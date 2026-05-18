@@ -39,6 +39,7 @@ import {
   remarkFileLinks,
   toFileLink,
 } from "../../../utils/remarkFileLinks";
+import { normalizeOutsideMarkdownCode } from "../../../utils/markdownCodeRegions";
 import { highlightLine } from "../../../utils/syntax";
 import { detectCodexLeadMarker, type CodexLeadMarkerConfig } from "../constants/codexLeadMarkers";
 
@@ -1672,7 +1673,7 @@ export const Markdown = memo(function Markdown({
           ),
         ),
       );
-    return normalizeDisplayText(renderValue);
+    return normalizeOutsideMarkdownCode(renderValue, normalizeDisplayText);
   }, [renderValue, codeBlock, liveRenderMode, preserveFormatting]);
   const sourceMarkdownRef = useRef(content);
   sourceMarkdownRef.current = content;

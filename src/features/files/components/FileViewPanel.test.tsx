@@ -1651,8 +1651,11 @@ describe("FileViewPanel markdown modes", () => {
     );
 
     await screen.findByTestId("file-markdown-preview");
-    expect(container.querySelector(".fvp-file-markdown .katex")).toBeTruthy();
-    expect(container.querySelector(".fvp-file-markdown .katex-display")).toBeTruthy();
+    await waitFor(() => {
+      expect(container.querySelector(".fvp-file-markdown .katex")).toBeTruthy();
+      expect(container.querySelector(".fvp-file-markdown .katex-display")).toBeTruthy();
+      expect(container.querySelector(".fvp-file-markdown .katex-error")).toBeFalsy();
+    });
     expect(mermaidRender).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("tab", { name: "Render" }));
