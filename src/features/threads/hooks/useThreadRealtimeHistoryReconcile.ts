@@ -9,10 +9,28 @@ const CODEX_REALTIME_HISTORY_RECONCILE_RETRY_DELAY_MS = 2_800;
 const CLAUDE_REALTIME_HISTORY_RECONCILE_DELAY_MS = 1_200;
 const CLAUDE_REALTIME_HISTORY_RECONCILE_RETRY_DELAY_MS = 2_800;
 
+type CodexRealtimeHistoryReconcileSource =
+  | "turn-completed"
+  | "assistant-completed"
+  | "activation-terminal-drift";
+
 type TurnCompletedPayload = {
   workspaceId: string;
   threadId: string;
   turnId: string;
+};
+
+type CodexRealtimeHistoryReconcileOptions = {
+  allowWhileProcessing?: boolean;
+  settleTerminalDriftAfterRefresh?: boolean;
+  source?: CodexRealtimeHistoryReconcileSource;
+};
+
+type CodexTerminalDriftSettlementPayload = {
+  workspaceId: string;
+  threadId: string;
+  turnId: string;
+  source: CodexRealtimeHistoryReconcileSource;
 };
 
 type UseThreadRealtimeHistoryReconcileOptions = {
@@ -20,6 +38,7 @@ type UseThreadRealtimeHistoryReconcileOptions = {
   onDebug?: (entry: DebugEntry) => void;
   refreshThread: (workspaceId: string, threadId: string) => Promise<unknown>;
   resolveCanonicalThreadId: (threadId: string) => string;
+  settleCodexTerminalDrift?: (payload: CodexTerminalDriftSettlementPayload) => void;
   threadStatusByIdRef: MutableRefObject<ThreadState["threadStatusById"]>;
   threadsByWorkspace: ThreadState["threadsByWorkspace"];
 };
@@ -29,6 +48,7 @@ export function useThreadRealtimeHistoryReconcile({
   onDebug,
   refreshThread,
   resolveCanonicalThreadId,
+  settleCodexTerminalDrift,
   threadStatusByIdRef,
   threadsByWorkspace,
 }: UseThreadRealtimeHistoryReconcileOptions) {
@@ -94,7 +114,13 @@ export function useThreadRealtimeHistoryReconcile({
   );
 
   const scheduleCodexRealtimeHistoryReconcile = useCallback(
-    (workspaceId: string, threadId: string, turnId: string, attempt = 0) => {
+    (
+      workspaceId: string,
+      threadId: string,
+      turnId: string,
+      attempt = 0,
+      options: CodexRealtimeHistoryReconcileOptions = {},
+    ) => {
       const canonicalThreadId = resolveCanonicalThreadId(threadId);
       if (!shouldReconcileCodexRealtimeThread(workspaceId, canonicalThreadId)) {
         return;
@@ -126,12 +152,17 @@ export function useThreadRealtimeHistoryReconcile({
             reconciliationThreadKey
           ];
           const status = threadStatusByIdRef.current[canonicalThreadId];
-          if (status?.isProcessing && attempt === 0) {
+          if (
+            status?.isProcessing &&
+            attempt === 0 &&
+            options.allowWhileProcessing !== true
+          ) {
             scheduleCodexRealtimeHistoryReconcile(
               workspaceId,
               canonicalThreadId,
               reconciliationTurnId,
               attempt + 1,
+              options,
             );
             return;
           }
@@ -146,6 +177,7 @@ export function useThreadRealtimeHistoryReconcile({
               canonicalThreadId,
               reconciliationTurnId,
               attempt + 1,
+              options,
             );
             return;
           }
@@ -159,23 +191,41 @@ export function useThreadRealtimeHistoryReconcile({
               threadId: canonicalThreadId,
               turnId: reconciliationTurnId,
               attempt,
+              source: options.source ?? "turn-completed",
+              allowWhileProcessing: options.allowWhileProcessing === true,
             },
           });
-          void refreshThread(workspaceId, canonicalThreadId).catch((error) => {
-            onDebug?.({
-              id: `${Date.now()}-codex-realtime-history-reconcile-error`,
-              timestamp: Date.now(),
-              source: "error",
-              label: "codex/realtime history reconcile error",
-              payload: {
+          void refreshThread(workspaceId, canonicalThreadId)
+            .then((refreshedThreadId) => {
+              if (
+                !refreshedThreadId ||
+                options.settleTerminalDriftAfterRefresh !== true
+              ) {
+                return;
+              }
+              settleCodexTerminalDrift?.({
                 workspaceId,
                 threadId: canonicalThreadId,
                 turnId: reconciliationTurnId,
-                attempt,
-                error: error instanceof Error ? error.message : String(error),
-              },
+                source: options.source ?? "turn-completed",
+              });
+            })
+            .catch((error) => {
+              onDebug?.({
+                id: `${Date.now()}-codex-realtime-history-reconcile-error`,
+                timestamp: Date.now(),
+                source: "error",
+                label: "codex/realtime history reconcile error",
+                payload: {
+                  workspaceId,
+                  threadId: canonicalThreadId,
+                  turnId: reconciliationTurnId,
+                  attempt,
+                  source: options.source ?? "turn-completed",
+                  error: error instanceof Error ? error.message : String(error),
+                },
+              });
             });
-          });
         }, delay);
     },
     [
@@ -183,6 +233,7 @@ export function useThreadRealtimeHistoryReconcile({
       onDebug,
       refreshThread,
       resolveCanonicalThreadId,
+      settleCodexTerminalDrift,
       shouldReconcileCodexRealtimeThread,
       threadStatusByIdRef,
     ],
@@ -300,7 +351,51 @@ export function useThreadRealtimeHistoryReconcile({
     ],
   );
 
+  const handleCodexAssistantCompletedForHistoryReconcile = useCallback(
+    (payload: {
+      workspaceId: string;
+      threadId: string;
+      turnId?: string | null;
+    }) => {
+      scheduleCodexRealtimeHistoryReconcile(
+        payload.workspaceId,
+        payload.threadId,
+        payload.turnId?.trim() || "__unknown_turn__",
+        0,
+        {
+          allowWhileProcessing: true,
+          settleTerminalDriftAfterRefresh: true,
+          source: "assistant-completed",
+        },
+      );
+    },
+    [scheduleCodexRealtimeHistoryReconcile],
+  );
+
+  const handleCodexActivationTerminalDriftReconcile = useCallback(
+    (payload: {
+      workspaceId: string;
+      threadId: string;
+      turnId?: string | null;
+    }) => {
+      scheduleCodexRealtimeHistoryReconcile(
+        payload.workspaceId,
+        payload.threadId,
+        payload.turnId?.trim() || "__unknown_turn__",
+        0,
+        {
+          allowWhileProcessing: true,
+          settleTerminalDriftAfterRefresh: true,
+          source: "activation-terminal-drift",
+        },
+      );
+    },
+    [scheduleCodexRealtimeHistoryReconcile],
+  );
+
   return {
+    handleCodexActivationTerminalDriftReconcile,
+    handleCodexAssistantCompletedForHistoryReconcile,
     handleTurnCompletedForHistoryReconcile,
   };
 }
