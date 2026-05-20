@@ -616,3 +616,60 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 535: 根治 Markdown 文件预览渲染抖动
+
+**Date**: 2026-05-21
+**Task**: 根治 Markdown 文件预览渲染抖动
+**Branch**: `feature/v0.5.0-md`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 内容 |
+|------|------|
+| 背景 | 根据本地录屏确认 Markdown preview 在表格与 Mermaid 图之间反复闪烁，根因是 live 内容刷新、全文 ReactMarkdown 渲染、AI 标注全量扫描、Mermaid/KaTeX 重型渲染互相放大。 |
+| OpenSpec | 新增 `stabilize-file-markdown-preview-render-architecture` change，覆盖 preview snapshot、render pipeline、runtime stability 三类约束。 |
+| 实现 | 引入 `compileFileMarkdownDocument` 编译缓存；Markdown preview 支持 stable/live snapshot；大文档 progressive/bounded 渲染；Mermaid/KaTeX render cache；重型表格、图表、数学块、长代码块 lazy mount；AI 标注改为按 end line 分桶索引。 |
+| 稳定性 | `useFileDocumentState` 增加 target key，避免切换文件时旧内容短暂渲染到新文件预览。 |
+| 测试 | 新增 Markdown document utility 和 preview 渐进/边界/懒渲染测试；更新 FileViewPanel external-change 和 Mermaid 缓存预期。 |
+| 验证 | `openspec validate stabilize-file-markdown-preview-render-architecture --strict --no-interactive`、`npm run typecheck`、`npm run lint`、相关 Vitest 80 tests、`npm run test` 全量 524 files、`npm run check:large-files:gate` 均通过。 |
+
+**Updated Files**:
+- `openspec/changes/stabilize-file-markdown-preview-render-architecture/**`
+- `src/features/files/components/FileMarkdownPreview.tsx`
+- `src/features/files/utils/fileMarkdownDocument.ts`
+- `src/features/files/components/FileViewBody.tsx`
+- `src/features/files/components/FileViewPanel.tsx`
+- `src/features/files/components/FileExplorerWorkspace.tsx`
+- `src/features/files/hooks/useFileDocumentState.ts`
+- `src/features/layout/hooks/useLayoutNodes.tsx`
+- `src/features/files/components/FileMarkdownPreview.test.tsx`
+- `src/features/files/utils/fileMarkdownDocument.test.ts`
+- `src/features/files/components/FileViewPanel.external-change.test.tsx`
+- `src/features/files/components/FileViewPanel.test.tsx`
+- `src/i18n/locales/en.part2.ts`
+- `src/i18n/locales/zh.part2.ts`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `61a33feb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
