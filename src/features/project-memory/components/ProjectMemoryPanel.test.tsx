@@ -802,14 +802,16 @@ describe("ProjectMemoryPanel", () => {
       expect(mockFacade.diagnostics).toHaveBeenCalledWith("ws-1");
     });
     expect(
-      screen.getByText("Diagnostics: 2 total, 1 incomplete, 0 duplicate turn groups, 0 bad files."),
+      await screen.findByText(
+        "Diagnostics: 2 total, 1 incomplete, 0 duplicate turn groups, 0 bad files.",
+      ),
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Dry run" }));
     await waitFor(() => {
       expect(mockFacade.reconcile).toHaveBeenCalledWith("ws-1", true);
     });
-    expect(screen.getByText("Reconcile: 2 fixable, 0 fixed, 0 skipped.")).toBeTruthy();
+    expect(await screen.findByText("Reconcile: 2 fixable, 0 fixed, 0 skipped.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Apply repair" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Apply repair" }).at(-1)!);
