@@ -91,6 +91,9 @@ interface StatusPanelProps extends CodeAnnotationBridgeProps {
   commitError?: string | null;
   preferredDockTab?: TabType | null;
   preferredDockTabRequestKey?: number;
+  dockCollapsed?: boolean;
+  onCollapseDock?: () => void;
+  onExpandDock?: () => void;
   onExpandToDock?: () => void;
 }
 
@@ -209,6 +212,9 @@ export const StatusPanel = memo(function StatusPanel({
   commitError = null,
   preferredDockTab = null,
   preferredDockTabRequestKey = 0,
+  dockCollapsed = false,
+  onCollapseDock,
+  onExpandDock,
   onExpandToDock,
   onCreateCodeAnnotation,
   onRemoveCodeAnnotation,
@@ -426,8 +432,11 @@ export const StatusPanel = memo(function StatusPanel({
         }
         return previous === tab ? null : tab;
       });
+      if (variant === "dock" && dockCollapsed) {
+        onExpandDock?.();
+      }
     },
-    [variant],
+    [dockCollapsed, onExpandDock, variant],
   );
 
   const activeTab =
@@ -786,12 +795,34 @@ export const StatusPanel = memo(function StatusPanel({
 
   return (
     <div
-      className={`sp-root${variant === "dock" ? " sp-root--dock" : ""}`}
+      className={`sp-root${variant === "dock" ? " sp-root--dock" : ""}${
+        variant === "dock" && dockCollapsed ? " sp-root--dock-collapsed" : ""
+      }`}
       ref={panelRef}
     >
       {variant === "dock" ? (
         <>
           <div className="sp-tabs sp-tabs--dock">
+            {onCollapseDock || onExpandDock ? (
+              <button
+                type="button"
+                className="sp-dock-panel-toggle"
+                onClick={dockCollapsed ? onExpandDock : onCollapseDock}
+                aria-label={
+                  dockCollapsed ? "Show status panel" : "Hide status panel"
+                }
+                title={dockCollapsed ? "Show status panel" : "Hide status panel"}
+              >
+                <span
+                  className={`codicon ${
+                    dockCollapsed
+                      ? "codicon-chevron-up"
+                      : "codicon-chevron-down"
+                  }`}
+                  aria-hidden
+                />
+              </button>
+            ) : null}
             {orderedTabs
               .map((tab) => tabDefinitions[tab])
               .filter((definition) => definition.visible)
@@ -817,11 +848,13 @@ export const StatusPanel = memo(function StatusPanel({
                 );
               })}
           </div>
-          <div className="sp-dock-shell">
-            <div className="sp-popover-content sp-dock-content">
-              {contentNode}
+          {!dockCollapsed ? (
+            <div className="sp-dock-shell">
+              <div className="sp-popover-content sp-dock-content">
+                {contentNode}
+              </div>
             </div>
-          </div>
+          ) : null}
         </>
       ) : (
         <>

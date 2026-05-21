@@ -5,6 +5,7 @@ type TerminalDockProps = {
   isOpen: boolean;
   terminals: TerminalTab[];
   activeTerminalId: string | null;
+  onToggleOpen: () => void;
   onSelectTerminal: (terminalId: string) => void;
   onNewTerminal: () => void;
   onCloseTerminal: (terminalId: string) => void;
@@ -16,6 +17,7 @@ export function TerminalDock({
   isOpen,
   terminals,
   activeTerminalId,
+  onToggleOpen,
   onSelectTerminal,
   onNewTerminal,
   onCloseTerminal,
@@ -38,6 +40,15 @@ export function TerminalDock({
         />
       )}
       <div className="terminal-header">
+        <button
+          className="terminal-panel-toggle"
+          type="button"
+          onClick={onToggleOpen}
+          aria-label="Hide terminal panel"
+          title="Hide terminal panel"
+        >
+          <span className="codicon codicon-chevron-down" aria-hidden />
+        </button>
         <div className="terminal-tabs" role="tablist" aria-label="Terminal tabs">
           {terminals.map((tab) => (
             <button

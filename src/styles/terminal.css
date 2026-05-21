@@ -43,19 +43,53 @@
 .terminal-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 12px;
+  gap: 0;
+  padding: 0;
+  min-height: 34px;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
   font-size: 12px;
+}
+
+.terminal-panel-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 42px;
+  align-self: stretch;
+  min-width: 42px;
+  min-height: 34px;
+  border: none;
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.terminal-panel-toggle:hover {
+  transform: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-strong);
+}
+
+.terminal-panel-toggle .codicon {
+  font-size: 15px;
+  line-height: 1;
 }
 
 .terminal-tabs {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   flex: 1;
   min-width: 0;
   overflow-x: auto;
-  padding: 2px 0;
+  padding: 0 12px;
+  align-self: stretch;
 }
 
 .terminal-tab {
@@ -66,11 +100,12 @@
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  padding: 4px 12px 6px;
+  min-height: 34px;
+  padding: 0 2px;
   border-radius: 0;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
   cursor: pointer;
   white-space: nowrap;
   box-shadow: none;
@@ -98,9 +133,12 @@
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  padding: 4px 12px 6px;
+  min-height: 34px;
+  padding: 0 2px;
   border-radius: 0;
-  font-size: 12px;
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1;
   cursor: pointer;
   box-shadow: none;
 }

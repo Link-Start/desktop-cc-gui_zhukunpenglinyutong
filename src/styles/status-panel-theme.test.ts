@@ -6,8 +6,57 @@ const statusPanelCss = readFileSync(
   fileURLToPath(new URL("./status-panel.css", import.meta.url)),
   "utf8",
 );
+const mainCss = readFileSync(
+  fileURLToPath(new URL("./main.css", import.meta.url)),
+  "utf8",
+);
 
 describe("status panel theme colors", () => {
+  it("keeps dock tabs as a flat bottom panel bar", () => {
+    expect(statusPanelCss).toMatch(
+      /\.sp-tabs--dock\s*\{[^}]*min-height:\s*30px/s,
+    );
+    expect(statusPanelCss).toMatch(
+      /\.sp-tabs--dock\s*\{[^}]*border-radius:\s*0/s,
+    );
+    expect(statusPanelCss).toMatch(
+      /\.sp-tabs--dock\s*\{[^}]*border-top:\s*1px solid var\(--sp-dock-tab-border\)/s,
+    );
+    expect(statusPanelCss).toMatch(
+      /\.sp-tabs--dock\s*\{[^}]*border-bottom:\s*1px solid var\(--sp-dock-tab-border\)/s,
+    );
+    expect(statusPanelCss).toMatch(
+      /\.sp-tabs--dock \.sp-tab-active\s*\{[^}]*border-bottom-color:\s*var\(--sp-dock-tab-active-accent\)/s,
+    );
+    expect(statusPanelCss).toMatch(
+      /\.sp-tabs--dock \.sp-tab-icon\s*\{[^}]*display:\s*none/s,
+    );
+  });
+
+  it("keeps the dock collapse control as the left tab bar cell", () => {
+    expect(statusPanelCss).toMatch(
+      /\.sp-root--dock-collapsed\s*\{[^}]*min-height:\s*30px/s,
+    );
+    expect(mainCss).toMatch(
+      /\.right-panel-bottom:has\(\.sp-root--dock-collapsed\)\s*\{[^}]*height:\s*30px/s,
+    );
+    expect(mainCss).toMatch(
+      /\.right-panel:has\(\.sp-root--dock-collapsed\) \.right-panel-divider\s*\{[^}]*display:\s*none/s,
+    );
+    expect(statusPanelCss).toMatch(
+      /\.sp-dock-panel-toggle\s*\{[^}]*flex:\s*0 0 38px/s,
+    );
+    expect(statusPanelCss).toMatch(
+      /\.sp-dock-panel-toggle\s*\{[^}]*min-height:\s*30px/s,
+    );
+    expect(statusPanelCss).toMatch(
+      /\.sp-dock-panel-toggle\s*\{[^}]*border-right:\s*1px solid var\(--sp-dock-tab-border\)/s,
+    );
+    expect(statusPanelCss).toMatch(
+      /\.sp-dock-panel-toggle\s*\{[^}]*border-radius:\s*0/s,
+    );
+  });
+
   it("keeps checkpoint commit dialog colors derived from theme tokens", () => {
     expect(statusPanelCss).toContain("--sp-commit-surface:");
     expect(statusPanelCss).toContain("--sp-commit-text:");

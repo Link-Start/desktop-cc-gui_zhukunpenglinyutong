@@ -1826,8 +1826,19 @@ body.editor-horizontal-split-resizing * {
   height: var(--plan-panel-height, 220px);
   min-height: 140px;
   max-height: 630px;
-  padding-bottom: 8px;
-  padding-top: 4px;
+  padding: 0;
+  background: var(--surface-right-panel);
+}
+
+.right-panel-bottom:has(.sp-root--dock-collapsed) {
+  height: 28px;
+  min-height: 28px;
+  max-height: 28px;
+  overflow: hidden;
+}
+
+.right-panel:has(.sp-root--dock-collapsed) .right-panel-divider {
+  display: none;
 }
 
 .right-panel.plan-collapsed .right-panel-divider {

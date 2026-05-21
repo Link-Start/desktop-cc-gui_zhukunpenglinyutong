@@ -24,6 +24,10 @@
   flex-direction: column;
 }
 
+.sp-root--dock-collapsed {
+  min-height: 28px;
+}
+
 .sp-dock-shell {
   min-height: 0;
   flex: 1 1 auto;
@@ -44,24 +48,55 @@
 
 .sp-tabs--dock {
   position: relative;
-  border: 1px solid
-    color-mix(
-      in srgb,
-      var(--border-subtle, rgba(255, 255, 255, 0.08)) 88%,
-      transparent
+  --sp-dock-tab-active-accent: #c7a08e;
+  --sp-dock-tab-border: color-mix(
+    in srgb,
+    var(--border-subtle, rgba(255, 255, 255, 0.08)) 88%,
+    transparent
+  );
+  min-height: 28px;
+  border: none;
+  border-top: 1px solid var(--sp-dock-tab-border);
+  border-bottom: 1px solid var(--sp-dock-tab-border);
+  border-radius: 0;
+  padding: 0 14px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-right-panel, transparent) 96%, white 4%),
+      color-mix(in srgb, var(--surface-right-panel, transparent) 92%, transparent)
     );
-  border-radius: 7px;
-  padding: 3px 8px;
-  background: transparent;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
   order: 1;
-  margin: 0 12px 3px;
+  margin: 0;
   flex: 0 0 auto;
-  gap: 18px;
-  align-items: flex-end;
+  gap: 14px;
+  align-items: stretch;
+}
+
+:root[data-theme="light"] .sp-tabs--dock {
+  --sp-dock-tab-active-accent: #c49a86;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-right-panel, #fff) 96%, white 4%),
+      color-mix(in srgb, var(--surface-right-panel, #fff) 92%, transparent)
+    );
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .sp-tabs--dock {
+    --sp-dock-tab-active-accent: #c49a86;
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--surface-right-panel, #fff) 96%, white 4%),
+        color-mix(in srgb, var(--surface-right-panel, #fff) 92%, transparent)
+      );
+  }
 }
 
 .sp-tabs--dock::-webkit-scrollbar {
@@ -69,15 +104,49 @@
   height: 0;
 }
 
-.sp-tabs--dock .sp-tab {
-  position: relative;
-  justify-content: flex-start;
-  gap: 4px;
-  padding: 3px 1px;
+.sp-dock-panel-toggle {
+  flex: 0 0 34px;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  min-height: 28px;
+  margin: 0 4px 0 -14px;
+  padding: 0;
   border: none;
+  border-right: 1px solid var(--sp-dock-tab-border);
+  border-bottom: 2px solid transparent;
   border-radius: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: color-mix(in srgb, var(--text-muted) 88%, transparent);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.sp-dock-panel-toggle:hover {
+  background: transparent;
+  color: var(--text-strong);
+}
+
+.sp-dock-panel-toggle .codicon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.sp-tabs--dock .sp-tab {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: stretch;
+  justify-content: flex-start;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 3px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--text-muted) 92%, transparent);
   font-size: 12px;
   font-weight: 500;
 }
@@ -98,32 +167,17 @@
 .sp-tabs--dock .sp-tab-active {
   background: transparent;
   border-color: transparent;
+  border-bottom-color: var(--sp-dock-tab-active-accent);
   color: var(--text-strong);
 }
 
 .sp-tabs--dock .sp-tab-icon {
-  opacity: 0.68;
-  transition:
-    color 0.18s ease,
-    filter 0.18s ease,
-    opacity 0.18s ease;
-}
-
-.sp-tabs--dock .sp-tab:hover .sp-tab-icon {
-  opacity: 0.92;
-}
-
-.sp-tabs--dock .sp-tab-active .sp-tab-icon {
-  color: var(--color-link, #2563eb);
-  filter: drop-shadow(
-    0 0 5px color-mix(in srgb, var(--color-link, #2563eb) 28%, transparent)
-  );
-  opacity: 1;
+  display: none;
 }
 
 .sp-tabs--dock .sp-tab-label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
 }
 
@@ -138,13 +192,18 @@
 }
 
 .sp-tabs--dock .sp-tab-count {
-  opacity: 0.72;
+  color: var(--text-muted);
+  opacity: 0.82;
 }
 
-.sp-tabs--dock .sp-tab-icon svg,
-.sp-tabs--dock .sp-tab-icon {
-  width: 16px;
-  height: 16px;
+.sp-tabs--dock .sp-tab-active .sp-tab-count {
+  color: color-mix(in srgb, var(--text-strong) 86%, var(--text-muted));
+  opacity: 0.94;
+}
+
+.sp-tabs--dock .sp-tab-loading {
+  width: 8px;
+  height: 8px;
 }
 
 .sp-tab {

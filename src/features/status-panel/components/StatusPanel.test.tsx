@@ -1842,6 +1842,33 @@ describe("StatusPanel", () => {
     expect(screen.getByText("step 1")).toBeTruthy();
   });
 
+  it("keeps the dock tab bar mounted when the bottom panel is collapsed", () => {
+    const onExpandDock = vi.fn();
+    const onCollapseDock = vi.fn();
+
+    const { container } = render(
+      <StatusPanel
+        items={[editToolItem]}
+        isProcessing={false}
+        variant="dock"
+        dockCollapsed
+        onCollapseDock={onCollapseDock}
+        onExpandDock={onExpandDock}
+      />,
+    );
+
+    expect(container.querySelector(".sp-root--dock-collapsed")).toBeTruthy();
+    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.queryByText("README.md")).toBeNull();
+
+    fireEvent.click(screen.getByTitle("Show status panel"));
+    expect(onExpandDock).toHaveBeenCalledTimes(1);
+    expect(onCollapseDock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText("Result"));
+    expect(onExpandDock).toHaveBeenCalledTimes(2);
+  });
+
   it("selects preferred checkpoint tab in dock variant", () => {
     render(
       <StatusPanel

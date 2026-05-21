@@ -1659,11 +1659,12 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
     commandTotal > 0 ||
     options.isPlanMode ||
     Boolean(options.plan);
-  const showBottomStatusPanel =
+  const shouldMountBottomStatusPanel =
     showBottomActivityPanel &&
     isStatusPanelEngine &&
-    options.bottomStatusPanelExpanded &&
     (hasStatusPanelActivity || options.bottomStatusPanelExpanded);
+  const showBottomStatusPanel =
+    shouldMountBottomStatusPanel && options.bottomStatusPanelExpanded;
   const openBottomStatusPanel = options.onOpenPlanPanel;
   const handleExpandCheckpointToDock = useCallback(() => {
     openBottomStatusPanel();
@@ -2296,7 +2297,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       </Suspense>
     ) : null;
 
-  const planPanelNode = showBottomStatusPanel ? (
+  const planPanelNode = shouldMountBottomStatusPanel ? (
     <StatusPanel
       workspaceId={options.activeWorkspace?.id ?? null}
       workspacePath={options.activeWorkspace?.path ?? null}
@@ -2339,6 +2340,9 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       commitError={options.commitError}
       preferredDockTab={preferredDockStatusTab?.tab ?? null}
       preferredDockTabRequestKey={preferredDockStatusTab?.requestKey ?? 0}
+      dockCollapsed={!showBottomStatusPanel}
+      onCollapseDock={options.onClosePlanPanel}
+      onExpandDock={options.onOpenPlanPanel}
       onExpandToDock={handleExpandCheckpointToDock}
       {...codeAnnotationBridgeProps}
     />
@@ -2357,6 +2361,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       isOpen={options.terminalOpen}
       terminals={options.terminalTabs}
       activeTerminalId={options.activeTerminalId}
+      onToggleOpen={options.onToggleTerminal}
       onSelectTerminal={options.onSelectTerminal}
       onNewTerminal={options.onNewTerminal}
       onCloseTerminal={options.onCloseTerminal}
