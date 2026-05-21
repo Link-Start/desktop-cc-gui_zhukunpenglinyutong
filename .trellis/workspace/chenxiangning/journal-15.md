@@ -1432,3 +1432,50 @@ Follow-ups: 重新推送并运行 Release workflow，创建 v0.5.0 release。
 ### Next Steps
 
 - None - task complete
+
+
+## Session 551: 修复 Composer readiness 测试依赖污染
+
+**Date**: 2026-05-22
+**Task**: 修复 Composer readiness 测试依赖污染
+**Branch**: `feature/v0.5.1`
+
+### Summary
+
+切断 Composer selector 对 @lobehub/icons barrel 的静态依赖，避免 CI 在 readiness 测试中触发 emoji-mart JSON ESM 加载失败。
+
+### Main Changes
+
+## 完成内容
+- 将 `ComposerReadinessBar` 的 `ModelSelect` import 从 selector barrel 改为直接文件 import，避免无关 selector/i18n 初始化链路进入该测试。
+- 将 `ModelSelect` / `ProviderSelect` 中的 Claude、Gemini 图标统一改为项目本地 `EngineIcon`，不再从 `@lobehub/icons` barrel import。
+- 清理 selector 测试中已不再需要的 `@lobehub/icons` mocks。
+
+## 根因
+`ComposerReadinessBar.test.tsx` 本身断言通过，但 suite 在模块加载阶段失败。原因是 selector barrel 静态加载 `ModelSelect`，而 `ModelSelect` 的 `@lobehub/icons` barrel import 会牵出 emoji 相关 ESM 依赖；CI 环境下落到 `@emoji-mart/data/*.json` 时触发 JSON import attribute 错误。
+
+## 验证
+- `npm exec vitest run src/features/composer/components/ChatInputBox/ComposerReadinessBar.test.tsx`
+- `npm exec vitest run src/features/composer/components/ChatInputBox/selectors/ModelSelect.test.tsx src/features/composer/components/ChatInputBox/selectors/ProviderSelect.test.tsx src/features/composer/components/ChatInputBox/selectors/ConfigSelect.test.tsx src/features/composer/components/ChatInputBox/ContextBar.test.tsx src/features/composer/components/ChatInputBox/ChatInputBoxFooter.manual-memory.test.tsx`
+- `npm exec vitest run src/features/composer/components/ChatInputBox/ComposerReadinessBar.test.tsx src/features/composer/components/ChatInputBox/ContextBar.test.tsx src/features/composer/components/ChatInputBox/ChatInputBoxFooter.manual-memory.test.tsx`
+- `npm run typecheck`
+- `npm run lint`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d682d9e2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

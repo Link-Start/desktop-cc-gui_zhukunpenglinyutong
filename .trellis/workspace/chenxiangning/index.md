@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-15.md`
-- **Total Sessions**: 550
+- **Total Sessions**: 551
 - **Last Active**: 2026-05-22
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-15.md` | ~1434 | Active |
+| `journal-15.md` | ~1481 | Active |
 | `journal-14.md` | ~1969 | Archived |
 | `journal-13.md` | ~1947 | Archived |
 | `journal-12.md` | ~1971 | Archived |
@@ -43,6 +43,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 551 | 2026-05-22 | 修复 Composer readiness 测试依赖污染 | `d682d9e2` | `feature/v0.5.1` |
 | 550 | 2026-05-22 | 上移 Composer 上下文芯片 | `45a721c2` | `feature/v0.5.1` |
 | 549 | 2026-05-22 | 稳定 WebService daemon 启动测试 | `1fd8ef0e` | `feature/v0.5.1` |
 | 548 | 2026-05-22 | 收口底部 dock 与运行按钮样式 | `cfd6dc0f` | `feature/v0.5.1` |
