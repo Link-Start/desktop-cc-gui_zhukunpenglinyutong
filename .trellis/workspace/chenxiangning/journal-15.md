@@ -1622,3 +1622,49 @@ Follow-ups: 重新推送并运行 Release workflow，创建 v0.5.0 release。
 ### Next Steps
 
 - None - task complete
+
+
+## Session 555: 统一 Git 文件树复选框与字体样式
+
+**Date**: 2026-05-22
+**Task**: 统一 Git 文件树复选框与字体样式
+**Branch**: `feature/v0.5.2`
+
+### Summary
+
+完成 Git/Git History/HUB 文件树复选框右置、树形目录 compact、字体样式归一、关闭按钮样式收口，并补充 OpenSpec artifacts。
+
+### Main Changes
+
+- 将 Git flat/tree 与 Git History/HUB worktree 的文件级 commit scope 复选框统一放到右侧 trailing control area，移除 tree root/folder 行前置复选框。
+- 抽取 `src/features/git/utils/diffTree.ts`，让 Git 与 HUB worktree 共用 `buildDiffTree` / `compactDiffTree`，并修复 compact dotted label collision，使用结构 key 而不是展示名作为 Map identity。
+- 归一 Git 与 HUB 文件树 typography 和状态色 token，兼容 built-in theme 与 custom theme。
+- 将 Git History/HUB overlay close chip 调整为 20x20 小圆角方形按钮，只改样式不改行为。
+- 新增/调整 Vitest 覆盖 checkbox placement、folder checkbox removal、package-style dotted folder display、branch-preserving compact、Windows-style path selection、compact label collision。
+- 回写 `openspec/changes/adjust-git-worktree-checkbox-placement/` 的 proposal/design/tasks/specs，并通过 strict validation。
+
+Validation:
+- `npx vitest run src/features/git/components/GitDiffPanel.test.tsx` passed, 42 tests.
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `npm run check:large-files` passed, found=0.
+- `openspec validate adjust-git-worktree-checkbox-placement --type change --strict --no-interactive` passed.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `89d219d8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

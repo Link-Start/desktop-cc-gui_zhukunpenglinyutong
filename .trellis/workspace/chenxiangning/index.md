@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-15.md`
-- **Total Sessions**: 554
+- **Total Sessions**: 555
 - **Last Active**: 2026-05-22
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-15.md` | ~1624 | Active |
+| `journal-15.md` | ~1670 | Active |
 | `journal-14.md` | ~1969 | Archived |
 | `journal-13.md` | ~1947 | Archived |
 | `journal-12.md` | ~1971 | Archived |
@@ -43,6 +43,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 555 | 2026-05-22 | 统一 Git 文件树复选框与字体样式 | `89d219d8` | `feature/v0.5.2` |
 | 554 | 2026-05-22 | 修复底部状态面板折叠挂载 | `1105940b` | `feature/v0.5.2` |
 | 553 | 2026-05-22 | 稳定 GitHistory worktree 未暂存提交测试 | `75b9cd12` | `feature/v0.5.1` |
 | 552 | 2026-05-22 | 对齐 StatusPanel dock 样式测试 | `506cf1e5` | `feature/v0.5.1` |
