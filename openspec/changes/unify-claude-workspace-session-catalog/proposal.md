@@ -106,6 +106,12 @@ cache validation
   - 缓存内容仅包含 bounded facts、title evidence、source diagnostics、file metadata，不包含完整 transcript、large inline payload 或最终 workspace membership。
   - workspace graph、owner resolver version、engine config home 变化时必须重新计算 owner 或触发 cache namespace/version invalidation。
   - cache miss / stale / corrupt / disabled 时必须 fallback 到 direct scan，并暴露 degraded 或 rebuild diagnostics。
+- 收紧 Claude history control-plane filter：
+  - `codex app-server` 只在纯命令形态下视为 control-plane 文本。
+  - 正常用户/assistant 文本即使提到 `codex app-server`，也必须作为真实 Claude Code 对话保留。
+- 调整 Session Management 默认读取窗口：
+  - 设置页会话管理首批 catalog page size 提升到 `999`，用于降低“管理页看不全”的误判。
+  - Sidebar 启动列表仍保持独立分页窗口，避免扩大启动加载压力。
 
 ## 关键架构约束
 

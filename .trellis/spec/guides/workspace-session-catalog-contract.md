@@ -25,6 +25,7 @@
 ### 3. Contracts
 
 - Backend catalog active strict projection MUST be the default membership truth for Sidebar and Session Management.
+- Session Management may use a larger first-page catalog window than Sidebar. Current Settings catalog hook uses page size `999`; Sidebar keeps its own startup/load-older catalog page size to avoid broadening startup pressure.
 - Workspace Home MUST NOT derive an independent session membership set from `recentThreads`; if it later displays sessions, it MUST consume the same catalog projection or document an explicit display-window difference.
 - Native engine list APIs such as `listClaudeSessions` MAY provide transcript restore, diagnostics, or continuity seed, but MUST NOT widen or shrink complete catalog membership.
 - Frontend MUST NOT reapply exact `entry.workspaceId === selectedWorkspaceId` membership filtering on active strict projection rows. Project aggregate rows may have child/worktree `workspaceId`, and that owner must survive to UI state.

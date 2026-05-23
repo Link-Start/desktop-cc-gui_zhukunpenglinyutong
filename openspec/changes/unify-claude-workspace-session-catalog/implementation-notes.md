@@ -178,3 +178,25 @@ Trellis 长期约束已落库：
 
 - `npm run check:large-files:near-threshold` 仍有 watch 项：`session_management.rs`、`claude_history.rs` 等接近阈值，但无 hard fail。
 - `npm run check:heavy-test-noise` 已跑完整 batched Vitest，531 个 test files 完成，只有既有 npm config warning，无 act/stdout/stderr payload noise。
+
+## 9. Review 收紧记录（2026-05-23）
+
+本轮问题：
+
+- 后端 Claude history scanner 与前端 fallback loader 仍存在 keyword-only 风险：文本中只要包含 `codex app-server`，就可能被判为 control-plane，从而误吞正常 Claude Code 对话。
+- Settings / Session Management 首批 catalog window 为 `100`，管理页容易被误判为“展示不全”；但 Sidebar 启动窗口不应同步放大。
+
+本轮修复：
+
+- Backend `is_codex_app_server_text` 改为 command-token 判断：只接受 `app-server` 单独文本，或 `codex/codex.exe/codex.cmd/codex.bat app-server` 这类纯命令形态。
+- Frontend fallback `isCodexAppServerControlPlaneText` 使用同等 command-token 判断，保持 backend / legacy loader 口径一致。
+- 正常自然语言 `Please inspect why codex app-server appears in logs.` 会保留为真实对话，不再被 control-plane filter 吞掉。
+- `src/features/settings/components/settings-view/hooks/useWorkspaceSessionCatalog.ts` 的 Session Management catalog page size 从 `100` 调整为 `999`；Sidebar 的 `SESSION_CATALOG_PAGE_SIZE = 200` 保持不变。
+
+验证证据：
+
+- `pnpm vitest run src/features/threads/loaders/claudeHistoryLoader.test.ts src/features/settings/components/settings-view/hooks/useWorkspaceSessionCatalog.test.tsx src/features/settings/components/SettingsView.test.tsx`
+  - 3 files / 84 tests passed
+- `cargo test --manifest-path src-tauri/Cargo.toml claude_history -- --nocapture`
+  - lib: 45 passed
+  - daemon: 33 passed

@@ -55,7 +55,7 @@ type UseWorkspaceSessionCatalogOptions = {
   enabled?: boolean;
 };
 
-const SESSION_CATALOG_PAGE_SIZE = 100;
+const SESSION_CATALOG_PAGE_SIZE = 999;
 const UNASSIGNED_WORKSPACE_ID = "__global_unassigned__";
 const OWNER_UNRESOLVED_CODE = "OWNER_WORKSPACE_UNRESOLVED";
 

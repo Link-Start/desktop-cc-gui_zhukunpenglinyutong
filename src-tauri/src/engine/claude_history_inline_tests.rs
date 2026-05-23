@@ -684,12 +684,38 @@ fn control_plane_predicate_detects_codex_initialize_payload() {
 }
 
 #[test]
+fn control_plane_predicate_detects_codex_app_server_command_text() {
+    let entry = json!({
+        "uuid": "control-codex-app-server",
+        "message": {
+            "role": "user",
+            "content": "codex app-server"
+        }
+    });
+
+    assert!(is_claude_control_plane_entry(&entry));
+}
+
+#[test]
 fn control_plane_predicate_does_not_filter_normal_app_server_text() {
     let entry = json!({
         "uuid": "user-normal",
         "message": {
             "role": "user",
             "content": "Please inspect why the app-server keyword appears in logs."
+        }
+    });
+
+    assert!(!is_claude_control_plane_entry(&entry));
+}
+
+#[test]
+fn control_plane_predicate_does_not_filter_normal_codex_app_server_text() {
+    let entry = json!({
+        "uuid": "user-codex-app-server",
+        "message": {
+            "role": "user",
+            "content": "Please inspect why codex app-server appears in logs."
         }
     });
 

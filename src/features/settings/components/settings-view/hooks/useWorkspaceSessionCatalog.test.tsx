@@ -98,7 +98,7 @@ describe("useWorkspaceSessionCatalog", () => {
       expect(vi.mocked(listWorkspaceSessions)).toHaveBeenCalledWith("ws-1", {
         query: { keyword: null, engine: null, status: "active", folderId: null },
         cursor: null,
-        limit: 100,
+        limit: 999,
       });
     });
 
@@ -371,7 +371,7 @@ describe("useWorkspaceSessionCatalog", () => {
       expect(listGlobalCodexSessions).toHaveBeenCalledWith({
         query: { keyword: null, engine: "claude", status: "active", folderId: null },
         cursor: null,
-        limit: 100,
+        limit: 999,
       });
     });
 
@@ -450,7 +450,7 @@ describe("useWorkspaceSessionCatalog", () => {
       expect(listProjectRelatedCodexSessions).toHaveBeenCalledWith("ws-main", {
         query: { keyword: null, engine: "codex", status: "active", folderId: null },
         cursor: null,
-        limit: 100,
+        limit: 999,
       });
     });
 

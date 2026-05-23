@@ -87,3 +87,4 @@
 - [x] 9.5 运行 `npm run typecheck` 与 `npm run check:runtime-contracts`；若存在无关失败，记录隔离证据。
 - [x] 9.6 更新相关 Trellis spec 或 implementation guide 中的 session projection/ownership/cache 约定；验证没有把运行态 `.omx` 或 local-only state 作为事实源。
 - [x] 9.7 记录实现证据：调用点审计结果、fixture matrix、关键测试命令、source completeness 行为、cache diagnostics、cache rebuild 证据。
+- [x] 9.8 Review 后收紧 Claude control-plane filter，确保纯 `codex app-server` 命令仍被隐藏，但自然语言提到 `codex app-server` 不吞 Claude Code 会话；同步 Settings Session Management page size 到 `999` 并补回归测试。
