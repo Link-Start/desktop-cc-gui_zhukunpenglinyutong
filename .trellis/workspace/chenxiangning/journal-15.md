@@ -1732,3 +1732,50 @@ Validation:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 557: 收紧 Claude 会话控制面过滤
+
+**Date**: 2026-05-23
+**Task**: 收紧 Claude 会话控制面过滤
+**Branch**: `feature/v0.5.2`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## Summary
+
+- 收紧 Claude history backend scanner 与 frontend fallback loader 的 control-plane 判断：纯 `app-server` / `codex app-server` 命令仍隐藏，自然语言提到 `codex app-server` 不再吞正常 Claude Code 会话。
+- 将 Settings / Session Management catalog 首批分页窗口从 `100` 提升到 `999`，Sidebar 启动分页保持独立 `200`。
+- 回写 `unify-claude-workspace-session-catalog` OpenSpec proposal/tasks/implementation notes，并同步 Trellis backend/frontend/workspace catalog contract。
+
+## Validation
+
+- `pnpm vitest run src/features/threads/loaders/claudeHistoryLoader.test.ts src/features/settings/components/settings-view/hooks/useWorkspaceSessionCatalog.test.tsx src/features/settings/components/SettingsView.test.tsx`：3 files / 84 tests passed
+- `cargo test --manifest-path src-tauri/Cargo.toml claude_history -- --nocapture`：lib 45 passed，daemon 33 passed
+- `openspec validate unify-claude-workspace-session-catalog --strict --no-interactive`：passed
+- `pnpm typecheck`：passed
+- `pnpm check:runtime-contracts`：passed，只有既有 npm config warning
+- `pnpm lint`：passed
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4baf7860` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
