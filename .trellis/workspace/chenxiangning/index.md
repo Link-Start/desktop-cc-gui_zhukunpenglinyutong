@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-15.md`
-- **Total Sessions**: 561
+- **Active File**: `journal-16.md`
+- **Total Sessions**: 562
 - **Last Active**: 2026-05-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-15.md` | ~1996 | Active |
+| `journal-16.md` | ~59 | Active |
+| `journal-15.md` | ~1996 | Archived |
 | `journal-14.md` | ~1969 | Archived |
 | `journal-13.md` | ~1947 | Archived |
 | `journal-12.md` | ~1971 | Archived |
@@ -43,6 +44,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 562 | 2026-05-24 | 校准会话管理重构收尾状态 | `98e1ff46` | `feature/v0.5.2` |
 | 561 | 2026-05-24 | 收紧会话恢复与目录全量水合 | `b7083ebf` | `feature/v0.5.2` |
 | 560 | 2026-05-24 | 收紧会话目录事实边界 | `6fe26f34` | `feature/v0.5.2` |
 | 559 | 2026-05-23 | 收尾 Claude sidebar fallback 自动化门禁 | `d53657ef` | `feature/v0.5.2` |
