@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -173,6 +174,9 @@ async function openCodexTab() {
   await waitFor(() => {
     expect(getCodexUnifiedExecExternalStatusMock).toHaveBeenCalled();
   });
+  return (await screen.findByText("Background terminal")).closest(
+    ".vendor-codex-runtime-card",
+  ) as HTMLElement;
 }
 
 beforeEach(() => {
@@ -215,17 +219,16 @@ describe("VendorSettingsPanel", () => {
   it("shows background terminal official actions in the Codex tab", async () => {
     renderPanel();
 
-    await openCodexTab();
+    const runtimeCard = await openCodexTab();
+    const runtimeCardQueries = within(runtimeCard);
 
-    expect(screen.getByText("Background terminal")).toBeTruthy();
-    expect(screen.getByText("Official config")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Enable" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Disable" })).toBeTruthy();
+    expect(runtimeCardQueries.getByText("Background terminal")).toBeTruthy();
+    expect(runtimeCardQueries.getByText("Official config")).toBeTruthy();
+    expect(runtimeCardQueries.getByText("Enable")).toBeTruthy();
+    expect(runtimeCardQueries.getByText("Disable")).toBeTruthy();
+    expect(runtimeCardQueries.getByText("Follow official default")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Follow official default" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText("Official default on this platform: enabled."),
+      runtimeCardQueries.getByText("Official default on this platform: enabled."),
     ).toBeTruthy();
   });
 
