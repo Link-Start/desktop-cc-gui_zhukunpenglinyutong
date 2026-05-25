@@ -97,6 +97,23 @@ const PENDING_THREAD_LAST_AGENT_ANCHOR_TTL_MS = 5 * 60 * 1000;
 type GeneratedImageItem = Extract<ConversationItem, { kind: "generatedImage" }>;
 const emptyItems: Record<string, ConversationItem[]> = {};
 
+function attachReplacedThreadId(
+  thread: ThreadSummary,
+  replacedThreadId: string,
+): ThreadSummary {
+  if (thread.id === replacedThreadId) {
+    return thread;
+  }
+  const nativeThreadIds = thread.nativeThreadIds ?? [];
+  if (nativeThreadIds.includes(replacedThreadId)) {
+    return thread;
+  }
+  return {
+    ...thread,
+    nativeThreadIds: [...nativeThreadIds, replacedThreadId],
+  };
+}
+
 export const initialState: ThreadState = {
   activeThreadIdByWorkspace: {},
   itemsByThread: emptyItems,
@@ -230,7 +247,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           const newThreadId = action.threadId;
 
           // Rename thread inline (similar to renameThreadId action)
-          const updatedThread = { ...pendingThread, id: newThreadId };
+          const updatedThread = attachReplacedThreadId(
+            { ...pendingThread, id: newThreadId },
+            oldThreadId,
+          );
           const nextList = [...list];
           nextList[pendingIndex] = updatedThread;
 
@@ -1475,7 +1495,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       const workspaceThreads = newThreadsByWorkspace[workspaceId];
       if (workspaceThreads) {
         const renamedThreads = workspaceThreads.map((thread) =>
-          thread.id === oldThreadId ? { ...thread, id: newThreadId } : thread,
+          thread.id === oldThreadId
+            ? attachReplacedThreadId({ ...thread, id: newThreadId }, oldThreadId)
+            : thread,
         );
         const dedupedById = new Map<string, ThreadSummary>();
         for (const thread of renamedThreads) {
@@ -1484,10 +1506,17 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             dedupedById.set(thread.id, thread);
             continue;
           }
+          const nativeThreadIds = Array.from(
+            new Set([
+              ...(current.nativeThreadIds ?? []),
+              ...(thread.nativeThreadIds ?? []),
+            ]),
+          );
           dedupedById.set(thread.id, {
             ...current,
             ...thread,
             updatedAt: Math.max(current.updatedAt, thread.updatedAt),
+            nativeThreadIds: nativeThreadIds.length > 0 ? nativeThreadIds : undefined,
           });
         }
         newThreadsByWorkspace[workspaceId] = Array.from(dedupedById.values());

@@ -68,6 +68,7 @@ import {
   buildWorkspaceSessionFolderProjection,
 } from "../utils/workspaceSessionFolders";
 import {
+  assignWorkspaceSessionFolders,
   assignWorkspaceSessionFolder,
   createWorkspaceSessionFolder,
   deleteWorkspaceSessionFolder,
@@ -75,6 +76,10 @@ import {
   renameWorkspaceSessionFolder,
   type WorkspaceSessionFolder,
 } from "../../../services/tauri";
+import {
+  runWithLoadingProgress,
+  type LoadingProgressController,
+} from "../utils/loadingProgressActions";
 
 type WorkspaceGroupSection = {
   id: string | null;
@@ -183,6 +188,12 @@ function resolveFolderIntentReplacementThreadId(
 ): string | null {
   if (!isPendingEngineThreadId(pendingThreadId)) {
     return pendingThreadId;
+  }
+  const explicitReplacement = threads.find((thread) =>
+    thread.nativeThreadIds?.includes(pendingThreadId),
+  );
+  if (explicitReplacement && !isPendingEngineThreadId(explicitReplacement.id)) {
+    return explicitReplacement.id;
   }
   const pendingEngine = resolveEnginePrefix(pendingThreadId);
   const sameEngineRealThreads = threads.filter((thread) => {
@@ -444,6 +455,8 @@ type SidebarProps = {
   globalSearchShortcut: string | null;
   openChatShortcut: string | null;
   openKanbanShortcut: string | null;
+  showLoadingProgressDialog?: LoadingProgressController["showLoadingProgressDialog"];
+  hideLoadingProgressDialog?: LoadingProgressController["hideLoadingProgressDialog"];
   topbarNode?: ReactNode;
 };
 
@@ -530,6 +543,8 @@ export function Sidebar({
   globalSearchShortcut,
   openChatShortcut,
   openKanbanShortcut,
+  showLoadingProgressDialog,
+  hideLoadingProgressDialog,
   topbarNode,
 }: SidebarProps) {
   const { t } = useTranslation();
@@ -647,17 +662,112 @@ export function Sidebar({
     async (workspaceId: string, threadId: string, folderId: string | null) => {
       const projectedThreads = getProjectedThreads(workspaceId);
       const threadIds = new Set(projectedThreads.map((thread) => thread.id));
-      const targetThreadIds = threadIds.has(threadId)
+      const targetThreadIds = (threadIds.has(threadId)
         ? collectThreadSubtreeIds(projectedThreads, threadParentById, threadId)
-        : [threadId];
-      for (const targetThreadId of targetThreadIds) {
-        if (isPendingSubagentThreadId(targetThreadId)) {
-          continue;
+        : [threadId]
+      ).filter((targetThreadId) => !isPendingSubagentThreadId(targetThreadId));
+      if (targetThreadIds.length === 0) {
+        return;
+      }
+      const response = await assignWorkspaceSessionFolders(
+        workspaceId,
+        targetThreadIds,
+        folderId,
+      );
+      const failedResults = response.results.filter((result) => !result.ok);
+      const respondedThreadIds = new Set(response.results.map((result) => result.sessionId));
+      const missingThreadIds = targetThreadIds.filter((targetThreadId) => {
+        return !respondedThreadIds.has(targetThreadId);
+      });
+      const successfulThreadIds = response.results
+        .filter((result) => result.ok)
+        .map((result) => result.sessionId);
+      if (successfulThreadIds.length > 0) {
+        setSessionFolderOverrideByWorkspaceId((current) => {
+          const workspaceOverrides = current[workspaceId] ?? {};
+          const nextWorkspaceOverrides = { ...workspaceOverrides };
+          successfulThreadIds.forEach((targetThreadId) => {
+            nextWorkspaceOverrides[targetThreadId] = folderId;
+          });
+          return {
+            ...current,
+            [workspaceId]: nextWorkspaceOverrides,
+          };
+        });
+        onQuickReloadWorkspaceThreads?.(workspaceId);
+      }
+      if (failedResults.length > 0 || missingThreadIds.length > 0) {
+        const firstFailureMessage =
+          failedResults.find((result) => result.error?.trim())?.error ??
+          (missingThreadIds.length > 0
+            ? `Missing assignment response for ${missingThreadIds.length} session(s).`
+            : "Session folder assignment failed.");
+        if (successfulThreadIds.length === 0) {
+          throw new Error(firstFailureMessage);
         }
-        await assignSessionToFolder(workspaceId, targetThreadId, folderId);
+        throw new Error(
+          `${firstFailureMessage} ${successfulThreadIds.length}/${targetThreadIds.length} session(s) moved.`,
+        );
       }
     },
-    [assignSessionToFolder, getProjectedThreads, threadParentById],
+    [getProjectedThreads, onQuickReloadWorkspaceThreads, threadParentById],
+  );
+
+  const loadingProgressController = useMemo<LoadingProgressController | null>(() => {
+    if (!showLoadingProgressDialog || !hideLoadingProgressDialog) {
+      return null;
+    }
+    return {
+      showLoadingProgressDialog,
+      hideLoadingProgressDialog,
+    };
+  }, [hideLoadingProgressDialog, showLoadingProgressDialog]);
+
+  const resolveMoveTargetLabel = useCallback(
+    (workspaceId: string, folderId: string | null, fallbackLabel?: string) => {
+      if (fallbackLabel?.trim()) {
+        return fallbackLabel;
+      }
+      if (!folderId) {
+        return t("threads.moveToProjectRoot");
+      }
+      return (
+        sessionFoldersByWorkspaceId[workspaceId]?.find((folder) => folder.id === folderId)
+          ?.name ?? t("threads.moveToFolder")
+      );
+    },
+    [sessionFoldersByWorkspaceId, t],
+  );
+
+  const moveThreadSubtreeToFolder = useCallback(
+    async (
+      workspaceId: string,
+      threadId: string,
+      folderId: string | null,
+      fallbackLabel?: string,
+    ) => {
+      const moveAction = () => assignThreadSubtreeToFolder(workspaceId, threadId, folderId);
+      if (!loadingProgressController) {
+        await moveAction();
+        return;
+      }
+      await runWithLoadingProgress(
+        loadingProgressController,
+        {
+          title: t("sidebar.loadingProgressMoveSessionTitle"),
+          message: t("sidebar.loadingProgressMoveSessionMessage", {
+            folder: resolveMoveTargetLabel(workspaceId, folderId, fallbackLabel),
+          }),
+        },
+        moveAction,
+      );
+    },
+    [
+      assignThreadSubtreeToFolder,
+      loadingProgressController,
+      resolveMoveTargetLabel,
+      t,
+    ],
   );
 
   const clearPendingSessionFolderIntent = useCallback((workspaceId: string, threadId: string) => {
@@ -707,6 +817,33 @@ export function Sidebar({
           [threadId]: folderId,
         },
       }));
+    },
+    [],
+  );
+
+  const migrateLocalSessionFolderOverride = useCallback(
+    (workspaceId: string, sourceThreadId: string, targetThreadId: string, folderId: string) => {
+      setSessionFolderOverrideByWorkspaceId((current) => {
+        const workspaceOverrides = current[workspaceId] ?? {};
+        const sourceHasOverride = Object.hasOwn(workspaceOverrides, sourceThreadId);
+        if (
+          workspaceOverrides[targetThreadId] === folderId &&
+          (!sourceHasOverride || sourceThreadId === targetThreadId)
+        ) {
+          return current;
+        }
+        const nextWorkspaceOverrides = {
+          ...workspaceOverrides,
+          [targetThreadId]: folderId,
+        };
+        if (sourceThreadId !== targetThreadId) {
+          delete nextWorkspaceOverrides[sourceThreadId];
+        }
+        return {
+          ...current,
+          [workspaceId]: nextWorkspaceOverrides,
+        };
+      });
     },
     [],
   );
@@ -761,6 +898,12 @@ export function Sidebar({
           if (pendingSessionFolderAssignInFlightRef.current.has(assignKey)) {
             return;
           }
+          migrateLocalSessionFolderOverride(
+            workspaceId,
+            intentThreadId,
+            targetThreadId,
+            folderId,
+          );
           pendingSessionFolderAssignInFlightRef.current.add(assignKey);
           void assignSessionToFolder(workspaceId, targetThreadId, folderId)
             .then(() => {
@@ -789,6 +932,7 @@ export function Sidebar({
   }, [
     assignSessionToFolder,
     clearPendingSessionFolderIntent,
+    migrateLocalSessionFolderOverride,
     pendingSessionFolderIntentByWorkspaceId,
     threadsByWorkspace,
     t,
@@ -822,7 +966,7 @@ export function Sidebar({
       onAutoNameThread,
       onMoveThreadToFolder: async (workspaceId, threadId, folderId) => {
         try {
-          await assignThreadSubtreeToFolder(workspaceId, threadId, folderId);
+          await moveThreadSubtreeToFolder(workspaceId, threadId, folderId);
         } catch (error: unknown) {
           pushErrorToast({
             title: t("sidebar.sessionFolderMoveFailed"),
@@ -1427,13 +1571,15 @@ export function Sidebar({
       if ((target.folderId ?? null) === (folderMovePicker.currentFolderId ?? null)) {
         return;
       }
+      const moveRequest = folderMovePicker;
+      closeFolderMovePicker();
       try {
-        await assignThreadSubtreeToFolder(
-          folderMovePicker.workspaceId,
-          folderMovePicker.threadId,
+        await moveThreadSubtreeToFolder(
+          moveRequest.workspaceId,
+          moveRequest.threadId,
           target.folderId,
+          target.label,
         );
-        closeFolderMovePicker();
       } catch (error: unknown) {
         pushErrorToast({
           title: t("sidebar.sessionFolderMoveFailed"),
@@ -1442,7 +1588,7 @@ export function Sidebar({
         });
       }
     },
-    [assignThreadSubtreeToFolder, closeFolderMovePicker, folderMovePicker, t],
+    [closeFolderMovePicker, folderMovePicker, moveThreadSubtreeToFolder, t],
   );
 
   const filteredFolderMoveTargets = useMemo(() => {
@@ -1727,6 +1873,7 @@ export function Sidebar({
             activeThreadId={activeThreadId}
             systemProxyEnabled={systemProxyEnabled}
             systemProxyUrl={systemProxyUrl}
+            moveFolderTargetsByWorkspaceId={moveFolderTargetsByWorkspaceId}
             getThreadRows={getThreadRows}
             getThreadTime={getThreadTime}
             isThreadPinned={isThreadPinned}
@@ -1879,6 +2026,7 @@ export function Sidebar({
     renderHighlightedName,
     hydratedThreadListWorkspaceIds,
     isExitedSessionsHidden,
+    moveFolderTargetsByWorkspaceId,
     sessionFolderErrorByWorkspaceId,
     sessionFoldersByWorkspaceId,
     rootSessionFolderDraftRequestByWorkspaceId,

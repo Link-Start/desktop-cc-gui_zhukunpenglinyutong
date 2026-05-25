@@ -739,16 +739,24 @@ describe("useSidebarMenus", () => {
       "Copy ID",
       "Archive",
       "Move to folder",
-      "Project root",
-      "Planning",
       "Delete",
     ]);
-    expect(items[6]?.type).toBe("label");
-    expect(items[8]?.type === "item" ? items[8].disabled : false).toBe(true);
+    const moveItem = items.find((item) => item.type === "submenu" && item.id === "move-to-folder");
+    expect(moveItem?.type).toBe("submenu");
+    expect(
+      moveItem?.type === "submenu"
+        ? moveItem.items.map((item) => item.type === "separator" ? "---" : item.label)
+        : [],
+    ).toEqual(["Project root", "Planning"]);
+    expect(
+      moveItem?.type === "submenu" && moveItem.items[1]?.type === "item"
+        ? moveItem.items[1].disabled
+        : false,
+    ).toBe(true);
 
     await act(async () => {
-      if (items[7]?.type === "item") {
-        await items[7].onSelect();
+      if (moveItem?.type === "submenu" && moveItem.items[0]?.type === "item") {
+        await moveItem.items[0].onSelect();
       }
     });
 
@@ -759,7 +767,7 @@ describe("useSidebarMenus", () => {
     );
   });
 
-  it("uses a searchable folder picker entry for large move target lists", async () => {
+  it("keeps folder move targets visible when large lists also offer search", async () => {
     const handlers = createHandlers();
     const targets = [
       { folderId: null, label: "Project root" },
@@ -797,13 +805,40 @@ describe("useSidebarMenus", () => {
       "Copy ID",
       "Archive",
       "Move to folder",
-      "Search folders...",
       "Delete",
     ]);
+    const moveItem = items.find((item) => item.type === "submenu" && item.id === "move-to-folder");
+    expect(moveItem?.type).toBe("submenu");
+    expect(
+      moveItem?.type === "submenu"
+        ? moveItem.items.map((item) => item.type === "separator" ? "---" : item.label)
+        : [],
+    ).toEqual([
+      "Search folders...",
+      "Project root",
+      "Folder 1",
+      "Folder 2",
+      "Folder 3",
+      "Folder 4",
+      "Folder 5",
+      "Folder 6",
+      "Folder 7",
+      "Folder 8",
+      "Folder 9",
+      "Folder 10",
+      "Folder 11",
+      "Folder 12",
+      "Folder 13",
+    ]);
+    expect(
+      moveItem?.type === "submenu" && moveItem.items[8]?.type === "item"
+        ? moveItem.items[8].disabled
+        : false,
+    ).toBe(true);
 
     await act(async () => {
-      if (items[7]?.type === "item") {
-        await items[7].onSelect();
+      if (moveItem?.type === "submenu" && moveItem.items[0]?.type === "item") {
+        await moveItem.items[0].onSelect();
       }
     });
 
@@ -814,6 +849,18 @@ describe("useSidebarMenus", () => {
       "folder-7",
     );
     expect(handlers.onMoveThreadToFolder).not.toHaveBeenCalled();
+
+    await act(async () => {
+      if (moveItem?.type === "submenu" && moveItem.items[2]?.type === "item") {
+        await moveItem.items[2].onSelect();
+      }
+    });
+
+    expect(handlers.onMoveThreadToFolder).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "folder-1",
+    );
   });
 
   it("triggers create action when Shared Session entry is clicked", async () => {

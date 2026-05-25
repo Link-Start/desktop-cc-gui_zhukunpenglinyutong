@@ -9,6 +9,7 @@ import {
 } from "../../../services/clientStorage";
 import {
   assignWorkspaceSessionFolder,
+  assignWorkspaceSessionFolders,
   createWorkspaceSessionFolder,
   deleteWorkspaceSessionFolder,
   listWorkspaceSessionFolders,
@@ -19,7 +20,7 @@ import { pushErrorToast } from "../../../services/toasts";
 vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, params?: Record<string, string | number>) => {
       const translations: Record<string, string> = {
         "sidebar.addWorkspace": "Add workspace",
         "common.cancel": "Cancel",
@@ -51,6 +52,8 @@ vi.mock("react-i18next", () => ({
         "sidebar.sessionFolderRenameFailed": "Could not rename folder",
         "sidebar.sessionFolderDeleteFailed": "Could not delete folder",
         "sidebar.sessionFolderMoveFailed": "Could not move session",
+        "sidebar.loadingProgressMoveSessionTitle": "Moving session...",
+        "sidebar.loadingProgressMoveSessionMessage": "Moving this session to {{folder}}.",
         "sidebar.sessionFolderCrossProjectBlocked": "Sessions cannot be moved across projects.",
         "sidebar.sessionFolderCount": "session count",
         "sidebar.sessionFolderLoadFailed": "Session folders unavailable.",
@@ -98,7 +101,15 @@ vi.mock("react-i18next", () => ({
         "settings.title": "Settings",
         "tabbar.primaryNavigation": "Primary navigation",
       };
-      return translations[key] ?? key;
+      const template = translations[key] ?? key;
+      if (!params) {
+        return template;
+      }
+      return Object.entries(params).reduce(
+        (value, [paramKey, paramValue]) =>
+          value.replaceAll(`{{${paramKey}}}`, String(paramValue)),
+        template,
+      );
     },
     i18n: {
       language: "en",
@@ -112,6 +123,7 @@ vi.mock("../../../services/tauri", async (importOriginal) => {
   return {
     ...actual,
     assignWorkspaceSessionFolder: vi.fn(),
+    assignWorkspaceSessionFolders: vi.fn(),
     createWorkspaceSessionFolder: vi.fn(),
     deleteWorkspaceSessionFolder: vi.fn(),
     listWorkspaceSessionFolders: vi.fn(),
@@ -174,6 +186,9 @@ beforeEach(() => {
   vi.mocked(assignWorkspaceSessionFolder).mockResolvedValue({
     sessionId: "default-session",
     folderId: null,
+  });
+  vi.mocked(assignWorkspaceSessionFolders).mockResolvedValue({
+    results: [{ sessionId: "default-session", ok: true }],
   });
   vi.mocked(createWorkspaceSessionFolder).mockResolvedValue({
     folder: {
@@ -606,9 +621,8 @@ describe("Sidebar workspace session folders", () => {
       workspaceId: "ws-1",
       folders,
     });
-    vi.mocked(assignWorkspaceSessionFolder).mockResolvedValueOnce({
-      sessionId: "thread-1",
-      folderId: "folder-12",
+    vi.mocked(assignWorkspaceSessionFolders).mockResolvedValueOnce({
+      results: [{ sessionId: "thread-1", ok: true }],
     });
     const workspace = {
       id: "ws-1",
@@ -621,6 +635,8 @@ describe("Sidebar workspace session folders", () => {
         worktreeSetupScript: null,
       },
     };
+    const showLoadingProgressDialog = vi.fn(() => "loading-1");
+    const hideLoadingProgressDialog = vi.fn();
 
     render(
       <Sidebar
@@ -644,6 +660,8 @@ describe("Sidebar workspace session folders", () => {
           ],
         }}
         hydratedThreadListWorkspaceIds={new Set(["ws-1"])}
+        showLoadingProgressDialog={showLoadingProgressDialog}
+        hideLoadingProgressDialog={hideLoadingProgressDialog}
       />,
     );
 
@@ -651,7 +669,8 @@ describe("Sidebar workspace session folders", () => {
     const threadRow = await screen.findByText("Thread one");
     fireEvent.contextMenu(threadRow.closest(".thread-row") as HTMLElement);
     const threadMenu = await screen.findByRole("menu", { name: "threads.threadActions" });
-    const searchFoldersItem = within(threadMenu).getByRole("menuitem", {
+    fireEvent.mouseEnter(within(threadMenu).getByRole("menuitem", { name: "Move to folder" }));
+    const searchFoldersItem = await screen.findByRole("menuitem", {
       name: "Search folders...",
     });
     await act(async () => {
@@ -675,7 +694,122 @@ describe("Sidebar workspace session folders", () => {
     await act(async () => {
       fireEvent.click(within(picker).getByRole("option", { name: "Needle" }));
     });
-    expect(assignWorkspaceSessionFolder).toHaveBeenCalledWith("ws-1", "thread-1", "folder-12");
+    expect(screen.queryByRole("dialog", { name: "Move to folder" })).toBeNull();
+    expect(showLoadingProgressDialog).toHaveBeenCalledWith({
+      title: "Moving session...",
+      message: "Moving this session to Needle.",
+    });
+    expect(assignWorkspaceSessionFolders).toHaveBeenCalledWith(
+      "ws-1",
+      ["thread-1"],
+      "folder-12",
+    );
+    expect(hideLoadingProgressDialog).toHaveBeenCalledWith("loading-1");
+  });
+
+  it("moves a session subtree with one batch assignment and one quick reload", async () => {
+    vi.mocked(listWorkspaceSessionFolders).mockResolvedValueOnce({
+      workspaceId: "ws-1",
+      folders: [
+        {
+          id: "folder-parent",
+          workspaceId: "ws-1",
+          parentId: null,
+          name: "Planning",
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    });
+    vi.mocked(assignWorkspaceSessionFolders).mockResolvedValueOnce({
+      results: [
+        { sessionId: "thread-parent", ok: true },
+        { sessionId: "claude:subagent:thread-parent:agent-1", ok: true },
+      ],
+    });
+    const workspace = {
+      id: "ws-1",
+      name: "codemoss",
+      path: "/tmp/codemoss",
+      connected: true,
+      kind: "main" as const,
+      settings: {
+        sidebarCollapsed: false,
+        worktreeSetupScript: null,
+      },
+    };
+    const onQuickReloadWorkspaceThreads = vi.fn();
+    const showLoadingProgressDialog = vi.fn(() => "loading-subtree");
+    const hideLoadingProgressDialog = vi.fn();
+
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace],
+          },
+        ]}
+        threadsByWorkspace={{
+          "ws-1": [
+            {
+              id: "thread-parent",
+              name: "Parent session",
+              updatedAt: 30,
+            },
+            {
+              id: "claude:subagent:thread-parent:agent-1",
+              name: "Subagent session",
+              updatedAt: 29,
+              parentThreadId: "thread-parent",
+              engineSource: "claude",
+            },
+            {
+              id: "claude-pending-subagent:thread-parent:tool-1",
+              name: "Pending subagent",
+              updatedAt: 28,
+              parentThreadId: "thread-parent",
+              engineSource: "claude",
+            },
+          ],
+        }}
+        threadParentById={{
+          "claude:subagent:thread-parent:agent-1": "thread-parent",
+          "claude-pending-subagent:thread-parent:tool-1": "thread-parent",
+        }}
+        hydratedThreadListWorkspaceIds={new Set(["ws-1"])}
+        onQuickReloadWorkspaceThreads={onQuickReloadWorkspaceThreads}
+        showLoadingProgressDialog={showLoadingProgressDialog}
+        hideLoadingProgressDialog={hideLoadingProgressDialog}
+      />,
+    );
+
+    const parentRow = await screen.findByText("Parent session");
+    fireEvent.contextMenu(parentRow.closest(".thread-row") as HTMLElement);
+    const threadMenu = await screen.findByRole("menu", { name: "threads.threadActions" });
+    fireEvent.mouseEnter(within(threadMenu).getByRole("menuitem", { name: "Move to folder" }));
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Planning" }));
+    });
+
+    expect(assignWorkspaceSessionFolders).toHaveBeenCalledTimes(1);
+    expect(assignWorkspaceSessionFolders).toHaveBeenCalledWith(
+      "ws-1",
+      ["thread-parent", "claude:subagent:thread-parent:agent-1"],
+      "folder-parent",
+    );
+    expect(assignWorkspaceSessionFolder).not.toHaveBeenCalled();
+    expect(onQuickReloadWorkspaceThreads).toHaveBeenCalledTimes(1);
+    expect(onQuickReloadWorkspaceThreads).toHaveBeenCalledWith("ws-1");
+    expect(showLoadingProgressDialog).toHaveBeenCalledWith({
+      title: "Moving session...",
+      message: "Moving this session to Planning.",
+    });
+    expect(hideLoadingProgressDialog).toHaveBeenCalledWith("loading-subtree");
   });
 
   it("keeps non-empty workspace session folders visible when backend blocks deletion", async () => {

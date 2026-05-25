@@ -323,6 +323,75 @@ describe("WorktreeSection", () => {
     expect(onToggleWorkspaceCollapse).not.toHaveBeenCalled();
   });
 
+  it("passes worktree-scoped folder move targets to thread menus", () => {
+    const onShowThreadMenu = vi.fn();
+    const parentMoveTargets = [{ folderId: "parent-folder", label: "Parent Folder" }];
+    const worktreeMoveTargets = [{ folderId: "worktree-folder", label: "Worktree Folder" }];
+    const thread = {
+      id: "claude:thread-1",
+      name: "Worktree Session",
+      updatedAt: 1000,
+      engineSource: "claude" as const,
+    };
+
+    render(
+      <WorktreeSection
+        parentWorkspaceId="workspace-1"
+        worktrees={[worktree]}
+        isSectionCollapsed={false}
+        onToggleSectionCollapse={vi.fn()}
+        deletingWorktreeIds={new Set()}
+        threadsByWorkspace={{ [worktree.id]: [thread] }}
+        threadStatusById={{}}
+        hydratedThreadListWorkspaceIds={new Set([worktree.id])}
+        threadListLoadingByWorkspace={{ [worktree.id]: false }}
+        threadListPagingByWorkspace={{ [worktree.id]: false }}
+        threadListCursorByWorkspace={{ [worktree.id]: null }}
+        expandedWorkspaces={new Set()}
+        activeWorkspaceId={null}
+        activeThreadId={null}
+        moveFolderTargetsByWorkspaceId={{
+          "workspace-1": parentMoveTargets,
+          [worktree.id]: worktreeMoveTargets,
+        }}
+        getThreadRows={() => ({
+          pinnedRows: [],
+          unpinnedRows: [{ thread, depth: 0 }],
+          totalRoots: 1,
+          hasMoreRoots: false,
+        })}
+        getThreadTime={() => null}
+        isThreadPinned={() => false}
+        isThreadAutoNaming={() => false}
+        onToggleThreadPin={vi.fn()}
+        getPinTimestamp={() => null}
+        onConnectWorkspace={vi.fn()}
+        onShowWorktreeSessionMenu={vi.fn()}
+        onQuickReloadWorkspaceThreads={vi.fn()}
+        onSelectWorkspace={vi.fn()}
+        onToggleWorkspaceCollapse={vi.fn()}
+        onSelectThread={vi.fn()}
+        onShowThreadMenu={onShowThreadMenu}
+        onShowWorktreeMenu={vi.fn()}
+        onToggleExpanded={vi.fn()}
+        onLoadOlderThreads={vi.fn()}
+      />,
+    );
+
+    const threadRow = screen.getByText("Worktree Session").closest(".thread-row");
+    expect(threadRow).toBeTruthy();
+    if (!threadRow) {
+      throw new Error("Expected worktree thread row");
+    }
+    fireEvent.contextMenu(threadRow);
+
+    expect(onShowThreadMenu).toHaveBeenCalledTimes(1);
+    expect(onShowThreadMenu.mock.calls[0]?.[1]).toBe(worktree.id);
+    expect(onShowThreadMenu.mock.calls[0]?.[2]).toBe("claude:thread-1");
+    expect(onShowThreadMenu.mock.calls[0]?.[5]).toBe(worktreeMoveTargets);
+    expect(onShowThreadMenu.mock.calls[0]?.[5]).not.toBe(parentMoveTargets);
+  });
+
   it("activates the worktree from the explicit main-panel action without toggling collapse", () => {
     const onSelectWorkspace = vi.fn();
     const onToggleWorkspaceCollapse = vi.fn();

@@ -55,6 +55,8 @@ const enPart1 = {
     sessionFolderRenameFailed: "Could not rename folder",
     sessionFolderDeleteFailed: "Could not delete folder",
     sessionFolderMoveFailed: "Could not move session",
+    loadingProgressMoveSessionTitle: "Moving session...",
+    loadingProgressMoveSessionMessage: "Moving this session to {{folder}}.",
     sessionFolderCrossProjectBlocked:
       "Sessions cannot be moved across projects.",
     sessionFolderCount: "{{count}} sessions",

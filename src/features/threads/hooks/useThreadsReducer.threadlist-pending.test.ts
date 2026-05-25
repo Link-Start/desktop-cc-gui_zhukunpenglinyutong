@@ -751,6 +751,9 @@ describe("threadReducer", () => {
       "a1",
     ]);
     expect(next.threadsByWorkspace["ws-1"]?.filter((t) => t.id === "opencode:ses-1")).toHaveLength(1);
+    expect(
+      next.threadsByWorkspace["ws-1"]?.find((t) => t.id === "opencode:ses-1")?.nativeThreadIds,
+    ).toContain("opencode-pending-1");
     expect(next.threadStatusById["opencode:ses-1"]?.isProcessing).toBe(true);
     expect(next.threadStatusById["opencode:ses-1"]?.hasUnread).toBe(true);
   });
@@ -800,6 +803,7 @@ describe("threadReducer", () => {
       "claude:child-session",
     ]);
     expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe("fork-prompt");
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.nativeThreadIds).toContain(forkThreadId);
     expect(next.threadStatusById["claude:child-session"]?.isProcessing).toBe(true);
     expect(next.activeTurnIdByThread["claude:child-session"]).toBe("turn-1");
   });

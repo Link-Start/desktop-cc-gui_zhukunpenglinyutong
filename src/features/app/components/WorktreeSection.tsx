@@ -10,6 +10,8 @@ import { WorktreeCard } from "./WorktreeCard";
 import { getExitedSessionRowVisibility } from "../utils/exitedSessionRows";
 import type { ThreadMoveFolderTarget } from "../hooks/useSidebarMenus";
 
+const EMPTY_MOVE_FOLDER_TARGETS_BY_WORKSPACE_ID: Record<string, ThreadMoveFolderTarget[]> = {};
+
 type ThreadStatusMap = Record<
   string,
   { isProcessing: boolean; hasUnread: boolean; isReviewing: boolean }
@@ -39,6 +41,7 @@ type WorktreeSectionProps = {
   activeThreadId: string | null;
   systemProxyEnabled?: boolean;
   systemProxyUrl?: string | null;
+  moveFolderTargetsByWorkspaceId?: Record<string, ThreadMoveFolderTarget[]>;
   getThreadRows: (
     threads: ThreadSummary[],
     isExpanded: boolean,
@@ -97,6 +100,7 @@ export function WorktreeSection({
   activeThreadId,
   systemProxyEnabled = false,
   systemProxyUrl = null,
+  moveFolderTargetsByWorkspaceId = EMPTY_MOVE_FOLDER_TARGETS_BY_WORKSPACE_ID,
   getThreadRows,
   getThreadTime,
   isThreadPinned,
@@ -224,6 +228,7 @@ export function WorktreeSection({
             const isThreadListDegraded = hasDegradedThreadList(worktreeThreads);
             const threadRows = threadRowsByWorktreeId.get(worktree.id);
             const worktreeThreadRows = threadRows?.unpinnedRows ?? [];
+            const moveFolderTargets = moveFolderTargetsByWorkspaceId[worktree.id];
             const totalWorktreeRoots = threadRows?.totalRoots ?? 0;
             const visibleThreadRootCount = normalizeVisibleThreadRootCount(
               worktree.settings.visibleThreadRootCount,
@@ -285,6 +290,7 @@ export function WorktreeSection({
                     systemProxyEnabled={systemProxyEnabled}
                     systemProxyUrl={systemProxyUrl}
                     threadStatusById={threadStatusById}
+                    moveFolderTargets={moveFolderTargets}
                     getThreadTime={getThreadTime}
                     isThreadPinned={isThreadPinned}
                     isThreadAutoNaming={isThreadAutoNaming}

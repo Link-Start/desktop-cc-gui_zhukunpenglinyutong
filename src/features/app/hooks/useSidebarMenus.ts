@@ -8,6 +8,7 @@ import { formatByteSize } from "../../../utils/formatting";
 import {
   clampRendererContextMenuPosition,
   type RendererContextMenuItem,
+  type RendererContextMenuLeafItem,
   type RendererContextMenuState,
 } from "../../../components/ui/RendererContextMenu";
 import {
@@ -789,13 +790,9 @@ export function useSidebarMenus({
         });
       }
       if (onMoveThreadToFolder && moveFolderTargets.length > 0) {
-        items.push({
-          type: "label",
-          id: "move-to-folder-label",
-          label: t("threads.moveToFolder"),
-        });
+        const moveFolderItems: RendererContextMenuLeafItem[] = [];
         if (moveFolderTargets.length > INLINE_MOVE_FOLDER_TARGET_LIMIT && onOpenThreadFolderPicker) {
-          items.push({
+          moveFolderItems.push({
             type: "item",
             id: "search-folder-targets",
             label: t("threads.searchFolderTargets"),
@@ -807,18 +804,23 @@ export function useSidebarMenus({
                 currentFolderId,
               ),
           });
-        } else {
-          for (const target of moveFolderTargets) {
-            const isCurrentTarget = (target.folderId ?? null) === (currentFolderId ?? null);
-            items.push({
-              type: "item",
-              id: `move-folder-${target.folderId ?? "root"}`,
-              label: target.label,
-              disabled: isCurrentTarget,
-              onSelect: () => onMoveThreadToFolder(workspaceId, threadId, target.folderId),
-            });
-          }
         }
+        for (const target of moveFolderTargets) {
+          const isCurrentTarget = (target.folderId ?? null) === (currentFolderId ?? null);
+          moveFolderItems.push({
+            type: "item",
+            id: `move-folder-${target.folderId ?? "root"}`,
+            label: target.label,
+            disabled: isCurrentTarget,
+            onSelect: () => onMoveThreadToFolder(workspaceId, threadId, target.folderId),
+          });
+        }
+        items.push({
+          type: "submenu",
+          id: "move-to-folder",
+          label: t("threads.moveToFolder"),
+          items: moveFolderItems,
+        });
       }
       const sizeLabel = formatByteSize(sizeBytes);
       if (sizeLabel) {

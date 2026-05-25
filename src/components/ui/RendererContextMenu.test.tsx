@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   clampRendererContextMenuPosition,
@@ -97,6 +97,115 @@ describe("RendererContextMenu", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Open" }));
 
     expect(events).toEqual(["close", "select"]);
+  });
+
+  it("opens submenu items in a flyout and activates leaf actions", () => {
+    const events: string[] = [];
+    render(
+      <RendererContextMenu
+        menu={createMenu({
+          items: [
+            {
+              type: "submenu",
+              id: "move-to-folder",
+              label: "Move to folder",
+              items: [
+                {
+                  type: "item",
+                  id: "move-root",
+                  label: "Project root",
+                  onSelect: () => {
+                    events.push("move-root");
+                  },
+                },
+                {
+                  type: "item",
+                  id: "move-planning",
+                  label: "Planning",
+                  onSelect: () => {
+                    events.push("move-planning");
+                  },
+                },
+              ],
+            },
+          ],
+        })}
+        onClose={() => {
+          events.push("close");
+        }}
+      />,
+    );
+
+    const trigger = screen.getByRole("menuitem", { name: "Move to folder" });
+    expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+    expect(screen.queryByRole("menu", { name: "Move to folder" })).toBeNull();
+
+    fireEvent.mouseEnter(trigger);
+
+    const submenu = screen.getByRole("menu", { name: "Move to folder" });
+    fireEvent.click(within(submenu).getByRole("menuitem", { name: "Planning" }));
+
+    expect(events).toEqual(["close", "move-planning"]);
+  });
+
+  it("aligns compact submenu flyouts with the trigger row when viewport space allows", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 900,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 430,
+    });
+    render(
+      <RendererContextMenu
+        menu={createMenu({
+          items: [
+            {
+              type: "submenu",
+              id: "move-to-folder",
+              label: "Move to folder",
+              items: [
+                {
+                  type: "label",
+                  id: "root-label",
+                  label: "Project root",
+                },
+                {
+                  type: "item",
+                  id: "move-planning",
+                  label: "Planning",
+                  onSelect: vi.fn(),
+                },
+              ],
+            },
+          ],
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByRole("menuitem", { name: "Move to folder" });
+    trigger.getBoundingClientRect = vi.fn(
+      () =>
+        ({
+          left: 260,
+          right: 516,
+          top: 300,
+          bottom: 340,
+          width: 256,
+          height: 40,
+          x: 260,
+          y: 300,
+          toJSON: () => ({}),
+        }) as DOMRect,
+    );
+
+    fireEvent.mouseEnter(trigger);
+
+    const submenu = screen.getByRole("menu", { name: "Move to folder" });
+    expect(submenu.style.top).toBe("300px");
+    expect(submenu.style.left).toBe("522px");
   });
 
   it("clamps the menu inside the viewport", () => {

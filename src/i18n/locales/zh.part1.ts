@@ -166,6 +166,8 @@ const zhPart1 = {
     sessionFolderRenameFailed: "重命名文件夹失败",
     sessionFolderDeleteFailed: "删除文件夹失败",
     sessionFolderMoveFailed: "移动会话失败",
+    loadingProgressMoveSessionTitle: "正在移动会话...",
+    loadingProgressMoveSessionMessage: "正在把会话移动到 {{folder}}。",
     sessionFolderCrossProjectBlocked: "不允许跨项目移动会话。",
     sessionFolderCount: "{{count}} 个会话",
     sessionFolderLoadFailed: "会话文件夹暂不可用。",

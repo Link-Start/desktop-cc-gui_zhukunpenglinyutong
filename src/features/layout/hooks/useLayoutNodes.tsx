@@ -90,6 +90,7 @@ import type { UpdateState } from "../../update/hooks/useUpdater";
 import type { TerminalSessionState } from "../../terminal/hooks/useTerminalSession";
 import type { TerminalTab } from "../../terminal/hooks/useTerminalTabs";
 import type { ErrorToast } from "../../../services/toasts";
+import type { LoadingProgressDialogConfig } from "../../app/hooks/useLoadingProgressDialogState";
 import type { WorkspaceDirectoryEntry } from "../../../services/tauri";
 import type {
   CodeAnnotationBridgeProps,
@@ -386,6 +387,8 @@ type LayoutNodesOptions = {
   globalSearchShortcut: string | null;
   openChatShortcut: string | null;
   openKanbanShortcut: string | null;
+  showLoadingProgressDialog?: (config: LoadingProgressDialogConfig) => string;
+  hideLoadingProgressDialog?: (requestId: string) => void;
   cycleOpenSessionPrevShortcut: string | null;
   cycleOpenSessionNextShortcut: string | null;
   saveFileShortcut: string | null;
@@ -1478,6 +1481,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       globalSearchShortcut={options.globalSearchShortcut}
       openChatShortcut={options.openChatShortcut}
       openKanbanShortcut={options.openKanbanShortcut}
+      showLoadingProgressDialog={options.showLoadingProgressDialog}
+      hideLoadingProgressDialog={options.hideLoadingProgressDialog}
       onOpenSpecHub={options.onOpenSpecHub}
       onOpenWorkspaceHome={options.onOpenWorkspaceHome}
       showTerminalButton={options.showTerminalButton}

@@ -709,6 +709,12 @@
   backdrop-filter: blur(14px);
 }
 
+.renderer-context-menu-flyout {
+  z-index: 1201;
+  min-width: 220px;
+  max-width: min(280px, calc(100vw - 24px));
+}
+
 .sidebar-workspace-menu-group + .sidebar-workspace-menu-group {
   margin-top: 6px;
 }
@@ -752,6 +758,29 @@
   font-weight: 500;
   line-height: 1.22;
   transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.renderer-context-menu-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.renderer-context-menu-submenu-trigger {
+  justify-content: space-between;
+}
+
+.renderer-context-menu-submenu-trigger.is-open {
+  background: var(--surface-hover);
+}
+
+.renderer-context-menu-submenu-chevron {
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  font-size: 17px;
+  line-height: 1;
+  margin-left: 14px;
 }
 
 .sidebar-workspace-menu-item-row {
