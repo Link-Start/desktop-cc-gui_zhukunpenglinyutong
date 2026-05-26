@@ -228,7 +228,7 @@ export function inferProjectMapWorkspaceFilePath(input: {
 export function extractProjectMapWorkspaceEvidencePaths(text: string): string[] {
   const paths: string[] = [];
   const seen = new Set<string>();
-  const tokenPattern = /[^\s`'"(){}\[\]<>]+/g;
+  const tokenPattern = /[^\s`'"(){}[\]<>]+/g;
   let match: RegExpExecArray | null = tokenPattern.exec(text);
   while (match) {
     const normalized = normalizeWorkspaceEvidencePath(match[0] ?? "");

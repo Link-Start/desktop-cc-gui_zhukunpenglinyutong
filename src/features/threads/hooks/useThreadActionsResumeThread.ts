@@ -1112,9 +1112,11 @@ export function useThreadActionsResumeThreadForWorkspace(
       dispatch,
       getCustomName,
       itemsByThread,
+      latestThreadsByWorkspaceRef,
       loadedThreadsRef,
       onDebug,
       clearThreadAlias,
+      previousThreadsByWorkspaceRef,
       rememberThreadAlias,
       replaceOnResumeRef,
       reconcileMissingClaudeThread,
@@ -1124,6 +1126,7 @@ export function useThreadActionsResumeThreadForWorkspace(
       threadsByWorkspace,
       userInputRequests,
       useUnifiedHistoryLoader,
+      workspacePathsByIdRef,
     ],
   );
   return resumeThreadForWorkspace;

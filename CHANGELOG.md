@@ -2,6 +2,58 @@
 
 ---
 
+##### **2026年5月27日（v0.5.3）**
+
+中文：
+
+✨ Features
+- 新增项目知识地图基础能力，支持从工作区结构、文件证据和项目上下文生成可浏览的知识图谱
+- 新增知识地图增量生成与交互图谱能力，支持全局合并、节点级补充、证据链追踪和手动裁剪
+- 新增知识地图自动补充队列，将候选节点、证据文件和生成任务串成可审计的补全流程
+- 新增记忆画布工具折叠态，保留核心生成入口的同时降低知识地图面板的视觉占用
+
+🔧 Improvements
+- 优化知识地图生成提示词、结构化输出修复和兼容性边界，降低模型输出异常导致的生成失败
+- 优化知识地图节点选择、视口定位、头部折叠工具栏、证据 chip 和 inspector 交互，让图谱浏览与证据核对更稳定
+- 优化项目地图规范证据，将 Project Knowledge Map 的基础契约、增量生成、候选复核、自动补充和画布控制同步到 OpenSpec 主规范
+- 拆分会话目录与线程恢复逻辑，降低 `useThreadActions` 和 session catalog 链路的维护复杂度
+- 合并 Composer 上下文来源展开/收起入口，减少 readiness 区域和 context ledger 入口之间的交互漂移
+- 升级应用版本号到 `0.5.3`，同步前端包配置与 Tauri 配置
+
+🐛 Fixes
+- 修复会话文件夹删除状态同步、空文件夹树删除和删除文件夹后会话归属提升问题
+- 修复 Claude 长流式渲染恢复问题，降低长输出场景下消息区空白或恢复不完整的概率
+- 修复 Codex 后台响应解析与流式空白恢复诊断问题，让异常响应和空白流式状态更容易被识别
+- 修复知识地图生成链路、入口显隐控制和节点选择视口稳定性问题
+- 修复 Sidebar 会话移动反馈与子菜单定位问题，提升会话文件夹操作的可预期性
+- 稳定会话文件夹菜单、移动、Settings 删除会话、Codex 配置面板和 renderer diagnostics 相关测试
+
+English:
+
+✨ Features
+- Add the Project Knowledge Map foundation for generating a browsable knowledge graph from workspace structure, file evidence, and project context
+- Add incremental Project Map generation and interactive graph support with global merges, node-scoped enrichment, evidence tracing, and manual pruning
+- Add an auto-ingestion queue for Project Map candidate nodes, evidence files, and auditable generation tasks
+- Add collapsed canvas-tool controls for the memory canvas so core generation actions remain available with less panel noise
+
+🔧 Improvements
+- Improve Project Map prompts, structured-output repair, and compatibility boundaries to reduce generation failures from malformed model output
+- Improve Project Map node selection, viewport positioning, collapsed header tools, evidence chips, and inspector interactions for steadier graph review
+- Sync Project Knowledge Map contracts into OpenSpec main specs, including base behavior, incremental generation, candidate review, auto ingestion, and canvas controls
+- Split session catalog and thread-resume logic to reduce maintenance pressure in `useThreadActions` and session catalog flows
+- Merge Composer context-source expand/collapse controls so readiness and context-ledger entrypoints no longer drift
+- Bump app version to `0.5.3` across frontend package metadata and Tauri configuration
+
+🐛 Fixes
+- Fix session-folder delete synchronization, empty folder-tree deletion, and session ownership promotion after folder deletion
+- Fix Claude long-stream rendering recovery to reduce blank or incomplete message restoration in long-output sessions
+- Fix Codex background response parsing and blank streaming recovery diagnostics so abnormal responses are easier to identify
+- Fix Project Map generation flow, entry visibility controls, and node-selection viewport stability
+- Fix Sidebar session-move feedback and submenu positioning for more predictable session-folder operations
+- Stabilize tests for session folder menus, folder moves, Settings session deletion, Codex settings panels, and renderer diagnostics
+
+---
+
 ##### **2026年5月24日（v0.5.2）**
 
 中文：
