@@ -11,6 +11,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import {
   appendRendererDiagnostic,
   flushRendererDiagnosticsBuffer,
+  startRendererBlankScreenWatchdog,
 } from "./services/rendererDiagnostics";
 import { recordStartupMilestone } from "./features/startup-orchestration/utils/startupTrace";
 
@@ -145,6 +146,7 @@ async function bootstrap() {
     </React.StrictMode>,
   );
   appendRendererDiagnostic("bootstrap/render-committed");
+  startRendererBlankScreenWatchdog({ rootId: "root" });
   recordStartupMilestone("shell-ready");
   pushBootstrapNotice("runtimeNotice.bootstrap.ready");
   void markRendererReady();

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const clientStorageMocks = vi.hoisted(() => ({
   getClientStoreSync: vi.fn(),
@@ -13,12 +13,22 @@ const testLocalStorage = globalThis.localStorage;
 
 describe("rendererDiagnostics", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.resetModules();
     vi.unstubAllGlobals();
+    if (typeof document !== "undefined") {
+      document.body.innerHTML = "";
+    }
     testLocalStorage.clear();
     clientStorageMocks.getClientStoreSync.mockReset();
     clientStorageMocks.isPreloaded.mockReset();
     clientStorageMocks.writeClientStoreValue.mockReset();
+  });
+
+  afterEach(async () => {
+    const diagnostics = await import("./rendererDiagnostics");
+    diagnostics.stopRendererBlankScreenWatchdog();
+    vi.useRealTimers();
   });
 
   it("buffers diagnostics until client stores are preloaded", async () => {
@@ -211,5 +221,123 @@ describe("rendererDiagnostics", () => {
     expect(documentListenerCallsAfterFirstInstall).toBeGreaterThan(0);
     expect(windowMock.addEventListener).toHaveBeenCalledTimes(windowListenerCallsAfterFirstInstall);
     expect(documentMock.addEventListener).toHaveBeenCalledTimes(documentListenerCallsAfterFirstInstall);
+  });
+
+  it("records a blank-screen suspicion after repeated empty root samples", async () => {
+    class TestHTMLElement {
+      childElementCount = 0;
+      textContent = "";
+      tagName = "DIV";
+
+      constructor(
+        private readonly rect: { width: number; height: number },
+      ) {}
+
+      getBoundingClientRect() {
+        return this.rect;
+      }
+    }
+    const rootElement = new TestHTMLElement({ width: 800, height: 600 });
+    const bodyElement = new TestHTMLElement({ width: 800, height: 600 });
+    vi.stubGlobal("HTMLElement", TestHTMLElement);
+    vi.stubGlobal("document", {
+      body: bodyElement,
+      activeElement: bodyElement,
+      visibilityState: "visible",
+      readyState: "complete",
+      hasFocus: () => true,
+      getElementById: (id: string) => (id === "root" ? rootElement : null),
+    });
+    vi.stubGlobal("window", {
+      clearInterval: globalThis.clearInterval,
+      location: { href: "tauri://localhost" },
+      setInterval: globalThis.setInterval,
+      getComputedStyle: () => ({
+        display: "block",
+        opacity: "1",
+        visibility: "visible",
+      }),
+    });
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.startRendererBlankScreenWatchdog({
+      rootId: "root",
+      intervalMs: 250,
+      minConsecutiveSamples: 2,
+      maxReports: 1,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 550));
+
+    expect(clientStorageMocks.writeClientStoreValue).toHaveBeenCalledWith(
+      "app",
+      "diagnostics.rendererLifecycleLog",
+      [
+        expect.objectContaining({
+          label: "renderer/blank-screen-suspected",
+          payload: expect.objectContaining({
+            rootId: "root",
+            consecutiveSamples: 2,
+            root: expect.objectContaining({
+              exists: true,
+              childElementCount: 0,
+              textLength: 0,
+            }),
+          }),
+        }),
+      ],
+      { immediate: true },
+    );
+  });
+
+  it("does not report a blank screen when the root has visible content", async () => {
+    class TestHTMLElement {
+      tagName = "DIV";
+
+      constructor(
+        readonly childElementCount: number,
+        readonly textContent: string,
+        private readonly rect: { width: number; height: number },
+      ) {}
+
+      getBoundingClientRect() {
+        return this.rect;
+      }
+    }
+    const rootElement = new TestHTMLElement(1, "ready", { width: 800, height: 600 });
+    const bodyElement = new TestHTMLElement(1, "ready", { width: 800, height: 600 });
+    vi.stubGlobal("HTMLElement", TestHTMLElement);
+    vi.stubGlobal("document", {
+      body: bodyElement,
+      activeElement: bodyElement,
+      visibilityState: "visible",
+      readyState: "complete",
+      hasFocus: () => true,
+      getElementById: (id: string) => (id === "root" ? rootElement : null),
+    });
+    vi.stubGlobal("window", {
+      clearInterval: globalThis.clearInterval,
+      location: { href: "tauri://localhost" },
+      setInterval: globalThis.setInterval,
+      getComputedStyle: () => ({
+        display: "block",
+        opacity: "1",
+        visibility: "visible",
+      }),
+    });
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.startRendererBlankScreenWatchdog({
+      rootId: "root",
+      intervalMs: 250,
+      minConsecutiveSamples: 2,
+      maxReports: 1,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 550));
+
+    expect(clientStorageMocks.writeClientStoreValue).not.toHaveBeenCalled();
   });
 });

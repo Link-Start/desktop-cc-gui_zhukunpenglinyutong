@@ -14,9 +14,22 @@ const RENDERER_DIAGNOSTICS_KEY = "diagnostics.rendererLifecycleLog";
 const MAX_RENDERER_DIAGNOSTICS = 200;
 const MAX_PERF_ENTRIES = 1000;
 const EARLY_RENDERER_DIAGNOSTICS_STORAGE_KEY = "ccgui.bootstrapRendererDiagnostics";
+const DEFAULT_BLANK_WATCHDOG_INTERVAL_MS = 1_500;
+const DEFAULT_BLANK_WATCHDOG_MIN_CONSECUTIVE_SAMPLES = 2;
+const DEFAULT_BLANK_WATCHDOG_MAX_REPORTS = 6;
 
 let installed = false;
 let bufferedEntries: RendererDiagnosticEntry[] = [];
+let blankWatchdogTimer: number | null = null;
+let blankWatchdogConsecutiveSamples = 0;
+let blankWatchdogReports = 0;
+
+type BlankScreenWatchdogOptions = {
+  rootId?: string;
+  intervalMs?: number;
+  minConsecutiveSamples?: number;
+  maxReports?: number;
+};
 
 function trimDiagnostics(entries: RendererDiagnosticEntry[]) {
   const regularEntries: RendererDiagnosticEntry[] = [];
@@ -111,6 +124,81 @@ function collectWindowSnapshot(extra: Record<string, unknown> = {}) {
   };
 }
 
+function collectElementSnapshot(element: HTMLElement | null) {
+  if (!element || typeof window === "undefined") {
+    return {
+      exists: false,
+      childElementCount: 0,
+      textLength: 0,
+      width: 0,
+      height: 0,
+      display: null,
+      visibility: null,
+      opacity: null,
+    };
+  }
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+  return {
+    exists: true,
+    childElementCount: element.childElementCount,
+    textLength: element.textContent?.trim().length ?? 0,
+    width: Math.round(rect.width),
+    height: Math.round(rect.height),
+    display: style.display,
+    visibility: style.visibility,
+    opacity: style.opacity,
+  };
+}
+
+function collectRendererBlankScreenSnapshot(rootId: string) {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return null;
+  }
+  const root = document.getElementById(rootId);
+  const rootElement = root instanceof HTMLElement ? root : null;
+  const rootSnapshot = collectElementSnapshot(rootElement);
+  const bodySnapshot = collectElementSnapshot(document.body);
+  const activeElement = document.activeElement;
+  return collectWindowSnapshot({
+    rootId,
+    root: rootSnapshot,
+    body: bodySnapshot,
+    activeElementTag:
+      activeElement instanceof HTMLElement ? activeElement.tagName.toLowerCase() : null,
+  });
+}
+
+function isBlankRendererSnapshot(snapshot: Record<string, unknown> | null) {
+  if (!snapshot) {
+    return false;
+  }
+  const root = snapshot.root;
+  const body = snapshot.body;
+  if (!isRecord(root) || !isRecord(body)) {
+    return false;
+  }
+  if (root.exists !== true) {
+    return true;
+  }
+  const rootChildElementCount =
+    typeof root.childElementCount === "number" ? root.childElementCount : 0;
+  const rootTextLength =
+    typeof root.textLength === "number" ? root.textLength : 0;
+  const rootWidth = typeof root.width === "number" ? root.width : 0;
+  const rootHeight = typeof root.height === "number" ? root.height : 0;
+  const bodyWidth = typeof body.width === "number" ? body.width : 0;
+  const bodyHeight = typeof body.height === "number" ? body.height : 0;
+  const rootHidden =
+    root.display === "none" ||
+    root.visibility === "hidden" ||
+    root.opacity === "0";
+  const rootHasNoContent = rootChildElementCount === 0 && rootTextLength === 0;
+  const rootHasNoArea = rootWidth <= 0 || rootHeight <= 0;
+  const bodyHasArea = bodyWidth > 0 && bodyHeight > 0;
+  return rootHidden || rootHasNoContent || (bodyHasArea && rootHasNoArea);
+}
+
 function persistDiagnostics(entries: RendererDiagnosticEntry[]) {
   writeClientStoreValue("app", RENDERER_DIAGNOSTICS_KEY, entries, { immediate: true });
 }
@@ -189,6 +277,55 @@ export function appendRendererPerfDiagnostic(
   payload: Record<string, unknown> = {},
 ) {
   appendRendererDiagnostic(label, payload);
+}
+
+export function stopRendererBlankScreenWatchdog() {
+  if (blankWatchdogTimer === null || typeof window === "undefined") {
+    blankWatchdogTimer = null;
+    return;
+  }
+  window.clearInterval(blankWatchdogTimer);
+  blankWatchdogTimer = null;
+}
+
+export function startRendererBlankScreenWatchdog(
+  options: BlankScreenWatchdogOptions = {},
+) {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+  if (blankWatchdogTimer !== null) {
+    return;
+  }
+  const rootId = options.rootId ?? "root";
+  const intervalMs = Math.max(250, options.intervalMs ?? DEFAULT_BLANK_WATCHDOG_INTERVAL_MS);
+  const minConsecutiveSamples = Math.max(
+    1,
+    options.minConsecutiveSamples ?? DEFAULT_BLANK_WATCHDOG_MIN_CONSECUTIVE_SAMPLES,
+  );
+  const maxReports = Math.max(1, options.maxReports ?? DEFAULT_BLANK_WATCHDOG_MAX_REPORTS);
+  blankWatchdogConsecutiveSamples = 0;
+  blankWatchdogReports = 0;
+  blankWatchdogTimer = window.setInterval(() => {
+    const snapshot = collectRendererBlankScreenSnapshot(rootId);
+    if (!isBlankRendererSnapshot(snapshot)) {
+      blankWatchdogConsecutiveSamples = 0;
+      return;
+    }
+    blankWatchdogConsecutiveSamples += 1;
+    if (
+      blankWatchdogConsecutiveSamples < minConsecutiveSamples ||
+      blankWatchdogReports >= maxReports
+    ) {
+      return;
+    }
+    blankWatchdogReports += 1;
+    appendRendererDiagnostic("renderer/blank-screen-suspected", {
+      consecutiveSamples: blankWatchdogConsecutiveSamples,
+      intervalMs,
+      ...snapshot,
+    });
+  }, intervalMs);
 }
 
 export function flushRendererDiagnosticsBuffer() {

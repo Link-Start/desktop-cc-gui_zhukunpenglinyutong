@@ -44,6 +44,7 @@ import {
 } from "../constants/liveCanvasControls";
 import { useFileLinkOpener } from "../hooks/useFileLinkOpener";
 import { RendererContextMenu } from "../../../components/ui/RendererContextMenu";
+import { appendRendererDiagnostic } from "../../../services/rendererDiagnostics";
 import {
   groupToolItems,
   shouldHideToolItemForRender,
@@ -355,16 +356,16 @@ export const Messages = memo(function Messages({
     activeEngine === "claude" &&
     isThinking &&
     threadStreamLatencySnapshot?.latencyCategory === "repeat-turn-blanking";
-  const visibleStallRecoveryActive =
-    activeEngine === "claude" &&
-    isThinking &&
-    threadStreamLatencySnapshot?.latencyCategory === "visible-output-stall-after-first-delta";
-  const readableWindowRecoveryActive =
-    blankingRecoveryActive || visibleStallRecoveryActive;
   const supportsStreamingReadableWindowRecovery =
     activeEngine === "claude" ||
     activeEngine === "codex" ||
     activeEngine === "gemini";
+  const visibleStallRecoveryActive =
+    supportsStreamingReadableWindowRecovery &&
+    isThinking &&
+    threadStreamLatencySnapshot?.latencyCategory === "visible-output-stall-after-first-delta";
+  const readableWindowRecoveryActive =
+    blankingRecoveryActive || visibleStallRecoveryActive;
   const latestRuntimeReconnectItemId = useMemo(() => {
     for (let index = items.length - 1; index >= 0; index -= 1) {
       const item = items[index];
@@ -453,6 +454,7 @@ export const Messages = memo(function Messages({
     visibleTextLength: 0,
     reportedAt: 0,
   });
+  const lastStreamSurfaceDiagnosticKeyRef = useRef<string | null>(null);
   const previousAssistantThinkingRef = useRef(isThinking);
   const previousAssistantThreadIdRef = useRef(threadId);
   const frozenItemsRef = useRef<ConversationItem[] | null>(null);
@@ -1507,6 +1509,74 @@ export const Messages = memo(function Messages({
     },
     [isThinking, latestReasoningId, renderSourceItems],
   );
+  useEffect(() => {
+    if (!threadId || !isThinking) {
+      lastStreamSurfaceDiagnosticKeyRef.current = null;
+      return;
+    }
+    const shouldReportSurface =
+      visibleStallRecoveryActive ||
+      shouldUseReadableWindowRecovery ||
+      renderChainBlankingRegressionActive;
+    if (!shouldReportSurface) {
+      return;
+    }
+    const liveAssistantTextLength = liveAssistantItem?.text.length ?? 0;
+    const diagnosticKey = [
+      threadId,
+      activeTurnId ?? "no-turn",
+      threadStreamLatencySnapshot?.latencyCategory ?? "no-category",
+      renderedItems.length,
+      presentationRenderedItems.length,
+      timelinePresentationItems.length,
+      renderSourceItems.length,
+      liveAssistantItem?.id ?? "no-live-assistant",
+      liveAssistantTextLength,
+      shouldUseReadableWindowRecovery ? "recovery" : "observe",
+    ].join(":");
+    if (lastStreamSurfaceDiagnosticKeyRef.current === diagnosticKey) {
+      return;
+    }
+    lastStreamSurfaceDiagnosticKeyRef.current = diagnosticKey;
+    appendRendererDiagnostic("messages/stream-surface-diagnostic", {
+      threadId,
+      turnId: activeTurnId,
+      engine: activeEngine,
+      latencyCategory: threadStreamLatencySnapshot?.latencyCategory ?? null,
+      renderedItemsCount: renderedItems.length,
+      presentationRenderedItemsCount: presentationRenderedItems.length,
+      timelinePresentationItemsCount: timelinePresentationItems.length,
+      renderSourceItemsCount: renderSourceItems.length,
+      visibleStallRecoveryActive,
+      readableWindowRecoveryActive,
+      shouldUseReadableWindowRecovery,
+      renderChainBlankingRegressionActive,
+      liveAssistantItemId: liveAssistantItem?.id ?? null,
+      liveAssistantTextLength,
+      liveReasoningItemId: liveReasoningItem?.id ?? null,
+      preservedReadableWindowItemsCount:
+        preservedReadableWindowSnapshot.renderedItems.length,
+      preservedLatestAssistantTextLength,
+    });
+  }, [
+    activeEngine,
+    activeTurnId,
+    isThinking,
+    liveAssistantItem,
+    liveReasoningItem,
+    preservedLatestAssistantTextLength,
+    preservedReadableWindowSnapshot.renderedItems.length,
+    presentationRenderedItems.length,
+    readableWindowRecoveryActive,
+    renderChainBlankingRegressionActive,
+    renderSourceItems.length,
+    renderedItems.length,
+    shouldUseReadableWindowRecovery,
+    threadId,
+    threadStreamLatencySnapshot?.latencyCategory,
+    timelinePresentationItems.length,
+    visibleStallRecoveryActive,
+  ]);
   const historyStickyCandidates = useMemo(() => {
     return buildHistoryStickyCandidates(
       timelinePresentationItems,
