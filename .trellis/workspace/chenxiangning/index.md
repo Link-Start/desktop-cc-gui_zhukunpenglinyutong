@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-16.md`
-- **Total Sessions**: 599
+- **Total Sessions**: 600
 - **Last Active**: 2026-05-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-16.md` | ~1662 | Active |
+| `journal-16.md` | ~1717 | Active |
 | `journal-15.md` | ~1996 | Archived |
 | `journal-14.md` | ~1969 | Archived |
 | `journal-13.md` | ~1947 | Archived |
@@ -44,6 +44,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 600 | 2026-05-27 | 修复 Composer 工具弹层遮挡与点击不稳 | `7e588b2a` | `feature/v0.5.3` |
 | 599 | 2026-05-27 | 修复 @ 文件引用白屏 | `f103e8c0` | `feature/v0.5.3` |
 | 598 | 2026-05-27 | 修复切换引擎后思考强度漂移 | `e76c2963` | `feature/v0.5.3` |
 | 597 | 2026-05-27 | Project Map 边界兼容性收口 | `4b215d62` | `feature/v0.5.3` |

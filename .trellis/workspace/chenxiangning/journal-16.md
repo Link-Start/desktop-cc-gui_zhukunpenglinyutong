@@ -1660,3 +1660,52 @@ CI 中 SettingsView 删除会话测试仍断言旧刷新签名；更新为包含
 ### Next Steps
 
 - None - task complete
+
+
+## Session 600: 修复 Composer 工具弹层遮挡与点击不稳
+
+**Date**: 2026-05-27
+**Task**: 修复 Composer 工具弹层遮挡与点击不稳
+**Branch**: `feature/v0.5.3`
+
+### Summary
+
+完成 issue #617 中两个明确 bug 的 OpenSpec 提案、实现、验证与提交：记忆引用弹层改为 body portal + viewport clamp，outside-click 逻辑识别 portal 内部点击，补充 ButtonArea 回归测试。
+
+### Main Changes
+
+| 项目 | 内容 |
+|------|------|
+| OpenSpec | 新增 `fix-composer-tool-popover-stability`，并回写 implementation notes 与 verification log。 |
+| Frontend | `ButtonArea` 记忆引用弹层改为 `document.body` portal，按触发按钮位置计算 fixed 定位，并在 viewport 内 clamp。 |
+| Interaction | outside-click 判断同时识别触发按钮区域与 portal 弹层区域，避免内部操作点击被提前关闭；工具栏收起时同步关闭弹层。 |
+| Style | `composer-memory-reference-popover` 移除 toolbar 内 absolute 定位依赖，使用 fixed overlay 与更高 z-index。 |
+| Tests | 补充 portal 渲染、内部点击稳定性、外部点击与 Escape 关闭三类回归测试。 |
+| Scope | 仅处理 issue #617 两个明确 bug；未修改 rewind 与消息输出行距。 |
+
+### Verification
+
+- `npx vitest run src/features/composer/components/ChatInputBox/ButtonArea.test.tsx`：13 tests passed
+- `npx eslint src/features/composer/components/ChatInputBox/ButtonArea.tsx src/features/composer/components/ChatInputBox/ButtonArea.test.tsx`：passed
+- `npm run typecheck`：passed
+- `npm run check:large-files`：found=0
+- `openspec validate fix-composer-tool-popover-stability --strict --no-interactive`：valid
+
+### Notes
+
+- 提交后发现当前工作区又追加了外部提交 `f103e8c0 fix(composer): 防止 @ 文件引用白屏`；本 session record 只对应 `7e588b2a`，未回退也未改动该外部提交。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7e588b2a` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
