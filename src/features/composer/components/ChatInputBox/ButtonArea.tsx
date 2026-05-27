@@ -1,4 +1,13 @@
-import { useCallback, useId, useRef, useState, useEffect } from 'react';
+import {
+  useCallback,
+  useId,
+  useRef,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  type CSSProperties,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import DatabaseZap from 'lucide-react/dist/esm/icons/database-zap';
 import X from 'lucide-react/dist/esm/icons/x';
@@ -8,6 +17,16 @@ import { ConfigSelect, ModeSelect, ReasoningSelect, ShortcutActionsSelect } from
 // Stable no-op callbacks to avoid re-renders when optional handlers are not provided
 const NOOP_MODE = (_mode: PermissionMode) => {};
 const NOOP_REASONING = (_effort: ReasoningEffort | null) => {};
+const MEMORY_REFERENCE_POPOVER_WIDTH = 312;
+const MEMORY_REFERENCE_POPOVER_GAP = 6;
+const MEMORY_REFERENCE_POPOVER_VIEWPORT_MARGIN = 12;
+
+function clampMemoryReferencePopoverPosition(value: number, min: number, max: number) {
+  if (max < min) {
+    return min;
+  }
+  return Math.min(Math.max(value, min), max);
+}
 
 function ToolGridIcon() {
   return <span className="codicon codicon-extensions selector-tool-icon" aria-hidden="true" />;
@@ -71,6 +90,10 @@ export const ButtonArea = ({
   const toolDockId = useId();
   const memoryReferencePopoverId = useId();
   const memoryReferenceRootRef = useRef<HTMLDivElement>(null);
+  const memoryReferenceButtonRef = useRef<HTMLButtonElement>(null);
+  const memoryReferencePopoverRef = useRef<HTMLDivElement>(null);
+  const [memoryReferencePopoverStyle, setMemoryReferencePopoverStyle] =
+    useState<CSSProperties | null>(null);
   const isMemoryReferenceEnabled = memoryReferenceMode !== 'off';
   const memoryReferenceStateLabel =
     memoryReferenceMode === 'always'
@@ -81,6 +104,7 @@ export const ButtonArea = ({
 
   useEffect(() => {
     if (!isToolDockOpen) {
+      setIsMemoryReferencePopoverOpen(false);
       return;
     }
 
@@ -103,7 +127,18 @@ export const ButtonArea = ({
 
     const handlePointerOutside = (event: MouseEvent) => {
       const root = memoryReferenceRootRef.current;
-      if (root && !root.contains(event.target as Node)) {
+      const popover = memoryReferencePopoverRef.current;
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (
+        (root && root.contains(target)) ||
+        (popover && popover.contains(target))
+      ) {
+        return;
+      }
+      if (root || popover) {
         setIsMemoryReferencePopoverOpen(false);
       }
     };
@@ -120,6 +155,76 @@ export const ButtonArea = ({
       document.removeEventListener('keydown', handleEscape);
     };
   }, [isMemoryReferencePopoverOpen]);
+
+  const updateMemoryReferencePopoverPosition = useCallback(() => {
+    if (!isMemoryReferencePopoverOpen || typeof window === 'undefined') {
+      return;
+    }
+    const trigger = memoryReferenceButtonRef.current;
+    if (!trigger) {
+      return;
+    }
+    const triggerRect = trigger.getBoundingClientRect();
+    const popoverRect = memoryReferencePopoverRef.current?.getBoundingClientRect();
+    const popoverWidth = Math.min(
+      MEMORY_REFERENCE_POPOVER_WIDTH,
+      Math.max(
+        160,
+        window.innerWidth - MEMORY_REFERENCE_POPOVER_VIEWPORT_MARGIN * 2,
+      ),
+    );
+    const measuredWidth = popoverRect?.width || popoverWidth;
+    const measuredHeight = popoverRect?.height || 140;
+    const left = clampMemoryReferencePopoverPosition(
+      triggerRect.right - measuredWidth,
+      MEMORY_REFERENCE_POPOVER_VIEWPORT_MARGIN,
+      window.innerWidth - measuredWidth - MEMORY_REFERENCE_POPOVER_VIEWPORT_MARGIN,
+    );
+    const preferredTop =
+      triggerRect.top - measuredHeight - MEMORY_REFERENCE_POPOVER_GAP;
+    const fallbackTop =
+      triggerRect.bottom + MEMORY_REFERENCE_POPOVER_GAP;
+    const top =
+      preferredTop >= MEMORY_REFERENCE_POPOVER_VIEWPORT_MARGIN
+        ? preferredTop
+        : clampMemoryReferencePopoverPosition(
+            fallbackTop,
+            MEMORY_REFERENCE_POPOVER_VIEWPORT_MARGIN,
+            window.innerHeight - measuredHeight - MEMORY_REFERENCE_POPOVER_VIEWPORT_MARGIN,
+          );
+
+    setMemoryReferencePopoverStyle({
+      left,
+      top,
+      width: popoverWidth,
+      maxWidth: `calc(100vw - ${MEMORY_REFERENCE_POPOVER_VIEWPORT_MARGIN * 2}px)`,
+      maxHeight: `calc(100vh - ${MEMORY_REFERENCE_POPOVER_VIEWPORT_MARGIN * 2}px)`,
+    });
+  }, [isMemoryReferencePopoverOpen]);
+
+  useLayoutEffect(() => {
+    if (!isMemoryReferencePopoverOpen) {
+      setMemoryReferencePopoverStyle(null);
+      return;
+    }
+    updateMemoryReferencePopoverPosition();
+    const rafId = window.requestAnimationFrame(updateMemoryReferencePopoverPosition);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [isMemoryReferencePopoverOpen, updateMemoryReferencePopoverPosition]);
+
+  useEffect(() => {
+    if (!isMemoryReferencePopoverOpen) {
+      return;
+    }
+    const handleViewportChange = () => updateMemoryReferencePopoverPosition();
+    const scrollOptions = { capture: true, passive: true } as const;
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, scrollOptions);
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, scrollOptions);
+    };
+  }, [isMemoryReferencePopoverOpen, updateMemoryReferencePopoverPosition]);
 
   /**
    * Handle submit button click
@@ -151,6 +256,15 @@ export const ButtonArea = ({
     onSelectCollaborationMode(isPlanModeEnabled ? 'code' : 'plan');
   }, [isPlanModeEnabled, onSelectCollaborationMode]);
 
+  const handleToolDockToggle = useCallback(() => {
+    setIsToolDockOpen((current) => {
+      if (current) {
+        setIsMemoryReferencePopoverOpen(false);
+      }
+      return !current;
+    });
+  }, []);
+
   const handleMemoryReferenceToggleClick = useCallback(() => {
     if (!onSetMemoryReferenceMode) {
       return;
@@ -176,6 +290,79 @@ export const ButtonArea = ({
     defaultValue: isToolDockOpen ? '收起工具' : '展开工具',
   });
 
+  const memoryReferencePopover =
+    isMemoryReferencePopoverOpen && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={memoryReferencePopoverRef}
+            id={memoryReferencePopoverId}
+            className="composer-memory-reference-popover"
+            role="dialog"
+            aria-label={t('composer.memoryReferenceDialogTitle')}
+            style={memoryReferencePopoverStyle ?? undefined}
+          >
+            <div className="composer-memory-reference-popover-head">
+              <div className="composer-memory-reference-popover-title-group">
+                <span className="composer-memory-reference-popover-title">
+                  {t('composer.memoryReferenceDialogTitle')}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="composer-memory-reference-popover-close"
+                onClick={() => setIsMemoryReferencePopoverOpen(false)}
+                aria-label={t('common.close', { defaultValue: '关闭' })}
+              >
+                <X size={12} aria-hidden />
+              </button>
+            </div>
+            <div className="composer-memory-reference-popover-body">
+              <div className="composer-memory-reference-popover-row">
+                <span className="composer-memory-reference-popover-label">
+                  {t('composer.memoryReferenceMode')}
+                </span>
+                <span className="composer-memory-reference-popover-value">
+                  {t('composer.memoryReferenceModeChoice')}
+                </span>
+              </div>
+              <div className="composer-memory-reference-popover-copy">
+                {t('composer.memoryReferenceModeHint')}
+              </div>
+            </div>
+            <div className="composer-memory-reference-popover-actions">
+              <button
+                type="button"
+                className="composer-memory-reference-popover-secondary"
+                onClick={() => setIsMemoryReferencePopoverOpen(false)}
+              >
+                {t('common.cancel', { defaultValue: '取消' })}
+              </button>
+              <button
+                type="button"
+                className={`composer-memory-reference-popover-mode${
+                  memoryReferenceMode === 'single' ? ' is-selected' : ''
+                }`}
+                aria-pressed={memoryReferenceMode === 'single'}
+                onClick={() => handleSelectMemoryReferenceMode('single')}
+              >
+                {t('composer.memoryReferenceEnableSingle')}
+              </button>
+              <button
+                type="button"
+                className={`composer-memory-reference-popover-mode${
+                  memoryReferenceMode === 'always' ? ' is-selected' : ''
+                }`}
+                aria-pressed={memoryReferenceMode === 'always'}
+                onClick={() => handleSelectMemoryReferenceMode('always')}
+              >
+                {t('composer.memoryReferenceEnableAlways')}
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div
       className={`button-area${isToolDockOpen ? ' is-tool-dock-open' : ''}`}
@@ -186,7 +373,7 @@ export const ButtonArea = ({
           <button
             type="button"
             className="selector-button selector-tool-dock-toggle"
-            onClick={() => setIsToolDockOpen((current) => !current)}
+            onClick={handleToolDockToggle}
             title={toolDockToggleLabel}
             aria-label={toolDockToggleLabel}
             aria-expanded={isToolDockOpen}
@@ -256,6 +443,7 @@ export const ButtonArea = ({
                   className="composer-memory-reference-control"
                 >
                   <button
+                    ref={memoryReferenceButtonRef}
                     type="button"
                     className={`composer-memory-reference-toggle${
                       isMemoryReferenceEnabled ? ' is-armed' : ''
@@ -274,72 +462,7 @@ export const ButtonArea = ({
                       <DatabaseZap size={17} />
                     </span>
                   </button>
-                  {isMemoryReferencePopoverOpen ? (
-                    <div
-                      id={memoryReferencePopoverId}
-                      className="composer-memory-reference-popover"
-                      role="dialog"
-                      aria-label={t('composer.memoryReferenceDialogTitle')}
-                    >
-                      <div className="composer-memory-reference-popover-head">
-                        <div className="composer-memory-reference-popover-title-group">
-                          <span className="composer-memory-reference-popover-title">
-                            {t('composer.memoryReferenceDialogTitle')}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          className="composer-memory-reference-popover-close"
-                          onClick={() => setIsMemoryReferencePopoverOpen(false)}
-                          aria-label={t('common.close', { defaultValue: '关闭' })}
-                        >
-                          <X size={12} aria-hidden />
-                        </button>
-                      </div>
-                      <div className="composer-memory-reference-popover-body">
-                        <div className="composer-memory-reference-popover-row">
-                          <span className="composer-memory-reference-popover-label">
-                            {t('composer.memoryReferenceMode')}
-                          </span>
-                          <span className="composer-memory-reference-popover-value">
-                            {t('composer.memoryReferenceModeChoice')}
-                          </span>
-                        </div>
-                        <div className="composer-memory-reference-popover-copy">
-                          {t('composer.memoryReferenceModeHint')}
-                        </div>
-                      </div>
-                      <div className="composer-memory-reference-popover-actions">
-                        <button
-                          type="button"
-                          className="composer-memory-reference-popover-secondary"
-                          onClick={() => setIsMemoryReferencePopoverOpen(false)}
-                        >
-                          {t('common.cancel', { defaultValue: '取消' })}
-                        </button>
-                        <button
-                          type="button"
-                          className={`composer-memory-reference-popover-mode${
-                            memoryReferenceMode === 'single' ? ' is-selected' : ''
-                          }`}
-                          aria-pressed={memoryReferenceMode === 'single'}
-                          onClick={() => handleSelectMemoryReferenceMode('single')}
-                        >
-                          {t('composer.memoryReferenceEnableSingle')}
-                        </button>
-                        <button
-                          type="button"
-                          className={`composer-memory-reference-popover-mode${
-                            memoryReferenceMode === 'always' ? ' is-selected' : ''
-                          }`}
-                          aria-pressed={memoryReferenceMode === 'always'}
-                          onClick={() => handleSelectMemoryReferenceMode('always')}
-                        >
-                          {t('composer.memoryReferenceEnableAlways')}
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
+                  {memoryReferencePopover}
                 </div>
               ) : null}
               {(currentProvider === 'codex' || currentProvider === 'claude') && (

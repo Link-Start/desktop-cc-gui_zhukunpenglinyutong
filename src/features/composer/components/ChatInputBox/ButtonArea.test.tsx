@@ -266,6 +266,87 @@ describe("ButtonArea custom model storage refresh", () => {
     expect(screen.queryByRole("dialog", { name: "composer.memoryReferenceDialogTitle" })).toBeNull();
   });
 
+  it("renders the memory reference popover through a body portal", () => {
+    const { container } = render(
+      <ButtonArea
+        currentProvider="codex"
+        models={[]}
+        selectedModel=""
+        hasInputContent
+        onSubmit={vi.fn()}
+        shortcutActions={[]}
+        memoryReferenceMode="off"
+        onSetMemoryReferenceMode={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand or collapse input tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "composer.memoryReferenceToggle" }));
+
+    const dialog = screen.getByRole("dialog", { name: "composer.memoryReferenceDialogTitle" });
+
+    expect(dialog.parentElement).toBe(document.body);
+    expect(container.querySelector(".composer-memory-reference-popover")).toBeNull();
+  });
+
+  it("keeps memory reference action clicks stable before closing the popover", () => {
+    const onSetMemoryReferenceMode = vi.fn();
+
+    render(
+      <ButtonArea
+        currentProvider="codex"
+        models={[]}
+        selectedModel=""
+        hasInputContent
+        onSubmit={vi.fn()}
+        shortcutActions={[]}
+        memoryReferenceMode="off"
+        onSetMemoryReferenceMode={onSetMemoryReferenceMode}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand or collapse input tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "composer.memoryReferenceToggle" }));
+
+    const alwaysButton = screen.getByRole("button", {
+      name: "composer.memoryReferenceEnableAlways",
+    });
+
+    fireEvent.mouseDown(alwaysButton);
+    fireEvent.click(alwaysButton);
+
+    expect(onSetMemoryReferenceMode).toHaveBeenCalledWith("always");
+    expect(screen.queryByRole("dialog", { name: "composer.memoryReferenceDialogTitle" })).toBeNull();
+  });
+
+  it("closes the memory reference popover from outside click and Escape", () => {
+    render(
+      <ButtonArea
+        currentProvider="codex"
+        models={[]}
+        selectedModel=""
+        hasInputContent
+        onSubmit={vi.fn()}
+        shortcutActions={[]}
+        memoryReferenceMode="off"
+        onSetMemoryReferenceMode={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand or collapse input tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "composer.memoryReferenceToggle" }));
+    expect(screen.getByRole("dialog", { name: "composer.memoryReferenceDialogTitle" })).toBeTruthy();
+
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("dialog", { name: "composer.memoryReferenceDialogTitle" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "composer.memoryReferenceToggle" }));
+    expect(screen.getByRole("dialog", { name: "composer.memoryReferenceDialogTitle" })).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "composer.memoryReferenceDialogTitle" })).toBeNull();
+  });
+
   it("can enable always-on memory reference from the popover", () => {
     const onSetMemoryReferenceMode = vi.fn();
 

@@ -688,10 +688,8 @@
 }
 
 .composer-memory-reference-popover {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 6px);
-  z-index: 45;
+  position: fixed;
+  z-index: 2000;
   width: min(312px, calc(100vw - 24px));
   padding: 0;
   border: 1px solid var(--composer-tool-popover-border, var(--border-strong, var(--border-subtle)));
@@ -700,6 +698,7 @@
   box-shadow: var(--shadow-popover, 0 10px 24px rgba(0, 0, 0, 0.24));
   color: var(--text-secondary);
   overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .composer-memory-reference-popover-head {
