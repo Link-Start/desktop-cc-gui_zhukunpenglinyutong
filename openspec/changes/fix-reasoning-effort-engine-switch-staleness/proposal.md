@@ -26,6 +26,7 @@ This matters now because CodeMoss has moved from single-engine composer assumpti
 - Modify `engine-capability-matrix` so Claude Code reports `reasoning.effort=supported` consistently across spec fixture, TypeScript runtime projection, and Rust `EngineFeatures`.
 - Require per-engine/thread composer selection persistence to store effort only when it is valid for that engine, while preserving draft state across pending-to-real thread transitions.
 - Add focused tests for engine switching, active thread selection, draft selection, non-supporting engine cleanup, IPC payload mapping, and backend capability parity.
+- Lock the default reasoning trigger visual contract so the no-selection state stays icon+label without an extra chevron, matching the compact composer chrome.
 
 ## 技术方案取舍
 
@@ -78,8 +79,10 @@ This matters now because CodeMoss has moved from single-engine composer assumpti
 
 - 已落地 effective-engine effort resolver：`src/app-shell-parts/modelSelection.ts` 统一判断 Claude/Codex/Gemini/OpenCode 的 effort 支持边界。
 - 已接入 composer engine switch：`src/app-shell.tsx` 在 model/effort selection 更新时按当前 effective engine 重新计算 effort。
+- 已修复 Codex runtime model metadata 为空时的错误 fallback：内置 Codex model catalog 现在补齐 reasoning effort 元数据，避免 UI 倒灌 Claude `max`。
 - 已补 thread-scoped persistence normalization：`selectedComposerSession.ts` 与 `useSelectedComposerSession.ts` 在读、写、draft 应用、pending-to-finalized migration 时过滤 unsupported/stale effort。
 - 已补 send-time guard：`useThreadMessaging.ts` 在最终 dispatch engine 上再次清洗 effort，防止 UI 状态和发送引擎漂移。
+- 已收紧默认 trigger 外观：`ReasoningSelect` 在默认态仅保留 icon+label，不再额外渲染 chevron。
 - 已对齐 capability matrix：OpenSpec fixture、TypeScript capability tests、Rust `EngineFeatures::claude()`、daemon bridge 均声明 Claude `reasoning.effort=supported`。
 - 未新增第三方依赖；未改变 Gemini/OpenCode 能力边界；未改变 Claude CLI allowlist。
 

@@ -44,14 +44,16 @@ const createModelOption = (
   displayName: string,
   description = "",
   source = "unknown",
+  supportedReasoningEfforts: ModelOption["supportedReasoningEfforts"] = [],
+  defaultReasoningEffort: string | null = null,
 ): ModelOption => ({
   id,
   model: id,
   displayName,
   description,
   source,
-  supportedReasoningEfforts: [],
-  defaultReasoningEffort: null,
+  supportedReasoningEfforts,
+  defaultReasoningEffort,
   isDefault: false,
 });
 
@@ -70,6 +72,12 @@ const mergeModelOption = (existing: ModelOption, next: ModelOption): ModelOption
   displayName: next.displayName || existing.displayName,
   description: next.description || existing.description,
   source: next.source || existing.source,
+  supportedReasoningEfforts:
+    existing.supportedReasoningEfforts.length > 0
+      ? existing.supportedReasoningEfforts
+      : next.supportedReasoningEfforts,
+  defaultReasoningEffort:
+    existing.defaultReasoningEffort ?? next.defaultReasoningEffort,
 });
 
 const upsertModelOption = (
@@ -112,7 +120,14 @@ const readCustomCodexModelOptions = (): ModelOption[] => {
 
 const getBuiltInCodexModelOptions = (): ModelOption[] =>
   CODEX_MODEL_CATALOG.map((model) =>
-    createModelOption(model.id, model.label, model.description),
+    createModelOption(
+      model.id,
+      model.label,
+      model.description,
+      "catalog",
+      model.supportedReasoningEfforts ?? [],
+      normalizeEffort(model.defaultReasoningEffort),
+    ),
   );
 
 const mergeCodexSelectableModels = (baseModels: ModelOption[]): ModelOption[] => {
@@ -124,7 +139,7 @@ const mergeCodexSelectableModels = (baseModels: ModelOption[]): ModelOption[] =>
     upsertModelOption(mergedModels, seenIdentities, model, true),
   );
   getBuiltInCodexModelOptions().forEach((model) =>
-    upsertModelOption(mergedModels, seenIdentities, model),
+    upsertModelOption(mergedModels, seenIdentities, model, true),
   );
 
   return mergedModels;

@@ -662,13 +662,16 @@ function effortToOptionalReasoning(effort?: string | null): ReasoningEffort | nu
 }
 
 function normalizeReasoningOptions(options?: string[]): ReasoningEffort[] | undefined {
-  if (!options || options.length === 0) {
+  if (!options) {
     return undefined;
+  }
+  if (options.length === 0) {
+    return [];
   }
   const normalized = options
     .map((option) => effortToOptionalReasoning(option))
     .filter((option): option is ReasoningEffort => option !== null);
-  return normalized.length > 0 ? normalized : undefined;
+  return normalized;
 }
 
 function normalizePath(path: string): string {

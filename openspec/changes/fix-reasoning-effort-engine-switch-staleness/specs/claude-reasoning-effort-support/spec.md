@@ -13,6 +13,7 @@ The composer MUST resolve reasoning effort against the effective engine selected
 #### Scenario: switching from Claude to Codex rebinds effort options
 - **WHEN** the user switches the composer engine from `claude` to `codex`
 - **THEN** the composer MUST resolve reasoning effort from the Codex model/capability path
+- **AND** the Codex selector MUST NOT surface Claude-only `max` as a fallback option when the active Codex model metadata is temporarily empty
 - **AND** Claude-specific effort state MUST NOT cause Codex to append Claude CLI `--effort`
 
 #### Scenario: switching to unsupported engine clears effective effort
@@ -56,6 +57,12 @@ Thread-scoped and draft composer selection MUST store and restore reasoning effo
 - **WHEN** persisted composer selection contains an effort value that is not supported by the current effective engine
 - **THEN** the system MUST treat that effort as absent for UI and send-time resolution
 - **AND** message sending MUST continue through the engine's default behavior
+
+#### Scenario: default trigger stays text-and-icon without chevron
+- **WHEN** the current engine supports a reasoning effort selector
+- **AND** the current thread or draft has no explicit effort selected
+- **THEN** the default reasoning trigger MUST render the engine-default label and icon
+- **AND** the trigger MUST NOT add an extra chevron-only affordance in that default state
 
 #### Scenario: pending to finalized thread migration preserves valid effort
 - **WHEN** a pending thread is finalized to a real engine session id

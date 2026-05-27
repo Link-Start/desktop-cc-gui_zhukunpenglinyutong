@@ -111,6 +111,39 @@ describe("useModels", () => {
     expect(result.current.reasoningSupported).toBe(true);
   });
 
+  it("hydrates built-in Codex reasoning options when runtime metadata is empty", async () => {
+    vi.mocked(getModelList).mockResolvedValueOnce({
+      result: {
+        data: [
+          {
+            id: "gpt-5.4",
+            model: "gpt-5.4",
+            displayName: "gpt-5.4",
+            supportedReasoningEfforts: [],
+            defaultReasoningEffort: null,
+            isDefault: true,
+          },
+        ],
+      },
+    });
+    vi.mocked(getConfigModel).mockResolvedValueOnce("gpt-5.4");
+
+    const { result } = renderHook(() =>
+      useModels({ activeWorkspace: workspace }),
+    );
+
+    await waitFor(() => expect(result.current.selectedModelId).toBe("gpt-5.4"));
+
+    expect(result.current.reasoningOptions).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+    ]);
+    expect(result.current.reasoningOptions).not.toContain("max");
+    expect(result.current.selectedEffort).toBe("medium");
+  });
+
   it("keeps the selected reasoning effort when switching models", async () => {
     vi.mocked(getModelList).mockResolvedValueOnce({
       result: {

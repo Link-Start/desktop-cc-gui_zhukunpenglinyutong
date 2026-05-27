@@ -682,6 +682,21 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     expect(latest.reasoningOptions).toEqual(['high', 'max']);
   });
 
+  it('preserves explicit empty reasoning options instead of falling back to every level', async () => {
+    renderAdapter({
+      selectedEngine: 'codex',
+      selectedEffort: null,
+      reasoningOptions: [],
+    });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      reasoningOptions?: string[];
+    };
+    expect(latest.reasoningOptions).toEqual([]);
+  });
+
   it('forwards queue fusion props to ChatInputBox', async () => {
     const onFuseQueued = vi.fn();
 

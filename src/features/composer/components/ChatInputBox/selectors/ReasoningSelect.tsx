@@ -117,9 +117,6 @@ export const ReasoningSelect = ({
             {resolvedDefaultLabel}
           </span>
         )}
-        {!currentLevel && (
-          <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
-        )}
       </button>
 
       {isOpen && (

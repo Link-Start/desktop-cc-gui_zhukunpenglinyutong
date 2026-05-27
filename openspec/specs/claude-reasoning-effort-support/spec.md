@@ -22,6 +22,7 @@ The system MUST expose Claude-supported reasoning effort values when the active 
 #### Scenario: existing Codex reasoning selector is preserved
 - **WHEN** the active provider or execution engine is Codex
 - **THEN** this change MUST NOT remove or alter the existing Codex reasoning selector contract
+- **AND** the Codex selector MUST NOT fall back to Claude-only `max` when Codex runtime model metadata is temporarily empty
 - **AND** Codex sends MUST NOT append Claude CLI `--effort` arguments
 
 #### Scenario: no selection preserves CLI default
@@ -93,3 +94,12 @@ Adding reasoning effort support MUST NOT alter Claude model discovery, model ref
 - **WHEN** a message is sent through Codex, Gemini, OpenCode, or another non-Claude engine
 - **THEN** reasoning effort support MUST NOT change that engine's model selection, send params, command construction, or runtime behavior
 
+### Requirement: Default Reasoning Trigger MUST Avoid Extra Chevron Chrome
+
+When the reasoning selector is in its engine-default state, the trigger MUST remain visually minimal and MUST NOT add an extra chevron-only affordance.
+
+#### Scenario: default trigger shows label and icon without chevron
+- **WHEN** the user is on a Claude or Codex composer surface that exposes a reasoning effort selector
+- **AND** no explicit effort is selected for the current thread or draft
+- **THEN** the trigger MUST show the default label and icon for that engine state
+- **AND** the trigger MUST NOT render an extra chevron glyph in that default state

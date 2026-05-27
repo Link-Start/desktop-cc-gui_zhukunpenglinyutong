@@ -27,6 +27,24 @@ describe('ReasoningSelect', () => {
     expect(container.querySelector('.selector-reasoning-button.is-icon-only')).toBeTruthy();
   });
 
+  it('does not render a chevron for the default trigger', () => {
+    const { container } = render(
+      <ReasoningSelect
+        value={null}
+        onChange={vi.fn()}
+        options={['low', 'medium']}
+        showDefaultOption
+        defaultLabel="Claude 默认"
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Claude 默认' });
+
+    expect(trigger.querySelector('.selector-button-text')).toBeTruthy();
+    expect(trigger.querySelector('[class*="codicon-chevron"]')).toBeNull();
+    expect(container.querySelector('.selector-reasoning-button.is-icon-only')).toBeNull();
+  });
+
   it('does not fall back to all levels when explicit options are empty', () => {
     render(
       <ReasoningSelect
