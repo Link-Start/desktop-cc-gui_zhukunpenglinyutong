@@ -711,6 +711,7 @@ export function AppShell() {
     activeEngine,
     workspaceId: activeWorkspace?.id ?? null,
   });
+  const workspaceFilesInitialLoadEnabled = Boolean(activeWorkspace?.id);
   const workspaceFilesPollingEnabled = !isCompact && !rightPanelCollapsed && filePanelMode === "files";
   const {
     files,
@@ -724,7 +725,7 @@ export function AppShell() {
   } = useWorkspaceFiles({
     activeWorkspace,
     onDebug: addDebugEntry,
-    initialLoadEnabled: workspaceFilesPollingEnabled,
+    initialLoadEnabled: workspaceFilesInitialLoadEnabled,
     pollingEnabled: workspaceFilesPollingEnabled,
   });
   const { branches, checkoutBranch, createBranch } = useGitBranches({

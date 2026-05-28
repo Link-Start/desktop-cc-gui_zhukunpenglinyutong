@@ -240,6 +240,41 @@ describe("useWorkspaceFiles", () => {
     unmount();
   });
 
+  it("loads the first workspace snapshot when polling is disabled without scheduling polls", async () => {
+    const getWorkspaceFilesMock = vi.mocked(getWorkspaceFiles);
+    getWorkspaceFilesMock.mockResolvedValue({
+      files: ["src/app.tsx"],
+      directories: ["src"],
+      gitignored_files: [],
+      gitignored_directories: [],
+    });
+
+    const { result, unmount } = renderHook(() =>
+      useWorkspaceFiles({
+        activeWorkspace: workspaceA,
+        initialLoadEnabled: true,
+        pollingEnabled: false,
+      }),
+    );
+
+    await flushAsyncWork();
+
+    expect(getWorkspaceFilesMock).toHaveBeenCalledTimes(1);
+    expect(result.current.files).toEqual(["src/app.tsx"]);
+    expect(result.current.directories).toEqual(["src"]);
+    expect(result.current.isLoading).toBe(false);
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getWorkspaceFilesMock).toHaveBeenCalledTimes(1);
+
+    unmount();
+  });
+
   it("does not clear a loaded snapshot when the same workspace briefly disconnects", async () => {
     const getWorkspaceFilesMock = vi.mocked(getWorkspaceFiles);
     getWorkspaceFilesMock.mockResolvedValue({
