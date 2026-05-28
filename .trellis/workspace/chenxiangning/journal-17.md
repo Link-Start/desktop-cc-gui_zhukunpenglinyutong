@@ -398,3 +398,42 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 615: 继续归档已验证 OpenSpec 提案
+
+**Date**: 2026-05-28
+**Task**: 继续归档已验证 OpenSpec 提案
+**Branch**: `feature/v0.5.4`
+
+### Summary
+
+继续批量归档 30 个已完成且验证通过的 OpenSpec change，同步主 specs 并刷新 workspace 治理快照。
+
+### Main Changes
+
+- Archived 30 remaining verified OpenSpec changes under `openspec/changes/archive/2026-05-28-*`.
+- Synced main specs for 28 changes, including session management, markdown preview rendering, stale-thread recovery, runtime stability, governance evidence, file reference, email controls, and related UI/runtime capabilities.
+- Archived `add-email-driven-session-continuation` and `fix-composer-tool-popover-stability` with `--skip-specs` because their stale MODIFIED delta headers no longer matched current main spec headings; archived artifacts preserve the historical deltas.
+- Updated `openspec/project.md` inventory to active changes = 5, archive changes = 369, main specs = 291.
+- Validation: `openspec validate --all --strict --no-interactive` passed with 296 passed / 0 failed.
+- Commit scope intentionally excluded existing `src/**` edits and the still-active `openspec/changes/fix-user-input-dismiss-settlement/` work.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `72c5cc60` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
