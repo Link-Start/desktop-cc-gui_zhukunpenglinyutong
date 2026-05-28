@@ -522,3 +522,39 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 618: 修复大文件门禁运行产物噪声
+
+**Date**: 2026-05-28
+**Task**: 修复大文件门禁运行产物噪声
+**Branch**: `feature/v0.5.4`
+
+### Summary
+
+Review 今天提交后修复 large-file governance 扫描 .artifacts 本地运行产物导致 hard gate false-positive 的问题，并补充回归测试。
+
+### Main Changes
+
+- 修复 scripts/check-large-files.mjs：将 .artifacts 加入 EXCLUDED_DIRS，避免本地 runtime artifacts、Cargo registry 缓存等 ignored 文件参与大文件门禁。
+- 补充 scripts/check-large-files.test.mjs 回归测试：验证 .artifacts/** 大文件被跳过，同时普通源码大文件仍会被报告。
+- 验证：node --test scripts/check-large-files.test.mjs；node --test scripts/check-heavy-test-noise.test.mjs scripts/test-batched.test.mjs；npm run check:large-files:gate；npm run check:large-files:near-threshold；npm run check:heavy-test-noise；npm run typecheck；npm run lint；cargo test codex::launch_profile；git diff --check。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `85010546` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

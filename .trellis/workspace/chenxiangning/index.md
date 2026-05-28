@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-17.md`
-- **Total Sessions**: 617
+- **Total Sessions**: 618
 - **Last Active**: 2026-05-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-17.md` | ~524 | Active |
+| `journal-17.md` | ~560 | Active |
 | `journal-16.md` | ~1985 | Archived |
 | `journal-15.md` | ~1996 | Archived |
 | `journal-14.md` | ~1969 | Archived |
@@ -45,6 +45,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 618 | 2026-05-28 | 修复大文件门禁运行产物噪声 | `85010546` | `feature/v0.5.4` |
 | 617 | 2026-05-28 | 精修请求输入收起与跳过交互 | `50283b5d` | `feature/v0.5.4` |
 | 616 | 2026-05-28 | 归档用户输入跳过结算提案 | `12804db3` | `feature/v0.5.4` |
 | 615 | 2026-05-28 | 继续归档已验证 OpenSpec 提案 | `72c5cc60` | `feature/v0.5.4` |
