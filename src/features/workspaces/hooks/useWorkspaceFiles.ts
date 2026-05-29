@@ -76,7 +76,7 @@ function normalizeWorkspaceFilesSnapshot(
 }
 
 function isWorkspaceRootChildPath(path: string) {
-  return path.length > 0 && !path.includes("/");
+  return path.length > 0 && !path.includes("/") && !path.includes("\\");
 }
 
 function toRootOnlyWorkspaceFilesSnapshot(
@@ -299,7 +299,7 @@ export function useWorkspaceFiles({
           const fallbackSnapshot = normalizeWorkspaceFilesSnapshot(fallbackResponse);
           const fallbackRootSnapshot = toRootOnlyWorkspaceFilesSnapshot(fallbackSnapshot);
           rememberWorkspaceFilesSnapshot(requestWorkspaceId, fallbackRootSnapshot);
-          const applied = applyWorkspaceFilesSnapshot(requestWorkspaceId, fallbackSnapshot);
+          const applied = applyWorkspaceFilesSnapshot(requestWorkspaceId, fallbackRootSnapshot);
           onDebug?.({
             id: `${Date.now()}-server-files-list-fallback-response`,
             timestamp: Date.now(),
@@ -310,10 +310,12 @@ export function useWorkspaceFiles({
               reason,
               ms: fallbackElapsedMs,
               applied,
-              files: fallbackSnapshot.files.length,
-              directories: fallbackSnapshot.directories.length,
-              scanState: fallbackSnapshot.scanState,
-              limitHit: fallbackSnapshot.limitHit,
+              files: fallbackRootSnapshot.files.length,
+              directories: fallbackRootSnapshot.directories.length,
+              fullSnapshotFiles: fallbackSnapshot.files.length,
+              fullSnapshotDirectories: fallbackSnapshot.directories.length,
+              scanState: fallbackRootSnapshot.scanState,
+              limitHit: fallbackRootSnapshot.limitHit,
               rootError: message,
             },
           });

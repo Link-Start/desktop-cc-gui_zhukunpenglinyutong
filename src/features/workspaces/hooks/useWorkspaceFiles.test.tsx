@@ -180,7 +180,7 @@ describe("useWorkspaceFiles", () => {
     unmount();
   });
 
-  it("falls back to the legacy full snapshot when the root query fails before any snapshot exists", async () => {
+  it("falls back to a root-only legacy snapshot when the root query fails before any snapshot exists", async () => {
     vi.mocked(getWorkspaceDirectoryChildren).mockImplementation((requestedWorkspaceId) => {
       if (requestedWorkspaceId === workspaceA.id) {
         return Promise.reject(new Error("Directory path cannot be empty."));
@@ -197,11 +197,12 @@ describe("useWorkspaceFiles", () => {
     });
     vi.mocked(getWorkspaceFiles).mockResolvedValueOnce(
       workspaceSnapshot({
-        files: ["README.md", "src/app.tsx"],
-        directories: ["src", "src/components"],
+        files: ["README.md", "src/app.tsx", "src\\windows.ts"],
+        directories: ["src", "src/components", "src\\windows-components"],
         directory_entries: [
           { path: "src", child_state: "loaded" },
           { path: "src/components", child_state: "loaded" },
+          { path: "src\\windows-components", child_state: "loaded" },
         ],
       }),
     );
@@ -221,8 +222,9 @@ describe("useWorkspaceFiles", () => {
 
     expect(getWorkspaceDirectoryChildren).toHaveBeenCalledWith(workspaceA.id, "");
     expect(getWorkspaceFiles).toHaveBeenCalledWith(workspaceA.id);
-    expect(result.current.files).toEqual(["README.md", "src/app.tsx"]);
-    expect(result.current.directories).toEqual(["src", "src/components"]);
+    expect(result.current.files).toEqual(["README.md"]);
+    expect(result.current.directories).toEqual(["src"]);
+    expect(result.current.directoryMetadata).toEqual([{ path: "src", child_state: "loaded" }]);
     expect(result.current.loadError).toBeNull();
     expect(result.current.isLoading).toBe(false);
 
