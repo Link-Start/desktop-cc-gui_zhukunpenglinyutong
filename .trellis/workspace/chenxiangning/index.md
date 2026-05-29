@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-17.md`
-- **Total Sessions**: 624
+- **Total Sessions**: 625
 - **Last Active**: 2026-05-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-17.md` | ~896 | Active |
+| `journal-17.md` | ~947 | Active |
 | `journal-16.md` | ~1985 | Archived |
 | `journal-15.md` | ~1996 | Archived |
 | `journal-14.md` | ~1969 | Archived |
@@ -45,6 +45,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 625 | 2026-05-29 | 三证结算干跑判断 | `2e6a8113` | `feature/v0.5.4` |
 | 624 | 2026-05-29 | 持久化核心错误日志 | `df8c3b3d` | `feature/v0.5.4` |
 | 623 | 2026-05-29 | 收口 v0.5.4 发布规范 | `3db17cd7` | `feature/v0.5.4` |
 | 622 | 2026-05-29 | 补录 v0.5.4 文件树首屏优化会话 | `395ef21f`, `cef1553b` | `feature/v0.5.4` |
