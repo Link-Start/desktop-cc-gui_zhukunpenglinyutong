@@ -230,6 +230,7 @@ const baseSettings: AppSettings = {
   newWorktreeAgentShortcut: null,
   newCloneAgentShortcut: null,
   archiveThreadShortcut: null,
+  closeCurrentSessionShortcut: null,
   openChatShortcut: null,
   openKanbanShortcut: null,
   cycleOpenSessionPrevShortcut: null,
