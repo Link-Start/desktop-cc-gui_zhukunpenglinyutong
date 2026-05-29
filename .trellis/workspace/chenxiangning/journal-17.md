@@ -1270,3 +1270,45 @@ Validation:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 634: 支持关闭当前会话快捷键
+
+**Date**: 2026-05-30
+**Task**: 支持关闭当前会话快捷键
+**Branch**: `feature/v0.5.4`
+
+### Summary
+
+新增可配置的关闭当前打开会话快捷键，默认 Command+W，并补齐 OpenSpec 提案、设计、spec delta 与任务记录。
+
+### Main Changes
+
+| Area | Detail |
+|------|--------|
+| Shortcut | Added `closeCurrentSessionShortcut`, defaulting to `cmd+w`. |
+| Behavior | The shortcut mirrors clicking the active topbar session tab `X`; it closes only the open tab and does not stop, delete, or archive the session. |
+| Settings | Added Settings -> Shortcuts metadata, icon, and i18n labels for the close-current-session command. |
+| OpenSpec | Created `openspec/changes/add-close-current-session-shortcut/` with proposal, design, spec deltas, and completed tasks. |
+
+**Testing**:
+- [OK] Human reported tests passed.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2192844c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
