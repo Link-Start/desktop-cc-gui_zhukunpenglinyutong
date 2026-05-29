@@ -2524,10 +2524,13 @@ const enPart1 = {
       "This message is not bound to a workspace runtime, so reconnect is unavailable.",
     threadRecoveryTitle: "Conversation recovery available",
     threadRecoveryThreadNotFound:
-      "This conversation points at a stale thread handle. Historical Codex sessions often cannot revive the old thread directly; if a previous prompt is available, recover and resend it into an available conversation.",
+      "This conversation is bound to a Codex thread that is no longer available. The existing canvas stays visible, but this request needs a usable conversation to continue safely.",
+    threadRecoveryRecommendation:
+      "Recommended next step: fork and resend. The app will create a usable conversation and automatically send the previous prompt there.",
+    threadRecoveryDetailLabel: "Error detail:",
     threadRecoveryAction: "Try recovery",
     threadRecoveryRunning: "Recovering...",
-    threadRecoveryForkResendAction: "Fork and resend previous prompt",
+    threadRecoveryForkResendAction: "Fork and resend",
     threadRecoveryResendAction: "Recover and resend previous prompt",
     threadRecoveryResendRunning: "Recovering and resending...",
     threadRecoveryResendUnavailable:

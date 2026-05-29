@@ -137,6 +137,21 @@ When a user explicitly chooses to recover and resend from a stale Codex thread r
 - **THEN** the recovery card MUST expose a direct Fork/resend action in the canvas
 - **AND** the user MUST NOT need to open the bottom toolbar Fork menu to continue
 
+#### Scenario: recovery card explains stale thread meaning and next step
+
+- **WHEN** the message canvas renders a Codex stale thread recovery card
+- **THEN** the card MUST explain that the current Codex thread binding is no longer safe to continue
+- **AND** it MUST state that the existing canvas content remains visible while the failed request needs a usable continuation thread
+- **AND** it MUST present a recommended next step that tells the user to Fork and resend the previous prompt
+- **AND** raw provider/runtime details such as `thread not found` MUST be visually secondary to the user-facing explanation
+
+#### Scenario: fork resend action is a clear primary action
+
+- **WHEN** the recovery card can replay a previous prompt
+- **THEN** the primary action MUST combine a Fork-oriented icon with concise text such as `Fork and resend`
+- **AND** the action label MUST NOT rely on long technical copy as the only indication of what will happen
+- **AND** the action MUST continue to call the existing recover-and-resend path rather than introducing a parallel recovery flow
+
 #### Scenario: forked resend reports fork continuation
 
 - **WHEN** recover-and-resend produces a forked continuation thread
@@ -282,4 +297,3 @@ The active workspace sidebar MUST use full active project catalog hydration as i
 - **AND** a manual, reload, rename, or other direct `listThreadsForWorkspaceTracked(workspace)` refresh runs without an explicit startup hydration kind
 - **THEN** the refresh MUST use `full-catalog`
 - **AND** it MUST NOT overwrite the active sidebar with startup `first-page` rows or any other subset projection
-

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import GitFork from "lucide-react/dist/esm/icons/git-fork";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
 import { Button } from "../../../components/ui/button";
 import { ensureRuntimeReady } from "../../../services/tauri";
@@ -227,6 +228,12 @@ export function RuntimeReconnectCard({
   const title = requiresThreadRecovery
     ? t("messages.threadRecoveryTitle")
     : t("messages.runtimeReconnectTitle");
+  const recoveryRecommendation = requiresThreadRecovery
+    ? t("messages.threadRecoveryRecommendation")
+    : null;
+  const recoveryDetailLabel = requiresThreadRecovery
+    ? t("messages.threadRecoveryDetailLabel")
+    : null;
   const reconnectActionLabel = isReconnectRunning && lastAction === "reconnect"
     ? requiresThreadRecovery
       ? t("messages.threadRecoveryRunning")
@@ -283,11 +290,26 @@ export function RuntimeReconnectCard({
             }}
             disabled={resendUnavailable || isReconnectRunning}
           >
+            {requiresThreadRecovery ? (
+              <GitFork className="message-runtime-recovery-button-icon" size={14} aria-hidden />
+            ) : null}
             {resendActionLabel}
           </Button>
         </div>
       </div>
-      <div className="message-runtime-recovery-detail">{hint.rawMessage}</div>
+      {recoveryRecommendation ? (
+        <div className="message-runtime-recovery-recommendation">
+          {recoveryRecommendation}
+        </div>
+      ) : null}
+      <div className="message-runtime-recovery-detail">
+        {recoveryDetailLabel ? (
+          <span className="message-runtime-recovery-detail-label">
+            {recoveryDetailLabel}
+          </span>
+        ) : null}
+        <span>{hint.rawMessage}</span>
+      </div>
       {showReconnectUnavailable ? (
         <div className="message-runtime-recovery-status is-error" aria-live="polite">
           {unavailableLabel}

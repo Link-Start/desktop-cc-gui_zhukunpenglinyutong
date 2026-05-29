@@ -193,10 +193,10 @@
 
 .message-runtime-recovery-card {
   display: grid;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: 12px;
+  padding: 14px 16px;
   margin: 2px 0 10px;
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--border-strong) 78%, #2563eb 22%);
   background:
     linear-gradient(
@@ -213,7 +213,7 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
-  gap: 10px;
+  gap: 12px;
 }
 
 .message-runtime-recovery-icon {
@@ -224,7 +224,7 @@
 .message-runtime-recovery-copy {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: 5px;
 }
 
 .message-runtime-recovery-actions {
@@ -236,7 +236,7 @@
 }
 
 .message-runtime-recovery-title {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.25;
   font-weight: 700;
   color: var(--text-primary);
@@ -249,8 +249,26 @@
 }
 
 .message-runtime-recovery-button {
-  min-width: 118px;
+  min-width: 132px;
   align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.message-runtime-recovery-button-icon {
+  flex: 0 0 auto;
+}
+
+.message-runtime-recovery-recommendation {
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #2563eb 24%, transparent);
+  background: color-mix(in srgb, #2563eb 9%, transparent);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .message-runtime-recovery-detail {
@@ -259,6 +277,12 @@
   color: var(--text-muted);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.message-runtime-recovery-detail-label {
+  margin-right: 6px;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .message-runtime-recovery-status {

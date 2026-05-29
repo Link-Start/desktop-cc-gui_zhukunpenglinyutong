@@ -2467,10 +2467,13 @@ const zhPart1 = {
       "当前消息没有关联的工作区 runtime，暂时无法执行重新连接。",
     threadRecoveryTitle: "当前会话需要恢复",
     threadRecoveryThreadNotFound:
-      "当前会话引用的 thread 已失效。历史 Codex 会话通常无法直接复活旧 thread；如有上一条提示词，优先恢复并发送到可用会话继续。",
+      "当前会话绑定的 Codex thread 已失效，原 thread 不能安全继续。幕布里已有内容会保留，但这次请求需要切到可用会话承接。",
+    threadRecoveryRecommendation:
+      "建议下一步：点击 Fork 并重发，系统会创建一个可用会话，并自动发送上一条提示词继续执行。",
+    threadRecoveryDetailLabel: "错误详情：",
     threadRecoveryAction: "尝试恢复会话",
     threadRecoveryRunning: "正在恢复...",
-    threadRecoveryForkResendAction: "Fork 并发送上一条提示词",
+    threadRecoveryForkResendAction: "Fork 并重发",
     threadRecoveryResendAction: "恢复并发送上一条提示词",
     threadRecoveryResendRunning: "正在恢复并发送...",
     threadRecoveryResendUnavailable: "当前没有可重发的上一条提示词。",
