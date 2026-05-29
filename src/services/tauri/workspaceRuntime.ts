@@ -1,10 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   DiagnosticsBundleExportResult,
+  DebugEntry,
   RuntimePoolSnapshot,
   WorkspaceInfo,
   WorkspaceSettings,
 } from "../../types";
+
+export type ClientErrorLogEntry = {
+  schemaVersion: number;
+  timestamp: string;
+  source: DebugEntry["source"];
+  label: string;
+  payload?: unknown;
+};
+
+export type ClientErrorLogAppendResult = {
+  filePath: string;
+};
 
 export type WorktreeSetupStatus = {
   shouldRun: boolean;
@@ -166,6 +179,12 @@ export async function noteWebServiceReconnected(
 
 export async function exportDiagnosticsBundle(): Promise<DiagnosticsBundleExportResult> {
   return invoke("export_diagnostics_bundle");
+}
+
+export async function appendClientErrorLog(
+  entry: ClientErrorLogEntry,
+): Promise<ClientErrorLogAppendResult> {
+  return invoke("append_client_error_log", { entry });
 }
 
 export async function mutateRuntimePool(mutation: {

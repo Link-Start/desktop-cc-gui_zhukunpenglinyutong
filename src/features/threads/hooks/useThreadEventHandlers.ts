@@ -160,6 +160,49 @@ type ThreadEventHandlersOptions = {
   domainEventController?: DomainEventRuntimeController | null;
 };
 
+const FOREGROUND_TERMINAL_EVENT_METHODS = new Set([
+  "turn/completed",
+  "turn/error",
+  "turn/stalled",
+  "runtime/ended",
+]);
+
+function extractTerminalEventThreadId(params: Record<string, unknown>): string {
+  const turn = (params.turn as Record<string, unknown> | undefined) ?? {};
+  const thread = (params.thread as Record<string, unknown> | undefined) ?? {};
+  return asString(
+    params.threadId ??
+      params.thread_id ??
+      turn.threadId ??
+      turn.thread_id ??
+      thread.threadId ??
+      thread.thread_id ??
+      thread.id ??
+      "",
+  ).trim();
+}
+
+function extractTerminalEventTurnId(params: Record<string, unknown>): string {
+  const turn = (params.turn as Record<string, unknown> | undefined) ?? {};
+  return asString(params.turnId ?? params.turn_id ?? turn.id ?? "").trim();
+}
+
+function extractTerminalEventResultTextLength(params: Record<string, unknown>): number | null {
+  const result = (params.result as Record<string, unknown> | undefined) ?? {};
+  const text = [
+    params.text,
+    result.text,
+    result.output_text,
+    result.outputText,
+    result.content,
+  ].find((value) => typeof value === "string" && value.trim().length > 0);
+  return typeof text === "string" ? text.length : null;
+}
+
+function normalizeRuntimeEndedCount(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0;
+}
+
 export function useThreadEventHandlers({
   activeThreadId,
   dispatch,
@@ -244,6 +287,16 @@ export function useThreadEventHandlers({
       });
     },
     [onDebug],
+  );
+
+  const emitForegroundSettlementDiagnostic = useCallback(
+    (label: string, payload: Record<string, unknown>) => {
+      emitTurnDiagnostic(label, {
+        diagnosticCategory: "foreground-terminal-settlement",
+        ...payload,
+      }, { force: true });
+    },
+    [emitTurnDiagnostic],
   );
 
   const clearFirstDeltaTimer = useCallback((threadId: string) => {
@@ -1609,6 +1662,10 @@ export function useThreadEventHandlers({
         });
       }
       const lifecycle = getThreadLifecycleSnapshot(threadId);
+      const suspectedDurationMs =
+        diagnostic.noProgressSuspectedAt === null
+          ? null
+          : Math.max(0, now - diagnostic.noProgressSuspectedAt);
       emitTurnDiagnostic(finalState, {
         workspaceId: diagnostic.workspaceId,
         threadId,
@@ -1634,6 +1691,12 @@ export function useThreadEventHandlers({
         deltaCount: diagnostic.deltaCount,
         itemEventCount: diagnostic.itemEventCount,
         stalledAfterFirstDelta: diagnostic.stallReported,
+        lastProgressSource: diagnostic.lastProgressSource,
+        lastProgressAgeMs: Math.max(0, now - diagnostic.lastProgressAt),
+        progressSequence: diagnostic.progressSequence,
+        wasNoProgressSuspected: diagnostic.noProgressSuspectedAt !== null,
+        noProgressSuspectedSource: diagnostic.noProgressSuspectedSource,
+        suspectedDurationMs,
         isProcessing: lifecycle.isProcessing,
         activeTurnId: lifecycle.activeTurnId,
         firstPacketTimeoutSeconds,
@@ -1750,6 +1813,33 @@ export function useThreadEventHandlers({
           }, { force: true });
         }
       }
+      const postSettlementLifecycle = getThreadLifecycleSnapshot(threadId);
+      if (
+        postSettlementLifecycle.isProcessing ||
+        (
+          normalizedTurnId &&
+          postSettlementLifecycle.activeTurnId === normalizedTurnId
+        )
+      ) {
+        const now = Date.now();
+        emitForegroundSettlementDiagnostic("terminal-settlement-busy-residue", {
+          workspaceId,
+          threadId,
+          turnId: normalizedTurnId,
+          handled,
+          fallbackApplied,
+          isProcessing: postSettlementLifecycle.isProcessing,
+          activeTurnId: postSettlementLifecycle.activeTurnId,
+          lastProgressSource: diagnostic?.lastProgressSource ?? null,
+          lastProgressAgeMs: diagnostic ? Math.max(0, now - diagnostic.lastProgressAt) : null,
+          progressSequence: diagnostic?.progressSequence ?? null,
+          wasNoProgressSuspected: Boolean(
+            diagnostic && diagnostic.noProgressSuspectedAt !== null,
+          ),
+          reason: "terminal-event-handled-but-foreground-state-remains-busy",
+          ...buildThreadStreamCorrelationDimensions(threadId),
+        });
+      }
       if (diagnostic && diagnostic.turnId !== normalizedTurnId) {
         return handled || fallbackApplied;
       }
@@ -1768,6 +1858,7 @@ export function useThreadEventHandlers({
     [
       dispatch,
       emitTurnDiagnostic,
+      emitForegroundSettlementDiagnostic,
       emitTurnDomainEvent,
       finalizeTurnDiagnostic,
       getThreadLifecycleSnapshot,
@@ -2054,6 +2145,46 @@ export function useThreadEventHandlers({
         });
       }
 
+      if (FOREGROUND_TERMINAL_EVENT_METHODS.has(method)) {
+        const threadId = extractTerminalEventThreadId(params);
+        const turnId = extractTerminalEventTurnId(params);
+        const lifecycle = threadId ? getThreadLifecycleSnapshot(threadId) : null;
+        emitForegroundSettlementDiagnostic("terminal-event-received", {
+          workspaceId: event.workspace_id,
+          threadId: threadId || null,
+          turnId: turnId || null,
+          eventType: method,
+          resultTextLength:
+            method === "turn/completed"
+              ? extractTerminalEventResultTextLength(params)
+              : null,
+          affectedThreadCount:
+            method === "runtime/ended"
+              ? normalizeRuntimeEndedCount(
+                  params.affectedThreadIds ?? params.affected_thread_ids,
+                )
+              : null,
+          affectedTurnCount:
+            method === "runtime/ended"
+              ? normalizeRuntimeEndedCount(
+                  params.affectedTurnIds ?? params.affected_turn_ids,
+                )
+              : null,
+          pendingRequestCount:
+            method === "runtime/ended"
+              ? Number(params.pendingRequestCount ?? params.pending_request_count ?? 0)
+              : null,
+          hadActiveLease:
+            method === "runtime/ended"
+              ? Boolean(params.hadActiveLease ?? params.had_active_lease ?? false)
+              : null,
+          isProcessing: lifecycle?.isProcessing ?? null,
+          activeTurnId: lifecycle?.activeTurnId ?? null,
+          reason: "terminal-event-reached-frontend-handler",
+          ...(threadId ? buildThreadStreamCorrelationDimensions(threadId) : {}),
+        });
+      }
+
       if (method === "codex/stderr") {
         const rawMessage = String(params.message ?? "").trim();
         if (onDebug && isReasoningRawDebugEnabled() && rawMessage) {
@@ -2193,6 +2324,7 @@ export function useThreadEventHandlers({
       });
     },
     [
+      emitForegroundSettlementDiagnostic,
       getThreadLifecycleSnapshot,
       onDebug,
       noteCodexTurnProgressEvidence,

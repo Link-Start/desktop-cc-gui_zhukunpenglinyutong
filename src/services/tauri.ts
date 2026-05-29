@@ -227,6 +227,7 @@ export {
   addWorkspace,
   addWorktree,
   applyWorktreeChanges,
+  appendClientErrorLog,
   connectWorkspace,
   ensureRuntimeReady,
   ensureWorkspacePathDir,

@@ -543,6 +543,43 @@ describe("useThreadEventHandlers diagnostics", () => {
     expect(suspectedEntry?.payload.quarantine).toBe(false);
   });
 
+  it("records terminal event receipt before settlement routing", () => {
+    const onDebug = vi.fn();
+    const { result } = renderHook(() => useThreadEventHandlers(makeOptions(onDebug)));
+
+    act(() => {
+      result.current.onTurnStarted("ws-1", "thread-1", "turn-1");
+      result.current.onAppServerEvent({
+        workspace_id: "ws-1",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "thread-1",
+            turnId: "turn-1",
+            result: { text: "final answer" },
+          },
+        },
+      });
+    });
+
+    const receivedEntry = collectDiagnosticCalls(onDebug).find(
+      (entry) => entry.label === "thread/session:turn-diagnostic:terminal-event-received",
+    );
+    expect(receivedEntry?.payload).toEqual(
+      expect.objectContaining({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+        eventType: "turn/completed",
+        resultTextLength: "final answer".length,
+        diagnosticCategory: "foreground-terminal-settlement",
+        isProcessing: true,
+        activeTurnId: "turn-1",
+        reason: "terminal-event-reached-frontend-handler",
+      }),
+    );
+  });
+
   it("keeps execution-active codex turns out of stalled state at the base window", () => {
     const onDebug = vi.fn();
     const options = makeOptions(onDebug);
@@ -1289,6 +1326,39 @@ describe("useThreadEventHandlers diagnostics", () => {
     );
   });
 
+  it("records busy residue when completed settlement is rejected without fallback evidence", () => {
+    const onDebug = vi.fn();
+    const options = makeOptions(onDebug);
+    const rejectCompletion = vi.fn(() => false);
+    turnHookFactory.setOnTurnCompletedOverride(rejectCompletion);
+    const { result } = renderHook(() => useThreadEventHandlers(options));
+
+    act(() => {
+      result.current.onTurnStarted("ws-1", "thread-1", "turn-1");
+      result.current.onTurnCompleted("ws-1", "thread-1", "turn-1");
+    });
+
+    expect(rejectCompletion).toHaveBeenCalledWith("ws-1", "thread-1", "turn-1");
+    expect(options.markProcessing).not.toHaveBeenCalledWith("thread-1", false);
+    expect(options.setActiveTurnId).not.toHaveBeenCalledWith("thread-1", null);
+    const residueEntry = collectDiagnosticCalls(onDebug).find(
+      (entry) => entry.label === "thread/session:turn-diagnostic:terminal-settlement-busy-residue",
+    );
+    expect(residueEntry?.payload).toEqual(
+      expect.objectContaining({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+        handled: false,
+        fallbackApplied: false,
+        isProcessing: true,
+        activeTurnId: "turn-1",
+        diagnosticCategory: "foreground-terminal-settlement",
+        reason: "terminal-event-handled-but-foreground-state-remains-busy",
+      }),
+    );
+  });
+
   it("does not apply fallback settlement when a newer active turn already exists", () => {
     const onDebug = vi.fn();
     const options = makeOptions(onDebug);
@@ -1659,6 +1729,36 @@ describe("useThreadEventHandlers diagnostics", () => {
     expect(labels).toContain("thread/session:turn-diagnostic:first-delta");
     expect(labels).toContain("thread/session:turn-diagnostic:first-execution-item");
     expect(labels).toContain("thread/session:turn-diagnostic:completed");
+  });
+
+  it("includes latest progress evidence in terminal diagnostics", () => {
+    window.localStorage.setItem("ccgui.debug.turnDiagnosticsVerbose", "1");
+    const onDebug = vi.fn();
+    const { result } = renderHook(() => useThreadEventHandlers(makeOptions(onDebug)));
+
+    act(() => {
+      result.current.onTurnStarted("ws-1", "thread-1", "turn-1");
+    });
+    act(() => {
+      vi.setSystemTime(new Date("2026-04-18T10:00:02.000Z"));
+      result.current.onProcessingHeartbeat("ws-1", "thread-1", 1);
+    });
+    act(() => {
+      vi.setSystemTime(new Date("2026-04-18T10:00:05.000Z"));
+      result.current.onTurnCompleted("ws-1", "thread-1", "turn-1");
+    });
+
+    const completedEntry = collectDiagnosticCalls(onDebug).find(
+      (entry) => entry.label === "thread/session:turn-diagnostic:completed",
+    );
+    expect(completedEntry?.payload).toEqual(
+      expect.objectContaining({
+        lastProgressSource: "processing-heartbeat",
+        lastProgressAgeMs: 3000,
+        progressSequence: 1,
+        wasNoProgressSuspected: false,
+      }),
+    );
   });
 
   it("includes correlated provider fingerprint and mitigation evidence on completion", async () => {

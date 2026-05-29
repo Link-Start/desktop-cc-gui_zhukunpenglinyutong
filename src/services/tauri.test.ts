@@ -100,6 +100,7 @@ import {
   deleteClaudeSession,
   deleteGeminiSession,
   sendConversationCompletionEmail,
+  appendClientErrorLog,
   exportDiagnosticsBundle,
   hydrateClaudeDeferredImage,
 } from "./tauri";
@@ -297,6 +298,35 @@ describe("tauri invoke wrappers", () => {
     });
 
     expect(invokeMock).toHaveBeenCalledWith("export_diagnostics_bundle");
+  });
+
+  it("invokes global client error log append command", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      filePath: "/Users/demo/.ccgui/error-log/2026-05-29.jsonl",
+    });
+
+    await expect(
+      appendClientErrorLog({
+        schemaVersion: 1,
+        timestamp: "2026-05-29T12:00:00.000Z",
+        source: "error",
+        label: "terminal write error",
+        payload: { workspaceId: "ws-1" },
+      }),
+    ).resolves.toEqual({
+      filePath: "/Users/demo/.ccgui/error-log/2026-05-29.jsonl",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("append_client_error_log", {
+      entry: {
+        schemaVersion: 1,
+        timestamp: "2026-05-29T12:00:00.000Z",
+        source: "error",
+        label: "terminal write error",
+        payload: { workspaceId: "ws-1" },
+      },
+    });
   });
 
   it("passes custom skill roots to the skills_list command", async () => {
