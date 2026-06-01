@@ -456,3 +456,36 @@ Review result:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 662: 校准 Phase2b 启动证据
+
+**Date**: 2026-06-01
+**Task**: 校准 Phase2b 启动证据
+**Branch**: `feature/v0.5.4`
+
+### Summary
+
+根据 2026-06-01 error-log 新证据，将 Phase2b handoff marker 校准为双 GO 路径：status-query resolved terminal evidence 或 matched terminal evidence + scoped busy residue；本次仅更新 OpenSpec 文档，不改运行时代码。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1cbbab37` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
