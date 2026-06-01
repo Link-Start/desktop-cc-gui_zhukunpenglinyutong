@@ -583,3 +583,53 @@ Review result:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 665: 收窄 Browser Dock 自动打开触发
+
+**Date**: 2026-06-01
+**Task**: 收窄 Browser Dock 自动打开触发
+**Branch**: `feature/v0.5.4`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+完成 Browser Dock 自动导航误触发修复与 release CI hotfix。
+
+主要改动：
+- 将 Composer 中的 Browser Dock 自动导航识别抽成 src/features/composer/utils/browserNavigation.ts。
+- 收窄自动打开 Browser Dock 的触发条件：只允许明确短导航命令，描述性 bug report、截图说明、日志文本和包含 URL 的上下文 fail closed 为普通发送。
+- 新增 browserNavigation.test.ts 覆盖 explicit navigation 与描述性文本拒绝。
+- 修复 src-tauri/src/workspaces/commands.rs 中 macOS-only status 绑定泄漏到非 macOS 编译的问题，恢复 Linux/Windows release build 编译。
+- 回写 openspec/changes/enhance-browser-agent-page-understanding 的 proposal/tasks/implementation-notes/validation，记录 post-closure hardening 和验证结果。
+
+验证：
+- openspec validate enhance-browser-agent-page-understanding --strict
+- npx vitest run src/features/composer/utils/browserNavigation.test.ts
+- npm run typecheck
+- cargo check --manifest-path src-tauri/Cargo.toml
+- npm run lint
+
+Commit: e22c9b1b fix(browser-agent): 收窄浏览器自动打开触发
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e22c9b1b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
