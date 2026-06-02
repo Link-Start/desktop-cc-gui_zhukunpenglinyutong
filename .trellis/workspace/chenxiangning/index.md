@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-18.md`
-- **Total Sessions**: 674
+- **Total Sessions**: 675
 - **Last Active**: 2026-06-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-18.md` | ~1042 | Active |
+| `journal-18.md` | ~1090 | Active |
 | `journal-17.md` | ~1971 | Archived |
 | `journal-16.md` | ~1985 | Archived |
 | `journal-15.md` | ~1996 | Archived |
@@ -46,6 +46,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 675 | 2026-06-02 | 归档已验证 OpenSpec 变更 | `e3ac6a9a` | `feature/v0.5.5` |
 | 674 | 2026-06-02 | 记录主 WebView 拖拽转发回归修复 | `f18b38df` | `feature/v0.5.5` |
 | 673 | 2026-06-02 | 修复文件树 ignored 文件夹置灰 | `0841d893` | `feature/v0.5.5` |
 | 672 | 2026-06-02 | OpenSpec 文件树管理范围校准 | `b2688517` | `feature/v0.5.5` |

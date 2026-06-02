@@ -1040,3 +1040,51 @@ Validation performed before commit:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 675: 归档已验证 OpenSpec 变更
+
+**Date**: 2026-06-02
+**Task**: 归档已验证 OpenSpec 变更
+**Branch**: `feature/v0.5.5`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+完成 OpenSpec 批量归档：同步 5 个已验证变更的 delta specs 到主 specs，并将变更目录移动到 archive/2026-06-02-*。
+
+归档变更：
+- add-vibecoding-browser-agent
+- enhance-browser-agent-page-understanding
+- enhance-file-tree-management-actions
+- fix-foreground-turn-settlement-phase2b
+- harden-model-structured-output-normalization
+
+主 specs 同步：
+- 新增 agent-task-orchestration-center、browser-agent-page-understanding、model-structured-output-normalization、vibecoding-browser-agent、workspace-filetree-management-actions 等主 spec。
+- 更新 agent-task-center、conversation-lifecycle-contract、engine-runtime-contract、workspace-filetree-root-node 等既有 spec。
+
+验证：
+- 未运行 openspec validate 或测试；本次为用户确认后的归档提交。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e3ac6a9a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
