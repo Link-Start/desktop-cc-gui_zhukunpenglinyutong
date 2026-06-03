@@ -38,6 +38,15 @@ Project Map 已经连续补齐 Evidence Files、Relations、Guided Tour、Path F
   - `ProjectMapNavigationPanel`, `ProjectMapEvidenceFilesPanel`, and `ProjectMapRelationLegendPanel` are already separate render units, but they are all mounted as peer blocks inside `.project-map-lens-shell` before the graph.
   - `DetailPanel` already receives selected node context, relation bucket, impact analysis, refresh summary, graph integrity issues, graph repair summary, and orchestration draft state.
   - `project-map.css` already has collapsed styling for navigation/evidence/relation panels, but the current composition still presents multiple capability summaries in the same red-frame visual band.
+- Backwrite current workspace adjustment facts:
+  - The view refactor has moved from proposal-only planning into an implemented Project Map workspace adjustment.
+  - A derived view composition layer now owns the primary summary, active context subject, secondary investigation modes, attention state, and visible section state.
+  - Evidence Files and Relations are treated as reachable secondary investigation modes instead of equal-weight default blocks.
+  - Graph health and repair now follow an attention-driven escalation model; healthy state stays compact while actionable issues can surface with higher priority.
+  - Navigation, tour, path, impact, evidence, relation, and repair entry points remain reachable through the refactored semantic hierarchy.
+  - Styling work has been aligned with Project Map large-file pressure cleanup so hierarchy changes do not create another parallel global stylesheet surface.
+  - Focused regression coverage has been added for default view state, contextual focus switching, repair visibility, sparse fallback, and visual priority behavior.
+  - Remaining closure work is validation-only: typecheck and focused Project Map test execution still need to be recorded before archive/closure.
 - Define a new Project Map view IA:
   - Primary: current map/lens overview, selected focus, health/risk summary, one primary action path.
   - Secondary: Evidence Files, Relations, Path Finder, Tour, Impact details.
@@ -80,6 +89,7 @@ Project Map 已经连续补齐 Evidence Files、Relations、Guided Tour、Path F
 
 - Frontend:
   - `src/features/project-map/components/ProjectMapPanel.tsx`
+  - possible extracted semantic Project Map view composition helpers/components under `src/features/project-map/components/`
   - existing local components in `ProjectMapPanel.tsx`:
     - `ProjectMapNavigationPanel`
     - `ProjectMapEvidenceFilesPanel`
@@ -90,6 +100,9 @@ Project Map 已经连续补齐 Evidence Files、Relations、Guided Tour、Path F
   - `src/styles/project-map.inspector.css` if contextual focus changes need inspector-specific styling
   - possible extracted Project Map detail/inspector stylesheet if it aligns with the active large-file-pressure cleanup
   - focused Project Map component/state tests
+- Workspace / governance:
+  - The proposal now reflects the workspace implementation state: tasks through view IA, styling, accessibility, and focused regression coverage are complete.
+  - Open validation gates remain tracked in `tasks.md` rather than being claimed as completed in this proposal.
 - Behavior specs:
   - `openspec/specs/project-xray-panel/spec.md`
 - Dependencies:

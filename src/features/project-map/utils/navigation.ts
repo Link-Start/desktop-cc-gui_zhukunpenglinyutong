@@ -2,19 +2,12 @@ import type {
   ProjectMapDataset,
   ProjectMapNode,
   ProjectMapRelation,
-  ProjectMapTourMetadata,
-  ProjectMapTourPurpose,
-  ProjectMapTourStep,
 } from "../types";
 import {
   buildProjectMapNodeIndex,
   compareProjectMapNodes,
-  getProjectMapCoreNode,
-  getSortedProjectMapChildren,
   normalizeProjectMapProjectionNodes,
 } from "./interactiveLayout";
-
-export type ProjectMapTourCopy = Record<ProjectMapTourPurpose, { title: string; summary: string }>;
 
 export type ProjectMapSearchResult = {
   node: ProjectMapNode;
@@ -48,130 +41,8 @@ export type ProjectMapPathResult =
       message: string;
     };
 
-const TOUR_ORDER: ProjectMapTourPurpose[] = [
-  "onboarding",
-  "architecture-review",
-  "risk-review",
-  "task-planning",
-];
-
 function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase();
-}
-
-function uniqueExistingNodeIds(nodeIds: string[], nodeIndex: Map<string, ProjectMapNode>): string[] {
-  const seen = new Set<string>();
-  const existingIds: string[] = [];
-  for (const nodeId of nodeIds) {
-    if (!nodeIndex.has(nodeId) || seen.has(nodeId)) {
-      continue;
-    }
-    seen.add(nodeId);
-    existingIds.push(nodeId);
-  }
-  return existingIds;
-}
-
-function buildTourStep(input: {
-  id: string;
-  purpose: ProjectMapTourPurpose;
-  copy: ProjectMapTourCopy;
-  nodeIds: string[];
-  nodeIndex: Map<string, ProjectMapNode>;
-  priority: number;
-}): ProjectMapTourStep | null {
-  const nodeIds = uniqueExistingNodeIds(input.nodeIds, input.nodeIndex);
-  if (nodeIds.length === 0) {
-    return null;
-  }
-  const copy = input.copy[input.purpose] ?? input.copy.onboarding;
-  return {
-    id: input.id,
-    purpose: input.purpose,
-    title: copy.title,
-    summary: copy.summary,
-    nodeIds,
-    priority: input.priority,
-  };
-}
-
-function sanitizePersistedTourSteps(
-  tours: ProjectMapTourMetadata | undefined,
-  nodeIndex: Map<string, ProjectMapNode>,
-): ProjectMapTourStep[] {
-  return (tours?.steps ?? [])
-    .map((step) => ({
-      ...step,
-      nodeIds: uniqueExistingNodeIds(step.nodeIds, nodeIndex),
-    }))
-    .filter((step) => step.nodeIds.length > 0)
-    .sort((left, right) => (left.priority ?? 99) - (right.priority ?? 99));
-}
-
-export function buildProjectMapGuidedTour(input: {
-  dataset: ProjectMapDataset;
-  copy: ProjectMapTourCopy;
-}): ProjectMapTourStep[] {
-  const nodes = normalizeProjectMapProjectionNodes(input.dataset.nodes);
-  const nodeIndex = buildProjectMapNodeIndex(nodes);
-  const persistedSteps = sanitizePersistedTourSteps(input.dataset.tours, nodeIndex);
-  if (persistedSteps.length > 0) {
-    return persistedSteps;
-  }
-
-  const rootNode = getProjectMapCoreNode({ ...input.dataset, nodes });
-  const hubNodes = rootNode ? getSortedProjectMapChildren(rootNode, nodeIndex).slice(0, 4) : [];
-  const riskNodes = nodes
-    .filter((node) => node.stale || node.confidence === "low" || node.detail.riskSignals.length > 0)
-    .sort(compareProjectMapNodes)
-    .slice(0, 4);
-  const candidateNodes = nodes.filter((node) => node.candidate).sort(compareProjectMapNodes).slice(0, 4);
-  const relationNodes = (input.dataset.relations ?? [])
-    .flatMap((relation) => [relation.sourceNodeId, relation.targetNodeId])
-    .map((nodeId) => nodeIndex.get(nodeId))
-    .filter((node): node is ProjectMapNode => Boolean(node))
-    .slice(0, 5);
-
-  return TOUR_ORDER.flatMap((purpose, index) => {
-    if (purpose === "onboarding") {
-      return buildTourStep({
-        id: "tour-onboarding",
-        purpose,
-        copy: input.copy,
-        nodeIds: [rootNode?.id ?? "", ...hubNodes.map((node) => node.id)],
-        nodeIndex,
-        priority: index + 1,
-      }) ?? [];
-    }
-    if (purpose === "architecture-review") {
-      return buildTourStep({
-        id: "tour-architecture-review",
-        purpose,
-        copy: input.copy,
-        nodeIds: [...hubNodes.map((node) => node.id), ...relationNodes.map((node) => node.id)],
-        nodeIndex,
-        priority: index + 1,
-      }) ?? [];
-    }
-    if (purpose === "risk-review") {
-      return buildTourStep({
-        id: "tour-risk-review",
-        purpose,
-        copy: input.copy,
-        nodeIds: riskNodes.map((node) => node.id),
-        nodeIndex,
-        priority: index + 1,
-      }) ?? [];
-    }
-    return buildTourStep({
-      id: "tour-task-planning",
-      purpose,
-      copy: input.copy,
-      nodeIds: [...candidateNodes.map((node) => node.id), ...riskNodes.map((node) => node.id)],
-      nodeIndex,
-      priority: index + 1,
-    }) ?? [];
-  });
 }
 
 export function searchProjectMapNodes(input: {
@@ -322,4 +193,3 @@ export function buildProjectMapShortestPath(input: {
 
   return { status: "found", steps, edgeKeys, message: input.foundMessage };
 }
-

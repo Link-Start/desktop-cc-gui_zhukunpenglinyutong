@@ -1,5 +1,5 @@
-export const OPEN_ORCHESTRATION_TASK_EVENT = "mossx:open-orchestration-task";
-export const OPEN_TASK_RUN_EVENT = "mossx:open-task-run";
+export const OPEN_ORCHESTRATION_TASK_EVENT = "ccgui:open-orchestration-task";
+export const OPEN_TASK_RUN_EVENT = "ccgui:open-task-run";
 
 export function dispatchOpenOrchestrationTaskEvent(taskId: string): void {
   if (typeof window === "undefined" || !taskId.trim()) {

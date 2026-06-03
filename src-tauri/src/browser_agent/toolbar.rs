@@ -12,7 +12,7 @@ use super::{
 };
 
 const BROWSER_TOOLBAR_BRIDGE_HOST: &str = "browser-agent-toolbar.invalid";
-const BROWSER_TOOLBAR_BRIDGE_PATH: &str = "/__mossx_toolbar__";
+const BROWSER_TOOLBAR_BRIDGE_PATH: &str = "/__ccgui_toolbar__";
 const BROWSER_CONTEXT_ATTACHMENT_REQUEST_EVENT: &str = "browser-agent://attach-current-context";
 
 struct BrowserToolbarLabels {
@@ -123,8 +123,8 @@ fn browser_agent_toolbar_script(
     script.push_str(
         r#";
   const toolbarHeight = 126;
-  const hostId = "mossx-browser-agent-toolbar";
-  const bridgeBase = "https://browser-agent-toolbar.invalid/__mossx_toolbar__";
+  const hostId = "ccgui-browser-agent-toolbar";
+  const bridgeBase = "https://browser-agent-toolbar.invalid/__ccgui_toolbar__";
   const escapeHtml = (value) => String(value || "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -683,18 +683,10 @@ pub(super) fn handle_browser_toolbar_navigation(
         .query_pairs()
         .map(|(key, value)| (key.into_owned(), value.into_owned()))
         .collect::<HashMap<_, _>>();
-    let toolbar_browser_session_id = query_pairs
-        .get("sessionId")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .unwrap_or(browser_session_id)
-        .to_string();
-    let toolbar_workspace_id = query_pairs
-        .get("workspaceId")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .unwrap_or(workspace_id)
-        .to_string();
+    let toolbar_browser_session_id =
+        normalize_toolbar_query_value(query_pairs.get("sessionId"), browser_session_id);
+    let toolbar_workspace_id =
+        normalize_toolbar_query_value(query_pairs.get("workspaceId"), workspace_id);
     let toolbar_locale = query_pairs
         .get("locale")
         .map(|value| value.trim())
@@ -704,7 +696,7 @@ pub(super) fn handle_browser_toolbar_navigation(
         "activate" => {
             let target_browser_session_id = query_pairs
                 .get("targetSessionId")
-                .cloned()
+                .map(|value| normalize_toolbar_query_value(Some(value), toolbar_browser_session_id.as_str()))
                 .unwrap_or_else(|| toolbar_browser_session_id.clone());
             let app_for_action = app.clone();
             let locale = toolbar_locale.clone();
@@ -724,10 +716,7 @@ pub(super) fn handle_browser_toolbar_navigation(
                 let current_browser_session_id = toolbar_browser_session_id.clone();
                 let workspace_id = toolbar_workspace_id.clone();
                 let locale = toolbar_locale.clone();
-                let new_tab = query_pairs
-                    .get("newTab")
-                    .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
-                    .unwrap_or(false);
+                let new_tab = parse_toolbar_boolean(query_pairs.get("newTab"));
                 tauri::async_runtime::spawn(async move {
                     open_browser_toolbar_url(
                         app_for_action,
@@ -768,4 +757,48 @@ pub(super) fn handle_browser_toolbar_navigation(
         _ => {}
     }
     true
+}
+
+fn normalize_toolbar_query_value(value: Option<&String>, fallback: &str) -> String {
+    value
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+fn parse_toolbar_boolean(value: Option<&String>) -> bool {
+    value
+        .map(|value| {
+            let normalized = value.trim();
+            normalized == "1" || normalized.eq_ignore_ascii_case("true")
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_toolbar_query_value, parse_toolbar_boolean};
+
+    #[test]
+    fn normalize_toolbar_query_value_trims_or_falls_back_for_empty_input() {
+        assert_eq!(
+            normalize_toolbar_query_value(Some(&" session-1 ".to_string()), "fallback"),
+            "session-1",
+        );
+        assert_eq!(
+            normalize_toolbar_query_value(Some(&"   ".to_string()), "fallback"),
+            "fallback",
+        );
+        assert_eq!(normalize_toolbar_query_value(None, "fallback"), "fallback");
+    }
+
+    #[test]
+    fn parse_toolbar_boolean_accepts_only_explicit_truthy_values() {
+        assert!(parse_toolbar_boolean(Some(&"1".to_string())));
+        assert!(parse_toolbar_boolean(Some(&" TRUE ".to_string())));
+        assert!(!parse_toolbar_boolean(Some(&"0".to_string())));
+        assert!(!parse_toolbar_boolean(Some(&"yes".to_string())));
+        assert!(!parse_toolbar_boolean(None));
+    }
 }

@@ -184,8 +184,11 @@ export function filterProjectMapRelations(input: {
     const matchesType = typeFilter === "all" || relation.type === typeFilter;
     const matchesSourceKind = sourceKindFilter === "all" || relation.sourceKind === sourceKindFilter;
     const matchesDirection = (() => {
-      if (!input.selectedNodeId || directionFilter === "all") {
+      if (!input.selectedNodeId) {
         return true;
+      }
+      if (directionFilter === "all") {
+        return relation.sourceNodeId === input.selectedNodeId || relation.targetNodeId === input.selectedNodeId;
       }
       if (directionFilter === "incoming") {
         return relation.targetNodeId === input.selectedNodeId || (relation.direction === "bidirectional" && relation.sourceNodeId === input.selectedNodeId);

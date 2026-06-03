@@ -3,10 +3,8 @@ import { useTranslation } from "react-i18next";
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
-import Crosshair from "lucide-react/dist/esm/icons/crosshair";
 import Folder from "lucide-react/dist/esm/icons/folder";
 import ListChecks from "lucide-react/dist/esm/icons/list-checks";
-import MapIcon from "lucide-react/dist/esm/icons/map";
 import Network from "lucide-react/dist/esm/icons/network";
 import RefreshCcw from "lucide-react/dist/esm/icons/refresh-ccw";
 import Route from "lucide-react/dist/esm/icons/route";
@@ -58,7 +56,6 @@ import type {
   ProjectMapRelatedArtifact,
   ProjectMapStorageLocation,
   ProjectMapStaleReason,
-  ProjectMapTourStep,
 } from "../types";
 import {
   ProjectMapArtifactChip,
@@ -70,6 +67,12 @@ import {
 
 const PROJECT_MAP_EVIDENCE_SOURCE_KIND_ALL = "all";
 const PROJECT_MAP_RELATION_FILTER_ALL = "all";
+
+export type ProjectMapHierarchyRelationView = {
+  id: string;
+  parent: ProjectMapNode;
+  child: ProjectMapNode;
+};
 
 function normalizePathForComparing(value: string): string {
   return value.replace(/[\\/]+$/g, "").replace(/\\/g, "/");
@@ -115,6 +118,19 @@ function isCandidateAfterCompletedCalibration(
   );
 }
 
+function summarizeGraphRepairActions(summary: ProjectMapGraphRepairSummary | null): {
+  deterministicCleanupCount: number;
+  evidenceMarkerCount: number;
+  actionCount: number;
+} {
+  const actions = summary?.actions ?? [];
+  return {
+    deterministicCleanupCount: actions.filter((repairAction) => repairAction.kind !== "quarantine-evidence-gap").length,
+    evidenceMarkerCount: actions.filter((repairAction) => repairAction.kind === "quarantine-evidence-gap").length,
+    actionCount: actions.length,
+  };
+}
+
 type ProjectMapOrchestrationDraftState =
   | { status: "idle" }
   | {
@@ -134,65 +150,36 @@ type ProjectMapOrchestrationDraftState =
 export function ProjectMapNavigationPanel({
   searchQuery,
   searchResults,
-  guidedTourSteps,
-  activeTourStep,
-  activeTourStepIndex,
   expanded,
   pathNodeOptions,
   pathSourceNodeId,
   pathTargetNodeId,
   pathResult,
-  onExpandedChange,
   onSearchQueryChange,
   onFocusNode,
-  onTourStepIndexChange,
   onPathSourceNodeChange,
   onPathTargetNodeChange,
 }: {
   searchQuery: string;
   searchResults: ProjectMapSearchResult[];
-  guidedTourSteps: ProjectMapTourStep[];
-  activeTourStep: ProjectMapTourStep | null;
-  activeTourStepIndex: number;
   expanded: boolean;
   pathNodeOptions: ProjectMapNode[];
   pathSourceNodeId: string | null;
   pathTargetNodeId: string | null;
   pathResult: ProjectMapPathResult;
-  onExpandedChange: (expanded: boolean) => void;
   onSearchQueryChange: (query: string) => void;
   onFocusNode: (nodeId: string | null) => void;
-  onTourStepIndexChange: (index: number) => void;
   onPathSourceNodeChange: (nodeId: string | null) => void;
   onPathTargetNodeChange: (nodeId: string | null) => void;
 }) {
   const { t } = useTranslation();
   const hasSearchQuery = searchQuery.trim().length > 0;
-  const canMoveTourBack = activeTourStepIndex > 0;
-  const canMoveTourForward = activeTourStepIndex < guidedTourSteps.length - 1;
-  const activeTourFocusNodeId = activeTourStep?.nodeIds[0] ?? null;
 
   return (
     <section
       className={cn("project-map-navigation-panel", !expanded && "is-collapsed")}
       aria-label={t("projectMap.navigation.title")}
     >
-      <div className="project-map-navigation-summary">
-        <Route aria-hidden />
-        <div>
-          <h4>{t("projectMap.navigation.title")}</h4>
-          <p>
-            {t("projectMap.navigation.summary", {
-              tours: guidedTourSteps.length,
-              matches: searchResults.length,
-              pathStatus: pathResult.status,
-            })}
-          </p>
-        </div>
-        <button type="button" onClick={() => onExpandedChange(!expanded)}>
-          {expanded ? t("projectMap.navigation.collapse") : t("projectMap.navigation.expand")}
-        </button>
-      </div>
       {!expanded ? null : (
         <>
       <div className="project-map-navigation-card project-map-search-card">
@@ -230,54 +217,6 @@ export function ProjectMapNavigationPanel({
             )}
           </div>
         ) : null}
-      </div>
-
-      <div className="project-map-navigation-card">
-        <header>
-          <MapIcon aria-hidden />
-          <div>
-            <h4>{t("projectMap.navigation.tour.title")}</h4>
-            <p>{t("projectMap.navigation.tour.subtitle")}</p>
-          </div>
-        </header>
-        {activeTourStep ? (
-          <>
-            <div className="project-map-tour-step">
-              <span>
-                {t("projectMap.navigation.tour.stepCounter", {
-                  current: activeTourStepIndex + 1,
-                  total: guidedTourSteps.length,
-                })}
-              </span>
-              <strong>{activeTourStep.title}</strong>
-              <p>{activeTourStep.summary}</p>
-            </div>
-            <div className="project-map-navigation-actions">
-              <button
-                type="button"
-                disabled={!canMoveTourBack}
-                onClick={() => onTourStepIndexChange(activeTourStepIndex - 1)}
-              >
-                <ChevronLeft aria-hidden />
-                {t("projectMap.navigation.tour.previous")}
-              </button>
-              <button type="button" onClick={() => onFocusNode(activeTourFocusNodeId)}>
-                <Crosshair aria-hidden />
-                {t("projectMap.navigation.tour.focus")}
-              </button>
-              <button
-                type="button"
-                disabled={!canMoveTourForward}
-                onClick={() => onTourStepIndexChange(activeTourStepIndex + 1)}
-              >
-                {t("projectMap.navigation.tour.next")}
-                <ChevronRight aria-hidden />
-              </button>
-            </div>
-          </>
-        ) : (
-          <p>{t("projectMap.navigation.tour.empty")}</p>
-        )}
       </div>
 
       <div className="project-map-navigation-card">
@@ -358,7 +297,8 @@ export function ProjectMapNavigationPanel({
 
 export function ProjectMapRelationLegendPanel({
   relationIndex,
-  filteredRelationCount,
+  hierarchyRelations,
+  hierarchyRelationTotalCount,
   expanded,
   typeFilter,
   sourceKindFilter,
@@ -366,14 +306,15 @@ export function ProjectMapRelationLegendPanel({
   typeOptions,
   sourceKindOptions,
   selectedNodeId,
-  onExpandedChange,
   onTypeFilterChange,
   onSourceKindFilterChange,
   onDirectionFilterChange,
   onClearSelectedRelation,
+  onFocusNode,
 }: {
   relationIndex: ProjectMapRelationIndex;
-  filteredRelationCount: number;
+  hierarchyRelations: ProjectMapHierarchyRelationView[];
+  hierarchyRelationTotalCount: number;
   expanded: boolean;
   typeFilter: string;
   sourceKindFilter: string;
@@ -381,34 +322,27 @@ export function ProjectMapRelationLegendPanel({
   typeOptions: string[];
   sourceKindOptions: string[];
   selectedNodeId: string | null;
-  onExpandedChange: (expanded: boolean) => void;
   onTypeFilterChange: (value: string) => void;
   onSourceKindFilterChange: (value: string) => void;
   onDirectionFilterChange: (value: ProjectMapRelationDirectionFilter) => void;
   onClearSelectedRelation: () => void;
+  onFocusNode: (nodeId: string) => void;
 }) {
   const { t } = useTranslation();
+  const hasHierarchyRelations = hierarchyRelationTotalCount > 0;
 
   return (
     <section className={cn("project-map-relation-legend-panel", !expanded && "is-collapsed")}>
-      <div className="project-map-relation-legend-header">
-        <Network aria-hidden />
-        <div>
-          <h4>{t("projectMap.relations.title")}</h4>
-          <p>
-            {t("projectMap.relations.summary", {
-              total: relationIndex.relations.length,
-              visible: filteredRelationCount,
-              degraded: relationIndex.degradedIssues.length,
-            })}
-          </p>
-        </div>
-        <button type="button" onClick={() => onExpandedChange(!expanded)}>
-          {expanded ? t("projectMap.relations.collapse") : t("projectMap.relations.expand")}
-        </button>
-      </div>
       {!expanded ? null : (
         <>
+      {hasHierarchyRelations ? (
+        <p className="project-map-relation-hierarchy-summary">
+          {t("projectMap.relations.hierarchySummary", {
+            count: hierarchyRelationTotalCount,
+            typed: relationIndex.relations.length,
+          })}
+        </p>
+      ) : null}
       <div className="project-map-relation-filters">
         <label>
           <span>{t("projectMap.relations.typeFilter")}</span>
@@ -425,6 +359,9 @@ export function ProjectMapRelationLegendPanel({
                 {type}
               </option>
             ))}
+            {hasHierarchyRelations ? (
+              <option value="hierarchy">{t("projectMap.relations.hierarchyType")}</option>
+            ) : null}
           </select>
         </label>
         <label>
@@ -442,6 +379,9 @@ export function ProjectMapRelationLegendPanel({
                 {sourceKind}
               </option>
             ))}
+            {hasHierarchyRelations ? (
+              <option value="map-tree">{t("projectMap.relations.mapTreeSourceKind")}</option>
+            ) : null}
           </select>
         </label>
         <label>
@@ -465,6 +405,19 @@ export function ProjectMapRelationLegendPanel({
       </div>
       {relationIndex.typeCounts.length > 0 ? (
         <div className="project-map-relation-type-counts">
+          {hasHierarchyRelations ? (
+            <button
+              key="hierarchy"
+              type="button"
+              className={cn(typeFilter === "hierarchy" && "is-active")}
+              onClick={() =>
+                onTypeFilterChange(typeFilter === "hierarchy" ? PROJECT_MAP_RELATION_FILTER_ALL : "hierarchy")
+              }
+            >
+              <span>{t("projectMap.relations.hierarchyType")}</span>
+              <em>{hierarchyRelationTotalCount}</em>
+            </button>
+          ) : null}
           {relationIndex.typeCounts.slice(0, 8).map((item) => (
             <button
               key={item.key}
@@ -480,8 +433,44 @@ export function ProjectMapRelationLegendPanel({
           ))}
         </div>
       ) : (
-        <p className="project-map-relation-empty">{t("projectMap.relations.empty")}</p>
+        <>
+          {hasHierarchyRelations ? (
+            <div className="project-map-relation-type-counts">
+              <button
+                type="button"
+                className={cn(typeFilter === "hierarchy" && "is-active")}
+                onClick={() =>
+                  onTypeFilterChange(typeFilter === "hierarchy" ? PROJECT_MAP_RELATION_FILTER_ALL : "hierarchy")
+                }
+              >
+                <span>{t("projectMap.relations.hierarchyType")}</span>
+                <em>{hierarchyRelationTotalCount}</em>
+              </button>
+            </div>
+          ) : null}
+          <p className="project-map-relation-empty">
+            {hasHierarchyRelations
+              ? t("projectMap.relations.noTypedRelations")
+              : t("projectMap.relations.empty")}
+          </p>
+        </>
       )}
+      {hierarchyRelations.length > 0 ? (
+        <div className="project-map-hierarchy-relation-list" role="list">
+          {hierarchyRelations.slice(0, 16).map((relation) => (
+            <div key={relation.id} className="project-map-hierarchy-relation-row" role="listitem">
+              <span>{t("projectMap.relations.hierarchyType")}</span>
+              <button type="button" onClick={() => onFocusNode(relation.parent.id)}>
+                {relation.parent.title}
+              </button>
+              <em>→</em>
+              <button type="button" onClick={() => onFocusNode(relation.child.id)}>
+                {relation.child.title}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
         </>
       )}
     </section>
@@ -737,7 +726,15 @@ export function ProjectMapEvidenceFilesPanel({
                 "project-map-evidence-file-row",
                 selectedFile?.path === fileEntry.path && "is-selected",
               )}
-              onClick={() => onSelectFile(fileEntry.path)}
+              onClick={() => {
+                onSelectFile(fileEntry.path);
+                const fileLineRef = fileEntry.lineRefs[0] ?? null;
+                onOpenTrace?.(
+                  fileLineRef
+                    ? { path: fileEntry.path, line: fileLineRef.line }
+                    : { path: fileEntry.path },
+                );
+              }}
             >
               <span className="project-map-evidence-file-path">{fileEntry.displayPath}</span>
               <span className="project-map-evidence-file-meta">
@@ -957,6 +954,13 @@ export function DetailPanel({
     node && orchestrationDraftState.status !== "idle" && orchestrationDraftState.nodeId === node.id
       ? orchestrationDraftState
       : null;
+  const graphRepairActionSummary = summarizeGraphRepairActions(graphRepairSummary);
+  const repairIssueCount = graphIntegrityIssues.length;
+  const canRunGraphRepair = repairIssueCount > 0;
+  const repairActionLabel =
+    graphIntegrityIssues.some((issue) => issue.kind !== "missing-node-evidence")
+      ? t("projectMap.repair.cleanupAction")
+      : t("projectMap.repair.markEvidenceAction");
 
   return (
     <aside
@@ -1193,7 +1197,7 @@ export function DetailPanel({
                   <h4>{t("projectMap.detail.evidenceZone", { defaultValue: "Evidence" })}</h4>
                   <p>
                     {t("projectMap.detail.evidenceZoneHint", {
-                      defaultValue: "Why mossx trusts this node and where the proof lives.",
+                      defaultValue: "Why ccgui trusts this node and where the proof lives.",
                     })}
                   </p>
                 </div>
@@ -1377,13 +1381,21 @@ export function DetailPanel({
                   </div>
                   <p>
                     {t("projectMap.repair.summary", {
-                      issues: graphIntegrityIssues.length,
-                      actions: graphRepairSummary?.actions.length ?? 0,
+                      issues: repairIssueCount,
+                      actions: graphRepairActionSummary.actionCount,
                     })}
                   </p>
-                  {isGraphHealthExpanded && graphIntegrityIssues.length > 0 ? (
-                    <button type="button" onClick={() => void onRepairGraph()}>
-                      {t("projectMap.repair.action")}
+                  {isGraphHealthExpanded && graphRepairActionSummary.actionCount > 0 ? (
+                    <p>
+                      {t("projectMap.repair.result", {
+                        cleanup: graphRepairActionSummary.deterministicCleanupCount,
+                        evidence: graphRepairActionSummary.evidenceMarkerCount,
+                      })}
+                    </p>
+                  ) : null}
+                  {isGraphHealthExpanded && canRunGraphRepair ? (
+                    <button type="button" onClick={() => void onRepairGraph()} disabled={!canRunGraphRepair}>
+                      {repairActionLabel}
                     </button>
                   ) : null}
                   {isGraphHealthExpanded && (graphRepairSummary?.actions ?? []).length > 0 ? (

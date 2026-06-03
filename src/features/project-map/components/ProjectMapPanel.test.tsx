@@ -10,7 +10,7 @@ import {
 import { resetClientStorageForTests } from "../../../services/clientStorage";
 import { mockProjectMapData } from "../mockProjectMapData";
 import type { ProjectMapDatasetController } from "../hooks/useProjectMapDataset";
-import type { ProjectMapDataset, ProjectMapNode, ProjectMapRunMetadata } from "../types";
+import type { ProjectMapDataset, ProjectMapNode, ProjectMapRelation, ProjectMapRunMetadata } from "../types";
 import { PROJECT_MAP_UNASSIGNED_DISCOVERIES_NODE_ID } from "../utils/incrementalGeneration";
 import { ProjectMapPanel } from "./ProjectMapPanel";
 
@@ -249,6 +249,85 @@ describe("ProjectMapPanel", () => {
       }),
     ).toBeTruthy();
     expect(view.container.querySelector("textarea, [contenteditable='true']")).toBeNull();
+  });
+
+  it("keeps navigation and relation investigation reachable without mounting Evidence Files in the main view", () => {
+    const view = renderMockProjectMapPanel();
+
+    expect(view.container.querySelector(".project-map-investigation-strip")).toBeTruthy();
+    expect(view.container.querySelector(".project-map-navigation-panel")).toBeNull();
+    expect(view.container.querySelector(".project-map-evidence-files-panel")).toBeNull();
+    expect(view.container.querySelector(".project-map-relation-legend-panel")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "projectMap.viewIa.relationsMode" }));
+    expect(view.container.querySelector(".project-map-relation-legend-panel")).toBeTruthy();
+    expect(view.container.querySelector(".project-map-evidence-files-panel")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "projectMap.viewIa.relationsMode" }));
+    expect(view.container.querySelector(".project-map-relation-legend-panel")).toBeNull();
+    expect(view.container.querySelector(".project-map-evidence-files-panel")).toBeNull();
+  });
+
+  it("preserves manually selected path endpoints when graph selection changes", () => {
+    const view = renderMockProjectMapPanel();
+
+    fireEvent.click(screen.getByRole("button", { name: "projectMap.viewIa.navigationMode" }));
+    const sourceSelect = screen.getByLabelText("projectMap.navigation.path.source") as HTMLSelectElement;
+    const targetSelect = screen.getByLabelText("projectMap.navigation.path.target") as HTMLSelectElement;
+
+    fireEvent.change(sourceSelect, { target: { value: "hub-api" } });
+    fireEvent.change(targetSelect, { target: { value: "hub-risk" } });
+    fireEvent.click(getGraphNodeButton(view.container, /业务能力 Business Capabilities/i));
+
+    expect(sourceSelect.value).toBe("hub-api");
+    expect(targetSelect.value).toBe("hub-risk");
+  });
+
+  it("counts hierarchy edges in relation investigation when typed relations are absent", () => {
+    const hierarchyOnlyDataset: ProjectMapDataset = {
+      ...mockProjectMapData,
+      relations: [],
+    };
+    const view = renderMockProjectMapPanel({ dataset: hierarchyOnlyDataset });
+    const relationsMode = screen.getByRole("button", { name: "projectMap.viewIa.relationsMode" });
+
+    expect(relationsMode.textContent).not.toContain("projectMap.viewIa.relationsMode0");
+    fireEvent.click(relationsMode);
+
+    expect(view.container.querySelector(".project-map-relation-legend-panel")).toBeTruthy();
+    expect(screen.getByText("projectMap.relations.hierarchySummary")).toBeTruthy();
+    expect(screen.getByText("projectMap.relations.noTypedRelations")).toBeTruthy();
+  });
+
+  it("promotes an explicit graph node selection into the contextual focus card", () => {
+    const view = renderMockProjectMapPanel();
+
+    fireEvent.click(getGraphNodeButton(view.container, /接口表面 API Surface/i));
+
+    const detailPanel = screen.getByLabelText("projectMap.detailPanel");
+    expect(within(detailPanel).getAllByText("接口表面 API Surface").length).toBeGreaterThan(0);
+  });
+
+  it("escalates graph health only when repair attention is required", () => {
+    const danglingRelation: ProjectMapRelation = {
+      id: "relation-missing-endpoint",
+      sourceNodeId: "missing-node",
+      targetNodeId: "project-core",
+      type: "depends_on",
+      direction: "forward",
+      confidence: "low",
+      sourceKind: "deterministic",
+      evidence: [],
+    };
+    const degradedDataset: ProjectMapDataset = {
+      ...mockProjectMapData,
+      relations: [...(mockProjectMapData.relations ?? []), danglingRelation],
+    };
+    const view = renderMockProjectMapPanel({ dataset: degradedDataset });
+    const healthMode = screen.getByRole("button", { name: "projectMap.viewIa.healthMode" });
+
+    expect(healthMode.classList.contains("requires-attention")).toBe(true);
+    expect(view.container.querySelector(".project-map-investigation-mode.requires-attention")).toBeTruthy();
   });
 
   it("uses the normalized node projection for graph selection and inspector details", () => {

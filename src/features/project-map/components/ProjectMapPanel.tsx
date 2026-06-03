@@ -56,7 +56,6 @@ import {
   translateProjectMapNodeKind,
 } from "../utils/display";
 import { buildProjectMapExplainPack } from "../utils/contextBuilder";
-import { buildProjectMapEvidenceFileIndex } from "../utils/evidenceFileIndex";
 import { buildProjectMapImpactAnalysis } from "../utils/impactAnalysis";
 import {
   getProjectMapNodeStaleReasons,
@@ -67,7 +66,6 @@ import {
   validateProjectMapGraphIntegrity,
 } from "../utils/graphIntegrity";
 import {
-  buildProjectMapGuidedTour,
   buildProjectMapShortestPath,
   searchProjectMapNodes,
 } from "../utils/navigation";
@@ -85,11 +83,11 @@ import {
   DeleteNodeConfirmDialog,
   DetailPanel,
   GenerationConfirmationDialog,
-  ProjectMapEvidenceFilesPanel,
   ProjectMapNavigationPanel,
   ProjectMapRelationLegendPanel,
   ProjectMapSettingsPanel,
 } from "./ProjectMapPanelSurfaces";
+import type { ProjectMapHierarchyRelationView } from "./ProjectMapPanelSurfaces";
 import type {
   ProjectMapDataset,
   ProjectMapGraphRepairSummary,
@@ -140,6 +138,13 @@ type ProjectMapOrchestrationDraftState =
       reason: "missing-workspace" | "missing-node";
     };
 
+type ProjectMapVisibleSectionState = {
+  navigation: boolean;
+  evidence: boolean;
+  relations: boolean;
+  health: boolean;
+};
+
 type GraphNodeDragState = {
   pointerId: number;
   startClientX: number;
@@ -155,7 +160,6 @@ const MINI_MAP_SIZE = { width: 180, height: 118 };
 const DETAIL_PANEL_FOCUS_OFFSET_MIN = 160;
 const DETAIL_PANEL_FOCUS_OFFSET_MAX = 240;
 const CANVAS_CONTROLS_COLLAPSED_STORAGE_KEY = "ccgui.projectMap.canvasControlsCollapsed";
-const PROJECT_MAP_EVIDENCE_SOURCE_KIND_ALL = "all";
 const PROJECT_MAP_RELATION_FILTER_ALL = "all";
 
 function readCanvasControlsCollapsedPreference(): boolean {
@@ -181,10 +185,6 @@ function writeCanvasControlsCollapsedPreference(collapsed: boolean): void {
   } catch {
     // UI preference persistence is best-effort.
   }
-}
-
-function normalizeEvidenceSearchText(value: string): string {
-  return value.trim().toLowerCase();
 }
 
 function resolveProjectMapOrchestrationWorkspaceId(input: {
@@ -348,26 +348,18 @@ export function ProjectMapPanel({
   const [deleteConfirmNodeId, setDeleteConfirmNodeId] = useState<string | null>(null);
   const [viewHistory, setViewHistory] = useState<GraphViewSnapshot[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [evidenceFileSearchQuery, setEvidenceFileSearchQuery] = useState("");
-  const [evidenceFileSourceKindFilter, setEvidenceFileSourceKindFilter] = useState(
-    PROJECT_MAP_EVIDENCE_SOURCE_KIND_ALL,
-  );
-  const [showSelectedNodeEvidenceOnly, setShowSelectedNodeEvidenceOnly] = useState(false);
-  const [selectedEvidenceFilePath, setSelectedEvidenceFilePath] = useState<string | null>(null);
-  const [isEvidenceFileHighlightActive, setIsEvidenceFileHighlightActive] = useState(false);
   const [relationTypeFilter, setRelationTypeFilter] = useState(PROJECT_MAP_RELATION_FILTER_ALL);
   const [relationSourceKindFilter, setRelationSourceKindFilter] = useState(PROJECT_MAP_RELATION_FILTER_ALL);
   const [relationDirectionFilter, setRelationDirectionFilter] =
     useState<ProjectMapRelationDirectionFilter>("all");
   const [selectedRelationId, setSelectedRelationId] = useState<string | null>(null);
-  const [activeTourStepIndex, setActiveTourStepIndex] = useState(0);
   const [pathSourceNodeId, setPathSourceNodeId] = useState<string | null>(null);
   const [pathTargetNodeId, setPathTargetNodeId] = useState<string | null>(null);
+  const pathEndpointsEditedByUserRef = useRef(false);
   const [hoverNodeId, setHoverNodeId] = useState<string | null>(null);
   const [isLensStripCollapsed, setIsLensStripCollapsed] = useState(true);
   const [isProjectMapChromeCollapsed, setIsProjectMapChromeCollapsed] = useState(false);
   const [isNavigationPanelExpanded, setIsNavigationPanelExpanded] = useState(false);
-  const [isEvidenceFilesPanelExpanded, setIsEvidenceFilesPanelExpanded] = useState(false);
   const [isRelationPanelExpanded, setIsRelationPanelExpanded] = useState(false);
   const [isGraphHealthExpanded, setIsGraphHealthExpanded] = useState(false);
   const [isCanvasControlsCollapsed, setIsCanvasControlsCollapsed] = useState(
@@ -431,6 +423,16 @@ export function ProjectMapPanel({
     (focusNodeId ? nodeIndex.get(focusNodeId) : rootNode) ??
     visibleNodes[0] ??
     null;
+  const selectedNavigationNodeId = selectedNode?.id ?? null;
+  const fallbackPathTargetNodeId = useMemo(() => {
+    if (!selectedNavigationNodeId) {
+      return null;
+    }
+    if (rootNode?.id && rootNode.id !== selectedNavigationNodeId) {
+      return rootNode.id;
+    }
+    return visibleNodes.find((node) => node.id !== selectedNavigationNodeId)?.id ?? null;
+  }, [rootNode?.id, selectedNavigationNodeId, visibleNodes]);
   const selectedExplainPackNodeId = selectedNode?.id ?? null;
   const selectedExplainPack = useMemo(
     () =>
@@ -438,36 +440,6 @@ export function ProjectMapPanel({
         ? buildProjectMapExplainPack({ dataset, nodeId: selectedExplainPackNodeId })
         : null,
     [dataset, selectedExplainPackNodeId],
-  );
-  const tourCopy = useMemo(
-    () => ({
-      onboarding: {
-        title: t("projectMap.navigation.tour.onboardingTitle"),
-        summary: t("projectMap.navigation.tour.onboardingSummary"),
-      },
-      "architecture-review": {
-        title: t("projectMap.navigation.tour.architectureTitle"),
-        summary: t("projectMap.navigation.tour.architectureSummary"),
-      },
-      "risk-review": {
-        title: t("projectMap.navigation.tour.riskTitle"),
-        summary: t("projectMap.navigation.tour.riskSummary"),
-      },
-      "task-planning": {
-        title: t("projectMap.navigation.tour.taskTitle"),
-        summary: t("projectMap.navigation.tour.taskSummary"),
-      },
-    }),
-    [t],
-  );
-  const guidedTourSteps = useMemo(
-    () => buildProjectMapGuidedTour({ dataset, copy: tourCopy }),
-    [dataset, tourCopy],
-  );
-  const activeTourStep = guidedTourSteps[activeTourStepIndex] ?? null;
-  const activeTourNodeIds = useMemo(
-    () => new Set(activeTourStep?.nodeIds ?? []),
-    [activeTourStep],
   );
   const searchResults = useMemo(
     () => searchProjectMapNodes({ dataset, query: searchQuery, limit: 8 }),
@@ -545,6 +517,53 @@ export function ProjectMapPanel({
   const selectedRelation = selectedRelationId
     ? relationIndex.relations.find((item) => item.relation.id === selectedRelationId) ?? null
     : null;
+  const hierarchyRelations = useMemo<ProjectMapHierarchyRelationView[]>(
+    () =>
+      dataset.nodes.flatMap((child) => {
+        if (!child.parentId) {
+          return [];
+        }
+        const parent = nodeIndex.get(child.parentId);
+        return parent
+          ? [
+              {
+                id: `hierarchy:${parent.id}:${child.id}`,
+                parent,
+                child,
+              },
+            ]
+          : [];
+      }),
+    [dataset.nodes, nodeIndex],
+  );
+  const filteredHierarchyRelations = useMemo(() => {
+    const matchesType =
+      relationTypeFilter === PROJECT_MAP_RELATION_FILTER_ALL || relationTypeFilter === "hierarchy";
+    const matchesSourceKind =
+      relationSourceKindFilter === PROJECT_MAP_RELATION_FILTER_ALL ||
+      relationSourceKindFilter === "map-tree";
+    if (!matchesType || !matchesSourceKind) {
+      return [];
+    }
+    if (!selectedNode?.id) {
+      return hierarchyRelations;
+    }
+    if (relationDirectionFilter === "all") {
+      return hierarchyRelations.filter(
+        (relation) => relation.parent.id === selectedNode.id || relation.child.id === selectedNode.id,
+      );
+    }
+    if (relationDirectionFilter === "incoming") {
+      return hierarchyRelations.filter((relation) => relation.child.id === selectedNode.id);
+    }
+    return hierarchyRelations.filter((relation) => relation.parent.id === selectedNode.id);
+  }, [
+    hierarchyRelations,
+    relationDirectionFilter,
+    relationSourceKindFilter,
+    relationTypeFilter,
+    selectedNode?.id,
+  ]);
   const relationFilteredNodeIds = useMemo(
     () =>
       new Set(
@@ -564,53 +583,19 @@ export function ProjectMapPanel({
       ),
     [selectedRelation],
   );
-  const evidenceFileIndex = useMemo(
-    () => buildProjectMapEvidenceFileIndex({ dataset }),
-    [dataset],
-  );
-  const evidenceFileSourceKindOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(evidenceFileIndex.files.flatMap((entry) => entry.sourceKinds)),
-      ).sort(),
-    [evidenceFileIndex.files],
-  );
-  const filteredEvidenceFiles = useMemo(() => {
-    const normalizedQuery = normalizeEvidenceSearchText(evidenceFileSearchQuery);
-    return evidenceFileIndex.files.filter((entry) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        entry.path.toLowerCase().includes(normalizedQuery) ||
-        entry.nodeLinks.some((link) => link.title.toLowerCase().includes(normalizedQuery));
-      const matchesSourceKind =
-        evidenceFileSourceKindFilter === PROJECT_MAP_EVIDENCE_SOURCE_KIND_ALL ||
-        entry.sourceKinds.includes(evidenceFileSourceKindFilter);
-      const matchesSelectedNode =
-        !showSelectedNodeEvidenceOnly ||
-        Boolean(selectedNode?.id && entry.nodeLinks.some((link) => link.nodeId === selectedNode.id));
-      return matchesQuery && matchesSourceKind && matchesSelectedNode;
-    });
-  }, [
-    evidenceFileIndex.files,
-    evidenceFileSearchQuery,
-    evidenceFileSourceKindFilter,
-    selectedNode?.id,
-    showSelectedNodeEvidenceOnly,
-  ]);
-  const selectedEvidenceFileEntry =
-    (selectedEvidenceFilePath
-      ? evidenceFileIndex.files.find((entry) => entry.path === selectedEvidenceFilePath) ?? null
-      : null) ??
-    filteredEvidenceFiles[0] ??
-    null;
-  const evidenceFileNodeIds = useMemo(
-    () =>
-      new Set(
-        isEvidenceFileHighlightActive
-          ? selectedEvidenceFileEntry?.nodeLinks.map((link) => link.nodeId) ?? []
-          : [],
-      ),
-    [isEvidenceFileHighlightActive, selectedEvidenceFileEntry],
+  const hasGraphRepairAttention = graphIntegrityIssues.length > 0;
+  const visibleSectionState = useMemo<ProjectMapVisibleSectionState>(
+    () => ({
+      navigation: isNavigationPanelExpanded,
+      evidence: false,
+      relations: isRelationPanelExpanded,
+      health: isGraphHealthExpanded,
+    }),
+    [
+      isGraphHealthExpanded,
+      isNavigationPanelExpanded,
+      isRelationPanelExpanded,
+    ],
   );
   const impactChangedNodeIds = useMemo(
     () => new Set(impactAnalysis.changedNodes.map((item) => item.node.id)),
@@ -930,32 +915,22 @@ export function ProjectMapPanel({
   }, [visibleNodes]);
 
   useEffect(() => {
-    setActiveTourStepIndex((current) => {
-      if (guidedTourSteps.length === 0) {
-        return 0;
+    if (pathEndpointsEditedByUserRef.current) {
+      return;
+    }
+    if (!selectedNavigationNodeId) {
+      return;
+    }
+    setPathSourceNodeId((current) =>
+      current === selectedNavigationNodeId ? current : selectedNavigationNodeId,
+    );
+    setPathTargetNodeId((current) => {
+      if (current && current !== selectedNavigationNodeId && nodeIndex.has(current)) {
+        return current;
       }
-      return Math.min(current, guidedTourSteps.length - 1);
+      return fallbackPathTargetNodeId;
     });
-  }, [guidedTourSteps.length]);
-
-  useEffect(() => {
-    if (
-      evidenceFileSourceKindFilter !== PROJECT_MAP_EVIDENCE_SOURCE_KIND_ALL &&
-      !evidenceFileSourceKindOptions.includes(evidenceFileSourceKindFilter)
-    ) {
-      setEvidenceFileSourceKindFilter(PROJECT_MAP_EVIDENCE_SOURCE_KIND_ALL);
-    }
-  }, [evidenceFileSourceKindFilter, evidenceFileSourceKindOptions]);
-
-  useEffect(() => {
-    if (
-      selectedEvidenceFilePath &&
-      !evidenceFileIndex.files.some((entry) => entry.path === selectedEvidenceFilePath)
-    ) {
-      setSelectedEvidenceFilePath(null);
-      setIsEvidenceFileHighlightActive(false);
-    }
-  }, [evidenceFileIndex.files, selectedEvidenceFilePath]);
+  }, [fallbackPathTargetNodeId, nodeIndex, selectedNavigationNodeId]);
 
   useEffect(() => {
     if (
@@ -1000,6 +975,16 @@ export function ProjectMapPanel({
         : selectedNode?.id ?? pathNodeOptions.find((node) => node.id !== rootNode?.id)?.id ?? null,
     );
   }, [nodeIndex, pathNodeOptions, rootNode?.id, selectedNode?.id]);
+
+  const handlePathSourceNodeChange = useCallback((nodeId: string | null) => {
+    pathEndpointsEditedByUserRef.current = true;
+    setPathSourceNodeId(nodeId);
+  }, []);
+
+  const handlePathTargetNodeChange = useCallback((nodeId: string | null) => {
+    pathEndpointsEditedByUserRef.current = true;
+    setPathTargetNodeId(nodeId);
+  }, []);
 
   const handleNodeSelect = (node: ProjectMapNode) => {
     setHoverNodeId(null);
@@ -1055,27 +1040,12 @@ export function ProjectMapPanel({
       setFocusNodeId(null);
       setSelectedNodeId(rootNode?.id ?? null);
       setSelectedGraphNodeIds(new Set());
-      setSelectedEvidenceFilePath(null);
       setSelectedRelationId(null);
       return;
     }
 
     focusNavigationNode(sourceFocusNodeId);
   }, [focusNavigationNode, nodeIndex, rootNode?.id, sourceFocusNodeId]);
-
-  const handleEvidenceFileSelect = (path: string) => {
-    setSelectedEvidenceFilePath(path);
-    setIsEvidenceFileHighlightActive(true);
-  };
-
-  const handleEvidenceFileNodeFocus = (nodeId: string) => {
-    setIsEvidenceFileHighlightActive(true);
-    focusNavigationNode(nodeId);
-  };
-
-  const handleClearEvidenceFileHighlight = () => {
-    setIsEvidenceFileHighlightActive(false);
-  };
 
   const handleRelationFocusNode = (nodeId: string) => {
     focusNavigationNode(nodeId);
@@ -1694,10 +1664,10 @@ export function ProjectMapPanel({
           <div className={cn("project-map-lens-shell", isLensStripCollapsed && "is-collapsed")}>
             <div className="project-map-stage-toolbar">
               <div className="project-map-breadcrumb" aria-label={t("projectMap.breadcrumb")}>
-                <button type="button" onClick={handleBackToOverview}>
+                <span className="project-map-breadcrumb-root">
                   <Network aria-hidden />
                   {t("projectMap.breadcrumbRoot")}
-                </button>
+                </span>
                 {activeLens && focusNodeId ? (
                   <>
                     <span>/</span>
@@ -1739,64 +1709,93 @@ export function ProjectMapPanel({
                   {isLensStripCollapsed ? t("projectMap.expandLenses") : t("projectMap.collapseLenses")}
                 </button>
               </div>
+              <section
+                className="project-map-investigation-strip"
+                role="toolbar"
+                aria-label={t("projectMap.viewIa.modesAria")}
+              >
+                  <button
+                    className={cn("project-map-investigation-mode", visibleSectionState.navigation && "is-active")}
+                    type="button"
+                    aria-label={t("projectMap.viewIa.navigationMode")}
+                    aria-pressed={visibleSectionState.navigation}
+                    aria-expanded={visibleSectionState.navigation}
+                    onClick={() => setIsNavigationPanelExpanded((current) => !current)}
+                  >
+                    <ListChecks aria-hidden />
+                    <span><strong>{t("projectMap.viewIa.navigationMode")}</strong></span>
+                    <b>{searchResults.length}</b>
+                  </button>
+                  <button
+                    className={cn("project-map-investigation-mode", visibleSectionState.relations && "is-active")}
+                    type="button"
+                    aria-label={t("projectMap.viewIa.relationsMode")}
+                    aria-pressed={visibleSectionState.relations}
+                    aria-expanded={visibleSectionState.relations}
+                    onClick={() => setIsRelationPanelExpanded((current) => !current)}
+                  >
+                    <Network aria-hidden />
+                    <span><strong>{t("projectMap.viewIa.relationsMode")}</strong></span>
+                  <b>{filteredRelations.length + filteredHierarchyRelations.length}</b>
+                  </button>
+                  <button
+                    className={cn(
+                      "project-map-investigation-mode",
+                      "is-health",
+                      visibleSectionState.health && "is-active",
+                      hasGraphRepairAttention && "requires-attention",
+                    )}
+                    type="button"
+                    aria-label={t("projectMap.viewIa.healthMode")}
+                    aria-pressed={visibleSectionState.health}
+                    aria-expanded={visibleSectionState.health}
+                    onClick={() => {
+                      setIsGraphHealthExpanded((current) => !current);
+                      setIsDetailCollapsed(false);
+                    }}
+                  >
+                    <Crosshair aria-hidden />
+                    <span><strong>{t("projectMap.viewIa.healthMode")}</strong></span>
+                    <b>{graphIntegrityIssues.length}</b>
+                  </button>
+              </section>
             </div>
 
-            <ProjectMapNavigationPanel
-              searchQuery={searchQuery}
-              searchResults={searchResults}
-              guidedTourSteps={guidedTourSteps}
-              activeTourStep={activeTourStep}
-              activeTourStepIndex={activeTourStepIndex}
-              expanded={isNavigationPanelExpanded}
-              pathNodeOptions={pathNodeOptions}
-              pathSourceNodeId={pathSourceNodeId}
-              pathTargetNodeId={pathTargetNodeId}
-              pathResult={pathResult}
-              onExpandedChange={setIsNavigationPanelExpanded}
-              onSearchQueryChange={setSearchQuery}
-              onFocusNode={focusNavigationNode}
-              onTourStepIndexChange={setActiveTourStepIndex}
-              onPathSourceNodeChange={setPathSourceNodeId}
-              onPathTargetNodeChange={setPathTargetNodeId}
-            />
+            {visibleSectionState.navigation ? (
+              <ProjectMapNavigationPanel
+                searchQuery={searchQuery}
+                searchResults={searchResults}
+                expanded={visibleSectionState.navigation}
+                pathNodeOptions={pathNodeOptions}
+                pathSourceNodeId={pathSourceNodeId}
+                pathTargetNodeId={pathTargetNodeId}
+                pathResult={pathResult}
+                onSearchQueryChange={setSearchQuery}
+                onFocusNode={focusNavigationNode}
+                onPathSourceNodeChange={handlePathSourceNodeChange}
+                onPathTargetNodeChange={handlePathTargetNodeChange}
+              />
+            ) : null}
 
-            <ProjectMapEvidenceFilesPanel
-              evidenceFileIndex={evidenceFileIndex}
-              filteredFiles={filteredEvidenceFiles}
-              selectedFile={selectedEvidenceFileEntry}
-              expanded={isEvidenceFilesPanelExpanded}
-              selectedNodeId={selectedNode?.id ?? null}
-              searchQuery={evidenceFileSearchQuery}
-              sourceKindFilter={evidenceFileSourceKindFilter}
-              sourceKindOptions={evidenceFileSourceKindOptions}
-              showSelectedNodeOnly={showSelectedNodeEvidenceOnly}
-              isHighlightActive={isEvidenceFileHighlightActive}
-              onExpandedChange={setIsEvidenceFilesPanelExpanded}
-              onSearchQueryChange={setEvidenceFileSearchQuery}
-              onSourceKindFilterChange={setEvidenceFileSourceKindFilter}
-              onSelectedNodeOnlyChange={setShowSelectedNodeEvidenceOnly}
-              onSelectFile={handleEvidenceFileSelect}
-              onFocusNode={handleEvidenceFileNodeFocus}
-              onClearHighlight={handleClearEvidenceFileHighlight}
-              onOpenTrace={onOpenEvidenceFile ? handleOpenTraceTarget : undefined}
-            />
-
-            <ProjectMapRelationLegendPanel
-              relationIndex={relationIndex}
-              filteredRelationCount={filteredRelations.length}
-              expanded={isRelationPanelExpanded}
-              typeFilter={relationTypeFilter}
-              sourceKindFilter={relationSourceKindFilter}
-              directionFilter={relationDirectionFilter}
-              typeOptions={relationTypeOptions}
-              sourceKindOptions={relationSourceKindOptions}
-              selectedNodeId={selectedNode?.id ?? null}
-              onExpandedChange={setIsRelationPanelExpanded}
-              onTypeFilterChange={setRelationTypeFilter}
-              onSourceKindFilterChange={setRelationSourceKindFilter}
-              onDirectionFilterChange={setRelationDirectionFilter}
-              onClearSelectedRelation={() => setSelectedRelationId(null)}
-            />
+            {visibleSectionState.relations ? (
+              <ProjectMapRelationLegendPanel
+                relationIndex={relationIndex}
+                hierarchyRelations={filteredHierarchyRelations}
+                hierarchyRelationTotalCount={filteredHierarchyRelations.length}
+                expanded={visibleSectionState.relations}
+                typeFilter={relationTypeFilter}
+                sourceKindFilter={relationSourceKindFilter}
+                directionFilter={relationDirectionFilter}
+                typeOptions={relationTypeOptions}
+                sourceKindOptions={relationSourceKindOptions}
+                selectedNodeId={selectedNode?.id ?? null}
+                onTypeFilterChange={setRelationTypeFilter}
+                onSourceKindFilterChange={setRelationSourceKindFilter}
+                onDirectionFilterChange={setRelationDirectionFilter}
+                onClearSelectedRelation={() => setSelectedRelationId(null)}
+                onFocusNode={focusNavigationNode}
+              />
+            ) : null}
 
             {!isLensStripCollapsed ? (
               <div className="project-map-domain-strip" aria-label={t("projectMap.domainStrip")}>
@@ -2012,16 +2011,12 @@ export function ProjectMapPanel({
                 const isImpactChanged = impactChangedNodeIds.has(node.id);
                 const isImpactAffected = impactAffectedNodeIds.has(node.id);
                 const isSearchMatch = searchResultNodeIds.has(node.id);
-                const isTourNode = activeTourNodeIds.has(node.id);
                 const isPathNode = pathNodeIds.has(node.id);
-                const isEvidenceFileNode = evidenceFileNodeIds.has(node.id);
                 const isRelationFilteredNode = relationFilteredNodeIds.has(node.id);
                 const isSelectedRelationNode = selectedRelationNodeIds.has(node.id);
                 const isNavigationHighlighted =
                   isSearchMatch ||
-                  isTourNode ||
                   isPathNode ||
-                  isEvidenceFileNode ||
                   isRelationFilteredNode ||
                   isSelectedRelationNode;
                 const descendantStats = getDescendantStats(node, nodeIndex);
@@ -2038,9 +2033,7 @@ export function ProjectMapPanel({
                       isImpactChanged && "is-impact-changed",
                       isImpactAffected && "is-impact-affected",
                       isSearchMatch && "is-search-match",
-                      isTourNode && "is-tour-node",
                       isPathNode && "is-path-node",
-                      isEvidenceFileNode && "is-evidence-file-node",
                       isRelationFilteredNode && "is-relation-filtered-node",
                       isSelectedRelationNode && "is-selected-relation-node",
                       isSelected && "is-selected",
@@ -2080,22 +2073,14 @@ export function ProjectMapPanel({
                             : t("projectMap.impact.affected", { defaultValue: "Affected" })}
                         </>
                       ) : null}
-                      {isSearchMatch ||
-                      isTourNode ||
-                      isPathNode ||
-                      isEvidenceFileNode ||
-                      isSelectedRelationNode ? (
+                      {isSearchMatch || isPathNode || isSelectedRelationNode ? (
                         <>
                           {" · "}
                           {isSelectedRelationNode
                             ? t("projectMap.relations.badge")
-                            : isEvidenceFileNode
-                            ? t("projectMap.evidenceFiles.badge")
                             : isPathNode
                             ? t("projectMap.navigation.path.badge")
-                            : isTourNode
-                              ? t("projectMap.navigation.tour.badge")
-                              : t("projectMap.navigation.search.badge")}
+                            : t("projectMap.navigation.search.badge")}
                         </>
                       ) : null}
                     </span>
