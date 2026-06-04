@@ -51,6 +51,7 @@ import {
   type ThreadDeleteErrorCode,
 } from "../utils/threadDelete";
 import {
+  collectCanonicalActiveThreadRebindings,
   makeCustomNameKey,
   saveCustomName,
 } from "../utils/threadStorage";
@@ -907,14 +908,10 @@ export function useThreads({
   );
 
   useEffect(() => {
-    Object.entries(state.activeThreadIdByWorkspace).forEach(([workspaceId, threadId]) => {
-      if (!threadId) {
-        return;
-      }
-      const canonicalThreadId = resolveCanonicalThreadId(threadId);
-      if (canonicalThreadId === threadId) {
-        return;
-      }
+    collectCanonicalActiveThreadRebindings(
+      state.activeThreadIdByWorkspace,
+      resolveCanonicalThreadId,
+    ).forEach(({ workspaceId, canonicalThreadId }) => {
       dispatch({
         type: "setActiveThreadId",
         workspaceId,
