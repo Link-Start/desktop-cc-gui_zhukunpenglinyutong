@@ -44,7 +44,7 @@ describe("useThreadActionsSessionCatalog", () => {
     expect(listWorkspaceSessionsService).toHaveBeenNthCalledWith(1, "ws-1", {
       query: { status: "active", sessionAttributionMode: "related" },
       cursor: null,
-      limit: 9_999,
+      limit: 100,
     });
     expect(listWorkspaceSessionsService).toHaveBeenCalledTimes(1);
     expect(catalog?.sessions.map((session) => session.sessionId)).toEqual([
@@ -112,7 +112,7 @@ describe("useThreadActionsSessionCatalog", () => {
     expect(listWorkspaceSessionsService).toHaveBeenCalledWith("ws-1", {
       query: { status: "active", sessionAttributionMode: "workspace-only" },
       cursor: null,
-      limit: 9_999,
+      limit: 100,
     });
   });
 

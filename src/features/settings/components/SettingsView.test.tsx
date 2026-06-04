@@ -1985,7 +1985,7 @@ describe("SettingsView Session management", () => {
           sessionAttributionMode: "related",
         },
         cursor: null,
-        limit: 9_999,
+        limit: 100,
       });
     });
   });
@@ -2063,7 +2063,7 @@ describe("SettingsView Session management", () => {
           sessionAttributionMode: "related",
         },
         cursor: null,
-        limit: 9_999,
+        limit: 100,
       });
     });
     expect(await screen.findByText("Session A")).toBeTruthy();

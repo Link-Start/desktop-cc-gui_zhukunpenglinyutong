@@ -374,7 +374,7 @@ describe("useThreadActions thread list recovery and pagination", () => {
     expect(listWorkspaceSessions).toHaveBeenCalledWith("ws-1", {
       query: { status: "active", sessionAttributionMode: "related" },
       cursor: "offset:200",
-      limit: 9_999,
+      limit: 100,
     });
     expect(listThreads).not.toHaveBeenCalled();
     expectSetThreadsDispatched(dispatch, "ws-1", [

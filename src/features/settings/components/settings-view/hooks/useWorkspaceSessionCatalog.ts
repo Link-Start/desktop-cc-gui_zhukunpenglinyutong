@@ -9,6 +9,7 @@ import {
   unarchiveWorkspaceSessions,
   type WorkspaceSessionBatchMutationResponse,
   type WorkspaceSessionCatalogEntry,
+  type WorkspaceSessionCatalogPage,
   type WorkspaceSessionCatalogQuery,
 } from "../../../../../services/tauri";
 import type { WorkspaceSessionAttributionMode } from "../../../../../types";
@@ -66,9 +67,13 @@ type UseWorkspaceSessionCatalogOptions = {
   enabled?: boolean;
 };
 
-const SESSION_CATALOG_PAGE_SIZE = 9_999;
+export const SESSION_CATALOG_PAGE_SIZE = 100;
 const UNASSIGNED_WORKSPACE_ID = "__global_unassigned__";
 const OWNER_UNRESOLVED_CODE = "OWNER_WORKSPACE_UNRESOLVED";
+const inFlightCatalogPageByKey = new Map<
+  string,
+  Promise<WorkspaceSessionCatalogPage>
+>();
 
 export function buildWorkspaceSessionSelectionKey(
   entry: Pick<
@@ -116,6 +121,74 @@ function toQuery(
   };
 }
 
+function buildCatalogRequestKey(input: {
+  mode: WorkspaceSessionCatalogMode;
+  workspaceId: string | null;
+  source: WorkspaceSessionCatalogSource;
+  query: WorkspaceSessionCatalogQuery;
+  cursor: string | null;
+  limit: number;
+}) {
+  const { cursor, limit, mode, query, source, workspaceId } = input;
+  return JSON.stringify({
+    mode,
+    workspaceId: workspaceId ?? null,
+    source,
+    cursor,
+    limit,
+    query: {
+      keyword: query.keyword ?? null,
+      engine: query.engine ?? null,
+      status: query.status ?? null,
+      folderId: query.folderId ?? null,
+      sessionAttributionMode: query.sessionAttributionMode ?? null,
+    },
+  });
+}
+
+function requestCatalogPage(input: {
+  mode: WorkspaceSessionCatalogMode;
+  workspaceId: string | null;
+  source: WorkspaceSessionCatalogSource;
+  query: WorkspaceSessionCatalogQuery;
+  cursor: string | null;
+  limit: number;
+}) {
+  const requestKey = buildCatalogRequestKey(input);
+  const existingRequest = inFlightCatalogPageByKey.get(requestKey);
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request =
+    input.mode === "global"
+      ? listGlobalCodexSessions({
+          query: input.query,
+          cursor: input.cursor,
+          limit: input.limit,
+        })
+      : input.source === "related"
+        ? listProjectRelatedSessions(input.workspaceId!, {
+            query: input.query,
+            cursor: input.cursor,
+            limit: input.limit,
+          })
+        : listWorkspaceSessions(input.workspaceId!, {
+            query: input.query,
+            cursor: input.cursor,
+            limit: input.limit,
+          });
+
+  inFlightCatalogPageByKey.set(requestKey, request);
+  const clearInFlightRequest = () => {
+    if (inFlightCatalogPageByKey.get(requestKey) === request) {
+      inFlightCatalogPageByKey.delete(requestKey);
+    }
+  };
+  void request.then(clearInFlightRequest, clearInFlightRequest);
+  return request;
+}
+
 function normalizeCatalogPage(response: WorkspaceSessionCatalogPageLike): {
   data: WorkspaceSessionCatalogEntry[];
   nextCursor: string | null;
@@ -134,7 +207,7 @@ function normalizeCatalogPage(response: WorkspaceSessionCatalogPageLike): {
       : null;
   return {
     data: Array.isArray(response?.data) ? response.data : [],
-    nextCursor: null,
+    nextCursor: response?.nextCursor ?? null,
     partialSource: response?.partialSource ?? null,
     pageLimit: {
       requestedLimit,
@@ -235,24 +308,14 @@ export function useWorkspaceSessionCatalog({
       }
 
       try {
-        const response =
-          mode === "global"
-            ? await listGlobalCodexSessions({
-                query,
-                cursor: cursor ?? null,
-                limit: SESSION_CATALOG_PAGE_SIZE,
-              })
-            : source === "related"
-              ? await listProjectRelatedSessions(workspaceId!, {
-                  query,
-                  cursor: cursor ?? null,
-                  limit: SESSION_CATALOG_PAGE_SIZE,
-                })
-              : await listWorkspaceSessions(workspaceId!, {
-                  query,
-                  cursor: cursor ?? null,
-                  limit: SESSION_CATALOG_PAGE_SIZE,
-                });
+        const response = await requestCatalogPage({
+          mode,
+          workspaceId,
+          source,
+          query,
+          cursor: cursor ?? null,
+          limit: SESSION_CATALOG_PAGE_SIZE,
+        });
         if (requestSeqRef.current !== requestId) {
           return;
         }

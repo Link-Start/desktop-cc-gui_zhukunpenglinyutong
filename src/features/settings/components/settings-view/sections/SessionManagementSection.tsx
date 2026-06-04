@@ -1,5 +1,6 @@
 import {
   Fragment,
+  startTransition,
   useCallback,
   useEffect,
   useMemo,
@@ -450,6 +451,18 @@ function collectDeletedThreadIdsByWorkspaceId(
   return threadIdsByWorkspaceId;
 }
 
+function areWorkspaceSessionCatalogFiltersEqual(
+  left: WorkspaceSessionCatalogFilters,
+  right: WorkspaceSessionCatalogFilters,
+): boolean {
+  return (
+    left.keyword === right.keyword &&
+    left.engine === right.engine &&
+    left.status === right.status &&
+    (left.folderId ?? null) === (right.folderId ?? null)
+  );
+}
+
 export function SessionManagementSection({
   title,
   description,
@@ -494,7 +507,9 @@ export function SessionManagementSection({
   const sessionCurtainTimeoutCleanupRef = useRef<(() => void) | null>(null);
   const sessionCurtainRef = useRef<SessionCurtainState | null>(null);
   const [mode, setMode] = useState<WorkspaceSessionCatalogMode>("project");
-  const [filters, setFilters] =
+  const [draftFilters, setDraftFilters] =
+    useState<WorkspaceSessionCatalogFilters>(DEFAULT_FILTERS);
+  const [queryFilters, setQueryFilters] =
     useState<WorkspaceSessionCatalogFilters>(DEFAULT_FILTERS);
   const [selectedIds, setSelectedIds] = useState<Record<string, true>>({});
   const [deleteArmed, setDeleteArmed] = useState(false);
@@ -534,24 +549,46 @@ export function SessionManagementSection({
     effectiveAttributionMode === "workspace-only"
       ? t("settings.sessionAttributionModeWorkspaceOnly")
       : t("settings.sessionAttributionModeRelated");
+  useEffect(() => {
+    if (areWorkspaceSessionCatalogFiltersEqual(queryFilters, draftFilters)) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      startTransition(() => {
+        setQueryFilters((current) =>
+          areWorkspaceSessionCatalogFiltersEqual(current, draftFilters)
+            ? current
+            : draftFilters,
+        );
+      });
+    }, 300);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [draftFilters, queryFilters]);
   const summaryQuery = useMemo(
     () => ({
-      keyword: filters.keyword,
-      engine: filters.engine,
-      status: filters.status,
+      keyword: queryFilters.keyword,
+      engine: queryFilters.engine,
+      status: queryFilters.status,
       sessionAttributionMode: effectiveAttributionMode,
     }),
-    [effectiveAttributionMode, filters.engine, filters.keyword, filters.status],
+    [
+      effectiveAttributionMode,
+      queryFilters.engine,
+      queryFilters.keyword,
+      queryFilters.status,
+    ],
   );
   const catalogFilters = useMemo<WorkspaceSessionCatalogFilters>(
     () => ({
-      ...filters,
+      ...queryFilters,
       folderId:
         mode === "project" && sessionFolderFilter !== SESSION_FOLDER_FILTER_ALL
           ? sessionFolderFilter
           : null,
     }),
-    [filters, mode, sessionFolderFilter],
+    [mode, queryFilters, sessionFolderFilter],
   );
   const {
     summary: projectionSummary,
@@ -595,7 +632,7 @@ export function SessionManagementSection({
   } = useWorkspaceSessionCatalog({
     mode: "project",
     workspaceId,
-    filters,
+    filters: queryFilters,
     sessionAttributionMode: effectiveAttributionMode,
     source: "related",
     enabled: mode === "project" && effectiveAttributionMode === "related",
@@ -748,7 +785,20 @@ export function SessionManagementSection({
   const handleFiltersChange = (
     nextFilters: Partial<WorkspaceSessionCatalogFilters>,
   ) => {
-    setFilters((current) => ({ ...current, ...nextFilters }));
+    const hasImmediateQueryChange =
+      nextFilters.engine !== undefined ||
+      nextFilters.status !== undefined ||
+      nextFilters.folderId !== undefined;
+    const applyPatch = (current: WorkspaceSessionCatalogFilters) => ({
+      ...current,
+      ...nextFilters,
+    });
+    setDraftFilters(applyPatch);
+    if (hasImmediateQueryChange) {
+      startTransition(() => {
+        setQueryFilters(applyPatch);
+      });
+    }
     resetSelection();
     setNotice(null);
   };
@@ -1294,12 +1344,12 @@ export function SessionManagementSection({
     ).length;
   }, [selectedWorkspace, workspaces]);
   const shouldShowSidebarStatusHint =
-    mode === "project" && filters.status !== "active";
+    mode === "project" && draftFilters.status !== "active";
   const shouldShowProjectScopeHint =
     mode === "project" && projectScopeWorktreeCount > 0;
   const shouldShowVisibleCountHint =
     mode === "project" && filteredTotalCount > currentPageVisibleCount;
-  const statusFilterLabel = resolveStatusFilterLabel(filters.status, t);
+  const statusFilterLabel = resolveStatusFilterLabel(draftFilters.status, t);
 
   const handleMutation = async (kind: "archive" | "unarchive" | "delete") => {
     const selectedEntries = getSelectedVisibleEntries();
@@ -1902,7 +1952,7 @@ export function SessionManagementSection({
 
                 <div className="settings-project-sessions-filterbar">
                   <Input
-                    value={filters.keyword}
+                    value={draftFilters.keyword}
                     onChange={(event) =>
                       handleFiltersChange({ keyword: event.target.value })
                     }
@@ -1916,7 +1966,7 @@ export function SessionManagementSection({
 
                   {mode === "project" ? (
                     <Select
-                      value={filters.engine || ENGINE_FILTER_ALL_VALUE}
+                      value={draftFilters.engine || ENGINE_FILTER_ALL_VALUE}
                       onValueChange={(value) =>
                         handleFiltersChange({
                           engine:
@@ -1931,7 +1981,7 @@ export function SessionManagementSection({
                           placeholder={t("settings.sessionManagementEngineAll")}
                         >
                           {engineFilterLabel[
-                            (filters.engine ||
+                            (draftFilters.engine ||
                               "all") as keyof typeof engineFilterLabel
                           ] ?? t("settings.sessionManagementEngineAll")}
                         </SelectValue>
@@ -1961,7 +2011,7 @@ export function SessionManagementSection({
                   )}
 
                   <Select
-                    value={filters.status}
+                    value={draftFilters.status}
                     onValueChange={(value) =>
                       handleFiltersChange({
                         status:
@@ -1971,9 +2021,9 @@ export function SessionManagementSection({
                   >
                     <SelectTrigger>
                       <SelectValue>
-                        {filters.status === "archived"
+                        {draftFilters.status === "archived"
                           ? t("settings.sessionManagementStatusArchived")
-                          : filters.status === "all"
+                          : draftFilters.status === "all"
                             ? t("settings.sessionManagementStatusAll")
                             : t("settings.sessionManagementStatusActive")}
                       </SelectValue>

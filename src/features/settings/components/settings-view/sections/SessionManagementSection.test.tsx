@@ -1082,8 +1082,8 @@ describe("SessionManagementSection", () => {
         threadKind: "native",
       })),
       nextCursor: "offset:3",
-      requestedLimit: 9_999,
-      effectiveLimit: 9_999,
+      requestedLimit: 100,
+      effectiveLimit: 100,
       limitCapped: true,
       partialSource: null,
     });

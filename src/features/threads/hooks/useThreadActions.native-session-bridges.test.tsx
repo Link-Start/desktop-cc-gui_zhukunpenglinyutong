@@ -218,7 +218,7 @@ describe("useThreadActions native session bridges", () => {
     expect(listWorkspaceSessions).toHaveBeenCalledWith("ws-1", {
       query: { status: "active", sessionAttributionMode: "related" },
       cursor: null,
-      limit: 9_999,
+      limit: 100,
     });
     expectSetThreadsDispatched(dispatch, "ws-1", [
       {
