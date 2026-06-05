@@ -691,3 +691,49 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 709: 补齐工作区打开性能任务
+
+**Date**: 2026-06-05
+**Task**: 补齐工作区打开性能任务
+**Branch**: `feature/v0.5.6`
+
+### Summary
+
+补齐 fix-workspace-folder-open-performance 的 PRD 验收勾选与 Trellis task metadata，关联既有实现 commit、OpenSpec archive、主 spec、backend 实现文件与验证记录。
+
+### Main Changes
+
+本次继续清理 Trellis/OpenSpec 残留债，只处理 fix-workspace-folder-open-performance 的任务与 PRD metadata。
+
+已完成：
+- 将 .trellis/tasks/05-29-fix-workspace-folder-open-performance/prd.md 的 Acceptance Criteria 全部标记为完成。
+- 补齐 task.json 的 dev_type=backend、scope=workspace。
+- 关联既有实现 commit bb510fc7b9675cb91bc6fbb47e139802348ab17c。
+- 关联 OpenSpec archive、workspace-filetree-progressive-scan-protocol 主 spec、workspace-session-folder-tree 主 spec。
+- 关联 workspace commands、daemon file_access、session_management、shared workspaces_core 等 backend 实现文件。
+- notes 记录 archive tasks 中已完成的 blocking-task boundary、daemon parity、remote session-folder forwarding、non-macOS GUI open compatibility、focused Rust validation 与 strict OpenSpec validation。
+
+边界：
+- 未修改生产代码。
+- 未触碰另一个 AI 正在处理的 harden-windows-ask-user-question-resume 相关 dirty 文件。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b4cb127bbe952a8aa4300cd70e29c1beaa2d1d05` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
