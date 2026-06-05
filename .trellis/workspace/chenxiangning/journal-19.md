@@ -425,3 +425,46 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 703: 归档 Codex 历史加载状态提案
+
+**Date**: 2026-06-05
+**Task**: 归档 Codex 历史加载状态提案
+**Branch**: `feature/v0.5.6`
+
+### Summary
+
+闭环 show-codex-history-loading-state：确认现有实现已展示 Codex history restoring 状态并避免空线程占位；归档 continuity OpenSpec change，同步 conversation realtime history parity spec。验证通过 Messages.history-loading、useThreads.sidebar-cache、typecheck、OpenSpec strict。
+
+### Main Changes
+
+本次完成 show-codex-history-loading-state-continuity：
+- 未改生产代码，确认现有实现已满足 Codex history loading presentation contract。
+- 创建并归档 OpenSpec continuity change。
+- 同步 conversation-realtime-history-parity 主 spec，明确 Codex history restoring 状态是 presentation-only，不持久化为 transcript fact。
+验证：
+- npm exec vitest run src/features/messages/components/Messages.history-loading.test.tsx src/features/threads/hooks/useThreads.sidebar-cache.test.tsx
+- npm run typecheck
+- openspec validate show-codex-history-loading-state-continuity --strict --no-interactive
+- openspec validate --all --strict --no-interactive
+注意：未触碰外部正在处理的 harden-windows-ask-user-question-resume 相关 dirty 文件。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b0e18b4fa1f87fb7079db1d93ce61971d0e5463a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
