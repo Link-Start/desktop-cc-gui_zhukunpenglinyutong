@@ -1009,6 +1009,16 @@ export type RuntimePoolSnapshot = {
     lastRuntimeEndAtMs?: number | null;
     lastRuntimeEndWorkspaceId?: string | null;
     lastRuntimeEndEngine?: string | null;
+    claudeAskUserQuestionResumeAttemptCount?: number;
+    claudeAskUserQuestionResumeSuccessCount?: number;
+    claudeAskUserQuestionResumeFailureCount?: number;
+    lastClaudeAskUserQuestionResumeAtMs?: number | null;
+    lastClaudeAskUserQuestionResumeWorkspaceId?: string | null;
+    lastClaudeAskUserQuestionResumeThreadId?: string | null;
+    lastClaudeAskUserQuestionResumeTurnId?: string | null;
+    lastClaudeAskUserQuestionResumeRequestId?: string | null;
+    lastClaudeAskUserQuestionResumeStatus?: string | null;
+    lastClaudeAskUserQuestionResumeError?: string | null;
   };
   engineObservability: RuntimeEngineObservability[];
 };

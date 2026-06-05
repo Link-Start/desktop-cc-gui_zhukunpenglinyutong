@@ -20,6 +20,18 @@ use tokio::time::sleep;
 use super::claude_message_content::{build_message_content, format_ask_user_answer};
 use super::events::EngineEvent;
 use super::{EngineConfig, EngineType, SendMessageParams};
+
+pub(crate) type ClaudeAskUserQuestionResumeDiagnosticSink =
+    Arc<dyn Fn(ClaudeAskUserQuestionResumeDiagnostic) + Send + Sync>;
+
+#[derive(Debug, Clone)]
+pub(crate) struct ClaudeAskUserQuestionResumeDiagnostic {
+    pub(crate) workspace_id: String,
+    pub(crate) turn_id: String,
+    pub(crate) request_id: Option<String>,
+    pub(crate) succeeded: bool,
+    pub(crate) error: Option<String>,
+}
 #[path = "claude/approval.rs"]
 mod approval;
 #[path = "claude/event_conversion.rs"]
@@ -278,6 +290,11 @@ pub struct ClaudeSession {
     user_input_notify_by_turn: StdMutex<HashMap<String, Arc<Notify>>>,
     /// Per-turn formatted AskUserQuestion answer for kill+resume mechanism
     user_input_answer_by_turn: StdMutex<HashMap<String, String>>,
+    /// Per-turn request id for AskUserQuestion resume diagnostics.
+    user_input_request_id_by_turn: StdMutex<HashMap<String, String>>,
+    /// Optional observer for real AskUserQuestion resume success/failure.
+    ask_user_question_resume_diagnostic_sink:
+        StdMutex<Option<ClaudeAskUserQuestionResumeDiagnosticSink>>,
 }
 
 impl ClaudeSession {
@@ -538,6 +555,47 @@ impl ClaudeSession {
             approval_resume_message_by_turn: StdMutex::new(HashMap::new()),
             user_input_notify_by_turn: StdMutex::new(HashMap::new()),
             user_input_answer_by_turn: StdMutex::new(HashMap::new()),
+            user_input_request_id_by_turn: StdMutex::new(HashMap::new()),
+            ask_user_question_resume_diagnostic_sink: StdMutex::new(None),
+        }
+    }
+
+    pub(crate) fn set_ask_user_question_resume_diagnostic_sink(
+        &self,
+        sink: Option<ClaudeAskUserQuestionResumeDiagnosticSink>,
+    ) {
+        if let Ok(mut current) = self.ask_user_question_resume_diagnostic_sink.lock() {
+            *current = sink;
+        }
+    }
+
+    fn take_user_input_request_id_for_turn(&self, turn_id: &str) -> Option<String> {
+        self.user_input_request_id_by_turn
+            .lock()
+            .ok()
+            .and_then(|mut map| map.remove(turn_id))
+    }
+
+    fn emit_ask_user_question_resume_diagnostic(
+        &self,
+        turn_id: &str,
+        request_id: Option<String>,
+        succeeded: bool,
+        error: Option<String>,
+    ) {
+        let sink = self
+            .ask_user_question_resume_diagnostic_sink
+            .lock()
+            .ok()
+            .and_then(|current| current.clone());
+        if let Some(sink) = sink {
+            sink(ClaudeAskUserQuestionResumeDiagnostic {
+                workspace_id: self.workspace_id.clone(),
+                turn_id: turn_id.to_string(),
+                request_id,
+                succeeded,
+                error,
+            });
         }
     }
 
@@ -639,6 +697,21 @@ impl ClaudeSession {
         *self.session_id.write().await = id;
     }
 
+    fn resolve_cli_binary(&self) -> String {
+        if let Some(ref custom) = self.bin_path {
+            return custom.clone();
+        }
+        crate::backend::app_server::find_cli_binary("claude", None)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| "claude".to_string())
+    }
+
+    fn cli_binary_diagnostics(&self) -> (String, &'static str) {
+        let bin = self.resolve_cli_binary();
+        let wrapper_kind = crate::backend::app_server::wrapper_kind_for_binary(&bin);
+        (bin, wrapper_kind)
+    }
+
     /// Build the Claude CLI command
     fn build_command(
         &self,
@@ -650,13 +723,7 @@ impl ClaudeSession {
         // 1. Use custom bin_path if configured
         // 2. Otherwise use find_cli_binary() to search npm global, cargo, etc.
         // 3. Fall back to bare "claude" as last resort
-        let bin = if let Some(ref custom) = self.bin_path {
-            custom.clone()
-        } else {
-            crate::backend::app_server::find_cli_binary("claude", None)
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|| "claude".to_string())
-        };
+        let bin = self.resolve_cli_binary();
 
         // Use build_command_for_binary to properly handle .cmd/.bat files on Windows
         let mut cmd = crate::backend::app_server::build_command_for_binary(&bin);
@@ -1650,6 +1717,10 @@ impl ClaudeSession {
             .unwrap_or_else(|e| e.into_inner())
             .clear();
         self.user_input_answer_by_turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        self.user_input_request_id_by_turn
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
