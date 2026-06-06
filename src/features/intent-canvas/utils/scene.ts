@@ -797,7 +797,7 @@ export function repairIntentCanvasGeneratedElements(
     }
     const textIndex = findGeneratedNodeTextIndex({ records, nodeIndex, pairedTextIndexes });
     const text = textIndex === null ? null : records[textIndex];
-    if (!text || !getGeneratedElementText(text)) {
+    if (textIndex === null || !text || !getGeneratedElementText(text)) {
       if (typeof node.id === "string") {
         droppedNodeIds.add(node.id);
       }

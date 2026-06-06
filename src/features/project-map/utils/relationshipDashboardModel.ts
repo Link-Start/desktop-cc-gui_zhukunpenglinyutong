@@ -2,6 +2,7 @@ import type {
   ProjectMapApiCallChain,
   ProjectMapApiConfidence,
   ProjectMapApiContractGraph,
+  ProjectMapApiCallChainEdge,
   ProjectMapApiEndpoint,
   ProjectMapApiEvidence,
   ProjectMapApiGroup,
@@ -670,6 +671,32 @@ function normalizeProjectMapApiCountMap(value: unknown): Record<string, number> 
   return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
+function normalizeProjectMapApiEndpointIdentityKind(value: unknown): ProjectMapApiEndpoint["identityKind"] | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  if (["http", "grpc", "graphql", "c-abi", "generic-rpc", "source-candidate"].includes(value)) {
+    return value as ProjectMapApiEndpoint["identityKind"];
+  }
+  return undefined;
+}
+
+function normalizeProjectMapApiCallChainEdgeKind(value: unknown): ProjectMapApiCallChainEdge["kind"] {
+  if (
+    value === "handler"
+    || value === "service"
+    || value === "repository"
+    || value === "model"
+    || value === "outbound-http"
+    || value === "rpc"
+    || value === "event"
+    || value === "unknown"
+  ) {
+    return value;
+  }
+  return "unknown";
+}
+
 function normalizeProjectMapApiEndpoints(value: unknown): ProjectMapApiEndpoint[] {
   if (!Array.isArray(value)) {
     return [];
@@ -702,8 +729,12 @@ function normalizeProjectMapApiEndpoints(value: unknown): ProjectMapApiEndpoint[
       usageScenario: readProjectMapRelationshipString(item, "usageScenario") ?? undefined,
       groupIds: readProjectMapRelationshipStringArray(item, "groupIds"),
       callChainIds: readProjectMapRelationshipStringArray(item, "callChainIds"),
+      callChainUnavailableReason: readProjectMapRelationshipString(item, "callChainUnavailableReason") ?? undefined,
       confidence: normalizeProjectMapApiConfidence(item.confidence),
       evidence: normalizeProjectMapApiEvidence(item.evidence),
+      canonicalIdentity: readProjectMapRelationshipString(item, "canonicalIdentity") ?? undefined,
+      identityKind: normalizeProjectMapApiEndpointIdentityKind(item.identityKind),
+      ambiguousIdentity: typeof item.ambiguousIdentity === "boolean" ? item.ambiguousIdentity : undefined,
     }];
   });
 }
@@ -751,9 +782,80 @@ function normalizeProjectMapApiCallChains(value: unknown): ProjectMapApiCallChai
     return [{
       id,
       endpointId,
-      edges: [],
+      edges: Array.isArray(item.edges)
+        ? item.edges.flatMap((edge) => {
+            if (!isProjectMapRelationshipRecord(edge)) {
+              return [];
+            }
+            const edgeId = readProjectMapRelationshipString(edge, "id");
+            const sourceSymbol = readProjectMapRelationshipString(edge, "sourceSymbol");
+            const targetSymbol = readProjectMapRelationshipString(edge, "targetSymbol");
+            const sourceFile = readProjectMapRelationshipString(edge, "sourceFile");
+            if (!edgeId || !sourceSymbol || !targetSymbol || !sourceFile) {
+              return [];
+            }
+            return [{
+              id: edgeId,
+              sourceSymbol,
+              targetSymbol,
+              sourceFile,
+              line: readProjectMapRelationshipNumber(edge, "line") || undefined,
+              excerpt: readProjectMapRelationshipString(edge, "excerpt") ?? undefined,
+              direction: edge.direction === "backward" ? "backward" : "forward",
+              kind: normalizeProjectMapApiCallChainEdgeKind(edge.kind),
+              confidence: normalizeProjectMapApiConfidence(edge.confidence),
+              evidence: normalizeProjectMapApiEvidence(edge.evidence),
+            }];
+          })
+        : [],
       maxDepth: readProjectMapRelationshipNumber(item, "maxDepth") || 4,
       truncatedReason: readProjectMapRelationshipString(item, "truncatedReason") ?? undefined,
+    }];
+  });
+}
+
+function normalizeProjectMapApiAdapterParserSource(
+  value: unknown,
+): NonNullable<ProjectMapApiContractGraph["adapters"]>[number]["parserSource"] {
+  if (
+    value === "schema-parser"
+    || value === "compiler-api"
+    || value === "syntax-tree-parser"
+    || value === "descriptor"
+    || value === "fallback-pattern"
+  ) {
+    return value;
+  }
+  return "fallback-pattern";
+}
+
+function normalizeProjectMapApiAdapterStatus(
+  value: unknown,
+): NonNullable<ProjectMapApiContractGraph["adapters"]>[number]["status"] {
+  if (value === "active" || value === "no-candidate" || value === "not-present" || value === "unsupported") {
+    return value;
+  }
+  return "unsupported";
+}
+
+function normalizeProjectMapApiAdapters(value: unknown): NonNullable<ProjectMapApiContractGraph["adapters"]> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    if (!isProjectMapRelationshipRecord(item)) {
+      return [];
+    }
+    const language = readProjectMapRelationshipString(item, "language") ?? "unknown";
+    return [{
+      language: language as NonNullable<ProjectMapApiContractGraph["adapters"]>[number]["language"],
+      parserSource: normalizeProjectMapApiAdapterParserSource(item.parserSource),
+      frameworks: readProjectMapRelationshipStringArray(item, "frameworks"),
+      status: normalizeProjectMapApiAdapterStatus(item.status),
+      fileCount: readProjectMapRelationshipNumber(item, "fileCount"),
+      endpointCount: readProjectMapRelationshipNumber(item, "endpointCount"),
+      noCandidateCount: readProjectMapRelationshipNumber(item, "noCandidateCount"),
+      unsupportedCount: readProjectMapRelationshipNumber(item, "unsupportedCount"),
     }];
   });
 }
@@ -771,12 +873,16 @@ function normalizeProjectMapApiContractGraph(value: unknown): ProjectMapApiContr
     generatedAt,
     storageKey: readProjectMapRelationshipString(value, "storageKey") ?? undefined,
     scanRunId: readProjectMapRelationshipString(value, "scanRunId") ?? undefined,
+    workspaceFingerprint: readProjectMapRelationshipString(value, "workspaceFingerprint") ?? undefined,
     endpoints: normalizeProjectMapApiEndpoints(value.endpoints),
     groups: normalizeProjectMapApiGroups(value.groups),
     schemas: Array.isArray(value.schemas)
       ? value.schemas.flatMap((item) => normalizeProjectMapApiSchemaRef(item) ?? [])
       : [],
     callChains: normalizeProjectMapApiCallChains(value.callChains),
+    adapters: normalizeProjectMapApiAdapters(value.adapters),
+    stale: value.stale,
+    repair: value.repair,
     skipped: Array.isArray(value.skipped)
       ? value.skipped.flatMap((item) => {
           if (!isProjectMapRelationshipRecord(item)) {

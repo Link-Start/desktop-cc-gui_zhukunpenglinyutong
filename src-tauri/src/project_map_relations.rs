@@ -322,9 +322,39 @@ fn validate_relationship_snapshot_ownership(
     files: &[ProjectMapRelationshipWriteFile],
 ) -> Result<(), String> {
     let mut found_manifest = false;
+    let mut found_api_contract_file = false;
+    let mut found_api_contract_manifest = false;
     for file in files {
         let relative = validate_relative_relationship_path(&file.relative_path)?;
         if relative != PathBuf::from("manifest.json") {
+            let normalized_relative = relative.to_string_lossy().replace('\\', "/");
+            let is_api_contract_file = matches!(
+                normalized_relative.as_str(),
+                "api-contracts/latest.json"
+                    | "api-contracts/manifest.json"
+                    | "api-contracts/endpoints.json"
+                    | "api-contracts/groups.json"
+                    | "api-contracts/schemas.json"
+                    | "api-contracts/chains.json"
+            );
+            if is_api_contract_file {
+                found_api_contract_file = true;
+            }
+            if relative == PathBuf::from("api-contracts/manifest.json") {
+                found_api_contract_manifest = true;
+                validate_api_contract_storage_key_content(
+                    storage_key,
+                    &file.content,
+                    "api-contracts/manifest.json",
+                )?;
+            }
+            if relative == PathBuf::from("api-contracts/latest.json") {
+                validate_api_contract_storage_key_content(
+                    storage_key,
+                    &file.content,
+                    "api-contracts/latest.json",
+                )?;
+            }
             continue;
         }
         found_manifest = true;
@@ -345,7 +375,87 @@ fn validate_relationship_snapshot_ownership(
     if !found_manifest {
         return Err("Project map relationship snapshot is missing manifest.json.".to_string());
     }
+    if found_api_contract_file && !found_api_contract_manifest {
+        return Err(
+            "Project map API contract snapshot is missing api-contracts/manifest.json.".to_string(),
+        );
+    }
     Ok(())
+}
+
+fn validate_api_contract_storage_key_content(
+    expected_storage_key: &str,
+    content: &str,
+    label: &str,
+) -> Result<(), String> {
+    let value: Value = serde_json::from_str(content)
+        .map_err(|err| format!("Failed to parse {label}: {err}"))?;
+    validate_api_contract_storage_key_value(expected_storage_key, &value, label)
+}
+
+fn validate_api_contract_storage_key_value(
+    expected_storage_key: &str,
+    value: &Value,
+    label: &str,
+) -> Result<(), String> {
+    let actual_storage_key = value
+        .get("storageKey")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| format!("{label} is missing storageKey."))?;
+    if actual_storage_key != expected_storage_key {
+        return Err(format!(
+            "{label} ownership mismatch: expected {expected_storage_key}, received {actual_storage_key}."
+        ));
+    }
+    Ok(())
+}
+
+fn read_api_contracts_with_ownership(
+    root: &Path,
+    storage_key: &str,
+    read_errors: &mut Vec<ProjectMapRelationshipReadError>,
+) -> Option<Value> {
+    let latest_path = "api-contracts/latest.json";
+    let manifest_path = "api-contracts/manifest.json";
+    let latest_exists = root.join(latest_path).is_file();
+    let manifest_exists = root.join(manifest_path).is_file();
+
+    if latest_exists && !manifest_exists {
+        read_errors.push(ProjectMapRelationshipReadError {
+            path: manifest_path.to_string(),
+            message: "Project map API contract artifact is missing ownership manifest.".to_string(),
+        });
+        return None;
+    }
+
+    let manifest = read_json_with_errors(root, manifest_path, read_errors);
+    if let Some(manifest) = manifest.as_ref() {
+        if let Err(message) =
+            validate_api_contract_storage_key_value(storage_key, manifest, manifest_path)
+        {
+            read_errors.push(ProjectMapRelationshipReadError {
+                path: manifest_path.to_string(),
+                message,
+            });
+            return None;
+        }
+    }
+
+    let artifact = read_json_with_errors(root, latest_path, read_errors);
+    if let Some(artifact) = artifact.as_ref() {
+        if let Err(message) =
+            validate_api_contract_storage_key_value(storage_key, artifact, latest_path)
+        {
+            read_errors.push(ProjectMapRelationshipReadError {
+                path: latest_path.to_string(),
+                message,
+            });
+            return None;
+        }
+    }
+    artifact
 }
 
 fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
@@ -1986,6 +2096,101 @@ fn enrich_context_pack_with_stale_state(
     Some(context_pack)
 }
 
+fn enrich_context_pack_with_api_contracts(mut context_pack: Value, api_contracts: &Value) -> Value {
+    let Some(object) = context_pack.as_object_mut() else {
+        return context_pack;
+    };
+    let endpoints = api_contracts
+        .get("endpoints")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let groups = api_contracts
+        .get("groups")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let call_chains = api_contracts
+        .get("callChains")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if endpoints.is_empty() && groups.is_empty() {
+        return context_pack;
+    }
+
+    let group_summaries = groups
+        .iter()
+        .take(48)
+        .map(|group| json!({
+            "id": group.get("id").cloned().unwrap_or(Value::Null),
+            "label": group.get("label").cloned().unwrap_or(Value::Null),
+            "level": group.get("level").cloned().unwrap_or(Value::Null),
+            "endpointIds": group.get("endpointIds").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
+            "confidenceCounts": group.get("confidenceCounts").cloned().unwrap_or(Value::Null),
+            "provenance": {
+                "artifact": "api-contracts/groups.json"
+            }
+        }))
+        .collect::<Vec<_>>();
+    let endpoint_summaries = endpoints
+        .iter()
+        .take(80)
+        .map(|endpoint| json!({
+            "id": endpoint.get("id").cloned().unwrap_or(Value::Null),
+            "protocol": endpoint.get("protocol").cloned().unwrap_or(Value::Null),
+            "method": endpoint.get("method").cloned().unwrap_or(Value::Null),
+            "path": endpoint.get("path").cloned().unwrap_or(Value::Null),
+            "operationName": endpoint.get("operationName").cloned().unwrap_or(Value::Null),
+            "framework": endpoint.get("framework").cloned().unwrap_or(Value::Null),
+            "handlerSymbol": endpoint.get("handlerSymbol").cloned().unwrap_or(Value::Null),
+            "sourceFile": endpoint.get("sourceFile").cloned().unwrap_or(Value::Null),
+            "groupIds": endpoint.get("groupIds").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
+            "callChainIds": endpoint.get("callChainIds").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
+            "confidence": endpoint.get("confidence").cloned().unwrap_or(Value::Null),
+            "evidence": endpoint.get("evidence").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
+            "provenance": {
+                "artifact": "api-contracts/endpoints.json"
+            }
+        }))
+        .collect::<Vec<_>>();
+    let chain_summaries = call_chains
+        .iter()
+        .take(40)
+        .map(|chain| json!({
+            "id": chain.get("id").cloned().unwrap_or(Value::Null),
+            "endpointId": chain.get("endpointId").cloned().unwrap_or(Value::Null),
+            "edges": chain.get("edges").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
+            "truncatedReason": chain.get("truncatedReason").cloned().unwrap_or(Value::Null),
+            "provenance": {
+                "artifact": "api-contracts/chains.json"
+            }
+        }))
+        .collect::<Vec<_>>();
+
+    object.insert(
+        "apiContracts".to_string(),
+        json!({
+            "schemaVersion": 1,
+            "source": "project-map-api-contract-artifacts",
+            "mode": "grouped-evidence",
+            "flatteningPolicy": "preserve-api-hierarchy-do-not-create-root-semantic-node-per-endpoint",
+            "endpointCount": endpoints.len(),
+            "groupCount": groups.len(),
+            "chainCount": call_chains.len(),
+            "groups": group_summaries,
+            "endpointSummaries": endpoint_summaries,
+            "methodChains": chain_summaries,
+            "provenance": {
+                "artifact": "api-contracts/latest.json",
+                "scanRunId": api_contracts.get("scanRunId").cloned().unwrap_or(Value::Null),
+                "storageKey": api_contracts.get("storageKey").cloned().unwrap_or(Value::Null)
+            }
+        }),
+    );
+    context_pack
+}
+
 fn scan_workspace(
     entry: &WorkspaceEntry,
     storage_key: &str,
@@ -2456,7 +2661,7 @@ fn scan_workspace(
     repair_issues.extend(duplicate_issues);
     let (by_file, by_type, hotspots, modules) = build_indexes(&files, &relations);
     let (git_common_root, git_commit_hash) = git_metadata(&scan_root);
-    let (impact_artifact, context_pack_artifact) = build_relationship_impact_and_context(
+    let (impact_artifact, mut context_pack_artifact) = build_relationship_impact_and_context(
         &files,
         &relations,
         &hotspots,
@@ -2472,6 +2677,7 @@ fn scan_workspace(
         &generated_at,
         &ignored_paths,
     );
+    context_pack_artifact = enrich_context_pack_with_api_contracts(context_pack_artifact, &api_contract_artifact);
     let api_endpoint_count = api_contract_artifact
         .get("endpoints")
         .and_then(Value::as_array)
@@ -2498,6 +2704,22 @@ fn scan_workspace(
         .get("callChains")
         .cloned()
         .unwrap_or_else(|| Value::Array(Vec::new()));
+    let api_adapters = api_contract_artifact
+        .get("adapters")
+        .cloned()
+        .unwrap_or_else(|| Value::Array(Vec::new()));
+    let api_workspace_fingerprint = api_contract_artifact
+        .get("workspaceFingerprint")
+        .cloned()
+        .unwrap_or(Value::Null);
+    let api_stale = api_contract_artifact
+        .get("stale")
+        .cloned()
+        .unwrap_or(Value::Null);
+    let api_repair = api_contract_artifact
+        .get("repair")
+        .cloned()
+        .unwrap_or(Value::Null);
     let manifest = json!({
         "schemaVersion": 1,
         "storageKey": storage_key,
@@ -2513,6 +2735,15 @@ fn scan_workspace(
         "relationCount": relations.len(),
         "apiEndpointCount": api_endpoint_count,
         "apiGroupCount": api_group_count,
+        "apiBranch": {
+            "status": "success",
+            "endpointCount": api_endpoint_count,
+            "groupCount": api_group_count,
+            "adapterCount": api_adapters.as_array().map(Vec::len).unwrap_or(0),
+            "workspaceFingerprint": api_workspace_fingerprint,
+            "stale": api_stale,
+            "repair": api_repair
+        },
         "ignoredCount": ignored_paths.len(),
         "repairIssueCount": repair_issues.len(),
         "source": "deterministic-scan"
@@ -2543,6 +2774,13 @@ fn scan_workspace(
                 "relationCount": relations.len(),
                 "apiEndpointCount": api_endpoint_count,
                 "apiGroupCount": api_group_count,
+                "apiBranch": {
+                    "status": "success",
+                    "endpointCount": api_endpoint_count,
+                    "groupCount": api_group_count,
+                    "adapterCount": api_adapters.as_array().map(Vec::len).unwrap_or(0),
+                    "skipped": api_contract_artifact.get("skipped").cloned().unwrap_or_else(|| Value::Array(Vec::new()))
+                },
                 "ignoredCount": ignored_paths.len()
             }))
             .map_err(|err| format!("Failed to serialize relationship run: {err}"))?,
@@ -2641,6 +2879,10 @@ fn scan_workspace(
                 "groupCount": api_group_count,
                 "schemaCount": api_schemas.as_array().map(Vec::len).unwrap_or(0),
                 "chainCount": api_chains.as_array().map(Vec::len).unwrap_or(0),
+                "adapterCount": api_adapters.as_array().map(Vec::len).unwrap_or(0),
+                "workspaceFingerprint": api_contract_artifact.get("workspaceFingerprint").cloned().unwrap_or(Value::Null),
+                "stale": api_contract_artifact.get("stale").cloned().unwrap_or(Value::Null),
+                "repair": api_contract_artifact.get("repair").cloned().unwrap_or(Value::Null),
                 "source": "project-map-api-contract-scan"
             }))
             .map_err(|err| format!("Failed to serialize API contract manifest: {err}"))?,
@@ -2736,7 +2978,7 @@ pub(crate) async fn project_map_relationship_read(
     let modules = read_json_with_errors(&root, "modules/latest.json", &mut read_errors);
     let impact = read_json_with_errors(&root, "impact/latest.json", &mut read_errors);
     let context_pack = read_json_with_errors(&root, "context-packs/latest.json", &mut read_errors);
-    let api_contracts = read_json_with_errors(&root, "api-contracts/latest.json", &mut read_errors);
+    let api_contracts = read_api_contracts_with_ownership(&root, &key, &mut read_errors);
     let stale = exists.then(|| {
         summarize_relationship_stale_state(Path::new(&entry.path), &manifest, &files)
     });

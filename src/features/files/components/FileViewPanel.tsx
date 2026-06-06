@@ -856,7 +856,6 @@ export function FileViewPanel({
   onActivateTab,
   onCloseTab,
   onCloseAllTabs,
-  fileReferenceMode = "path",
   activeFileLineRange = null,
   onActiveFileLineRangeChange,
   onActiveCodeAnchorChange,

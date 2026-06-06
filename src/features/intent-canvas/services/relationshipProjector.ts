@@ -85,6 +85,9 @@ function createPlaceholderFile(fileId: string): ProjectMapRelationshipFileLike {
     id: fileId,
     path: fileId,
     basename: fileId,
+    role: "unknown",
+    layer: "unknown",
+    parseStatus: "skipped",
   };
 }
 
@@ -301,11 +304,7 @@ export function projectRelationshipEdgeToCanvasSemanticGraph(input: {
   const targetFileId = input.edgeContext.relation.targetFileId;
   const sourceFileLabel = input.edgeContext.sourceNode?.basename ?? sourceFileId;
   const targetFileLabel = input.edgeContext.targetNode?.basename ?? targetFileId;
-  const edgeSnapshot: ProjectMapRelationshipEdgeSnapshot = {
-    relation: input.edgeContext.relation,
-    evidenceIds: input.edgeContext.evidenceIds,
-    evidenceSummary: input.edgeContext.evidenceSummary,
-  };
+  const edgeSnapshot = createProjectMapRelationshipEdgeSnapshot(input.edgeContext.relation);
 
   const sourceAnchor = buildNodeAnchor({
     workspaceId: input.workspaceId,

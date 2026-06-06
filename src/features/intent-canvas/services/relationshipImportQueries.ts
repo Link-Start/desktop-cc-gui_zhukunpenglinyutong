@@ -343,7 +343,6 @@ export async function queryProjectMapRelationshipEdge(input: {
   }
   return {
     scan,
-    relation,
     ...createProjectMapRelationshipEdgeSnapshot(relation),
     sourceNode: filesById.get(relation.sourceFileId),
     targetNode: filesById.get(relation.targetFileId),

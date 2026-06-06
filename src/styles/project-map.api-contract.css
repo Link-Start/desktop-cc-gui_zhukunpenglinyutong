@@ -9,6 +9,7 @@
 
 .project-map-api-contract-workspace {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 620px;
   gap: 10px;
 }
@@ -18,6 +19,69 @@
   grid-template-columns: minmax(300px, 0.24fr) minmax(720px, 1fr) minmax(380px, 0.32fr);
   min-height: 590px;
   gap: 10px;
+}
+
+.project-map-relationship-workspace-header.project-map-api-contract-toolbar {
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+}
+
+.project-map-relationship-workspace-header .project-map-api-contract-toolbar-copy {
+  display: grid;
+  flex: 0 1 320px;
+  gap: 2px;
+}
+
+.project-map-relationship-workspace-header .project-map-api-contract-toolbar-controls {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.project-map-api-contract-scan-action {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding-block: 5px;
+}
+
+.project-map-relationship-workspace-header .project-map-api-contract-filters {
+  display: flex;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.project-map-relationship-workspace-header .project-map-api-contract-filters label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.project-map-api-contract-filters label span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.project-map-api-contract-filters select {
+  width: clamp(92px, 9vw, 150px);
+  border: 1px solid color-mix(in srgb, var(--project-map-border) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--project-map-surface-strong) 74%, transparent);
+  color: var(--project-map-text);
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 7px;
 }
 
 .project-map-api-contract-group-rail,
@@ -430,9 +494,106 @@
 }
 
 .project-map-api-contract-response-list,
+.project-map-api-contract-method-chain-list,
 .project-map-api-contract-distribution {
   display: grid;
   gap: 7px;
+}
+
+.project-map-api-contract-method-chain-card {
+  display: grid;
+  gap: 8px;
+}
+
+.project-map-api-contract-method-chain-warning {
+  border: 1px solid color-mix(in srgb, var(--project-map-warning) 44%, transparent);
+  border-radius: 9px;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--project-map-warning) 9%, transparent);
+  color: var(--project-map-warning);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.project-map-api-contract-method-chain-edge {
+  display: grid;
+  gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--project-map-border) 64%, transparent);
+  border-radius: 12px;
+  padding: 9px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--project-map-accent) 9%, transparent), transparent 55%),
+    color-mix(in srgb, var(--project-map-surface) 70%, transparent);
+}
+
+.project-map-api-contract-method-chain-flow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 7px;
+}
+
+.project-map-api-contract-method-chain-flow span {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: color-mix(in srgb, var(--project-map-accent) 14%, transparent);
+  color: var(--project-map-accent);
+  font-size: 9px;
+  font-weight: 820;
+  text-transform: uppercase;
+}
+
+.project-map-api-contract-method-chain-flow strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--project-map-text-strong);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-map-api-contract-method-chain-flow b {
+  grid-column: 1 / -1;
+  color: var(--project-map-accent);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.project-map-api-contract-method-chain-meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.project-map-api-contract-method-chain-meta span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: color-mix(in srgb, var(--project-map-border) 28%, transparent);
+  color: var(--project-map-text-muted);
+  font-size: 9px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-map-api-contract-method-chain-excerpt {
+  display: block;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--project-map-border) 48%, transparent);
+  border-radius: 9px;
+  padding: 7px;
+  background: color-mix(in srgb, #020617 46%, transparent);
+  color: color-mix(in srgb, var(--project-map-text-strong) 86%, var(--project-map-accent));
+  font-family: "SFMono-Regular", "Cascadia Code", "Menlo", monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .project-map-api-contract-response-list article {

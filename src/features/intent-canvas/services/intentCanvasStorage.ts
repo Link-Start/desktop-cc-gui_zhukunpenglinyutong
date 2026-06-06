@@ -837,7 +837,7 @@ function offsetIntentCanvasScene(scene: IntentCanvasScene, offsetX: number, offs
         ? rawElement.y + offsetY
         : rawElement.y,
     };
-  }) as IntentCanvasScene["elements"];
+  }) as unknown as IntentCanvasScene["elements"];
   return sanitizeIntentCanvasScene(elements, scene.appState, scene.files);
 }
 

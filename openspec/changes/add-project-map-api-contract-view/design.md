@@ -290,3 +290,52 @@ Project Map scan orchestration
 
 If API discovery proves unstable in a real workspace, the API tab can continue showing the graph empty/partial state while the API branch is disabled or hidden.
 This rollback does not affect existing file relationship scan artifacts or Project Map semantic graph because the artifact namespace and UI state are isolated.
+
+## Parser wrapper plan（2026-06-07 implementation update）
+
+The implementation now treats parser/schema tools as evidence providers behind a stable mossx adapter contract.
+
+- OpenAPI / Swagger:
+  - wrapper source: `serde_json` / `serde_yaml` schema document traversal.
+  - parser source label: `schema-parser`.
+  - persisted output: normalized `ApiEndpoint`, `ApiParameter`, `ApiRequestBody`, `ApiResponse`, `ApiSchemaRef`, and `ApiEvidence`.
+- protobuf / gRPC:
+  - wrapper source: `.proto` service/RPC contract traversal, with the future seam reserved for protoc/Buf descriptor output.
+  - parser source label: `descriptor`.
+  - persisted output: gRPC `ApiEndpoint` with request/response schema refs.
+- GraphQL:
+  - wrapper source: GraphQL schema operation type traversal, with the future seam reserved for a mature GraphQL schema parser.
+  - parser source label: `schema-parser`.
+  - persisted output: query/mutation/subscription endpoints.
+- Language source adapters:
+  - wrapper source: first-stage `ApiAdapterDescriptor` registry for Java, Kotlin, Python, Go, C, C++, TypeScript, JavaScript, C#, and Rust.
+  - parser source label: currently `fallback-pattern` until compiler API / syntax tree parser wrappers are attached per language.
+  - persisted output MUST NOT leak parser-native AST/schema types.
+
+Design review checklist:
+
+- Every adapter emits only shared API contract model fields.
+- Every evidence record exposes `parserSource`.
+- Strong schema sources may use `spec` confidence.
+- Fallback-pattern language evidence cannot masquerade as compiler-grade AST evidence.
+- Unsupported or no-candidate adapter states remain visible in artifact metadata.
+
+## Adapter confidence limitations（2026-06-07 rollout note）
+
+- OpenAPI / Swagger confidence:
+  - `spec` confidence when endpoints come from `paths` in JSON/YAML contract files.
+  - `$ref`, media type, parameters, request body, and response schemas are preserved when present.
+  - Full OpenAPI semantic validation is not attempted in this change.
+- protobuf / gRPC confidence:
+  - `spec` confidence for service/RPC signatures found in `.proto` files.
+  - Current implementation keeps a descriptor seam and emits descriptor-labeled evidence, but does not invoke external `protoc` / Buf during scan.
+- GraphQL confidence:
+  - `spec` confidence for `type Query`, `type Mutation`, and `type Subscription` fields in schema files.
+  - Advanced schema constructs such as interfaces, unions, directives, and schema stitching remain best-effort.
+- Language adapter confidence:
+  - Java/Kotlin, Python, Go, TypeScript/JavaScript, C#, Rust, C, and C++ source adapters currently emit `fallback-pattern` evidence.
+  - These adapters are intentionally conservative and cannot claim compiler-grade AST precision until parser wrappers are attached.
+  - C and C++ route candidates remain low/medium confidence unless backed by strong schema evidence.
+- Method chain confidence:
+  - Chain edges are bounded, low-confidence, source-line-backed candidates.
+  - Missing chains are explicitly represented with `method-chain-evidence-unavailable`; no synthetic service narratives are generated.

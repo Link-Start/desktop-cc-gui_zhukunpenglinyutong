@@ -226,7 +226,7 @@ describe("IntentCanvasManager", () => {
 
     await screen.findByText("intentCanvas.editor.sourceTraceability");
     await screen.findByText("intentCanvas.editor.sourceStaleNotice");
-    expect(screen.getByText("intentCanvas.editor.sourceUnresolvedNotice")).toBeInTheDocument();
+    expect(screen.getByText("intentCanvas.editor.sourceUnresolvedNotice")).toBeTruthy();
 
     fireEvent.click(screen.getByText("toUserResponse"));
 

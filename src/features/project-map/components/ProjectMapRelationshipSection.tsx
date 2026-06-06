@@ -318,6 +318,12 @@ export function ProjectMapRelationshipSection({
   const [expandedRelationshipFileGroups, setExpandedRelationshipFileGroups] = useState<Set<string>>(() => new Set());
   const [selectedApiGroupId, setSelectedApiGroupId] = useState<string | null>(null);
   const [selectedApiEndpointId, setSelectedApiEndpointId] = useState<string | null>(null);
+  const [apiProtocolFilter, setApiProtocolFilter] = useState("all");
+  const [apiLanguageFilter, setApiLanguageFilter] = useState("all");
+  const [apiFrameworkFilter, setApiFrameworkFilter] = useState("all");
+  const [apiModuleFilter, setApiModuleFilter] = useState("all");
+  const [apiControllerFilter, setApiControllerFilter] = useState("all");
+  const [apiConfidenceFilter, setApiConfidenceFilter] = useState("all");
   const [expandedApiModuleGroupIds, setExpandedApiModuleGroupIds] = useState<Set<string>>(() => new Set());
   const relationshipGraphCanvasRef = useRef<HTMLDivElement | null>(null);
   const relationshipGraphPanRef = useRef<ProjectMapRelationshipGraphPanStart | null>(null);
@@ -1393,6 +1399,40 @@ export function ProjectMapRelationshipSection({
     ? relationshipDashboardQuery.trim().toLowerCase()
     : "";
 
+  const apiFilterOptions = useMemo(() => {
+    const apiContracts = relationshipDashboardData?.apiContracts;
+    const options = {
+      protocols: new Set<string>(),
+      languages: new Set<string>(),
+      frameworks: new Set<string>(),
+      modules: new Set<string>(),
+      controllers: new Set<string>(),
+      confidences: new Set<string>(),
+    };
+    if (!apiContracts) {
+      return options;
+    }
+    const groupIndex = new Map(apiContracts.groups.map((group) => [group.id, group]));
+    apiContracts.endpoints.forEach((endpoint) => {
+      options.protocols.add(endpoint.protocol);
+      options.languages.add(endpoint.language);
+      if (endpoint.framework) {
+        options.frameworks.add(endpoint.framework);
+      }
+      options.confidences.add(endpoint.confidence);
+      endpoint.groupIds.forEach((groupId) => {
+        const group = groupIndex.get(groupId);
+        if (group?.level === "module") {
+          options.modules.add(group.label);
+        }
+        if (group?.level === "controller") {
+          options.controllers.add(group.label);
+        }
+      });
+    });
+    return options;
+  }, [relationshipDashboardData?.apiContracts]);
+
   const apiSearchProjection = useMemo(() => {
     const apiContracts = relationshipDashboardData?.apiContracts;
     const visibleEndpointIds = new Set<string>();
@@ -1423,22 +1463,53 @@ export function ProjectMapRelationshipSection({
       group.childGroupIds.forEach(addGroupWithDescendants);
     };
 
-    if (!apiSearchQuery) {
+    const endpointMatchesFilters = (endpoint: ProjectMapApiEndpoint) => {
+      const matchesModule = apiModuleFilter === "all"
+        || endpoint.groupIds.some((groupId) => {
+          const group = groupIndex.get(groupId);
+          return group?.level === "module" && group.label === apiModuleFilter;
+        });
+      const matchesController = apiControllerFilter === "all"
+        || endpoint.groupIds.some((groupId) => {
+          const group = groupIndex.get(groupId);
+          return group?.level === "controller" && group.label === apiControllerFilter;
+        });
+      return (apiProtocolFilter === "all" || endpoint.protocol === apiProtocolFilter)
+        && (apiLanguageFilter === "all" || endpoint.language === apiLanguageFilter)
+        && (apiFrameworkFilter === "all" || endpoint.framework === apiFrameworkFilter)
+        && (apiConfidenceFilter === "all" || endpoint.confidence === apiConfidenceFilter)
+        && matchesModule
+        && matchesController
+        && (!apiSearchQuery || projectMapApiEndpointMatchesQuery(endpoint, apiSearchQuery));
+    };
+
+    const hasStructuredFilter = [
+      apiProtocolFilter,
+      apiLanguageFilter,
+      apiFrameworkFilter,
+      apiModuleFilter,
+      apiControllerFilter,
+      apiConfidenceFilter,
+    ].some((value) => value !== "all");
+
+    if (!apiSearchQuery && !hasStructuredFilter) {
       apiContracts.groups.forEach((group) => visibleGroupIds.add(group.id));
       apiContracts.endpoints.forEach((endpoint) => visibleEndpointIds.add(endpoint.id));
       return { visibleEndpointIds, visibleGroupIds };
     }
 
-    apiContracts.groups.forEach((group) => {
-      if (!projectMapApiGroupMatchesQuery(group, apiSearchQuery)) {
-        return;
-      }
-      addGroupWithAncestors(group.id);
-      addGroupWithDescendants(group.id);
-    });
+    if (apiSearchQuery && !hasStructuredFilter) {
+      apiContracts.groups.forEach((group) => {
+        if (!projectMapApiGroupMatchesQuery(group, apiSearchQuery)) {
+          return;
+        }
+        addGroupWithAncestors(group.id);
+        addGroupWithDescendants(group.id);
+      });
+    }
 
     apiContracts.endpoints.forEach((endpoint) => {
-      if (!projectMapApiEndpointMatchesQuery(endpoint, apiSearchQuery)) {
+      if (!endpointMatchesFilters(endpoint)) {
         return;
       }
       visibleEndpointIds.add(endpoint.id);
@@ -1446,7 +1517,16 @@ export function ProjectMapRelationshipSection({
     });
 
     return { visibleEndpointIds, visibleGroupIds };
-  }, [apiSearchQuery, relationshipDashboardData?.apiContracts]);
+  }, [
+    apiConfidenceFilter,
+    apiControllerFilter,
+    apiFrameworkFilter,
+    apiLanguageFilter,
+    apiModuleFilter,
+    apiProtocolFilter,
+    apiSearchQuery,
+    relationshipDashboardData?.apiContracts,
+  ]);
 
   const apiGroups = useMemo<ProjectMapApiGroupWithCount[]>(() => {
     const apiContracts = relationshipDashboardData?.apiContracts;
@@ -1625,6 +1705,15 @@ export function ProjectMapRelationshipSection({
     }
     return apiEndpointSections[0]?.endpoints[0] ?? null;
   }, [apiEndpointById, apiEndpointSections, selectedApiEndpointId, selectedApiGroupEndpoints]);
+
+  const selectedApiCallChains = useMemo(() => {
+    const callChains = relationshipDashboardData?.apiContracts?.callChains ?? [];
+    if (!selectedApiEndpoint) {
+      return [];
+    }
+    const selectedChainIds = new Set(selectedApiEndpoint.callChainIds);
+    return callChains.filter((chain) => chain.endpointId === selectedApiEndpoint.id || selectedChainIds.has(chain.id));
+  }, [relationshipDashboardData?.apiContracts?.callChains, selectedApiEndpoint]);
 
   const apiEndpointCount = relationshipDashboardData?.apiContracts?.endpoints.length ?? 0;
   const apiContractScanExists = Boolean(relationshipDashboardData?.apiContracts);
@@ -2844,8 +2933,8 @@ export function ProjectMapRelationshipSection({
                           )}
                           style={{ "--relationship-graph-scale": relationshipGraphZoom } as CSSProperties}
                         >
-                          <header className="project-map-relationship-workspace-header">
-                            <div>
+                          <header className="project-map-relationship-workspace-header project-map-api-contract-toolbar">
+                            <div className="project-map-api-contract-toolbar-copy">
                               <strong>{t("projectMap.relationship.apiWorkspaceTitle")}</strong>
                               <span>{t("projectMap.relationship.apiWorkspaceSummary", {
                                 endpoints: apiEndpointCount,
@@ -2853,17 +2942,75 @@ export function ProjectMapRelationshipSection({
                                 mode: t(`projectMap.relationship.apiGraphMode.${apiGraphMode}`),
                               })}</span>
                             </div>
-                            <button
-                              type="button"
-                              className="project-map-toolbar-action"
-                              onClick={handleRelationshipScanClick}
-                              disabled={!activeWorkspaceId || relationshipScanState.status === "running"}
-                            >
-                              <RefreshCw aria-hidden />
-                              {relationshipScanState.status === "running"
-                                ? t("projectMap.relationship.scanning")
-                                : t("projectMap.relationship.apiScan")}
-                            </button>
+                            <div className="project-map-api-contract-toolbar-controls">
+                              <button
+                                type="button"
+                                className="project-map-toolbar-action project-map-api-contract-scan-action"
+                                onClick={handleRelationshipScanClick}
+                                disabled={!activeWorkspaceId || relationshipScanState.status === "running"}
+                              >
+                                <RefreshCw aria-hidden />
+                                {relationshipScanState.status === "running"
+                                  ? t("projectMap.relationship.scanning")
+                                  : t("projectMap.relationship.apiScan")}
+                              </button>
+                              <div className="project-map-api-contract-filters">
+                                {[
+                                  {
+                                    label: t("projectMap.relationship.apiFilterProtocol"),
+                                    value: apiProtocolFilter,
+                                    onChange: setApiProtocolFilter,
+                                    options: Array.from(apiFilterOptions.protocols),
+                                  },
+                                  {
+                                    label: t("projectMap.relationship.apiFilterLanguage"),
+                                    value: apiLanguageFilter,
+                                    onChange: setApiLanguageFilter,
+                                    options: Array.from(apiFilterOptions.languages),
+                                  },
+                                  {
+                                    label: t("projectMap.relationship.apiFilterFramework"),
+                                    value: apiFrameworkFilter,
+                                    onChange: setApiFrameworkFilter,
+                                    options: Array.from(apiFilterOptions.frameworks),
+                                  },
+                                  {
+                                    label: t("projectMap.relationship.apiFilterModule"),
+                                    value: apiModuleFilter,
+                                    onChange: setApiModuleFilter,
+                                    options: Array.from(apiFilterOptions.modules),
+                                  },
+                                  {
+                                    label: t("projectMap.relationship.apiFilterController"),
+                                    value: apiControllerFilter,
+                                    onChange: setApiControllerFilter,
+                                    options: Array.from(apiFilterOptions.controllers),
+                                  },
+                                  {
+                                    label: t("projectMap.relationship.apiFilterConfidence"),
+                                    value: apiConfidenceFilter,
+                                    onChange: setApiConfidenceFilter,
+                                    options: Array.from(apiFilterOptions.confidences),
+                                  },
+                                ].map((filter) => (
+                                  <label key={filter.label}>
+                                    <span>{filter.label}</span>
+                                    <select
+                                      value={filter.value}
+                                      onChange={(event) => {
+                                        filter.onChange(event.target.value);
+                                        setSelectedApiEndpointId(null);
+                                      }}
+                                    >
+                                      <option value="all">{t("projectMap.relationship.apiFilterAll")}</option>
+                                      {filter.options.sort().map((option) => (
+                                        <option key={option} value={option}>{option}</option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
                           </header>
                           {relationshipDashboardData.apiContracts && apiEndpointCount > 0 ? (
                             <div className="project-map-api-contract-grid">
@@ -3130,6 +3277,53 @@ export function ProjectMapRelationshipSection({
                                       {!selectedApiEndpoint.evidence.length ? (
                                         <p>{t("projectMap.relationship.apiEvidenceEmpty")}</p>
                                       ) : null}
+                                    </section>
+                                    <section className="project-map-api-contract-inspector-section">
+                                      <h5>{t("projectMap.relationship.apiMethodChainTitle")}</h5>
+                                      {selectedApiCallChains.length ? (
+                                        <div className="project-map-api-contract-method-chain-list">
+                                          {selectedApiCallChains.map((chain) => (
+                                            <article key={chain.id} className="project-map-api-contract-method-chain-card">
+                                              {chain.truncatedReason ? (
+                                                <span className="project-map-api-contract-method-chain-warning">
+                                                  {t("projectMap.relationship.apiMethodChainTruncated", {
+                                                    reason: chain.truncatedReason,
+                                                  })}
+                                                </span>
+                                              ) : null}
+                                              {chain.edges.slice(0, 8).map((edge) => (
+                                                <div key={edge.id} className="project-map-api-contract-method-chain-edge">
+                                                  <div className="project-map-api-contract-method-chain-flow">
+                                                    <span>{t("projectMap.relationship.apiMethodChainSource")}</span>
+                                                    <strong>{edge.sourceSymbol}</strong>
+                                                    <b aria-hidden>{"->"}</b>
+                                                    <span>{t("projectMap.relationship.apiMethodChainTarget")}</span>
+                                                    <strong>{edge.targetSymbol}</strong>
+                                                  </div>
+                                                  <div className="project-map-api-contract-method-chain-meta">
+                                                    <span>{edge.kind}</span>
+                                                    <span>{edge.confidence}</span>
+                                                    <span>{edge.sourceFile}{edge.line ? `:${edge.line}` : ""}</span>
+                                                  </div>
+                                                  {edge.excerpt ? (
+                                                    <code className="project-map-api-contract-method-chain-excerpt">
+                                                      {edge.excerpt}
+                                                    </code>
+                                                  ) : null}
+                                                </div>
+                                              ))}
+                                            </article>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p>
+                                          {selectedApiEndpoint.callChainUnavailableReason
+                                            ? t("projectMap.relationship.apiMethodChainUnavailable", {
+                                                reason: selectedApiEndpoint.callChainUnavailableReason,
+                                              })
+                                            : t("projectMap.relationship.apiMethodChainEmpty")}
+                                        </p>
+                                      )}
                                     </section>
                                   </>
                                 ) : selectedApiGroup ? (

@@ -94,7 +94,6 @@ type IntentCanvasEditorProps = {
 
 const EMPTY_CANVAS_ENTRIES: IntentCanvasIndexEntry[] = [];
 const EMPTY_SOURCE_BACKLINKS: IntentCanvasSourceBacklink[] = [];
-const EMPTY_CODE_SELECTION_BACKLINKS: IntentCanvasSourceBacklink[] = [];
 const EMPTY_EVIDENCE_BACKLINKS: IntentCanvasEvidenceBacklink[] = [];
 const LazyExcalidraw = lazy(async () => {
   const module = await import("@excalidraw/excalidraw");

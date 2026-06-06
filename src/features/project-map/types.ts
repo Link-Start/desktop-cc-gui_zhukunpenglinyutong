@@ -806,6 +806,14 @@ export type ProjectMapApiResponse = {
   evidence: ProjectMapApiEvidence[];
 };
 
+export type ProjectMapApiEndpointIdentityKind =
+  | "http"
+  | "grpc"
+  | "graphql"
+  | "c-abi"
+  | "generic-rpc"
+  | "source-candidate";
+
 export type ProjectMapApiEndpoint = {
   id: string;
   protocol: ProjectMapApiProtocol;
@@ -825,8 +833,12 @@ export type ProjectMapApiEndpoint = {
   usageScenario?: string;
   groupIds: string[];
   callChainIds: string[];
+  callChainUnavailableReason?: string;
   confidence: ProjectMapApiConfidence;
   evidence: ProjectMapApiEvidence[];
+  canonicalIdentity?: string;
+  identityKind?: ProjectMapApiEndpointIdentityKind;
+  ambiguousIdentity?: boolean;
 };
 
 export type ProjectMapApiGroup = {
@@ -872,15 +884,30 @@ export type ProjectMapApiCallChain = {
   truncatedReason?: string;
 };
 
+export type ProjectMapApiAdapterCoverage = {
+  language: string;
+  parserSource: ProjectMapApiParserSource;
+  frameworks: string[];
+  status: "active" | "no-candidate" | "not-present" | "unsupported";
+  fileCount: number;
+  endpointCount: number;
+  noCandidateCount: number;
+  unsupportedCount: number;
+};
+
 export type ProjectMapApiContractGraph = {
   schemaVersion: 1;
   generatedAt: string;
   storageKey?: string;
   scanRunId?: string;
+  workspaceFingerprint?: string;
   endpoints: ProjectMapApiEndpoint[];
   groups: ProjectMapApiGroup[];
   schemas: ProjectMapApiSchemaRef[];
   callChains: ProjectMapApiCallChain[];
+  adapters?: ProjectMapApiAdapterCoverage[];
+  stale?: unknown;
+  repair?: unknown;
   skipped?: Array<{ reason: string; count: number }>;
 };
 
