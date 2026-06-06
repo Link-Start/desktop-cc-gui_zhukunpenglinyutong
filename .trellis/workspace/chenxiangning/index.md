@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-20.md`
-- **Total Sessions**: 736
+- **Total Sessions**: 737
 - **Last Active**: 2026-06-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-20.md` | ~71 | Active |
+| `journal-20.md` | ~114 | Active |
 | `journal-19.md` | ~1989 | Archived |
 | `journal-18.md` | ~1966 | Archived |
 | `journal-17.md` | ~1971 | Archived |
@@ -48,6 +48,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 737 | 2026-06-07 | 修复 CI 门禁测试与大文件基线 | `fe76841f` | `feature/v0.5.7` |
 | 736 | 2026-06-07 | 完成 Project Map 接口契约视图阶段交付 | `5720fde9` | `feature/v0.5.7` |
 | 735 | 2026-06-07 | 加固客户端渲染稳定性防线 | `96ba5b06` | `feature/v0.5.7` |
 | 734 | 2026-06-07 | 归档 Project Canvas 代码关系图导入变更 | `a26a3a9d` | `feature/v0.5.7` |

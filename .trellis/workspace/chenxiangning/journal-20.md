@@ -69,3 +69,46 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 737: 修复 CI 门禁测试与大文件基线
+
+**Date**: 2026-06-07
+**Task**: 修复 CI 门禁测试与大文件基线
+**Branch**: `feature/v0.5.7`
+
+### Summary
+
+修复 heavy-test-noise 与 large-file-governance 两个 workflow 的阻塞问题。
+
+### Main Changes
+
+- 修复 IntentCanvasManager 测试缺少 jsdom 环境导致 heavy-test-noise 中断。
+- 同步 Intent Canvas transmission context 测试到当前 compact JSON payload marker。
+- 刷新 large-file hard-debt baseline，将现有 4 个 hard-debt 文件记录为 retained 基线，恢复 hard gate。
+
+验证：
+- node --test scripts/check-heavy-test-noise.test.mjs scripts/test-batched.test.mjs
+- npm run check:heavy-test-noise
+- node --test scripts/check-large-files.test.mjs
+- npm run check:large-files:near-threshold
+- npm run check:large-files:gate
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fe76841f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
