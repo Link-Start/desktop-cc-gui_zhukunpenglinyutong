@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-19.md`
-- **Total Sessions**: 732
-- **Last Active**: 2026-06-06
+- **Total Sessions**: 733
+- **Last Active**: 2026-06-07
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-19.md` | ~1857 | Active |
+| `journal-19.md` | ~1897 | Active |
 | `journal-18.md` | ~1966 | Archived |
 | `journal-17.md` | ~1971 | Archived |
 | `journal-16.md` | ~1985 | Archived |
@@ -47,6 +47,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 733 | 2026-06-07 | 收口 Project Canvas 代码关系图导入 | `78d0101d` | `feature/v0.5.7` |
 | 732 | 2026-06-06 | 完善代码关系导入画布链路 | `d2d14f4d` | `feature/v0.5.7` |
 | 731 | 2026-06-06 | 修复代码关系导入 Intent Canvas 稳定性 | `83c6feaf` | `feature/v0.5.7` |
 | 730 | 2026-06-06 | Project Canvas 文件关系图导入阶段实现 | `861d34a9` | `feature/v0.5.7` |

@@ -1855,3 +1855,43 @@ OpenSpec 回写：
 ### Next Steps
 
 - None - task complete
+
+
+## Session 733: 收口 Project Canvas 代码关系图导入
+
+**Date**: 2026-06-07
+**Task**: 收口 Project Canvas 代码关系图导入
+**Branch**: `feature/v0.5.7`
+
+### Summary
+
+收口 Project Canvas 代码关系图导入链路，修复编辑器关联 Canvas、合并导入空框/黑框、Intent Canvas 审计卡片历史回放与主题单色样式。
+
+### Main Changes
+
+- 完成 Project Canvas code graph import 的阶段性实现收口，覆盖 relationship dashboard 导入、editor code selection 入口、source backlink、stale/unresolved 状态与 OpenSpec 回写。
+- 修复 editor `关联 Canvas` 从方法体内触发时不能正确解析 enclosing declaration 的问题，并用 method reference tokens 扩展事实关系匹配。
+- 修复导入到老 Canvas / 合并导入时出现空白框、黑框和虚连线的问题，保证 source-backed 节点与 solid bound arrows 一致。
+- 修复 Intent Canvas send-audit compact JSON inline 展开破坏历史布局的问题，改为 bounded modal。
+- 修复历史消息回放不显示 Intent Canvas 审计卡片的问题，在 `threadItems` user-message adapter 边界恢复 `intentCanvasContextAttachments`。
+- 将 Intent Canvas 审计卡片背景从蓝色 gradient 调整为主题兼容的单色 surface。
+- 本轮未执行测试或 typecheck；用户未要求验证，遵守当前执行约束。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `78d0101d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
