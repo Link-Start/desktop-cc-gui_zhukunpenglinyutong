@@ -117,10 +117,15 @@ mod linux_startup_guard;
 mod local_usage;
 mod menu;
 mod note_cards;
+mod project_canvas;
+mod project_identity;
 mod project_map;
+mod project_map_api_contracts;
+mod project_map_relations;
 mod project_memory;
 mod prompts;
 mod remote_backend;
+mod renderer_stability;
 mod rules;
 mod runtime;
 mod runtime_log;
@@ -207,6 +212,7 @@ pub fn run() {
             }
             let state = state::AppState::load(&app.handle());
             app.manage(state);
+            renderer_stability::spawn_renderer_heartbeat_watchdog(app.handle().clone());
             {
                 let app_handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
