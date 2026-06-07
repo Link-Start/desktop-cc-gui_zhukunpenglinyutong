@@ -18,8 +18,15 @@
 - [x] 3.1 [P0][Depends: specs] Add left Files and right Inspector pane resize behavior to the Graph workspace without changing graph projection; input: existing Graph dashboard grid; output: draggable pane widths via CSS variables; validation: manual Graph resize smoke.
 - [x] 3.2 [P0][Depends: 3.1] Ensure focused relationship Graph layout overrides also use the resize variables; input: focused Graph CSS rules; output: dragging remains effective in the active file-relations layout; validation: manual Graph resize smoke.
 - [x] 3.3 [P1][Depends: 3.1] Allow Graph node file basenames to display as primary readable content while keeping metadata compact; input: Graph node title styles; output: title can wrap without expanding all node metadata; validation: manual Graph node smoke.
+- [x] 3.4 [P0][Depends: 3.1] Tighten Java file relationship calls to receiver/import/field-backed resolution and target method existence; input: Java scanned files and symbols; output: fewer false-positive Graph call edges; validation: manual rescan smoke on Java service/controller nodes.
+- [x] 3.5 [P1][Depends: 3.4] Remove global bottom repair/read issue strip from relationship workspaces; input: repair/read-error artifacts; output: artifacts are not rendered as persistent bottom tab noise; validation: manual tab-switch smoke.
 
-## 4. Closure
+## 4. Read Path MVP polish
 
-- [x] 4.1 [P1][Depends: 1-3] Update Chinese and English i18n copy for Files/API/Graph polish; input: changed keys; output: localized copy; validation: focused UI smoke.
-- [x] 4.2 [P1][Depends: implementation] Record this MVP implementation in tasks; input: completed changes; output: checked tasks; validation: OpenSpec status shows apply-ready/complete tasks.
+- [x] 4.1 [P0][Depends: specs] Rebuild Read Path as a layered reading route instead of raw relation/context lists; input: selected file, relations, context-pack; output: entry/current/dependency/verification route steps; validation: manual Read tab smoke.
+- [x] 4.2 [P1][Depends: 4.1] Add comprehension checklist and compact route signals; input: route projection and impact/context data; output: user-facing questions and low-noise summary; validation: manual Read tab smoke.
+
+## 5. Closure
+
+- [x] 5.1 [P1][Depends: 1-4] Update Chinese and English i18n copy for Files/API/Graph/Read polish; input: changed keys; output: localized copy; validation: focused UI smoke.
+- [x] 5.2 [P1][Depends: implementation] Record this MVP implementation in tasks; input: completed changes; output: checked tasks; validation: OpenSpec status shows apply-ready/complete tasks.

@@ -1,12 +1,12 @@
 ## Why
 
-Project Map relationship surfaces already expose file navigation, graph navigation, read path, and API contracts, but the first-screen UX still feels dense: Files can over-hide governance sources, Graph panes have fixed proportions, API controls compete for attention, and evidence/confidence cues are not prominent enough for users to judge trust quickly.
+Project Map relationship surfaces already expose file navigation, graph navigation, read path, and API contracts, but the first-screen UX still feels dense: Files can over-hide governance sources, Graph panes have fixed proportions, Read Path can look like a raw relation dump, API controls compete for attention, and evidence/confidence cues are not prominent enough for users to judge trust quickly.
 
-This change polishes the existing Files, Graph, and API modules without adding new scanner capabilities, so the current surfaces become easier to read, easier to trust, and less noisy before deeper feature expansion.
+This change polishes the existing Files, Graph, Read Path, and API modules so the current surfaces become easier to read, easier to trust, and less noisy before deeper feature expansion.
 
 ## 目标与边界
 
-- Improve user perception of the existing Project Map Files, Graph, and API tabs.
+- Improve user perception of the existing Project Map Files, Graph, Read Path, and API tabs.
 - Keep file relationship snapshots, API contract graph, and semantic Project Map graph separated.
 - Refine default filtering, copy, visual hierarchy, and confidence/evidence cues.
 - Avoid Tauri payload/schema changes, new parser adapters, and new product workflows.
@@ -29,6 +29,9 @@ This change polishes the existing Files, Graph, and API modules without adding n
 - API Method chain renders endpoint-scoped Java/Spring calls as a layered tree with source and target file anchors.
 - Graph view supports user-resizable Files and Inspector panes while preserving the existing canvas layout.
 - Graph node filename rendering treats the basename as primary information and can show it without truncating the node title.
+- Read Path is redesigned from raw relation/context lists into a layered reading route that explains what to read first, why it matters, and how to verify understanding.
+- Java file relationship `calls` are tightened from global fuzzy symbol matching to receiver/import/field-based resolution with target method existence checks.
+- Relationship workspace no longer shows the global bottom `Repair / Read issues` strip across tabs; repair/read-error data remains available to future diagnostics surfaces.
 - Empty states distinguish missing scan, no endpoints, and filtered-out endpoints more explicitly.
 - UI/UX polish improves hierarchy, secondary action weight, and scan-derived contract disclaimers.
 
@@ -42,11 +45,13 @@ None.
 
 - `project-map-api-contract-view`: API contract view MUST communicate scan-derived confidence, evidence, fallback, and export caveats in the UI.
 - `project-map-relationship-graph-view`: Relationship Graph view MUST support adjustable left/right pane widths and readable node filename presentation.
+- `project-map-relationship-read-path-view`: Relationship Read Path view MUST present a concise layered reading route instead of dumping raw relationship groups and context-pack lists.
 - `project-map-relationship-storage`: Relationship Files view MUST support low-signal filtering without treating governance/documentation roots as unconditional noise.
 
 ## Impact
 
 - Frontend feature slice: `src/features/project-map/**`.
+- Backend relationship scanner: `src-tauri/src/project_map_relations.rs`, `src-tauri/src/project_map_relations/relation_resolution.rs`.
 - Project Map styles: `src/styles/project-map.relationship-graph.css`, `src/styles/project-map.relationship-workspace.css`, `src/styles/project-map.api-contract.css`.
 - i18n copy: `src/i18n/locales/zh.part5.ts`, `src/i18n/locales/en.part5.ts`.
 - No new dependencies.
@@ -72,4 +77,7 @@ Chosen option: B. The current issue is density and trust signaling, not missing 
 - Method chain displays a layered call tree and source/target file-line links for resolved Java calls.
 - Graph Files and Inspector panes can be resized beyond the default widths without breaking canvas layout.
 - Graph node filename presentation does not hide the primary basename behind avoidable ellipsis.
+- Read Path explains the selected file through entry/current/dependency/verification layers and includes comprehension checklist questions.
+- Java relationship Graph no longer treats untyped Java call candidates such as constructor annotations, DTO getters, or local variable method calls as cross-file `calls`.
+- Relationship workspace does not render the bottom repair/read-error chip strip in Graph, Files, Read, or API tabs.
 - Existing Project Map relationship/API data flow remains unchanged.

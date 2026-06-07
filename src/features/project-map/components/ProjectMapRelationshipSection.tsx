@@ -2863,21 +2863,6 @@ export function ProjectMapRelationshipSection({
                           setSelectedRelationshipRelationId={setSelectedRelationshipRelationId}
                         />
                       ) : null}
-                      {relationshipDashboardViewMode !== "api" && (relationshipDashboardData.repairIssues.length || relationshipDashboardData.readErrors.length) ? (
-                        <div className="project-map-relationship-repair-strip">
-                          <strong>{t("projectMap.relationship.repairTitle")}</strong>
-                          {relationshipDashboardData.repairIssues.slice(0, 4).map((issue) => (
-                            <span key={issue.id}>
-                              {issue.severity} · {issue.kind} · {issue.path ?? issue.message}
-                            </span>
-                          ))}
-                          {relationshipDashboardData.readErrors.slice(0, 2).map((error) => (
-                            <span key={error.path}>
-                              read-error · {error.path} · {error.message}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
                     </div>
                   ) : null}
                   {relationshipScanState.status === "failed" ? (

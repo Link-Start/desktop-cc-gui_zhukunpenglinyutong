@@ -1,6 +1,6 @@
 ## Context
 
-Project Map relationship surfaces currently expose four major modes: Graph, Files, Read, and API. The API contract detail view already has a three-pane structure and export path, the Graph view already has Files/Canvas/Inspector panes, and the Files view already supports relationship navigation and low-level filtering. The remaining MVP issue is user perception: controls feel dense, pane proportions are not always task-fit, scan-derived data can look more authoritative than it is, and “noise” wording makes useful governance sources feel disposable.
+Project Map relationship surfaces currently expose four major modes: Graph, Files, Read, and API. The API contract detail view already has a three-pane structure and export path, the Graph view already has Files/Canvas/Inspector panes, and the Files view already supports relationship navigation and low-level filtering. The remaining MVP issue is user perception and trust: controls feel dense, pane proportions are not always task-fit, Read Path can look like a raw data dump, scan-derived data can look more authoritative than it is, and “noise” wording makes useful governance sources feel disposable.
 
 ## Goals / Non-Goals
 
@@ -8,9 +8,11 @@ Project Map relationship surfaces currently expose four major modes: Graph, File
 
 - Make Files and API first-screen hierarchy easier to understand.
 - Make Graph/Files/Inspector pane proportions adjustable without changing the relationship graph data model.
+- Reposition Read Path as the shortest effective reading route for a selected file.
 - Preserve existing data flow and scan artifacts.
 - Make low-confidence, fallback, and scan-derived API details explicit.
 - Refine Java/Spring method-chain extraction so Method chain is scoped to the selected endpoint handler.
+- Refine Java file relationship calls so Graph edges favor credible receiver/import/field-backed calls over broad text matches.
 - Make API endpoint detail sections and Graph node titles more readable through layout/style refinements.
 - Keep Project Map relationship storage, API contract graph, and semantic graph boundaries intact.
 
@@ -54,19 +56,33 @@ Graph pane resizing is a view-only CSS variable over the existing Files/Canvas/I
 
 The Graph node basename is the primary identifier. Filename title wrapping is allowed for the node `strong` element, while secondary metadata (`language`, `layer`, relation metrics) can remain single-line and truncated. This preserves scan density without hiding the file identity.
 
+### Decision 9: Reframe Read Path as route projection instead of relation dump
+
+Read Path should answer “what is the shortest useful path to understand this file?” rather than “what relations exist around this file?”. The view projects existing relations/context-pack data into four layers: entry, current file, key dependencies, and verification. Each route step explains why it matters and exposes enough path/evidence metadata to orient the user, while a side checklist defines the comprehension questions users should be able to answer after reading.
+
+### Decision 10: Tighten Java file `calls` toward proven receiver calls
+
+The relationship scanner previously resolved Java `calls` through a global symbol/file alias index. That was useful for broad discovery but produced false positives such as annotation constructors, DTO getters, enum equality checks, and local variable method calls. Java file relationships now resolve `calls` through a Java-specific context: imported types, declared class type, resolvable fields, receiver/type call candidates, and target method declarations. This deliberately prefers fewer, more trustworthy graph edges.
+
+### Decision 11: Remove global repair/read issue strip from relationship tabs
+
+Repair/read-error artifacts remain part of the relationship snapshot, but rendering them as a global bottom strip across relationship tabs creates persistent visual noise and competes with the selected file/edge context. The MVP removes that strip from Graph/Files/Read/API workspaces. Future diagnostics can reintroduce this information in an explicit Inspector or expandable diagnostics surface.
+
 ## Risks / Trade-offs
 
 - Low-signal filtering may reveal more files in governance-heavy repositories → mitigate with role/module grouping and low-signal toggle copy.
 - API contracts may still be mistaken for official API docs → mitigate with scan-derived export and inspector caveat copy.
 - Java method-chain resolution is static and heuristic, not compiler-classpath complete → mitigate by only treating resolved target method anchors as high confidence.
+- Java file relationship `calls` may miss untyped or dynamic calls after tightening → mitigate by favoring correctness in the main Graph and keeping future low-confidence call clues out of the primary edge layer.
+- Read Path is still heuristic because it projects from existing relationships/context-pack data → mitigate by making step reasons explicit and avoiding claims of complete coverage.
 - Graph pane resizing can be broken by later CSS overrides → mitigate by centralizing resize variables in all focused/non-focused Graph grid rules.
 - Longer Graph filenames can increase node height → mitigate by only wrapping the title while keeping secondary metadata compact.
 - CSS polish may be limited → mitigate through class hooks, copy hierarchy, and narrow visual changes first; deeper redesign can follow if needed.
 
 ## Migration Plan
 
-- Update frontend projection/UI/i18n, graph/API CSS, and Java API method-chain scanner refinement.
-- Roll back by restoring the previous low-signal predicate, toolbar grouping, copy keys, graph fixed pane widths, and flat method-chain/response rendering.
+- Update frontend projection/UI/i18n, graph/API/Read CSS, Java API method-chain scanner refinement, and Java relationship call resolution.
+- Roll back by restoring the previous low-signal predicate, toolbar grouping, copy keys, graph fixed pane widths, flat method-chain/response rendering, Read Path relation-list rendering, and global Java call resolution.
 
 ## Open Questions
 
