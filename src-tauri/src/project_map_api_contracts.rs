@@ -1,29 +1,23 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::Serialize;
-use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
-
 use crate::project_map_relations::ScannedFile;
+use serde_json::{json, Value};
+
+#[path = "project_map_api_contracts_types.rs"]
+mod project_map_api_contracts_types;
+use project_map_api_contracts_types::*;
+
+#[path = "project_map_api_contracts_identity.rs"]
+mod project_map_api_contracts_identity;
+use project_map_api_contracts_identity::*;
 
 #[path = "project_map_api_contracts_schema_sources.rs"]
 mod project_map_api_contracts_schema_sources;
 use project_map_api_contracts_schema_sources::{
     api_contract_schema_ref_from_name, extract_graphql_contract_candidates,
-    extract_openapi_contract_candidates, extract_proto_contract_candidates, is_graphql_contract_file,
-    is_openapi_contract_file, is_proto_contract_file,
+    extract_openapi_contract_candidates, extract_proto_contract_candidates,
+    is_graphql_contract_file, is_openapi_contract_file, is_proto_contract_file,
 };
-
-fn stable_hash(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(value.as_bytes());
-    let digest = hasher.finalize();
-    digest
-        .iter()
-        .take(8)
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
 
 fn module_label(path: &str) -> String {
     let segments = path.split('/').collect::<Vec<_>>();
@@ -168,9 +162,9 @@ fn java_field_from_line(
     if tokens.len() < 2 {
         return None;
     }
-    let name = tokens.last()?.trim_matches(|character: char| {
-        !character.is_ascii_alphanumeric() && character != '_'
-    });
+    let name = tokens
+        .last()?
+        .trim_matches(|character: char| !character.is_ascii_alphanumeric() && character != '_');
     if name.is_empty() {
         return None;
     }
@@ -244,7 +238,11 @@ fn build_java_schema_field_index(
                 pending_required = false;
                 continue;
             }
-            if trimmed.starts_with('@') || trimmed.starts_with("/**") || trimmed.starts_with('*') || trimmed.starts_with("//") {
+            if trimmed.starts_with('@')
+                || trimmed.starts_with("/**")
+                || trimmed.starts_with('*')
+                || trimmed.starts_with("//")
+            {
                 pending_description = java_annotation_description(line)
                     .or_else(|| java_comment_text(line))
                     .or(pending_description);
@@ -284,11 +282,7 @@ fn build_java_schema_field_index(
 }
 
 fn api_schema_lookup_names(schema_name: &str) -> Vec<String> {
-    let normalized = schema_name
-        .trim()
-        .trim_end_matches("[]")
-        .trim()
-        .to_string();
+    let normalized = schema_name.trim().trim_end_matches("[]").trim().to_string();
     let mut names = vec![normalized.clone()];
     if let Some((_, inner)) = normalized.split_once('<') {
         let inner = inner.trim_end_matches('>').trim();
@@ -306,357 +300,6 @@ fn structured_fields_for_schema(
         .into_iter()
         .find_map(|name| schema_field_index.get(&name).cloned())
         .unwrap_or_default()
-}
-
-#[derive(Debug, Clone)]
-struct ApiRouteAnnotation {
-    method: Option<String>,
-    path: Option<String>,
-    framework: String,
-    confidence: String,
-    parser_source: String,
-}
-
-#[derive(Debug, Clone, Default)]
-struct JavaApiMethodMetadata {
-    description: Option<String>,
-    parameter_descriptions: BTreeMap<String, String>,
-    response_descriptions: Vec<(String, String)>,
-}
-
-#[derive(Debug, Clone)]
-struct JavaIndexedMethod {
-    class_name: String,
-    method_name: String,
-    source_file: String,
-    signature_line: usize,
-    body_start_line: usize,
-    end_line: usize,
-}
-
-#[derive(Debug, Clone, Default)]
-struct JavaSourceIndex {
-    class_name: String,
-    injected_fields: BTreeMap<String, String>,
-    methods: Vec<JavaIndexedMethod>,
-}
-
-#[derive(Debug, Clone)]
-struct ApiRouteCandidate {
-    protocol: String,
-    language: String,
-    framework: Option<String>,
-    method: Option<String>,
-    path: Option<String>,
-    operation_name: Option<String>,
-    handler_symbol: Option<String>,
-    source_file: String,
-    line: usize,
-    excerpt: String,
-    confidence: String,
-    parser_source: String,
-    module_label: String,
-    controller_label: String,
-    parameter_overrides: Vec<ApiParameter>,
-    request_body_override: Option<ApiRequestBody>,
-    response_overrides: Vec<ApiResponse>,
-    request_schema_override: Option<ApiSchemaRef>,
-    response_schema_override: Option<ApiSchemaRef>,
-    description: Option<String>,
-    usage_scenario: Option<String>,
-}
-
-#[derive(Debug, Clone, Default)]
-struct ApiGroupBuild {
-    id: String,
-    label: String,
-    level: String,
-    parent_id: Option<String>,
-    endpoint_ids: BTreeSet<String>,
-    child_group_ids: BTreeSet<String>,
-    protocol_counts: BTreeMap<String, usize>,
-    language_counts: BTreeMap<String, usize>,
-    confidence_counts: BTreeMap<String, usize>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiEvidence {
-    path: String,
-    line: usize,
-    excerpt: String,
-    redacted: bool,
-    parser_source: String,
-    extractor_version: String,
-    observed_at: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiSchemaRef {
-    id: String,
-    name: String,
-    language: String,
-    source_file: String,
-    evidence: Vec<ApiEvidence>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiParameter {
-    name: String,
-    location: String,
-    required: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    schema: Option<ApiSchemaRef>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    default_value: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    example: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    structured_fields: Vec<ApiStructuredSchemaField>,
-    evidence: Vec<ApiEvidence>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiStructuredSchemaField {
-    name: String,
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    field_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    required: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    default_value: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    enum_values: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    range: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    example: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    children: Vec<ApiStructuredSchemaField>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    evidence: Vec<ApiEvidence>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiRequestBody {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    content_type: Option<String>,
-    required: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    schema: Option<ApiSchemaRef>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    structured_fields: Vec<ApiStructuredSchemaField>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    examples: Vec<String>,
-    evidence: Vec<ApiEvidence>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiResponse {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    status_code: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    content_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    schema: Option<ApiSchemaRef>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    structured_fields: Vec<ApiStructuredSchemaField>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    examples: Vec<String>,
-    is_error: bool,
-    evidence: Vec<ApiEvidence>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiDescriptionSource {
-    kind: String,
-    text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    language: Option<String>,
-    evidence: Vec<ApiEvidence>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiEndpoint {
-    id: String,
-    protocol: String,
-    language: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    framework: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    method: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    operation_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    handler_symbol: Option<String>,
-    source_file: String,
-    parameters: Vec<ApiParameter>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    request_body: Option<ApiRequestBody>,
-    responses: Vec<ApiResponse>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    request_schema: Option<ApiSchemaRef>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    response_schema: Option<ApiSchemaRef>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    description_sources: Vec<ApiDescriptionSource>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    usage_scenario: Option<String>,
-    group_ids: Vec<String>,
-    call_chain_ids: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    call_chain_unavailable_reason: Option<String>,
-    confidence: String,
-    evidence: Vec<ApiEvidence>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    canonical_identity: Option<String>,
-    identity_kind: String,
-    ambiguous_identity: bool,
-}
-
-fn api_description_sources(candidate: &ApiRouteCandidate, evidence: &[ApiEvidence]) -> Vec<ApiDescriptionSource> {
-    candidate
-        .description
-        .as_ref()
-        .map(|description| {
-            let kind = if candidate.confidence == "spec" {
-                "schema-description"
-            } else if candidate
-                .framework
-                .as_deref()
-                .map(|framework| framework.contains("Spring") || framework.contains("Swagger"))
-                .unwrap_or(false)
-            {
-                "swagger-annotation"
-            } else if candidate.parser_source == "fallback-pattern" {
-                "doc-comment"
-            } else {
-                "swagger-annotation"
-            };
-            vec![ApiDescriptionSource {
-                kind: kind.to_string(),
-                text: description.clone(),
-                language: Some(candidate.language.clone()),
-                evidence: evidence.to_vec(),
-            }]
-        })
-        .unwrap_or_default()
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiGroup {
-    id: String,
-    label: String,
-    level: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    parent_id: Option<String>,
-    endpoint_ids: Vec<String>,
-    child_group_ids: Vec<String>,
-    protocol_counts: BTreeMap<String, usize>,
-    language_counts: BTreeMap<String, usize>,
-    confidence_counts: BTreeMap<String, usize>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiCallChainEdge {
-    id: String,
-    source_symbol: String,
-    target_symbol: String,
-    source_file: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    line: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    target_file: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    target_line: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    excerpt: Option<String>,
-    direction: String,
-    kind: String,
-    confidence: String,
-    evidence: Vec<ApiEvidence>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiCallChain {
-    id: String,
-    endpoint_id: String,
-    edges: Vec<ApiCallChainEdge>,
-    max_depth: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    truncated_reason: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiSkippedSummary {
-    reason: String,
-    count: usize,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct ApiAdapterDescriptor {
-    language: &'static str,
-    parser_source: &'static str,
-    frameworks: &'static [&'static str],
-    extractor: fn(&ScannedFile, &str) -> Vec<ApiRouteCandidate>,
-}
-
-#[derive(Debug, Clone, Default)]
-struct ApiAdapterCoverageBuild {
-    file_count: usize,
-    endpoint_count: usize,
-    no_candidate_count: usize,
-    unsupported_count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiAdapterCoverage {
-    language: String,
-    parser_source: String,
-    frameworks: Vec<String>,
-    status: String,
-    file_count: usize,
-    endpoint_count: usize,
-    no_candidate_count: usize,
-    unsupported_count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ApiContractGraph {
-    schema_version: u8,
-    generated_at: String,
-    storage_key: String,
-    scan_run_id: String,
-    workspace_fingerprint: String,
-    endpoints: Vec<ApiEndpoint>,
-    groups: Vec<ApiGroup>,
-    schemas: Vec<ApiSchemaRef>,
-    call_chains: Vec<ApiCallChain>,
-    adapters: Vec<ApiAdapterCoverage>,
-    stale: Value,
-    repair: Value,
-    skipped: Vec<ApiSkippedSummary>,
 }
 
 const API_CONTRACT_MAX_FILE_BYTES: u64 = 1_000_000;
@@ -894,34 +537,6 @@ fn api_evidence_payload(
         extractor_version: "project-map-api-contract-v1".to_string(),
         observed_at: generated_at.to_string(),
     }
-}
-
-fn normalize_api_path(value: Option<String>) -> Option<String> {
-    let raw = value?.trim().to_string();
-    if raw.is_empty() {
-        return Some("/".to_string());
-    }
-    if raw.starts_with('/') {
-        Some(raw)
-    } else {
-        Some(format!("/{raw}"))
-    }
-}
-
-fn join_api_paths(prefix: &str, path: Option<String>) -> Option<String> {
-    let path = normalize_api_path(path)?;
-    let prefix = normalize_api_path(Some(prefix.to_string())).unwrap_or_else(|| "/".to_string());
-    if prefix == "/" {
-        return Some(path);
-    }
-    if path == "/" {
-        return Some(prefix);
-    }
-    Some(format!(
-        "{}/{}",
-        prefix.trim_end_matches('/'),
-        path.trim_start_matches('/')
-    ))
 }
 
 fn parse_api_methods_from_line(line: &str) -> Vec<String> {
@@ -1183,7 +798,13 @@ fn java_signature_parameters(
                 default_value: None,
                 example: None,
                 structured_fields: Vec::new(),
-                evidence: vec![api_evidence_payload(&file.path, line, excerpt, "fallback-pattern", "")],
+                evidence: vec![api_evidence_payload(
+                    &file.path,
+                    line,
+                    excerpt,
+                    "fallback-pattern",
+                    "",
+                )],
             }]
         })
         .collect()
@@ -1200,10 +821,23 @@ fn java_request_body(file: &ScannedFile, line: usize, excerpt: &str) -> Option<A
         .map(|type_name| ApiRequestBody {
             content_type: Some("application/json".to_string()),
             required: true,
-            schema: api_contract_schema_ref_from_name(&type_name, file, line, excerpt, "fallback-pattern", ""),
+            schema: api_contract_schema_ref_from_name(
+                &type_name,
+                file,
+                line,
+                excerpt,
+                "fallback-pattern",
+                "",
+            ),
             structured_fields: Vec::new(),
             examples: Vec::new(),
-            evidence: vec![api_evidence_payload(&file.path, line, excerpt, "fallback-pattern", "")],
+            evidence: vec![api_evidence_payload(
+                &file.path,
+                line,
+                excerpt,
+                "fallback-pattern",
+                "",
+            )],
         })
 }
 
@@ -1240,7 +874,14 @@ fn java_annotation_responses(
         .map(|(status_code, description)| ApiResponse {
             status_code: Some(status_code.clone()),
             content_type: Some("application/json".to_string()),
-            schema: api_contract_schema_ref_from_name(&return_type, file, line, excerpt, "fallback-pattern", ""),
+            schema: api_contract_schema_ref_from_name(
+                &return_type,
+                file,
+                line,
+                excerpt,
+                "fallback-pattern",
+                "",
+            ),
             structured_fields: vec![ApiStructuredSchemaField {
                 name: "description".to_string(),
                 field_type: Some(description.clone()),
@@ -1251,11 +892,23 @@ fn java_annotation_responses(
                 range: None,
                 example: None,
                 children: Vec::new(),
-                evidence: vec![api_evidence_payload(&file.path, line, excerpt, "fallback-pattern", "")],
+                evidence: vec![api_evidence_payload(
+                    &file.path,
+                    line,
+                    excerpt,
+                    "fallback-pattern",
+                    "",
+                )],
             }],
             examples: Vec::new(),
             is_error: status_code.starts_with('4') || status_code.starts_with('5'),
-            evidence: vec![api_evidence_payload(&file.path, line, excerpt, "fallback-pattern", "")],
+            evidence: vec![api_evidence_payload(
+                &file.path,
+                line,
+                excerpt,
+                "fallback-pattern",
+                "",
+            )],
         })
         .collect()
 }
@@ -2121,143 +1774,6 @@ fn api_signature_response(candidate: &ApiRouteCandidate, generated_at: &str) -> 
     }]
 }
 
-fn api_endpoint_instance_identity(candidate: &ApiRouteCandidate) -> String {
-    let fingerprint = format!(
-        "source-candidate|{}|{}|{}|{}|{}|{}",
-        candidate.protocol,
-        candidate
-            .method
-            .as_deref()
-            .unwrap_or("*")
-            .to_ascii_uppercase(),
-        candidate.path.as_deref().unwrap_or("").to_ascii_lowercase(),
-        candidate.source_file.to_ascii_lowercase(),
-        candidate.line,
-        candidate.handler_symbol.as_deref().unwrap_or("")
-    );
-    fingerprint
-}
-
-fn normalized_api_identity_path(path: Option<&str>) -> Option<String> {
-    let path = normalize_api_path(path.map(str::to_string))?;
-    let mut normalized_segments = Vec::new();
-    for segment in path.split('/') {
-        if segment.is_empty() {
-            continue;
-        }
-        let normalized = if segment.starts_with('{') && segment.ends_with('}') {
-            "{}".to_string()
-        } else if segment.starts_with(':') || segment.starts_with('<') && segment.ends_with('>') {
-            "{}".to_string()
-        } else {
-            segment.to_ascii_lowercase()
-        };
-        normalized_segments.push(normalized);
-    }
-    if normalized_segments.is_empty() {
-        Some("/".to_string())
-    } else {
-        Some(format!("/{}", normalized_segments.join("/")))
-    }
-}
-
-fn api_endpoint_identity_kind(candidate: &ApiRouteCandidate) -> String {
-    match candidate.protocol.as_str() {
-        "http" => "http",
-        "grpc" => "grpc",
-        "graphql" => "graphql",
-        "c-abi" => "c-abi",
-        "rpc" => "generic-rpc",
-        _ => "source-candidate",
-    }
-    .to_string()
-}
-
-fn canonical_api_endpoint_identity(candidate: &ApiRouteCandidate) -> Option<String> {
-    match candidate.protocol.as_str() {
-        "http" => {
-            let path = normalized_api_identity_path(candidate.path.as_deref())?;
-            Some(format!(
-                "http|{}|{}",
-                candidate
-                    .method
-                    .as_deref()
-                    .unwrap_or("*")
-                    .to_ascii_uppercase(),
-                path
-            ))
-        }
-        "grpc" => candidate
-            .operation_name
-            .as_ref()
-            .or(candidate.handler_symbol.as_ref())
-            .map(|operation| {
-                format!(
-                    "grpc|{}|{}|{}",
-                    candidate.module_label.to_ascii_lowercase(),
-                    candidate.controller_label.to_ascii_lowercase(),
-                    operation
-                )
-            }),
-        "graphql" => candidate.operation_name.as_ref().map(|operation| {
-            format!(
-                "graphql|{}|{}",
-                candidate
-                    .method
-                    .as_deref()
-                    .unwrap_or("operation")
-                    .to_ascii_lowercase(),
-                operation
-            )
-        }),
-        "c-abi" | "rpc" => candidate.handler_symbol.as_ref().map(|symbol| {
-            format!(
-                "{}|{}|{}",
-                api_endpoint_identity_kind(candidate),
-                symbol,
-                candidate.source_file.to_ascii_lowercase()
-            )
-        }),
-        _ => None,
-    }
-}
-
-fn api_endpoint_merge_identity(candidate: &ApiRouteCandidate) -> String {
-    canonical_api_endpoint_identity(candidate)
-        .unwrap_or_else(|| api_endpoint_instance_identity(candidate))
-}
-
-fn api_endpoint_id_from_identity(identity: &str) -> String {
-    format!("api-endpoint-{}", stable_hash(identity))
-}
-
-fn api_confidence_rank(value: &str) -> u8 {
-    match value {
-        "spec" => 4,
-        "high" => 3,
-        "medium" => 2,
-        "low" => 1,
-        _ => 0,
-    }
-}
-
-fn api_parser_source_rank(value: &str) -> u8 {
-    match value {
-        "schema-parser" | "descriptor" => 4,
-        "compiler-api" => 3,
-        "syntax-tree-parser" => 2,
-        "fallback-pattern" => 1,
-        _ => 0,
-    }
-}
-
-fn api_candidate_priority(candidate: &ApiRouteCandidate) -> (u8, u8) {
-    (
-        api_confidence_rank(&candidate.confidence),
-        api_parser_source_rank(&candidate.parser_source),
-    )
-}
-
 fn java_identifier_char(character: char) -> bool {
     character.is_ascii_alphanumeric() || matches!(character, '_' | '$')
 }
@@ -2274,7 +1790,10 @@ fn java_simple_type_name(value: &str) -> String {
         .to_string()
 }
 
-fn java_injected_field_from_line(line: &str, previous_line: Option<&str>) -> Option<(String, String)> {
+fn java_injected_field_from_line(
+    line: &str,
+    previous_line: Option<&str>,
+) -> Option<(String, String)> {
     let trimmed = line.trim();
     if !trimmed.ends_with(';') || trimmed.contains('(') {
         return None;
@@ -2284,7 +1803,9 @@ fn java_injected_field_from_line(line: &str, previous_line: Option<&str>) -> Opt
         || trimmed.contains("@Resource")
         || previous_line
             .map(|line| {
-                line.contains("@Autowired") || line.contains("@Inject") || line.contains("@Resource")
+                line.contains("@Autowired")
+                    || line.contains("@Inject")
+                    || line.contains("@Resource")
             })
             .unwrap_or(false);
     let cleaned = strip_java_annotations(trimmed)
@@ -2305,7 +1826,9 @@ fn java_injected_field_from_line(line: &str, previous_line: Option<&str>) -> Opt
     if tokens.len() < 2 {
         return None;
     }
-    let field_name = tokens.last()?.trim_matches(|character: char| !java_identifier_char(character));
+    let field_name = tokens
+        .last()?
+        .trim_matches(|character: char| !java_identifier_char(character));
     let field_type = java_simple_type_name(tokens.get(tokens.len().saturating_sub(2))?);
     if field_name.is_empty() || field_type.is_empty() {
         return None;
@@ -2381,7 +1904,10 @@ fn build_java_source_index(file: &ScannedFile, content: &str) -> Option<JavaSour
     for (line_index, line) in lines.iter().enumerate() {
         if let Some((field_name, field_type)) = java_injected_field_from_line(
             line,
-            line_index.checked_sub(1).and_then(|index| lines.get(index)).copied(),
+            line_index
+                .checked_sub(1)
+                .and_then(|index| lines.get(index))
+                .copied(),
         ) {
             index.injected_fields.insert(field_name, field_type);
         }
@@ -2434,7 +1960,12 @@ fn java_indexed_method_for_candidate(
                 && candidate.line >= method.signature_line
                 && candidate.line <= method.end_line
         })
-        .or_else(|| index.methods.iter().find(|method| method.method_name == method_name))
+        .or_else(|| {
+            index
+                .methods
+                .iter()
+                .find(|method| method.method_name == method_name)
+        })
         .cloned()
 }
 
@@ -2513,7 +2044,8 @@ fn java_find_target_method(
         .values()
         .flat_map(|index| index.methods.iter())
         .find(|method| {
-            method.method_name == method_name && java_type_matches_class(type_name, &method.class_name)
+            method.method_name == method_name
+                && java_type_matches_class(type_name, &method.class_name)
         })
         .cloned()
 }
@@ -2672,30 +2204,39 @@ fn extract_java_resolved_api_call_chain(
             .lines()
             .enumerate()
             .skip(source_method.body_start_line.saturating_sub(1))
-            .take(source_method.end_line.saturating_sub(source_method.body_start_line) + 1)
+            .take(
+                source_method
+                    .end_line
+                    .saturating_sub(source_method.body_start_line)
+                    + 1,
+            )
         {
             let line_number = line_offset + 1;
             for (receiver, target_method_name) in java_call_expressions(line) {
                 let Some(target_type) = java_resolve_receiver_type(source_index, &receiver) else {
                     continue;
                 };
-                let target_method = java_find_target_method(
-                    java_source_indexes,
-                    &target_type,
-                    &target_method_name,
-                );
+                let target_method =
+                    java_find_target_method(java_source_indexes, &target_type, &target_method_name);
                 let target_symbol = target_method
                     .as_ref()
                     .map(|method| format!("{}.{}", method.class_name, method.method_name))
                     .unwrap_or_else(|| format!("{}.{}", target_type, target_method_name));
-                let source_symbol = format!("{}.{}", source_method.class_name, source_method.method_name);
+                let source_symbol =
+                    format!("{}.{}", source_method.class_name, source_method.method_name);
                 if source_symbol == target_symbol {
                     continue;
                 }
                 let excerpt = api_trimmed_excerpt(line);
-                let target_file = target_method.as_ref().map(|method| method.source_file.clone());
+                let target_file = target_method
+                    .as_ref()
+                    .map(|method| method.source_file.clone());
                 let target_line = target_method.as_ref().map(|method| method.signature_line);
-                let confidence = if target_method.is_some() { "high" } else { "medium" };
+                let confidence = if target_method.is_some() {
+                    "high"
+                } else {
+                    "medium"
+                };
                 edges.push(ApiCallChainEdge {
                     id: format!(
                         "api-chain-edge-{}",
@@ -2771,7 +2312,9 @@ fn extract_api_call_chain(
     }
     file_content_index
         .get(&candidate.source_file)
-        .and_then(|content| extract_fallback_api_call_chain(endpoint_id, candidate, content, generated_at))
+        .and_then(|content| {
+            extract_fallback_api_call_chain(endpoint_id, candidate, content, generated_at)
+        })
 }
 
 fn api_group_id(level: &str, label: &str, parent_id: Option<&str>) -> String {
@@ -3005,8 +2548,11 @@ pub(crate) fn build_api_contract_artifact(
         };
         for parameter in &mut parameters {
             if parameter.structured_fields.is_empty() {
-                if let Some(schema_name) = parameter.schema.as_ref().map(|schema| schema.name.as_str()) {
-                    parameter.structured_fields = structured_fields_for_schema(schema_name, &schema_field_index);
+                if let Some(schema_name) =
+                    parameter.schema.as_ref().map(|schema| schema.name.as_str())
+                {
+                    parameter.structured_fields =
+                        structured_fields_for_schema(schema_name, &schema_field_index);
                 }
             }
         }
@@ -3017,7 +2563,8 @@ pub(crate) fn build_api_contract_artifact(
         if let Some(body) = request_body.as_mut() {
             if body.structured_fields.is_empty() {
                 if let Some(schema_name) = body.schema.as_ref().map(|schema| schema.name.as_str()) {
-                    body.structured_fields = structured_fields_for_schema(schema_name, &schema_field_index);
+                    body.structured_fields =
+                        structured_fields_for_schema(schema_name, &schema_field_index);
                 }
             }
         }
@@ -3028,8 +2575,11 @@ pub(crate) fn build_api_contract_artifact(
         };
         for response in &mut responses {
             if response.structured_fields.is_empty() {
-                if let Some(schema_name) = response.schema.as_ref().map(|schema| schema.name.as_str()) {
-                    response.structured_fields = structured_fields_for_schema(schema_name, &schema_field_index);
+                if let Some(schema_name) =
+                    response.schema.as_ref().map(|schema| schema.name.as_str())
+                {
+                    response.structured_fields =
+                        structured_fields_for_schema(schema_name, &schema_field_index);
                 }
             }
         }
