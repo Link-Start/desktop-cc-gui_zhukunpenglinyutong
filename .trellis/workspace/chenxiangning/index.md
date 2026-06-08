@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-20.md`
-- **Total Sessions**: 760
+- **Total Sessions**: 761
 - **Last Active**: 2026-06-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-20.md` | ~1079 | Active |
+| `journal-20.md` | ~1125 | Active |
 | `journal-19.md` | ~1989 | Archived |
 | `journal-18.md` | ~1966 | Archived |
 | `journal-17.md` | ~1971 | Archived |
@@ -48,6 +48,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 761 | 2026-06-08 | 拆分客户端大文件第一组 | `7473688b` | `feature/v0.5.8` |
 | 760 | 2026-06-08 | 稳定实时对话幕布渲染 | `241f5839` | `feature/v0.5.8` |
 | 759 | 2026-06-08 | 收口 ProjectMap 大文件拆分 | `f64deaf2` | `feature/v0.5.8` |
 | 758 | 2026-06-08 | 修复 markdown 预览标注测试 act warning | `c74d0f9f` | `feature/v0.5.8` |

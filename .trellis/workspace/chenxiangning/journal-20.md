@@ -1077,3 +1077,49 @@ Codex app-server 对话链路切换为 codex-tui 兼容身份，补 terminal env
 ### Next Steps
 
 - None - task complete
+
+
+## Session 761: 拆分客户端大文件第一组
+
+**Date**: 2026-06-08
+**Task**: 拆分客户端大文件第一组
+**Branch**: `feature/v0.5.8`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Summary |
+|------|---------|
+| App shell | Extracted composer model/reasoning/collaboration/access-mode state into `useAppShellComposerModelSection`; extracted plan/home/kanban/git-history view-state handling into `useAppShellViewStateSection`. |
+| Kanban shell sections | Extracted composer-linked Kanban send flow into `useAppShellKanbanComposerSection`; extracted Kanban execution/scheduler lifecycle into `useAppShellKanbanExecutionSection`. |
+| Layout hooks | Extracted layout node shared types into `layoutNodesTypes`; extracted topbar session tab state machine into `useLayoutTopbarSessionTabs`. |
+| Governance | Kept original public hook surfaces intact while bringing large-file policy check to `found=0`. |
+
+**Validation**:
+- `npm run typecheck -- --pretty false`
+- `npm run lint`
+- `npm run check:large-files`
+- `npx openspec validate harden-live-message-canvas-rendering --strict --no-interactive`
+- `npm run test` (completed 621 test files)
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7473688b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
