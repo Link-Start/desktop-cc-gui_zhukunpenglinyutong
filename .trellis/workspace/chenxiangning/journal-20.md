@@ -1252,3 +1252,36 @@ Codex app-server 对话链路切换为 codex-tui 兼容身份，补 terminal env
 ### Next Steps
 
 - None - task complete
+
+
+## Session 765: 拆分消息渲染大文件
+
+**Date**: 2026-06-08
+**Task**: 拆分消息渲染大文件
+**Branch**: `feature/v0.5.8`
+
+### Summary
+
+拆分 Messages/MessagesRows 消息渲染大文件，抽出 view model、类型、常量、锚点栏、inline prompts 与上下文摘要卡片，并迁移 reasoning render 测试；已通过 lint、typecheck、大文件检查和消息区 targeted Vitest。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9e249e7f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
