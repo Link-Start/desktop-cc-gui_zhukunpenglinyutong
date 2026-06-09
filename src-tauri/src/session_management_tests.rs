@@ -76,7 +76,11 @@
         }
     }
 
-    fn write_codex_session_fixture(codex_home: &Path, session_id: &str, cwd: &str) {
+    fn write_codex_session_fixture(
+        codex_home: &Path,
+        session_id: &str,
+        cwd: &str,
+    ) -> std::path::PathBuf {
         write_codex_session_fixture_with_message(
             codex_home,
             session_id,
@@ -84,7 +88,7 @@
             "2026-01-19T12:00:00.000Z",
             "2026-01-19T12:00:05.000Z",
             "Fixture session",
-        );
+        )
     }
 
     fn write_codex_session_fixture_with_message(
@@ -94,7 +98,7 @@
         metadata_timestamp: &str,
         message_timestamp: &str,
         message: &str,
-    ) {
+    ) -> std::path::PathBuf {
         let day_dir = codex_home
             .join("sessions")
             .join("2026")
@@ -102,7 +106,7 @@
             .join("19");
         std::fs::create_dir_all(&day_dir).expect("create codex fixture day dir");
         let path = day_dir.join(format!("{session_id}.jsonl"));
-        let mut file = std::fs::File::create(path).expect("create codex fixture");
+        let mut file = std::fs::File::create(&path).expect("create codex fixture");
         writeln!(
                 file,
                 r#"{{"timestamp":"{metadata_timestamp}","type":"session_meta","payload":{{"id":"{session_id}","cwd":"{cwd}"}}}}"#
@@ -113,6 +117,7 @@
                 r#"{{"timestamp":"{message_timestamp}","type":"response_item","payload":{{"type":"message","role":"user","content":[{{"type":"input_text","text":"{message}"}}]}}}}"#
             )
             .expect("write codex fixture message");
+        path
     }
 
     fn create_claude_project_dir(base_dir: &Path, workspace_path: &Path) -> std::path::PathBuf {
@@ -235,7 +240,8 @@
             Some(SESSION_CATALOG_PARTIAL_CODEX.to_string()),
             vec![WorkspaceSessionCatalogSourceStatus {
                 engine: "codex".to_string(),
-                completeness: WorkspaceSessionSourceCompleteness::Complete,
+                source_kind: None,
+            completeness: WorkspaceSessionSourceCompleteness::Complete,
                 reason: None,
                 scanned_candidates: Some(26),
                 skipped_candidates: None,
@@ -384,7 +390,8 @@
         let statuses = normalize_source_statuses(vec![
             WorkspaceSessionCatalogSourceStatus {
                 engine: "codex".to_string(),
-                completeness: WorkspaceSessionSourceCompleteness::Complete,
+                source_kind: None,
+            completeness: WorkspaceSessionSourceCompleteness::Complete,
                 reason: None,
                 scanned_candidates: Some(10),
                 skipped_candidates: None,
@@ -394,7 +401,8 @@
             },
             WorkspaceSessionCatalogSourceStatus {
                 engine: "claude".to_string(),
-                completeness: WorkspaceSessionSourceCompleteness::Complete,
+                source_kind: None,
+            completeness: WorkspaceSessionSourceCompleteness::Complete,
                 reason: None,
                 scanned_candidates: Some(2),
                 skipped_candidates: None,
@@ -404,7 +412,8 @@
             },
             WorkspaceSessionCatalogSourceStatus {
                 engine: "claude".to_string(),
-                completeness: WorkspaceSessionSourceCompleteness::UncertainEmpty,
+                source_kind: None,
+            completeness: WorkspaceSessionSourceCompleteness::UncertainEmpty,
                 reason: Some(SESSION_CATALOG_PARTIAL_CLAUDE_UNCERTAIN_EMPTY.to_string()),
                 scanned_candidates: Some(0),
                 skipped_candidates: None,
@@ -600,7 +609,8 @@
             &[
                 WorkspaceSessionCatalogSourceStatus {
                     engine: "claude".to_string(),
-                    completeness: WorkspaceSessionSourceCompleteness::UncertainEmpty,
+                    source_kind: None,
+            completeness: WorkspaceSessionSourceCompleteness::UncertainEmpty,
                     reason: Some(SESSION_CATALOG_PARTIAL_CLAUDE_UNCERTAIN_EMPTY.to_string()),
                     scanned_candidates: Some(0),
                     skipped_candidates: None,
@@ -610,7 +620,8 @@
                 },
                 WorkspaceSessionCatalogSourceStatus {
                     engine: "codex".to_string(),
-                    completeness: WorkspaceSessionSourceCompleteness::Complete,
+                    source_kind: None,
+            completeness: WorkspaceSessionSourceCompleteness::Complete,
                     reason: None,
                     scanned_candidates: Some(0),
                     skipped_candidates: None,
@@ -635,7 +646,8 @@
             &metadata,
             &[WorkspaceSessionCatalogSourceStatus {
                 engine: "claude".to_string(),
-                completeness: WorkspaceSessionSourceCompleteness::AuthoritativeEmpty,
+                source_kind: None,
+            completeness: WorkspaceSessionSourceCompleteness::AuthoritativeEmpty,
                 reason: None,
                 scanned_candidates: Some(0),
                 skipped_candidates: None,
@@ -714,6 +726,274 @@
                 .map(|metadata| metadata.session_purpose.as_str()),
             Some("spec-hub-apply")
         );
+
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn provider_home_catalog_entry_projects_unavailable_provider_without_disk_fallback() {
+        let mut entry = catalog_entry("codex-provider-session", "ws-1", Some("Workspace"), None);
+        entry.provider_profile_id = Some("deleted-provider".to_string());
+        entry.provider_profile_source = Some("managed".to_string());
+        entry.provider_availability = Some("unknown".to_string());
+
+        let finalized = finalize_existing_catalog_entry(entry, &HashMap::new());
+
+        assert_eq!(
+            finalized.provider_profile_id.as_deref(),
+            Some("deleted-provider")
+        );
+        assert_eq!(finalized.provider_profile_source.as_deref(), Some("managed"));
+        assert_eq!(
+            finalized.provider_profile_name.as_deref(),
+            Some("deleted-provider")
+        );
+        assert_eq!(
+            finalized.provider_availability.as_deref(),
+            Some("unavailable")
+        );
+        assert_eq!(finalized.source_label.as_deref(), Some("deleted-provider"));
+    }
+
+    #[test]
+    fn mutation_target_resolves_provider_home_codex_row() {
+        let workspace = workspace_entry("ws-1", "Workspace", "/tmp/ws-1", WorkspaceKind::Main, None);
+        let workspaces = HashMap::from([(workspace.id.clone(), workspace)]);
+        let mut entry = catalog_entry("provider-session", "ws-1", Some("Workspace"), None);
+        entry.provider_profile_id = Some("provider-a".to_string());
+        entry.provider_profile_source = Some("managed".to_string());
+        entry.provider_profile_name = Some("Provider A".to_string());
+        entry.provider_availability = Some("available".to_string());
+        entry.physical_path = Some(
+            "/tmp/app/codex-provider-homes/provider-a/sessions/2026/01/19/provider-session.jsonl"
+                .to_string(),
+        );
+
+        let target = resolve_session_mutation_target(&[entry], &workspaces, "provider-session")
+            .expect("provider-home row should resolve as mutation target");
+
+        assert_eq!(target.owner_workspace_id, "ws-1");
+        assert_eq!(target.native_session_id, "provider-session");
+        assert_eq!(target.provider_profile_id.as_deref(), Some("provider-a"));
+        assert!(target.exists_on_disk);
+        assert_eq!(
+            target.delete_mode.as_deref(),
+            Some(SESSION_DELETE_MODE_PHYSICAL)
+        );
+    }
+
+    #[tokio::test]
+    async fn provider_home_only_codex_session_restores_from_catalog_without_runtime() {
+        let base = std::env::temp_dir().join(format!("provider-home-catalog-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&base).expect("create temp dir");
+        let storage_path = base.join("workspaces.json");
+        std::fs::write(&storage_path, "[]").expect("seed storage path");
+
+        let workspace_path = base.join("workspace");
+        std::fs::create_dir_all(&workspace_path).expect("create workspace path");
+        let provider_home = base.join("codex-provider-homes").join("provider-a");
+        write_codex_session_fixture(
+            &provider_home,
+            "provider-home-only",
+            &workspace_path.to_string_lossy(),
+        );
+
+        let mut workspace = workspace_entry(
+            "ws-1",
+            "Workspace",
+            &workspace_path.to_string_lossy(),
+            WorkspaceKind::Main,
+            None,
+        );
+        workspace.settings.codex_home = Some(provider_home.to_string_lossy().to_string());
+        let workspaces = Mutex::new(HashMap::from([(workspace.id.clone(), workspace)]));
+        let sessions = Mutex::new(HashMap::new());
+        let engine_manager = engine::EngineManager::new();
+
+        let page = list_workspace_sessions_core(
+            &workspaces,
+            &sessions,
+            &engine_manager,
+            &storage_path,
+            "ws-1".to_string(),
+            Some(WorkspaceSessionCatalogQuery {
+                engine: Some("codex".to_string()),
+                status: Some("all".to_string()),
+                ..Default::default()
+            }),
+            None,
+            Some(20),
+        )
+        .await
+        .expect("list provider-home catalog sessions");
+
+        let entry = page
+            .data
+            .iter()
+            .find(|entry| entry.session_id == "provider-home-only")
+            .expect("provider-home session should be restored from catalog");
+        assert_eq!(entry.provider_profile_id.as_deref(), Some("provider-a"));
+        assert_eq!(entry.provider_profile_source.as_deref(), Some("managed"));
+        assert_eq!(entry.provider_profile_name.as_deref(), Some("provider-a"));
+        assert_eq!(entry.provider_availability.as_deref(), Some("unavailable"));
+        assert!(entry.exists_on_disk);
+        assert!(page.source_statuses.iter().any(|status| {
+            status.engine == "codex" && status.source_kind.as_deref() == Some("disk")
+        }));
+        assert!(page.source_statuses.iter().any(|status| {
+            status.engine == "codex" && status.source_kind.as_deref() == Some("provider-home")
+        }));
+
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[tokio::test]
+    async fn provider_home_archive_folder_and_delete_target_only_session_file() {
+        let base = std::env::temp_dir().join(format!("provider-home-mutate-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&base).expect("create temp dir");
+        let storage_path = base.join("workspaces.json");
+        std::fs::write(&storage_path, "[]").expect("seed storage path");
+
+        let workspace_path = base.join("workspace");
+        std::fs::create_dir_all(&workspace_path).expect("create workspace path");
+        let provider_home = base.join("codex-provider-homes").join("provider-a");
+        let target_path = write_codex_session_fixture(
+            &provider_home,
+            "provider-delete-target",
+            &workspace_path.to_string_lossy(),
+        );
+        let sibling_path = write_codex_session_fixture(
+            &provider_home,
+            "provider-keep-sibling",
+            &workspace_path.to_string_lossy(),
+        );
+
+        let mut workspace = workspace_entry(
+            "ws-1",
+            "Workspace",
+            &workspace_path.to_string_lossy(),
+            WorkspaceKind::Main,
+            None,
+        );
+        workspace.settings.codex_home = Some(provider_home.to_string_lossy().to_string());
+        let workspaces = Mutex::new(HashMap::from([(workspace.id.clone(), workspace)]));
+        let sessions = Mutex::new(HashMap::new());
+        let engine_manager = engine::EngineManager::new();
+        let requested_session_id = "provider-delete-target".to_string();
+        let stable_key = "codex:ws-1:provider-delete-target".to_string();
+
+        let folder = create_workspace_session_folder_core(
+            &workspaces,
+            &storage_path,
+            "ws-1".to_string(),
+            "Provider folder".to_string(),
+            None,
+        )
+        .await
+        .expect("create provider folder")
+        .folder;
+        let folder_response = assign_workspace_session_folder_core(
+            &workspaces,
+            &engine_manager,
+            &storage_path,
+            "ws-1".to_string(),
+            requested_session_id.clone(),
+            Some(folder.id.clone()),
+        )
+        .await
+        .expect("assign provider-home folder");
+        assert_eq!(folder_response.folder_id.as_deref(), Some(folder.id.as_str()));
+
+        let archive_response = archive_workspace_sessions_core(
+            &workspaces,
+            &sessions,
+            &engine_manager,
+            &storage_path,
+            "ws-1".to_string(),
+            vec![requested_session_id.clone()],
+        )
+        .await
+        .expect("archive provider-home session");
+        assert!(archive_response.results[0].ok);
+
+        let metadata = read_catalog_metadata(&storage_path, "ws-1").expect("read metadata");
+        assert_eq!(
+            metadata.folder_id_by_session_id.get(&stable_key),
+            Some(&folder.id)
+        );
+        assert!(metadata.archived_at_by_session_id.contains_key(&stable_key));
+
+        let delete_response = delete_workspace_sessions_core(
+            &workspaces,
+            &sessions,
+            &engine_manager,
+            &storage_path,
+            "ws-1".to_string(),
+            vec![requested_session_id],
+        )
+        .await
+        .expect("delete provider-home session");
+        assert!(delete_response.results[0].ok);
+        assert_eq!(delete_response.results[0].deleted_from_disk, Some(true));
+        assert!(!target_path.exists());
+        assert!(sibling_path.exists());
+        assert!(provider_home.exists());
+
+        let metadata = read_catalog_metadata(&storage_path, "ws-1").expect("read cleaned metadata");
+        assert!(!metadata.folder_id_by_session_id.contains_key(&stable_key));
+        assert!(!metadata.archived_at_by_session_id.contains_key(&stable_key));
+
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[tokio::test]
+    async fn provider_home_mutation_failure_reports_provider_aware_diagnostic() {
+        let base =
+            std::env::temp_dir().join(format!("provider-home-unresolved-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&base).expect("create temp dir");
+        let storage_path = base.join("workspaces.json");
+        std::fs::write(&storage_path, "[]").expect("seed storage path");
+
+        let workspace_path = base.join("workspace");
+        std::fs::create_dir_all(&workspace_path).expect("create workspace path");
+        let mut workspace = workspace_entry(
+            "ws-1",
+            "Workspace",
+            &workspace_path.to_string_lossy(),
+            WorkspaceKind::Main,
+            None,
+        );
+        workspace.settings.codex_home = Some(
+            base.join("codex-provider-homes")
+                .join("provider-a")
+                .to_string_lossy()
+                .to_string(),
+        );
+        let workspaces = Mutex::new(HashMap::from([(workspace.id.clone(), workspace)]));
+        let sessions = Mutex::new(HashMap::new());
+        let engine_manager = engine::EngineManager::new();
+
+        let response = delete_workspace_sessions_core(
+            &workspaces,
+            &sessions,
+            &engine_manager,
+            &storage_path,
+            "ws-1".to_string(),
+            vec!["codex:missing-provider-session".to_string()],
+        )
+        .await
+        .expect("unresolved provider-home delete should return batch result");
+
+        assert!(!response.results[0].ok);
+        assert_eq!(
+            response.results[0].code.as_deref(),
+            Some("OWNER_WORKSPACE_UNRESOLVED")
+        );
+        assert!(response.results[0]
+            .error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("provider-home source"));
 
         std::fs::remove_dir_all(base).ok();
     }

@@ -147,7 +147,32 @@ mod codex {
         pub(crate) use crate::codex_launch_profile::*;
     }
     pub(crate) mod provider_profile {
+        use crate::session_management::CodexProviderBinding;
+
         pub(crate) const CODEX_DISK_PROVIDER_PROFILE_ID: &str = "__disk__";
+        pub(crate) const CODEX_DISK_PROVIDER_PROFILE_NAME: &str = "磁盘 .codex 配置";
+
+        pub(crate) fn codex_provider_binding_for_profile_id(
+            provider_profile_id: &str,
+        ) -> CodexProviderBinding {
+            let provider_profile_id = provider_profile_id.trim();
+            if provider_profile_id.is_empty()
+                || provider_profile_id == CODEX_DISK_PROVIDER_PROFILE_ID
+            {
+                return CodexProviderBinding {
+                    provider_profile_id: CODEX_DISK_PROVIDER_PROFILE_ID.to_string(),
+                    provider_profile_source: "disk".to_string(),
+                    provider_profile_name: CODEX_DISK_PROVIDER_PROFILE_NAME.to_string(),
+                    provider_availability: "available".to_string(),
+                };
+            }
+            CodexProviderBinding {
+                provider_profile_id: provider_profile_id.to_string(),
+                provider_profile_source: "managed".to_string(),
+                provider_profile_name: provider_profile_id.to_string(),
+                provider_availability: "unavailable".to_string(),
+            }
+        }
 
         pub(crate) fn codex_runtime_key(workspace_id: &str, provider_profile_id: &str) -> String {
             let provider_profile_id = provider_profile_id.trim();

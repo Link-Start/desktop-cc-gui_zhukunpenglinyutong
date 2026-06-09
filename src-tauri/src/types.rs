@@ -435,6 +435,16 @@ pub(crate) struct LocalUsageSessionSummary {
     #[serde(default)]
     pub(crate) provider: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) provider_profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) provider_profile_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) provider_profile_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) provider_availability: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) physical_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) file_size_bytes: Option<u64>,
     #[serde(default)]
     pub(crate) modified_lines: i64,

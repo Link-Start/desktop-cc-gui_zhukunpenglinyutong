@@ -124,6 +124,8 @@ pub(crate) enum WorkspaceSessionSourceCompleteness {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WorkspaceSessionCatalogSourceStatus {
     pub(crate) engine: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) source_kind: Option<String>,
     pub(crate) completeness: WorkspaceSessionSourceCompleteness,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) reason: Option<String>,

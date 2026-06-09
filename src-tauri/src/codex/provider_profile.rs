@@ -28,6 +28,34 @@ impl CodexProviderBinding {
     }
 }
 
+pub(crate) fn codex_provider_binding_for_profile_id(
+    provider_profile_id: &str,
+) -> CodexProviderBinding {
+    let profile_id = normalize_profile_id(Some(provider_profile_id));
+    if profile_id == CODEX_DISK_PROVIDER_PROFILE_ID {
+        return CodexProviderBinding::disk();
+    }
+
+    match read_config()
+        .ok()
+        .and_then(|config| config.codex.providers.get(&profile_id).cloned())
+        .and_then(|value| value_to_codex_provider(&profile_id, &value).ok())
+    {
+        Some(provider) => CodexProviderBinding {
+            provider_profile_id: profile_id,
+            provider_profile_source: "managed".to_string(),
+            provider_profile_name: provider.name,
+            provider_availability: "available".to_string(),
+        },
+        None => CodexProviderBinding {
+            provider_profile_id: profile_id.clone(),
+            provider_profile_source: "managed".to_string(),
+            provider_profile_name: profile_id,
+            provider_availability: "unavailable".to_string(),
+        },
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum CodexProviderProfile {
     Disk,

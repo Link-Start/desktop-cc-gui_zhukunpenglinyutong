@@ -642,10 +642,12 @@ pub(crate) async fn archive_workspace_sessions_core(
                     &workspaces_snapshot,
                     &session_id,
                 ) else {
+                    let message =
+                        unresolved_session_mutation_message(&session_id, &scope_catalog.entries);
                     results.push(batch_error(
                         session_id,
                         "OWNER_WORKSPACE_UNRESOLVED",
-                        "session does not belong to target workspace",
+                        &message,
                     ));
                     continue;
                 };
@@ -740,10 +742,11 @@ pub(crate) async fn unarchive_workspace_sessions_core(
             &workspaces_snapshot,
             &session_id,
         ) else {
+            let message = unresolved_session_mutation_message(&session_id, &scope_catalog.entries);
             results.push(batch_error(
                 session_id,
                 "OWNER_WORKSPACE_UNRESOLVED",
-                "session does not belong to target workspace",
+                &message,
             ));
             continue;
         };
@@ -832,13 +835,10 @@ pub(crate) async fn delete_workspace_sessions_core(
             &workspaces_snapshot,
             &session_id,
         ) else {
+            let message = unresolved_session_mutation_message(&session_id, &scope_catalog.entries);
             results_by_session_id.insert(
                 session_id.clone(),
-                batch_error(
-                    session_id,
-                    "OWNER_WORKSPACE_UNRESOLVED",
-                    "session does not belong to target workspace",
-                ),
+                batch_error(session_id, "OWNER_WORKSPACE_UNRESOLVED", &message),
             );
             continue;
         };
@@ -1397,6 +1397,7 @@ fn finalize_existing_catalog_entry(
 ) -> WorkspaceSessionCatalogEntry {
     mark_entry_as_existing_on_disk(&mut entry);
     apply_codex_provider_binding(&mut entry, metadata_by_workspace_id);
+    apply_codex_provider_home_binding_fallback(&mut entry);
     apply_folder_assignment(&mut entry, metadata_by_workspace_id);
     apply_auto_session_metadata(&mut entry, metadata_by_workspace_id);
     entry
@@ -1847,6 +1848,31 @@ fn apply_codex_provider_binding(
     entry.source_label = Some(binding.provider_profile_name);
 }
 
+fn apply_codex_provider_home_binding_fallback(entry: &mut WorkspaceSessionCatalogEntry) {
+    if !entry.engine.eq_ignore_ascii_case("codex") {
+        return;
+    }
+    if entry.provider_profile_name.is_some() && entry.provider_availability.is_some() {
+        return;
+    }
+    let Some(provider_profile_id) = entry
+        .provider_profile_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+    else {
+        return;
+    };
+    let binding =
+        crate::codex::provider_profile::codex_provider_binding_for_profile_id(&provider_profile_id);
+    entry.provider_profile_id = Some(binding.provider_profile_id);
+    entry.provider_profile_source = Some(binding.provider_profile_source);
+    entry.provider_profile_name = Some(binding.provider_profile_name.clone());
+    entry.provider_availability = Some(binding.provider_availability);
+    entry.source_label = Some(binding.provider_profile_name);
+}
+
 fn archived_at_for_entry(
     metadata: &WorkspaceSessionCatalogMetadata,
     entry: &WorkspaceSessionCatalogEntry,
@@ -2214,7 +2240,9 @@ pub(crate) async fn assign_workspace_session_folder_core(
     let target =
         resolve_session_mutation_target(&scope_catalog.entries, &workspaces_snapshot, &session_id)
             .filter(|target| target.exists_on_disk)
-            .ok_or_else(|| "session does not belong to target workspace".to_string())?;
+            .ok_or_else(|| {
+                unresolved_session_mutation_message(&session_id, &scope_catalog.entries)
+            })?;
 
     with_catalog_metadata_mutation(storage_path, &target.owner_workspace_id, |metadata| {
         if let Some(folder_id) = folder_id.as_deref() {
@@ -2313,6 +2341,38 @@ fn resolve_session_mutation_target(
         exists_on_disk: entry.exists_on_disk,
         delete_mode: entry.delete_mode.clone(),
     })
+}
+
+fn unresolved_session_mutation_message(
+    session_id: &str,
+    entries: &[WorkspaceSessionCatalogEntry],
+) -> String {
+    let identity = parse_catalog_identity(session_id);
+    if !identity.engine_name().eq_ignore_ascii_case("codex") {
+        return "session does not belong to target workspace".to_string();
+    }
+
+    let raw_session_id = identity.raw_session_id();
+    let has_provider_backed_hint = entries.iter().any(|entry| {
+        entry.engine.eq_ignore_ascii_case("codex")
+            && entry.provider_profile_id.is_some()
+            && (entry
+                .canonical_session_id
+                .as_deref()
+                .map(|value| value == raw_session_id)
+                .unwrap_or(false)
+                || entry.session_id == session_id
+                || catalog_metadata_lookup_keys_for_entry(entry)
+                    .iter()
+                    .any(|key| key == session_id))
+    });
+
+    if has_provider_backed_hint {
+        return "provider-backed Codex session target could not be resolved safely for this workspace"
+            .to_string();
+    }
+
+    "Codex session target could not be resolved safely for this workspace; provider-home source may be incomplete or the session no longer belongs to this workspace".to_string()
 }
 fn now_millis() -> i64 {
     SystemTime::now()
@@ -2608,10 +2668,10 @@ fn build_global_codex_catalog_entry(
         thread_kind: "native".to_string(),
         source: summary.source.clone(),
         source_label,
-        provider_profile_id: None,
-        provider_profile_source: None,
-        provider_profile_name: None,
-        provider_availability: None,
+        provider_profile_id: summary.provider_profile_id.clone(),
+        provider_profile_source: summary.provider_profile_source.clone(),
+        provider_profile_name: summary.provider_profile_name.clone(),
+        provider_availability: summary.provider_availability.clone(),
         source_completeness: None,
         source_status_reason: None,
         size_bytes: summary.file_size_bytes,
@@ -2626,7 +2686,7 @@ fn build_global_codex_catalog_entry(
         exists_on_disk: false,
         inconsistency_code: None,
         delete_mode: Some(SESSION_DELETE_MODE_UNSUPPORTED.to_string()),
-        physical_path: None,
+        physical_path: summary.physical_path.clone(),
         children_count: None,
     };
     let attribution = resolve_catalog_entry_attribution(workspaces_snapshot, &unresolved_entry);
@@ -2641,6 +2701,7 @@ fn build_global_codex_catalog_entry(
         }
     }
     mark_entry_as_existing_on_disk(&mut entry);
+    apply_codex_provider_home_binding_fallback(&mut entry);
     entry
 }
 
