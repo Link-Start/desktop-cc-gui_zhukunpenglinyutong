@@ -1869,3 +1869,45 @@ Codex app-server 对话链路切换为 codex-tui 兼容身份，补 terminal env
 ### Next Steps
 
 - None - task complete
+
+
+## Session 780: 深化 Session Activity 语义 Diff 证据审查
+
+**Date**: 2026-06-10
+**Task**: 深化 Session Activity 语义 Diff 证据审查
+**Branch**: `feature/v0.5.8`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Summary |
+|------|---------|
+| Semantic Diff Model | 扩展 `SemanticDiffSummaryItem`，支持 `source` 与 structured `evidenceRefs`，保留数组输入兼容性并新增 object input。 |
+| Evidence Collection | 接入同 turn validation command evidence，区分 test-file hint 与真实验证命令结果。 |
+| Extractors | 增加 TypeScript/React/test/config deterministic facts，包括 hooks、component、state、handler、test case、assertion、config key。 |
+| AI Review Contract | 新增 bounded AI review fact contract；无 evidence refs 的 AI fact 会被丢弃，不自动调用模型。 |
+| UI | 语义 diff 保持平铺极简；为章节加入主题适配色彩；证据合并为单行，长路径自适应换行，文件证据可点击打开到对应行号。 |
+| Proposal Sync | 新增并回写 OpenSpec change `deepen-semantic-diff-review` 与 Trellis task/PRD，记录 evidence UI 单行与 file-line navigation contract。 |
+| Validation | 通过 OpenSpec strict、focused Vitest、lint、typecheck、large-file check。 |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9daa596c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

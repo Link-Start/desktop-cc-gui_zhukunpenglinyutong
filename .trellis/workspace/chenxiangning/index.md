@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-20.md`
-- **Total Sessions**: 779
+- **Total Sessions**: 780
 - **Last Active**: 2026-06-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-20.md` | ~1871 | Active |
+| `journal-20.md` | ~1913 | Active |
 | `journal-19.md` | ~1989 | Archived |
 | `journal-18.md` | ~1966 | Archived |
 | `journal-17.md` | ~1971 | Archived |
@@ -48,6 +48,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 780 | 2026-06-10 | 深化 Session Activity 语义 Diff 证据审查 | `9daa596c` | `feature/v0.5.8` |
 | 779 | 2026-06-10 | Session Activity 轮次产物语义 diff 第一版 | `1c5e6a6e`, `0192308a` | `feature/v0.5.8` |
 | 778 | 2026-06-09 | 修复 Sidebar 子会话移动测试等待 | `d4a7ed63` | `feature/v0.5.8` |
 | 777 | 2026-06-09 | 兼容 Codex provider-home 会话归属恢复错误 | `f464ef6c` | `feature/v0.5.8` |
