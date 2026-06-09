@@ -1558,3 +1558,51 @@ Codex app-server 对话链路切换为 codex-tui 兼容身份，补 terminal env
 ### Next Steps
 
 - None - task complete
+
+
+## Session 772: 校准 Codex provider home catalog recovery 提案
+
+**Date**: 2026-06-09
+**Task**: 校准 Codex provider home catalog recovery 提案
+**Branch**: `feature/v0.5.8`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 内容 |
+|------|------|
+| OpenSpec change | `harden-codex-provider-session-catalog-recovery` |
+| 本次动作 | 将未跟踪的 OpenSpec 提案独立提交，避免后续实现代码与提案文档混在同一个 commit。 |
+| 状态 | Planning complete / Implementation not started。 |
+| 关键结论 | 该 change 用于修复 managed Codex provider sessions 存在 `codex-provider-homes/<providerId>` 后，workspace catalog 刷新/重启无法恢复 provider-home-only sessions 的缺口。 |
+| 验证 | `openspec validate harden-codex-provider-session-catalog-recovery --strict --no-interactive` 通过。 |
+
+**Updated Files**:
+- `openspec/changes/harden-codex-provider-session-catalog-recovery/.openspec.yaml`
+- `openspec/changes/harden-codex-provider-session-catalog-recovery/proposal.md`
+- `openspec/changes/harden-codex-provider-session-catalog-recovery/design.md`
+- `openspec/changes/harden-codex-provider-session-catalog-recovery/tasks.md`
+- `openspec/changes/harden-codex-provider-session-catalog-recovery/specs/codex-session-sidebar-state-parity/spec.md`
+- `openspec/changes/harden-codex-provider-session-catalog-recovery/specs/workspace-session-catalog-projection/spec.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ebf75dff` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
