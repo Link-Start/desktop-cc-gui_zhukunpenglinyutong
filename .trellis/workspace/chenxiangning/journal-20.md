@@ -1454,3 +1454,55 @@ Codex app-server 对话链路切换为 codex-tui 兼容身份，补 terminal env
 ### Next Steps
 
 - None - task complete
+
+
+## Session 770: 同步 Codex 供应商契约文档
+
+**Date**: 2026-06-09
+**Task**: 同步 Codex 供应商契约文档
+**Branch**: `feature/v0.5.8`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## Goal
+提交当前工作区中的 Codex provider / codex-tui 相关 OpenSpec 与 Trellis code-spec 文档变更。
+
+## Changes
+- 新增 `.trellis/spec/backend/codex-provider-scoped-runtime.md`，固化 Codex provider-scoped runtime、thread binding、fork、stale retry 与 codex-tui launch identity 的 executable contract。
+- 新增 `.trellis/spec/frontend/codex-provider-session-ui.md`，固化 provider selector、start/fork payload、thread metadata merge、sidebar/pinned/composer label contract。
+- 更新 `.trellis/spec/backend/index.md` 与 `.trellis/spec/frontend/index.md`，将新 code-spec 纳入 Pre-Development Checklist。
+- 校准 `add-codex-provider-scoped-session-launch` proposal/design/tasks/spec，明确 disk legacy runtime key、managed provider runtime key、frontend in-flight identity 和 provider metadata preservation。
+- 为 `harden-codex-tui-compatible-user-agent` 新增 behavior spec，并在 proposal/tasks 中同步 codex-tui compatible launch identity 与 control-plane filtering contract。
+
+## Validation
+- `openspec validate add-codex-provider-scoped-session-launch --strict --no-interactive` passed。
+- `openspec validate harden-codex-tui-compatible-user-agent --strict --no-interactive` passed。
+- `git diff --check` passed。
+- 未运行 `npm`/`cargo` gates：本次仅提交文档与 spec artifact，无源码改动。
+
+## Follow-ups
+- `add-codex-provider-scoped-session-launch` 仍有 manual verification evidence task 未完成。
+- `harden-codex-tui-compatible-user-agent` 仍需 relay-side request-log evidence。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e6dc2157` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
