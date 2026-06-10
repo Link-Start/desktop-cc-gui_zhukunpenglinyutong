@@ -139,3 +139,54 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 786: 收口客户端运行态 P0
+
+**Date**: 2026-06-10
+**Task**: 收口客户端运行态 P0
+**Branch**: `feature/v0.5.8`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Summary |
+|------|---------|
+| HomeChat | Replanned New Home as creation-first, removed workspace run dashboard/cockpit, artifacts, and Task Center entrypoints. |
+| Runtime visibility | Moved P0 user-visible runtime hints to contextual surfaces: Sidebar session badges, Conversation linked-run indicator, and shared RunDetailSurface. |
+| Task module deferral | Hid Project Map / Orchestration task entrypoints while preserving internal Task Center and task code for later redesign. |
+| Evidence/detail | Kept TaskRun as execution truth and RunDetailSurface as shared explanation surface for status, diagnostics, artifacts, evidence, and linked conversation. |
+| OpenSpec | Recalibrated unify-client-workflow-runtime-model proposal, design, tasks, and delta spec to match the HomeChat replanning and defer AppShell/useThreads deep refactor. |
+| Validation | OpenSpec validate passed; focused tests passed: 5 files, 111 tests; typecheck passed; lint passed with one existing warning. |
+
+**Validation commands executed**:
+- `openspec validate unify-client-workflow-runtime-model --strict --no-interactive`
+- `pnpm vitest run src/features/home/components/HomeChat.test.tsx src/features/tasks/components/RunDetailSurface.test.tsx src/features/messages/components/Messages.test.tsx src/features/tasks/components/TaskCenterView.test.tsx src/features/project-map/components/ProjectMapPanel.test.tsx`
+- `npm run typecheck`
+- `npm run lint`
+
+**Notes**:
+- Deferred AppShell orchestration split, useThreads runtime split, and core @ts-nocheck removal to a separate architecture proposal.
+- No backend command or storage migration was added.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `91cf4440` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

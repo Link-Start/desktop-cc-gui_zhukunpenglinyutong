@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-21.md`
-- **Total Sessions**: 785
+- **Total Sessions**: 786
 - **Last Active**: 2026-06-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-21.md` | ~141 | Active |
+| `journal-21.md` | ~192 | Active |
 | `journal-20.md` | ~1997 | Archived |
 | `journal-19.md` | ~1989 | Archived |
 | `journal-18.md` | ~1966 | Archived |
@@ -49,6 +49,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 786 | 2026-06-10 | 收口客户端运行态 P0 | `91cf4440` | `feature/v0.5.8` |
 | 785 | 2026-06-10 | 提示词增强支持手动配置模型 | `5bb5b56f` | `feature/v0.5.8` |
 | 784 | 2026-06-10 | 归档已验证 OpenSpec 提案批次 | `8615451e` | `feature/v0.5.8` |
 | 783 | 2026-06-10 | 补充 Codex 供应商面板背景验收 | `9b8b17d9` | `feature/v0.5.8` |
