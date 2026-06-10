@@ -1149,18 +1149,19 @@ describe("ProjectMapPanel", () => {
 
   it("accepts all current candidates from the toolbar", async () => {
     const confirmAllCandidates = vi.fn(async () => ({ confirmed: 2, skipped: 1, errors: [] }));
-    renderMockProjectMapPanel({
+    const view = renderMockProjectMapPanel({
       datasetController: createDatasetControllerMock({
         confirmAllCandidates,
       }),
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "projectMap.confirmAllCandidates" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "projectMap.confirmAllCandidates" }));
+      await Promise.resolve();
+    });
 
-    await waitFor(() => expect(confirmAllCandidates).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(screen.getByText(/projectMap\.confirmAllCandidatesResult/)).toBeTruthy(),
-    );
+    expect(confirmAllCandidates).toHaveBeenCalledTimes(1);
+    expect(view.container.textContent).toContain("projectMap.confirmAllCandidatesResult");
   });
 
   it("uses candidate badge as a review entry for AI organizer parent-move candidates", () => {
