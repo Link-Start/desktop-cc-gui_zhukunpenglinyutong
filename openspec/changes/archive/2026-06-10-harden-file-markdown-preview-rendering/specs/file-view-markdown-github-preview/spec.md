@@ -63,34 +63,6 @@ The system SHALL present file Markdown preview with a stable GitHub-style readin
 - **THEN** the Mermaid block SHALL keep its file-preview Source / Render tab behavior
 - **AND** math plugin support MUST NOT force Mermaid rendering during initial source-tab display
 
-### Requirement: File View Markdown Preview SHALL Provide Parser-Derived Outline Navigation
-
-The file-view Markdown preview SHALL expose a document outline derived from Markdown parser heading metadata or an equivalent compile-time source map.
-
-#### Scenario: outline is available for heading-bearing markdown documents
-
-- **WHEN** a Markdown file contains headings
-- **THEN** file preview SHALL provide outline entries with heading text, depth, stable anchor, ordinal, and source line range
-- **AND** the outline MUST be generated from parser/source metadata rather than repeated scans of the mounted rendered DOM
-
-#### Scenario: outline navigation jumps without changing document snapshot
-
-- **WHEN** the user activates an outline entry
-- **THEN** the preview SHALL navigate to the corresponding heading/source-line anchor
-- **AND** the navigation MUST NOT change the selected file, document snapshot, or Markdown compile cache identity
-
-#### Scenario: duplicate and non-English headings have stable anchors
-
-- **WHEN** a Markdown document contains duplicate headings or headings containing Chinese/Japanese/Korean text
-- **THEN** outline anchors SHALL remain stable and disambiguated for the same document content
-- **AND** activating any duplicate heading entry SHALL target the matching ordinal occurrence
-
-#### Scenario: outline works with bounded preview projection
-
-- **WHEN** a heading exists outside the currently visible bounded/progressive projection
-- **THEN** the outline MAY show that heading as not yet rendered or trigger reveal of the target block before scrolling
-- **AND** it MUST NOT force an unbounded full-document rich render solely to make the outline item usable
-
 ### Requirement: File View Markdown Styling SHALL Be Isolated From Message Curtain Styling
 
 The system SHALL scope file-preview Markdown styles and render customizations to the file-view namespace so that message-curtain Markdown remains unaffected.
@@ -160,3 +132,33 @@ The system SHALL keep Markdown rendering failures inside the file-preview bounda
 - **WHEN** fast renderer HTML sanitization rejects or fails a document fragment
 - **THEN** the preview MUST use the file-preview fallback path for that document or affected region
 - **AND** unsafe unsanitized HTML MUST NOT be mounted
+
+## ADDED Requirements
+
+### Requirement: File View Markdown Preview SHALL Provide Parser-Derived Outline Navigation
+
+The file-view Markdown preview SHALL expose a document outline derived from Markdown parser heading metadata or an equivalent compile-time source map.
+
+#### Scenario: outline is available for heading-bearing markdown documents
+
+- **WHEN** a Markdown file contains headings
+- **THEN** file preview SHALL provide outline entries with heading text, depth, stable anchor, ordinal, and source line range
+- **AND** the outline MUST be generated from parser/source metadata rather than repeated scans of the mounted rendered DOM
+
+#### Scenario: outline navigation jumps without changing document snapshot
+
+- **WHEN** the user activates an outline entry
+- **THEN** the preview SHALL navigate to the corresponding heading/source-line anchor
+- **AND** the navigation MUST NOT change the selected file, document snapshot, or Markdown compile cache identity
+
+#### Scenario: duplicate and non-English headings have stable anchors
+
+- **WHEN** a Markdown document contains duplicate headings or headings containing Chinese/Japanese/Korean text
+- **THEN** outline anchors SHALL remain stable and disambiguated for the same document content
+- **AND** activating any duplicate heading entry SHALL target the matching ordinal occurrence
+
+#### Scenario: outline works with bounded preview projection
+
+- **WHEN** a heading exists outside the currently visible bounded/progressive projection
+- **THEN** the outline MAY show that heading as not yet rendered or trigger reveal of the target block before scrolling
+- **AND** it MUST NOT force an unbounded full-document rich render solely to make the outline item usable
