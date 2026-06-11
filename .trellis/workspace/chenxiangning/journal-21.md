@@ -929,3 +929,46 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 804: 补齐实时链路追踪门禁
+
+**Date**: 2026-06-11
+**Task**: 补齐实时链路追踪门禁
+**Branch**: `feature/v0.5.9`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 内容 |
+|------|------|
+| OpenSpec | `realtime-trace-correlation-gate` |
+| 代码提交 | `ea916f00 feat(perf): 补齐实时链路追踪门禁` |
+| 实现 | 新增 bounded per-turn trace correlation aggregator，贯穿 user-send、runtime-start、first delta、batch flush、reducer commit、first visible row/text、terminal settlement。 |
+| Replay | 新增 `realtimeTurnTraceReplay`，从 replay event stream 合成 turn-level milestone summaries 与 4 个预算指标。 |
+| Evidence | 生成 `docs/perf/realtime-turn-trace.json`，扩展 realtime baseline、runtime evidence gates 与 OpenSpec runtime evidence 文档。 |
+| 质量 | 补充 trace id uniqueness、replay grouping、proxy evidence classification、runtime milestone wiring、boundary guard、content-safety tests。 |
+| 验证 | `npm run typecheck`、`npm run lint`、`npm run test`、`npm run perf:realtime:report -- --profile=extended`、`npm run perf:baseline:aggregate`、`npm run check:runtime-evidence-gates`、`npm run perf:realtime:boundary-guard`、`openspec validate realtime-trace-correlation-gate --strict --no-interactive`、`git diff --check` 均通过。 |
+| 遗留 | `scripts/ensure-dev-port.*` 和两个较早 perf history untracked 快照未纳入本次 realtime gate 提交。 |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ea916f00` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
