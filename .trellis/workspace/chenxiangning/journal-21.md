@@ -832,3 +832,45 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 802: 完成文件预览重依赖延迟加载
+
+**Date**: 2026-06-11
+**Task**: 完成文件预览重依赖延迟加载
+**Branch**: `feature/v0.5.9`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 内容 |
+|------|------|
+| OpenSpec | `lazy-file-preview-dependencies` tasks 已完成并归档；proposal/design 回写最终实现、evidence、`@codemirror/search` No-Reintroduction 决策。 |
+| Frontend | `FileViewPanel` / `FileViewBody` shell 不再 runtime import CodeMirror；新增 `FileCodeMirrorEditor` lazy boundary 与 `FileCodeMirrorEditorImpl` runtime chunk。 |
+| Runtime boundary | `useFileNavigation` 改为通过 editor handle 调用 find panel / navigation flash，CodeMirror search、keymap、annotation widgets、git line markers 保持在 lazy editor chunk 内。 |
+| Regression guard | 新增 lazy language loader race test，补充 Trellis quality guideline 和 `openspec/docs/lazy-state-extension-regression-2026-06-11.md`。 |
+| Evidence | 刷新 perf baseline/history；`vendor-codemirror-*` 不再从 `dist/index.html` modulepreload，bundle gate 通过。 |
+| Validation | `npm run typecheck`、`npm run lint`、`npm run build`、`npm run check:bundle-chunking`、`npm test`、`openspec validate lazy-file-preview-dependencies --strict --no-interactive` 全部通过。 |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b2fe0224` | (see git log) |
+| `bf048d7c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
