@@ -1065,3 +1065,47 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 807: 为 5 个 P1 提案补串行执行顺序
+
+**Date**: 2026-06-12
+**Task**: 为 5 个 P1 提案补串行执行顺序
+**Branch**: `feature/v0.5.9`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 阶段 | 内容 |
+|---|---|
+| 判断并行可行性 | 分析 5 个 P1 提案的物理写入面 + 跨提案耦合点；结论：仅 A+E 可并行（共享 `rendererDiagnostics` / `runtime-performance-evidence-gates`），B 与 C 共写 `workspaces/files.rs`，A 与 D 共写 `app-shell.tsx`，5 个全部并行必冲突 |
+| 决定串行顺序 | 改用 A → D → C → B → E 全串行：A 先解 Composer 与 shell 订阅；D 再拆 `app-shell.tsx` listener owner registry；C 落地 `ScanCache` / `spawn_blocking` helper / `payloadBudget` 注解；B 复用 C 基础设施改 `workspaces/files.rs` 分页契约；E 最后做 markdown worker |
+| 改写 proposal | 5 个 proposal.md 末尾新增 `## Execution Order / 执行顺序` 段：Position / Predecessors / Successors / Required Public Artifacts / Cross-Change Constraint / Blocking Rule |
+| 改写 tasks | 5 个 tasks.md 顶部 prepend `## Execution Step / 执行步序` 段：Step 编号 + 前置提案提示 + 串行链阻塞规则 |
+| 验证 | 5 个 change 全部 `openspec validate --strict --no-interactive` 返回 `is valid`；3 个新 OpenSpec change 目录（`composer-queued-fusion-*` / `git-status-rename-*` / `layout-plan-panel-live-resize-preview`）未触碰 |
+| Commit | `944e3536 docs(openspec): 为 5 个 P1 提案补串行执行顺序`（10 files changed, +127 lines） |
+| 状态 | 工作区剩 28 个 src 改动 + 3 个 untracked change 目录均来自用户/团队，未混入本次 commit |
+
+**改天实施入口**：按 `944e3536` 回到任一 proposal，看 `Execution Order` 段确认自己的 Step 编号与前置产物；改源码前先 `rg "## Required Public Artifacts"` 找到下游依赖的接口契约，确保本 change 不会破坏下游。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `944e3536` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

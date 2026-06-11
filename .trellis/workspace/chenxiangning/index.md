@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-21.md`
-- **Total Sessions**: 806
-- **Last Active**: 2026-06-11
+- **Total Sessions**: 807
+- **Last Active**: 2026-06-12
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-21.md` | ~1067 | Active |
+| `journal-21.md` | ~1111 | Active |
 | `journal-20.md` | ~1997 | Archived |
 | `journal-19.md` | ~1989 | Archived |
 | `journal-18.md` | ~1966 | Archived |
@@ -49,6 +49,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 807 | 2026-06-12 | 为 5 个 P1 提案补串行执行顺序 | `944e3536` | `feature/v0.5.9` |
 | 806 | 2026-06-11 | 提交 OpenSpec 性能预算提案 | `41ffa534` | `feature/v0.5.9` |
 | 805 | 2026-06-11 | 归档 P0 性能提案至 openspec archive | `aba7c2fd` | `feature/v0.5.9` |
 | 804 | 2026-06-11 | 补齐实时链路追踪门禁 | `ea916f00` | `feature/v0.5.9` |
