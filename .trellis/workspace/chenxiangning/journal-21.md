@@ -1573,3 +1573,36 @@ During verification, `TaskCreateModal.test.tsx` exposed an async state assertion
 ### Next Steps
 
 - None - task complete
+
+
+## Session 818: 恢复 Project Map Task 入口
+
+**Date**: 2026-06-13
+**Task**: 恢复 Project Map Task 入口
+**Branch**: `feature/v0.5.9`
+
+### Summary
+
+恢复 Project Map 顶部 Task 按钮和 generation task drawer 链路，回写 project-map-incremental-generation spec，并修复 useLayoutNodes 中重复 onRefreshGitStatus prop 造成的 typecheck 阻塞。验证通过 ProjectMapPanel focused test、ESLint、OpenSpec specs strict validation 与 npm run typecheck。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `32159950` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
