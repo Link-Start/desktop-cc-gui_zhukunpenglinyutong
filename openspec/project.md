@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: tracked active changes = `5`, archive changes = `472`, main specs = `328`
+- Current workspace state: tracked active changes = `7`, archive changes = `472`, main specs = `328`
 
 ## Entry Surfaces
 
@@ -54,13 +54,25 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 ## Current Inventory
 
-- Active changes: `5`
+- Active changes: `7`
 - Archive changes: `472`
 - Main specs: `328`
 - Completed task sets still active: `0`
 - Ready-for-implementation task sets: `5`
 
 ## Active Changes
+
+### `realtime-input-and-io-isolation-2026-06`
+
+- Status: in progress; root-cause isolation change for realtime reducer fast path, backend file I/O isolation, Rust event batching, file watcher debounce, and evidence-gate fields.
+- Current artifact fact: proposal/design/spec/tasks are complete and calibrated. Rust/backend substrate is mostly landed; app-server batching now has per-workspace Rust flush + terminal workspace flush and frontend status-snapshot coalesce + chunked dispatch; broader React shell isolation and full perf/manual gates remain follow-up work.
+- Action: finish remaining frontend batching/evidence tasks before archive; do not mark app-server route complete until dispatch cost is bounded beyond IPC batching.
+
+### `frontend-prop-chain-stability-2026-06`
+
+- Status: in progress; follow-up to consume batch channels and reduce frontend render propagation.
+- Current artifact fact: proposal/design/spec/tasks are complete. Current implementation has mutual-exclusive batch consumers, shared app-server dispatcher, and `useFileExternalSync` batch path coalescing; app shell domain split, row-level status lookup, and measured evidence remain open.
+- Action: next implement app-shell domain context split only after batch consumer wording and evidence status remain aligned.
 
 ### `composer-and-message-row-render-budget`
 

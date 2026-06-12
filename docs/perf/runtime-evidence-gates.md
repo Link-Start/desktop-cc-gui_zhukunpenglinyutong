@@ -1,6 +1,6 @@
 # Runtime Evidence Gates
 
-Generated at: 2026-06-12T05:34:49.658Z
+Generated at: 2026-06-12T11:08:33.439Z
 
 ## Performance Evidence
 
@@ -88,6 +88,61 @@ Generated at: 2026-06-12T05:34:49.658Z
 - Modes: worker-precompute, main, cache-hit, fallback
 - Unsafe HTML boundary: Worker output is not trusted DOM; rich React render and sanitization remain on the main renderer path.
 - Content safety: Diagnostics store source length/hash and structural counts; raw Markdown, prompt text, assistant body, tool output, and file content are excluded.
+
+## Realtime Input Render Budget
+
+- Diagnostics label: perf.realtime.input-render-budget
+- prepareThreadItems calls / 1000 delta: unsupported (target 5)
+- Reducer flush P95: unsupported ms (target 8)
+- Delta route P95: unsupported ms (target 4)
+- Evidence class: unsupported
+- Reason: Streaming fixture needed to populate reducer fast-path evidence; baseline scenarios are added by this change.
+- Next action: Wire prepareThreadItems call counter and reducer flush timing into the realtime replay fixture.
+
+## Backend File IO Isolation
+
+- Diagnostics label: perf.backend.file-io-isolation
+- File I/O command wall P95: unsupported ms (no artificial 5ms budget)
+- Async worker stall P95: unsupported ms (target 1)
+- Blocking pool call count: unsupported
+- Tauri command during stream P95: unsupported ms
+- Evidence class: unsupported
+- Reason: Blocking pool call counter and async-worker stall probe will be added by the file I/O isolation step.
+- Next action: Run blocking pool call counter and async-worker stall probe in a 10MB read/write fixture during streaming.
+
+## File Change Debounce
+
+- Diagnostics label: perf.file-change.debounce
+- Raw fs events / sec: unsupported
+- Emitted fs events / sec: unsupported (target 10)
+- Same-path coalesce ratio: unsupported (target 0.8)
+- Empty batch emit count: unsupported (target 0)
+- Evidence class: unsupported
+- Reason: Debounce emitter is added by the file watcher debounce step; current fixture does not yet produce same-path burst events.
+- Next action: Generate a 1000-event same-path burst fixture and capture raw vs emitted counts.
+
+## App Server Event Batching
+
+- Diagnostics label: perf.app-server-event.batching
+- Raw app server events / sec: unsupported
+- IPC app server events / sec: unsupported (target ipcEmit/raw ratio 0.1)
+- Route P95: unsupported ms (target 4)
+- Reducer dispatches / 1000 delta: unsupported (target 1000)
+- Main thread long tasks during stream: unsupported (target 0)
+- Evidence class: unsupported
+- Reason: App server event batching emitter and batch-aware route are added by the batching step.
+- Next action: Capture raw vs IPC emit divergence and reducer dispatch count in a multi-workspace codex streaming fixture.
+
+## Frontend Prop Chain Stability
+
+- Diagnostics label: perf.frontend.prop-chain-stability
+- Composer renders / streaming minute: unsupported (target 1800)
+- Sidebar renders / streaming minute: unsupported (target 600)
+- Thread row rerenders / 1000 delta: unsupported (target 100)
+- Layout nodes recomputes / 1000 delta: unsupported (target 100)
+- Evidence class: unsupported
+- Reason: Domain context split and scoped status lookup are added by the prop chain stability step; render counters need source.
+- Next action: Add Profiler-based render counters or React Profiler API capture during the streaming fixture.
 
 ## Cold Start
 

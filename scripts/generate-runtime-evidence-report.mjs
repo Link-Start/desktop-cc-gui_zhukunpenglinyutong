@@ -440,6 +440,189 @@ function buildColdStartSummary(perfEvidence) {
   };
 }
 
+function buildRealtimeInputRenderBudgetSummary(perfEvidence) {
+  const prepareThreadItemsCallRate = findMetric(perfEvidence, "S-IO-RR", "prepareThreadItems_calls_per_1000_delta");
+  const reducerFlush = findMetric(perfEvidence, "S-IO-RR", "thread_reducer_flush_ms_p95");
+  const routeDuration = findMetric(perfEvidence, "S-IO-RR", "realtime_delta_route_ms_p95");
+  return {
+    diagnosticsLabel: "perf.realtime.input-render-budget",
+    scenarios: ["S-IO-RR"],
+    metadataFields: [
+      "scenario",
+      "metric",
+      "value",
+      "unit",
+      "budget",
+      "evidenceClass",
+    ],
+    target: {
+      prepareThreadItemsCallsPer1000Delta: 5,
+      threadReducerFlushMsP95: 8,
+      realtimeDeltaRouteMsP95: 4,
+    },
+    prepareThreadItems_calls_per_1000_delta: prepareThreadItemsCallRate?.value ?? null,
+    thread_reducer_flush_ms_p95: reducerFlush?.value ?? null,
+    realtime_delta_route_ms_p95: routeDuration?.value ?? null,
+    evidenceClass: prepareThreadItemsCallRate?.evidenceClass
+      ?? reducerFlush?.evidenceClass
+      ?? routeDuration?.evidenceClass
+      ?? "unsupported",
+    reason: "Streaming fixture needed to populate reducer fast-path evidence; baseline scenarios are added by this change.",
+    nextAction: "Wire prepareThreadItems call counter and reducer flush timing into the realtime replay fixture.",
+  };
+}
+
+function buildBackendFileIoIsolationSummary(perfEvidence) {
+  const wallP95 = findMetric(perfEvidence, "S-IO-FS", "file_io_command_wall_ms_p95");
+  const asyncStall = findMetric(perfEvidence, "S-IO-FS", "file_io_async_worker_stall_ms_p95");
+  const poolCalls = findMetric(perfEvidence, "S-IO-FS", "file_io_blocking_pool_call_count");
+  const tauriDuringStream = findMetric(perfEvidence, "S-IO-FS", "tauri_command_during_stream_ms_p95");
+  return {
+    diagnosticsLabel: "perf.backend.file-io-isolation",
+    scenarios: ["S-IO-FS"],
+    metadataFields: [
+      "command",
+      "workspaceId",
+      "durationMs",
+      "asyncWorkerStallMs",
+      "blockingPoolCalled",
+      "evidenceClass",
+    ],
+    target: {
+      // No artificial 5ms budget; use realistic workspace file command wall time.
+      file_io_command_wall_ms_p95: null,
+      file_io_async_worker_stall_ms_p95_target: 1,
+      file_io_blocking_pool_call_count: null,
+      tauri_command_during_stream_ms_p95: null,
+    },
+    file_io_command_wall_ms_p95: wallP95?.value ?? null,
+    file_io_async_worker_stall_ms_p95: asyncStall?.value ?? null,
+    file_io_blocking_pool_call_count: poolCalls?.value ?? null,
+    tauri_command_during_stream_ms_p95: tauriDuringStream?.value ?? null,
+    evidenceClass: wallP95?.evidenceClass
+      ?? asyncStall?.evidenceClass
+      ?? poolCalls?.evidenceClass
+      ?? tauriDuringStream?.evidenceClass
+      ?? "unsupported",
+    reason: "Blocking pool call counter and async-worker stall probe will be added by the file I/O isolation step.",
+    nextAction: "Run blocking pool call counter and async-worker stall probe in a 10MB read/write fixture during streaming.",
+  };
+}
+
+function buildFileChangeEventDebounceSummary(perfEvidence) {
+  const raw = findMetric(perfEvidence, "S-IO-FC", "fs_event_raw_per_sec");
+  const emit = findMetric(perfEvidence, "S-IO-FC", "fs_event_emitted_per_sec");
+  const samePath = findMetric(perfEvidence, "S-IO-FC", "fs_event_same_path_coalesce_ratio");
+  const emptyBatch = findMetric(perfEvidence, "S-IO-FC", "fs_event_empty_batch_emit_count");
+  return {
+    diagnosticsLabel: "perf.file-change.debounce",
+    scenarios: ["S-IO-FC"],
+    metadataFields: [
+      "workspaceId",
+      "normalizedPathHash",
+      "eventKind",
+      "rawCount",
+      "emittedCount",
+      "coalesceRatio",
+      "emptyBatchEmitted",
+      "evidenceClass",
+    ],
+    target: {
+      fs_event_emitted_per_sec: 10,
+      fs_event_same_path_coalesce_ratio: 0.8,
+      fs_event_empty_batch_emit_count: 0,
+    },
+    fs_event_raw_per_sec: raw?.value ?? null,
+    fs_event_emitted_per_sec: emit?.value ?? null,
+    fs_event_same_path_coalesce_ratio: samePath?.value ?? null,
+    fs_event_empty_batch_emit_count: emptyBatch?.value ?? null,
+    evidenceClass: raw?.evidenceClass
+      ?? emit?.evidenceClass
+      ?? samePath?.evidenceClass
+      ?? emptyBatch?.evidenceClass
+      ?? "unsupported",
+    reason: "Debounce emitter is added by the file watcher debounce step; current fixture does not yet produce same-path burst events.",
+    nextAction: "Generate a 1000-event same-path burst fixture and capture raw vs emitted counts.",
+  };
+}
+
+function buildAppServerEventBatchingSummary(perfEvidence) {
+  const rawRate = findMetric(perfEvidence, "S-IO-AS", "app_server_event_raw_per_sec");
+  const ipcRate = findMetric(perfEvidence, "S-IO-AS", "app_server_event_ipc_emit_per_sec");
+  const route = findMetric(perfEvidence, "S-IO-AS", "app_server_event_route_ms_p95");
+  const dispatches = findMetric(perfEvidence, "S-IO-AS", "realtime_reducer_dispatches_per_1000_delta");
+  const longTasks = findMetric(perfEvidence, "S-IO-AS", "main_thread_long_task_count_during_stream");
+  return {
+    diagnosticsLabel: "perf.app-server-event.batching",
+    scenarios: ["S-IO-AS"],
+    metadataFields: [
+      "workspaceId",
+      "eventKind",
+      "rawCount",
+      "ipcEmitCount",
+      "routeDurationMs",
+      "reducerDispatchCount",
+      "mainThreadLongTaskCount",
+      "evidenceClass",
+    ],
+    target: {
+      // IPC emit rate must be far below raw rate when batching is enabled.
+      ipcEmitToRawRatioMax: 0.1,
+      app_server_event_route_ms_p95: 4,
+      realtime_reducer_dispatches_per_1000_delta: 1000,
+      main_thread_long_task_count_during_stream: 0,
+    },
+    app_server_event_raw_per_sec: rawRate?.value ?? null,
+    app_server_event_ipc_emit_per_sec: ipcRate?.value ?? null,
+    app_server_event_route_ms_p95: route?.value ?? null,
+    realtime_reducer_dispatches_per_1000_delta: dispatches?.value ?? null,
+    main_thread_long_task_count_during_stream: longTasks?.value ?? null,
+    evidenceClass: rawRate?.evidenceClass
+      ?? ipcRate?.evidenceClass
+      ?? route?.evidenceClass
+      ?? dispatches?.evidenceClass
+      ?? longTasks?.evidenceClass
+      ?? "unsupported",
+    reason: "App server event batching emitter and batch-aware route are added by the batching step.",
+    nextAction: "Capture raw vs IPC emit divergence and reducer dispatch count in a multi-workspace codex streaming fixture.",
+  };
+}
+
+function buildFrontendPropChainStabilitySummary(perfEvidence) {
+  const composerRenders = findMetric(perfEvidence, "S-IO-FP", "composer_render_count_per_streaming_minute");
+  const sidebarRenders = findMetric(perfEvidence, "S-IO-FP", "sidebar_render_count_per_streaming_minute");
+  const rowRerender = findMetric(perfEvidence, "S-IO-FP", "thread_row_rerender_count_per_1000_delta");
+  const layoutRecompute = findMetric(perfEvidence, "S-IO-FP", "layout_nodes_recompute_count_per_1000_delta");
+  return {
+    diagnosticsLabel: "perf.frontend.prop-chain-stability",
+    scenarios: ["S-IO-FP"],
+    metadataFields: [
+      "componentName",
+      "renderCount",
+      "rerenderSource",
+      "evidenceClass",
+    ],
+    target: {
+      composer_render_count_per_streaming_minute: 1800,
+      sidebar_render_count_per_streaming_minute: 600,
+      thread_row_rerender_count_per_1000_delta: 100,
+      layout_nodes_recompute_count_per_1000_delta: 100,
+    },
+    composer_render_count_per_streaming_minute: composerRenders?.value ?? null,
+    sidebar_render_count_per_streaming_minute: sidebarRenders?.value ?? null,
+    thread_row_rerender_count_per_1000_delta: rowRerender?.value ?? null,
+    layout_nodes_recompute_count_per_1000_delta: layoutRecompute?.value ?? null,
+    evidenceClass: composerRenders?.evidenceClass
+      ?? sidebarRenders?.evidenceClass
+      ?? rowRerender?.evidenceClass
+      ?? layoutRecompute?.evidenceClass
+      ?? "unsupported",
+    reason: "Domain context split and scoped status lookup are added by the prop chain stability step; render counters need source.",
+    nextAction: "Add Profiler-based render counters or React Profiler API capture during the streaming fixture.",
+  };
+}
+
+
 function qualifierForChange(changeName) {
   if (
     changeName.includes("session")
@@ -585,7 +768,53 @@ function createPerfMarkdown(report) {
   lines.push(`- Modes: ${report.markdownPrecomputeSummary.modes.join(", ")}`);
   lines.push(`- Unsafe HTML boundary: ${report.markdownPrecomputeSummary.unsafeHtmlBoundary}`);
   lines.push(`- Content safety: ${report.markdownPrecomputeSummary.contentSafety}`);
+  lines.push("", "## Realtime Input Render Budget", "");
+  lines.push(`- Diagnostics label: ${report.realtimeInputRenderBudgetSummary.diagnosticsLabel}`);
+  lines.push(`- prepareThreadItems calls / 1000 delta: ${report.realtimeInputRenderBudgetSummary.prepareThreadItems_calls_per_1000_delta ?? "unsupported"} (target ${report.realtimeInputRenderBudgetSummary.target.prepareThreadItemsCallsPer1000Delta})`);
+  lines.push(`- Reducer flush P95: ${report.realtimeInputRenderBudgetSummary.thread_reducer_flush_ms_p95 ?? "unsupported"} ms (target ${report.realtimeInputRenderBudgetSummary.target.threadReducerFlushMsP95})`);
+  lines.push(`- Delta route P95: ${report.realtimeInputRenderBudgetSummary.realtime_delta_route_ms_p95 ?? "unsupported"} ms (target ${report.realtimeInputRenderBudgetSummary.target.realtimeDeltaRouteMsP95})`);
+  lines.push(`- Evidence class: ${report.realtimeInputRenderBudgetSummary.evidenceClass}`);
+  lines.push(`- Reason: ${report.realtimeInputRenderBudgetSummary.reason}`);
+  lines.push(`- Next action: ${report.realtimeInputRenderBudgetSummary.nextAction}`);
+  lines.push("", "## Backend File IO Isolation", "");
+  lines.push(`- Diagnostics label: ${report.backendFileIoIsolationSummary.diagnosticsLabel}`);
+  lines.push(`- File I/O command wall P95: ${report.backendFileIoIsolationSummary.file_io_command_wall_ms_p95 ?? "unsupported"} ms (no artificial 5ms budget)`);
+  lines.push(`- Async worker stall P95: ${report.backendFileIoIsolationSummary.file_io_async_worker_stall_ms_p95 ?? "unsupported"} ms (target ${report.backendFileIoIsolationSummary.target.file_io_async_worker_stall_ms_p95_target})`);
+  lines.push(`- Blocking pool call count: ${report.backendFileIoIsolationSummary.file_io_blocking_pool_call_count ?? "unsupported"}`);
+  lines.push(`- Tauri command during stream P95: ${report.backendFileIoIsolationSummary.tauri_command_during_stream_ms_p95 ?? "unsupported"} ms`);
+  lines.push(`- Evidence class: ${report.backendFileIoIsolationSummary.evidenceClass}`);
+  lines.push(`- Reason: ${report.backendFileIoIsolationSummary.reason}`);
+  lines.push(`- Next action: ${report.backendFileIoIsolationSummary.nextAction}`);
+  lines.push("", "## File Change Debounce", "");
+  lines.push(`- Diagnostics label: ${report.fileChangeEventDebounceSummary.diagnosticsLabel}`);
+  lines.push(`- Raw fs events / sec: ${report.fileChangeEventDebounceSummary.fs_event_raw_per_sec ?? "unsupported"}`);
+  lines.push(`- Emitted fs events / sec: ${report.fileChangeEventDebounceSummary.fs_event_emitted_per_sec ?? "unsupported"} (target ${report.fileChangeEventDebounceSummary.target.fs_event_emitted_per_sec})`);
+  lines.push(`- Same-path coalesce ratio: ${report.fileChangeEventDebounceSummary.fs_event_same_path_coalesce_ratio ?? "unsupported"} (target ${report.fileChangeEventDebounceSummary.target.fs_event_same_path_coalesce_ratio})`);
+  lines.push(`- Empty batch emit count: ${report.fileChangeEventDebounceSummary.fs_event_empty_batch_emit_count ?? "unsupported"} (target ${report.fileChangeEventDebounceSummary.target.fs_event_empty_batch_emit_count})`);
+  lines.push(`- Evidence class: ${report.fileChangeEventDebounceSummary.evidenceClass}`);
+  lines.push(`- Reason: ${report.fileChangeEventDebounceSummary.reason}`);
+  lines.push(`- Next action: ${report.fileChangeEventDebounceSummary.nextAction}`);
+  lines.push("", "## App Server Event Batching", "");
+  lines.push(`- Diagnostics label: ${report.appServerEventBatchingSummary.diagnosticsLabel}`);
+  lines.push(`- Raw app server events / sec: ${report.appServerEventBatchingSummary.app_server_event_raw_per_sec ?? "unsupported"}`);
+  lines.push(`- IPC app server events / sec: ${report.appServerEventBatchingSummary.app_server_event_ipc_emit_per_sec ?? "unsupported"} (target ipcEmit/raw ratio ${report.appServerEventBatchingSummary.target.ipcEmitToRawRatioMax})`);
+  lines.push(`- Route P95: ${report.appServerEventBatchingSummary.app_server_event_route_ms_p95 ?? "unsupported"} ms (target ${report.appServerEventBatchingSummary.target.app_server_event_route_ms_p95})`);
+  lines.push(`- Reducer dispatches / 1000 delta: ${report.appServerEventBatchingSummary.realtime_reducer_dispatches_per_1000_delta ?? "unsupported"} (target ${report.appServerEventBatchingSummary.target.realtime_reducer_dispatches_per_1000_delta})`);
+  lines.push(`- Main thread long tasks during stream: ${report.appServerEventBatchingSummary.main_thread_long_task_count_during_stream ?? "unsupported"} (target ${report.appServerEventBatchingSummary.target.main_thread_long_task_count_during_stream})`);
+  lines.push(`- Evidence class: ${report.appServerEventBatchingSummary.evidenceClass}`);
+  lines.push(`- Reason: ${report.appServerEventBatchingSummary.reason}`);
+  lines.push(`- Next action: ${report.appServerEventBatchingSummary.nextAction}`);
+  lines.push("", "## Frontend Prop Chain Stability", "");
+  lines.push(`- Diagnostics label: ${report.frontendPropChainStabilitySummary.diagnosticsLabel}`);
+  lines.push(`- Composer renders / streaming minute: ${report.frontendPropChainStabilitySummary.composer_render_count_per_streaming_minute ?? "unsupported"} (target ${report.frontendPropChainStabilitySummary.target.composer_render_count_per_streaming_minute})`);
+  lines.push(`- Sidebar renders / streaming minute: ${report.frontendPropChainStabilitySummary.sidebar_render_count_per_streaming_minute ?? "unsupported"} (target ${report.frontendPropChainStabilitySummary.target.sidebar_render_count_per_streaming_minute})`);
+  lines.push(`- Thread row rerenders / 1000 delta: ${report.frontendPropChainStabilitySummary.thread_row_rerender_count_per_1000_delta ?? "unsupported"} (target ${report.frontendPropChainStabilitySummary.target.thread_row_rerender_count_per_1000_delta})`);
+  lines.push(`- Layout nodes recomputes / 1000 delta: ${report.frontendPropChainStabilitySummary.layout_nodes_recompute_count_per_1000_delta ?? "unsupported"} (target ${report.frontendPropChainStabilitySummary.target.layout_nodes_recompute_count_per_1000_delta})`);
+  lines.push(`- Evidence class: ${report.frontendPropChainStabilitySummary.evidenceClass}`);
+  lines.push(`- Reason: ${report.frontendPropChainStabilitySummary.reason}`);
+  lines.push(`- Next action: ${report.frontendPropChainStabilitySummary.nextAction}`);
   lines.push("", "## Cold Start", "");
+
   lines.push(`- First paint evidence: ${report.coldStartSummary.firstPaintEvidence}`);
   lines.push(`- First interactive evidence: ${report.coldStartSummary.firstInteractiveEvidence}`);
   lines.push(`- Reason: ${report.coldStartSummary.reason}`);
@@ -665,6 +894,11 @@ async function main() {
     backendBridgeSummary: buildBackendBridgeSummary(),
     workspaceFileListingSummary: buildWorkspaceFileListingSummary(performanceEvidence),
     markdownPrecomputeSummary: buildMarkdownPrecomputeSummary(),
+    realtimeInputRenderBudgetSummary: buildRealtimeInputRenderBudgetSummary(performanceEvidence),
+    backendFileIoIsolationSummary: buildBackendFileIoIsolationSummary(performanceEvidence),
+    fileChangeEventDebounceSummary: buildFileChangeEventDebounceSummary(performanceEvidence),
+    appServerEventBatchingSummary: buildAppServerEventBatchingSummary(performanceEvidence),
+    frontendPropChainStabilitySummary: buildFrontendPropChainStabilitySummary(performanceEvidence),
     realtimeTraceBudgets,
     coldStartSummary: buildColdStartSummary(performanceEvidence),
     archiveReadiness: buildArchiveReadiness(openSpecState),

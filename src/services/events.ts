@@ -163,6 +163,17 @@ const runtimeLogStatusBackpressure =
   });
 
 const appServerHub = createEventHub<AppServerEvent>("app-server-event");
+
+/**
+ * Batch channel emitted by `BatchedTauriEventSink` (Rust). The payload is a
+ * `Vec<AppServerEvent>` ordered by arrival within a workspace; the
+ * batch-aware route in `useAppServerEvents` is responsible for dispatching
+ * each event to the original handler with coalescing / budgeted flush, NOT
+ * a tight synchronous loop.
+ */
+const appServerBatchHub = createEventHub<readonly AppServerEvent[]>(
+  "app-server-event-batch",
+);
 const dictationDownloadHub =
   createEventHub<DictationModelStatus>("dictation-download");
 const dictationEventHub = createEventHub<DictationEvent>("dictation-event");
@@ -187,6 +198,17 @@ const cliInstallerHub = createEventHub<CliInstallProgressEvent>(
 const detachedExternalFileChangeHub =
   createEventHub<DetachedExternalFileChangeEvent>(
     "detached-external-file-change",
+  );
+
+/**
+ * Batch channel emitted by the Rust `DebouncedExternalChangeEmitter`.
+ * The payload is a `Vec<DetachedExternalFileChangeEvent>` ordered by
+ * arrival, with same-`(workspace_id, normalized_path)` events coalesced
+ * to the latest within a 100ms window.
+ */
+const detachedExternalFileChangeBatchHub =
+  createEventHub<readonly DetachedExternalFileChangeEvent[]>(
+    "detached-external-file-change-batch",
   );
 const updaterCheckHub = createEventHub<void>("updater-check");
 const menuNewAgentHub = createEventHub<void>("menu-new-agent");
@@ -235,6 +257,22 @@ export function subscribeAppServerEvents(
   options?: SubscriptionOptions,
 ): Unsubscribe {
   return appServerHub.subscribe(onEvent, options);
+}
+
+/**
+ * Subscribe to the Rust-side batched app server event channel.
+ *
+ * Callers should use this in preference to `subscribeAppServerEvents` when
+ * the backend has `BatchedTauriEventSink` enabled. The default
+ * `useAppServerEvents` consumer routes both channels through a single
+ * batch-aware path so the frontend does not pay per-event reducer dispatch
+ * cost for every raw event.
+ */
+export function subscribeAppServerEventBatch(
+  onBatch: (events: readonly AppServerEvent[]) => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return appServerBatchHub.subscribe(onBatch, options);
 }
 
 export function subscribeWebServiceReconnect(
@@ -306,6 +344,18 @@ export function subscribeDetachedExternalFileChanges(
   options?: SubscriptionOptions,
 ): Unsubscribe {
   return detachedExternalFileChangeHub.subscribe(onEvent, options);
+}
+
+/**
+ * Subscribe to the Rust-side debounced file change batch channel.
+ * Use this in preference to `subscribeDetachedExternalFileChanges` when
+ * the backend `DebouncedExternalChangeEmitter` is enabled.
+ */
+export function subscribeDetachedExternalFileChangeBatch(
+  onBatch: (events: readonly DetachedExternalFileChangeEvent[]) => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return detachedExternalFileChangeBatchHub.subscribe(onBatch, options);
 }
 
 export function subscribeUpdaterCheck(

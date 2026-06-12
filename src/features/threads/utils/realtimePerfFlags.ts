@@ -62,6 +62,18 @@ export function isRealtimeBatchingEnabled(): boolean {
   return readRealtimePerfFlag("realtimeBatching", true, false);
 }
 
+export function isAppServerEventBatchConsumerEnabled(): boolean {
+  // Webview-side gate for the `app-server-event-batch` channel exposed by
+  // `services/events.ts`. The Rust side also gates the channel via
+  // `CCGUI_APP_SERVER_EVENT_BATCH`; the webview side falls back to single
+  // `app-server-event` channel when this flag is off. localStorage is the
+  // correct source for this knob per spec
+  // `app-server-event-batching` §"Backend Runtime Config Source" (frontend
+  // localStorage controls webview behavior; backend batch toggle is its
+  // own env var).
+  return readRealtimePerfFlag("appServerEventBatch", true, false);
+}
+
 export function isReducerNoopGuardEnabled(): boolean {
   return readRealtimePerfFlag("reducerNoopGuard", true);
 }

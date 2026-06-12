@@ -2,7 +2,10 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useRef, useState } from "react";
-import { useFileExternalSync } from "./useFileExternalSync";
+import {
+  coalesceDetachedExternalFileChangeBatch,
+  useFileExternalSync,
+} from "./useFileExternalSync";
 import { readWorkspaceFile } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 
@@ -29,6 +32,68 @@ describe("useFileExternalSync", () => {
     vi.useRealTimers();
     vi.clearAllMocks();
   });
+
+    it("coalesces batch watcher events by workspace and normalized path with latest event winning", () => {
+      const batch = [
+        {
+          workspaceId: "ws-1",
+          normalizedPath: "src/live.ts",
+          eventKind: "modified",
+          source: "watcher",
+          detectedAtMs: 1,
+        },
+        {
+          workspaceId: "ws-1",
+          normalizedPath: "src/other.ts",
+          eventKind: "modified",
+          source: "watcher",
+          detectedAtMs: 2,
+        },
+        {
+          workspaceId: "ws-1",
+          normalizedPath: "src/live.ts",
+          eventKind: "modified",
+          source: "watcher",
+          detectedAtMs: 3,
+        },
+        {
+          workspaceId: "ws-2",
+          normalizedPath: "src/live.ts",
+          eventKind: "modified",
+          source: "watcher",
+          detectedAtMs: 4,
+        },
+      ];
+
+      const coalesced = coalesceDetachedExternalFileChangeBatch(batch, false);
+
+      expect(coalesced.map((event) => event.detectedAtMs)).toEqual([3, 2, 4]);
+    });
+
+    it("coalesces watcher batch paths case-insensitively when requested", () => {
+      const coalesced = coalesceDetachedExternalFileChangeBatch(
+        [
+          {
+            workspaceId: "ws-1",
+            normalizedPath: "SRC/Live.ts",
+            eventKind: "modified",
+            source: "watcher",
+            detectedAtMs: 1,
+          },
+          {
+            workspaceId: "ws-1",
+            normalizedPath: "src/live.ts",
+            eventKind: "modified",
+            source: "watcher",
+            detectedAtMs: 2,
+          },
+        ],
+        true,
+      );
+
+      expect(coalesced).toHaveLength(1);
+      expect(coalesced[0]?.detectedAtMs).toBe(2);
+    });
 
     it("ignores stale polling refresh results after the file path changes", async () => {
     vi.useFakeTimers();

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-06-12T05:34:49.658Z",
+  "generatedAt": "2026-06-12T11:08:33.439Z",
   "sources": {
     "perfBaseline": "docs/perf/baseline.json",
     "composerBaseline": "docs/perf/composer-baseline.json",
@@ -654,6 +654,141 @@
     "evidenceClass": "proxy",
     "contentSafety": "Diagnostics store source length/hash and structural counts; raw Markdown, prompt text, assistant body, tool output, and file content are excluded."
   },
+  "realtimeInputRenderBudgetSummary": {
+    "diagnosticsLabel": "perf.realtime.input-render-budget",
+    "scenarios": [
+      "S-IO-RR"
+    ],
+    "metadataFields": [
+      "scenario",
+      "metric",
+      "value",
+      "unit",
+      "budget",
+      "evidenceClass"
+    ],
+    "target": {
+      "prepareThreadItemsCallsPer1000Delta": 5,
+      "threadReducerFlushMsP95": 8,
+      "realtimeDeltaRouteMsP95": 4
+    },
+    "prepareThreadItems_calls_per_1000_delta": null,
+    "thread_reducer_flush_ms_p95": null,
+    "realtime_delta_route_ms_p95": null,
+    "evidenceClass": "unsupported",
+    "reason": "Streaming fixture needed to populate reducer fast-path evidence; baseline scenarios are added by this change.",
+    "nextAction": "Wire prepareThreadItems call counter and reducer flush timing into the realtime replay fixture."
+  },
+  "backendFileIoIsolationSummary": {
+    "diagnosticsLabel": "perf.backend.file-io-isolation",
+    "scenarios": [
+      "S-IO-FS"
+    ],
+    "metadataFields": [
+      "command",
+      "workspaceId",
+      "durationMs",
+      "asyncWorkerStallMs",
+      "blockingPoolCalled",
+      "evidenceClass"
+    ],
+    "target": {
+      "file_io_command_wall_ms_p95": null,
+      "file_io_async_worker_stall_ms_p95_target": 1,
+      "file_io_blocking_pool_call_count": null,
+      "tauri_command_during_stream_ms_p95": null
+    },
+    "file_io_command_wall_ms_p95": null,
+    "file_io_async_worker_stall_ms_p95": null,
+    "file_io_blocking_pool_call_count": null,
+    "tauri_command_during_stream_ms_p95": null,
+    "evidenceClass": "unsupported",
+    "reason": "Blocking pool call counter and async-worker stall probe will be added by the file I/O isolation step.",
+    "nextAction": "Run blocking pool call counter and async-worker stall probe in a 10MB read/write fixture during streaming."
+  },
+  "fileChangeEventDebounceSummary": {
+    "diagnosticsLabel": "perf.file-change.debounce",
+    "scenarios": [
+      "S-IO-FC"
+    ],
+    "metadataFields": [
+      "workspaceId",
+      "normalizedPathHash",
+      "eventKind",
+      "rawCount",
+      "emittedCount",
+      "coalesceRatio",
+      "emptyBatchEmitted",
+      "evidenceClass"
+    ],
+    "target": {
+      "fs_event_emitted_per_sec": 10,
+      "fs_event_same_path_coalesce_ratio": 0.8,
+      "fs_event_empty_batch_emit_count": 0
+    },
+    "fs_event_raw_per_sec": null,
+    "fs_event_emitted_per_sec": null,
+    "fs_event_same_path_coalesce_ratio": null,
+    "fs_event_empty_batch_emit_count": null,
+    "evidenceClass": "unsupported",
+    "reason": "Debounce emitter is added by the file watcher debounce step; current fixture does not yet produce same-path burst events.",
+    "nextAction": "Generate a 1000-event same-path burst fixture and capture raw vs emitted counts."
+  },
+  "appServerEventBatchingSummary": {
+    "diagnosticsLabel": "perf.app-server-event.batching",
+    "scenarios": [
+      "S-IO-AS"
+    ],
+    "metadataFields": [
+      "workspaceId",
+      "eventKind",
+      "rawCount",
+      "ipcEmitCount",
+      "routeDurationMs",
+      "reducerDispatchCount",
+      "mainThreadLongTaskCount",
+      "evidenceClass"
+    ],
+    "target": {
+      "ipcEmitToRawRatioMax": 0.1,
+      "app_server_event_route_ms_p95": 4,
+      "realtime_reducer_dispatches_per_1000_delta": 1000,
+      "main_thread_long_task_count_during_stream": 0
+    },
+    "app_server_event_raw_per_sec": null,
+    "app_server_event_ipc_emit_per_sec": null,
+    "app_server_event_route_ms_p95": null,
+    "realtime_reducer_dispatches_per_1000_delta": null,
+    "main_thread_long_task_count_during_stream": null,
+    "evidenceClass": "unsupported",
+    "reason": "App server event batching emitter and batch-aware route are added by the batching step.",
+    "nextAction": "Capture raw vs IPC emit divergence and reducer dispatch count in a multi-workspace codex streaming fixture."
+  },
+  "frontendPropChainStabilitySummary": {
+    "diagnosticsLabel": "perf.frontend.prop-chain-stability",
+    "scenarios": [
+      "S-IO-FP"
+    ],
+    "metadataFields": [
+      "componentName",
+      "renderCount",
+      "rerenderSource",
+      "evidenceClass"
+    ],
+    "target": {
+      "composer_render_count_per_streaming_minute": 1800,
+      "sidebar_render_count_per_streaming_minute": 600,
+      "thread_row_rerender_count_per_1000_delta": 100,
+      "layout_nodes_recompute_count_per_1000_delta": 100
+    },
+    "composer_render_count_per_streaming_minute": null,
+    "sidebar_render_count_per_streaming_minute": null,
+    "thread_row_rerender_count_per_1000_delta": null,
+    "layout_nodes_recompute_count_per_1000_delta": null,
+    "evidenceClass": "unsupported",
+    "reason": "Domain context split and scoped status lookup are added by the prop chain stability step; render counters need source.",
+    "nextAction": "Add Profiler-based render counters or React Profiler API capture during the streaming fixture."
+  },
   "realtimeTraceBudgets": [
     {
       "source": "docs/perf/baseline.json",
@@ -1149,7 +1284,18 @@
         "qualifier": "Review validation and platform qualifiers before archive."
       }
     ],
-    "inProgress": [],
+    "inProgress": [
+      {
+        "name": "realtime-input-and-io-isolation-2026-06",
+        "tasks": "58/68",
+        "recommendation": "not-archive-ready"
+      },
+      {
+        "name": "frontend-prop-chain-stability-2026-06",
+        "tasks": "26/45",
+        "recommendation": "not-archive-ready"
+      }
+    ],
     "error": null
   },
   "compatibilityPaths": [
@@ -1180,7 +1326,7 @@
   ],
   "largeFileSummary": {
     "source": ".artifacts/large-files-near-threshold.json",
-    "generatedAt": "2026-06-11T19:58:47.168Z",
+    "generatedAt": "2026-06-12T10:45:48.365Z",
     "status": "warn",
     "candidates": [
       {
