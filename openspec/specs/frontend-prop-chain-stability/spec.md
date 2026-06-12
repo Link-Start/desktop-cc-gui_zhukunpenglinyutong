@@ -1,8 +1,8 @@
-## ADDED Requirements
+# frontend-prop-chain-stability Specification
 
-> **Implementation Status (本 change)**: **全部留 follow-up change `frontend-prop-chain-stability-2026-06`**,本 change 不带产品代码改动。本 spec delta 在本 change 内保留,作为 follow-up change 的 capability spec 来源。
-
-
+## Purpose
+TBD - created by archiving change frontend-prop-chain-stability-2026-06. Update Purpose after archive.
+## Requirements
 ### Requirement: App Shell Context MUST Be Split By Domain
 
 The single monolithic `appShellContext` MUST be split into domain-scoped contexts (e.g. `runtimeThreadContext`, `workspaceNavigationContext`, `composerContext`, `layoutContext`, `fileEditorContext`, `settingsContext`) so that streaming state does not propagate to unrelated UI regions.
@@ -99,3 +99,4 @@ Runtime evidence gates MUST report per-region render counts so a prop chain regr
 - **WHEN** this change is implemented
 - **THEN** it MUST NOT introduce Sidebar virtualization as part of this change
 - **AND** a follow-up change MAY be opened based on the reported `thread_row_rerender_count_per_1000_delta` evidence.
+
