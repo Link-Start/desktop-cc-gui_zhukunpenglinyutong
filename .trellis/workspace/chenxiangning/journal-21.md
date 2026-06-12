@@ -1639,3 +1639,36 @@ During verification, `TaskCreateModal.test.tsx` exposed an async state assertion
 ### Next Steps
 
 - None - task complete
+
+
+## Session 820: Fix Git diff modal preview
+
+**Date**: 2026-06-13
+**Task**: Fix Git diff modal preview
+**Branch**: `feature/v0.5.9`
+
+### Summary
+
+修复 Git 平铺面板弹窗预览无法弹出的问题：抽出共享 git-diff-modal 样式，确保 Git Diff 面板显式加载弹窗样式；手动刷新 Git 状态时同步刷新 diff 数据，并补充回归测试。验证 npm exec vitest run src/features/git/components/GitDiffPanel.test.tsx、npm exec tsc -- --noEmit、npm run lint、npm run check:large-files 均通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7836896a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

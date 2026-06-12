@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-21.md`
-- **Total Sessions**: 819
+- **Total Sessions**: 820
 - **Last Active**: 2026-06-13
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-21.md` | ~1641 | Active |
+| `journal-21.md` | ~1674 | Active |
 | `journal-20.md` | ~1997 | Archived |
 | `journal-19.md` | ~1989 | Archived |
 | `journal-18.md` | ~1966 | Archived |
@@ -49,6 +49,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 820 | 2026-06-13 | Fix Git diff modal preview | `7836896a` | `feature/v0.5.9` |
 | 819 | 2026-06-13 | 添加 Git 状态手动刷新入口 | `0c66668e` | `feature/v0.5.9` |
 | 818 | 2026-06-13 | 恢复 Project Map Task 入口 | `32159950` | `feature/v0.5.9` |
 | 817 | 2026-06-13 | 收口性能迭代结构债 | `9e99f6f9` | `feature/v0.5.9` |
