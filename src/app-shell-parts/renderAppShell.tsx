@@ -30,6 +30,35 @@ import type {
   RenderAppShellFlattenedContext,
 } from "./renderAppShellTypes";
 
+export function injectSidebarTopbarNode(
+  sidebarNode: React.ReactNode,
+  topbarNode: React.ReactNode,
+) {
+  if (!topbarNode || !isValidElement(sidebarNode)) {
+    return sidebarNode;
+  }
+
+  const sidebarProps = sidebarNode.props as { children?: React.ReactNode };
+  if (isValidElement(sidebarProps.children)) {
+    return cloneElement(
+      sidebarNode as React.ReactElement<{ children?: React.ReactNode }>,
+      {
+        children: cloneElement(
+          sidebarProps.children as React.ReactElement<{
+            topbarNode?: React.ReactNode;
+          }>,
+          { topbarNode },
+        ),
+      },
+    );
+  }
+
+  return cloneElement(
+    sidebarNode as React.ReactElement<{ topbarNode?: React.ReactNode }>,
+    { topbarNode },
+  );
+}
+
 export function renderAppShell(ctx: RenderAppShellContext) {
   const legacyCtx =
     adaptAppShellLegacyFlatContext<RenderAppShellFlattenedContext>({
@@ -369,11 +398,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     </div>
   ) : null;
   const sidebarNodeWithTopbar =
-    sidebarTopbarToggleNode && isValidElement(sidebarNode)
-      ? cloneElement(
-          sidebarNode as React.ReactElement<{ topbarNode?: React.ReactNode }>,
-          { topbarNode: sidebarTopbarToggleNode },
-        )
+    sidebarTopbarToggleNode !== null
+      ? injectSidebarTopbarNode(sidebarNode, sidebarTopbarToggleNode)
       : sidebarNode;
   const runtimeConsoleDockNode = (
     <RuntimeConsoleDock

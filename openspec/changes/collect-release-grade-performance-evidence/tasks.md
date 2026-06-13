@@ -46,3 +46,10 @@
 - [x] 7.4 [P0][depends:6.3,7.1][input: TypeScript project][output: typecheck pass][validation:`npm run typecheck`] Run typecheck.
 - [x] 7.5 [P1][depends:4.2][input: touched tests][output: focused test pass][validation: focused Vitest/script tests for readiness, startup markers, and realtime evidence scripts pass] Run focused tests.
 - [x] 7.6 [P1][depends:7.1][input: repository diff][output: scoped diff confirmation][validation:`git diff --stat` shows evidence scripts/docs and narrow bundle remediation only] Confirm scope did not drift into broad refactor.
+
+## 8. Profiling Regression Follow-up
+
+- [x] 8.1 [P0][depends:none][input:`git blame src/features/layout/hooks/useLayoutNodes.tsx`, `git show 25d101a0`][output: regression root-cause record][validation: identify that `Profiler` wrapper changed `sidebarNode` from direct `Sidebar` element to wrapper element] Confirm sidebar titlebar toggle disappearance root cause.
+- [x] 8.2 [P0][depends:8.1][input:`src/app-shell-parts/renderAppShell.tsx`][output: wrapper-aware `topbarNode` injection][validation: `Profiler` remains in `useLayoutNodes`, while `topbarNode` reaches the actual `Sidebar` child] Restore sidebar titlebar collapse affordance without removing profiling.
+- [x] 8.3 [P0][depends:8.2][input:`src/app-shell-parts/renderAppShell.sidebarTopbar.test.tsx`][output: focused regression test][validation:`npx vitest run src/app-shell-parts/renderAppShell.sidebarTopbar.test.tsx src/features/layout/utils/sidebarTogglePlacement.test.ts src/styles/sidebar-titlebar-drag-region.test.ts`] Lock the `Profiler -> Sidebar` injection path.
+- [x] 8.4 [P1][depends:8.2][input: desktop sidebar placement rules][output: expanded desktop sidebar shows left titlebar toggle; collapsed sidebar shows restore toggle in main topbar][validation: user-confirmed Tauri screenshot shows the button restored] Confirm user-visible restoration.

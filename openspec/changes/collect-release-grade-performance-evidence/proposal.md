@@ -21,6 +21,7 @@
 - 不把 proxy/jsdom/fixture evidence 伪装成 measured evidence。
 - 不新增重型依赖；如必须引入 browser/Tauri runner helper，优先使用现有 Vite/Tauri/Node/Playwright 能力或项目已有脚本。
 - 不改变 Tauri command public payload contract，除非只是 additive diagnostics field。
+- 不借性能 profiling 改动破坏已有 UI affordance；若 profiling wrapper 改变 React element 结构，必须补回原有 prop injection contract，并用 focused test 锁住。
 
 ## What Changes
 
@@ -92,3 +93,18 @@
   - bounded diagnostics only; no prompt, assistant body, terminal output, file content, or raw diff content.
 - Possible narrow bundle remediation:
   - startup lazy boundary or feature style/runtime loader only when proven by bundle analysis.
+- Narrow regression correction:
+  - `src/features/layout/hooks/useLayoutNodes.tsx` 中的 `Profiler` wrapper 保留 sidebar render profiling。
+  - `src/app-shell-parts/renderAppShell.tsx` 必须把 sidebar titlebar `topbarNode` 注入到真正的 `Sidebar` child，而不是注入到 `Profiler` 外壳。
+
+## Regression Note: Sidebar Titlebar Toggle After Profiling Wrapper
+
+2026-06-13 用户反馈左侧区域上方折叠按钮消失。根因不是按钮组件、CSS 或 platform detection 被删除，而是 `25d101a0 feat(perf): 收口实时输入与前端 prop 链稳定性阶段实现` 为 sidebar 增加 `React.Profiler` wrapper 后，旧的 `cloneElement(sidebarNode, { topbarNode })` 将 `topbarNode` 写到了 `Profiler` 上，真正渲染 `SidebarTopbarSlot` 的 `Sidebar` 没收到该 prop。
+
+本 change 接受一个 narrow runtime regression fix：保留 `Profiler id="sidebar"` 与 `handleRuntimeProfileRender`，仅修正 `renderAppShell` 的 topbar injection contract，使 wrapper child 收到 `topbarNode`。该修复不移除 profiling、不新增 runtime subscription、不改变 Tauri command payload，只恢复既有 sidebar collapse affordance。
+
+Required validation:
+
+- `src/app-shell-parts/renderAppShell.sidebarTopbar.test.tsx` 覆盖 `Profiler -> Sidebar child` 注入路径。
+- `src/features/layout/utils/sidebarTogglePlacement.test.ts` 覆盖 desktop expanded/collapsed placement。
+- `npm run typecheck` 必须通过。
