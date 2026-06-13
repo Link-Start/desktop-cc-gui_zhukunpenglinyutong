@@ -1732,3 +1732,36 @@ During verification, `TaskCreateModal.test.tsx` exposed an async state assertion
 ### Next Steps
 
 - None - task complete
+
+
+## Session 822: 加固治理门禁边界处理
+
+**Date**: 2026-06-13
+**Task**: 加固治理门禁边界处理
+**Branch**: `feature/v0.5.9`
+
+### Summary
+
+加固 large-file 与 heavy-test-noise 治理门禁的输入边界、跨平台换行处理和回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `12f8c3c3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
