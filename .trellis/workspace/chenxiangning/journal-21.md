@@ -1831,3 +1831,56 @@ During verification, `TaskCreateModal.test.tsx` exposed an async state assertion
 ### Next Steps
 
 - None - task complete
+
+
+## Session 825: 收口发布级性能证据提案
+
+**Date**: 2026-06-13
+**Task**: 收口发布级性能证据提案
+**Branch**: `feature/v0.5.9`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 内容 |
+|------|------|
+| OpenSpec | 完成并归档 `collect-release-grade-performance-evidence`，归档路径 `openspec/changes/archive/2026-06-13-collect-release-grade-performance-evidence/`。 |
+| 性能证据 | 生成 release-grade baseline/runtime evidence，realtime runtime metrics 从 proxy/unsupported 推进为 measured。 |
+| Bundle | 通过 Project Map / Intent Canvas lazy boundary 将 `bundleSizeMain` 降到 hardFail 以下。 |
+| Gate | 同步 release-grade evidence requirements 到 `openspec/specs/runtime-performance-evidence-gates/spec.md`。 |
+| 验证 | 通过 OpenSpec specs/changes validation、typecheck、lint、build、focused Vitest、perf script tests；release gate 仅剩 cold-start timing residual blocker。 |
+
+**关键文件**:
+- `scripts/perf-aggregate.mjs`
+- `scripts/generate-runtime-evidence-report.mjs`
+- `src/features/layout/hooks/useLayoutNodes.tsx`
+- `src/app-shell-parts/appShellLazyBoundaries.test.ts`
+- `openspec/specs/runtime-performance-evidence-gates/spec.md`
+- `docs/perf/baseline.json`
+- `docs/perf/runtime-evidence-gates.json`
+
+**Residual**:
+- `S-CS-COLD/firstPaintMs` 和 `S-CS-COLD/firstInteractiveMs` 仍为 unsupported，应由后续 `close-client-performance-residual-2026-06` 或等价 change 继续处理。
+- 未跟踪目录 `openspec/changes/close-client-performance-residual-2026-06/` 未纳入本次提交。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9db56c88` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
