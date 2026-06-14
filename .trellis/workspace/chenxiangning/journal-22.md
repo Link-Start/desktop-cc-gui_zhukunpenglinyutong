@@ -134,3 +134,51 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 831: 优化 progressive reveal 边界扫描
+
+**Date**: 2026-06-14
+**Task**: 优化 progressive reveal 边界扫描
+**Branch**: `feature/v0.5.9`
+
+### Summary
+
+完成 fix-progressive-reveal-runtime-residual-2026-06：将 LiveMarkdown progressive reveal boundary finder 从多 regex pass 改为单次 newline scan，补齐回归测试、OpenSpec artifacts 与进度文档。
+
+### Main Changes
+
+本次会话完成并提交 OpenSpec change fix-progressive-reveal-runtime-residual-2026-06。
+
+主要内容：
+- 新建独立 P1 OpenSpec change，范围限定在 Markdown progressive reveal runtime residual。
+- 将 LiveMarkdown 的 findProgressiveRevealBoundary 从 6 组 regex 顺序扫描改为单次 newline scan。
+- 将循环内结构分类改成字符级判断，避免重复 slice / regex。
+- 保留短 pending 直接 flush、极端 backlog 直接 flush、heading/list/quote/code fence/readable newline 边界优先级。
+- 补充 LiveMarkdown 回归测试：短 pending direct flush、结构化边界优先、长 pending partial reveal。
+- 更新 docs/perf/jank-fix-progress.md 阶段 3 状态。
+
+验证：
+- npx vitest run src/features/messages/components/LiveMarkdown.test.tsx
+- npm run typecheck
+- npm run lint
+- openspec validate fix-progressive-reveal-runtime-residual-2026-06 --strict
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f706b181` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

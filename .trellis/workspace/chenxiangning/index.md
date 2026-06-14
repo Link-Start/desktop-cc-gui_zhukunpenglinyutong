@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-22.md`
-- **Total Sessions**: 830
-- **Last Active**: 2026-06-13
+- **Total Sessions**: 831
+- **Last Active**: 2026-06-14
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-22.md` | ~136 | Active |
+| `journal-22.md` | ~184 | Active |
 | `journal-21.md` | ~1970 | Archived |
 | `journal-20.md` | ~1997 | Archived |
 | `journal-19.md` | ~1989 | Archived |
@@ -50,6 +50,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 831 | 2026-06-14 | 优化 progressive reveal 边界扫描 | `f706b181` | `feature/v0.5.9` |
 | 830 | 2026-06-13 | 收口并行对话运行时残留 P0 修复 | `bd456e46` | `feature/v0.5.9` |
 | 829 | 2026-06-13 | 修复 heavy-test-noise 与 branding gate | `38e3cee0` | `feature/v0.5.9` |
 | 828 | 2026-06-13 | 修复 AppShell domain context 测试换行断言 | `cd41bcb8` | `feature/v0.5.9` |
