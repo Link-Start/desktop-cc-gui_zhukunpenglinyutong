@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../types";
 import { Messages } from "./Messages";
@@ -17,7 +18,7 @@ vi.mock("./Markdown", () => ({
     onRenderedValueChange?.(value);
 
     const blocks = value.split(/\n{2,}/).filter((block) => block.length > 0);
-    const renderedBlocks: JSX.Element[] = [];
+    const renderedBlocks: ReactElement[] = [];
 
     for (let index = 0; index < blocks.length; index += 1) {
       const block = blocks[index];
