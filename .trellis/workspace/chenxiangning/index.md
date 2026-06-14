@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-22.md`
-- **Total Sessions**: 836
+- **Total Sessions**: 837
 - **Last Active**: 2026-06-14
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-22.md` | ~400 | Active |
+| `journal-22.md` | ~433 | Active |
 | `journal-21.md` | ~1970 | Archived |
 | `journal-20.md` | ~1997 | Archived |
 | `journal-19.md` | ~1989 | Archived |
@@ -50,6 +50,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 837 | 2026-06-14 | 修复 router lazy 测试 act 噪声 | `4ec39c61` | `feature/v0.5.9` |
 | 836 | 2026-06-14 | 修复 CI WebService 超时与 Suspense 噪声 | `50c2a169` | `feature/v0.5.9` |
 | 835 | 2026-06-14 | 修复 Messages reasoning 测试类型检查 | `262970f1` | `feature/v0.5.9` |
 | 834 | 2026-06-14 | 重新触发 heavy noise CI 验证 | `7486cdfb` | `feature/v0.5.9` |

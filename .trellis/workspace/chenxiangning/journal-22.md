@@ -398,3 +398,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 837: 修复 router lazy 测试 act 噪声
+
+**Date**: 2026-06-14
+**Task**: 修复 router lazy 测试 act 噪声
+**Branch**: `feature/v0.5.9`
+
+### Summary
+
+修复 macOS heavy-test-noise CI 中 React Suspense pingSuspendedRoot act warning：将 AppRouter 测试渲染收口到 async act helper，确保 React.lazy promise 在测试边界内完成。验证通过 npm run typecheck、targeted router/WebService Vitest、完整 npm run check:heavy-test-noise（670 test files，act warnings 0，breachCount 0）。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4ec39c61` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
