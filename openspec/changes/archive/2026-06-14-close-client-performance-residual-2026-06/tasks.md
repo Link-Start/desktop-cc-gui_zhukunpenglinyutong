@@ -1,5 +1,16 @@
 # Tasks: Close Client Performance Residual 2026-06
 
+## Archive Calibration 2026-06-14
+
+- [x] A.1 [archive][input:`openspec archive close-client-performance-residual-2026-06 -y`][output:`openspec/changes/archive/2026-06-14-close-client-performance-residual-2026-06/`][validation: archived directory exists and proposal/tasks/spec deltas are preserved] Archive this completed change.
+- [x] A.2 [sync][input: change-local delta specs][output: main specs updated][validation: `openspec/specs/bundle-chunking-performance/spec.md`, `openspec/specs/realtime-input-render-budget/spec.md`, and `openspec/specs/runtime-performance-evidence-gates/spec.md` contain the synced requirements] Sync delta specs into main specs.
+- [x] A.3 [truth-check][input:`docs/perf/baseline.json` + `scripts/perf-archive-readiness.mjs`][output: inputEventLossCount budgets encoded and stale residual entries removed][validation: `S-CI-50/inputEventLossCount` and `S-CI-100-IME/inputEventLossCount` have approved budget blocks; `BUDGET_RESIDUALS` excludes those two records and the four measured realtime records] Confirm post-archive budget truth.
+- [x] A.4 [validation][input:`npm run perf:archive-readiness -- --json`][output: normal readiness remains warning-only][validation: `budgetMissingCount=15` and `hardFailures=[]`] Re-run normal archive-readiness.
+- [x] A.5 [validation][input:`npm run perf:archive-readiness -- --release --json`][output: release readiness still has explicit cold-start blocker][validation: hard failures are exactly `S-CS-COLD/firstPaintMs` and `S-CS-COLD/firstInteractiveMs`] Re-run release archive-readiness.
+- [x] A.6 [validation][input:`node --test scripts/perf-cold-start-baseline.test.mjs`][output: cold-start marker unit test passes][validation: 3 tests pass for valid marker, missing marker, and corrupt marker] Re-run cold-start runner unit test.
+- [x] A.7 [validation][input:`openspec validate --all --strict --no-interactive`][output: all main specs and active changes validate][validation: 346 passed, 0 failed] Re-run full OpenSpec validation.
+- [x] A.8 [handoff][input: remaining release hard failures][output: follow-up boundary documented][validation: `S-CS-COLD/firstPaintMs` and `firstInteractiveMs` remain out-of-scope and require measured Tauri/WebView marker collection] Document next proposal boundary.
+
 ## 1. Preflight
 
 - [x] 1.1 [P0][depends:none][input:`npm run perf:archive-readiness -- --release --json`][output: hard failure baseline record][validation: hardFailures 恰好 2 项,记录是 `S-CS-COLD/firstPaintMs` 与 `S-CS-COLD/firstInteractiveMs`;`bundleSizeMain` 不在 hardFailures] Capture current release-readiness hard failures.

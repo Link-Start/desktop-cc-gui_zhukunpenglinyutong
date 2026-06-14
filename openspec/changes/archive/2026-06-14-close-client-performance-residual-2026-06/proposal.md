@@ -1,5 +1,29 @@
 # Proposal: Close Client Performance Residual 2026-06
 
+## Archive Calibration 2026-06-14
+
+This change is archived and complete. Current source-of-truth status:
+
+- Archived at: `openspec/changes/archive/2026-06-14-close-client-performance-residual-2026-06/`
+- Archive commit: `c9dd8cb1 docs(openspec): 归档已验证提案`
+- All tasks in this change are complete (`tasks.md` is fully checked).
+- Delta specs have been synced into main specs:
+  - `openspec/specs/bundle-chunking-performance/spec.md`
+  - `openspec/specs/realtime-input-render-budget/spec.md`
+  - `openspec/specs/runtime-performance-evidence-gates/spec.md`
+- Business/runtime product code is not part of this change's final scope.
+
+Post-archive truth check:
+
+- `S-CI-50/inputEventLossCount` and `S-CI-100-IME/inputEventLossCount` are budgeted in `docs/perf/baseline.json` with `target=0`, `hardFail=0`, `unit=count`, `owner=input-latency-budget`, and `status=approved`.
+- `scripts/perf-archive-readiness.mjs` `BUDGET_RESIDUALS` no longer includes the two input-event-loss records or the four measured realtime records (`S-RS-VL/RA/FD/TS`).
+- `npm run perf:archive-readiness -- --json` currently reports `budgetMissingCount=15` and no hard failures.
+- `npm run perf:archive-readiness -- --release --json` still reports exactly two hard failures: `S-CS-COLD/firstPaintMs` and `S-CS-COLD/firstInteractiveMs`.
+- `node --test scripts/perf-cold-start-baseline.test.mjs` passes all three marker branches.
+- `openspec validate --all --strict --no-interactive` passes.
+
+Remaining work is not part of this archived proposal. The next real proposal should collect measured Tauri/WebView cold-start markers and upgrade `S-CS-COLD/firstPaintMs` / `firstInteractiveMs` from `unsupported` to `measured`. Suggested follow-up change: `collect-cold-start-webview-markers-2026-06`.
+
 ## Why
 
 2026-06-13 `9db56c88 feat(perf): 收口发布级性能证据提案` 把 `collect-release-grade-performance-evidence` 整个归档到 `openspec/changes/archive/2026-06-13-collect-release-grade-performance-evidence/`,同时落地了大部分 release-grade evidence 工作:bundle lazy boundary、realtime 4 条 budget、realtime measured runtime 数据。
