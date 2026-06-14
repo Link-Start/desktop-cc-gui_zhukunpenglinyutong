@@ -225,6 +225,7 @@ vi.mock("../../browser-agent/components/BrowserDock", () => ({
 - Summary/home tests SHOULD assert their own rendered contract only, not incidental webview/session bootstrap effects.
 - Tests MUST NOT leave React `act(...)` warnings or stderr payloads for `heavy-test-noise` to collect.
 - Runtime-heavy child behavior MUST be covered in its own focused test file, where async effects are explicitly awaited or mocked.
+- React 19 Suspense / `React.lazy` teardown MUST drain both microtasks and host-task scheduled work inside `act(...)`; do not assume repeated `Promise.resolve()` alone covers `pingSuspendedRoot`.
 - Do not solve unrelated `act(...)` warnings by globally silencing `console.error`; that hides regressions.
 
 ### 4. Validation & Error Matrix
@@ -234,6 +235,7 @@ vi.mock("../../browser-agent/components/BrowserDock", () => ({
 | WorkspaceHome summary test | mock `BrowserDock` if browser behavior is not under test | real mount triggers BrowserDock async state updates |
 | BrowserDock behavior test | test BrowserDock directly with awaited effects/mocked services | rely on WorkspaceHome tests for BrowserDock coverage |
 | heavy-test-noise gate | no `act` / stderr violations | passing assertions but noisy CI failure |
+| Suspense lazy boundary teardown | drain microtask + host task inside `act(...)` | only add more `Promise.resolve()` rounds |
 | unrelated child warning | isolate or await the actual child effect | blanket `console.error = vi.fn()` |
 
 ### 5. Good / Base / Bad Cases
