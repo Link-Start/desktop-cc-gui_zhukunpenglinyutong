@@ -24,6 +24,7 @@ import {
   isGeminiReasoningThread,
   shouldAcceptReasoningDelta,
 } from "./threadReducerReasoningGuards";
+import { areEquivalentAssistantMessageTexts } from "../assembly/conversationNormalization";
 import {
   addSummaryBoundary,
   findDuplicateReasoningSnapshotIndex,
@@ -232,6 +233,34 @@ function conversationItemsShallowEqual(
     return false;
   }
   return leftKeys.every((key) => Object.is(leftRecord[key], rightRecord[key]));
+}
+
+function findEquivalentAssistantSnapshotIndex(
+  list: ConversationItem[],
+  incomingText: string,
+) {
+  if (!incomingText.trim()) {
+    return -1;
+  }
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const item = list[index];
+    if (isUserMessageItem(item)) {
+      return -1;
+    }
+    if (!isAssistantMessageItem(item)) {
+      continue;
+    }
+    if (
+      areEquivalentAssistantMessageTexts(
+        item.text,
+        incomingText,
+        mergeCompletedAgentText,
+      )
+    ) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function mergeProviderBindingFields<T extends ThreadSummary>(
@@ -1320,6 +1349,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     }
     case "upsertItem": {
       let list = state.itemsByThread[action.threadId] ?? [];
+      const rawAssistantSnapshotText =
+        action.item.kind === "message" && action.item.role === "assistant"
+          ? action.item.text
+          : "";
       const item = normalizeItem(action.item);
       const isUserMessage = isUserMessageItem(item);
       const isOptimisticUser = isUserMessage && isOptimisticUserMessageId(item.id);
@@ -1352,6 +1385,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         }
       }
       let nextItem = ensureUniqueReviewId(list, item);
+      let didMergeEquivalentAssistantSnapshot = false;
       if (
         nextItem.kind === "generatedImage" &&
         !isProcessingGeneratedImageItem(nextItem)
@@ -1448,16 +1482,21 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         }) &&
         findAssistantMessageIndexById(list, nextItem.id) < 0
       ) {
-        const equivalentAssistantIndex = findEquivalentCodexAssistantMessageIndex(
+        const incomingAssistantText = rawAssistantSnapshotText || nextItem.text;
+        const codexEquivalentAssistantIndex = findEquivalentCodexAssistantMessageIndex(
           list,
-          nextItem.text,
+          incomingAssistantText,
         );
+        const equivalentAssistantIndex =
+          codexEquivalentAssistantIndex >= 0
+            ? codexEquivalentAssistantIndex
+            : findEquivalentAssistantSnapshotIndex(list, incomingAssistantText);
         const equivalentAssistant =
           equivalentAssistantIndex >= 0 ? list[equivalentAssistantIndex] : undefined;
         if (isAssistantMessageItem(equivalentAssistant)) {
-          const mergedText = mergeAgentMessageText(
+          const mergedText = mergeCompletedAgentText(
             equivalentAssistant.text,
-            nextItem.text,
+            incomingAssistantText,
           );
           list = [
             ...list.slice(0, equivalentAssistantIndex),
@@ -1470,10 +1509,12 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             ...list.slice(equivalentAssistantIndex + 1),
           ];
           nextItem = list[equivalentAssistantIndex] ?? nextItem;
+          didMergeEquivalentAssistantSnapshot = true;
         }
       }
       if (
         INCREMENTAL_DERIVATION_ENABLED &&
+        !didMergeEquivalentAssistantSnapshot &&
         generatedImagesToReinsertAfterUser.length === 0 &&
         !isUserMessage
       ) {
