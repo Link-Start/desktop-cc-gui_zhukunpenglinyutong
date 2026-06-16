@@ -777,3 +777,39 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 846: 审核聊天流渲染隔离提案
+
+**Date**: 2026-06-16
+**Task**: 审核聊天流渲染隔离提案
+**Branch**: `feature/v0.5.10`
+
+### Summary
+
+优化并提交 chat-stream-render-isolation-2026-06 OpenSpec 提案
+
+### Main Changes
+
+- 审核并优化 chat-stream-render-isolation-2026-06 OpenSpec proposal/design/tasks/spec delta。
+- 修正 useAppServerEvents、transient timer、TTL ownership、streaming virtualization 等执行口径。
+- 验证 openspec validate chat-stream-render-isolation-2026-06 --strict --no-interactive 通过。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `536a7b5c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
