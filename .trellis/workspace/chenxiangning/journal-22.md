@@ -1168,3 +1168,55 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 855: 修复 runtime 重连恢复卡片状态
+
+**Date**: 2026-06-17
+**Task**: 修复 runtime 重连恢复卡片状态
+**Branch**: `feature/v0.5.10`
+
+### Summary
+
+稳定 Messages runtime reconnect card 状态与 CI batch 回归
+
+### Main Changes
+
+本次处理客户端 runtime reconnect 恢复卡片再次出现的 CI batch failure，并收敛 React #185 同类前端 update-loop 风险。
+
+主要变更：
+- 创建 OpenSpec change `fix-runtime-reconnect-card-state-loop`，补充 proposal/design/spec delta/tasks。
+- `RuntimeReconnectCard` 将 reset effect 依赖从 `retryMessage` 对象引用改为语义签名，避免父层传入等价新对象时清掉刚完成的 error/restored 状态。
+- `Messages.runtime-reconnect.test.tsx` 的 Markdown mock 改为 effect-phase 调用 `onRenderedValueChange`，避免 render-phase callback 制造 React update-depth 风险。
+- runtime reconnect 成功/失败断言改为等待完整 recovery outcome，而不是只等待 `ensureRuntimeReady` 被调用。
+
+验证：
+- `npx vitest run --maxWorkers 1 --minWorkers 1 src/features/messages/components/Messages.reasoning-exit-plan.test.tsx src/features/messages/components/Messages.reasoning-render.test.tsx src/features/messages/components/Messages.rich-content.test.tsx src/features/messages/components/Messages.runtime-reconnect.test.tsx` 通过，72 tests passed。
+- `npx vitest run src/features/messages/components/Messages.runtime-reconnect.test.tsx --maxWorkers 1 --minWorkers 1` 通过，20 tests passed。
+- `npm run typecheck` 通过。
+- `npm run lint` 通过。
+- `openspec validate fix-runtime-reconnect-card-state-loop --strict --no-interactive` 通过。
+
+影响范围：
+- 前端 message runtime reconnect card 状态稳定性。
+- runtime reconnect focused tests。
+- OpenSpec conversation-runtime-stability delta。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `86f3ecb3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
