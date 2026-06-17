@@ -1422,3 +1422,44 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 860: 校准 v0.5.11 流式路由实测证据
+
+**Date**: 2026-06-18
+**Task**: 校准 v0.5.11 流式路由实测证据
+**Branch**: `feature/v0.5.11`
+
+### Summary
+
+完成 v0.5.11 performance evidence 精确路由计时校准：turn trace 新增 realtime/app-server route timing counters，report 不再把 batch wait/window 当作 route duration；热启动实机流式对话导出 turnTraceSummaryCount=1，并刷新 runtime evidence、baseline、gate 文档。
+
+### Main Changes
+
+- 业务目标：把 v0.5.11 性能方向从猜测推进到可证据化闭环，重点校准 streaming route/batch/reducer 运行态指标。
+- 关键实现：`turnTraceCorrelation.ts` 增加 `realtimeDeltaRouteDuration*` 和 `appServerEventRouteDuration*` counters；`useThreadItemEvents.ts` 在实际 batch route work 前后采集时间；`streamLatencyDiagnostics.ts` 透传并校验 route timing。
+- 报告校准：`perf-v0511-runtime-evidence.ts` 与 `perf-realtime-runtime-report.mjs` 只允许新 precise route 字段晋级 measured，legacy `firstDeltaToBatchFlushEndMs` / `batchFlushDurationAvgMs` 不再代表 route duration。
+- 测试补强：新增/更新 perf producer 与 turn trace tests，覆盖 precise route timing、非法 route timing 忽略、legacy window 不晋级 measured。
+- 实机证据：用户热启动最新 app 后运行流式对话，`perf:renderer-diagnostics:export` 导出 `entries=1200`、`turnTraceSummaryCount=1`；summary 包含 `realtimeDeltaRouteDurationAvgMs=0`、`appServerEventRouteDurationAvgMs=0`、`firstDeltaToFirstVisibleTextMs=116`、`batchFlushEndToReducerCommitMs=7265`。
+- 生成物：刷新 `docs/perf/realtime-runtime-evidence.json`、`docs/perf/v0511-runtime-evidence.json`、`docs/perf/runtime-evidence-gates.*`、`docs/perf/baseline.*` 与最新 v0.5.11 baseline history 快照；OpenSpec implementation evidence 记录热启动闭环事实。
+- 验证：`vitest` 相关 turn/thread tests 通过，`node --test` perf tests 通过，`npm run typecheck` 通过，`npm run lint` 通过，`npm run check:runtime-evidence-gates` 通过，`openspec validate ... --strict --no-interactive` 通过；`perf:archive-readiness -- --json` 为 `ok=true`、`hardFailures=[]`、仅保留既有 warning。
+- 注意：`CHANGELOG.md` 是提交前已存在的未归属改动，本次提交已刻意排除。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8abe2405` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
