@@ -946,3 +946,47 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 850: 稳定长运行客户端运行时
+
+**Date**: 2026-06-17
+**Task**: 稳定长运行客户端运行时
+**Branch**: `feature/v0.5.10`
+
+### Summary
+
+完成 stabilize-long-running-client-runtime-2026-06 OpenSpec 提案与实现提交：补齐长列表虚拟化生产路径、runtime active process diagnostics age threshold、Markdown worker request metadata 与 diagnostics evidence gate。
+
+### Main Changes
+
+| Area | Details |
+|------|---------|
+| OpenSpec | 新增 `stabilize-long-running-client-runtime-2026-06` proposal/design/tasks/spec deltas/evidence，并明确 `5.4` long-run trace 与 `6.x` 为 follow-up/deferred。 |
+| Runtime | Gemini/OpenCode active child registry 改为记录 `registered_age_ms`，stale child candidates 只在达到阈值后输出；保留 `activeProcessIds` 兼容字段。 |
+| Frontend | HomeChat workspace picker 与 ThreadList 接入真实 virtualization helper，并补齐 bounded viewport、relative spacer、absolute row CSS。 |
+| Markdown | Worker request 增加 content-safe metadata，导出 hook/worker diagnostics，补充 focused tests。 |
+| Validation | `typecheck`、`lint`、`cargo check`、focused Vitest、focused cargo tests、OpenSpec strict validate、runtime evidence gate、diff check 均通过。 |
+
+**Manual Follow-up**:
+- 真实 30-60 分钟 long-run trace 仍建议由人工使用后补证据。
+- P2 `6.x` 保持后续增强项，不阻塞当前代码提交。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e981689` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
