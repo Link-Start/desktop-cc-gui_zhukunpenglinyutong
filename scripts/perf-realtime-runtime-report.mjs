@@ -85,6 +85,14 @@ function collectCodexTurnStartAckDiagnostics(entries) {
     .filter((payload) => payload !== null);
 }
 
+function collectCodexAppServerTimingDiagnostics(entries) {
+  return entries
+    .filter((entry) => isRecord(entry) && entry.label === "stream-latency/app-server-event")
+    .map((entry) => (isRecord(entry.payload) ? entry.payload : null))
+    .filter((payload) => payload !== null)
+    .filter((payload) => payload.traceSource === "codex-app-server");
+}
+
 function metricFromValues({ scenario, metric, values, unit, notes, unsupportedReason }) {
   const value = metric === "reducerAmplificationMedian"
     ? median(values)
@@ -176,7 +184,28 @@ function collectTurnStartAckComparisonNotes(summaries, ackDiagnostics) {
   ];
 }
 
-function buildFragment(summaries, ackDiagnostics, sourcePath) {
+function collectCodexPostAckComparisonNotes(summaries, ackDiagnostics, codexTimingDiagnostics) {
+  const firstDeltaP95 = percentile(
+    summaries.map((summary) => summary.deltas?.sendToFirstDeltaMs),
+    0.95,
+  );
+  const turnStartAckP95 = percentile(
+    ackDiagnostics.map((diagnostic) => diagnostic.durationMs),
+    0.95,
+  );
+  const postAckFirstDeltaP95 = percentile(
+    codexTimingDiagnostics.map((diagnostic) => diagnostic.turnStartResponseToFirstTextDeltaMs),
+    0.95,
+  );
+  if (firstDeltaP95 === null || turnStartAckP95 === null || postAckFirstDeltaP95 === null) {
+    return [];
+  }
+  return [
+    `codexPostAckComparison=firstDeltaLatencyP95:${firstDeltaP95}ms turnStartAckLatencyP95:${turnStartAckP95}ms codexPostAckFirstDeltaP95:${postAckFirstDeltaP95}ms`,
+  ];
+}
+
+function buildFragment(summaries, ackDiagnostics, codexTimingDiagnostics, sourcePath) {
   const unsupportedReason = summaries.length === 0
     ? "No measured realtime.turnTrace.summary diagnostics were found. Enable turn trace in a Tauri/webview session and export renderer diagnostics."
     : undefined;
@@ -192,6 +221,9 @@ function buildFragment(summaries, ackDiagnostics, sourcePath) {
     summary.counters?.terminalSettlementLagMs ?? summary.deltas?.lastReducerCommitToTerminalSettlementMs
   );
   const turnStartAckLatencyValues = ackDiagnostics.map((diagnostic) => diagnostic.durationMs);
+  const codexPostAckFirstDeltaValues = codexTimingDiagnostics.map((diagnostic) =>
+    diagnostic.turnStartResponseToFirstTextDeltaMs
+  );
   return {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
@@ -214,6 +246,16 @@ function buildFragment(summaries, ackDiagnostics, sourcePath) {
         unsupportedReason:
           unsupportedReason ??
           "No stream-latency/codex-turn-start-ack diagnostics were found. Run a build with Codex turn-start ack instrumentation.",
+      }),
+      metricFromValues({
+        scenario: "S-RS-PA",
+        metric: "codexPostAckFirstDeltaP95",
+        values: codexPostAckFirstDeltaValues,
+        unit: "ms",
+        notes: `measured renderer stream-latency/app-server-event Codex ccguiTiming from ${sourcePath}`,
+        unsupportedReason:
+          unsupportedReason ??
+          "No Codex stream-latency/app-server-event diagnostics with turnStartResponseToFirstTextDeltaMs were found. Run a build with Codex backend post-ack timing instrumentation.",
       }),
       metricFromValues({
         scenario: "S-RS-VL",
@@ -252,10 +294,12 @@ function buildFragment(summaries, ackDiagnostics, sourcePath) {
       `input=${sourcePath}`,
       `measuredSummaryCount=${summaries.length}`,
       `turnStartAckDiagnosticCount=${ackDiagnostics.length}`,
+      `codexAppServerTimingDiagnosticCount=${codexTimingDiagnostics.length}`,
       "contentSafety=ids, durations, counters, and dimensions only; no prompt, assistant text, tool output, or file content",
       ...collectTraceConsistencyCautions(summaries),
       ...collectFirstDeltaDominanceNotes(summaries),
       ...collectTurnStartAckComparisonNotes(summaries, ackDiagnostics),
+      ...collectCodexPostAckComparisonNotes(summaries, ackDiagnostics, codexTimingDiagnostics),
     ],
   };
 }
@@ -276,7 +320,8 @@ async function main() {
   const entries = collectEntries(input);
   const summaries = collectMeasuredSummaries(entries);
   const ackDiagnostics = collectCodexTurnStartAckDiagnostics(entries);
-  await writeJson(outputPath, buildFragment(summaries, ackDiagnostics, inputPath));
+  const codexTimingDiagnostics = collectCodexAppServerTimingDiagnostics(entries);
+  await writeJson(outputPath, buildFragment(summaries, ackDiagnostics, codexTimingDiagnostics, inputPath));
   if (process.argv.includes("--verbose")) {
     console.info(`realtime runtime measured summaries: ${summaries.length}`);
   }

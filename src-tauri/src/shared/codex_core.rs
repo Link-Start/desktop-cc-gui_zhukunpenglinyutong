@@ -354,12 +354,19 @@ async fn retry_turn_start_after_thread_resume(
         .note_codex_turn_start_pending(thread_id, timeout_duration)
         .await;
     session
+        .start_codex_turn_timing(thread_id, crate::backend::app_server::now_millis())
+        .await;
+    let retry_response = session
         .send_request_with_timeout(
             "turn/start",
             Value::Object(params.clone()),
             timeout_duration,
         )
-        .await
+        .await?;
+    session
+        .record_codex_turn_start_response(thread_id, crate::backend::app_server::now_millis())
+        .await;
+    Ok(retry_response)
 }
 
 const CODE_MODE_FALLBACK_DIRECTIVE: &str = "Execution policy (default mode): do not ask the user follow-up questions. If details are missing, make minimal reasonable assumptions, proceed autonomously, and report assumptions briefly.";
@@ -729,6 +736,10 @@ pub(crate) async fn send_user_message_core(
     session
         .note_codex_turn_start_pending(&thread_id, timeout_duration)
         .await;
+    let turn_start_request_started_at_ms = crate::backend::app_server::now_millis();
+    session
+        .start_codex_turn_timing(&thread_id, turn_start_request_started_at_ms)
+        .await;
     let response = match session
         .send_request_with_timeout(
             "turn/start",
@@ -738,6 +749,12 @@ pub(crate) async fn send_user_message_core(
         .await
     {
         Ok(response) if is_thread_not_found_response(&response) => {
+            session
+                .record_codex_turn_start_response(
+                    &thread_id,
+                    crate::backend::app_server::now_millis(),
+                )
+                .await;
             session
                 .clear_codex_foreground_work(Some(&thread_id), None)
                 .await;
@@ -765,7 +782,15 @@ pub(crate) async fn send_user_message_core(
                 }
             }
         }
-        Ok(response) => response,
+        Ok(response) => {
+            session
+                .record_codex_turn_start_response(
+                    &thread_id,
+                    crate::backend::app_server::now_millis(),
+                )
+                .await;
+            response
+        }
         Err(error) => {
             session
                 .clear_codex_foreground_work(Some(&thread_id), None)
@@ -818,9 +843,15 @@ pub(crate) async fn send_user_message_core(
         if let Some(Value::Array(input_items)) = params.get_mut("input") {
             inject_mode_fallback_prompt(input_items, &policy.effective_mode);
         }
+        session
+            .start_codex_turn_timing(&thread_id, crate::backend::app_server::now_millis())
+            .await;
         let fallback_response = session
             .send_request("turn/start", Value::Object(params))
             .await?;
+        session
+            .record_codex_turn_start_response(&thread_id, crate::backend::app_server::now_millis())
+            .await;
         if fallback_response.get("error").is_some() {
             session
                 .clear_codex_foreground_work(Some(&thread_id), None)

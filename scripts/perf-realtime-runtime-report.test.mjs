@@ -79,6 +79,28 @@ test("realtime runtime report derives measured metrics from content-safe diagnos
           outcome: "ok",
         },
       },
+      {
+        timestamp: Date.now(),
+        label: "stream-latency/app-server-event",
+        payload: {
+          traceSource: "codex-app-server",
+          workspaceId: "ws-1",
+          threadId: "thread-1",
+          method: "item/agentMessage/delta",
+          turnStartResponseToFirstTextDeltaMs: 12,
+        },
+      },
+      {
+        timestamp: Date.now(),
+        label: "stream-latency/app-server-event",
+        payload: {
+          traceSource: "codex-app-server",
+          workspaceId: "ws-1",
+          threadId: "thread-2",
+          method: "item/agentMessage/delta",
+          turnStartResponseToFirstTextDeltaMs: 24,
+        },
+      },
     ],
   }), "utf-8");
 
@@ -87,6 +109,7 @@ test("realtime runtime report derives measured metrics from content-safe diagnos
   const byMetric = new Map(fragment.metrics.map((metric) => [metric.metric, metric]));
   assert.equal(byMetric.get("firstDeltaLatencyP95")?.value, 40);
   assert.equal(byMetric.get("turnStartAckLatencyP95")?.value, 28);
+  assert.equal(byMetric.get("codexPostAckFirstDeltaP95")?.value, 24);
   assert.equal(byMetric.get("visibleTextLagP95")?.value, 35);
   assert.equal(byMetric.get("reducerAmplificationMedian")?.value, 3);
   assert.equal(byMetric.get("batchFlushDurationP95")?.evidenceClass, "measured");
@@ -161,6 +184,28 @@ test("realtime runtime report separates first-delta latency from visible lag", a
           outcome: "ok",
         },
       },
+      {
+        timestamp: Date.now(),
+        label: "stream-latency/app-server-event",
+        payload: {
+          traceSource: "codex-app-server",
+          workspaceId: "ws-1",
+          threadId: "thread-slow",
+          method: "item/agentMessage/delta",
+          turnStartResponseToFirstTextDeltaMs: 14_200,
+        },
+      },
+      {
+        timestamp: Date.now(),
+        label: "stream-latency/app-server-event",
+        payload: {
+          traceSource: "codex-app-server",
+          workspaceId: "ws-1",
+          threadId: "thread-normal",
+          method: "item/agentMessage/delta",
+          turnStartResponseToFirstTextDeltaMs: 900,
+        },
+      },
     ],
   }), "utf-8");
 
@@ -170,6 +215,7 @@ test("realtime runtime report separates first-delta latency from visible lag", a
 
   assert.equal(byMetric.get("firstDeltaLatencyP95")?.value, 14602);
   assert.equal(byMetric.get("turnStartAckLatencyP95")?.value, 320);
+  assert.equal(byMetric.get("codexPostAckFirstDeltaP95")?.value, 14200);
   assert.equal(byMetric.get("visibleTextLagP95")?.value, 177);
   assert.match(
     fragment.notes.join("\n"),
@@ -182,6 +228,10 @@ test("realtime runtime report separates first-delta latency from visible lag", a
   assert.match(
     fragment.notes.join("\n"),
     /turnStartAckComparison=firstDeltaLatencyP95:14602ms turnStartAckLatencyP95:320ms postAckFirstDeltaWaitApprox:14282ms/,
+  );
+  assert.match(
+    fragment.notes.join("\n"),
+    /codexPostAckComparison=firstDeltaLatencyP95:14602ms turnStartAckLatencyP95:320ms codexPostAckFirstDeltaP95:14200ms/,
   );
 });
 

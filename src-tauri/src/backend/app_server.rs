@@ -186,6 +186,16 @@ struct TimedOutRequest {
     timed_out_at_ms: u64,
 }
 
+#[derive(Debug, Clone)]
+pub(super) struct CodexTurnTimingState {
+    turn_start_request_started_at_ms: u64,
+    turn_start_response_received_at_ms: Option<u64>,
+    first_stream_event_received_at_ms: Option<u64>,
+    first_text_delta_received_at_ms: Option<u64>,
+    first_stream_event_method: Option<String>,
+    first_text_delta_method: Option<String>,
+}
+
 fn non_empty_env_var(key: &str) -> Option<String> {
     env::var(key)
         .ok()
@@ -346,7 +356,7 @@ struct ResumePendingTurnState {
     source: ResumePendingSource,
 }
 
-fn now_millis() -> u64 {
+pub(crate) fn now_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_else(|_| Duration::from_millis(0))
@@ -452,6 +462,7 @@ pub(crate) struct WorkspaceSession {
     local_user_input_requests: Mutex<HashMap<String, String>>,
     local_request_seq: AtomicU64,
     resume_pending_turns: Mutex<HashMap<String, ResumePendingTurnState>>,
+    codex_turn_timing: Mutex<HashMap<String, CodexTurnTimingState>>,
     runtime_manager: StdMutex<Option<Arc<RuntimeManager>>>,
     active_turns: Mutex<HashMap<String, String>>,
     manual_shutdown_requested: AtomicBool,
@@ -581,6 +592,51 @@ impl WorkspaceSession {
                 )
                 .await;
         }
+    }
+
+    pub(crate) async fn start_codex_turn_timing(
+        &self,
+        thread_id: &str,
+        request_started_at_ms: u64,
+    ) {
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return;
+        }
+        self.codex_turn_timing.lock().await.insert(
+            normalized_thread_id.to_string(),
+            CodexTurnTimingState {
+                turn_start_request_started_at_ms: request_started_at_ms,
+                turn_start_response_received_at_ms: None,
+                first_stream_event_received_at_ms: None,
+                first_text_delta_received_at_ms: None,
+                first_stream_event_method: None,
+                first_text_delta_method: None,
+            },
+        );
+    }
+
+    pub(crate) async fn record_codex_turn_start_response(
+        &self,
+        thread_id: &str,
+        response_received_at_ms: u64,
+    ) {
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return;
+        }
+        let mut timing = self.codex_turn_timing.lock().await;
+        let entry = timing
+            .entry(normalized_thread_id.to_string())
+            .or_insert_with(|| CodexTurnTimingState {
+                turn_start_request_started_at_ms: response_received_at_ms,
+                turn_start_response_received_at_ms: None,
+                first_stream_event_received_at_ms: None,
+                first_text_delta_received_at_ms: None,
+                first_stream_event_method: None,
+                first_text_delta_method: None,
+            });
+        entry.turn_start_response_received_at_ms = Some(response_received_at_ms);
     }
 
     pub(crate) async fn note_codex_thread_create_pending(&self, timeout_duration: Duration) {
@@ -1036,6 +1092,7 @@ async fn spawn_workspace_session_once<E: EventSink>(
         local_user_input_requests: Mutex::new(HashMap::new()),
         local_request_seq: AtomicU64::new(1),
         resume_pending_turns: Mutex::new(HashMap::new()),
+        codex_turn_timing: Mutex::new(HashMap::new()),
         runtime_manager: StdMutex::new(None),
         active_turns: Mutex::new(HashMap::new()),
         manual_shutdown_requested: AtomicBool::new(false),
@@ -1173,6 +1230,7 @@ pub(crate) async fn make_test_workspace_session(id: &str) -> Arc<WorkspaceSessio
         local_user_input_requests: Mutex::new(HashMap::new()),
         local_request_seq: AtomicU64::new(1),
         resume_pending_turns: Mutex::new(HashMap::new()),
+        codex_turn_timing: Mutex::new(HashMap::new()),
         runtime_manager: StdMutex::new(None),
         active_turns: Mutex::new(HashMap::new()),
         manual_shutdown_requested: AtomicBool::new(false),

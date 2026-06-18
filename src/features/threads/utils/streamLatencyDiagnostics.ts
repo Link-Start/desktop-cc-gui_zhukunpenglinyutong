@@ -738,6 +738,7 @@ export function noteThreadAppServerEventReceived(input: {
   if (!timing) {
     return;
   }
+  const traceSource = normalizeString(timing.source) || "unknown";
   const threadId = extractThreadIdFromAppServerParams(params);
   if (!threadId) {
     return;
@@ -761,6 +762,24 @@ export function noteThreadAppServerEventReceived(input: {
   const sessionEmittedAtMs = normalizeNonNegativeFiniteNumber(timing.sessionEmittedAtMs);
   const forwarderReceivedAtMs = normalizeNonNegativeFiniteNumber(timing.forwarderReceivedAtMs);
   const appServerEmittedAtMs = normalizeNonNegativeFiniteNumber(timing.appServerEmittedAtMs);
+  const turnStartRequestStartedAtMs = normalizeNonNegativeFiniteNumber(
+    timing.turnStartRequestStartedAtMs,
+  );
+  const turnStartResponseReceivedAtMs = normalizeNonNegativeFiniteNumber(
+    timing.turnStartResponseReceivedAtMs,
+  );
+  const firstStreamEventReceivedAtMs = normalizeNonNegativeFiniteNumber(
+    timing.firstStreamEventReceivedAtMs,
+  );
+  const firstTextDeltaReceivedAtMs = normalizeNonNegativeFiniteNumber(
+    timing.firstTextDeltaReceivedAtMs,
+  );
+  const firstStreamEventMethod = normalizeNullableString(
+    normalizeString(timing.firstStreamEventMethod),
+  );
+  const firstTextDeltaMethod = normalizeNullableString(
+    normalizeString(timing.firstTextDeltaMethod),
+  );
   const snapshot =
     snapshotByThread.get(threadId) ?? {
       ...createInitialSnapshot(threadId),
@@ -773,7 +792,7 @@ export function noteThreadAppServerEventReceived(input: {
       method: input.method,
       itemId: extractItemIdFromAppServerParams(params),
       deltaLength: normalizeString(params.delta).length,
-      traceSource: normalizeString(timing.source) || "unknown",
+      traceSource,
       stdoutReceivedAtMs,
       processSpawnStartedAtMs,
       processSpawnedAtMs,
@@ -786,6 +805,12 @@ export function noteThreadAppServerEventReceived(input: {
       sessionEmittedAtMs,
       forwarderReceivedAtMs,
       appServerEmittedAtMs,
+      turnStartRequestStartedAtMs,
+      turnStartResponseReceivedAtMs,
+      firstStreamEventReceivedAtMs,
+      firstTextDeltaReceivedAtMs,
+      firstStreamEventMethod,
+      firstTextDeltaMethod,
       rendererReceivedAtMs: receivedAt,
       spawnToStdinClosedMs: normalizeNonNegativeFiniteNumber(timing.spawnToStdinClosedMs),
       stdinClosedToFirstStdoutMs: normalizeNonNegativeFiniteNumber(
@@ -810,8 +835,24 @@ export function noteThreadAppServerEventReceived(input: {
       stdoutToAppServerEmitMs: normalizeNonNegativeFiniteNumber(
         timing.stdoutToAppServerEmitMs,
       ),
+      turnStartRequestToResponseMs: normalizeNonNegativeFiniteNumber(
+        timing.turnStartRequestToResponseMs,
+      ),
+      turnStartResponseToFirstStreamEventMs: normalizeNonNegativeFiniteNumber(
+        timing.turnStartResponseToFirstStreamEventMs,
+      ),
+      turnStartResponseToFirstTextDeltaMs: normalizeNonNegativeFiniteNumber(
+        timing.turnStartResponseToFirstTextDeltaMs,
+      ),
+      turnStartResponseToThisEventMs: normalizeNonNegativeFiniteNumber(
+        timing.turnStartResponseToThisEventMs,
+      ),
       appServerEmitToRendererMs: nonNegativeGapMs(receivedAt, appServerEmittedAtMs),
       stdoutToRendererMs: nonNegativeGapMs(receivedAt, stdoutReceivedAtMs),
+      turnStartResponseToRendererMs: nonNegativeGapMs(
+        receivedAt,
+        turnStartResponseReceivedAtMs,
+      ),
     }),
   );
 

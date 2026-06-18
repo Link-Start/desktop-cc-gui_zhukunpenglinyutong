@@ -38,6 +38,44 @@ impl WorkspaceSession {
         super::event_helpers::apply_runtime_event_activity(&mut active_turns, value);
     }
 
+    pub(super) async fn enrich_codex_turn_timing(
+        &self,
+        value: &mut Value,
+        stdout_received_at_ms: u64,
+    ) {
+        let Some(thread_id) = extract_thread_id(value) else {
+            return;
+        };
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return;
+        }
+        let method = extract_event_method(value).map(ToOwned::to_owned);
+        let has_text_delta = extract_stream_delta_text(value).is_some();
+        let timing_snapshot = {
+            let mut timing = self.codex_turn_timing.lock().await;
+            let Some(state) = timing.get_mut(normalized_thread_id) else {
+                return;
+            };
+            if state.first_stream_event_received_at_ms.is_none() {
+                state.first_stream_event_received_at_ms = Some(stdout_received_at_ms);
+                state.first_stream_event_method = method.clone();
+            }
+            if has_text_delta && state.first_text_delta_received_at_ms.is_none() {
+                state.first_text_delta_received_at_ms = Some(stdout_received_at_ms);
+                state.first_text_delta_method = method.clone();
+            }
+            state.clone()
+        };
+        attach_codex_timing_to_event(value, &timing_snapshot, stdout_received_at_ms);
+        if matches!(method.as_deref(), Some("turn/completed" | "turn/error")) {
+            self.codex_turn_timing
+                .lock()
+                .await
+                .remove(normalized_thread_id);
+        }
+    }
+
     pub(crate) fn mark_shutdown_requested(&self, source: RuntimeShutdownSource) {
         self.manual_shutdown_requested.store(true, Ordering::SeqCst);
         let mut shutdown_source = self
@@ -208,6 +246,86 @@ impl WorkspaceSession {
     }
 }
 
+fn non_negative_gap_ms(later: Option<u64>, earlier: Option<u64>) -> Option<u64> {
+    match (later, earlier) {
+        (Some(later), Some(earlier)) => Some(later.saturating_sub(earlier)),
+        _ => None,
+    }
+}
+
+fn attach_codex_timing_to_event(
+    value: &mut Value,
+    timing: &CodexTurnTimingState,
+    stdout_received_at_ms: u64,
+) {
+    let Some(params) = value.get_mut("params").and_then(Value::as_object_mut) else {
+        return;
+    };
+    let response_received_at_ms = timing.turn_start_response_received_at_ms;
+    let mut payload = serde_json::Map::new();
+    payload.insert("source".to_string(), json!("codex-app-server"));
+    payload.insert(
+        "turnStartRequestStartedAtMs".to_string(),
+        json!(timing.turn_start_request_started_at_ms),
+    );
+    payload.insert(
+        "turnStartResponseReceivedAtMs".to_string(),
+        json!(response_received_at_ms),
+    );
+    payload.insert(
+        "firstStreamEventReceivedAtMs".to_string(),
+        json!(timing.first_stream_event_received_at_ms),
+    );
+    payload.insert(
+        "firstTextDeltaReceivedAtMs".to_string(),
+        json!(timing.first_text_delta_received_at_ms),
+    );
+    payload.insert("stdoutReceivedAtMs".to_string(), json!(stdout_received_at_ms));
+    payload.insert(
+        "turnStartRequestToResponseMs".to_string(),
+        json!(non_negative_gap_ms(
+            timing.turn_start_response_received_at_ms,
+            Some(timing.turn_start_request_started_at_ms),
+        )),
+    );
+    payload.insert(
+        "turnStartResponseToFirstStreamEventMs".to_string(),
+        json!(non_negative_gap_ms(
+            timing.first_stream_event_received_at_ms,
+            response_received_at_ms,
+        )),
+    );
+    payload.insert(
+        "turnStartResponseToFirstTextDeltaMs".to_string(),
+        json!(non_negative_gap_ms(
+            timing.first_text_delta_received_at_ms,
+            response_received_at_ms,
+        )),
+    );
+    payload.insert(
+        "turnStartResponseToThisEventMs".to_string(),
+        json!(non_negative_gap_ms(
+            Some(stdout_received_at_ms),
+            response_received_at_ms,
+        )),
+    );
+    payload.insert(
+        "firstStreamEventMethod".to_string(),
+        json!(timing.first_stream_event_method.as_deref()),
+    );
+    payload.insert(
+        "firstTextDeltaMethod".to_string(),
+        json!(timing.first_text_delta_method.as_deref()),
+    );
+
+    match params.get_mut("ccguiTiming").and_then(Value::as_object_mut) {
+        Some(existing) => existing.extend(payload),
+        None => {
+            params.insert("ccguiTiming".to_string(), Value::Object(payload));
+        }
+    }
+}
+
 fn runtime_shutdown_message(source: Option<RuntimeShutdownSource>) -> String {
     let source = source.unwrap_or(RuntimeShutdownSource::CompatibilityManual);
     format!(
@@ -372,6 +490,7 @@ async fn process_workspace_stdout_value<E: EventSink>(
     workspace_id: &str,
     mut value: Value,
 ) {
+    let stdout_received_at_ms = now_millis();
     if let Some(blocked_event) = session.intercept_request_user_input_if_needed(&value).await {
         value = blocked_event;
     }
@@ -393,6 +512,9 @@ async fn process_workspace_stdout_value<E: EventSink>(
             .handle_codex_runtime_event(&session.entry, &value)
             .await;
     }
+    session
+        .enrich_codex_turn_timing(&mut value, stdout_received_at_ms)
+        .await;
 
     let synthetic_plan_event = session.maybe_emit_plan_blocker_user_input(&value).await;
     let synthetic_plan_apply_event = session.maybe_emit_plan_apply_user_input(&value).await;
