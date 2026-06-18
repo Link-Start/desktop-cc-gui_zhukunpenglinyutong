@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-22.md`
-- **Total Sessions**: 860
+- **Total Sessions**: 861
 - **Last Active**: 2026-06-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-22.md` | ~1465 | Active |
+| `journal-22.md` | ~1531 | Active |
 | `journal-21.md` | ~1970 | Archived |
 | `journal-20.md` | ~1997 | Archived |
 | `journal-19.md` | ~1989 | Archived |
@@ -50,6 +50,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 861 | 2026-06-18 | 记录流式输出可见延迟优化 | `1412bfcb` | `feature/v0.5.11` |
 | 860 | 2026-06-18 | 校准 v0.5.11 流式路由实测证据 | `8abe2405` | `feature/v0.5.11` |
 | 859 | 2026-06-18 | 锁定 turn completed 写出 trace summary | `364fd177` | `feature/v0.5.11` |
 | 858 | 2026-06-18 | 接通 renderer 诊断导出并校准 turn trace | `1f5c087f` | `feature/v0.5.11` |

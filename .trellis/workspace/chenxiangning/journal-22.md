@@ -1463,3 +1463,69 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 861: 记录流式输出可见延迟优化
+
+**Date**: 2026-06-18
+**Task**: 记录流式输出可见延迟优化
+**Branch**: `feature/v0.5.11`
+
+### Summary
+
+完成 v0.5.11 流式输出性能第一阶段修复：live assistant delta urgent dispatch，lightweight Markdown visible-text fallback，并基于热启动验证确认 visible-output-stall 消失，下一步转向 message row render amplification。
+
+### Main Changes
+
+## 本次完成
+
+- 创建并完成 OpenSpec change：`reduce-streaming-reducer-commit-lag`。
+- 修复 `appendAgentMessageDelta` flush 后进入 React transition queue 的问题，改为 urgent reducer dispatch。
+- 补充 `useThreadItemEvents` 回归测试，证明 cadence-flushed live assistant delta 不进入 `scheduleRealtimeDispatch`。
+- 根据用户热启动实测，新证据从 reducer commit lag 转向 `visible-output-stall-after-first-delta`。
+- 修复 lightweight / Codex recovery Markdown streaming 在 Markdown rendered callback 延迟时的 visible text 上报缺口。
+- 补充 `MessagesRows.stream-mitigation.test.tsx` 回归，锁定 Codex recovery 仍保持 lightweight Markdown 且可上报当前 assistant text。
+
+## 验证
+
+- `npm exec vitest run src/features/messages/components/MessagesRows.stream-mitigation.test.tsx src/features/threads/hooks/useThreadItemEvents.test.ts src/features/threads/hooks/useThreadsReducer.append-agent-delta-fast-path.test.ts src/features/threads/contracts/realtimeEventBatcher.test.ts`：73 tests passed。
+- `npm run typecheck`：passed。
+- `npm run lint`：passed。
+- `openspec validate reduce-streaming-reducer-commit-lag --strict --no-interactive`：passed。
+- `git diff --check`：passed。
+
+## 热启动验证结论
+
+用户热启动并完成一轮流式问答后，重新导出 renderer diagnostics：
+
+- `turnTraceSummaryCount=0`，仍无法复测原始 `batchFlushEndToReducerCommitMs`。
+- `stream-latency/visible-output-stall-after-first-delta = 0`。
+- `stream-latency/mitigation-activated = 0`。
+- `firstVisibleTextAfterDeltaMs = 103ms`。
+- `lastVisibleTextAfterDeltaMs`: p50 约 120ms，p90 约 154ms，max 191ms。
+
+因此本阶段修复方向成立。下一阶段性能证据转向 `render-amplification`：一次 `lastRenderLagMs=4955ms`，并且旧 completed message row 在 live turn 中反复 render。
+
+## 下一步
+
+- 新开阶段处理 `MessagesRows` / timeline 的 row render amplification。
+- 重点确认为什么非 streaming 旧 message row 在 live turn 期间持续 render，并用测试锁住 memoization / props stability contract。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1412bfcb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
