@@ -338,3 +338,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 880: 拆分 tauri service facade wrapper
+
+**Date**: 2026-06-18
+**Task**: 拆分 tauri service facade wrapper
+**Branch**: `feature/v0.5.11`
+
+### Summary
+
+按 follow-up v0.5.11 OpenSpec 推进 large-file wave3：将 src/services/tauri.ts 中的 session、permission、app-server wrapper 拆到 src/services/tauri/session.ts、permission.ts、appServer.ts，保留原 facade re-export 兼容旧入口；同步勾选已完成 OpenSpec tasks。验证通过 npm run typecheck、npm run lint、npm exec vitest run src/services/tauri.test.ts、npm run check:large-files、npm run check:runtime-contracts、openspec validate follow-up-v0511-large-file-cookbook-and-measured-evidence --strict --no-interactive。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9c80e25c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
