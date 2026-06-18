@@ -1093,7 +1093,7 @@ describe("useLayoutNodes client UI visibility", () => {
         providerProfileId: "__disk__",
         providerProfile: {
           id: "__disk__",
-          name: "磁盘 .codex 配置",
+          name: "codex-tui/default-config",
           source: "disk",
         },
       });

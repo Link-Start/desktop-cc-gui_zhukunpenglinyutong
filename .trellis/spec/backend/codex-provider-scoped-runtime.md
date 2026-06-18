@@ -11,7 +11,7 @@
 ### 2. Signatures
 
 - `CODEX_DISK_PROVIDER_PROFILE_ID: "__disk__"`
-- `CODEX_DISK_PROVIDER_PROFILE_NAME: "磁盘 .codex 配置"`
+- `CODEX_DISK_PROVIDER_PROFILE_NAME: "codex-tui/default-config"`
 - `CodexProviderProfile::{Disk, Managed { id, name, config_toml, auth_json }}`
 - `CodexProviderBinding { providerProfileId, providerProfileSource, providerProfileName, providerAvailability }`
 - `resolve_codex_provider_profile(provider_profile_id: Option<&str>) -> Result<CodexProviderProfile, String>`

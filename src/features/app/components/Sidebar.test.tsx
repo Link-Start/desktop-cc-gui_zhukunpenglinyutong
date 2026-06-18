@@ -1793,7 +1793,7 @@ describe("Sidebar", () => {
     const codexItem = screen.getByRole("menuitem", { name: /Codex/ });
     fireEvent.mouseEnter(codexItem);
     await act(async () => {
-      fireEvent.click(screen.getByRole("menuitem", { name: /磁盘 \.codex 配置/ }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /codex-tui\/default-config/ }));
     });
 
     await vi.waitFor(() => {
@@ -1802,7 +1802,7 @@ describe("Sidebar", () => {
         providerProfileId: "__disk__",
         providerProfile: {
           id: "__disk__",
-          name: "磁盘 .codex 配置",
+          name: "codex-tui/default-config",
           source: "disk",
         },
       });
@@ -2431,7 +2431,7 @@ describe("Sidebar", () => {
     const codexItem = screen.getByRole("menuitem", { name: "Codex" });
     fireEvent.mouseEnter(codexItem);
     await act(async () => {
-      fireEvent.click(screen.getByRole("menuitem", { name: /磁盘 \.codex 配置/ }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /codex-tui\/default-config/ }));
     });
 
     await vi.waitFor(() => {
@@ -2440,7 +2440,7 @@ describe("Sidebar", () => {
         providerProfileId: "__disk__",
         providerProfile: {
           id: "__disk__",
-          name: "磁盘 .codex 配置",
+          name: "codex-tui/default-config",
           source: "disk",
         },
       });

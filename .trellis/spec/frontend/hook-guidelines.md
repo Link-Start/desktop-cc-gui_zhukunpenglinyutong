@@ -105,6 +105,26 @@ useEffect(() => {
 - `unknown` error 必须 normalize 成可读 message。
 - 失败场景优先回退到缓存或 safe state，避免 UI 崩断。
 
+## Scenario: Codex First-Turn Draft Recovery Hooks
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `useThreadMessaging`、Codex stale-thread recovery、`canUseLocalFirstSendCodexDraftReplacement` 或 thread refresh/fork fallback 顺序。
+- 目标：区分 disposable first-turn draft 和 durable stale conversation，避免把空白首轮 draft 拖进手动恢复卡。
+
+### 2. Contracts
+
+- `thread not found` / `session not found` 进入 Codex recovery 时，必须先尝试 verified refresh/rebind。
+- 当 accepted-turn / durable-activity facts 证明当前 thread 是 disposable first-turn draft，且本地有当前 optimistic user intent 时，fresh Codex thread replay MUST happen before stale fork fallback。
+- durable activity 存在、accepted turn 已成立、或无法证明是当前 first-send empty draft 时，MUST NOT silent fresh replace；继续使用 verified rebind、fork 或显式用户恢复语义。
+- fresh replay MUST be single-shot：retry 请求必须携带 `codexInvalidThreadRetryAttempted`，重复失败后进入可见错误/恢复状态，不能循环创建 fresh thread。
+
+### 3. Tests Required
+
+- 覆盖 empty-draft `thread not found` 在 refresh 无法 rebind 时直接 fresh replay，且不调用 fork。
+- 覆盖 durable stale thread 不 silent fresh replacement，仍走 rebind/fork 或错误展示。
+- 覆盖 lost empty-draft marker 但本地无 durable activity 且有当前 optimistic user intent 时可 fresh replay。
+
 ## Scenario: One-Shot Composer Command And User-Input Settlement Hooks
 
 ### 1. Scope / Trigger

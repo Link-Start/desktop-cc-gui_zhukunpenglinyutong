@@ -1020,7 +1020,68 @@ export function useThreadMessaging({
             codexInvalidThreadRetryAttempted: true,
           });
         };
+        const canUseFirstSendDraftReplacement =
+          canUseLocalFirstSendCodexDraftReplacement({
+            resolution: acceptedTurnResolution,
+            hasLocalUserIntent: Boolean(optimisticUserItem),
+          });
+        const canUseFreshDraftReplacementForMalformedThreadId =
+          isInvalidReviewThreadIdError(errorMessage) && canUseFirstSendDraftReplacement;
+        const canUseFreshDraftReplacementForMissingThread =
+          isCodexMissingThreadBindingError(errorMessage) &&
+          canUseFirstSendDraftReplacement;
+        const canUseFreshDraftReplacement =
+          canUseFreshDraftReplacementForMalformedThreadId ||
+          canUseFreshDraftReplacementForMissingThread;
+        let freshDraftReplacementAttempted = false;
+        const tryFreshDraftReplacement = async (
+          fallbackReason: string | null,
+        ): Promise<boolean> => {
+          if (!canUseFreshDraftReplacement || freshDraftReplacementAttempted) {
+            return false;
+          }
+          freshDraftReplacementAttempted = true;
+          const freshThreadId = await startThreadForMessageSend(workspace, "codex");
+          if (!freshThreadId) {
+            return false;
+          }
+          onDebug?.({
+            id: `${Date.now()}-client-turn-start-draft-fresh-fallback`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "turn/start draft fresh fallback",
+            payload: {
+              ...buildCodexLivenessDiagnostic({
+                workspaceId: workspace.id,
+                threadId,
+                stage: "fresh-continuation",
+                outcome: "fresh",
+                acceptedTurnFact: acceptedTurnResolution.fact,
+                source: acceptedTurnResolution.source,
+                reason: fallbackReason ? `${errorMessage}; ${fallbackReason}` : errorMessage,
+              }),
+              reasonCode: staleRecoveryClassification?.reasonCode ?? null,
+              staleReason: staleRecoveryClassification?.staleReason ?? null,
+              userAction: staleRecoveryClassification?.userAction ?? null,
+            },
+          });
+          dispatch({
+            type: "setActiveThreadId",
+            workspaceId: workspace.id,
+            threadId: freshThreadId,
+          });
+          moveOptimisticUserIntentToThread(freshThreadId);
+          await retrySendOnThread(freshThreadId);
+          return true;
+        };
         if (!reboundThreadId) {
+          if (
+            await tryFreshDraftReplacement(
+              refreshErrorMessage ? `refresh failed: ${refreshErrorMessage}` : null,
+            )
+          ) {
+            return true;
+          }
           let forkedThreadId: string | null = null;
           let forkErrorMessage: string | null = null;
           try {
@@ -1067,58 +1128,9 @@ export function useThreadMessaging({
             await retrySendOnThread(normalizedForkedThreadId);
             return true;
           }
-          const canUseFirstSendDraftReplacement =
-            canUseLocalFirstSendCodexDraftReplacement({
-              resolution: acceptedTurnResolution,
-              hasLocalUserIntent: Boolean(optimisticUserItem),
-            });
-          const canUseFreshDraftReplacementForMalformedThreadId =
-            isInvalidReviewThreadIdError(errorMessage) && canUseFirstSendDraftReplacement;
-          const canUseFreshDraftReplacementForMissingThread =
-            isCodexMissingThreadBindingError(errorMessage) &&
-            canUseFirstSendDraftReplacement;
-          const canUseFreshDraftReplacement =
-            canUseFreshDraftReplacementForMalformedThreadId ||
-            canUseFreshDraftReplacementForMissingThread;
-          if (!canUseFreshDraftReplacement) {
-            return false;
-          }
-          const freshThreadId = await startThreadForMessageSend(workspace, "codex");
-          if (!freshThreadId) {
-            return false;
-          }
-          onDebug?.({
-            id: `${Date.now()}-client-turn-start-draft-fresh-fallback`,
-            timestamp: Date.now(),
-            source: "client",
-            label: "turn/start draft fresh fallback",
-            payload: {
-              ...buildCodexLivenessDiagnostic({
-                workspaceId: workspace.id,
-                threadId,
-                stage: "fresh-continuation",
-                outcome: "fresh",
-                acceptedTurnFact: acceptedTurnResolution.fact,
-                source: acceptedTurnResolution.source,
-                reason: refreshErrorMessage
-                  ? `${errorMessage}; refresh failed: ${refreshErrorMessage}`
-                  : forkErrorMessage
-                    ? `${errorMessage}; fork failed: ${forkErrorMessage}`
-                  : errorMessage,
-              }),
-              reasonCode: staleRecoveryClassification?.reasonCode ?? null,
-              staleReason: staleRecoveryClassification?.staleReason ?? null,
-              userAction: staleRecoveryClassification?.userAction ?? null,
-            },
-          });
-          dispatch({
-            type: "setActiveThreadId",
-            workspaceId: workspace.id,
-            threadId: freshThreadId,
-          });
-          moveOptimisticUserIntentToThread(freshThreadId);
-          await retrySendOnThread(freshThreadId);
-          return true;
+          return tryFreshDraftReplacement(
+            forkErrorMessage ? `fork failed: ${forkErrorMessage}` : null,
+          );
         }
         onDebug?.({
           id: `${Date.now()}-client-turn-start-thread-retry`,

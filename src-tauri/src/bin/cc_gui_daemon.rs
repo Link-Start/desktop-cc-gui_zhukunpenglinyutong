@@ -153,7 +153,7 @@ mod codex {
         use crate::session_management::CodexProviderBinding;
 
         pub(crate) const CODEX_DISK_PROVIDER_PROFILE_ID: &str = "__disk__";
-        pub(crate) const CODEX_DISK_PROVIDER_PROFILE_NAME: &str = "磁盘 .codex 配置";
+        pub(crate) const CODEX_DISK_PROVIDER_PROFILE_NAME: &str = "codex-tui/default-config";
 
         pub(crate) fn codex_provider_binding_for_profile_id(
             provider_profile_id: &str,

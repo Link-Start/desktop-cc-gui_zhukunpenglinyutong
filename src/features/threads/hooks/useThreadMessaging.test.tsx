@@ -2007,6 +2007,7 @@ describe("useThreadMessaging", () => {
         result: { turn: { id: "turn-fresh-draft" } },
       } as never);
     const refreshThread = vi.fn(async () => null);
+    const forkThreadForWorkspace = vi.fn(async () => "thread-fork-should-not-use");
     const startThreadForWorkspace = vi.fn(async () => "thread-fresh-draft");
     const dispatch = vi.fn();
     const { result, recordThreadActivity } = makeThreadMessagingHook("codex", {
@@ -2014,6 +2015,7 @@ describe("useThreadMessaging", () => {
       ensuredThreadId: "legacy-thread-id",
       startThreadForWorkspace,
       refreshThread,
+      forkThreadForWorkspace,
       dispatch,
       codexAcceptedTurnByThread: {
         "legacy-thread-id": {
@@ -2030,6 +2032,7 @@ describe("useThreadMessaging", () => {
 
     await waitFor(() => {
       expect(refreshThread).toHaveBeenCalledWith("ws-1", "legacy-thread-id");
+      expect(forkThreadForWorkspace).not.toHaveBeenCalled();
       expect(startThreadForWorkspace).toHaveBeenCalledWith("ws-1", {
         activate: true,
         engine: "codex",

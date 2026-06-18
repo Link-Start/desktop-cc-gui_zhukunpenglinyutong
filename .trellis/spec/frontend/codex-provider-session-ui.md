@@ -9,7 +9,7 @@
 
 ### 2. Signatures
 
-- Constants: `CODEX_DISK_PROVIDER_PROFILE_ID = "__disk__"`, `CODEX_DISK_PROVIDER_PROFILE_NAME = "磁盘 .codex 配置"`。
+- Constants: `CODEX_DISK_PROVIDER_PROFILE_ID = "__disk__"`, `CODEX_DISK_PROVIDER_PROFILE_NAME = "codex-tui/default-config"`。
 - `CodexProviderProfileOption { id, name, source, availability? }`。
 - `CodexProviderProfileSelection { providerProfileId?, providerProfile? }`。
 - Service bridge: `startThread(workspaceId, { autoSession?, providerProfileId? })`。
