@@ -503,3 +503,41 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 885: 修复性能归档门禁
+
+**Date**: 2026-06-18
+**Task**: 修复性能归档门禁
+**Branch**: `feature/v0.5.11`
+
+### Summary
+
+修复 Perf archive readiness CI 在 GitHub runner 上依赖全局 openspec 导致 exit 3 的问题，并清理 stale archive readiness 报告，使门禁降级为可放行的 advisory warning。
+
+### Main Changes
+
+- 为 `scripts/perf-archive-readiness.mjs` 增加 `openspec/changes` repo-local fallback，避免 CI runner 没有全局 `openspec` 时直接 exit 3。
+- 在 workflow 中打印非 0 exit 的 JSON report，提升 CI 可诊断性。
+- 增加 node:test 覆盖：无 openspec binary 时 fallback 可用，且 stale completed changes 仍会 hard fail。
+- 将 `docs/perf/runtime-evidence-gates.json` 中已归档的 performance changes 从 `completed` 移到 `previousArchiveContext`，同步更新 OpenSpec governance markdown。
+- 验证：`node --test scripts/perf-archive-readiness.test.mjs` 通过；`npm run --silent perf:archive-readiness -- --json` 返回 exit 2 / warn / hardFailures=[]，符合 workflow 放行策略。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e7837d2d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
