@@ -1802,3 +1802,36 @@ Conclusion：性能证据现在明确显示，下一阶段真实方向不是 Mes
 ### Next Steps
 
 - None - task complete
+
+
+## Session 867: 稳定 AppShell Claude thinking 状态上报
+
+**Date**: 2026-06-18
+**Task**: 稳定 AppShell Claude thinking 状态上报
+**Branch**: `feature/v0.5.11`
+
+### Summary
+
+修复 Composer resolved Claude thinking 状态重复上报导致 AppShell nested update 与热启动 hook queue mismatch 的不稳定问题。复用既有 ref 记录 resolved/lastReported 状态，useLayoutNodes 对同值上报直接 no-op，并补充 ChatInputBoxAdapter 与 useLayoutNodes 回归测试。验证通过目标 Vitest、typecheck、lint、app-shell runtime contract 与 git diff --check。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7bede17e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

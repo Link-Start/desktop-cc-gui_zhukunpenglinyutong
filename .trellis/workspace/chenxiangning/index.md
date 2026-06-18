@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-22.md`
-- **Total Sessions**: 866
+- **Total Sessions**: 867
 - **Last Active**: 2026-06-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-22.md` | ~1804 | Active |
+| `journal-22.md` | ~1837 | Active |
 | `journal-21.md` | ~1970 | Archived |
 | `journal-20.md` | ~1997 | Archived |
 | `journal-19.md` | ~1989 | Archived |
@@ -50,6 +50,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 867 | 2026-06-18 | 稳定 AppShell Claude thinking 状态上报 | `7bede17e` | `feature/v0.5.11` |
 | 866 | 2026-06-18 | v0.5.11 Codex ack 后首包延迟拆分 | `2ecbc5de` | `feature/v0.5.11` |
 | 865 | 2026-06-18 | v0.5.11 Codex turn start ack 延迟证据 | `769fa83a` | `feature/v0.5.11` |
 | 864 | 2026-06-18 | 增加 Codex first-delta 延迟证据 | `fefe5bfa` | `feature/v0.5.11` |
