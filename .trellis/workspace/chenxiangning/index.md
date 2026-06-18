@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-23.md`
-- **Total Sessions**: 877
+- **Total Sessions**: 878
 - **Last Active**: 2026-06-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-23.md` | ~250 | Active |
+| `journal-23.md` | ~295 | Active |
 | `journal-22.md` | ~1969 | Archived |
 | `journal-21.md` | ~1970 | Archived |
 | `journal-20.md` | ~1997 | Archived |
@@ -51,6 +51,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 878 | 2026-06-18 | 修复 tauri wrapper 参数断言 | `1613366c` | `feature/v0.5.11` |
 | 877 | 2026-06-18 | 修复文件树刷新失效 | `c5fe7b17` | `feature/v0.5.11` |
 | 876 | 2026-06-18 | 稳定 Codex 默认配置冷启动首发 | `a84b801e` | `feature/v0.5.11` |
 | 875 | 2026-06-18 | 修复 Codex 默认配置首轮恢复 | `44c31fb4` | `feature/v0.5.11` |

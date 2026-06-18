@@ -248,3 +248,48 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 878: 修复 tauri wrapper 参数断言
+
+**Date**: 2026-06-18
+**Task**: 修复 tauri wrapper 参数断言
+**Branch**: `feature/v0.5.11`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+修复 `src/services/tauri.test.ts` 中 startup-heavy wrapper 单测断言与当前 workspace file listing bridge contract 不一致的问题。
+
+主要变更：
+- 将 `list_workspace_files` 的 invoke 期望补齐 `forceRefresh: false`。
+- 保持生产代码 `src/services/tauri/workspaceFiles.ts` 不变，因为 `.trellis/spec/frontend/hook-guidelines.md` 已规定 initial load / polling 应显式传 `forceRefresh: false` 以保留 listing-budget cache 行为。
+
+验证：
+- `npm exec vitest run src/services/tauri.test.ts` 通过，115 tests passed。
+
+注意：
+- 本次代码提交只包含 `src/services/tauri.test.ts` 一行测试断言更新。
+- 仓库中既有 OpenSpec staged 变更未纳入本次代码提交，保持原工作区状态。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1613366c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
