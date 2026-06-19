@@ -611,3 +611,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 888: 清理文件树 Hook 依赖告警
+
+**Date**: 2026-06-19
+**Task**: 清理文件树 Hook 依赖告警
+**Branch**: `feature/v0.5.11`
+
+### Summary
+
+补齐 FileTreePanel hooks dependency arrays，并将 toggleFolder 稳定为 useCallback，使 npm run lint 从 34 个 hooks warning 降为 0 warning。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `223e589c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
