@@ -1004,3 +1004,52 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 897: 弱化可恢复 runtime 提示样式
+
+**Date**: 2026-06-22
+**Task**: 弱化可恢复 runtime 提示样式
+**Branch**: `feature/v0.5.12`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Item | Details |
+|------|---------|
+| Goal | 将可自动恢复的 transient runtime cleanup 提示从 recovery/error card 弱化为 lightweight notice，避免用户误判为断联失败。 |
+| OpenSpec | 回写 `soften-transient-runtime-reconnect-card` proposal / design / spec delta / tasks，明确 transient cleanup 使用轻量 notice、theme tokens、保留交互逻辑。 |
+| UI | 更新 `messages.part1.css` 的 `.message-runtime-recovery-card.is-transient`，降低阴影、边框、背景、按钮权重；保留 reconnect / resend 行为。 |
+| i18n | 将中英文文案调整为 `Runtime 切换中` / `Runtime switching`，强调后台 cleanup 与自动继续。 |
+| Validation | `openspec validate soften-transient-runtime-reconnect-card --strict --no-interactive`; focused Vitest runtime reconnect suites; `npm run typecheck`; `npm run lint -- --quiet`; `npm run check:large-files` all passed. |
+
+**Updated Files**:
+- `openspec/changes/soften-transient-runtime-reconnect-card/proposal.md`
+- `openspec/changes/soften-transient-runtime-reconnect-card/design.md`
+- `openspec/changes/soften-transient-runtime-reconnect-card/specs/conversation-live-message-canvas-rendering/spec.md`
+- `openspec/changes/soften-transient-runtime-reconnect-card/tasks.md`
+- `src/i18n/locales/en.part1.ts`
+- `src/i18n/locales/zh.part1.ts`
+- `src/styles/messages.part1.css`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b5a9d3a8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
