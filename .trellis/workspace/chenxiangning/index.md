@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-23.md`
-- **Total Sessions**: 895
-- **Last Active**: 2026-06-21
+- **Total Sessions**: 896
+- **Last Active**: 2026-06-22
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-23.md` | ~960 | Active |
+| `journal-23.md` | ~1006 | Active |
 | `journal-22.md` | ~1969 | Archived |
 | `journal-21.md` | ~1970 | Archived |
 | `journal-20.md` | ~1997 | Archived |
@@ -51,6 +51,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 896 | 2026-06-22 | 降低瞬态 runtime 恢复提示干扰 | `cdd3a483` | `feature/v0.5.12` |
 | 895 | 2026-06-21 | 归档 Claude 供应商与 Codex 并行运行提案 | `351c48b5` | `feature/v0.5.11` |
 | 894 | 2026-06-21 | 修复超时引导卡片失败状态 | `6d69dd8c` | `feature/v0.5.11` |
 | 893 | 2026-06-21 | 合入 Claude 供应商排序与模型拉取 | `31732a32` | `feature/v0.5.11` |

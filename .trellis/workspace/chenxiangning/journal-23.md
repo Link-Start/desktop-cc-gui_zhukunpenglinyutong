@@ -958,3 +958,49 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 896: 降低瞬态 runtime 恢复提示干扰
+
+**Date**: 2026-06-22
+**Task**: 降低瞬态 runtime 恢复提示干扰
+**Branch**: `feature/v0.5.12`
+
+### Summary
+
+调整实时对话中 transient managed-runtime cleanup 的恢复提示展示，保留后端 lifecycle 语义与恢复动作，仅降低 UI 干扰。
+
+### Main Changes
+
+本次修复实时对话中 `Runtime 连接已中断` 卡片对 transient cleanup 的误导式展示：
+
+- 新增 OpenSpec change：`soften-transient-runtime-reconnect-card`。
+- 在 `runtimeReconnect` hint 增加 UI-only `tone: blocking | transient`。
+- 将 `stale_reuse_cleanup` / `internal_replacement` 分类为 transient managed-runtime cleanup。
+- `RuntimeReconnectCard` 对 transient 状态显示轻量 “Runtime 正在恢复” 提示。
+- `MessagesRows` 只在 blocking reconnect 时隐藏 assistant 原文；transient cleanup 卡片与原文同时保留。
+- 未修改后端、`runtime/ended` payload、runtime lifecycle ownership 或 terminal settlement 规则。
+
+验证：
+- `npx vitest run src/features/messages/components/runtimeReconnect.test.ts src/features/messages/components/Messages.runtime-reconnect.test.tsx`：30 tests passed。
+- `npm run typecheck`：通过。
+- `openspec validate soften-transient-runtime-reconnect-card --strict --no-interactive`：通过。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cdd3a483` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
