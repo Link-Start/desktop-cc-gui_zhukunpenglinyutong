@@ -2,6 +2,56 @@
 
 ---
 
+##### **2026年6月22日（v0.5.12）**
+
+中文：
+
+✨ Features
+- 新增 Mermaid 图表全屏查看能力，支持消息与文件中的 Mermaid 图表在独立查看器中展开
+- 新增图片全屏与消息目录（message outline）能力，优化 Markdown 图片与消息章节的检视体验
+- 升级应用版本号到 `0.5.12`，同步前端包配置与 Tauri 配置
+
+🔧 Improvements
+- 收口 Markdown 渲染性能优化提案，补齐 file preview 与消息 markdown 流式渲染性能边界
+- 归档 Mermaid 全屏与图片全屏相关 OpenSpec 变更提案，收束提案与实现交付边界
+- 优化 release CI Rust 编译缓存，降低发布流水线构建成本
+- 提取 MermaidBlock 全屏按钮等待逻辑为通用辅助函数，降低重复并提升复用性
+- 收紧 runtime 重连恢复提示展示范围，弱化恢复提示样式，减少瞬态误导干扰
+- 稳定文件面板测试与品牌检查口径，减少 CI 不稳定波动
+- 拆分消息流式测试并清理品牌残留，提升流式消息测试稳定性
+- 修复 Kanban 与 Threads 国际化/元素查找稳定性，提升相关测试可靠性
+
+🐛 Fixes
+- 修复 Codex 会话中 `conversation not found` 时未触发恢复问题
+- 修复供应商模型目录与 Codex 刷新断联，提升模型选择与刷新链路稳定性
+- 修复 Composer 与 Codex 恢复绑定细节，降低并行恢复场景中的会话状态漂移
+- 移除首页最近会话入口，避免首页会话入口行为与主页动线不一致
+
+English:
+
+✨ Features
+- Add Mermaid chart fullscreen viewing so Mermaid diagrams in messages and files can be opened in a dedicated fullscreen viewer
+- Add image fullscreen and message outline support to improve inspection of markdown images and section navigation
+- Bump app version to `0.5.12` across frontend package metadata and Tauri configuration
+
+🔧 Improvements
+- Close the markdown rendering performance proposal to document and align file preview and message markdown streaming performance boundaries
+- Archive OpenSpec change proposals for Mermaid and image fullscreen features to tighten proposal-to-delivery traceability
+- Optimize release CI Rust cache to reduce pipeline build overhead
+- Extract the MermaidBlock fullscreen button await logic into shared helpers to improve reuse and reduce duplication
+- Tighten runtime reconnect prompt conditions, soften recoverable-runtime hint visuals, and reduce transient interruption noise
+- Stabilize file-panel test and brand-check behavior to lower CI flakiness
+- Split streaming-message tests and clean up branding residue to improve streaming test determinism
+- Fix Kanban/Threads internationalization and UI element lookup stability to improve test reliability
+
+🐛 Fixes
+- Fix session recovery when `conversation not found` occurs in Codex flows
+- Fix provider model-catalog and Codex refresh disconnection to improve model selection refresh reliability
+- Fix provider recovery binding details in Composer/Codex to reduce session drift in recovery flows
+- Remove the Home recent-conversations entry to align home entry behavior with current navigation flow
+
+---
+
 ##### **2026年6月18日（v0.5.11）**
 
 中文：
