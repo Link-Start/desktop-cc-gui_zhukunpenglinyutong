@@ -749,6 +749,20 @@ function inferDeleteChangesFromCommand(command: string): FileChangeEntry[] {
   return inferred;
 }
 
+export function inferMutatingFileChangesFromCommand(command: string): FileChangeEntry[] {
+  const byPath = new Map<string, FileChangeEntry>();
+  for (const entry of inferWriteChangesFromCommand(command)) {
+    if (isTemporaryPatchArtifactPath(entry.path)) {
+      continue;
+    }
+    mergeInferredEntry(byPath, entry);
+  }
+  for (const entry of inferDeleteChangesFromCommand(command)) {
+    mergeInferredEntry(byPath, entry);
+  }
+  return Array.from(byPath.values()).filter((entry) => entry.path);
+}
+
 function mergeInferredEntry(
   byPath: Map<string, FileChangeEntry>,
   entry: FileChangeEntry,
