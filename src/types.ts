@@ -2009,6 +2009,7 @@ export type ModelOption = {
   displayName: string;
   description: string;
   source: string;
+  providerProfileId?: string | null;
   supportedReasoningEfforts: { reasoningEffort: string; description: string }[];
   defaultReasoningEffort: string | null;
   isDefault: boolean;

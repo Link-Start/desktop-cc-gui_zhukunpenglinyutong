@@ -322,6 +322,7 @@ export interface ModelInfo {
   label: string;
   description?: string;
   source?: string;
+  providerProfileId?: string;
 }
 
 /**

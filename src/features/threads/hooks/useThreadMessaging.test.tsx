@@ -1552,6 +1552,39 @@ describe("useThreadMessaging", () => {
     );
   });
 
+  it("passes selected Codex provider profile when first send creates a managed-provider thread", async () => {
+    const startThreadForWorkspace = vi.fn(async () => "thread-provider-1");
+    const { result } = makeThreadMessagingHook("codex", {
+      activeThreadId: null,
+      ensuredThreadId: "thread-provider-1",
+      startThreadForWorkspace,
+      resolveComposerSelection: () => ({
+        id: "minimax-m3",
+        model: "minimax-m3",
+        source: "custom",
+        providerProfileId: "provider-minimax",
+        effort: null,
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessage("first provider message");
+    });
+
+    expect(startThreadForWorkspace).toHaveBeenCalledWith("ws-1", {
+      activate: true,
+      engine: "codex",
+      providerProfileId: "provider-minimax",
+    });
+    expect(sendUserMessage).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-provider-1",
+      "first provider message",
+      expect.any(Object),
+    );
+  });
+
   it("does not show create-session loading for follow-up sends on existing threads", async () => {
     const runWithCreateSessionLoading = vi.fn(async (_params, action) => action());
     const { result } = makeThreadMessagingHook("codex", {
