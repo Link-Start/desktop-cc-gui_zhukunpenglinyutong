@@ -50,7 +50,6 @@ export type MessagesProps = {
   openTargets: OpenAppTarget[];
   selectedOpenAppId: string;
   showMessageAnchors?: boolean;
-  showStickyUserBubble?: boolean;
   codeBlockCopyUseModifier?: boolean;
   userInputRequests?: RequestUserInputRequest[];
   approvals?: ApprovalRequest[];

@@ -49,7 +49,6 @@ describe("clientUiVisibility", () => {
         "topTool.terminal": false,
         "topTool.clientDocumentation": true,
         "rightToolbar.projectMap": false,
-        "curtain.stickyUserBubble": false,
         "curtain.contextLedger": false,
         "future.control": false,
       },
@@ -61,7 +60,6 @@ describe("clientUiVisibility", () => {
         "topTool.terminal": false,
         "topTool.clientDocumentation": true,
         "rightToolbar.projectMap": false,
-        "curtain.stickyUserBubble": false,
         "curtain.contextLedger": false,
       },
     });
@@ -69,7 +67,6 @@ describe("clientUiVisibility", () => {
     expect(isClientUiPanelVisible(preference, "globalRuntimeNoticeDock")).toBe(false);
     expect(isClientUiControlVisible(preference, "topTool.terminal")).toBe(false);
     expect(isClientUiControlVisible(preference, "rightToolbar.projectMap")).toBe(false);
-    expect(isClientUiControlVisible(preference, "curtain.stickyUserBubble")).toBe(false);
     expect(isClientUiControlVisible(preference, "curtain.contextLedger")).toBe(false);
   });
 
@@ -94,7 +91,6 @@ describe("clientUiVisibility", () => {
 
     expect(preference.controls).toEqual({
       "topTool.clientDocumentation": false,
-      "curtain.stickyUserBubble": false,
       "topTool.terminal": false,
     });
     expect(isClientUiControlVisible(preference, "topTool.clientDocumentation")).toBe(false);
@@ -110,7 +106,6 @@ describe("clientUiVisibility", () => {
 
     expect(preference.controls).toEqual({
       "topTool.clientDocumentation": false,
-      "curtain.stickyUserBubble": false,
       "bottomActivity.checkpoint": false,
     });
     expect(isClientUiControlVisible(preference, "bottomActivity.checkpoint")).toBe(false);

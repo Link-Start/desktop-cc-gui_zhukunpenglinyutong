@@ -341,9 +341,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const showMessageAnchors =
     options.showMessageAnchors &&
     clientUiVisibility.isControlVisible("cornerStatus.messageAnchors");
-  const showStickyUserBubble = clientUiVisibility.isControlVisible(
-    "curtain.stickyUserBubble",
-  );
   const showTopSessionTabs =
     clientUiVisibility.isPanelVisible("topSessionTabs");
   const showTopRunControls =
@@ -921,7 +918,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           openTargets: options.openAppTargets,
           selectedOpenAppId: options.selectedOpenAppId,
           showMessageAnchors,
-          showStickyUserBubble,
           codeBlockCopyUseModifier: options.codeBlockCopyUseModifier,
           userInputRequests: [],
           approvals: [],
@@ -982,7 +978,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.openAppTargets,
       options.selectedOpenAppId,
       showMessageAnchors,
-      showStickyUserBubble,
       options.codeBlockCopyUseModifier,
       options.workspaces,
       options.handleUserInputSubmit,

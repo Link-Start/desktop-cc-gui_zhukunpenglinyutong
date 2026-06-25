@@ -1422,7 +1422,6 @@ describe("SettingsView Display", () => {
     expect(screen.getByText("Client UI visibility")).toBeTruthy();
     expect(screen.getByText("Conversation canvas")).toBeTruthy();
     expect(screen.getByText("Runtime notice dock")).toBeTruthy();
-    expect(screen.getByText("Sticky user bubble")).toBeTruthy();
     expect(screen.getByText("Context sources card")).toBeTruthy();
 
     const topSessionTabsRow = screen
@@ -1430,9 +1429,6 @@ describe("SettingsView Display", () => {
       .closest(".settings-toggle-row") as HTMLElement | null;
     const terminalRow = screen
       .getByText("Terminal shortcut")
-      .closest(".settings-toggle-row") as HTMLElement | null;
-    const stickyUserBubbleRow = screen
-      .getByText("Sticky user bubble")
       .closest(".settings-toggle-row") as HTMLElement | null;
     const contextSourcesCardRow = screen
       .getByText("Context sources card")
@@ -1443,7 +1439,6 @@ describe("SettingsView Display", () => {
     if (
       !topSessionTabsRow ||
       !terminalRow ||
-      !stickyUserBubbleRow ||
       !contextSourcesCardRow ||
       !runtimeNoticeDockRow
     ) {
@@ -1456,11 +1451,6 @@ describe("SettingsView Display", () => {
     ).toBeTruthy();
     expect(
       terminalRow.querySelector(".settings-client-ui-visibility-row-icon svg"),
-    ).toBeTruthy();
-    expect(
-      stickyUserBubbleRow.querySelector(
-        ".settings-client-ui-visibility-row-icon svg",
-      ),
     ).toBeTruthy();
     expect(
       contextSourcesCardRow.querySelector(
@@ -1528,7 +1518,7 @@ describe("SettingsView Display", () => {
       expect(writeClientStoreValue).toHaveBeenLastCalledWith(
         "app",
         "clientUiVisibility",
-        { panels: {}, controls: { "topTool.clientDocumentation": false, "curtain.stickyUserBubble": false } },
+        { panels: {}, controls: { "topTool.clientDocumentation": false } },
         { immediate: true },
       );
     });

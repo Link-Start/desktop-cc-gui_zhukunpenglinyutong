@@ -35,7 +35,6 @@ export const CLIENT_UI_CONTROL_IDS = [
   "bottomActivity.agents",
   "bottomActivity.checkpoint",
   "bottomActivity.latestConversation",
-  "curtain.stickyUserBubble",
   "curtain.contextLedger",
   "cornerStatus.messageAnchors",
 ] as const;
@@ -98,7 +97,6 @@ export const DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE: ClientUiVisibilityPreferen
   panels: {},
   controls: {
     "topTool.clientDocumentation": false,
-    "curtain.stickyUserBubble": false,
   },
 };
 
@@ -238,13 +236,6 @@ export const CLIENT_UI_CONTROL_REGISTRY: readonly ClientUiControlDefinition[] = 
     iconKey: "messageSquareQuote",
   },
   {
-    id: "curtain.stickyUserBubble",
-    parentPanelId: "cornerStatusIndicator",
-    labelKey: "settings.clientUiVisibility.controls.curtainStickyUserBubble",
-    descriptionKey: "settings.clientUiVisibility.controlDescriptions.curtainStickyUserBubble",
-    iconKey: "messageSquareText",
-  },
-  {
     id: "curtain.contextLedger",
     parentPanelId: "cornerStatusIndicator",
     labelKey: "settings.clientUiVisibility.controls.curtainContextLedger",
@@ -331,7 +322,6 @@ export const CLIENT_UI_PANEL_REGISTRY: readonly ClientUiPanelDefinition[] = [
     descriptionKey: "settings.clientUiVisibility.panelDescriptions.cornerStatusIndicator",
     iconKey: "messageSquareText",
     controls: [
-      "curtain.stickyUserBubble",
       "curtain.contextLedger",
       "cornerStatus.messageAnchors",
     ],

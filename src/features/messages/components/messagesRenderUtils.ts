@@ -22,11 +22,6 @@ export const MESSAGES_SLOW_RENDER_WARN_MS = 18;
 export const MESSAGES_SLOW_ANCHOR_WARN_MS = 8;
 export const VISIBLE_MESSAGE_WINDOW = 30;
 
-export type HistoryStickyCandidate = {
-  id: string;
-  text: string;
-};
-
 export type MessagesEngine = "claude" | "codex" | "gemini" | "opencode";
 
 export function isSelectionInsideNode(selection: Selection | null, node: HTMLElement | null) {
@@ -40,10 +35,6 @@ export function isSelectionInsideNode(selection: Selection | null, node: HTMLEle
     }
   }
   return false;
-}
-
-export function normalizeHistoryStickyHeaderText(text: string) {
-  return text.replace(/\s+/g, " ").trim();
 }
 
 export function isMessagesPerfDebugEnabled(): boolean {

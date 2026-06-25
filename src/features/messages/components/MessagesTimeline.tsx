@@ -14,11 +14,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import Bell from "lucide-react/dist/esm/icons/bell";
 import Check from "lucide-react/dist/esm/icons/check";
-import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
-import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Flag from "lucide-react/dist/esm/icons/flag";
-import MessageSquareText from "lucide-react/dist/esm/icons/message-square-text";
 import type {
   AccessMode,
   ConversationItem,
@@ -57,7 +54,6 @@ import { parseReasoning } from "./messagesReasoning";
 import type { RuntimeReconnectRecoveryCallbackResult } from "./runtimeReconnect";
 import {
   formatCompletedTimeMs,
-  type HistoryStickyCandidate,
   type MessagesEngine,
   resolveProvenanceEngineLabel,
   shouldHideCodexCanvasCommandCard,
@@ -110,7 +106,6 @@ type MessagesTimelineProps = {
   activeCollaborationModeId: string | null;
   activeEngine: MessagesEngine;
   activeUserInputAnchorItemId: string | null;
-  activeStickyHeaderCandidate: HistoryStickyCandidate | null;
   activeUserInputRequestId: string | number | null;
   agentTaskNodeByTaskIdRef: MutableRefObject<Map<string, HTMLDivElement>>;
   agentTaskNodeByToolUseIdRef: MutableRefObject<Map<string, HTMLDivElement>>;
@@ -231,7 +226,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   activeCollaborationModeId,
   activeEngine,
   activeUserInputAnchorItemId,
-  activeStickyHeaderCandidate,
   activeUserInputRequestId,
   agentTaskNodeByTaskIdRef,
   agentTaskNodeByToolUseIdRef,
@@ -309,7 +303,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   workspaceId,
 }: MessagesTimelineProps) {
   const { t } = useTranslation();
-  const [isStickyHeaderCollapsed, setIsStickyHeaderCollapsed] = useState(false);
   const [currentOutline, setCurrentOutline] = useState<MessageOutlineSnapshot | null>(null);
   const handleLiveOutlineReady = useCallback(
     (snapshot: MessageOutlineSnapshot) => {
@@ -358,7 +351,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const lastVirtualizedTimelineScopeResetRef = useRef<string | null>(null);
 
   useEffect(() => {
-    setIsStickyHeaderCollapsed(false);
     hydrationRemeasureBudgetRef.current = DEFAULT_HYDRATION_REMEASURE_BUDGET;
     if (typeof window !== "undefined" && hydrationRemeasureRafRef.current !== null) {
       window.cancelAnimationFrame(hydrationRemeasureRafRef.current);
@@ -1734,60 +1726,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         data-timeline-virtualized={shouldVirtualizeTimeline ? "true" : "false"}
       >
         {renderConversationLightweightPrompt()}
-        {activeStickyHeaderCandidate && (
-          <div
-            className="messages-history-sticky-header"
-            data-history-sticky-message-id={activeStickyHeaderCandidate.id}
-            data-history-sticky-collapsed={isStickyHeaderCollapsed ? "true" : "false"}
-          >
-            <div className="messages-history-sticky-header-inner">
-              <div className="messages-history-sticky-header-content">
-                <div
-                  className={`messages-history-sticky-header-bubble${
-                    isStickyHeaderCollapsed ? " is-collapsed" : ""
-                  }`}
-                >
-                  {!isStickyHeaderCollapsed ? (
-                    <button
-                      type="button"
-                      className="messages-history-sticky-header-toggle"
-                      data-history-sticky-toggle="collapse"
-                      aria-label={t("messages.collapseStickyHeader")}
-                      title={t("messages.collapseStickyHeader")}
-                      aria-expanded={!isStickyHeaderCollapsed}
-                      onClick={() => {
-                        setIsStickyHeaderCollapsed(true);
-                      }}
-                    >
-                      <ChevronRight size={15} aria-hidden />
-                    </button>
-                  ) : null}
-                  <span className="messages-history-sticky-header-leading" aria-hidden="true">
-                    <MessageSquareText size={12} />
-                  </span>
-                  <div className="messages-history-sticky-header-text">
-                    {activeStickyHeaderCandidate.text}
-                  </div>
-                  {isStickyHeaderCollapsed ? (
-                    <button
-                      type="button"
-                      className="messages-history-sticky-header-peek"
-                      data-history-sticky-toggle="expand"
-                      aria-label={t("messages.expandStickyHeader")}
-                      title={t("messages.expandStickyHeader")}
-                      aria-expanded={!isStickyHeaderCollapsed}
-                      onClick={() => {
-                        setIsStickyHeaderCollapsed(false);
-                      }}
-                    >
-                      <ChevronLeft size={14} aria-hidden />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
         {visibleCollapsedHistoryItemCount > 0 && (
           <div
             className="messages-collapsed-indicator"
