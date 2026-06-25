@@ -360,3 +360,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 929: 实时幕布与控制区隔离 Phase 1
+
+**Date**: 2026-06-25
+**Task**: 实时幕布与控制区隔离 Phase 1
+**Branch**: `feature/v0.5.13`
+
+### Summary
+
+创建 OpenSpec isolate-conversation-canvas-runtime，定义五区模型与 interaction/canvas/background lane 契约；实现 Composer interaction-safe memo comparator，memo 化 TopbarSessionTabs，给 app-server realtime dispatch scheduler 增加 resource-retention diagnostics；验证 focused Vitest、typecheck、lint、runtime-contracts、large-file gate 与 OpenSpec strict validate。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `823c657f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
