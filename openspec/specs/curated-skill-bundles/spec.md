@@ -7,9 +7,7 @@ version-pinned skill assets ship with the desktop app, users enable them from
 Settings, and enabled skill bodies are injected into supported engine launches.
 Composer UI is read-only feedback only; Settings remains the only toggle
 surface.
-
 ## Requirements
-
 ### Requirement: Client MUST Bundle Curated Skills As Versioned Assets
 
 The desktop client MUST bundle curated skills as application resources under
@@ -37,33 +35,29 @@ bodies from a remote marketplace or URL at runtime.
 
 ### Requirement: Curated Skill Lock Entries MUST Be Validated At Compile Time
 
-`skills-lock.json` MUST use schema version `2`. Existing marketplace-style
-entries are `kind: "bundled"`; curated entries are `kind: "curated"`. The
-`src-tauri/build.rs` validator MUST validate only `kind == "curated"` entries
-and MUST skip bundled entries. For curated entries it MUST verify SHA-256,
-metadata completeness, approved license, token estimate bounds, category,
-icon format, kebab-case ASCII skill ids, and safe repo-relative paths.
+The build-time lock validator and runtime curated-skill loader MUST validate
+`skills-lock.json` without relying on OS-specific shell commands or path
+semantics. SHA-256 hash validation MUST use a Rust implementation that works on
+Linux, macOS, and Windows. `assetPath` and `metadataPath` MUST be non-empty
+repo-relative POSIX paths: absolute paths, parent directory traversal, Windows
+backslash separators, and drive-prefix-like `:` values MUST be rejected before
+any file read is attempted. Cargo MUST watch the repo-root `skills-lock.json`
+path for rebuilds, not a stale package-local path.
 
-#### Scenario: curated hash mismatch fails build
+#### Scenario: build validator works on Windows/macOS/Linux
 
-- **WHEN** a curated skill `SKILL.md` changes
-- **AND** its `computedHash` is stale
-- **THEN** `cargo check --manifest-path src-tauri/Cargo.toml` MUST fail with a
-  curated skill lock hash mismatch naming the skill.
+- **WHEN** `cargo test` or `cargo build` runs on Windows, macOS, or Linux
+- **THEN** `build.rs` MUST compute `computedHash` with Rust code
+- **AND** it MUST NOT spawn `sha256sum`, `shasum`, shell, cmd.exe, or any
+  other external hash utility.
 
-#### Scenario: bundled hash mismatch is skipped
+#### Scenario: unsafe lock path is rejected
 
-- **WHEN** a `kind: "bundled"` entry has no matching on-disk asset
-- **THEN** the curated validator MUST skip that entry
-- **AND** MUST NOT fail the build for that bundled entry.
-
-#### Scenario: unsafe metadata is rejected
-
-- **WHEN** a curated metadata file declares an unsupported license, unsafe path,
-  invalid category, non-ASCII / non-kebab icon, invalid skill id, or token
-  estimate outside the accepted range
-- **THEN** the build MUST fail with an error naming the offending skill and
-  field.
+- **GIVEN** a curated lock entry whose `assetPath` is `../escape/SKILL.md`,
+  `/tmp/SKILL.md`, `C:/tmp/SKILL.md`, or `resources\\skill\\SKILL.md`
+- **WHEN** the build validator or runtime loader processes the lock
+- **THEN** it MUST reject the entry with an actionable error
+- **AND** it MUST NOT read outside the curated resource tree.
 
 ### Requirement: AppSettings MUST Persist Enabled Curated Skill IDs
 
@@ -247,3 +241,147 @@ and runtime rollback paths for emergency response.
 - **WHEN** curated skill activation needs to be disabled quickly
 - **THEN** maintainers MUST have a documented path to keep UI/config schema
   compatible while preventing new enabled curated skill ids from taking effect.
+
+### Requirement: Composer Shows A Read-Only Always-On Indicator In The Readiness Bar
+
+The desktop client MUST render a read-only **always-on indicator** in the
+composer readiness bar whenever at least one curated skill is enabled. The
+indicator MUST be supplied by `ChatInputBox` through the generic
+`ChatInputBoxHeader.rightAccessory -> ComposerReadinessBar.rightAccessory`
+prop chain and MUST render inside `.composer-readiness-right-accessory`.
+`ComposerReadinessBar` MUST NOT directly import the curated-skills domain.
+
+The indicator MUST be hidden (zero visual weight) when zero curated skills are
+enabled. For each enabled skill, the indicator MUST show the skill's lucide
+icon and display name in a single-line chip. Long names MUST truncate instead
+of wrapping, and additional enabled skills MAY collapse into a compact `+N`
+overflow chip. The indicator MUST reflect the live
+`AppSettings.enabledCuratedSkillIds` set within a polling cadence of 2 seconds
+so toggling a skill on or off in Settings is visible to the user in the
+composer without an app restart. The indicator MUST NOT provide an on/off
+affordance; Settings > Skills > Curated remains the only toggle surface.
+
+The `.composer-readiness-right-accessory` and `.curated-indicator*` CSS MUST
+ship in the ChatInputBox style bundle so cold composer startup uses the same
+single-line layout as the post-Settings return path.
+
+#### Scenario: indicator hidden when no skills are enabled
+
+- **GIVEN** `AppSettings.enabledCuratedSkillIds` is empty
+- **WHEN** the user opens the composer
+- **THEN** the composer MUST NOT contain any element matching
+  `.curated-indicator`.
+
+#### Scenario: indicator visible in readiness bar accessory
+
+- **GIVEN** `AppSettings.enabledCuratedSkillIds` contains
+  `lazy-senior-dev`
+- **WHEN** the user opens the composer
+- **THEN** a `[data-testid="curated-indicator"]` element MUST be rendered
+- **AND** the element MUST be a descendant of
+  `.composer-readiness-right-accessory`
+- **AND** the element MUST NOT be rendered in a
+  `home-chat-curated-skill-strip` input/footer strip.
+
+#### Scenario: indicator chip stays single-line on cold start
+
+- **GIVEN** the user has not opened Settings in the current renderer session
+- **AND** `AppSettings.enabledCuratedSkillIds` contains `lazy-senior-dev`
+- **WHEN** the composer first renders the indicator
+- **THEN** the chip MUST show the lucide icon and display name on one line
+- **AND** long display names MUST truncate with ellipsis instead of wrapping.
+
+#### Scenario: Settings toggle change is reflected within 2 seconds
+
+- **GIVEN** the composer is open and the indicator is visible
+- **WHEN** the user toggles a new curated skill on in `Settings > Skills`
+- **THEN** within 2 seconds the indicator MUST add a chip for the newly enabled
+  skill
+- **AND** within 2 seconds of toggling it off, the indicator MUST remove the
+  chip.
+
+#### Scenario: readiness bar core controls remain usable
+
+- **GIVEN** one or more curated skills are enabled
+- **WHEN** the readiness bar renders the right accessory
+- **THEN** mode, target, context summary, jump-to-request, and context-source
+  expand controls MUST remain visible or gracefully truncated according to the
+  existing readiness bar responsive rules
+- **AND** the indicator MUST truncate itself before overlapping those controls.
+
+### Requirement: Curated Skill Activation Is Always-On Per User
+
+The engine MUST treat the set of curated skill ids in
+`AppSettings.enabledCuratedSkillIds` as **always-on for every
+conversation**: when an id is present, the engine MUST inject that
+skill's `SKILL.md` body into the conversation's system prompt for
+**every** subsequent message in **every** workspace, with no further
+user action. The injection MUST be applied identically to fresh
+sessions and resumed sessions. There is no per-conversation, per-turn,
+or per-message opt-in / opt-out path for curated skills in this
+change. Toggling a skill off (removing it from
+`enabledCuratedSkillIds`) MUST cause the engine to stop injecting it
+on the next conversation; the change is observed on the next CLI
+launch, not retroactively on in-flight turns.
+
+#### Scenario: enabled skill appears in every conversation's system prompt
+
+- **GIVEN** `AppSettings.enabledCuratedSkillIds` contains
+  `lazy-senior-dev`
+- **WHEN** the user starts a new conversation in any workspace
+- **THEN** the engine's `--append-system-prompt` (or equivalent
+  system-prompt assembly path) MUST include a `<skill id="lazy-senior-dev">…</skill>`
+  block sourced from the bundled `SKILL.md`
+- **AND** the block MUST be present on the first turn and on every
+  subsequent turn in the same session.
+
+#### Scenario: Codex internal developer instructions do not suppress curated skills
+
+- **GIVEN** `AppSettings.enabledCuratedSkillIds` contains
+  `lazy-senior-dev`
+- **AND** the Codex app-server launch path also needs to inject an
+  internal `developer_instructions` hint
+- **WHEN** the desktop client builds the Codex `app-server` argv
+- **THEN** it MUST produce a single merged auto-generated
+  `-c developer_instructions=...` argument
+- **AND** that argument MUST contain both the internal hint and the
+  `## Curated Skills` block for `lazy-senior-dev`
+- **AND** the presence of the internal hint MUST NOT cause the curated
+  skill block to be skipped.
+
+#### Scenario: disabled skill is not injected
+
+- **GIVEN** `AppSettings.enabledCuratedSkillIds` does not contain
+  `lazy-senior-dev`
+- **WHEN** the user starts a new conversation
+- **THEN** the engine MUST NOT include a `<skill id="lazy-senior-dev">`
+  block in the system prompt.
+
+#### Scenario: toggle change is observed on the next CLI launch
+
+- **GIVEN** a session is mid-flight and the user toggles
+  `lazy-senior-dev` off in Settings
+- **WHEN** the user sends the next message in the same session
+- **THEN** Claude-style per-turn CLI launches and Codex app-server
+  replacement launches MUST both pick up the new `enabledCuratedSkillIds`
+- **AND** disabling a curated skill MUST remove its `<skill id="...">`
+  block from the next turn's prompt/instructions
+- **AND** in-flight turns are not retroactively rewritten.
+
+#### Scenario: Settings toggle restarts Codex app-server snapshots
+
+- **GIVEN** `lazy-senior-dev` is enabled and a Codex app-server runtime is
+  already connected
+- **WHEN** the user toggles `lazy-senior-dev` off in
+  `Settings > Skills > Curated`
+- **THEN** the toggle IPC MUST update `AppSettings.enabledCuratedSkillIds`
+  through the same restart-aware settings path as other Codex launch-affecting
+  settings
+- **AND** `app_settings_change_requires_codex_restart` MUST return true for
+  additions, removals, or reordering of `enabledCuratedSkillIds`
+- **AND** the existing Codex app-server runtime MUST be replaced so the next
+  Codex turn cannot observe the stale `developer_instructions` block
+- **AND** if replacement fails, the settings write MUST be rolled back and an
+  actionable error returned instead of leaving UI state and runtime prompt
+  state inconsistent.
+

@@ -67,7 +67,7 @@
 
 ## 6. Archive
 
-- [ ] After user sign-off and focused verification, run
+- [x] After user sign-off and focused verification, run
       `openspec archive 2026-06-25-composer-readiness-bar-indicator-layout --yes`
       and confirm the `curated-skill-bundles` main spec receives the
       right-accessory indicator requirement.

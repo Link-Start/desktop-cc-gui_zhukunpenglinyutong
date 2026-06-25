@@ -1,8 +1,8 @@
 # curated-skill-bundles Spec Delta
 
-## ADDED Requirements
+## MODIFIED Requirements
 
-### Requirement: Composer Shows A Read-Only Always-On Header Indicator
+### Requirement: Composer Shows A Read-Only Always-On Indicator In The Readiness Bar
 
 The desktop client MUST render a read-only **always-on indicator** in
 the composer title/readiness bar's right side whenever at least one
@@ -72,7 +72,7 @@ Curated switch.
 - **AND** the indicator MUST render as a single title-bar line without
   requiring a Settings-page visit.
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Settings > Skills > Curated Surfaces An Optional Upstream Source Link
 
@@ -123,7 +123,7 @@ have full coverage in `en.part1.base.ts` and `zh.part1.ts`.
 - **AND** it MUST NOT return `sourceUrl: null`
 - **AND** the Settings row MUST hide the upstream link.
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Settings > Skills > Curated Is The Only Toggle Surface For A Curated Skill
 
@@ -258,7 +258,7 @@ launch, not retroactively on in-flight turns.
 
 ## MODIFIED Requirements
 
-### Requirement: Curated Skill Lock Validation Is Cross-Platform And Path-Safe
+### Requirement: Curated Skill Lock Entries MUST Be Validated At Compile Time
 
 The build-time lock validator and runtime curated-skill loader MUST validate
 `skills-lock.json` without relying on OS-specific shell commands or path

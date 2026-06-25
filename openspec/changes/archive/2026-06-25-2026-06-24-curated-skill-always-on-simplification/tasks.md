@@ -135,7 +135,7 @@
 
 ## 6. Archive
 
-- [ ] After user sign-off, run `openspec archive
+- [x] After user sign-off, run `openspec archive
       2026-06-24-curated-skill-always-on-simplification --yes` and
       copy the resulting capability delta onto the existing
       `curated-skill-bundles` main spec as a new
