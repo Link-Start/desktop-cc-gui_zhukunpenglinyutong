@@ -47,3 +47,23 @@ When `streamingScheduleTier === "baseline"`, the tail gate MUST bypass throttlin
 - **WHEN** the ref buffer exceeds 1MB
 - **THEN** `bufferOverflowCount` MUST increment by 1
 - **AND** `appendRendererDiagnostic("tool-output-tail-gate/overflow", { key, sizeBytes })` MUST fire.
+
+### Requirement: Tail Gate Runtime State MUST Be Bounded
+
+`useToolOutputTailGate` MUST bound its per-key runtime state during long-running clients. Empty idle entries MUST be evicted after a TTL, active key count MUST stay under a configured cap, and evicting a buffered entry MUST flush its accumulated text before deletion so raw output is not lost. Consumers that maintain side metadata for gate keys MUST receive an eviction callback and release matching metadata.
+
+#### Scenario: idle empty key is evicted
+- **WHEN** a key has no buffered text, no pending flush timer, and has been idle longer than the TTL
+- **THEN** the next submit MUST prune that key
+- **AND** `activeKeys` MUST decrease.
+
+#### Scenario: active key cap flushes before eviction
+- **WHEN** active key count exceeds the configured cap
+- **THEN** the gate MUST choose oldest keys for eviction
+- **AND** any buffered text for those keys MUST be flushed before the key is deleted
+- **AND** `droppedDeltaCount` MUST remain unchanged.
+
+#### Scenario: side metadata is released with gate entry
+- **WHEN** the tail gate evicts a key because of TTL or key cap
+- **THEN** `useThreadItemEvents` MUST delete the matching `toolOutputMetadataRef` entry
+- **AND** stale metadata MUST NOT keep completed item/thread ids alive.

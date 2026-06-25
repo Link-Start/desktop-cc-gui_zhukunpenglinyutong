@@ -42,3 +42,9 @@ The realtime event pipeline MUST bound main-thread work through three cooperatin
 - **AND** a raw `item/commandExecution/outputDelta` or `item/fileChange/outputDelta` event is queued
 - **THEN** that event MUST be classified as protected
 - **AND** the overflow policy MUST choose only an eligible derived snapshot for dropping or defer delivery until capacity is available.
+
+#### Scenario: long-running realtime client does not accumulate stale pacing state
+- **WHEN** the client stays open across many completed realtime turns
+- **THEN** pacing state held by `appServerEventBackpressure`, `SnapshotThrottle`, and `useToolOutputTailGate` MUST remain bounded by explicit retained-count, TTL, and active-key caps
+- **AND** completed item/thread metadata MUST be removed after terminal events or idle eviction
+- **AND** UI input latency MUST NOT degrade solely because old pacing state remained in memory.

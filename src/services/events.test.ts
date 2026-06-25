@@ -3,6 +3,7 @@ import type { Event, EventCallback, UnlistenFn } from "@tauri-apps/api/event";
 import { listen } from "@tauri-apps/api/event";
 import type { AppServerEvent } from "../types";
 import {
+  getAppServerEventBackpressureForTests,
   resetAppServerEventBackpressureForTests,
   subscribeAppServerEvents,
   subscribeCliInstallerEvents,
@@ -86,6 +87,19 @@ describe("events subscriptions", () => {
     expect(onEvent).toHaveBeenCalledWith(first);
 
     cleanup();
+  });
+
+  it("bounds app-server raw diagnostics retention to 128 events", () => {
+    const backpressure = getAppServerEventBackpressureForTests();
+    for (let i = 0; i < 200; i++) {
+      backpressure.push({
+        workspace_id: "ws-1",
+        message: { method: "processing/heartbeat", params: { threadId: `t-${i}` } },
+      });
+    }
+
+    expect(backpressure.getStats().rawRetainedCount).toBe(128);
+    expect(backpressure.getRawRecent()).toHaveLength(128);
   });
 
   it("cleans up listeners that resolve after unsubscribe", async () => {

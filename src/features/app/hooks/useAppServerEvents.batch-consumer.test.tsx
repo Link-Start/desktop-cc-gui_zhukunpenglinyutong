@@ -293,6 +293,28 @@ describe("useAppServerEvents channel subscription (proposal §1.4 e/f)", () => {
     expect(unlistenSingle).not.toHaveBeenCalled();
   });
 
+  it("drains the raw fallback channel through the scheduler instead of dispatching synchronously", async () => {
+    vi.useFakeTimers();
+    vi.mocked(isAppServerEventBatchConsumerEnabled).mockReturnValue(false);
+    const handlers: Handlers = { onAppServerEvent: vi.fn() };
+    await mount(handlers);
+
+    const payload: AppServerEvent = {
+      workspace_id: "ws-1",
+      message: { method: "ping" },
+    };
+    await act(async () => {
+      listener?.(payload);
+    });
+
+    expect(handlers.onAppServerEvent).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.runOnlyPendingTimers();
+    });
+    expect(handlers.onAppServerEvent).toHaveBeenCalledWith(payload);
+  });
+
   it("batch channel preserves non-coalescible delta events (proposal §1.4 d)", async () => {
     vi.mocked(isAppServerEventBatchConsumerEnabled).mockReturnValue(true);
     const onAgentMessageDelta = vi.fn();
@@ -362,6 +384,7 @@ describe("useAppServerEvents channel subscription (proposal §1.4 e/f)", () => {
   });
 
   it("single channel still routes events when the flag is off", async () => {
+    vi.useFakeTimers();
     vi.mocked(isAppServerEventBatchConsumerEnabled).mockReturnValue(false);
     const onWorkspaceConnected = vi.fn();
     const handlers: Handlers = {
@@ -375,6 +398,11 @@ describe("useAppServerEvents channel subscription (proposal §1.4 e/f)", () => {
         workspace_id: "ws-1",
         message: { method: "codex/connected" },
       });
+    });
+    expect(onWorkspaceConnected).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.runOnlyPendingTimers();
     });
     expect(onWorkspaceConnected).toHaveBeenCalledTimes(1);
   });

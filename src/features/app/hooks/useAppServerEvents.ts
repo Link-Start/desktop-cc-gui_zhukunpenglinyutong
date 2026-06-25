@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { MutableRefObject } from "react";
 import type {
   AppServerEvent,
@@ -32,7 +32,10 @@ import { updateSharedSessionNativeBinding as updateSharedSessionNativeBindingSer
 import { noteThreadAppServerEventReceived } from "../../threads/utils/streamLatencyDiagnostics";
 import {
   isAppServerEventBatchConsumerEnabled,
+  readStreamingScheduleTier,
 } from "../../threads/utils/realtimePerfFlags";
+import { useRenderScheduler } from "../../../hooks/useRenderScheduler";
+import { resolveDispatchSchedule } from "../../threads/utils/renderSchedulingPolicy";
 import {
   classifyCodexEventRisk,
   resolveCodexEventOwnership,
@@ -2880,6 +2883,56 @@ export function useAppServerEvents(
     threadAgentSnapshotSeenRef,
   };
   const batchConsumerEnabled = isAppServerEventBatchConsumerEnabled();
+  const rawFallbackQueueRef = useRef<AppServerEvent[]>([]);
+  const rawFallbackSchedule = resolveDispatchSchedule({
+    tier: readStreamingScheduleTier(),
+    isLiveRow: false,
+    isHeavy: false,
+    isCritical: false,
+  });
+  const rawFallbackScheduleRef = useRef(rawFallbackSchedule);
+  rawFallbackScheduleRef.current = rawFallbackSchedule;
+  const rawFallbackScheduler = useRenderScheduler({
+    budgetMs: rawFallbackSchedule.budgetMs,
+    idleTimeoutMs: rawFallbackSchedule.idleTimeoutMs,
+  });
+  const dispatchRawFallbackQueue = useCallback((): boolean => {
+    const startedAt =
+      typeof performance !== "undefined" && typeof performance.now === "function"
+        ? performance.now()
+        : Date.now();
+    let dispatchedInChunk = 0;
+    while (
+      rawFallbackQueueRef.current.length > 0 &&
+      dispatchedInChunk < DEFAULT_APP_SERVER_EVENT_BATCH_CHUNK_SIZE
+    ) {
+      const elapsed =
+        (typeof performance !== "undefined" &&
+        typeof performance.now === "function"
+          ? performance.now()
+          : Date.now()) - startedAt;
+      if (
+        dispatchedInChunk > 0 &&
+        rawFallbackScheduleRef.current.budgetMs > 0 &&
+        elapsed >= rawFallbackScheduleRef.current.budgetMs
+      ) {
+        break;
+      }
+      const next = rawFallbackQueueRef.current.shift()!;
+      dispatchedInChunk += 1;
+      try {
+        dispatchAppServerEvent(
+          handlersRef.current,
+          next,
+          dispatcherOptionsRef.current,
+        );
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error("[useAppServerEvents] raw fallback dispatch failed", error);
+      }
+    }
+    return rawFallbackQueueRef.current.length > 0;
+  }, []);
   useAppServerEventBatchDispatch(handlers, {
     ...dispatcherOptionsRef.current,
     enableInternalBatchSubscription: batchConsumerEnabled,
@@ -2889,12 +2942,15 @@ export function useAppServerEvents(
     if (batchConsumerEnabled) {
       return undefined;
     }
-    return subscribeRawAppServerEvents((payload) => {
-      dispatchAppServerEvent(
-        handlersRef.current,
-        payload,
-        dispatcherOptionsRef.current,
-      );
+    const rawFallbackQueue = rawFallbackQueueRef.current;
+    const unsubscribe = subscribeRawAppServerEvents((payload) => {
+      rawFallbackQueue.push(payload);
+      rawFallbackScheduler.scheduleChunk(dispatchRawFallbackQueue);
     });
-  }, [batchConsumerEnabled]);
+    return () => {
+      unsubscribe();
+      rawFallbackQueue.length = 0;
+      rawFallbackScheduler.cancel();
+    };
+  }, [batchConsumerEnabled, dispatchRawFallbackQueue, rawFallbackScheduler]);
 }

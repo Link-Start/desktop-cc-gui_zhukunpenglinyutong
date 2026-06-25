@@ -46,6 +46,8 @@ type GateEntry = {
 const MAX_BUFFER_BYTES = 1024 * 1024; // 1 MiB
 const RATE_WINDOW_MS = 60_000;
 const BACKPRESSURE_AFTER_DELTAS = 256;
+export const TOOL_OUTPUT_TAIL_GATE_IDLE_TTL_MS = 120_000;
+export const TOOL_OUTPUT_TAIL_GATE_MAX_ACTIVE_KEYS = 512;
 // Tier-aware throttle: aggressive 16ms / guarded 32ms / baseline = no gate
 // (baseline bypasses this helper entirely via isToolOutputTailGateEnabled).
 const DEFAULT_THROTTLE_MS = 32;
@@ -67,6 +69,8 @@ export type ToolOutputTailGateOptions = {
   setTimeoutFn?: typeof setTimeout;
   /** Override clearTimeout for test environments. */
   clearTimeoutFn?: typeof clearTimeout;
+  /** Called when a gate entry is evicted or reset so side metadata can be released. */
+  onEntryEvicted?: (key: ToolOutputKey) => void;
 };
 
 export type ToolOutputTailGate = {
@@ -124,6 +128,47 @@ export function createToolOutputTailGate(
     return text;
   };
 
+  const evictEntry = (key: ToolOutputKey, flushBuffered: boolean) => {
+    const entry = entries.get(key);
+    if (!entry) {
+      return;
+    }
+    if (flushBuffered && entry.buffer.length > 0) {
+      flushKey(key);
+    }
+    const current = entries.get(key);
+    if (current?.pendingFlush) {
+      clearTimeoutFn(current.pendingFlush);
+    }
+    entries.delete(key);
+    options.onEntryEvicted?.(key);
+  };
+
+  const pruneEntries = (referenceNow: number) => {
+    for (const [key, entry] of entries) {
+      const idleForMs = referenceNow - entry.lastSubmitAtMs;
+      if (
+        entry.buffer.length === 0 &&
+        entry.pendingFlush === null &&
+        idleForMs > TOOL_OUTPUT_TAIL_GATE_IDLE_TTL_MS
+      ) {
+        evictEntry(key, false);
+      }
+    }
+    if (entries.size <= TOOL_OUTPUT_TAIL_GATE_MAX_ACTIVE_KEYS) {
+      return;
+    }
+    const oldestKeys = [...entries.entries()]
+      .sort(([, left], [, right]) => left.lastSubmitAtMs - right.lastSubmitAtMs)
+      .map(([key]) => key);
+    for (const key of oldestKeys) {
+      if (entries.size <= TOOL_OUTPUT_TAIL_GATE_MAX_ACTIVE_KEYS) {
+        break;
+      }
+      evictEntry(key, true);
+    }
+  };
+
   const scheduleKey = (key: ToolOutputKey) => {
     const entry = entries.get(key);
     if (!entry) {
@@ -147,8 +192,9 @@ export function createToolOutputTailGate(
       options.flushHandler(key, delta);
       return true;
     }
-    let entry = entries.get(key);
     const submittedAt = now();
+    pruneEntries(submittedAt);
+    let entry = entries.get(key);
     if (!entry) {
       entry = {
         buffer: "",
@@ -161,6 +207,7 @@ export function createToolOutputTailGate(
         bufferBytes: 0,
       };
       entries.set(key, entry);
+      pruneEntries(submittedAt);
     }
     if (submittedAt - entry.windowStartedAtMs > RATE_WINDOW_MS) {
       entry.windowStartedAtMs = submittedAt;
@@ -205,14 +252,7 @@ export function createToolOutputTailGate(
   };
 
   const reset = (key: ToolOutputKey) => {
-    const entry = entries.get(key);
-    if (!entry) {
-      return;
-    }
-    if (entry.pendingFlush) {
-      clearTimeoutFn(entry.pendingFlush);
-    }
-    entries.delete(key);
+    evictEntry(key, false);
   };
 
   return {

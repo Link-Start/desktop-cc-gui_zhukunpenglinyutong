@@ -1256,6 +1256,9 @@ export function useThreadItemEvents({
   const toolOutputTailGate = useMemo(
     () =>
       createToolOutputTailGate({
+        onEntryEvicted: (key) => {
+          toolOutputMetadataRef.current.delete(key);
+        },
         flushHandler: (key, fullText) => {
           // Re-decompose the key into the original tuple. The gate is
           // append-only, so we forward the merged text as a single delta.
@@ -1319,6 +1322,7 @@ export function useThreadItemEvents({
       for (const kind of ["commandExecution", "fileChange"] as const) {
         const key = buildToolOutputKey(workspaceId, itemId, kind);
         toolOutputTailGate.flush(key);
+        toolOutputTailGate.reset(key);
         toolOutputMetadataRef.current.delete(key);
       }
     },

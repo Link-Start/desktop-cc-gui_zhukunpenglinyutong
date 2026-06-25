@@ -51,12 +51,17 @@ The sink MUST publish `BatchStats` snapshots to a dedicated Tauri channel every 
 
 ### Requirement: Webview `appServerEventDeliverHub` MUST Use Per-Event Backpressure
 
-The webview MUST subscribe to `app-server-event-batch`, split each batch into individual `AppServerEvent` entries, and route each event through a `createEventBackpressure<AppServerEvent>` instance. The `createEventHub` helper MUST expose an internal `publish(payload)` method (or an equivalent internal method) for already-received batch entries so implementation does not invent an ad-hoc subscription-style delivery API. The per-event backpressure MUST apply `maxEventsPerFlush = 256`, `maxBytesPerFlush = 512 KiB`, and `maxQueueDepth = 4000`. Its `coalesceKey` MUST be limited to idempotent status events such as `processing/heartbeat`, `thread/tokenUsage/updated`, `thread/compacting`, `turn/diff/updated`, and `account/rateLimits/updated`.
+The webview MUST subscribe to `app-server-event-batch`, split each batch into individual `AppServerEvent` entries, and route each event through a `createEventBackpressure<AppServerEvent>` instance. The `createEventHub` helper MUST expose an internal `publish(payload)` method (or an equivalent internal method) for already-received batch entries so implementation does not invent an ad-hoc subscription-style delivery API. The per-event backpressure MUST apply `maxEventsPerFlush = 64`, `maxBytesPerFlush = 128 KiB`, `maxQueueDepth = 4000`, and `rawRetainedLimit <= 128`. Its `coalesceKey` MUST be limited to idempotent status events such as `processing/heartbeat`, `thread/tokenUsage/updated`, `thread/compacting`, `turn/diff/updated`, and `account/rateLimits/updated`.
 
 #### Scenario: 2000 events keep per-event queue bounded
 - **WHEN** 2000 individual `AppServerEvent` entries arrive within 100ms
 - **THEN** `appServerEventBackpressure.queueDepth` MUST remain <= 4000
-- **AND** events exceeding `maxEventsPerFlush = 256` per RAF MUST be deferred to subsequent flushes.
+- **AND** events exceeding `maxEventsPerFlush = 64` or `maxBytesPerFlush = 128 KiB` per RAF MUST be deferred to subsequent flushes.
+
+#### Scenario: raw diagnostics retention stays bounded
+- **WHEN** long-running realtime sessions deliver more than 128 app-server events
+- **THEN** `appServerEventBackpressure.rawRetainedCount` MUST remain <= 128
+- **AND** retained diagnostics MUST NOT keep thousands of full event payloads alive.
 
 #### Scenario: tool output deltas stay protected from generic coalesce
 - **WHEN** 1000 `item/commandExecution/outputDelta` events for the same `(workspaceId, itemId)` arrive within 1 second
@@ -100,6 +105,31 @@ The per-event dispatch loop in `useAppServerEvents` MUST use a `useRenderSchedul
 - **WHEN** `requestIdleCallback` is not available
 - **THEN** the dispatcher MUST fall back to `setTimeout(processNextChunk, 0)`
 - **AND** the 8ms wall-clock budget MUST still apply.
+
+### Requirement: Raw Single-Channel Fallback MUST Also Be Budgeted
+
+When `ccgui.perf.appServerEventBatch` is disabled, `useAppServerEvents` MAY subscribe to the legacy raw single-event channel for rollback compatibility, but it MUST NOT dispatch the raw callback synchronously into reducers. Raw fallback events MUST enter a local FIFO queue and drain through the same `useRenderScheduler` budget policy as the unified per-event stream.
+
+#### Scenario: batch rollback does not restore synchronous dispatch flood
+- **WHEN** `ccgui.perf.appServerEventBatch` is disabled
+- **AND** 200 raw `app-server-event` payloads arrive in one burst
+- **THEN** `useAppServerEvents` MUST enqueue them and drain in chunks of at most 64 events
+- **AND** remaining work MUST be rescheduled through `useRenderScheduler`
+- **AND** the UI input path MUST get an opportunity to run between chunks.
+
+### Requirement: Snapshot Throttle Runtime State MUST Be Bounded
+
+`SnapshotThrottle` MUST bound long-running state by pruning stale `last_emit_at` entries and clearing terminal scopes. The implementation MUST retain pending snapshots until flushed, but non-pending keys older than the configured TTL MUST be pruned and the total tracked key count MUST stay under the configured cap.
+
+#### Scenario: terminal item clears completed item state
+- **WHEN** an `item/completed` event is processed for `(workspaceId, threadId, itemId)`
+- **THEN** pending snapshots for that item MUST flush before the terminal event
+- **AND** `SnapshotThrottle` MUST remove `last_emit_at` entries for that completed item.
+
+#### Scenario: long-running unique item stream stays bounded
+- **WHEN** a long-running workspace emits snapshots for more unique items than the throttle cap
+- **THEN** `SnapshotThrottle` MUST prune oldest non-pending keys
+- **AND** the tracked key count MUST remain <= the configured cap.
 
 ### Requirement: Lossless Sink And Per-Event Backpressure MUST Be Compatible
 

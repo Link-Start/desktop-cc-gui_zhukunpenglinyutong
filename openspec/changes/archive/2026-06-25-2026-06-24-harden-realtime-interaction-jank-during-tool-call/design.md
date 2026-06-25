@@ -563,6 +563,23 @@ function appendEventBackpressureDiagnostic(stats: EventBackpressureStats) {
 
 ## 9. 风险与缓解
 
+### 9.1 第二轮 residual hardening（2026-06-25）
+
+用户复测反馈：实时对话期间按钮点击与 composer typing 仍有卡顿，长时间运行后流畅度继续下降。复查后确认还有三类残留：
+
+1. `ccgui.perf.appServerEventBatch=off` 时，`useAppServerEvents` 的 legacy raw subscription 仍从 Tauri callback 同步直派到 reducer。这保留了旧接入口的 synchronous dispatch flood。
+2. `appServerEventBackpressure` 的 per-flush budget 仍是 `256 events / 512 KiB`，适合吞吐但会在高频流里占用过长帧；同时 `rawRecent` 沿用默认 `5000` 条完整 event，长时间运行会保留大量 payload。
+3. `SnapshotThrottle.last_emit_at` 与 `useToolOutputTailGate.entries` 缺少 TTL / cap。正常 completed 会清一部分，但异常终止、缺失 terminal、长会话多 item 会让 pacing metadata 累积。
+
+本轮补强采用“少写代码、守住边界”的策略：
+
+- raw fallback 保留 rollback channel，但进入本地 FIFO queue，并复用 `useRenderScheduler` 分块 drain。
+- app-server webview backpressure 收紧到 `64 events / 128 KiB`，并显式设置 `rawRetainedLimit = 128`。
+- Rust `SnapshotThrottle` 增 stale TTL、tracked-key cap、terminal item/thread/workspace scope cleanup。
+- `useToolOutputTailGate` 增 idle TTL、active key cap、eviction callback；`useThreadItemEvents` 通过 callback 删除 `toolOutputMetadataRef`。
+
+这些改动不会改变 protected event delivery：critical / raw outputDelta 仍不 drop；有 buffer 的 gate entry 被 eviction 前必须先 flush。
+
 | 风险 | 缓解 |
 |---|---|
 | `requestIdleCallback` 在 WebView2 表现不稳 | fallback `setTimeout(0)`；Windows runner 单独跑 extended-baseline |

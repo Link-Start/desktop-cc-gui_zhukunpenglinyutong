@@ -5,6 +5,8 @@ import {
   createToolOutputTailGate,
   defaultToolOutputTailGate,
   installToolOutputTailGateHandler,
+  TOOL_OUTPUT_TAIL_GATE_IDLE_TTL_MS,
+  TOOL_OUTPUT_TAIL_GATE_MAX_ACTIVE_KEYS,
   uninstallToolOutputTailGateHandler,
 } from "./useToolOutputTailGate";
 import {
@@ -129,6 +131,60 @@ describe("useToolOutputTailGate", () => {
     vi.advanceTimersByTime(100);
     expect(flushed).toHaveLength(256);
     expect(gate.__getDiagnosticsForTests().activeKeys).toBe(0);
+  });
+
+  it("evicts idle empty entries on the next submit", () => {
+    let currentNow = 0;
+    const evicted: string[] = [];
+    const flushed: string[] = [];
+    const gate = createToolOutputTailGate({
+      now: () => currentNow,
+      flushHandler: (_key, text) => flushed.push(text),
+      onEntryEvicted: (key) => evicted.push(key),
+    });
+    const staleKey = buildToolOutputKey("ws-1", "item-1", "commandExecution");
+    const activeKey = buildToolOutputKey("ws-1", "item-2", "commandExecution");
+
+    gate.submit(staleKey, "a");
+    expect(gate.__getDiagnosticsForTests().activeKeys).toBe(1);
+
+    currentNow = TOOL_OUTPUT_TAIL_GATE_IDLE_TTL_MS + 1;
+    gate.submit(activeKey, "b");
+
+    expect(flushed).toEqual(["a", "b"]);
+    expect(evicted).toEqual([staleKey]);
+    expect(gate.__getDiagnosticsForTests().activeKeys).toBe(1);
+  });
+
+  it("flushes buffered text before active-key cap eviction", () => {
+    let currentNow = 0;
+    const evicted: string[] = [];
+    const flushed: string[] = [];
+    const gate = createToolOutputTailGate({
+      now: () => currentNow,
+      flushHandler: (_key, text) => flushed.push(text),
+      onEntryEvicted: (key) => evicted.push(key),
+    });
+    const oldKey = buildToolOutputKey("ws-1", "old-item", "commandExecution");
+    for (let i = 0; i < 256; i++) {
+      gate.submit(oldKey, `warm-${i}\n`);
+    }
+    gate.submit(oldKey, "buffered-tail");
+
+    for (let i = 0; i < TOOL_OUTPUT_TAIL_GATE_MAX_ACTIVE_KEYS; i++) {
+      currentNow += 1;
+      gate.submit(
+        buildToolOutputKey("ws-1", `item-${i}`, "commandExecution"),
+        "x",
+      );
+    }
+
+    expect(gate.__getDiagnosticsForTests().activeKeys).toBe(
+      TOOL_OUTPUT_TAIL_GATE_MAX_ACTIVE_KEYS,
+    );
+    expect(evicted).toContain(oldKey);
+    expect(flushed).toContain("buffered-tail");
+    expect(gate.__getDiagnosticsForTests().droppedDeltaCount).toBe(0);
   });
 
   it("flushAll() drains every active key", () => {

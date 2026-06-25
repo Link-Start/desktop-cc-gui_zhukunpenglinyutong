@@ -261,9 +261,10 @@ function appServerEventBytes(event: AppServerEvent) {
 export const appServerEventBackpressure = createEventBackpressure<AppServerEvent>({
   surfaceId: "app-server-event",
   eventKind: "app-server-event",
-  maxEventsPerFlush: 256,
-  maxBytesPerFlush: 512 * 1024,
+  maxEventsPerFlush: 64,
+  maxBytesPerFlush: 128 * 1024,
   maxQueueDepth: 4_000,
+  rawRetainedLimit: 128,
   classify: appServerEventCriticality,
   coalesceKey: appServerEventCoalesceKey,
   dropPolicy: appServerEventDropPolicy,
