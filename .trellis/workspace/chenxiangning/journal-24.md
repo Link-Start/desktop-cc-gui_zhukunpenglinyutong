@@ -624,3 +624,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 936: feat(messages): 去除对话幕布重复复制入口
+
+**Date**: 2026-06-25
+**Task**: feat(messages): 去除对话幕布重复复制入口
+**Branch**: `feature/v0.5.13`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `34cf3ac6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

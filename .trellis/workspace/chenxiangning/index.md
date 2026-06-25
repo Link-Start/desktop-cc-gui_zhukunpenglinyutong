@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-24.md`
-- **Total Sessions**: 935
+- **Total Sessions**: 936
 - **Last Active**: 2026-06-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-24.md` | ~626 | Active |
+| `journal-24.md` | ~659 | Active |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
 | `journal-21.md` | ~1970 | Archived |
@@ -52,6 +52,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 936 | 2026-06-25 | feat(messages): 去除对话幕布重复复制入口 | `34cf3ac6` | `feature/v0.5.13` |
 | 935 | 2026-06-25 | Archive Codex disk session start readiness | `3e485b63` | `feature/v0.5.13` |
 | 934 | 2026-06-25 | Externalize active canvas state selectors | `40c49757`, `774d1354` | `feature/v0.5.13` |
 | 933 | 2026-06-25 | 降级临时 runtime 重连提示 | `809e8234` | `feature/v0.5.13` |
