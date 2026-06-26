@@ -80,6 +80,7 @@ import {
 import {
   buildReviewCommandText,
   extractSessionIdFromEngineSendResponse,
+  isCodexMissingThreadBindingError,
   isInvalidReviewThreadIdError,
   isLikelyForeignModelForGemini,
   isRecoverableCodexThreadBindingError,
@@ -1044,10 +1045,17 @@ export function useThreadMessaging({
           providerProfileId:
             getThreadProviderProfileId?.(workspace.id, threadId) ?? null,
         });
-        if (!reboundThreadId || recoveryAttempt.isUnverifiedSameThreadMissingRebind) {
+        const isSameMissingThreadRebind =
+          reboundThreadId === threadId && isCodexMissingThreadBindingError(errorMessage);
+        if (
+          !reboundThreadId ||
+          recoveryAttempt.isUnverifiedSameThreadMissingRebind ||
+          isSameMissingThreadRebind
+        ) {
           if (
             await recoveryAttempt.tryFreshDraftReplacement(
-              recoveryAttempt.isUnverifiedSameThreadMissingRebind
+              recoveryAttempt.isUnverifiedSameThreadMissingRebind ||
+                isSameMissingThreadRebind
                 ? "refresh returned the same missing thread"
                 : refreshErrorMessage
                   ? `refresh failed: ${refreshErrorMessage}`

@@ -15,13 +15,8 @@ fn codex_summary(session_id: &str, timestamp: i64) -> crate::types::LocalUsageSe
 #[test]
 fn daemon_codex_local_thread_response_marks_live_unavailable() {
     let sessions = vec![codex_summary("s1", 20), codex_summary("s2", 10)];
-    let response = build_codex_daemon_local_thread_response(
-        "/repo",
-        sessions,
-        None,
-        Some(1),
-        &HashMap::new(),
-    );
+    let response =
+        build_codex_daemon_local_thread_response("/repo", sessions, None, Some(1), &HashMap::new());
     let result = response.get("result").and_then(Value::as_object).unwrap();
     let data = result.get("data").and_then(Value::as_array).unwrap();
 

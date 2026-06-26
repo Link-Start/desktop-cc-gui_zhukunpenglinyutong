@@ -679,6 +679,27 @@ impl WorkspaceSession {
         }
     }
 
+    pub(crate) async fn note_codex_thread_started_pending(
+        &self,
+        thread_id: &str,
+        timeout_duration: Duration,
+    ) {
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return;
+        }
+        if let Some(runtime_manager) = self.runtime_manager() {
+            runtime_manager
+                .note_foreground_thread_started_pending(
+                    &self.entry,
+                    "codex",
+                    normalized_thread_id,
+                    timeout_duration.as_millis() as u64,
+                )
+                .await;
+        }
+    }
+
     pub(crate) async fn clear_codex_foreground_work(
         &self,
         thread_id: Option<&str>,

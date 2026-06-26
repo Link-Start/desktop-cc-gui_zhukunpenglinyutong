@@ -868,6 +868,57 @@ describe("Messages live behavior", () => {
     scrollSpy.mockRestore();
   });
 
+  it("does not auto-follow static history item changes", () => {
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const { rerender } = render(
+      <Messages
+        items={[
+          {
+            id: "history-static-1",
+            kind: "message",
+            role: "user",
+            text: "历史消息 1",
+          },
+        ]}
+        threadId="thread-history-static"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    rerender(
+      <Messages
+        items={[
+          {
+            id: "history-static-1",
+            kind: "message",
+            role: "user",
+            text: "历史消息 1",
+          },
+          {
+            id: "history-static-2",
+            kind: "message",
+            role: "assistant",
+            text: "历史消息 2",
+          },
+        ]}
+        threadId="thread-history-static"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(scrollSpy).not.toHaveBeenCalled();
+    scrollSpy.mockRestore();
+  });
+
   it("resets to the revealed history head when expanding collapsed history", async () => {
     const items: ConversationItem[] = Array.from({ length: 32 }, (_, index) => ({
       id: `history-reveal-${index + 1}`,

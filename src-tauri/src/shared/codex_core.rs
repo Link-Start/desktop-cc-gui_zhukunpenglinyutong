@@ -30,7 +30,8 @@ const THREAD_COMPACTION_METHOD_CANDIDATES: [&str; 3] = [
     "thread/compactStart",
     "thread/compact",
 ];
-const TURN_START_THREAD_NOT_FOUND_RETRY_DELAYS_MS: [u64; 2] = [150, 350];
+const TURN_START_THREAD_NOT_FOUND_RETRY_DELAYS_MS: [u64; 4] = [150, 350, 750, 1_500];
+const THREAD_RESUME_READY_RETRY_DELAYS_MS: [u64; 5] = [150, 350, 750, 1_500, 3_000];
 // Disk Codex cold starts can take longer than the normal turn/start ack window.
 // Keep readiness bounded, but do not misclassify a slow first resume as a broken thread.
 const THREAD_START_READY_CONFIRM_TIMEOUT_MS: u64 = 8_000;
@@ -137,6 +138,8 @@ pub(crate) fn extract_thread_id_from_response(value: &Value) -> Option<String> {
         .or_else(|| value.get("thread_id"))
         .or_else(|| value.get("thread").and_then(|thread| thread.get("id")))
         .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|thread_id| !thread_id.is_empty())
         .map(ToString::to_string)
 }
 
@@ -336,6 +339,64 @@ fn is_thread_not_found_response(value: &Value) -> bool {
         .is_some_and(is_thread_not_found_error_message)
 }
 
+async fn wait_for_thread_resume_ready(
+    session: &Arc<WorkspaceSession>,
+    workspace_id: &str,
+    thread_id: &str,
+    timeout_duration: Duration,
+    context: &str,
+) -> Result<(), String> {
+    let mut last_thread_not_ready_reason: Option<String> = None;
+    for attempt_index in 0..=THREAD_RESUME_READY_RETRY_DELAYS_MS.len() {
+        if attempt_index > 0 {
+            if let Some(delay_ms) = THREAD_RESUME_READY_RETRY_DELAYS_MS.get(attempt_index - 1) {
+                sleep(Duration::from_millis(*delay_ms)).await;
+            }
+        }
+        match session
+            .send_request_with_timeout(
+                "thread/resume",
+                json!({ "threadId": thread_id }),
+                timeout_duration,
+            )
+            .await
+        {
+            Ok(response) if is_thread_not_found_response(&response) => {
+                let reason = extract_error_message_from_response(&response)
+                    .unwrap_or_else(|| "thread not found".to_string());
+                last_thread_not_ready_reason = Some(reason.clone());
+                log::warn!(
+                    "[thread/resume][ready_retry] workspace_id={} thread_id={} context={} outcome=thread_not_ready attempt={} next_retry={} reason={}",
+                    workspace_id,
+                    thread_id,
+                    context,
+                    attempt_index + 1,
+                    attempt_index < THREAD_RESUME_READY_RETRY_DELAYS_MS.len(),
+                    reason
+                );
+            }
+            Ok(_) => return Ok(()),
+            Err(error) if is_thread_not_found_error_message(&error) => {
+                last_thread_not_ready_reason = Some(error.clone());
+                log::warn!(
+                    "[thread/resume][ready_retry] workspace_id={} thread_id={} context={} outcome=thread_not_ready attempt={} next_retry={} reason={}",
+                    workspace_id,
+                    thread_id,
+                    context,
+                    attempt_index + 1,
+                    attempt_index < THREAD_RESUME_READY_RETRY_DELAYS_MS.len(),
+                    error
+                );
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(format!(
+        "thread not ready after bounded resume retry: {}",
+        last_thread_not_ready_reason.unwrap_or_else(|| "thread not found".to_string())
+    ))
+}
+
 async fn retry_turn_start_after_thread_resume(
     session: &Arc<WorkspaceSession>,
     workspace_id: &str,
@@ -350,13 +411,14 @@ async fn retry_turn_start_after_thread_resume(
         thread_id,
         reason
     );
-    session
-        .send_request_with_timeout(
-            "thread/resume",
-            json!({ "threadId": thread_id }),
-            timeout_duration,
-        )
-        .await?;
+    wait_for_thread_resume_ready(
+        session,
+        workspace_id,
+        thread_id,
+        timeout_duration,
+        "turn-start",
+    )
+    .await?;
     for (attempt_index, delay_ms) in TURN_START_THREAD_NOT_FOUND_RETRY_DELAYS_MS
         .iter()
         .copied()
@@ -517,8 +579,21 @@ pub(crate) async fn start_thread_core(
         .await
     {
         Ok(response) => {
-            session.clear_codex_foreground_work(None, None).await;
-            validate_thread_start_response(response)
+            let response = match validate_thread_start_response(response) {
+                Ok(response) => response,
+                Err(error) => {
+                    session.clear_codex_foreground_work(None, None).await;
+                    return Err(error);
+                }
+            };
+            if let Some(thread_id) = extract_thread_id_from_response(&response) {
+                session
+                    .note_codex_thread_started_pending(&thread_id, timeout_duration)
+                    .await;
+            } else {
+                session.clear_codex_foreground_work(None, None).await;
+            }
+            Ok(response)
         }
         Err(error) => {
             session.clear_codex_foreground_work(None, None).await;
@@ -565,20 +640,19 @@ pub(crate) async fn confirm_thread_ready_after_start_core(
 ) -> Result<(), String> {
     let session_key = session_key_for_provider(&workspace_id, provider_profile_id.as_deref());
     let session = get_session_clone(sessions, &session_key).await?;
-    let params = json!({ "threadId": thread_id.clone() });
-    session
-        .send_request_with_timeout(
-            "thread/resume",
-            params,
-            Duration::from_millis(THREAD_START_READY_CONFIRM_TIMEOUT_MS),
+    wait_for_thread_resume_ready(
+        &session,
+        &workspace_id,
+        &thread_id,
+        Duration::from_millis(THREAD_START_READY_CONFIRM_TIMEOUT_MS),
+        "thread-start",
+    )
+    .await
+    .map_err(|error| {
+        format!(
+            "thread/start ready confirmation failed for workspace {workspace_id} thread {thread_id}: {error}"
         )
-        .await
-        .map(|_| ())
-        .map_err(|error| {
-            format!(
-                "thread/start ready confirmation failed for workspace {workspace_id} thread {thread_id}: {error}"
-            )
-        })
+    })
 }
 
 pub(crate) async fn fork_thread_core(
@@ -1074,6 +1148,10 @@ mod tests {
         assert_eq!(
             extract_thread_id_from_response(&json!({ "thread_id": "thread-3" })),
             Some("thread-3".to_string())
+        );
+        assert_eq!(
+            extract_thread_id_from_response(&json!({ "result": { "threadId": "   " } })),
+            None
         );
         assert_eq!(extract_thread_id_from_response(&json!({})), None);
     }

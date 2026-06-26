@@ -540,7 +540,7 @@ export const Messages = memo(function Messages({
   }, []);
 
   const requestAutoScroll = useCallback(() => {
-    if (!liveAutoFollowEnabled) {
+    if (!liveAutoFollowEnabled || !isWorking) {
       return;
     }
     if (!bottomRef.current) {
@@ -548,7 +548,7 @@ export const Messages = memo(function Messages({
     }
     // Always use instant for programmatic scroll requests to avoid blocking input
     bottomRef.current.scrollIntoView({ behavior: "instant", block: "end" });
-  }, [liveAutoFollowEnabled]);
+  }, [isWorking, liveAutoFollowEnabled]);
 
   const scrollToAgentTaskCard = useCallback((request: AgentTaskScrollRequest | null) => {
     if (!request) {
@@ -723,12 +723,12 @@ export const Messages = memo(function Messages({
     };
   }, []);
   useEffect(() => {
-    if (!liveAutoFollowEnabled) {
+    if (!liveAutoFollowEnabled || !isWorking) {
       return;
     }
     autoScrollRef.current = true;
     requestAutoScroll();
-  }, [liveAutoFollowEnabled, requestAutoScroll]);
+  }, [isWorking, liveAutoFollowEnabled, requestAutoScroll]);
   useEffect(() => {
     const currentFirstId = effectiveItems[0]?.id ?? null;
     if (currentFirstId !== firstItemIdRef.current) {
@@ -1903,12 +1903,12 @@ export const Messages = memo(function Messages({
     if (!bottomRef.current) {
       return undefined;
     }
-    if (!liveAutoFollowEnabled) {
+    if (!liveAutoFollowEnabled || (!isWorking && !isAssistantFinalizing)) {
       return undefined;
     }
     const container = containerRef.current;
     const shouldScroll =
-      liveAutoFollowEnabled ||
+      (liveAutoFollowEnabled && (isWorking || isAssistantFinalizing)) ||
       autoScrollRef.current ||
       (container ? isNearBottom(container) : true);
     if (!shouldScroll) {
@@ -1928,7 +1928,14 @@ export const Messages = memo(function Messages({
         window.cancelAnimationFrame(raf);
       }
     };
-  }, [isAssistantFinalizing, scrollKey, isThinking, isNearBottom, liveAutoFollowEnabled]);
+  }, [
+    isAssistantFinalizing,
+    isNearBottom,
+    isThinking,
+    isWorking,
+    liveAutoFollowEnabled,
+    scrollKey,
+  ]);
 
   const groupedEntries = useMemo(
     () => groupToolItems(timelinePresentationItems),
