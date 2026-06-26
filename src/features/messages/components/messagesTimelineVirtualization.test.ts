@@ -415,6 +415,21 @@ describe("messagesTimelineVirtualization", () => {
     });
   });
 
+  it("remeasures without resetting scroll when the same history thread changes weight", () => {
+    expect(resolveVirtualizedTimelineScopeReset({
+      previousScopeKey: "ws-1\u0000thread-1\u0000200\u0000120\u0000virtualized",
+      nextScopeKey: "ws-1\u0000thread-1\u0000205\u0000135\u0000virtualized",
+      shouldVirtualize: true,
+      stableHistoryView: true,
+      hasPendingJump: false,
+      hasScrollElement: true,
+    })).toEqual({
+      nextScopeKey: "ws-1\u0000thread-1\u0000205\u0000135\u0000virtualized",
+      shouldResetScroll: false,
+      shouldMeasure: true,
+    });
+  });
+
   it("does not reset virtualized scroll during streaming or jump targeting", () => {
     expect(resolveVirtualizedTimelineScopeReset({
       previousScopeKey: "ws-1\u0000thread-old\u0000200",

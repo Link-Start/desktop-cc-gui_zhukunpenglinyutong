@@ -576,11 +576,27 @@ export function resolveVirtualizedTimelineScopeReset(input: {
       shouldMeasure: false,
     };
   }
+  if (
+    input.previousScopeKey !== null &&
+    resolveVirtualizedTimelineScopeIdentity(input.previousScopeKey) ===
+      resolveVirtualizedTimelineScopeIdentity(input.nextScopeKey)
+  ) {
+    return {
+      nextScopeKey: input.nextScopeKey,
+      shouldResetScroll: false,
+      shouldMeasure: true,
+    };
+  }
   return {
     nextScopeKey: input.nextScopeKey,
     shouldResetScroll: true,
     shouldMeasure: true,
   };
+}
+
+function resolveVirtualizedTimelineScopeIdentity(scopeKey: string): string {
+  const [workspaceId = "", threadId = "", , , mode = ""] = scopeKey.split("\u0000");
+  return [workspaceId, threadId, mode].join("\u0000");
 }
 
 export function observeTimelineElementOffset<TScrollElement extends Element>(
