@@ -658,6 +658,17 @@ impl DaemonState {
 
     pub(crate) async fn get_git_status(&self, workspace_id: String) -> Result<Value, String> {
         let repo_root = self.git_repo_root(&workspace_id).await?;
+        if !crate::git_utils::path_has_git_repository_marker(&repo_root) {
+            return Ok(serde_json::json!({
+                "isGitRepository": false,
+                "branchName": "",
+                "files": [],
+                "stagedFiles": [],
+                "unstagedFiles": [],
+                "totalAdditions": 0,
+                "totalDeletions": 0,
+            }));
+        }
         let repo = open_repository_at_root(&repo_root)?;
         let branch_name = repo
             .head()
@@ -720,6 +731,7 @@ impl DaemonState {
         }
 
         Ok(json!({
+            "isGitRepository": true,
             "branchName": branch_name,
             "files": files,
             "stagedFiles": staged_files,
@@ -734,6 +746,9 @@ impl DaemonState {
         workspace_id: String,
     ) -> Result<Vec<GitFileDiff>, String> {
         let repo_root = self.git_repo_root(&workspace_id).await?;
+        if !crate::git_utils::path_has_git_repository_marker(&repo_root) {
+            return Ok(Vec::new());
+        }
         tokio::task::spawn_blocking(move || {
             let repo = open_repository_at_root(&repo_root)?;
             let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
