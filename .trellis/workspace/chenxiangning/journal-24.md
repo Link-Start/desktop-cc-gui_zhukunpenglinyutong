@@ -1127,3 +1127,36 @@ Validation:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 948: 修复 Git Diff 统计显示漂移
+
+**Date**: 2026-06-27
+**Task**: 修复 Git Diff 统计显示漂移
+**Branch**: `feature/v0.6`
+
+### Summary
+
+右侧 Git Diff 面板现在会从 daemon status 与 canonical diff fallback 获取正确 additions/deletions；过万 diff 统计使用 compact badge 显示并保留精确 accessible count。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d1e8d7db` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
