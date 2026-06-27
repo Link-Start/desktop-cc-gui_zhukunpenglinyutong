@@ -69,22 +69,6 @@ describe("Markdown file links", () => {
     ).toBeTruthy();
   });
 
-  it("copies inline code from its copy button", async () => {
-    const writeTextMock = vi.fn(async () => undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText: writeTextMock },
-      configurable: true,
-    });
-
-    render(<Markdown value={"运行 `npm run test` 后继续。"} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "messages.copyInlineCode" }));
-
-    await waitFor(() => {
-      expect(writeTextMock).toHaveBeenCalledWith("npm run test");
-    });
-  });
-
   it("preserves fragmented inline code content during markdown normalization", () => {
     const { container } = render(
       <Markdown value={"命令是 `pnpm\nrun\nlint`，执行后继续。"} />,
@@ -93,6 +77,16 @@ describe("Markdown file links", () => {
     const code = container.querySelector("code");
     expect(code?.textContent ?? "").toBe("pnpm run lint");
     expect(container.textContent ?? "").not.toContain("pnpmrunlint");
+  });
+
+  it("renders ordinary inline code without copy controls", () => {
+    const { container } = render(
+      <Markdown value={"版本记录包含 `feat(messages)` 和 `useCallback`。"} />,
+    );
+
+    expect(container.querySelectorAll("code")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /copy inline code/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "复制行内代码" })).toBeNull();
   });
 
   it("flushes the latest content immediately when streaming throttle changes", () => {

@@ -4,7 +4,6 @@ import { EngineIcon } from '../../../engine/components/EngineIcon';
 import type { ComposerSendReadiness } from '../../utils/composerSendReadiness';
 import type { ModelInfo, ProviderId } from './types';
 import type { ProviderModelGroup } from './modelOptions';
-import type { RuntimeVendorOption } from './hooks/useActiveVendorByRuntime';
 import { ModelSelect } from './selectors/ModelSelect';
 
 function parseContextChipCount(chip: string, prefix: string) {
@@ -24,10 +23,8 @@ type ComposerReadinessBarProps = {
   models?: ModelInfo[];
   modelGroups?: ProviderModelGroup[];
   currentProvider?: string;
-  runtimeVendorOptions?: Partial<Record<ProviderId, RuntimeVendorOption[]>>;
   onModelSelect?: (modelId: string) => void;
   onProviderModelSelect?: (providerId: ProviderId, modelId: string) => void;
-  onRuntimeVendorSwitch?: (providerId: ProviderId, vendorId: string) => Promise<void> | void;
   onAddModel?: () => void;
   onRefreshModelConfig?: () => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
@@ -43,10 +40,8 @@ export function ComposerReadinessBar({
   models,
   modelGroups,
   currentProvider,
-  runtimeVendorOptions,
   onModelSelect,
   onProviderModelSelect,
-  onRuntimeVendorSwitch,
   onAddModel,
   onRefreshModelConfig,
   isModelConfigRefreshing,
@@ -111,8 +106,6 @@ export function ComposerReadinessBar({
             providerLabel={readiness.target.providerLabel}
             triggerVariant="readiness"
             onProviderModelChange={onProviderModelSelect}
-            runtimeVendorOptions={runtimeVendorOptions}
-            onRuntimeVendorSwitch={onRuntimeVendorSwitch}
             onAddModel={onAddModel}
             onRefreshConfig={onRefreshModelConfig}
             isRefreshingConfig={Boolean(isModelConfigRefreshing)}

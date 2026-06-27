@@ -20,7 +20,6 @@ export type ModelStorageSnapshot = {
 export type ProviderModelGroup = {
   providerId: ProviderId;
   providerLabel: string;
-  activeVendorLabel?: string;
   models: ModelInfo[];
   enabled: boolean;
 };
@@ -287,7 +286,6 @@ export function resolveProviderModelGroups({
   providerModelCatalogs,
   providerAvailability,
   resolveProviderLabel,
-  activeVendorByProvider,
 }: {
   currentProvider: string;
   models?: ModelInfo[];
@@ -296,7 +294,6 @@ export function resolveProviderModelGroups({
   providerModelCatalogs?: ProviderModelCatalogs;
   providerAvailability?: Partial<Record<ProviderId, boolean>>;
   resolveProviderLabel?: (providerId: ProviderId, fallbackLabel: string) => string;
-  activeVendorByProvider?: Partial<Record<ProviderId, string>>;
 }): ProviderModelGroup[] {
   return AVAILABLE_PROVIDERS.map((provider) => {
     const enabled = providerAvailability?.[provider.id] ?? provider.enabled;
@@ -309,11 +306,9 @@ export function resolveProviderModelGroups({
       providerModelCatalogs,
     });
 
-    const vendorLabel = activeVendorByProvider?.[provider.id]?.trim();
     return {
       providerId: provider.id,
       providerLabel: resolveProviderLabel?.(provider.id, provider.label) ?? provider.label,
-      activeVendorLabel: vendorLabel && vendorLabel.length > 0 ? vendorLabel : undefined,
       models: groupModels,
       enabled,
     };

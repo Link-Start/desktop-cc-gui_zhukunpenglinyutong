@@ -28,4 +28,3 @@ export { useSpaceKeyListener } from './useSpaceKeyListener.js';
 export { useResizableChatInputBox, computeResize } from './useResizableChatInputBox.js';
 export { useInlineHistoryCompletion } from './useInlineHistoryCompletion.js';
 export { useUndoRedoHistory, createUndoRedoHistory } from './useUndoRedoHistory.js';
-export { useActiveVendorByRuntime } from './useActiveVendorByRuntime.js';
