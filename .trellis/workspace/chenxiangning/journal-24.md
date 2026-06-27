@@ -1193,3 +1193,36 @@ Validation:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 950: 收敛 Codex 磁盘会话失效提示
+
+**Date**: 2026-06-27
+**Task**: 收敛 Codex 磁盘会话失效提示
+**Branch**: `feature/v0.6.1`
+
+### Summary
+
+修复 Codex disk provider 在旧 thread binding/runtime 失效时的误导性运行时提示；限定 disk provider readiness failure 的 recoverable toast，不影响 Claude Code 和 managed Codex providers；补充 OpenSpec change 与目标测试，并通过 typecheck、lint、large-file gate、heavy-test-noise gate。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5f027bbd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
