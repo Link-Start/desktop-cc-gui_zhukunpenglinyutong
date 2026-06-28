@@ -1100,7 +1100,10 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     options.gitStatus,
   );
 
-  const renderComposerNode = (showStatusPanelToggleOverride?: boolean) =>
+  const renderComposerNode = (
+    showStatusPanelToggleOverride?: boolean,
+    branchControlEnabled: boolean = true,
+  ) =>
     options.showComposer ? (
       <Profiler id="composer" onRender={handleRuntimeProfileRender}>
         <ActiveCanvasComposer
@@ -1241,6 +1244,17 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           activeWorkspaceId={options.activeWorkspaceId}
           activeWorkspaceName={options.activeWorkspace?.name ?? null}
           activeWorkspacePath={options.activeWorkspace?.path ?? null}
+          branchControl={
+            branchControlEnabled && options.activeWorkspace && options.branchName
+              ? {
+                  branchName: options.branchName,
+                  branches: options.branches,
+                  onCheckout: options.onCheckoutBranch,
+                  onCreate: options.onCreateBranch,
+                  disabled: options.isWorktreeWorkspace,
+                }
+              : null
+          }
           rewindWorkspaceGitState={rewindWorkspaceGitState}
           plan={options.plan}
           isPlanMode={options.isPlanMode}
@@ -1284,7 +1298,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       </Profiler>
     ) : null;
   const composerNode = renderComposerNode(false);
-  const homeComposerNode = renderComposerNode(false);
+  // 首页：分支徽标与工作区选择并排渲染在 HomeChat 里，故 Composer 内不再重复
+  const homeComposerNode = renderComposerNode(false, false);
   const approvalToastsNode = null;
 
   const updateToastNode = (
@@ -1320,7 +1335,17 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       onAddWorkspace={options.onAddWorkspace}
       composerNode={homeComposerNode}
       selectedEngine={options.selectedEngine}
-      selectedBranchName={options.branchName}
+      branchControl={
+        options.activeWorkspace && options.branchName
+          ? {
+              branchName: options.branchName,
+              branches: options.branches,
+              onCheckout: options.onCheckoutBranch,
+              onCreate: options.onCreateBranch,
+              disabled: options.isWorktreeWorkspace,
+            }
+          : null
+      }
     />
   );
 

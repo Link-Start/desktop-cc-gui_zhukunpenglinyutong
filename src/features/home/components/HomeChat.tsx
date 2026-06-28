@@ -8,7 +8,6 @@ import Check from "lucide-react/dist/esm/icons/check";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import Folder from "lucide-react/dist/esm/icons/folder";
 import FolderPlus from "lucide-react/dist/esm/icons/folder-plus";
-import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import Search from "lucide-react/dist/esm/icons/search";
 import { useTranslation } from "react-i18next";
 import type { EngineType } from "../../../types";
@@ -19,6 +18,10 @@ import {
   PopoverTrigger,
 } from "../../../components/ui/popover";
 import { EngineIcon } from "../../engine/components/EngineIcon";
+import {
+  ComposerBranchBadge,
+  type ComposerBranchControl,
+} from "../../composer/components/ComposerBranchBadge";
 
 type LatestAgentRun = {
   message: string;
@@ -48,7 +51,7 @@ type HomeChatProps = {
   onAddWorkspace?: () => void;
   composerNode?: ReactNode;
   selectedEngine?: EngineType;
-  selectedBranchName?: string | null;
+  branchControl?: ComposerBranchControl | null;
 };
 
 function getEngineLabel(engine: EngineType): string {
@@ -72,7 +75,7 @@ export function HomeChat({
   onAddWorkspace,
   composerNode,
   selectedEngine = "codex",
-  selectedBranchName = null,
+  branchControl = null,
 }: HomeChatProps) {
   const { t } = useTranslation();
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -115,12 +118,6 @@ export function HomeChat({
       Math.max(48, filteredWorkspaces.length * 36),
     );
   }, [filteredWorkspaces.length, shouldVirtualizeWorkspacePicker]);
-  const branchLabel = selectedWorkspace
-    ? selectedBranchName?.trim() || selectedWorkspace.worktree?.branch || null
-    : null;
-  const branchDescriptor = selectedWorkspace?.kind === "worktree"
-    ? t("workspace.homeBranchLabelWorktree")
-    : t("workspace.homeBranchLabelMain");
   const resolvedWorkspaceId = selectedWorkspace?.id ?? workspaces[0]?.id ?? "";
   useEffect(() => {
     if (!workspaceMenuOpen) {
@@ -163,10 +160,18 @@ export function HomeChat({
             <h1 className="home-chat-title">
               {t("homeChat.minimalTitle", "Create anything")}
             </h1>
+          </div>
+        </header>
 
+        <section className="home-chat-stage">
+          <section
+            className="home-chat-composer-panel"
+            aria-label={t("home.newConversation", "New Conversation")}
+          >
+            <div className="home-chat-composer-host">{composerNode}</div>
             {selectedWorkspace ? (
               <div
-                className="home-chat-workspace-summary"
+                className="home-chat-composer-meta"
                 title={selectedWorkspace.name}
               >
                 <div className="home-chat-workspace-select" title={selectedWorkspace.name}>
@@ -324,24 +329,11 @@ export function HomeChat({
                     </PopoverContent>
                   </Popover>
                 </div>
-                {branchLabel ? (
-                  <div className="home-chat-workspace-branch">
-                    <GitBranch size={18} aria-hidden className="home-chat-workspace-branch-icon" />
-                    <span className="home-chat-workspace-branch-label">{branchDescriptor}</span>
-                    <span className="home-chat-workspace-branch-value">({branchLabel})</span>
-                  </div>
+                {branchControl?.branchName ? (
+                  <ComposerBranchBadge {...branchControl} />
                 ) : null}
               </div>
             ) : null}
-          </div>
-        </header>
-
-        <section className="home-chat-stage">
-          <section
-            className="home-chat-composer-panel"
-            aria-label={t("home.newConversation", "New Conversation")}
-          >
-            <div className="home-chat-composer-host">{composerNode}</div>
           </section>
 
         </section>

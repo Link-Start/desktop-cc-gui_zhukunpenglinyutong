@@ -225,7 +225,7 @@
 .selector-button .selector-tool-icon {
   font-size: 15px;
   line-height: 1;
-  opacity: 0.78;
+  opacity: 1;
 }
 
 .selector-reasoning-button.is-icon-only {
@@ -316,7 +316,7 @@
 .button-area-primary-row .selector-button.selector-provider-button,
 .button-area-primary-row .selector-button.selector-shortcut-button,
 .button-area-primary-row .selector-button.config-button {
-  border-color: transparent;
+  border: none;
 }
 
 .button-area.is-tool-dock-open .button-area-primary-row .selector-tool-dock-toggle {

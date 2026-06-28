@@ -44,7 +44,12 @@ const baseProps = {
   composerNode: <div>Composer node</div>,
   selectedEngine: "claude" as const,
   selectedWorkspaceId: "ws-1",
-  selectedBranchName: "feature/ref-layout",
+  branchControl: {
+    branchName: "feature/ref-layout",
+    branches: [{ name: "feature/ref-layout", lastCommit: 1 }],
+    onCheckout: vi.fn(),
+    onCreate: vi.fn(),
+  },
   workspaces: [
     { id: "ws-1", name: "desktop-cc-gui", path: "/Users/demo/Desktop/desktop-cc-gui", kind: "main" as const },
     { id: "ws-2", name: "workfree", path: "/Users/demo/Desktop/workfree", kind: "worktree" as const, worktree: { branch: "feature/workfree" } },
@@ -60,11 +65,11 @@ describe("HomeChat", () => {
     expect(markup).toContain("home-chat-workspace-select");
     expect(markup).toContain("home-chat-workspace-select-trigger");
     expect(markup).toContain('aria-label="Workspace"');
-    expect(markup).toContain("Primary branch");
-    expect(markup).toContain("(feature/ref-layout)");
+    expect(markup).toContain("composer-branch-badge");
+    expect(markup).toContain("feature/ref-layout");
     expect(markup).toContain("Composer node");
     expect(markup).toContain("home-chat-engine-mark");
-    expect(markup).toContain("home-chat-workspace-summary");
+    expect(markup).toContain("home-chat-composer-meta");
   });
 
   it("keeps the composer mounted inside the dedicated host container", () => {
@@ -79,7 +84,6 @@ describe("HomeChat", () => {
       <HomeChat
         {...baseProps}
         selectedWorkspaceId="80ad34fc-f38d-4023-8bb5-3073b0f3e001"
-        selectedBranchName="feature/hero-layout"
         workspaces={[
           {
             id: "80ad34fc-f38d-4023-8bb5-3073b0f3e001",
@@ -106,14 +110,14 @@ describe("HomeChat", () => {
       />,
     );
 
-    expect(markup).not.toContain("home-chat-workspace-summary");
+    expect(markup).not.toContain("home-chat-composer-meta");
   });
 
-  it("does not render an unknown branch placeholder when branch data is unavailable", () => {
+  it("does not render a branch badge when branch data is unavailable", () => {
     const markup = renderToStaticMarkup(
       <HomeChat
         {...baseProps}
-        selectedBranchName={null}
+        branchControl={null}
         workspaces={[
           {
             id: "ws-1",
@@ -125,8 +129,7 @@ describe("HomeChat", () => {
       />,
     );
 
-    expect(markup).not.toContain("unknown");
-    expect(markup).not.toContain("home-chat-workspace-branch");
+    expect(markup).not.toContain("composer-branch-badge");
   });
 
   it("keeps New Home creation-first without a runtime dashboard", () => {
@@ -177,7 +180,6 @@ describe("HomeChat workspace picker virtualization", () => {
         {...baseProps}
         workspaces={longWorkspaces}
         selectedWorkspaceId={longWorkspaces[0]?.id ?? null}
-        selectedBranchName="main"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Workspace" }));

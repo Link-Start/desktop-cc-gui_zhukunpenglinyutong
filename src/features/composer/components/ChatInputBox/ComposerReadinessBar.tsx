@@ -131,11 +131,6 @@ export function ComposerReadinessBar({
             {modeLabel}
           </span>
         ) : null}
-        {readiness.target.modeImpactLabel ? (
-          <span className="composer-readiness-mode-impact">
-            {readiness.target.modeImpactLabel}
-          </span>
-        ) : null}
       </div>
 
       <div className="composer-readiness-activity" title={readiness.activity.detailLabel}>

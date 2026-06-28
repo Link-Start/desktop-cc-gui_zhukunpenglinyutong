@@ -364,6 +364,14 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const hydrationRemeasureBudgetRef = useRef<HydrationRemeasureBudget>(
     DEFAULT_HYDRATION_REMEASURE_BUDGET,
   );
+  // lightweight / live 两套重测同样复用 budget guard：签名不变时封顶重测次数 +
+  // cooldown，避免 measure→重排→ResizeObserver→再 measure 的回路造成持续闪动。
+  const lightweightRemeasureBudgetRef = useRef<HydrationRemeasureBudget>(
+    DEFAULT_HYDRATION_REMEASURE_BUDGET,
+  );
+  const liveRowRemeasureBudgetRef = useRef<HydrationRemeasureBudget>(
+    DEFAULT_HYDRATION_REMEASURE_BUDGET,
+  );
   const hydrationRemeasureRafRef = useRef<number | null>(null);
   const lightweightRemeasureRafRef = useRef<number | null>(null);
   const liveRowRemeasureRafRef = useRef<number | null>(null);
@@ -388,6 +396,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
   useEffect(() => {
     hydrationRemeasureBudgetRef.current = DEFAULT_HYDRATION_REMEASURE_BUDGET;
+    lightweightRemeasureBudgetRef.current = DEFAULT_HYDRATION_REMEASURE_BUDGET;
+    liveRowRemeasureBudgetRef.current = DEFAULT_HYDRATION_REMEASURE_BUDGET;
     if (typeof window !== "undefined" && hydrationRemeasureRafRef.current !== null) {
       window.cancelAnimationFrame(hydrationRemeasureRafRef.current);
       hydrationRemeasureRafRef.current = null;
@@ -811,6 +821,50 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     liveReasoningItem?.summary.length,
   ]);
 
+  // 判定为空的虚拟行：除了 CSS 压成 0，还要主动把虚拟化器内部记录的尺寸归零，
+  // 否则 measure() 重算时会沿用上一次的非 0 测量值，导致后续行 translateY 偏移。
+  const emptyTimelineRowIndexSignature = useMemo(() => {
+    if (!shouldVirtualizeTimeline) {
+      return "";
+    }
+    const indices: number[] = [];
+    timelineProjectionRows.forEach((row, index) => {
+      const isEmpty = isEmptyVirtualProjectionRow(row, {
+        activeEngine,
+        claudeHistoryTranscriptFallbackActive,
+        hasTailUserInputNode: Boolean(userInputNode),
+        isWorking,
+        lastDurationMs,
+        effectiveItemsCount,
+      });
+      if (isEmpty) {
+        indices.push(index);
+      }
+    });
+    return indices.join(",");
+  }, [
+    activeEngine,
+    claudeHistoryTranscriptFallbackActive,
+    effectiveItemsCount,
+    isWorking,
+    lastDurationMs,
+    shouldVirtualizeTimeline,
+    timelineProjectionRows,
+    userInputNode,
+  ]);
+
+  useEffect(() => {
+    if (!shouldVirtualizeTimeline || emptyTimelineRowIndexSignature.length === 0) {
+      return;
+    }
+    emptyTimelineRowIndexSignature.split(",").forEach((rawIndex) => {
+      const index = Number(rawIndex);
+      if (Number.isInteger(index) && index >= 0) {
+        timelineVirtualizer.resizeItem(index, 0);
+      }
+    });
+  }, [emptyTimelineRowIndexSignature, shouldVirtualizeTimeline, timelineVirtualizer]);
+
   useEffect(() => {
     return () => {
       if (typeof window !== "undefined" && hydrationRemeasureRafRef.current !== null) {
@@ -838,6 +892,16 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         window.cancelAnimationFrame(lightweightRemeasureRafRef.current);
         lightweightRemeasureRafRef.current = null;
       }
+      return;
+    }
+    const recovery = resolveHydrationRemeasureGuard({
+      previous: lightweightRemeasureBudgetRef.current,
+      signature: lightweightTimelineRowSignature,
+      hydratedHeavyRowCount: 1,
+      now: Date.now(),
+    });
+    lightweightRemeasureBudgetRef.current = recovery.nextBudget;
+    if (!recovery.shouldRemeasure) {
       return;
     }
     if (lightweightRemeasureRafRef.current !== null) {
@@ -872,6 +936,18 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeLiveTimelineRowKeys.length === 0 ||
       typeof window === "undefined"
     ) {
+      return;
+    }
+    // 流式打字时 liveRowRemeasureSignature 随文本量化变化（每 ~600 字符）→ budget
+    // 重置 → 正常重测；只有签名不变还反复触发时才封顶，掐断测量回路闪动。
+    const recovery = resolveHydrationRemeasureGuard({
+      previous: liveRowRemeasureBudgetRef.current,
+      signature: liveRowRemeasureSignature,
+      hydratedHeavyRowCount: 1,
+      now: Date.now(),
+    });
+    liveRowRemeasureBudgetRef.current = recovery.nextBudget;
+    if (!recovery.shouldRemeasure) {
       return;
     }
     if (liveRowRemeasureRafRef.current !== null) {
@@ -1803,19 +1879,33 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             data-active-live-row={isActiveLiveTimelineRow ? "true" : undefined}
             data-conversation-lightweight-virtual-row={isLightweightTimelineRow ? "true" : undefined}
             data-timeline-row-kind={row?.kind}
+            data-empty-virtual-row={isEmptyTimelineRow ? "true" : undefined}
             data-virtual-row-size={placeholderHeight}
-            className={isActiveLiveTimelineRow ? "messages-virtualized-row is-active-live-row" : "messages-virtualized-row"}
-            ref={timelineVirtualizer.measureElement}
+            className={
+              isEmptyTimelineRow
+                ? "messages-virtualized-row is-empty-virtual-row"
+                : isActiveLiveTimelineRow
+                  ? "messages-virtualized-row is-active-live-row"
+                  : "messages-virtualized-row"
+            }
+            // 空行不挂 measureElement：避免内层残留内容/margin 穿透被测成非 0
+            // 高度，扰乱后续行的 translateY 累加（重叠 + 测量回路闪动的根因）。
+            ref={isEmptyTimelineRow ? undefined : timelineVirtualizer.measureElement}
             style={{
               left: 0,
-              minHeight: `${placeholderHeight}px`,
+              height: isEmptyTimelineRow ? 0 : undefined,
+              // 只有轻量摘要行（固定高度卡片）用估高占位；普通行的高度交给
+              // measureElement 量真实内容。给普通行设 minHeight=估高会与
+              // measureElement 形成正反馈棘轮：元素被撑到估高 → 量得估高 →
+              // 永远塌不回真实内容高度，短内容行下方因此残留大段空白。
+              minHeight: isLightweightTimelineRow ? `${placeholderHeight}px` : undefined,
               position: "absolute",
               top: 0,
               transform: `translateY(${virtualRow.start}px)`,
               width: "100%",
             }}
           >
-            {renderProjectionRowWithBoundary(row)}
+            {isEmptyTimelineRow ? null : renderProjectionRowWithBoundary(row)}
           </div>
         );
       })}

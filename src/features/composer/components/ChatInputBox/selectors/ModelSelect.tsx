@@ -64,7 +64,6 @@ export const ModelSelect = ({
   onChange,
   models = [],
   currentProvider = 'claude',
-  providerLabel,
   triggerVariant = 'default',
   modelGroups,
   onProviderModelChange,
@@ -114,7 +113,6 @@ export const ModelSelect = ({
     return model.description;
   };
   const currentModelLabel = currentModel ? getModelLabel(currentModel) : t('models.selectModel');
-  const resolvedProviderLabel = providerLabel ?? t(`providers.${currentProvider}.label`);
   const hasGroupedModels = Boolean(modelGroups && modelGroups.length > 0);
 
   /**
@@ -203,13 +201,7 @@ export const ModelSelect = ({
         {triggerVariant === 'readiness' ? (
           <>
             <span className="composer-readiness-icon" aria-hidden="true">
-              <ModelIcon provider={currentProvider} size={17} />
-            </span>
-            <span className="composer-readiness-provider">
-              {resolvedProviderLabel}
-            </span>
-            <span className="composer-readiness-divider" aria-hidden="true">
-              /
+              <ModelIcon provider={currentProvider} size={16} />
             </span>
             <span className="composer-readiness-model">
               {currentModelLabel}

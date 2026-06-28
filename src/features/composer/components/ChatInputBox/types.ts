@@ -836,6 +836,8 @@ export interface ButtonAreaProps {
   isModelConfigRefreshing?: boolean;
   /** Quick shortcut actions rendered in config panel */
   shortcutActions?: ShortcutAction[];
+  /** Composer readiness bar rendered in the center of the primary toolbar row */
+  readinessSurface?: ReactNode;
   /** High-signal status controls rendered on the main toolbar row */
   mainSurface?: ReactNode;
   /** Additional low-frequency tools rendered inside the tool popover */

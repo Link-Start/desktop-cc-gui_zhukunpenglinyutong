@@ -11,8 +11,12 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import DatabaseZap from 'lucide-react/dist/esm/icons/database-zap';
 import X from 'lucide-react/dist/esm/icons/x';
+import ArrowUp from 'lucide-react/dist/esm/icons/arrow-up';
+import Square from 'lucide-react/dist/esm/icons/square';
+import Plus from 'lucide-react/dist/esm/icons/plus';
 import type { ButtonAreaProps, MemoryReferenceMode, PermissionMode, ReasoningEffort } from './types';
 import { ConfigSelect, ModeSelect, ReasoningSelect, ShortcutActionsSelect } from './selectors';
+import { Button } from '@/components/ui/button';
 
 // Stable no-op callbacks to avoid re-renders when optional handlers are not provided
 const NOOP_MODE = (_mode: PermissionMode) => {};
@@ -29,7 +33,7 @@ function clampMemoryReferencePopoverPosition(value: number, min: number, max: nu
 }
 
 function ToolGridIcon() {
-  return <span className="codicon codicon-extensions selector-tool-icon" aria-hidden="true" />;
+  return <Plus size={18} className="selector-tool-icon" aria-hidden="true" />;
 }
 
 /**
@@ -73,6 +77,7 @@ export const ButtonArea = ({
   onAgentSelect,
   onOpenAgentSettings,
   shortcutActions,
+  readinessSurface,
   mainSurface,
   toolSurface,
   panelToggleSurface,
@@ -488,6 +493,12 @@ export const ButtonArea = ({
           ) : null}
         </div>
 
+        {readinessSurface ? (
+          <div className="button-area-readiness-surface">
+            {readinessSurface}
+          </div>
+        ) : null}
+
         <div className="button-area-right">
           {providerProfileLabel ? (
             <span className="button-area-provider-tag" title={providerProfileLabel}>
@@ -495,16 +506,22 @@ export const ButtonArea = ({
             </span>
           ) : null}
           {isLoading ? (
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
               className={`submit-button stop-button is-${resolvedStopButtonPhase}`}
               onClick={handleStopClick}
               title={t('chat.stopGeneration')}
               data-stream-phase={resolvedStopButtonPhase}
             >
-              <span className="codicon codicon-debug-stop" />
-            </button>
+              <Square aria-hidden fill="currentColor" />
+            </Button>
           ) : (
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
               className="submit-button"
               onClick={handleSubmitClick}
               disabled={disabled || !hasInputContent}
@@ -514,8 +531,8 @@ export const ButtonArea = ({
                   : t('chat.sendMessageEnter')
               }
             >
-              <span className="codicon codicon-send" />
-            </button>
+              <ArrowUp aria-hidden />
+            </Button>
           )}
         </div>
       </div>
