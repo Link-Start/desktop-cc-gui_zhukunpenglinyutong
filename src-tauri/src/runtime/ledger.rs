@@ -187,6 +187,13 @@ impl RuntimeManager {
         if let Ok(serialized) = serde_json::to_string_pretty(&payload) {
             let _ = write_json_atomically(&self.ledger_path, &serialized);
         }
-        *self.diagnostics.blocking_lock() = diagnostics;
+        // This runs during startup before any concurrent access, so the lock is
+        // always immediately available. Use `try_lock` instead of `blocking_lock`
+        // because this method is invoked from within a Tokio runtime in the daemon
+        // (`runtime.block_on(... DaemonState::load ...)`), and `blocking_lock`
+        // panics when called from a thread that is driving async tasks.
+        if let Ok(mut guard) = self.diagnostics.try_lock() {
+            *guard = diagnostics;
+        }
     }
 }
