@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
-- **Last Active**: 2026-06-27
+- **Total Sessions**: 5
+- **Last Active**: 2026-06-29
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~172 | Active |
+| `journal-1.md` | ~268 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-06-29 | 工具菜单下拉化与时间线空行修复 | `bd00e490` | `feat/ui-refactoring` |
 | 4 | 2026-06-27 | 工具块尺寸对齐 shadcn 官方 Marker 默认规格 | `144563c2` | `feat/ui-refactoring` |
 | 3 | 2026-06-27 | 新增 devtools 菜单项 + Geist 字体与文档观感优化 | `7a1d11e5`, `9d480e77` | `feat/ui-refactoring` |
 | 2 | 2026-06-26 | 迁移到 shadcn 默认 zinc 样式并统一组件库到 radix | `c4f9de84` | `feat/ui-refactoring` |

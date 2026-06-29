@@ -217,3 +217,52 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: 工具菜单下拉化与时间线空行修复
+
+**Date**: 2026-06-29
+**Task**: 工具菜单下拉化与时间线空行修复
+**Branch**: `feat/ui-refactoring`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 模块 | 变更 |
+|------|------|
+| ButtonArea | 用 shadcn DropdownMenu/Submenu 替换手写 portal 记忆引用浮层，移除定位与事件监听逻辑 |
+| selectors | 抽出 ConfigSelect/ModeSelect/ReasoningSelect 独立选择器文件 |
+| MessagesTimeline | 空投影行估高归零，修复对话中 phantom 间隙 |
+| HomeChat | 工作区选择器复用 composer-branch-badge 视觉 |
+| 样式/测试 | 清理 home-chat.css、selectors.css 及相关测试 |
+
+**Updated Files**:
+- `src/features/composer/components/ChatInputBox/ButtonArea.tsx`
+- `src/features/composer/components/ChatInputBox/selectors/ConfigSelect.tsx`
+- `src/features/composer/components/ChatInputBox/selectors/ModeSelect.tsx`
+- `src/features/composer/components/ChatInputBox/selectors/ReasoningSelect.tsx`
+- `src/features/messages/components/MessagesTimeline.tsx`
+- `src/features/home/components/HomeChat.tsx`
+- `src/styles/home-chat.css`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bd00e490` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
