@@ -155,7 +155,7 @@
 .composer-readiness-provider,
 .composer-readiness-model {
   color: var(--text-primary);
-  font-weight: 620;
+  font-weight: 400;
 }
 
 .composer-readiness-divider {

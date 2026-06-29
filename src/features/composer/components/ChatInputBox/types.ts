@@ -844,6 +844,8 @@ export interface ButtonAreaProps {
   toolSurface?: ReactNode;
   /** Status panel toggle rendered inside the tool popover icon row */
   panelToggleSurface?: ReactNode;
+  /** Curated-skill indicator relocated into the tool popover surface row */
+  curatedSkillSurface?: ReactNode;
 }
 
 export interface ShortcutAction {

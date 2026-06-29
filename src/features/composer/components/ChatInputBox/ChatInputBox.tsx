@@ -1465,7 +1465,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             : undefined
         }
         isModelConfigRefreshing={isModelConfigRefreshing}
-        rightAccessory={curatedSkillIndicator}
       />
     ) : null;
     const mainToolbarSurface = (
@@ -1749,6 +1748,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               readinessSurface={readinessSurface}
               mainSurface={mainToolbarSurface}
               panelToggleSurface={panelToggleSurface}
+              curatedSkillSurface={curatedSkillIndicator}
               toolSurface={(
                 <ContextBar
                   surface="tool-popover"

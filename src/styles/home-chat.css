@@ -904,8 +904,8 @@
 }
 
 [data-theme="light"] .home-chat .home-chat-composer-host .submit-button:disabled {
-  background: rgba(15, 23, 42, 0.12);
-  color: rgba(15, 23, 42, 0.3);
+  background: rgba(15, 23, 42, 0.18);
+  color: #ffffff;
 }
 
 .home-chat .home-chat-composer-host .submit-button.stop-button {
@@ -930,8 +930,8 @@
   }
 
   :root:not([data-theme]) .home-chat .home-chat-composer-host .submit-button:disabled {
-    background: rgba(15, 23, 42, 0.12);
-    color: rgba(15, 23, 42, 0.3);
+    background: rgba(15, 23, 42, 0.18);
+    color: #ffffff;
   }
 
   :root:not([data-theme]) .home-chat .home-chat-composer-host .submit-button.stop-button {

@@ -80,7 +80,7 @@
 
 .submit-button:disabled {
   background: color-mix(in srgb, var(--text-muted, #666) 26%, transparent);
-  color: color-mix(in srgb, var(--input-bg, #fff) 70%, var(--text-muted, #666));
+  color: #ffffff;
   box-shadow: none;
   cursor: not-allowed;
   opacity: 1;

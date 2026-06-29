@@ -1,6 +1,8 @@
 import {
   useCallback,
   useId,
+  useLayoutEffect,
+  useRef,
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +11,7 @@ import ArrowUp from 'lucide-react/dist/esm/icons/arrow-up';
 import Square from 'lucide-react/dist/esm/icons/square';
 import Plus from 'lucide-react/dist/esm/icons/plus';
 import type { ButtonAreaProps, MemoryReferenceMode, PermissionMode, ReasoningEffort } from './types';
-import { ConfigSelect, ModeSelect, ReasoningSelect, ShortcutActionsSelect } from './selectors';
+import { ConfigSelect, ModeSelect, ReasoningSelect } from './selectors';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -81,11 +83,11 @@ export const ButtonArea = ({
   selectedAgent,
   onAgentSelect,
   onOpenAgentSettings,
-  shortcutActions,
   readinessSurface,
   mainSurface,
   toolSurface,
   panelToggleSurface,
+  curatedSkillSurface,
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   const supportsStreamActivityPhaseFx =
@@ -97,6 +99,64 @@ export const ButtonArea = ({
 
   const [isToolDockOpen, setIsToolDockOpen] = useState(false);
   const toolDockId = useId();
+  const buttonAreaRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // The tool menu should read as a panel attached to the input box's top edge:
+  // full input width, left edge aligned to the box. Radix anchors the popover
+  // to the "+" trigger, so we measure the box width and the trigger's offset
+  // to derive an equivalent width + negative alignOffset.
+  const [menuMetrics, setMenuMetrics] = useState<{
+    width: number;
+    alignOffset: number;
+    sideOffset: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!isToolDockOpen) {
+      return;
+    }
+    const buttonArea = buttonAreaRef.current;
+    const trigger = triggerRef.current;
+    if (!buttonArea || !trigger || typeof window === 'undefined') {
+      return;
+    }
+    // Gap between the menu's bottom edge and the input box's top edge.
+    const MENU_GAP = 8;
+    const inputBox = buttonArea.closest('.chat-input-box') as HTMLElement | null;
+    const measure = () => {
+      const boxRect = buttonArea.getBoundingClientRect();
+      const triggerRect = trigger.getBoundingClientRect();
+      const width = Math.round(boxRect.width);
+      if (width <= 0) {
+        return;
+      }
+      const alignOffset = -Math.round(triggerRect.left - boxRect.left);
+      // Lift the menu fully above the input box (not just the "+" trigger), so
+      // it never overlaps the text area. sideOffset is measured from the
+      // trigger's top edge up to the box's top edge, plus a small gap.
+      const anchorTop = inputBox
+        ? inputBox.getBoundingClientRect().top
+        : boxRect.top;
+      const sideOffset = Math.max(8, Math.round(triggerRect.top - anchorTop) + MENU_GAP);
+      setMenuMetrics((prev) =>
+        prev &&
+        prev.width === width &&
+        prev.alignOffset === alignOffset &&
+        prev.sideOffset === sideOffset
+          ? prev
+          : { width, alignOffset, sideOffset },
+      );
+    };
+    measure();
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    resizeObserver?.observe(buttonArea);
+    window.addEventListener('resize', measure);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [isToolDockOpen]);
   const memoryReferenceStateLabel =
     memoryReferenceMode === 'always'
       ? t('composer.memoryReferenceAlwaysOn')
@@ -133,6 +193,7 @@ export const ButtonArea = ({
 
   return (
     <div
+      ref={buttonAreaRef}
       className={`button-area${isToolDockOpen ? ' is-tool-dock-open' : ''}`}
       data-provider={currentProvider}
     >
@@ -141,6 +202,7 @@ export const ButtonArea = ({
           <DropdownMenu open={isToolDockOpen} onOpenChange={setIsToolDockOpen}>
             <DropdownMenuTrigger asChild>
               <button
+                ref={triggerRef}
                 type="button"
                 className="selector-button selector-tool-dock-toggle"
                 title={toolDockToggleLabel}
@@ -154,10 +216,36 @@ export const ButtonArea = ({
               id={toolDockId}
               side="top"
               align="start"
-              sideOffset={8}
+              sideOffset={menuMetrics?.sideOffset ?? 12}
+              alignOffset={menuMetrics?.alignOffset ?? 0}
+              avoidCollisions={false}
               className="composer-tool-menu"
               aria-label={toolDockToggleLabel}
+              style={menuMetrics ? { width: menuMetrics.width } : undefined}
             >
+              {(toolSurface || mainSurface || panelToggleSurface || curatedSkillSurface) ? (
+                <>
+                  <div className="composer-tool-menu-surface-row">
+                    {toolSurface ? (
+                      <div className="button-area-tool-surface">
+                        {toolSurface}
+                      </div>
+                    ) : null}
+                    {curatedSkillSurface ? (
+                      <div className="button-area-curated-surface">
+                        {curatedSkillSurface}
+                      </div>
+                    ) : null}
+                    {mainSurface ? (
+                      <div className="button-area-main-surface">
+                        {mainSurface}
+                      </div>
+                    ) : null}
+                    {panelToggleSurface}
+                  </div>
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
               <ConfigSelect
                 inline
                 currentProvider={currentProvider}
@@ -241,20 +329,8 @@ export const ButtonArea = ({
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               ) : null}
-              <ShortcutActionsSelect inline actions={shortcutActions} />
             </DropdownMenuContent>
           </DropdownMenu>
-          {toolSurface ? (
-            <div className="button-area-tool-surface">
-              {toolSurface}
-            </div>
-          ) : null}
-          {panelToggleSurface}
-          {mainSurface ? (
-            <div className="button-area-main-surface">
-              {mainSurface}
-            </div>
-          ) : null}
         </div>
 
         {readinessSurface ? (

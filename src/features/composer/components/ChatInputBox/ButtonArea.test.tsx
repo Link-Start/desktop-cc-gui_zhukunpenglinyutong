@@ -198,7 +198,7 @@ describe("ButtonArea custom model storage refresh", () => {
     expect(providerTag.compareDocumentPosition(sendButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("renders the status panel toggle as an always-visible surface", () => {
+  it("renders the status panel toggle inside the tool menu", () => {
     const onToggleStatusPanel = vi.fn();
 
     render(
@@ -222,8 +222,9 @@ describe("ButtonArea custom model storage refresh", () => {
       />,
     );
 
-    // The panel toggle now lives in the always-visible primary row, no longer
-    // gated behind opening the tool dock.
+    // The panel toggle now lives inside the "+" tool menu alongside the other
+    // relocated surfaces, so it is gated behind opening the dock.
+    openToolDock();
     screen.getByRole("button", { name: "Collapse status panel" }).click();
 
     expect(onToggleStatusPanel).toHaveBeenCalledTimes(1);
@@ -258,7 +259,7 @@ describe("ButtonArea custom model storage refresh", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("keeps the token surface inline while reasoning and memory reference move into the tool menu", () => {
+  it("moves the token surface, reasoning and memory reference into the tool menu", () => {
     render(
       <ButtonArea
         currentProvider="claude"
@@ -274,13 +275,15 @@ describe("ButtonArea custom model storage refresh", () => {
       />,
     );
 
-    // The token surface stays in the always-visible primary row.
-    expect(screen.getByTestId("main-surface")).toBeTruthy();
+    // The token surface is now relocated inside the "+" tool menu, so it is
+    // not rendered until the dock is opened.
+    expect(screen.queryByTestId("main-surface")).toBeNull();
 
     openToolDock();
 
-    // Reasoning and the memory reference control now live inside the vertical
-    // tool menu (a DropdownMenu portal).
+    // The usage ring, reasoning and the memory reference control all live
+    // inside the vertical tool menu (a DropdownMenu portal).
+    expect(screen.getByTestId("main-surface")).toBeTruthy();
     expect(screen.getByTestId("reasoning-select")).toBeTruthy();
     expect(
       screen.getByRole("menuitem", { name: /composer\.memoryReferenceToggle/ }),
