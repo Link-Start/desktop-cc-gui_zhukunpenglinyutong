@@ -728,7 +728,16 @@
 .message .markdown-mermaidblock-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.message .markdown-mermaidblock-action {
+  flex: 0 0 24px;
+  min-width: 24px;
+  white-space: nowrap;
 }
 
 .message .markdown-mermaidblock-diagram {

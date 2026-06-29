@@ -2757,6 +2757,8 @@ const enPart1 = {
     copyCodeBlockWithFence: "Copy fenced code block",
     copy: "Copy",
     copyWithFence: "Fence copy",
+    showMermaidSource: "Show Mermaid source",
+    previewMermaidDiagram: "Preview Mermaid diagram",
     toolCallCard: {
       title: "Tool call",
       expand: "Expand",

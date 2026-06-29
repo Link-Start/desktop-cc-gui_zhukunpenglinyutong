@@ -2722,6 +2722,8 @@ const zhPart1 = {
     copyCodeBlockWithFence: "复制带围栏代码块",
     copy: "复制",
     copyWithFence: "围栏复制",
+    showMermaidSource: "查看 Mermaid 源码",
+    previewMermaidDiagram: "预览 Mermaid 图表",
     toolCallCard: {
       title: "工具调用",
       expand: "展开",
