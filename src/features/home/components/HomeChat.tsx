@@ -174,24 +174,28 @@ export function HomeChat({
                 className="home-chat-composer-meta"
                 title={selectedWorkspace.name}
               >
-                <div className="home-chat-workspace-select" title={selectedWorkspace.name}>
+                <div className="composer-branch-badge home-chat-workspace-select" title={selectedWorkspace.name}>
                   <Popover open={workspaceMenuOpen} onOpenChange={setWorkspaceMenuOpen}>
                     <PopoverTrigger asChild>
                       <button
                         type="button"
-                        className="home-chat-workspace-select-trigger"
+                        className="composer-branch-badge-trigger"
                         aria-label={t("homeChat.workspaceSelectLabel", "Workspace")}
                         aria-expanded={workspaceMenuOpen}
                         aria-controls={workspacePanelId}
                       >
-                        <span className="home-chat-workspace-select-label">
+                        <Folder
+                          size={13}
+                          aria-hidden
+                          className="composer-branch-badge-icon"
+                        />
+                        <span className="composer-branch-badge-name">
                           {selectedWorkspace.name}
                         </span>
                         <ChevronDown
-                          size={16}
+                          size={12}
                           aria-hidden
-                          className="home-chat-workspace-select-trigger-icon"
-                          data-open={workspaceMenuOpen ? "true" : undefined}
+                          className="composer-branch-badge-caret"
                         />
                       </button>
                     </PopoverTrigger>

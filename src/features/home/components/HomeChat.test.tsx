@@ -63,7 +63,7 @@ describe("HomeChat", () => {
     expect(markup).toContain("Create anything");
     expect(markup).toContain("desktop-cc-gui");
     expect(markup).toContain("home-chat-workspace-select");
-    expect(markup).toContain("home-chat-workspace-select-trigger");
+    expect(markup).toContain("composer-branch-badge-trigger");
     expect(markup).toContain('aria-label="Workspace"');
     expect(markup).toContain("composer-branch-badge");
     expect(markup).toContain("feature/ref-layout");
@@ -96,7 +96,7 @@ describe("HomeChat", () => {
     );
 
     expect(markup).toMatch(
-      /home-chat-workspace-select-label">desktop-cc-gui<\/span>/,
+      /composer-branch-badge-name">desktop-cc-gui<\/span>/,
     );
     expect(markup).not.toContain("/Users/demo/Desktop/desktop-cc-gui");
   });
@@ -129,7 +129,8 @@ describe("HomeChat", () => {
       />,
     );
 
-    expect(markup).not.toContain("composer-branch-badge");
+    // 工作区选择器现已复用 composer-branch-badge 视觉，分支胶囊的独有标识是 git-branch 图标
+    expect(markup).not.toContain("lucide-git-branch");
   });
 
   it("keeps New Home creation-first without a runtime dashboard", () => {

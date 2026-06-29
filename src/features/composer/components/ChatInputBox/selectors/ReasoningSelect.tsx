@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { REASONING_LEVELS, type ReasoningEffort } from '../types';
+import {
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from '@/components/ui/dropdown-menu';
 
 interface ReasoningSelectProps {
   value: ReasoningEffort | null;
@@ -9,6 +14,11 @@ interface ReasoningSelectProps {
   showDefaultOption?: boolean;
   defaultLabel?: string;
   disabled?: boolean;
+  /**
+   * When true, render as a DropdownMenuSub for the vertical tool menu
+   * instead of a standalone button + popover.
+   */
+  inline?: boolean;
 }
 
 /**
@@ -22,6 +32,7 @@ export const ReasoningSelect = ({
   showDefaultOption = false,
   defaultLabel,
   disabled,
+  inline = false,
 }: ReasoningSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -100,6 +111,67 @@ export const ReasoningSelect = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen]);
+
+  if (inline) {
+    return (
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger className="composer-tool-menu-sub-trigger">
+          <span className={`codicon ${triggerIcon} composer-tool-menu-item-icon`} aria-hidden="true" />
+          <span className="composer-tool-menu-item-body">
+            <span className="composer-tool-menu-item-label">
+              {t('reasoning.title', { defaultValue: '推理深度' })}
+            </span>
+            <span className="composer-tool-menu-item-value">{triggerLabel}</span>
+          </span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="composer-tool-menu-sub-content">
+          {showDefaultOption && (
+            <button
+              type="button"
+              className={`composer-tool-menu-option${value === null ? ' is-selected' : ''}`}
+              onClick={() => handleSelect(null)}
+              title={t('reasoning.defaultDescription', {
+                defaultValue: 'Use the engine default reasoning behavior',
+              })}
+            >
+              <span className="codicon codicon-circle-outline composer-tool-menu-option-icon" aria-hidden="true" />
+              <span className="composer-tool-menu-option-body">
+                <span className="composer-tool-menu-option-label">{resolvedDefaultLabel}</span>
+                <span className="composer-tool-menu-option-description">
+                  {t('reasoning.defaultDescription', {
+                    defaultValue: 'Use the engine default reasoning behavior',
+                  })}
+                </span>
+              </span>
+              {value === null && (
+                <span className="codicon codicon-check composer-tool-menu-option-check" aria-hidden="true" />
+              )}
+            </button>
+          )}
+          {visibleLevels.map((level) => (
+            <button
+              key={level.id}
+              type="button"
+              className={`composer-tool-menu-option${level.id === value ? ' is-selected' : ''}`}
+              onClick={() => handleSelect(level.id)}
+              title={getReasoningText(level.id, 'description')}
+            >
+              <span className={`codicon ${level.icon} composer-tool-menu-option-icon`} aria-hidden="true" />
+              <span className="composer-tool-menu-option-body">
+                <span className="composer-tool-menu-option-label">{getReasoningText(level.id, 'label')}</span>
+                <span className="composer-tool-menu-option-description">
+                  {getReasoningText(level.id, 'description')}
+                </span>
+              </span>
+              {level.id === value && (
+                <span className="codicon codicon-check composer-tool-menu-option-check" aria-hidden="true" />
+              )}
+            </button>
+          ))}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    );
+  }
 
   return (
     <div className="selector-reasoning-wrap" style={{ position: 'relative', display: 'inline-block' }}>

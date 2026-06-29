@@ -6,6 +6,11 @@ import {
   MODE_SELECT_FLASH_DURATION_MS,
   MODE_SELECT_FLASH_EVENT,
 } from './modeSelectFlash';
+import {
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from '@/components/ui/dropdown-menu';
 
 interface ModeSelectProps {
   value: PermissionMode;
@@ -13,6 +18,11 @@ interface ModeSelectProps {
   provider?: string;
   selectedCollaborationModeId?: string | null;
   onSelectCollaborationMode?: (id: string | null) => void;
+  /**
+   * When true, render as a DropdownMenuSub for the vertical tool menu
+   * instead of a standalone button + popover.
+   */
+  inline?: boolean;
 }
 
 type ModeSelectFlashStyle = CSSProperties & {
@@ -30,6 +40,7 @@ export const ModeSelect = ({
   provider,
   selectedCollaborationModeId,
   onSelectCollaborationMode,
+  inline = false,
 }: ModeSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -209,6 +220,60 @@ export const ModeSelect = ({
           : 'selector-mode-chevron-flash-b',
     };
   }, [flashCycle, isChevronFlashing]);
+
+  if (inline) {
+    return (
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger className="composer-tool-menu-sub-trigger">
+          <span
+            className={`codicon ${currentMode.icon} composer-tool-menu-item-icon`}
+            aria-hidden="true"
+          />
+          <span className="composer-tool-menu-item-body">
+            <span className="composer-tool-menu-item-label">
+              {t('chat.permissionModeEntry', { defaultValue: '权限模式' })}
+            </span>
+            <span className="composer-tool-menu-item-value">
+              {getModeText(currentMode.id, 'label')}
+            </span>
+          </span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="composer-tool-menu-sub-content">
+          {modeOptions.map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              data-mode-id={mode.id}
+              className={`composer-tool-menu-option${mode.id === selectedModeId ? ' is-selected' : ''}${mode.disabled ? ' is-disabled' : ''}`}
+              disabled={mode.disabled}
+              onClick={() => handleSelect(mode.id, mode.disabled)}
+              title={getModeText(mode.id, 'tooltip')}
+            >
+              <span
+                className={`codicon ${mode.icon} composer-tool-menu-option-icon`}
+                aria-hidden="true"
+              />
+              <span className="composer-tool-menu-option-body">
+                <span className="composer-tool-menu-option-label">
+                  {getModeText(mode.id, 'label')}
+                </span>
+                <span className="composer-tool-menu-option-description">
+                  {getModeText(mode.id, 'description')}
+                </span>
+              </span>
+              {mode.id === selectedModeId && (
+                <img
+                  src={xuanzhonIcon}
+                  className="composer-tool-menu-option-check"
+                  aria-hidden
+                />
+              )}
+            </button>
+          ))}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    );
+  }
 
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>

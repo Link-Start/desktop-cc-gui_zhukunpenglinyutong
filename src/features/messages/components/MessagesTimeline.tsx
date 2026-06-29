@@ -545,11 +545,32 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const timelineVirtualizer = useVirtualizer({
     count: shouldVirtualizeTimeline ? timelineProjectionRows.length : 0,
     enabled: shouldVirtualizeTimeline,
-    estimateSize: (index) =>
-      estimateTimelineProjectionRowSize(timelineProjectionRows[index] ?? {
-        kind: "bottomAnchor",
-        key: "bottom-anchor",
-      }),
+    estimateSize: (index) => {
+      const projectionRow = timelineProjectionRows[index];
+      if (!projectionRow) {
+        return estimateTimelineProjectionRowSize({
+          kind: "bottomAnchor",
+          key: "bottom-anchor",
+        });
+      }
+      // 渲染为空的投影行（被跳过的工具卡、非工作态 working 指示等）视觉高度为 0；
+      // 估高也必须归零。否则 measure() 重置后虚拟器会按 row.kind 估高（如 tool=58px）
+      // 给这些空行预留布局偏移，在相邻两行之间撑出 phantom 间隙——这正是对话过程中
+      // 时不时空一大段的根因（resizeItem(index,0) 会被后续 measure() 重置覆盖）。
+      if (
+        isEmptyVirtualProjectionRow(projectionRow, {
+          activeEngine,
+          claudeHistoryTranscriptFallbackActive,
+          hasTailUserInputNode: Boolean(userInputNode),
+          isWorking,
+          lastDurationMs,
+          effectiveItemsCount,
+        })
+      ) {
+        return 0;
+      }
+      return estimateTimelineProjectionRowSize(projectionRow);
+    },
     getItemKey: (index) => timelineProjectionRows[index]?.key ?? `missing:${index}`,
     getScrollElement: () => scrollElementRef.current,
     observeElementOffset: observeTimelineElementOffset,

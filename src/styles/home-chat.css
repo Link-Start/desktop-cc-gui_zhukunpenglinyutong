@@ -127,54 +127,9 @@
   max-width: min(100%, 420px);
 }
 
+/* 工作区选择器复用分支胶囊（.composer-branch-badge*）的视觉，此处仅约束最大宽度 */
 .home-chat-workspace-select {
-  width: auto;
   max-width: 100%;
-  display: block;
-}
-
-.home-chat-workspace-select-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: auto;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: color-mix(in srgb, var(--home-chat-text) 72%, transparent);
-  font-size: clamp(15px, 1.05vw, 18px);
-  line-height: 1.2;
-  letter-spacing: -0.028em;
-  font-weight: 500;
-  padding: 0;
-  padding-block: 2px;
-  cursor: pointer;
-  transition: color 140ms ease;
-}
-
-.home-chat-workspace-select-trigger:hover,
-.home-chat-workspace-select-trigger:focus-visible {
-  color: color-mix(in srgb, var(--home-chat-text) 88%, transparent);
-  outline: none;
-}
-
-.home-chat-workspace-select-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: inherit;
-}
-
-.home-chat-workspace-select-trigger-icon {
-  flex: 0 0 auto;
-  color: color-mix(in srgb, var(--home-chat-text) 40%, transparent);
-  transition: transform 160ms ease, color 160ms ease;
-}
-
-.home-chat-workspace-select-trigger-icon[data-open="true"] {
-  transform: rotate(180deg);
 }
 
 .home-chat-workspace-picker-popover[data-slot="popover-content"] {
@@ -1039,15 +994,6 @@
 
   .home-chat-workspace-summary {
     gap: 14px;
-  }
-
-  .home-chat-workspace-select {
-    width: auto;
-    max-width: 100%;
-  }
-
-  .home-chat-workspace-select-trigger {
-    font-size: clamp(14px, 3.4vw, 17px);
   }
 
   .home-chat-workspace-picker-popover[data-slot="popover-content"] {
