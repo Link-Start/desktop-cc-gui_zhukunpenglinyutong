@@ -969,32 +969,8 @@ function toDisplayChanges(
   });
 }
 
-function collectChangeStats(changes: DisplayChange[]) {
-  let additions = 0;
-  let deletions = 0;
-  let added = 0;
-  let modified = 0;
-  let deleted = 0;
-  let renamed = 0;
-
-  for (const change of changes) {
-    const kind = change.normalizedKind;
-    if (kind === 'added') added += 1;
-    if (kind === 'modified') modified += 1;
-    if (kind === 'deleted') deleted += 1;
-    if (kind === 'renamed') renamed += 1;
-    additions += change.diffStats.additions;
-    deletions += change.diffStats.deletions;
-  }
-  return { additions, deletions, added, modified, deleted, renamed };
-}
-
 function getChangeEntryKey(path: string, index: number): string {
   return `${path}::${index}`;
-}
-
-function formatFileCountLabel(count: number): string {
-  return count === 1 ? '1 file' : `${count} files`;
 }
 
 /**
@@ -1190,18 +1166,6 @@ export const GenericToolBlock = memo(function GenericToolBlock({
       shouldDeferToolChangeDetails,
     ],
   );
-  const changeStats = useMemo(
-    () => collectChangeStats(displayChanges),
-    [displayChanges],
-  );
-  const collapsedPreviewChange = useMemo(
-    () => (!isExpanded && hasChanges ? displayChanges[0] : undefined),
-    [isExpanded, hasChanges, displayChanges],
-  );
-  const collapsedPreviewMoreCount = useMemo(
-    () => Math.max(0, (item.changes?.length ?? 0) - 1),
-    [item.changes],
-  );
   const filePath = useMemo(() => {
     if (!parsedArgs) return null;
     const path = getFirstStringField(parsedArgs, ['file_path', 'path', 'target_file', 'filename', 'notebook_path']);
@@ -1252,8 +1216,6 @@ export const GenericToolBlock = memo(function GenericToolBlock({
     activeCollaborationModeId === "code" &&
     activeEngine !== "claude" &&
     !suppressPlanModeHintForClaude;
-  const showCollapsedMultiFileRows =
-    isFileChangeTool && !isExpanded && displayChanges.length > 1;
   const markerStatus =
     status === 'failed' ? 'failed' : status === 'completed' ? 'completed' : 'processing';
   const isInteractive = Boolean(
@@ -1480,142 +1442,129 @@ export const GenericToolBlock = memo(function GenericToolBlock({
     );
   }
 
-  if (showCollapsedMultiFileRows) {
+  // 文件变更统一渲染为「每文件一行」的紧凑 marker 行（对齐 EditToolBlock 风格）：
+  // 描边图标 + 文件名 + 绿/红统计 + 靠右状态，点击行内展开看 diff。
+  // 单文件 / 多文件、实时 / 历史一致，不再显示「File changes」标签与文件计数。
+  if (isFileChangeTool && hasChanges) {
     return (
       <div className="tool-change-stack" role="group" aria-label="File changes">
-        {displayChanges.map((change, index) => (
-          (() => {
-            const changeEntryKey = getChangeEntryKey(change.path, index);
-            const isChangeExpanded = expandedCollapsedChangeRows[changeEntryKey] ?? false;
-            return (
-              <div key={changeEntryKey} className="tool-change-stack-entry">
-                <Marker
-                  onClick={() => {
-                    setExpandedCollapsedChangeRows((prev) => ({
-                      ...prev,
-                      [changeEntryKey]: !prev[changeEntryKey],
-                    }));
-                  }}
-                  className="tool-change-stack-header cursor-pointer select-none gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent/50"
-                >
-                  <MarkerIcon>
-                    <FileDiff />
-                  </MarkerIcon>
-                  <span className="shrink-0">{displayName}</span>
-                  <MarkerContent className="flex min-w-0 items-center gap-2">
-                    <span className="tool-change-summary tool-change-summary-single">
-                      <span className="tool-change-collapsed-preview" title={change.path}>
-                        <span className={`tool-change-kind-badge ${change.normalizedKind}`}>
-                          {change.kindCode}
-                        </span>
-                        <FileIcon fileName={getFileName(change.path)} size={14} />
-                        <span className="tool-change-collapsed-file-name">
-                          {getFileName(change.path)}
-                        </span>
-                      </span>
-                      <span className="tool-change-summary-meta">
+        {displayChanges.map((change, index) => {
+          const changeEntryKey = getChangeEntryKey(change.path, index);
+          const isChangeExpanded = expandedCollapsedChangeRows[changeEntryKey] ?? false;
+          const changeFileName = getFileName(change.path);
+          const hasRowStats =
+            change.diffStats.additions > 0 || change.diffStats.deletions > 0;
+          const hasRowDiff = change.diffPreviewLines.length > 0;
+          return (
+            <div key={changeEntryKey} className="tool-change-stack-entry">
+              <Marker
+                onClick={() => {
+                  setExpandedCollapsedChangeRows((prev) => ({
+                    ...prev,
+                    [changeEntryKey]: !prev[changeEntryKey],
+                  }));
+                }}
+                className="tool-change-stack-header cursor-pointer select-none gap-2 rounded-md pr-3 py-1.5 text-sm transition-colors hover:bg-accent/50"
+              >
+                <MarkerIcon>
+                  <FilePen />
+                </MarkerIcon>
+                {onOpenDiffPath ? (
+                  <button
+                    type="button"
+                    className="tool-change-file-name tool-change-file-link min-w-0 truncate"
+                    title={change.path}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      try {
+                        onOpenDiffPath(change.path);
+                      } catch {
+                        // Keep conversation interactive even if diff entry routing fails.
+                      }
+                    }}
+                  >
+                    {changeFileName}
+                  </button>
+                ) : (
+                  <span className="min-w-0 truncate" title={change.path}>
+                    {changeFileName}
+                  </span>
+                )}
+                <MarkerContent className="flex min-w-0 items-center gap-2">
+                  {hasRowStats && (
+                    <span className="flex shrink-0 items-center gap-1 tabular-nums">
+                      {change.diffStats.additions > 0 && (
                         <span className="diff-stat-add">+{change.diffStats.additions}</span>
+                      )}
+                      {change.diffStats.deletions > 0 && (
                         <span className="diff-stat-del">-{change.diffStats.deletions}</span>
-                      </span>
+                      )}
                     </span>
-                  </MarkerContent>
-                  <ToolStatusIcon status={markerStatus} />
-                </Marker>
-                {isChangeExpanded && (
-                  <div className="task-details tool-change-details" style={{ border: 'none' }}>
-                    <div className="task-content-wrapper">
-                      <div className="tool-change-entry">
-                        <div className="tool-change-row">
-                          <span className={`tool-change-kind-badge ${change.normalizedKind}`}>
-                            {change.kindCode}
-                          </span>
-                          <FileIcon fileName={getFileName(change.path)} size={14} />
-                          {onOpenDiffPath ? (
-                            <button
-                              type="button"
-                              className="tool-change-file-name tool-change-file-link"
-                              title={change.path}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                try {
-                                  onOpenDiffPath(change.path);
-                                } catch {
-                                  // Keep conversation interactive even if diff entry routing fails.
-                                }
-                              }}
+                  )}
+                </MarkerContent>
+                <ToolStatusIcon status={markerStatus} />
+              </Marker>
+              {isChangeExpanded && hasRowDiff && (
+                <div className="task-details tool-change-details" style={{ border: 'none' }}>
+                  <div className="task-content-wrapper">
+                    <div className="tool-change-entry">
+                      <div className="tool-change-inline-diff edit-diff-viewer">
+                        {change.diffPreviewLines.map((line, lineIndex) => {
+                          const lineClass =
+                            line.type === 'del'
+                              ? 'is-deleted'
+                              : line.type === 'add'
+                                ? 'is-added'
+                                : line.type === 'hunk' || line.type === 'meta'
+                                  ? 'is-hunk'
+                                  : '';
+                          const sign =
+                            line.type === 'del'
+                              ? '-'
+                              : line.type === 'add'
+                                ? '+'
+                                : line.type === 'hunk'
+                                  ? ''
+                                  : ' ';
+                          const signNode =
+                            line.type === 'hunk' ? (
+                              <span
+                                className="codicon codicon-diff tool-change-hunk-icon"
+                                aria-hidden
+                              />
+                            ) : (
+                              sign
+                            );
+                          const content =
+                            line.type === 'hunk'
+                              ? line.text
+                                  .replace(/^@@\s*/, '')
+                                  .replace(/\s*@@$/, '')
+                              : line.text;
+                          return (
+                            <div
+                              key={`${change.path}-${line.type}-${lineIndex}`}
+                              className={`edit-diff-line ${lineClass}`}
                             >
-                              {getFileName(change.path)}
-                            </button>
-                          ) : (
-                            <span className="tool-change-file-name" title={change.path}>
-                              {getFileName(change.path)}
-                            </span>
-                          )}
-                          <span className="tool-change-file-diff-stats">
-                            <span className="diff-stat-add">+{change.diffStats.additions}</span>
-                            <span className="diff-stat-del">-{change.diffStats.deletions}</span>
-                          </span>
-                        </div>
-                        {change.diffPreviewLines.length > 0 && (
-                          <div className="tool-change-inline-diff edit-diff-viewer">
-                            {change.diffPreviewLines.map((line, lineIndex) => {
-                              const lineClass =
-                                line.type === 'del'
-                                  ? 'is-deleted'
-                                  : line.type === 'add'
-                                    ? 'is-added'
-                                    : line.type === 'hunk' || line.type === 'meta'
-                                      ? 'is-hunk'
-                                      : '';
-                              const sign =
-                                line.type === 'del'
-                                  ? '-'
-                                  : line.type === 'add'
-                                    ? '+'
-                                    : line.type === 'hunk'
-                                      ? ''
-                                      : ' ';
-                              const signNode =
-                                line.type === 'hunk' ? (
-                                  <span
-                                    className="codicon codicon-diff tool-change-hunk-icon"
-                                    aria-hidden
-                                  />
-                                ) : (
-                                  sign
-                                );
-                              const content =
-                                line.type === 'hunk'
-                                  ? line.text
-                                      .replace(/^@@\s*/, '')
-                                      .replace(/\s*@@$/, '')
-                                  : line.text;
-                              return (
-                                <div
-                                  key={`${change.path}-${line.type}-${lineIndex}`}
-                                  className={`edit-diff-line ${lineClass}`}
-                                >
-                                  <div className="edit-diff-gutter" />
-                                  <div className={`edit-diff-sign ${lineClass}`}>{signNode}</div>
-                                  <pre className="edit-diff-content">{content}</pre>
-                                </div>
-                              );
-                            })}
-                            {change.diffPreviewTruncated && (
-                              <div className="tool-change-inline-diff-truncated">
-                                Diff truncated…
-                              </div>
-                            )}
+                              <div className="edit-diff-gutter" />
+                              <div className={`edit-diff-sign ${lineClass}`}>{signNode}</div>
+                              <pre className="edit-diff-content">{content}</pre>
+                            </div>
+                          );
+                        })}
+                        {change.diffPreviewTruncated && (
+                          <div className="tool-change-inline-diff-truncated">
+                            Diff truncated…
                           </div>
                         )}
                       </div>
                     </div>
                   </div>
-                )}
-              </div>
-            );
-          })()
-        ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -1642,30 +1591,6 @@ export const GenericToolBlock = memo(function GenericToolBlock({
                 <FileIcon fileName={isDirectory ? fileName + '/' : fileName} size={14} />
               )}
               {summary}
-            </span>
-          )}
-          {hasChanges && (
-            <span className="tool-change-summary">
-              {collapsedPreviewChange && (
-                <span className="tool-change-collapsed-preview" title={collapsedPreviewChange.path}>
-                  <FileIcon fileName={getFileName(collapsedPreviewChange.path)} size={14} />
-                  <span className="tool-change-collapsed-file-name">
-                    {getFileName(collapsedPreviewChange.path)}
-                  </span>
-                  {collapsedPreviewMoreCount > 0 && (
-                    <span className="tool-change-collapsed-more">
-                      +{collapsedPreviewMoreCount} more
-                    </span>
-                  )}
-                </span>
-              )}
-              <span className="tool-change-summary-meta">
-                <span className="tool-change-summary-count">
-                  {formatFileCountLabel(item.changes?.length ?? 0)}
-                </span>
-                <span className="diff-stat-add">+{changeStats.additions}</span>
-                <span className="diff-stat-del">-{changeStats.deletions}</span>
-              </span>
             </span>
           )}
         </MarkerContent>
@@ -1732,104 +1657,6 @@ export const GenericToolBlock = memo(function GenericToolBlock({
               loading="lazy"
               style={{ maxWidth: '100%', maxHeight: '240px', borderRadius: '8px' }}
             />
-          </div>
-        </div>
-      )}
-
-      {isExpanded && hasChanges && item.changes && (
-        <div className="task-details tool-change-details" style={{ border: 'none' }}>
-          <div className="task-content-wrapper">
-            {shouldDeferToolChangeDetails
-              ? renderToolDetailPlaceholder(
-                t("messages.toolHeavyDiff"),
-                item.changes.length,
-              )
-              : null}
-            {displayChanges.map((change, index) => (
-              <div key={`${change.path}-${index}`} className="tool-change-entry">
-                <div className="tool-change-row">
-                  <span className={`tool-change-kind-badge ${change.normalizedKind}`}>
-                    {change.kindCode}
-                  </span>
-                  <FileIcon fileName={getFileName(change.path)} size={14} />
-                  {onOpenDiffPath ? (
-                    <button
-                      type="button"
-                      className="tool-change-file-name tool-change-file-link"
-                      title={change.path}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        try {
-                          onOpenDiffPath(change.path);
-                        } catch {
-                          // Keep conversation interactive even if diff entry routing fails.
-                        }
-                      }}
-                    >
-                      {getFileName(change.path)}
-                    </button>
-                  ) : (
-                    <span className="tool-change-file-name" title={change.path}>
-                      {getFileName(change.path)}
-                    </span>
-                  )}
-                  <span className="tool-change-file-diff-stats">
-                    <span className="diff-stat-add">+{change.diffStats.additions}</span>
-                    <span className="diff-stat-del">-{change.diffStats.deletions}</span>
-                  </span>
-                </div>
-                {change.diffPreviewLines.length > 0 && (
-                  <div className="tool-change-inline-diff edit-diff-viewer">
-                    {change.diffPreviewLines.map((line, lineIndex) => {
-                      const lineClass =
-                        line.type === 'del'
-                          ? 'is-deleted'
-                          : line.type === 'add'
-                            ? 'is-added'
-                            : line.type === 'hunk' || line.type === 'meta'
-                              ? 'is-hunk'
-                              : '';
-                      const sign =
-                        line.type === 'del'
-                          ? '-'
-                          : line.type === 'add'
-                            ? '+'
-                            : line.type === 'hunk'
-                              ? ''
-                              : ' ';
-                      const signNode =
-                        line.type === 'hunk' ? (
-                          <span
-                            className="codicon codicon-diff tool-change-hunk-icon"
-                            aria-hidden
-                          />
-                        ) : (
-                          sign
-                        );
-                      const content =
-                        line.type === 'hunk'
-                          ? line.text
-                              .replace(/^@@\s*/, '')
-                              .replace(/\s*@@$/, '')
-                          : line.text;
-                      return (
-                        <div
-                          key={`${change.path}-${line.type}-${lineIndex}`}
-                          className={`edit-diff-line ${lineClass}`}
-                        >
-                          <div className="edit-diff-gutter" />
-                          <div className={`edit-diff-sign ${lineClass}`}>{signNode}</div>
-                          <pre className="edit-diff-content">{content}</pre>
-                        </div>
-                      );
-                    })}
-                    {change.diffPreviewTruncated && (
-                      <div className="tool-change-inline-diff-truncated">Diff truncated…</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         </div>
       )}

@@ -330,7 +330,7 @@ describe("GenericToolBlock", () => {
     expect(rawPre?.textContent ?? "").toContain("Switch to Plan mode");
   });
 
-  it("shows file-change summary and per-file detail stats", () => {
+  it("renders each changed file as its own compact row with per-file stats", () => {
     const view = render(
       <GenericToolBlock
         item={fileChangeItem}
@@ -339,17 +339,19 @@ describe("GenericToolBlock", () => {
       />,
     );
 
-    expect(screen.getAllByText("2 files").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("+2").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("-1").length).toBeGreaterThan(0);
-    expect(view.container.querySelector(".tool-change-metrics")).toBeNull();
-    expect(view.container.querySelectorAll(".tool-change-kind-badge.added").length).toBe(1);
-    expect(view.container.querySelectorAll(".tool-change-kind-badge.modified").length).toBe(1);
-    expect(screen.getByText("-0")).toBeTruthy();
-    expect(screen.getAllByText("+1").length).toBeGreaterThan(1);
+    // 每文件一行，无聚合「N files」计数、无 A/M/D 徽标
+    expect(view.container.querySelectorAll(".tool-change-stack-entry").length).toBe(2);
+    expect(screen.queryByText("2 files")).toBeNull();
+    expect(view.container.querySelector(".tool-change-kind-badge")).toBeNull();
+    expect(screen.getByText("App.tsx")).toBeTruthy();
+    expect(screen.getByText("New.tsx")).toBeTruthy();
+    // App.tsx: +1 -1，New.tsx: +1（删除为 0 时不显示 -0）
+    expect(screen.getAllByText("+1").length).toBe(2);
+    expect(screen.getAllByText("-1").length).toBe(1);
+    expect(screen.queryByText("-0")).toBeNull();
   });
 
-  it("uses singular file label for collapsed single file changes", () => {
+  it("omits file-count label for single file changes", () => {
     render(
       <GenericToolBlock
         item={fileChangeWithOutputItem}
@@ -358,8 +360,8 @@ describe("GenericToolBlock", () => {
       />,
     );
 
-    expect(screen.getByText("1 file")).toBeTruthy();
-    expect(screen.queryByText("1 files")).toBeNull();
+    expect(screen.getByText("App.tsx")).toBeTruthy();
+    expect(screen.queryByText(/\d+\s+files?/i)).toBeNull();
   });
 
   it("shows each changed file as its own collapsed row without overflow summary", () => {
@@ -421,12 +423,20 @@ describe("GenericToolBlock", () => {
       />,
     );
 
+    const headers = Array.from(
+      view.container.querySelectorAll(".tool-change-stack-entry .tool-change-stack-header"),
+    );
+    expect(headers.length).toBe(2);
+    // 折叠态不渲染 diff，逐行展开后每行各自一个 inline diff 卡片
+    expect(view.container.querySelector(".tool-change-inline-diff")).toBeNull();
+    fireEvent.click(headers[0]!);
+    fireEvent.click(headers[1]!);
     expect(view.container.querySelectorAll(".tool-change-entry").length).toBe(2);
-    expect(view.container.querySelector(".tool-change-entry .tool-change-inline-diff")).toBeTruthy();
+    expect(view.container.querySelectorAll(".tool-change-entry .tool-change-inline-diff").length).toBe(2);
   });
 
   it("shows inline diff preview for file changes and hides raw diff output pane", () => {
-    render(
+    const view = render(
       <GenericToolBlock
         item={fileChangeWithOutputItem}
         isExpanded
@@ -436,11 +446,15 @@ describe("GenericToolBlock", () => {
 
     expect(screen.getByText("App.tsx")).toBeTruthy();
     expect(document.querySelector(".tool-output-raw-pre")).toBeNull();
+    // diff 仅在展开该行后出现，且不回退到原始输出面板
+    expect(document.querySelector(".tool-change-inline-diff")).toBeNull();
+    fireEvent.click(view.container.querySelector(".tool-change-stack-header")!);
     expect(screen.getByText("-1 +1")).toBeTruthy();
     expect(document.querySelector(".tool-change-inline-diff")).toBeTruthy();
+    expect(document.querySelector(".tool-output-raw-pre")).toBeNull();
   });
 
-  it("defers expanded heavy file-change diff previews while keeping open-diff actions", () => {
+  it("keeps heavy file-change diffs collapsed until a row is opened, preserving open-diff actions", () => {
     const onOpenDiffPath = vi.fn();
     const view = render(
       <GenericToolBlock
@@ -451,19 +465,22 @@ describe("GenericToolBlock", () => {
       />,
     );
 
-    expect(screen.getByText("Tool detail deferred")).toBeTruthy();
+    // 8 行折叠紧凑行，折叠态不渲染任何 diff（天然延迟）
+    expect(view.container.querySelectorAll(".tool-change-stack-entry").length).toBe(8);
     expect(view.container.querySelector(".tool-change-inline-diff")).toBeNull();
 
+    // 点击文件名仅触发跳转，不展开本行
     fireEvent.click(screen.getByRole("button", { name: "heavy-0.ts" }));
     expect(onOpenDiffPath).toHaveBeenCalledWith("src/heavy-0.ts");
+    expect(view.container.querySelector(".tool-change-inline-diff")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show detail" }));
-
+    // 点击行头展开后才渲染该行 diff
+    fireEvent.click(view.container.querySelector(".tool-change-stack-header")!);
     expect(view.container.querySelector(".tool-change-inline-diff")).toBeTruthy();
   });
 
   it("falls back to output diff stats when change rows omit inline diff", () => {
-    render(
+    const view = render(
       <GenericToolBlock
         item={fileChangeWithoutInlineDiffItem}
         isExpanded
@@ -471,9 +488,11 @@ describe("GenericToolBlock", () => {
       />,
     );
 
+    // 折叠行即显示来自输出回退的统计，不显示原始输出面板
     expect(screen.getAllByText("+1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("-1").length).toBeGreaterThan(0);
     expect(document.querySelector(".tool-output-raw-pre")).toBeNull();
+    fireEvent.click(view.container.querySelector(".tool-change-stack-header")!);
     expect(screen.getByText("-1 +1")).toBeTruthy();
   });
 
