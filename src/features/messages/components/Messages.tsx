@@ -17,6 +17,7 @@ import type {
 import { isMacPlatform, isWindowsPlatform } from "../../../utils/platform";
 import type { ConversationState } from "../../threads/contracts/conversationCurtainContracts";
 import { useStreamActivityPhase } from "../../threads/hooks/useStreamActivityPhase";
+import { setPerfStreamingState } from "../../../services/perfBaseline/perfContextBridge";
 import {
   noteThreadVisibleTextRendered,
   noteThreadVisibleRender,
@@ -474,6 +475,12 @@ export const Messages = memo(function Messages({
     [effectiveItems, enableCollaborationBadge, isThinking, showAllHistoryItems],
   );
   const renderSourceItems = liveTailWorkingSet.items;
+  // 跨 token 稳定引用:供 handleAssistantVisibleTextRender 在回调体内读取最新条目,
+  // 而不必把每 token 换新引用的 renderSourceItems 放进 useCallback 依赖。render 期
+  // 同步赋值,读取不滞后一帧。不复用 latestItemsRef(=未 windowing 的原始 items),
+  // 以免 codex finalizing 分支的 targetTextLength 语义漂移。
+  const renderSourceItemsRef = useRef(renderSourceItems);
+  renderSourceItemsRef.current = renderSourceItems;
   const renderSourceSnapshot = useMemo(
     () => ({
       scopeKey: renderScopeKey,
@@ -1145,6 +1152,15 @@ export const Messages = memo(function Messages({
       (activeEngine === "codex" || activeEngine === "claude" || activeEngine === "gemini"),
     items: deferredRenderSourceItems,
   });
+  // 把对话页当前的流式状态 / 可见行数写入性能上下文桥,供掉帧 / 长任务采集器在
+  // 掉帧瞬间附带"当时在干什么"。廉价 effect,仅在派生值变化时触发。
+  useEffect(() => {
+    setPerfStreamingState({
+      isStreaming: isThinking,
+      streamActivityPhase: streamActivityPhase ? String(streamActivityPhase) : null,
+      visibleRowCount: renderSourceItems.length,
+    });
+  }, [isThinking, streamActivityPhase, renderSourceItems.length]);
   const codexSilentSuspectedLabel =
     activeEngine === "codex" && codexSilentSuspectedAt !== null
       ? t("messages.codexSilentSuspected")
@@ -1712,7 +1728,7 @@ export const Messages = memo(function Messages({
         isAssistantFinalizing &&
         payload.itemId === finalizingAssistantMessageId
       ) {
-        const targetItem = renderSourceItems.find(
+        const targetItem = renderSourceItemsRef.current.find(
           (item) =>
             isAssistantMessageConversationItem(item) &&
             item.id === payload.itemId,
@@ -1775,7 +1791,6 @@ export const Messages = memo(function Messages({
       finalizingAssistantMessageId,
       isAssistantFinalizing,
       isThinking,
-      renderSourceItems,
       threadId,
     ],
   );

@@ -925,6 +925,18 @@ const zhPart1 = {
       "在界面上叠加高亮，实时标出正在重渲染的组件及其渲染次数，用于定位对话卡顿。开关即时生效。",
     reactScanDetail:
       "开发级工具，仅本机诊断用。注意：打包（生产）版只能看重渲染高亮与次数，看不到每次渲染耗时；要看耗时请用开发版（npm run dev:scan）。",
+    perfDiagnosticsCaptureTitle: "性能诊断采集",
+    perfDiagnosticsCaptureDescription:
+      "打开后在后台记录掉帧（rAF）、长任务（longtask）与最近交互上下文，打包版同样可用。默认关闭，复现卡顿后可一键导出现场。",
+    perfDiagnosticsCaptureDetail:
+      "开销极小，仅本机记录，不含任何对话内容。定位卡顿时打开，复现问题后用下面的「复制卡顿现场」导出。",
+    perfCopyReportTitle: "复制卡顿现场",
+    perfCopyReportDescription:
+      "把最近的掉帧 / 长任务 / 性能指标汇总成一段文本，便于直接发给维护者定位。",
+    perfCopyReportButton: "复制",
+    perfCopyReportDone: "已复制到剪贴板。",
+    perfCopyReportDownloaded: "剪贴板不可用，已下载为文本文件。",
+    perfCopyReportFailed: "复制失败，请重试。",
     costBudgetTitle: "成本预算",
     costBudgetDescription:
       "设置本机月度预算，用于 StatusPanel 的 BudgetBar 和成本提示。",

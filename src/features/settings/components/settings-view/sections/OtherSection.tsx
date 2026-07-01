@@ -7,6 +7,11 @@ import {
   isReactScanFlagEnabled,
   setReactScanEnabled,
 } from "@/services/reactScanController";
+import {
+  isPerfDiagnosticsFlagEnabled,
+  setPerfDiagnosticsEnabled,
+} from "@/services/perfBaseline/perfDiagnosticsController";
+import { buildDiagnosticsReportText } from "@/services/perfBaseline/diagnosticsReport";
 import { HistoryCompletionSettings } from "../../HistoryCompletionSettings";
 import { SessionRadarHistoryManagementSection } from "../../SessionRadarHistoryManagementSection";
 import type { SessionRadarEntry } from "../../../../session-activity/hooks/useSessionRadarFeed";
@@ -45,10 +50,45 @@ export function OtherSection({
   const [reactScanEnabled, setReactScanEnabledState] = useState<boolean>(() =>
     isReactScanFlagEnabled(),
   );
+  const [perfDiagnosticsEnabled, setPerfDiagnosticsEnabledState] =
+    useState<boolean>(() => isPerfDiagnosticsFlagEnabled());
+  const [copyReportMessage, setCopyReportMessage] = useState<string | null>(
+    null,
+  );
 
   const handleReactScanToggle = (checked: boolean) => {
     setReactScanEnabledState(checked);
     void setReactScanEnabled(checked);
+  };
+
+  const handlePerfDiagnosticsToggle = (checked: boolean) => {
+    setPerfDiagnosticsEnabledState(checked);
+    setPerfDiagnosticsEnabled(checked);
+  };
+
+  const handleCopyPerfReport = async () => {
+    const report = buildDiagnosticsReportText();
+    try {
+      await navigator.clipboard.writeText(report);
+      setCopyReportMessage(t("settings.perfCopyReportDone"));
+      return;
+    } catch {
+      // WKWebView 可能拒绝剪贴板写入,降级为下载文本文件。
+    }
+    try {
+      const blob = new Blob([report], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `ccgui-perf-report-${Date.now()}.txt`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setCopyReportMessage(t("settings.perfCopyReportDownloaded"));
+    } catch {
+      setCopyReportMessage(t("settings.perfCopyReportFailed"));
+    }
   };
 
   const handleResetPerformanceFlags = () => {
@@ -140,6 +180,44 @@ export function OtherSection({
           checked={reactScanEnabled}
           onCheckedChange={handleReactScanToggle}
         />
+      </div>
+      <div className="settings-toggle-row">
+        <div>
+          <div className="settings-toggle-title">
+            {t("settings.perfDiagnosticsCaptureTitle")}
+          </div>
+          <div className="settings-toggle-subtitle">
+            {t("settings.perfDiagnosticsCaptureDescription")}
+          </div>
+          <div className="settings-help">
+            {t("settings.perfDiagnosticsCaptureDetail")}
+          </div>
+        </div>
+        <Switch
+          aria-label={t("settings.perfDiagnosticsCaptureTitle")}
+          checked={perfDiagnosticsEnabled}
+          onCheckedChange={handlePerfDiagnosticsToggle}
+        />
+      </div>
+      <div className="settings-toggle-row">
+        <div>
+          <div className="settings-toggle-title">
+            {t("settings.perfCopyReportTitle")}
+          </div>
+          <div className="settings-toggle-subtitle">
+            {t("settings.perfCopyReportDescription")}
+          </div>
+          {copyReportMessage ? (
+            <div className="settings-help">{copyReportMessage}</div>
+          ) : null}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void handleCopyPerfReport()}
+        >
+          {t("settings.perfCopyReportButton")}
+        </Button>
       </div>
       <Separator className="my-4" />
       <CostBudgetSettingsSection />

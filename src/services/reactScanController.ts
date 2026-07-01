@@ -81,6 +81,8 @@ async function applyReactScan(enabled: boolean): Promise<void> {
     scan({
       enabled,
       showToolbar: enabled,
+      // 在工具条直接显示 FPS,便于第一眼看到掉帧(生产版只有 FPS/计数,无 per-render 计时)。
+      showFPS: true,
       dangerouslyForceRunInProduction: true,
     });
   } catch (error) {

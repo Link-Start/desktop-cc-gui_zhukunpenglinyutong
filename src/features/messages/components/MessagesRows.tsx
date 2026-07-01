@@ -58,6 +58,7 @@ import {
   EMPTY_STREAMING_MARKDOWN_COMPLEXITY,
   resolveAssistantMessageStreamingThrottleMs,
   resolveReasoningStreamingThrottleMs,
+  shouldUseStagedStreamingMarkdown,
   type StreamingMarkdownComplexity,
 } from "./messagesStreamingComplexity";
 import { resolveUserMessagePresentation } from "./messagesUserPresentation";
@@ -382,8 +383,10 @@ function shouldUseLightweightStreamingMarkdown(
   if (item.role !== "assistant" || !isStreaming) {
     return false;
   }
-  const useStagedMarkdownThrottle =
-    presentationProfile?.useCodexStagedMarkdownThrottle ?? activeEngine === "codex";
+  const useStagedMarkdownThrottle = shouldUseStagedStreamingMarkdown(
+    activeEngine,
+    presentationProfile,
+  );
   if (!useStagedMarkdownThrottle) {
     return false;
   }
@@ -1005,8 +1008,10 @@ export const MessageRow = memo(function MessageRow({
   const useCodexCanvasMarkdown = presentationProfile
     ? presentationProfile.codexCanvasMarkdown
     : activeEngine === "codex";
-  const useStagedMarkdownThrottle =
-    presentationProfile?.useCodexStagedMarkdownThrottle ?? activeEngine === "codex";
+  const useStagedMarkdownThrottle = shouldUseStagedStreamingMarkdown(
+    activeEngine,
+    presentationProfile,
+  );
   const markdownClassName =
     item.role === "assistant" && useCodexCanvasMarkdown
       ? "markdown markdown-codex-canvas"
