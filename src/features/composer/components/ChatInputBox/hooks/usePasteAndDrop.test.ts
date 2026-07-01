@@ -125,6 +125,7 @@ describe("usePasteAndDrop path insertion", () => {
     delete window.__fileTreeDragDropped;
     window.localStorage.removeItem(DETACHED_FILE_TREE_DRAG_SNAPSHOT_STORAGE_KEY);
     crossWindowDragBridgeHandler = null;
+    vi.restoreAllMocks();
   });
 
   it("inserts multi-path payload from custom drag data once", () => {
@@ -673,6 +674,54 @@ describe("usePasteAndDrop path insertion", () => {
     const state2 = updater2 ? updater2(state1) : state1;
     expect(state2).toHaveLength(1);
     expect(state2[0]?.data).toBe("C:\\Users\\demo\\Desktop\\bug.png");
+
+    harness.unmount();
+  });
+
+  it("falls back to async clipboard image read when WebView paste payload is empty", async () => {
+    const imageBlob = new Blob(["fake-png"], { type: "image/png" });
+    const read = vi.fn(async () => [
+      {
+        types: ["image/png"],
+        getType: vi.fn(async (type: string) => {
+          expect(type).toBe("image/png");
+          return imageBlob;
+        }),
+      },
+    ]);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { read },
+    });
+
+    const harness = createHarness();
+    const pasteEvent = {
+      preventDefault: vi.fn(),
+      clipboardData: {
+        items: [],
+        getData: () => "",
+      },
+    } as unknown as React.ClipboardEvent;
+
+    act(() => {
+      harness.result.handlePaste(pasteEvent);
+    });
+
+    expect(pasteEvent.preventDefault).toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(harness.setInternalAttachments).toHaveBeenCalled();
+    });
+    expect(read).toHaveBeenCalledTimes(1);
+
+    const updater = harness.setInternalAttachments.mock.calls[0]?.[0] as
+      | ((prev: Array<{ data: string; fileName: string; mediaType: string }>) => Array<{ data: string; fileName: string; mediaType: string }>)
+      | undefined;
+    expect(typeof updater).toBe("function");
+    const next = updater ? updater([]) : [];
+    expect(next).toHaveLength(1);
+    expect(next[0]?.fileName).toMatch(/^pasted-image-\d+\.png$/);
+    expect(next[0]?.mediaType).toBe("image/png");
+    expect(next[0]?.data).toBe("ZmFrZS1wbmc=");
 
     harness.unmount();
   });

@@ -344,6 +344,42 @@ function hasPathLikeDragType(
   );
 }
 
+async function readAsyncClipboardImageBlobs(): Promise<Blob[]> {
+  if (typeof navigator === 'undefined') {
+    return [];
+  }
+  const clipboard = navigator.clipboard;
+  if (!clipboard || typeof clipboard.read !== 'function') {
+    return [];
+  }
+
+  let clipboardItems: ClipboardItems;
+  try {
+    clipboardItems = await clipboard.read();
+  } catch {
+    return [];
+  }
+
+  const blobs: Blob[] = [];
+  for (const clipboardItem of clipboardItems) {
+    const imageType = Array.from(clipboardItem.types).find((type) =>
+      type.startsWith('image/'),
+    );
+    if (!imageType) {
+      continue;
+    }
+    try {
+      const blob = await clipboardItem.getType(imageType);
+      if (blob.size > 0 && (blob.type || imageType).startsWith('image/')) {
+        blobs.push(blob);
+      }
+    } catch {
+      // Continue probing other clipboard items.
+    }
+  }
+  return blobs;
+}
+
 /**
  * usePasteAndDrop - Handle paste and drag-drop operations
  *
@@ -375,6 +411,37 @@ export function usePasteAndDrop({
   const lastClientPositionRef = useRef<{ x: number; y: number } | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragPreviewNames, setDragPreviewNames] = useState<string[]>([]);
+
+  const appendImageBlobAttachment = useCallback(
+    (blob: Blob, fallbackMediaType = 'image/png') => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1] ?? '';
+        if (!base64) {
+          return;
+        }
+        const mediaType = blob.type || fallbackMediaType;
+        const ext = (() => {
+          if (mediaType && mediaType.includes('/')) {
+            return mediaType.split('/')[1] ?? 'png';
+          }
+          const name = (blob as File).name || '';
+          const m = name.match(/\.([a-zA-Z0-9]+)$/);
+          return m?.[1] ?? 'png';
+        })();
+        const attachment: Attachment = {
+          id: generateId(),
+          fileName: `pasted-image-${Date.now()}.${ext}`,
+          mediaType,
+          data: base64,
+        };
+
+        setInternalAttachments((prev) => [...prev, attachment]);
+      };
+      reader.readAsDataURL(blob);
+    },
+    [setInternalAttachments],
+  );
 
   const appendImagePathAttachments = useCallback(
     (paths: string[]) => {
@@ -702,29 +769,7 @@ export function usePasteAndDrop({
           const blob = item.getAsFile();
 
           if (blob) {
-            // Read image as Base64
-            const reader = new FileReader();
-            reader.onload = () => {
-              const base64 = (reader.result as string).split(',')[1] ?? '';
-              const mediaType = blob.type || item.type || 'image/png';
-              const ext = (() => {
-                if (mediaType && mediaType.includes('/')) {
-                  return mediaType.split('/')[1] ?? 'png';
-                }
-                const name = blob.name || '';
-                const m = name.match(/\.([a-zA-Z0-9]+)$/);
-                return m?.[1] ?? 'png';
-              })();
-              const attachment: Attachment = {
-                id: generateId(),
-                fileName: `pasted-image-${Date.now()}.${ext}`,
-                mediaType,
-                data: base64,
-              };
-
-              setInternalAttachments((prev) => [...prev, attachment]);
-            };
-            reader.readAsDataURL(blob);
+            appendImageBlobAttachment(blob, item.type || 'image/png');
           }
 
           return;
@@ -805,10 +850,17 @@ export function usePasteAndDrop({
           });
 
           timer.end();
+          return;
         }
+
+        void readAsyncClipboardImageBlobs().then((blobs) => {
+          for (const blob of blobs) {
+            appendImageBlobAttachment(blob);
+          }
+        });
       }
     },
-    [disabled, setInternalAttachments, handleInput, flushInput, editableRef]
+    [disabled, appendImageBlobAttachment, handleInput, flushInput, editableRef]
   );
 
   /**
