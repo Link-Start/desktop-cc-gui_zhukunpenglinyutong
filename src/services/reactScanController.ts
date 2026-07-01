@@ -5,6 +5,8 @@
 // loaded lazily via dynamic import, so it stays in a separate chunk that is only
 // fetched when the overlay is actually turned on.
 
+import { recordReactScanRender } from "./perfBaseline/reactScanRenderLog";
+
 type ReactScanModule = typeof import("react-scan");
 
 const REACT_SCAN_FLAG_KEY = "ccgui.perf.reactScan";
@@ -84,6 +86,10 @@ async function applyReactScan(enabled: boolean): Promise<void> {
       // 在工具条直接显示 FPS,便于第一眼看到掉帧(生产版只有 FPS/计数,无 per-render 计时)。
       showFPS: true,
       dangerouslyForceRunInProduction: true,
+      // MON-3:把每次 commit 的组件渲染记入日志,供掉帧现场回答"谁在重渲染"。
+      onRender: (fiber, renders) => {
+        recordReactScanRender(fiber, renders);
+      },
     });
   } catch (error) {
     console.error("Failed to apply react-scan overlay:", error);

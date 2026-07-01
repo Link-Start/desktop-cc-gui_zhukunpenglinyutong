@@ -829,6 +829,18 @@ function MainHeaderImpl({
               ))}
             </div>
           )}
+        {showOpenAppMenu ? (
+          <OpenAppMenu
+            path={resolvedWorktreePath}
+            openTargets={openTargets}
+            selectedOpenAppId={selectedOpenAppId}
+            onSelectOpenAppId={onSelectOpenAppId}
+            iconById={openAppIconById}
+            iconOnly
+            extraActions={openAppMenuActions}
+          />
+        ) : null}
+        {extraActionsNode}
         {rightPanelAction ? (
           <TooltipIconButton
             className="ghost main-header-action"
@@ -844,18 +856,6 @@ function MainHeaderImpl({
               : rightPanelAction.icon}
           </TooltipIconButton>
         ) : null}
-        {showOpenAppMenu ? (
-          <OpenAppMenu
-            path={resolvedWorktreePath}
-            openTargets={openTargets}
-            selectedOpenAppId={selectedOpenAppId}
-            onSelectOpenAppId={onSelectOpenAppId}
-            iconById={openAppIconById}
-            iconOnly
-            extraActions={openAppMenuActions}
-          />
-        ) : null}
-        {extraActionsNode}
       </div>
     </header>
   );

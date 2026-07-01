@@ -11,6 +11,7 @@
 
 import { appendRendererDiagnostic } from "../rendererDiagnostics";
 import { readPerfContext } from "./perfContextBridge";
+import { getRecentReactScanRenderSummary } from "./reactScanRenderLog";
 
 const WARN_FRAME_MS = 50; // 约掉 3 帧(60fps 下)
 const SEVERE_FRAME_MS = 100; // 约掉 6 帧
@@ -42,6 +43,7 @@ function reportFrameDrop(deltaMs: number): void {
     approxFps: Math.max(1, Math.round(1000 / deltaMs)),
     level: deltaMs >= SEVERE_FRAME_MS ? "severe" : "warn",
     ...readPerfContext(),
+    topRenders: getRecentReactScanRenderSummary(600),
   });
 }
 

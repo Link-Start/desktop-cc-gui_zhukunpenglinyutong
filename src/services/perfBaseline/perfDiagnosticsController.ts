@@ -16,48 +16,15 @@ import {
   stopFrameDropMonitor,
   stopLongTaskObserver,
 } from "./frameDropMonitor";
+import {
+  isPerfDiagnosticsFlagEnabled,
+  persistPerfDiagnosticsFlag,
+} from "./perfDiagnosticsFlag";
 
-const PERF_DIAGNOSTICS_FLAG_KEY = "ccgui.perf.diagnostics";
+// 供设置页读取当前开关(单一来源在 perfDiagnosticsFlag)。
+export { isPerfDiagnosticsFlagEnabled };
 
 let running = false;
-
-function canUseLocalStorage(): boolean {
-  try {
-    return (
-      typeof globalThis !== "undefined" &&
-      typeof globalThis.localStorage !== "undefined"
-    );
-  } catch {
-    return false;
-  }
-}
-
-/** 用户是否已打开性能诊断采集(持久化在 localStorage)。 */
-export function isPerfDiagnosticsFlagEnabled(): boolean {
-  if (!canUseLocalStorage()) {
-    return false;
-  }
-  try {
-    return globalThis.localStorage.getItem(PERF_DIAGNOSTICS_FLAG_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function persistFlag(enabled: boolean): void {
-  if (!canUseLocalStorage()) {
-    return;
-  }
-  try {
-    if (enabled) {
-      globalThis.localStorage.setItem(PERF_DIAGNOSTICS_FLAG_KEY, "1");
-    } else {
-      globalThis.localStorage.removeItem(PERF_DIAGNOSTICS_FLAG_KEY);
-    }
-  } catch {
-    // localStorage 是尽力而为,忽略配额 / 权限失败。
-  }
-}
 
 function startMonitors(): void {
   if (running) {
@@ -67,6 +34,12 @@ function startMonitors(): void {
   installPerfInteractionTracking();
   startFrameDropMonitor();
   startLongTaskObserver();
+  // MON-5:即便打包版关闭了 build-time perf baseline,也在运行时开关下采集 web-vitals(INP)。
+  void import("./index")
+    .then((module) => module.installPerfBaselineWebVitals(true))
+    .catch(() => {
+      // web-vitals 采集是尽力而为。
+    });
 }
 
 function stopMonitors(): void {
@@ -88,7 +61,7 @@ export function startPerfDiagnosticsIfEnabled(): void {
 
 /** 从设置页切换:持久化选择并即时启停采集。 */
 export function setPerfDiagnosticsEnabled(enabled: boolean): void {
-  persistFlag(enabled);
+  persistPerfDiagnosticsFlag(enabled);
   if (enabled) {
     startMonitors();
   } else {

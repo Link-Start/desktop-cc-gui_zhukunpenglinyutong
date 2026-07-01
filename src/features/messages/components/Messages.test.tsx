@@ -1267,7 +1267,8 @@ describe("Messages", () => {
     }
   });
 
-  it("collapses earlier items and reveals them on demand", () => {
+  // A2:VISIBLE_MESSAGE_WINDOW=10000(95bc726a)有意禁用数量折叠(旧阈值 30,故 32 条折叠 2 条);折叠当前不启用,恢复策略后去 skip。
+  it.skip("collapses earlier items and reveals them on demand", () => {
     const items: ConversationItem[] = Array.from({ length: 32 }, (_, index) => ({
       id: `history-item-${index + 1}`,
       kind: "message",
@@ -1306,7 +1307,8 @@ describe("Messages", () => {
     expect(container.querySelector(".messages-collapsed-indicator")).toBeNull();
   });
 
-  it("resets collapsed state when conversation head changes", () => {
+  // A2:VISIBLE_MESSAGE_WINDOW=10000(95bc726a)有意禁用数量折叠;折叠当前不启用,恢复策略后去 skip。
+  it.skip("resets collapsed state when conversation head changes", () => {
     const firstBatch: ConversationItem[] = Array.from({ length: 32 }, (_, index) => ({
       id: `session-a-${index + 1}`,
       kind: "message",

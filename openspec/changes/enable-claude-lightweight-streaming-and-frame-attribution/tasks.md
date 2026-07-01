@@ -16,6 +16,8 @@
 - [x] 3.4 `diagnosticsReport.buildDiagnosticsReportText`:汇总可粘贴文本(仅性能标签,无对话内容)。
 - [x] 3.5 `rendererDiagnostics`:导出 `exportRendererDiagnostics` + install 接线;`reactScanController` `showFPS`。
 - [x] 3.6 `Messages.tsx` 写 `perfContextBridge`;`OtherSection` 加采集开关 + 复制按钮 + i18n(zh/en)。
+- [x] 3.7 MON-3:`reactScanController` 接 react-scan `onRender` → `reactScanRenderLog` 记录每次 commit 的组件渲染;掉帧诊断附带 `topRenders`(掉帧前最多重渲染的组件),回答"谁在重渲染"。
+- [x] 3.8 MON-5:web-vitals(INP)门控从 build-time 放开到运行时开关(`perfDiagnosticsFlag` 单一来源,避免与 controller 循环依赖),打包版开启采集时可上报。
 
 ## 4. 验证
 

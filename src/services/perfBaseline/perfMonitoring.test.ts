@@ -33,6 +33,11 @@ import {
   stopFrameDropMonitor,
 } from "./frameDropMonitor";
 import { buildDiagnosticsReportText } from "./diagnosticsReport";
+import {
+  __resetReactScanRenderLogForTests,
+  getRecentReactScanRenderSummary,
+  recordReactScanRender,
+} from "./reactScanRenderLog";
 
 describe("perfContextBridge", () => {
   beforeEach(() => {
@@ -202,5 +207,31 @@ describe("buildDiagnosticsReportText", () => {
     ];
     const text = buildDiagnosticsReportText();
     expect(text).toContain("no performance diagnostics recorded");
+  });
+});
+
+describe("reactScanRenderLog (MON-3)", () => {
+  beforeEach(() => {
+    __resetReactScanRenderLogForTests();
+  });
+
+  it("aggregates render counts by component name, ranked", () => {
+    function MessageRow() {
+      return null;
+    }
+    recordReactScanRender({ type: MessageRow }, [1, 2]);
+    recordReactScanRender({ type: MessageRow }, [1]);
+    recordReactScanRender({ type: "div" }, [1]);
+    const summary = getRecentReactScanRenderSummary(10_000);
+    expect(summary[0]).toMatchObject({ name: "MessageRow", count: 3 });
+    expect(summary.find((s) => s.name === "div")?.count).toBe(1);
+  });
+
+  it("handles memo/forwardRef wrappers and unknown fibers", () => {
+    recordReactScanRender({ type: { displayName: "MemoRow" } }, [1]);
+    recordReactScanRender({ type: null }, 1);
+    const summary = getRecentReactScanRenderSummary(10_000);
+    expect(summary.find((s) => s.name === "MemoRow")).toBeTruthy();
+    expect(summary.find((s) => s.name === "unknown")).toBeTruthy();
   });
 });
