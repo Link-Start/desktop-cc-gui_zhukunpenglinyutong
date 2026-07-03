@@ -216,6 +216,79 @@ describe("threadReducer non-Claude live delta fast path", () => {
     }
   });
 
+  it("appends boundary-free fragments onto long text without renormalizing", () => {
+    const threadId = "codex:thread-longtext";
+    const longText = Array.from({ length: 300 }, (_, index) => `正文${index}`).join("");
+    const assistantItem: ConversationItem = {
+      id: "assistant-live",
+      kind: "message",
+      role: "assistant",
+      text: longText,
+      isFinal: false,
+    };
+    const base = processingEngineState(threadId, [assistantItem]);
+
+    const next = threadReducer(
+      base,
+      makeAppendDelta(threadId, "assistant-live", "接着输出"),
+    );
+
+    const message = next.itemsByThread[threadId]?.[0];
+    expect(message?.kind).toBe("message");
+    if (message?.kind === "message") {
+      expect(message.text).toBe(`${longText}接着输出`);
+    }
+  });
+
+  it("returns the same state reference when a duplicate tail fragment is re-sent", () => {
+    const threadId = "codex:thread-noop";
+    const longText = `${Array.from({ length: 300 }, (_, index) => `正文${index}`).join("")}结尾片段`;
+    const assistantItem: ConversationItem = {
+      id: "assistant-live",
+      kind: "message",
+      role: "assistant",
+      text: longText,
+      isFinal: false,
+    };
+    const base = processingEngineState(threadId, [assistantItem]);
+
+    const next = threadReducer(
+      base,
+      makeAppendDelta(threadId, "assistant-live", "结尾片段"),
+    );
+
+    expect(next).toBe(base);
+    expect(next.itemsByThread[threadId]).toBe(base.itemsByThread[threadId]);
+  });
+
+  it("streams 600 deltas onto a long message within the time budget", () => {
+    const threadId = "codex:thread-long-burst";
+    const assistantItem: ConversationItem = {
+      id: "assistant-live",
+      kind: "message",
+      role: "assistant",
+      text: Array.from({ length: 1000 }, (_, index) => `字段${index}`).join(""),
+      isFinal: false,
+    };
+    let state = processingEngineState(threadId, [assistantItem]);
+
+    const start = performance.now();
+    for (let index = 0; index < 600; index += 1) {
+      state = threadReducer(
+        state,
+        makeAppendDelta(threadId, "assistant-live", `片段${index}续写，`),
+      );
+    }
+    const elapsed = performance.now() - start;
+
+    const message = state.itemsByThread[threadId]?.[0];
+    expect(message?.kind).toBe("message");
+    if (message?.kind === "message") {
+      expect(message.text.endsWith("片段599续写，")).toBe(true);
+    }
+    expect(elapsed).toBeLessThan(400);
+  });
+
   it("records component render counts for profiler evidence", () => {
     __profile.reset();
 

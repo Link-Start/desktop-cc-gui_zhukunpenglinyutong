@@ -33,6 +33,7 @@ import type {
 import type { EngineDisplayInfo } from "../../engine/hooks/useEngineController";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
+import { useComposerDraft } from "../hooks/composerDraftStore";
 import { usePromptHistory } from "../hooks/usePromptHistory";
 import { useInlineHistoryCompletion } from "../hooks/useInlineHistoryCompletion";
 import { recordHistory as recordInputHistory } from "../hooks/useInputHistoryStore";
@@ -48,6 +49,7 @@ import {
 } from "./ClaudeRewindConfirmDialog";
 import { ReviewInlinePrompt } from "./ReviewInlinePrompt";
 import { ComposerBranchBadge, type ComposerBranchControl } from "./ComposerBranchBadge";
+import { TokenIndicator } from "./ChatInputBox/TokenIndicator";
 import type {
   ClaudeContextUsageViewModel,
   CodexCompactionSource,
@@ -98,6 +100,7 @@ import { useStreamActivityPhase } from "../../threads/hooks/useStreamActivityPha
 import { exportRewindFiles } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import { getManualMemoryInjectionMode } from "../../project-memory/utils/manualInjectionMode";
+import { estimateClaudeContextWindow } from "../../models/claudeContextWindow";
 import type { RewindMode } from "../../threads/utils/rewindMode";
 import {
   buildRetainedContextChipKeys,
@@ -249,7 +252,6 @@ type ComposerProps = {
   onJumpToUserInputRequest?: (request: RequestUserInputRequest) => void;
   runtimeLifecycleState?: RuntimeLifecycleState | null;
   sendLabel?: string;
-  draftText?: string;
   onDraftChange?: (text: string) => void;
   historyKey?: string | null;
   attachedImages?: string[];
@@ -323,6 +325,8 @@ type ComposerProps = {
   activeWorkspaceName?: string | null;
   activeWorkspacePath?: string | null;
   branchControl?: ComposerBranchControl | null;
+  /** 输入框下方分支行右侧的上下文占用指示器；首页由 HomeChat 自行渲染，置 false 关闭 */
+  footerUsageIndicatorEnabled?: boolean;
   rewindWorkspaceGitState?: {
     isGitRepository: boolean;
     hasDetectedChanges: boolean;
@@ -514,7 +518,6 @@ function ComposerImpl({
   onJumpToUserInputRequest,
   runtimeLifecycleState = null,
   sendLabel: _sendLabel = "Send",
-  draftText = "",
   onDraftChange,
   historyKey = null,
   attachedImages = [],
@@ -578,6 +581,7 @@ function ComposerImpl({
   activeWorkspaceName = null,
   activeWorkspacePath = null,
   branchControl = null,
+  footerUsageIndicatorEnabled = true,
   rewindWorkspaceGitState = null,
   activeThreadId = null,
   threadItemsByThread,
@@ -619,6 +623,9 @@ function ComposerImpl({
     selectedEngine === "claude" ||
     selectedEngine === "codex" ||
     selectedEngine === "gemini";
+  // 草稿值直接订阅模块级 store(而非经 app-shell 根 prop 灌入):按键写 store 时
+  // 只有 Composer 自身重渲染,不再把整个 app-shell 拖下水。
+  const draftText = useComposerDraft(activeThreadId);
   const [text, setText] = useState(draftText);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
   const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);
@@ -1669,7 +1676,10 @@ function ComposerImpl({
       return null;
     }
     const usedTokens = resolveClaudeWindowUsedTokens(contextUsage);
-    const contextWindow = finitePositive(contextUsage.modelContextWindow);
+    // CLI 没上报窗口总量时按模型估算兜底，让占用百分比可以计算。
+    const contextWindow =
+      finitePositive(contextUsage.modelContextWindow)
+      ?? (usedTokens !== null ? estimateClaudeContextWindow(selectedModelId) : null);
     const totalTokens = finiteNonNegative(contextUsage.total.totalTokens);
     const inputTokens = finiteNonNegative(contextUsage.total.inputTokens);
     const cachedInputTokens = finiteNonNegative(contextUsage.total.cachedInputTokens);
@@ -1701,7 +1711,7 @@ function ComposerImpl({
       toolUsages: contextUsage.contextToolUsages ?? null,
       toolUsagesTruncated: contextUsage.contextToolUsagesTruncated ?? null,
     };
-  }, [contextUsage, selectedEngine]);
+  }, [contextUsage, selectedEngine, selectedModelId]);
 
   const legacyContextUsage = useMemo(() => {
     if (!contextUsage) {
@@ -1709,8 +1719,10 @@ function ComposerImpl({
     }
     if (selectedEngine === "claude") {
       const usedTokens = resolveClaudeWindowUsedTokens(contextUsage);
-      const contextWindow = finitePositive(contextUsage.modelContextWindow);
-      return usedTokens !== null && contextWindow !== null
+      const contextWindow =
+        finitePositive(contextUsage.modelContextWindow)
+        ?? estimateClaudeContextWindow(selectedModelId);
+      return usedTokens !== null
         ? { used: usedTokens, total: contextWindow }
         : null;
     }
@@ -1718,7 +1730,7 @@ function ComposerImpl({
       used: contextUsage.total.totalTokens,
       total: contextUsage.modelContextWindow ?? 0,
     };
-  }, [contextUsage, selectedEngine]);
+  }, [contextUsage, selectedEngine, selectedModelId]);
 
   const dualContextUsage = useMemo(
     () =>
@@ -1830,6 +1842,16 @@ function ComposerImpl({
     setContextLedgerExpanded((current) => !current);
   }, []);
   const codexContextDualViewEnabled = contextDualViewEnabled && isCodexEngine;
+  // 上下文占用指示器渲染在输入框下方分支行右侧；
+  // codex 双上下文视图在工具栏有自己的指示器，避免重复展示。
+  const showFooterUsageIndicator =
+    footerUsageIndicatorEnabled && !codexContextDualViewEnabled;
+  const footerUsagePercentage =
+    resolvedLegacyContextUsage && resolvedLegacyContextUsage.total > 0
+      ? Math.round(
+        (resolvedLegacyContextUsage.used / resolvedLegacyContextUsage.total) * 100,
+      )
+      : null;
   const contextLedgerProjection = useMemo(
     () =>
       buildContextLedgerProjection({
@@ -2460,9 +2482,23 @@ function ComposerImpl({
               completionEmailDisabled={completionEmailDisabled}
               onToggleCompletionEmail={onToggleCompletionEmail}
             />
-            {branchControl?.branchName ? (
+            {branchControl?.branchName || showFooterUsageIndicator ? (
               <div className="composer-branch-row">
-                <ComposerBranchBadge {...branchControl} />
+                {branchControl?.branchName ? (
+                  <ComposerBranchBadge {...branchControl} />
+                ) : null}
+                {showFooterUsageIndicator ? (
+                  <div className="composer-branch-row-usage">
+                    <TokenIndicator
+                      percentage={footerUsagePercentage}
+                      usedTokens={resolvedLegacyContextUsage?.used}
+                      maxTokens={resolvedLegacyContextUsage?.total}
+                      claudeContextUsage={
+                        selectedEngine === "claude" ? resolvedClaudeContextUsage : null
+                      }
+                    />
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </>

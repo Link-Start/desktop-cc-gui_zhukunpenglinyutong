@@ -27,6 +27,7 @@ export type ThreadActivityStatus = {
   lastDurationMs: number | null;
   heartbeatPulse?: number;
   continuationPulse?: number;
+  lastContinuationEvidenceAtMs?: number | null;
   terminalPulse?: number;
   codexCompactionSource?: CodexCompactionSource | null;
   codexCompactionLifecycleState?: CodexCompactionLifecycleState;
@@ -124,7 +125,12 @@ export type ThreadAction =
       timestamp: number | null;
     }
   | { type: "markHeartbeat"; threadId: string; pulse: number }
-  | { type: "markContinuationEvidence"; threadId: string }
+  | {
+      type: "markContinuationEvidence";
+      threadId: string;
+      at: number;
+      force?: boolean;
+    }
   | { type: "markTerminalSettlement"; threadId: string }
   | {
       type: "markCodexSilentSuspected";

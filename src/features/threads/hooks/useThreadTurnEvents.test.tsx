@@ -36,6 +36,7 @@ type SetupOverrides = {
   resolveCanonicalThreadId?: (threadId: string) => string;
   onDebug?: ReturnType<typeof vi.fn>;
   activeWorkspaceId?: string;
+  establishedThreadIds?: string[];
 };
 
 const makeOptions = (overrides: SetupOverrides = {}) => {
@@ -59,6 +60,10 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const activeTurnIdByThread = overrides.activeTurnIdByThread ?? {};
   const getActiveTurnIdForThread = vi.fn(
     (threadId: string) => activeTurnIdByThread[threadId] ?? null,
+  );
+  const establishedThreadIds = overrides.establishedThreadIds ?? [];
+  const hasEstablishedThreadItems = vi.fn((threadId: string) =>
+    establishedThreadIds.includes(threadId),
   );
   const renamePendingMemoryCaptureKey = vi.fn();
   // chat-stream-render-isolation-2026-06 task 8: workspace-scope ref
@@ -109,6 +114,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       resolvePendingThreadForSession,
       resolvePendingThreadForTurn,
       getActiveTurnIdForThread,
+      hasEstablishedThreadItems,
       renamePendingMemoryCaptureKey,
       onDebug: overrides.onDebug,
     }),
@@ -133,6 +139,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     resolvePendingThreadForSession,
     resolvePendingThreadForTurn,
     getActiveTurnIdForThread,
+    hasEstablishedThreadItems,
     renamePendingMemoryCaptureKey,
     codexCompactionInFlightByThreadRef,
     pendingInterruptsRef,
@@ -1008,6 +1015,53 @@ describe("useThreadTurnEvents", () => {
       "claude-pending-active",
       "claude:session-xyz",
     );
+  });
+
+  it("does not steal the active pending thread when an established thread re-announces its session id", () => {
+    // Regression: an in-flight conversation (claude:session-old) emits
+    // thread/started with its own session id on every turn. A freshly created
+    // pending tab must not be renamed onto it, or the new conversation's
+    // optimistic user message merges into the old timeline.
+    const {
+      result,
+      dispatch,
+      renameCustomNameKey,
+      renameAutoTitlePendingKey,
+      renameThreadTitleMapping,
+      renamePendingMemoryCaptureKey,
+      resolvePendingThreadForSession,
+    } = makeOptions({
+      activeThreadId: "claude-pending-active",
+      establishedThreadIds: ["claude:session-old"],
+      activeTurnIdByThread: {
+        "claude:session-old": "turn-old",
+        "claude-pending-active": "turn-new",
+      },
+    });
+    resolvePendingThreadForSession.mockImplementation(
+      (_workspaceId: string, engine: "claude" | "gemini" | "opencode") =>
+        engine === "claude" ? "claude-pending-active" : null,
+    );
+
+    act(() => {
+      result.current.onThreadSessionIdUpdated(
+        "ws-1",
+        "claude:session-old",
+        "session-old",
+        "claude",
+        "turn-old",
+      );
+    });
+
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "renameThreadId",
+      }),
+    );
+    expect(renameCustomNameKey).not.toHaveBeenCalled();
+    expect(renameAutoTitlePendingKey).not.toHaveBeenCalled();
+    expect(renamePendingMemoryCaptureKey).not.toHaveBeenCalled();
+    expect(renameThreadTitleMapping).not.toHaveBeenCalled();
   });
 
   it("prefers turn-bound Claude pending thread when concurrent realtime sessions exist", () => {

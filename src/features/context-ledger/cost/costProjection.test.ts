@@ -136,24 +136,31 @@ describe("context ledger token breakdown and local stores", () => {
       usage,
       scope: "session",
     });
+    // totals() 按运行机器的本地日/本地月分桶,固定 UTC 字符串会随测试机时区漂移
+    // (曾在 UTC-7 下 05-20T01:00Z 落到本地 5/19 而挂测)。用本地时间构造时刻,
+    // 使"同一天/同一月/上个月"的语义与时区无关。
+    const sameLocalDay = new Date(2026, 4, 20, 1, 0, 0);
+    const sameLocalMonth = new Date(2026, 4, 18, 23, 0, 0);
+    const previousLocalMonth = new Date(2026, 3, 20, 1, 0, 0);
+    const localNow = new Date(2026, 4, 20, 12, 0, 0);
     const store = createCostHistoryStore([
       {
         ...pricedRecord,
         sessionId: "session-a",
-        occurredAt: "2026-05-20T01:00:00.000Z",
+        occurredAt: sameLocalDay.toISOString(),
       },
       {
         ...pricedRecord,
         sessionId: "session-b",
-        occurredAt: "2026-05-18T23:00:00.000Z",
+        occurredAt: sameLocalMonth.toISOString(),
       },
       {
         ...pricedRecord,
         sessionId: "session-a",
-        occurredAt: "2026-04-20T01:00:00.000Z",
+        occurredAt: previousLocalMonth.toISOString(),
       },
     ]);
-    const totals = store.totals(new Date("2026-05-20T12:00:00.000Z"));
+    const totals = store.totals(localNow);
 
     expect(totals.sessionUsd("session-a")).toBeCloseTo(
       (pricedRecord.amountUsd ?? 0) * 2,
@@ -164,6 +171,9 @@ describe("context ledger token breakdown and local stores", () => {
   });
 
   it("drops malformed persisted cost history entries before aggregation", () => {
+    // 同上:今天/本月按测试机本地时区分桶,时刻必须用本地时间构造。
+    const sameLocalDayIso = new Date(2026, 4, 20, 1, 0, 0).toISOString();
+    const localNow = new Date(2026, 4, 20, 12, 0, 0);
     const parsed = costHistoryStoreInternals.parseEntries(
       JSON.stringify([
         {
@@ -177,7 +187,7 @@ describe("context ledger token breakdown and local stores", () => {
           degraded: false,
           degradationReason: null,
           sessionId: "safe-session",
-          occurredAt: "2026-05-20T01:00:00.000Z",
+          occurredAt: sameLocalDayIso,
         },
         {
           engine: "codex",
@@ -189,9 +199,7 @@ describe("context ledger token breakdown and local stores", () => {
         },
       ]),
     );
-    const totals = createCostHistoryStore(parsed).totals(
-      new Date("2026-05-20T12:00:00.000Z"),
-    );
+    const totals = createCostHistoryStore(parsed).totals(localNow);
 
     expect(parsed).toEqual([
       {
@@ -205,7 +213,7 @@ describe("context ledger token breakdown and local stores", () => {
         degraded: false,
         degradationReason: null,
         sessionId: "safe-session",
-        occurredAt: "2026-05-20T01:00:00.000Z",
+        occurredAt: sameLocalDayIso,
       },
     ]);
     expect(totals.sessionUsd("safe-session")).toBe(0.25);

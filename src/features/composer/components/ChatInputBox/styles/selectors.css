@@ -504,15 +504,6 @@
   }
 }
 
-.button-area-inline-tools .button-area-main-token .token-indicator {
-  min-height: 32px;
-}
-
-.button-area-inline-tools .button-area-main-token .token-indicator-ring {
-  width: 17px;
-  height: 17px;
-}
-
 /* Responsive text hiding for selector buttons */
 .selector-button-text {
   white-space: nowrap;
@@ -1034,84 +1025,6 @@
   100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
 }
 
-/* ============================================================
-   Usage Indicator
-   ============================================================ */
-.token-indicator {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-.token-indicator-wrap {
-  position: relative;
-  display: inline-block;
-}
-
-.token-indicator-ring {
-  transform: rotate(-90deg);
-}
-
-.token-indicator-bg {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  opacity: 0.25;
-}
-
-.token-indicator-fill {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  opacity: 0.7;
-  transition: stroke-dashoffset 0.3s;
-}
-
-.token-indicator--pending .token-indicator-fill {
-  opacity: 0.3;
-}
-
-/* Usage hover tooltip bubble */
-.token-tooltip {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  transform: translateY(-6px);
-  background: var(--tooltip-bg, #1a1c24);
-  color: var(--text-primary);
-  border: 1px solid var(--dropdown-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  padding: 6px 8px;
-  font-size: 11px;
-  white-space: nowrap;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.15s ease, visibility 0.15s ease;
-  z-index: 1002;
-}
-
-/* Claude 卡片外观由 ClaudeContextCard(Tailwind) 自绘；
-   这里把 tooltip 容器收敛为纯定位/显隐壳，去掉旧的背景、边框与内边距。 */
-.token-tooltip--claude {
-  width: max-content;
-  max-width: min(340px, calc(100vw - 32px));
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  white-space: normal;
-}
-
-.token-indicator:hover .token-tooltip {
-  opacity: 1;
-  visibility: visible;
-}
-
 /* Desktop + light: keep selector surfaces opaque and text contrast stable */
 :root[data-theme="light"] .app.layout-desktop .selector-dropdown {
   background: #ffffff;
@@ -1455,25 +1368,4 @@
   height: 34px;
   padding: 0;
   border-radius: 9px;
-}
-
-/* Usage ring presented as a compact status pill inside the menu. */
-.composer-tool-menu-surface-row .button-area-main-token {
-  height: 28px;
-  min-width: auto;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
-  background: color-mix(in srgb, var(--surface-subtle) 70%, transparent);
-}
-
-/* The ring sits at the menu's top-right corner. Its tooltip opens upward and
-   left-anchored by default, which would clip off the top/right of the screen.
-   Flip it to open downward, right-aligned, so it stays fully visible. */
-.composer-tool-menu-surface-row .token-tooltip {
-  bottom: auto;
-  top: calc(100% + 6px);
-  left: auto;
-  right: 0;
-  transform: none;
 }

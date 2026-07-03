@@ -45,4 +45,38 @@ describe("resolveThreadScopedCollaborationModeSync", () => {
       }),
     ).toBeNull();
   });
+
+  it("opens a new thread in the remembered default mode when provided", () => {
+    expect(
+      resolveThreadScopedCollaborationModeSync({
+        activeEngine: "claude",
+        activeThreadId: "thread-2",
+        mappedMode: null,
+        selectedCollaborationModeId: "code",
+        lastSyncedThreadId: "thread-1",
+        newThreadDefaultMode: "plan",
+      }),
+    ).toEqual({
+      nextMode: "plan",
+      nextSyncedThreadId: "thread-2",
+      shouldUpdateSelectedMode: true,
+    });
+  });
+
+  it("still honors an explicitly mapped thread mode over the remembered default", () => {
+    expect(
+      resolveThreadScopedCollaborationModeSync({
+        activeEngine: "claude",
+        activeThreadId: "thread-2",
+        mappedMode: "code",
+        selectedCollaborationModeId: "code",
+        lastSyncedThreadId: "thread-1",
+        newThreadDefaultMode: "plan",
+      }),
+    ).toEqual({
+      nextMode: "code",
+      nextSyncedThreadId: "thread-2",
+      shouldUpdateSelectedMode: false,
+    });
+  });
 });

@@ -107,6 +107,7 @@ import type { UseThreadActionsOptions } from "./useThreadActions.types";
 export function useThreadActions({
   dispatch,
   itemsByThread,
+  tokenUsageByThread = {},
   userInputRequests,
   threadsByWorkspace,
   activeThreadIdByWorkspace,
@@ -206,6 +207,7 @@ export function useThreadActions({
     dispatch,
     getCustomName,
     itemsByThread,
+    tokenUsageByThread,
     loadedThreadsRef,
     onDebug,
     rememberThreadAlias,

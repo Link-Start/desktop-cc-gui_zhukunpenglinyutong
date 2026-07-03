@@ -11,6 +11,7 @@ import {
   DEFAULT_TIMELINE_VIRTUALIZER_STABILITY_RECOVERY_BUDGET,
   summarizeTimelineProjectionRenderWeight,
   observeTimelineElementOffset,
+  remeasureTimelineVirtualizerRows,
   resolveTimelineCanvasOverscan,
   resolveTimelineVirtualizerStabilityRecovery,
   resolveVirtualizedTimelineRowPlaceholderHeight,
@@ -502,6 +503,64 @@ describe("messagesTimelineVirtualization", () => {
     expect(callback).toHaveBeenCalledWith(240, true);
     expect(setTimeoutSpy).toHaveBeenCalled();
     expect(clearTimeoutSpy).toHaveBeenCalledWith(7);
+  });
+
+  describe("remeasureTimelineVirtualizerRows", () => {
+    const createInstance = (nodes: Array<{ isConnected: boolean }>) => {
+      const measure = vi.fn();
+      const measureElement = vi.fn();
+      const elementsCache = new Map(
+        nodes.map((node, index) => [`row-${index}`, node]),
+      );
+      const instance = {
+        elementsCache,
+        measure,
+        measureElement,
+      } as unknown as Virtualizer<Element, Element>;
+      return { instance, measure, measureElement };
+    };
+
+    it("re-measures mounted rows instead of wiping the size cache", () => {
+      const mountedA = { isConnected: true };
+      const mountedB = { isConnected: true };
+      const { instance, measure, measureElement } = createInstance([
+        mountedA,
+        mountedB,
+      ]);
+
+      remeasureTimelineVirtualizerRows(instance);
+
+      expect(measure).not.toHaveBeenCalled();
+      expect(measureElement).toHaveBeenCalledTimes(2);
+      expect(measureElement).toHaveBeenCalledWith(mountedA);
+      expect(measureElement).toHaveBeenCalledWith(mountedB);
+    });
+
+    it("skips disconnected rows when re-measuring", () => {
+      const mounted = { isConnected: true };
+      const unmounted = { isConnected: false };
+      const { instance, measure, measureElement } = createInstance([
+        unmounted,
+        mounted,
+      ]);
+
+      remeasureTimelineVirtualizerRows(instance);
+
+      expect(measure).not.toHaveBeenCalled();
+      expect(measureElement).toHaveBeenCalledTimes(1);
+      expect(measureElement).toHaveBeenCalledWith(mounted);
+    });
+
+    it("falls back to a full measure reset when nothing is mounted", () => {
+      const { instance, measure, measureElement } = createInstance([
+        { isConnected: false },
+      ]);
+
+      remeasureTimelineVirtualizerRows(instance);
+
+      expect(measure).toHaveBeenCalledTimes(1);
+      expect(measureElement).not.toHaveBeenCalled();
+    });
   });
 
   describe("isEmptyVirtualProjectionRow", () => {

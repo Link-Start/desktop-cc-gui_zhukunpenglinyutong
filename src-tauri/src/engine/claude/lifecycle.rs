@@ -305,6 +305,19 @@ impl ClaudeSession {
 
     /// Find usage data from various locations in the event
     fn find_usage_data(&self, event: &Value) -> ClaudeUsageSnapshot {
+        // 回合结束的 result 事件顶层 usage 是整轮累计统计（每次 API 调用的
+        // input/cache_read 相加，远超上下文窗口），不代表当前上下文占用；
+        // 对 result 事件跳过顶层 usage 兜底，只信任 context_window 快照。
+        let is_result_event = event
+            .get("type")
+            .and_then(Value::as_str)
+            .map(|value| value.eq_ignore_ascii_case("result"))
+            .unwrap_or(false);
+        let top_level_usage = if is_result_event {
+            None
+        } else {
+            find_usage(event)
+        };
         if let Some(context_window) = find_context_window(event) {
             log::debug!(
                 "[claude] Found context_window field: {}",
@@ -338,7 +351,7 @@ impl ClaudeSession {
                 };
                 let usage_totals = usage
                     .or_else(|| message_usage(event))
-                    .or_else(|| find_usage(event))
+                    .or(top_level_usage)
                     .map(read_usage_totals)
                     .unwrap_or_default();
                 let context_used_tokens = as_i64(current_usage).or_else(|| {
@@ -366,7 +379,7 @@ impl ClaudeSession {
                 || remaining_percent.is_some()
             {
                 let usage_totals = message_usage(event)
-                    .or_else(|| find_usage(event))
+                    .or(top_level_usage)
                     .map(read_usage_totals)
                     .unwrap_or_default();
                 return ClaudeUsageSnapshot {
@@ -402,7 +415,7 @@ impl ClaudeSession {
             };
         }
 
-        if let Some(usage) = find_usage(event) {
+        if let Some(usage) = top_level_usage {
             log::debug!(
                 "[claude] Found top-level usage field: {}",
                 serde_json::to_string_pretty(usage).unwrap_or_else(|_| usage.to_string())

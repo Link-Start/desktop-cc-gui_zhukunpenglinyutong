@@ -431,16 +431,45 @@ fn parse_gemini_model_from_config_json(root: &Value) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-/// Build Claude model list from user-controlled local sources.
+/// Built-in Claude Code model catalog (mirrors the CLI `/model` roster).
+///
+/// The Claude CLI does not expose a model-list RPC, so this catalog is
+/// hardcoded like `get_codex_models`. Settings/env overrides are spliced in
+/// front by `apply_claude_model_overrides` and shadow same-runtime entries
+/// through `dedupe_models_preserve_order`.
+fn get_builtin_claude_models() -> Vec<ModelInfo> {
+    vec![
+        ModelInfo::new("claude-opus-4-8", "Opus 4.8")
+            .as_default()
+            .with_provider("anthropic")
+            .with_description("Best for everyday, complex tasks")
+            .with_source("builtin"),
+        ModelInfo::new("claude-fable-5", "Fable 5")
+            .with_provider("anthropic")
+            .with_description("Most capable for the hardest and longest-running tasks")
+            .with_source("builtin"),
+        ModelInfo::new("claude-sonnet-5", "Sonnet 5")
+            .with_provider("anthropic")
+            .with_description("Efficient for routine tasks")
+            .with_source("builtin"),
+        ModelInfo::new("claude-haiku-4-5-20251001", "Haiku 4.5")
+            .with_provider("anthropic")
+            .with_description("Fastest for quick answers")
+            .with_source("builtin"),
+    ]
+}
+
+/// Build Claude model list.
 ///
 /// Priority:
 /// 1. Local Claude settings (`~/.claude/settings.json`) and env overrides
-/// 2. Frontend user custom models
+/// 2. Built-in catalog (see `get_builtin_claude_models`)
+/// 3. Frontend user custom models (merged in the webview layer)
 ///
 /// `claude --help` examples are intentionally not treated as a model catalog:
 /// they are documentation snippets, not the current provider's configured list.
 async fn get_claude_models(_bin: &str, _path_env: Option<&String>) -> Vec<ModelInfo> {
-    let mut models = Vec::new();
+    let mut models = get_builtin_claude_models();
     apply_claude_model_overrides(&mut models, read_claude_model_overrides());
     ensure_default_model(&mut models);
     dedupe_models_preserve_order(models)
@@ -876,18 +905,74 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn claude_models_do_not_use_help_or_builtin_fallback() {
+    async fn claude_models_include_builtin_catalog() {
         let models = get_claude_models("claude", None).await;
+        // Builtin runtime models survive regardless of env/settings overrides:
+        // dedupe keys on the runtime model, so either the builtin entry or a
+        // same-runtime override entry remains.
+        for runtime in [
+            "claude-opus-4-8",
+            "claude-fable-5",
+            "claude-sonnet-5",
+            "claude-haiku-4-5-20251001",
+        ] {
+            assert!(
+                models.iter().any(|model| model.model == runtime),
+                "missing builtin runtime model {runtime}"
+            );
+        }
+        // Bare help aliases are still not synthesized as catalog entries.
         assert!(!models.iter().any(|model| model.id == "sonnet"));
         assert!(!models.iter().any(|model| model.id == "opus"));
         assert!(!models.iter().any(|model| model.id == "haiku"));
-        assert!(!models.iter().any(|model| model.id == "claude-sonnet-4-6"));
-        assert!(
-            models.is_empty()
-                || models
-                    .iter()
-                    .all(|model| model.source == "settings-override")
+        assert_eq!(models.iter().filter(|model| model.default).count(), 1);
+    }
+
+    #[test]
+    fn claude_settings_overrides_take_precedence_over_builtin_catalog() {
+        let mut models = get_builtin_claude_models();
+        apply_claude_model_overrides(
+            &mut models,
+            ClaudeModelOverrides {
+                main: Some("GLM-5.1".to_string()),
+                opus: Some("claude-opus-4-8".to_string()),
+                ..ClaudeModelOverrides::default()
+            },
         );
+        ensure_default_model(&mut models);
+        let models = dedupe_models_preserve_order(models);
+
+        assert_eq!(models[0].id, "settings-main");
+        assert!(models[0].default);
+        // The settings opus entry shadows the builtin claude-opus-4-8.
+        let opus_entries: Vec<_> = models
+            .iter()
+            .filter(|model| model.model == "claude-opus-4-8")
+            .collect();
+        assert_eq!(opus_entries.len(), 1);
+        assert_eq!(opus_entries[0].source, "settings-override");
+        // Non-conflicting builtin models remain, without default flag.
+        assert!(models
+            .iter()
+            .any(|model| model.model == "claude-fable-5" && !model.default));
+    }
+
+    #[test]
+    fn claude_builtin_catalog_defaults_to_opus() {
+        let mut models = get_builtin_claude_models();
+        apply_claude_model_overrides(&mut models, ClaudeModelOverrides::default());
+        ensure_default_model(&mut models);
+        let models = dedupe_models_preserve_order(models);
+
+        assert_eq!(models.len(), 4);
+        assert!(models
+            .iter()
+            .all(|model| model.provider.as_deref() == Some("anthropic")));
+        assert!(models
+            .iter()
+            .all(|model| model.source == "builtin"));
+        let default_model = models.iter().find(|model| model.default).unwrap();
+        assert_eq!(default_model.id, "claude-opus-4-8");
     }
 
     #[test]

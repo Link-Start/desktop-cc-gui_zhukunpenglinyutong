@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ComposerEditorSettings, CustomCommandOption, SkillOption } from "../../../types";
 import { Composer } from "./Composer";
@@ -59,7 +59,6 @@ function ComposerHarness({
   onSend = () => {},
   activeThreadId = "thread-1",
 }: HarnessProps) {
-  const [draftText, setDraftText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const editorSettings: ComposerEditorSettings = {
@@ -99,8 +98,6 @@ function ComposerHarness({
       prompts={[]}
       commands={commands}
       files={[]}
-      draftText={draftText}
-      onDraftChange={setDraftText}
       textareaRef={textareaRef}
       dictationEnabled={false}
       editorSettings={editorSettings}

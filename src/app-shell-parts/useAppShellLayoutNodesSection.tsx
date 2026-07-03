@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEventCallback } from "../utils/useEventCallback";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useLayoutNodes } from "../features/layout/hooks/useLayoutNodes";
 import { useMainHeaderActionItems } from "../features/app/components/MainHeaderActions";
@@ -20,7 +21,13 @@ import {
   recoverThreadBindingForManualRecovery,
 } from "./manualThreadRecovery";
 import { OPENCODE_VARIANT_OPTIONS } from "./utils";
-import type { WorkspaceInfo } from "../types";
+import type { CodexProviderProfileSelection } from "../features/threads/constants/codexProviderProfiles";
+import type {
+  WorkspaceInfo,
+  QueuedMessage,
+  GitHubPullRequest,
+  GitLogEntry,
+} from "../types";
 import {
   archiveWorkspaceSessions,
   clearDetachedExternalChangeMonitor,
@@ -67,6 +74,11 @@ const APP_SHELL_LAYOUT_NODES_DOMAIN_NAMES = [
   "modelSelectionContext",
   "collaborationModeContext",
 ] as const satisfies readonly AppShellDomainContextName[];
+
+// Stable empty-array sentinel so optional `string[]` fallbacks keep a constant
+// reference across renders (avoids defeating downstream React.memo shields).
+const EMPTY_STRING_ARRAY: string[] = [];
+Object.freeze(EMPTY_STRING_ARRAY);
 
 function formatWorkspaceAliasError(error: unknown) {
   if (error instanceof Error) {
@@ -152,7 +164,6 @@ export function useAppShellLayoutNodesSection(
     activeDiffError,
     activeDiffLoading,
     activeDiffs,
-    activeDraft,
     activeEditorFilePath,
     activeEditorLineRange,
     activeEngine,
@@ -1049,6 +1060,466 @@ export function useAppShellLayoutNodesSection(
     };
   }, [activeWorkspace?.name, activeWorkspaceId, alertError]);
 
+  // Stabilized handler/prop references for the useLayoutNodes options object.
+  // Each was previously an inline arrow/object literal recreated every render,
+  // which defeated the React.memo shields on Messages/Composer/Sidebar. Wrapping
+  // in useEventCallback (stable identity, always-latest closure) / useMemo keeps
+  // behavior identical while preserving referential stability.
+  const handleRecoverThreadRuntime = useEventCallback(
+    async (workspaceId: string, threadId: string) =>
+      recoverThreadBindingForManualRecovery({
+        workspaceId,
+        threadId,
+        threadsByWorkspace,
+        refreshThread,
+        startThreadForWorkspace,
+      }),
+  );
+  const handleRecoverThreadRuntimeAndResend = useEventCallback(
+    async (
+      workspaceId: string,
+      threadId: string,
+      message: Pick<QueuedMessage, "text" | "images">,
+    ) =>
+      recoverThreadBindingAndResendForManualRecovery({
+        workspaceId,
+        threadId,
+        message,
+        threadsByWorkspace,
+        resolveWorkspace: (targetWorkspaceId) =>
+          (typeof workspacesById?.get === "function"
+            ? workspacesById.get(targetWorkspaceId)
+            : workspacesById?.[targetWorkspaceId]) ??
+          workspaces.find((entry: any) => entry.id === targetWorkspaceId) ??
+          null,
+        refreshThread,
+        forkThreadForWorkspace,
+        startThreadForWorkspace,
+        connectWorkspace,
+        sendUserMessageToThread,
+      }),
+  );
+  const handleThreadRecoveryFork = useEventCallback(async () => {
+    await startFork("/fork");
+  });
+  const handleOpenSettings = useEventCallback(() => openSettings());
+  const handleOpenAgentSettings = useEventCallback(() =>
+    openSettings("agent-prompt-management", "agent-management"),
+  );
+  const handleOpenPromptSettings = useEventCallback(() =>
+    openSettings("agent-prompt-management", "prompt-library"),
+  );
+  const handleOpenDictationSettings = useEventCallback(() =>
+    openSettings("dictation"),
+  );
+  const handleOpenSkillsSettings = useEventCallback(() =>
+    openSettings("mcp", "mcp-skills"),
+  );
+  const handleSelectHome = useEventCallback(() => {
+    closeSettings();
+    handleOpenHomeChat();
+  });
+  const handleSelectWorkspace = useEventCallback((workspaceId: string) => {
+    closeSettings();
+    exitDiffView();
+    resetPullRequestSelection();
+    setHomeOpen(false);
+    setWorkspaceHomeWorkspaceId(null);
+    setCenterMode("chat");
+    setActiveWorkspaceId(workspaceId);
+    if (isCompact) {
+      setActiveTab("codex");
+    }
+    ensureWorkspaceThreadListLoaded(workspaceId);
+    setActiveThreadId(null, workspaceId);
+  });
+  const handleConnectWorkspace = useEventCallback(
+    async (workspace: WorkspaceInfo) => {
+      await connectWorkspace(workspace);
+      ensureWorkspaceThreadListLoaded(workspace.id, { force: true });
+      if (isCompact) {
+        setActiveTab("codex");
+      }
+    },
+  );
+  const enabledEngines = useMemo(
+    () => ({
+      gemini: appSettings.geminiEnabled !== false,
+      opencode: appSettings.opencodeEnabled !== false,
+    }),
+    [appSettings.geminiEnabled, appSettings.opencodeEnabled],
+  );
+  const handleToggleWorkspaceCollapse = useEventCallback(
+    (workspaceId: string, collapsed: boolean) => {
+      const target = workspacesById.get(workspaceId);
+      if (!target) {
+        return;
+      }
+      void updateWorkspaceSettings(workspaceId, {
+        sidebarCollapsed: collapsed,
+      }).then(() => {
+        if (!collapsed) {
+          ensureWorkspaceThreadListLoaded(workspaceId);
+        }
+      });
+    },
+  );
+  const handleSelectThread = useEventCallback(
+    (workspaceId: string, threadId: string) => {
+      const preserveEditor = shouldPreserveEditorOnThreadSelect({
+        isCompact,
+        centerMode,
+        activeWorkspaceId,
+        targetWorkspaceId: workspaceId,
+        activeEditorFilePath,
+      });
+      const diffCleanupAction =
+        getThreadSelectDiffCleanupAction(preserveEditor);
+      closeSettings();
+      if (diffCleanupAction === "clear-selected-diff") {
+        setSelectedDiffPath(null);
+      } else {
+        exitDiffView();
+      }
+      resetPullRequestSelection();
+      setHomeOpen(false);
+      setWorkspaceHomeWorkspaceId(null);
+      if (!preserveEditor) {
+        setCenterMode("chat");
+      }
+      setAppMode("chat");
+      setActiveTab("codex");
+      selectWorkspace(workspaceId);
+      setActiveThreadId(threadId, workspaceId);
+      // Auto-switch engine based on thread's engineSource
+      const threads = threadsByWorkspace[workspaceId] ?? [];
+      const thread = threads.find(
+        (threadEntry: { id: string }) => threadEntry.id === threadId,
+      );
+      if (thread?.engineSource) {
+        setActiveEngine(thread.engineSource);
+      }
+    },
+  );
+  const handleDeleteThread = useEventCallback(
+    async (workspaceId: string, threadId: string) => {
+      openDeleteThreadPrompt(workspaceId, threadId);
+    },
+  );
+  const handleArchiveThread = useEventCallback(
+    async (workspaceId: string, threadId: string) => {
+      try {
+        const response = await archiveWorkspaceSessions(workspaceId, [
+          threadId,
+        ]);
+        const mutationResult = response.results.find(
+          (result: any) => result.sessionId === threadId,
+        );
+        if (!mutationResult?.ok) {
+          throw new Error(
+            mutationResult?.error ?? t("workspace.archiveConversationFailed"),
+          );
+        }
+        if (
+          activeWorkspaceId === workspaceId &&
+          activeThreadId === threadId
+        ) {
+          setActiveThreadId(null, workspaceId);
+        }
+        ensureWorkspaceThreadListLoaded(workspaceId, { force: true });
+      } catch (error: unknown) {
+        alertError(error instanceof Error ? error.message : String(error));
+      }
+    },
+  );
+  const handleConfirmDeleteConfirm = useEventCallback(() => {
+    void handleDeleteThreadPromptConfirm();
+  });
+  const handleSyncThread = useEventCallback(
+    (workspaceId: string, threadId: string) => {
+      void refreshThread(workspaceId, threadId);
+    },
+  );
+  const handleSidebarRenameThread = useEventCallback(
+    (workspaceId: string, threadId: string) => {
+      handleRenameThread(workspaceId, threadId);
+    },
+  );
+  const handleAutoNameThread = useEventCallback(
+    (workspaceId: string, threadId: string) => {
+      addDebugEntry({
+        id: `${Date.now()}-thread-title-manual-trigger`,
+        timestamp: Date.now(),
+        source: "client",
+        label: "thread/title manual trigger",
+        payload: { workspaceId, threadId },
+      });
+      void triggerAutoThreadTitle(workspaceId, threadId, { force: true })
+        .then((title: string | null | undefined) => {
+          if (!title) {
+            addDebugEntry({
+              id: `${Date.now()}-thread-title-manual-empty`,
+              timestamp: Date.now(),
+              source: "client",
+              label: "thread/title manual skipped",
+              payload: { workspaceId, threadId },
+            });
+            return;
+          }
+          addDebugEntry({
+            id: `${Date.now()}-thread-title-manual-success`,
+            timestamp: Date.now(),
+            source: "server",
+            label: "thread/title manual generated",
+            payload: { workspaceId, threadId, title },
+          });
+        })
+        .catch((error: unknown) => {
+          addDebugEntry({
+            id: `${Date.now()}-thread-title-manual-error`,
+            timestamp: Date.now(),
+            source: "error",
+            label: "thread/title manual error",
+            payload: error instanceof Error ? error.message : String(error),
+          });
+        });
+    },
+  );
+  const handleDeleteWorkspace = useEventCallback((workspaceId: string) => {
+    void removeWorkspace(workspaceId);
+  });
+  const handleDeleteWorktree = useEventCallback((workspaceId: string) => {
+    void removeWorktree(workspaceId);
+  });
+  const handleLoadOlderThreads = useEventCallback((workspaceId: string) => {
+    const workspace = workspacesById.get(workspaceId);
+    if (!workspace) {
+      return;
+    }
+    void loadOlderThreadsForWorkspace(workspace);
+  });
+  const handleQuickReloadWorkspaceThreads = useEventCallback(
+    (workspaceId: string) => {
+      const workspace = workspacesById.get(workspaceId);
+      if (!workspace) {
+        return;
+      }
+      const targets =
+        workspace.kind === "main"
+          ? [
+              workspace,
+              ...workspaces.filter(
+                (candidate: WorkspaceInfo) =>
+                  candidate.parentId === workspace.id,
+              ),
+            ]
+          : [workspace];
+      void Promise.allSettled(
+        targets.map((target) => listThreadsForWorkspaceTracked(target)),
+      );
+    },
+  );
+  const handleReloadWorkspaceThreads = useEventCallback(
+    async (workspaceId: string) => {
+      const workspace = workspacesById.get(workspaceId);
+      if (!workspace) {
+        return;
+      }
+      const workspaceName =
+        workspace.name || t("workspace.noWorkspaceSelected");
+      const detailLines = [
+        t("workspace.reloadWorkspaceThreadsEffectRefresh"),
+        t("workspace.reloadWorkspaceThreadsEffectDisplayOnly"),
+        t("workspace.reloadWorkspaceThreadsEffectNoDelete"),
+        t("workspace.reloadWorkspaceThreadsEffectNoGitWrite"),
+      ];
+      const confirmed = await ask(
+        `${t("workspace.reloadWorkspaceThreadsConfirm", { name: workspaceName })}\n\n${t("workspace.reloadWorkspaceThreadsBeforeYouConfirm")}\n${detailLines.map((line) => `• ${line}`).join("\n")}`,
+        {
+          title: t("workspace.reloadWorkspaceThreadsTitle"),
+          kind: "warning",
+          okLabel: t("threads.reloadThreads"),
+          cancelLabel: t("common.cancel"),
+        },
+      );
+      if (!confirmed) {
+        return;
+      }
+      const targets =
+        workspace.kind === "main"
+          ? [
+              workspace,
+              ...workspaces.filter(
+                (candidate: WorkspaceInfo) =>
+                  candidate.parentId === workspace.id,
+              ),
+            ]
+          : [workspace];
+      void Promise.allSettled(
+        targets.map((target) => listThreadsForWorkspaceTracked(target)),
+      );
+    },
+  );
+  const handleToggleLiveEditPreview = useEventCallback(() => {
+    setLiveEditPreviewEnabled((current: boolean) => !current);
+  });
+  const handleToggleEditorSplitLayout = useEventCallback(() =>
+    setEditorSplitLayout((prev: "vertical" | "horizontal") =>
+      prev === "vertical" ? "horizontal" : "vertical",
+    ),
+  );
+  const handleToggleEditorFileMaximized = useEventCallback(() =>
+    setIsEditorFileMaximized((prev: boolean) => !prev),
+  );
+  const handleExitDiff = useEventCallback(() => {
+    setCenterMode("chat");
+    handleSelectDiffForPanel(null);
+  });
+  const handleOpenGitHistoryPanel = useEventCallback(() => {
+    setAppMode((current: string) =>
+      current === "gitHistory" ? "chat" : "gitHistory",
+    );
+  });
+  const handleOpenProjectMap = useEventCallback(() => {
+    closeSettings();
+    collapseSidebar();
+    setAppMode("chat");
+    setCenterMode("projectMap");
+    expandRightPanel();
+  });
+  const handleGitSelectPullRequest = useEventCallback(
+    (pullRequest: GitHubPullRequest) => {
+      setSelectedCommitSha(null);
+      handleSelectPullRequest(pullRequest);
+    },
+  );
+  const handleGitSelectCommit = useEventCallback((entry: GitLogEntry) => {
+    handleSelectCommit(entry.sha);
+  });
+  const handleSelectGitRoot = useEventCallback((path: string) => {
+    void handleSetGitRoot(path);
+  });
+  const handleClearGitRoot = useEventCallback(() => {
+    void handleSetGitRoot(null);
+  });
+  const handleRequestContextCompaction = useEventCallback(() =>
+    startCompact("/compact"),
+  );
+  const handleToggleCompletionEmail = useEventCallback(() => {
+    if (activeThreadId) {
+      toggleCompletionEmailIntent(activeThreadId);
+    }
+  });
+  const handleForkFromMessage = useEventCallback(
+    async (messageId: string, options?: CodexProviderProfileSelection) => {
+      if (!activeWorkspace || !activeThreadId) {
+        return;
+      }
+      const forkedThreadId = await forkSessionFromMessageForWorkspace(
+        activeWorkspace.id,
+        activeThreadId,
+        messageId,
+        {
+          activate: true,
+          mode: "messages-only",
+          providerProfileId: options?.providerProfileId ?? null,
+          providerProfile: options?.providerProfile ?? null,
+        },
+      );
+      if (!forkedThreadId) {
+        throw new Error("Fork did not return a child conversation.");
+      }
+      if (forkedThreadId && forkedThreadId !== activeThreadId) {
+        if (typeof updateThreadParent === "function") {
+          updateThreadParent(activeThreadId, [forkedThreadId]);
+        }
+      }
+    },
+  );
+  const handleCodexAutoCompactionSettingsChange = useEventCallback(
+    async (patch: { enabled?: boolean; thresholdPercent?: number }) => {
+      await queueSaveSettings({
+        ...appSettings,
+        codexAutoCompactionEnabled:
+          patch.enabled ?? appSettings.codexAutoCompactionEnabled,
+        codexAutoCompactionThresholdPercent:
+          patch.thresholdPercent ??
+          appSettings.codexAutoCompactionThresholdPercent,
+      });
+    },
+  );
+  const handlePrefillHandled = useEventCallback((id: string) => {
+    if (prefillDraft?.id === id) {
+      setPrefillDraft(null);
+    }
+  });
+  const handleInsertHandled = useEventCallback((id: string) => {
+    if (composerInsert?.id === id) {
+      setComposerInsert(null);
+    }
+  });
+  const handleDictationTranscriptHandled = useEventCallback((id: string) => {
+    clearDictationTranscript(id);
+  });
+  const handleOpenExperimentalSettings = useEventCallback(() =>
+    openSettings("experimental", "experimental-collaboration-modes"),
+  );
+  const handleBackFromDiff = useEventCallback(() => {
+    setSelectedDiffPath(null);
+    setCenterMode("chat");
+  });
+  const handleGoProjects = useEventCallback(() => setActiveTab("projects"));
+  const handleOpenMemory = useEventCallback(() => {
+    setFocusedProjectMemoryId(null);
+    setFocusedWorkspaceNoteId(null);
+    closeSettings();
+    setAppMode("chat");
+    setCenterMode("memory");
+  });
+  const handleOpenProjectMemory = useEventCallback(() => {
+    setFocusedProjectMemoryId(null);
+    setFocusedWorkspaceNoteId(null);
+    closeSettings();
+    setAppMode("chat");
+    setCenterMode("chat");
+    setFilePanelMode("memory");
+    expandRightPanel();
+    if (isCompact) {
+      setActiveTab("git");
+    }
+  });
+  const handleOpenContextLedgerMemory = useEventCallback(
+    (memoryId: string) => {
+      setFocusedWorkspaceNoteId(null);
+      setFocusedProjectMemoryId(memoryId);
+      setFocusedProjectMemoryRequestKey((value) => value + 1);
+      closeSettings();
+      setAppMode("chat");
+      setCenterMode("chat");
+      setFilePanelMode("memory");
+      expandRightPanel();
+      if (isCompact) {
+        setActiveTab("git");
+      }
+    },
+  );
+  const handleOpenContextLedgerNote = useEventCallback((noteId: string) => {
+    setFocusedProjectMemoryId(null);
+    setFocusedWorkspaceNoteId(noteId);
+    setFocusedWorkspaceNoteRequestKey((value) => value + 1);
+    closeSettings();
+    setAppMode("chat");
+    setCenterMode("chat");
+    setFilePanelMode("notes");
+    expandRightPanel();
+    if (isCompact) {
+      setActiveTab("git");
+    }
+  });
+  const handleOpenReleaseNotes = useEventCallback(() => {
+    void openReleaseNotes();
+  });
+
   const {
     sidebarNode,
     messagesNode,
@@ -1129,292 +1600,59 @@ export function useAppShellLayoutNodesSection(
       handleApprovalRemember,
       handleUserInputSubmit: handleUserInputSubmitWithPlanApply,
       handleUserInputDismiss,
-      onRecoverThreadRuntime: async (workspaceId, threadId) =>
-        recoverThreadBindingForManualRecovery({
-          workspaceId,
-          threadId,
-          threadsByWorkspace,
-          refreshThread,
-          startThreadForWorkspace,
-        }),
-      onRecoverThreadRuntimeAndResend: async (workspaceId, threadId, message) =>
-        recoverThreadBindingAndResendForManualRecovery({
-          workspaceId,
-          threadId,
-          message,
-          threadsByWorkspace,
-          resolveWorkspace: (targetWorkspaceId) =>
-            (typeof workspacesById?.get === "function"
-              ? workspacesById.get(targetWorkspaceId)
-              : workspacesById?.[targetWorkspaceId]) ??
-            workspaces.find((entry: any) => entry.id === targetWorkspaceId) ??
-            null,
-          refreshThread,
-          forkThreadForWorkspace,
-          startThreadForWorkspace,
-          connectWorkspace,
-          sendUserMessageToThread,
-        }),
-      onThreadRecoveryFork: async () => {
-        await startFork("/fork");
-      },
+      onRecoverThreadRuntime: handleRecoverThreadRuntime,
+      onRecoverThreadRuntimeAndResend: handleRecoverThreadRuntimeAndResend,
+      onThreadRecoveryFork: handleThreadRecoveryFork,
       handleExitPlanModeExecute,
     },
     chrome: {
-      onOpenSettings: () => openSettings(),
-      onOpenAgentSettings: () =>
-        openSettings("agent-prompt-management", "agent-management"),
-      onOpenPromptSettings: () =>
-        openSettings("agent-prompt-management", "prompt-library"),
+      onOpenSettings: handleOpenSettings,
+      onOpenAgentSettings: handleOpenAgentSettings,
+      onOpenPromptSettings: handleOpenPromptSettings,
       onOpenModelSettings: handleOpenModelSettings,
       onRefreshModelConfig: handleRefreshModelConfig,
       isModelConfigRefreshing,
-      onOpenDictationSettings: () => openSettings("dictation"),
-      onOpenSkillsSettings: () => openSettings("mcp", "mcp-skills"),
+      onOpenDictationSettings: handleOpenDictationSettings,
+      onOpenSkillsSettings: handleOpenSkillsSettings,
       onOpenDebug: handleDebugClick,
       showDebugButton,
       onAddWorkspace: handleAddWorkspace,
-      onSelectHome: () => {
-        closeSettings();
-        handleOpenHomeChat();
-      },
-      onSelectWorkspace: (workspaceId) => {
-        closeSettings();
-        exitDiffView();
-        resetPullRequestSelection();
-        setHomeOpen(false);
-        setWorkspaceHomeWorkspaceId(null);
-        setCenterMode("chat");
-        setActiveWorkspaceId(workspaceId);
-        if (isCompact) {
-          setActiveTab("codex");
-        }
-        ensureWorkspaceThreadListLoaded(workspaceId);
-        setActiveThreadId(null, workspaceId);
-      },
-      onConnectWorkspace: async (workspace) => {
-        await connectWorkspace(workspace);
-        ensureWorkspaceThreadListLoaded(workspace.id, { force: true });
-        if (isCompact) {
-          setActiveTab("codex");
-        }
-      },
+      onSelectHome: handleSelectHome,
+      onSelectWorkspace: handleSelectWorkspace,
+      onConnectWorkspace: handleConnectWorkspace,
       onAddAgent: handleAddAgent,
       engineOptions: availableEngines,
-      enabledEngines: {
-        gemini: appSettings.geminiEnabled !== false,
-        opencode: appSettings.opencodeEnabled !== false,
-      },
+      enabledEngines,
       onRefreshEngineOptions: refreshEngines,
       onAddSharedAgent: handleStartSharedConversation,
       onAddWorktreeAgent: handleAddWorktreeAgent,
       onAddCloneAgent: handleAddCloneAgent,
-      onToggleWorkspaceCollapse: (workspaceId, collapsed) => {
-        const target = workspacesById.get(workspaceId);
-        if (!target) {
-          return;
-        }
-        void updateWorkspaceSettings(workspaceId, {
-          sidebarCollapsed: collapsed,
-        }).then(() => {
-          if (!collapsed) {
-            ensureWorkspaceThreadListLoaded(workspaceId);
-          }
-        });
-      },
-      onSelectThread: (workspaceId, threadId) => {
-        const preserveEditor = shouldPreserveEditorOnThreadSelect({
-          isCompact,
-          centerMode,
-          activeWorkspaceId,
-          targetWorkspaceId: workspaceId,
-          activeEditorFilePath,
-        });
-        const diffCleanupAction =
-          getThreadSelectDiffCleanupAction(preserveEditor);
-        closeSettings();
-        if (diffCleanupAction === "clear-selected-diff") {
-          setSelectedDiffPath(null);
-        } else {
-          exitDiffView();
-        }
-        resetPullRequestSelection();
-        setHomeOpen(false);
-        setWorkspaceHomeWorkspaceId(null);
-        if (!preserveEditor) {
-          setCenterMode("chat");
-        }
-        setAppMode("chat");
-        setActiveTab("codex");
-        selectWorkspace(workspaceId);
-        setActiveThreadId(threadId, workspaceId);
-        // Auto-switch engine based on thread's engineSource
-        const threads = threadsByWorkspace[workspaceId] ?? [];
-        const thread = threads.find(
-          (threadEntry: { id: string }) => threadEntry.id === threadId,
-        );
-        if (thread?.engineSource) {
-          setActiveEngine(thread.engineSource);
-        }
-      },
+      onToggleWorkspaceCollapse: handleToggleWorkspaceCollapse,
+      onSelectThread: handleSelectThread,
       onSelectHomeWorkspace: handleSelectHomeWorkspace,
-      onDeleteThread: async (workspaceId, threadId) => {
-        openDeleteThreadPrompt(workspaceId, threadId);
-      },
-      onArchiveThread: async (workspaceId, threadId) => {
-        try {
-          const response = await archiveWorkspaceSessions(workspaceId, [
-            threadId,
-          ]);
-          const mutationResult = response.results.find(
-            (result: any) => result.sessionId === threadId,
-          );
-          if (!mutationResult?.ok) {
-            throw new Error(
-              mutationResult?.error ?? t("workspace.archiveConversationFailed"),
-            );
-          }
-          if (
-            activeWorkspaceId === workspaceId &&
-            activeThreadId === threadId
-          ) {
-            setActiveThreadId(null, workspaceId);
-          }
-          ensureWorkspaceThreadListLoaded(workspaceId, { force: true });
-        } catch (error: unknown) {
-          alertError(error instanceof Error ? error.message : String(error));
-        }
-      },
+      onDeleteThread: handleDeleteThread,
+      onArchiveThread: handleArchiveThread,
       deleteConfirmThreadId: deleteThreadPrompt?.threadId ?? null,
       deleteConfirmWorkspaceId: deleteThreadPrompt?.workspaceId ?? null,
       deleteConfirmBusy: isDeleteThreadPromptBusy,
       onCancelDeleteConfirm: handleDeleteThreadPromptCancel,
-      onConfirmDeleteConfirm: () => {
-        void handleDeleteThreadPromptConfirm();
-      },
-      onSyncThread: (workspaceId, threadId) => {
-        void refreshThread(workspaceId, threadId);
-      },
+      onConfirmDeleteConfirm: handleConfirmDeleteConfirm,
+      onSyncThread: handleSyncThread,
       pinThread,
       unpinThread,
       isThreadPinned,
       getPinTimestamp,
       pinnedThreadsVersion,
       isThreadAutoNaming,
-      onRenameThread: (workspaceId, threadId) => {
-        handleRenameThread(workspaceId, threadId);
-      },
-      onAutoNameThread: (workspaceId, threadId) => {
-        addDebugEntry({
-          id: `${Date.now()}-thread-title-manual-trigger`,
-          timestamp: Date.now(),
-          source: "client",
-          label: "thread/title manual trigger",
-          payload: { workspaceId, threadId },
-        });
-        void triggerAutoThreadTitle(workspaceId, threadId, { force: true })
-          .then((title: string | null | undefined) => {
-            if (!title) {
-              addDebugEntry({
-                id: `${Date.now()}-thread-title-manual-empty`,
-                timestamp: Date.now(),
-                source: "client",
-                label: "thread/title manual skipped",
-                payload: { workspaceId, threadId },
-              });
-              return;
-            }
-            addDebugEntry({
-              id: `${Date.now()}-thread-title-manual-success`,
-              timestamp: Date.now(),
-              source: "server",
-              label: "thread/title manual generated",
-              payload: { workspaceId, threadId, title },
-            });
-          })
-          .catch((error: unknown) => {
-            addDebugEntry({
-              id: `${Date.now()}-thread-title-manual-error`,
-              timestamp: Date.now(),
-              source: "error",
-              label: "thread/title manual error",
-              payload: error instanceof Error ? error.message : String(error),
-            });
-          });
-      },
+      onRenameThread: handleSidebarRenameThread,
+      onAutoNameThread: handleAutoNameThread,
       onOpenClaudeTui: handleOpenClaudeTui,
-      onDeleteWorkspace: (workspaceId) => {
-        void removeWorkspace(workspaceId);
-      },
-      onDeleteWorktree: (workspaceId) => {
-        void removeWorktree(workspaceId);
-      },
+      onDeleteWorkspace: handleDeleteWorkspace,
+      onDeleteWorktree: handleDeleteWorktree,
       onRenameWorkspaceAlias: handleRenameWorkspaceAlias,
-      onLoadOlderThreads: (workspaceId) => {
-        const workspace = workspacesById.get(workspaceId);
-        if (!workspace) {
-          return;
-        }
-        void loadOlderThreadsForWorkspace(workspace);
-      },
-      onQuickReloadWorkspaceThreads: (workspaceId) => {
-        const workspace = workspacesById.get(workspaceId);
-        if (!workspace) {
-          return;
-        }
-        const targets =
-          workspace.kind === "main"
-            ? [
-                workspace,
-                ...workspaces.filter(
-                  (candidate: WorkspaceInfo) =>
-                    candidate.parentId === workspace.id,
-                ),
-              ]
-            : [workspace];
-        void Promise.allSettled(
-          targets.map((target) => listThreadsForWorkspaceTracked(target)),
-        );
-      },
-      onReloadWorkspaceThreads: async (workspaceId) => {
-        const workspace = workspacesById.get(workspaceId);
-        if (!workspace) {
-          return;
-        }
-        const workspaceName =
-          workspace.name || t("workspace.noWorkspaceSelected");
-        const detailLines = [
-          t("workspace.reloadWorkspaceThreadsEffectRefresh"),
-          t("workspace.reloadWorkspaceThreadsEffectDisplayOnly"),
-          t("workspace.reloadWorkspaceThreadsEffectNoDelete"),
-          t("workspace.reloadWorkspaceThreadsEffectNoGitWrite"),
-        ];
-        const confirmed = await ask(
-          `${t("workspace.reloadWorkspaceThreadsConfirm", { name: workspaceName })}\n\n${t("workspace.reloadWorkspaceThreadsBeforeYouConfirm")}\n${detailLines.map((line) => `• ${line}`).join("\n")}`,
-          {
-            title: t("workspace.reloadWorkspaceThreadsTitle"),
-            kind: "warning",
-            okLabel: t("threads.reloadThreads"),
-            cancelLabel: t("common.cancel"),
-          },
-        );
-        if (!confirmed) {
-          return;
-        }
-        const targets =
-          workspace.kind === "main"
-            ? [
-                workspace,
-                ...workspaces.filter(
-                  (candidate: WorkspaceInfo) =>
-                    candidate.parentId === workspace.id,
-                ),
-              ]
-            : [workspace];
-        void Promise.allSettled(
-          targets.map((target) => listThreadsForWorkspaceTracked(target)),
-        );
-      },
+      onLoadOlderThreads: handleLoadOlderThreads,
+      onQuickReloadWorkspaceThreads: handleQuickReloadWorkspaceThreads,
+      onReloadWorkspaceThreads: handleReloadWorkspaceThreads,
       updaterState,
       onUpdate: startUpdate,
       onDismissUpdate: dismissUpdate,
@@ -1454,9 +1692,7 @@ export function useAppShellLayoutNodesSection(
       filePanelMode,
       onFilePanelModeChange: setFilePanelMode,
       liveEditPreviewEnabled,
-      onToggleLiveEditPreview: () => {
-        setLiveEditPreviewEnabled((current: boolean) => !current);
-      },
+      onToggleLiveEditPreview: handleToggleLiveEditPreview,
       fileTreeLoading: isFilesLoading,
       fileTreeLoadError,
       onRefreshFiles: refreshFiles,
@@ -1472,13 +1708,9 @@ export function useAppShellLayoutNodesSection(
       editorSplitCompanion,
       setEditorSplitCompanion,
       editorSplitLayout,
-      onToggleEditorSplitLayout: () =>
-        setEditorSplitLayout((prev: "vertical" | "horizontal") =>
-          prev === "vertical" ? "horizontal" : "vertical",
-        ),
+      onToggleEditorSplitLayout: handleToggleEditorSplitLayout,
       isEditorFileMaximized,
-      onToggleEditorFileMaximized: () =>
-        setIsEditorFileMaximized((prev: boolean) => !prev),
+      onToggleEditorFileMaximized: handleToggleEditorFileMaximized,
       editorFilePath: activeEditorFilePath,
       editorNavigationTarget,
       editorHighlightTarget,
@@ -1493,27 +1725,14 @@ export function useAppShellLayoutNodesSection(
       externalChangeApplyMode: liveEditPreviewEnabled ? "auto" : "manual",
       externalChangeAutoApplyDebounceMs: liveEditPreviewEnabled ? 700 : 0,
       onExitEditor: handleExitWorkspaceEditor,
-      onExitDiff: () => {
-        setCenterMode("chat");
-        handleSelectDiffForPanel(null);
-      },
+      onExitDiff: handleExitDiff,
       activeTab,
       onSelectTab: setActiveTab,
       tabletNavTab: tabletTab,
       gitPanelMode,
       onGitPanelModeChange: handleGitPanelModeChange,
-      onOpenGitHistoryPanel: () => {
-        setAppMode((current: string) =>
-          current === "gitHistory" ? "chat" : "gitHistory",
-        );
-      },
-      onOpenProjectMap: () => {
-        closeSettings();
-        collapseSidebar();
-        setAppMode("chat");
-        setCenterMode("projectMap");
-        expandRightPanel();
-      },
+      onOpenGitHistoryPanel: handleOpenGitHistoryPanel,
+      onOpenProjectMap: handleOpenProjectMap,
       gitDiffViewStyle,
       gitDiffListView,
       onGitDiffListViewChange: setGitDiffListView,
@@ -1558,13 +1777,8 @@ export function useAppShellLayoutNodesSection(
         diffSource === "pr" ? gitPullRequestComments : [],
       selectedPullRequestCommentsLoading: gitPullRequestCommentsLoading,
       selectedPullRequestCommentsError: gitPullRequestCommentsError,
-      onSelectPullRequest: (pullRequest) => {
-        setSelectedCommitSha(null);
-        handleSelectPullRequest(pullRequest);
-      },
-      onSelectCommit: (entry) => {
-        handleSelectCommit(entry.sha);
-      },
+      onSelectPullRequest: handleGitSelectPullRequest,
+      onSelectCommit: handleGitSelectCommit,
       gitRemoteUrl,
       gitRoot: activeGitRoot,
       gitRootCandidates,
@@ -1574,12 +1788,8 @@ export function useAppShellLayoutNodesSection(
       gitRootScanHasScanned,
       onGitRootScanDepthChange: setGitRootScanDepth,
       onScanGitRoots: scanGitRoots,
-      onSelectGitRoot: (path) => {
-        void handleSetGitRoot(path);
-      },
-      onClearGitRoot: () => {
-        void handleSetGitRoot(null);
-      },
+      onSelectGitRoot: handleSelectGitRoot,
+      onClearGitRoot: handleClearGitRoot,
       onPickGitRoot: handlePickGitRoot,
       onStageGitAll: handleStageGitAll,
       onStageGitFile: handleStageGitFile,
@@ -1623,42 +1833,15 @@ export function useAppShellLayoutNodesSection(
       canRevealGeneralPrompts: Boolean(activeWorkspace),
       onSend: handleComposerSendWithIntentCanvas,
       onQueue: handleComposerQueueWithIntentCanvas,
-      onRequestContextCompaction: () => startCompact("/compact"),
+      onRequestContextCompaction: handleRequestContextCompaction,
       onStop: interruptTurn,
       completionEmailSelected: Boolean(
         activeThreadId && completionEmailIntentByThread?.[activeThreadId],
       ),
       completionEmailDisabled: !activeThreadId,
-      onToggleCompletionEmail: () => {
-        if (activeThreadId) {
-          toggleCompletionEmailIntent(activeThreadId);
-        }
-      },
+      onToggleCompletionEmail: handleToggleCompletionEmail,
       onRewind: handleRewindFromMessage,
-      onForkFromMessage: async (messageId, options) => {
-        if (!activeWorkspace || !activeThreadId) {
-          return;
-        }
-        const forkedThreadId = await forkSessionFromMessageForWorkspace(
-          activeWorkspace.id,
-          activeThreadId,
-          messageId,
-          {
-            activate: true,
-            mode: "messages-only",
-            providerProfileId: options?.providerProfileId ?? null,
-            providerProfile: options?.providerProfile ?? null,
-          },
-        );
-        if (!forkedThreadId) {
-          throw new Error("Fork did not return a child conversation.");
-        }
-        if (forkedThreadId && forkedThreadId !== activeThreadId) {
-          if (typeof updateThreadParent === "function") {
-            updateThreadParent(activeThreadId, [forkedThreadId]);
-          }
-        }
-      },
+      onForkFromMessage: handleForkFromMessage,
       canStop: canInterrupt,
       isReviewing,
       isProcessing,
@@ -1687,35 +1870,18 @@ export function useAppShellLayoutNodesSection(
       codexAutoCompactionEnabled: appSettings.codexAutoCompactionEnabled,
       codexAutoCompactionThresholdPercent:
         appSettings.codexAutoCompactionThresholdPercent,
-      onCodexAutoCompactionSettingsChange: async (patch) => {
-        await queueSaveSettings({
-          ...appSettings,
-          codexAutoCompactionEnabled:
-            patch.enabled ?? appSettings.codexAutoCompactionEnabled,
-          codexAutoCompactionThresholdPercent:
-            patch.thresholdPercent ??
-            appSettings.codexAutoCompactionThresholdPercent,
-        });
-      },
+      onCodexAutoCompactionSettingsChange:
+        handleCodexAutoCompactionSettingsChange,
       activeQueue,
-      draftText: activeDraft,
       onDraftChange: handleDraftChange,
       activeImages,
       onPickImages: pickImages,
       onAttachImages: attachImages,
       onRemoveImage: removeImage,
       prefillDraft,
-      onPrefillHandled: (id) => {
-        if (prefillDraft?.id === id) {
-          setPrefillDraft(null);
-        }
-      },
+      onPrefillHandled: handlePrefillHandled,
       insertText: composerInsert,
-      onInsertHandled: (id) => {
-        if (composerInsert?.id === id) {
-          setComposerInsert(null);
-        }
-      },
+      onInsertHandled: handleInsertHandled,
       onEditQueued: handleEditQueued,
       onDeleteQueued: handleDeleteQueued,
       onFuseQueued: handleFuseQueued,
@@ -1759,7 +1925,7 @@ export function useAppShellLayoutNodesSection(
       accessMode,
       onSelectAccessMode: handleSetAccessMode,
       skills,
-      customSkillDirectories: appSettings.customSkillDirectories ?? [],
+      customSkillDirectories: appSettings.customSkillDirectories ?? EMPTY_STRING_ARRAY,
       prompts,
       commands,
       files,
@@ -1779,15 +1945,12 @@ export function useAppShellLayoutNodesSection(
       dictationLevel,
       onToggleDictation: handleToggleDictation,
       dictationTranscript,
-      onDictationTranscriptHandled: (id) => {
-        clearDictationTranscript(id);
-      },
+      onDictationTranscriptHandled: handleDictationTranscriptHandled,
       dictationError,
       onDismissDictationError: clearDictationError,
       dictationHint,
       onDismissDictationHint: clearDictationHint,
-      onOpenExperimentalSettings: () =>
-        openSettings("experimental", "experimental-collaboration-modes"),
+      onOpenExperimentalSettings: handleOpenExperimentalSettings,
       composerSendLabel,
       composerLinkedKanbanPanels,
       selectedComposerKanbanPanelId,
@@ -1825,11 +1988,8 @@ export function useAppShellLayoutNodesSection(
       onCopyDebug: handleCopyDebug,
       onResizeDebug: onDebugPanelResizeStart,
       onResizeTerminal: onTerminalPanelResizeStart,
-      onBackFromDiff: () => {
-        setSelectedDiffPath(null);
-        setCenterMode("chat");
-      },
-      onGoProjects: () => setActiveTab("projects"),
+      onBackFromDiff: handleBackFromDiff,
+      onGoProjects: handleGoProjects,
       workspaceDropTargetRef,
       isWorkspaceDropActive: dropOverlayActive,
       workspaceDropText: dropOverlayText,
@@ -1840,54 +2000,11 @@ export function useAppShellLayoutNodesSection(
       appMode,
       onAppModeChange: handleAppModeChange,
       onOpenHomeChat: handleOpenHomeChat,
-      onOpenMemory: () => {
-        setFocusedProjectMemoryId(null);
-        setFocusedWorkspaceNoteId(null);
-        closeSettings();
-        setAppMode("chat");
-        setCenterMode("memory");
-      },
-      onOpenProjectMemory: () => {
-        setFocusedProjectMemoryId(null);
-        setFocusedWorkspaceNoteId(null);
-        closeSettings();
-        setAppMode("chat");
-        setCenterMode("chat");
-        setFilePanelMode("memory");
-        expandRightPanel();
-        if (isCompact) {
-          setActiveTab("git");
-        }
-      },
-      onOpenContextLedgerMemory: (memoryId) => {
-        setFocusedWorkspaceNoteId(null);
-        setFocusedProjectMemoryId(memoryId);
-        setFocusedProjectMemoryRequestKey((value) => value + 1);
-        closeSettings();
-        setAppMode("chat");
-        setCenterMode("chat");
-        setFilePanelMode("memory");
-        expandRightPanel();
-        if (isCompact) {
-          setActiveTab("git");
-        }
-      },
-      onOpenContextLedgerNote: (noteId) => {
-        setFocusedProjectMemoryId(null);
-        setFocusedWorkspaceNoteId(noteId);
-        setFocusedWorkspaceNoteRequestKey((value) => value + 1);
-        closeSettings();
-        setAppMode("chat");
-        setCenterMode("chat");
-        setFilePanelMode("notes");
-        expandRightPanel();
-        if (isCompact) {
-          setActiveTab("git");
-        }
-      },
-      onOpenReleaseNotes: () => {
-        void openReleaseNotes();
-      },
+      onOpenMemory: handleOpenMemory,
+      onOpenProjectMemory: handleOpenProjectMemory,
+      onOpenContextLedgerMemory: handleOpenContextLedgerMemory,
+      onOpenContextLedgerNote: handleOpenContextLedgerNote,
+      onOpenReleaseNotes: handleOpenReleaseNotes,
       focusedProjectMemoryId,
       focusedProjectMemoryRequestKey,
       focusedWorkspaceNoteId,

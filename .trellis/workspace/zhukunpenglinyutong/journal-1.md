@@ -401,3 +401,123 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: 按引擎持久化 composer 偏好与会话绑定加固
+
+**Date**: 2026-07-02
+**Task**: 提交暂存的 composer 偏好持久化等改动
+**Branch**: `feat/ui-refactoring`
+
+### Summary
+
+新增 per-engine composer 偏好持久化:每个引擎记住最近一次使用的 model/effort/access mode/plan 模式,新会话按引擎默认恢复;同时加固 pending 线程会话绑定(established 目标不再被反向命中),Claude 上下文窗口估算默认改 1M(Haiku 保持 200K),掉帧监视器剔除挂起恢复造成的假掉帧。
+
+### Main Changes
+
+| 模块 | 变更 |
+|------|------|
+| composer 偏好 | 新增 `composerEnginePrefs.ts`(归一化/immutable upsert/legacy codex 字段迁移)+ 单测;`AppSettings` 增加 `lastComposerPrefsByEngine`;`useSelectedComposerSession` 对全新 pending 线程应用引擎默认;`useThreadScopedCollaborationMode` 仅显式 plan/code 切换时回写偏好;app-shell 接线 |
+| 会话绑定 | `useThreadTurnEvents` 新增 `hasEstablishedThreadItems` 守卫:目标线程已有条目时 active-pending 兜底不再触发(Claude 每 turn 重播 session id 导致的串会话) |
+| 上下文窗口 | `claudeContextWindow` 默认 1M,仅 Haiku 200K;`ContextUsageIndicator` 默认值同步 |
+| perf 监控 | `frameDropMonitor` 新增 `SUSPEND_GAP_MS=5000` 挂起恢复识别(记 `perf.suspend-gap` 不计掉帧)、visibilitychange 重置计时、`isLongTaskObservable()`;`diagnosticsReport` 统计剔除脏数据 |
+| UI 细节 | ThreadList 有 runtime badge 时隐藏相对时间;`ReadToolGroupBlock` 改用 explore-inline 样式(净减 72 行) |
+
+**Updated Files**: 27 files (+821/-150),核心见上表;commit `d94ad984`
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d94ad984` | feat(composer): persist per-engine composer preferences |
+
+### Testing
+
+- 未运行(用户仅要求提交暂存变更,不做二次确认)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 工作区仍有未提交改动:`src-tauri/src/engine/claude/lifecycle.rs`、`tests_core.rs`、`TokenIndicator.test.tsx`,待后续整理提交
+
+## Session 10: 提交新增 agent skills
+
+**Date**: 2026-07-02
+**Task**: 只提交暂存区中新增的 skills 代码,排除优化代码
+**Branch**: `feat/ui-refactoring`
+
+### Summary
+
+用户暂存区混有两类改动:新增 skills 与渲染优化代码。按要求先将 4 个优化相关的 src 文件移出暂存区,只提交 skills 部分:`vercel-optimize`(157 文件,含 gates/scanners/sanitizers/scripts/reference playbooks)与 `writing-guidelines` 两个 skill,以及 `.claude/skills` 下的软链接和 `skills-lock.json` 注册表更新。
+
+### Main Changes
+
+| 模块 | 变更 |
+|------|------|
+| skills | 新增 `.agents/skills/vercel-optimize/**`、`.agents/skills/writing-guidelines/SKILL.md` |
+| 接线 | `.claude/skills/vercel-optimize`、`.claude/skills/writing-guidelines` 软链接指向 `.agents/skills`;`skills-lock.json` 注册表同步 |
+
+**Updated Files**: 160 files (+19075/-16);commit `5b49eb12`
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5b49eb12` | feat(skills): add vercel-optimize and writing-guidelines agent skills |
+
+### Testing
+
+- 未运行(仅提交第三方 skill 资产,无运行时代码变更)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 工作区仍保留未提交的优化代码:`useResizablePanels.ts`、`useSessionRadarFeed.ts`、`useEventCallback.ts(.test.ts)`,待用户后续整理提交
+
+## Session 11: 第一批卡死修复(流式合并 O(L²) + 启动分包泄漏)
+
+**Date**: 2026-07-02
+**Task**: vercel-react-best-practices 全项目性能审查后的第一批修复
+**Branch**: `feat/ui-refactoring`
+
+### Summary
+
+六个并行审查 agent 定位出卡死四层根因,第一批落地收益/风险比最高的两项:①流式文本合并每 delta 对全文做 8-14 趟扫描(单消息 O(L²)),加"低风险追加片段"快速路径(existing≥2048 且 delta≤256 且无段落断且 compact<24)后降为 O(L),慢路径语义零改动;reducer 侧同步把 normalizeItem 全文重复检测推迟到边界 delta,克隆延后到 no-op 守卫之后。②生产构建把 vendor-mermaid(2.4MB)/vendor-docs(1.3MB) modulepreload 进启动——真凶是 `\0vite/preload-helper`/`\0commonjsHelpers` 虚拟模块被并进重 chunk,精确钉进 vendor-shared(1.86KB)修复;dompurify 独立分包;xterm 改动态导入(需 tick 通知 openSession effect 重跑)。
+
+### Main Changes
+
+| 模块 | 变更 |
+|------|------|
+| threads | textMerge 快速路径 + reasoning 尾窗比较 + overlap 512 上限;reducer 延迟克隆/边界归一化/尾部查找;删死代码 fastPathForAppendAgentDelta |
+| build | manualChunks 钉 helper 虚拟模块与 dompurify;勿用 `\0` 全量兜底(commonjs 代理会循环) |
+| terminal | xterm/addon/CSS 动态导入,加载失败可重试 |
+
+**Updated Files**: 6 files (+361/-88);commit `d0fc3feb`
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d0fc3feb` | perf: eliminate O(L^2) streaming merge and keep heavy vendors lazy |
+
+### Testing
+
+- 全量 737 测试文件通过;typecheck/lint 全绿
+- 新增回归:合并语义保持用例 + 1000-delta 线性时间判别(实测 4ms)+ 引用相等断言
+- dist 验证:index.html preload 只剩 vendor-shared/react/tauri;mermaid/docs/xterm 移出启动图
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 第二批(已获用户同意开工):时间线 userActionNode 稳定化 + content-visibility + 行级诊断 effect 门控;常驻轮询统一可见性门控(CuratedSkillIndicator/task stores/runtime dock/blank watchdog);生产剥离 React Profiler 与 reactComponentName 插件
+- 已知残留:<24 字符空白改写的头部重发不再去重;2048 以下预热区仍付 collapseRepeatedParagraph 回溯正则(~7ms/delta)
+- 人工验证待做:真实长回复流式体感 + 终端面板首开(xterm 懒加载后)

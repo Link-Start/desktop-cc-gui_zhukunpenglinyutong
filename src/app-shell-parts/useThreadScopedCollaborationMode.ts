@@ -11,10 +11,16 @@ type CollaborationModeByThread = Record<string, CollaborationMode>;
 
 type UseThreadScopedCollaborationModeOptions = {
   setSelectedCollaborationModeId: Dispatch<SetStateAction<string | null>>;
+  /**
+   * Fired only for explicit plan/code toggles (not the automatic per-thread sync),
+   * so the caller can remember the user's last deliberate choice.
+   */
+  onExplicitCollaborationModeChange?: (mode: string | null) => void;
 };
 
 export function useThreadScopedCollaborationMode({
   setSelectedCollaborationModeId,
+  onExplicitCollaborationModeChange,
 }: UseThreadScopedCollaborationModeOptions) {
   const [collaborationUiModeByThread, setCollaborationUiModeByThread] =
     useState<CollaborationModeByThread>({});
@@ -29,6 +35,7 @@ export function useThreadScopedCollaborationMode({
       if (!modeId) {
         codexComposerModeRef.current = null;
         setSelectedCollaborationModeId(null);
+        onExplicitCollaborationModeChange?.(null);
         return;
       }
       const normalized: CollaborationMode = modeId === "plan" ? "plan" : "code";
@@ -46,8 +53,9 @@ export function useThreadScopedCollaborationMode({
         });
       }
       setSelectedCollaborationModeId(normalized);
+      onExplicitCollaborationModeChange?.(normalized);
     },
-    [setSelectedCollaborationModeId],
+    [onExplicitCollaborationModeChange, setSelectedCollaborationModeId],
   );
 
   const setCodexCollaborationMode = useCallback(

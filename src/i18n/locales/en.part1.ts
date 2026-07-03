@@ -828,6 +828,17 @@ const enPart1 = {
     perfCopyReportDone: "Copied to clipboard.",
     perfCopyReportDownloaded: "Clipboard unavailable — downloaded as a text file.",
     perfCopyReportFailed: "Copy failed, please retry.",
+    perfJankLiveTitle: "Recent jank (live)",
+    perfJankLiveDescription:
+      "Frame drops / long tasks captured by performance diagnostics, newest first, auto-refreshing every second. Clear first, reproduce the jank, then read each entry's attribution (time, cost, streaming phase, last interaction, re-rendered components).",
+    perfJankLiveClearButton: "Clear",
+    perfJankLiveCleared: "Cleared — start observing from zero.",
+    perfJankLiveEmpty:
+      "No records yet. Enable “Performance diagnostics capture” above and frame drops will appear here in real time.",
+    perfJankLiveSummary: "{{count}} entries · worst {{worst}}ms",
+    perfJankLiveNoRenders: "no render attribution",
+    perfJankLiveTruncated:
+      "Showing the latest 40 entries; {{hidden}} older ones are in the exported report.",
     costBudgetTitle: "Cost budget",
     costBudgetDescription:
       "Set a local monthly budget for the StatusPanel BudgetBar and cost guidance.",
@@ -1193,7 +1204,6 @@ const enPart1 = {
         bottomActivityTasks: "Tasks tab",
         bottomActivityAgents: "Agents tab",
         bottomActivityCheckpoint: "Result tab",
-        bottomActivityLatestConversation: "Latest conversation tab",
         curtainContextLedger: "Context sources card",
         cornerStatusMessageAnchors: "Message anchors",
       },
@@ -1229,7 +1239,6 @@ const enPart1 = {
         bottomActivityTasks: "Hides the task status tab.",
         bottomActivityAgents: "Hides the agent status tab.",
         bottomActivityCheckpoint: "Hides the result checkpoint tab.",
-        bottomActivityLatestConversation: "Hides the latest conversation tab.",
         curtainContextLedger:
           "Hides the context sources card above the composer without disabling ledger calculations.",
         cornerStatusMessageAnchors:

@@ -7,7 +7,7 @@ const THREAD_COMPOSER_SELECTION_STORAGE_KEY_PREFIX = "selectedModelByThread.";
 const CLAUDE_FORK_THREAD_PREFIX = "claude-fork:";
 const CLAUDE_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
-function resolveThreadEngine(
+export function resolveThreadEngine(
   threadId: string,
 ): "claude" | "gemini" | "opencode" | "codex" | null {
   if (

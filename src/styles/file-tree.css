@@ -93,6 +93,7 @@
   height: 24px;
   padding: 0;
   border: none;
+  border-radius: 6px;
   box-shadow: none;
   background: transparent;
 }
@@ -652,6 +653,8 @@
   background: transparent;
   color: var(--text-emphasis);
   font-size: var(--file-tree-content-font-size);
+  /* 全局 button 规则(buttons.css @layer app)会漏下 font-weight:600，这里显式压平 */
+  font-weight: 400;
   line-height: 1.25;
   text-align: left;
   width: 100%;
@@ -699,10 +702,6 @@
   background: var(--surface-hover);
 }
 
-.file-tree-row.is-folder {
-  font-weight: 400;
-}
-
 .file-tree-row.is-root {
   width: 100%;
   min-width: 0;
@@ -721,7 +720,7 @@
 }
 
 .file-tree-icon-root-special {
-  color: color-mix(in srgb, var(--accent-500) 65%, var(--text-strong) 35%);
+  color: var(--text-muted);
 }
 
 .file-tree-chevron {
@@ -759,6 +758,7 @@
   width: 15px;
   height: 15px;
   flex-shrink: 0;
+  color: var(--text-muted);
 }
 
 .file-tree-icon svg {
@@ -785,6 +785,7 @@
   z-index: 2;
   padding: 2px;
   border: none;
+  border-radius: 6px;
   background: transparent;
   box-shadow: none;
 }
@@ -1114,16 +1115,6 @@
 }
 
 /* Git status colors in file tree */
-.file-tree-name.git-a,
-.file-tree-name.git-m,
-.file-tree-name.git-d,
-.file-tree-name.git-r,
-.file-tree-name.git-t {
-  font-weight: 800 !important;
-  font-variation-settings: "wght" 800;
-  text-shadow: 0.25px 0 currentColor;
-}
-
 .file-tree-name.git-a {
   color: #89d185;
 }

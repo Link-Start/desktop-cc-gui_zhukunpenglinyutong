@@ -232,10 +232,10 @@ describe("useAppShellLayoutNodesSection adapter contract", () => {
       "utf8",
     );
     const projectMapHandler = source.slice(
-      source.indexOf("onOpenProjectMap: () => {"),
+      source.indexOf("const handleOpenProjectMap = useEventCallback(() => {"),
       source.indexOf(
-        "gitDiffViewStyle,",
-        source.indexOf("onOpenProjectMap: () => {"),
+        "const handleGitSelectPullRequest",
+        source.indexOf("const handleOpenProjectMap = useEventCallback(() => {"),
       ),
     );
 
@@ -252,10 +252,10 @@ describe("useAppShellLayoutNodesSection adapter contract", () => {
       "utf8",
     );
     const forkHandler = source.slice(
-      source.indexOf("onForkFromMessage: async (messageId, options) => {"),
+      source.indexOf("const handleForkFromMessage = useEventCallback("),
       source.indexOf(
-        "canStop: canInterrupt,",
-        source.indexOf("onForkFromMessage: async (messageId, options) => {"),
+        "const handleCodexAutoCompactionSettingsChange",
+        source.indexOf("const handleForkFromMessage = useEventCallback("),
       ),
     );
 

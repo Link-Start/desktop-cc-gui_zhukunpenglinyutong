@@ -8,7 +8,6 @@ import {
 } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pushErrorToast } from "../../../services/toasts";
 import type { ConversationItem } from "../../../types";
@@ -788,7 +787,6 @@ function ComposerHarness({
   selectedEngine = "claude",
   rewindWorkspaceGitState = null,
 }: ComposerHarnessProps) {
-  const [draftText, setDraftText] = useState("");
 
   return (
     <Composer
@@ -817,8 +815,6 @@ function ComposerHarness({
       prompts={[]}
       commands={[]}
       files={[]}
-      draftText={draftText}
-      onDraftChange={setDraftText}
       dictationEnabled={false}
       activeWorkspaceId="ws-1"
       rewindWorkspaceGitState={rewindWorkspaceGitState}

@@ -7,10 +7,13 @@ import {
   exportRendererDiagnostics,
   type RendererDiagnosticEntry,
 } from "../rendererDiagnostics";
+import { getReactScanAttributionState } from "../reactScanController";
+import { SUSPEND_GAP_MS, isLongTaskObservable } from "./frameDropMonitor";
 
 const REPORT_MAX_ENTRIES = 80;
 const REPORT_LABELS = [
   "perf.frame-drop",
+  "perf.suspend-gap",
   "perf.longtask",
   "perf.longtask/unsupported",
   "perf.longtask/install-failed",
@@ -54,22 +57,52 @@ export function buildDiagnosticsReportText(): string {
   const all = exportRendererDiagnostics();
   const relevant = all.filter((entry) => REPORT_LABELS.includes(entry.label));
   const recent = relevant.slice(-REPORT_MAX_ENTRIES);
-  const frameDrops = relevant.filter((entry) => entry.label === "perf.frame-drop");
+  const allFrameDrops = relevant.filter(
+    (entry) => entry.label === "perf.frame-drop",
+  );
+  // 旧版监视器会把挂起/睡眠恢复记成 frame-drop(deltaMs 可达几十分钟),统计口径按
+  // SUSPEND_GAP_MS 剔除这类历史脏条目,避免 worstFrameMs 被污染成无意义的天文数字。
+  const suspendResumeFrames = allFrameDrops.filter(
+    (entry) => (readNumber(entry.payload, "deltaMs") ?? 0) >= SUSPEND_GAP_MS,
+  );
+  const frameDrops = allFrameDrops.filter(
+    (entry) => (readNumber(entry.payload, "deltaMs") ?? 0) < SUSPEND_GAP_MS,
+  );
   const worstFrameMs = frameDrops.reduce((max, entry) => {
     const delta = readNumber(entry.payload, "deltaMs") ?? 0;
     return delta > max ? delta : max;
   }, 0);
   const longTasks = relevant.filter((entry) => entry.label === "perf.longtask");
 
-  const header = [
+  const headerLines = [
     "=== CC GUI 性能诊断 / performance report ===",
     `generatedAt: ${new Date().toISOString()}`,
     `appVersion: ${getAppVersion()}`,
     `platform: ${getPlatform()}`,
     `totalEntries: ${all.length} | relevant: ${relevant.length} | shown: ${recent.length}`,
     `frameDropCount: ${frameDrops.length} | worstFrameMs: ${Math.round(worstFrameMs)} | longTaskCount: ${longTasks.length}`,
-    "",
-  ].join("\n");
+  ];
+  if (!isLongTaskObservable()) {
+    headerLines.push(
+      "longTaskSupport: unsupported — 本平台无 longtask API,longTaskCount 恒为 0,不代表没有长任务",
+    );
+  }
+  const attributionState = getReactScanAttributionState();
+  headerLines.push(
+    attributionState === "on"
+      ? "renderAttribution: on — topRenders 为掉帧前 600ms 内渲染最多的组件(react-scan overlay)"
+      : attributionState === "paused"
+        ? "renderAttribution: paused — react-scan 工具条处于暂停态,onRender 归因被闸门跳过,topRenders 恒空;重开设置里的 react-scan 开关恢复"
+        : attributionState === "missing"
+          ? "renderAttribution: flag-on 但 instrumentation 未就绪 — topRenders 为空不代表没有渲染发生"
+          : "renderAttribution: off — topRenders 为空是预期;需要组件归因请在设置里开启 react-scan overlay 后复现",
+  );
+  if (suspendResumeFrames.length > 0) {
+    headerLines.push(
+      `suspendResumeFrames: ${suspendResumeFrames.length} (deltaMs ≥ ${SUSPEND_GAP_MS} 视为挂起/睡眠恢复,已从掉帧统计剔除)`,
+    );
+  }
+  const header = [...headerLines, ""].join("\n");
 
   if (recent.length === 0) {
     return `${header}(no performance diagnostics recorded — 打开设置里的「性能诊断采集」并复现卡顿后再导出)\n`;

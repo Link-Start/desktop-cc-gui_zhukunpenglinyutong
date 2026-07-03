@@ -37,12 +37,6 @@ vi.mock("../features/session-activity/hooks/useSessionRadarFeed", () => ({
   })),
 }));
 
-vi.mock("../features/session-activity/utils/performanceCompatibility", () => ({
-  isPerformanceCompatibilityModeEnabled: vi.fn((settings) =>
-    settings?.performanceCompatibilityModeEnabled === true
-  ),
-}));
-
 vi.mock("../features/workspaces/hooks/useWorkspaceSessionProjectionSummary", () => ({
   useWorkspaceSessionProjectionSummary: vi.fn(() => ({
     summary: { ownerWorkspaceIds: ["ws-1"] },
@@ -99,7 +93,6 @@ describe("useAppShellSearchRadarSection", () => {
 
     const { result } = renderHook(() =>
       useAppShellSearchRadarSection({
-        activeDraft: "",
         activeItems: [],
         activeThreadId: null,
         activeWorkspace: workspace,
@@ -112,6 +105,7 @@ describe("useAppShellSearchRadarSection", () => {
         directories: [],
         filePanelMode: "radar",
         files: [],
+        getActiveDraft: () => "",
         globalSearchFilesByWorkspace: {},
         handleDraftChange: vi.fn(),
         isCompact: false,
@@ -180,7 +174,6 @@ describe("useAppShellSearchRadarSection", () => {
 
     renderHook(() =>
       useAppShellSearchRadarSection({
-        activeDraft: "",
         activeItems: [],
         activeThreadId: null,
         activeWorkspace: workspace,
@@ -193,6 +186,7 @@ describe("useAppShellSearchRadarSection", () => {
         directories: [],
         filePanelMode: "radar",
         files: [],
+        getActiveDraft: () => "",
         globalSearchFilesByWorkspace: {},
         handleDraftChange: vi.fn(),
         isCompact: false,
@@ -230,7 +224,6 @@ describe("useAppShellSearchRadarSection", () => {
 
     renderHook(() =>
       useAppShellSearchRadarSection({
-        activeDraft: "",
         activeItems: [],
         activeThreadId: "thread-1",
         activeWorkspace: workspace,
@@ -243,6 +236,7 @@ describe("useAppShellSearchRadarSection", () => {
         directories: [],
         filePanelMode: "git",
         files: [],
+        getActiveDraft: () => "",
         globalSearchFilesByWorkspace: {},
         handleDraftChange: vi.fn(),
         isCompact: false,

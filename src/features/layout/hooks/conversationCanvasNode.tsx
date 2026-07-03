@@ -14,6 +14,10 @@ export type ConversationCanvasNodeInput = {
   forkConfirmDialogProps: ComponentProps<typeof MessageForkConfirmDialog>;
 };
 
+// 刻意不选 heartbeatPulse:opencode 心跳(约 5s 一次)会 bump 该计数,若选入这里,
+// 每次心跳都会击穿 shallowEqual 并整树重渲染 <Messages>(单次 ~200ms)。
+// WorkingIndicator 的心跳提示改经 conversationState.meta.heartbeatPulse 送达,
+// 与 conversationState 的重建节奏一致,不再单独驱动大树渲染。
 const selectActiveCanvasMessagesProps = (
   snapshot: ActiveCanvasSnapshot,
 ): Pick<
@@ -31,7 +35,6 @@ const selectActiveCanvasMessagesProps = (
   | "isContextCompacting"
   | "processingStartedAt"
   | "lastDurationMs"
-  | "heartbeatPulse"
   | "codexSilentSuspectedAt"
   | "taskRuns"
 > => ({
@@ -48,7 +51,6 @@ const selectActiveCanvasMessagesProps = (
   isContextCompacting: snapshot.isContextCompacting,
   processingStartedAt: snapshot.processingStartedAt,
   lastDurationMs: snapshot.lastDurationMs,
-  heartbeatPulse: snapshot.heartbeatPulse,
   codexSilentSuspectedAt: snapshot.codexSilentSuspectedAt,
   taskRuns: snapshot.taskRuns,
 });

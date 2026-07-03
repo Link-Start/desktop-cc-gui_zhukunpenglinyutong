@@ -305,6 +305,18 @@ export function exportRendererDiagnostics(): RendererDiagnosticEntry[] {
   return readPersistedDiagnostics();
 }
 
+/**
+ * 清空全部诊断条目。readPersistedDiagnostics 会合并三个来源(当前 store、legacy
+ * store、preload 前的 early localStorage),漏掉任何一个都会让旧条目"复活",
+ * 所以必须三处一起清。供设置页「最近卡顿」面板的清空按钮使用。
+ */
+export function clearRendererDiagnostics(): void {
+  bufferedEntries = [];
+  persistEarlyDiagnostics([]);
+  persistDiagnostics([]);
+  writeClientStoreValue(LEGACY_RENDERER_DIAGNOSTICS_STORE, RENDERER_DIAGNOSTICS_KEY, []);
+}
+
 export function appendRendererDiagnostic(
   label: string,
   payload: Record<string, unknown> = {},
@@ -877,6 +889,12 @@ export function startRendererBlankScreenWatchdog(
   blankWatchdogConsecutiveSamples = 0;
   blankWatchdogReports = 0;
   blankWatchdogTimer = window.setInterval(() => {
+    // 隐藏窗口不存在"用户看到白屏"，跳过采样避免后台每 1.5s 两次强制回流
+    // （getBoundingClientRect + getComputedStyle），并清零连续计数。
+    if (document.visibilityState === "hidden") {
+      blankWatchdogConsecutiveSamples = 0;
+      return;
+    }
     const snapshot = collectRendererBlankScreenSnapshot(rootId);
     if (!isBlankRendererSnapshot(snapshot)) {
       blankWatchdogConsecutiveSamples = 0;

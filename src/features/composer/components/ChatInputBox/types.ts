@@ -885,8 +885,6 @@ export interface DropdownProps {
 export interface TokenIndicatorProps {
   /** Percentage (0-100) */
   percentage: number | null;
-  /** Size */
-  size?: number;
   /** Used context tokens */
   usedTokens?: number;
   /** Maximum context tokens */

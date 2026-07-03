@@ -29,6 +29,12 @@ type ResolveThreadScopedCollaborationModeSyncOptions = {
   mappedMode: "plan" | "code" | null;
   selectedCollaborationModeId: string | null;
   lastSyncedThreadId: string | null;
+  /**
+   * Mode a freshly-synced thread (no mapped mode yet) should open in. Defaults to
+   * "code" to preserve the historical behavior; callers pass the user's remembered
+   * plan/code choice to make new conversations reopen where they left off.
+   */
+  newThreadDefaultMode?: "plan" | "code";
 };
 
 type ThreadScopedCollaborationModeSyncResult = {
@@ -43,6 +49,7 @@ export function resolveThreadScopedCollaborationModeSync({
   mappedMode,
   selectedCollaborationModeId,
   lastSyncedThreadId,
+  newThreadDefaultMode = "code",
 }: ResolveThreadScopedCollaborationModeSyncOptions): ThreadScopedCollaborationModeSyncResult | null {
   if (activeEngine !== "codex" && activeEngine !== "claude") {
     return null;
@@ -65,9 +72,9 @@ export function resolveThreadScopedCollaborationModeSync({
     };
   }
   return {
-    nextMode: "code",
+    nextMode: newThreadDefaultMode,
     nextSyncedThreadId: activeThreadId,
-    shouldUpdateSelectedMode: selectedCollaborationModeId !== "code",
+    shouldUpdateSelectedMode: selectedCollaborationModeId !== newThreadDefaultMode,
   };
 }
 

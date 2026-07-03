@@ -46,7 +46,6 @@ export const CLIENT_DOCUMENTATION_REQUIRED_UI_CONTROL_IDS = [
   "bottomActivity.tasks",
   "bottomActivity.agents",
   "bottomActivity.checkpoint",
-  "bottomActivity.latestConversation",
   "curtain.contextLedger",
   "cornerStatus.messageAnchors",
 ] as const;
@@ -757,22 +756,6 @@ export const CLIENT_DOCUMENTATION_TREE: ClientDocumentationNode[] = [
         ],
         ["结果展示不等于最终 CI 通过，仍需看具体验证命令。"],
         ["任务与状态面板", "Spec Hub 与规范工作流"],
-      ),
-      uiControlFeature(
-        "bottomActivity.latestConversation",
-        "最新对话 Tab",
-        "显示最近对话或最新消息状态。",
-        "底部活动面板；Latest conversation tab。",
-        "在长任务和多面板切换时快速回看最近一次会话动向。",
-        ["latest message", "conversation snapshot", "跳转回对话", "状态摘要"],
-        [
-          "打开底部活动面板。",
-          "切换到 Latest conversation tab。",
-          "查看最近用户消息或 agent 输出摘要。",
-          "需要继续时跳回对应会话。",
-        ],
-        ["隐藏 tab 不会删除会话消息。"],
-        ["对话与会话", "任务与状态面板"],
       ),
       uiControlFeature(
         "curtain.contextLedger",

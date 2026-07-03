@@ -321,6 +321,77 @@ describe("useSelectedComposerSession", () => {
     );
   });
 
+  it("seeds a brand-new pending thread from the engine default selection", async () => {
+    const { result } = renderHook(() =>
+      useSelectedComposerSession({
+        activeWorkspaceId: "ws-a",
+        activeThreadId: "claude-pending-1",
+        resolveCanonicalThreadId: (threadId: string) => threadId,
+        resolveEngineDefaultComposerSelection: () => ({
+          modelId: "fable-5",
+          effort: "high",
+        }),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedComposerSelection).toEqual({
+        modelId: "fable-5",
+        effort: "high",
+      });
+    });
+    expect(writeClientStoreValue).toHaveBeenCalledWith(
+      "composer",
+      "selectedModelByThread.ws-a:claude-pending-1",
+      { modelId: "fable-5", effort: "high" },
+    );
+  });
+
+  it("does not override a thread's own stored selection with the engine default", async () => {
+    composerStore["selectedModelByThread.ws-a:claude-pending-2"] = {
+      modelId: "claude-opus-4-8",
+      effort: "medium",
+    };
+
+    const { result } = renderHook(() =>
+      useSelectedComposerSession({
+        activeWorkspaceId: "ws-a",
+        activeThreadId: "claude-pending-2",
+        resolveCanonicalThreadId: (threadId: string) => threadId,
+        resolveEngineDefaultComposerSelection: () => ({
+          modelId: "fable-5",
+          effort: "high",
+        }),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedComposerSelection).toEqual({
+        modelId: "claude-opus-4-8",
+        effort: "medium",
+      });
+    });
+  });
+
+  it("does not seed an already-finalized thread from the engine default", async () => {
+    const { result } = renderHook(() =>
+      useSelectedComposerSession({
+        activeWorkspaceId: "ws-a",
+        activeThreadId: "claude:session-9",
+        resolveCanonicalThreadId: (threadId: string) => threadId,
+        resolveEngineDefaultComposerSelection: () => ({
+          modelId: "fable-5",
+          effort: "high",
+        }),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedComposerSelection).toBeNull();
+    });
+    expect(writeClientStoreValue).not.toHaveBeenCalled();
+  });
+
   it("drops stale stored effort for unsupported thread engines", async () => {
     composerStore["selectedModelByThread.ws-a:gemini:session-1"] = {
       modelId: "gemini-2.5-pro",

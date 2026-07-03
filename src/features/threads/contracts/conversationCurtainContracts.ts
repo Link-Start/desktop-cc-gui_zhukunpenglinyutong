@@ -1,6 +1,7 @@
 import type {
   ConversationItem,
   RequestUserInputRequest,
+  ThreadTokenUsage,
   TurnPlan,
 } from "../../../types";
 
@@ -87,6 +88,8 @@ export type NormalizedHistorySnapshot = {
   userInputQueue: RequestUserInputRequest[];
   meta: ConversationMeta;
   fallbackWarnings: SnapshotFallbackWarning[];
+  /** 历史里恢复出的 token 用量（可选，目前仅 Claude loader 提供）。 */
+  tokenUsage?: ThreadTokenUsage | null;
 };
 
 export type ConversationState = {
@@ -173,5 +176,6 @@ export function normalizeHistorySnapshot(
     userInputQueue,
     meta,
     fallbackWarnings: [...(input.fallbackWarnings ?? []), ...fallbackWarnings],
+    tokenUsage: input.tokenUsage ?? null,
   };
 }

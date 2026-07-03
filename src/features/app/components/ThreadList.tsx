@@ -353,7 +353,9 @@ const ThreadRowItem = memo(function ThreadRowItem({
                   {runtimeBadge.label}
                 </span>
               ) : null}
-              {relativeTime ? <span className="thread-time">{relativeTime}</span> : null}
+              {relativeTime && !runtimeBadge ? (
+                <span className="thread-time">{relativeTime}</span>
+              ) : null}
             </div>
           </button>
       </PopoverAnchor>

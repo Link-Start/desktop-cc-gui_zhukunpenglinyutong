@@ -94,24 +94,6 @@
   background: transparent;
 }
 
-.button-area-main-token {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 32px;
-  min-width: 40px;
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-}
-
-.button-area-main-token .token-indicator {
-  font-size: 13px;
-  font-weight: 600;
-  gap: var(--composer-toolbar-icon-gap);
-}
-
 .button-area-main-surface .context-bar--tool-popover {
   width: auto;
 }

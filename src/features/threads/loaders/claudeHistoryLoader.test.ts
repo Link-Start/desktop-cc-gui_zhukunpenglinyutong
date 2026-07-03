@@ -1984,3 +1984,50 @@ describe("createClaudeHistoryLoader", () => {
     );
   });
 });
+
+describe("createClaudeHistoryLoader token usage restore", () => {
+  it("carries last-assistant usage from history payload into the snapshot", async () => {
+    const loader = createClaudeHistoryLoader({
+      workspaceId: "ws-usage",
+      workspacePath: "/tmp/ws-usage",
+      loadClaudeSession: vi.fn().mockResolvedValue({
+        messages: [
+          { kind: "message", id: "u-1", role: "user", text: "你好" },
+          { kind: "message", id: "a-1", role: "assistant", text: "好的" },
+        ],
+        usage: {
+          inputTokens: 15_493,
+          outputTokens: 198,
+          cacheCreationInputTokens: 33_848,
+          cacheReadInputTokens: 15_012,
+        },
+      }),
+    });
+
+    const snapshot = await loader.load("claude:session-usage");
+    expect(snapshot.tokenUsage).toMatchObject({
+      last: {
+        inputTokens: 15_493,
+        outputTokens: 198,
+        cachedInputTokens: 48_860,
+        totalTokens: 15_691,
+      },
+      modelContextWindow: null,
+      contextUsageSource: "claude_history",
+      contextUsageFreshness: "estimated",
+    });
+  });
+
+  it("returns null token usage when history payload has no usage", async () => {
+    const loader = createClaudeHistoryLoader({
+      workspaceId: "ws-usage",
+      workspacePath: "/tmp/ws-usage",
+      loadClaudeSession: vi.fn().mockResolvedValue({
+        messages: [{ kind: "message", id: "u-1", role: "user", text: "你好" }],
+      }),
+    });
+
+    const snapshot = await loader.load("claude:session-no-usage");
+    expect(snapshot.tokenUsage).toBeNull();
+  });
+});

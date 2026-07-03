@@ -1,30 +1,27 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import type { RefObject } from "react";
 
 type UseComposerInsertArgs = {
   activeThreadId: string | null;
-  draftText: string;
+  // 命令式读取当前草稿(草稿活在 composerDraftStore 里,不再经根级 state 灌入)。
+  // 读取发生在插入动作那一刻,天然拿到最新值,不需要 prop 同步。
+  getDraftText: () => string;
   onDraftChange: (next: string) => void;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
 };
 
 export function useComposerInsert({
   activeThreadId,
-  draftText,
+  getDraftText,
   onDraftChange,
   textareaRef,
 }: UseComposerInsertArgs) {
-  const latestTextRef = useRef(draftText ?? "");
   const latestSelectionRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    latestTextRef.current = draftText ?? "";
-  }, [draftText]);
 
   return useCallback(
     (insertText: string) => {
       const textarea = textareaRef.current;
-      const currentText = latestTextRef.current;
+      const currentText = getDraftText() ?? "";
       const isTextareaActive =
         textarea !== null &&
         typeof document !== "undefined" &&
@@ -59,7 +56,6 @@ export function useComposerInsert({
         insertText.length +
         (needsSpaceAfter ? 1 : 0);
       const safeCursor = Math.min(cursor, nextText.length);
-      latestTextRef.current = nextText;
       latestSelectionRef.current = safeCursor;
       onDraftChange(nextText);
       requestAnimationFrame(() => {
@@ -74,6 +70,6 @@ export function useComposerInsert({
         node.dispatchEvent(new Event("select", { bubbles: true }));
       });
     },
-    [activeThreadId, onDraftChange, textareaRef],
+    [activeThreadId, getDraftText, onDraftChange, textareaRef],
   );
 }

@@ -102,7 +102,6 @@ function renderComposer(onSend = vi.fn(() => Promise.resolve())) {
       prompts={[]}
       commands={[]}
       files={[]}
-      draftText=""
       onDraftChange={() => {}}
       dictationEnabled={false}
       activeWorkspaceId="ws-1"

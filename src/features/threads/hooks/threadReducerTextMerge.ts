@@ -67,6 +67,40 @@ function hasParagraphBreak(value: string) {
   return PARAGRAPH_BREAK_SPLIT_REGEX.test(value);
 }
 
+const STREAMING_APPEND_MIN_EXISTING_CHARS = 2048;
+const STREAMING_APPEND_MAX_DELTA_CHARS = 256;
+const STREAMING_APPEND_MAX_DELTA_COMPACT_CHARS = 24;
+const STREAMING_APPEND_BOUNDARY_REGEX = /[\n。！？!?]/;
+
+/**
+ * 低风险流式追加片段：existing 已足够长而 delta 是不含段落边界的短片段。
+ * mergeAgentMessageText 的快照/回显/前缀判定都要求 ≥24 个 comparable 字符或
+ * delta 尺寸接近 existing；低于这些下限的片段在完整路径里最终也只会落到
+ * mergeStreamingText 追加，因此可以跳过对 existing 的整段扫描（O(L) → O(delta)）。
+ */
+export function isLowRiskStreamingAppendFragment(existing: string, delta: string) {
+  return (
+    existing.length >= STREAMING_APPEND_MIN_EXISTING_CHARS &&
+    delta.length > 0 &&
+    delta.length <= STREAMING_APPEND_MAX_DELTA_CHARS &&
+    !hasParagraphBreak(delta)
+  );
+}
+
+/**
+ * 片段连句末/换行边界都没有时，重复/碎片归一化（按句子或段落工作）在本次
+ * 追加后不会产生新的可折叠结构，调用方可以把全文归一化推迟到下一个边界。
+ */
+export function isLowRiskStreamingAppendFragmentWithoutBoundary(
+  existing: string,
+  delta: string,
+) {
+  return (
+    isLowRiskStreamingAppendFragment(existing, delta) &&
+    !STREAMING_APPEND_BOUNDARY_REGEX.test(delta)
+  );
+}
+
 function shouldMergeReasoningFragment(value: string) {
   const trimmed = value.trim();
   return (
@@ -698,6 +732,14 @@ export function mergeAgentMessageText(existing: string, delta: string) {
   if (!existing) {
     return collapseMergedAssistantRepeats(normalizedDelta);
   }
+  if (
+    isLowRiskStreamingAppendFragment(existing, normalizedDelta) &&
+    !existing.startsWith(normalizedDelta) &&
+    compactComparableStreamingText(normalizedDelta).length <
+      STREAMING_APPEND_MAX_DELTA_COMPACT_CHARS
+  ) {
+    return mergeStreamingText(existing, normalizedDelta);
+  }
   const compactExisting = compactComparableStreamingText(existing);
   const compactDelta = compactComparableStreamingText(normalizedDelta);
   const existingInlineCode = getMarkdownInlineCodeInfo(existing);
@@ -758,8 +800,16 @@ export function mergeAgentMessageText(existing: string, delta: string) {
 }
 
 function mergeReasoningText(existing: string, delta: string) {
-  return normalizeReasoningReadableText(mergeAgentMessageText(existing, delta));
+  const merged = mergeAgentMessageText(existing, delta);
+  // 归一化按句子/段落边界工作；无边界的追加片段推迟到下一个边界再整段归一。
+  if (isLowRiskStreamingAppendFragmentWithoutBoundary(existing, delta)) {
+    return merged;
+  }
+  return normalizeReasoningReadableText(merged);
 }
+
+const REASONING_APPEND_OVERLAP_WINDOW_SLACK_CHARS = 512;
+const REASONING_APPEND_OVERLAP_SCAN_LIMIT_CHARS = 512;
 
 function appendReasoningTextWithoutReplacement(existing: string, incoming: string) {
   if (!incoming) {
@@ -768,15 +818,36 @@ function appendReasoningTextWithoutReplacement(existing: string, incoming: strin
   if (!existing) {
     return incoming;
   }
-  const comparableExisting = compactComparableStreamingText(existing);
   const comparableIncoming = compactComparableStreamingText(incoming);
+  // 重叠长度不会超过 |comparableIncoming|，且 compact 变换是逐字符局部的
+  // （去空白 + 标点归一），后缀窗口的 compact 恰是全文 compact 的后缀。
+  // 因此 existing 只取尾窗即可等价完成重叠判断，避免每个 delta 全文扫描。
+  const windowChars = incoming.length + REASONING_APPEND_OVERLAP_WINDOW_SLACK_CHARS;
+  let comparableExisting: string;
+  let comparableExistingIsFull = true;
+  if (existing.length > windowChars) {
+    comparableExisting = compactComparableStreamingText(existing.slice(-windowChars));
+    comparableExistingIsFull = false;
+    if (comparableExisting.length <= comparableIncoming.length) {
+      // 尾窗几乎全是空白，compact 后不足以覆盖可能的重叠，退回全文比较。
+      comparableExisting = compactComparableStreamingText(existing);
+      comparableExistingIsFull = true;
+    }
+  } else {
+    comparableExisting = compactComparableStreamingText(existing);
+  }
   if (!comparableExisting || !comparableIncoming) {
     return `${existing}${incoming}`;
   }
-  if (comparableExisting === comparableIncoming) {
+  // 窗口模式下 comparableExisting 严格长于 comparableIncoming，整体相等不可能成立。
+  if (comparableExistingIsFull && comparableExisting === comparableIncoming) {
     return existing;
   }
-  const maxOverlap = Math.min(comparableExisting.length, comparableIncoming.length);
+  const maxOverlap = Math.min(
+    comparableExisting.length,
+    comparableIncoming.length,
+    REASONING_APPEND_OVERLAP_SCAN_LIMIT_CHARS,
+  );
   for (let overlapLength = maxOverlap; overlapLength > 0; overlapLength -= 1) {
     if (!comparableExisting.endsWith(comparableIncoming.slice(0, overlapLength))) {
       continue;
@@ -846,9 +917,11 @@ export function mergeReasoningTextForThread(
     return normalizeReasoningReadableText(merged);
   }
   if (isClaudeReasoningThread(threadId)) {
-    return normalizeReasoningReadableText(
-      appendReasoningTextWithoutReplacement(existing, incoming),
-    );
+    const merged = appendReasoningTextWithoutReplacement(existing, incoming);
+    if (isLowRiskStreamingAppendFragmentWithoutBoundary(existing, incoming)) {
+      return merged;
+    }
+    return normalizeReasoningReadableText(merged);
   }
   return mergeReasoningText(existing, incoming);
 }

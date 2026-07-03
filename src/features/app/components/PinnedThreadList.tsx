@@ -269,7 +269,7 @@ const PinnedThreadRowItem = memo(function PinnedThreadRowItem({
                   {runtimeBadge.label}
                 </span>
               ) : null}
-              {relativeTime ? (
+              {relativeTime && !runtimeBadge ? (
                 <span className="thread-time">{relativeTime}</span>
               ) : null}
             </div>

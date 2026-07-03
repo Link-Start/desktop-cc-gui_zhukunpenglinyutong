@@ -67,7 +67,6 @@ function ComposerHarness({
   pendingCodeAnnotation?: CodeAnnotationDraftInput | null;
   onCodeAnnotationConsumed?: (dedupeKey: string) => void;
 }) {
-  const [draftText, setDraftText] = useState("");
   const [selectedCodeAnnotations, setSelectedCodeAnnotations] = useState<CodeAnnotationSelection[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const handleRemoveCodeAnnotation = useCallback((annotationId: string) => {
@@ -127,8 +126,6 @@ function ComposerHarness({
       prompts={[]}
       commands={[]}
       files={[]}
-      draftText={draftText}
-      onDraftChange={setDraftText}
       textareaRef={textareaRef}
       dictationEnabled={false}
       editorSettings={editorSettings}

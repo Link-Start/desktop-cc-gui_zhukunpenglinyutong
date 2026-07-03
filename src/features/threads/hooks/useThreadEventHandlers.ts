@@ -91,6 +91,7 @@ export function useThreadEventHandlers({
   resolvePendingThreadForSession,
   resolvePendingThreadForTurn,
   getActiveTurnIdForThread,
+  hasEstablishedThreadItems,
   renamePendingMemoryCaptureKey,
   onAgentMessageCompletedExternal,
   onTurnCompletedExternal,
@@ -1285,6 +1286,7 @@ export function useThreadEventHandlers({
     resolvePendingThreadForSession,
     resolvePendingThreadForTurn,
     getActiveTurnIdForThread,
+    hasEstablishedThreadItems,
     renamePendingMemoryCaptureKey,
     onDebug,
   });
@@ -1313,7 +1315,7 @@ export function useThreadEventHandlers({
         return;
       }
       dispatch({ type: "markHeartbeat", threadId, pulse });
-      dispatch({ type: "markContinuationEvidence", threadId });
+      dispatch({ type: "markContinuationEvidence", threadId, at: Date.now() });
       noteCodexTurnProgressEvidence(_workspaceId, threadId, "processing-heartbeat");
       safeMessageActivity();
     },
@@ -1399,7 +1401,7 @@ export function useThreadEventHandlers({
       scheduleFirstDeltaTimer(workspaceId, threadId);
       scheduleCodexNoProgressTimer(workspaceId, threadId);
       onTurnStarted(workspaceId, threadId, turnId);
-      dispatch({ type: "markContinuationEvidence", threadId });
+      dispatch({ type: "markContinuationEvidence", threadId, at: Date.now(), force: true });
       const lifecycle = getThreadLifecycleSnapshot(threadId);
       emitTurnDiagnostic("started", {
         workspaceId,
@@ -1454,7 +1456,7 @@ export function useThreadEventHandlers({
         return;
       }
       onAgentMessageDelta(payload);
-      dispatch({ type: "markContinuationEvidence", threadId: payload.threadId });
+      dispatch({ type: "markContinuationEvidence", threadId: payload.threadId, at: Date.now() });
       if (workspaceScopedHas(interruptedThreadsRef.current, payload.workspaceId, payload.threadId)) {
         return;
       }
@@ -1531,7 +1533,7 @@ export function useThreadEventHandlers({
         return;
       }
       onItemStarted(workspaceId, threadId, item);
-      dispatch({ type: "markContinuationEvidence", threadId });
+      dispatch({ type: "markContinuationEvidence", threadId, at: Date.now() });
       noteCodexTurnProgressEvidence(workspaceId, threadId, "item-started");
       maybeRecordAgentMessageSnapshotIngress(workspaceId, threadId, item);
       captureTurnItemDiagnostic(workspaceId, threadId, "started", item);
@@ -1566,7 +1568,7 @@ export function useThreadEventHandlers({
         return;
       }
       onItemUpdated(workspaceId, threadId, item);
-      dispatch({ type: "markContinuationEvidence", threadId });
+      dispatch({ type: "markContinuationEvidence", threadId, at: Date.now() });
       noteCodexTurnProgressEvidence(workspaceId, threadId, "item-updated");
       maybeRecordAgentMessageSnapshotIngress(workspaceId, threadId, item);
       captureTurnItemDiagnostic(workspaceId, threadId,
@@ -1603,7 +1605,7 @@ export function useThreadEventHandlers({
         return;
       }
       onItemCompleted(workspaceId, threadId, item);
-      dispatch({ type: "markContinuationEvidence", threadId });
+      dispatch({ type: "markContinuationEvidence", threadId, at: Date.now() });
       noteCodexTurnProgressEvidence(workspaceId, threadId, "item-completed");
       captureTurnItemDiagnostic(workspaceId, threadId,
         "completed", item);
@@ -1645,7 +1647,7 @@ export function useThreadEventHandlers({
         return;
       }
       onNormalizedRealtimeEvent(event);
-      dispatch({ type: "markContinuationEvidence", threadId: event.threadId });
+      dispatch({ type: "markContinuationEvidence", threadId: event.threadId, at: Date.now() });
       noteCodexTurnProgressEvidence(event.workspaceId, event.threadId, `normalized:${event.operation}`);
       if (event.operation === "appendAgentMessageDelta") {
         const textLength =

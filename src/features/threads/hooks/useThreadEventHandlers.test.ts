@@ -1161,10 +1161,12 @@ describe("useThreadEventHandlers diagnostics", () => {
       });
     });
 
-    expect(options.dispatch).toHaveBeenCalledWith({
-      type: "markContinuationEvidence",
-      threadId: "thread-1",
-    });
+    expect(options.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "markContinuationEvidence",
+        threadId: "thread-1",
+      }),
+    );
     expect(options.dispatch).toHaveBeenCalledWith({
       type: "clearCodexSilentSuspected",
       threadId: "thread-1",
@@ -1210,10 +1212,12 @@ describe("useThreadEventHandlers diagnostics", () => {
       });
     });
 
-    expect(options.dispatch).toHaveBeenCalledWith({
-      type: "markContinuationEvidence",
-      threadId: "thread-1",
-    });
+    expect(options.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "markContinuationEvidence",
+        threadId: "thread-1",
+      }),
+    );
     expect(
       collectDiagnosticCalls(onDebug).some(
         (entry) => entry.label === "thread/session:turn-diagnostic:quarantined-codex-event-skipped",
@@ -1299,10 +1303,12 @@ describe("useThreadEventHandlers diagnostics", () => {
       });
     });
 
-    expect(options.dispatch).toHaveBeenCalledWith({
-      type: "markContinuationEvidence",
-      threadId: "shared:thread-claude-stalled",
-    });
+    expect(options.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "markContinuationEvidence",
+        threadId: "shared:thread-claude-stalled",
+      }),
+    );
     expect(
       collectDiagnosticCalls(onDebug).some(
         (entry) => entry.label === "thread/session:turn-diagnostic:quarantined-codex-event-skipped",

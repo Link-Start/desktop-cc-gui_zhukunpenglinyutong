@@ -26,6 +26,7 @@ import {
   type RenderScheduleTier,
 } from "../../../../threads/utils/renderSchedulingPolicy";
 import { CostBudgetSettingsSection } from "./CostBudgetSettingsSection";
+import { PerfJankLivePanel } from "./PerfJankLivePanel";
 
 type OtherSectionProps = {
   title: string;
@@ -219,6 +220,7 @@ export function OtherSection({
           {t("settings.perfCopyReportButton")}
         </Button>
       </div>
+      <PerfJankLivePanel />
       <Separator className="my-4" />
       <CostBudgetSettingsSection />
       <Separator className="my-4" />

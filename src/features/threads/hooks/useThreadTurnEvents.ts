@@ -185,6 +185,7 @@ type UseThreadTurnEventsOptions = {
     turnId: string | null | undefined,
   ) => string | null;
   getActiveTurnIdForThread?: (threadId: string) => string | null;
+  hasEstablishedThreadItems?: (threadId: string) => boolean;
   renamePendingMemoryCaptureKey: (
     oldThreadId: string,
     newThreadId: string,
@@ -214,6 +215,7 @@ export function useThreadTurnEvents({
   resolvePendingThreadForSession,
   resolvePendingThreadForTurn,
   getActiveTurnIdForThread,
+  hasEstablishedThreadItems,
   renamePendingMemoryCaptureKey,
   onDebug,
 }: UseThreadTurnEventsOptions) {
@@ -1134,6 +1136,14 @@ export function useThreadTurnEvents({
         return;
       }
 
+      // Claude re-announces its session id at the start of every turn, so an
+      // established conversation keeps emitting finalized session-id updates
+      // while it streams. Rebinding a pending thread onto such a target would
+      // merge a brand-new session into an unrelated in-flight conversation
+      // (its user bubble shows up in the old timeline), so the active-pending
+      // fallbacks below must never fire when the target already has items.
+      const newThreadIsEstablished =
+        hasEstablishedThreadItems?.(newThreadId) ?? false;
       let sourceThreadId: string | null = null;
       if (threadId === newThreadId) {
         // Some runtimes emit session-id updates with finalized thread ids only.
@@ -1147,7 +1157,8 @@ export function useThreadTurnEvents({
         if (isPendingThreadForEngine(enginePrefix, turnBoundPendingThreadId)) {
           sourceThreadId = turnBoundPendingThreadId;
         } else if (
-          isPendingThreadForEngine(enginePrefix, pendingThreadId)
+          !newThreadIsEstablished
+          && isPendingThreadForEngine(enginePrefix, pendingThreadId)
           && (
             pendingThreadId === activeThreadId ||
             activeThreadId === newThreadId
@@ -1155,16 +1166,21 @@ export function useThreadTurnEvents({
         ) {
           sourceThreadId = pendingThreadId;
         } else {
-          logSessionTrace("skip:already-finalized", {
-            workspaceId,
-            threadId,
-            newThreadId,
-            enginePrefix,
-            activeThreadId,
-            pendingThreadId: pendingThreadId ?? null,
-            turnBoundPendingThreadId,
-            turnId: turnId ?? null,
-          });
+          logSessionTrace(
+            newThreadIsEstablished
+              ? "skip:established-target"
+              : "skip:already-finalized",
+            {
+              workspaceId,
+              threadId,
+              newThreadId,
+              enginePrefix,
+              activeThreadId,
+              pendingThreadId: pendingThreadId ?? null,
+              turnBoundPendingThreadId,
+              turnId: turnId ?? null,
+            },
+          );
           return;
         }
       } else if (isPendingThreadForEngine(enginePrefix, threadId)) {
@@ -1183,7 +1199,8 @@ export function useThreadTurnEvents({
         if (isPendingThreadForEngine(enginePrefix, turnBoundPendingThreadId)) {
           sourceThreadId = turnBoundPendingThreadId;
         } else if (
-          isPendingThreadForEngine(enginePrefix, pendingThreadId)
+          !newThreadIsEstablished
+          && isPendingThreadForEngine(enginePrefix, pendingThreadId)
           && (
             pendingThreadId === activeThreadId ||
             activeThreadId === newThreadId
@@ -1191,16 +1208,21 @@ export function useThreadTurnEvents({
         ) {
           sourceThreadId = pendingThreadId;
         } else {
-          logSessionTrace("skip:non-prefixed-not-active", {
-            workspaceId,
-            threadId,
-            newThreadId,
-            enginePrefix,
-            pendingThreadId: pendingThreadId ?? null,
-            turnBoundPendingThreadId,
-            activeThreadId,
-            turnId: turnId ?? null,
-          });
+          logSessionTrace(
+            newThreadIsEstablished
+              ? "skip:established-target"
+              : "skip:non-prefixed-not-active",
+            {
+              workspaceId,
+              threadId,
+              newThreadId,
+              enginePrefix,
+              pendingThreadId: pendingThreadId ?? null,
+              turnBoundPendingThreadId,
+              activeThreadId,
+              turnId: turnId ?? null,
+            },
+          );
         }
       }
 
@@ -1269,6 +1291,7 @@ export function useThreadTurnEvents({
       resolvePendingThreadForTurn,
       migrateThreadInterruptGuards,
       getActiveTurnIdForThread,
+      hasEstablishedThreadItems,
       pendingInterruptsRef,
       activeThreadId,
     ],

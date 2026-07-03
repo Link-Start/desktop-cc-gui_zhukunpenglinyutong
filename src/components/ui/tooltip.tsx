@@ -8,8 +8,13 @@ import { cn } from "@/lib/utils"
 // backward compatible for any consumer that references it.
 const TooltipCreateHandle = () => ({})
 
+// A zero hover delay makes every pointer crossing over chrome buttons and
+// thread rows mount/unmount a body portal (forced reflow per crossing), which
+// reads as whole-app jank. Uncontrolled tooltips must wait for a dwell.
+const DEFAULT_TOOLTIP_DELAY_MS = 500
+
 function TooltipProvider({
-  delayDuration = 0,
+  delayDuration = DEFAULT_TOOLTIP_DELAY_MS,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (

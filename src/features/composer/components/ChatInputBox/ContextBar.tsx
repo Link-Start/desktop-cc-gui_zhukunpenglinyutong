@@ -452,7 +452,6 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
                 usedTokens={usedTokens}
                 maxTokens={maxTokens}
                 claudeContextUsage={currentProvider === 'claude' ? claudeContextUsage : null}
-                size={14}
               />
             </div>
           )}

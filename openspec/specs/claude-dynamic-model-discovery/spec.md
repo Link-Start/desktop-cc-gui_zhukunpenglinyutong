@@ -4,24 +4,27 @@
 
 Define how Claude Code model discovery, selector merge, runtime resolution, diagnostics, and compatibility normalization behave when the GUI relies only on user-controlled model sources.
 ## Requirements
-### Requirement: Claude Model Catalog MUST Use User-Controlled Sources Only
+### Requirement: Claude Model Catalog MUST Combine Built-In Catalog With User-Controlled Overrides
 
-The system MUST build the Claude Code model catalog only from Claude settings/env model overrides and user-added Claude custom models.
+The system MUST build the Claude Code model catalog from a hardcoded built-in catalog (mirroring the Claude CLI `/model` roster) plus Claude settings/env model overrides and user-added Claude custom models. Settings/env overrides and custom models take precedence over built-in entries with the same runtime model.
 
 #### Scenario: settings override populates selector catalog
 - **WHEN** `~/.claude/settings.json` or supported environment variables define a Claude model override
 - **THEN** the Claude model selector MUST include an entry for that configured runtime model
 - **AND** the entry source MUST be diagnosable as `settings-override`
+- **AND** the override entry MUST be ordered before and shadow any built-in entry sharing the same runtime model
 
 #### Scenario: help examples are not catalog entries
 - **WHEN** Claude Code help text mentions aliases or example models such as `sonnet`, `opus`, `haiku`, or `claude-sonnet-4-6`
 - **THEN** the system MUST NOT add those values to the Claude selector solely from help text
 - **AND** it MUST NOT report them as discovered catalog entries
 
-#### Scenario: builtin fallback is not synthesized
+#### Scenario: builtin catalog is provided when overrides are empty
 - **WHEN** Claude settings/env overrides are empty
 - **AND** no user custom Claude models exist
-- **THEN** the Claude selector MUST NOT synthesize `sonnet`, `opus`, `haiku`, or any hardcoded Claude fallback model
+- **THEN** the Claude selector MUST show the built-in catalog entries with full runtime model ids (e.g. `claude-opus-4-8`)
+- **AND** the entry source MUST be diagnosable as `builtin`
+- **AND** it MUST NOT synthesize bare alias entries such as `sonnet`, `opus`, or `haiku`
 - **AND** it MUST NOT synthesize an option from the current selected value for Claude
 
 ### Requirement: Claude Model Entries MUST Separate UI Identity From Runtime Model
@@ -122,11 +125,11 @@ The system MUST replace the visible Claude backend catalog on successful refresh
 - **THEN** the selector MUST remove those stale configured models
 - **AND** it MUST keep user custom models available
 
-#### Scenario: successful empty refresh does not synthesize fallback
+#### Scenario: successful empty refresh falls back to builtin catalog
 - **WHEN** Claude model refresh succeeds with no settings/env model overrides
 - **AND** no user custom Claude models exist
-- **THEN** the selector MUST show no Claude model options
-- **AND** it MUST NOT replace the catalog with hardcoded fallback models
+- **THEN** the selector MUST show the built-in Claude catalog entries
+- **AND** it MUST NOT synthesize bare alias entries or options derived from the current selected value
 
 #### Scenario: failed refresh preserves previous catalog
 - **WHEN** Claude model refresh fails
@@ -218,9 +221,10 @@ The implementation MUST include verification gates that cover OpenSpec, frontend
 - **THEN** frontend focused tests MUST prove selector persistence uses `id`
 - **AND** send-time tests MUST prove `engine_send_message` receives runtime `model`
 
-#### Scenario: no-fallback behavior is regression-tested
+#### Scenario: builtin catalog behavior is regression-tested
 - **WHEN** Claude settings/env and custom model catalog are empty
-- **THEN** focused frontend and Rust tests MUST prove hardcoded Claude fallback models are not synthesized
+- **THEN** focused Rust tests MUST prove the built-in catalog is returned with full runtime model ids and a single default entry
+- **AND** tests MUST prove settings/env overrides shadow built-in entries sharing the same runtime model
 
 ### Requirement: Claude Custom Models MUST Appear In Grouped Selector
 

@@ -302,16 +302,6 @@ export function useResizablePanels() {
       }
     };
 
-    const scheduleResizeApply = (next: number) => {
-      pendingValueRef.current = next;
-      if (resizeRafRef.current != null) {
-        return;
-      }
-      resizeRafRef.current = window.requestAnimationFrame(() => {
-        resizeRafRef.current = null;
-        flushPendingResize();
-      });
-    };
 
     function handleMouseMove(event: MouseEvent) {
       if (!resizeRef.current) {
@@ -363,7 +353,6 @@ export function useResizablePanels() {
         );
         liveSizesRef.current.terminalPanelHeight = next;
         applyLiveSizeCssVar("terminal-panel", next);
-        scheduleResizeApply(next);
       } else if (resizeRef.current.type === "kanban-conversation") {
         const delta = event.clientX - resizeRef.current.startX;
         const next = clamp(
@@ -371,7 +360,6 @@ export function useResizablePanels() {
           MIN_KANBAN_CONVERSATION_WIDTH,
           MAX_KANBAN_CONVERSATION_WIDTH,
         );
-        scheduleResizeApply(next);
         liveSizesRef.current.kanbanConversationWidth = next;
         applyLiveSizeCssVar("kanban-conversation", next);
       } else {
@@ -381,7 +369,6 @@ export function useResizablePanels() {
           MIN_DEBUG_PANEL_HEIGHT,
           MAX_DEBUG_PANEL_HEIGHT,
         );
-        scheduleResizeApply(next);
         liveSizesRef.current.debugPanelHeight = next;
         applyLiveSizeCssVar("debug-panel", next);
       }

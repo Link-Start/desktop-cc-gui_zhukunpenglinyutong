@@ -3,6 +3,7 @@ import { MAX_ITEM_TEXT } from "../../../utils/threadItems";
 import {
   mergeAgentMessageText,
   mergeCompletedAgentText,
+  mergeReasoningTextForThread,
 } from "./threadReducerTextMerge";
 import { mergeNearDuplicateParagraphVariants } from "../../../utils/assistantDuplicateParagraphs";
 
@@ -382,6 +383,88 @@ describe("threadReducerTextMerge", () => {
     expect(merged.match(/这通常是 macOS 权限问题/g)).toHaveLength(1);
     expect(merged.match(/我这边不能绕过/g)).toHaveLength(1);
     expect(merged).toContain("Apple event error -10000");
+  });
+
+  it("appends short boundary-free fragments verbatim on long streaming text", () => {
+    const base = Array.from({ length: 420 }, (_, index) => `正文${index}`).join("");
+    expect(mergeAgentMessageText(base, "接着输出的片段，")).toBe(`${base}接着输出的片段，`);
+  });
+
+  it("still trims overlapping fragment prefixes on long streaming text", () => {
+    const base = `${Array.from({ length: 420 }, (_, index) => `正文${index}`).join("")}结尾片段`;
+    expect(mergeAgentMessageText(base, "结尾片段之后")).toBe(`${base}之后`);
+  });
+
+  it("still dedupes an exact head re-send on long streaming text", () => {
+    const head = "开场白句子，";
+    const base = `${head}${Array.from({ length: 400 }, (_, index) => `正文${index}`).join("")}`;
+    expect(mergeAgentMessageText(base, head)).toBe(base);
+  });
+
+  it("still replaces long text with a full snapshot delta", () => {
+    const base = Array.from({ length: 500 }, (_, index) => `内容${index}`).join("");
+    const snapshot = `${base}新增结尾`;
+    expect(mergeAgentMessageText(base, snapshot)).toBe(snapshot);
+  });
+
+  it("still collapses duplicate paragraphs when the delta carries a paragraph break", () => {
+    const paragraph = "重复的段落内容需要足够长，确保超过二十个字符的下限限制。";
+    const base = `${"引导文字。".repeat(500)}\n\n${paragraph}`;
+    const merged = mergeAgentMessageText(base, `\n\n${paragraph}`);
+    expect(merged.match(/重复的段落内容需要足够长/g)).toHaveLength(1);
+  });
+
+  it("streams long assistant text in near-linear time via the append fast path", () => {
+    let text = "起始内容。".repeat(420);
+    const start = performance.now();
+    for (let index = 0; index < 1000; index += 1) {
+      text = mergeAgentMessageText(text, `片段${index}的后续内容，`);
+    }
+    const elapsed = performance.now() - start;
+    expect(text.length).toBeGreaterThan(2100 + 1000 * 8);
+    expect(elapsed).toBeLessThan(250);
+  });
+
+  it("appends boundary-free reasoning fragments verbatim for claude threads", () => {
+    const threadId = "claude:thread-append";
+    const base = Array.from({ length: 400 }, (_, index) => `推理步骤${index}`).join("");
+    expect(mergeReasoningTextForThread(threadId, base, "继续推理")).toBe(
+      `${base}继续推理`,
+    );
+  });
+
+  it("still dedupes a full duplicate reasoning snapshot for claude threads", () => {
+    const threadId = "claude:thread-dup";
+    const base = Array.from({ length: 300 }, (_, index) => `推理步骤${index}`).join("");
+    expect(mergeReasoningTextForThread(threadId, base, base)).toBe(base);
+  });
+
+  it("still trims tail overlap for claude reasoning fragments within the scan window", () => {
+    const threadId = "claude:thread-overlap";
+    const base = Array.from({ length: 500 }, (_, index) => `推理${index}`).join("");
+    const tail = base.slice(-40);
+    expect(mergeReasoningTextForThread(threadId, base, `${tail}接下来新增`)).toBe(
+      `${base}接下来新增`,
+    );
+  });
+
+  it("still dedupes a re-sent trailing reasoning sentence at a boundary delta", () => {
+    const threadId = "claude:thread-boundary";
+    const sentence = "这一步推理已经完成。";
+    const base = `${Array.from({ length: 300 }, (_, index) => `步骤${index}`).join("")}${sentence}`;
+    expect(mergeReasoningTextForThread(threadId, base, sentence)).toBe(base);
+  });
+
+  it("streams long claude reasoning in near-linear time", () => {
+    const threadId = "claude:thread-perf";
+    let content = Array.from({ length: 600 }, (_, index) => `推理${index}`).join("");
+    const start = performance.now();
+    for (let index = 0; index < 1000; index += 1) {
+      content = mergeReasoningTextForThread(threadId, content, `继续第${index}步推导`);
+    }
+    const elapsed = performance.now() - start;
+    expect(content.endsWith("继续第999步推导")).toBe(true);
+    expect(elapsed).toBeLessThan(250);
   });
 
   it("does not run expensive fuzzy collapse for unrelated very long paragraph variants", () => {

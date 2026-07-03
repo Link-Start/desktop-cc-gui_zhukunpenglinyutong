@@ -51,7 +51,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "activeDiffError",
     "activeDiffLoading",
     "activeDiffs",
-    "activeDraft",
     "activeEditorFilePath",
     "activeEditorLineRange",
     "activeEngine",

@@ -20,6 +20,7 @@ import {
   CommandSeparator,
 } from "../../../components/ui/command";
 import { EngineIcon } from "../../engine/components/EngineIcon";
+import { TokenIndicator } from "../../composer/components/ChatInputBox/TokenIndicator";
 import {
   ComposerBranchBadge,
   type ComposerBranchControl,
@@ -230,6 +231,10 @@ export function HomeChat({
                 {branchControl?.branchName ? (
                   <ComposerBranchBadge {...branchControl} />
                 ) : null}
+                {/* 首页尚无会话用量，指示器以空态常驻在行末，与对话视图布局一致 */}
+                <div className="composer-branch-row-usage">
+                  <TokenIndicator percentage={null} />
+                </div>
               </div>
             ) : null}
           </section>

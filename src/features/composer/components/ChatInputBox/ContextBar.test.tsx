@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ContextBar } from "./ContextBar";
 
@@ -238,7 +239,8 @@ describe("ContextBar live canvas controls visibility", () => {
     expect(screen.getByText("chat.contextDualViewCompactedPendingSyncAuto")).toBeTruthy();
   });
 
-  it("does not render unknown Claude context usage as zero percent", () => {
+  it("does not render unknown Claude context usage as zero percent", async () => {
+    const user = userEvent.setup();
     const { container } = render(
       <ContextBar
         currentProvider="claude"
@@ -259,13 +261,19 @@ describe("ContextBar live canvas controls visibility", () => {
       />,
     );
 
-    expect(container.querySelector(".token-percentage-label")).toBeNull();
     expect(screen.queryByText("0%")).toBeNull();
-    expect(screen.getByText("chat.claudeContextFreshness.pending")).toBeTruthy();
+
+    const trigger = container.querySelector('[data-slot="hover-card-trigger"]');
+    expect(trigger).toBeTruthy();
+    await user.hover(trigger as Element);
+
+    expect(await screen.findByText("chat.claudeContextUnavailable")).toBeTruthy();
+    expect(screen.queryByText("0%")).toBeNull();
   });
 
-  it("renders Claude live context usage with Codex-like density but no compaction controls", () => {
-    render(
+  it("renders Claude live context usage with Codex-like density but no compaction controls", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
       <ContextBar
         currentProvider="claude"
         percentage={65}
@@ -297,28 +305,24 @@ describe("ContextBar live canvas controls visibility", () => {
       />,
     );
 
+    await user.hover(container.querySelector('[data-slot="hover-card-trigger"]') as Element);
+
+    // Header shows the context window occupancy (used / total).
+    expect(await screen.findByText("168K / 258K")).toBeTruthy();
     // Trigger label + card header both surface the used percentage.
     expect(screen.getAllByText("65%").length).toBeGreaterThanOrEqual(2);
-    // Header shows the context window occupancy (used / total).
-    expect(screen.getByText("167.8k / 258.4k")).toBeTruthy();
-    // Body renders per-category usage rows (Input / Output / Cache).
-    expect(screen.getByText("400k")).toBeTruthy();
-    expect(screen.getByText("150.4k")).toBeTruthy();
-    expect(screen.getByText("chat.claudeContextCachedExcludedDetail")).toBeTruthy();
-    expect(screen.getByText("chat.claudeContextCategoryTitle")).toBeTruthy();
-    expect(screen.getByText("System prompt")).toBeTruthy();
-    expect(screen.getByText("Memory files")).toBeTruthy();
-    expect(screen.getByText("0.8%")).toBeTruthy();
-    expect(screen.getByText("3.3%")).toBeTruthy();
-    expect(document.querySelector(".claude-context-category-grid")).toBeTruthy();
-    expect(screen.queryByText("chat.claudeContextMcpToolsTitle")).toBeNull();
-    expect(screen.queryByText("mcp__one: 3k · mcp__two: 2k · mcp__three: 1k · ...")).toBeNull();
+    // Card is header-only: no per-category usage rows or freshness footer.
+    expect(screen.queryByText("chat.claudeContextInputLabel")).toBeNull();
+    expect(screen.queryByText("chat.claudeContextCachedExcludedDetail")).toBeNull();
+    expect(screen.queryByText("chat.claudeContextCategoryTitle")).toBeNull();
+    expect(document.querySelector(".claude-context-category-grid")).toBeNull();
+    expect(screen.queryByText("chat.claudeContextFreshness.live")).toBeNull();
     expect(screen.queryByLabelText("chat.contextDualViewAutoCompactionEnabled")).toBeNull();
-    expect(screen.getByText("chat.claudeContextFreshness.live")).toBeTruthy();
   });
 
-  it("labels Claude estimated window usage instead of waiting for CLI telemetry", () => {
-    render(
+  it("labels Claude estimated window usage instead of waiting for CLI telemetry", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
       <ContextBar
         currentProvider="claude"
         percentage={null}
@@ -338,8 +342,9 @@ describe("ContextBar live canvas controls visibility", () => {
       />,
     );
 
-    expect(screen.getByText("chat.claudeContextWindowEstimatedTokens")).toBeTruthy();
-    expect(screen.getByText("chat.claudeContextCachedExcludedDetail")).toBeTruthy();
+    await user.hover(container.querySelector('[data-slot="hover-card-trigger"]') as Element);
+
+    expect(await screen.findByText("chat.claudeContextWindowEstimatedTokens")).toBeTruthy();
     expect(screen.queryByText("chat.claudeContextUnavailable")).toBeNull();
   });
 });

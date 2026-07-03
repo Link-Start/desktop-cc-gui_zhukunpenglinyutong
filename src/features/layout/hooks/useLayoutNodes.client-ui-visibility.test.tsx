@@ -10,6 +10,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import type { ConversationItem, WorkspaceInfo } from "../../../types";
+import { setComposerDraft } from "../../composer/hooks/composerDraftStore";
 import { useLayoutNodes } from "./useLayoutNodes";
 import type {
   LayoutNodesFlatOptions,
@@ -101,10 +102,6 @@ vi.mock("../../client-ui-visibility/hooks/useClientUiVisibility", () => ({
         "bottomActivity.checkpoint": clientUiVisibilityMock.visibleControls.has(
           "bottomActivity.checkpoint",
         ),
-        "bottomActivity.latestConversation":
-          clientUiVisibilityMock.visibleControls.has(
-            "bottomActivity.latestConversation",
-          ),
         "cornerStatus.messageAnchors":
           clientUiVisibilityMock.visibleControls.has(
             "cornerStatus.messageAnchors",
@@ -175,9 +172,13 @@ vi.mock("../../messages/components/Messages", () => ({
   ),
 }));
 
-vi.mock("../../composer/components/Composer", () => ({
+vi.mock("../../composer/components/Composer", async () => {
+  // 真实 Composer 已改为从 composerDraftStore 订阅草稿(不再有 draftText prop),
+  // mock 同样从 store 读取,保持与生产一致的数据来源。
+  const { useComposerDraft } = await import("../../composer/hooks/composerDraftStore");
+  return {
   Composer: ({
-    draftText,
+    activeThreadId = null,
     onDraftChange,
     onSend,
     sendLabel,
@@ -185,7 +186,7 @@ vi.mock("../../composer/components/Composer", () => ({
     showStatusPanelToggleOverride,
     onResolvedAlwaysThinkingChange,
   }: {
-    draftText: string;
+    activeThreadId?: string | null;
     onDraftChange: (next: string) => void;
     onSend: (text: string, images: string[]) => void;
     sendLabel: string;
@@ -193,6 +194,7 @@ vi.mock("../../composer/components/Composer", () => ({
     showStatusPanelToggleOverride?: boolean;
     onResolvedAlwaysThinkingChange?: (enabled: boolean) => void;
   }) => {
+    const draftText = useComposerDraft(activeThreadId ?? null);
     composerMockState.thinkingCallbacks.push(onResolvedAlwaysThinkingChange);
     return (
       <form
@@ -223,7 +225,8 @@ vi.mock("../../composer/components/Composer", () => ({
       </form>
     );
   },
-}));
+  };
+});
 
 vi.mock("../../app/components/MainHeader", () => ({
   MainHeader: ({
@@ -701,7 +704,6 @@ function createLayoutOptions(
     onReviewPromptConfirmCustom: asyncNoop,
     activeTokenUsage: null,
     activeQueue: [],
-    draftText: "hello from maximum hidden mode",
     onDraftChange: noop,
     activeImages: [],
     onPickImages: noop,
@@ -965,6 +967,8 @@ describe("useLayoutNodes client UI visibility", () => {
   it("keeps conversation, composer, send, and settings recovery available when every optional entry is hidden", async () => {
     const onOpenSettings = vi.fn();
     const onSend = vi.fn();
+    // 草稿经 composerDraftStore 注入(fixture 的 activeThreadId 为 thread-1)。
+    setComposerDraft("thread-1", "hello from maximum hidden mode");
     const { result } = await renderUseLayoutNodes(
       createLayoutOptions({ onOpenSettings, onSend }),
     );
@@ -1339,9 +1343,6 @@ describe("useLayoutNodes client UI visibility", () => {
   it("keeps the bottom status dock mounted when baseline tabs are visible and collapsed", async () => {
     clientUiVisibilityMock.visiblePanels.add("bottomActivityPanel");
     clientUiVisibilityMock.visibleControls.add("bottomActivity.checkpoint");
-    clientUiVisibilityMock.visibleControls.add(
-      "bottomActivity.latestConversation",
-    );
 
     const { result } = await renderUseLayoutNodes(
       createLayoutOptions({

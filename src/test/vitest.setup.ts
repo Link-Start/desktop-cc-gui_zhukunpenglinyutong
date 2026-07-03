@@ -44,6 +44,11 @@ afterEach(async () => {
   await flushReactSuspenseWork();
   cleanup();
   await flushReactSuspenseWork();
+  // composerDraftStore 是模块级单例,不清理会把草稿泄漏到下一个用例。
+  const { __resetComposerDraftStoreForTests } = await import(
+    "../features/composer/hooks/composerDraftStore"
+  );
+  __resetComposerDraftStoreForTests();
 });
 
 if (typeof Element !== "undefined" && !Element.prototype.getAnimations) {
@@ -646,7 +651,6 @@ vi.mock("react-i18next", () => ({
         "settings.clientUiVisibility.controls.bottomActivityTasks": "Tasks tab",
         "settings.clientUiVisibility.controls.bottomActivityAgents": "Agents tab",
         "settings.clientUiVisibility.controls.bottomActivityCheckpoint": "Result tab",
-        "settings.clientUiVisibility.controls.bottomActivityLatestConversation": "Latest conversation tab",
         "settings.clientUiVisibility.controls.curtainContextLedger": "Context sources card",
         "settings.clientUiVisibility.controls.cornerStatusMessageAnchors": "Message anchors",
         "settings.clientUiVisibility.controlDescriptions.topRunStart": "Hides launch script run/edit buttons only.",
@@ -665,7 +669,6 @@ vi.mock("react-i18next", () => ({
         "settings.clientUiVisibility.controlDescriptions.bottomActivityAgents": "Hides the agent status tab.",
         "settings.clientUiVisibility.controlDescriptions.bottomActivityCheckpoint":
           "Hides the result checkpoint tab.",
-        "settings.clientUiVisibility.controlDescriptions.bottomActivityLatestConversation": "Hides the latest conversation tab.",
         "settings.clientUiVisibility.controlDescriptions.curtainContextLedger": "Hides the context sources card above the composer without disabling ledger calculations.",
         "settings.clientUiVisibility.controlDescriptions.cornerStatusMessageAnchors": "Hides message anchor dots from the conversation canvas.",
         "settings.showRemainingLimitsDesc": "Display what is left instead of what is used.",
@@ -1078,13 +1081,7 @@ vi.mock("react-i18next", () => ({
         "tools.userInputRequest": "Ask User Question",
         "tools.planQuickView": "Plan",
         "tools.openFullPlanPanel": "Open full Plan panel",
-        "statusPanel.tabLatestUserMessage": "User Conversation",
         "statusPanel.tabCheckpoint": "Result",
-        "statusPanel.emptyLatestUserMessage": "No user conversation",
-        "statusPanel.latestUserMessageImages": "Images: {{count}}",
-        "statusPanel.expandLatestUserMessage": "Expand",
-        "statusPanel.collapseLatestUserMessage": "Collapse",
-        "statusPanel.jumpToConversationMessage": "Jump to message",
         "statusPanel.tabPlan": "Plan",
         "statusPanel.emptyPlan": "No plan",
         "statusPanel.planGenerating": "Generating plan...",

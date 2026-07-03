@@ -5,6 +5,7 @@ import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 export type UseThreadActionsOptions = {
   dispatch: Dispatch<ThreadAction>;
   itemsByThread: ThreadState["itemsByThread"];
+  tokenUsageByThread?: ThreadState["tokenUsageByThread"];
   userInputRequests: ThreadState["userInputRequests"];
   threadsByWorkspace: ThreadState["threadsByWorkspace"];
   activeThreadIdByWorkspace: ThreadState["activeThreadIdByWorkspace"];

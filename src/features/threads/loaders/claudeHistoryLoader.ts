@@ -3,6 +3,7 @@ import type {
   ClaudeDeferredImageLocator,
   ConversationItem,
   RequestUserInputRequest,
+  ThreadTokenUsage,
 } from "../../../types";
 import i18n from "../../../i18n";
 import {
@@ -2257,6 +2258,48 @@ export function parseClaudeHistoryMessagesWithShadowRecovery({
   });
 }
 
+function asFiniteNonNegativeNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : 0;
+}
+
+/**
+ * 从 load_claude_session 的返回值里提取 token 用量（后端会附带历史 JSONL
+ * 中最后一条 assistant 消息的 usage）。窗口总量历史里没有，留 null，
+ * 由展示层按模型估算。
+ */
+export function extractClaudeHistoryTokenUsage(
+  result: unknown,
+): ThreadTokenUsage | null {
+  const usage = asRecord(asRecord(result)?.usage);
+  if (!usage) {
+    return null;
+  }
+  const inputTokens = asFiniteNonNegativeNumber(usage.inputTokens);
+  const outputTokens = asFiniteNonNegativeNumber(usage.outputTokens);
+  if (inputTokens <= 0 && outputTokens <= 0) {
+    return null;
+  }
+  const cachedInputTokens =
+    asFiniteNonNegativeNumber(usage.cacheCreationInputTokens) +
+    asFiniteNonNegativeNumber(usage.cacheReadInputTokens);
+  const breakdown = {
+    inputTokens,
+    outputTokens,
+    cachedInputTokens,
+    totalTokens: inputTokens + outputTokens,
+    reasoningOutputTokens: 0,
+  };
+  return {
+    total: breakdown,
+    last: breakdown,
+    modelContextWindow: null,
+    contextUsageSource: "claude_history",
+    contextUsageFreshness: "estimated",
+  };
+}
+
 export function createClaudeHistoryLoader({
   workspaceId,
   workspacePath,
@@ -2306,6 +2349,7 @@ export function createClaudeHistoryLoader({
         items: parsedItems,
         plan: null,
         userInputQueue,
+        tokenUsage: extractClaudeHistoryTokenUsage(result),
         meta: {
           workspaceId,
           threadId,

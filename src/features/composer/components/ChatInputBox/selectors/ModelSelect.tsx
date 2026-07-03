@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo, useState } from 'react';
+import { Fragment, memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import CheckIcon from 'lucide-react/dist/esm/icons/check';
 import type { ModelInfo, ProviderId } from '../types';
@@ -67,7 +67,7 @@ const ModelIcon = ({ provider, size = 16 }: { provider?: string; size?: number }
  * ModelSelect - Model selector component
  * Supports switching between Sonnet 4.5, Opus 4.5, and other models, including Codex models
  */
-export const ModelSelect = ({
+export const ModelSelect = memo(({
   value,
   onChange,
   models = [],
@@ -293,6 +293,6 @@ export const ModelSelect = ({
   ) : (
     menu
   );
-};
+});
 
 export default ModelSelect;

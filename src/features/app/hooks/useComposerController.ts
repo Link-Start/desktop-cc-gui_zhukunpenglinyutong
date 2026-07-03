@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   EngineType,
@@ -7,6 +7,11 @@ import type {
   WorkspaceInfo,
 } from "../../../types";
 import { pushErrorToast } from "../../../services/toasts";
+import {
+  clearComposerDraft,
+  getComposerDraft,
+  setComposerDraft,
+} from "../../composer/hooks/composerDraftStore";
 import { useComposerImages } from "../../composer/hooks/useComposerImages";
 import { useQueuedSend } from "../../threads/hooks/useQueuedSend";
 
@@ -98,10 +103,6 @@ export function useComposerController({
   }) => Promise<void>;
 }) {
   const { t } = useTranslation();
-  const [composerDraftsByThread, setComposerDraftsByThread] = useState<
-    Record<string, string>
-  >({});
-  const [detachedDraft, setDetachedDraft] = useState("");
   const [prefillDraft, setPrefillDraft] = useState<QueuedMessage | null>(null);
   const [composerInsert, setComposerInsert] = useState<QueuedMessage | null>(
     null,
@@ -162,24 +163,16 @@ export function useComposerController({
     clearActiveImages,
   });
 
-  const activeDraft = useMemo(
-    () =>
-      activeThreadId
-        ? composerDraftsByThread[activeThreadId] ?? ""
-        : detachedDraft,
-    [activeThreadId, composerDraftsByThread, detachedDraft],
+  // 草稿活在模块级 composerDraftStore 里,这里只暴露读写入口。写入不经 React state,
+  // 因此按键不会再从 app-shell 根引发全树重渲染;需要草稿"值"的组件自行订阅 store。
+  const getActiveDraft = useCallback(
+    () => getComposerDraft(activeThreadId),
+    [activeThreadId],
   );
 
   const handleDraftChange = useCallback(
     (next: string) => {
-      if (!activeThreadId) {
-        setDetachedDraft(next);
-        return;
-      }
-      setComposerDraftsByThread((prev) => ({
-        ...prev,
-        [activeThreadId]: next,
-      }));
+      setComposerDraft(activeThreadId, next);
     },
     [activeThreadId],
   );
@@ -237,13 +230,7 @@ export function useComposerController({
   );
 
   const clearDraftForThread = useCallback((threadId: string) => {
-    setComposerDraftsByThread((prev) => {
-      if (!(threadId in prev)) {
-        return prev;
-      }
-      const { [threadId]: _, ...rest } = prev;
-      return rest;
-    });
+    clearComposerDraft(threadId);
   }, []);
 
   return {
@@ -263,7 +250,7 @@ export function useComposerController({
     setPrefillDraft,
     composerInsert,
     setComposerInsert,
-    activeDraft,
+    getActiveDraft,
     handleDraftChange,
     handleSendPrompt,
     handleEditQueued,

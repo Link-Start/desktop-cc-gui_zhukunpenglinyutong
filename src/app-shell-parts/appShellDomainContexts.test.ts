@@ -531,7 +531,7 @@ describe("appShellDomainContexts", () => {
       "renderAppShell({\n    ...appShellContext",
     );
     expect(appShellSource).toMatch(
-      /useAppShellSearchAndComposerSection\(\{\s*activeDraft,\s*activeEditorFilePath,\s*activeWorkspace,\s*activeWorkspaceId,/,
+      /useAppShellSearchAndComposerSection\(\{\s*activeEditorFilePath,\s*activeWorkspace,\s*activeWorkspaceId,/,
     );
     expect(appShellSource).not.toMatch(
       /useAppShellSearchAndComposerSection\(\{\s*workspaceNavigationContext:/,

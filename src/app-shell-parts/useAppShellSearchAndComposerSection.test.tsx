@@ -41,7 +41,6 @@ function createBoundary(
   });
 
   return {
-    activeDraft: "draft",
     activeEditorFilePath: "src/current.ts",
     activeWorkspace,
     activeWorkspaceId: activeWorkspace.id,
@@ -55,6 +54,7 @@ function createBoundary(
     connectWorkspace: vi.fn(async () => undefined),
     exitDiffView: vi.fn(),
     filePanelMode: "files",
+    getActiveDraft: () => "draft",
     gitPanelMode: "diff",
     gitPullRequestDiffs: [],
     handleDraftChange: vi.fn(),

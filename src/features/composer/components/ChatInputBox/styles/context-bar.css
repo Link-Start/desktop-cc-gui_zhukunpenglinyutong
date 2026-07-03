@@ -165,8 +165,7 @@
   display: none;
 }
 
-.button-area-inline-tools .context-bar--tool-popover .context-dual-usage-ring,
-.button-area-inline-tools .context-bar--tool-popover .token-indicator-ring {
+.button-area-inline-tools .context-bar--tool-popover .context-dual-usage-ring {
   width: 17px;
   height: 17px;
 }

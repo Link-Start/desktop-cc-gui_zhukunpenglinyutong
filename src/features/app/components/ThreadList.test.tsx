@@ -591,6 +591,22 @@ describe("ThreadList", () => {
     expect(time?.textContent).toBe("2m");
   });
 
+  it("hides relative time while thread is running", () => {
+    const { container } = render(
+      <ThreadList
+        {...baseProps}
+        threadStatusById={{
+          "thread-1": { isProcessing: true, hasUnread: false, isReviewing: false },
+        }}
+      />,
+    );
+
+    const meta = container.querySelector(".thread-meta");
+    expect(meta).toBeTruthy();
+    expect(meta?.querySelector(".thread-runtime-badge")).toBeTruthy();
+    expect(meta?.querySelector(".thread-time")).toBeNull();
+  });
+
   it("marks engine badge as processing when thread is running", () => {
     const { container } = render(
       <ThreadList

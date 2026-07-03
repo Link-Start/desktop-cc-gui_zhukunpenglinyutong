@@ -306,6 +306,82 @@ fn convert_event_emits_context_window_state_when_current_usage_is_null() {
 }
 
 #[test]
+fn convert_event_ignores_cumulative_usage_from_result_event() {
+    let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
+    let mut receiver = session.subscribe();
+    // 回合结束的 result 事件：顶层 usage 是整轮累计统计（每次 API 调用的
+    // input/cache_read 相加），远超上下文窗口，不能当作上下文占用快照。
+    let event = json!({
+        "type": "result",
+        "subtype": "success",
+        "usage": {
+            "input_tokens": 147_370,
+            "cache_creation_input_tokens": 1_755_481,
+            "cache_read_input_tokens": 14_358_400,
+            "output_tokens": 52_000
+        }
+    });
+
+    let _ = session.convert_event("turn-result", &event);
+
+    assert!(
+        matches!(receiver.try_recv(), Err(TryRecvError::Empty)),
+        "result event cumulative usage must not be emitted as context usage"
+    );
+}
+
+#[test]
+fn convert_event_keeps_context_window_snapshot_from_result_event() {
+    let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
+    let mut receiver = session.subscribe();
+    // result 事件若携带 context_window.current_usage（精确快照），仍应上报，
+    // 且不得回落到顶层累计 usage。
+    let event = json!({
+        "type": "result",
+        "subtype": "success",
+        "usage": {
+            "input_tokens": 147_370,
+            "cache_creation_input_tokens": 1_755_481,
+            "cache_read_input_tokens": 14_358_400,
+            "output_tokens": 52_000
+        },
+        "context_window": {
+            "current_usage": {
+                "input_tokens": 120_000,
+                "cache_read_input_tokens": 35_800,
+                "output_tokens": 0
+            },
+            "context_window_size": 258_400,
+            "used_percentage": 60.3,
+            "remaining_percentage": 39.7
+        }
+    });
+
+    let _ = session.convert_event("turn-result-window", &event);
+    let received = receiver
+        .try_recv()
+        .expect("expected usage update from result context_window snapshot");
+
+    match received.event {
+        EngineEvent::UsageUpdate {
+            input_tokens,
+            cached_tokens,
+            model_context_window,
+            context_used_tokens,
+            context_usage_source,
+            ..
+        } => {
+            assert_eq!(input_tokens, Some(120_000));
+            assert_eq!(cached_tokens, Some(35_800));
+            assert_eq!(model_context_window, Some(258_400));
+            assert_eq!(context_used_tokens, Some(155_800));
+            assert_eq!(context_usage_source.as_deref(), Some("context_window"));
+        }
+        other => panic!("expected usage update, got {:?}", other),
+    }
+}
+
+#[test]
 fn prompt_too_long_detection_matches_common_variants() {
     assert!(ClaudeSession::is_prompt_too_long_error(
         "Prompt is too long"

@@ -14,7 +14,10 @@ import {
   mergeThreadItems,
   previewThreadName,
 } from "../../../utils/threadItems";
-import { parseClaudeHistoryMessagesWithShadowRecovery } from "../loaders/claudeHistoryLoader";
+import {
+  extractClaudeHistoryTokenUsage,
+  parseClaudeHistoryMessagesWithShadowRecovery,
+} from "../loaders/claudeHistoryLoader";
 import { parseGeminiHistoryMessages } from "../loaders/geminiHistoryParser";
 import { hydrateHistory } from "../assembly/conversationAssembler";
 import { asString } from "../utils/threadNormalize";
@@ -52,7 +55,6 @@ import {
 } from "../utils/stabilityDiagnostics";
 import { createThreadHistoryLoaderForThread } from "./useThreadActions.historyLoaderFactory";
 import {
-  DEFAULT_CLAUDE_CONTEXT_WINDOW,
   RELATED_THREAD_LOAD_CONCURRENCY,
   THREAD_LIST_PAGE_SIZE,
   THREAD_RECOVERY_HISTORY_MATCH_CANDIDATES,
@@ -89,6 +91,7 @@ export function useThreadActionsResumeThreadForWorkspace(
     dispatch,
     getCustomName,
     itemsByThread,
+    tokenUsageByThread = {},
     loadedThreadsRef,
     onDebug,
     rememberThreadAlias,
@@ -149,6 +152,38 @@ export function useThreadActionsResumeThreadForWorkspace(
           },
         });
         loadedThreadsRef.current[threadId] = true;
+        // 本地实时消息保留时不重放历史，但应用重启后 token 用量 store 是空的
+        //（消息来自持久化快照、用量不持久化），单独从历史 JSONL 回填一次。
+        if (!tokenUsageByThread[threadId]) {
+          const usageWorkspacePath =
+            workspacePathsByIdRef.current[workspaceId] ??
+            resolveWorkspacePath?.(workspaceId) ??
+            "";
+          const usageSessionId = threadId.slice("claude:".length);
+          if (usageWorkspacePath && usageSessionId) {
+            void loadClaudeSessionService(usageWorkspacePath, usageSessionId)
+              .then((result) => {
+                const tokenUsage = extractClaudeHistoryTokenUsage(result);
+                if (tokenUsage) {
+                  dispatch({ type: "setThreadTokenUsage", threadId, tokenUsage });
+                }
+              })
+              .catch((error) => {
+                onDebug?.({
+                  id: `${Date.now()}-claude-history-usage-backfill-error`,
+                  timestamp: Date.now(),
+                  source: "error",
+                  label: "thread/claude history usage backfill error",
+                  payload: {
+                    workspaceId,
+                    threadId,
+                    error:
+                      error instanceof Error ? error.message : String(error),
+                  },
+                });
+              });
+          }
+        }
         return threadId;
       }
       if (useUnifiedHistoryLoader) {
@@ -193,6 +228,13 @@ export function useThreadActionsResumeThreadForWorkspace(
             threadId: effectiveThreadId,
             timestamp: assembledSnapshot.meta.historyRestoredAtMs,
           });
+          if (snapshot.tokenUsage) {
+            dispatch({
+              type: "setThreadTokenUsage",
+              threadId: effectiveThreadId,
+              tokenUsage: snapshot.tokenUsage,
+            });
+          }
           const effectiveLocalItems =
             effectiveThreadId === threadId
               ? localItems
@@ -760,14 +802,6 @@ export function useThreadActionsResumeThreadForWorkspace(
             // Handle both new format { messages, usage } and old format (array)
             const messagesData =
               (result as { messages?: unknown }).messages ?? result;
-            const usageData = (result as { usage?: unknown }).usage as
-              | {
-                  inputTokens?: number;
-                  outputTokens?: number;
-                  cacheCreationInputTokens?: number;
-                  cacheReadInputTokens?: number;
-                }
-              | undefined;
 
             const items = parseClaudeHistoryMessagesWithShadowRecovery({
               messagesData,
@@ -809,39 +843,12 @@ export function useThreadActionsResumeThreadForWorkspace(
             });
 
             // Dispatch usage data if available
-            if (
-              usageData &&
-              (usageData.inputTokens || usageData.outputTokens)
-            ) {
-              const cachedTokens =
-                (usageData.cacheCreationInputTokens ?? 0) +
-                (usageData.cacheReadInputTokens ?? 0);
+            const restoredTokenUsage = extractClaudeHistoryTokenUsage(result);
+            if (restoredTokenUsage) {
               dispatch({
                 type: "setThreadTokenUsage",
                 threadId,
-                tokenUsage: {
-                  total: {
-                    inputTokens: usageData.inputTokens ?? 0,
-                    outputTokens: usageData.outputTokens ?? 0,
-                    cachedInputTokens: cachedTokens,
-                    totalTokens:
-                      (usageData.inputTokens ?? 0) +
-                      (usageData.outputTokens ?? 0),
-                    reasoningOutputTokens: 0,
-                  },
-                  last: {
-                    inputTokens: usageData.inputTokens ?? 0,
-                    outputTokens: usageData.outputTokens ?? 0,
-                    cachedInputTokens: cachedTokens,
-                    totalTokens:
-                      (usageData.inputTokens ?? 0) +
-                      (usageData.outputTokens ?? 0),
-                    reasoningOutputTokens: 0,
-                  },
-                  modelContextWindow: DEFAULT_CLAUDE_CONTEXT_WINDOW,
-                  contextUsageSource: "claude_history",
-                  contextUsageFreshness: "estimated",
-                },
+                tokenUsage: restoredTokenUsage,
               });
             }
           } catch (error) {
@@ -1066,6 +1073,7 @@ export function useThreadActionsResumeThreadForWorkspace(
       dispatch,
       getCustomName,
       itemsByThread,
+      tokenUsageByThread,
       latestThreadsByWorkspaceRef,
       loadedThreadsRef,
       onDebug,

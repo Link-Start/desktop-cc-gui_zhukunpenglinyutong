@@ -57,8 +57,22 @@ import {
   buildDetachedFileExplorerSession,
   openOrFocusDetachedFileExplorer,
 } from "./features/files/detachedFileExplorer";
-import { pickWorkspacePath } from "./services/tauri";
-import type { AccessMode, AppMode, ComposerEditorSettings } from "./types";
+import { pickWorkspacePath, updateAppSettings } from "./services/tauri";
+import type {
+  AccessMode,
+  AppMode,
+  ComposerEditorSettings,
+  ComposerEnginePrefs,
+  EngineType,
+} from "./types";
+import { resolveRestoredAccessMode } from "./app-shell-parts/composerEnginePrefs";
+import { resolveThreadEngine } from "./app-shell-parts/selectedComposerSession";
+import {
+  getComposerEnginePrefForEngine,
+  getComposerEnginePrefsSnapshot,
+  seedComposerEnginePrefs,
+  setComposerEnginePref,
+} from "./features/composer/hooks/composerEnginePrefsStore";
 import { useCodeCssVars } from "./features/app/hooks/useCodeCssVars";
 import { useAccountSwitching } from "./features/app/hooks/useAccountSwitching";
 import { pushErrorToast } from "./services/toasts";
@@ -127,6 +141,80 @@ export function AppShell() {
     queueSaveSettings,
   } = useAppSettingsController();
   useCodeCssVars(appSettings);
+  // Keep the latest full settings for the debounced prefs writer below, which persists
+  // to disk imperatively (no setState) and therefore needs the other settings fields.
+  const appSettingsRef = useRef(appSettings);
+  useEffect(() => {
+    appSettingsRef.current = appSettings;
+  }, [appSettings]);
+
+  // Durable per-engine composer preferences (model / effort / permission / plan mode)
+  // so a brand-new conversation reopens with the user's last choices after restart.
+  // These live in an external store (composerEnginePrefsStore) so a switch-button click
+  // never re-renders the 2600-line app-shell root. Disk persistence still goes through
+  // AppSettings (the backend replaces the whole file), so we debounce a write that
+  // overlays the live snapshot onto the current settings — WITHOUT setSettings, which
+  // would re-render the root a second time. saveSettings applies the same overlay so
+  // unrelated settings saves cannot clobber newer prefs on disk.
+  const prefsPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushPersistEnginePrefs = useCallback(() => {
+    void updateAppSettings({
+      ...appSettingsRef.current,
+      lastComposerPrefsByEngine: getComposerEnginePrefsSnapshot(),
+    }).catch(() => undefined);
+  }, []);
+  const schedulePersistEnginePrefs = useCallback(() => {
+    if (prefsPersistTimerRef.current) {
+      clearTimeout(prefsPersistTimerRef.current);
+    }
+    prefsPersistTimerRef.current = setTimeout(() => {
+      prefsPersistTimerRef.current = null;
+      flushPersistEnginePrefs();
+    }, 400);
+  }, [flushPersistEnginePrefs]);
+  useEffect(
+    () => () => {
+      if (prefsPersistTimerRef.current) {
+        clearTimeout(prefsPersistTimerRef.current);
+        flushPersistEnginePrefs();
+      }
+    },
+    [flushPersistEnginePrefs],
+  );
+  const persistComposerEnginePref = useCallback(
+    (engine: EngineType, patch: Partial<ComposerEnginePrefs>) => {
+      if (!setComposerEnginePref(engine, patch)) {
+        return;
+      }
+      schedulePersistEnginePrefs();
+    },
+    [schedulePersistEnginePrefs],
+  );
+  const activeEngineRef = useRef<EngineType>("claude");
+  const persistClaudeCollaborationMode = useCallback(
+    (modeId: string | null) => {
+      if (activeEngineRef.current !== "claude") {
+        return;
+      }
+      persistComposerEnginePref("claude", {
+        collaborationModeId: modeId === "plan" ? "plan" : "code",
+      });
+    },
+    [persistComposerEnginePref],
+  );
+
+  // Seed the per-engine prefs store once, after settings finish loading. The reads below
+  // (access-mode restore, new-session default selection, claude plan/code default) pull
+  // from the store imperatively, so this effect is declared before them to seed first on
+  // the load-complete commit.
+  const prefsSeededRef = useRef(false);
+  useEffect(() => {
+    if (appSettingsLoading || prefsSeededRef.current) {
+      return;
+    }
+    seedComposerEnginePrefs(appSettings.lastComposerPrefsByEngine);
+    prefsSeededRef.current = true;
+  }, [appSettingsLoading, appSettings.lastComposerPrefsByEngine]);
   const {
     dictationModel,
     dictationState,
@@ -535,6 +623,7 @@ export function AppShell() {
     handleCollaborationModeResolved,
   } = useThreadScopedCollaborationMode({
     setSelectedCollaborationModeId,
+    onExplicitCollaborationModeChange: persistClaudeCollaborationMode,
   });
 
   const { skills } = useSkills({
@@ -560,6 +649,7 @@ export function AppShell() {
     },
     onDebug: addDebugEntry,
   });
+  activeEngineRef.current = activeEngine;
   const { handleRefreshModelConfig, isModelConfigRefreshing } =
     useModelConfigRefresh({
       activeEngine,
@@ -602,7 +692,9 @@ export function AppShell() {
     reorderTask: kanbanReorderTask,
   } = useKanbanStore(workspaces);
 
-  // Sync accessMode when switching engines (Codex forces full-access, Claude restores saved mode)
+  // Sync accessMode when switching engines. Codex forces full-access; non-codex
+  // engines restore the permission the user last chose for that engine (persisted
+  // across restart), falling back to the configured defaultAccessMode.
   useEffect(() => {
     if (activeEngine === "codex") {
       setAccessMode((prev) => {
@@ -611,20 +703,34 @@ export function AppShell() {
         }
         return "full-access";
       });
-    } else {
-      setAccessMode(claudeAccessModeRef.current);
+      return;
     }
-  }, [activeEngine]);
+    const storedAccessMode =
+      getComposerEnginePrefForEngine(activeEngine).accessMode;
+    const restored = resolveRestoredAccessMode(
+      activeEngine,
+      storedAccessMode,
+      appSettings.defaultAccessMode,
+    );
+    claudeAccessModeRef.current = restored;
+    setAccessMode(restored);
+  }, [
+    activeEngine,
+    appSettingsLoading,
+    appSettings.defaultAccessMode,
+  ]);
 
-  // Keep claudeAccessModeRef in sync when user changes mode on a non-codex engine
+  // Remember the permission the user picks on a non-codex engine so future
+  // conversations (and app restarts) reopen with the same access mode.
   const handleSetAccessMode = useCallback(
     (mode: AccessMode) => {
       setAccessMode(mode);
       if (activeEngine !== "codex") {
         claudeAccessModeRef.current = mode;
+        persistComposerEnginePref(activeEngine, { accessMode: mode });
       }
     },
-    [activeEngine],
+    [activeEngine, persistComposerEnginePref],
   );
 
   const {
@@ -945,6 +1051,22 @@ export function AppShell() {
     [activeThreadId, selectOpenCodeVariantForThread],
   );
 
+  // Seed a brand-new conversation with the model/effort the user last chose for its
+  // engine. Codex keeps its own global-selection path, so it opts out here.
+  const resolveEngineDefaultComposerSelection = useCallback(
+    (threadId: string) => {
+      const engine = resolveThreadEngine(threadId);
+      if (!engine || engine === "codex") {
+        return null;
+      }
+      const pref = getComposerEnginePrefForEngine(engine);
+      if (pref.modelId === null && pref.effort === null) {
+        return null;
+      }
+      return { modelId: pref.modelId, effort: pref.effort };
+    },
+    [],
+  );
   const {
     selectedComposerSelection,
     handleSelectComposerSelection,
@@ -954,6 +1076,7 @@ export function AppShell() {
     activeThreadId,
     activeWorkspaceId,
     resolveCanonicalThreadId,
+    resolveEngineDefaultComposerSelection,
     onDebug: addDebugEntry,
   });
   const {
@@ -990,6 +1113,7 @@ export function AppShell() {
     handleSetAccessMode,
     models,
     modelsReady,
+    persistComposerEnginePref,
     persistComposerSelectionForThread,
     queueSaveSettings,
     selectedCollaborationMode,
@@ -1225,6 +1349,10 @@ export function AppShell() {
   }, [activeThreadId, activeThreadIdForModeRef]);
 
   useEffect(() => {
+    const claudePlanCodeDefault =
+      getComposerEnginePrefForEngine("claude").collaborationModeId === "plan"
+        ? "plan"
+        : "code";
     const syncResult = resolveThreadScopedCollaborationModeSync({
       activeEngine,
       activeThreadId,
@@ -1233,6 +1361,8 @@ export function AppShell() {
         : null,
       selectedCollaborationModeId,
       lastSyncedThreadId: lastCodexModeSyncThreadRef.current,
+      newThreadDefaultMode:
+        activeEngine === "claude" ? claudePlanCodeDefault : "code",
     });
     if (!syncResult) {
       return;
@@ -1246,6 +1376,7 @@ export function AppShell() {
   }, [
     activeEngine,
     activeThreadId,
+    appSettingsLoading,
     codexComposerModeRef,
     collaborationUiModeByThread,
     lastCodexModeSyncThreadRef,
@@ -1314,7 +1445,7 @@ export function AppShell() {
     setPrefillDraft,
     composerInsert,
     setComposerInsert,
-    activeDraft,
+    getActiveDraft,
     handleDraftChange,
     handleSendPrompt,
     handleEditQueued,
@@ -1397,7 +1528,6 @@ export function AppShell() {
     workspaceNameByPath,
     workspaceSearchSources,
   } = useAppShellSearchRadarSection({
-    activeDraft,
     activeItems,
     activeThreadId,
     activeWorkspace,
@@ -1411,6 +1541,7 @@ export function AppShell() {
     filePanelMode,
     fileTreeSourceVersion,
     files,
+    getActiveDraft,
     globalSearchFilesByWorkspace,
     handleDraftChange,
     isCompact,
@@ -1867,7 +1998,6 @@ export function AppShell() {
       activeDiffError,
       activeDiffLoading,
       activeDiffs,
-      activeDraft,
       activeEditorFilePath,
       activeEditorLineRange,
       activeEngine,
@@ -2524,7 +2654,6 @@ export function AppShell() {
   }, [appShellDomainContexts]);
 
   const searchAndComposerSection = useAppShellSearchAndComposerSection({
-    activeDraft,
     activeEditorFilePath,
     activeWorkspace,
     activeWorkspaceId,
@@ -2535,6 +2664,7 @@ export function AppShell() {
     connectWorkspace,
     exitDiffView,
     filePanelMode,
+    getActiveDraft,
     gitPanelMode,
     gitPullRequestDiffs,
     handleDraftChange,

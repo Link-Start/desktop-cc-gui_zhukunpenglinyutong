@@ -937,6 +937,15 @@ const zhPart1 = {
     perfCopyReportDone: "已复制到剪贴板。",
     perfCopyReportDownloaded: "剪贴板不可用，已下载为文本文件。",
     perfCopyReportFailed: "复制失败，请重试。",
+    perfJankLiveTitle: "最近卡顿（实时）",
+    perfJankLiveDescription:
+      "性能诊断采集记录到的掉帧 / 长任务，最新的排在最前，每秒自动刷新。先清空，再复现卡顿，即可看到每次卡顿的归因（时间、耗时、流式阶段、最近交互、重渲染组件）。",
+    perfJankLiveClearButton: "清空",
+    perfJankLiveCleared: "已清空，开始重新观察。",
+    perfJankLiveEmpty: "暂无记录。开启上方「性能诊断采集」后，掉帧会实时出现在这里。",
+    perfJankLiveSummary: "共 {{count}} 条 · 最差 {{worst}}ms",
+    perfJankLiveNoRenders: "无渲染归因",
+    perfJankLiveTruncated: "仅显示最近 40 条，另有 {{hidden}} 条较早记录（导出报告可见全部）。",
     costBudgetTitle: "成本预算",
     costBudgetDescription:
       "设置本机月度预算，用于 StatusPanel 的 BudgetBar 和成本提示。",
@@ -1274,7 +1283,6 @@ const zhPart1 = {
         bottomActivityTasks: "任务 Tab",
         bottomActivityAgents: "Agent Tab",
         bottomActivityCheckpoint: "结果 Tab",
-        bottomActivityLatestConversation: "最新对话 Tab",
         curtainContextLedger: "本轮上下文来源卡片",
         cornerStatusMessageAnchors: "消息锚点",
       },
@@ -1301,7 +1309,6 @@ const zhPart1 = {
         bottomActivityTasks: "隐藏任务状态 Tab。",
         bottomActivityAgents: "隐藏 Agent 状态 Tab。",
         bottomActivityCheckpoint: "隐藏结果检查点 Tab。",
-        bottomActivityLatestConversation: "隐藏最新对话 Tab。",
         curtainContextLedger:
           "隐藏 Composer 上方的本轮上下文来源卡片，但不影响账本计算和来源治理能力。",
         cornerStatusMessageAnchors: "隐藏对话幕布中的消息锚点。",

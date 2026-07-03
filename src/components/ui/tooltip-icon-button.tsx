@@ -1,8 +1,23 @@
-import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 
 type TooltipSide = "top" | "right" | "bottom" | "left";
 type TooltipAlign = "start" | "center" | "end";
+
+function isKeyboardFocus(element: HTMLElement): boolean {
+  try {
+    return element.matches(":focus-visible");
+  } catch {
+    return true;
+  }
+}
 
 type TooltipIconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   label: string;
@@ -36,6 +51,31 @@ export function TooltipIconButton({
   ...buttonProps
 }: TooltipIconButtonProps) {
   const [open, setOpen] = useState(false);
+  // Opening synchronously on mouseenter turns every pointer crossing into a
+  // portal mount + forced reflow. Honor `delay` so only a dwell opens it.
+  const openTimerRef = useRef<number | null>(null);
+
+  const clearOpenTimer = useCallback(() => {
+    if (openTimerRef.current !== null) {
+      window.clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleOpen = useCallback(() => {
+    clearOpenTimer();
+    openTimerRef.current = window.setTimeout(() => {
+      openTimerRef.current = null;
+      setOpen(true);
+    }, delay);
+  }, [clearOpenTimer, delay]);
+
+  const closeNow = useCallback(() => {
+    clearOpenTimer();
+    setOpen(false);
+  }, [clearOpenTimer]);
+
+  useEffect(() => clearOpenTimer, [clearOpenTimer]);
 
   useEffect(() => {
     if (!open) {
@@ -62,9 +102,9 @@ export function TooltipIconButton({
 
   useEffect(() => {
     if (disabled) {
-      setOpen(false);
+      closeNow();
     }
-  }, [disabled]);
+  }, [disabled, closeNow]);
 
   return (
     <Tooltip open={open} onOpenChange={setOpen} disabled={disabled}>
@@ -78,34 +118,38 @@ export function TooltipIconButton({
         onMouseEnter={(event) => {
           onMouseEnter?.(event);
           if (!disabled) {
-            setOpen(true);
+            scheduleOpen();
           }
         }}
         onMouseLeave={(event) => {
           onMouseLeave?.(event);
-          setOpen(false);
+          closeNow();
         }}
         onFocus={(event) => {
           onFocus?.(event);
-          if (!disabled) {
+          // Only keyboard focus opens immediately (a11y). Pointer clicks also
+          // fire focus right after pointerdown; opening there would mount a
+          // tooltip portal on every click.
+          if (!disabled && isKeyboardFocus(event.currentTarget)) {
+            clearOpenTimer();
             setOpen(true);
           }
         }}
         onBlur={(event) => {
           onBlur?.(event);
-          setOpen(false);
+          closeNow();
         }}
         onClick={(event) => {
           onClick?.(event);
-          setOpen(false);
+          closeNow();
         }}
         onPointerCancel={(event) => {
           onPointerCancel?.(event);
-          setOpen(false);
+          closeNow();
         }}
         onPointerDown={(event) => {
           onPointerDown?.(event);
-          setOpen(false);
+          closeNow();
         }}
         {...buttonProps}
       >

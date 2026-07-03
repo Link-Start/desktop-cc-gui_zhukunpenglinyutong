@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import CheckIcon from 'lucide-react/dist/esm/icons/check';
 import { AVAILABLE_MODES, type PermissionMode } from '../types';
@@ -39,7 +39,7 @@ type ModeSelectFlashStyle = CSSProperties & {
  * ModeSelect - Mode selector component
  * Supports switching between default, agent, plan, and auto modes
  */
-export const ModeSelect = ({
+export const ModeSelect = memo(({
   value,
   onChange,
   provider,
@@ -293,6 +293,6 @@ export const ModeSelect = ({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-};
+});
 
 export default ModeSelect;

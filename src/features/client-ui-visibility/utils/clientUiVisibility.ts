@@ -34,7 +34,6 @@ export const CLIENT_UI_CONTROL_IDS = [
   "bottomActivity.tasks",
   "bottomActivity.agents",
   "bottomActivity.checkpoint",
-  "bottomActivity.latestConversation",
   "curtain.contextLedger",
   "cornerStatus.messageAnchors",
 ] as const;
@@ -229,13 +228,6 @@ export const CLIENT_UI_CONTROL_REGISTRY: readonly ClientUiControlDefinition[] = 
     iconKey: "fileEdit",
   },
   {
-    id: "bottomActivity.latestConversation",
-    parentPanelId: "bottomActivityPanel",
-    labelKey: "settings.clientUiVisibility.controls.bottomActivityLatestConversation",
-    descriptionKey: "settings.clientUiVisibility.controlDescriptions.bottomActivityLatestConversation",
-    iconKey: "messageSquareQuote",
-  },
-  {
     id: "curtain.contextLedger",
     parentPanelId: "cornerStatusIndicator",
     labelKey: "settings.clientUiVisibility.controls.curtainContextLedger",
@@ -313,7 +305,6 @@ export const CLIENT_UI_PANEL_REGISTRY: readonly ClientUiPanelDefinition[] = [
       "bottomActivity.tasks",
       "bottomActivity.agents",
       "bottomActivity.checkpoint",
-      "bottomActivity.latestConversation",
     ],
   },
   {

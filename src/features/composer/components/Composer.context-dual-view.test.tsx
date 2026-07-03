@@ -161,7 +161,6 @@ function ComposerHarness({
       prompts={[]}
       commands={[]}
       files={[]}
-      draftText=""
       onDraftChange={() => {}}
       dictationEnabled={false}
       activeWorkspaceId="ws-1"

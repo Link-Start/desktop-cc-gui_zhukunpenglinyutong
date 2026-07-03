@@ -9,10 +9,6 @@ import {
   SESSION_RADAR_READ_STATE_KEY,
   SESSION_RADAR_RECENT_STORAGE_KEY,
 } from "../utils/sessionRadarPersistence";
-import {
-  resolveSessionRadarTickMs,
-  shouldPauseSessionRadarTick,
-} from "../utils/performanceCompatibility";
 
 const DEFAULT_RUNNING_LIMIT = 12;
 const DEFAULT_RECENT_LIMIT = Number.POSITIVE_INFINITY;
@@ -462,9 +458,12 @@ export function buildSessionRadarFeed(input: BuildSessionRadarFeedInput): Sessio
 type UseSessionRadarFeedInput = Omit<BuildSessionRadarFeedInput, "now"> & {
   runningLimit?: number;
   recentLimit?: number;
-  performanceCompatibilityModeEnabled?: boolean;
 };
 
+// 刻意没有秒级时钟:曾经这里有一个"回合进行中每秒 setClockNow"的 interval,而该 state
+// 挂在 app-shell 根上,等于回合期间每秒强制整个 app-shell 重渲染一次(~200ms,1Hz 卡顿
+// 主因);且运行中条目的实时时长没有任何 UI 消费(雷达面板只显示已完成条目的时长)。
+// durationMs 只在 feed 因真实输入变化重建时刷新。
 export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRadarFeed {
   const {
     workspaces,
@@ -474,55 +473,12 @@ export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRad
     lastAgentMessageByThread,
     runningLimit,
     recentLimit,
-    performanceCompatibilityModeEnabled = false,
   } = input;
   const resolvedRecentLimit = recentLimit ?? DEFAULT_RECENT_LIMIT;
-  const [clockNow, setClockNow] = useState(() => Date.now());
   const [recentHistorySnapshot, setRecentHistorySnapshot] = useState<RecentHistorySnapshot>(() =>
     readRecentHistorySnapshot(),
   );
   const cachedLiveThreadEntriesRef = useRef<Record<string, CachedLiveThreadEntry>>({});
-  const hasRunningThread = useMemo(
-    () => Object.values(threadStatusById).some((status) => Boolean(status?.isProcessing)),
-    [threadStatusById],
-  );
-
-  useEffect(() => {
-    if (!hasRunningThread) {
-      return;
-    }
-
-    const tickMs = resolveSessionRadarTickMs(performanceCompatibilityModeEnabled);
-    const updateClockIfVisible = () => {
-      if (
-        typeof document !== "undefined" &&
-        shouldPauseSessionRadarTick(
-          performanceCompatibilityModeEnabled,
-          document.visibilityState,
-        )
-      ) {
-        return;
-      }
-      setClockNow(Date.now());
-    };
-    const handleVisibilityChange = () => {
-      updateClockIfVisible();
-    };
-
-    setClockNow(Date.now());
-    const timerId = window.setInterval(() => {
-      updateClockIfVisible();
-    }, tickMs);
-    if (performanceCompatibilityModeEnabled && typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-    }
-    return () => {
-      window.clearInterval(timerId);
-      if (performanceCompatibilityModeEnabled && typeof document !== "undefined") {
-        document.removeEventListener("visibilitychange", handleVisibilityChange);
-      }
-    };
-  }, [hasRunningThread, performanceCompatibilityModeEnabled]);
 
   const liveFeed = useMemo(
     () => {
@@ -539,7 +495,7 @@ export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRad
         });
       }
 
-      const now = Math.max(clockNow, Date.now());
+      const now = Date.now();
       const runningSessions: SessionRadarEntry[] = [];
       const runningCountByWorkspaceId: Record<string, number> = {};
       const recentCountByWorkspaceId: Record<string, number> = {};
@@ -622,7 +578,6 @@ export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRad
       threadStatusById,
       threadsByWorkspace,
       workspaces,
-      clockNow,
     ],
   );
 
@@ -671,6 +626,7 @@ export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRad
     workspaces,
   ]);
 
+  const lastPersistedRecentSignatureRef = useRef<string | null>(null);
   useEffect(() => {
     const persistedRecentRefs: PersistedRecentSessionRef[] =
       mergedRecentFeed.recentCompletedSessions.map((entry) => ({
@@ -686,6 +642,15 @@ export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRad
         completedAt: entry.completedAt ?? entry.updatedAt,
         durationMs: entry.durationMs,
       }));
+    // The recentCompletedSessions reference churns on every deferred settle while a turn
+    // streams, but its persisted content rarely changes mid-stream. Skip the redundant
+    // immediate disk writes (which bypass the 300ms debounce and contend with streaming IPC)
+    // when the serialized content is unchanged.
+    const persistedRecentSignature = JSON.stringify(persistedRecentRefs);
+    if (persistedRecentSignature === lastPersistedRecentSignatureRef.current) {
+      return;
+    }
+    lastPersistedRecentSignatureRef.current = persistedRecentSignature;
     writeClientStoreValue(RADAR_STORE_NAME, SESSION_RADAR_RECENT_STORAGE_KEY, persistedRecentRefs, {
       immediate: true,
     });

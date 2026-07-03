@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import CheckIcon from 'lucide-react/dist/esm/icons/check';
 import { REASONING_LEVELS, type ReasoningEffort } from '../types';
@@ -30,7 +30,7 @@ interface ReasoningSelectProps {
  * ReasoningSelect - runtime reasoning effort selector.
  * Controls the depth of reasoning for engines that expose an effort option.
  */
-export const ReasoningSelect = ({
+export const ReasoningSelect = memo(({
   value,
   onChange,
   options,
@@ -216,6 +216,6 @@ export const ReasoningSelect = ({
       </DropdownMenu>
     </div>
   );
-};
+});
 
 export default ReasoningSelect;

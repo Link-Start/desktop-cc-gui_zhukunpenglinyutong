@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type MutableRefObject,
   type ReactNode,
   type RefObject,
@@ -40,6 +41,13 @@ import {
   WorkingIndicator,
 } from "./MessagesRows";
 import { ConversationRowErrorBoundary } from "./ConversationRowErrorBoundary";
+import { MessagesOutlineFloater } from "./MessagesOutlineFloater";
+import type { MarkdownOutlineEntry } from "../../markdown/fastMarkdownRenderer";
+import { useMessageOutlineActive } from "../hooks/useMessageOutlineActive";
+import {
+  resolveNextMessageOutlineSnapshot,
+  type MessageOutlineSnapshot,
+} from "./messagesOutlineState";
 import { appendRendererDiagnostic } from "../../../services/rendererDiagnostics";
 import { parseReasoning } from "./messagesReasoning";
 import type { RuntimeReconnectRecoveryCallbackResult } from "./runtimeReconnect";
@@ -75,6 +83,7 @@ import {
   getTimelineVirtualizationThresholdReason,
   isEmptyVirtualProjectionRow,
   observeTimelineElementOffset,
+  remeasureTimelineVirtualizerRows,
   resolveTimelineCanvasOverscan,
   resolveTimelineVirtualizerStabilityRecovery,
   TIMELINE_LIGHTWEIGHT_ROW_PLACEHOLDER_HEIGHT,
@@ -322,6 +331,34 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   workspaceId,
 }: MessagesTimelineProps) {
   const { t } = useTranslation();
+  const [currentOutline, setCurrentOutline] = useState<MessageOutlineSnapshot | null>(null);
+  const handleLiveOutlineReady = useCallback(
+    (snapshot: MessageOutlineSnapshot) => {
+      setCurrentOutline((previous) =>
+        resolveNextMessageOutlineSnapshot(previous, snapshot),
+      );
+    },
+    [],
+  );
+  const liveAssistantOutlineReady = useMemo(() => {
+    if (!liveAssistantMessageId) {
+      return undefined;
+    }
+    return (outline: MarkdownOutlineEntry[]) => {
+      handleLiveOutlineReady({
+        messageId: liveAssistantMessageId,
+        outline,
+      });
+    };
+  }, [handleLiveOutlineReady, liveAssistantMessageId]);
+  const floaterContainerRef = useRef<HTMLDivElement | null>(null);
+  const { activeHeadingId } = useMessageOutlineActive(
+    currentOutline?.outline ?? null,
+    floaterContainerRef,
+  );
+  useEffect(() => {
+    setCurrentOutline(null);
+  }, [threadId, workspaceId]);
   const timelineStabilityRecoveryBudgetRef = useRef(
     DEFAULT_TIMELINE_VIRTUALIZER_STABILITY_RECOVERY_BUDGET,
   );
@@ -904,7 +941,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           timelineVirtualizer.resizeItem(index, TIMELINE_LIGHTWEIGHT_ROW_PLACEHOLDER_HEIGHT);
         }
       });
-      timelineVirtualizer.measure();
+      remeasureTimelineVirtualizerRows(timelineVirtualizer);
     });
   }, [
     lightweightTimelineRowSignature,
@@ -940,7 +977,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     }
     liveRowRemeasureRafRef.current = window.requestAnimationFrame(() => {
       liveRowRemeasureRafRef.current = null;
-      timelineVirtualizer.measure();
+      remeasureTimelineVirtualizerRows(timelineVirtualizer);
     });
   }, [
     activeLiveTimelineRowKeys.length,
@@ -972,7 +1009,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       }
       hydrationRemeasureRafRef.current = window.requestAnimationFrame(() => {
         hydrationRemeasureRafRef.current = null;
-        timelineVirtualizer.measure();
+        remeasureTimelineVirtualizerRows(timelineVirtualizer);
       });
     }
     if (!recovery.shouldDiagnose) {
@@ -1132,11 +1169,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       scrollElement.scrollTo({ top: 0, behavior: "auto" });
     }
     if (typeof window === "undefined") {
-      timelineVirtualizer.measure();
+      remeasureTimelineVirtualizerRows(timelineVirtualizer);
       return undefined;
     }
     const raf = window.requestAnimationFrame(() => {
-      timelineVirtualizer.measure();
+      remeasureTimelineVirtualizerRows(timelineVirtualizer);
     });
     return () => {
       window.cancelAnimationFrame(raf);
@@ -1188,7 +1225,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     });
     timelineStabilityRecoveryBudgetRef.current = recovery.nextBudget;
     if (recovery.shouldRemeasure) {
-      timelineVirtualizer.measure();
+      remeasureTimelineVirtualizerRows(timelineVirtualizer);
     }
     if (!recovery.shouldDiagnose) {
       return;
@@ -1223,6 +1260,23 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     virtualTimelineRowKeys,
     workspaceId,
   ]);
+
+  // MessageRow 的 memo 比较器按引用比对 userActionNode；若每次时间线渲染都新建
+  // 元素，所有用户行都会被打穿并真实重渲染（流式期间每个 token 一次）。按行缓存
+  // 元素，仅在影响输出的输入（item 引用 / 复制文案 / 已复制态 / 语言）变化时重建。
+  const userActionNodeCacheRef = useRef(
+    new Map<
+      string,
+      {
+        item: ConversationItem;
+        copyText: string;
+        isCopied: boolean;
+        translate: typeof t;
+        node: ReactNode;
+      }
+    >(),
+  );
+  const USER_ACTION_NODE_CACHE_LIMIT = 500;
 
   const renderSingleItem = (item: ConversationItem) => {
     const renderItem = resolveLiveRenderItem(
@@ -1328,7 +1382,18 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         if (!shouldRenderUserActions) {
           return null;
         }
-        return (
+        const cache = userActionNodeCacheRef.current;
+        const cached = cache.get(renderItem.id);
+        if (
+          cached &&
+          cached.item === renderItem &&
+          cached.copyText === userCopyText &&
+          cached.isCopied === isCopied &&
+          cached.translate === t
+        ) {
+          return cached.node;
+        }
+        const node = (
           <div
             className="message-action-bar message-user-bubble-actions"
             aria-label={t("messages.messageActions")}
@@ -1347,6 +1412,17 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             </button>
           </div>
         );
+        if (cache.size >= USER_ACTION_NODE_CACHE_LIMIT) {
+          cache.clear();
+        }
+        cache.set(renderItem.id, {
+          item: renderItem,
+          copyText: userCopyText,
+          isCopied,
+          translate: t,
+          node,
+        });
+        return node;
       };
       const bindMessageNode = (node: HTMLDivElement | null) => {
         if (renderItem.role === "user" && node) {
@@ -1419,6 +1495,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               onAssistantVisibleTextRender={onAssistantVisibleTextRender}
               suppressMemorySummaryCard={suppressedUserMemoryContextMessageIds.has(renderItem.id)}
               suppressNoteCardSummaryCard={suppressedUserNoteCardContextMessageIds.has(renderItem.id)}
+              onOutlineReady={
+                renderItem.role === "assistant" && renderItem.id === liveAssistantMessageId
+                  ? liveAssistantOutlineReady
+                  : undefined
+              }
             />
           </div>
           {shouldRenderFinalBoundary && (
@@ -1896,6 +1977,12 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       <Fragment key={row.key}>{renderProjectionRowWithBoundary(row)}</Fragment>
     ));
 
+  const handleJumpToHeading = (headingId: string) => {
+    const target = document.getElementById(headingId);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
   const shouldShowConversationLightweightPrompt =
     !isThinking &&
     !isWorking &&
@@ -1950,6 +2037,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
   return (
     <div
+      ref={floaterContainerRef}
       className="messages-timeline-root"
       data-timeline-static-expanded-history={
         shouldUseStaticExpandedHistoryFlow ? "true" : undefined
@@ -1960,6 +2048,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       data-timeline-presentation-mode={presentationMode}
       data-timeline-presentation-scope={presentationScopeKey}
     >
+      <MessagesOutlineFloater
+        outline={currentOutline?.outline ?? null}
+        activeHeadingId={activeHeadingId}
+        onJumpToHeading={handleJumpToHeading}
+      />
       <div
         className="messages-full"
         data-timeline-projection-row-count={timelineProjectionRows.length}

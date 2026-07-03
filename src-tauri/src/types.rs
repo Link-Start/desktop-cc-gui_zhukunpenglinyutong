@@ -1019,6 +1019,10 @@ pub(crate) struct AppSettings {
     pub(crate) last_composer_model_id: Option<String>,
     #[serde(default, rename = "lastComposerReasoningEffort")]
     pub(crate) last_composer_reasoning_effort: Option<String>,
+    // Frontend-owned per-engine composer preferences; stored as opaque JSON so
+    // new frontend fields survive the save/echo round-trip without backend changes.
+    #[serde(default, rename = "lastComposerPrefsByEngine")]
+    pub(crate) last_composer_prefs_by_engine: Option<serde_json::Value>,
     #[serde(default = "default_ui_scale", rename = "uiScale")]
     pub(crate) ui_scale: f64,
     #[serde(default = "default_theme", rename = "theme")]
@@ -1746,6 +1750,7 @@ impl Default for AppSettings {
             cycle_workspace_prev_shortcut: default_cycle_workspace_prev_shortcut(),
             last_composer_model_id: None,
             last_composer_reasoning_effort: None,
+            last_composer_prefs_by_engine: None,
             ui_scale: 1.0,
             theme: default_theme(),
             light_theme_preset_id: default_light_theme_preset_id(),
@@ -1882,6 +1887,36 @@ mod tests {
         AppSettings, BackendMode, EmailSenderProvider, EmailSenderSecurity, WorkspaceEntry,
         WorkspaceGroup, WorkspaceKind, WorkspaceSessionAttributionMode, WorkspaceSettings,
     };
+
+    #[test]
+    fn app_settings_round_trips_last_composer_prefs_by_engine() {
+        let raw = r#"{
+            "lastComposerPrefsByEngine": {
+                "claude": {
+                    "modelId": "claude-opus-4-8",
+                    "effort": null,
+                    "accessMode": "full-access",
+                    "collaborationModeId": "code"
+                }
+            }
+        }"#;
+        let settings: AppSettings = serde_json::from_str(raw).expect("settings deserialize");
+        let prefs = settings
+            .last_composer_prefs_by_engine
+            .as_ref()
+            .expect("prefs preserved");
+        assert_eq!(
+            prefs["claude"]["accessMode"],
+            serde_json::Value::String("full-access".to_string())
+        );
+
+        let echoed = serde_json::to_string(&settings).expect("settings serialize");
+        let reparsed: AppSettings = serde_json::from_str(&echoed).expect("echo deserialize");
+        assert_eq!(
+            reparsed.last_composer_prefs_by_engine,
+            settings.last_composer_prefs_by_engine
+        );
+    }
 
     #[test]
     fn app_settings_defaults_from_empty_json() {

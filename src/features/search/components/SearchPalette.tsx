@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import projectIconUrl from "../../../../icon.png";
 import { isComposingEvent } from "../../../utils/keys";
@@ -7,6 +7,8 @@ import { useFeatureStylesReady } from "../../../styles/useFeatureStylesReady";
 import type { SearchContentFilter, SearchResult, SearchScope } from "../types";
 
 const INVISIBLE_QUERY_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g;
+// Debounce before the typed query reaches the app-shell root (see commitQuery below).
+const SEARCH_QUERY_DEBOUNCE_MS = 150;
 
 function sanitizeSearchQueryInput(value: string): string {
   return value.replace(INVISIBLE_QUERY_CHARS_REGEX, "");
@@ -48,6 +50,63 @@ export function SearchPalette({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const isComposingRef = useRef(false);
   const lastCompositionEndAtRef = useRef(0);
+
+  // The query is debounced before it reaches the app-shell root: typing updates only this
+  // local input (a leaf re-render), while the committed query — which drives the root-level
+  // results compute and a whole-app re-render — is pushed at most once per debounce window.
+  // Without this, every keystroke re-rendered the entire app-shell (single-digit FPS).
+  const [inputValue, setInputValue] = useState(query);
+  const lastPushedQueryRef = useRef(query);
+  const queryCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // External query changes (open/close reset, programmatic clear) override local input.
+  useEffect(() => {
+    if (query !== lastPushedQueryRef.current) {
+      lastPushedQueryRef.current = query;
+      setInputValue(query);
+    }
+  }, [query]);
+
+  const commitQuery = useCallback(
+    (value: string) => {
+      setInputValue(value);
+      if (queryCommitTimerRef.current) {
+        clearTimeout(queryCommitTimerRef.current);
+      }
+      queryCommitTimerRef.current = setTimeout(() => {
+        queryCommitTimerRef.current = null;
+        lastPushedQueryRef.current = value;
+        onQueryChange(value);
+      }, SEARCH_QUERY_DEBOUNCE_MS);
+    },
+    [onQueryChange],
+  );
+
+  // IME composition end yields final text — commit it immediately (no debounce), both for
+  // correct CJK input and because the committed word is the meaningful search trigger.
+  const flushQuery = useCallback(
+    (value: string) => {
+      if (queryCommitTimerRef.current) {
+        clearTimeout(queryCommitTimerRef.current);
+        queryCommitTimerRef.current = null;
+      }
+      setInputValue(value);
+      lastPushedQueryRef.current = value;
+      onQueryChange(value);
+    },
+    [onQueryChange],
+  );
+
+  // Cancel a pending commit once the palette closes so it can't fire after the reset.
+  useEffect(() => {
+    if (isOpen) {
+      return;
+    }
+    if (queryCommitTimerRef.current) {
+      clearTimeout(queryCommitTimerRef.current);
+      queryCommitTimerRef.current = null;
+    }
+  }, [isOpen]);
   const badgeLabelByKind: Record<SearchResult["kind"], string> = {
     file: t("searchPalette.typeFile"),
     kanban: t("searchPalette.typeKanban"),
@@ -159,15 +218,15 @@ export function SearchPalette({
             className="search-palette-input"
             placeholder={placeholderText}
             aria-label={t("searchPalette.inputAria")}
-            value={query}
-            onChange={(event) => onQueryChange(sanitizeSearchQueryInput(event.target.value))}
+            value={inputValue}
+            onChange={(event) => commitQuery(sanitizeSearchQueryInput(event.target.value))}
             onCompositionStart={() => {
               isComposingRef.current = true;
             }}
             onCompositionEnd={(event) => {
               isComposingRef.current = false;
               lastCompositionEndAtRef.current = Date.now();
-              onQueryChange(sanitizeSearchQueryInput(event.currentTarget.value));
+              flushQuery(sanitizeSearchQueryInput(event.currentTarget.value));
             }}
           />
           <span className="search-palette-project-icon-box" aria-hidden="true">

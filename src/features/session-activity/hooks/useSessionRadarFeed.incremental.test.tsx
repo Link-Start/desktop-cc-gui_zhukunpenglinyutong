@@ -166,7 +166,9 @@ describe("useSessionRadarFeed incremental refresh", () => {
     vi.useRealTimers();
   });
 
-  it("updates running duration every second even without external rerender", () => {
+  // 回归守护(2026-07-02 1Hz 卡顿修复):hook 内部不得再有任何自驱动时钟。曾经的
+  // "回合进行中每秒 setClockNow" 挂在 app-shell 根,等于回合期间每秒强制全树重渲染。
+  it("does not self-rerender on timers while a thread is running", () => {
     vi.useFakeTimers();
     const now = 100_000;
     vi.setSystemTime(now);
@@ -178,133 +180,37 @@ describe("useSessionRadarFeed incremental refresh", () => {
     const threadItemsByThread = {
       "thread-1": [userMessage("user-1", "hello 1")],
     };
+    const threadStatusById = {
+      "thread-1": { isProcessing: true, processingStartedAt: now - 5_000 },
+    };
+    const lastAgentMessageByThread = {
+      "thread-1": { text: "agent-1", timestamp: now - 3_000 },
+    };
 
-    const { result } = renderHook(() =>
-      useSessionRadarFeed({
+    let renderCount = 0;
+    const { result } = renderHook(() => {
+      renderCount += 1;
+      return useSessionRadarFeed({
         workspaces: [workspace],
         threadsByWorkspace,
-        threadStatusById: {
-          "thread-1": { isProcessing: true, processingStartedAt: now - 5_000 },
-        },
+        threadStatusById,
         threadItemsByThread,
-        lastAgentMessageByThread: {
-          "thread-1": { text: "agent-1", timestamp: now - 3_000 },
-        },
-      }),
-    );
+        lastAgentMessageByThread,
+      });
+    });
 
-    const firstEntry = result.current.runningSessions[0];
-    expect(firstEntry?.durationMs).toBe(5_000);
+    const firstFeed = result.current;
+    expect(firstFeed.runningSessions[0]?.durationMs).toBe(5_000);
+    const renderCountAfterMount = renderCount;
 
     act(() => {
-      vi.advanceTimersByTime(2_000);
+      vi.advanceTimersByTime(10_000);
     });
 
-    const secondEntry = result.current.runningSessions[0];
-    expect(secondEntry).not.toBe(firstEntry);
-    expect(secondEntry?.durationMs).toBe(7_000);
+    expect(renderCount).toBe(renderCountAfterMount);
+    expect(result.current).toBe(firstFeed);
+    expect(result.current.runningSessions[0]?.durationMs).toBe(5_000);
 
-    vi.useRealTimers();
-  });
-
-  it("uses a slower visible tick when compatibility mode is enabled", () => {
-    vi.useFakeTimers();
-    const now = 100_000;
-    vi.setSystemTime(now);
-
-    const workspace = createWorkspace("ws-main", "Workspace Main");
-    const threadsByWorkspace = {
-      [workspace.id]: [createThread("thread-1", "Thread 1", now - 1000)],
-    };
-    const threadItemsByThread = {
-      "thread-1": [userMessage("user-1", "hello 1")],
-    };
-
-    const { result } = renderHook(() =>
-      useSessionRadarFeed({
-        workspaces: [workspace],
-        threadsByWorkspace,
-        threadStatusById: {
-          "thread-1": { isProcessing: true, processingStartedAt: now - 5_000 },
-        },
-        threadItemsByThread,
-        lastAgentMessageByThread: {
-          "thread-1": { text: "agent-1", timestamp: now - 3_000 },
-        },
-        performanceCompatibilityModeEnabled: true,
-      }),
-    );
-
-    const firstEntry = result.current.runningSessions[0];
-    expect(firstEntry?.durationMs).toBe(5_000);
-
-    act(() => {
-      vi.advanceTimersByTime(2_000);
-    });
-    expect(result.current.runningSessions[0]).toBe(firstEntry);
-
-    act(() => {
-      vi.advanceTimersByTime(3_000);
-    });
-    expect(result.current.runningSessions[0]).not.toBe(firstEntry);
-    expect(result.current.runningSessions[0]?.durationMs).toBe(10_000);
-
-    vi.useRealTimers();
-  });
-
-  it("pauses compatibility ticks while the document is hidden and resumes when visible", () => {
-    vi.useFakeTimers();
-    const now = 100_000;
-    vi.setSystemTime(now);
-    Object.defineProperty(document, "visibilityState", {
-      configurable: true,
-      value: "hidden",
-    });
-
-    const workspace = createWorkspace("ws-main", "Workspace Main");
-    const threadsByWorkspace = {
-      [workspace.id]: [createThread("thread-1", "Thread 1", now - 1000)],
-    };
-    const threadItemsByThread = {
-      "thread-1": [userMessage("user-1", "hello 1")],
-    };
-
-    const { result } = renderHook(() =>
-      useSessionRadarFeed({
-        workspaces: [workspace],
-        threadsByWorkspace,
-        threadStatusById: {
-          "thread-1": { isProcessing: true, processingStartedAt: now - 5_000 },
-        },
-        threadItemsByThread,
-        lastAgentMessageByThread: {
-          "thread-1": { text: "agent-1", timestamp: now - 3_000 },
-        },
-        performanceCompatibilityModeEnabled: true,
-      }),
-    );
-
-    const firstEntry = result.current.runningSessions[0];
-    act(() => {
-      vi.advanceTimersByTime(6_000);
-    });
-    expect(result.current.runningSessions[0]).toBe(firstEntry);
-
-    Object.defineProperty(document, "visibilityState", {
-      configurable: true,
-      value: "visible",
-    });
-    act(() => {
-      document.dispatchEvent(new Event("visibilitychange"));
-    });
-
-    expect(result.current.runningSessions[0]).not.toBe(firstEntry);
-    expect(result.current.runningSessions[0]?.durationMs).toBe(11_000);
-
-    Object.defineProperty(document, "visibilityState", {
-      configurable: true,
-      value: "visible",
-    });
     vi.useRealTimers();
   });
 

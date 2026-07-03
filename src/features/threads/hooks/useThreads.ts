@@ -909,6 +909,7 @@ export function useThreads({
   } = useThreadActions({
     dispatch,
     itemsByThread: state.itemsByThread,
+    tokenUsageByThread: state.tokenUsageByThread,
     userInputRequests: state.userInputRequests,
     threadsByWorkspace: state.threadsByWorkspace,
     activeThreadIdByWorkspace: state.activeThreadIdByWorkspace,
@@ -2530,6 +2531,8 @@ export function useThreads({
     resolvePendingThreadForTurn,
     getActiveTurnIdForThread: (threadId: string) =>
       state.activeTurnIdByThread[threadId] ?? null,
+    hasEstablishedThreadItems: (threadId: string) =>
+      (state.itemsByThread[threadId]?.length ?? 0) > 0,
     renamePendingMemoryCaptureKey,
     onAgentMessageCompletedExternal: handleAgentMessageCompletedForMemory,
     onTurnCompletedExternal: (payload) => {

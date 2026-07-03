@@ -7,7 +7,9 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 // Preserves readable React component names in production bundles so the bundled
 // react-scan overlay can attribute renders to real names (e.g. MessagesTimeline)
-// instead of minified identifiers. Build-only: dev already keeps names, tests skip it.
+// instead of minified identifiers. It suppresses name minification and inflates
+// the bundle, so it is opt-in: only profiling builds (VITE_ENABLE_REACT_SCAN=1)
+// pay for it; regular release builds ship fully minified names.
 import reactComponentName from "react-scan/react-component-name/vite";
 
 // @ts-expect-error process is a nodejs global
@@ -24,7 +26,9 @@ const packageJson = JSON.parse(
 export default defineConfig(({ command }) => ({
   plugins: [
     react(),
-    ...(command === "build" ? [reactComponentName({}) as PluginOption] : []),
+    ...(command === "build" && process.env.VITE_ENABLE_REACT_SCAN === "1"
+      ? [reactComponentName({}) as PluginOption]
+      : []),
     tailwindcss(),
   ],
   resolve: {
@@ -51,6 +55,12 @@ export default defineConfig(({ command }) => ({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // Vite/Rollup 的共享 helper 虚拟模块不带 node_modules 路径，默认并进
+          // 「首个使用者」chunk；一旦落进 vendor-mermaid / vendor-docs，入口会静态
+          // 依赖这些重 chunk，把懒加载全部击穿。钉进常驻小 chunk（不要用 \0 全量
+          // 兜底：commonjs 代理模块也带 \0 前缀，会把真实代码扫进来并造成循环 chunk）。
+          if (id === "\0vite/preload-helper.js" || id === "\0commonjsHelpers.js")
+            return "vendor-shared";
           if (!id.includes("node_modules")) return;
           if (id.includes("/react-dom/") || /\/react\//.test(id) || id.includes("scheduler"))
             return "vendor-react";
@@ -61,6 +71,9 @@ export default defineConfig(({ command }) => ({
               id.includes("mdast-") || id.includes("hast-") || id.includes("unist-") ||
               id.includes("remark-") || id.includes("rehype-"))
             return "vendor-markdown";
+          // dompurify 被启动路径静态引用，又被 mermaid 依赖；不单独分包时 Rollup 会把
+          // 它并进 vendor-mermaid，导致 2.3MB 的 mermaid 变成启动即加载。
+          if (id.includes("/dompurify/")) return "vendor-sanitize";
           if (id.includes("/mermaid/")) return "vendor-mermaid";
           if (id.includes("/viewerjs/") || id.includes("/viewerjs-")) return "vendor-mermaid";
           if (id.includes("/pdfjs-dist/") || id.includes("/mammoth/") || id.includes("/xlsx/"))

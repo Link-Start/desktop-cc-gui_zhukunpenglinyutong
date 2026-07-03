@@ -13,7 +13,6 @@ import Bot from "lucide-react/dist/esm/icons/bot";
 import FileEdit from "lucide-react/dist/esm/icons/file-edit";
 import ListChecks from "lucide-react/dist/esm/icons/list-checks";
 import ListTodo from "lucide-react/dist/esm/icons/list-todo";
-import MessageSquareQuote from "lucide-react/dist/esm/icons/message-square-quote";
 import type { LucideIcon } from "lucide-react";
 import type { ConversationItem, GitFileStatus, TurnPlan } from "../../../types";
 import type { EngineType, ThreadTokenUsage } from "../../../types";
@@ -35,8 +34,6 @@ import type { CodeAnnotationBridgeProps } from "../../code-annotations/types";
 import { PlanList } from "./PlanList";
 import { SubagentList } from "./SubagentList";
 import { TodoList } from "./TodoList";
-import { UserConversationTimelinePanel } from "./UserConversationTimelinePanel";
-import { resolveUserConversationTimeline } from "../utils/userConversationTimeline";
 import { CostBudgetSection } from "./CostBudgetSection";
 import { GovernanceEvidenceSection } from "./GovernanceEvidenceSection";
 import { projectCostRecord } from "../../context-ledger/cost-budget";
@@ -77,7 +74,6 @@ interface StatusPanelProps extends CodeAnnotationBridgeProps {
   onOpenDiffPath?: (path: string) => void;
   onOpenFilePath?: (path: string) => void;
   onSelectSubagent?: (agent: SubagentInfo) => void;
-  onJumpToConversationMessage?: (messageId: string) => void;
   variant?: "popover" | "dock";
   visibleDockTabs?: Partial<Record<TabType, boolean>>;
   onRefreshGitStatus?: (() => void) | null;
@@ -111,7 +107,6 @@ type StatusPanelTabDefinition = {
 };
 
 const DOCK_TAB_ORDER: readonly TabType[] = [
-  "latestUserMessage",
   "todo",
   "subagent",
   "checkpoint",
@@ -202,7 +197,6 @@ export const StatusPanel = memo(function StatusPanel({
   onOpenDiffPath,
   onOpenFilePath,
   onSelectSubagent,
-  onJumpToConversationMessage,
   variant = "popover",
   visibleDockTabs,
   onRefreshGitStatus = null,
@@ -288,13 +282,6 @@ export const StatusPanel = memo(function StatusPanel({
   const codexTaskInProgress = codexTaskItems.some(
     (item) => item.status === "in_progress",
   );
-  const userConversationTimeline = useMemo(
-    () =>
-      resolveUserConversationTimeline(effectiveItems, {
-        enableCollaborationBadge: isCodexEngine,
-      }),
-    [effectiveItems, isCodexEngine],
-  );
   const workspaceFileChanges = useMemo<FileChangeSummary[]>(() => {
     const diffByPath = new Map(
       (workspaceGitDiffs ?? []).map((entry) => [entry.path, entry.diff]),
@@ -332,7 +319,6 @@ export const StatusPanel = memo(function StatusPanel({
   const shouldShowPlanTab = showPlanTab && hasTabData(planCompleted, planTotal);
   const dockTabAvailability = useMemo<Partial<Record<TabType, boolean>>>(
     () => ({
-      latestUserMessage: true,
       todo: shouldShowTodoTab,
       subagent: shouldShowSubagentTab,
       checkpoint: true,
@@ -558,25 +544,6 @@ export const StatusPanel = memo(function StatusPanel({
 
   const tabDefinitions = useMemo<Record<TabType, StatusPanelTabDefinition>>(
     () => ({
-      latestUserMessage: {
-        tab: "latestUserMessage",
-        labelKey: "statusPanel.tabLatestUserMessage",
-        icon: MessageSquareQuote,
-        visible:
-          variant === "dock" &&
-          isDockTabVisible(
-            variant,
-            "latestUserMessage",
-            showPlanTab,
-            visibleDockTabs,
-            dockTabAvailability,
-          ),
-        badge: (
-          <span className="sp-tab-count">
-            {userConversationTimeline.items.length}
-          </span>
-        ),
-      },
       todo: {
         tab: "todo",
         labelKey: "statusPanel.tabTodos",
@@ -695,7 +662,6 @@ export const StatusPanel = memo(function StatusPanel({
       t,
       todoCompleted,
       todoTotal,
-      userConversationTimeline.items.length,
       usePlanAsTaskList,
       variant,
       visibleDockTabs,
@@ -803,12 +769,6 @@ export const StatusPanel = memo(function StatusPanel({
             }}
           />
         </>
-      )}
-      {activeTab === "latestUserMessage" && variant === "dock" && (
-        <UserConversationTimelinePanel
-          timeline={userConversationTimeline}
-          onJumpToMessage={onJumpToConversationMessage}
-        />
       )}
       {activeTab === "plan" && (
         <PlanList

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ComposerEditorSettings } from "../../../types";
+import { setComposerDraft } from "../hooks/composerDraftStore";
 import { Composer } from "./Composer";
 
 vi.mock("../../../services/dragDrop", () => ({
@@ -84,7 +85,6 @@ type HarnessProps = {
 };
 
 function ComposerHarness({
-  initialText = "",
   selectedEngine = "claude",
   commands = [],
   attachedImages = [],
@@ -127,7 +127,6 @@ function ComposerHarness({
       prompts={[]}
       commands={commands}
       files={[]}
-      draftText={initialText}
       onDraftChange={() => {}}
       attachedImages={attachedImages}
       dictationEnabled={false}
@@ -148,6 +147,9 @@ function renderComposerHarness(props: HarnessProps): RenderedHarness {
   document.body.appendChild(container);
   const root = createRoot(container);
 
+  // Composer 改为从 composerDraftStore 订阅草稿,初始文本经 store 注入
+  // (harness 固定 activeThreadId="thread-1")。
+  setComposerDraft("thread-1", props.initialText ?? "");
   act(() => {
     root.render(<ComposerHarness {...props} />);
   });

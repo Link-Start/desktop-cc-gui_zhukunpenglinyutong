@@ -47,8 +47,7 @@ export type TabType =
   | "subagent"
   | "checkpoint"
   | "plan"
-  | "command"
-  | "latestUserMessage";
+  | "command";
 
 export type CheckpointVerdict = "running" | "blocked" | "needs_review" | "ready";
 

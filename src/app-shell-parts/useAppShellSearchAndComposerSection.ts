@@ -49,13 +49,13 @@ function isNonEmptyString(value: unknown): value is string {
 
 export const COMPOSER_SEARCH_BOUNDARY_FIELD_GROUPS = {
   searchPalette: [
-    "activeDraft",
     "activeEditorFilePath",
     "activeWorkspaceId",
     "appSettings",
     "canInterrupt",
     "centerMode",
     "exitDiffView",
+    "getActiveDraft",
     "handleDraftChange",
     "handleOpenFile",
     "interruptTurn",
@@ -105,7 +105,6 @@ export const COMPOSER_SEARCH_BOUNDARY_FIELD_GROUPS = {
 } as const;
 
 export type SearchPaletteBoundary = {
-  activeDraft: string;
   activeEditorFilePath: string | null | undefined;
   activeWorkspaceId: string | null;
   appSettings: Pick<
@@ -115,6 +114,7 @@ export type SearchPaletteBoundary = {
   canInterrupt: boolean;
   centerMode: CenterMode;
   exitDiffView: () => void;
+  getActiveDraft: () => string;
   handleDraftChange: (draft: string) => void;
   handleOpenFile: (filePath: string) => void;
   interruptTurn: () => Promise<unknown> | unknown;
@@ -203,7 +203,6 @@ export function useAppShellSearchAndComposerSection(
   input: ComposerSearchShellBoundary,
 ) {
   const {
-    activeDraft,
     activeEditorFilePath,
     activeWorkspace,
     activeWorkspaceId,
@@ -214,6 +213,7 @@ export function useAppShellSearchAndComposerSection(
     connectWorkspace,
     exitDiffView,
     filePanelMode,
+    getActiveDraft,
     gitPanelMode,
     gitPullRequestDiffs,
     handleDraftChange,
@@ -414,8 +414,9 @@ export function useAppShellSearchAndComposerSection(
         case "skill":
           if (result.skillName) {
             const slashToken = `/${result.skillName}`;
-            const nextDraft = activeDraft.trim()
-              ? `${activeDraft.trim()} ${slashToken} `
+            const currentDraft = getActiveDraft().trim();
+            const nextDraft = currentDraft
+              ? `${currentDraft} ${slashToken} `
               : `${slashToken} `;
             handleDraftChange(nextDraft);
             if (isCompact) {
@@ -426,8 +427,9 @@ export function useAppShellSearchAndComposerSection(
         case "command":
           if (result.commandName) {
             const slashToken = `/${result.commandName}`;
-            const nextDraft = activeDraft.trim()
-              ? `${activeDraft.trim()} ${slashToken} `
+            const currentDraft = getActiveDraft().trim();
+            const nextDraft = currentDraft
+              ? `${currentDraft} ${slashToken} `
               : `${slashToken} `;
             handleDraftChange(nextDraft);
             if (isCompact) {
@@ -447,9 +449,9 @@ export function useAppShellSearchAndComposerSection(
       centerMode,
       closeSearchPalette,
       exitDiffView,
+      getActiveDraft,
       handleDraftChange,
       handleOpenFile,
-      activeDraft,
       isCompact,
       kanbanTasks,
       workspacesByPath,

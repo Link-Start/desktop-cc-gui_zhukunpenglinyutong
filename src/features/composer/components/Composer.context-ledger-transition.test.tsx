@@ -111,7 +111,6 @@ function renderComposer({
       prompts={[]}
       commands={[]}
       files={[]}
-      draftText=""
       onDraftChange={() => {}}
       dictationEnabled={false}
       activeWorkspaceId="ws-1"
@@ -167,7 +166,6 @@ describe("Composer context ledger transitions", () => {
         prompts={[]}
         commands={[]}
         files={[]}
-        draftText=""
         onDraftChange={() => {}}
         dictationEnabled={false}
         activeWorkspaceId="ws-1"

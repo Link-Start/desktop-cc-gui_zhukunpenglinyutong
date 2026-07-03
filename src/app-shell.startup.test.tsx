@@ -1152,7 +1152,7 @@ vi.mock("./features/app/hooks/useComposerController", () => ({
     setPrefillDraft: createNoopFunction(),
     composerInsert: null,
     setComposerInsert: createNoopFunction(),
-    activeDraft: "",
+    getActiveDraft: () => "",
     handleDraftChange: createNoopFunction(),
     handleSendPrompt: createNoopFunction(),
     handleEditQueued: createNoopFunction(),

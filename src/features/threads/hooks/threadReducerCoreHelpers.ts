@@ -125,6 +125,7 @@ export function withThreadStatusDefaults(
     lastDurationMs: status?.lastDurationMs ?? null,
     heartbeatPulse: status?.heartbeatPulse ?? 0,
     continuationPulse: status?.continuationPulse ?? 0,
+    lastContinuationEvidenceAtMs: status?.lastContinuationEvidenceAtMs ?? null,
     terminalPulse: status?.terminalPulse ?? 0,
     codexCompactionSource: status?.codexCompactionSource ?? null,
     codexCompactionLifecycleState:

@@ -3,6 +3,14 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { WorkspaceSessionRadarPanel } from "./WorkspaceSessionRadarPanel";
 
+// 完成条目按测试机"本地日期"分组(formatDateKey),固定 epoch 毫秒会随时区漂移
+// (曾在 UTC-7 下 1970-01-01T00:00:00.005Z 落进本地 1969-12-31 而挂测)。
+// 用本地时间构造时间戳,分组键在任何时区下都稳定。
+const DAY_ONE = new Date(2026, 4, 20, 10, 0, 0).getTime();
+const DAY_TWO = new Date(2026, 4, 21, 10, 0, 0).getTime();
+const DAY_ONE_KEY = "2026-05-20";
+const DAY_TWO_KEY = "2026-05-21";
+
 describe("WorkspaceSessionRadarPanel", () => {
   it("renders radar entries and toggles preview by click", () => {
     const onSelectThread = vi.fn();
@@ -34,10 +42,10 @@ describe("WorkspaceSessionRadarPanel", () => {
             threadName: "Recent Thread",
             engine: "CLAUDE",
             preview: "recent preview",
-            updatedAt: 5,
+            updatedAt: DAY_ONE + 5_000,
             isProcessing: false,
-            startedAt: 1,
-            completedAt: 5,
+            startedAt: DAY_ONE + 1_000,
+            completedAt: DAY_ONE + 5_000,
             durationMs: 4000,
           },
           {
@@ -48,10 +56,10 @@ describe("WorkspaceSessionRadarPanel", () => {
             threadName: "Recent Thread 2",
             engine: "CLAUDE",
             preview: "recent preview 2",
-            updatedAt: 6,
+            updatedAt: DAY_ONE + 6_000,
             isProcessing: false,
-            startedAt: 2,
-            completedAt: 6,
+            startedAt: DAY_ONE + 2_000,
+            completedAt: DAY_ONE + 6_000,
             durationMs: 4000,
           },
         ]}
@@ -59,7 +67,7 @@ describe("WorkspaceSessionRadarPanel", () => {
       />,
     );
 
-    const dateGroupToggle = screen.getByRole("button", { name: /1970-01-01/i });
+    const dateGroupToggle = screen.getByRole("button", { name: new RegExp(DAY_ONE_KEY) });
     expect(dateGroupToggle).toBeTruthy();
     expect(within(dateGroupToggle).getByText("2")).toBeTruthy();
     expect(screen.queryByText("Recent Thread")).toBeNull();
@@ -106,10 +114,10 @@ describe("WorkspaceSessionRadarPanel", () => {
             threadName: "Recent Thread",
             engine: "CLAUDE",
             preview: "recent preview",
-            updatedAt: 5,
+            updatedAt: DAY_ONE + 5_000,
             isProcessing: false,
-            startedAt: 1,
-            completedAt: 5,
+            startedAt: DAY_ONE + 1_000,
+            completedAt: DAY_ONE + 5_000,
             durationMs: 4000,
           },
         ]}
@@ -117,7 +125,7 @@ describe("WorkspaceSessionRadarPanel", () => {
       />,
     );
 
-    const dateGroupToggle = within(view.container).getByRole("button", { name: /1970-01-01/i });
+    const dateGroupToggle = within(view.container).getByRole("button", { name: new RegExp(DAY_ONE_KEY) });
     if (!within(view.container).queryByRole("button", { name: /^Recent Thread$/i })) {
       fireEvent.click(dateGroupToggle);
     }
@@ -149,10 +157,10 @@ describe("WorkspaceSessionRadarPanel", () => {
             threadName: "Badge Thread",
             engine: "CLAUDE",
             preview: "recent preview",
-            updatedAt: 5,
+            updatedAt: DAY_ONE + 5_000,
             isProcessing: false,
-            startedAt: 1,
-            completedAt: 5,
+            startedAt: DAY_ONE + 1_000,
+            completedAt: DAY_ONE + 5_000,
             durationMs: 4000,
           },
         ]}
@@ -160,7 +168,7 @@ describe("WorkspaceSessionRadarPanel", () => {
       />,
     );
 
-    const dateGroupToggle = within(view.container).getByRole("button", { name: /1970-01-01/i });
+    const dateGroupToggle = within(view.container).getByRole("button", { name: new RegExp(DAY_ONE_KEY) });
     if (!within(view.container).queryByRole("button", { name: /^Badge Thread$/i })) {
       fireEvent.click(dateGroupToggle);
     }
@@ -187,10 +195,10 @@ describe("WorkspaceSessionRadarPanel", () => {
             threadName: "Unread Thread",
             engine: "CLAUDE",
             preview: "recent preview",
-            updatedAt: 5,
+            updatedAt: DAY_ONE + 5_000,
             isProcessing: false,
-            startedAt: 1,
-            completedAt: 5,
+            startedAt: DAY_ONE + 1_000,
+            completedAt: DAY_ONE + 5_000,
             durationMs: 4000,
           },
         ]}
@@ -198,7 +206,7 @@ describe("WorkspaceSessionRadarPanel", () => {
       />,
     );
 
-    const dateGroupToggle = within(view.container).getByRole("button", { name: /1970-01-01/i });
+    const dateGroupToggle = within(view.container).getByRole("button", { name: new RegExp(DAY_ONE_KEY) });
     if (!within(view.container).queryByRole("button", { name: /^Unread Thread$/i })) {
       fireEvent.click(dateGroupToggle);
     }
@@ -229,10 +237,10 @@ describe("WorkspaceSessionRadarPanel", () => {
             threadName: "Date Group Thread",
             engine: "CLAUDE",
             preview: "recent preview",
-            updatedAt: 86400001,
+            updatedAt: DAY_TWO + 1_000,
             isProcessing: false,
-            startedAt: 86400000,
-            completedAt: 86400001,
+            startedAt: DAY_TWO,
+            completedAt: DAY_TWO + 1_000,
             durationMs: 4000,
           },
         ]}
@@ -240,7 +248,7 @@ describe("WorkspaceSessionRadarPanel", () => {
       />,
     );
 
-    const dateGroupToggle = within(view.container).getByRole("button", { name: /1970-01-02/i });
+    const dateGroupToggle = within(view.container).getByRole("button", { name: new RegExp(DAY_TWO_KEY) });
     expect(dateGroupToggle.getAttribute("aria-expanded")).toBeNull();
     expect(within(view.container).queryByRole("button", { name: /^Date Group Thread$/i })).toBeNull();
 

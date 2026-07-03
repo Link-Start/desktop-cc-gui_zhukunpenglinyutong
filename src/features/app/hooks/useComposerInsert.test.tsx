@@ -5,14 +5,18 @@ import { useComposerInsert } from "./useComposerInsert";
 
 describe("useComposerInsert", () => {
   it("applies consecutive inserts on latest text snapshot", () => {
-    const onDraftChange = vi.fn();
+    // 模拟生产接线:onDraftChange 同步写入草稿源,getDraftText 读到最新值。
+    let draft = "";
+    const onDraftChange = vi.fn((next: string) => {
+      draft = next;
+    });
     const textarea = document.createElement("textarea");
     const textareaRef = { current: textarea };
 
     const { result } = renderHook(() =>
       useComposerInsert({
         activeThreadId: "thread-1",
-        draftText: "",
+        getDraftText: () => draft,
         onDraftChange,
         textareaRef,
       }),
@@ -35,7 +39,7 @@ describe("useComposerInsert", () => {
     const { result } = renderHook(() =>
       useComposerInsert({
         activeThreadId: null,
-        draftText: "",
+        getDraftText: () => "",
         onDraftChange,
         textareaRef,
       }),

@@ -94,7 +94,7 @@ describe("useComposerController input responsiveness", () => {
       result.current.handleDraftChange("typed without lag");
     });
 
-    expect(result.current.activeDraft).toBe("typed without lag");
+    expect(result.current.getActiveDraft()).toBe("typed without lag");
   });
 
   it("keeps detached draft updates immediate as well", () => {
@@ -106,6 +106,6 @@ describe("useComposerController input responsiveness", () => {
       result.current.handleDraftChange("detached typed text");
     });
 
-    expect(result.current.activeDraft).toBe("detached typed text");
+    expect(result.current.getActiveDraft()).toBe("detached typed text");
   });
 });

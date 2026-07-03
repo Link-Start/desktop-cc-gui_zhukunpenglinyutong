@@ -26,7 +26,6 @@ import { ChatInputBoxFooter } from './ChatInputBoxFooter.js';
 import { ComposerReadinessBar } from './ComposerReadinessBar.js';
 import { ContextBar } from './ContextBar.js';
 import { ResizeHandles } from './ResizeHandles.js';
-import { TokenIndicator } from './TokenIndicator.js';
 import { CuratedSkillIndicator } from '../../../curated-skills';
 import {
   useCompletionDropdown,
@@ -190,12 +189,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       providerVersions,
       providerStatusLabels,
       providerDisabledMessages,
-      usagePercentage = null,
-      usageUsedTokens,
-      usageMaxTokens,
       contextDualViewEnabled = false,
       dualContextUsage = null,
-      claudeContextUsage = null,
       onRequestContextCompaction,
       codexAutoCompactionEnabled = true,
       codexAutoCompactionThresholdPercent = 92,
@@ -1467,31 +1462,19 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         isModelConfigRefreshing={isModelConfigRefreshing}
       />
     ) : null;
-    const mainToolbarSurface = (
-      <>
-        {shouldShowMainLegacyTokenIndicator ? (
-          <div className="button-area-main-token">
-            <TokenIndicator
-              percentage={usagePercentage}
-              usedTokens={usageUsedTokens}
-              maxTokens={usageMaxTokens}
-              claudeContextUsage={currentProvider === 'claude' ? claudeContextUsage : null}
-              size={16}
-            />
-          </div>
-        ) : (
-          <ContextBar
-            surface="tool-popover"
-            contextDualViewEnabled={contextDualViewEnabled}
-            dualContextUsage={dualContextUsage}
-            onRequestContextCompaction={onRequestContextCompaction}
-            codexAutoCompactionEnabled={codexAutoCompactionEnabled}
-            codexAutoCompactionThresholdPercent={codexAutoCompactionThresholdPercent}
-            onCodexAutoCompactionSettingsChange={onCodexAutoCompactionSettingsChange}
-            currentProvider={currentProvider}
-          />
-        )}
-      </>
+    // 上下文占用指示器已移到输入框下方的分支行（Composer 渲染）；
+    // 这里只保留 codex 双视图的 ContextBar。
+    const mainToolbarSurface = shouldShowMainLegacyTokenIndicator ? null : (
+      <ContextBar
+        surface="tool-popover"
+        contextDualViewEnabled={contextDualViewEnabled}
+        dualContextUsage={dualContextUsage}
+        onRequestContextCompaction={onRequestContextCompaction}
+        codexAutoCompactionEnabled={codexAutoCompactionEnabled}
+        codexAutoCompactionThresholdPercent={codexAutoCompactionThresholdPercent}
+        onCodexAutoCompactionSettingsChange={onCodexAutoCompactionSettingsChange}
+        currentProvider={currentProvider}
+      />
     );
     const contextToolbarSurface = (
       <>

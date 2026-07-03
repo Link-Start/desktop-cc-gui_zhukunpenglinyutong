@@ -52,7 +52,10 @@ describe("composer input responsiveness guard", () => {
     const handleDraftChangeBlock = extractUseCallbackBlock(source, "handleDraftChange");
 
     expect(handleDraftChangeBlock).toBeTruthy();
-    expect(handleDraftChangeBlock).toContain("setComposerDraftsByThread");
+    // 草稿写入必须走模块级 composerDraftStore(setComposerDraft),不允许退回
+    // app-shell 根级 useState——那会让每次按键重渲染整个 app-shell(输入卡顿回归)。
+    expect(handleDraftChangeBlock).toContain("setComposerDraft(");
+    expect(handleDraftChangeBlock).not.toContain("setComposerDraftsByThread");
     expect(handleDraftChangeBlock).not.toContain("startTransition");
   });
 

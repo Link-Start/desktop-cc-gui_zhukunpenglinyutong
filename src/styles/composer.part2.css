@@ -2212,6 +2212,13 @@
   padding: 0 2px;
 }
 
+/* 分支行右侧的上下文占用指示器 */
+.composer-branch-row-usage {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
 .composer-branch-badge {
   position: relative;
   display: inline-flex;

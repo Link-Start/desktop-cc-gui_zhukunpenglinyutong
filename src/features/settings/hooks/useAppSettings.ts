@@ -28,6 +28,8 @@ import {
   DEFAULT_OPEN_APP_TARGETS,
 } from "../../app/constants";
 import { getClientStoreSync } from "../../../services/clientStorage";
+import { normalizeComposerEnginePrefsRecord } from "../../../app-shell-parts/composerEnginePrefs";
+import { getComposerEnginePrefsSnapshot } from "../../composer/hooks/composerEnginePrefsStore";
 import { normalizeOpenAppTargets } from "../../app/utils/openApp";
 import { getDefaultInterruptShortcut } from "../../../utils/shortcuts";
 import { normalizeHexColor } from "../../../utils/colorUtils";
@@ -220,6 +222,7 @@ const defaultSettings: AppSettings = {
   cycleWorkspacePrevShortcut: "cmd+shift+up",
   lastComposerModelId: null,
   lastComposerReasoningEffort: null,
+  lastComposerPrefsByEngine: {},
   uiScale: UI_SCALE_DEFAULT,
   theme: "system",
   lightThemePresetId: "vscode-light-modern",
@@ -502,7 +505,21 @@ function normalizeAppSettings(
     ),
     openAppTargets: normalizedTargets,
     selectedOpenAppId,
+    lastComposerPrefsByEngine: normalizeComposerEnginePrefsRecord(
+      settings.lastComposerPrefsByEngine,
+      {
+        modelId: settings.lastComposerModelId,
+        effort: settings.lastComposerReasoningEffort,
+      },
+    ),
   };
+}
+
+// Value equality for the post-save round-trip guard. Both operands are produced by
+// normalizeAppSettings (stable key order), so a structural JSON compare is reliable here;
+// a false negative would only cost one extra render, never correctness.
+function areAppSettingsEqual(a: AppSettings, b: AppSettings): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 export function useAppSettings() {
@@ -545,13 +562,24 @@ export function useAppSettings() {
   }, []);
 
   const saveSettings = useCallback(async (next: AppSettings) => {
-    const normalized = normalizeAppSettings(next);
+    // Composer per-engine prefs live in an external store (composerEnginePrefsStore) so a
+    // switch-button click never re-renders the app-shell root. The backend replaces the
+    // whole settings file, so overlay the live snapshot here to keep an unrelated settings
+    // save from clobbering newer prefs on disk. Skip the overlay before the store is seeded
+    // (empty snapshot) to avoid wiping loaded prefs.
+    const snapshot = getComposerEnginePrefsSnapshot();
+    const hasSnapshot = Object.keys(snapshot).length > 0;
+    const normalized = normalizeAppSettings(
+      hasSnapshot ? { ...next, lastComposerPrefsByEngine: snapshot } : next,
+    );
     const saved = await updateAppSettings(normalized);
-    setSettings(
-      normalizeAppSettings({
-        ...defaultSettings,
-        ...saved,
-      }),
+    const nextSettings = normalizeAppSettings({
+      ...defaultSettings,
+      ...saved,
+    });
+    // Avoid the whole-tree re-render when the round-trip echoed back an identical value.
+    setSettings((current) =>
+      areAppSettingsEqual(current, nextSettings) ? current : nextSettings,
     );
     return saved;
   }, []);

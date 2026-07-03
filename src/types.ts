@@ -233,6 +233,18 @@ export type ReviewTarget =
   | { type: "custom"; instructions: string };
 
 export type AccessMode = "default" | "read-only" | "current" | "full-access";
+
+/**
+ * Durable "last used" composer preferences, remembered per engine so a brand-new
+ * conversation reopens with the same model / reasoning effort / permission / plan
+ * mode the user last chose (survives app restart via AppSettings persistence).
+ */
+export type ComposerEnginePrefs = {
+  modelId: string | null;
+  effort: string | null;
+  accessMode: AccessMode | null;
+  collaborationModeId: string | null;
+};
 export type BackendMode = "local" | "remote";
 export type WorkspaceSessionAttributionMode = "related" | "workspace-only";
 export type ThemeAppearance = "light" | "dark";
@@ -804,6 +816,7 @@ export type AppSettings = {
   cycleWorkspacePrevShortcut: string | null;
   lastComposerModelId: string | null;
   lastComposerReasoningEffort: string | null;
+  lastComposerPrefsByEngine?: Partial<Record<EngineType, ComposerEnginePrefs>>;
   uiScale: number;
   theme: ThemePreference;
   lightThemePresetId?: LightThemePresetId;

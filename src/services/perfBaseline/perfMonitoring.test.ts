@@ -152,6 +152,39 @@ describe("frameDropMonitor", () => {
     expect(dropCalls.length).toBe(1);
   });
 
+  it("treats a huge rAF gap as suspend-resume instead of a frame drop", () => {
+    startFrameDropMonitor();
+    advance(0);
+    advance(6000); // 睡眠/挂起恢复后的第一帧
+    expect(
+      appendMock.mock.calls.some((c) => c[0] === "perf.frame-drop"),
+    ).toBe(false);
+    const gap = appendMock.mock.calls.find((c) => c[0] === "perf.suspend-gap");
+    expect(gap?.[1]).toMatchObject({ gapMs: 6000 });
+  });
+
+  it("does not count time spent hidden as a frame drop", () => {
+    startFrameDropMonitor();
+    advance(0); // seed
+    Object.defineProperty(document, "hidden", {
+      value: true,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    Object.defineProperty(document, "hidden", {
+      value: false,
+      configurable: true,
+    });
+    advance(3000); // 切后台 3 秒后恢复:该帧只重新起表,不上报
+    advance(16); // 恢复后的正常帧
+    expect(
+      appendMock.mock.calls.some(
+        (c) => c[0] === "perf.frame-drop" || c[0] === "perf.suspend-gap",
+      ),
+    ).toBe(false);
+    Reflect.deleteProperty(document, "hidden");
+  });
+
   it("records longtask unsupported when the entry type is unavailable", () => {
     const original = (globalThis as { PerformanceObserver?: unknown })
       .PerformanceObserver;
@@ -207,6 +240,50 @@ describe("buildDiagnosticsReportText", () => {
     ];
     const text = buildDiagnosticsReportText();
     expect(text).toContain("no performance diagnostics recorded");
+  });
+
+  it("excludes suspend-resume outliers from frame statistics", () => {
+    exportState.entries = [
+      {
+        timestamp: 1,
+        label: "perf.frame-drop",
+        payload: { deltaMs: 190, level: "severe" },
+      },
+      {
+        timestamp: 2,
+        label: "perf.frame-drop",
+        payload: { deltaMs: 4_418_123, level: "severe" }, // 修复前把挂起恢复记成的脏条目
+      },
+    ];
+    const text = buildDiagnosticsReportText();
+    expect(text).toContain("frameDropCount: 1");
+    expect(text).toContain("worstFrameMs: 190");
+    expect(text).toContain("suspendResumeFrames: 1");
+  });
+
+  it("labels longtask support and render attribution in the header", () => {
+    exportState.entries = [
+      {
+        timestamp: 1,
+        label: "perf.frame-drop",
+        payload: { deltaMs: 60, level: "warn" },
+      },
+    ];
+    // jsdom/Node 均不支持 longtask entryType
+    expect(buildDiagnosticsReportText()).toContain(
+      "longTaskSupport: unsupported",
+    );
+    expect(buildDiagnosticsReportText()).toContain("renderAttribution: off");
+    localStorage.setItem("ccgui.perf.reactScan", "1");
+    try {
+      // flag 开着但 react-scan 模块未加载(测试环境不加载)时,必须如实汇报
+      // instrumentation 未就绪,而不是笼统的 "on"。
+      expect(buildDiagnosticsReportText()).toContain(
+        "renderAttribution: flag-on 但 instrumentation 未就绪",
+      );
+    } finally {
+      localStorage.removeItem("ccgui.perf.reactScan");
+    }
   });
 });
 

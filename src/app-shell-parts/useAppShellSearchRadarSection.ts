@@ -22,7 +22,6 @@ import type {
 } from "../features/search/types";
 import { useWorkspaceSessionActivity } from "../features/session-activity/hooks/useWorkspaceSessionActivity";
 import { useSessionRadarFeed } from "../features/session-activity/hooks/useSessionRadarFeed";
-import { isPerformanceCompatibilityModeEnabled } from "../features/session-activity/utils/performanceCompatibility";
 import { isBackgroundRenderGatingEnabled } from "../features/threads/utils/realtimePerfFlags";
 import {
   RADAR_STORE_NAME,
@@ -97,7 +96,6 @@ type ListThreadsForWorkspace = (
 ) => Promise<void | { applied?: boolean; stale?: boolean }>;
 
 type UseAppShellSearchRadarSectionOptions = {
-  activeDraft: string;
   activeItems: ConversationItem[];
   activeThreadId: string | null;
   activeWorkspace: WorkspaceInfo | null;
@@ -113,6 +111,7 @@ type UseAppShellSearchRadarSectionOptions = {
   filePanelMode: FilePanelMode;
   fileTreeSourceVersion?: string | null;
   files: string[];
+  getActiveDraft: () => string;
   globalSearchFilesByWorkspace: Record<string, string[]>;
   handleDraftChange: (next: string) => void;
   isCompact: boolean;
@@ -144,7 +143,6 @@ type UseAppShellSearchRadarSectionOptions = {
 };
 
 export function useAppShellSearchRadarSection({
-  activeDraft,
   activeItems,
   activeThreadId,
   activeWorkspace,
@@ -158,6 +156,7 @@ export function useAppShellSearchRadarSection({
   filePanelMode,
   fileTreeSourceVersion = null,
   files,
+  getActiveDraft,
   globalSearchFilesByWorkspace,
   handleDraftChange,
   isCompact,
@@ -184,7 +183,7 @@ export function useAppShellSearchRadarSection({
 }: UseAppShellSearchRadarSectionOptions) {
   const handleInsertComposerText = useComposerInsert({
     activeThreadId,
-    draftText: activeDraft,
+    getDraftText: getActiveDraft,
     onDraftChange: handleDraftChange,
     textareaRef: composerInputRef,
   });
@@ -213,10 +212,10 @@ export function useAppShellSearchRadarSection({
       filePanelMode,
       rightPanelCollapsed,
       isCompact,
-      draftLength: activeDraft.length,
+      draftLength: getActiveDraft().length,
     };
   }, [
-    activeDraft.length,
+    getActiveDraft,
     activeItems.length,
     activeThreadId,
     directories.length,
@@ -534,8 +533,6 @@ export function useAppShellSearchRadarSection({
     threadItemsByThread: deferredThreadItemsByThread,
     lastAgentMessageByThread,
     runningLimit: LOCK_LIVE_SESSION_LIMIT,
-    performanceCompatibilityModeEnabled:
-      isPerformanceCompatibilityModeEnabled(appSettings),
   });
   const lockLiveSessions = sessionRadarFeed.runningSessions;
 

@@ -1689,67 +1689,6 @@ describe("StatusPanel", () => {
     expect(screen.queryByText("step 1")).toBeNull();
   });
 
-  it("shows latest user message tab only in dock variant", () => {
-    const { rerender } = render(
-      <StatusPanel
-        items={latestUserMessageItems}
-        isProcessing={false}
-        variant="dock"
-      />,
-    );
-
-    expect(screen.getByText("User Conversation")).toBeTruthy();
-
-    rerender(
-      <StatusPanel items={latestUserMessageItems} isProcessing={false} />,
-    );
-
-    expect(screen.queryByText("User Conversation")).toBeNull();
-  });
-
-  it("renders latest user message tab for codex dock threads without selecting it by default", () => {
-    render(
-      <StatusPanel
-        items={latestUserMessageItems}
-        isProcessing={false}
-        variant="dock"
-        isCodexEngine
-      />,
-    );
-
-    expect(screen.getByText("User Conversation")).toBeTruthy();
-    expect(screen.getByText("Images: 2")).toBeTruthy();
-  });
-
-  it("keeps latest user message tab before edits for both codex and non-codex dock layouts", () => {
-    const { rerender } = render(
-      <StatusPanel
-        items={latestUserMessageItems}
-        isProcessing={false}
-        variant="dock"
-      />,
-    );
-
-    let labels = Array.from(
-      document.querySelectorAll(".sp-tabs--dock .sp-tab-label"),
-    ).map((node) => node.textContent);
-    expect(labels).toEqual(["User Conversation", "Result"]);
-
-    rerender(
-      <StatusPanel
-        items={latestUserMessageItems}
-        isProcessing={false}
-        variant="dock"
-        isCodexEngine
-      />,
-    );
-
-    labels = Array.from(
-      document.querySelectorAll(".sp-tabs--dock .sp-tab-label"),
-    ).map((node) => node.textContent);
-    expect(labels).toEqual(["User Conversation", "Result"]);
-  });
-
   it("removes hidden dock tabs without clearing available panel data", () => {
     const { container } = render(
       <StatusPanel
@@ -1759,7 +1698,6 @@ describe("StatusPanel", () => {
         visibleDockTabs={{
           subagent: false,
           checkpoint: false,
-          latestUserMessage: false,
         }}
       />,
     );
@@ -1770,7 +1708,6 @@ describe("StatusPanel", () => {
     expect(labels).toEqual([]);
     expect(container.querySelector(".sp-root--dock")).toBeNull();
     expect(screen.queryByText("Result")).toBeNull();
-    expect(screen.queryByText("User Conversation")).toBeNull();
   });
 
   it("renders cost budget section in checkpoint panel when token usage is available", () => {
@@ -1919,131 +1856,12 @@ describe("StatusPanel", () => {
       document.querySelectorAll(".sp-tabs--dock .sp-tab-label"),
     ).map((node) => node.textContent);
     expect(labels).toEqual([
-      "User Conversation",
       "statusPanel.tabTodos",
       "statusPanel.tabAgents",
       "Result",
     ]);
     expect(screen.getByText("1/1")).toBeTruthy();
     expect(screen.getByText("0/1")).toBeTruthy();
-  });
-
-  it("shows user conversation timeline in reverse chronological order with image summary", () => {
-    render(
-      <StatusPanel
-        items={latestUserMessageItems}
-        isProcessing={false}
-        variant="dock"
-      />,
-    );
-
-    fireEvent.click(screen.getByText("User Conversation"));
-
-    const renderedMessages = screen
-      .getAllByText(/用户消息|第一条消息/)
-      .map((node) => node.textContent);
-    expect(renderedMessages[0]).toContain("第二条用户消息");
-    expect(renderedMessages[1]).toContain("第一条消息");
-    expect(screen.getByText("Images: 2")).toBeTruthy();
-    expect(screen.getByText("#2")).toBeTruthy();
-    expect(screen.getByText("Expand")).toBeTruthy();
-  });
-
-  it("filters pseudo-user payloads out of the dock conversation timeline while keeping image-only turns", () => {
-    render(
-      <StatusPanel
-        items={[
-          {
-            id: "u-memory-only",
-            kind: "message",
-            role: "user",
-            text: "<project-memory>\n[项目上下文] 已记录会话摘要\n</project-memory>\n",
-          },
-          {
-            id: "u-image-only",
-            kind: "message",
-            role: "user",
-            text: "",
-            images: ["diagram.png"],
-          },
-          {
-            id: "u-real",
-            kind: "message",
-            role: "user",
-            text: "真实用户问题",
-          },
-        ]}
-        isProcessing={false}
-        variant="dock"
-      />,
-    );
-
-    fireEvent.click(screen.getByText("User Conversation"));
-
-    expect(screen.getByText("真实用户问题")).toBeTruthy();
-    expect(screen.getByText("Images: 1")).toBeTruthy();
-    expect(screen.queryByText(/\[项目上下文\]/)).toBeNull();
-  });
-
-  it("uses Codex user-message cleanup rules inside the dock conversation timeline", () => {
-    render(
-      <StatusPanel
-        items={[
-          {
-            id: "u-codex-wrapper",
-            kind: "message",
-            role: "user",
-            text: "Collaboration mode: code. Do not ask the user follow-up questions.\n\nUser request: 真正的问题",
-          },
-        ]}
-        isProcessing={false}
-        variant="dock"
-        isCodexEngine
-      />,
-    );
-
-    fireEvent.click(screen.getByText("User Conversation"));
-
-    expect(screen.getByText("真正的问题")).toBeTruthy();
-    expect(screen.queryByText(/Collaboration mode:/)).toBeNull();
-    expect(screen.getByText("#1")).toBeTruthy();
-  });
-
-  it("shows filtered user conversation turn count in the dock tab", () => {
-    render(
-      <StatusPanel
-        items={[
-          {
-            id: "u-memory-only",
-            kind: "message",
-            role: "user",
-            text: "<project-memory>\n[项目上下文] 已记录会话摘要\n</project-memory>\n",
-          },
-          {
-            id: "u-image-only",
-            kind: "message",
-            role: "user",
-            text: "",
-            images: ["diagram.png"],
-          },
-          {
-            id: "u-real",
-            kind: "message",
-            role: "user",
-            text: "真实用户问题",
-          },
-        ]}
-        isProcessing={false}
-        variant="dock"
-      />,
-    );
-
-    const userConversationTab = screen
-      .getByText("User Conversation")
-      .closest("button");
-    const turnCountNode = userConversationTab?.querySelector(".sp-tab-count");
-    expect(turnCountNode).toBeTruthy();
-    expect(turnCountNode?.textContent).toBe("2");
   });
 
   it("keeps the current dock tab active when a new user message arrives", () => {
@@ -2080,38 +1898,6 @@ describe("StatusPanel", () => {
       "sp-tab-active",
     );
     expect(screen.queryByText("新的问题")).toBeNull();
-  });
-
-  it("updates latest user message preview when thread items change", () => {
-    const { rerender } = render(
-      <StatusPanel
-        items={latestUserMessageItems}
-        isProcessing={false}
-        variant="dock"
-      />,
-    );
-
-    fireEvent.click(screen.getByText("User Conversation"));
-    expect(screen.getByText(/第一条消息/)).toBeTruthy();
-    expect(screen.getByText("第二条用户消息")).toBeTruthy();
-
-    rerender(
-      <StatusPanel
-        items={[
-          {
-            id: "u-thread-2",
-            kind: "message",
-            role: "user",
-            text: "thread 2 latest",
-          },
-        ]}
-        isProcessing={false}
-        variant="dock"
-      />,
-    );
-
-    expect(screen.getByText("thread 2 latest")).toBeTruthy();
-    expect(screen.queryByText(/第一条消息/)).toBeNull();
   });
 
   it("converges deferred status panel content to the latest streaming snapshot", () => {
@@ -2164,24 +1950,6 @@ describe("StatusPanel", () => {
     );
 
     expect(screen.getByText("new streaming todo")).toBeTruthy();
-  });
-
-  it("emits message jump when clicking a user conversation timeline item action", () => {
-    const onJumpToConversationMessage = vi.fn();
-
-    render(
-      <StatusPanel
-        items={latestUserMessageItems}
-        isProcessing={false}
-        variant="dock"
-        onJumpToConversationMessage={onJumpToConversationMessage}
-      />,
-    );
-
-    fireEvent.click(screen.getByText("User Conversation"));
-    fireEvent.click(screen.getAllByText("Jump to message")[0]);
-
-    expect(onJumpToConversationMessage).toHaveBeenCalledWith("u2");
   });
 
   it("keeps dock tab content visible when clicking the active tab again", () => {

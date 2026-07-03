@@ -26,10 +26,10 @@ import type { ThreadTokenUsage } from "../../../types";
 
 /**
  * 默认的上下文窗口大小
- * - Claude 模型通常是 200k tokens
- * - 当后端没有提供具体数值时，使用这个默认值
+ * - 现代 Claude 模型（Opus/Sonnet/Fable）通常是 1M tokens
+ * - 当后端没有提供具体数值时（Claude 线程），使用这个默认值
  */
-const DEFAULT_CONTEXT_WINDOW = 200_000;
+const DEFAULT_CONTEXT_WINDOW = 1_000_000;
 
 /**
  * 组件属性定义

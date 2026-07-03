@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import "@xterm/xterm/css/xterm.css";
+import type { Terminal } from "@xterm/xterm";
+import type { FitAddon } from "@xterm/addon-fit";
 import type { DebugEntry, TerminalStatus, WorkspaceInfo } from "../../../types";
 import { buildErrorDebugEntry } from "../../../utils/debugEntries";
 import { subscribeTerminalOutput, type TerminalOutputEvent } from "../../../services/events";
@@ -17,6 +16,29 @@ const MAX_BUFFER_CHARS = 200_000;
 /** Maximum number of terminal session buffers to keep in memory.
  *  Oldest inactive sessions are evicted when this limit is reached. */
 const MAX_CACHED_SESSIONS = 10;
+
+type XtermModules = {
+  Terminal: typeof import("@xterm/xterm").Terminal;
+  FitAddon: typeof import("@xterm/addon-fit").FitAddon;
+};
+
+// 本 hook 被 app-shell 常驻区段静态可达；xterm(~250KB+CSS) 若静态导入会进启动包。
+// 首次真正显示终端时才动态加载，Promise 模块级缓存保证只加载一次。
+let xtermModulesPromise: Promise<XtermModules> | null = null;
+
+function loadXtermModules(): Promise<XtermModules> {
+  if (!xtermModulesPromise) {
+    xtermModulesPromise = Promise.all([
+      import("@xterm/xterm"),
+      import("@xterm/addon-fit"),
+      import("@xterm/xterm/css/xterm.css"),
+    ]).then(([xterm, fit]) => ({
+      Terminal: xterm.Terminal,
+      FitAddon: fit.FitAddon,
+    }));
+  }
+  return xtermModulesPromise;
+}
 
 type UseTerminalSessionOptions = {
   activeWorkspace: WorkspaceInfo | null;
@@ -120,6 +142,8 @@ export function useTerminalSession({
   const [hasSession, setHasSession] = useState(false);
   const [readyKey, setReadyKey] = useState<string | null>(null);
   const [sessionResetCounter, setSessionResetCounter] = useState(0);
+  // xterm 实例经动态导入异步创建；ref 赋值不会触发 effect，用 tick 通知依赖方重跑。
+  const [terminalInstanceTick, setTerminalInstanceTick] = useState(0);
   const cleanupTerminalSession = useCallback((workspaceId: string, terminalId: string) => {
     const key = `${workspaceId}:${terminalId}`;
     outputBuffersRef.current.delete(key);
@@ -239,42 +263,61 @@ export function useTerminalSession({
       return;
     }
 
-    if (!terminalRef.current && containerRef.current) {
-      const appearance = getTerminalAppearance(containerRef.current);
-      const terminal = new Terminal({
-        cursorBlink: true,
-        fontSize: 12,
-        fontFamily: appearance.fontFamily,
-        theme: appearance.theme,
-        scrollback: 5000,
-      });
-      const fitAddon = new FitAddon();
-      terminal.loadAddon(fitAddon);
-      terminal.open(containerRef.current);
-      fitAddon.fit();
-      terminalRef.current = terminal;
-      fitAddonRef.current = fitAddon;
-      applyTerminalAppearance();
+    if (terminalRef.current || !containerRef.current) {
+      return;
+    }
+    let cancelled = false;
+    void loadXtermModules()
+      .then(({ Terminal, FitAddon }) => {
+        if (cancelled || terminalRef.current || !containerRef.current) {
+          return;
+        }
+        const appearance = getTerminalAppearance(containerRef.current);
+        const terminal = new Terminal({
+          cursorBlink: true,
+          fontSize: 12,
+          fontFamily: appearance.fontFamily,
+          theme: appearance.theme,
+          scrollback: 5000,
+        });
+        const fitAddon = new FitAddon();
+        terminal.loadAddon(fitAddon);
+        terminal.open(containerRef.current);
+        fitAddon.fit();
+        terminalRef.current = terminal;
+        fitAddonRef.current = fitAddon;
+        applyTerminalAppearance();
 
-      inputDisposableRef.current = terminal.onData((data: string) => {
-        const workspace = activeWorkspaceRef.current;
-        const terminalId = activeTerminalIdRef.current;
-        if (!workspace || !terminalId) {
-          return;
-        }
-        const key = `${workspace.id}:${terminalId}`;
-        if (!openedSessionsRef.current.has(key)) {
-          return;
-        }
-        void writeTerminalSession(workspace.id, terminalId, data).catch((error) => {
-          if (shouldIgnoreTerminalError(error)) {
-            openedSessionsRef.current.delete(key);
+        inputDisposableRef.current = terminal.onData((data: string) => {
+          const workspace = activeWorkspaceRef.current;
+          const terminalId = activeTerminalIdRef.current;
+          if (!workspace || !terminalId) {
             return;
           }
-          onDebug?.(buildErrorDebugEntry("terminal write error", error));
+          const key = `${workspace.id}:${terminalId}`;
+          if (!openedSessionsRef.current.has(key)) {
+            return;
+          }
+          void writeTerminalSession(workspace.id, terminalId, data).catch((error) => {
+            if (shouldIgnoreTerminalError(error)) {
+              openedSessionsRef.current.delete(key);
+              return;
+            }
+            onDebug?.(buildErrorDebugEntry("terminal write error", error));
+          });
         });
+        setTerminalInstanceTick((prev) => prev + 1);
+      })
+      .catch((error) => {
+        // 加载失败时清空缓存的 Promise，下次可见性变化可以重试。
+        xtermModulesPromise = null;
+        if (!cancelled) {
+          onDebug?.(buildErrorDebugEntry("terminal module load error", error));
+        }
       });
-    }
+    return () => {
+      cancelled = true;
+    };
   }, [applyTerminalAppearance, isVisible, onDebug]);
 
   useEffect(() => {
@@ -347,6 +390,7 @@ export function useTerminalSession({
     refreshTerminal,
     syncActiveBuffer,
     sessionResetCounter,
+    terminalInstanceTick,
   ]);
 
   useEffect(() => {

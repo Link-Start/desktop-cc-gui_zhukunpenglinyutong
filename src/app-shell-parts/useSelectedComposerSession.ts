@@ -46,6 +46,15 @@ type UseSelectedComposerSessionOptions = {
   activeThreadId: string | null;
   activeWorkspaceId: string | null;
   resolveCanonicalThreadId: (threadId: string) => string;
+  /**
+   * Supplies the durable per-engine "last used" selection so a brand-new
+   * conversation opens with the model/effort the user last chose for that engine.
+   * Return null to keep the engine catalog default (e.g. codex, which persists
+   * its global selection through a separate path).
+   */
+  resolveEngineDefaultComposerSelection?: (
+    threadId: string,
+  ) => ComposerSessionSelection | null;
   onDebug?: (entry: DebugEntry) => void;
 };
 
@@ -69,6 +78,7 @@ export function useSelectedComposerSession({
   activeThreadId,
   activeWorkspaceId,
   resolveCanonicalThreadId,
+  resolveEngineDefaultComposerSelection,
 }: UseSelectedComposerSessionOptions): UseSelectedComposerSessionResult {
   const [selectedComposerSelectionBySessionKey, setSelectedComposerSelectionBySessionKey] =
     useState<Record<string, ComposerSessionSelection | null>>({});
@@ -236,6 +246,17 @@ export function useSelectedComposerSession({
         shouldApplyDraftToNextThreadRef.current = false;
         writeClientStoreValue("composer", sessionKey, candidate);
       }
+      if (!hasCandidate && activeThreadId.includes("-pending-")) {
+        const engineDefault = normalizeComposerSessionSelectionForThread(
+          activeThreadId,
+          resolveEngineDefaultComposerSelection?.(activeThreadId) ?? null,
+        );
+        if (engineDefault) {
+          candidate = engineDefault;
+          hasCandidate = true;
+          writeClientStoreValue("composer", sessionKey, candidate);
+        }
+      }
       if (hasCandidate) {
         setSelectedComposerSelectionBySessionKey((prev) => {
           if (selectionsEqual(prev[sessionKey] ?? null, candidate ?? null)) {
@@ -257,6 +278,7 @@ export function useSelectedComposerSession({
     activeThreadId,
     activeWorkspaceId,
     draftComposerSelection,
+    resolveEngineDefaultComposerSelection,
     resolveSelectedComposerSessionKey,
     selectedComposerSelectionBySessionKey,
   ]);

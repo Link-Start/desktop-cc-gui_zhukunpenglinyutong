@@ -653,6 +653,37 @@ function resolveVirtualizedTimelineScopeIdentity(scopeKey: string): string {
   return [workspaceId, threadId].join("\u0000");
 }
 
+/**
+ * virtual-core 的 measure() 只清空行高缓存（所有行回落到估高），并不会重测已挂载
+ * 的 DOM：measureElement ref 只在行挂载时触发一次，ResizeObserver 只在行高变化时
+ * 触发。清缓存后 DOM 高度并没有变 → 没有任何回调把真实高度写回缓存 → 已挂载的
+ * 重内容行被压回估高（消息行封顶 260px），真实内容溢出进后续行的 translateY 区间，
+ * 形成进入长对话时的行堆叠，且在滚动触发重挂载前不会自愈。
+ *
+ * 需要重测时应逐行重测仍挂载的节点（只更新有偏差的行，不丢弃有效测量值）；
+ * 仅当没有任何挂载行时（如 empty-visible-set 卡死恢复），全量 measure() 才安全。
+ */
+export function remeasureTimelineVirtualizerRows<TScrollElement extends Element>(
+  instance: Virtualizer<TScrollElement, Element>,
+) {
+  const mountedNodes: Element[] = [];
+  // elementsCache 属于公开字段，但测试替身可能不提供；缺失时按「无挂载行」回落。
+  (instance.elementsCache as typeof instance.elementsCache | undefined)?.forEach(
+    (node) => {
+      if (node?.isConnected) {
+        mountedNodes.push(node);
+      }
+    },
+  );
+  if (mountedNodes.length === 0) {
+    instance.measure();
+    return;
+  }
+  for (const node of mountedNodes) {
+    instance.measureElement(node);
+  }
+}
+
 export function observeTimelineElementOffset<TScrollElement extends Element>(
   instance: Virtualizer<TScrollElement, Element>,
   callback: (offset: number, isScrolling: boolean) => void,

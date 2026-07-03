@@ -32,6 +32,7 @@ export function useAppShellComposerModelSection({
   handleSetAccessMode,
   models,
   modelsReady,
+  persistComposerEnginePref,
   persistComposerSelectionForThread,
   queueSaveSettings,
   selectedCollaborationMode,
@@ -197,6 +198,10 @@ export function useAppShellComposerModelSection({
           ...prev,
           [activeEngine]: nextSelectedModel.id,
         }));
+        persistComposerEnginePref?.(activeEngine, {
+          modelId: nextSelectedModel.id,
+          effort: nextSelectedEffort,
+        });
       }
       handleSelectComposerSelection({
         modelId: nextSelectedModel.id,
@@ -209,6 +214,7 @@ export function useAppShellComposerModelSection({
       effectiveSelectedEffort,
       handleSelectComposerSelection,
       hasActiveComposerThread,
+      persistComposerEnginePref,
       setSelectedModelId,
     ],
   );
@@ -229,6 +235,8 @@ export function useAppShellComposerModelSection({
       });
       if (activeEngine === "codex" && !hasActiveComposerThread) {
         setSelectedEffort(nextEffort);
+      } else if (activeEngine !== "codex") {
+        persistComposerEnginePref?.(activeEngine, { effort: nextEffort });
       }
       handleSelectComposerSelection({
         modelId: effectiveSelectedModelId,
@@ -241,6 +249,7 @@ export function useAppShellComposerModelSection({
       effectiveReasoningOptions,
       handleSelectComposerSelection,
       hasActiveComposerThread,
+      persistComposerEnginePref,
       setSelectedEffort,
     ],
   );

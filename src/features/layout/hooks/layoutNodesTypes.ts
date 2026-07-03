@@ -590,7 +590,6 @@ export type LayoutNodesFlatOptions = {
     thresholdPercent?: number;
   }) => Promise<void> | void;
   activeQueue: QueuedMessage[];
-  draftText: string;
   onDraftChange: (next: string) => void;
   activeImages: string[];
   onPickImages: () => void | Promise<void>;
@@ -1042,7 +1041,6 @@ export type ComposerLayoutNodesOptions = Pick<
   | "codexAutoCompactionThresholdPercent"
   | "onCodexAutoCompactionSettingsChange"
   | "activeQueue"
-  | "draftText"
   | "onDraftChange"
   | "activeImages"
   | "onPickImages"
