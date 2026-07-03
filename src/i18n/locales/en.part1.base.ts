@@ -64,6 +64,7 @@ const enPart1Base = {
     terminal: "Terminal",
     toggleTerminalPanel: "Toggle terminal panel",
     moreActions: "More actions",
+    showInHeader: "Show in toolbar",
     markdownMermaidFullscreen: "Fullscreen",
     markdownMermaidFullscreenHint: "Open diagram fullscreen",
     markdownImageFullscreen: "Fullscreen",

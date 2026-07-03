@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import Ellipsis from "lucide-react/dist/esm/icons/ellipsis";
 import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
-import { openWorkspaceIn } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import type { OpenAppTarget } from "../../../types";
+import { openPathInTarget } from "../utils/openApp";
 import { useOpenAppIcons } from "../hooks/useOpenAppIcons";
 import {
   DEFAULT_OPEN_APP_ID,
@@ -27,6 +27,8 @@ export type OpenAppMenuExtraAction = {
   icon: ReactNode;
   onSelect: () => void;
   active?: boolean;
+  /** false 时该行不显示「在顶栏显示」勾选框（如启动脚本子条目） */
+  pinnable?: boolean;
 };
 
 type OpenAppMenuProps = {
@@ -37,10 +39,14 @@ type OpenAppMenuProps = {
   iconById?: Record<string, string>;
   iconOnly?: boolean;
   extraActions?: OpenAppMenuExtraAction[];
+  /** 勾选后外显到顶栏的条目 id；配合 onTogglePinned 启用勾选框 */
+  pinnedIds?: string[];
+  onTogglePinned?: (id: string) => void;
 };
 
 const EMPTY_OPEN_APP_ICON_BY_ID: Record<string, string> = {};
 const EMPTY_OPEN_APP_EXTRA_ACTIONS: OpenAppMenuExtraAction[] = [];
+const EMPTY_PINNED_IDS: string[] = [];
 
 export function OpenAppMenu({
   path,
@@ -50,6 +56,8 @@ export function OpenAppMenu({
   iconById = EMPTY_OPEN_APP_ICON_BY_ID,
   iconOnly = false,
   extraActions = EMPTY_OPEN_APP_EXTRA_ACTIONS,
+  pinnedIds = EMPTY_PINNED_IDS,
+  onTogglePinned,
 }: OpenAppMenuProps) {
   const { t } = useTranslation();
   const [openMenuOpen, setOpenMenuOpen] = useState(false);
@@ -135,28 +143,7 @@ export function OpenAppMenu({
 
   const openWithTarget = async (target: OpenTarget) => {
     try {
-      if (target.target.kind === "finder") {
-        await revealItemInDir(path);
-        return;
-      }
-      if (target.target.kind === "command") {
-        if (!target.target.command) {
-          return;
-        }
-        await openWorkspaceIn(path, {
-          command: target.target.command,
-          args: target.target.args,
-        });
-        return;
-      }
-      const appName = target.target.appName || target.label;
-      if (!appName) {
-        return;
-      }
-      await openWorkspaceIn(path, {
-        appName,
-        args: target.target.args,
-      });
+      await openPathInTarget(path, target.target);
     } catch (error) {
       reportOpenError(error, target);
     }
@@ -181,6 +168,19 @@ export function OpenAppMenu({
     action.onSelect();
   };
 
+  const renderPinCheckbox = (id: string, pinnable = true) =>
+    onTogglePinned && pinnable ? (
+      <input
+        type="checkbox"
+        className="open-app-command-pin"
+        checked={pinnedIds.includes(id)}
+        onChange={() => onTogglePinned(id)}
+        aria-label={t("common.showInHeader")}
+        title={t("common.showInHeader")}
+        data-tauri-drag-region="false"
+      />
+    ) : null;
+
   if (iconOnly) {
     return (
       <div className="open-app-menu is-icon-only" ref={openMenuRef}>
@@ -190,57 +190,61 @@ export function OpenAppMenu({
           data-tauri-drag-region="false"
           aria-haspopup="menu"
           aria-expanded={openMenuOpen}
-          label={selectedOpenLabel}
+          label={t("common.moreActions")}
         >
-          <img
-            className="open-app-icon open-app-fusion-icon"
-            src={selectedOpenTarget.icon}
-            alt=""
-            aria-hidden
-          />
-          <ChevronDown size={14} aria-hidden />
+          <Ellipsis size={16} aria-hidden />
         </TooltipIconButton>
         {openMenuOpen && (
           <div className="open-app-command-menu popover-surface" role="menu">
             {resolvedOpenTargets.map((target, index) => (
-              <button
+              <div
                 key={target.id}
-                type="button"
                 className={`open-app-command-option${
                   target.id === resolvedOpenAppId ? " is-active" : ""
                 }`}
-                onClick={() => handleSelectOpenTarget(target)}
-                role="menuitem"
-                data-tauri-drag-region="false"
-                aria-label={target.label}
-                title={target.label}
               >
-                <span className="open-app-command-icon" aria-hidden>
-                  <img className="open-app-icon" src={target.icon} alt="" />
-                </span>
-                <span className="open-app-command-label">{target.label}</span>
-                <span className="open-app-command-shortcut" aria-hidden>
-                  {index + 1}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  className="open-app-command-main"
+                  onClick={() => handleSelectOpenTarget(target)}
+                  role="menuitem"
+                  data-tauri-drag-region="false"
+                  aria-label={target.label}
+                  title={target.label}
+                >
+                  <span className="open-app-command-icon" aria-hidden>
+                    <img className="open-app-icon" src={target.icon} alt="" />
+                  </span>
+                  <span className="open-app-command-label">{target.label}</span>
+                  <span className="open-app-command-shortcut" aria-hidden>
+                    {index + 1}
+                  </span>
+                </button>
+                {renderPinCheckbox(target.id)}
+              </div>
             ))}
             {extraActions.map((action, index) => (
-              <button
+              <div
                 key={action.id}
-                type="button"
                 className={`open-app-command-option${action.active ? " is-active" : ""}`}
-                onClick={() => handleSelectExtraAction(action)}
-                role="menuitem"
-                data-tauri-drag-region="false"
               >
-                <span className="open-app-command-icon" aria-hidden>
-                  {action.icon}
-                </span>
-                <span className="open-app-command-label">{action.label}</span>
-                <span className="open-app-command-shortcut" aria-hidden>
-                  {resolvedOpenTargets.length + index + 1}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  className="open-app-command-main"
+                  onClick={() => handleSelectExtraAction(action)}
+                  role="menuitem"
+                  data-tauri-drag-region="false"
+                >
+                  <span className="open-app-command-icon" aria-hidden>
+                    {action.icon}
+                  </span>
+                  <span className="open-app-command-label">{action.label}</span>
+                  <span className="open-app-command-shortcut" aria-hidden>
+                    {resolvedOpenTargets.length + index + 1}
+                  </span>
+                </button>
+                {renderPinCheckbox(action.id, action.pinnable !== false)}
+              </div>
             ))}
           </div>
         )}

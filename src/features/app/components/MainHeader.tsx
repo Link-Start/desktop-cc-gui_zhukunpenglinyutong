@@ -2,6 +2,7 @@ import {
   cloneElement,
   isValidElement,
   memo,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -13,6 +14,7 @@ import ClipboardCopy from "lucide-react/dist/esm/icons/clipboard-copy";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Folder from "lucide-react/dist/esm/icons/folder";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
+import Play from "lucide-react/dist/esm/icons/play";
 import Search from "lucide-react/dist/esm/icons/search";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { BranchInfo, OpenAppTarget, WorkspaceInfo } from "../../../types";
@@ -22,6 +24,16 @@ import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
 import { LaunchScriptButton } from "./LaunchScriptButton";
 import { LaunchScriptEntryButton } from "./LaunchScriptEntryButton";
 import type { WorkspaceLaunchScriptsState } from "../hooks/useWorkspaceLaunchScripts";
+import {
+  getClientStoreSync,
+  writeClientStoreValue,
+} from "../../../services/clientStorage";
+import { pushErrorToast } from "../../../services/toasts";
+import { DEFAULT_OPEN_APP_TARGETS } from "../constants";
+import { useOpenAppIcons } from "../hooks/useOpenAppIcons";
+import { getLaunchScriptIcon } from "../utils/launchScriptIcons";
+import { openPathInTarget } from "../utils/openApp";
+import { GENERIC_APP_ICON, getKnownOpenAppIcon } from "../utils/openAppIcons";
 
 type WorkspaceGroupSection = {
   id: string | null;
@@ -89,6 +101,29 @@ type MainHeaderProps = {
 };
 
 const EMPTY_OPEN_APP_EXTRA_ACTIONS: OpenAppMenuExtraAction[] = [];
+
+const HEADER_PINNED_ACTIONS_KEY = "headerPinnedActions";
+// 默认外显：启动脚本、VS Code、终端；「更多」入口与右侧面板开关始终外显
+const DEFAULT_HEADER_PINNED_ACTIONS = ["launch-script", "vscode", "terminal"];
+
+function useHeaderPinnedActions() {
+  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+    const stored = getClientStoreSync<unknown>("app", HEADER_PINNED_ACTIONS_KEY);
+    return Array.isArray(stored)
+      ? stored.filter((id): id is string => typeof id === "string")
+      : DEFAULT_HEADER_PINNED_ACTIONS;
+  });
+  const togglePinned = useCallback((id: string) => {
+    setPinnedIds((prev) => {
+      const next = prev.includes(id)
+        ? prev.filter((pinnedId) => pinnedId !== id)
+        : [...prev, id];
+      writeClientStoreValue("app", HEADER_PINNED_ACTIONS_KEY, next);
+      return next;
+    });
+  }, []);
+  return { pinnedIds, togglePinned };
+}
 
 function MainHeaderImpl({
   workspace,
@@ -239,12 +274,105 @@ function MainHeaderImpl({
     () => openAppExtraActions.find((action) => action.id === "right-panel"),
     [openAppExtraActions],
   );
+
+  // 用户自选外显按钮：菜单里勾选的条目以图标按钮形式外显到顶栏
+  const { pinnedIds, togglePinned } = useHeaderPinnedActions();
+  const isLaunchScriptPinned = pinnedIds.includes("launch-script");
+  const launchScriptControlsAvailable = Boolean(
+    showLaunchScriptControls &&
+      onRunLaunchScript &&
+      onOpenLaunchScriptEditor &&
+      onCloseLaunchScriptEditor &&
+      onLaunchScriptDraftChange &&
+      onSaveLaunchScript,
+  );
+  // 未外显时仍需在编辑态渲染整个 cluster，否则菜单里触发的脚本编辑弹层没有锚点
+  const launchScriptEditorVisible = Boolean(
+    launchScriptEditorOpen ||
+      launchScriptsState?.newEditorOpen ||
+      launchScriptsState?.editorOpenId,
+  );
+  const showLaunchScriptCluster =
+    launchScriptControlsAvailable &&
+    (isLaunchScriptPinned || launchScriptEditorVisible);
+  const hasLaunchScript = Boolean(launchScript?.trim());
+  const launchScriptMenuActions = useMemo<OpenAppMenuExtraAction[]>(() => {
+    if (!launchScriptControlsAvailable || !onRunLaunchScript) {
+      return [];
+    }
+    const actions: OpenAppMenuExtraAction[] = [
+      {
+        id: "launch-script",
+        label: t(
+          hasLaunchScript
+            ? "composer.runLaunchScript"
+            : "composer.setLaunchScript",
+        ),
+        icon: <Play size={18} aria-hidden />,
+        onSelect: onRunLaunchScript,
+      },
+    ];
+    if (!isLaunchScriptPinned && launchScriptsState) {
+      for (const entry of launchScriptsState.launchScripts) {
+        const EntryIcon = getLaunchScriptIcon(entry.icon);
+        actions.push({
+          id: `launch-script-entry-${entry.id}`,
+          label: entry.label || t("composer.runLaunchScript"),
+          icon: <EntryIcon size={18} aria-hidden />,
+          onSelect: () => launchScriptsState.onRunScript(entry.id),
+          pinnable: false,
+        });
+      }
+    }
+    return actions;
+  }, [
+    hasLaunchScript,
+    isLaunchScriptPinned,
+    launchScriptControlsAvailable,
+    launchScriptsState,
+    onRunLaunchScript,
+    t,
+  ]);
   const openAppMenuActions = useMemo(
     () => [
+      ...launchScriptMenuActions,
       ...openAppExtraActions.filter((action) => action.id !== "right-panel"),
       copyPathAction,
     ],
-    [copyPathAction, openAppExtraActions],
+    [copyPathAction, launchScriptMenuActions, openAppExtraActions],
+  );
+  const pinnedOpenTargets = useMemo(() => {
+    if (!showOpenAppMenu) {
+      return [];
+    }
+    const availableTargets =
+      openTargets.length > 0 ? openTargets : DEFAULT_OPEN_APP_TARGETS;
+    return availableTargets.filter((target) => pinnedIds.includes(target.id));
+  }, [openTargets, pinnedIds, showOpenAppMenu]);
+  const pinnedTargetIconById = useOpenAppIcons(pinnedOpenTargets, {
+    enabled: pinnedOpenTargets.length > 0,
+  });
+  const pinnedExtraActions = useMemo(
+    () =>
+      openAppMenuActions.filter(
+        (action) =>
+          action.id !== "launch-script" && pinnedIds.includes(action.id),
+      ),
+    [openAppMenuActions, pinnedIds],
+  );
+  const handleOpenPinnedTarget = useCallback(
+    async (target: OpenAppTarget) => {
+      try {
+        await openPathInTarget(resolvedWorktreePath, target);
+      } catch (openError) {
+        pushErrorToast({
+          title: t("errors.couldntOpenWorkspace"),
+          message:
+            openError instanceof Error ? openError.message : String(openError),
+        });
+      }
+    },
+    [resolvedWorktreePath, t],
   );
   const relativeWorktreePath = useMemo(() => {
     if (!parentPath) {
@@ -776,7 +904,7 @@ function MainHeaderImpl({
         </div>
       ) : null}
       <div className="main-header-actions">
-        {showLaunchScriptControls &&
+        {showLaunchScriptCluster &&
           onRunLaunchScript &&
           onOpenLaunchScriptEditor &&
           onCloseLaunchScriptEditor &&
@@ -829,6 +957,44 @@ function MainHeaderImpl({
               ))}
             </div>
           )}
+        {pinnedOpenTargets.map((target) => (
+          <TooltipIconButton
+            key={target.id}
+            className="ghost main-header-action"
+            onClick={() => void handleOpenPinnedTarget(target)}
+            data-tauri-drag-region="false"
+            label={t("settings.openInTarget", { target: target.label })}
+          >
+            <img
+              className="open-app-icon"
+              src={
+                getKnownOpenAppIcon(target.id) ??
+                pinnedTargetIconById[target.id] ??
+                openAppIconById[target.id] ??
+                GENERIC_APP_ICON
+              }
+              alt=""
+              aria-hidden
+            />
+          </TooltipIconButton>
+        ))}
+        {pinnedExtraActions.map((action) => (
+          <TooltipIconButton
+            key={action.id}
+            className={`ghost main-header-action${action.active ? " is-active" : ""}`}
+            onClick={action.onSelect}
+            data-tauri-drag-region="false"
+            label={action.label}
+            aria-pressed={action.active}
+          >
+            {isValidElement(action.icon)
+              ? cloneElement(
+                  action.icon as ReactElement<{ size?: number }>,
+                  { size: 14 },
+                )
+              : action.icon}
+          </TooltipIconButton>
+        ))}
         {showOpenAppMenu ? (
           <OpenAppMenu
             path={resolvedWorktreePath}
@@ -838,6 +1004,8 @@ function MainHeaderImpl({
             iconById={openAppIconById}
             iconOnly
             extraActions={openAppMenuActions}
+            pinnedIds={pinnedIds}
+            onTogglePinned={togglePinned}
           />
         ) : null}
         {extraActionsNode}

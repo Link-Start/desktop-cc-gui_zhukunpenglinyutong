@@ -1,6 +1,33 @@
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { AppSettings, OpenAppTarget } from "../../../types";
 import { DEFAULT_OPEN_APP_ID } from "../constants";
 import { getClientStoreSync } from "../../../services/clientStorage";
+import { openWorkspaceIn } from "../../../services/tauri";
+
+export async function openPathInTarget(
+  path: string,
+  target: OpenAppTarget,
+): Promise<void> {
+  if (target.kind === "finder") {
+    await revealItemInDir(path);
+    return;
+  }
+  if (target.kind === "command") {
+    if (!target.command) {
+      return;
+    }
+    await openWorkspaceIn(path, {
+      command: target.command,
+      args: target.args,
+    });
+    return;
+  }
+  const appName = target.appName || target.label;
+  if (!appName) {
+    return;
+  }
+  await openWorkspaceIn(path, { appName, args: target.args });
+}
 
 export function normalizeOpenAppTargets(targets: OpenAppTarget[]): OpenAppTarget[] {
   return targets

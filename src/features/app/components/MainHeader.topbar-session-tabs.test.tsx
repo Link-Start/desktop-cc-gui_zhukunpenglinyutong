@@ -123,7 +123,7 @@ describe("MainHeader topbar session tabs integration", () => {
 
     renderHeaderWithWidth(1280);
 
-    fireEvent.click(screen.getByRole("button", { name: "settings.openInTarget" }));
+    fireEvent.click(screen.getByRole("button", { name: "common.moreActions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /files\.copyPath/ }));
 
     expect(writeText).toHaveBeenCalledWith("/tmp/w1");

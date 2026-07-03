@@ -234,6 +234,16 @@ body[data-panel-resizing="true"] .main {
 .open-app-command-option {
   width: 100%;
   min-height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  color: var(--text-emphasis);
+}
+
+.open-app-command-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -242,18 +252,30 @@ body[data-panel-resizing="true"] .main {
   align-items: center;
   gap: 7px;
   padding: 4px 8px;
-  color: var(--text-emphasis);
+  color: inherit;
   font-size: 14px;
   line-height: 1.2;
   text-align: left;
 }
 
 .open-app-command-option:hover,
-.open-app-command-option:focus-visible,
+.open-app-command-option:focus-within,
 .open-app-command-option.is-active {
   background: var(--surface-hover);
   color: var(--text-stronger);
+}
+
+.open-app-command-main:focus-visible {
   outline: none;
+}
+
+.open-app-command-pin {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0 8px 0 0;
+  accent-color: var(--primary);
+  cursor: pointer;
 }
 
 .open-app-command-icon {
