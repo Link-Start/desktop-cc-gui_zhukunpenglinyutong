@@ -7,7 +7,9 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 // Preserves readable React component names in production bundles so the bundled
 // react-scan overlay can attribute renders to real names (e.g. MessagesTimeline)
-// instead of minified identifiers. Build-only: dev already keeps names, tests skip it.
+// instead of minified identifiers. It suppresses name minification and inflates
+// the bundle, so it is opt-in: only profiling builds (VITE_ENABLE_REACT_SCAN=1)
+// pay for it; regular release builds ship fully minified names.
 import reactComponentName from "react-scan/react-component-name/vite";
 
 // @ts-expect-error process is a nodejs global
@@ -24,7 +26,9 @@ const packageJson = JSON.parse(
 export default defineConfig(({ command }) => ({
   plugins: [
     react(),
-    ...(command === "build" ? [reactComponentName({}) as PluginOption] : []),
+    ...(command === "build" && process.env.VITE_ENABLE_REACT_SCAN === "1"
+      ? [reactComponentName({}) as PluginOption]
+      : []),
     tailwindcss(),
   ],
   resolve: {

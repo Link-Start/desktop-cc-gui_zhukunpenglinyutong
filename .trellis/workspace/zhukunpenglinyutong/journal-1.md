@@ -479,3 +479,45 @@
 ### Next Steps
 
 - 工作区仍保留未提交的优化代码:`useResizablePanels.ts`、`useSessionRadarFeed.ts`、`useEventCallback.ts(.test.ts)`,待用户后续整理提交
+
+## Session 11: 第一批卡死修复(流式合并 O(L²) + 启动分包泄漏)
+
+**Date**: 2026-07-02
+**Task**: vercel-react-best-practices 全项目性能审查后的第一批修复
+**Branch**: `feat/ui-refactoring`
+
+### Summary
+
+六个并行审查 agent 定位出卡死四层根因,第一批落地收益/风险比最高的两项:①流式文本合并每 delta 对全文做 8-14 趟扫描(单消息 O(L²)),加"低风险追加片段"快速路径(existing≥2048 且 delta≤256 且无段落断且 compact<24)后降为 O(L),慢路径语义零改动;reducer 侧同步把 normalizeItem 全文重复检测推迟到边界 delta,克隆延后到 no-op 守卫之后。②生产构建把 vendor-mermaid(2.4MB)/vendor-docs(1.3MB) modulepreload 进启动——真凶是 `\0vite/preload-helper`/`\0commonjsHelpers` 虚拟模块被并进重 chunk,精确钉进 vendor-shared(1.86KB)修复;dompurify 独立分包;xterm 改动态导入(需 tick 通知 openSession effect 重跑)。
+
+### Main Changes
+
+| 模块 | 变更 |
+|------|------|
+| threads | textMerge 快速路径 + reasoning 尾窗比较 + overlap 512 上限;reducer 延迟克隆/边界归一化/尾部查找;删死代码 fastPathForAppendAgentDelta |
+| build | manualChunks 钉 helper 虚拟模块与 dompurify;勿用 `\0` 全量兜底(commonjs 代理会循环) |
+| terminal | xterm/addon/CSS 动态导入,加载失败可重试 |
+
+**Updated Files**: 6 files (+361/-88);commit `d0fc3feb`
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d0fc3feb` | perf: eliminate O(L^2) streaming merge and keep heavy vendors lazy |
+
+### Testing
+
+- 全量 737 测试文件通过;typecheck/lint 全绿
+- 新增回归:合并语义保持用例 + 1000-delta 线性时间判别(实测 4ms)+ 引用相等断言
+- dist 验证:index.html preload 只剩 vendor-shared/react/tauri;mermaid/docs/xterm 移出启动图
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 第二批(已获用户同意开工):时间线 userActionNode 稳定化 + content-visibility + 行级诊断 effect 门控;常驻轮询统一可见性门控(CuratedSkillIndicator/task stores/runtime dock/blank watchdog);生产剥离 React Profiler 与 reactComponentName 插件
+- 已知残留:<24 字符空白改写的头部重发不再去重;2048 以下预热区仍付 collapseRepeatedParagraph 回溯正则(~7ms/delta)
+- 人工验证待做:真实长回复流式体感 + 终端面板首开(xterm 懒加载后)

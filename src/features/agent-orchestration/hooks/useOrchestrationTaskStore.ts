@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { OrchestrationTaskStoreData } from "../types";
 import { loadOrchestrationTaskStore } from "../utils/taskStore";
+import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
 
 const DEFAULT_REFRESH_INTERVAL_MS = 2_000;
 
@@ -33,10 +34,9 @@ export function useOrchestrationTaskStore(options?: {
       return undefined;
     }
 
-    const intervalId = window.setInterval(refresh, refreshIntervalMs);
-    return () => {
-      window.clearInterval(intervalId);
-    };
+    // 本 hook 挂在布局根上；隐藏时暂停轮询，避免后台每 2s 做全量
+    // normalize + stringify 比较。恢复可见时立即补一次刷新。
+    return setVisibilityGatedInterval(refresh, refreshIntervalMs);
   }, [refreshIntervalMs]);
 
   return store;

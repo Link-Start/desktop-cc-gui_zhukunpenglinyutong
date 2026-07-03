@@ -1261,6 +1261,23 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     workspaceId,
   ]);
 
+  // MessageRow 的 memo 比较器按引用比对 userActionNode；若每次时间线渲染都新建
+  // 元素，所有用户行都会被打穿并真实重渲染（流式期间每个 token 一次）。按行缓存
+  // 元素，仅在影响输出的输入（item 引用 / 复制文案 / 已复制态 / 语言）变化时重建。
+  const userActionNodeCacheRef = useRef(
+    new Map<
+      string,
+      {
+        item: ConversationItem;
+        copyText: string;
+        isCopied: boolean;
+        translate: typeof t;
+        node: ReactNode;
+      }
+    >(),
+  );
+  const USER_ACTION_NODE_CACHE_LIMIT = 500;
+
   const renderSingleItem = (item: ConversationItem) => {
     const renderItem = resolveLiveRenderItem(
       item,
@@ -1365,7 +1382,18 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         if (!shouldRenderUserActions) {
           return null;
         }
-        return (
+        const cache = userActionNodeCacheRef.current;
+        const cached = cache.get(renderItem.id);
+        if (
+          cached &&
+          cached.item === renderItem &&
+          cached.copyText === userCopyText &&
+          cached.isCopied === isCopied &&
+          cached.translate === t
+        ) {
+          return cached.node;
+        }
+        const node = (
           <div
             className="message-action-bar message-user-bubble-actions"
             aria-label={t("messages.messageActions")}
@@ -1384,6 +1412,17 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             </button>
           </div>
         );
+        if (cache.size >= USER_ACTION_NODE_CACHE_LIMIT) {
+          cache.clear();
+        }
+        cache.set(renderItem.id, {
+          item: renderItem,
+          copyText: userCopyText,
+          isCopied,
+          translate: t,
+          node,
+        });
+        return node;
       };
       const bindMessageNode = (node: HTMLDivElement | null) => {
         if (renderItem.role === "user" && node) {

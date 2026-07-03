@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCuratedSkills, getEnabledCuratedSkillIds } from "../../../services/tauri";
+import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
 import { resolveLucideIcon, FALLBACK_ICON } from "../utils/resolveLucideIcon";
 import type { CuratedSkillOption } from "../../../types";
 
@@ -40,6 +41,41 @@ type CuratedSkillIndicatorProps = {
   onOpenSkillsSettings?: () => void;
 };
 
+function areStringArraysEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areCuratedSkillListsEqual(
+  left: CuratedSkillOption[],
+  right: CuratedSkillOption[],
+) {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const a = left[index];
+    const b = right[index];
+    if (
+      !a ||
+      !b ||
+      a.name !== b.name ||
+      a.displayName !== b.displayName ||
+      a.icon !== b.icon
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function CuratedSkillIndicator({
   onOpenSkillsSettings,
 }: CuratedSkillIndicatorProps = {}) {
@@ -56,8 +92,13 @@ export function CuratedSkillIndicator({
           getCuratedSkills(),
         ]);
         if (cancelled) return;
-        setEnabledIds(ids ?? []);
-        setSkills(entries ?? []);
+        // 内容未变时保留旧引用，避免每次轮询都强制重渲染常驻的 composer 叶子。
+        setEnabledIds((prev) =>
+          areStringArraysEqual(prev, ids ?? []) ? prev : (ids ?? []),
+        );
+        setSkills((prev) =>
+          areCuratedSkillListsEqual(prev, entries ?? []) ? prev : (entries ?? []),
+        );
       } catch {
         // Best-effort: a failed poll leaves the previous values in
         // place. The next successful tick will overwrite them.
@@ -65,18 +106,15 @@ export function CuratedSkillIndicator({
     };
 
     void tick();
-    const handle = window.setInterval(() => {
+    // 隐藏时暂停轮询，恢复可见时立即补一次 tick——用户切回窗口看到的仍是
+    // 最新设置，但后台不再每 2s 打两次 IPC。
+    const cleanupInterval = setVisibilityGatedInterval(() => {
       void tick();
     }, POLL_INTERVAL_MS);
 
-    // Note: the `setInterval` is intentionally not paused on
-    // visibilitychange. The poll is cheap (two in-process IPC calls
-    // every 2s) and the user expects the indicator to reflect the
-    // current settings even when they switch back to a backgrounded
-    // tab.
     return () => {
       cancelled = true;
-      window.clearInterval(handle);
+      cleanupInterval();
     };
   }, []);
 

@@ -16,6 +16,7 @@ import {
   type GlobalRuntimeNoticeSeverity,
 } from "../../../services/globalRuntimeNotices";
 import { getRuntimePoolSnapshot } from "../../../services/tauri";
+import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
 
 const GLOBAL_RUNTIME_NOTICE_DOCK_VISIBILITY_KEY = "globalRuntimeNoticeDock.visibility";
 const GLOBAL_RUNTIME_NOTICE_STREAMING_WINDOW_MS = 8000;
@@ -473,13 +474,14 @@ export function useGlobalRuntimeNoticeDock(workspaces: readonly WorkspaceInfo[] 
     };
 
     void loadRuntimeSnapshot();
-    const intervalId = window.setInterval(() => {
+    // 隐藏时暂停 runtime 池轮询，恢复可见时立即补一次快照。
+    const cleanupInterval = setVisibilityGatedInterval(() => {
       void loadRuntimeSnapshot();
     }, GLOBAL_RUNTIME_NOTICE_RUNTIME_POLL_MS);
 
     return () => {
       disposed = true;
-      window.clearInterval(intervalId);
+      cleanupInterval();
     };
   }, []);
 

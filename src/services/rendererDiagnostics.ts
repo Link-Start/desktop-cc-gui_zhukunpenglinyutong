@@ -889,6 +889,12 @@ export function startRendererBlankScreenWatchdog(
   blankWatchdogConsecutiveSamples = 0;
   blankWatchdogReports = 0;
   blankWatchdogTimer = window.setInterval(() => {
+    // 隐藏窗口不存在"用户看到白屏"，跳过采样避免后台每 1.5s 两次强制回流
+    // （getBoundingClientRect + getComputedStyle），并清零连续计数。
+    if (document.visibilityState === "hidden") {
+      blankWatchdogConsecutiveSamples = 0;
+      return;
+    }
     const snapshot = collectRendererBlankScreenSnapshot(rootId);
     if (!isBlankRendererSnapshot(snapshot)) {
       blankWatchdogConsecutiveSamples = 0;
