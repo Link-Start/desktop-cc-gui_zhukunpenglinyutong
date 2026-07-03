@@ -142,6 +142,56 @@ describe("Messages rich content", () => {
     });
   });
 
+  it("opens lightbox when clicking a hydrated deferred Claude image", async () => {
+    const locator = {
+      sessionId: "session-1",
+      lineIndex: 2,
+      blockIndex: 1,
+      mediaType: "image/png",
+    };
+    vi.mocked(hydrateClaudeDeferredImage).mockResolvedValueOnce({
+      src: "data:image/png;base64,BBBB",
+      mediaType: "image/png",
+      byteSize: 3,
+      locator,
+    });
+    const items: ConversationItem[] = [
+      {
+        id: "msg-deferred-lightbox",
+        kind: "message",
+        role: "user",
+        text: "",
+        deferredImages: [
+          {
+            workspacePath: "/tmp/workspace",
+            mediaType: "image/png",
+            estimatedByteSize: 700000,
+            reason: "large-inline-image",
+            locator,
+          },
+        ],
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load image" }));
+    await waitFor(() => {
+      expect(container.querySelector(".message-deferred-image-preview img")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Open image 1" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
   it("releases hydrated deferred Claude image resource on unmount", async () => {
     const revokeSpy = vi.spyOn(URL, "revokeObjectURL");
     const locator = {

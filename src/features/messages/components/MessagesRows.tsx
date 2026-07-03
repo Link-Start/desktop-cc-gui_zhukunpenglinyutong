@@ -910,6 +910,23 @@ export const MessageRow = memo(function MessageRow({
       .filter(Boolean) as MessageImage[];
   }, [item.images, noteCardImagePathSet]);
   const deferredImageItems = item.deferredImages ?? [];
+  const loadedDeferredImages = useMemo(
+    () =>
+      deferredImageItems
+        .map((image, index) => {
+          const state = deferredImageStates[deferredImageKey(image)];
+          if (state?.status !== "loaded" || !state.src) {
+            return null;
+          }
+          return { src: state.src, label: `Deferred Claude image ${index + 1}` };
+        })
+        .filter(Boolean) as MessageImage[],
+    [deferredImageItems, deferredImageStates],
+  );
+  const lightboxImages = useMemo(
+    () => [...imageItems, ...loadedDeferredImages],
+    [imageItems, loadedDeferredImages],
+  );
   const revokeTrackedDeferredImageState = useCallback((state: DeferredImageState | undefined) => {
     const objectUrl = isTransientImageObjectUrl(state?.src, state?.transient)
       ? state?.src ?? null
@@ -1307,11 +1324,21 @@ export const MessageRow = memo(function MessageRow({
                 role="listitem"
               >
                 {state.status === "loaded" && state.src ? (
-                  <div
+                  <button
+                    type="button"
                     className="message-deferred-image-preview"
+                    onClick={() => {
+                      const lightboxTarget = lightboxImages.findIndex(
+                        (entry) => entry.src === state.src,
+                      );
+                      if (lightboxTarget >= 0) {
+                        setLightboxIndex(lightboxTarget);
+                      }
+                    }}
+                    aria-label={`Open image ${index + 1}`}
                   >
                     <img src={state.src} alt={`Deferred Claude image ${index + 1}`} loading="lazy" />
-                  </div>
+                  </button>
                 ) : (
                   <>
                     <div className="message-deferred-image-copy">
@@ -1386,9 +1413,9 @@ export const MessageRow = memo(function MessageRow({
         )
       )}
       {item.role === "user" && !agentTaskNotification ? userActionNode : null}
-      {lightboxIndex !== null && imageItems.length > 0 && (
+      {lightboxIndex !== null && lightboxImages.length > 0 && (
         <ImageLightbox
-          images={imageItems}
+          images={lightboxImages}
           activeIndex={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
         />

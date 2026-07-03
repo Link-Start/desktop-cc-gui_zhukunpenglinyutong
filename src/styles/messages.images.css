@@ -103,9 +103,20 @@
 .message-deferred-image-preview {
   width: 160px;
   max-width: 100%;
+  border: none;
+  padding: 0;
   border-radius: 12px;
   overflow: hidden;
   background: color-mix(in srgb, var(--surface-item) 92%, transparent);
+  cursor: zoom-in;
+  display: block;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.message-deferred-image-preview:hover {
+  outline: 1px solid var(--border-accent);
+  outline-offset: 0;
 }
 
 .message-deferred-image-preview img {
