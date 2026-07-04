@@ -217,6 +217,20 @@ pub fn run() {
             app.manage(state);
             renderer_stability::spawn_renderer_heartbeat_watchdog(app.handle().clone());
             {
+                // Start the in-process AskUserQuestion MCP server so mid-turn
+                // structured asks work in default/acceptEdits (not just plan mode).
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app_handle.state::<state::AppState>();
+                    let claude_manager = state.engine_manager.claude_manager.clone();
+                    if let Err(error) =
+                        crate::engine::claude::init_askuser_mcp_global(claude_manager).await
+                    {
+                        log::warn!("Failed to start AskUserQuestion MCP server: {error}");
+                    }
+                });
+            }
+            {
                 let app_handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     let state = app_handle.state::<state::AppState>();

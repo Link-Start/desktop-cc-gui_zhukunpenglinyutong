@@ -279,7 +279,12 @@ impl ClaudeSession {
                                         input.as_ref(),
                                     );
 
-                                    // Intercept AskUserQuestion tool to emit a RequestUserInput event
+                                    // Intercept the NATIVE (plan-mode) AskUserQuestion tool to emit a
+                                    // RequestUserInput event. The MCP variant
+                                    // (`mcp__ccgui__AskUserQuestion`) is deliberately NOT matched here:
+                                    // its RequestUserInput is already emitted by the in-process MCP
+                                    // handler (`ask_via_mcp`), so re-converting the transcript tool_use
+                                    // would double-emit the dialog. It renders as a normal MCP tool card.
                                     if tool_name == "AskUserQuestion" {
                                         if let Some(ref input_val) = input {
                                             return self.convert_ask_user_question_to_request(
@@ -513,7 +518,9 @@ impl ClaudeSession {
                 }
                 self.register_pending_tool(turn_id, &tool_id, &tool_name, input.as_ref());
 
-                // Intercept AskUserQuestion tool to emit a RequestUserInput event
+                // Intercept the NATIVE (plan-mode) AskUserQuestion tool only. The MCP
+                // variant is answered via the in-process handler; see the streaming
+                // site above for why we must not match it here (double-emit).
                 if tool_name == "AskUserQuestion" {
                     if let Some(ref input_val) = input {
                         return self

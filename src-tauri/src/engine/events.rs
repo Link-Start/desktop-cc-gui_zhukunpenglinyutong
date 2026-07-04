@@ -119,6 +119,11 @@ pub enum EngineEvent {
         workspace_id: String,
         request_id: Value,
         questions: Value,
+        /// When true, this is a *removal* signal (e.g. backend timeout): the
+        /// frontend drops the pending dialog instead of showing it. Normal asks
+        /// leave this false.
+        #[serde(default)]
+        completed: bool,
     },
 
     /// Turn/response completed
@@ -710,6 +715,7 @@ pub fn engine_event_to_app_server_event_with_turn_context(
         EngineEvent::RequestUserInput {
             request_id,
             questions,
+            completed,
             ..
         } => json!({
             "method": "item/tool/requestUserInput",
@@ -718,6 +724,7 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                 "turnId": item_id,
                 "itemId": item_id,
                 "questions": questions,
+                "completed": completed,
             },
             "id": request_id,
         }),

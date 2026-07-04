@@ -406,6 +406,7 @@ impl ClaudeSession {
             workspace_id: self.workspace_id.clone(),
             request_id: Value::String(request_id),
             questions: Value::Array(questions),
+            completed: false,
         })
     }
 
@@ -815,6 +816,24 @@ impl ClaudeSession {
 
         // Format the answer and store it for the target turn only.
         let answer_text = format_ask_user_answer(&result);
+
+        // MCP-origin request (B2): deliver the answer by resolving the waiting
+        // MCP tool call. No kill/`--resume` — the CLI turn continues natively
+        // with the tool_result in hand.
+        if let Some(sender) = self.take_mcp_answer_waiter(&request_id_key) {
+            let (answer_count, non_empty_answer_count, has_skipped_questions) =
+                Self::summarize_user_input_response(&result);
+            log::info!(
+                "Claude engine: AskUserQuestion (MCP) response accepted (request_id={}, turn_id={}, answer_count={}, non_empty_answer_count={}, has_skipped_questions={})",
+                request_id_key,
+                turn_id,
+                answer_count,
+                non_empty_answer_count,
+                has_skipped_questions
+            );
+            let _ = sender.send(answer_text);
+            return Ok(());
+        }
         let (answer_count, non_empty_answer_count, has_skipped_questions) =
             Self::summarize_user_input_response(&result);
         log::info!(
@@ -836,5 +855,110 @@ impl ClaudeSession {
         self.get_or_create_user_input_notify(&turn_id).notify_one();
 
         Ok(())
+    }
+
+    /// Raise an AskUserQuestion via the in-process MCP tool (B2 path) and block
+    /// until the user answers, returning the formatted tool_result text.
+    ///
+    /// Unlike the native plan-mode path, the answer is delivered by returning the
+    /// MCP tool_result to the still-running CLI turn — no kill/`--resume`. The
+    /// CLI is blocked awaiting our HTTP response while this future is pending, so
+    /// `isProcessing` stays true and the dialog preempts the queued messages,
+    /// exactly as with the native tool.
+    ///
+    /// The current live turn (whose event subscriber carries the RequestUserInput
+    /// to the frontend) is resolved from `active_turn_id()`. `input` is the MCP
+    /// tool's raw arguments (`{ questions: [...] }`), byte-identical to native.
+    pub async fn ask_via_mcp(&self, input: &Value) -> Result<String, String> {
+        let turn_id = self
+            .active_turn_id()
+            .ok_or_else(|| "no active turn for AskUserQuestion".to_string())?;
+        let turn_id = turn_id.as_str();
+        // Reuse the existing conversion so rendering + request_id derivation are
+        // identical to the native path. A synthetic, unique tool_id keeps
+        // concurrent asks within one turn from colliding.
+        let tool_id = {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            turn_id.hash(&mut hasher);
+            (input as *const Value as usize).hash(&mut hasher);
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+                .hash(&mut hasher);
+            format!("mcp-ask-{:016x}", hasher.finish())
+        };
+
+        let event = self
+            .convert_ask_user_question_to_request(&tool_id, input, turn_id)
+            .ok_or_else(|| "AskUserQuestion input had no valid questions".to_string())?;
+
+        // Pull the request_id back out of the event so we can register the waiter
+        // under the same key the frontend answer will arrive with.
+        let request_id = match &event {
+            EngineEvent::RequestUserInput { request_id, .. } => request_id
+                .as_str()
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| "RequestUserInput request_id was not a string".to_string())?,
+            _ => return Err("expected RequestUserInput event".to_string()),
+        };
+
+        let (tx, rx) = tokio::sync::oneshot::channel::<String>();
+        if let Ok(mut waiters) = self.mcp_answer_waiters.lock() {
+            waiters.insert(request_id.clone(), tx);
+        }
+
+        // Emit to the live turn's subscriber → existing React dialog.
+        self.emit_turn_event(turn_id, event);
+
+        // Block until the answer arrives (or the native 5-min bound elapses).
+        let answer = match tokio::time::timeout(std::time::Duration::from_secs(300), rx).await {
+            Ok(Ok(text)) => text,
+            Ok(Err(_)) => {
+                // Sender dropped without answering.
+                self.clear_mcp_answer_waiter(&request_id);
+                return Err("AskUserQuestion answer channel closed".to_string());
+            }
+            Err(_) => {
+                self.clear_mcp_answer_waiter(&request_id);
+                // Also drop the pending_user_inputs entry so a late answer is rejected.
+                if let Ok(mut pending) = self.pending_user_inputs.lock() {
+                    pending.remove(&request_id);
+                }
+                // Tell the frontend to dismiss the now-dead dialog (completed=true
+                // is the removal signal). Without this the card lingers forever.
+                self.emit_turn_event(
+                    turn_id,
+                    EngineEvent::RequestUserInput {
+                        workspace_id: self.workspace_id.clone(),
+                        request_id: Value::String(request_id.clone()),
+                        questions: Value::Array(Vec::new()),
+                        completed: true,
+                    },
+                );
+                return Err("AskUserQuestion timed out after 5 minutes".to_string());
+            }
+        };
+
+        Ok(answer)
+    }
+
+    /// Take the MCP answer waiter for `request_id`, if this request is MCP-origin.
+    /// Returns the oneshot sender so the caller can deliver the formatted answer.
+    pub(super) fn take_mcp_answer_waiter(
+        &self,
+        request_id: &str,
+    ) -> Option<tokio::sync::oneshot::Sender<String>> {
+        self.mcp_answer_waiters
+            .lock()
+            .ok()
+            .and_then(|mut waiters| waiters.remove(request_id))
+    }
+
+    fn clear_mcp_answer_waiter(&self, request_id: &str) {
+        if let Ok(mut waiters) = self.mcp_answer_waiters.lock() {
+            waiters.remove(request_id);
+        }
     }
 }

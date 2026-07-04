@@ -25,8 +25,9 @@ pub struct EngineManager {
     /// Cached engine statuses
     engine_statuses: RwLock<HashMap<EngineType, EngineStatus>>,
 
-    /// Claude session manager
-    pub claude_manager: ClaudeSessionManager,
+    /// Claude session manager. Wrapped in `Arc` so the in-process AskUserQuestion
+    /// MCP server can hold a shared handle for session lookup (see `askuser_mcp`).
+    pub claude_manager: Arc<ClaudeSessionManager>,
 
     /// OpenCode sessions per workspace
     opencode_sessions: Mutex<HashMap<String, Arc<OpenCodeSession>>>,
@@ -44,7 +45,7 @@ impl EngineManager {
         Self {
             active_engine: RwLock::new(EngineType::default()),
             engine_statuses: RwLock::new(HashMap::new()),
-            claude_manager: ClaudeSessionManager::new(),
+            claude_manager: Arc::new(ClaudeSessionManager::new()),
             opencode_sessions: Mutex::new(HashMap::new()),
             gemini_sessions: Mutex::new(HashMap::new()),
             engine_configs: RwLock::new(HashMap::new()),

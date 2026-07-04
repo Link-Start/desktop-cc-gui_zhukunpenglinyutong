@@ -1261,6 +1261,20 @@ export function AppShell() {
   const activeTurnId = activeThreadId
     ? (activeTurnIdByThread[activeThreadId] ?? null)
     : null;
+  // An open AskUserQuestion for the active thread holds the send queue — the CLI
+  // turn is blocked awaiting the answer. Mirror AskUserQuestionDialog's filter:
+  // match on workspace + thread_id (empty thread_id = current thread).
+  const hasPendingUserInput = useMemo(
+    () =>
+      Boolean(activeThreadId) &&
+      userInputRequests.some((req) => {
+        const requestThreadId = (req.params.thread_id ?? "").trim();
+        if (requestThreadId && requestThreadId !== activeThreadId) return false;
+        if (activeWorkspaceId && req.workspace_id !== activeWorkspaceId) return false;
+        return true;
+      }),
+    [userInputRequests, activeThreadId, activeWorkspaceId],
+  );
   const {
     activeImages,
     attachImages,
@@ -1298,6 +1312,7 @@ export function AppShell() {
     activeWorkspace,
     isProcessing,
     isReviewing,
+    hasPendingUserInput,
     steerEnabled: appSettings.experimentalSteerEnabled,
     activeEngine,
     connectWorkspace,

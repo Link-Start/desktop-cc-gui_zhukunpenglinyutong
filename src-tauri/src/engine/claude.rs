@@ -35,6 +35,8 @@ pub(crate) struct ClaudeAskUserQuestionResumeDiagnostic {
 }
 #[path = "claude/approval.rs"]
 mod approval;
+#[path = "claude/askuser_mcp.rs"]
+mod askuser_mcp;
 #[path = "claude/curated_skill_prompt.rs"]
 mod curated_skill_prompt;
 #[path = "claude/event_conversion.rs"]
@@ -60,6 +62,9 @@ use approval::{
 #[cfg(test)]
 #[path = "claude/tests_stream.rs"]
 mod tests_stream;
+pub use askuser_mcp::{
+    global as askuser_mcp_global, init_global as init_askuser_mcp_global, AskUserMcpServer,
+};
 pub use manager::ClaudeSessionManager;
 #[cfg(test)]
 use stream_helpers::extract_text_from_content;
@@ -342,6 +347,27 @@ pub struct ClaudeSession {
     /// Optional observer for real AskUserQuestion resume success/failure.
     ask_user_question_resume_diagnostic_sink:
         StdMutex<Option<ClaudeAskUserQuestionResumeDiagnosticSink>>,
+    /// Waiters for AskUserQuestion requests answered via the in-process MCP tool
+    /// (B2 path): request_id -> oneshot sender carrying the formatted answer text.
+    /// Present here means the answer is delivered by returning the MCP tool_result,
+    /// so the kill/`--resume` path is skipped for that request.
+    mcp_answer_waiters: StdMutex<HashMap<String, tokio::sync::oneshot::Sender<String>>>,
+    /// The turn currently being processed, if any. Set for the duration of
+    /// `send_message_with_app_settings`. The in-process MCP server reads this to
+    /// route a mid-turn AskUserQuestion to the live turn's event subscriber.
+    active_turn_id: StdMutex<Option<String>>,
+}
+
+/// Clears the session's active turn on drop, covering every exit path of
+/// `send_message_with_app_settings` (including `?`/panic unwinds).
+struct ActiveTurnGuard<'a> {
+    session: &'a ClaudeSession,
+}
+
+impl Drop for ActiveTurnGuard<'_> {
+    fn drop(&mut self) {
+        self.session.set_active_turn(None);
+    }
 }
 
 impl ClaudeSession {
@@ -605,6 +631,8 @@ impl ClaudeSession {
             thread_id_by_turn: StdMutex::new(HashMap::new()),
             pending_user_input_resume_diagnostic_by_turn: StdMutex::new(HashMap::new()),
             ask_user_question_resume_diagnostic_sink: StdMutex::new(None),
+            mcp_answer_waiters: StdMutex::new(HashMap::new()),
+            active_turn_id: StdMutex::new(None),
         }
     }
 
@@ -891,6 +919,7 @@ impl ClaudeSession {
 
         // Access mode / permission handling
         // Maps UI access modes to Claude Code CLI permission flags
+        let is_plan_mode = matches!(params.access_mode.as_deref(), Some("read-only"));
         match params.access_mode.as_deref() {
             Some("full-access") => {
                 // Full access: bypass all permission checks
@@ -910,6 +939,39 @@ impl ClaudeSession {
                 // "current" mode: auto-accept edits but still prompt for dangerous ops
                 cmd.arg("--permission-mode");
                 cmd.arg("acceptEdits");
+            }
+        }
+
+        // Register the in-process AskUserQuestion MCP server in NON-plan modes.
+        // In plan mode the CLI already exposes the native AskUserQuestion tool, so
+        // registering ours would double the surface. Outside plan mode the native
+        // tool is never offered, so this is what restores mid-turn structured asks.
+        //
+        // MCP tools are permission-gated, so we must also allow ours explicitly
+        // (verified: without this the CLI reports "not granted" and the model
+        // can't get the answer). `--dangerously-skip-permissions` (full-access)
+        // already covers it, but allowing it is harmless and keeps modes uniform.
+        // We intentionally do NOT pass `--strict-mcp-config` so the user's own
+        // MCP servers (from ~/.claude.json) keep working — this is purely additive.
+        if !is_plan_mode {
+            if let Some(server) = crate::engine::claude::askuser_mcp_global() {
+                cmd.arg("--mcp-config");
+                cmd.arg(server.mcp_config_json(&self.workspace_id));
+                cmd.arg("--allowedTools");
+                cmd.arg(crate::engine::claude::AskUserMcpServer::allowed_tool_name());
+                // The CLI's per-request MCP tool-call fetch timeout defaults to 60s
+                // for remote HTTP servers. Our AskUserQuestion server blocks up to
+                // 300s waiting for the user, so without this the CLI abandons the
+                // call at 60s and any ask the user takes longer than a minute on is
+                // lost. Raise it to match our server bound (ms). Only set when our
+                // MCP ask is actually wired; the user can still override via env.
+                if std::env::var_os("MCP_TOOL_TIMEOUT").is_none() {
+                    cmd.env("MCP_TOOL_TIMEOUT", "300000");
+                }
+            } else {
+                log::warn!(
+                    "[claude] AskUserQuestion MCP server not started; mid-turn asks unavailable this turn"
+                );
             }
         }
 
@@ -1015,6 +1077,11 @@ impl ClaudeSession {
         turn_id: &str,
         app_settings: Option<&crate::types::AppSettings>,
     ) -> Result<String, String> {
+        // Mark this as the active turn so a mid-turn MCP AskUserQuestion can find
+        // the live event subscriber. Cleared on any exit path via the guard.
+        self.set_active_turn(Some(turn_id));
+        let _active_turn_guard = ActiveTurnGuard { session: self };
+
         match self
             .send_message_attempt(params.clone(), turn_id, true, app_settings)
             .await
@@ -1029,6 +1096,18 @@ impl ClaudeSession {
             }
             result => result,
         }
+    }
+
+    fn set_active_turn(&self, turn_id: Option<&str>) {
+        if let Ok(mut active) = self.active_turn_id.lock() {
+            *active = turn_id.map(ToOwned::to_owned);
+        }
+    }
+
+    /// The turn currently being processed, if any. Used by the in-process MCP
+    /// AskUserQuestion server to route a mid-turn ask to the live subscriber.
+    pub fn active_turn_id(&self) -> Option<String> {
+        self.active_turn_id.lock().ok().and_then(|active| active.clone())
     }
 
     async fn send_message_attempt(

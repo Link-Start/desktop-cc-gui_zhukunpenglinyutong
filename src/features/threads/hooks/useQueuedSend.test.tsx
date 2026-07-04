@@ -86,6 +86,34 @@ describe("useQueuedSend", () => {
     expect(options.sendUserMessage).toHaveBeenLastCalledWith("Second", []);
   });
 
+  it("holds the queue while an AskUserQuestion is pending, then flushes once it clears", async () => {
+    const options = makeOptions({ hasPendingUserInput: true });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("Queued during ask");
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Turn is blocked on the dialog answer — must NOT dispatch the queued message.
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+
+    // Dialog answered → pending clears → queue drains.
+    await act(async () => {
+      rerender({ ...options, hasPendingUserInput: false });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith("Queued during ask", []);
+  });
+
   it("waits for processing to start before sending the next queued message", async () => {
     const options = makeOptions();
     const { result } = renderHook((props) => useQueuedSend(props), {

@@ -299,6 +299,45 @@ async fn respond_to_user_input_rejects_mismatched_request_id() {
     assert!(session.has_any_pending_user_input());
 }
 
+#[tokio::test]
+async fn respond_to_user_input_settles_note_only_mcp_answer() {
+    // A note-only answer (free text, NO option selected) must still settle the
+    // waiting MCP tool call — guards the ask_via_mcp oneshot delivery path.
+    let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
+    let request_id = "ask-note-only";
+    if let Ok(mut pending) = session.pending_user_inputs.lock() {
+        pending.insert(request_id.to_string(), "turn-note-only".to_string());
+    }
+    let (tx, rx) = tokio::sync::oneshot::channel::<String>();
+    if let Ok(mut waiters) = session.mcp_answer_waiters.lock() {
+        waiters.insert(request_id.to_string(), tx);
+    }
+
+    // Note-only payload: the frontend emits the note under the question id with a
+    // `user_note:` prefix and no option value.
+    let result = json!({
+        "answers": {
+            "q-0": { "answers": ["user_note: just a note"] }
+        }
+    });
+    session
+        .respond_to_user_input(json!(request_id), result)
+        .await
+        .expect("note-only answer should settle, not error");
+
+    let answer = rx
+        .await
+        .expect("MCP waiter must receive the note-only answer (else ask_via_mcp hangs)");
+    assert!(
+        answer.contains("just a note"),
+        "settled answer should carry the note text, got: {answer}"
+    );
+    assert!(
+        !session.has_any_pending_user_input(),
+        "pending request should be consumed on settle"
+    );
+}
+
 #[test]
 fn build_command_adds_external_spec_root_when_configured() {
     let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
@@ -316,6 +355,45 @@ fn build_command_adds_external_spec_root_when_configured() {
     assert!(args.windows(2).any(|window| {
         window[0] == "--add-dir" && window[1] == params.custom_spec_root.clone().unwrap()
     }));
+}
+
+#[tokio::test]
+async fn build_command_raises_mcp_tool_timeout_when_ask_wired() {
+    // Root cause of the "answers >60s are lost" bug (2026-07-04): the CLI's
+    // per-request MCP tool-call fetch timeout defaults to 60s for remote HTTP
+    // servers, so it abandons our AskUserQuestion call before a slow user answers.
+    // build_command must raise MCP_TOOL_TIMEOUT to our 300s server bound whenever
+    // the MCP ask is wired (non-plan mode + server started).
+    let manager = std::sync::Arc::new(ClaudeSessionManager::new());
+    // Idempotent; starts the process-global in-process MCP server so the wiring
+    // branch in build_command is taken.
+    init_askuser_mcp_global(manager)
+        .await
+        .expect("MCP server should start for the test");
+    // Don't fight a user-provided override if one is set in the test env.
+    if std::env::var_os("MCP_TOOL_TIMEOUT").is_some() {
+        return;
+    }
+
+    let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
+    let mut params = SendMessageParams::default();
+    params.text = "hello".to_string();
+    // Non-plan mode → MCP ask is wired.
+    params.access_mode = Some("acceptEdits".to_string());
+
+    let command = session.build_command(&params, false, true, None, None);
+    let timeout_env = command
+        .as_std()
+        .get_envs()
+        .find(|(key, _)| *key == "MCP_TOOL_TIMEOUT")
+        .and_then(|(_, value)| value)
+        .map(|value| value.to_string_lossy().to_string());
+
+    assert_eq!(
+        timeout_env.as_deref(),
+        Some("300000"),
+        "MCP_TOOL_TIMEOUT must be raised to 300s when the AskUserQuestion MCP ask is wired"
+    );
 }
 
 #[test]
