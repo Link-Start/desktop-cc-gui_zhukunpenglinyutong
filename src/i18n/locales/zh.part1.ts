@@ -1627,6 +1627,8 @@ const zhPart1 = {
     archiveActiveThread: "归档活动对话",
     closeCurrentSession: "关闭当前会话",
     typeShortcut: "输入快捷键",
+    pressShortcutPrompt: "请按快捷键…",
+    resetToDefault: "重置为默认",
     pressNewShortcut: "聚焦时按下新快捷键。默认：",
     composerSubtitle: "编辑器",
     composerSubDescription: "在模型、访问、推理和协作模式之间循环。",

@@ -2,10 +2,31 @@
 
 .vendor-settings-panel {
   margin-top: 12px;
-  --vendor-button-primary: var(--surface-bubble-user);
-  --vendor-button-primary-hover: color-mix(in srgb, var(--surface-bubble-user) 86%, #000 14%);
-  --vendor-button-primary-border: color-mix(in srgb, var(--surface-bubble-user) 72%, var(--border-stronger));
-  --vendor-button-primary-soft: color-mix(in srgb, var(--surface-bubble-user) 14%, var(--surface-card-strong));
+  /*
+   * Mirror the basic-settings redesign tokens (settings.part2.basic-redesign.css)
+   * so vendor cards share the exact same soft surfaces / borders / dividers.
+   * The panel's shadcn Button/Badge/Tabs are left native — no re-skin — matching
+   * the basic settings page the user signed off on.
+   */
+  --settings-basic-text: var(--text-strong);
+  --settings-basic-text-muted: var(--text-muted);
+  --settings-basic-surface: color-mix(in srgb, var(--surface-card-strong) 84%, var(--surface-messages) 16%);
+  --settings-basic-surface-strong: color-mix(in srgb, var(--surface-card) 88%, var(--surface-messages) 12%);
+  --settings-basic-border: color-mix(in srgb, var(--border-strong) 72%, transparent);
+  --settings-basic-divider: color-mix(in srgb, var(--border-muted) 88%, transparent);
+  --settings-basic-control: color-mix(in srgb, var(--surface-control) 94%, var(--surface-card) 6%);
+  --settings-basic-control-hover: color-mix(in srgb, var(--surface-control-hover) 92%, var(--surface-card) 8%);
+  --settings-basic-control-border: color-mix(in srgb, var(--border-strong) 80%, transparent);
+  /*
+   * Accent tokens re-pointed from the blue user-bubble to the neutral shadcn
+   * primary, so the few legacy call-sites still referencing them (count badge,
+   * codex "official" badge, dialog solid buttons) read as native shadcn.
+   */
+  --vendor-button-primary: var(--primary);
+  --vendor-button-primary-fg: var(--primary-foreground);
+  --vendor-button-primary-hover: color-mix(in srgb, var(--primary) 88%, transparent);
+  --vendor-button-primary-border: var(--settings-basic-control-border);
+  --vendor-button-primary-soft: var(--settings-basic-surface-strong);
 }
 
 .vendor-section-title {
@@ -115,16 +136,16 @@
   gap: 12px;
   padding: 12px 14px;
   margin-bottom: 12px;
-  border: 1px solid var(--border-muted);
+  border: 1px solid var(--settings-basic-border);
   border-radius: 10px;
-  background: var(--surface-card);
+  background: var(--settings-basic-surface);
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .vendor-plugin-model-entry:hover {
-  border-color: var(--border-stronger);
-  background: var(--surface-hover);
+  border-color: color-mix(in srgb, var(--settings-basic-control-border) 75%, #b9c5df 25%);
+  background: var(--settings-basic-surface-strong);
 }
 
 .vendor-provider-label-toggle {
@@ -154,7 +175,7 @@
   justify-content: center;
   font-size: 11px;
   font-weight: 600;
-  color: #fff;
+  color: var(--vendor-button-primary-fg);
   background: var(--vendor-button-primary);
 }
 

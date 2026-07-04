@@ -1557,7 +1557,11 @@ export function SettingsView({
     if (!value) {
       return;
     }
+    // Blur after a successful capture so the recorded value shows immediately
+    // (the input renders blank while focused to surface the "press shortcut" prompt).
+    const input = event.currentTarget;
     void updateShortcut(key, value);
+    input.blur();
   };
 
   const trimmedGroupName = newGroupName.trim();

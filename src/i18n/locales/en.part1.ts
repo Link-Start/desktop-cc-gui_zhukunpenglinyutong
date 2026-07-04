@@ -1583,6 +1583,8 @@ const enPart1 = {
     archiveActiveThread: "Archive active thread",
     closeCurrentSession: "Close current session",
     typeShortcut: "Type shortcut",
+    pressShortcutPrompt: "Press shortcut…",
+    resetToDefault: "Reset to default",
     pressNewShortcut: "Press a new shortcut while focused. Default:",
     composerSubtitle: "Composer",
     composerSubDescription:
