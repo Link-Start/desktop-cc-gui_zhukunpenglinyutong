@@ -2010,6 +2010,7 @@ function SidebarImpl({
             </div>
           </ScrollArea>
           <div className="sidebar-bottom-nav">
+            {runtimeNoticeDockNode}
             <SidebarSettingsMenu
               isOpen={isSettingsMenuOpen}
               appMode={appMode}
@@ -2026,7 +2027,6 @@ function SidebarImpl({
               onOpenSettings={onOpenSettings}
               onAppModeChange={onAppModeChange}
             />
-            {runtimeNoticeDockNode}
           </div>
         </div>
       </div>

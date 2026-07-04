@@ -162,6 +162,20 @@
   align-items: center;
 }
 
+/*
+ * Terminal-shell row carries two trailing buttons (save + clear); keep them on
+ * the same row as the input instead of dropping "clear" to a full-width second
+ * row. Scoped to the terminal card so the proxy row (single button) is untouched.
+ */
+.settings-section-basic .settings-basic-terminal-card .settings-proxy-input-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.settings-section-basic .settings-basic-terminal-card .settings-proxy-input-row .settings-button-compact {
+  min-height: 36px;
+  padding-inline: 14px;
+}
+
 .settings-section-basic .settings-proxy-input {
   min-height: 36px;
 }
@@ -423,11 +437,16 @@
 }
 
 @media (max-width: 900px) {
-  .settings-section-basic .settings-proxy-input-row {
+  .settings-section-basic .settings-proxy-input-row,
+  .settings-section-basic .settings-basic-terminal-card .settings-proxy-input-row {
     grid-template-columns: 1fr;
   }
 
   .settings-section-basic .settings-proxy-save-btn {
+    width: 100%;
+  }
+
+  .settings-section-basic .settings-basic-terminal-card .settings-proxy-input-row .settings-button-compact {
     width: 100%;
   }
 }
@@ -681,6 +700,82 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Native range inputs (interface scale / code font size / window opacity) are
+ * restyled into a shadcn Slider look: thin 6px rail + small circular thumb.
+ * Kept as <input type="range"> so existing fireEvent.change tests still drive
+ * them. ponytail: uniform rail (no primary progress fill) — WebKit can't fill a
+ * range track without JS; upgrade to an inline --value gradient if a fill is
+ * wanted.
+ */
+.settings-section-basic .settings-input--range,
+.settings-section-tabbed .settings-input--range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+  accent-color: auto;
+  cursor: pointer;
+}
+
+.settings-section-basic .settings-input--range::-webkit-slider-runnable-track,
+.settings-section-tabbed .settings-input--range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--settings-basic-control-border) 52%, transparent);
+}
+
+.settings-section-basic .settings-input--range::-moz-range-track,
+.settings-section-tabbed .settings-input--range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--settings-basic-control-border) 52%, transparent);
+}
+
+.settings-section-basic .settings-input--range::-webkit-slider-thumb,
+.settings-section-tabbed .settings-input--range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: -4.5px;
+  border-radius: 999px;
+  background: var(--settings-basic-surface);
+  border: 1px solid color-mix(in srgb, var(--settings-basic-text) 55%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.settings-section-basic .settings-input--range::-moz-range-thumb,
+.settings-section-tabbed .settings-input--range::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--settings-basic-surface);
+  border: 1px solid color-mix(in srgb, var(--settings-basic-text) 55%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+}
+
+.settings-section-basic .settings-input--range:hover::-webkit-slider-thumb,
+.settings-section-tabbed .settings-input--range:hover::-webkit-slider-thumb {
+  border-color: color-mix(in srgb, var(--settings-basic-text) 72%, transparent);
+}
+
+.settings-section-basic .settings-input--range:hover::-moz-range-thumb,
+.settings-section-tabbed .settings-input--range:hover::-moz-range-thumb {
+  border-color: color-mix(in srgb, var(--settings-basic-text) 72%, transparent);
+}
+
+.settings-section-basic .settings-input--range:focus-visible::-webkit-slider-thumb,
+.settings-section-tabbed .settings-input--range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--settings-basic-text) 16%, transparent);
+}
+
+.settings-section-basic .settings-input--range:focus-visible::-moz-range-thumb,
+.settings-section-tabbed .settings-input--range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--settings-basic-text) 16%, transparent);
+}
+
 .settings-section-basic .settings-field.settings-basic-item > .settings-help {
   grid-area: help;
   margin: 0;
@@ -735,8 +830,8 @@
   display: flex;
   justify-content: stretch;
   gap: 2px;
-  padding: 3px;
-  border-radius: 9px;
+  padding: 2px;
+  border-radius: 8px;
   border: 1px solid var(--settings-basic-divider);
   background: color-mix(in srgb, var(--settings-basic-control) 45%, transparent);
 }
@@ -744,9 +839,9 @@
 .settings-section-basic .settings-basic-theme-option,
 .settings-section-basic .settings-basic-language-option {
   flex: 1 1 0;
-  min-height: 30px;
+  min-height: 28px;
   min-width: 0;
-  padding: 5px 10px;
+  padding: 4px 10px;
   border: none;
   border-radius: 6px;
   background: transparent;
@@ -771,58 +866,36 @@
   color: var(--settings-basic-text);
   border: none;
   background: var(--settings-basic-surface);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-.settings-section-basic .settings-basic-theme-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-}
-
-.settings-section-basic .settings-basic-theme-icon svg {
-  width: 11px;
-  height: 11px;
-}
-
+/*
+ * Icons render as plain monochrome glyphs (shadcn ToggleGroup style) — the
+ * previous colored circular chips read as too heavy / not minimal. They inherit
+ * the option's muted color and darken with the active option.
+ */
+.settings-section-basic .settings-basic-theme-icon,
 .settings-section-basic .settings-basic-language-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border: 1px solid transparent;
+  width: auto;
+  height: auto;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--settings-basic-text-muted) 92%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
+.settings-section-basic .settings-basic-theme-option.active .settings-basic-theme-icon,
+.settings-section-basic .settings-basic-language-option.active .settings-basic-language-icon {
+  color: var(--settings-basic-text);
+}
+
+.settings-section-basic .settings-basic-theme-icon svg,
 .settings-section-basic .settings-basic-language-icon svg {
-  width: 11px;
-  height: 11px;
-}
-
-.settings-section-basic .settings-basic-language-icon-zh {
-  background: #4a5a7a;
-  border-color: #64789f;
-}
-
-.settings-section-basic .settings-basic-language-icon-en {
-  background: #303745;
-  border-color: #495062;
-}
-
-.settings-section-basic .settings-basic-theme-icon-system {
-  background: #4a5a7a;
-  border-color: #64789f;
-}
-
-.settings-section-basic .settings-basic-theme-icon-light {
-  background: #e7e8eb;
-  border-color: #c8cbd2;
-}
-
-.settings-section-basic .settings-basic-theme-icon-dark {
-  background: #222831;
-  border-color: #3f4652;
+  width: 15px;
+  height: 15px;
 }
 
 .settings-section-basic .settings-input,
@@ -862,7 +935,7 @@
 
 .settings-section-basic .settings-field-row--font {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 112px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
 }
@@ -894,10 +967,10 @@
   -webkit-appearance: none;
   -moz-appearance: none;
   width: 100%;
-  height: 44px;
-  min-height: 44px;
-  max-height: 44px;
-  padding-inline: 12px 32px;
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  padding-inline: 12px 30px;
   padding-block: 0;
   border-radius: 8px;
   border-color: var(--settings-basic-border);
@@ -919,21 +992,22 @@
 }
 
 .settings-section-basic .settings-font-reset {
-  width: 112px;
-  min-width: 112px;
-  max-width: 112px;
-  height: 40px;
-  min-height: 40px;
-  max-height: 40px;
-  padding: 0;
+  width: auto;
+  min-width: 64px;
+  max-width: none;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  padding: 0 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  border-color: var(--settings-basic-border);
+  border: 1px solid var(--settings-basic-border);
   background: var(--settings-basic-surface);
   white-space: nowrap;
   line-height: 1;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.01em;
   transition: border-color 140ms ease, background-color 140ms ease;
@@ -951,18 +1025,32 @@
 .settings-section-basic .ghost.settings-button-compact,
 .settings-section-basic .ghost.settings-color-reset,
 .settings-section-basic .ghost.settings-sound-test-btn {
-  min-height: 36px;
+  min-height: 32px;
   padding: 0 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid var(--settings-basic-control-border);
   background: color-mix(in srgb, var(--settings-basic-control) 92%, transparent);
   color: var(--settings-basic-text);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .settings-section-basic .ghost.settings-button-compact:hover,
 .settings-section-basic .ghost.settings-color-reset:hover,
 .settings-section-basic .ghost.settings-sound-test-btn:hover {
   background: color-mix(in srgb, var(--settings-basic-control-hover) 90%, transparent);
+}
+
+/*
+ * Primary compact buttons (e.g. UI-scale "Save") keep the global dark fill but
+ * drop the chunky 10px radius / 600 weight so they read as shadcn size="sm".
+ */
+.settings-section-basic .primary.settings-button-compact {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .settings-section-basic .settings-color-config-card {
@@ -996,19 +1084,43 @@
 }
 
 .settings-section-basic .settings-color-swatch {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
+  padding: 3px;
+  border-width: 1px;
+  border-radius: 8px;
   border-color: color-mix(in srgb, var(--settings-basic-control-border) 90%, transparent);
 }
 
+.settings-section-basic .settings-color-swatch:hover {
+  transform: none;
+  border-color: color-mix(in srgb, var(--settings-basic-text) 34%, transparent);
+}
+
 .settings-section-basic .settings-color-swatch.is-active {
-  border-color: color-mix(in srgb, var(--primary) 58%, #9cb2e4 42%);
+  border-color: color-mix(in srgb, var(--primary) 62%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 32%, transparent);
+}
+
+.settings-section-basic .settings-color-swatch-inner {
+  border-radius: 5px;
 }
 
 .settings-section-basic .settings-color-picker {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   border-color: var(--settings-basic-control-border);
+}
+
+.settings-section-basic .settings-color-hex-input {
+  min-height: 34px;
+  width: 116px;
+  font-size: 12px;
+}
+
+.settings-section-basic .settings-color-reset {
+  min-height: 32px;
 }
 
 .settings-section-basic .settings-color-preset-grid {

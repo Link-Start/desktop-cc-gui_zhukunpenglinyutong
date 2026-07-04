@@ -369,6 +369,49 @@ function areRuntimeRowsSignalEquivalent(
   });
 }
 
+function areNoticeMessageParamsEqual(
+  previousParams: GlobalRuntimeNotice["messageParams"],
+  nextParams: GlobalRuntimeNotice["messageParams"],
+) {
+  if (Object.is(previousParams, nextParams)) {
+    return true;
+  }
+  const previousKeys = Object.keys(previousParams ?? {});
+  const nextKeys = Object.keys(nextParams ?? {});
+  if (previousKeys.length !== nextKeys.length) {
+    return false;
+  }
+  return previousKeys.every((key) =>
+    Object.is(previousParams?.[key], nextParams?.[key]),
+  );
+}
+
+function areGlobalRuntimeNoticesEqual(
+  previousNotices: readonly GlobalRuntimeNotice[],
+  nextNotices: readonly GlobalRuntimeNotice[],
+) {
+  if (previousNotices.length !== nextNotices.length) {
+    return false;
+  }
+  return nextNotices.every((nextNotice, index) => {
+    const previousNotice = previousNotices[index];
+    return (
+      previousNotice !== undefined &&
+      previousNotice.id === nextNotice.id &&
+      previousNotice.severity === nextNotice.severity &&
+      previousNotice.category === nextNotice.category &&
+      previousNotice.messageKey === nextNotice.messageKey &&
+      previousNotice.timestampMs === nextNotice.timestampMs &&
+      previousNotice.repeatCount === nextNotice.repeatCount &&
+      previousNotice.dedupeKey === nextNotice.dedupeKey &&
+      areNoticeMessageParamsEqual(
+        previousNotice.messageParams,
+        nextNotice.messageParams,
+      )
+    );
+  });
+}
+
 export function sanitizeGlobalRuntimeNoticeDockVisibility(
   value: unknown,
 ): GlobalRuntimeNoticeDockVisibility {
@@ -415,7 +458,12 @@ export function useGlobalRuntimeNoticeDock(workspaces: readonly WorkspaceInfo[] 
 
   useEffect(() => {
     return subscribeGlobalRuntimeNotices((snapshot) => {
-      setNotices([...snapshot]);
+      const nextVisibleNotices = filterVisibleGlobalRuntimeNoticeDockItems(snapshot);
+      setNotices((previousNotices) =>
+        areGlobalRuntimeNoticesEqual(previousNotices, nextVisibleNotices)
+          ? previousNotices
+          : nextVisibleNotices,
+      );
     });
   }, []);
 
@@ -443,10 +491,7 @@ export function useGlobalRuntimeNoticeDock(workspaces: readonly WorkspaceInfo[] 
     writeClientStoreValue("app", GLOBAL_RUNTIME_NOTICE_DOCK_VISIBILITY_KEY, visibility);
   }, [visibility]);
 
-  const visibleNotices = useMemo(
-    () => filterVisibleGlobalRuntimeNoticeDockItems(notices),
-    [notices],
-  );
+  const visibleNotices = notices;
 
   useEffect(() => {
     let disposed = false;

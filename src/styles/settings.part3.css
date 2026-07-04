@@ -71,24 +71,7 @@
 }
 
 /* theme/language selected pill inherits the neutral segmented style — no accent fill */
-
-:root[data-theme="light"] .settings-section-basic .settings-basic-theme-icon-system {
-  background: #56719a;
-  border-color: #4c658c;
-  color: #f8fbff;
-}
-
-:root[data-theme="light"] .settings-section-basic .settings-basic-theme-icon-light {
-  background: #ffffff;
-  border-color: #8fa2c4;
-  color: #2f405e;
-}
-
-:root[data-theme="light"] .settings-section-basic .settings-basic-theme-icon-dark {
-  background: #1f2a3c;
-  border-color: #172132;
-  color: #e5edf9;
-}
+/* theme icons render as plain monochrome glyphs — no colored chips in light mode */
 
 /* switch thumb uses the native shadcn appearance */
 
@@ -115,24 +98,7 @@
   }
 
   /* theme/language selected pill inherits the neutral segmented style — no accent fill */
-
-  :root:not([data-theme]) .settings-section-basic .settings-basic-theme-icon-system {
-    background: #56719a;
-    border-color: #4c658c;
-    color: #f8fbff;
-  }
-
-  :root:not([data-theme]) .settings-section-basic .settings-basic-theme-icon-light {
-    background: #ffffff;
-    border-color: #8fa2c4;
-    color: #2f405e;
-  }
-
-  :root:not([data-theme]) .settings-section-basic .settings-basic-theme-icon-dark {
-    background: #1f2a3c;
-    border-color: #172132;
-    color: #e5edf9;
-  }
+  /* theme icons render as plain monochrome glyphs — no colored chips in light mode */
 
   /* switch thumb uses the native shadcn appearance */
 }

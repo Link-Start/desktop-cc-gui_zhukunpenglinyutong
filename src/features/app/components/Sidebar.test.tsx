@@ -81,7 +81,7 @@ describe("Sidebar", () => {
     expect(settingsButton).toBeTruthy();
     expect(runtimeNoticeButton).toBeTruthy();
     expect(
-      settingsButton?.compareDocumentPosition(runtimeNoticeButton as Node),
+      runtimeNoticeButton?.compareDocumentPosition(settingsButton as Node),
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 

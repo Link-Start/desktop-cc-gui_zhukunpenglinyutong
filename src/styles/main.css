@@ -1001,7 +1001,7 @@ body[data-panel-resizing="true"] .main {
 
 .workspace-title {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.2px;
   max-width: min(32vw, 420px);
   overflow: hidden;

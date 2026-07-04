@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearGlobalRuntimeNotices,
   getGlobalRuntimeNoticesSnapshot,
+  pushGlobalRuntimeNotice,
 } from "../../../services/globalRuntimeNotices";
 import {
   recordStartupMilestone,
@@ -223,6 +224,28 @@ describe("useGlobalRuntimeNoticeDock", () => {
 
     expect(result.current.status).toBe("idle");
     expect(resolveGlobalRuntimeNoticeDockStatus(result.current.notices, Date.now())).toBe("idle");
+  });
+
+  it("keeps exposed notices stable when invisible info notices are appended", async () => {
+    const { result } = renderHook(() => useGlobalRuntimeNoticeDock([]));
+
+    await act(async () => {
+      await tauriMocks.getRuntimePoolSnapshot.mock.results[0]?.value;
+    });
+
+    const exposedNotices = result.current.notices;
+
+    act(() => {
+      pushGlobalRuntimeNotice({
+        severity: "info",
+        category: "diagnostic",
+        messageKey: "runtimeNotice.startup.commandCompleted",
+      });
+    });
+
+    expect(getGlobalRuntimeNoticesSnapshot()).toHaveLength(1);
+    expect(result.current.notices).toBe(exposedNotices);
+    expect(result.current.status).toBe("idle");
   });
 
   it("keeps runtime row signal state stable when snapshot order changes only", async () => {

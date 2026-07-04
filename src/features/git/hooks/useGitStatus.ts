@@ -37,6 +37,40 @@ type UseGitStatusOptions = {
   pollingMode?: GitStatusPollingMode;
 };
 
+function areGitFileStatusesEqual(
+  left: GitFileStatus[],
+  right: GitFileStatus[],
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((leftFile, index) => {
+    const rightFile = right[index];
+    return (
+      rightFile !== undefined &&
+      leftFile.path === rightFile.path &&
+      leftFile.status === rightFile.status &&
+      leftFile.additions === rightFile.additions &&
+      leftFile.deletions === rightFile.deletions &&
+      leftFile.isDiffOnlyFallback === rightFile.isDiffOnlyFallback &&
+      leftFile.mutationDisabled === rightFile.mutationDisabled
+    );
+  });
+}
+
+function areGitStatusesEqual(left: GitStatusState, right: GitStatusState): boolean {
+  return (
+    left.isGitRepository === right.isGitRepository &&
+    left.branchName === right.branchName &&
+    left.totalAdditions === right.totalAdditions &&
+    left.totalDeletions === right.totalDeletions &&
+    left.error === right.error &&
+    areGitFileStatusesEqual(left.files, right.files) &&
+    areGitFileStatusesEqual(left.stagedFiles, right.stagedFiles) &&
+    areGitFileStatusesEqual(left.unstagedFiles, right.unstagedFiles)
+  );
+}
+
 export function useGitStatus(
   activeWorkspace: WorkspaceInfo | null,
   options?: UseGitStatusOptions,
@@ -117,8 +151,14 @@ export function useGitStatus(
           branchName: resolvedBranchName,
           error: isGitRepository ? null : "not a git repository",
         };
-        setStatus(nextStatus);
-        cachedStatusRef.current.set(workspaceId, nextStatus);
+        setStatus((currentStatus) => {
+          if (areGitStatusesEqual(currentStatus, nextStatus)) {
+            cachedStatusRef.current.set(workspaceId, currentStatus);
+            return currentStatus;
+          }
+          cachedStatusRef.current.set(workspaceId, nextStatus);
+          return nextStatus;
+        });
       } catch (err) {
         console.error("Failed to load git status", err);
         if (
@@ -132,7 +172,11 @@ export function useGitStatus(
         const nextStatus = cached
           ? { ...cached, error: message }
           : { ...emptyStatus, error: message };
-        setStatus(nextStatus);
+        setStatus((currentStatus) =>
+          areGitStatusesEqual(currentStatus, nextStatus)
+            ? currentStatus
+            : nextStatus,
+        );
       } finally {
         if (inFlightRequestIdRef.current === currentRequestId) {
           inFlightRef.current = null;

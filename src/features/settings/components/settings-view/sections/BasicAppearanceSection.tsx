@@ -511,6 +511,8 @@ export function BasicAppearanceSection({
           </div>
         </div>
       </div>
+      {/* 界面显示面板已隐藏，仅隐藏 UI，底层可见性逻辑保留 */}
+      {false && (
       <div className="settings-basic-group-card settings-basic-group-card--list settings-client-ui-visibility-card">
         <div className="settings-client-ui-visibility-head">
           <div>
@@ -603,6 +605,7 @@ export function BasicAppearanceSection({
           );
         })}
       </div>
+      )}
       <div className="settings-color-config-card settings-basic-group-card">
         <div className="settings-color-config-head">
           <MessageCircle className="settings-color-config-icon" aria-hidden />

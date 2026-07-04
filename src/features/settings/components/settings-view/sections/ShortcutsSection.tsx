@@ -138,37 +138,47 @@ export function ShortcutsSection({
               {group.items.map((item) => {
                 const Icon = shortcutIconByActionId[item.id] ?? Settings;
                 const defaultShortcut = resolveDefaultShortcut(item);
+                const label = t(item.labelKey);
                 return (
                   <div className="settings-shortcuts-item" key={item.setting}>
-                    <div className="settings-shortcuts-item-heading">
-                      <span className="settings-shortcuts-item-icon" aria-hidden="true">
+                    <div className="settings-shortcuts-item-main">
+                      <span
+                        className="settings-shortcuts-item-icon"
+                        aria-hidden="true"
+                      >
                         <Icon size={15} strokeWidth={2.1} />
                       </span>
-                      <div className="settings-shortcuts-item-title">
-                        {t(item.labelKey)}
+                      <div className="settings-shortcuts-item-text">
+                        <div className="settings-shortcuts-item-title">
+                          {label}
+                        </div>
+                        <div className="settings-shortcuts-item-default">
+                          {t(item.defaultLabelKey ?? "settings.defaultColon")}{" "}
+                          {formatShortcutForPlatform(defaultShortcut)}
+                        </div>
                       </div>
                     </div>
-                    <input
-                      className="settings-input settings-input--shortcut settings-shortcuts-item-input"
-                      value={formatShortcutForPlatform(shortcutDrafts[item.draftKey])}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, item.setting)
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      aria-label={`${t(item.labelKey)} ${t("settings.typeShortcut")}`}
-                      readOnly
-                    />
-                    <div className="settings-shortcuts-item-footer">
-                      <span className="settings-shortcuts-item-default">
-                        {t(item.defaultLabelKey ?? "settings.defaultColon")}{" "}
-                        {formatShortcutForPlatform(defaultShortcut)}
-                      </span>
+                    <div className="settings-shortcuts-item-control">
+                      <input
+                        className="settings-input settings-input--shortcut settings-shortcuts-item-input"
+                        value={formatShortcutForPlatform(
+                          shortcutDrafts[item.draftKey],
+                        )}
+                        onKeyDown={(event) =>
+                          handleShortcutKeyDown(event, item.setting)
+                        }
+                        placeholder={t("settings.typeShortcut")}
+                        aria-label={`${label} ${t("settings.typeShortcut")}`}
+                        readOnly
+                      />
                       <button
                         type="button"
-                        className="ghost settings-button-compact settings-shortcuts-item-clear"
+                        className="settings-shortcuts-item-clear"
                         onClick={() => void updateShortcut(item.setting, null)}
+                        title={t("settings.clear")}
+                        aria-label={`${t("settings.clear")} ${label}`}
                       >
-                        {t("settings.clear")}
+                        <X size={13} strokeWidth={2.2} aria-hidden="true" />
                       </button>
                     </div>
                   </div>

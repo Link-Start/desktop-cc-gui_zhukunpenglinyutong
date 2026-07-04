@@ -93,6 +93,34 @@ describe("useGitStatus", () => {
     unmount();
   });
 
+  it("preserves status identity when a poll returns unchanged data", async () => {
+    const getGitStatusMock = vi.mocked(getGitStatus);
+    getGitStatusMock
+      .mockResolvedValueOnce(makeStatus("main", 2, 1, 1))
+      .mockResolvedValueOnce(makeStatus("main", 2, 1, 1));
+
+    const { result, unmount } = renderHook(
+      ({ active }: { active: WorkspaceInfo | null }) => useGitStatus(active),
+      { initialProps: { active: workspace } },
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const initialStatus = result.current.status;
+
+    await act(async () => {
+      vi.advanceTimersByTime(15000);
+      await Promise.resolve();
+    });
+
+    expect(getGitStatusMock).toHaveBeenCalledTimes(2);
+    expect(result.current.status).toBe(initialStatus);
+
+    unmount();
+  });
+
   it("keeps heavy change sets on the active polling interval", async () => {
     const getGitStatusMock = vi.mocked(getGitStatus);
     getGitStatusMock
