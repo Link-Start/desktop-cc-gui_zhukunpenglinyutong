@@ -1,162 +1,151 @@
+/*
+ * Search palette — shadcn-flavored command dialog.
+ *
+ * Loaded outside any @layer (dynamic import), so these rules outrank the global
+ * `button { … }` reset in `@layer app` (buttons.css). The scope/content/result
+ * buttons therefore re-declare padding / border-radius / font-* explicitly to
+ * shed that global styling. Colors come from the standard shadcn tokens
+ * (--popover, --muted-foreground, --accent, --border, --primary) so the palette
+ * matches the real shadcn components in src/components/ui.
+ */
+
 .search-palette-overlay {
   position: fixed;
   inset: 0;
   z-index: 2100;
-  background: rgba(12, 14, 18, 0.24);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 64px 20px 20px;
+  padding: 12vh 16px 16px;
 }
 
 .search-palette {
-  width: min(760px, 100%);
-  border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--border-muted) 86%, #b6bcc8);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--surface-popover) 95%, #ffffff 5%) 0%,
-    var(--surface-popover) 100%
-  );
-  color: var(--text-primary);
+  width: min(640px, 100%);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
   box-shadow:
-    0 20px 40px rgba(18, 22, 30, 0.16),
-    0 8px 20px rgba(18, 22, 30, 0.1),
-    0 0 0 1px color-mix(in srgb, var(--border-muted) 44%, transparent);
+    0 10px 15px -3px rgba(0, 0, 0, 0.12),
+    0 4px 6px -4px rgba(0, 0, 0, 0.12);
   overflow: hidden;
 }
 
-.search-palette-top-accent {
-  height: 3px;
-  background: linear-gradient(
-    90deg,
-    rgba(122, 130, 145, 0.08) 0%,
-    rgba(122, 130, 145, 0.28) 50%,
-    rgba(122, 130, 145, 0.08) 100%
-  );
-}
+/* ── Input row ─────────────────────────────────────────────────────────── */
 
 .search-palette-input-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--border-muted);
-  background: color-mix(in srgb, var(--surface-card) 58%, transparent);
+  gap: 8px;
+  height: 48px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
 }
 
 .search-palette-search-icon {
-  color: var(--text-subtle);
-  font-size: 15px;
-  line-height: 1;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  opacity: 0.65;
 }
 
 .search-palette-input {
   width: 100%;
+  height: 100%;
   background: transparent;
   border: 0;
   outline: 0;
-  padding: 14px 0;
-  color: var(--text-primary);
+  padding: 0;
+  color: var(--foreground);
   font-size: 14px;
 }
 
-.search-palette-project-icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  object-fit: cover;
-  flex-shrink: 0;
+.search-palette-input::placeholder {
+  color: var(--muted-foreground);
 }
 
 .search-palette-project-icon-box {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px;
-  border-radius: 10px;
-  border: 1px solid var(--border-muted);
-  background: color-mix(in srgb, var(--surface-item) 52%, transparent);
+  padding: 0;
+  border: 0;
+  background: transparent;
   flex-shrink: 0;
 }
 
-.search-palette-input::placeholder {
-  color: color-mix(in srgb, var(--text-fainter) 84%, var(--text-muted));
+.search-palette-project-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  object-fit: cover;
+  opacity: 0.9;
+  flex-shrink: 0;
 }
 
-.search-palette-scope {
+/* ── Scope / content rows ──────────────────────────────────────────────── */
+
+.search-palette-scope,
+.search-palette-content {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 9px 16px;
-  border-bottom: 1px solid var(--border-muted);
-  background: color-mix(in srgb, var(--surface-item) 42%, transparent);
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
 }
 
 .search-palette-scope-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 7px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border-muted) 90%, #c0c6d2);
-  color: color-mix(in srgb, var(--text-muted) 86%, var(--text-subtle));
+  color: var(--muted-foreground);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
+  font-weight: 500;
 }
 
 .search-palette-scope-value {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--muted-foreground);
 }
 
+/* Segmented control (current / global) — shadcn tabs look. */
 .search-palette-scope-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   padding: 2px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, var(--border-muted));
-  background: color-mix(in srgb, var(--surface-control) 74%, transparent);
+  border-radius: 8px;
+  background: var(--muted);
 }
 
 .search-palette-scope-btn {
+  appearance: none;
+  margin: 0;
   border: 0;
-  border-radius: 999px;
-  padding: 3px 9px;
+  border-radius: 6px;
+  padding: 3px 10px;
   background: transparent;
-  color: color-mix(in srgb, var(--text-subtle) 88%, var(--text-muted));
-  font-size: 11px;
-  font-weight: 600;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
   cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
 }
 
 .search-palette-scope-btn:hover {
-  color: var(--text-emphasis);
+  color: var(--foreground);
 }
 
-.search-palette-scope-btn.is-active,
-.search-palette-content-btn.is-active {
-  color: var(--text-primary);
-  background: color-mix(in srgb, #747c8c 18%, var(--surface-item));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, #5f6777 38%, var(--border-muted)) inset,
-    0 1px 1px rgba(0, 0, 0, 0.1);
-  font-weight: 700;
+.search-palette-scope-btn.is-active {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.search-palette-content {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border-muted);
-  background: color-mix(in srgb, var(--surface-card) 36%, transparent);
-}
-
+/* Content filter chips. */
 .search-palette-content-toggle {
   display: inline-flex;
   align-items: center;
@@ -165,64 +154,80 @@
 }
 
 .search-palette-content-btn {
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 76%, var(--border-muted));
-  border-radius: 999px;
-  padding: 2px 9px;
-  background: color-mix(in srgb, var(--surface-control) 78%, transparent);
-  color: color-mix(in srgb, var(--text-subtle) 88%, var(--text-muted));
-  font-size: 11px;
-  font-weight: 600;
+  appearance: none;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .search-palette-content-btn:hover {
-  color: var(--text-emphasis);
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 .search-palette-content-btn.is-active {
-  border-color: color-mix(in srgb, #5f6777 34%, var(--border-muted));
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
 }
 
+/* ── Results ───────────────────────────────────────────────────────────── */
+
 .search-palette-results {
-  max-height: min(56vh, 520px);
+  max-height: min(52vh, 420px);
   overflow: auto;
+  padding: 4px;
 }
 
 .search-palette-empty {
-  padding: 18px 16px 20px;
+  padding: 28px 16px;
+  text-align: center;
 }
 
 .search-palette-empty-title {
-  color: var(--text-quiet);
+  color: var(--foreground);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .search-palette-empty-hint {
   margin-top: 6px;
-  color: var(--text-faint);
+  color: var(--muted-foreground);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .search-palette-result {
+  appearance: none;
+  margin: 0;
   width: 100%;
   border: 0;
+  border-radius: 6px;
   background: transparent;
-  color: var(--text-primary);
-  padding: 10px 16px;
+  color: var(--foreground);
+  padding: 8px 10px;
   text-align: left;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
 }
 
 .search-palette-result:hover,
 .search-palette-result.is-active {
-  background: color-mix(in srgb, var(--surface-active) 78%, var(--surface-item));
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 .search-palette-result-main {
@@ -235,14 +240,14 @@
 .search-palette-result-title {
   display: block;
   font-size: 13px;
-  color: var(--text-emphasis);
+  color: var(--foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .search-palette-result-subtitle {
-  color: var(--text-faint);
+  color: var(--muted-foreground);
   font-size: 11px;
   line-height: 1.35;
   white-space: nowrap;
@@ -261,13 +266,13 @@
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  padding: 1px 6px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, var(--border-muted));
-  background: color-mix(in srgb, var(--surface-control) 74%, transparent);
-  color: color-mix(in srgb, var(--text-subtle) 92%, var(--text-muted));
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
   font-size: 10px;
-  line-height: 1.45;
+  line-height: 1.6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -276,45 +281,35 @@
 .search-palette-kind-badge {
   flex-shrink: 0;
   margin-top: 1px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border-strong) 80%, var(--border-muted));
-  color: var(--text-subtle);
-  background: color-mix(in srgb, var(--surface-card) 78%, transparent);
+  padding: 1px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  background: transparent;
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
-.search-kind-file {
-  border-color: color-mix(in srgb, var(--border-accent) 78%, var(--border-strong));
+/* Selected/hover row lifts the badge + tag foreground for contrast. */
+.search-palette-result:hover .search-palette-kind-badge,
+.search-palette-result.is-active .search-palette-kind-badge,
+.search-palette-result:hover .search-palette-result-tag,
+.search-palette-result.is-active .search-palette-result-tag {
+  color: var(--accent-foreground);
+  border-color: color-mix(in srgb, var(--accent-foreground) 22%, transparent);
 }
 
-.search-kind-kanban {
-  border-color: color-mix(in srgb, var(--status-warning) 35%, var(--border-strong));
-}
-
-.search-kind-thread {
-  border-color: color-mix(in srgb, var(--status-success) 30%, var(--border-strong));
-}
-
-.search-kind-message {
-  border-color: color-mix(in srgb, var(--message-link-color) 28%, var(--border-strong));
-}
-
-.search-kind-history {
-  border-color: color-mix(in srgb, var(--text-subtle) 50%, var(--border-strong));
-}
+/* ── Footer ────────────────────────────────────────────────────────────── */
 
 .search-palette-footer {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   padding: 8px 12px;
-  border-top: 1px solid color-mix(in srgb, var(--border-muted) 72%, transparent);
-  color: var(--text-faint);
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
   font-size: 11px;
-  background: color-mix(in srgb, var(--surface-item) 48%, transparent);
 }
 
 .search-palette-key-hint {
@@ -324,23 +319,17 @@
 }
 
 .search-palette-key-hint kbd {
-  min-width: 22px;
-  padding: 1px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
   border-radius: 6px;
-  border: 1px solid var(--border-strong);
-  background: color-mix(in srgb, var(--surface-control) 82%, transparent);
-  color: var(--text-quiet);
+  border: 0;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-family: inherit;
   font-size: 10px;
-  font-weight: 600;
-  text-align: center;
-}
-
-:root[data-theme="light"] .search-palette-overlay {
-  background: rgba(12, 18, 28, 0.24);
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) .search-palette-overlay {
-    background: rgba(12, 18, 28, 0.24);
-  }
+  font-weight: 500;
 }

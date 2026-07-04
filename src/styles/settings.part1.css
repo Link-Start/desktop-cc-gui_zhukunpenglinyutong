@@ -115,7 +115,7 @@
   min-height: 36px;
   gap: 10px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--text-muted);
   padding: 8px 12px;
   border-radius: 4px;
@@ -145,7 +145,7 @@
   margin-left: -4px;
   border-radius: 10px;
   color: color-mix(in srgb, var(--text-muted) 92%, var(--text-strong) 8%);
-  font-weight: 600;
+  font-weight: 400;
   font-size: 13px;
 }
 
@@ -157,7 +157,7 @@
 .settings-nav.active {
   background: color-mix(in srgb, var(--surface-card) 64%, transparent);
   color: var(--text-strong);
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .settings-nav:hover:not(:disabled) {

@@ -178,8 +178,8 @@
 
 
 .sidebar-settings-dropdown {
-  width: 200px;
-  max-width: calc(100vw - 24px);
+  /* 跟随侧栏宽度收缩，避免窄侧栏时被 .sidebar-body 的 overflow:hidden 裁掉右侧圆角/阴影 */
+  width: min(200px, calc(var(--sidebar-width, 210px) - 24px));
   position: absolute;
   bottom: 100%;
   left: 0;
