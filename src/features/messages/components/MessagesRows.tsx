@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import Search from "lucide-react/dist/esm/icons/search";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import LoaderCircle from "lucide-react/dist/esm/icons/loader-circle";
 import { AgentIcon } from "../../../components/AgentIcon";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1341,25 +1343,26 @@ export const MessageRow = memo(function MessageRow({
                   </button>
                 ) : (
                   <>
-                    <div className="message-deferred-image-copy">
-                      <span className="message-deferred-image-title">
-                        Claude history image available on demand
-                      </span>
-                      <span className="message-deferred-image-meta">
-                        {image.mediaType} · {formatDeferredImageSize(image.estimatedByteSize)}
-                      </span>
-                      {state.status === "error" && state.error ? (
-                        <span className="message-deferred-image-error">{state.error}</span>
-                      ) : null}
-                    </div>
                     <button
                       type="button"
-                      className="message-deferred-image-action"
+                      className="message-deferred-image-placeholder"
                       onClick={() => void handleLoadDeferredImage(image)}
                       disabled={state.status === "loading"}
+                      aria-label="Load image"
+                      title={`${image.mediaType} · ${formatDeferredImageSize(image.estimatedByteSize)}`}
                     >
-                      {state.status === "loading" ? "Loading..." : "Load image"}
+                      <span className="message-deferred-image-icon" aria-hidden="true">
+                        {state.status === "loading" ? (
+                          <LoaderCircle size={18} className="message-deferred-image-spinner" />
+                        ) : (
+                          <RefreshCw size={18} />
+                        )}
+                      </span>
+                      <span className="sr-only">Claude history image available on demand</span>
                     </button>
+                    {state.status === "error" && state.error ? (
+                      <span className="message-deferred-image-error">{state.error}</span>
+                    ) : null}
                   </>
                 )}
               </div>

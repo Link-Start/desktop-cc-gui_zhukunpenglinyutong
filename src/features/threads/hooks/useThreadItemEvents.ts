@@ -254,7 +254,9 @@ function buildPendingNormalizedRealtimeOperationKey(event: NormalizedThreadEvent
   return `${event.threadId}\u0000${event.item.kind}\u0000${event.item.id}`;
 }
 
-const MAX_TERMINAL_TURN_IDS_PER_THREAD = 12;
+// 全局已终态 turnId 的保留上限。turnId 全局唯一（claude-turn-<uuid>），
+// 因此改为按 turnId 而非按线程分桶，容量相应放大。
+const MAX_TERMINAL_TURN_IDS = 256;
 
 function normalizeTurnId(value: unknown) {
   return asString(value).trim();
@@ -312,7 +314,14 @@ export function useThreadItemEvents({
   const normalizedRealtimeFlushTimerRef = useRef<number | null>(null);
   const isFlushingNormalizedRealtimeOpsRef = useRef(false);
   const activeRealtimeTurnIdByThreadRef = useRef<Map<string, string>>(new Map());
-  const terminalRealtimeTurnIdsByThreadRef = useRef<Map<string, Set<string>>>(new Map());
+  // 全局已终态 turnId 集合。按 turnId（回合的全局唯一身份）判定终态，
+  // 使迟到事件无论落在主线程还是别名线程都能被识别为已结束，避免复燃。
+  const terminalRealtimeTurnIdsRef = useRef<Set<string>>(new Set());
+  // 已结算且尚未开始新回合的线程，用于拦截「无 turnId」的迟到复燃事件。
+  const settledRealtimeThreadsRef = useRef<Set<string>>(new Set());
+  // 诊断：被终态守卫拦下（本会把线程复燃为「处理中」）的迟到事件计数，
+  // 结算时汇总上报，用于量化「结束后仍显示生成中」的根因频率。
+  const droppedLateRealtimeEventCountRef = useRef(0);
 
   const normalizeToolIdentifier = useCallback((value: string) => {
     return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -397,17 +406,22 @@ export function useThreadItemEvents({
       } = {},
     ) => {
       const normalizedTurnId = normalizeTurnId(turnId);
-      const resolvedTurnId =
-        normalizedTurnId ||
-        (options.allowActiveTurnFallback === false
-          ? ""
-          : activeRealtimeTurnIdByThreadRef.current.get(threadId) ?? "");
-      if (!resolvedTurnId) {
+      if (normalizedTurnId) {
+        // 带 turnId：按回合的全局唯一身份判定终态，与线程别名无关。
+        // 这样迟到事件即便落在别名线程上，只要其 turnId 已结算就会被拒绝，
+        // 不再把线程复燃为「处理中」。
+        return terminalRealtimeTurnIdsRef.current.has(normalizedTurnId);
+      }
+      if (options.allowActiveTurnFallback === false) {
         return false;
       }
-      return terminalRealtimeTurnIdsByThreadRef.current
-        .get(threadId)
-        ?.has(resolvedTurnId) ?? false;
+      const activeTurnId = activeRealtimeTurnIdByThreadRef.current.get(threadId);
+      if (activeTurnId) {
+        return terminalRealtimeTurnIdsRef.current.has(activeTurnId);
+      }
+      // 无 turnId 且该线程已无进行中回合：结算过则视为终态，
+      // 拒绝迟到事件把它复燃。新线程（从未结算）仍放行首个事件。
+      return settledRealtimeThreadsRef.current.has(threadId);
     },
     [],
   );
@@ -418,6 +432,9 @@ export function useThreadItemEvents({
       return;
     }
     activeRealtimeTurnIdByThreadRef.current.set(threadId, normalizedTurnId);
+    // 新回合开始：解除该线程的「已结算」态，避免上一回合的结算态
+    // 误杀本回合的无 turnId 事件。
+    settledRealtimeThreadsRef.current.delete(threadId);
   }, []);
 
   const markRealtimeTurnTerminal = useCallback((threadId: string, turnId: string) => {
@@ -425,24 +442,48 @@ export function useThreadItemEvents({
     if (!threadId || !normalizedTurnId) {
       return;
     }
-    let threadTurnIds = terminalRealtimeTurnIdsByThreadRef.current.get(threadId);
-    if (!threadTurnIds) {
-      threadTurnIds = new Set<string>();
-      terminalRealtimeTurnIdsByThreadRef.current.set(threadId, threadTurnIds);
-    }
-    threadTurnIds.delete(normalizedTurnId);
-    threadTurnIds.add(normalizedTurnId);
-    while (threadTurnIds.size > MAX_TERMINAL_TURN_IDS_PER_THREAD) {
-      const oldestTurnId = threadTurnIds.values().next().value;
+    const terminalTurnIds = terminalRealtimeTurnIdsRef.current;
+    terminalTurnIds.delete(normalizedTurnId);
+    terminalTurnIds.add(normalizedTurnId);
+    while (terminalTurnIds.size > MAX_TERMINAL_TURN_IDS) {
+      const oldestTurnId = terminalTurnIds.values().next().value;
       if (!oldestTurnId) {
         break;
       }
-      threadTurnIds.delete(oldestTurnId);
+      terminalTurnIds.delete(oldestTurnId);
     }
-    if (!activeRealtimeTurnIdByThreadRef.current.has(threadId)) {
-      activeRealtimeTurnIdByThreadRef.current.set(threadId, normalizedTurnId);
+    // 该线程回合已结算：登记结算态并清掉活跃记录，使后续「无 turnId」
+    // 的迟到事件不再复燃它（配合 isRealtimeTurnTerminal 的无 id 分支）。
+    const settledThreads = settledRealtimeThreadsRef.current;
+    settledThreads.delete(threadId);
+    settledThreads.add(threadId);
+    while (settledThreads.size > MAX_TERMINAL_TURN_IDS) {
+      const oldestThreadId = settledThreads.values().next().value;
+      if (!oldestThreadId) {
+        break;
+      }
+      settledThreads.delete(oldestThreadId);
     }
-  }, []);
+    activeRealtimeTurnIdByThreadRef.current.delete(threadId);
+    // 诊断汇总：本回合期间被终态守卫拦下的迟到事件数（>0 表示确有
+    // 迟到事件试图复燃线程，这正是「结束后仍显示生成中」的根因）。
+    const droppedLateEvents = droppedLateRealtimeEventCountRef.current;
+    if (droppedLateEvents > 0) {
+      droppedLateRealtimeEventCountRef.current = 0;
+      onDebug?.({
+        id: `${Date.now()}-realtime-late-event-drop`,
+        timestamp: Date.now(),
+        source: "event",
+        label: "thread/session:realtime-late-event-drop",
+        payload: {
+          threadId,
+          turnId: normalizedTurnId,
+          droppedLateEvents,
+          activeThreadId,
+        },
+      });
+    }
+  }, [activeThreadId, onDebug]);
 
   const isRealtimeTurnTerminalExact = useCallback(
     (threadId: string, turnId?: string | null) =>
@@ -464,6 +505,7 @@ export function useThreadItemEvents({
         return;
       }
       if (isRealtimeTurnTerminal(operation.threadId, operation.turnId)) {
+        droppedLateRealtimeEventCountRef.current += 1;
         return;
       }
       const ensuredThreads = context?.ensuredThreads;
@@ -637,6 +679,7 @@ export function useThreadItemEvents({
       };
       const run = (runOptions: { skipProcessingMark?: boolean } = {}) => {
         if (isEventTurnTerminal()) {
+          droppedLateRealtimeEventCountRef.current += 1;
           return;
         }
         if (!ensuredThreads?.has(normalizedEvent.threadId)) {
@@ -943,7 +986,8 @@ export function useThreadItemEvents({
       pendingRealtimeDeltaOpsRef.current = [];
       pendingNormalizedRealtimeOpsRef.current.clear();
       activeRealtimeTurnIdByThreadRef.current.clear();
-      terminalRealtimeTurnIdsByThreadRef.current.clear();
+      terminalRealtimeTurnIdsRef.current.clear();
+      settledRealtimeThreadsRef.current.clear();
     },
     [flushNormalizedRealtimeOps, flushRealtimeDeltaOps],
   );

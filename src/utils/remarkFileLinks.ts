@@ -5,6 +5,10 @@ const FILE_PATH_PATTERN =
 const FILE_PATH_MATCH = new RegExp(`^${FILE_PATH_PATTERN.source}$`);
 
 const TRAILING_PUNCTUATION = new Set([".", ",", ";", ":", "!", "?", ")", "]", "}"]);
+// CJK ideographs, kana, and full-width punctuation — characters that show up in
+// prose but never in real code file paths.
+const CJK_PATTERN = /[぀-ヿ㐀-䶿一-鿿＀-￯]/;
+const FILE_EXTENSION_PATTERN = /\.[A-Za-z0-9]+$/;
 const RELATIVE_ALLOWED_PREFIXES = [
   "src/",
   "app/",
@@ -35,10 +39,14 @@ function isPathCandidate(
   if (value.startsWith("//")) {
     return false;
   }
-  // Reject plain-language phrases that merely contain slashes (e.g. CJK text
-  // like "/分支/历史回溯"). Real file paths always carry at least one ASCII
-  // letter or digit segment; a token with none is prose, not a path.
-  if (!/[A-Za-z0-9]/.test(value)) {
+  // Prose written with slashes (e.g. "/MCP/权限/models" or "/分支/历史回溯")
+  // looks like an absolute path but isn't. A token carrying CJK text is only a
+  // real path when its last segment ends in a file extension (e.g.
+  // "/Users/张三/a.ts"); otherwise it is prose, not a path.
+  if (
+    CJK_PATTERN.test(value) &&
+    !FILE_EXTENSION_PATTERN.test(value.split("/").pop() ?? "")
+  ) {
     return false;
   }
   if (leadingContext.endsWith("://")) {

@@ -10,15 +10,16 @@
 
 .vendor-section-title {
   margin: 0;
-  font-size: 30px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
 }
 
 .vendor-section-desc {
-  margin: 8px 0 18px;
+  margin: 6px 0 18px;
   color: var(--text-secondary);
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .vendor-tabs {
@@ -325,8 +326,8 @@
 }
 
 .vendor-local-provider-card {
-  border-left: 3px solid #f39c12;
-  background: linear-gradient(90deg, rgba(243, 156, 18, 0.08) 0%, transparent 45%);
+  border-left: 2px solid #f39c12;
+  background: color-mix(in srgb, #f39c12 5%, var(--surface-card));
 }
 
 .vendor-local-provider-name svg {
@@ -424,8 +425,8 @@
 }
 
 .vendor-current-config-title {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 

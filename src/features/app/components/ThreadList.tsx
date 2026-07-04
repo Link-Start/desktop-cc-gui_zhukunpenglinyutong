@@ -676,6 +676,7 @@ export function ThreadList({
         data-virtualized={shouldVirtualizeThreads ? "true" : undefined}
       >
         {shouldVirtualizeThreads ? (
+          <>
           <div
             className="thread-list-virtual-spacer"
             style={{ height: `${threadRowVirtualizer.getTotalSize()}px` }}
@@ -701,6 +702,7 @@ export function ThreadList({
                 </div>
               );
             })}
+          </div>
             {showHiddenExitedSummary && (
               <div className="thread-list-hidden-summary">
                 {t("threads.exitedSessionsHidden", { count: hiddenExitedCount })}
@@ -735,7 +737,7 @@ export function ThreadList({
                     : t("threads.loadOlder")}
               </button>
             )}
-          </div>
+          </>
         ) : (
           <>
             {displayedPinnedRows.map((row) => renderThreadRow(row))}

@@ -1680,6 +1680,18 @@
   min-height: 36px;
 }
 
+/*
+ * In the virtualized list the rows live (absolutely positioned) inside
+ * `.thread-list-virtual-spacer`, while the footer controls ("收起"/"更多"/
+ * "加载更多") are rendered as siblings after the spacer. Since the virtualized
+ * `.thread-list` is `display: block`, force these footer controls to stack as
+ * block rows instead of flowing inline side-by-side.
+ */
+.thread-list[data-virtualized="true"] > .thread-more,
+.thread-list[data-virtualized="true"] > .thread-list-hidden-summary {
+  display: block;
+}
+
 .pinned-thread-list {
   padding: 0 4px;
 }

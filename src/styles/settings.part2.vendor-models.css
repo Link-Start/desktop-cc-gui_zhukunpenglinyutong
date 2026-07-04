@@ -1,7 +1,7 @@
 .vendor-btn-cancel:hover {
-  border-color: var(--vendor-button-primary, var(--text-accent));
-  background: var(--vendor-button-primary, var(--text-accent));
-  color: #fff;
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .vendor-btn-save {
@@ -183,7 +183,7 @@
 /* ==================== Model Mapping Settings ==================== */
 .model-mapping-card {
   padding: 16px;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--border-muted);
   background: var(--surface-card);
 }

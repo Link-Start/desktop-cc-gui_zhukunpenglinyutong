@@ -185,6 +185,12 @@ const CLAUDE_STREAM_FIRST_EVENT_TIMEOUT: Duration = Duration::from_secs(90);
 #[cfg(test)]
 const CLAUDE_STREAM_FIRST_EVENT_TIMEOUT: Duration = Duration::from_secs(10);
 const CLAUDE_STREAM_DIAGNOSTIC_SAMPLE_LIMIT: usize = 800;
+// After Claude emits its final `result` event the turn is logically done. We
+// still wait for the CLI process to exit (post-turn usage probe / Stop hooks)
+// before emitting TurnCompleted, but that wait must be bounded: if MCP child
+// processes or hooks keep the CLI alive, the UI would otherwise stay stuck on
+// "generating…" indefinitely. This grace caps how long we wait after `result`.
+const CLAUDE_POST_RESULT_GRACE: Duration = Duration::from_secs(5);
 const CLAUDE_REASONING_EFFORTS: &[&str] = &["low", "medium", "high", "xhigh", "max"];
 
 #[derive(Debug, Default)]

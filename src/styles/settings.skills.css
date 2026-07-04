@@ -126,7 +126,7 @@
 
 .settings-skills-custom-dirs-title {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-strong);
 }
 
@@ -210,7 +210,7 @@
 .settings-skills-pane-title {
   padding: 10px 12px 8px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-strong);
   border-bottom: 1px solid var(--border-muted);
 }
@@ -312,7 +312,7 @@
 
 .settings-skills-detail-name {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-strong);
 }
 

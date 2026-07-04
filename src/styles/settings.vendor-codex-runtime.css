@@ -5,13 +5,8 @@
   gap: 20px;
   padding: 16px 18px;
   border: 1px solid var(--border-muted);
-  border-radius: 14px;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--surface-card) 92%, var(--vendor-button-primary-soft)) 0%,
-      var(--surface-card) 100%
-    );
+  border-radius: 10px;
+  background: var(--surface-card);
 }
 
 .vendor-codex-runtime-card-copy {
@@ -27,8 +22,8 @@
 }
 
 .vendor-codex-runtime-card-title {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 

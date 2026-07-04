@@ -17,4 +17,10 @@ describe("isLinkableFilePath", () => {
   it("recognizes paths with CJK segments as long as one ASCII segment exists", () => {
     expect(isLinkableFilePath("/Users/张三/code/a.ts")).toBe(true);
   });
+
+  it("does not linkify mixed CJK/ASCII prose without a file extension", () => {
+    expect(isLinkableFilePath("/MCP/权限/models")).toBe(false);
+    expect(isLinkableFilePath("/MCP/权限/models）")).toBe(false);
+    expect(isLinkableFilePath("/供应商/models/接口")).toBe(false);
+  });
 });

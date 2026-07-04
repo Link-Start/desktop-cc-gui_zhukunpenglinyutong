@@ -46,8 +46,8 @@
 
 .settings-project-sessions-mode-toggle {
   padding: 3px;
-  border: 1px solid color-mix(in srgb, var(--project-session-border) 72%, transparent);
-  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--project-session-border) 56%, transparent);
+  border-radius: 8px;
   background: color-mix(in srgb, var(--surface-muted) 26%, transparent);
 }
 
@@ -57,8 +57,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--project-session-border) 72%, transparent);
-  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--project-session-border) 56%, transparent);
+  border-radius: 10px;
   background: color-mix(in srgb, var(--surface-muted) 28%, transparent);
 }
 
@@ -75,20 +75,20 @@
 
 .settings-project-sessions-attribution-title {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-default);
 }
 
 .settings-project-sessions-attribution-current {
   display: inline-flex;
   align-items: center;
-  border: 1px solid color-mix(in srgb, var(--project-session-accent-text) 46%, transparent);
-  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--project-session-border) 60%, transparent);
+  border-radius: 6px;
   padding: 2px 8px;
-  background: color-mix(in srgb, var(--project-session-accent) 12%, transparent);
-  color: color-mix(in srgb, var(--project-session-accent-text) 88%, var(--text-default));
+  background: color-mix(in srgb, var(--surface-muted) 40%, transparent);
+  color: var(--text-muted);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -116,10 +116,8 @@
 }
 
 .settings-project-sessions-attribution-toggle [role="radio"][aria-checked="true"] {
-  border-color: color-mix(in srgb, var(--project-session-accent-text) 68%, var(--project-session-border));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--project-session-accent-text) 34%, transparent),
-    0 10px 24px color-mix(in srgb, var(--project-session-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--text-default) 40%, var(--project-session-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-default) 14%, transparent);
 }
 
 .settings-project-sessions-attribution-radio {
@@ -156,7 +154,7 @@
 
 .settings-project-sessions-attribution-option-title {
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .settings-project-sessions-attribution-option-description {
@@ -175,8 +173,8 @@
 }
 
 .settings-project-sessions-nav {
-  border: 1px solid color-mix(in srgb, var(--project-session-border) 76%, transparent);
-  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--project-session-border) 56%, transparent);
+  border-radius: 10px;
   background: color-mix(in srgb, var(--project-session-panel-muted) 42%, transparent);
   padding: 10px;
   position: sticky;
@@ -186,7 +184,7 @@
 .settings-project-sessions-nav-title {
   padding: 2px 2px 8px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -228,12 +226,12 @@
 }
 
 .settings-project-sessions-nav-item.is-active {
-  background: color-mix(in srgb, var(--project-session-accent) 18%, transparent);
+  background: color-mix(in srgb, var(--surface-control) 68%, transparent);
   color: var(--text-strong);
 }
 
 .settings-project-sessions-nav-item svg {
-  color: color-mix(in srgb, var(--project-session-accent-text) 82%, var(--text-muted));
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -242,7 +240,7 @@
 }
 
 .settings-project-sessions-nav-item.is-workspace {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .settings-project-sessions-nav-item.is-folder {
@@ -256,8 +254,8 @@
 }
 
 .settings-project-sessions-nav-item.is-folder.is-create {
-  border: 1px dashed color-mix(in srgb, var(--project-session-accent-text) 56%, var(--project-session-border));
-  color: color-mix(in srgb, var(--project-session-accent-text) 88%, var(--text-default));
+  border: 1px dashed color-mix(in srgb, var(--project-session-border) 60%, transparent);
+  color: var(--text-default);
   box-shadow: none;
 }
 
@@ -319,14 +317,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border: 1px solid color-mix(in srgb, var(--project-session-border) 72%, transparent);
-  border-radius: 16px;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--project-session-panel-muted) 38%, transparent),
-      color-mix(in srgb, var(--surface-control) 16%, transparent)
-    );
+  border: 1px solid color-mix(in srgb, var(--project-session-border) 52%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--project-session-panel-muted) 28%, transparent);
   padding: 10px;
 }
 
@@ -375,12 +368,12 @@
   max-width: 100%;
   align-items: center;
   gap: 8px;
-  border: 1px solid color-mix(in srgb, var(--project-session-border) 76%, transparent);
-  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--project-session-border) 56%, transparent);
+  border-radius: 8px;
   background: color-mix(in srgb, var(--project-session-panel-muted) 34%, transparent);
   color: var(--text-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   padding: 6px 10px;
   min-width: 0;
   overflow: hidden;
@@ -405,15 +398,15 @@
 .settings-project-sessions-advanced summary {
   list-style: none;
   cursor: pointer;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--project-session-border) 66%, transparent);
-  background: color-mix(in srgb, var(--project-session-accent) 10%, var(--surface-control));
-  color: color-mix(in srgb, var(--project-session-accent-text) 86%, var(--text-default));
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--project-session-border) 56%, transparent);
+  background: color-mix(in srgb, var(--surface-control) 88%, transparent);
+  color: var(--text-default);
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 500;
   padding: 6px 10px;
   user-select: none;
 }
@@ -424,7 +417,7 @@
 
 .settings-project-sessions-advanced[open] summary {
   color: var(--text-strong);
-  border-color: color-mix(in srgb, var(--project-session-accent) 48%, var(--project-session-border));
+  border-color: color-mix(in srgb, var(--project-session-border) 80%, transparent);
 }
 
 .settings-project-sessions-advanced-body {
@@ -433,10 +426,10 @@
   top: calc(100% + 8px);
   z-index: 12;
   width: min(440px, calc(100vw - 48px));
-  border: 1px solid color-mix(in srgb, var(--project-session-border) 78%, transparent);
-  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--project-session-border) 60%, transparent);
+  border-radius: 10px;
   background: var(--surface-popover, var(--surface-control));
-  box-shadow: 0 18px 50px color-mix(in srgb, var(--text-strong) 18%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text-strong) 12%, transparent);
   padding: 12px;
 }
 
@@ -456,8 +449,8 @@
 .settings-project-sessions-toolbar {
   justify-content: space-between;
   gap: 10px 16px;
-  border: 1px solid color-mix(in srgb, var(--project-session-border) 60%, transparent);
-  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--project-session-border) 48%, transparent);
+  border-radius: 10px;
   background: color-mix(in srgb, var(--project-session-panel-muted) 18%, transparent);
   padding: 8px 10px;
 }
@@ -481,19 +474,19 @@
 }
 
 .settings-project-sessions-btn {
-  border: 1px solid color-mix(in srgb, var(--project-session-accent) 38%, var(--project-session-border));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--project-session-accent) 10%, transparent);
-  color: color-mix(in srgb, var(--project-session-accent-text) 88%, var(--text-default));
-  font-weight: 700;
+  border: 1px solid color-mix(in srgb, var(--project-session-border) 60%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-control) 82%, transparent);
+  color: var(--text-default);
+  font-weight: 500;
   padding: 5px 9px;
   white-space: nowrap;
   min-height: 28px;
 }
 
 .settings-project-sessions-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--project-session-accent) 18%, transparent);
-  border-color: color-mix(in srgb, var(--project-session-accent-text) 62%, var(--project-session-border));
+  background: color-mix(in srgb, var(--surface-control) 100%, transparent);
+  border-color: color-mix(in srgb, var(--project-session-border) 82%, transparent);
   color: var(--text-strong);
 }
 
@@ -586,7 +579,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--project-session-accent-text) 84%, var(--text-muted));
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -598,7 +591,7 @@
 .settings-project-sessions-detail-toggle[aria-expanded="true"],
 .settings-project-sessions-curtain-toggle:hover {
   background: transparent;
-  color: var(--project-session-accent-text);
+  color: var(--text-strong);
 }
 
 .settings-project-sessions-detail-toggle:focus-visible,
@@ -742,10 +735,10 @@
 .settings-session-curtain-dialog {
   width: min(980px, calc(100vw - 40px));
   height: min(760px, calc(100vh - 40px));
-  border: 1px solid color-mix(in srgb, var(--project-session-border) 78%, transparent);
-  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--project-session-border) 62%, transparent);
+  border-radius: 12px;
   background: var(--surface-card, var(--surface-control));
-  box-shadow: 0 28px 90px color-mix(in srgb, #000 34%, transparent);
+  box-shadow: 0 16px 48px color-mix(in srgb, #000 24%, transparent);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
@@ -772,12 +765,12 @@
 .settings-session-curtain-engine {
   width: 30px;
   height: 30px;
-  border-radius: 10px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--project-session-accent) 12%, transparent);
-  color: var(--project-session-accent-text);
+  background: color-mix(in srgb, var(--surface-control) 70%, transparent);
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -791,7 +784,7 @@
 
 .settings-session-curtain-title {
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--text-strong);
 }
 
@@ -807,7 +800,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--project-session-accent-text) 92%, var(--text-muted));
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -817,7 +810,7 @@
 
 .settings-session-curtain-icon-btn:hover:not(:disabled) {
   background: transparent;
-  color: var(--project-session-accent-text);
+  color: var(--text-strong);
 }
 
 .settings-session-curtain-icon-btn:focus-visible {
@@ -856,14 +849,14 @@
 
 .settings-session-curtain-message.is-user {
   align-self: flex-end;
-  background: color-mix(in srgb, var(--project-session-accent) 13%, transparent);
+  background: color-mix(in srgb, var(--surface-control) 72%, transparent);
 }
 
 .settings-session-curtain-message-label {
   margin-bottom: 6px;
   color: var(--text-muted);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -877,9 +870,9 @@
 
 .settings-session-curtain-status {
   margin: 0 16px 10px;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 8px 10px;
-  background: color-mix(in srgb, var(--project-session-accent) 12%, transparent);
+  background: color-mix(in srgb, var(--surface-control) 60%, transparent);
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -897,7 +890,7 @@
   .settings-session-curtain-dialog {
     width: 100%;
     height: calc(100vh - 20px);
-    border-radius: 14px;
+    border-radius: 12px;
   }
 
   .settings-session-curtain-message {

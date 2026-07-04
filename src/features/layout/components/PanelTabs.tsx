@@ -92,13 +92,13 @@ function useRightPanelPinnedTabs() {
 }
 
 const tabIds: PanelToolbarTabId[] = ([
+  "files",
+  "search",
+  "git",
   "activity",
   "projectMap",
   "intentCanvas",
   "radar",
-  "git",
-  "files",
-  "search",
   "notes",
   "prompts",
   "specHub",

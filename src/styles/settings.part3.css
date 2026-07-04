@@ -64,22 +64,13 @@
 
 :root[data-theme="light"] .settings-section-basic > .settings-basic-tabs > .settings-basic-tab.active,
 :root[data-theme="light"] .settings-section-tabbed > .settings-basic-tabs > .settings-basic-tab.active {
-  color: #12213e;
-  border-color: color-mix(in srgb, var(--primary) 45%, #8ba0c8 55%);
-  background: color-mix(in srgb, var(--primary) 26%, #d9e3f8);
+  color: var(--settings-basic-text);
+  border-color: transparent;
+  border-bottom-color: var(--settings-basic-text);
+  background: transparent;
 }
 
-:root[data-theme="light"] .settings-section-basic .settings-basic-theme-option.active {
-  color: #13243f;
-  border-color: color-mix(in srgb, var(--primary) 45%, #8ca1ca 55%);
-  background: color-mix(in srgb, var(--primary) 20%, #dee6f8);
-}
-
-:root[data-theme="light"] .settings-section-basic .settings-basic-language-option.active {
-  color: #13243f;
-  border-color: color-mix(in srgb, var(--primary) 45%, #8ca1ca 55%);
-  background: color-mix(in srgb, var(--primary) 20%, #dee6f8);
-}
+/* theme/language selected pill inherits the neutral segmented style — no accent fill */
 
 :root[data-theme="light"] .settings-section-basic .settings-basic-theme-icon-system {
   background: #56719a;
@@ -99,10 +90,7 @@
   color: #e5edf9;
 }
 
-:root[data-theme="light"] .settings-section-basic .settings-toggle-row [data-slot="switch"] [data-slot="switch-thumb"] {
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
-}
+/* switch thumb uses the native shadcn appearance */
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) .settings-section-basic,
@@ -120,22 +108,13 @@
 
   :root:not([data-theme]) .settings-section-basic > .settings-basic-tabs > .settings-basic-tab.active,
   :root:not([data-theme]) .settings-section-tabbed > .settings-basic-tabs > .settings-basic-tab.active {
-    color: #12213e;
-    border-color: color-mix(in srgb, var(--primary) 45%, #8ba0c8 55%);
-    background: color-mix(in srgb, var(--primary) 26%, #d9e3f8);
+    color: var(--settings-basic-text);
+    border-color: transparent;
+    border-bottom-color: var(--settings-basic-text);
+    background: transparent;
   }
 
-  :root:not([data-theme]) .settings-section-basic .settings-basic-theme-option.active {
-    color: #13243f;
-    border-color: color-mix(in srgb, var(--primary) 45%, #8ca1ca 55%);
-    background: color-mix(in srgb, var(--primary) 20%, #dee6f8);
-  }
-
-  :root:not([data-theme]) .settings-section-basic .settings-basic-language-option.active {
-    color: #13243f;
-    border-color: color-mix(in srgb, var(--primary) 45%, #8ca1ca 55%);
-    background: color-mix(in srgb, var(--primary) 20%, #dee6f8);
-  }
+  /* theme/language selected pill inherits the neutral segmented style — no accent fill */
 
   :root:not([data-theme]) .settings-section-basic .settings-basic-theme-icon-system {
     background: #56719a;
@@ -155,15 +134,12 @@
     color: #e5edf9;
   }
 
-  :root:not([data-theme]) .settings-section-basic .settings-toggle-row [data-slot="switch"] [data-slot="switch-thumb"] {
-    background: #ffffff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
-  }
+  /* switch thumb uses the native shadcn appearance */
 }
 
 @media (max-width: 1080px) {
   .settings-section-basic .settings-section-title {
-    font-size: 26px;
+    font-size: 20px;
   }
 
   .settings-section-basic .settings-field.settings-basic-item,
