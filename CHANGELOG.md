@@ -2,6 +2,88 @@
 
 ---
 
+##### **2026年7月4日（v0.6.5）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.6.5`，同步前端包配置与 Tauri 打包配置
+- `feat(settings)`: 优化快捷键录入交互，并统一供应商面板配色
+- `feat(sidebar)`: 侧栏底部新增可点击的版本号标签
+
+🔧 Improvements
+- `refactor(app-shell)`: 从主顶栏移除分支切换与 worktree 重命名 UI
+- `refactor`: 重设计设置面板，并稳定空闲轮询渲染
+- `perf(conversation)`: 压制长对话流式渲染的 O(L²) 与全历史开销
+- `perf(markdown)`: 轻量流式 / 纯代码块跳过 heavy-islands 的每 token 重扫
+- `refactor(ui)`: 精修搜索面板、设置导航与侧栏视觉细节
+- `refactor(release-notes)`: 重构版本记录弹窗头部与导航按钮样式
+- `refactor(search)`: 移除搜索面板右侧的项目图标
+- `refactor(diff)`: 收敛面板强调蓝到主题令牌，并压平多余内阴影
+
+🐛 Fixes
+- `fix(claude)`: 收到 result 后按宽限期结算回合，并强杀残留进程组
+- `fix`: 加固实时回合生命周期，并精修设置样式
+- `fix(panel-tabs)`: 面板不再因 live 状态强制外显，仅按激活 / 勾选常驻
+- `fix(toolbar)`: 顶栏图标放不下时，按优先级裁进「更多」菜单
+
+English:
+
+✨ Features
+- Bump the app version to `0.6.5` across frontend package metadata and Tauri bundle configuration
+- `feat(settings)`: refine the shortcut-recording interaction and unify provider panel colors
+- `feat(sidebar)`: add a clickable version tag at the bottom of the sidebar
+
+🔧 Improvements
+- `refactor(app-shell)`: remove the branch switcher and worktree rename UI from the MainHeader
+- `refactor`: redesign the settings panel and stabilize idle polling renders
+- `perf(conversation)`: suppress O(L²) and full-history overhead in long-conversation streaming rendering
+- `perf(markdown)`: skip the per-token heavy-islands re-scan for lightweight streaming / pure code blocks
+- `refactor(ui)`: refine the search panel, settings navigation, and sidebar visuals
+- `refactor(release-notes)`: rework the release-notes modal header and navigation button styles
+- `refactor(search)`: remove the project icon on the right of the search panel
+- `refactor(diff)`: converge the panel accent blue to theme tokens and flatten redundant inner shadows
+
+🐛 Fixes
+- `fix(claude)`: settle the turn after receiving result within a grace period and force-kill leftover process groups
+- `fix`: harden the realtime turn lifecycle and refine settings styling
+- `fix(panel-tabs)`: stop panels from force-showing on live state; keep them resident only when active/checked
+- `fix(toolbar)`: move overflowing toolbar icons into the “More” menu by priority
+
+---
+
+##### **2026年7月3日（v0.6.4）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.6.4`，同步前端包配置与 Tauri 打包配置
+- 重做文件树面板，并新增可固定的右侧面板标签页
+- 点击即可在灯箱中打开延迟加载的 Claude 图片
+- 支持将「打开应用」类操作固定到工具栏
+- 合并同段思考片段，并优化阅读体验
+- 新增锚点导航栏，用于在用户消息间快速跳转
+
+🐛 Fixes
+- 计划面板默认折叠，并在切换线程时保持折叠
+- 修复 `contain: strict` 导致滚动视口塌陷为 0px 的问题
+
+English:
+
+✨ Features
+- Bump the app version to `0.6.4` across frontend package metadata and Tauri bundle configuration
+- rework file tree panel and add pinnable right-panel tabs
+- open deferred Claude images in the lightbox on click
+- let users pin open-app actions to the toolbar
+- merge same-segment thinking runs and refine reading UX
+- add anchor rail for jumping between user messages
+
+🐛 Fixes
+- keep the plan panel collapsed by default and on thread switch
+- stop `contain: strict` from collapsing scroll viewports to 0px
+
+---
+
 ##### **2026年7月3日（v0.6.3）**
 
 中文：
