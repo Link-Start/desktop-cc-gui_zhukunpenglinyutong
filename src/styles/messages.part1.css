@@ -514,12 +514,11 @@
   transform: scale(1.04);
   transform-origin: center;
   animation: message-agent-icon-idle 3.4s ease-in-out infinite;
+  /* text-shadow already provides the glow; the drop-shadow filter was redundant and forced an
+     offscreen filter surface to be re-composited on every frame of the transform animation. */
   text-shadow:
     0 0 0.6px color-mix(in srgb, var(--color-message-user-bg, var(--surface-bubble-user)) 70%, #ffffff 30%),
     0 0 0.6px color-mix(in srgb, var(--color-message-user-bg, var(--surface-bubble-user)) 70%, #ffffff 30%);
-  filter: drop-shadow(
-    0 0 0.7px color-mix(in srgb, var(--color-message-user-bg, var(--surface-bubble-user)) 68%, #ffffff 32%)
-  );
 }
 
 .message-agent-icon-glyph svg {

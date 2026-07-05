@@ -168,9 +168,9 @@ export const BashToolGroupBlock = memo(function BashToolGroupBlock({
           {parsed.map((entry, index) => {
             const isLast = index === parsed.length - 1;
             const isItemExpanded = expandedItemId === entry.id;
-            const outputLines = entry.output
-              ? entry.output.split(/\r?\n/).slice(-MAX_OUTPUT_LINES)
-              : [];
+            const allOutputLines = entry.output ? entry.output.split(/\r?\n/) : [];
+            const outputLines = allOutputLines.slice(-MAX_OUTPUT_LINES);
+            const outputStartIndex = allOutputLines.length - outputLines.length;
             const highlightedOutputLines = outputLines.map((line) => highlightLine(line, 'bash'));
 
             return (
@@ -230,7 +230,7 @@ export const BashToolGroupBlock = memo(function BashToolGroupBlock({
                           </div>
                           {outputLines.map((line, i) => (
                             <div
-                              key={`${i}-${line.slice(0, 20)}`}
+                              key={`line-${outputStartIndex + i}`}
                               className="bash-output-line"
                             >
                               {ERROR_LINE_PATTERN.test(line) ? (

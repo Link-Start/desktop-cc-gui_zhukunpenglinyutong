@@ -106,6 +106,7 @@ import {
   resolveActiveMessageAnchor,
   resolveCollapsedTimelineItems,
   resolveVisibleMessageItems,
+  type MessageActionTargets,
   type PreservedReadableWindow,
 } from "./messagesViewModel";
 import {
@@ -165,6 +166,40 @@ function areStringSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string
     }
   }
   return true;
+}
+
+// 流式期间每个 token 都会替换 items 数组引用,但通常只有最后一条正在流式输出的
+// assistant/user "message" 条目发生了文本变化,其余条目引用保持不变。此时
+// dedupeExitPlanItemsKeepFirst / buildMessageActionTargets 的计算结果必然与上一次
+// 完全相同(两者都只关心 tool 条目身份或 role/isFinal 边界,不关心文本内容本身),
+// 可以安全复用缓存结果,避免对整段历史重新扫描。
+// 一旦出现条目增删、非 message 类型条目变化,或 role/isFinal 发生翻转,则回退到全量重算,
+// 保证 idle/展开态下覆盖全部历史的正确性不受影响。
+function isTrailingMessageTextOnlyUpdate(
+  prev: ConversationItem[],
+  next: ConversationItem[],
+): boolean {
+  if (prev.length === 0 || prev.length !== next.length) {
+    return false;
+  }
+  const lastIndex = prev.length - 1;
+  for (let index = 0; index < lastIndex; index += 1) {
+    if (prev[index] !== next[index]) {
+      return false;
+    }
+  }
+  const prevLast = prev[lastIndex];
+  const nextLast = next[lastIndex];
+  if (prevLast === nextLast) {
+    return true;
+  }
+  return (
+    prevLast.kind === "message" &&
+    nextLast.kind === "message" &&
+    prevLast.id === nextLast.id &&
+    prevLast.role === nextLast.role &&
+    prevLast.isFinal === nextLast.isFinal
+  );
 }
 
 export const Messages = memo(function Messages({
@@ -489,16 +524,44 @@ export const Messages = memo(function Messages({
   const latestItemsRef = useRef(items);
   latestItemsRef.current = items;
   const [finalizingAssistantMessageId, setFinalizingAssistantMessageId] = useState<string | null>(null);
+  const exitPlanDedupeCacheRef = useRef<{
+    baseItems: ConversationItem[];
+    result: ConversationItem[];
+  } | null>(null);
   const effectiveItems = useMemo(() => {
     const baseItems = isSelectionFrozen
       ? frozenItemsRef.current ?? items
       : items;
-    return dedupeExitPlanItemsKeepFirst(baseItems);
+    const cache = exitPlanDedupeCacheRef.current;
+    if (cache && isTrailingMessageTextOnlyUpdate(cache.baseItems, baseItems)) {
+      // dedupe 只会移除 exit-plan 工具条目,末尾的 "message" 条目必然原样透传,
+      // 因此只需把结果数组的最后一项替换为最新引用,无需重新扫描整段历史。
+      const nextLast = baseItems[baseItems.length - 1];
+      const result =
+        cache.result[cache.result.length - 1] === nextLast
+          ? cache.result
+          : [...cache.result.slice(0, -1), nextLast];
+      exitPlanDedupeCacheRef.current = { baseItems, result };
+      return result;
+    }
+    const result = dedupeExitPlanItemsKeepFirst(baseItems);
+    exitPlanDedupeCacheRef.current = { baseItems, result };
+    return result;
   }, [isSelectionFrozen, items]);
-  const messageActionTargets = useMemo(
-    () => buildMessageActionTargets(effectiveItems),
-    [effectiveItems],
-  );
+  const messageActionTargetsCacheRef = useRef<{
+    baseItems: ConversationItem[];
+    result: MessageActionTargets;
+  } | null>(null);
+  const messageActionTargets = useMemo(() => {
+    const cache = messageActionTargetsCacheRef.current;
+    if (cache && isTrailingMessageTextOnlyUpdate(cache.baseItems, effectiveItems)) {
+      messageActionTargetsCacheRef.current = { baseItems: effectiveItems, result: cache.result };
+      return cache.result;
+    }
+    const result = buildMessageActionTargets(effectiveItems);
+    messageActionTargetsCacheRef.current = { baseItems: effectiveItems, result };
+    return result;
+  }, [effectiveItems]);
   const liveTailWorkingSet = useMemo(
     () =>
       buildLiveTailWorkingSet(effectiveItems, {

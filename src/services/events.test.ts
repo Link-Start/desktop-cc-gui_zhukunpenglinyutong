@@ -102,6 +102,47 @@ describe("events subscriptions", () => {
     expect(backpressure.getRawRecent()).toHaveLength(128);
   });
 
+  it("coalesces superseding item/updated snapshots for the same item", () => {
+    const backpressure = getAppServerEventBackpressureForTests();
+    const snapshot = (text: string): AppServerEvent => ({
+      workspace_id: "ws-1",
+      message: {
+        method: "item/updated",
+        params: {
+          threadId: "t1",
+          item: { id: "item-1", kind: "message", text },
+        },
+      },
+    });
+
+    backpressure.push(snapshot("hel"));
+    backpressure.push(snapshot("hello"));
+    backpressure.push(snapshot("hello wor"));
+
+    expect(backpressure.queueDepth).toBe(1);
+    expect(backpressure.coalescedCount).toBe(2);
+  });
+
+  it("does not coalesce item/updated events for different items", () => {
+    const backpressure = getAppServerEventBackpressureForTests();
+    const snapshot = (itemId: string): AppServerEvent => ({
+      workspace_id: "ws-1",
+      message: {
+        method: "item/updated",
+        params: {
+          threadId: "t1",
+          item: { id: itemId, kind: "message", text: "hi" },
+        },
+      },
+    });
+
+    backpressure.push(snapshot("item-1"));
+    backpressure.push(snapshot("item-2"));
+
+    expect(backpressure.queueDepth).toBe(2);
+    expect(backpressure.coalescedCount).toBe(0);
+  });
+
   it("cleans up listeners that resolve after unsubscribe", async () => {
     let resolveListener: (handler: UnlistenFn) => void = () => {};
     const unlisten = vi.fn();

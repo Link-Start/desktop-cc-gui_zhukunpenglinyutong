@@ -337,7 +337,10 @@
   animation-duration: 0.42s;
   border-top-color: #ffb347;
   border-right-color: rgba(255, 179, 71, 0.56);
-  filter: drop-shadow(0 0 8px rgba(255, 166, 62, 0.55));
+  /* Static box-shadow glow instead of animated filter: drop-shadow — drop-shadow forces an
+     offscreen surface to be re-rasterized every frame of the rotate animation; box-shadow paints
+     once and lets the rotation stay a pure compositor transform. */
+  box-shadow: 0 0 8px rgba(255, 166, 62, 0.55);
 }
 
 .working.is-ingress .working-spinner::before,
@@ -384,7 +387,7 @@
   animation-duration: 1s;
   border-top-color: color-mix(in srgb, var(--text-stronger) 82%, transparent);
   border-right-color: rgba(255, 255, 255, 0.2);
-  filter: none;
+  box-shadow: none;
 }
 
 .app.windows-desktop
@@ -410,7 +413,7 @@
 :root[data-theme="light"] .working.is-ingress .working-spinner {
   border-top-color: #ff6a00;
   border-right-color: rgba(255, 106, 0, 0.68);
-  filter: drop-shadow(0 0 8px rgba(255, 90, 0, 0.42));
+  box-shadow: 0 0 8px rgba(255, 90, 0, 0.42);
 }
 
 :root[data-theme="light"] .working.is-ingress .working-spinner::before {
@@ -431,7 +434,7 @@
   :root:not([data-theme]) .working.is-ingress .working-spinner {
     border-top-color: #ff6a00;
     border-right-color: rgba(255, 106, 0, 0.68);
-    filter: drop-shadow(0 0 8px rgba(255, 90, 0, 0.42));
+    box-shadow: 0 0 8px rgba(255, 90, 0, 0.42);
   }
 
   :root:not([data-theme]) .working.is-ingress .working-spinner::before {
@@ -467,9 +470,12 @@
     rgba(255, 255, 255, 0.95),
     rgba(255, 255, 255, 0.3)
   );
-  background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
+  /* Animate opacity instead of background-position: moving the gradient under a text clip-mask
+     forces a full glyph-mask + gradient re-raster every frame (uncompositable in WebKit).
+     Opacity is one of the few properties WebKit can composite as a post-process alpha blend,
+     so the pulse no longer re-rasters the clipped text per frame. */
   animation: working-shimmer 2.2s ease-in-out infinite;
 }
 
@@ -528,14 +534,12 @@
 }
 
 @keyframes working-shimmer {
-  0% {
-    background-position: 0% 50%;
+  0%,
+  100% {
+    opacity: 0.55;
   }
   50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
+    opacity: 1;
   }
 }
 

@@ -75,11 +75,11 @@ export const BashToolBlock = memo(function BashToolBlock({
   const durationMs = typeof item.durationMs === 'number' ? item.durationMs : null;
   const isLongRunning = durationMs !== null && durationMs >= 1200;
 
-  const outputLines = useMemo(() => {
-    if (!item.output) return [];
+  const { outputLines, outputStartIndex } = useMemo(() => {
+    if (!item.output) return { outputLines: [], outputStartIndex: 0 };
     const lines = item.output.split(/\r?\n/);
-    if (lines.length <= MAX_OUTPUT_LINES) return lines;
-    return lines.slice(-MAX_OUTPUT_LINES);
+    if (lines.length <= MAX_OUTPUT_LINES) return { outputLines: lines, outputStartIndex: 0 };
+    return { outputLines: lines.slice(-MAX_OUTPUT_LINES), outputStartIndex: lines.length - MAX_OUTPUT_LINES };
   }, [item.output]);
   const highlightedOutputLines = useMemo(
     () => outputLines.map((line) => highlightLine(line, 'bash')),
@@ -189,7 +189,7 @@ export const BashToolBlock = memo(function BashToolBlock({
                 </button>
               </div>
               {outputLines.map((line, index) => (
-                <div key={`${index}-${line.slice(0, 20)}`} className="bash-output-line">
+                <div key={`line-${outputStartIndex + index}`} className="bash-output-line">
                   {isErrorLine(line) ? (
                     <span className="bash-output-line-error">{line || ' '}</span>
                   ) : line.length === 0 ? (

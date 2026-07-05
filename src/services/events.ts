@@ -212,6 +212,18 @@ function appServerEventCoalesceKey(event: AppServerEvent): string | null {
     }
     case "account/rateLimits/updated":
       return `${event.workspace_id}\0${method}`;
+    case "item/updated": {
+      if (appServerEventDropPolicy(event) !== "drop-eligible-snapshot") {
+        return null;
+      }
+      const threadId = appServerEventThreadId(params);
+      const item = (params.item as Record<string, unknown> | undefined) ?? params;
+      const itemId = item.id ?? params.itemId ?? params.item_id;
+      if (!threadId || typeof itemId !== "string" || !itemId.trim()) {
+        return null;
+      }
+      return `${event.workspace_id}\0${method}\0${threadId}\0${itemId}`;
+    }
     default:
       return null;
   }
