@@ -1539,3 +1539,36 @@ Windows Codex app-server wrapper fallback 改为通过 provider/default CODEX_HO
 ### Next Steps
 
 - None - task complete
+
+
+## Session 959: 归档 OpenSpec 近期变更提案
+
+**Date**: 2026-07-05
+**Task**: 归档 OpenSpec 近期变更提案
+**Branch**: `ui-refactoring`
+
+### Summary
+
+补齐 zhukunpenglinyutong 近 10 天优化变更的 OpenSpec retro 提案，按功能点拆分并以中文为主重构 proposal/design/tasks/spec；完成 18 个 retro change 与 8 个既有完成 change 的归档，同步 main specs，并通过 openspec validate --all --strict --no-interactive。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f68626ca` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
