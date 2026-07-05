@@ -19,7 +19,13 @@ The system MUST keep the current primary Codex app-server launch behavior for ma
 
 ### Requirement: Windows Wrapper Failure MUST Use Bounded Compatibility Retry
 
-When Windows `.cmd/.bat` wrapper launch fails before Codex app-server initialization completes, the system MUST attempt a bounded compatibility retry that avoids known fragile wrapper argument combinations.
+When Windows `.cmd/.bat` wrapper launch fails before Codex app-server initialization completes, the system MUST attempt a bounded compatibility retry that avoids known fragile wrapper argument combinations. Compatibility retry MUST use argument forms supported by `codex app-server`; it MUST NOT rely on `--profile <name> app-server`.
+
+#### Scenario: Windows primary avoids generated developer instructions argv
+- **WHEN** the app starts a Codex app-server process on Windows
+- **AND** ccgui-generated instructions contain the external spec priority hint or enabled curated skill bodies
+- **THEN** primary launch argv MUST NOT include generated `developer_instructions` quoted TOML config arguments
+- **AND** the launch argv MUST still preserve user-provided Codex args unless they are invalid
 
 #### Scenario: wrapper primary fails before initialize
 - **WHEN** the resolved Codex binary is a `.cmd` or `.bat` wrapper on Windows
@@ -27,14 +33,21 @@ When Windows `.cmd/.bat` wrapper launch fails before Codex app-server initializa
 - **THEN** the system MUST attempt at most one compatibility retry for that launch request
 - **AND** retry diagnostics MUST retain the primary failure summary
 
-#### Scenario: compatibility retry avoids fragile internal quoted config
+#### Scenario: compatibility retry avoids generated developer instructions argv
 - **WHEN** compatibility retry is attempted for a Windows wrapper launch
-- **THEN** the retry MUST avoid sending the internal `developer_instructions` quoted TOML config argument through `cmd.exe /c <wrapper>`
+- **THEN** the retry MUST avoid sending internally generated `developer_instructions` quoted TOML config arguments through `cmd.exe /c <wrapper>`
+- **AND** the omitted generated argv instructions MUST include the external spec priority hint
+- **AND** the omitted generated argv instructions MUST include curated skill bodies such as `lazy-senior-dev`
 - **AND** user-provided Codex args MUST still be preserved unless they are invalid
+
+#### Scenario: compatibility retry does not use profile app-server transport
+- **WHEN** compatibility retry is attempted for a Windows wrapper launch
+- **THEN** retry argv MUST NOT include `--profile ccgui-generated-instructions app-server`
+- **AND** retry MUST NOT create a ccgui-generated profile file as the app-server curated skill transport
 
 #### Scenario: retry success creates usable session
 - **WHEN** primary Windows wrapper launch fails before initialize
-- **AND** compatibility retry completes initialize handshake successfully
+- **AND** compatibility retry completes initialize handshake successfully after omitting ccgui-generated instructions
 - **THEN** the system MUST create a usable Codex workspace session
 - **AND** runtime diagnostics SHOULD indicate that fallback was retried
 
@@ -109,10 +122,16 @@ The system MUST include targeted backend tests that lock the wrapper fallback co
 - **THEN** they MUST verify that `.cmd/.bat` wrapper failures are eligible for bounded compatibility retry
 - **AND** direct executable launches are not eligible
 
-#### Scenario: internal hint fallback is covered
-- **WHEN** backend tests exercise compatibility retry planning
-- **THEN** they MUST verify that the retry avoids the fragile internal quoted config argument
-- **AND** preserves user-provided Codex args
+#### Scenario: generated instructions degraded fallback is covered
+- **WHEN** backend tests exercise compatibility retry planning with curated skills enabled
+- **THEN** they MUST verify that retry argv avoids the fragile internally generated `developer_instructions` config argument
+- **AND** they MUST verify that retry argv does not use `--profile ccgui-generated-instructions`
+- **AND** they MUST verify that retry preserves user-provided Codex args
+
+#### Scenario: Windows primary omission is covered
+- **WHEN** backend tests exercise platform-specific Codex app-server launch options
+- **THEN** they MUST verify that Windows primary launch omits ccgui-generated `developer_instructions` argv
+- **AND** they MUST verify that macOS/Linux primary launch behavior can still include generated `developer_instructions` argv.
 
 ### Requirement: Codex App Server Creation MUST Treat SessionStart Hook As Recoverable Enhancement
 
@@ -183,3 +202,4 @@ The system MUST include targeted tests that lock hook-safe fallback behavior and
 
 - **WHEN** frontend tests simulate a fallback-created Codex session or equivalent backend notice
 - **THEN** they MUST verify the user sees a warning that SessionStart hooks were skipped
+

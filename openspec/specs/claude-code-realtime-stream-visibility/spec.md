@@ -225,3 +225,79 @@ Claude Code live stream visibility MUST remain progressive when app-server event
 - **THEN** triage MUST classify the issue as app-server event channel compatibility or transport migration drift
 - **AND** it MUST NOT be misclassified as Claude CLI unavailable or model first-token latency without channel evidence.
 
+### Requirement: Claude Backend Stream MUST Emit Text Before Process Completion
+
+Claude Code backend streaming MUST forward valid assistant text delta events before the Claude CLI process exits, including on Windows wrapper launches, while preserving existing non-Windows immediate flush semantics.
+
+#### Scenario: delayed stdout delta is visible before process exit
+
+- **WHEN** a Claude Code runtime process emits a valid assistant text delta on stdout
+- **AND** the process remains alive before emitting later stdout lines or terminal completion
+- **THEN** the backend MUST emit the assistant text delta to the conversation event stream before waiting for process exit
+- **AND** the terminal completed output MUST NOT be the first meaningful assistant text event when earlier valid deltas existed
+
+#### Scenario: non-Windows flush behavior is unchanged
+
+- **WHEN** Claude Code emits adjacent assistant text deltas on macOS or Linux
+- **THEN** the backend MUST preserve immediate per-delta forwarding semantics
+- **AND** Windows-specific coalescing MUST NOT be applied to non-Windows platforms
+
+#### Scenario: Windows coalescing remains bounded
+
+- **WHEN** Claude Code emits adjacent assistant text deltas on Windows
+- **THEN** the backend MAY coalesce deltas inside the existing bounded coalescing window
+- **AND** coalescing MUST NOT defer all assistant text until process completion
+
+### Requirement: Claude Stream JSON Stdin MUST NOT Use Positional Prompt Placeholders
+
+When Claude Code runtime sends prompt content through `--input-format stream-json` stdin, the launched CLI command MUST NOT include a user prompt positional argument or an empty positional placeholder after `-p`.
+
+#### Scenario: stream-json stdin has no empty prompt placeholder
+- **WHEN** a Claude Code prompt is sent through stream-json stdin
+- **THEN** the runtime MUST launch Claude CLI with `--input-format stream-json`
+- **AND** the argv list MUST NOT include an empty positional prompt placeholder after `-p`
+- **AND** the stdin payload MUST remain the only carrier for the user message content
+
+#### Scenario: Windows wrapper receives stable stream-json args
+- **WHEN** Claude Code is launched through a Windows `.cmd` or `.bat` wrapper
+- **AND** the prompt is sent through stream-json stdin
+- **THEN** the command argv MUST preserve Claude control flags without injecting an empty prompt argument
+- **AND** the raw JSON stdin payload MUST NOT become the visible user message or sidebar title
+
+#### Scenario: Unix direct launches use the same protocol contract
+- **WHEN** Claude Code is launched on macOS or Linux without a Windows command wrapper
+- **AND** the prompt is sent through stream-json stdin
+- **THEN** the runtime MUST use the same no-placeholder stdin protocol contract
+- **AND** existing stream-json output parsing and live text streaming MUST remain unchanged
+
+### Requirement: Claude Windows Launch MUST Avoid Curated Skill Body Argv
+
+Claude Code launch MUST keep stream-json stdin prompt delivery intact and MUST avoid placing large ccgui-generated curated skill bodies in Windows argv.
+
+#### Scenario: Windows skips curated append system prompt
+- **WHEN** a Claude Code send runs on Windows
+- **AND** `enabledCuratedSkillIds` contains `lazy-senior-dev`
+- **THEN** the launched command MUST NOT include `--append-system-prompt` with the generated curated skill body
+- **AND** the user message MUST still be sent through `--input-format stream-json` stdin
+- **AND** the enabled curated skill MUST be made available through Claude native skill discovery instead of argv
+- **AND** any automatic curated-skill activation MUST use `--append-system-prompt-file`, not inline `--append-system-prompt`
+
+#### Scenario: non-wrapper Claude launch preserves curated skills
+- **WHEN** a Claude Code send runs on macOS or Linux
+- **AND** `enabledCuratedSkillIds` contains `lazy-senior-dev`
+- **THEN** the launched command MUST keep the existing `--append-system-prompt` curated skill injection behavior
+
+#### Scenario: Windows mirrors curated skill before Claude send
+- **WHEN** a Claude Code send runs on Windows
+- **AND** `enabledCuratedSkillIds` contains `lazy-senior-dev`
+- **THEN** ccgui MUST sync `lazy-senior-dev` into `<effective Claude home>/skills/lazy-senior-dev/SKILL.md`
+- **AND** effective Claude home MUST come from configured Claude home, then `CLAUDE_HOME`, then platform default
+- **AND** the sync MUST protect user-owned skill directories by requiring a ccgui ownership marker before overwrite or delete
+
+#### Scenario: Windows passes activation hint file for curated skills
+- **WHEN** a Claude Code send runs on Windows
+- **AND** `enabledCuratedSkillIds` contains `lazy-senior-dev`
+- **THEN** ccgui MUST pass `--append-system-prompt-file <hint-file-path>`
+- **AND** `<hint-file-path>` MUST be a ccgui-managed file under the effective Claude home
+- **AND** the launched command MUST NOT include the curated skill body in argv
+

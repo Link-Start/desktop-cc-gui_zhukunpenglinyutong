@@ -40,27 +40,30 @@ Defines the claude-history-transcript-visibility behavior contract, covering Cla
 
 ### Requirement: Claude History MUST Filter Cross-Engine Control Plane Contamination
 
-Claude history parsing MUST filter Codex or GUI control-plane payloads before projecting user-visible sessions or messages.
+Claude history parsing MUST filter GUI, Codex, and Claude protocol control-plane payloads before projecting user-visible sessions or messages.
 
-#### Scenario: control-plane payload is not used as first message
-- **WHEN** a Claude JSONL entry contains control-plane text such as JSON-RPC `initialize`, `clientInfo.name=ccgui`, `capabilities.experimentalApi`, `developer_instructions`, or Codex `app-server` launch text
-- **THEN** the backend scanner MUST NOT use that text as the session first user message
-- **AND** it MUST NOT derive a user-visible session title from that text
+#### Scenario: leaked stream-json stdin payload is not used as first message
+- **WHEN** a Claude JSONL entry contains text that parses as a Claude stream-json stdin user-message envelope
+- **THEN** backend session scanning MUST NOT use that text as `firstMessage`
+- **AND** backend session loading MUST NOT return it as a visible user message
+- **AND** frontend fallback history parsing MUST skip that row
 
-#### Scenario: control-plane-only transcript is omitted from session list
-- **WHEN** a Claude history transcript contains no real user or assistant conversation after filtering control-plane entries
-- **THEN** the backend MUST omit that transcript from the visible Claude session list
-- **AND** the frontend MUST NOT recreate a visible conversation from the filtered entries
+#### Scenario: mixed polluted transcript keeps real conversation
+- **WHEN** a Claude transcript contains leaked stream-json stdin payload rows followed by real user and assistant messages
+- **THEN** the session MUST remain visible
+- **AND** the first real user message MUST become the title fact
+- **AND** real assistant/user messages MUST be preserved
 
-#### Scenario: mixed transcript keeps valid messages
-- **WHEN** a Claude history transcript contains real conversation messages and control-plane contamination
-- **THEN** the backend MUST keep the valid conversation messages
-- **AND** the frontend loader MUST keep the valid conversation messages if it receives a mixed payload
+#### Scenario: polluted assistant echo is quarantined
+- **WHEN** a Claude transcript contains a leaked stream-json stdin payload followed by assistant-side reasoning or final text created from that payload
+- **THEN** backend session scanning MUST NOT count that assistant-side echo as a visible message
+- **AND** backend session loading MUST NOT return that assistant-side echo
+- **AND** frontend fallback history parsing MUST skip that assistant-side echo
+- **AND** quarantine MUST end when the next real user row is encountered
 
-#### Scenario: normal Claude messages are not over-filtered
-- **WHEN** a real user message mentions terms such as `app-server` without matching high-confidence control-plane structure
-- **THEN** the system MUST keep that message visible
-- **AND** it MUST NOT hide normal conversation content solely because it contains a keyword
+#### Scenario: normal JSON discussion remains visible
+- **WHEN** a real user message mentions JSON or includes JSON text that does not match the Claude stream-json stdin envelope
+- **THEN** the message MUST remain visible in history restore
 
 ### Requirement: Claude History Contamination Filtering MUST Be Cross-Platform
 
