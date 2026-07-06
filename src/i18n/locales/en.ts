@@ -6,6 +6,7 @@ import enPart4 from "./en.part4";
 import enPart5 from "./en.part5";
 import enPart6 from "./en.part6";
 import enPart7 from "./en.part7";
+import enModes from "./en.modes";
 import enModels from "./en.models";
 
 const enPart2Settings =
@@ -31,6 +32,7 @@ const en = {
   ...enPart4,
   ...enPart5,
   ...enPart6,
+  ...enModes,
   ...enModels,
   messages: {
     ...enPart1.messages,

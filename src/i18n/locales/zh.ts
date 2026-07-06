@@ -6,6 +6,7 @@ import zhPart5 from "./zh.part5";
 import zhPart6 from "./zh.part6";
 import zhPart7 from "./zh.part7";
 import zhPart8 from "./zh.part8";
+import zhModes from "./zh.modes";
 import zhModels from "./zh.models";
 
 const zhPart2Settings =
@@ -27,6 +28,7 @@ const zh = {
   ...zhPart5,
   ...zhPart6,
   ...zhPart8,
+  ...zhModes,
   ...zhModels,
   messages: {
     ...zhPart1.messages,
