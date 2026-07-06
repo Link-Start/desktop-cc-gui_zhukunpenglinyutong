@@ -475,6 +475,28 @@ export function useComposerAutocompleteState({
     [skills],
   );
 
+  // Pre-filter out gitignored paths ONCE per data change, not once per keystroke.
+  // `files`/`directories` are the full unfiltered workspace lists (tens of
+  // thousands of paths in large projects); the gitignored sets typically remove
+  // ~95% of them. Doing this filter inside the per-keystroke `fileItems` memo
+  // (deps include `text`) meant re-filtering the whole raw list on every
+  // keystroke — the dominant cost in the 20-36s composer stall. Same result,
+  // moved off the hot path.
+  const visibleDirectories = useMemo(
+    () =>
+      gitignoredDirectories && gitignoredDirectories.size > 0
+        ? directories.filter((path) => !gitignoredDirectories.has(path))
+        : directories,
+    [directories, gitignoredDirectories],
+  );
+  const visibleFiles = useMemo(
+    () =>
+      gitignoredFiles && gitignoredFiles.size > 0
+        ? files.filter((path) => !gitignoredFiles.has(path))
+        : files,
+    [files, gitignoredFiles],
+  );
+
   const fileItems = useMemo<AutocompleteItem[]>(
     () =>
       isFileTriggerActive(text, selectionStart)
@@ -486,16 +508,14 @@ export function useComposerAutocompleteState({
             const matchedDirectories: string[] = [];
             const matchedFiles: string[] = [];
             if (!query || isDirectoryScoped) {
-              for (const path of directories) {
+              for (const path of visibleDirectories) {
                 if (matchedDirectories.length >= MAX_FILE_SUGGESTIONS) break;
-                if (gitignoredDirectories?.has(path)) continue;
                 if (!isDirectChildPath(path, parentPath)) continue;
                 if (!matchesFileFragment(path, fragment)) continue;
                 matchedDirectories.push(path);
               }
-              for (const path of files) {
+              for (const path of visibleFiles) {
                 if (matchedFiles.length >= MAX_FILE_SUGGESTIONS) break;
-                if (gitignoredFiles?.has(path)) continue;
                 if (!isDirectChildPath(path, parentPath)) continue;
                 if (!matchesFileFragment(path, fragment)) continue;
                 matchedFiles.push(path);
@@ -505,14 +525,21 @@ export function useComposerAutocompleteState({
             } else {
               const rankedDirectories: Array<{ path: string; score: number }> = [];
               const rankedFiles: Array<{ path: string; score: number }> = [];
-              for (const path of directories) {
-                if (gitignoredDirectories?.has(path)) continue;
+              // Early-exit once we've collected MAX_FILE_SUGGESTIONS scored hits.
+              // Without this cap, a query fragment scores the ENTIRE visible
+              // list on every keystroke. The `if` branch above already caps this
+              // way. The ranked output here is only consumed to compute the
+              // `isAutocompleteOpen` boolean (the visible @-dropdown is fed by a
+              // separate async provider in ChatInputBox), so scan-order
+              // truncation is behaviourally equivalent to score-order.
+              for (const path of visibleDirectories) {
+                if (rankedDirectories.length >= MAX_FILE_SUGGESTIONS) break;
                 const score = scoreFileReferenceMatch(path, query);
                 if (score <= 0) continue;
                 rankedDirectories.push({ path, score });
               }
-              for (const path of files) {
-                if (gitignoredFiles?.has(path)) continue;
+              for (const path of visibleFiles) {
+                if (rankedFiles.length >= MAX_FILE_SUGGESTIONS) break;
                 const score = scoreFileReferenceMatch(path, query);
                 if (score <= 0) continue;
                 rankedFiles.push({ path, score });
@@ -545,7 +572,7 @@ export function useComposerAutocompleteState({
             return [...directoryItems, ...fileItemsList];
           })()
         : [],
-    [directories, files, gitignoredDirectories, gitignoredFiles, selectionStart, text],
+    [visibleDirectories, visibleFiles, selectionStart, text],
   );
 
   const promptItems = useMemo<AutocompleteItem[]>(

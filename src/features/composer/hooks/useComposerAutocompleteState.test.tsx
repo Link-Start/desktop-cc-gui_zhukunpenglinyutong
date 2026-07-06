@@ -98,6 +98,71 @@ describe("useComposerAutocompleteState", () => {
     );
   });
 
+  it("bounds the @ file scan on a huge workspace list and still finds a match", () => {
+    // Regression guard for the 20-36s composer stall: a large workspace list
+    // (like a project with a big .deps/ or build/ tree) must NOT be scored in
+    // full on every keystroke. Result is capped at MAX_FILE_SUGGESTIONS (200)
+    // and a genuine match is still surfaced.
+    const files = Array.from({ length: 10_000 }, (_, i) => `pkg/module${i}/index.ts`);
+    files.push("app/widget.ts"); // the intended target for query "widget"
+    const text = "review @widget";
+    const selectionStart = text.length;
+    const textareaRef = createTextareaRef();
+
+    const started = performance.now();
+    const { result } = renderHook(() =>
+      useComposerAutocompleteState({
+        text,
+        selectionStart,
+        disabled: false,
+        skills: [],
+        prompts: [],
+        files,
+        directories: [],
+        textareaRef,
+        setText: vi.fn(),
+        setSelectionStart: vi.fn(),
+      }),
+    );
+    const elapsed = performance.now() - started;
+
+    expect(result.current.isAutocompleteOpen).toBe(true);
+    expect(result.current.autocompleteMatches.length).toBeLessThanOrEqual(200);
+    expect(result.current.autocompleteMatches.map((item) => item.label)).toContain(
+      "app/widget.ts",
+    );
+    // Sanity: even 10k entries resolve well under a second (was tens of seconds).
+    expect(elapsed).toBeLessThan(1000);
+  });
+
+  it("excludes gitignored paths via the pre-filter even under a scored @ query", () => {
+    // Exercises the memoized visible* lists with a fuzzy (scored) query, not just
+    // the directory-scoped branch covered above.
+    const text = "see @gen";
+    const selectionStart = text.length;
+    const textareaRef = createTextareaRef();
+
+    const { result } = renderHook(() =>
+      useComposerAutocompleteState({
+        text,
+        selectionStart,
+        disabled: false,
+        skills: [],
+        prompts: [],
+        files: ["src/generator.ts", "build/generated.ts"],
+        directories: [],
+        gitignoredFiles: new Set(["build/generated.ts"]),
+        textareaRef,
+        setText: vi.fn(),
+        setSelectionStart: vi.fn(),
+      }),
+    );
+
+    const labels = result.current.autocompleteMatches.map((item) => item.label);
+    expect(labels).toContain("src/generator.ts");
+    expect(labels).not.toContain("build/generated.ts");
+  });
+
   it("shows only top-level entries when @ query has no directory scope", () => {
     const text = "看看 @";
     const selectionStart = text.length;
