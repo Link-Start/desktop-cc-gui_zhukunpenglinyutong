@@ -5,18 +5,18 @@ import type {
 } from "react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import CircleCheckBig from "lucide-react/dist/esm/icons/circle-check-big";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import Expand from "lucide-react/dist/esm/icons/expand";
 import Minus from "lucide-react/dist/esm/icons/minus";
 import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
 import Plus from "lucide-react/dist/esm/icons/plus";
-import SquarePen from "lucide-react/dist/esm/icons/square-pen";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2";
+import { Badge } from "@/components/ui/badge";
 import { getFileTreeIconSvg } from "../../files/utils/fileTreeIcons";
 import { GitDiffPanelSectionActions } from "./GitDiffPanelSectionActions";
 import {
   type InclusionState,
-  InclusionToggle,
   getFileInclusionState,
   normalizeDiffPath,
 } from "./GitDiffPanelInclusion";
@@ -86,20 +86,20 @@ function splitNameAndExtension(name: string) {
   };
 }
 
-function getStatusSymbol(status: string) {
+function getStatusLetter(status: string, section: "staged" | "unstaged") {
   switch (status) {
     case "A":
-      return "(A)";
+      return section === "unstaged" ? "U" : "A";
     case "M":
-      return "(U)";
+      return "M";
     case "D":
-      return "(D)";
+      return "D";
     case "R":
-      return "(R)";
+      return "R";
     case "T":
-      return "(T)";
+      return "T";
     default:
-      return "(?)";
+      return "?";
   }
 }
 
@@ -118,20 +118,6 @@ function getStatusClass(status: string) {
     default:
       return "diff-icon-unknown";
   }
-}
-
-export function formatGitChangeCount(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "0";
-  }
-  const normalized = Math.max(0, Math.trunc(value));
-  if (normalized < 10_000) {
-    return String(normalized);
-  }
-  if (normalized < 100_000) {
-    return `${(normalized / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
-  }
-  return `${Math.round(normalized / 1_000)}k`;
 }
 
 type DiffFileRowProps = {
@@ -182,11 +168,8 @@ export function DiffFileRow({
   const { t } = useTranslation();
   const { name, dir } = splitPath(file.path);
   const { base, extension } = splitNameAndExtension(name ?? "");
-  const statusSymbol = getStatusSymbol(file.status);
+  const statusLetter = getStatusLetter(file.status, section);
   const statusClass = getStatusClass(file.status);
-  const additionsLabel = formatGitChangeCount(file.additions);
-  const deletionsLabel = formatGitChangeCount(file.deletions);
-  const exactStatsLabel = `+${file.additions} -${file.deletions}`;
   const mutationDisabled = Boolean(file.mutationDisabled || file.isDiffOnlyFallback);
   const showStage = section === "unstaged" && Boolean(onStageFile) && !mutationDisabled;
   const showUnstage = section === "staged" && Boolean(onUnstageFile) && !mutationDisabled;
@@ -236,9 +219,6 @@ export function DiffFileRow({
       }}
       onContextMenu={onContextMenu}
     >
-      <span className={`diff-icon ${statusClass}`} aria-hidden>
-        {statusSymbol}
-      </span>
       <span className="diff-file-icon" aria-hidden>
         <GitFileTreeIcon name={name ?? ""} />
       </span>
@@ -252,15 +232,6 @@ export function DiffFileRow({
         {showDirectory && dir && <div className="diff-dir">{dir}</div>}
       </div>
       <div className="diff-row-meta">
-        <span
-          className="diff-counts-inline git-filetree-badge"
-          aria-label={exactStatsLabel}
-          title={exactStatsLabel}
-        >
-          <span className="diff-add">+{additionsLabel}</span>
-          <span className="diff-sep">/</span>
-          <span className="diff-del">-{deletionsLabel}</span>
-        </span>
         <div className="diff-row-actions" role="group" aria-label={t("git.fileActions")}>
           {onOpenInlinePreview ? (
             <button
@@ -334,17 +305,24 @@ export function DiffFileRow({
           )}
         </div>
         {!mutationDisabled ? (
-          <InclusionToggle
-            state={inclusionState}
-            label={inclusionLabel}
-            className="diff-row-selection diff-row-selection--trailing"
+          <button
+            type="button"
+            className={`diff-status-letter ${statusClass} is-${inclusionState}`}
             disabled={inclusionDisabled}
-            stopPropagation
-            onToggle={() => {
+            aria-label={inclusionLabel}
+            title={inclusionLabel}
+            onClick={(event) => {
+              event.stopPropagation();
               void onSetCommitSelection?.([file.path], inclusionState !== "all");
             }}
-          />
-        ) : null}
+          >
+            {statusLetter}
+          </button>
+        ) : (
+          <span className={`diff-status-letter ${statusClass}`} aria-hidden>
+            {statusLetter}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -361,6 +339,8 @@ export type DiffSectionProps = {
   rootTrailingAction?: ReactNode;
   leadingMeta?: ReactNode;
   compactHeader?: boolean;
+  isCollapsed?: boolean;
+  onToggleCollapsed?: () => void;
   selectedFiles: Set<string>;
   selectedPath: string | null;
   onSelectFile?: (path: string | null) => void;
@@ -392,18 +372,53 @@ export function renderSectionIndicator(
   section: "staged" | "unstaged",
   count: number,
   t: (key: string, options?: Record<string, unknown>) => string,
+  isCollapsed = false,
+  onToggleCollapsed?: () => void,
 ) {
   const label = section === "staged" ? t("git.staged") : t("git.unstaged");
-  const Icon = section === "staged" ? CircleCheckBig : SquarePen;
+  const className = `diff-section-indicator is-${section}`;
+  const content = (
+    <>
+      <span className="diff-section-indicator-chevron" aria-hidden>
+        {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+      </span>
+      <span className="diff-section-indicator-label">{label}</span>
+    </>
+  );
+  if (onToggleCollapsed) {
+    return (
+      <button
+        type="button"
+        className={className}
+        aria-label={`${label} (${count})`}
+        aria-expanded={!isCollapsed}
+        title={label}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleCollapsed();
+        }}
+      >
+        {content}
+      </button>
+    );
+  }
   return (
-    <span
-      className={`diff-section-indicator is-${section}`}
-      aria-label={`${label} (${count})`}
-      title={label}
-    >
-      <Icon size={12} aria-hidden />
-      <strong>{count}</strong>
+    <span className={className} aria-label={`${label} (${count})`} title={label}>
+      {content}
     </span>
+  );
+}
+
+export function renderSectionCountBadge(count: number) {
+  return (
+    <Badge
+      variant="secondary"
+      size="sm"
+      className="diff-section-count-badge"
+      aria-hidden
+    >
+      {count}
+    </Badge>
   );
 }
 
@@ -414,10 +429,11 @@ export function DiffSection({
   includedPaths,
   excludedPaths,
   partialPaths,
-  rootFolderName,
   rootTrailingAction,
   leadingMeta,
   compactHeader = false,
+  isCollapsed = false,
+  onToggleCollapsed,
   selectedFiles,
   selectedPath,
   onSelectFile,
@@ -495,43 +511,34 @@ export function DiffSection({
   }, [excludedPathSet, files, includedPathSet, partialPathSet]);
   const showSectionActions =
     toggleableFilePaths.length > 0 || actionFilePaths.length > 0;
-  const showCompactRoot = compactHeader && Boolean(rootFolderName?.trim());
 
   return (
-    <div className={`diff-section git-filetree-section diff-section--${section}`}>
+    <div
+      className={`diff-section git-filetree-section diff-section--${section}${
+        isCollapsed ? " is-collapsed" : ""
+      }`}
+    >
       <div
         className={`diff-section-title diff-section-title--row git-filetree-section-header${
           compactHeader ? " is-compact" : ""
         }`}
       >
-        {showCompactRoot ? (
-          <span className="diff-tree-summary-root-group">
-            <span className="diff-tree-summary-root is-static">
-              <span className="diff-tree-summary-root-toggle" aria-hidden>
-                <span className="diff-tree-folder-spacer" />
-              </span>
-              <GitFileTreeIcon
-                name={rootFolderName ?? ""}
-                isFolder
-                className="diff-tree-summary-root-icon"
-              />
-              <span className="diff-tree-summary-root-name">{rootFolderName}</span>
-            </span>
-            {rootTrailingAction ? (
-              <span className="diff-tree-summary-root-action">{rootTrailingAction}</span>
-            ) : null}
-          </span>
-        ) : null}
-        {!showCompactRoot && rootTrailingAction ? (
+        <span className="diff-tree-summary-section-label">
+          {renderSectionIndicator(
+            section,
+            files.length,
+            t,
+            isCollapsed,
+            onToggleCollapsed,
+          )}
+        </span>
+        {!isCollapsed && rootTrailingAction ? (
           <span className="diff-tree-summary-root-action">{rootTrailingAction}</span>
         ) : null}
-        <span className="diff-tree-summary-section-label">
-          {renderSectionIndicator(section, files.length, t)}
-        </span>
-        {leadingMeta ? (
+        {!isCollapsed && leadingMeta ? (
           <span className="diff-tree-summary-meta">{leadingMeta}</span>
         ) : null}
-        {showSectionActions && (
+        {!isCollapsed && showSectionActions && (
           <GitDiffPanelSectionActions
             title={title}
             section={section}
@@ -547,45 +554,48 @@ export function DiffSection({
             onDiscardFiles={onDiscardFiles}
           />
         )}
+        {renderSectionCountBadge(files.length)}
       </div>
-      <div className="diff-section-list git-filetree-list">
-        {files.map((file) => {
-          const isSelected =
-            selectedFiles.size > 1 && selectedFiles.has(file.path);
-          const isActive = selectedPath === file.path;
-          return (
-            <DiffFileRow
-              key={`${section}-${file.path}`}
-              file={file}
-              isSelected={isSelected}
-              isActive={isActive}
-              section={section}
-              inclusionState={getFileInclusionState(
-                file.path,
-                includedPathSet,
-                excludedPathSet,
-                partialPathSet,
-              )}
-              inclusionDisabled={Boolean(
-                file.mutationDisabled ||
-                  file.isDiffOnlyFallback ||
-                  isCommitPathLocked?.(file.path),
-              )}
-              onClick={(event) => onFileClick(event, file.path, section)}
-              onKeySelect={() => onSelectFile?.(file.path)}
-              onOpenInlinePreview={() => onOpenInlinePreview?.(file.path)}
-              onOpenPreview={() => onOpenFilePreview?.(file, section)}
-              onContextMenu={(event) =>
-                onShowFileMenu(event, file.path, section)
-              }
-              onStageFile={onStageFile}
-              onUnstageFile={onUnstageFile}
-              onDiscardFile={onDiscardFile}
-              onSetCommitSelection={onSetCommitSelection}
-            />
-          );
-        })}
-      </div>
+      {!isCollapsed ? (
+        <div className="diff-section-list git-filetree-list">
+          {files.map((file) => {
+            const isSelected =
+              selectedFiles.size > 1 && selectedFiles.has(file.path);
+            const isActive = selectedPath === file.path;
+            return (
+              <DiffFileRow
+                key={`${section}-${file.path}`}
+                file={file}
+                isSelected={isSelected}
+                isActive={isActive}
+                section={section}
+                inclusionState={getFileInclusionState(
+                  file.path,
+                  includedPathSet,
+                  excludedPathSet,
+                  partialPathSet,
+                )}
+                inclusionDisabled={Boolean(
+                  file.mutationDisabled ||
+                    file.isDiffOnlyFallback ||
+                    isCommitPathLocked?.(file.path),
+                )}
+                onClick={(event) => onFileClick(event, file.path, section)}
+                onKeySelect={() => onSelectFile?.(file.path)}
+                onOpenInlinePreview={() => onOpenInlinePreview?.(file.path)}
+                onOpenPreview={() => onOpenFilePreview?.(file, section)}
+                onContextMenu={(event) =>
+                  onShowFileMenu(event, file.path, section)
+                }
+                onStageFile={onStageFile}
+                onUnstageFile={onUnstageFile}
+                onDiscardFile={onDiscardFile}
+                onSetCommitSelection={onSetCommitSelection}
+              />
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

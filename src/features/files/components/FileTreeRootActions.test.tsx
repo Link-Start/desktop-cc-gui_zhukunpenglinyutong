@@ -25,25 +25,31 @@ describe("FileTreeRootActions", () => {
   });
 
   it("replays spin animation when clicking the same action repeatedly", () => {
-    const onOpenSpecHub = vi.fn();
+    const onRefreshFiles = vi.fn();
 
-    render(<FileTreeRootActions onOpenSpecHub={onOpenSpecHub} />);
+    render(
+      <FileTreeRootActions
+        rootLabel="DESKTOP-CC-GUI"
+        onRefreshFiles={onRefreshFiles}
+        showSpecHubAction={false}
+      />,
+    );
 
-    const button = screen.getByRole("button", { name: "sidebar.specHub" });
+    const button = screen.getByRole("button", { name: "files.refreshFiles" });
 
     fireEvent.click(button);
     act(() => {
       vi.advanceTimersByTime(16);
     });
     expect(button.className).toContain("is-spinning");
-    expect(onOpenSpecHub).toHaveBeenCalledTimes(1);
+    expect(onRefreshFiles).toHaveBeenCalledTimes(1);
 
     fireEvent.click(button);
     act(() => {
       vi.advanceTimersByTime(16);
     });
     expect(button.className).toContain("is-spinning");
-    expect(onOpenSpecHub).toHaveBeenCalledTimes(2);
+    expect(onRefreshFiles).toHaveBeenCalledTimes(2);
 
     act(() => {
       vi.advanceTimersByTime(420);
@@ -51,12 +57,30 @@ describe("FileTreeRootActions", () => {
     expect(button.className).not.toContain("is-spinning");
   });
 
-  it("does not render new-file, new-folder, refresh, or delete actions", () => {
-    render(<FileTreeRootActions onOpenSpecHub={() => undefined} />);
+  it("renders uppercase root label with create and refresh actions but no delete action", () => {
+    const onCreateFile = vi.fn();
+    const onCreateFolder = vi.fn();
+    const onRefreshFiles = vi.fn();
 
-    expect(screen.queryByRole("button", { name: "files.newFile" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "files.newFolder" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "files.refreshFiles" })).toBeNull();
+    render(
+      <FileTreeRootActions
+        rootLabel="desktop-cc-gui"
+        onCreateFile={onCreateFile}
+        onCreateFolder={onCreateFolder}
+        onRefreshFiles={onRefreshFiles}
+        showSpecHubAction={false}
+      />,
+    );
+
+    expect(screen.getByText("DESKTOP-CC-GUI")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "files.newFile" }));
+    fireEvent.click(screen.getByRole("button", { name: "files.newFolder" }));
+    fireEvent.click(screen.getByRole("button", { name: "files.refreshFiles" }));
+
+    expect(onCreateFile).toHaveBeenCalledTimes(1);
+    expect(onCreateFolder).toHaveBeenCalledTimes(1);
+    expect(onRefreshFiles).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole("button")).toHaveLength(3);
     expect(screen.queryByRole("button", { name: "files.deleteItem" })).toBeNull();
   });
 });

@@ -1069,7 +1069,50 @@ describe("FileTreePanel run action isolation", () => {
     });
   });
 
-  it("hides file-management toolbar buttons and trashes a node from its context menu", async () => {
+  it("opens root create prompts and refreshes from the header actions", () => {
+    const onRefreshFiles = vi.fn();
+
+    const { container } = render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspaceName="desktop-cc-gui"
+        workspacePath="/tmp/workspace"
+        files={["README.md"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        onInsertText={() => undefined}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        onRefreshFiles={onRefreshFiles}
+        showSpecHubAction={false}
+        showDetachedExplorerAction={false}
+        gitStatusFiles={[]}
+        gitignoredFiles={new Set<string>()}
+      />,
+    );
+
+    expect(screen.getByText("DESKTOP-CC-GUI")).toBeTruthy();
+    expect(container.querySelectorAll(".file-tree-root-actions button")).toHaveLength(3);
+
+    fireEvent.click(screen.getByRole("button", { name: "files.newFile" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByPlaceholderText("files.newFileNamePlaceholder")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "files.cancel" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "files.newFolder" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByPlaceholderText("files.newFolderNamePlaceholder")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "files.cancel" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "files.refreshFiles" }));
+    expect(onRefreshFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps delete out of the root header and trashes a node from its context menu", async () => {
     const onRefreshFiles = vi.fn();
 
     render(
@@ -1092,9 +1135,6 @@ describe("FileTreePanel run action isolation", () => {
       />,
     );
 
-    expect(screen.queryByRole("button", { name: "files.newFile" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "files.newFolder" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "files.refreshFiles" })).toBeNull();
     expect(screen.queryByRole("button", { name: "files.deleteItem" })).toBeNull();
 
     fireEvent.contextMenu(screen.getByRole("button", { name: "README.md" }));

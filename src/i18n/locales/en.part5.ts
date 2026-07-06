@@ -2,8 +2,8 @@ const enPart5 = {
   // Git
   git: {
     changes: "Changes",
-    staged: "Staged",
-    unstaged: "Unstaged",
+    staged: "Staged Changes",
+    unstaged: "Changes",
     commitMessage: "Commit message...",
     commit: "Commit",
     committing: "Committing...",
@@ -521,6 +521,8 @@ const enPart5 = {
     depth: "Depth",
     path: "Path:",
     change: "Switch",
+    switchRepository: "Switch Git repository",
+    switchRepositoryDescription: "Choose which repo the Diff panel uses.",
     active: "Active",
     // GitHub integration
     githubIssues: "GitHub issues",

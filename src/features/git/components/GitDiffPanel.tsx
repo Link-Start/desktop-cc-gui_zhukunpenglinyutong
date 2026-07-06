@@ -38,6 +38,7 @@ import {
   type DiffSectionProps,
   getTreeLineOpacity,
   GitFileTreeIcon,
+  renderSectionCountBadge,
   renderSectionIndicator,
   TREE_INDENT_STEP,
 } from "./GitDiffPanelFileSections";
@@ -64,6 +65,8 @@ type ModeMenuLayout = {
   align: "left" | "right";
   width: number;
 };
+
+type GitDiffSectionKey = "staged" | "unstaged";
 
 function getPathLeafName(value: string | null | undefined): string {
   if (!value) {
@@ -181,6 +184,8 @@ function DiffTreeSection({
   rootTrailingAction,
   leadingMeta,
   compactHeader = false,
+  isCollapsed = false,
+  onToggleCollapsed,
 }: DiffTreeSectionProps) {
   const { t } = useTranslation();
   const tree = useMemo(() => compactDiffTree(buildDiffTree(files, section)), [files, section]);
@@ -480,53 +485,30 @@ function DiffTreeSection({
   );
 
   return (
-    <div className={`diff-section git-filetree-section diff-section--${section}`}>
+    <div
+      className={`diff-section git-filetree-section diff-section--${section}${
+        isCollapsed ? " is-collapsed" : ""
+      }`}
+    >
       <div
         className={`diff-section-title diff-section-title--row git-filetree-section-header${
           useCompactHeader ? " is-compact" : ""
         }`}
       >
-        {useCompactHeader ? (
-          <span className="diff-tree-summary-root-group">
-            <button
-              type="button"
-              className="diff-tree-summary-root"
-              aria-label={rootFolderName}
-              aria-expanded={hasTreeNodes ? !rootCollapsed : undefined}
-              onClick={() => {
-                if (hasTreeNodes) {
-                  onToggleFolder(rootFolderKey);
-                }
-              }}
-            >
-              <span className="diff-tree-summary-root-toggle" aria-hidden>
-                {hasTreeNodes ? (
-                  rootCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />
-                ) : (
-                  <span className="diff-tree-folder-spacer" />
-                )}
-              </span>
-              <GitFileTreeIcon
-                name={rootFolderName}
-                isFolder
-                isOpen={!rootCollapsed}
-                className="diff-tree-summary-root-icon"
-              />
-              <span className="diff-tree-summary-root-name">{rootFolderName}</span>
-            </button>
-            {rootTrailingAction ? (
-              <span className="diff-tree-summary-root-action">{rootTrailingAction}</span>
-            ) : null}
-          </span>
-        ) : null}
-        {!useCompactHeader && rootTrailingAction ? (
+        <span className="diff-tree-summary-section-label">
+          {renderSectionIndicator(
+            section,
+            files.length,
+            t,
+            isCollapsed,
+            onToggleCollapsed,
+          )}
+        </span>
+        {!isCollapsed && rootTrailingAction ? (
           <span className="diff-tree-summary-root-action">{rootTrailingAction}</span>
         ) : null}
-        <span className="diff-tree-summary-section-label">
-          {renderSectionIndicator(section, files.length, t)}
-        </span>
-        {leadingMeta ? <span className="diff-tree-summary-meta">{leadingMeta}</span> : null}
-        {showSectionActions && (
+        {!isCollapsed && leadingMeta ? <span className="diff-tree-summary-meta">{leadingMeta}</span> : null}
+        {!isCollapsed && showSectionActions && (
           <GitDiffPanelSectionActions
             title={title}
             section={section}
@@ -542,16 +524,18 @@ function DiffTreeSection({
             onDiscardFiles={onDiscardFiles}
           />
         )}
+        {renderSectionCountBadge(files.length)}
       </div>
-      <div
-        ref={treeContainerRef}
-        className={`diff-section-list diff-section-tree-list git-filetree-list git-filetree-list--tree${
-          useCompactHeader ? " is-compact-root" : ""
-        }`}
-        role="tree"
-        aria-label={title}
-        onKeyDownCapture={handleTreeKeyDownCapture}
-      >
+      {!isCollapsed ? (
+        <div
+          ref={treeContainerRef}
+          className={`diff-section-list diff-section-tree-list git-filetree-list git-filetree-list--tree${
+            useCompactHeader ? " is-compact-root" : ""
+          }`}
+          role="tree"
+          aria-label={title}
+          onKeyDownCapture={handleTreeKeyDownCapture}
+        >
         {hasTreeNodes && hasRootFolderName && !useCompactHeader && (
           <div className="diff-tree-folder-group">
             <div
@@ -725,7 +709,8 @@ function DiffTreeSection({
             })}
           </>
         )}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -872,6 +857,7 @@ export function GitDiffPanel({
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [lastClickedFile, setLastClickedFile] = useState<string | null>(null);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const [collapsedSections, setCollapsedSections] = useState<Set<GitDiffSectionKey>>(new Set());
   const [discardDialogPaths, setDiscardDialogPaths] = useState<string[] | null>(null);
   const [discardDialogSubmitting, setDiscardDialogSubmitting] = useState(false);
   const [gitContextMenu, setGitContextMenu] =
@@ -1007,6 +993,10 @@ export function GitDiffPanel({
     },
     [mode, onModeChange],
   );
+  const openGitRootPanelFromMenu = useCallback(() => {
+    setIsModeMenuOpen(false);
+    setIsGitRootPanelOpen(true);
+  }, []);
 
   const updateModeMenuLayout = useCallback(() => {
     const panelElement = panelRef.current;
@@ -1141,6 +1131,7 @@ export function GitDiffPanel({
     setSelectedFiles(new Set());
     setLastClickedFile(null);
     setCollapsedFolders(new Set());
+    setCollapsedSections(new Set());
     setDiscardDialogPaths(null);
     setDiscardDialogSubmitting(false);
     setPreviewFile((current) => {
@@ -1315,6 +1306,17 @@ export function GitDiffPanel({
         next.delete(key);
       } else {
         next.add(key);
+      }
+      return next;
+    });
+  }, []);
+  const handleToggleSection = useCallback((section: GitDiffSectionKey) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
       }
       return next;
     });
@@ -1593,7 +1595,6 @@ export function GitDiffPanel({
     : logUpstream
       ? `${logSyncLabel} · ${fileStatus}`
       : fileStatus;
-  const compactTreeMetaNode = hasDiffTotals ? diffTotalsNode : <span>{fileStatus}</span>;
   const gitStatusRefreshButton =
     mode === "diff" && (stagedFiles.length > 0 || unstagedFiles.length > 0) ? (
       <button
@@ -1844,6 +1845,32 @@ export function GitDiffPanel({
                         </button>
                       );
                     })}
+                  </>
+                ) : null}
+                {mode === "diff" && onScanGitRoots ? (
+                  <>
+                    <div className="git-panel-select-menu-divider" role="separator" />
+                    <button
+                      type="button"
+                      className="git-panel-select-option"
+                      role="menuitem"
+                      aria-label={t("git.switchRepository")}
+                      onClick={openGitRootPanelFromMenu}
+                    >
+                      <span className="git-panel-select-option-text">
+                        <span className="git-panel-select-option-icon" aria-hidden>
+                          <ArrowLeftRight size={13} />
+                        </span>
+                        <span className="git-panel-select-option-copy">
+                          <span className="git-panel-select-option-label">
+                            {t("git.switchRepository")}
+                          </span>
+                          <span className="git-panel-select-option-description">
+                            {t("git.switchRepositoryDescription")}
+                          </span>
+                        </span>
+                      </span>
+                    </button>
                   </>
                 ) : null}
                 {onOpenGitHistoryPanel ? (
@@ -2140,8 +2167,9 @@ export function GitDiffPanel({
                     partialPaths={partialCommitPaths}
                     rootFolderName={repositoryRootName}
                     rootTrailingAction={gitStatusRefreshButton}
-                    leadingMeta={primaryTreeSection === "staged" ? compactTreeMetaNode : undefined}
                     compactHeader={useCompactTreeSectionHeaders}
+                    isCollapsed={collapsedSections.has("staged")}
+                    onToggleCollapsed={() => handleToggleSection("staged")}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
                     onSelectFile={onSelectFile}
@@ -2167,8 +2195,9 @@ export function GitDiffPanel({
                     partialPaths={partialCommitPaths}
                     rootFolderName={repositoryRootName}
                     rootTrailingAction={gitStatusRefreshButton}
-                    leadingMeta={primaryTreeSection === "staged" ? compactTreeMetaNode : undefined}
                     compactHeader={primaryTreeSection === "staged"}
+                    isCollapsed={collapsedSections.has("staged")}
+                    onToggleCollapsed={() => handleToggleSection("staged")}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
                     onSelectFile={onSelectFile}
@@ -2194,8 +2223,9 @@ export function GitDiffPanel({
                     partialPaths={partialCommitPaths}
                     rootFolderName={repositoryRootName}
                     rootTrailingAction={gitStatusRefreshButton}
-                    leadingMeta={primaryTreeSection === "unstaged" ? compactTreeMetaNode : undefined}
                     compactHeader={useCompactTreeSectionHeaders}
+                    isCollapsed={collapsedSections.has("unstaged")}
+                    onToggleCollapsed={() => handleToggleSection("unstaged")}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
                     onSelectFile={onSelectFile}
@@ -2222,8 +2252,9 @@ export function GitDiffPanel({
                     partialPaths={partialCommitPaths}
                     rootFolderName={repositoryRootName}
                     rootTrailingAction={gitStatusRefreshButton}
-                    leadingMeta={primaryTreeSection === "unstaged" ? compactTreeMetaNode : undefined}
                     compactHeader={primaryTreeSection === "unstaged"}
+                    isCollapsed={collapsedSections.has("unstaged")}
+                    onToggleCollapsed={() => handleToggleSection("unstaged")}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
                     onSelectFile={onSelectFile}

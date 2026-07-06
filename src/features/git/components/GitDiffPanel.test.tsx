@@ -22,8 +22,8 @@ vi.mock("react-i18next", () => ({
         "git.commit": "Commit",
         "git.committing": "Committing...",
         "git.commitMessage": "Commit message...",
-        "git.staged": "Staged",
-        "git.unstaged": "Unstaged",
+        "git.staged": "Staged Changes",
+        "git.unstaged": "Changes",
         "git.commitStagedChanges": "Commit staged changes",
         "git.commitAllChanges": "Commit all unstaged changes",
         "git.noChangesToCommit": "No changes to commit",
@@ -77,6 +77,8 @@ vi.mock("react-i18next", () => ({
         "git.statusUnavailable": "Git status unavailable",
         "git.noRepositoriesFound": "No repositories found.",
         "git.historyQuickAction": "Hub",
+        "git.switchRepository": "Switch Git repository",
+        "git.switchRepositoryDescription": "Choose which repo the Diff panel uses",
         "menu.maximize": "Maximize",
         "common.restore": "Restore",
         "common.close": "Close",
@@ -226,11 +228,11 @@ describe("GitDiffPanel", () => {
 
     const refreshButton = screen.getByRole("button", { name: "Refresh Git status" });
     const refreshAction = refreshButton.closest(".diff-tree-summary-root-action");
+    const sectionHeader = refreshButton.closest(".git-filetree-section-header");
 
-    expect(refreshButton.closest(".diff-tree-summary-root-group")?.textContent).toContain("ccgui");
-    expect(
-      refreshAction?.previousElementSibling?.classList.contains("diff-tree-summary-root"),
-    ).toBe(true);
+    expect(sectionHeader?.textContent).not.toContain("ccgui");
+    expect(sectionHeader?.lastElementChild?.classList.contains("diff-section-count-badge")).toBe(true);
+    expect(refreshAction?.parentElement).toBe(sectionHeader);
 
     fireEvent.click(refreshButton);
 
@@ -387,7 +389,7 @@ describe("GitDiffPanel", () => {
       />,
     );
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "Toggle commit selection: file.txt" }),
+      screen.getByRole("button", { name: "Toggle commit selection: file.txt" }),
     );
     await chooseCodexEnglishCommitMessage();
 
@@ -409,7 +411,7 @@ describe("GitDiffPanel", () => {
       />,
     );
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "Toggle commit selection: file.txt" }),
+      screen.getByRole("button", { name: "Toggle commit selection: file.txt" }),
     );
     await chooseCodexEnglishCommitMessage();
 
@@ -428,7 +430,7 @@ describe("GitDiffPanel", () => {
         unstagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
       />,
     );
-    const selectionToggle = screen.getByRole("checkbox", {
+    const selectionToggle = screen.getByRole("button", {
       name: "Toggle commit selection: file.txt",
     });
     fireEvent.click(selectionToggle);
@@ -452,7 +454,7 @@ describe("GitDiffPanel", () => {
     expect(document.querySelector(".commit-message-engine-icon--spinning")).toBeTruthy();
   });
 
-  it("applies unified file-tree semantic classes", () => {
+  it("applies unified file-tree semantic classes without diff stat badges", () => {
     render(
       <GitDiffPanel
         {...baseProps}
@@ -466,15 +468,14 @@ describe("GitDiffPanel", () => {
     const section = document.querySelector(".diff-section.git-filetree-section");
     const folderRow = document.querySelector(".diff-tree-folder-row.git-filetree-folder-row");
     const fileRow = document.querySelector(".diff-row.git-filetree-row");
-    const badge = document.querySelector(".diff-counts-inline.git-filetree-badge");
 
     expect(section).toBeTruthy();
     expect(folderRow).toBeTruthy();
     expect(fileRow).toBeTruthy();
-    expect(badge).toBeTruthy();
+    expect(document.querySelector(".diff-counts-inline.git-filetree-badge")).toBeNull();
   });
 
-  it("renders large file stats compactly without losing exact counts", () => {
+  it("does not render inline file stats in the compact Source Control list", () => {
     render(
       <GitDiffPanel
         {...baseProps}
@@ -489,11 +490,9 @@ describe("GitDiffPanel", () => {
       />,
     );
 
-    expect(screen.getByText("+12.3k")).toBeTruthy();
-    expect(screen.getByText("-10k")).toBeTruthy();
-    const badge = document.querySelector(".diff-counts-inline.git-filetree-badge");
-    expect(badge?.getAttribute("aria-label")).toBe("+12345 -10001");
-    expect(badge?.getAttribute("title")).toBe("+12345 -10001");
+    expect(screen.queryByText("+12.3k")).toBeNull();
+    expect(screen.queryByText("-10k")).toBeNull();
+    expect(document.querySelector(".diff-counts-inline.git-filetree-badge")).toBeNull();
   });
 
   it("renders single-path diff package folders in a.b.c style", () => {
@@ -539,7 +538,7 @@ describe("GitDiffPanel", () => {
       <GitDiffPanel
         {...baseProps}
         gitDiffListView="tree"
-        gitRoot="/repo/src"
+        gitRoot="/repo/desktop-cc-gui"
         totalAdditions={1}
         totalDeletions={1}
         unstagedFiles={[{ path: "src/main.css", status: "M", additions: 1, deletions: 1 }]}
@@ -547,8 +546,8 @@ describe("GitDiffPanel", () => {
     );
 
     expect(document.querySelector(".git-filetree-section-header.is-compact")).toBeTruthy();
-    expect(screen.getAllByText("src").length).toBeGreaterThan(0);
-    expect(screen.getByLabelText("Unstaged (1)")).toBeTruthy();
+    expect(screen.queryByText("desktop-cc-gui")).toBeNull();
+    expect(screen.getByLabelText("Changes (1)")).toBeTruthy();
   });
 
   it("keeps staged and unstaged tree sections visually consistent", () => {
@@ -565,7 +564,7 @@ describe("GitDiffPanel", () => {
     );
 
     expect(document.querySelectorAll(".git-filetree-section-header.is-compact")).toHaveLength(2);
-    expect(screen.getAllByText("codex-2026-03-12-v0.2.7").length).toBeGreaterThan(1);
+    expect(screen.queryByText("codex-2026-03-12-v0.2.7")).toBeNull();
   });
 
   it("renders compact flat summary in single-section flat mode", () => {
@@ -573,15 +572,74 @@ describe("GitDiffPanel", () => {
       <GitDiffPanel
         {...baseProps}
         gitDiffListView="flat"
+        gitRoot="/repo/desktop-cc-gui"
         totalAdditions={302}
         totalDeletions={10}
         stagedFiles={[{ path: "src/main.css", status: "M", additions: 302, deletions: 10 }]}
       />,
     );
 
-    expect(document.querySelector(".git-filetree-section-header.is-compact")).toBeTruthy();
+    const header = document.querySelector(".git-filetree-section-header.is-compact");
+    expect(header).toBeTruthy();
     expect(screen.queryByText("1 file changed")).toBeNull();
-    expect(screen.getByLabelText("Staged (1)")).toBeTruthy();
+    expect(screen.queryByText("desktop-cc-gui")).toBeNull();
+    expect(screen.getByLabelText("Staged Changes (1)")).toBeTruthy();
+    expect(header?.lastElementChild?.classList.contains("diff-section-count-badge")).toBe(true);
+    expect(header?.lastElementChild?.textContent).toBe("1");
+    expect(header?.lastElementChild?.getAttribute("data-slot")).toBe("badge");
+    expect(header?.lastElementChild?.className).toContain("bg-secondary");
+    expect(header?.lastElementChild?.className).toContain("text-secondary-foreground");
+    expect(header?.lastElementChild?.className).toContain("sm:min-w-4");
+  });
+
+  it("collapses and expands a flat section from the section header", () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        gitDiffListView="flat"
+        stagedFiles={[
+          { path: "src/alpha.ts", status: "M", additions: 1, deletions: 0 },
+          { path: "src/beta.ts", status: "M", additions: 2, deletions: 1 },
+        ]}
+      />,
+    );
+
+    const toggle = screen.getByRole("button", { name: "Staged Changes (2)" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByLabelText("src/alpha.ts")).toBeTruthy();
+
+    fireEvent.click(toggle);
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByLabelText("src/alpha.ts")).toBeNull();
+
+    fireEvent.click(toggle);
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByLabelText("src/alpha.ts")).toBeTruthy();
+  });
+
+  it("collapses and expands a tree section from the section header", () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        gitDiffListView="tree"
+        gitRoot="/repo/desktop-cc-gui"
+        unstagedFiles={[
+          { path: "src/alpha.ts", status: "M", additions: 1, deletions: 0 },
+        ]}
+      />,
+    );
+
+    const toggle = screen.getByRole("button", { name: "Changes (1)" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.queryByText("desktop-cc-gui")).toBeNull();
+    expect(screen.getByLabelText("src/alpha.ts")).toBeTruthy();
+
+    fireEvent.click(toggle);
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByLabelText("src/alpha.ts")).toBeNull();
   });
 
   it("toggles list view via shortcut when panel is focused", () => {
@@ -759,11 +817,11 @@ describe("GitDiffPanel", () => {
     );
 
     const rowMeta = document.querySelector('.diff-row[data-path="file.txt"] .diff-row-meta');
-    const selectionToggle = screen.getByRole("checkbox", {
+    const selectionToggle = screen.getByRole("button", {
       name: "Toggle commit selection: file.txt",
     });
     expect(rowMeta?.lastElementChild).toBe(selectionToggle);
-    expect(selectionToggle.classList.contains("diff-row-selection--trailing")).toBe(true);
+    expect(selectionToggle.classList.contains("diff-status-letter")).toBe(true);
 
     fireEvent.click(selectionToggle);
     expect(onSelectFile).not.toHaveBeenCalled();
@@ -880,7 +938,7 @@ describe("GitDiffPanel", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Stage all changes" }),
     );
-    expect(screen.getByRole("group", { name: "Unstaged actions" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Changes actions" })).toBeTruthy();
     expect(onStageAllChanges).toHaveBeenCalledTimes(1);
   });
 
@@ -924,7 +982,7 @@ describe("GitDiffPanel", () => {
         ]}
       />,
     );
-    fireEvent.click(screen.getByRole("checkbox", { name: "Toggle commit selection: file.txt" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle commit selection: file.txt" }));
     expect(onStageFile).not.toHaveBeenCalled();
     expect(screen.getByText("1 file selected for commit")).toBeTruthy();
 
@@ -960,12 +1018,12 @@ describe("GitDiffPanel", () => {
     ).toBeNull();
 
     fireEvent.click(
-      screen.getByRole("checkbox", {
+      screen.getByRole("button", {
         name: "Toggle commit selection: src/pending-a.ts",
       }),
     );
     fireEvent.click(
-      screen.getByRole("checkbox", {
+      screen.getByRole("button", {
         name: "Toggle commit selection: src/pending-b.ts",
       }),
     );
@@ -995,13 +1053,12 @@ describe("GitDiffPanel", () => {
       />,
     );
 
-    const hybridToggles = screen.getAllByRole("checkbox", {
+    const hybridToggles = screen.getAllByRole("button", {
       name: "Toggle commit selection: src/hybrid.ts",
     });
     expect(hybridToggles).toHaveLength(2);
     for (const toggle of hybridToggles) {
       expect((toggle as HTMLButtonElement).disabled).toBe(true);
-      expect(toggle.getAttribute("aria-checked")).toBe("mixed");
     }
   });
 
@@ -1129,6 +1186,25 @@ describe("GitDiffPanel", () => {
 
     fireEvent.click(toggleButton);
     expect(screen.getByText("git.chooseRepo")).toBeTruthy();
+  });
+
+  it("opens git root panel from the Diff menu switch repository action", () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        workspacePath="/tmp/non-git-workspace"
+        gitRoot={null}
+        onScanGitRoots={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("git.chooseRepo")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Git panel view" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Switch Git repository" }));
+
+    expect(screen.getByText("git.chooseRepo")).toBeTruthy();
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
   it("renders compact red alert on root row and hides raw git error", () => {

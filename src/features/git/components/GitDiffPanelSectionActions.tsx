@@ -3,7 +3,6 @@ import Minus from "lucide-react/dist/esm/icons/minus";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2";
 import {
-  InclusionToggle,
   runSequentialPathAction,
   type InclusionState,
 } from "./GitDiffPanelInclusion";
@@ -24,25 +23,23 @@ type GitDiffPanelSectionActionsProps = {
 export function GitDiffPanelSectionActions({
   title,
   section,
-  sectionInclusionState,
-  toggleableFilePaths,
+  sectionInclusionState: _sectionInclusionState,
+  toggleableFilePaths: _toggleableFilePaths,
   filePaths,
-  onSetCommitSelection,
+  onSetCommitSelection: _onSetCommitSelection,
   onStageAllChanges,
   onStageFile,
   onUnstageFile,
   onDiscardFiles,
 }: GitDiffPanelSectionActionsProps) {
   const { t } = useTranslation();
-  const canToggleSection =
-    Boolean(onSetCommitSelection) && toggleableFilePaths.length > 0;
   const canStageAll = section === "unstaged" && filePaths.length > 0;
   const canUnstageAll =
     section === "staged" && Boolean(onUnstageFile) && filePaths.length > 0;
   const canDiscardAll =
     section === "unstaged" && Boolean(onDiscardFiles) && filePaths.length > 0;
 
-  if (!canToggleSection && !canStageAll && !canUnstageAll && !canDiscardAll) {
+  if (!canStageAll && !canUnstageAll && !canDiscardAll) {
     return null;
   }
 
@@ -52,19 +49,6 @@ export function GitDiffPanelSectionActions({
       role="group"
       aria-label={t("git.sectionActions", { title })}
     >
-      {canToggleSection ? (
-        <InclusionToggle
-          state={sectionInclusionState}
-          label={t("git.commitSelectionToggleScope", { path: title })}
-          className="git-commit-scope-toggle--section"
-          onToggle={() =>
-            onSetCommitSelection?.(
-              toggleableFilePaths,
-              sectionInclusionState !== "all",
-            )
-          }
-        />
-      ) : null}
       {canStageAll ? (
         <button
           type="button"

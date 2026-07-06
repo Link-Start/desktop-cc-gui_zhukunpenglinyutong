@@ -2,8 +2,8 @@ const zhPart5 = {
   // Git
   git: {
     changes: "更改",
-    staged: "已暂存",
-    unstaged: "未暂存",
+    staged: "暂存的更改",
+    unstaged: "更改",
     commitMessage: "提交信息...",
     commit: "提交",
     committing: "提交中...",
@@ -519,6 +519,8 @@ const zhPart5 = {
     depth: "深度",
     path: "路径：",
     change: "切换",
+    switchRepository: "切换 Git 仓库",
+    switchRepositoryDescription: "选择当前 Diff 面板使用的仓库。",
     active: "活动",
     // GitHub 集成
     githubIssues: "GitHub 议题",

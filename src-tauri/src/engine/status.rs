@@ -165,27 +165,13 @@ pub async fn detect_claude_status(custom_bin: Option<&str>) -> EngineStatus {
 
 /// Detect Codex CLI installation status
 pub async fn detect_codex_status(custom_bin: Option<&str>) -> EngineStatus {
-    let bin_path = resolve_bin_path("codex", custom_bin);
-    let bin = bin_path
-        .as_ref()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|| "codex".to_string());
-    let path_env = build_codex_path_env(custom_bin);
-
-    let (mut installed, mut version, mut error) =
-        probe_cli_version(&bin, "codex", path_env.as_ref()).await;
-
-    if !installed && probe_cli_help(&bin, path_env.as_ref()).await {
-        installed = true;
-        if version.is_none() {
-            version = Some("unknown".to_string());
-        }
-        error = None;
-    }
-
-    if !installed {
-        return not_installed_status(EngineType::Codex, error);
-    }
+    let Some(bin_path) = resolve_bin_path("codex", custom_bin) else {
+        return not_installed_status(
+            EngineType::Codex,
+            Some("Codex CLI not found during startup detection".to_string()),
+        );
+    };
+    let bin = bin_path.to_string_lossy().to_string();
 
     let home_dir = get_codex_home_dir();
     let models = get_codex_models();
@@ -194,7 +180,7 @@ pub async fn detect_codex_status(custom_bin: Option<&str>) -> EngineStatus {
     EngineStatus {
         engine_type: EngineType::Codex,
         installed: true,
-        version,
+        version: None,
         bin_path: Some(bin.to_string()),
         home_dir: home_dir.map(|p| p.to_string_lossy().to_string()),
         models,
@@ -968,9 +954,7 @@ mod tests {
         assert!(models
             .iter()
             .all(|model| model.provider.as_deref() == Some("anthropic")));
-        assert!(models
-            .iter()
-            .all(|model| model.source == "builtin"));
+        assert!(models.iter().all(|model| model.source == "builtin"));
         let default_model = models.iter().find(|model| model.default).unwrap();
         assert_eq!(default_model.id, "claude-opus-4-8");
     }
@@ -1080,15 +1064,48 @@ opencode/gpt-5-nano
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn detect_codex_status_uses_help_fallback_when_version_probe_fails() {
+    async fn detect_codex_status_does_not_execute_resolved_cli() {
+        let marker_path = std::env::temp_dir().join(format!(
+            "ccgui-codex-startup-probe-marker-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let script_body = format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$1\" >> {}\necho 'codex 0.0.0'\nexit 0\n",
+            marker_path.to_string_lossy()
+        );
+        let script_path = write_unix_test_cli(&script_body);
+
+        let status = detect_codex_status(Some(script_path.to_string_lossy().as_ref())).await;
+
+        assert!(status.installed);
+        assert_eq!(status.engine_type, EngineType::Codex);
+        assert!(
+            !marker_path.exists(),
+            "startup Codex status detection must not execute the resolved CLI"
+        );
+
+        let _ = fs::remove_file(&script_path);
+        let _ = fs::remove_file(&marker_path);
+        let _ = fs::remove_dir_all(script_path.parent().unwrap_or(std::path::Path::new("")));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn detect_codex_status_reports_metadata_for_unprobeable_cli() {
         let script_path = write_unix_test_cli(
             "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo 'broken version' >&2\n  exit 1\nfi\nif [ \"$1\" = \"--help\" ]; then\n  echo 'usage'\n  exit 0\nfi\nexit 1\n",
         );
 
         let status = detect_codex_status(Some(script_path.to_string_lossy().as_ref())).await;
         assert!(status.installed);
-        assert_eq!(status.version.as_deref(), Some("unknown"));
+        assert!(status.version.is_none());
         assert_eq!(status.engine_type, EngineType::Codex);
+        assert!(status.bin_path.is_some());
+        assert!(status.error.is_none());
 
         let _ = fs::remove_file(&script_path);
         let _ = fs::remove_dir_all(script_path.parent().unwrap_or(std::path::Path::new("")));

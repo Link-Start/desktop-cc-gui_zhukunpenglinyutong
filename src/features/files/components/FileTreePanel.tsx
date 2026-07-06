@@ -1874,20 +1874,22 @@ export function FileTreePanel({
 
   return (
     <aside className="diff-panel file-tree-panel" ref={panelRef}>
-      {showSpecHubAction || showDetachedExplorerAction ? (
-        <div className="file-tree-top-zone">
-          <div className="file-tree-root-row">
-            <FileTreeRootActions
-              isSpecHubActive={isSpecHubActive}
-              onOpenDetachedExplorer={onOpenDetachedExplorer}
-              detachedInitialFilePath={detachedInitialFilePath}
-              onOpenSpecHub={onOpenSpecHub}
-              showSpecHubAction={showSpecHubAction}
-              showDetachedExplorerAction={showDetachedExplorerAction}
-            />
-          </div>
+      <div className="file-tree-top-zone">
+        <div className="file-tree-root-row">
+          <FileTreeRootActions
+            rootLabel={workspaceRootLabel}
+            onCreateFile={() => openNewFilePrompt("")}
+            onCreateFolder={() => openNewFolderPrompt("")}
+            onRefreshFiles={refreshFileTree}
+            isSpecHubActive={isSpecHubActive}
+            onOpenDetachedExplorer={onOpenDetachedExplorer}
+            detachedInitialFilePath={detachedInitialFilePath}
+            onOpenSpecHub={onOpenSpecHub}
+            showSpecHubAction={showSpecHubAction}
+            showDetachedExplorerAction={showDetachedExplorerAction}
+          />
         </div>
-      ) : null}
+      </div>
       <div
         ref={fileTreeListRef}
         className={`file-tree-list${shouldVirtualizeFileTree ? " is-virtualized" : ""}`}

@@ -299,10 +299,9 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     let toggle_terminal_item = MenuItemBuilder::with_id("view_toggle_terminal", "切换终端")
         .accelerator("CmdOrCtrl+Shift+T")
         .build(handle)?;
-    let toggle_devtools_item =
-        MenuItemBuilder::with_id("view_toggle_devtools", "切换开发者工具")
-            .accelerator("CmdOrCtrl+Alt+I")
-            .build(handle)?;
+    let toggle_devtools_item = MenuItemBuilder::with_id("view_toggle_devtools", "切换开发者工具")
+        .accelerator("CmdOrCtrl+Alt+I")
+        .build(handle)?;
     let next_agent_item =
         MenuItemBuilder::with_id("view_next_agent", "下一个代理").build(handle)?;
     let prev_agent_item =

@@ -58,9 +58,25 @@
 .file-tree-root-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 2px;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
   min-width: 0;
+  padding: 2px 4px 5px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  background: transparent;
+}
+
+.file-tree-root-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-emphasis);
+  font-size: var(--file-tree-content-font-size);
+  font-weight: 500;
+  line-height: 22px;
+  text-transform: uppercase;
 }
 
 .file-tree-root-actions {
@@ -71,13 +87,19 @@
 }
 
 .file-tree-root-action {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   box-shadow: none;
   background: transparent;
+}
+
+.file-tree-root-action svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.65;
 }
 
 .file-tree-root-action.is-spinning svg {
