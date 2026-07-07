@@ -11,11 +11,14 @@ vi.mock("../../../services/clientStorage", () => ({
 }));
 
 import {
+  MAX_CUSTOM_NAME_ENTRIES,
   buildClearedThreadAliases,
   buildUpdatedThreadAliases,
   collectCanonicalActiveThreadRebindings,
   loadThreadAliases,
+  pruneCustomNames,
   resolveCanonicalThreadAlias,
+  saveCustomName,
   saveThreadAliases,
 } from "./threadStorage";
 
@@ -153,5 +156,54 @@ describe("threadStorage aliases", () => {
         canonicalThreadId: "codex:latest",
       },
     ]);
+  });
+});
+
+describe("threadStorage customNames pruning", () => {
+  beforeEach(() => {
+    clientStorageMocks.getClientStoreSync.mockReset();
+    clientStorageMocks.writeClientStoreValue.mockReset();
+  });
+
+  it("keeps maps under the capacity untouched (same reference)", () => {
+    const names = { "ws:a": "Alpha", "ws:b": "Beta" };
+    expect(pruneCustomNames(names)).toBe(names);
+  });
+
+  it("drops the oldest entries by insertion order when over capacity", () => {
+    const names: Record<string, string> = {};
+    for (let index = 0; index < MAX_CUSTOM_NAME_ENTRIES + 5; index += 1) {
+      names[`ws:thread-${index}`] = `Name ${index}`;
+    }
+
+    const pruned = pruneCustomNames(names);
+    const keys = Object.keys(pruned);
+    expect(keys).toHaveLength(MAX_CUSTOM_NAME_ENTRIES);
+    expect(pruned["ws:thread-0"]).toBeUndefined();
+    expect(pruned["ws:thread-4"]).toBeUndefined();
+    expect(pruned["ws:thread-5"]).toBe("Name 5");
+    expect(keys[keys.length - 1]).toBe(
+      `ws:thread-${MAX_CUSTOM_NAME_ENTRIES + 4}`,
+    );
+  });
+
+  it("moves renamed threads to the newest position instead of keeping stale insertion order", () => {
+    clientStorageMocks.getClientStoreSync.mockReturnValueOnce({
+      "ws:thread-1": "Old title",
+      "ws:thread-2": "Other",
+    });
+
+    saveCustomName("ws", "thread-1", "New title");
+
+    expect(clientStorageMocks.writeClientStoreValue).toHaveBeenCalledWith(
+      "threads",
+      "customNames",
+      { "ws:thread-2": "Other", "ws:thread-1": "New title" },
+    );
+    const written = clientStorageMocks.writeClientStoreValue.mock.calls[0]![2] as Record<
+      string,
+      string
+    >;
+    expect(Object.keys(written)).toEqual(["ws:thread-2", "ws:thread-1"]);
   });
 });

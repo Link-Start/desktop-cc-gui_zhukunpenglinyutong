@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getClientStoreSync,
   writeClientStoreValue,
@@ -8,7 +8,9 @@ import {
   appendLiveAssistantShadowDelta,
   buildLiveAssistantShadowTranscriptId,
   findLiveAssistantShadowTranscriptForRestore,
+  flushLiveAssistantShadowTranscriptsNow,
   normalizeLiveAssistantShadowTranscriptStore,
+  resetLiveAssistantShadowTranscriptsForTests,
   settleLiveAssistantShadowTranscript,
   upsertLiveAssistantShadowSnapshot,
 } from "./liveAssistantShadowTranscript";
@@ -17,6 +19,7 @@ const STORE_KEY = "liveAssistantShadowTranscripts";
 
 describe("liveAssistantShadowTranscript", () => {
   beforeEach(() => {
+    resetLiveAssistantShadowTranscriptsForTests();
     writeClientStoreValue("threads", STORE_KEY, {});
     window.localStorage.clear();
   });
@@ -33,6 +36,7 @@ describe("liveAssistantShadowTranscript", () => {
 
     appendLiveAssistantShadowDelta({ ...input, delta: "第一段\n\n", timestamp: now });
     appendLiveAssistantShadowDelta({ ...input, delta: "第二段", timestamp: now + 100 });
+    flushLiveAssistantShadowTranscriptsNow();
 
     const id = buildLiveAssistantShadowTranscriptId(input);
     const store = getClientStoreSync<Record<string, unknown>>("threads", STORE_KEY);
@@ -70,6 +74,7 @@ describe("liveAssistantShadowTranscript", () => {
       text: "第一段\n\n第二段",
       timestamp: now + 100,
     });
+    flushLiveAssistantShadowTranscriptsNow();
 
     const id = buildLiveAssistantShadowTranscriptId(input);
     const store = getClientStoreSync<Record<string, { text?: string }>>(
@@ -78,6 +83,41 @@ describe("liveAssistantShadowTranscript", () => {
     );
     expect(store?.[id]?.text).toBe("第一段\n\n第二段");
     expect(store?.[id]?.text).not.toBe("第一段第一段\n\n第二段");
+  });
+
+  it("throttles delta persistence into the client store while keeping restore reads fresh", () => {
+    vi.useFakeTimers();
+    try {
+      const now = Date.now();
+      const input = {
+        engine: "claude" as const,
+        workspaceId: "ws-1",
+        threadId: "claude:session-1",
+        turnId: "turn-1",
+        itemId: "assistant-1",
+      };
+
+      appendLiveAssistantShadowDelta({ ...input, delta: "streamed", timestamp: now });
+
+      // 节流窗口内不写 client store，但 restore 读内存态可见。
+      expect(getClientStoreSync("threads", STORE_KEY)).toEqual({});
+      expect(
+        findLiveAssistantShadowTranscriptForRestore({
+          workspaceId: "ws-1",
+          threadId: "claude:session-1",
+        })?.text,
+      ).toBe("streamed");
+
+      vi.advanceTimersByTime(1_100);
+      const id = buildLiveAssistantShadowTranscriptId(input);
+      const store = getClientStoreSync<Record<string, { text?: string }>>(
+        "threads",
+        STORE_KEY,
+      );
+      expect(store?.[id]?.text).toBe("streamed");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("ignores non-Claude engines for the initial recovery contract", () => {
@@ -257,6 +297,7 @@ describe("liveAssistantShadowTranscript", () => {
       delta: "recoverable",
       timestamp: now,
     });
+    flushLiveAssistantShadowTranscriptsNow();
     window.localStorage.setItem(
       "ccgui.recovery.liveAssistantShadowTranscript.disabled",
       "1",

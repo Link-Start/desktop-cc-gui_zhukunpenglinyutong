@@ -303,6 +303,70 @@ describe("rendererDiagnostics", () => {
     expect(entry.payload).not.toHaveProperty("promptText");
   });
 
+  it("skips idle empty composer render budget diagnostics to avoid store churn", async () => {
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.appendComposerRenderBudgetDiagnostic({
+      surfaceId: "chat-input-adapter",
+      evidenceKind: "proxy",
+      workspaceId: "workspace-1",
+      renderCount: 170,
+      isProcessing: false,
+      disabled: false,
+      streamActivityPhase: "idle",
+      textLength: 0,
+    });
+
+    expect(clientStorageMocks.writeClientStoreValue).not.toHaveBeenCalled();
+  });
+
+  it("samples repeated composer render diagnostics to avoid active stream store churn", async () => {
+    const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.appendComposerRenderBudgetDiagnostic({
+      surfaceId: "chat-input-adapter",
+      evidenceKind: "proxy",
+      workspaceId: "workspace-1",
+      renderCount: 1,
+      isProcessing: true,
+      disabled: false,
+      streamActivityPhase: "ingress",
+      textLength: 0,
+    });
+    diagnostics.appendComposerRenderBudgetDiagnostic({
+      surfaceId: "chat-input-adapter",
+      evidenceKind: "proxy",
+      workspaceId: "workspace-1",
+      renderCount: 2,
+      isProcessing: true,
+      disabled: false,
+      streamActivityPhase: "ingress",
+      textLength: 0,
+    });
+
+    expect(clientStorageMocks.writeClientStoreValue).toHaveBeenCalledTimes(1);
+
+    dateNowSpy.mockReturnValue(7_000);
+    diagnostics.appendComposerRenderBudgetDiagnostic({
+      surfaceId: "chat-input-adapter",
+      evidenceKind: "proxy",
+      workspaceId: "workspace-1",
+      renderCount: 3,
+      isProcessing: true,
+      disabled: false,
+      streamActivityPhase: "ingress",
+      textLength: 0,
+    });
+
+    expect(clientStorageMocks.writeClientStoreValue).toHaveBeenCalledTimes(2);
+    dateNowSpy.mockRestore();
+  });
+
   it("records content-safe message row render budget diagnostics", async () => {
     clientStorageMocks.isPreloaded.mockReturnValue(true);
     clientStorageMocks.getClientStoreSync.mockReturnValue([]);

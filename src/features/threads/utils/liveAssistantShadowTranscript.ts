@@ -223,15 +223,60 @@ function pruneLiveAssistantShadowTranscriptEntries(
   return Object.fromEntries(retained.map((entry) => [entry.id, entry]));
 }
 
-function readStore(now = Date.now()) {
-  return normalizeLiveAssistantShadowTranscriptStore(
-    getClientStoreSync<unknown>("threads", STORE_KEY),
-    now,
-  );
+// streaming delta 每条都触发整份 store 的 normalize + prune + 写盘 patch，
+// 是 CPU storm 的高频写入源之一。改为模块级内存聚合 + 节流 flush：
+// delta 只更新内存，约 1s 落盘一次；settle 时立即落盘。
+const FLUSH_THROTTLE_MS = 1_000;
+
+let memoryStore: LiveAssistantShadowTranscriptStore | null = null;
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function getMemoryStore(now = Date.now()): LiveAssistantShadowTranscriptStore {
+  if (memoryStore === null) {
+    memoryStore = normalizeLiveAssistantShadowTranscriptStore(
+      getClientStoreSync<unknown>("threads", STORE_KEY),
+      now,
+    );
+  }
+  return memoryStore;
 }
 
-function writeStore(store: LiveAssistantShadowTranscriptStore) {
-  writeClientStoreValue("threads", STORE_KEY, store);
+function flushMemoryStore(now = Date.now()) {
+  if (flushTimer !== null) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  if (memoryStore === null) {
+    return;
+  }
+  memoryStore = pruneLiveAssistantShadowTranscriptEntries(
+    Object.values(memoryStore),
+    now,
+  );
+  writeClientStoreValue("threads", STORE_KEY, memoryStore);
+}
+
+function scheduleThrottledFlush() {
+  if (flushTimer !== null) {
+    return;
+  }
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    flushMemoryStore();
+  }, FLUSH_THROTTLE_MS);
+}
+
+/** 立即把内存中的 shadow transcript 落盘（供测试与需要确定性落盘的调用方使用）。 */
+export function flushLiveAssistantShadowTranscriptsNow() {
+  flushMemoryStore();
+}
+
+export function resetLiveAssistantShadowTranscriptsForTests() {
+  if (flushTimer !== null) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  memoryStore = null;
 }
 
 export function appendLiveAssistantShadowDelta(
@@ -241,7 +286,7 @@ export function appendLiveAssistantShadowDelta(
     return;
   }
   const now = input.timestamp ?? Date.now();
-  const store = readStore(now);
+  const store = getMemoryStore(now);
   const id = buildLiveAssistantShadowTranscriptId(input);
   const existing = store[id];
   const text = `${existing?.text ?? ""}${input.delta}`.slice(0, MAX_ENTRY_CHARS);
@@ -257,7 +302,7 @@ export function appendLiveAssistantShadowDelta(
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
-  writeStore(pruneLiveAssistantShadowTranscriptEntries(Object.values(store), now));
+  scheduleThrottledFlush();
 }
 
 export function upsertLiveAssistantShadowSnapshot(
@@ -267,7 +312,7 @@ export function upsertLiveAssistantShadowSnapshot(
     return;
   }
   const now = input.timestamp ?? Date.now();
-  const store = readStore(now);
+  const store = getMemoryStore(now);
   const id = buildLiveAssistantShadowTranscriptId(input);
   const existing = store[id];
   const text = mergeShadowSnapshotText(existing?.text ?? "", input.text).slice(
@@ -286,7 +331,7 @@ export function upsertLiveAssistantShadowSnapshot(
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
-  writeStore(pruneLiveAssistantShadowTranscriptEntries(Object.values(store), now));
+  scheduleThrottledFlush();
 }
 
 export function settleLiveAssistantShadowTranscript(
@@ -300,7 +345,7 @@ export function settleLiveAssistantShadowTranscript(
     return;
   }
   const now = input.timestamp ?? Date.now();
-  const store = readStore(now);
+  const store = getMemoryStore(now);
   const id = buildLiveAssistantShadowTranscriptId(input);
   const existing = store[id];
   const normalizedTurnId = input.turnId?.trim() || null;
@@ -332,7 +377,8 @@ export function settleLiveAssistantShadowTranscript(
   if (legacyId && legacyId !== id) {
     delete store[legacyId];
   }
-  writeStore(pruneLiveAssistantShadowTranscriptEntries(Object.values(store), now));
+  // settle 是恢复语义的关键节点，必须立即落盘而不是等节流窗口。
+  flushMemoryStore(now);
 }
 
 export function isLiveAssistantShadowRecoveryEnabled() {
@@ -359,7 +405,7 @@ export function findLiveAssistantShadowTranscriptForRestore(input: {
   }
   const sessionId = input.sessionId?.trim() || normalizeThreadSessionId(input.threadId);
   const normalizedExpectedTurnId = normalizeTurnId(input.expectedTurnId);
-  let candidates = Object.values(readStore()).filter((entry) => {
+  let candidates = Object.values(getMemoryStore()).filter((entry) => {
     if (entry.engine !== "claude" || entry.workspaceId !== input.workspaceId) {
       return false;
     }

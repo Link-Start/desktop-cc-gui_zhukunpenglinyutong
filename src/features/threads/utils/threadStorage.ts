@@ -39,6 +39,25 @@ export function makeCustomNameKey(workspaceId: string, threadId: string): string
   return `${workspaceId}:${threadId}`;
 }
 
+// customNames 历史上只增不减（实测膨胀到 ~21,000 条 / 2.8MB），
+// 超容量时按插入序淘汰最旧条目（plain object 的 string key 保持插入序）。
+export const MAX_CUSTOM_NAME_ENTRIES = 2_000;
+
+export function pruneCustomNames(
+  names: CustomNamesMap,
+  maxEntries: number = MAX_CUSTOM_NAME_ENTRIES,
+): CustomNamesMap {
+  const keys = Object.keys(names);
+  if (keys.length <= maxEntries) {
+    return names;
+  }
+  const pruned: CustomNamesMap = {};
+  for (const key of keys.slice(keys.length - maxEntries)) {
+    pruned[key] = names[key]!;
+  }
+  return pruned;
+}
+
 export function loadCustomNames(): CustomNamesMap {
   return getClientStoreSync<CustomNamesMap>("threads", "customNames") ?? {};
 }
@@ -46,8 +65,11 @@ export function loadCustomNames(): CustomNamesMap {
 export function saveCustomName(workspaceId: string, threadId: string, name: string): void {
   const current = loadCustomNames();
   const key = makeCustomNameKey(workspaceId, threadId);
-  const updated = { ...current, [key]: name };
-  writeClientStoreValue("threads", "customNames", updated);
+  // 先删再插：已存在的 key 重命名时移到插入序末尾，避免被当作最旧条目淘汰。
+  const updated: CustomNamesMap = { ...current };
+  delete updated[key];
+  updated[key] = name;
+  writeClientStoreValue("threads", "customNames", pruneCustomNames(updated));
 }
 
 export function loadAutoTitlePending(): AutoTitlePendingMap {

@@ -21,6 +21,9 @@ const MAX_RENDERER_DIAGNOSTICS = 200;
 const MAX_PERF_ENTRIES = 1000;
 const MAX_REALTIME_TURN_SUMMARIES = 100;
 const MAX_STREAM_LATENCY_ENTRIES = 600;
+const MAX_COMPOSER_RENDER_DIAGNOSTIC_SIGNATURES = 80;
+const COMPOSER_RENDER_DIAGNOSTIC_MIN_INTERVAL_MS = 5_000;
+const COMPOSER_RENDER_DIAGNOSTIC_RENDER_COUNT_STEP = 20;
 const MAX_MESSAGE_ROW_RENDER_DIAGNOSTIC_SIGNATURES = 400;
 const MESSAGE_ROW_RENDER_DIAGNOSTIC_MIN_INTERVAL_MS = 5_000;
 const MESSAGE_ROW_RENDER_DIAGNOSTIC_RENDER_COUNT_STEP = 20;
@@ -41,6 +44,10 @@ let rendererHeartbeatInFlight = false;
 let rendererHeartbeatSequence = 0;
 let rendererHeartbeatFailureReports = 0;
 const messageRowRenderDiagnosticSamples = new Map<string, {
+  lastAt: number;
+  renderCount: number;
+}>();
+const composerRenderDiagnosticSamples = new Map<string, {
   lastAt: number;
   renderCount: number;
 }>();
@@ -317,6 +324,23 @@ export function clearRendererDiagnostics(): void {
   writeClientStoreValue(LEGACY_RENDERER_DIAGNOSTICS_STORE, RENDERER_DIAGNOSTICS_KEY, []);
 }
 
+/**
+ * 将 legacy `app` store 里的 renderer lifecycle 日志合并进当前 diagnostics store
+ * 并清空 legacy key。存量死数据会一直被 readPersistedDiagnostics 反复 merge +
+ * JSON.stringify 签名去重，白白消耗 CPU，迁移后即可停付这笔开销。
+ */
+export function migrateLegacyRendererDiagnostics(): void {
+  const legacyStored = getClientStoreSync<unknown>(
+    LEGACY_RENDERER_DIAGNOSTICS_STORE,
+    RENDERER_DIAGNOSTICS_KEY,
+  );
+  if (!Array.isArray(legacyStored) || legacyStored.length === 0) {
+    return;
+  }
+  persistDiagnostics(readPersistedDiagnostics());
+  writeClientStoreValue(LEGACY_RENDERER_DIAGNOSTICS_STORE, RENDERER_DIAGNOSTICS_KEY, []);
+}
+
 export function appendRendererDiagnostic(
   label: string,
   payload: Record<string, unknown> = {},
@@ -527,6 +551,39 @@ function shouldAppendMessageRowRenderBudgetDiagnostic(
   return true;
 }
 
+function shouldAppendComposerRenderBudgetDiagnostic(
+  input: ComposerRenderBudgetDiagnosticInput,
+) {
+  const signature = [
+    input.surfaceId,
+    input.workspaceId ?? "workspace:unknown",
+    input.streamActivityPhase ?? "phase:unknown",
+    input.isProcessing ? "processing" : "not-processing",
+    input.disabled ? "disabled" : "enabled",
+  ].join(":");
+  const now = Date.now();
+  const previous = composerRenderDiagnosticSamples.get(signature);
+  const renderCount = toFiniteDiagnosticNumber(input.renderCount) ?? 0;
+  const shouldAppend =
+    !previous ||
+    renderCount < previous.renderCount ||
+    now - previous.lastAt >= COMPOSER_RENDER_DIAGNOSTIC_MIN_INTERVAL_MS ||
+    renderCount - previous.renderCount >= COMPOSER_RENDER_DIAGNOSTIC_RENDER_COUNT_STEP;
+  if (!shouldAppend) {
+    return false;
+  }
+  composerRenderDiagnosticSamples.delete(signature);
+  composerRenderDiagnosticSamples.set(signature, { lastAt: now, renderCount });
+  while (composerRenderDiagnosticSamples.size > MAX_COMPOSER_RENDER_DIAGNOSTIC_SIGNATURES) {
+    const oldestKey = composerRenderDiagnosticSamples.keys().next().value;
+    if (typeof oldestKey !== "string") {
+      break;
+    }
+    composerRenderDiagnosticSamples.delete(oldestKey);
+  }
+  return true;
+}
+
 function isPerfDiagnosticCollectionEnabled() {
   const env = (import.meta.env ?? {}) as Record<string, string | boolean | undefined>;
   const nodeEnv = typeof process === "undefined" ? undefined : process.env?.NODE_ENV;
@@ -680,6 +737,16 @@ export function appendComposerRenderBudgetDiagnostic(
   input: ComposerRenderBudgetDiagnosticInput,
 ) {
   if (!isPerfDiagnosticCollectionEnabled()) {
+    return;
+  }
+  if (
+    !input.isProcessing &&
+    input.streamActivityPhase === "idle" &&
+    toFiniteDiagnosticNumber(input.textLength) === 0
+  ) {
+    return;
+  }
+  if (!shouldAppendComposerRenderBudgetDiagnostic(input)) {
     return;
   }
   appendRendererDiagnostic("perf.composer.render-budget", {

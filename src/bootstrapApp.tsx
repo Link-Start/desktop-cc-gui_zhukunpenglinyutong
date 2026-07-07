@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { preloadClientStores } from "./services/clientStorage";
+import { runClientStoreMaintenance } from "./services/clientStoreMaintenance";
 import {
   pushGlobalRuntimeNotice,
   type GlobalRuntimeNoticeSeverity,
@@ -210,6 +211,7 @@ async function bootstrap() {
   void appImportPromise.catch(() => undefined);
   void i18nImportPromise.catch(() => undefined);
   await traceBootstrapTask("bootstrap:storage-preload", "storage-preload", preloadClientStores);
+  runClientStoreMaintenance();
   flushRendererDiagnosticsBuffer();
   appendRendererDiagnostic("bootstrap/preload-complete");
   pushBootstrapNotice("runtimeNotice.bootstrap.interfaceResources");

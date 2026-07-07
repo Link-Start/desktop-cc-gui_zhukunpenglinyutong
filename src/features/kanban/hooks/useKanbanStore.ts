@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import type { EngineType, WorkspaceInfo } from "../../../types";
 import { loadKanbanData, migrateWorkspaceIds, saveKanbanData } from "../utils/kanbanStorage";
+import { hasKanbanImageDataUrl, persistKanbanImages } from "../utils/kanbanImages";
 import { generateKanbanId, generatePanelId } from "../utils/kanbanId";
 
 type CreateTaskInput = {
@@ -54,6 +55,34 @@ export function useKanbanStore(workspaces?: WorkspaceInfo[]) {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [store]);
+
+  // Migrate: 存量任务里内嵌的 base64 data URL 图片异步落盘为文件路径。
+  // 这类 base64 曾把 app.json 撑到 ~24MB，是每次 kanban 写盘都要付出的体积成本。
+  const imageMigrationRef = useRef(false);
+  useEffect(() => {
+    if (imageMigrationRef.current) {
+      return;
+    }
+    imageMigrationRef.current = true;
+    const tasksToMigrate = store.tasks.filter((task) => hasKanbanImageDataUrl(task.images));
+    if (tasksToMigrate.length === 0) {
+      return;
+    }
+    void (async () => {
+      for (const task of tasksToMigrate) {
+        const migratedImages = await persistKanbanImages(task.images);
+        if (migratedImages.every((image, index) => image === task.images[index])) {
+          continue;
+        }
+        setStore((prev) => ({
+          ...prev,
+          tasks: prev.tasks.map((t) =>
+            t.id === task.id ? { ...t, images: migratedImages } : t,
+          ),
+        }));
+      }
+    })();
+  }, [store.tasks]);
 
   // Migrate: convert old UUID-based workspaceId to workspace path
   const migratedRef = useRef(false);

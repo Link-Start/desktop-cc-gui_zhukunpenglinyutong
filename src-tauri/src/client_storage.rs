@@ -1,7 +1,9 @@
 use serde_json::Value;
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -144,6 +146,14 @@ fn write_string_atomically(path: &Path, content: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 进程内 store 缓存：避免每次 patch 都对整份 store 文件做 read + parse。
+/// renderer 侧本就整份缓存并按 key 盲写 patch（单实例假设成立），
+/// 写盘期间仍持有跨进程 file lock，语义不劣化。
+fn store_cache() -> &'static Mutex<HashMap<PathBuf, Value>> {
+    static CACHE: OnceLock<Mutex<HashMap<PathBuf, Value>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 fn read_store_unlocked(path: &Path) -> Result<Value, String> {
     if !path.exists() {
         return Ok(Value::Null);
@@ -154,37 +164,64 @@ fn read_store_unlocked(path: &Path) -> Result<Value, String> {
 
 fn read_store(filename: &str) -> Result<Value, String> {
     let path = client_storage_dir()?.join(filename);
-    read_store_unlocked(&path)
-}
-
-fn write_store_unlocked(path: &Path, value: &Value) -> Result<(), String> {
-    let data = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
-    write_string_atomically(path, &data)
+    {
+        let cache = store_cache().lock().map_err(|e| e.to_string())?;
+        if let Some(value) = cache.get(&path) {
+            return Ok(value.clone());
+        }
+    }
+    let value = read_store_unlocked(&path)?;
+    let mut cache = store_cache().lock().map_err(|e| e.to_string())?;
+    cache.insert(path, value.clone());
+    Ok(value)
 }
 
 fn write_store(filename: &str, value: &Value) -> Result<(), String> {
     let dir = client_storage_dir()?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join(filename);
-    with_client_store_lock(&path, || write_store_unlocked(&path, value))
+    with_client_store_lock(&path, || {
+        // compact JSON：pretty-print 对大 store 的 serialize CPU 与文件体积都是纯开销。
+        let data = serde_json::to_string(value).map_err(|e| e.to_string())?;
+        {
+            let mut cache = store_cache().lock().map_err(|e| e.to_string())?;
+            cache.insert(path.clone(), value.clone());
+        }
+        write_string_atomically(&path, &data)
+    })
 }
 
 fn patch_store_at_path(path: &Path, patch: &serde_json::Map<String, Value>) -> Result<(), String> {
-    with_client_store_lock(&path, || {
-        let existing = read_store_unlocked(&path)?;
-        let mut merged = match &existing {
-            Value::Object(map) => map.clone(),
-            Value::Null => serde_json::Map::new(),
-            _ => serde_json::Map::new(),
+    with_client_store_lock(path, || {
+        let serialized = {
+            let mut cache = store_cache().lock().map_err(|e| e.to_string())?;
+            if !cache.contains_key(path) {
+                let value = read_store_unlocked(path)?;
+                cache.insert(path.to_path_buf(), value);
+            }
+            let entry = cache
+                .get_mut(path)
+                .ok_or_else(|| "client store cache entry missing".to_string())?;
+            if !entry.is_object() {
+                *entry = Value::Object(serde_json::Map::new());
+            }
+            let map = entry
+                .as_object_mut()
+                .ok_or_else(|| "client store cache entry is not an object".to_string())?;
+            // 只比较 patch 涉及的 key，避免对整份 store 做全量 deep equality。
+            let mut changed = false;
+            for (key, value) in patch {
+                if map.get(key) != Some(value) {
+                    map.insert(key.clone(), value.clone());
+                    changed = true;
+                }
+            }
+            if !changed {
+                return Ok(());
+            }
+            serde_json::to_string(entry).map_err(|e| e.to_string())?
         };
-        for (key, value) in patch {
-            merged.insert(key.to_string(), value.clone());
-        }
-        let next = Value::Object(merged);
-        if existing == next {
-            return Ok(());
-        }
-        write_store_unlocked(&path, &next)
+        write_string_atomically(path, &serialized)
     })
 }
 
@@ -232,6 +269,52 @@ pub(crate) fn client_store_patch(store: String, patch: Value) -> Result<(), Stri
         .as_object()
         .ok_or_else(|| "client_store_patch expects an object patch".to_string())?;
     patch_store(&format!("{store}.json"), patch_map)
+}
+
+const KANBAN_IMAGE_DIR_NAME: &str = "kanban-images";
+const MAX_KANBAN_IMAGE_BYTES: usize = 20 * 1024 * 1024;
+
+fn kanban_image_extension(media_type: &str) -> Option<&'static str> {
+    match media_type {
+        "image/png" => Some("png"),
+        "image/jpeg" | "image/jpg" => Some("jpg"),
+        "image/gif" => Some("gif"),
+        "image/webp" => Some("webp"),
+        "image/bmp" => Some("bmp"),
+        "image/avif" => Some("avif"),
+        _ => None,
+    }
+}
+
+/// 将 kanban 任务里的 base64 data URL 图片落盘为文件，返回绝对路径。
+/// 避免把 MB 级 base64 存进 client store JSON（曾把 app.json 撑到 24MB）。
+#[tauri::command]
+pub(crate) fn client_save_kanban_image(data_url: String) -> Result<String, String> {
+    use base64::Engine;
+
+    let (media_type, payload) = data_url
+        .strip_prefix("data:")
+        .and_then(|rest| rest.split_once(";base64,"))
+        .ok_or_else(|| "client_save_kanban_image expects a base64 image data URL".to_string())?;
+    let extension = kanban_image_extension(media_type)
+        .ok_or_else(|| format!("Unsupported kanban image media type: {media_type}"))?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(payload.trim().as_bytes())
+        .map_err(|error| format!("Invalid kanban image base64 payload: {error}"))?;
+    if bytes.is_empty() {
+        return Err("Kanban image payload is empty".to_string());
+    }
+    if bytes.len() > MAX_KANBAN_IMAGE_BYTES {
+        return Err(format!(
+            "Kanban image payload too large: {} bytes",
+            bytes.len()
+        ));
+    }
+    let dir = client_storage_dir()?.join(KANBAN_IMAGE_DIR_NAME);
+    std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+    let path = dir.join(format!("kanban-{}.{extension}", Uuid::new_v4()));
+    std::fs::write(&path, &bytes).map_err(|error| error.to_string())?;
+    Ok(path.to_string_lossy().to_string())
 }
 
 #[cfg(test)]
@@ -308,5 +391,54 @@ mod tests {
         assert_eq!(after_modified, before_modified);
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn patch_store_accumulates_keys_and_writes_compact_json() {
+        let dir = std::env::temp_dir().join(format!("ccgui-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("test-compact-patch.json");
+
+        patch_store_at_path(&path, json!({ "alpha": 1 }).as_object().unwrap())
+            .expect("first patch");
+        patch_store_at_path(&path, json!({ "beta": { "nested": true } }).as_object().unwrap())
+            .expect("second patch");
+
+        let content = std::fs::read_to_string(&path).expect("read store file");
+        assert!(
+            !content.contains('\n'),
+            "store file should be compact JSON without pretty-print newlines"
+        );
+        let value: serde_json::Value = serde_json::from_str(&content).expect("parse store file");
+        assert_eq!(value, json!({ "alpha": 1, "beta": { "nested": true } }));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn patch_store_serves_existing_value_from_cache_after_first_read() {
+        let dir = std::env::temp_dir().join(format!("ccgui-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("test-cache-patch.json");
+
+        patch_store_at_path(&path, json!({ "keep": "value" }).as_object().unwrap())
+            .expect("initial patch");
+        // 模拟外部把文件删掉：cache 仍应保留 existing keys，patch 后完整写回。
+        std::fs::remove_file(&path).expect("remove store file");
+        patch_store_at_path(&path, json!({ "extra": 2 }).as_object().unwrap())
+            .expect("patch after external delete");
+
+        let content = std::fs::read_to_string(&path).expect("read store file");
+        let value: serde_json::Value = serde_json::from_str(&content).expect("parse store file");
+        assert_eq!(value, json!({ "keep": "value", "extra": 2 }));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_kanban_image_extension_mapping() {
+        assert_eq!(super::kanban_image_extension("image/png"), Some("png"));
+        assert_eq!(super::kanban_image_extension("image/jpeg"), Some("jpg"));
+        assert_eq!(super::kanban_image_extension("text/plain"), None);
     }
 }

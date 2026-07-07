@@ -14,7 +14,10 @@ const MAX_DEBUG_ENTRIES = 200;
 const THREAD_SESSION_LOG_KEY = "diagnostics.threadSessionLog";
 const THREAD_SESSION_LOG_STORE = "diagnostics";
 const LEGACY_THREAD_SESSION_LOG_STORE = "app";
-const MAX_THREAD_SESSION_LOG_ENTRIES = 400;
+export const MAX_THREAD_SESSION_LOG_ENTRIES = 400;
+// 单条 payload 序列化体积上限：防止单个巨型 payload 把 diagnostics store 再次撑爆。
+export const MAX_THREAD_SESSION_LOG_PAYLOAD_CHARS = 8_000;
+const TRUNCATED_PAYLOAD_PREVIEW_CHARS = 2_000;
 
 type ThreadSessionLogEntry = {
   timestamp: number;
@@ -23,18 +26,27 @@ type ThreadSessionLogEntry = {
   payload: unknown;
 };
 
-function normalizePayload(payload: unknown): unknown {
+export function normalizeThreadSessionLogPayload(payload: unknown): unknown {
   if (payload == null) {
     return payload;
   }
   if (typeof payload === "string") {
-    return payload.length > 2000 ? `${payload.slice(0, 2000)}...(truncated)` : payload;
+    return payload.length > TRUNCATED_PAYLOAD_PREVIEW_CHARS
+      ? `${payload.slice(0, TRUNCATED_PAYLOAD_PREVIEW_CHARS)}...(truncated)`
+      : payload;
   }
   if (typeof payload !== "object") {
     return payload;
   }
   try {
-    return JSON.parse(JSON.stringify(payload));
+    const serialized = JSON.stringify(payload);
+    if (typeof serialized !== "string") {
+      return String(payload);
+    }
+    if (serialized.length > MAX_THREAD_SESSION_LOG_PAYLOAD_CHARS) {
+      return `${serialized.slice(0, TRUNCATED_PAYLOAD_PREVIEW_CHARS)}...(truncated ${serialized.length} chars)`;
+    }
+    return JSON.parse(serialized);
   } catch {
     return String(payload);
   }
@@ -52,6 +64,23 @@ function shouldMirrorThreadSessionLog(entry: DebugEntry): boolean {
     label === "item/updated" ||
     label === "item/completed"
   );
+}
+
+/** 高频/巨型 payload 的 label 黑名单：新增条目拒绝，startup maintenance 用同一判定清理存量。 */
+export function isBlockedThreadSessionLogLabel(label: string): boolean {
+  const normalized = label.toLowerCase();
+  return (
+    normalized === "thread/session:turn-diagnostic:codex-no-progress-watchdog-scheduled" ||
+    normalized === "thread/list response" ||
+    normalized === "thread/list older response"
+  );
+}
+
+function shouldPersistThreadSessionLogEntry(entry: DebugEntry): boolean {
+  if (isBlockedThreadSessionLogLabel(entry.label)) {
+    return false;
+  }
+  return shouldMirrorThreadSessionLog(entry);
 }
 
 export function useDebugLog() {
@@ -91,7 +120,7 @@ export function useDebugLog() {
 
   const addDebugEntry = useCallback(
     (entry: DebugEntry) => {
-      if (shouldMirrorThreadSessionLog(entry)) {
+      if (shouldPersistThreadSessionLogEntry(entry)) {
         const cachedLogs =
           threadSessionLogCacheRef.current ??
           (getClientStoreSync<ThreadSessionLogEntry[]>(
@@ -107,7 +136,7 @@ export function useDebugLog() {
           timestamp: entry.timestamp,
           source: entry.source,
           label: entry.label,
-          payload: normalizePayload(entry.payload),
+          payload: normalizeThreadSessionLogPayload(entry.payload),
         };
         const nextLogs = [...cachedLogs, nextEntry].slice(
           -MAX_THREAD_SESSION_LOG_ENTRIES,

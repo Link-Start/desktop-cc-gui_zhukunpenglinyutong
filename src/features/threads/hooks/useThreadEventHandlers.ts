@@ -300,7 +300,7 @@ export function useThreadEventHandlers({
         activeTurnId: input.lifecycle?.activeTurnId ?? null,
         activeThreadId,
         ...buildThreadStreamCorrelationDimensions(input.threadId),
-      }, { force: true });
+      }, stage === "scheduled" ? undefined : { force: true });
     },
     [activeThreadId, emitTurnDiagnostic],
   );

@@ -567,16 +567,7 @@ describe("useThreadEventHandlers diagnostics", () => {
         entry.label ===
         "thread/session:turn-diagnostic:codex-no-progress-watchdog-scheduled",
     );
-    expect(watchdogScheduledEntry?.payload).toEqual(
-      expect.objectContaining({
-        workspaceId: "ws-1",
-        threadId: "thread-1",
-        turnId: "turn-1",
-        diagnosticCategory: "codex-no-progress-watchdog",
-        stage: "scheduled",
-        timeoutMs: CODEX_TURN_NO_PROGRESS_STALL_MS,
-      }),
-    );
+    expect(watchdogScheduledEntry).toBeUndefined();
     const watchdogFiredEntry = collectDiagnosticCalls(onDebug).find(
       (entry) =>
         entry.label ===

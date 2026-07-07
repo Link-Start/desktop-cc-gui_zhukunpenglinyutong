@@ -28,6 +28,7 @@ import { RichTextInput } from "../../../components/common/RichTextInput";
 import { useInlineHistoryCompletion } from "../../composer/hooks/useInlineHistoryCompletion";
 import { recordHistory as recordInputHistory } from "../../composer/hooks/useInputHistoryStore";
 import { loadTaskDraft, saveTaskDraft, clearTaskDraft } from "../utils/kanbanStorage";
+import { hasKanbanImageDataUrl, persistKanbanImages } from "../utils/kanbanImages";
 import { buildTaskChain, validateChainSelection } from "../utils/chaining";
 import { buildTaskScheduleFromForm } from "../utils/scheduling";
 
@@ -405,7 +406,20 @@ export function TaskCreateModal({
   };
 
   const handleAttachImages = (paths: string[]) => {
+    // 先用原始值（含 data URL）即时预览，再异步把 base64 落盘为文件路径替换，
+    // 避免 MB 级 base64 被写进 client store。
     setImages((prev) => [...prev, ...paths]);
+    if (!hasKanbanImageDataUrl(paths)) {
+      return;
+    }
+    void persistKanbanImages(paths).then((persisted) => {
+      setImages((prev) =>
+        prev.map((image) => {
+          const index = paths.indexOf(image);
+          return index >= 0 ? persisted[index] ?? image : image;
+        }),
+      );
+    });
   };
 
   const handleRemoveImage = (path: string) => {
