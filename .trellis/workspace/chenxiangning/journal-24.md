@@ -1661,3 +1661,43 @@ Windows Codex app-server wrapper fallback 改为通过 provider/default CODEX_HO
 ### Next Steps
 
 - None - task complete
+
+
+## Session 962: 添加消息锚点直达底部按钮
+
+**Date**: 2026-07-07
+**Task**: 添加消息锚点直达底部按钮
+**Branch**: `ui-refactoring`
+
+### Summary
+
+完成消息幕布锚点 rail 下方直达底部按钮，并补齐 OpenSpec 提案记录与验证。
+
+### Main Changes
+
+- 新增 OpenSpec change `add-message-anchor-bottom-jump`，包含 proposal、tasks 和 `message-reading-navigation-reasoning-ux` spec delta。
+- 在 `MessagesAnchorRail` 下方新增 icon-only bottom jump button，使用 `ArrowDown` 图标并提供本地化 accessible label。
+- 在 `Messages.tsx` 接入 `requestScrollToBottom`，点击后滚动到底部 sentinel，并恢复 live auto-follow。
+- 调整 `messages.status-shell.css`，让按钮宽高与锚点 dash 对齐，避免胶囊样式突兀。
+- 调整 anchor panel 层级和最大高度，避免锚点多时展开面板遮挡底部按钮。
+- 更新中英文文案与 focused test。
+- 验证结果：OpenSpec strict 通过；focused Vitest 通过但保留该测试文件既有 Suspense act warning；typecheck 通过；lint 0 error 且仅保留既有 MessagesRows.tsx warning；diff check 通过；large-file gate 通过。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6ede6933` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
