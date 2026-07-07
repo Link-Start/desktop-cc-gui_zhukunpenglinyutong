@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { useGlobalSearchShortcut } from "../features/app/hooks/useGlobalSearchShortcut";
 import { useInterruptShortcut } from "../features/app/hooks/useInterruptShortcut";
 import { usePullRequestComposer } from "../features/git/hooks/usePullRequestComposer";
+import type { CenterMode } from "../features/app/hooks/useGitPanelController";
 import { recordSearchResultOpen } from "../features/search/ranking/recencyStore";
 import type { KanbanTask } from "../features/kanban/types";
 import type {
@@ -24,13 +25,6 @@ import {
 } from "./threadEditorPreservation";
 
 type AppShellTab = "projects" | "codex" | "spec" | "git" | "log";
-type CenterMode =
-  | "chat"
-  | "diff"
-  | "editor"
-  | "memory"
-  | "projectMap"
-  | "intentCanvas";
 type DiffSource = "local" | "pr" | "commit";
 type FilePanelMode =
   | "git"

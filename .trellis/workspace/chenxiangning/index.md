@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-24.md`
-- **Total Sessions**: 959
-- **Last Active**: 2026-07-05
+- **Total Sessions**: 963
+- **Last Active**: 2026-07-07
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-24.md` | ~1574 | Active |
+| `journal-24.md` | ~1753 | Active |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
 | `journal-21.md` | ~1970 | Archived |
@@ -52,6 +52,10 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 963 | 2026-07-07 | 修复焦点跟随重新开启滚底 | `8ad0eff7` | `ui-refactoring` |
+| 962 | 2026-07-07 | 添加消息锚点直达底部按钮 | `6ede6933` | `ui-refactoring` |
+| 961 | 2026-07-07 | 新增工作区文件对比工具 | `cb2fd0ea` | `ui-refactoring` |
+| 960 | 2026-07-07 | 修复编辑器最大化布局与工作区文件标签记忆 | `9194ad26` | `ui-refactoring` |
 | 959 | 2026-07-05 | 归档 OpenSpec 近期变更提案 | `f68626ca` | `ui-refactoring` |
 | 958 | 2026-06-29 | 优化 Mermaid 卡片操作按钮 | `ba7bae44` | `ui-refactoring` |
 | 957 | 2026-06-29 | 修复 Markdown HTML 序列化依赖声明 | `72eac29a` | `ui-refactoring` |

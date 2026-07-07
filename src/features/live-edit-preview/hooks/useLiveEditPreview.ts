@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { SessionActivityEvent } from "../../session-activity/types";
+import type { CenterMode } from "../../app/hooks/useGitPanelController";
 
 const DEFAULT_MANUAL_PAUSE_MS = 4_000;
 const DEFAULT_THROTTLE_MS = 900;
-
-type CenterMode = "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas";
 
 type UseLiveEditPreviewOptions = {
   enabled: boolean;

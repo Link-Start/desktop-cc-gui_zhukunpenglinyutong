@@ -2815,6 +2815,7 @@ const enPart1 = {
     anchorNavigation: "Message anchors",
     anchorJumpToUser: "Go to user message {{index}}",
     anchorUserTitle: "User #{{index}}",
+    scrollToBottom: "Scroll to bottom",
     showEarlierMessages: "Show {{count}} earlier messages",
     liveControls: "Live canvas controls",
     liveAutoFollowToggle: "Focus follow",

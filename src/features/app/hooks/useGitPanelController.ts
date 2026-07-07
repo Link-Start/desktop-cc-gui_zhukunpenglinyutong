@@ -12,11 +12,15 @@ import { useGitCommitDiffs } from "../../git/hooks/useGitCommitDiffs";
 import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
 import type { GitLineMarkers } from "../../files/utils/gitLineMarkers";
 import { resolveWorkspaceRelativePath } from "../../../utils/workspacePaths";
+import type { FileCompareSession } from "../../files/types/fileCompare";
+import { FILE_COMPARE_MAX_WORKSPACE_FILES } from "../../files/types/fileCompare";
 
 const GIT_DIFF_LIST_VIEW_BY_WORKSPACE_KEY = "gitDiffListViewByWorkspace";
 const GIT_DIFF_PRELOAD_MAX_CHANGED_FILES = 80;
 const GIT_DIFF_PRELOAD_MAX_SINGLE_FILE_CHURN = 3_000;
 const GIT_DIFF_PRELOAD_MAX_TOTAL_CHURN = 8_000;
+const FALLBACK_FILE_TAB_WORKSPACE_KEY = "__no_workspace__";
+const EMPTY_FILE_TABS: string[] = [];
 const GIT_DIFF_PRELOAD_RISKY_FILE_NAMES = new Set([
   "pnpm-lock.yaml",
   "package-lock.json",
@@ -110,10 +114,59 @@ export type EditorHighlightTarget = {
 
 export type EditorSplitCompanion = "chat" | "projectMap";
 
+export type CenterMode =
+  | "chat"
+  | "diff"
+  | "editor"
+  | "memory"
+  | "projectMap"
+  | "intentCanvas"
+  | "fileCompare";
+
 export type OpenFileOptions = {
   highlightMarkers?: GitLineMarkers | null;
   editorSplitCompanion?: EditorSplitCompanion;
 };
+
+type WorkspaceFileTabsState = {
+  openTabs: string[];
+  activeFilePath: string | null;
+};
+
+function resolveFileTabWorkspaceKey(workspace: WorkspaceInfo | null): string {
+  return workspace?.id ?? FALLBACK_FILE_TAB_WORKSPACE_KEY;
+}
+
+function updateWorkspaceFileTabs(
+  states: Record<string, WorkspaceFileTabsState>,
+  workspaceKey: string,
+  updater: (current: WorkspaceFileTabsState) => WorkspaceFileTabsState,
+): Record<string, WorkspaceFileTabsState> {
+  const current = states[workspaceKey] ?? {
+    openTabs: EMPTY_FILE_TABS,
+    activeFilePath: null,
+  };
+  const next = updater(current);
+  if (next.openTabs.length === 0 && !next.activeFilePath) {
+    if (!(workspaceKey in states)) {
+      return states;
+    }
+    const remaining = { ...states };
+    delete remaining[workspaceKey];
+    return remaining;
+  }
+  if (
+    current.activeFilePath === next.activeFilePath &&
+    current.openTabs.length === next.openTabs.length &&
+    current.openTabs.every((path, index) => path === next.openTabs[index])
+  ) {
+    return states;
+  }
+  return {
+    ...states,
+    [workspaceKey]: next,
+  };
+}
 
 export function useGitPanelController({
   activeWorkspace,
@@ -142,11 +195,13 @@ export function useGitPanelController({
   prDiffsError: string | null;
   onOpenEditorLayoutRequest?: () => void;
 }) {
-  const [centerMode, setCenterMode] = useState<
-    "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas"
-  >("chat");
-  const [openFileTabs, setOpenFileTabs] = useState<string[]>([]);
-  const [activeEditorFilePath, setActiveEditorFilePath] = useState<string | null>(null);
+  const [centerMode, setCenterMode] = useState<CenterMode>("chat");
+  const [fileCompareSession, setFileCompareSession] =
+    useState<FileCompareSession | null>(null);
+  const scratchFileCompareRequestIdRef = useRef(0);
+  const [fileTabsByWorkspace, setFileTabsByWorkspace] = useState<
+    Record<string, WorkspaceFileTabsState>
+  >({});
   const [editorSplitCompanion, setEditorSplitCompanion] =
     useState<EditorSplitCompanion>("chat");
   const [editorNavigationTarget, setEditorNavigationTarget] =
@@ -178,6 +233,10 @@ export function useGitPanelController({
     "local",
   );
   const compactTab = isTablet ? tabletTab : activeTab;
+  const fileTabWorkspaceKey = resolveFileTabWorkspaceKey(activeWorkspace);
+  const currentFileTabsState = fileTabsByWorkspace[fileTabWorkspaceKey];
+  const openFileTabs = currentFileTabsState?.openTabs ?? EMPTY_FILE_TABS;
+  const activeEditorFilePath = currentFileTabsState?.activeFilePath ?? null;
   const isGitStatusPollingActive = isCompact
     ? compactTab === "git"
     : centerMode === "diff" ||
@@ -193,6 +252,7 @@ export function useGitPanelController({
   const gitStatusRefreshTimeoutRef = useRef<number | null>(null);
   const activeWorkspaceIdRef = useRef<string | null>(activeWorkspace?.id ?? null);
   const activeWorkspaceRef = useRef(activeWorkspace);
+  const previousFileTabWorkspaceKeyRef = useRef(fileTabWorkspaceKey);
 
   useEffect(() => {
     activeWorkspaceIdRef.current = activeWorkspace?.id ?? null;
@@ -205,6 +265,35 @@ export function useGitPanelController({
   useEffect(() => {
     activeWorkspaceRef.current = activeWorkspace;
   }, [activeWorkspace]);
+
+  useEffect(() => {
+    if (previousFileTabWorkspaceKeyRef.current === fileTabWorkspaceKey) {
+      return;
+    }
+    previousFileTabWorkspaceKeyRef.current = fileTabWorkspaceKey;
+    setEditorNavigationTarget(null);
+    setEditorHighlightTarget(null);
+    setFileCompareSession(null);
+    const nextActiveFilePath = fileTabsByWorkspace[fileTabWorkspaceKey]?.activeFilePath ?? null;
+    if (nextActiveFilePath) {
+      setCenterMode("editor");
+      return;
+    }
+    if (centerMode === "fileCompare") {
+      setFileCompareSession(null);
+      setCenterMode("chat");
+      return;
+    }
+    if (centerMode === "editor") {
+      setCenterMode(editorSplitCompanion === "projectMap" ? "projectMap" : "chat");
+      setEditorSplitCompanion("chat");
+    }
+  }, [
+    centerMode,
+    editorSplitCompanion,
+    fileTabsByWorkspace,
+    fileTabWorkspaceKey,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -401,10 +490,14 @@ export function useGitPanelController({
       options?: OpenFileOptions,
     ) => {
       const normalizedPath = resolveWorkspaceRelativePath(activeWorkspace?.path, path);
-      setOpenFileTabs((prev) =>
-        prev.includes(normalizedPath) ? prev : [...prev, normalizedPath],
+      setFileTabsByWorkspace((states) =>
+        updateWorkspaceFileTabs(states, fileTabWorkspaceKey, (current) => ({
+          openTabs: current.openTabs.includes(normalizedPath)
+            ? current.openTabs
+            : [...current.openTabs, normalizedPath],
+          activeFilePath: normalizedPath,
+        })),
       );
-      setActiveEditorFilePath(normalizedPath);
       setEditorHighlightTarget((current) => {
         if (options?.highlightMarkers) {
           return {
@@ -435,71 +528,136 @@ export function useGitPanelController({
         setActiveTab("codex");
       }
     },
-    [activeWorkspace?.path, isCompact, onOpenEditorLayoutRequest, setActiveTab],
+    [
+      activeWorkspace?.path,
+      fileTabWorkspaceKey,
+      isCompact,
+      onOpenEditorLayoutRequest,
+      setActiveTab,
+    ],
   );
 
-  const handleActivateFileTab = useCallback((path: string) => {
-    setOpenFileTabs((prev) => {
-      if (!prev.includes(path)) {
-        return [...prev, path];
+  const handleOpenWorkspaceFileCompare = useCallback(
+    (paths: string[]) => {
+      const workspace = activeWorkspaceRef.current;
+      if (!workspace?.id) {
+        return false;
       }
-      return prev;
+      const normalizedPaths = Array.from(
+        new Set(
+          paths
+            .map((path) => resolveWorkspaceRelativePath(workspace.path, path))
+            .map((path) => path.trim())
+            .filter(Boolean),
+        ),
+      );
+      if (
+        normalizedPaths.length < 2 ||
+        normalizedPaths.length > FILE_COMPARE_MAX_WORKSPACE_FILES
+      ) {
+        return false;
+      }
+      setFileCompareSession({
+        kind: "workspace",
+        workspaceId: workspace.id,
+        paths: normalizedPaths,
+      });
+      setCenterMode("fileCompare");
+      if (isCompact) {
+        setActiveTab("codex");
+      }
+      return true;
+    },
+    [isCompact, setActiveTab],
+  );
+
+  const handleOpenScratchFileCompare = useCallback(() => {
+    scratchFileCompareRequestIdRef.current += 1;
+    setFileCompareSession({
+      kind: "scratch",
+      requestId: scratchFileCompareRequestIdRef.current,
     });
-    setActiveEditorFilePath(path);
+    setCenterMode("fileCompare");
+    if (isCompact) {
+      setActiveTab("codex");
+    }
+  }, [isCompact, setActiveTab]);
+
+  const handleCloseFileCompare = useCallback(() => {
+    setFileCompareSession(null);
+    setCenterMode("chat");
+  }, []);
+
+  const handleActivateFileTab = useCallback((path: string) => {
+    setFileTabsByWorkspace((states) =>
+      updateWorkspaceFileTabs(states, fileTabWorkspaceKey, (current) => ({
+        openTabs: current.openTabs.includes(path)
+          ? current.openTabs
+          : [...current.openTabs, path],
+        activeFilePath: path,
+      })),
+    );
     setEditorNavigationTarget(null);
     setCenterMode("editor");
-  }, []);
+  }, [fileTabWorkspaceKey]);
 
   const handleCloseFileTab = useCallback(
     (path: string) => {
-      setOpenFileTabs((prev) => {
-        const closingIndex = prev.indexOf(path);
-        if (closingIndex < 0) {
-          return prev;
-        }
-        const nextTabs = prev.filter((entry) => entry !== path);
-        setActiveEditorFilePath((currentActivePath) => {
-          if (currentActivePath && currentActivePath !== path) {
-            return nextTabs.includes(currentActivePath)
-              ? currentActivePath
-              : nextTabs[0] ?? null;
+      setFileTabsByWorkspace((states) =>
+        updateWorkspaceFileTabs(states, fileTabWorkspaceKey, (current) => {
+          const closingIndex = current.openTabs.indexOf(path);
+          if (closingIndex < 0) {
+            return current;
           }
-          const fallback = nextTabs[closingIndex] ?? nextTabs[closingIndex - 1] ?? null;
+          const nextTabs = current.openTabs.filter((entry) => entry !== path);
+          const fallback =
+            current.activeFilePath && current.activeFilePath !== path
+              ? nextTabs.includes(current.activeFilePath)
+                ? current.activeFilePath
+                : nextTabs[0] ?? null
+              : nextTabs[closingIndex] ?? nextTabs[closingIndex - 1] ?? null;
           if (!fallback && centerMode === "editor") {
             setCenterMode(editorSplitCompanion === "projectMap" ? "projectMap" : "chat");
             setEditorSplitCompanion("chat");
           }
-          return fallback;
-        });
-        setEditorNavigationTarget((current) =>
-          current && current.path === path ? null : current,
-        );
-        setEditorHighlightTarget((current) =>
-          current && current.path === path ? null : current,
-        );
-        return nextTabs;
-      });
+          setEditorNavigationTarget((current) =>
+            current && current.path === path ? null : current,
+          );
+          setEditorHighlightTarget((current) =>
+            current && current.path === path ? null : current,
+          );
+          return { openTabs: nextTabs, activeFilePath: fallback };
+        }),
+      );
     },
-    [centerMode, editorSplitCompanion],
+    [centerMode, editorSplitCompanion, fileTabWorkspaceKey],
   );
 
   const handleCloseAllFileTabs = useCallback(() => {
-    setOpenFileTabs([]);
-    setActiveEditorFilePath(null);
+    setFileTabsByWorkspace((states) =>
+      updateWorkspaceFileTabs(states, fileTabWorkspaceKey, () => ({
+        openTabs: EMPTY_FILE_TABS,
+        activeFilePath: null,
+      })),
+    );
     setEditorNavigationTarget(null);
     setEditorHighlightTarget(null);
     setEditorSplitCompanion("chat");
     setCenterMode(editorSplitCompanion === "projectMap" ? "projectMap" : "chat");
-  }, [editorSplitCompanion]);
+  }, [editorSplitCompanion, fileTabWorkspaceKey]);
 
   const handleExitEditor = useCallback(() => {
     setCenterMode(editorSplitCompanion === "projectMap" ? "projectMap" : "chat");
-    setOpenFileTabs([]);
-    setActiveEditorFilePath(null);
+    setFileTabsByWorkspace((states) =>
+      updateWorkspaceFileTabs(states, fileTabWorkspaceKey, () => ({
+        openTabs: EMPTY_FILE_TABS,
+        activeFilePath: null,
+      })),
+    );
     setEditorNavigationTarget(null);
     setEditorHighlightTarget(null);
     setEditorSplitCompanion("chat");
-  }, [editorSplitCompanion]);
+  }, [editorSplitCompanion, fileTabWorkspaceKey]);
 
   useEffect(() => {
     if (!selectedDiffPath) {
@@ -527,6 +685,7 @@ export function useGitPanelController({
   return {
     centerMode,
     setCenterMode,
+    fileCompareSession,
     openFileTabs,
     activeEditorFilePath,
     editorSplitCompanion,
@@ -579,6 +738,9 @@ export function useGitPanelController({
     handleActiveDiffPath,
     handleGitPanelModeChange,
     handleOpenFile,
+    handleOpenWorkspaceFileCompare,
+    handleOpenScratchFileCompare,
+    handleCloseFileCompare,
     handleActivateFileTab,
     handleCloseFileTab,
     handleCloseAllFileTabs,

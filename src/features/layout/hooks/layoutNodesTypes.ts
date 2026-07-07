@@ -12,8 +12,10 @@ import type {
   EditorHighlightTarget,
   EditorNavigationLocation,
   EditorNavigationTarget,
+  CenterMode,
   OpenFileOptions,
 } from "../../app/hooks/useGitPanelController";
+import type { FileCompareSession } from "../../files/types/fileCompare";
 import type {
   ReviewPromptState,
   ReviewPromptStep,
@@ -327,16 +329,9 @@ export type LayoutNodesFlatOptions = {
   mainHeaderActions?: OpenAppMenuExtraAction[];
   browserDockOpen?: boolean;
   onCloseBrowserDock?: () => void;
-  centerMode:
-    | "chat"
-    | "diff"
-    | "editor"
-    | "memory"
-    | "projectMap"
-    | "intentCanvas";
-  setCenterMode: (
-    mode: "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas",
-  ) => void;
+  centerMode: CenterMode;
+  setCenterMode: (mode: CenterMode) => void;
+  fileCompareSession: FileCompareSession | null;
   editorSplitCompanion: "chat" | "projectMap";
   setEditorSplitCompanion: (companion: "chat" | "projectMap") => void;
   editorSplitLayout: "vertical" | "horizontal";
@@ -358,6 +353,8 @@ export type LayoutNodesFlatOptions = {
     location?: EditorNavigationLocation,
     options?: OpenFileOptions,
   ) => void;
+  onCompareFiles: (paths: string[]) => boolean;
+  onCloseFileCompare: () => void;
   externalChangeMonitoringEnabled?: boolean;
   externalChangeTransportMode?: "watcher" | "polling";
   externalChangeApplyMode?: "auto" | "manual";
@@ -878,6 +875,7 @@ export type EditorLayoutNodesOptions = Pick<
   LayoutNodesFlatOptions,
   | "centerMode"
   | "setCenterMode"
+  | "fileCompareSession"
   | "editorSplitCompanion"
   | "setEditorSplitCompanion"
   | "editorSplitLayout"
@@ -893,6 +891,8 @@ export type EditorLayoutNodesOptions = Pick<
   | "onCloseAllEditorTabs"
   | "onActiveEditorLineRangeChange"
   | "onOpenFile"
+  | "onCompareFiles"
+  | "onCloseFileCompare"
   | "externalChangeMonitoringEnabled"
   | "externalChangeTransportMode"
   | "externalChangeApplyMode"
@@ -1218,6 +1218,7 @@ export type LayoutNodesResult = {
   gitDiffPanelNode: ReactNode;
   gitDiffViewerNode: ReactNode;
   fileViewPanelNode: ReactNode;
+  fileComparePanelNode: ReactNode;
   projectMapPanelNode: ReactNode;
   intentCanvasPanelNode: ReactNode;
   browserDockNode: ReactNode;

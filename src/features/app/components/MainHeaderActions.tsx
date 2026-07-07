@@ -4,6 +4,7 @@ import Construction from "lucide-react/dist/esm/icons/construction";
 import Focus from "lucide-react/dist/esm/icons/focus";
 import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
 import BookOpen from "lucide-react/dist/esm/icons/book-open";
+import Columns3 from "lucide-react/dist/esm/icons/columns-3";
 import Globe from "lucide-react/dist/esm/icons/globe";
 import PanelLeftClose from "lucide-react/dist/esm/icons/panel-left-close";
 import PanelLeftOpen from "lucide-react/dist/esm/icons/panel-left-open";
@@ -33,6 +34,9 @@ type MainHeaderActionsOptions = {
   onToggleBrowserDock?: () => void;
   showClientDocumentationButton?: boolean;
   onOpenClientDocumentation?: () => void;
+  showFileCompareButton?: boolean;
+  isFileCompareActive?: boolean;
+  onOpenFileCompare?: () => void;
 };
 
 export function useMainHeaderActionItems({
@@ -55,6 +59,9 @@ export function useMainHeaderActionItems({
   onToggleBrowserDock,
   showClientDocumentationButton = false,
   onOpenClientDocumentation,
+  showFileCompareButton = false,
+  isFileCompareActive = false,
+  onOpenFileCompare,
 }: MainHeaderActionsOptions): OpenAppMenuExtraAction[] {
   const { t } = useTranslation();
   const {
@@ -72,6 +79,7 @@ export function useMainHeaderActionItems({
     const canToggleSpecHub = showSpecHubButton && Boolean(onOpenSpecHub);
     const canOpenClientDocumentation =
       showClientDocumentationButton && Boolean(onOpenClientDocumentation);
+    const canOpenFileCompare = showFileCompareButton && Boolean(onOpenFileCompare);
     const canToggleBrowserDock = !isCompact && Boolean(onToggleBrowserDock);
 
     if (
@@ -81,6 +89,7 @@ export function useMainHeaderActionItems({
         !canToggleTerminal &&
         !canToggleSoloMode &&
         !canToggleBrowserDock &&
+        !canOpenFileCompare &&
         !canOpenClientDocumentation)
     ) {
       return [];
@@ -149,6 +158,16 @@ export function useMainHeaderActionItems({
       });
     }
 
+    if (canOpenFileCompare) {
+      actionItems.push({
+        id: "file-compare",
+        label: t("files.fileCompare.title"),
+        icon: <Columns3 size={18} aria-hidden />,
+        onSelect: () => onOpenFileCompare?.(),
+        active: isFileCompareActive,
+      });
+    }
+
     if (rightPanelAvailable && !isSoloMode) {
       actionItems.push({
         id: "right-panel",
@@ -173,6 +192,7 @@ export function useMainHeaderActionItems({
     isBrowserDockOpen,
     isCompact,
     isLayoutSwapped,
+    isFileCompareActive,
     isRuntimeConsoleVisible,
     isSoloMode,
     isSpecHubActive,
@@ -180,6 +200,7 @@ export function useMainHeaderActionItems({
     onCollapseRightPanel,
     onExpandRightPanel,
     onOpenClientDocumentation,
+    onOpenFileCompare,
     onOpenSpecHub,
     onToggleBrowserDock,
     onToggleRuntimeConsole,
@@ -188,6 +209,7 @@ export function useMainHeaderActionItems({
     rightPanelAvailable,
     rightPanelCollapsed,
     showClientDocumentationButton,
+    showFileCompareButton,
     showRuntimeConsoleButton,
     showSoloButton,
     showSpecHubButton,

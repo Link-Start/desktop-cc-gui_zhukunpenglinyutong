@@ -1,3 +1,5 @@
+import type { CenterMode } from "../features/app/hooks/useGitPanelController";
+
 export function shouldPreserveEditorOnThreadSelect({
   isCompact,
   centerMode,
@@ -6,7 +8,7 @@ export function shouldPreserveEditorOnThreadSelect({
   activeEditorFilePath,
 }: {
   isCompact: boolean;
-  centerMode: "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas";
+  centerMode: CenterMode;
   activeWorkspaceId: string | null | undefined;
   targetWorkspaceId: string;
   activeEditorFilePath: string | null | undefined;

@@ -6,6 +6,7 @@ import type {
   WorkspaceInfo,
 } from "../../../types";
 import type { AutoSessionMetadata } from "../../../services/tauri";
+import type { CenterMode } from "../../app/hooks/useGitPanelController";
 import {
   buildPullRequestDraft,
   buildPullRequestPrompt,
@@ -17,12 +18,12 @@ type UsePullRequestComposerOptions = {
   gitPullRequestDiffs: GitHubPullRequestDiff[];
   filePanelMode: "git" | "files" | "search" | "notes" | "prompts" | "memory" | "activity" | "radar";
   gitPanelMode: "diff" | "log" | "issues" | "prs";
-  centerMode: "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas";
+  centerMode: CenterMode;
   isCompact: boolean;
   setSelectedPullRequest: (pullRequest: GitHubPullRequest | null) => void;
   setDiffSource: (source: "local" | "pr" | "commit") => void;
   setSelectedDiffPath: (path: string | null) => void;
-  setCenterMode: (mode: "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas") => void;
+  setCenterMode: (mode: CenterMode) => void;
   setGitPanelMode: (mode: "diff" | "log" | "issues" | "prs") => void;
   setPrefillDraft: (draft: { id: string; text: string; createdAt: number }) => void;
   setActiveTab: (tab: "projects" | "codex" | "spec" | "git" | "log") => void;

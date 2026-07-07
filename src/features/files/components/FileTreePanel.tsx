@@ -41,6 +41,7 @@ import { loadFileTreeStyles } from "../../../styles/featureStyleLoaders";
 import {
   CROSS_WINDOW_TREE_DRAG_REBROADCAST_THROTTLE_MS,
 } from "../utils/fileTreeDragBridge";
+import { FILE_COMPARE_MAX_WORKSPACE_FILES } from "../types/fileCompare";
 import { FilePreviewPopover } from "./FilePreviewPopover";
 import {
   FileTreeNewFilePrompt,
@@ -101,6 +102,7 @@ type FileTreePanelProps = {
   onFilePanelModeChange: (mode: PanelTabId) => void;
   onInsertText?: (text: string) => void;
   onOpenFile?: (path: string, location?: FileOpenLocation) => void;
+  onCompareFiles?: (paths: string[]) => boolean;
   openTargets: OpenAppTarget[];
   openAppIconById: Record<string, string>;
   selectedOpenAppId: string;
@@ -147,6 +149,7 @@ export function FileTreePanel({
   onFilePanelModeChange: _onFilePanelModeChange,
   onInsertText,
   onOpenFile,
+  onCompareFiles,
   openTargets,
   openAppIconById,
   selectedOpenAppId,
@@ -1663,6 +1666,27 @@ export function FileTreePanel({
       const parentFolder = resolveParentFolderForNode(relativePath, isFolder ? "folder" : "file");
       const isRootActionTarget = relativePath.length === 0;
       const itemKind = isFolder ? "folder" : "file";
+      const effectiveSelectedPaths = selectedNodePaths.has(relativePath)
+        ? orderedSelectedNodePaths
+        : isRootActionTarget
+          ? []
+          : [relativePath];
+      const selectedFilePaths = effectiveSelectedPaths.filter(
+        (path) => visibleTreePathTypeMap.get(path) === "file",
+      );
+      const shouldShowCompareAction =
+        Boolean(onCompareFiles) &&
+        selectedFilePaths.length >= 2 &&
+        selectedFilePaths.length <= FILE_COMPARE_MAX_WORKSPACE_FILES;
+      if (onCompareFiles && selectedFilePaths.length > FILE_COMPARE_MAX_WORKSPACE_FILES) {
+        showOperationNotice(
+          "error",
+          t("files.fileCompare.tooManyFiles", {
+            count: selectedFilePaths.length,
+            limit: FILE_COMPARE_MAX_WORKSPACE_FILES,
+          }),
+        );
+      }
 
       const menuItems: RendererContextMenuItem[] = [
         {
@@ -1734,6 +1758,19 @@ export function FileTreePanel({
             await copyPath(relativePath);
           },
         },
+        ...(shouldShowCompareAction
+          ? [
+              {
+                type: "item" as const,
+                id: "compare-files",
+                label: t("files.fileCompare.compareSelected"),
+                onSelect: () => {
+                  setFileTreeContextMenu(null);
+                  onCompareFiles?.(selectedFilePaths);
+                },
+              },
+            ]
+          : []),
         {
           type: "item",
           id: "reveal",
@@ -1797,8 +1834,13 @@ export function FileTreePanel({
       openRenamePrompt,
       openNewFilePrompt,
       openNewFolderPrompt,
+      onCompareFiles,
+      orderedSelectedNodePaths,
       resolveParentFolderForNode,
+      selectedNodePaths,
+      showOperationNotice,
       t,
+      visibleTreePathTypeMap,
     ],
   );
 

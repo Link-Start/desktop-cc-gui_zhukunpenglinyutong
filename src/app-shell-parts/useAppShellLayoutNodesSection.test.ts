@@ -226,6 +226,24 @@ describe("useAppShellLayoutNodesSection adapter contract", () => {
     expect(layoutNodesOptions).toContain("setEditorSplitCompanion,");
   });
 
+  it("forwards file compare panel node from useLayoutNodes to the renderer context", () => {
+    const source = readFileSync(
+      join(currentDir, "useAppShellLayoutNodesSection.tsx"),
+      "utf8",
+    );
+    const layoutNodesResult = source.slice(
+      source.indexOf("  const {"),
+      source.indexOf("  } = useLayoutNodes({"),
+    );
+    const returnedContext = source.slice(
+      source.lastIndexOf("  return {"),
+      source.lastIndexOf("};"),
+    );
+
+    expect(layoutNodesResult).toContain("fileComparePanelNode,");
+    expect(returnedContext).toContain("fileComparePanelNode,");
+  });
+
   it("collapses the left conversation sidebar before opening Project Map", () => {
     const source = readFileSync(
       join(currentDir, "useAppShellLayoutNodesSection.tsx"),

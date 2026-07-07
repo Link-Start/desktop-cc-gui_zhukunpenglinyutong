@@ -33,6 +33,14 @@ const workspace: WorkspaceInfo = {
   settings: { sidebarCollapsed: false },
 };
 
+const secondaryWorkspace: WorkspaceInfo = {
+  id: "workspace-2",
+  name: "docs",
+  path: "/tmp/docs",
+  connected: true,
+  settings: { sidebarCollapsed: false },
+};
+
 function makeProps(overrides?: Partial<Parameters<typeof useGitPanelController>[0]>) {
   return {
     activeWorkspace: workspace,
@@ -478,5 +486,170 @@ describe("useGitPanelController editor tabs", () => {
 
     expect(result.current.openFileTabs).toEqual(["src/App.tsx"]);
     expect(result.current.activeEditorFilePath).toBe("src/App.tsx");
+  });
+
+  it("restores open file tabs when switching back to a workspace", () => {
+    const { result, rerender } = renderHook(
+      ({ activeWorkspace }: { activeWorkspace: WorkspaceInfo }) =>
+        useGitPanelController(makeProps({ activeWorkspace })),
+      { initialProps: { activeWorkspace: workspace } },
+    );
+
+    act(() => {
+      result.current.handleOpenFile("src/App.tsx");
+      result.current.handleOpenFile("src/main.tsx");
+    });
+
+    expect(result.current.openFileTabs).toEqual(["src/App.tsx", "src/main.tsx"]);
+    expect(result.current.activeEditorFilePath).toBe("src/main.tsx");
+
+    act(() => {
+      rerender({ activeWorkspace: secondaryWorkspace });
+    });
+
+    expect(result.current.openFileTabs).toEqual([]);
+    expect(result.current.activeEditorFilePath).toBeNull();
+    expect(result.current.centerMode).toBe("chat");
+
+    act(() => {
+      result.current.handleOpenFile("README.md");
+    });
+
+    expect(result.current.openFileTabs).toEqual(["README.md"]);
+    expect(result.current.activeEditorFilePath).toBe("README.md");
+
+    act(() => {
+      rerender({ activeWorkspace: workspace });
+    });
+
+    expect(result.current.openFileTabs).toEqual(["src/App.tsx", "src/main.tsx"]);
+    expect(result.current.activeEditorFilePath).toBe("src/main.tsx");
+    expect(result.current.centerMode).toBe("editor");
+  });
+
+  it("clears only the active workspace tabs when closing all files", () => {
+    const { result, rerender } = renderHook(
+      ({ activeWorkspace }: { activeWorkspace: WorkspaceInfo }) =>
+        useGitPanelController(makeProps({ activeWorkspace })),
+      { initialProps: { activeWorkspace: workspace } },
+    );
+
+    act(() => {
+      result.current.handleOpenFile("src/App.tsx");
+      result.current.handleOpenFile("src/main.tsx");
+    });
+
+    act(() => {
+      rerender({ activeWorkspace: secondaryWorkspace });
+    });
+
+    act(() => {
+      result.current.handleOpenFile("README.md");
+      result.current.handleCloseAllFileTabs();
+    });
+
+    expect(result.current.openFileTabs).toEqual([]);
+    expect(result.current.activeEditorFilePath).toBeNull();
+
+    act(() => {
+      rerender({ activeWorkspace: workspace });
+    });
+
+    expect(result.current.openFileTabs).toEqual(["src/App.tsx", "src/main.tsx"]);
+    expect(result.current.activeEditorFilePath).toBe("src/main.tsx");
+  });
+});
+
+describe("useGitPanelController file compare", () => {
+  it("opens workspace compare without changing editor tabs", () => {
+    const { result } = renderHook(() => useGitPanelController(makeProps()));
+
+    act(() => {
+      result.current.handleOpenFile("src/App.tsx");
+    });
+
+    let opened = false;
+    act(() => {
+      opened = result.current.handleOpenWorkspaceFileCompare([
+        "/tmp/mossx/src/a.ts",
+        "src/b.ts",
+      ]);
+    });
+
+    expect(opened).toBe(true);
+    expect(result.current.centerMode).toBe("fileCompare");
+    expect(result.current.fileCompareSession).toEqual({
+      kind: "workspace",
+      workspaceId: "workspace-1",
+      paths: ["src/a.ts", "src/b.ts"],
+    });
+    expect(result.current.openFileTabs).toEqual(["src/App.tsx"]);
+    expect(result.current.activeEditorFilePath).toBe("src/App.tsx");
+  });
+
+  it("opens scratch compare as a fresh center surface", () => {
+    const { result } = renderHook(() => useGitPanelController(makeProps()));
+
+    act(() => {
+      result.current.handleOpenScratchFileCompare();
+    });
+
+    expect(result.current.centerMode).toBe("fileCompare");
+    expect(result.current.fileCompareSession).toEqual({
+      kind: "scratch",
+      requestId: 1,
+    });
+  });
+
+  it("clears compare session when switching to a workspace with editor tabs", () => {
+    const { result, rerender } = renderHook(
+      ({ activeWorkspace }: { activeWorkspace: WorkspaceInfo }) =>
+        useGitPanelController(makeProps({ activeWorkspace })),
+      { initialProps: { activeWorkspace: workspace } },
+    );
+
+    act(() => {
+      rerender({ activeWorkspace: secondaryWorkspace });
+    });
+
+    act(() => {
+      result.current.handleOpenFile("README.md");
+    });
+
+    act(() => {
+      rerender({ activeWorkspace: workspace });
+    });
+
+    act(() => {
+      result.current.handleOpenWorkspaceFileCompare(["src/a.ts", "src/b.ts"]);
+    });
+
+    expect(result.current.centerMode).toBe("fileCompare");
+    expect(result.current.fileCompareSession).not.toBeNull();
+
+    act(() => {
+      rerender({ activeWorkspace: secondaryWorkspace });
+    });
+
+    expect(result.current.centerMode).toBe("editor");
+    expect(result.current.fileCompareSession).toBeNull();
+    expect(result.current.activeEditorFilePath).toBe("README.md");
+  });
+
+  it("rejects unsupported workspace compare path counts", () => {
+    const { result } = renderHook(() => useGitPanelController(makeProps()));
+
+    expect(result.current.handleOpenWorkspaceFileCompare(["a.ts"])).toBe(false);
+    expect(
+      result.current.handleOpenWorkspaceFileCompare([
+        "a.ts",
+        "b.ts",
+        "c.ts",
+        "d.ts",
+        "e.ts",
+      ]),
+    ).toBe(false);
+    expect(result.current.centerMode).toBe("chat");
+    expect(result.current.fileCompareSession).toBeNull();
   });
 });

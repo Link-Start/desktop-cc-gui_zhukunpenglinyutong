@@ -2778,6 +2778,7 @@ const zhPart1 = {
     anchorNavigation: "消息锚点",
     anchorJumpToUser: "跳转到用户消息 {{index}}",
     anchorUserTitle: "用户 #{{index}}",
+    scrollToBottom: "直达底部",
     showEarlierMessages: "显示之前的 {{count}} 条消息",
     liveControls: "实时幕布控制",
     liveAutoFollowToggle: "焦点跟随",

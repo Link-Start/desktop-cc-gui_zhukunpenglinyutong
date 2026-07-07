@@ -3,6 +3,7 @@ import type { MouseEvent, PointerEvent, ReactNode } from "react";
 import { DesktopLayout } from "../../layout/components/DesktopLayout";
 import { TabletLayout } from "../../layout/components/TabletLayout";
 import { PhoneLayout } from "../../layout/components/PhoneLayout";
+import type { CenterMode } from "../hooks/useGitPanelController";
 type AppLayoutProps = {
   isPhone: boolean;
   isTablet: boolean;
@@ -16,7 +17,7 @@ type AppLayoutProps = {
   showGitDetail: boolean;
   activeTab: "projects" | "codex" | "spec" | "git" | "log";
   tabletTab: "codex" | "spec" | "git" | "log";
-  centerMode: "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas";
+  centerMode: CenterMode;
   editorSplitLayout: "vertical" | "horizontal";
   editorSplitCompanion: "chat" | "projectMap";
   isEditorFileMaximized: boolean;
@@ -38,6 +39,7 @@ type AppLayoutProps = {
   gitDiffPanelNode: ReactNode;
   gitDiffViewerNode: ReactNode;
   fileViewPanelNode: ReactNode;
+  fileComparePanelNode: ReactNode;
   projectMapPanelNode: ReactNode;
   intentCanvasPanelNode: ReactNode;
   browserDockNode?: ReactNode;
@@ -93,6 +95,7 @@ export const AppLayout = memo(function AppLayout({
   gitDiffPanelNode,
   gitDiffViewerNode,
   fileViewPanelNode,
+  fileComparePanelNode,
   projectMapPanelNode,
   intentCanvasPanelNode,
   browserDockNode = null,
@@ -196,6 +199,7 @@ export const AppLayout = memo(function AppLayout({
       messagesNode={messagesNode}
       gitDiffViewerNode={gitDiffViewerNode}
       fileViewPanelNode={fileViewPanelNode}
+      fileComparePanelNode={fileComparePanelNode}
       projectMapPanelNode={projectMapPanelNode}
       intentCanvasPanelNode={intentCanvasPanelNode}
       browserDockNode={browserDockNode}

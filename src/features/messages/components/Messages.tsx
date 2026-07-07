@@ -601,6 +601,11 @@ export const Messages = memo(function Messages({
     bottomRef.current.scrollIntoView({ behavior: "instant", block: "end" });
   }, [isWorking, liveAutoFollowEnabled]);
 
+  const rearmAutoFollowToBottom = useCallback(() => {
+    autoScrollRef.current = true;
+    bottomRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
+  }, []);
+
   const scrollToAgentTaskCard = useCallback((request: AgentTaskScrollRequest | null) => {
     if (!request) {
       return;
@@ -742,6 +747,9 @@ export const Messages = memo(function Messages({
       }
       if (typeof detail.liveAutoFollowEnabled === "boolean") {
         setLiveAutoFollowEnabled(detail.liveAutoFollowEnabled);
+        if (detail.liveAutoFollowEnabled && isWorking) {
+          rearmAutoFollowToBottom();
+        }
       }
       if (typeof detail.collapseLiveMiddleStepsEnabled === "boolean") {
         setCollapseLiveMiddleStepsEnabled(detail.collapseLiveMiddleStepsEnabled);
@@ -773,7 +781,7 @@ export const Messages = memo(function Messages({
       );
       window.removeEventListener("storage", handleStorage);
     };
-  }, []);
+  }, [isWorking, rearmAutoFollowToBottom]);
   useEffect(() => {
     if (!liveAutoFollowEnabled || !isWorking) {
       return;
@@ -2185,6 +2193,16 @@ export const Messages = memo(function Messages({
     }
   }, [revealAllHistoryItems, scrollToAnchor, showAllHistoryItems]);
 
+  const requestScrollToBottom = useCallback(() => {
+    autoScrollRef.current = true;
+    setPendingJumpMessageId(null);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const latestAnchorId = messageAnchors[messageAnchors.length - 1]?.id ?? null;
+    if (latestAnchorId) {
+      commitActiveAnchorId(latestAnchorId, "sync");
+    }
+  }, [commitActiveAnchorId, messageAnchors]);
+
   const handlePendingJumpTargetReady = useCallback((messageId: string) => {
     if (pendingJumpMessageId !== messageId) {
       return;
@@ -2229,8 +2247,10 @@ export const Messages = memo(function Messages({
         activeAnchorId={activeAnchorId}
         anchors={messageAnchors}
         anchorNavigationLabel={t("messages.anchorNavigation")}
+        scrollToBottomLabel={t("messages.scrollToBottom")}
         getFallbackTitle={(index) => t("messages.anchorUserTitle", { index: index + 1 })}
         onScrollToAnchor={requestScrollToAnchor}
+        onScrollToBottom={requestScrollToBottom}
       />
       <div
         className="messages"

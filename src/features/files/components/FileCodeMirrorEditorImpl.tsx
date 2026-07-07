@@ -3,7 +3,13 @@ import CodeMirror, {
   type ReactCodeMirrorProps,
   type ReactCodeMirrorRef,
 } from "@uiw/react-codemirror";
-import { Decoration, EditorView, keymap, type DecorationSet } from "@codemirror/view";
+import {
+  Decoration,
+  EditorView,
+  WidgetType,
+  keymap,
+  type DecorationSet,
+} from "@codemirror/view";
 import { closeSearchPanel, openSearchPanel, search, searchPanelOpen } from "@codemirror/search";
 import { StateEffect, StateField, type Extension } from "@codemirror/state";
 import type { CodeAnnotationSelection } from "../../code-annotations/types";
@@ -28,6 +34,7 @@ export type FileCodeMirrorEditorProps = {
   theme: ReactCodeMirrorProps["theme"];
   languageExtensions: ReactCodeMirrorProps["extensions"];
   gitLineMarkers: GitLineMarkers;
+  fileCompareLineGaps?: FileCodeMirrorLineGap[];
   codeAnnotations: CodeAnnotationSelection[];
   annotationDraft: FileAnnotationDraftState | null;
   annotationWidgetLabels: {
@@ -47,7 +54,76 @@ export type FileCodeMirrorEditorProps = {
   handleSave: () => void;
 };
 
+export type FileCodeMirrorLineGap = {
+  lineNumber: number;
+  count: number;
+};
+
 const navigationLineFlashEffect = StateEffect.define<number | null>();
+
+class FileCompareLineGapWidget extends WidgetType {
+  constructor(private readonly lineCount: number) {
+    super();
+  }
+
+  toDOM() {
+    const element = document.createElement("div");
+    element.className = "cm-file-compare-line-gap";
+    element.style.setProperty("--file-compare-gap-lines", String(this.lineCount));
+    return element;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
+
+function buildFileCompareLineGapDecorations(
+  doc: { lines: number; length: number; line: (lineNumber: number) => { from: number } },
+  gaps: FileCodeMirrorLineGap[],
+) {
+  if (gaps.length === 0) {
+    return Decoration.none;
+  }
+  const sortedGaps = [...gaps]
+    .filter((gap) => gap.count > 0 && Number.isFinite(gap.lineNumber))
+    .sort((left, right) => left.lineNumber - right.lineNumber);
+  return Decoration.set(
+    sortedGaps.map((gap) => {
+      const lineNumber = Math.max(1, Math.floor(gap.lineNumber));
+      const position = lineNumber <= doc.lines ? doc.line(lineNumber).from : doc.length;
+      return Decoration.widget({
+        widget: new FileCompareLineGapWidget(gap.count),
+        block: true,
+        side: lineNumber <= doc.lines ? -1 : 1,
+      }).range(position);
+    }),
+    true,
+  );
+}
+
+const setFileCompareLineGapsEffect = StateEffect.define<FileCodeMirrorLineGap[]>();
+const fileCompareLineGapsField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none;
+  },
+  update(decorations, transaction) {
+    let nextDecorations = decorations;
+    if (transaction.docChanged) {
+      nextDecorations = nextDecorations.map(transaction.changes);
+    }
+    for (const effect of transaction.effects) {
+      if (effect.is(setFileCompareLineGapsEffect)) {
+        nextDecorations = buildFileCompareLineGapDecorations(
+          transaction.state.doc,
+          effect.value,
+        );
+      }
+    }
+    return nextDecorations;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
 
 const navigationLineFlashField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
@@ -88,6 +164,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     theme,
     languageExtensions,
     gitLineMarkers,
+    fileCompareLineGaps = [],
     codeAnnotations,
     annotationDraft,
     annotationWidgetLabels,
@@ -205,6 +282,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
       persistentSearchExtension,
       annotationWidgetsExt,
       gitLineMarkersExtension(),
+      fileCompareLineGapsField,
       ...(Array.isArray(languageExtensions)
         ? languageExtensions
         : languageExtensions
@@ -283,6 +361,16 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     });
   }, [gitLineMarkers, filePath]);
 
+  useEffect(() => {
+    const view = codeMirrorRef.current?.view;
+    if (!view) {
+      return;
+    }
+    view.dispatch({
+      effects: setFileCompareLineGapsEffect.of(fileCompareLineGaps),
+    });
+  }, [fileCompareLineGaps, filePath]);
+
   return (
     <div className="fvp-editor">
       <CodeMirror
@@ -292,7 +380,10 @@ export const FileCodeMirrorEditorImpl = forwardRef<
         onChange={onChange}
         onCreateEditor={(view) => {
           view.dispatch({
-            effects: setGitLineMarkersEffect.of(gitLineMarkers),
+            effects: [
+              setGitLineMarkersEffect.of(gitLineMarkers),
+              setFileCompareLineGapsEffect.of(fileCompareLineGaps),
+            ],
           });
         }}
         onUpdate={(update) => {

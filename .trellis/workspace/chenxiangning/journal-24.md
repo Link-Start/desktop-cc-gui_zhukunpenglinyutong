@@ -1572,3 +1572,182 @@ Windows Codex app-server wrapper fallback 改为通过 provider/default CODEX_HO
 ### Next Steps
 
 - None - task complete
+
+
+## Session 960: 修复编辑器最大化布局与工作区文件标签记忆
+
+**Date**: 2026-07-07
+**Task**: 修复编辑器最大化布局与工作区文件标签记忆
+**Branch**: `ui-refactoring`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+本次完成桌面编辑器两个关联问题的实现、验证与提交。
+
+| Area | Summary |
+|------|---------|
+| Editor layout | `DesktopLayout` 在文件最大化态隐藏外层 composer，文件查看区可占满中间区域。 |
+| Workspace tabs | `useGitPanelController` 将打开文件 tabs 和 active file 变为 workspace-scoped state，切换工作区后可恢复各自打开文件。 |
+| Cleanup behavior | close tab、close all、exit editor 只清理当前 workspace 的文件标签状态，避免影响其他 workspace。 |
+| OpenSpec | 新增 `fix-editor-file-maximize-and-workspace-file-tabs` change，记录 proposal、design、tasks 与 spec delta。 |
+| Tests | 增加/更新 DesktopLayout 与 useGitPanelController 回归测试。 |
+
+验证已执行：
+- `npx vitest run src/features/layout/components/DesktopLayout.test.tsx src/features/app/hooks/useGitPanelController.test.tsx`
+- `npx vitest run src/features/app/hooks/useWorkspaceCycling.test.tsx`
+- `npm run typecheck`
+- `npm run lint`（仅有既有 `MessagesRows.tsx:914` warning，不属于本次变更）
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9194ad26` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 961: 新增工作区文件对比工具
+
+**Date**: 2026-07-07
+**Task**: 新增工作区文件对比工具
+**Branch**: `ui-refactoring`
+
+### Summary
+
+完成文件树多选与顶部入口触发的文件对比功能，并收口 OpenSpec、实现、测试和样式。
+
+### Main Changes
+
+- 新增 OpenSpec change `add-workspace-file-compare-tool`，覆盖 proposal、design、tasks 和行为 delta。
+- 新增 `fileCompare` center mode，接入 app-shell、layout nodes、desktop layout 和 header actions。
+- 新增 `WorkspaceFileComparePanel`，支持 workspace 文件对比和 scratch 文本对比。
+- 文件树右键菜单在选中 2 到 4 个文件时显示“文件对比”，超过 4 个文件提示缩小选择范围。
+- 复用现有 CodeMirror 编辑器能力，支持行级差异高亮、差异导航、保存、只读限制和轻量同步滚动。
+- 新增 `fileCompareDiff` helper 与测试，提供基于首列 anchor 的轻量行对齐和 visual gap 数据。
+- 验证结果：typecheck 通过；lint 0 error，保留既有 `MessagesRows.tsx` hook warning；文件对比相关 97 个测试通过；OpenSpec strict 通过；git diff --check 通过；large-file gate 通过。
+- 全量 `npm run test` 在非本次 diff 文件 `src/features/app/components/Sidebar.test.tsx` 的既有 bottom action 顺序断言处失败，已单独复跑确认，未扩散处理。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cb2fd0ea` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 962: 添加消息锚点直达底部按钮
+
+**Date**: 2026-07-07
+**Task**: 添加消息锚点直达底部按钮
+**Branch**: `ui-refactoring`
+
+### Summary
+
+完成消息幕布锚点 rail 下方直达底部按钮，并补齐 OpenSpec 提案记录与验证。
+
+### Main Changes
+
+- 新增 OpenSpec change `add-message-anchor-bottom-jump`，包含 proposal、tasks 和 `message-reading-navigation-reasoning-ux` spec delta。
+- 在 `MessagesAnchorRail` 下方新增 icon-only bottom jump button，使用 `ArrowDown` 图标并提供本地化 accessible label。
+- 在 `Messages.tsx` 接入 `requestScrollToBottom`，点击后滚动到底部 sentinel，并恢复 live auto-follow。
+- 调整 `messages.status-shell.css`，让按钮宽高与锚点 dash 对齐，避免胶囊样式突兀。
+- 调整 anchor panel 层级和最大高度，避免锚点多时展开面板遮挡底部按钮。
+- 更新中英文文案与 focused test。
+- 验证结果：OpenSpec strict 通过；focused Vitest 通过但保留该测试文件既有 Suspense act warning；typecheck 通过；lint 0 error 且仅保留既有 MessagesRows.tsx warning；diff check 通过；large-file gate 通过。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6ede6933` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 963: 修复焦点跟随重新开启滚底
+
+**Date**: 2026-07-07
+**Task**: 修复焦点跟随重新开启滚底
+**Branch**: `ui-refactoring`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+Goal: 修复消息幕布中“焦点跟随”重新开启后当前幕布不自动滚到底部的问题，并补充 OpenSpec 提案记录。
+
+Changes:
+- 在 `Messages` 的 live controls event handler 中，当 `liveAutoFollowEnabled: true` 且当前会话正在 working 时，显式 re-arm `autoScrollRef` 并滚动到底部 sentinel。
+- 新增 `Messages.live-behavior.test.tsx` 回归测试，覆盖用户滚离底部后重新开启焦点跟随会立即回到底部，并允许后续 live 输出继续跟随。
+- 新增 OpenSpec change `fix-live-auto-follow-rearm-scroll`，包含 proposal/design/spec delta/tasks。
+
+Validation:
+- `npx vitest run src/features/messages/components/Messages.live-behavior.test.tsx src/features/messages/components/Messages.test.tsx`
+- `openspec validate --changes fix-live-auto-follow-rearm-scroll --strict`
+- `npm run typecheck`
+- `npx eslint src/features/messages/components/Messages.tsx src/features/messages/components/Messages.live-behavior.test.tsx`
+- `git diff --check`
+
+Review:
+- 未发现阻断问题。
+- 风险点：只在 active working 状态下 re-arm，避免静态 history 更新误触发滚底；继续保留手动上滚暂停跟随的保护。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8ad0eff7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

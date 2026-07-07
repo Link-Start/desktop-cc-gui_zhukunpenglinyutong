@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../types";
 import type { ConversationState } from "../../threads/contracts/conversationCurtainContracts";
+import { MESSAGES_LIVE_CONTROLS_UPDATED_EVENT } from "../constants/liveCanvasControls";
 import { Messages } from "./Messages";
 
 vi.mock("./Markdown", () => ({
@@ -864,6 +865,64 @@ describe("Messages live behavior", () => {
     fireEvent.scroll(scroller);
 
     baselineCalls = scrollSpy.mock.calls.length;
+    rerender(renderWith(true));
+    await waitFor(() => {
+      expect(scrollSpy.mock.calls.length).toBeGreaterThan(baselineCalls);
+    });
+    scrollSpy.mockRestore();
+  });
+
+  it("re-arms auto-follow and returns to the bottom when focus follow is re-enabled", async () => {
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "0");
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const renderWith = (extraChunk: boolean) => (
+      <Messages
+        items={[
+          {
+            id: "assistant-live-rearm-1",
+            kind: "message",
+            role: "assistant",
+            text: "first chunk",
+          },
+          ...(extraChunk
+            ? [
+                {
+                  id: "assistant-live-rearm-2",
+                  kind: "message" as const,
+                  role: "assistant" as const,
+                  text: "second chunk",
+                },
+              ]
+            : []),
+        ]}
+        threadId="thread-live-follow-rearm"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(renderWith(false));
+
+    const scroller = getMessagesScroller(container);
+    setScrollerMetrics(scroller, 400, 2000);
+    fireEvent.scroll(scroller);
+
+    scrollSpy.mockClear();
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(MESSAGES_LIVE_CONTROLS_UPDATED_EVENT, {
+          detail: { liveAutoFollowEnabled: true },
+        }),
+      );
+    });
+
+    expect(scrollSpy).toHaveBeenCalledWith({ behavior: "instant", block: "end" });
+
+    const baselineCalls = scrollSpy.mock.calls.length;
     rerender(renderWith(true));
     await waitFor(() => {
       expect(scrollSpy.mock.calls.length).toBeGreaterThan(baselineCalls);

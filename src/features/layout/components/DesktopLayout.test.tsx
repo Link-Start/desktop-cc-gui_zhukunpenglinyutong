@@ -86,20 +86,16 @@ describe("DesktopLayout", () => {
     expect(container.querySelector(".right-panel-divider")).toBeNull();
   });
 
-  it("keeps the composer mounted when the editor file is maximized", () => {
+  it("hides the outer composer when the editor file is maximized", () => {
     cleanup();
-    const { container, getByText } = renderDesktopLayout({
+    const { container } = renderDesktopLayout({
       centerMode: "editor",
       isEditorFileMaximized: true,
     });
 
     expect(container.querySelector(".content.is-editor-file-maximized")).toBeTruthy();
     expect(container.textContent ?? "").toContain("file-viewer");
-    expect(container.textContent ?? "").toContain("composer");
-
-    const chatLayer = container.querySelector(".content-layer--chat");
-    const composer = getByText("composer");
-    expect(chatLayer?.contains(composer)).toBe(false);
+    expect(container.querySelector(".composer")).toBeNull();
   });
 
   it("places the composer inside the chat column in horizontal editor split", () => {

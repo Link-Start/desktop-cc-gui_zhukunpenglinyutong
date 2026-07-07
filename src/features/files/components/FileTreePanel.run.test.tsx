@@ -1465,6 +1465,123 @@ describe("FileTreePanel run action isolation", () => {
     expect(window.__fileTreeDragCleanup).toBeUndefined();
   });
 
+  it("opens file compare from selected file context menu", async () => {
+    const onCompareFiles = vi.fn((_paths: string[]) => true);
+
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={["README.md", "package.json"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        onInsertText={() => undefined}
+        onCompareFiles={onCompareFiles}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitStatusFiles={[]}
+        gitignoredFiles={new Set<string>()}
+      />,
+    );
+
+    const readme = screen.getByRole("button", { name: "README.md" });
+    const pkg = screen.getByRole("button", { name: "package.json" });
+    fireEvent.click(readme);
+    fireEvent.click(pkg, { ctrlKey: true });
+    fireEvent.contextMenu(pkg);
+    fireEvent.click(
+      await screen.findByRole("menuitem", {
+        name: "files.fileCompare.compareSelected",
+      }),
+    );
+
+    expect(onCompareFiles).toHaveBeenCalledTimes(1);
+    expect(new Set(onCompareFiles.mock.calls[0]?.[0])).toEqual(
+      new Set(["README.md", "package.json"]),
+    );
+  });
+
+  it("does not reuse previous multi-selection when right-clicking outside it", () => {
+    const onCompareFiles = vi.fn(() => true);
+
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={["README.md", "package.json", "vite.config.ts"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        onInsertText={() => undefined}
+        onCompareFiles={onCompareFiles}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitStatusFiles={[]}
+        gitignoredFiles={new Set<string>()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "README.md" }));
+    fireEvent.click(screen.getByRole("button", { name: "package.json" }), {
+      ctrlKey: true,
+    });
+    fireEvent.contextMenu(screen.getByRole("button", { name: "vite.config.ts" }));
+
+    expect(
+      screen.queryByRole("menuitem", {
+        name: "files.fileCompare.compareSelected",
+      }),
+    ).toBeNull();
+    expect(onCompareFiles).not.toHaveBeenCalled();
+  });
+
+  it("prompts instead of comparing when more than four files are selected", () => {
+    const onCompareFiles = vi.fn(() => true);
+    const files = ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts"];
+
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={files}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        onInsertText={() => undefined}
+        onCompareFiles={onCompareFiles}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitStatusFiles={[]}
+        gitignoredFiles={new Set<string>()}
+      />,
+    );
+
+    const [firstFile, ...remainingFiles] = files;
+    fireEvent.click(screen.getByRole("button", { name: firstFile }));
+    for (const file of remainingFiles) {
+      fireEvent.click(screen.getByRole("button", { name: file }), { ctrlKey: true });
+    }
+    fireEvent.contextMenu(screen.getByRole("button", { name: "e.ts" }));
+
+    expect(
+      screen.queryByRole("menuitem", {
+        name: "files.fileCompare.compareSelected",
+      }),
+    ).toBeNull();
+    expect(screen.getByText("files.fileCompare.tooManyFiles")).toBeTruthy();
+    expect(onCompareFiles).not.toHaveBeenCalled();
+  });
+
   it("uses a windows-only drag image for internal tree drags", () => {
     const originalPlatform = window.navigator.platform;
     Object.defineProperty(window.navigator, "platform", {
