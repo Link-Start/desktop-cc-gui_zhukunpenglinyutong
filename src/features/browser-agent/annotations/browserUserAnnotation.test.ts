@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildBrowserUserAnnotationFromSelectedElement,
   buildBrowserUserAnnotation,
   buildAnnotatedVisualEvidenceBlockedDiagnostic,
   formatBrowserUserAnnotationEvidence,
@@ -169,5 +170,83 @@ describe("BrowserUserAnnotation", () => {
     expect(diagnostic.diagnosticId).toBe("annotation-visual-blocked-annotation-1");
     expect(diagnostic.aiMessage).toContain("blocked by default");
     expect(diagnostic.aiMessage).toContain("structured annotation text evidence");
+  });
+
+  it("builds annotation evidence from selected page element facts", () => {
+    const annotation = buildBrowserUserAnnotationFromSelectedElement({
+      annotationId: "selection-1",
+      observation: makeObservation(),
+      element: {
+        tagName: "p",
+        role: null,
+        label: null,
+        text: "This domain is for use in documentation examples.",
+        href: null,
+        selectorHint: "p",
+        sensitive: false,
+        bounds: {
+          x: 254,
+          y: 510,
+          width: 742,
+          height: 112,
+        },
+        viewport: {
+          width: 1234,
+          height: 900,
+          scrollX: 0,
+          scrollY: 0,
+          devicePixelRatio: 2,
+        },
+        selectedAt: 1500,
+      },
+    });
+
+    expect(annotation.anchor).toBe("element");
+    expect(annotation.userNote).toBe("This domain is for use in documentation examples.");
+    expect(annotation.nearestElement).toMatchObject({
+      role: "p",
+      label: "This domain is for use in documentation examples.",
+      selectorHint: "p",
+    });
+    expect(formatBrowserUserAnnotationEvidence(annotation)).toContain("w=742 h=112");
+  });
+
+  it("preserves precise selected link evidence for Composer context", () => {
+    const annotation = buildBrowserUserAnnotationFromSelectedElement({
+      annotationId: "selection-link-1",
+      observation: makeObservation(),
+      element: {
+        tagName: "a",
+        role: "link",
+        label: "Learn more",
+        text: "Learn more",
+        href: "https://example.com/details",
+        selectorHint: "a",
+        sensitive: false,
+        bounds: {
+          x: 252,
+          y: 664,
+          width: 133,
+          height: 30,
+        },
+        viewport: {
+          width: 1234,
+          height: 900,
+          scrollX: 0,
+          scrollY: 0,
+          devicePixelRatio: 2,
+        },
+        selectedAt: 1600,
+      },
+    });
+
+    expect(annotation.userNote).toBe("Learn more");
+    expect(annotation.nearestElement).toMatchObject({
+      role: "link",
+      label: "Learn more",
+      hrefOrigin: "https://example.com",
+      selectorHint: "a",
+    });
+    expect(formatBrowserUserAnnotationEvidence(annotation)).toContain("w=133 h=30");
   });
 });

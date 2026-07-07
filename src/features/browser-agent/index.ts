@@ -30,6 +30,7 @@ export {
 } from "./evidence";
 export {
   buildAnnotatedVisualEvidenceBlockedDiagnostic,
+  buildBrowserUserAnnotationFromSelectedElement,
   buildBrowserUserAnnotation,
   formatBrowserUserAnnotationEvidence,
   reconcileBrowserUserAnnotationStaleReasons,

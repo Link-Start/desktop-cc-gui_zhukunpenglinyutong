@@ -5,6 +5,7 @@ import type {
   BrowserPrivacyReport,
   BrowserSnapshotBudget,
   BrowserObservationState,
+  BrowserUserAnnotation,
 } from "../types";
 import type { TaskRunBrowserEvidenceRef } from "../../tasks/types";
 
@@ -20,9 +21,25 @@ export type BrowserEvidenceViewModelSection = {
   emptyReason: string | null;
 };
 
+export type BrowserSelectedElementPreview = {
+  annotationId: string;
+  title: string;
+  elementName: string;
+  role: string | null;
+  meta: string;
+  boundsLabel: string | null;
+  selectorHint: string | null;
+  hrefOrigin: string | null;
+  sourceTitle: string;
+  sourceUrl: string;
+  copySafeText: string;
+};
+
 export type BrowserEvidenceViewModel = {
   observationState: BrowserObservationState;
   staleReasons: BrowserContextAttachment["observation"]["staleReasons"];
+  selectedElements: BrowserSelectedElementPreview[];
+  selectedElement: BrowserSelectedElementPreview | null;
   overview: BrowserEvidenceViewModelSection;
   primaryContent: BrowserEvidenceViewModelSection;
   readableBlocks: BrowserEvidenceViewModelSection;
@@ -66,6 +83,106 @@ function compactEvidenceText(value: string, limit = 700): string {
   return normalized.length > limit ? `${normalized.slice(0, limit)}...` : normalized;
 }
 
+function formatRoundedNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
+}
+
+function formatRegionSize(region: BrowserUserAnnotation["region"]): string | null {
+  if (!region) {
+    return null;
+  }
+  return `${formatRoundedNumber(region.width)}x${formatRoundedNumber(region.height)}`;
+}
+
+function formatRegionBounds(region: BrowserUserAnnotation["region"]): string | null {
+  if (!region) {
+    return null;
+  }
+  return [
+    `x=${formatRoundedNumber(region.x)}`,
+    `y=${formatRoundedNumber(region.y)}`,
+    `w=${formatRoundedNumber(region.width)}`,
+    `h=${formatRoundedNumber(region.height)}`,
+  ].join(" ");
+}
+
+function elementNameFromAnnotation(annotation: BrowserUserAnnotation): string {
+  const selectorTag = annotation.nearestElement?.selectorHint
+    ?.trim()
+    .match(/^[a-zA-Z][a-zA-Z0-9-]*/)?.[0];
+  return selectorTag || annotation.nearestElement?.role || annotation.anchor;
+}
+
+function selectedElementTitle(annotation: BrowserUserAnnotation): string {
+  return compactEvidenceText(
+    annotation.userNote ||
+      annotation.nearestElement?.label ||
+      annotation.nearbyText ||
+      annotation.nearestElement?.role ||
+      annotation.anchor,
+    220,
+  );
+}
+
+function buildBrowserSelectedElementPreviewFromAnnotation(
+  attachment: Pick<BrowserEvidenceAttachmentLike, "title" | "url">,
+  annotation: BrowserUserAnnotation,
+): BrowserSelectedElementPreview {
+  const elementName = elementNameFromAnnotation(annotation);
+  const role = annotation.nearestElement?.role ?? null;
+  const size = formatRegionSize(annotation.region);
+  const boundsLabel = formatRegionBounds(annotation.region);
+  const title = selectedElementTitle(annotation);
+  const meta = [
+    elementName,
+    role ? `role=${role}` : null,
+    size,
+  ].filter((value): value is string => Boolean(value)).join(" · ");
+  const sourceTitle = annotation.title || attachment.title || attachment.url;
+  const sourceUrl = annotation.url || attachment.url;
+  const copySafeText = [
+    "Selected browser element:",
+    `- text: ${title}`,
+    `- element: ${meta || elementName}`,
+    boundsLabel ? `- bounds: ${boundsLabel}` : null,
+    annotation.nearestElement?.selectorHint
+      ? `- selector: ${annotation.nearestElement.selectorHint}`
+      : null,
+    annotation.nearestElement?.hrefOrigin
+      ? `- href origin: ${annotation.nearestElement.hrefOrigin}`
+      : null,
+    `- source: ${sourceTitle}`,
+    `- url: ${sourceUrl}`,
+  ].filter((value): value is string => Boolean(value)).join("\n");
+  return {
+    annotationId: annotation.annotationId,
+    title,
+    elementName,
+    role,
+    meta,
+    boundsLabel,
+    selectorHint: annotation.nearestElement?.selectorHint ?? null,
+    hrefOrigin: annotation.nearestElement?.hrefOrigin ?? null,
+    sourceTitle,
+    sourceUrl,
+    copySafeText,
+  };
+}
+
+export function buildBrowserSelectedElementPreviews(
+  attachment: Pick<BrowserEvidenceAttachmentLike, "title" | "url" | "annotations">,
+): BrowserSelectedElementPreview[] {
+  return (attachment.annotations ?? [])
+    .filter((annotation) => annotation.anchor === "element")
+    .map((annotation) => buildBrowserSelectedElementPreviewFromAnnotation(attachment, annotation));
+}
+
+export function buildBrowserSelectedElementPreview(
+  attachment: Pick<BrowserEvidenceAttachmentLike, "title" | "url" | "annotations">,
+): BrowserSelectedElementPreview | null {
+  return buildBrowserSelectedElementPreviews(attachment)[0] ?? null;
+}
+
 function buildSection(
   sectionId: string,
   title: string,
@@ -91,6 +208,7 @@ export function buildBrowserEvidenceViewModel(
 ): BrowserEvidenceViewModel {
   const observationState = attachment.observation?.state ?? (attachment.stale ? "stale" : "available");
   const staleReasons = attachment.observation?.staleReasons ?? [];
+  const selectedElements = buildBrowserSelectedElementPreviews(attachment);
   const elementCounts = attachment.elementCounts ?? {
     headings: 0,
     links: 0,
@@ -185,6 +303,8 @@ export function buildBrowserEvidenceViewModel(
   return {
     observationState,
     staleReasons,
+    selectedElements,
+    selectedElement: selectedElements[0] ?? null,
     overview: buildSection("overview", "Overview", observationState, overviewItems),
     primaryContent: buildSection(
       "primaryContent",
@@ -256,6 +376,7 @@ export function buildBrowserEvidenceCopyText(
     return section.copySafeText;
   }
   return [
+    viewModel.selectedElements.map((item) => item.copySafeText).join("\n\n"),
     viewModel.overview.copySafeText,
     viewModel.primaryContent.copySafeText,
     viewModel.readableBlocks.copySafeText,

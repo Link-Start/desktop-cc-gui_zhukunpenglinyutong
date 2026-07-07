@@ -18,6 +18,7 @@ import type {
   BrowserVisualEvidence,
 } from "../types";
 import { formatBrowserUserAnnotationEvidence } from "../annotations";
+import { buildBrowserSelectedElementPreviews } from "../evidence";
 
 const DEFAULT_STALE_AFTER_MS = 5 * 60 * 1000;
 const SUMMARY_CHAR_LIMIT = 360;
@@ -398,6 +399,13 @@ export function formatBrowserContextPrompt(
       formatBrowserUserAnnotationEvidence(annotation),
     ].join("\n"))
     .join("\n") || "none";
+  const selectedElements = buildBrowserSelectedElementPreviews(attachment);
+  const selectedElementsText = selectedElements.length > 0
+    ? selectedElements.map((item, index) => [
+      `Selection ${index + 1}:`,
+      item.copySafeText,
+    ].join("\n")).join("\n\n")
+    : "none";
   const noiseDiagnostics = (attachment.noiseDiagnostics ?? [])
     .map((diagnostic) => `- ${diagnostic.severity}: ${diagnostic.kind} score=${diagnostic.score}; ${diagnostic.message}`)
     .join("\n") || "none";
@@ -413,14 +421,20 @@ export function formatBrowserContextPrompt(
     `observation.transport: ${observation.transport}`,
     `observation.rendererBinding: ${observation.rendererBinding}`,
     `pageType: ${attachment.pageType ?? "unknown"}`,
-    "sourceKind: browser_visible_page_snapshot",
-    "usageHint: answer questions about the current page from this browser context first; do not switch to CLI/API/raw fetch unless the user explicitly asks for raw/API data or this context is degraded/insufficient.",
+    `sourceKind: ${selectedElements.length > 0 ? "browser_selected_elements_with_page_snapshot" : "browser_visible_page_snapshot"}`,
+    selectedElements.length > 0
+      ? "usageHint: the user selected one or more specific page elements; answer from selectedElements first in selection order, then use the page snapshot only as surrounding context."
+      : "usageHint: answer questions about the current page from this browser context first; do not switch to CLI/API/raw fetch unless the user explicitly asks for raw/API data or this context is degraded/insufficient.",
     "imageHint: visualEvidence describes visible images/figures/attachments from the browser page; use labels, alt text, origin, and nearby text as clues, but do not invent unseen image contents.",
     "visualSourceHint: DOM visual clues, OCR text, and screenshot references are separate evidence sources; screenshot refs are metadata only unless modelPayloadAllowed=true.",
     "annotationHint: annotations are structured text evidence only; no screenshot payload is included.",
     `budget.truncated: ${attachment.budget?.truncated ?? false}`,
     `budget.omittedElementCount: ${attachment.budget?.omittedElementCount ?? 0}`,
     `counts: headings=${attachment.elementCounts?.headings ?? 0}, links=${attachment.elementCounts?.links ?? 0}, buttons=${attachment.elementCounts?.buttons ?? 0}, forms=${attachment.elementCounts?.forms ?? 0}, landmarks=${attachment.elementCounts?.landmarks ?? 0}, readableBlocks=${attachment.elementCounts?.readableBlocks ?? 0}, visualEvidence=${attachment.elementCounts?.visualEvidence ?? 0}, codeCandidates=${attachment.elementCounts?.codeCandidates ?? 0}`,
+    "selectedElements:",
+    selectedElementsText,
+    "selectedElement:",
+    selectedElements[0]?.copySafeText ?? "none",
     "summary:",
     attachment.summary,
     "primaryContent:",

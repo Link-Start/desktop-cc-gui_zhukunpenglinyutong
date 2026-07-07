@@ -79,6 +79,12 @@ export function BrowserContextPreview({
   const stateClass = browserContextStateClass(evidenceViewModel.observationState);
   const diagnostics = attachment.diagnostics.slice(0, 3);
   const counts = attachment.elementCounts;
+  const selectedElements = evidenceViewModel.selectedElements;
+  const selectedElement = selectedElements[0] ?? null;
+  const hasSelectedElements = selectedElements.length > 0;
+  const selectedElementsCopyText = selectedElements
+    .map((item) => item.copySafeText)
+    .join("\n\n");
   const detailSnapshotText =
     (evidenceViewModel.primaryContent.items[0] ??
     attachment.visibleTextExcerpt) ||
@@ -92,23 +98,65 @@ export function BrowserContextPreview({
       <div className="composer-browser-context-main">
         <div className="composer-browser-context-title-row">
           <div className="composer-browser-context-kicker">
-            {t("browserAgent.composer.visibleSnapshot")}
+            {hasSelectedElements
+              ? t("browserAgent.composer.selectedElement")
+              : t("browserAgent.composer.visibleSnapshot")}
           </div>
           <span className={`composer-browser-context-state ${stateClass}`}>
             {stateLabel}
           </span>
         </div>
-        <div className="composer-browser-context-title" title={attachment.url}>
-          {attachment.title || attachment.url}
+        <div
+          className="composer-browser-context-title"
+          title={selectedElement?.sourceUrl ?? attachment.url}
+        >
+          {selectedElements.length > 1
+            ? t("browserAgent.composer.selectedElementCount", {
+              count: selectedElements.length,
+            })
+            : selectedElement?.title || attachment.title || attachment.url}
         </div>
-        <div className="composer-browser-context-counts" aria-label={t("browserAgent.composer.countSummary")}>
-          <span>{t("browserAgent.composer.headingCount", { count: counts.headings })}</span>
-          <span>{t("browserAgent.composer.linkCount", { count: counts.links })}</span>
-          <span>{t("browserAgent.composer.buttonCount", { count: counts.buttons })}</span>
-          <span>{t("browserAgent.composer.formCount", { count: counts.forms })}</span>
-          <span>{t("browserAgent.composer.readableBlockCount", { count: counts.readableBlocks ?? 0 })}</span>
-          <span>{t("browserAgent.composer.visualEvidenceCount", { count: counts.visualEvidence ?? 0 })}</span>
-        </div>
+        {hasSelectedElements ? (
+          <div
+            className="composer-browser-context-counts"
+            aria-label={t("browserAgent.composer.selectedElementFacts")}
+          >
+            {selectedElements.length > 1 ? (
+              <>
+                {selectedElements.slice(0, 3).map((item, index) => (
+                  <span key={item.annotationId}>
+                    {index + 1}. {item.title} · {item.meta}
+                  </span>
+                ))}
+                {selectedElements.length > 3 ? (
+                  <span>
+                    {t("browserAgent.composer.selectedElementMore", {
+                      count: selectedElements.length - 3,
+                    })}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <span>{selectedElement?.meta}</span>
+                {selectedElement?.boundsLabel ? <span>{selectedElement.boundsLabel}</span> : null}
+                {selectedElement?.selectorHint ? (
+                  <span>{t("browserAgent.composer.selectorHint", { selector: selectedElement.selectorHint })}</span>
+                ) : null}
+                {selectedElement?.hrefOrigin ? <span>{selectedElement.hrefOrigin}</span> : null}
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="composer-browser-context-counts" aria-label={t("browserAgent.composer.countSummary")}>
+            <span>{t("browserAgent.composer.headingCount", { count: counts.headings })}</span>
+            <span>{t("browserAgent.composer.linkCount", { count: counts.links })}</span>
+            <span>{t("browserAgent.composer.buttonCount", { count: counts.buttons })}</span>
+            <span>{t("browserAgent.composer.formCount", { count: counts.forms })}</span>
+            <span>{t("browserAgent.composer.readableBlockCount", { count: counts.readableBlocks ?? 0 })}</span>
+            <span>{t("browserAgent.composer.visualEvidenceCount", { count: counts.visualEvidence ?? 0 })}</span>
+          </div>
+        )}
         <button
           type="button"
           className="composer-browser-context-detail-toggle"
@@ -125,6 +173,28 @@ export function BrowserContextPreview({
               {" · "}
               {t("browserAgent.composer.noRawApi")}
             </div>
+            {hasSelectedElements ? (
+              <section className="composer-browser-context-section">
+                <div className="composer-browser-context-section-title">
+                  {selectedElements.length > 1
+                    ? t("browserAgent.composer.selectedElementCount", {
+                      count: selectedElements.length,
+                    })
+                    : t("browserAgent.composer.selectedElement")}
+                </div>
+                {selectedElements.length > 1 ? (
+                  <ol className="composer-browser-context-evidence-list">
+                    {selectedElements.map((item) => (
+                      <li key={item.annotationId}>
+                        <p>{compactDetailText(item.copySafeText, 1_000)}</p>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p>{compactDetailText(selectedElementsCopyText, 1_000)}</p>
+                )}
+              </section>
+            ) : null}
             <section className="composer-browser-context-section">
               <div className="composer-browser-context-section-title">
                 {evidenceViewModel.overview.title}

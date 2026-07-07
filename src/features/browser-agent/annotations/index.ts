@@ -1,5 +1,6 @@
 export {
   buildAnnotatedVisualEvidenceBlockedDiagnostic,
+  buildBrowserUserAnnotationFromSelectedElement,
   buildBrowserUserAnnotation,
   formatBrowserUserAnnotationEvidence,
   reconcileBrowserUserAnnotationStaleReasons,

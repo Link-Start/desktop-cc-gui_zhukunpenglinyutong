@@ -258,5 +258,103 @@ describe("browser attachment utilities", () => {
       userNote: "这里按钮文案不对",
       staleReasons: ["capture_degraded"],
     });
+    expect(parsed?.elementCounts?.annotations).toBe(1);
+  });
+
+  it("puts selected element evidence before full-page summary in prompt output", () => {
+    const attachment = buildBrowserContextAttachment(makeSnapshot({
+      page: {
+        ...makeSnapshot().page,
+        visibleText:
+          "LATEST DETECTION · 2026-07-07 下午 135 IQ 正常 当前表现接近健康区间。",
+      },
+    }), {
+      now: 1100,
+      staleAfterMs: 5000,
+    });
+    attachment.annotations = [
+      {
+        annotationId: "selection-1",
+        observationId: attachment.observation.observationId,
+        browserSessionId: attachment.browserSessionId,
+        workspaceId: attachment.workspaceId,
+        createdAt: 1200,
+        url: attachment.url,
+        title: "Codex GPT 模型降智雷达",
+        anchor: "element",
+        userNote: "刷新数据",
+        viewport: {
+          width: 1280,
+          height: 720,
+          scrollX: 0,
+          scrollY: 0,
+          devicePixelRatio: 2,
+        },
+        region: {
+          x: 1557,
+          y: 537,
+          width: 78,
+          height: 36,
+        },
+        nearbyText: "刷新数据",
+        nearestElement: {
+          role: "button",
+          label: "刷新数据",
+          placeholder: null,
+          hrefOrigin: null,
+          selectorHint: "button",
+          sensitive: false,
+        },
+        privacy: attachment.privacy,
+        staleReasons: [],
+        diagnostics: [],
+      },
+      {
+        annotationId: "selection-2",
+        observationId: attachment.observation.observationId,
+        browserSessionId: attachment.browserSessionId,
+        workspaceId: attachment.workspaceId,
+        createdAt: 1300,
+        url: attachment.url,
+        title: "Codex GPT 模型降智雷达",
+        anchor: "element",
+        userNote: "JSON",
+        viewport: {
+          width: 1280,
+          height: 720,
+          scrollX: 0,
+          scrollY: 0,
+          devicePixelRatio: 2,
+        },
+        region: {
+          x: 1675,
+          y: 537,
+          width: 86,
+          height: 36,
+        },
+        nearbyText: "JSON",
+        nearestElement: {
+          role: "button",
+          label: "JSON",
+          placeholder: null,
+          hrefOrigin: null,
+          selectorHint: "button.json",
+          sensitive: false,
+        },
+        privacy: attachment.privacy,
+        staleReasons: [],
+        diagnostics: [],
+      },
+    ];
+
+    const prompt = formatBrowserContextPrompt(attachment);
+
+    expect(prompt).toContain("sourceKind: browser_selected_elements_with_page_snapshot");
+    expect(prompt.indexOf("selectedElements:")).toBeLessThan(prompt.indexOf("summary:"));
+    expect(prompt.indexOf("Selection 1:")).toBeLessThan(prompt.indexOf("Selection 2:"));
+    expect(prompt).toContain("- text: 刷新数据");
+    expect(prompt).toContain("- text: JSON");
+    expect(prompt).toContain("- element: button · role=button · 78x36");
+    expect(prompt).toContain("- element: button · role=button · 86x36");
   });
 });

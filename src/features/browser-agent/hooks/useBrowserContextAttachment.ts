@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { captureBrowserAgentSnapshot } from "@/services/tauri";
-import type { BrowserContextAttachment } from "../types";
+import type {
+  BrowserContextAttachment,
+  BrowserSelectedElementEvidence,
+} from "../types";
+import { buildBrowserUserAnnotationFromSelectedElement } from "../annotations";
 import {
   buildBrowserContextAttachment,
   isBrowserContextAttachmentStale,
@@ -100,6 +104,45 @@ function reconcileAttachmentFreshness(
   };
 }
 
+function browserAttachmentContextMatches(
+  left: BrowserContextAttachment,
+  right: BrowserContextAttachment,
+): boolean {
+  return (
+    left.browserSessionId === right.browserSessionId &&
+    left.workspaceId === right.workspaceId &&
+    left.url === right.url
+  );
+}
+
+export function appendSelectedElementAnnotation(
+  attachment: BrowserContextAttachment,
+  selectedElement: BrowserSelectedElementEvidence,
+  currentAttachment: BrowserContextAttachment | null,
+): BrowserContextAttachment {
+  const annotation = buildBrowserUserAnnotationFromSelectedElement({
+    annotationId: `browser-selection-${attachment.snapshotId}-${selectedElement.selectedAt}`,
+    observation: attachment.observation,
+    element: selectedElement,
+  });
+  const previousAnnotations =
+    currentAttachment && browserAttachmentContextMatches(currentAttachment, attachment)
+      ? currentAttachment.annotations ?? []
+      : [];
+  const annotations = [
+    ...previousAnnotations.filter((item) => item.annotationId !== annotation.annotationId),
+    annotation,
+  ].sort((left, right) => left.createdAt - right.createdAt);
+  return {
+    ...attachment,
+    annotations,
+    elementCounts: {
+      ...attachment.elementCounts,
+      annotations: annotations.length,
+    },
+  };
+}
+
 export function useBrowserContextAttachment(
   workspaceId: string | null | undefined,
 ): BrowserContextAttachmentState {
@@ -109,6 +152,23 @@ export function useBrowserContextAttachment(
   const [attachment, setAttachment] = useState<BrowserContextAttachment | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pendingCapturesRef = useRef(0);
+
+  const beginCapture = useCallback((allowWhileBusy = false): boolean => {
+    if (!allowWhileBusy && pendingCapturesRef.current > 0) {
+      return false;
+    }
+    pendingCapturesRef.current += 1;
+    setBusy(true);
+    return true;
+  }, []);
+
+  const finishCapture = useCallback(() => {
+    pendingCapturesRef.current = Math.max(0, pendingCapturesRef.current - 1);
+    if (pendingCapturesRef.current === 0) {
+      setBusy(false);
+    }
+  }, []);
 
   useEffect(
     () =>
@@ -138,37 +198,49 @@ export function useBrowserContextAttachment(
   }, [workspaceId]);
 
   const attach = useCallback(async () => {
-    if (busy) {
+    if (!beginCapture()) {
       return;
     }
-    setBusy(true);
     setError(null);
     try {
       setAttachment(await capture());
     } catch (captureError) {
       setError(normalizeError(captureError));
     } finally {
-      setBusy(false);
+      finishCapture();
     }
-  }, [busy, capture]);
+  }, [beginCapture, capture, finishCapture]);
 
   const attachBrowserSession = useCallback(
-    async (browserSessionId: string) => {
-      if (busy) {
+    async (
+      browserSessionId: string,
+      selectedElement?: BrowserSelectedElementEvidence | null,
+    ) => {
+      if (!beginCapture(Boolean(selectedElement))) {
         return;
       }
-      setBusy(true);
       setError(null);
       try {
         const snapshot = await captureBrowserAgentSnapshot(browserSessionId);
-        setAttachment(buildBrowserContextAttachment(snapshot));
+        if (selectedElement) {
+          const nextAttachment = buildBrowserContextAttachment(snapshot);
+          setAttachment((currentAttachment) =>
+            appendSelectedElementAnnotation(
+              nextAttachment,
+              selectedElement,
+              currentAttachment,
+            ),
+          );
+        } else {
+          setAttachment(buildBrowserContextAttachment(snapshot));
+        }
       } catch (captureError) {
         setError(normalizeError(captureError));
       } finally {
-        setBusy(false);
+        finishCapture();
       }
     },
-    [busy],
+    [beginCapture, finishCapture],
   );
 
   useEffect(
@@ -181,7 +253,16 @@ export function useBrowserContextAttachment(
         }
         const requestedBrowserSessionId = request.browserSessionId?.trim();
         if (requestedBrowserSessionId) {
-          void attachBrowserSession(requestedBrowserSessionId);
+          void attachBrowserSession(requestedBrowserSessionId, request.selectedElement);
+          return;
+        }
+        if (request.selectedElement) {
+          const context = getActiveBrowserContext();
+          if (contextCanCapture(context, workspaceId)) {
+            void attachBrowserSession(context.browserSessionId, request.selectedElement);
+          } else {
+            void attach();
+          }
           return;
         }
         void attach();
@@ -190,16 +271,18 @@ export function useBrowserContextAttachment(
   );
 
   const refresh = useCallback(async () => {
-    setBusy(true);
+    if (!beginCapture()) {
+      return;
+    }
     setError(null);
     try {
       setAttachment(await capture());
     } catch (captureError) {
       setError(normalizeError(captureError));
     } finally {
-      setBusy(false);
+      finishCapture();
     }
-  }, [capture]);
+  }, [beginCapture, capture, finishCapture]);
 
   const remove = useCallback(() => {
     setAttachment(null);

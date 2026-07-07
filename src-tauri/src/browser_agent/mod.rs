@@ -9,11 +9,11 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::Deserialize;
 use tauri::{
-    webview::{NewWindowResponse, WebviewBuilder},
     AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder,
+    webview::{NewWindowResponse, WebviewBuilder},
 };
 
 use crate::state::AppState;
@@ -1247,8 +1247,8 @@ fn create_browser_agent_window(
         WebviewUrl::External(renderer_url),
     )
     .title("Browser Dock")
-    .inner_size(1100.0, 820.0)
-    .min_inner_size(480.0, 360.0)
+    .inner_size(1280.0, 900.0)
+    .min_inner_size(760.0, 520.0)
     .resizable(true)
     .center()
     .on_navigation(move |target_url| {
@@ -1368,7 +1368,7 @@ fn validate_browser_url_for_workspace(
                 raw_url,
                 "missing_scheme",
                 "Browser Agent URL must include an http:// or https:// scheme.",
-            )
+            );
         }
     };
 
@@ -1417,8 +1417,8 @@ pub(crate) async fn get_browser_agent_settings(
 }
 
 #[tauri::command]
-pub(crate) async fn get_browser_agent_platform_capability(
-) -> Result<BrowserPlatformCapability, String> {
+pub(crate) async fn get_browser_agent_platform_capability()
+-> Result<BrowserPlatformCapability, String> {
     Ok(platform::current_platform_capability())
 }
 

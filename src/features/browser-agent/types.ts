@@ -244,6 +244,22 @@ export type BrowserUserAnnotation = {
   diagnostics: BrowserObservationDiagnostic[];
 };
 
+export type BrowserSelectedElementEvidence = {
+  tagName: string;
+  role: string | null;
+  label: string | null;
+  text: string | null;
+  href: string | null;
+  selectorHint: string | null;
+  sensitive: boolean;
+  bounds: BrowserUserAnnotationRegion | null;
+  viewport: Pick<
+    BrowserViewportState,
+    "width" | "height" | "scrollX" | "scrollY" | "devicePixelRatio"
+  >;
+  selectedAt: number;
+};
+
 export type BrowserSnapshotSource = {
   url: string;
   normalizedUrl: string;

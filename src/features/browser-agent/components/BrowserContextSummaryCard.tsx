@@ -36,6 +36,7 @@ type BrowserContextSummaryCardAttachment = Pick<
   readableBlocks?: BrowserContextAttachment["readableBlocks"];
   noiseDiagnostics?: BrowserContextAttachment["noiseDiagnostics"];
   visualEvidence?: BrowserContextAttachment["visualEvidence"];
+  annotations?: BrowserContextAttachment["annotations"];
 };
 
 export type BrowserContextSummaryCardProps = {
@@ -119,6 +120,12 @@ export function BrowserContextSummaryCard({
     () => buildBrowserEvidenceViewModel(attachment),
     [attachment],
   );
+  const selectedElements = evidenceViewModel.selectedElements;
+  const selectedElement = selectedElements[0] ?? null;
+  const hasSelectedElements = selectedElements.length > 0;
+  const selectedElementsCopyText = selectedElements
+    .map((item) => item.copySafeText)
+    .join("\n\n");
   const stateClass = browserContextSummaryStateClass(evidenceViewModel.observationState);
   const diagnostics = attachment.diagnostics?.slice(0, 2) ?? [];
   const summary = useMemo(
@@ -138,12 +145,15 @@ export function BrowserContextSummaryCard({
     hasDiagnostics(attachment.diagnostics) ||
     attachment.readableBlocks?.length ||
     attachment.visualEvidence?.length ||
+    hasSelectedElements ||
     attachment.codeCandidates?.length,
   );
   const copyBrowserSummary = async (section?: BrowserEvidenceViewModelSection) => {
     try {
       await navigator.clipboard.writeText(
-        section?.copySafeText || buildBrowserEvidenceCopyText(evidenceViewModel),
+        section?.copySafeText ||
+          selectedElementsCopyText ||
+          buildBrowserEvidenceCopyText(evidenceViewModel),
       );
       setCopyState("copied");
     } catch {
@@ -155,28 +165,78 @@ export function BrowserContextSummaryCard({
     <div className={`browser-context-summary-card ${stateClass}`}>
       <div className="browser-context-summary-header">
         <div className="browser-context-summary-kicker">
-          {t("messages.browserContextSummary")}
+          {hasSelectedElements
+            ? t("messages.browserContextSelectedElement")
+            : t("messages.browserContextSummary")}
         </div>
         <span className={`browser-context-summary-state ${stateClass}`}>
           {browserContextSummaryStateLabel(evidenceViewModel.observationState, t)}
         </span>
       </div>
-      <div className="browser-context-summary-title-line" title={attachment.title ?? attachment.url}>
-        {attachment.title || attachment.url}
+      <div
+        className="browser-context-summary-title-line"
+        title={selectedElement?.sourceUrl ?? attachment.title ?? attachment.url}
+      >
+        {selectedElements.length > 1
+          ? t("messages.browserContextSelectedElementCount", {
+            count: selectedElements.length,
+          })
+          : selectedElement?.title || attachment.title || attachment.url}
       </div>
-      <div className="browser-context-summary-source" title={attachment.url}>
-        {t("messages.browserContextVisibleSnapshot")}
-        {" · "}
-        {formatBrowserSource(attachment.url)}
-        {" · "}
-        {t("messages.browserContextPageType", { type: attachment.pageType ?? "unknown" })}
+      <div
+        className="browser-context-summary-source"
+        title={selectedElement?.sourceUrl ?? attachment.url}
+      >
+        {hasSelectedElements ? (
+          <>
+            {selectedElement?.sourceTitle ?? attachment.title ?? attachment.url}
+            {" · "}
+            {formatBrowserSource(selectedElement?.sourceUrl ?? attachment.url)}
+          </>
+        ) : (
+          <>
+            {t("messages.browserContextVisibleSnapshot")}
+            {" · "}
+            {formatBrowserSource(attachment.url)}
+            {" · "}
+            {t("messages.browserContextPageType", { type: attachment.pageType ?? "unknown" })}
+          </>
+        )}
       </div>
-      {summary ? (
+      {!hasSelectedElements && summary ? (
         <div className="browser-context-summary-excerpt">
           {summary}
         </div>
       ) : null}
-      {counts ? (
+      {hasSelectedElements ? (
+        <div className="browser-context-summary-counts" aria-label={t("messages.browserContextSelectedFacts")}>
+          {selectedElements.length > 1 ? (
+            <>
+              {selectedElements.slice(0, 3).map((item, index) => (
+                <span key={item.annotationId}>
+                  {index + 1}. {item.title} · {item.meta}
+                </span>
+              ))}
+              {selectedElements.length > 3 ? (
+                <span>
+                  {t("messages.browserContextSelectedElementMore", {
+                    count: selectedElements.length - 3,
+                  })}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <span>{selectedElement?.meta}</span>
+              {selectedElement?.boundsLabel ? <span>{selectedElement.boundsLabel}</span> : null}
+              {selectedElement?.selectorHint ? (
+                <span>{t("messages.browserContextSelectorHint", { selector: selectedElement.selectorHint })}</span>
+              ) : null}
+              {selectedElement?.hrefOrigin ? <span>{selectedElement.hrefOrigin}</span> : null}
+            </>
+          )}
+        </div>
+      ) : counts ? (
         <div className="browser-context-summary-counts" aria-label={t("messages.browserContextIncluded")}>
           <span>{t("messages.browserContextHeadingCount", { count: counts.headings })}</span>
           <span>{t("messages.browserContextLinkCount", { count: counts.links })}</span>
@@ -225,6 +285,47 @@ export function BrowserContextSummaryCard({
                 candidates: counts.codeCandidates,
               })}
             </div>
+          ) : null}
+          {hasSelectedElements ? (
+            <section className="browser-context-summary-section">
+              <div className="browser-context-summary-section-title">
+                {selectedElements.length > 1
+                  ? t("messages.browserContextSelectedElementCount", {
+                    count: selectedElements.length,
+                  })
+                  : t("messages.browserContextSelectedElement")}
+              </div>
+              <button
+                type="button"
+                className="browser-context-summary-copy"
+                onClick={() => void copyBrowserSummary({
+                  sectionId: "selectedElements",
+                  title: selectedElements.length > 1
+                    ? t("messages.browserContextSelectedElementCount", {
+                      count: selectedElements.length,
+                    })
+                    : selectedElement?.title ?? t("messages.browserContextSelectedElement"),
+                  state: evidenceViewModel.observationState,
+                  items: [selectedElementsCopyText],
+                  truncated: false,
+                  copySafeText: selectedElementsCopyText,
+                  emptyReason: null,
+                })}
+              >
+                {t("messages.browserContextCopySection", "Copy section")}
+              </button>
+              {selectedElements.length > 1 ? (
+                <ol className="browser-context-summary-evidence-list">
+                  {selectedElements.map((item) => (
+                    <li key={item.annotationId}>
+                      <p>{compactDetailText(item.copySafeText, 1_000)}</p>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p>{compactDetailText(selectedElementsCopyText, 1_000)}</p>
+              )}
+            </section>
           ) : null}
           <section className="browser-context-summary-section">
             <div className="browser-context-summary-section-title">

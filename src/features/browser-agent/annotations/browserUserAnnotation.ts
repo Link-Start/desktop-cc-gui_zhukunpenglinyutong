@@ -2,6 +2,7 @@ import type {
   BrowserObservation,
   BrowserObservationDiagnostic,
   BrowserObservationStaleReason,
+  BrowserSelectedElementEvidence,
   BrowserUserAnnotation,
   BrowserUserAnnotationAnchorType,
   BrowserUserAnnotationNearestElement,
@@ -148,6 +149,45 @@ export function buildBrowserUserAnnotation(
     staleReasons: input.observation.staleReasons,
     diagnostics: input.observation.diagnostics,
   };
+}
+
+function selectedElementRole(element: BrowserSelectedElementEvidence): string {
+  return element.role?.trim() || element.tagName.trim().toLowerCase() || "element";
+}
+
+function selectedElementNote(element: BrowserSelectedElementEvidence): string {
+  return [
+    element.label?.trim(),
+    element.text?.trim(),
+    element.href?.trim(),
+  ].find((value): value is string => Boolean(value)) ?? selectedElementRole(element);
+}
+
+export function buildBrowserUserAnnotationFromSelectedElement(input: {
+  annotationId: string;
+  observation: BrowserObservation;
+  element: BrowserSelectedElementEvidence;
+}): BrowserUserAnnotation {
+  const element = input.element;
+  const hrefOrigin = hrefOriginFor(element.href);
+  return buildBrowserUserAnnotation({
+    annotationId: input.annotationId,
+    observation: input.observation,
+    createdAt: element.selectedAt,
+    anchor: "element",
+    userNote: selectedElementNote(element),
+    viewport: element.viewport,
+    region: element.bounds,
+    nearbyText: element.text,
+    nearestElement: {
+      role: selectedElementRole(element),
+      label: element.label ?? element.text ?? null,
+      placeholder: null,
+      hrefOrigin,
+      selectorHint: element.selectorHint,
+      sensitive: element.sensitive,
+    },
+  });
 }
 
 export function formatBrowserUserAnnotationEvidence(

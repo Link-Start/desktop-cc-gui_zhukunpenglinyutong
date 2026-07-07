@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { emitTo } from "@tauri-apps/api/event";
+import type { BrowserSelectedElementEvidence } from "../types";
 
 const BROWSER_CONTEXT_ATTACHMENT_REQUEST_EVENT =
   "browser-agent://attach-current-context";
@@ -7,6 +8,7 @@ const BROWSER_CONTEXT_ATTACHMENT_REQUEST_EVENT =
 export type BrowserContextAttachmentRequest = {
   workspaceId?: string | null;
   browserSessionId?: string | null;
+  selectedElement?: BrowserSelectedElementEvidence | null;
 };
 
 type BrowserContextAttachmentRequestListener = (
