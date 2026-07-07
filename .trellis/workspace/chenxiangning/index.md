@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-24.md`
-- **Total Sessions**: 964
+- **Total Sessions**: 965
 - **Last Active**: 2026-07-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-24.md` | ~1805 | Active |
+| `journal-24.md` | ~1857 | Active |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
 | `journal-21.md` | ~1970 | Archived |
@@ -52,6 +52,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 965 | 2026-07-07 | 支持浏览器网页多元素点选上下文 | `1e96af3c` | `feature/ui-reactoring-2` |
 | 964 | 2026-07-07 | 修复消息流式滚动更新回环 | `5b672863` | `ui-refactoring` |
 | 963 | 2026-07-07 | 修复焦点跟随重新开启滚底 | `8ad0eff7` | `ui-refactoring` |
 | 962 | 2026-07-07 | 添加消息锚点直达底部按钮 | `6ede6933` | `ui-refactoring` |

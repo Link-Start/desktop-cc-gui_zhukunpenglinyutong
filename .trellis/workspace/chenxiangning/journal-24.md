@@ -1803,3 +1803,55 @@ Review:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 965: 支持浏览器网页多元素点选上下文
+
+**Date**: 2026-07-07
+**Task**: 支持浏览器网页多元素点选上下文
+**Branch**: `feature/ui-reactoring-2`
+
+### Summary
+
+实现 Browser Dock 页面元素多选、上下文追加注入、选中元素优先展示，并修复点选模式拦截关联浏览器上下文按钮的问题。
+
+### Main Changes
+
+本次会话围绕 Browser Agent 内置浏览器模块完成：
+
+- 增大 Browser Agent renderer 默认窗口尺寸，避免打开网页时首屏被挤压变形。
+- 新增 Browser Dock 页面元素点选器，支持语义优先命中链接、按钮、段落等可读元素。
+- 将点选结果作为 BrowserContextAttachment annotation evidence 注入当前 Composer。
+- 将单元素选择升级为连续多选，重复点选会 append 到当前浏览器上下文，不覆盖旧选择。
+- Composer 预览、已发送消息 BrowserContextSummaryCard、AI prompt 均优先展示 selectedElements，再展示整页快照详情。
+- 修复多选模式拦截 Browser Dock toolbar/chrome 点击导致“关联浏览器上下文”按钮看起来失效的问题。
+- 补充 OpenSpec change `add-browser-page-selector-and-window-sizing` 的 proposal/design/spec/tasks。
+- 增加 Rust toolbar tests、Browser Agent annotation/evidence/preview/summary/prompt/hook focused tests。
+
+验证：
+- npm run typecheck
+- npm exec vitest run src/features/browser-agent/hooks/useBrowserContextAttachment.test.ts src/features/browser-agent/evidence/browserEvidenceViewModel.test.ts src/features/browser-agent/components/BrowserContextPreview.test.tsx src/features/browser-agent/components/BrowserContextSummaryCard.test.tsx src/features/browser-agent/utils/attachment.test.ts src/features/browser-agent/annotations/browserUserAnnotation.test.ts
+- cargo test --manifest-path src-tauri/Cargo.toml browser_agent::toolbar --lib
+- openspec validate add-browser-page-selector-and-window-sizing --strict --no-interactive
+- npm run lint（0 errors，保留既有 MessagesRows.tsx exhaustive-deps warning）
+- npm run check:large-files
+- git diff --check
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e96af3c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
