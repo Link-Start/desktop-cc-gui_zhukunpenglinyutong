@@ -168,6 +168,7 @@ export function useAppShellLayoutNodesSection(
     activeEditorLineRange,
     activeEngine,
     activeFusingMessageId,
+    fileCompareSession,
     activeGitRoot,
     activeImages,
     activeItems,
@@ -336,6 +337,9 @@ export function useAppShellLayoutNodesSection(
     handleMovePrompt,
     handleOpenComposerKanbanPanel,
     handleOpenDetachedFileExplorer,
+    handleOpenWorkspaceFileCompare,
+    handleOpenScratchFileCompare,
+    handleCloseFileCompare,
     handleOpenHomeChat,
     handleOpenModelSettings,
     handleRefreshModelConfig,
@@ -919,6 +923,9 @@ export function useAppShellLayoutNodesSection(
       !isCompact &&
       clientUiVisibility.isControlVisible("topTool.clientDocumentation"),
     onOpenClientDocumentation: handleOpenClientDocumentation,
+    showFileCompareButton: !isCompact,
+    isFileCompareActive: centerMode === "fileCompare",
+    onOpenFileCompare: handleOpenScratchFileCompare,
   });
   const handleCloseBrowserDock = useCallback(() => {
     // Browser Agent now lives in its own tool window.
@@ -1537,6 +1544,7 @@ export function useAppShellLayoutNodesSection(
     gitDiffPanelNode,
     gitDiffViewerNode,
     fileViewPanelNode,
+    fileComparePanelNode,
     projectMapPanelNode,
     intentCanvasPanelNode,
     browserDockNode,
@@ -1705,6 +1713,7 @@ export function useAppShellLayoutNodesSection(
     editor: {
       centerMode,
       setCenterMode,
+      fileCompareSession,
       editorSplitCompanion,
       setEditorSplitCompanion,
       editorSplitLayout,
@@ -1720,6 +1729,8 @@ export function useAppShellLayoutNodesSection(
       onCloseAllEditorTabs: handleCloseAllWorkspaceFileTabs,
       onActiveEditorLineRangeChange: setActiveEditorLineRange,
       onOpenFile: handleOpenWorkspaceFile,
+      onCompareFiles: handleOpenWorkspaceFileCompare,
+      onCloseFileCompare: handleCloseFileCompare,
       externalChangeMonitoringEnabled: enableMainFileExternalChangeMonitoring,
       externalChangeTransportMode: mainFileExternalChangeTransportMode,
       externalChangeApplyMode: liveEditPreviewEnabled ? "auto" : "manual",
@@ -2040,6 +2051,7 @@ export function useAppShellLayoutNodesSection(
     gitDiffPanelNode,
     gitDiffViewerNode,
     fileViewPanelNode,
+    fileComparePanelNode,
     projectMapPanelNode,
     intentCanvasPanelNode,
     browserDockNode,

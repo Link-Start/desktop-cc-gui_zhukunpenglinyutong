@@ -132,6 +132,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     engineStatuses,
     errorToastsNode,
     fileViewPanelNode,
+    fileComparePanelNode,
     projectMapPanelNode,
     intentCanvasPanelNode,
     browserDockNode,
@@ -563,6 +564,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         gitDiffPanelNode={gitDiffPanelNode}
         gitDiffViewerNode={gitDiffViewerNode}
         fileViewPanelNode={fileViewPanelNode}
+        fileComparePanelNode={fileComparePanelNode}
         projectMapPanelNode={projectMapPanelNode}
         intentCanvasPanelNode={intentCanvasPanelNode}
         browserDockNode={browserDockNode}

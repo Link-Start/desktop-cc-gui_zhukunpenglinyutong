@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import type { WorkspaceInfo, WorkspaceSettings } from "../../../types";
+import type { CenterMode } from "../../app/hooks/useGitPanelController";
 
 type UseWorkspaceSelectionOptions = {
   workspaces: WorkspaceInfo[];
@@ -11,7 +12,7 @@ type UseWorkspaceSelectionOptions = {
     workspaceId: string,
     settings: Partial<WorkspaceSettings>,
   ) => Promise<WorkspaceInfo>;
-  setCenterMode: (mode: "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas") => void;
+  setCenterMode: (mode: CenterMode) => void;
   setSelectedDiffPath: (path: string | null) => void;
 };
 

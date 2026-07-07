@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import type { GitCommitDiff, GitHubPullRequestDiff } from "../../../types";
+import type { CenterMode } from "./useGitPanelController";
 
 type Params = {
   diffSource: "local" | "pr" | "commit";
-  centerMode: "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas";
+  centerMode: CenterMode;
   gitPullRequestDiffs: GitHubPullRequestDiff[];
   gitCommitDiffs: GitCommitDiff[];
   selectedDiffPath: string | null;

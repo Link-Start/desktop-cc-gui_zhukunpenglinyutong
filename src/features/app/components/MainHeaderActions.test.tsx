@@ -109,4 +109,35 @@ describe("useMainHeaderActionItems", () => {
     expect(result.current).not.toBe(previousActions);
     expect(result.current.find((item) => item.id === "solo-mode")?.active).toBe(true);
   });
+
+  it("adds file compare action to the open app command menu", () => {
+    const onOpenFileCompare = vi.fn();
+
+    const { result } = renderHook(() =>
+      useMainHeaderActionItems({
+        isCompact: false,
+        rightPanelCollapsed: false,
+        sidebarToggleProps: {
+          isCompact: false,
+          sidebarCollapsed: false,
+          rightPanelCollapsed: false,
+          rightPanelAvailable: false,
+          onCollapseSidebar: vi.fn(),
+          onExpandSidebar: vi.fn(),
+          onCollapseRightPanel: vi.fn(),
+          onExpandRightPanel: vi.fn(),
+        },
+        showFileCompareButton: true,
+        isFileCompareActive: true,
+        onOpenFileCompare,
+      }),
+    );
+
+    const action = result.current.find((item) => item.id === "file-compare");
+    expect(action?.label).toBe("files.fileCompare.title");
+    expect(action?.active).toBe(true);
+
+    action?.onSelect();
+    expect(onOpenFileCompare).toHaveBeenCalledTimes(1);
+  });
 });

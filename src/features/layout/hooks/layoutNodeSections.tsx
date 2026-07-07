@@ -7,9 +7,10 @@ import { DebugPanel } from "../../debug/components/DebugPanel";
 import type { TerminalSessionState } from "../../terminal/hooks/useTerminalSession";
 import type { TerminalTab } from "../../terminal/hooks/useTerminalTabs";
 import type { DebugEntry } from "../../../types";
+import type { CenterMode } from "../../app/hooks/useGitPanelController";
 
 export type BuildDesktopTopbarLeftNodeInput = {
-  centerMode: "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas";
+  centerMode: CenterMode;
   backLabel: string;
   mainHeaderNode: ReactNode;
   contextMenuNode: ReactNode;

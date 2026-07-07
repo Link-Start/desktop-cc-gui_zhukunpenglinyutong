@@ -14,6 +14,7 @@ import { useTerminalController } from "../features/terminal/hooks/useTerminalCon
 import { useWorkspaceLaunchScript } from "../features/app/hooks/useWorkspaceLaunchScript";
 import { useWorkspaceRuntimeRun } from "../features/app/hooks/useWorkspaceRuntimeRun";
 import { useWorkspaceLaunchScripts } from "../features/app/hooks/useWorkspaceLaunchScripts";
+import type { CenterMode } from "../features/app/hooks/useGitPanelController";
 import { useWorktreeSetupScript } from "../features/app/hooks/useWorktreeSetupScript";
 import { buildClaudeResumeTerminalCommand } from "../features/app/utils/claudeResumeCommand";
 import { writeTerminalSession } from "../services/tauri";
@@ -52,7 +53,7 @@ type ThreadSwitchScope = {
 type WorkspaceShellSettings = Pick<AppSettings, "workspaceGroups"> &
   Partial<Pick<AppSettings, "selectedOpenAppId">>;
 type WorkspaceShellTab = "projects" | "codex" | "spec" | "git" | "log";
-type WorkspaceShellCenterMode = "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas";
+type WorkspaceShellCenterMode = CenterMode;
 
 function isEngineType(value: unknown): value is EngineType {
   return value === "claude" || value === "codex" || value === "gemini" || value === "opencode";

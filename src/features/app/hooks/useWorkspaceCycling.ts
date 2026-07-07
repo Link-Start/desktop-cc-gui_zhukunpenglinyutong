@@ -1,6 +1,7 @@
 import type { MutableRefObject } from "react";
 import { useCallback, useMemo } from "react";
 import type { ThreadSummary, WorkspaceInfo } from "../../../types";
+import type { CenterMode } from "./useGitPanelController";
 import {
   getThreadSelectDiffCleanupAction,
   shouldPreserveEditorOnThreadSelect,
@@ -25,7 +26,7 @@ type Params = {
   activeWorkspaceIdRef: MutableRefObject<string | null>;
   activeThreadIdRef: MutableRefObject<string | null>;
   activeEditorFilePath: string | null;
-  centerMode: "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas";
+  centerMode: CenterMode;
   exitDiffView: () => void;
   isCompact: boolean;
   resetPullRequestSelection: () => void;

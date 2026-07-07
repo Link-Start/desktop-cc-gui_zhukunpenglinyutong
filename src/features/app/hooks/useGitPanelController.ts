@@ -12,6 +12,8 @@ import { useGitCommitDiffs } from "../../git/hooks/useGitCommitDiffs";
 import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
 import type { GitLineMarkers } from "../../files/utils/gitLineMarkers";
 import { resolveWorkspaceRelativePath } from "../../../utils/workspacePaths";
+import type { FileCompareSession } from "../../files/types/fileCompare";
+import { FILE_COMPARE_MAX_WORKSPACE_FILES } from "../../files/types/fileCompare";
 
 const GIT_DIFF_LIST_VIEW_BY_WORKSPACE_KEY = "gitDiffListViewByWorkspace";
 const GIT_DIFF_PRELOAD_MAX_CHANGED_FILES = 80;
@@ -112,6 +114,15 @@ export type EditorHighlightTarget = {
 
 export type EditorSplitCompanion = "chat" | "projectMap";
 
+export type CenterMode =
+  | "chat"
+  | "diff"
+  | "editor"
+  | "memory"
+  | "projectMap"
+  | "intentCanvas"
+  | "fileCompare";
+
 export type OpenFileOptions = {
   highlightMarkers?: GitLineMarkers | null;
   editorSplitCompanion?: EditorSplitCompanion;
@@ -184,9 +195,10 @@ export function useGitPanelController({
   prDiffsError: string | null;
   onOpenEditorLayoutRequest?: () => void;
 }) {
-  const [centerMode, setCenterMode] = useState<
-    "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas"
-  >("chat");
+  const [centerMode, setCenterMode] = useState<CenterMode>("chat");
+  const [fileCompareSession, setFileCompareSession] =
+    useState<FileCompareSession | null>(null);
+  const scratchFileCompareRequestIdRef = useRef(0);
   const [fileTabsByWorkspace, setFileTabsByWorkspace] = useState<
     Record<string, WorkspaceFileTabsState>
   >({});
@@ -261,9 +273,15 @@ export function useGitPanelController({
     previousFileTabWorkspaceKeyRef.current = fileTabWorkspaceKey;
     setEditorNavigationTarget(null);
     setEditorHighlightTarget(null);
+    setFileCompareSession(null);
     const nextActiveFilePath = fileTabsByWorkspace[fileTabWorkspaceKey]?.activeFilePath ?? null;
     if (nextActiveFilePath) {
       setCenterMode("editor");
+      return;
+    }
+    if (centerMode === "fileCompare") {
+      setFileCompareSession(null);
+      setCenterMode("chat");
       return;
     }
     if (centerMode === "editor") {
@@ -519,6 +537,57 @@ export function useGitPanelController({
     ],
   );
 
+  const handleOpenWorkspaceFileCompare = useCallback(
+    (paths: string[]) => {
+      const workspace = activeWorkspaceRef.current;
+      if (!workspace?.id) {
+        return false;
+      }
+      const normalizedPaths = Array.from(
+        new Set(
+          paths
+            .map((path) => resolveWorkspaceRelativePath(workspace.path, path))
+            .map((path) => path.trim())
+            .filter(Boolean),
+        ),
+      );
+      if (
+        normalizedPaths.length < 2 ||
+        normalizedPaths.length > FILE_COMPARE_MAX_WORKSPACE_FILES
+      ) {
+        return false;
+      }
+      setFileCompareSession({
+        kind: "workspace",
+        workspaceId: workspace.id,
+        paths: normalizedPaths,
+      });
+      setCenterMode("fileCompare");
+      if (isCompact) {
+        setActiveTab("codex");
+      }
+      return true;
+    },
+    [isCompact, setActiveTab],
+  );
+
+  const handleOpenScratchFileCompare = useCallback(() => {
+    scratchFileCompareRequestIdRef.current += 1;
+    setFileCompareSession({
+      kind: "scratch",
+      requestId: scratchFileCompareRequestIdRef.current,
+    });
+    setCenterMode("fileCompare");
+    if (isCompact) {
+      setActiveTab("codex");
+    }
+  }, [isCompact, setActiveTab]);
+
+  const handleCloseFileCompare = useCallback(() => {
+    setFileCompareSession(null);
+    setCenterMode("chat");
+  }, []);
+
   const handleActivateFileTab = useCallback((path: string) => {
     setFileTabsByWorkspace((states) =>
       updateWorkspaceFileTabs(states, fileTabWorkspaceKey, (current) => ({
@@ -616,6 +685,7 @@ export function useGitPanelController({
   return {
     centerMode,
     setCenterMode,
+    fileCompareSession,
     openFileTabs,
     activeEditorFilePath,
     editorSplitCompanion,
@@ -668,6 +738,9 @@ export function useGitPanelController({
     handleActiveDiffPath,
     handleGitPanelModeChange,
     handleOpenFile,
+    handleOpenWorkspaceFileCompare,
+    handleOpenScratchFileCompare,
+    handleCloseFileCompare,
     handleActivateFileTab,
     handleCloseFileTab,
     handleCloseAllFileTabs,

@@ -57,6 +57,7 @@ export type RenderAppShellFlattenedContext = {
   engineStatuses: any;
   errorToastsNode: any;
   fileViewPanelNode: any;
+  fileComparePanelNode: any;
   projectMapPanelNode: any;
   intentCanvasPanelNode: any;
   browserDockNode: any;

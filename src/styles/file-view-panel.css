@@ -2457,3 +2457,205 @@
     var(--surface-active) 28%
   );
 }
+
+.file-compare-panel {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  background: var(--surface-primary, var(--surface-panel));
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+.file-compare-header {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.file-compare-heading {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.file-compare-heading h2 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.25;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.file-compare-heading span,
+.file-compare-active-diff,
+.file-compare-column-path {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.file-compare-diff-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.file-compare-diff-nav .ghost,
+.file-compare-save {
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-compare-active-diff {
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-panel) 84%, transparent);
+}
+
+.file-compare-columns {
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--file-compare-column-count), minmax(260px, 1fr));
+  overflow: auto;
+}
+
+.file-compare-column {
+  min-width: 260px;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+}
+
+.file-compare-column:last-child {
+  border-right: 0;
+}
+
+.file-compare-column-header {
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.file-compare-column-title {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.file-compare-column-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.file-compare-column-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-compare-column-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.file-compare-dirty {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent-primary);
+}
+
+.file-compare-save-error-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--text-danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-danger) 16%, transparent);
+}
+
+.file-compare-state,
+.file-compare-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.file-compare-state.is-error {
+  color: var(--text-danger);
+}
+
+.file-compare-editor,
+.file-compare-editor .fvp-editor,
+.file-compare-editor .file-compare-cm,
+.file-compare-editor .cm-editor {
+  min-height: 0;
+  height: 100%;
+}
+
+.file-compare-readonly-content {
+  height: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  background: var(--surface-card);
+}
+
+.file-compare-cm .cm-scroller {
+  min-height: 0;
+  height: 100%;
+}
+
+.file-compare-cm .cm-file-compare-line-gap {
+  height: calc(var(--file-compare-gap-lines, 1) * 1.55em);
+  background: color-mix(in srgb, #6bb3f0 10%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, #6bb3f0 68%, transparent);
+}
+
+.file-compare-cm .cm-line.cm-git-modified-line {
+  background: color-mix(in srgb, #6bb3f0 14%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, #6bb3f0 88%, var(--text-strong));
+}
+
+.file-compare-cm .cm-line.cm-activeLine.cm-git-modified-line {
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, #6bb3f0 14%, transparent) 72%,
+    var(--surface-active) 28%
+  );
+}

@@ -31,6 +31,7 @@ import { resolveCodexProviderLabel } from "../../app/utils/codexProviderLabel";
 import { GitDiffViewer } from "../../git/components/GitDiffViewer";
 import { buildCanonicalGitChanges } from "../../git/utils/gitChangeModel";
 import { FileTreePanel } from "../../files/components/FileTreePanel";
+import { WorkspaceFileComparePanel } from "../../files/components/WorkspaceFileComparePanel";
 import { WorkspaceSearchPanel } from "../../search/components/WorkspaceSearchPanel";
 import { PromptPanel } from "../../prompts/components/PromptPanel";
 import { ProjectMemoryPanel } from "../../project-memory/components/ProjectMemoryPanel";
@@ -1569,6 +1570,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onFilePanelModeChange={options.onFilePanelModeChange}
         onInsertText={options.onInsertComposerText}
         onOpenFile={options.onOpenFile}
+        onCompareFiles={options.onCompareFiles}
         openTargets={options.openAppTargets}
         openAppIconById={options.openAppIconById}
         selectedOpenAppId={options.selectedOpenAppId}
@@ -1840,6 +1842,17 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         />
       </Suspense>
     ) : null;
+
+  const fileComparePanelNode = options.centerMode === "fileCompare" ? (
+    <WorkspaceFileComparePanel
+      session={options.fileCompareSession}
+      workspaceId={options.activeWorkspace?.id ?? null}
+      workspaceName={options.activeWorkspace?.name ?? null}
+      workspacePath={options.activeWorkspace?.path ?? null}
+      saveFileShortcut={options.saveFileShortcut}
+      onClose={options.onCloseFileCompare}
+    />
+  ) : null;
 
   const projectMapImpactInput = useMemo(
     () =>
@@ -2266,6 +2279,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     gitDiffPanelNode,
     gitDiffViewerNode,
     fileViewPanelNode,
+    fileComparePanelNode,
     projectMapPanelNode,
     intentCanvasPanelNode,
     browserDockNode,

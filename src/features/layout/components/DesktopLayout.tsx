@@ -9,6 +9,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { MainTopbar } from "../../app/components/MainTopbar";
 import { MemoryPanel } from "./MemoryPanel";
+import type { CenterMode } from "../../app/hooks/useGitPanelController";
 
 type DesktopLayoutProps = {
   sidebarNode: ReactNode;
@@ -28,13 +29,14 @@ type DesktopLayoutProps = {
   settingsOpen: boolean;
   settingsNode: ReactNode;
   topbarLeftNode: ReactNode;
-  centerMode: "chat" | "diff" | "editor" | "memory" | "projectMap" | "intentCanvas";
+  centerMode: CenterMode;
   editorSplitLayout: "vertical" | "horizontal";
   editorSplitCompanion: "chat" | "projectMap";
   isEditorFileMaximized: boolean;
   messagesNode: ReactNode;
   gitDiffViewerNode: ReactNode;
   fileViewPanelNode: ReactNode;
+  fileComparePanelNode?: ReactNode;
   projectMapPanelNode?: ReactNode;
   intentCanvasPanelNode?: ReactNode;
   browserDockNode?: ReactNode;
@@ -77,6 +79,7 @@ export function DesktopLayout({
   messagesNode,
   gitDiffViewerNode,
   fileViewPanelNode,
+  fileComparePanelNode = null,
   projectMapPanelNode = null,
   intentCanvasPanelNode = null,
   browserDockNode = null,
@@ -98,6 +101,7 @@ export function DesktopLayout({
   const editorLayerRef = useRef<HTMLDivElement | null>(null);
   const projectMapLayerRef = useRef<HTMLDivElement | null>(null);
   const intentCanvasLayerRef = useRef<HTMLDivElement | null>(null);
+  const fileCompareLayerRef = useRef<HTMLDivElement | null>(null);
   const memoryLayerRef = useRef<HTMLDivElement | null>(null);
   const splitResizeCleanupRef = useRef<(() => void) | null>(null);
   const isEditorSplitMode = centerMode === "editor";
@@ -116,6 +120,7 @@ export function DesktopLayout({
   const shouldShowComposerBelowContent =
     centerMode !== "projectMap" &&
     centerMode !== "intentCanvas" &&
+    centerMode !== "fileCompare" &&
     !shouldPlaceComposerInChatColumn &&
     !isEditorSplitProjectMapVisible &&
     !isEditorFileMaximized;
@@ -126,6 +131,7 @@ export function DesktopLayout({
     const editorLayer = editorLayerRef.current;
     const projectMapLayer = projectMapLayerRef.current;
     const intentCanvasLayer = intentCanvasLayerRef.current;
+    const fileCompareLayer = fileCompareLayerRef.current;
 
     const layers = [
       { ref: diffLayer, mode: "diff" as const },
@@ -133,6 +139,7 @@ export function DesktopLayout({
       { ref: editorLayer, mode: "editor" as const },
       { ref: projectMapLayer, mode: "projectMap" as const },
       { ref: intentCanvasLayer, mode: "intentCanvas" as const },
+      { ref: fileCompareLayer, mode: "fileCompare" as const },
     ];
 
     for (const { ref, mode } of layers) {
@@ -439,6 +446,15 @@ export function DesktopLayout({
                     ref={intentCanvasLayerRef}
                   >
                     {intentCanvasPanelNode}
+                  </div>
+                  <div
+                    className={`content-layer content-layer--file-compare ${
+                      centerMode === "fileCompare" ? "is-active" : "is-hidden"
+                    }`}
+                    aria-hidden={centerMode !== "fileCompare"}
+                    ref={fileCompareLayerRef}
+                  >
+                    {fileComparePanelNode}
                   </div>
                   <div
                     className={`content-layer content-layer--chat ${
