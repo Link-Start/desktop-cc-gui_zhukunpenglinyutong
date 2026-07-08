@@ -152,4 +152,71 @@ describe("useDebugLog", () => {
       },
     });
   });
+
+  it("buffers loggable entries while the panel is closed and flushes them on open", () => {
+    const { result } = renderHook(() => useDebugLog());
+
+    act(() => {
+      result.current.addDebugEntry({
+        id: "buffered-1",
+        timestamp: 100,
+        source: "error",
+        label: "engine crashed",
+        payload: "boom",
+      });
+    });
+
+    // 面板关闭：条目不进 React state（避免每条日志一次根渲染），但红点已亮。
+    expect(result.current.debugEntries).toEqual([]);
+    expect(result.current.hasDebugAlerts).toBe(true);
+
+    act(() => {
+      result.current.setDebugOpen(true);
+    });
+
+    // 打开面板：缓冲一次性灌入。
+    expect(result.current.debugEntries.map((entry) => entry.id)).toEqual([
+      "buffered-1",
+    ]);
+
+    act(() => {
+      result.current.addDebugEntry({
+        id: "live-1",
+        timestamp: 200,
+        source: "error",
+        label: "engine crashed again",
+        payload: "boom",
+      });
+    });
+
+    // 面板打开期间：条目实时进 state。
+    expect(result.current.debugEntries.map((entry) => entry.id)).toEqual([
+      "buffered-1",
+      "live-1",
+    ]);
+  });
+
+  it("does not replay cleared entries when the panel is reopened", () => {
+    const { result } = renderHook(() => useDebugLog());
+
+    act(() => {
+      result.current.addDebugEntry({
+        id: "stale-1",
+        timestamp: 100,
+        source: "error",
+        label: "old failure",
+        payload: "boom",
+      });
+    });
+
+    act(() => {
+      result.current.clearDebugEntries();
+    });
+
+    act(() => {
+      result.current.setDebugOpen(true);
+    });
+
+    expect(result.current.debugEntries).toEqual([]);
+  });
 });

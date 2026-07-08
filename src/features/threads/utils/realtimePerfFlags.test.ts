@@ -37,7 +37,7 @@ describe("realtimePerfFlags background scheduling rollback flags", () => {
 
     const flags = getActiveRealtimePerfFlags();
 
-    expect(Object.keys(flags)).toHaveLength(8);
+    expect(Object.keys(flags)).toHaveLength(9);
     expect(flags.realtimeBatching.value).toBe(false);
     expect(flags.realtimeBatching.source).toBe("localStorage");
     expect(flags.realtimeBatching.storageKey).toBe("ccgui.perf.realtimeBatching");
@@ -45,6 +45,8 @@ describe("realtimePerfFlags background scheduling rollback flags", () => {
     expect(flags.appServerEventBatch.defaultValue).toBe(true);
     expect(flags.appServerEventBatch.testDefaultValue).toBe(false);
     expect(flags.reducerNoopGuard.metric).toContain("no-op");
+    expect(flags.liveTextExternalization.defaultValue).toBe(true);
+    expect(flags.liveTextExternalization.testDefaultValue).toBe(false);
   });
 
   it("resets known localStorage overrides and clears the cache", () => {

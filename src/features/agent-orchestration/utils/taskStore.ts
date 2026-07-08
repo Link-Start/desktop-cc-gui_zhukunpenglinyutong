@@ -252,10 +252,18 @@ export function loadOrchestrationTaskStore(): OrchestrationTaskStoreData {
   );
 }
 
+// 写入即广播：useOrchestrationTaskStore 靠此事件即时刷新，替代原来的 2s 高频
+// 轮询（该 hook 挂在布局根上，编排任务运行期间每次轮询都换引用导致全树重渲染）。
+export const ORCHESTRATION_TASK_STORE_UPDATED_EVENT =
+  "ccgui:orchestration-task-store-updated" as const;
+
 export function saveOrchestrationTaskStore(store: OrchestrationTaskStoreData): void {
   writeClientStoreValue("app", ORCHESTRATION_TASK_STORE_KEY, normalizeOrchestrationTaskStore(store), {
     immediate: true,
   });
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(ORCHESTRATION_TASK_STORE_UPDATED_EVENT));
+  }
 }
 
 export function listOrchestrationTasksForWorkspace(

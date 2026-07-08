@@ -15,6 +15,7 @@ const REALTIME_PERF_FLAG_IDS = [
   "backgroundBufferedFlush",
   "stagedHydration",
   "debugLightPath",
+  "liveTextExternalization",
 ] as const;
 
 export type RealtimePerfFlagId = (typeof REALTIME_PERF_FLAG_IDS)[number];
@@ -83,6 +84,16 @@ const PERF_FLAG_DEFINITIONS: readonly RealtimePerfFlagDefinition[] = [
     defaultValue: true,
     testDefaultValue: true,
     metric: "debug/diagnostic light-path gating",
+  },
+  {
+    // A4 流式正文外部化（docs/perf/a4-live-text-externalization-plan.md）：
+    // 流式正文 delta 只写 liveAssistantTextChannel（订阅行小树渲染），不再
+    // 逐条 dispatch 进根 reducer。2026-07-08 人工验收「卡顿大幅优化」后默认
+    // 开启；异常时 localStorage 置 ccgui.perf.liveTextExternalization=0 回退。
+    id: "liveTextExternalization",
+    defaultValue: true,
+    testDefaultValue: false,
+    metric: "streaming agent-text delta root-render bypass",
   },
 ];
 
@@ -166,6 +177,10 @@ export function isAppServerEventBatchConsumerEnabled(): boolean {
 
 export function isReducerNoopGuardEnabled(): boolean {
   return readRealtimePerfFlagById("reducerNoopGuard");
+}
+
+export function isLiveTextExternalizationEnabled(): boolean {
+  return readRealtimePerfFlagById("liveTextExternalization");
 }
 
 export function isIncrementalDerivationEnabled(): boolean {

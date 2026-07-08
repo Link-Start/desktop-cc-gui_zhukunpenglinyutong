@@ -21,6 +21,8 @@ import {
 import type { ConversationItem, QueuedMessage } from "../../../types";
 import { DiffBlock } from "../../git/components/DiffBlock";
 import type { StreamActivityPhase } from "../../threads/hooks/useStreamActivityPhase";
+import { useLiveAssistantText } from "../../threads/hooks/useLiveAssistantText";
+import { isLiveTextExternalizationEnabled } from "../../threads/utils/realtimePerfFlags";
 import {
   noteThreadLiveRowRenderMeasured,
   type StreamMitigationProfile,
@@ -391,6 +393,10 @@ function shouldUsePlainTextStreamingSurface(
  * 高亮，是对话页 5 FPS / 单组件 225ms 的主因之一；settle 后由 full markdown
  * 渲染最终内容，视觉结果不变。
  */
+// A4 流式正文外部化（docs/perf/a4-live-text-externalization-plan.md）：
+// 模块加载时读一次 flag，翻转需刷新页面（与其余 perf flag 同语义）。
+const LIVE_TEXT_EXTERNALIZATION_ENABLED = isLiveTextExternalizationEnabled();
+
 function shouldUseLightweightStreamingMarkdown(
   item: Extract<ConversationItem, { kind: "message" }>,
   isStreaming: boolean,
@@ -816,6 +822,18 @@ export const MessageRow = memo(function MessageRow({
         (userMessagePresentation?.stickyCandidateText ?? "").trim().length === 0
       )
     );
+  // A4 live-text 外部化：流式中的 assistant 行订阅 liveAssistantTextChannel
+  // （通道自首条 delta 起全量累计，item.text 仅为建壳首段），后续 delta 只驱动
+  // 本行小树渲染。非流式行/flag 关闭时订阅为空、零开销；终稿落地或中断 drain
+  // 后通道条目清除，本行自然切回读 item.text。
+  const liveAssistantTextEntry = useLiveAssistantText(
+    threadId,
+    LIVE_TEXT_EXTERNALIZATION_ENABLED && isStreaming && item.role === "assistant",
+  );
+  const liveAssistantText =
+    liveAssistantTextEntry && isStreaming && item.role === "assistant"
+      ? liveAssistantTextEntry.text
+      : null;
   const displayText = agentTaskNotification
     ? agentTaskNotification.resultText
     : item.role === "user"
@@ -826,7 +844,7 @@ export const MessageRow = memo(function MessageRow({
         )
       : resolvedMemorySummary || resolvedNoteCardSummary
         ? ""
-        : item.text;
+        : liveAssistantText ?? item.text;
   const messageRowSubtype = agentTaskNotification
     ? "agent-task"
     : item.role === "assistant"

@@ -58,6 +58,7 @@ import {
   resolveClaudeContinuationThreadId as resolveClaudeContinuationThreadIdFromState,
   shouldShowHistoryLoadingForSelectionThread,
 } from "../utils/claudeThreadContinuity";
+import { clearLiveAssistantText } from "../utils/liveAssistantTextChannel";
 import {
   resolvePendingThreadIdForSession,
   resolvePendingThreadIdForTurn,
@@ -2198,6 +2199,9 @@ export function useThreads({
       cleanedRefCount,
       cacheMax,
       inFlightCount,
+    });
+    evictedThreadIds.forEach((threadId) => {
+      clearLiveAssistantText(threadId);
     });
     dispatch({ type: "evictThreadItems", threadIds: evictedThreadIds });
   }, [

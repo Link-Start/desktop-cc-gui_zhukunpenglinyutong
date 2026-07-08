@@ -31,12 +31,20 @@ import {
   upsertLiveAssistantShadowSnapshot,
 } from "../utils/liveAssistantShadowTranscript";
 import {
+  appendLiveAssistantText,
+  clearLiveAssistantText,
+} from "../utils/liveAssistantTextChannel";
+import { isLiveTextExternalizationEnabled } from "../utils/realtimePerfFlags";
+import {
   noteRealtimeCoalescedFlush,
   noteThreadReducerWorkMeasured,
 } from "../utils/streamLatencyDiagnostics";
 import { recordHotspotSample } from "../../../services/perfBaseline/hotspotTracker";
 
 const CLAUDE_STREAM_DEBUG_FLAG_KEY = "ccgui.debug.claude.stream";
+// A4 流式正文外部化（docs/perf/a4-live-text-externalization-plan.md）：
+// 模块加载时读一次，翻转 flag 需刷新页面（与其余 perf flag 同语义）。
+const LIVE_TEXT_EXTERNALIZATION_ENABLED = isLiveTextExternalizationEnabled();
 
 /**
  * Infer engine type from thread ID.
@@ -1462,14 +1470,22 @@ export function useThreadItemEvents({
         delta: resolvedDelta,
         turnId,
       });
-      enqueueRealtimeDeltaOperation({
-        kind: "agentDelta",
-        workspaceId,
-        threadId,
-        itemId,
-        delta: resolvedDelta,
-        turnId,
-      });
+      // A4：flag 开启时，首条 delta（或 itemId 变化）仍走 reducer 建壳；
+      // 后续 delta 只累计进 live 通道（订阅的 MessageRow 小树渲染），
+      // 不再逐条 dispatch 打根。终稿由 completed 全量落地。
+      const liveTextResult = LIVE_TEXT_EXTERNALIZATION_ENABLED
+        ? appendLiveAssistantText(threadId, itemId, resolvedDelta)
+        : null;
+      if (!liveTextResult || liveTextResult.isFirst) {
+        enqueueRealtimeDeltaOperation({
+          kind: "agentDelta",
+          workspaceId,
+          threadId,
+          itemId,
+          delta: resolvedDelta,
+          turnId,
+        });
+      }
       logClaudeStream("agent-delta", {
         workspaceId,
         threadId,
@@ -1536,6 +1552,11 @@ export function useThreadItemEvents({
         timestamp,
         isActiveThread: threadId === activeThreadId,
       });
+      // A4：终稿已全量落 reducer，清 live 通道；订阅行在同一批提交内
+      // 切回读 item.text（终稿），无闪烁。
+      if (LIVE_TEXT_EXTERNALIZATION_ENABLED) {
+        clearLiveAssistantText(threadId);
+      }
       recordThreadActivity(workspaceId, threadId, timestamp);
       safeMessageActivity();
       onAgentMessageCompletedExternal?.({

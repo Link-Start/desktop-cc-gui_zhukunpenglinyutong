@@ -22,6 +22,7 @@ import {
   toSharedThreadSummary,
 } from "../../shared-session/runtime/sharedSessionSummaries";
 import { asString } from "../utils/threadNormalize";
+import { clearLiveAssistantText } from "../utils/liveAssistantTextChannel";
 import { saveThreadActivity } from "../utils/threadStorage";
 import {
   collectKnownCodexThreadIds,
@@ -328,6 +329,7 @@ export function useThreadActions({
       deletedThreadIds.forEach((threadId) => {
         loadedThreadsRef.current[threadId] = false;
         removeThreadFromCachedSummaries(workspace.id, threadId);
+        clearLiveAssistantText(threadId);
         dispatch({ type: "removeThread", workspaceId: workspace.id, threadId });
       });
       if (!preserveState) {

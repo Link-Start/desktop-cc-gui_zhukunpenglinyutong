@@ -106,6 +106,7 @@ import {
   resolveCodexAcceptedTurnFact,
   shouldDeferCodexActivityUntilTurnAccepted,
 } from "../utils/codexConversationLiveness";
+import { drainLiveAssistantTextTail } from "../utils/liveAssistantTextChannel";
 import { formatBrowserContextPromptOnce } from "../../browser-agent";
 import {
   buildLocalizedMemoryScoutPreviewText,
@@ -1966,6 +1967,20 @@ export function useThreadMessaging({
     }
     const turnId = activeTurnId ?? "pending";
     const shouldGuardInterruptedThread = reason !== "queue-fusion";
+    // A4 live-text 外部化：中断前把通道里「尚未落 reducer 的尾段」灌回 items，
+    // 否则中断后该行会从通道全量文本回退到壳首段。hasCustomName: true 表示
+    // 灌回不参与线程自动命名。
+    const liveTextTail = drainLiveAssistantTextTail(activeThreadId);
+    if (liveTextTail) {
+      dispatch({
+        type: "appendAgentDelta",
+        workspaceId: activeWorkspace.id,
+        threadId: activeThreadId,
+        itemId: liveTextTail.itemId,
+        delta: liveTextTail.tailDelta,
+        hasCustomName: true,
+      });
+    }
     // Queue fusion immediately starts a successor turn on the same curtain; a
     // long-lived interrupted guard would drop that successor's realtime output.
     if (shouldGuardInterruptedThread) {

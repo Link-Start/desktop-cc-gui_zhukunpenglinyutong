@@ -30,6 +30,7 @@ import {
 import { previewThreadName } from "../../../utils/threadItems";
 import { resolveThreadStabilityDiagnostic } from "../utils/stabilityDiagnostics";
 import { hasCodexBackgroundHelperPreview } from "../utils/codexBackgroundHelpers";
+import { renameLiveAssistantTextThread } from "../utils/liveAssistantTextChannel";
 import type { ThreadAction } from "./useThreadsReducer";
 
 /**
@@ -1275,6 +1276,9 @@ export function useThreadTurnEvents({
         oldThreadId: sourceThreadId,
         newThreadId,
       });
+      // A4 live-text 外部化：随迁通道条目，流式中改名后订阅（新 threadId）
+      // 才能继续读到累计文本。
+      renameLiveAssistantTextThread(sourceThreadId, newThreadId);
       renameCustomNameKey(workspaceId, sourceThreadId, newThreadId);
       renameAutoTitlePendingKey(workspaceId, sourceThreadId, newThreadId);
       renamePendingMemoryCaptureKey(sourceThreadId, newThreadId);

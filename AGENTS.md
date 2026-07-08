@@ -106,6 +106,12 @@ Keep this managed block so 'trellis update' can refresh the instructions.
 - 仍失败再排查：
   - `zsh -lc 'source ~/.zshrc && which <command> && echo $PATH'`
 
+### Render Perf Baseline
+
+- AppShell 根渲染单次阻塞主线程 100~350ms；改动对话/流式/后台任务链路前，读 `docs/perf/render-jank-knife-experiments-2026-07-08.md`（四层根因）。
+- 硬红线：① 高频 setState（每事件/日志/轮询级）禁挂根 hook 链；② 数组追加型 setState 禁入根链；③ 根链 store 用事件驱动 + ≥30s 兜底轮询，禁秒级轮询；④ 流式正文走 `liveAssistantTextChannel`（flag `liveTextExternalization` 默认开），禁恢复逐 delta dispatch 进 reducer。
+- 渲染风暴排查用归因面板 + React `memoizedUpdaters` 追踪（复现指南见上述文档 §七）；react-scan 2~3x 放大，测量前关。
+
 ## 仓库卫生
 
 - `.omx/**`、`.trellis/.developer`、`.trellis/.current-task` 等本地 state 属于 runtime artifact 或 local-only state。

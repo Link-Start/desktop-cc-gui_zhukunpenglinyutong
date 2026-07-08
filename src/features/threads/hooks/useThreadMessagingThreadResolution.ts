@@ -4,6 +4,7 @@ import type { ConversationItem, DebugEntry, WorkspaceInfo } from "../../../types
 import {
   isClaudeRuntimeThreadId,
 } from "../utils/claudeForkThread";
+import { renameLiveAssistantTextThread } from "../utils/liveAssistantTextChannel";
 import { loadClaudeSession as loadClaudeSessionService } from "../../../services/tauri";
 import { parseClaudeHistoryMessagesWithShadowRecovery } from "../loaders/claudeHistoryLoader";
 import type { ThreadAction } from "./useThreadsReducer";
@@ -240,6 +241,8 @@ export function useThreadMessagingThreadResolution({
           oldThreadId: pendingThreadId,
           newThreadId: finalizedThreadId,
         });
+        // A4 live-text 外部化：随迁通道条目（流式早期可能已在累计）。
+        renameLiveAssistantTextThread(pendingThreadId, finalizedThreadId);
         claudePendingThreadAwaitingNativeSessionRef.current.delete(
           pendingThreadId,
         );
