@@ -41,6 +41,7 @@ import {
 } from "../utils/groupToolItems";
 import { MessagesTimeline } from "./MessagesTimeline";
 import { MessagesAnchorRail } from "./MessagesAnchorRail";
+import { ScrollControl } from "./ScrollControl";
 import {
   MessagesInlineApproval,
   MessagesInlineUserInput,
@@ -102,6 +103,7 @@ import {
   findLatestAssistantTextLength,
   isMessagesScrollNearBottom,
   mergeReadableRecoveryItems,
+  scrollContainerToBottom,
   resolveActiveUserInputRequest,
   resolveActiveMessageAnchor,
   resolveCollapsedTimelineItems,
@@ -111,7 +113,9 @@ import {
 import {
   ASSISTANT_FINALIZING_LIVE_WINDOW_MS,
   CODEX_FINALIZING_LIVE_WINDOW_MS,
+  INITIAL_BOTTOM_PIN_BUDGET_MS,
   MESSAGE_JUMP_EVENT_NAME,
+  SETTLE_REPIN_WINDOW_MS,
   VISIBLE_TEXT_REPORT_EAGER_PREFIX_CHARS,
   VISIBLE_TEXT_REPORT_MIN_GROWTH_CHARS,
   VISIBLE_TEXT_REPORT_MIN_INTERVAL_MS,
@@ -381,6 +385,10 @@ export const Messages = memo(function Messages({
     typeof performance === "undefined" ? 0 : performance.now();
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // 非流式期的「跟随窗口」deadline：打开会话钉底、对话结束回刷幕布落地，都在窗口内
+  // 允许内容长高时把视口按回底部。isThinking 下降沿用于开启收尾窗口。
+  const stickToBottomDeadlineRef = useRef(0);
+  const settleRepinPrevThinkingRef = useRef(isThinking);
   const pendingHistoryExpansionModeRef = useRef<MessagesHistoryExpansionMode>(null);
   const messageNodeByIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const agentTaskNodeByTaskIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -595,19 +603,18 @@ export const Messages = memo(function Messages({
       return;
     }
     // Respect a manual scroll-up: never yank the user back to the bottom.
-    if (!autoScrollRef.current) {
+    if (!autoScrollRef.current || !containerRef.current) {
       return;
     }
-    if (!bottomRef.current) {
-      return;
-    }
-    // Always use instant for programmatic scroll requests to avoid blocking input
-    bottomRef.current.scrollIntoView({ behavior: "instant", block: "end" });
+    // Always instant for programmatic scroll requests to avoid blocking input.
+    scrollContainerToBottom(containerRef.current);
   }, [isWorking, liveAutoFollowEnabled]);
 
   const rearmAutoFollowToBottom = useCallback(() => {
     autoScrollRef.current = true;
-    bottomRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
+    if (containerRef.current) {
+      scrollContainerToBottom(containerRef.current);
+    }
   }, []);
 
   const scrollToAgentTaskCard = useCallback((request: AgentTaskScrollRequest | null) => {
@@ -1129,6 +1136,11 @@ export const Messages = memo(function Messages({
   const isAssistantFinalizing =
     !isThinking &&
     liveAssistantMessageId !== null;
+  // 供内容高度观察器（见下方 ResizeObserver）读取，避免它随每次流式状态变化重挂。
+  const isWorkingRef = useRef(isWorking);
+  isWorkingRef.current = isWorking;
+  const isAssistantFinalizingRef = useRef(isAssistantFinalizing);
+  isAssistantFinalizingRef.current = isAssistantFinalizing;
   useEffect(() => {
     const previouslyThinking = previousAssistantThinkingRef.current;
     previousAssistantThreadIdRef.current = threadId;
@@ -1677,7 +1689,7 @@ export const Messages = memo(function Messages({
     () => buildSuppressedUserMemoryContextMessageIdSet(timelinePresentationItems),
     [timelinePresentationItems],
   );
-  const hasAnchorRail = showMessageAnchors && messageAnchors.length > 1;
+  const hasAnchorRail = showMessageAnchors && messageAnchors.length > 0;
   const commitActiveAnchorId = useCallback(
     (nextActiveAnchor: string | null, reason: "scroll" | "sync") => {
       const signature = [
@@ -2063,25 +2075,17 @@ export const Messages = memo(function Messages({
     if (isWorking || isThinking) {
       return undefined;
     }
-    const target = bottomRef.current;
-    if (!target) {
-      return undefined;
+    const container = containerRef.current;
+    if (!container) {
+      return;
     }
     initialBottomPinScopeRef.current = scope;
     autoScrollRef.current = true;
-    target.scrollIntoView({ behavior: "instant", block: "end" });
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-    // ponytail: virtualized rows start on estimated heights, so re-pin once on
-    // the next frame; if late row measurements still drift the viewport, the
-    // upgrade path is re-pinning until the scroll height stabilizes.
-    const raf = window.requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
-    });
-    return () => {
-      window.cancelAnimationFrame(raf);
-    };
+    scrollContainerToBottom(container);
+    // 落位只对此刻的高度有效：虚拟化行还是估算高度、content-visibility:auto 的屏外行
+    // 要进视口才真实布局，底部长消息被系统性低估（估高封顶 260px，真实常上千）。
+    // 开一个跟随窗口，让下方的内容高度观察器把迟到的测量一路追到底。
+    stickToBottomDeadlineRef.current = Date.now() + INITIAL_BOTTOM_PIN_BUDGET_MS;
   }, [
     isHistoryLoading,
     isThinking,
@@ -2091,6 +2095,67 @@ export const Messages = memo(function Messages({
     timelinePresentationItems,
     workspaceId,
   ]);
+
+  // 对话结束（isThinking true→false）后开一个收尾跟随窗口：live 尾窗回刷成全量
+  // timeline 时几百条历史带着估算高度插进列表，scrollHeight 暴涨；且全量渲染源经
+  // useDeferredValue 延后数帧才落地。窗口内的高度变化都由观察器钉回底部。
+  useEffect(() => {
+    const wasThinking = settleRepinPrevThinkingRef.current;
+    settleRepinPrevThinkingRef.current = isThinking;
+    if (wasThinking && !isThinking) {
+      stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
+    }
+  }, [isThinking]);
+
+  // ── 底部跟随的真正驱动：内容高度变化 ───────────────────────────────────
+  // 曾经唯一的驱动是依赖 scrollKey 的 auto-follow effect，而 scrollKey 由 items 末条的
+  // text.length 算出。正文外部化（liveAssistantTextChannel）之后流式 delta 不再进
+  // reducer，items 不变 → scrollKey 不变 → 整个流式期一次都不触发，视口被越长越高的
+  // 正文甩在半空，用户每轮都得手动滚到底。虚拟化行的迟到测量、content-visibility 屏外
+  // 行进视口才布局也一样：只改高度，不改 items。
+  //
+  // 所以改由 ResizeObserver 盯住内容盒的真实高度：只要跟随仍 armed（用户 parked 在
+  // 底部）且处于跟随窗口（流式中 / 收尾中 / 打开会话的钉底窗口内），就把视口按在底部。
+  // 命令式写 scrollTop，不进 state / 不重渲染；空闲期内容不变 → 回调不触发，零开销。
+  //
+  // 交还控制权走 wheel 而不是只等 scroll：流式期观察器每帧都在写 scrollTop，而 scroll
+  // 事件是异步派发的。只靠 updateAutoScroll 的话，一旦某帧的高度变化抢在 scroll 送达
+  // 之前，用户刚滚上去就被当场拽回底部——表现是「滚不走」。wheel 在滚动生效前同步到达，
+  // 向上滚立即解除跟随；向下滚回底部时由 scroll 的 isNearBottom 重新武装。
+  // ponytail: 只覆盖 wheel（桌面主场景）。键盘 PageUp / 触屏拖拽仍靠 scroll 事件滞后一帧
+  // 解除，它们不是每帧连续的，不会和高度变化持续抢跑；真要根治得改成 scrollend 语义。
+  useEffect(() => {
+    const container = containerRef.current;
+    const content = container?.querySelector<HTMLElement>(".messages-timeline-root");
+    if (!container || !content || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+    const handleWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) {
+        autoScrollRef.current = false;
+      }
+    };
+    container.addEventListener("wheel", handleWheel, { passive: true });
+    const observer = new ResizeObserver(() => {
+      if (!liveAutoFollowEnabledRef.current || !autoScrollRef.current) {
+        return;
+      }
+      const insideFollowWindow =
+        isWorkingRef.current ||
+        isAssistantFinalizingRef.current ||
+        Date.now() <= stickToBottomDeadlineRef.current;
+      if (!insideFollowWindow) {
+        return;
+      }
+      scrollContainerToBottom(container);
+    });
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+      container.removeEventListener("wheel", handleWheel);
+    };
+    // threadId：切会话时重新绑定，避免时间线根节点被换掉后观察到已脱离文档的旧节点。
+  }, [threadId]);
 
   const groupedEntries = useMemo(
     () => groupToolItems(timelinePresentationItems),
@@ -2218,16 +2283,6 @@ export const Messages = memo(function Messages({
     }
   }, [revealAllHistoryItems, scrollToAnchor, showAllHistoryItems]);
 
-  const requestScrollToBottom = useCallback(() => {
-    autoScrollRef.current = true;
-    setPendingJumpMessageId(null);
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    const latestAnchorId = messageAnchors[messageAnchors.length - 1]?.id ?? null;
-    if (latestAnchorId) {
-      commitActiveAnchorId(latestAnchorId, "sync");
-    }
-  }, [commitActiveAnchorId, messageAnchors]);
-
   const handlePendingJumpTargetReady = useCallback((messageId: string) => {
     if (pendingJumpMessageId !== messageId) {
       return;
@@ -2272,10 +2327,8 @@ export const Messages = memo(function Messages({
         activeAnchorId={activeAnchorId}
         anchors={messageAnchors}
         anchorNavigationLabel={t("messages.anchorNavigation")}
-        scrollToBottomLabel={t("messages.scrollToBottom")}
         getFallbackTitle={(index) => t("messages.anchorUserTitle", { index: index + 1 })}
         onScrollToAnchor={requestScrollToAnchor}
-        onScrollToBottom={requestScrollToBottom}
       />
       <div
         className="messages"
@@ -2386,6 +2439,7 @@ export const Messages = memo(function Messages({
           workspaceId={workspaceId}
         />
       </div>
+      <ScrollControl containerRef={containerRef} />
       {fileLinkMenu ? (
         <RendererContextMenu
           menu={fileLinkMenu}

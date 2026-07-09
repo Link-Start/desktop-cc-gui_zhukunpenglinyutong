@@ -1269,9 +1269,8 @@ describe("Messages", () => {
 
   it("renders user-only anchors and scrolls on click", () => {
     const scrollToMock = vi.fn();
-    const scrollIntoViewMock = vi.fn();
     HTMLElement.prototype.scrollTo = scrollToMock;
-    HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+    HTMLElement.prototype.scrollIntoView = vi.fn();
 
     const items: ConversationItem[] = [
       {
@@ -1304,7 +1303,6 @@ describe("Messages", () => {
         selectedOpenAppId=""
       />,
     );
-    scrollIntoViewMock.mockClear();
 
     const rail = screen.getByRole("navigation", { name: "messages.anchorNavigation" });
     expect(rail).toBeTruthy();
@@ -1323,12 +1321,24 @@ describe("Messages", () => {
     expect(scrollToMock).toHaveBeenCalledWith(
       expect.objectContaining({ behavior: "smooth" }),
     );
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "messages.scrollToBottom" }));
-    expect(scrollIntoViewMock).toHaveBeenCalledWith({
-      behavior: "smooth",
-      block: "end",
-    });
+  it("renders the anchor rail for a single user message", () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+
+    render(
+      <Messages
+        items={[{ id: "anchor-only", kind: "message", role: "user", text: "only" }]}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const rail = screen.getByRole("navigation", { name: "messages.anchorNavigation" });
+    expect(rail.querySelectorAll(".messages-anchor-dash").length).toBe(1);
   });
 
   // A2:VISIBLE_MESSAGE_WINDOW=10000(95bc726a)有意禁用数量折叠(旧阈值 30,故 32 条折叠 2 条);折叠当前不启用,恢复策略后去 skip。

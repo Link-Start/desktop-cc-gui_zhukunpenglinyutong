@@ -171,6 +171,21 @@ export function isMessagesScrollNearBottom(node: HTMLDivElement, thresholdPx: nu
   return node.scrollHeight - node.scrollTop - node.clientHeight <= thresholdPx;
 }
 
+/**
+ * 把容器落位到底部。
+ *
+ * 不用 bottomRef.scrollIntoView({ block: "end" })：那只把零高度锚点的下边对齐视口
+ * 下边，锚点之下 .messages-full 的 padding-bottom 永远滚不到，天生差一截。
+ * 直接写 scrollTop 才是真正的底。
+ *
+ * 单次落位只对「调用那一刻」的高度有效；内容之后还会长高（流式正文、虚拟化行的
+ * 迟到测量、content-visibility:auto 屏外行进视口才布局），追赶交给 Messages 里
+ * 观察内容盒的 ResizeObserver。
+ */
+export function scrollContainerToBottom(container: HTMLElement) {
+  container.scrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+}
+
 export function resolveActiveMessageAnchor(
   container: HTMLDivElement | null,
   messageNodeById: Map<string, HTMLDivElement>,

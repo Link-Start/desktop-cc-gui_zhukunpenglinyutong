@@ -61,6 +61,14 @@ function isMarkdownPath(path: string): boolean {
   return fileName === 'readme' || fileName.startsWith('readme.');
 }
 
+// Claude 的 Read 工具输出为 `行号\t内容`（cat -n 风格）。带行号文本直接喂给
+// markdown 会让标题/列表等结构失效（行首都是行号），故渲染前逐行剥掉行首的
+// 「数字+制表符」。^\d+\t 只匹配每行开头第一个，正文内的 \t 或以数字开头的
+// 内容（Read 会输出为 `5\t42\tfoo`）不受影响。
+function stripReadLineNumbers(value: string): string {
+  return value.replace(/^\d+\t/gm, '');
+}
+
 export const ReadToolBlock = memo(function ReadToolBlock({
   item,
   isExpanded: _isExpanded,
@@ -89,6 +97,11 @@ export const ReadToolBlock = memo(function ReadToolBlock({
     );
   }, [args, item.output, nestedArgs, nestedInput]);
 
+  const markdownSource = useMemo(
+    () => stripReadLineNumbers(renderedOutput),
+    [renderedOutput],
+  );
+
   const renderAsMarkdown = useMemo(() => {
     if (!renderedOutput) {
       return false;
@@ -96,8 +109,8 @@ export const ReadToolBlock = memo(function ReadToolBlock({
     if (isMarkdownPath(filePath)) {
       return true;
     }
-    return looksLikeMarkdownOutput(renderedOutput);
-  }, [filePath, renderedOutput]);
+    return looksLikeMarkdownOutput(markdownSource);
+  }, [filePath, markdownSource, renderedOutput]);
 
   const offset = args?.offset as number | undefined;
   const limit = args?.limit as number | undefined;
@@ -128,7 +141,7 @@ export const ReadToolBlock = memo(function ReadToolBlock({
             <div className="task-content-wrapper read-tool-markdown-wrapper">
               <div className="read-tool-rendered-content">
                 <Markdown
-                  value={renderedOutput}
+                  value={markdownSource}
                   className="markdown read-tool-markdown"
                   liveRenderMode="lightweight"
                 />

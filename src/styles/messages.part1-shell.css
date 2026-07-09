@@ -218,8 +218,14 @@
   font-size: var(--message-title-font-size);
 }
 
+.messages-lightweight-mode-banner-eyebrow {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .messages-lightweight-mode-banner strong {
   flex: 0 0 auto;
+  font-size: var(--message-meta-font-size);
   line-height: 1.2;
 }
 

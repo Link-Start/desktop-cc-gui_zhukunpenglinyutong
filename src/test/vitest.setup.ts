@@ -1169,7 +1169,12 @@ if (!("ResizeObserver" in globalThis)) {
     unobserve() {}
     disconnect() {}
   }
-  Object.defineProperty(globalThis, "ResizeObserver", { value: ResizeObserverMock });
+  // configurable/writable so suites can swap in a triggerable fake (vi.stubGlobal).
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    value: ResizeObserverMock,
+    configurable: true,
+    writable: true,
+  });
 }
 
 if (!("IntersectionObserver" in globalThis)) {

@@ -12,9 +12,9 @@ import { cn } from '@/lib/utils';
 import { Marker, MarkerContent, MarkerIcon } from '../../../../components/ui/marker';
 import type { ToolStatusTone } from './toolConstants';
 
-/** 单块统一折叠体容器类：淡边框 + rounded-md(6px) + muted/30 底、与头部小间距 */
+/** 单块统一折叠体容器类：淡边框 + 2px 圆角 + muted/30 底、与头部小间距 */
 export const TOOL_MARKER_BODY_CLASS =
-  'mt-1 overflow-hidden rounded-md border border-border bg-muted/30';
+  'mt-1 overflow-hidden rounded-[2px] border border-border bg-muted/30';
 
 /**
  * 靠右状态图标：失败=警示、完成=不显示、处理中=转圈。

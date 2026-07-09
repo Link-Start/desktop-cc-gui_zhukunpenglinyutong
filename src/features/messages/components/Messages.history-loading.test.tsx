@@ -222,11 +222,44 @@ describe("Messages history loading", () => {
     expect(screen.queryByText(/tools\.bashGroupBatchRun/)).toBeNull();
   });
 
-  it("pins the viewport to the bottom when opening a loaded history thread", () => {
-    const scrollIntoView = vi.fn();
-    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  // jsdom drops scrollTop writes on unlaid-out elements, so back the scroller
+  // with a real value and fixed metrics.
+  const stubScrollerMetrics = (container: HTMLElement, scrollHeight: number) => {
+    const scroller = container.querySelector(".messages") as HTMLDivElement;
+    expect(scroller).toBeTruthy();
+    let currentScrollTop = 0;
+    Object.defineProperty(scroller, "scrollTop", {
+      configurable: true,
+      get: () => currentScrollTop,
+      set: (value: number) => {
+        currentScrollTop = value;
+      },
+    });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 720 });
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: scrollHeight });
+    return scroller;
+  };
 
-    render(
+  it("pins the viewport to the bottom when opening a loaded history thread", () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+
+    const { container, rerender } = render(
+      <Messages
+        items={[]}
+        threadId="thread-history-bottom-pin"
+        workspaceId="ws-1"
+        isThinking={false}
+        isHistoryLoading
+        activeEngine="codex"
+        onUserInputSubmit={vi.fn()}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    // Stub metrics before history lands, so the pin sees a scrollable container.
+    const scroller = stubScrollerMetrics(container, 2400);
+
+    rerender(
       <Messages
         items={[
           { id: "m-1", kind: "message", role: "user", text: "hello" },
@@ -242,14 +275,13 @@ describe("Messages history loading", () => {
       />,
     );
 
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "instant", block: "end" });
+    expect(scroller.scrollTop).toBe(2400 - 720);
   });
 
   it("does not pin the viewport while history is still loading", () => {
-    const scrollIntoView = vi.fn();
-    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = vi.fn();
 
-    render(
+    const { container } = render(
       <Messages
         items={[]}
         threadId="thread-history-loading-no-pin"
@@ -263,7 +295,8 @@ describe("Messages history loading", () => {
       />,
     );
 
-    expect(scrollIntoView).not.toHaveBeenCalled();
+    const scroller = stubScrollerMetrics(container, 2400);
+    expect(scroller.scrollTop).toBe(0);
   });
 
   it("prefers request_user_input UI over history loading when the active thread has a pending request", () => {

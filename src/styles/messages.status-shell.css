@@ -51,33 +51,6 @@
   background: var(--text-strong);
 }
 
-.messages-anchor-bottom-button {
-  position: relative;
-  z-index: 3;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  margin-top: 11px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background-color 0.16s ease,
-    color 0.16s ease;
-}
-
-.messages-anchor-bottom-button:hover,
-.messages-anchor-bottom-button:focus-visible {
-  outline: none;
-  background: color-mix(in srgb, var(--surface-hover) 82%, transparent);
-  color: var(--text-strong);
-}
-
 /* ── Expanded: outline panel (flyout to the right) ─────────────── */
 
 .messages-anchor-panel {
@@ -161,7 +134,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .messages-anchor-dash,
-  .messages-anchor-bottom-button,
   .messages-anchor-panel {
     transition: none !important;
     animation: none !important;
@@ -601,5 +573,62 @@
   50% {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+/* ── 快捷滚动浮标（跟随滚轮方向出现，逻辑移植自 ScrollControl）──── */
+
+.scroll-control-button {
+  position: absolute;
+  right: 40px;
+  bottom: 24px;
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-popover, var(--surface-card-strong));
+  color: var(--text-muted);
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  opacity: 0;
+  animation: scroll-control-fade-in 0.18s ease-out forwards;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.scroll-control-button:hover,
+.scroll-control-button:focus-visible {
+  outline: none;
+  background: var(--surface-hover);
+  color: var(--text-strong);
+  border-color: var(--border-strong, var(--border-subtle));
+}
+
+.scroll-control-button:active {
+  transform: translateY(1px);
+}
+
+@keyframes scroll-control-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .scroll-control-button {
+    right: 24px;
+    width: 30px;
+    height: 30px;
   }
 }

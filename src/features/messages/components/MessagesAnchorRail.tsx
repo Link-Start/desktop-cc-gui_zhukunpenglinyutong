@@ -1,4 +1,3 @@
-import ArrowDown from "lucide-react/dist/esm/icons/arrow-down";
 import { useCollapsibleFloater } from "../hooks/useCollapsibleFloater";
 
 type MessageAnchor = {
@@ -11,24 +10,20 @@ type MessagesAnchorRailProps = {
   activeAnchorId: string | null;
   anchors: MessageAnchor[];
   anchorNavigationLabel: string;
-  scrollToBottomLabel: string;
   getFallbackTitle: (index: number) => string;
   onScrollToAnchor: (messageId: string) => void;
-  onScrollToBottom: () => void;
 };
 
 export function MessagesAnchorRail({
   activeAnchorId,
   anchors,
   anchorNavigationLabel,
-  scrollToBottomLabel,
   getFallbackTitle,
   onScrollToAnchor,
-  onScrollToBottom,
 }: MessagesAnchorRailProps) {
   const { state, expand, scheduleCollapse } = useCollapsibleFloater();
 
-  if (anchors.length <= 1) {
+  if (anchors.length === 0) {
     return null;
   }
 
@@ -62,16 +57,6 @@ export function MessagesAnchorRail({
           );
         })}
       </div>
-      <button
-        type="button"
-        className="messages-anchor-bottom-button"
-        onClick={onScrollToBottom}
-        aria-label={scrollToBottomLabel}
-        title={scrollToBottomLabel}
-        data-testid="messages-anchor-bottom-button"
-      >
-        <ArrowDown size={14} aria-hidden />
-      </button>
 
       {/* Expanded: full outline panel flying out to the right. */}
       {isExpanded ? (

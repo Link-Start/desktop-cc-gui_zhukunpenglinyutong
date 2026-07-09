@@ -24,15 +24,38 @@ vi.mock("./messagesRenderUtils", async (importOriginal) => {
   };
 });
 
+// jsdom never lays anything out, so its ResizeObserver mock never fires. Messages
+// drives bottom-follow off content-height changes, so tests need to fire it by hand.
+const resizeObserverCallbacks: Array<() => void> = [];
+const notifyContentResized = () => {
+  act(() => {
+    for (const callback of [...resizeObserverCallbacks]) {
+      callback();
+    }
+  });
+};
+
 describe("Messages live behavior", () => {
   afterEach(() => {
     cleanup();
+    resizeObserverCallbacks.length = 0;
   });
 
   beforeEach(() => {
     window.localStorage.setItem("ccgui.claude.hideReasoningModule", "0");
     window.localStorage.removeItem("ccgui.messages.live.autoFollow");
     window.localStorage.removeItem("ccgui.messages.live.collapseMiddleSteps");
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resizeObserverCallbacks.push(callback);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
   });
 
   beforeAll(() => {
@@ -920,13 +943,318 @@ describe("Messages live behavior", () => {
       );
     });
 
-    expect(scrollSpy).toHaveBeenCalledWith({ behavior: "instant", block: "end" });
+    // Re-arming snaps the viewport back to the true bottom.
+    expect(scroller.scrollTop).toBe(2000 - 720);
 
     const baselineCalls = scrollSpy.mock.calls.length;
     rerender(renderWith(true));
     await waitFor(() => {
       expect(scrollSpy.mock.calls.length).toBeGreaterThan(baselineCalls);
     });
+    scrollSpy.mockRestore();
+  });
+
+  it("chases late row measurements so opening a thread lands at the true bottom", async () => {
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const { container } = render(
+      <Messages
+        items={[
+          { id: "open-pin-1", kind: "message", role: "user", text: "hello" },
+          { id: "open-pin-2", kind: "message", role: "assistant", text: "long answer" },
+        ]}
+        threadId="thread-open-pin"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+
+    // Rows land on estimated heights first; the real measurements (virtualizer
+    // ResizeObserver / content-visibility layout) grow scrollHeight afterwards.
+    // A one-shot pin would be stranded — the follow window must chase it down.
+    let scrollHeight = 2400;
+    setScrollerMetrics(scroller, 0, () => scrollHeight);
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(2400 - 720);
+
+    scrollHeight = 3600;
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(3600 - 720);
+    scrollSpy.mockRestore();
+  });
+
+  it("attaches the content observer on the first frame, before history lands", () => {
+    // Threads mount with isHistoryLoading=true and an empty timeline. The observer
+    // binds to .messages-timeline-root on mount and only rebinds per threadId, so
+    // that node must already exist on the loading frame — otherwise follow is dead
+    // for the whole session.
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const renderWith = (items: ConversationItem[], loading: boolean) => (
+      <Messages
+        items={items}
+        threadId="thread-loading-then-lands"
+        workspaceId="ws-1"
+        isThinking={false}
+        isHistoryLoading={loading}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(renderWith([], true));
+
+    expect(container.querySelector(".messages-timeline-root")).toBeTruthy();
+    expect(resizeObserverCallbacks.length).toBeGreaterThan(0);
+
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 2400;
+    setScrollerMetrics(scroller, 0, () => scrollHeight);
+
+    // History lands: the initial pin fires and opens the follow window.
+    rerender(
+      renderWith(
+        [{ id: "landed-1", kind: "message", role: "assistant", text: "history" }],
+        false,
+      ),
+    );
+    expect(scroller.scrollTop).toBe(2400 - 720);
+
+    // Late row measurements grow the content inside the follow window.
+    scrollHeight = 4000;
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(4000 - 720);
+    scrollSpy.mockRestore();
+  });
+
+  it("follows the bottom while streaming text grows without changing items", () => {
+    // The regression this guards: live assistant text is externalized through
+    // liveAssistantTextChannel, so `items` (and therefore scrollKey) never change
+    // during a turn. Only the content height changes — follow must key off that.
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const items: ConversationItem[] = [
+      { id: "stream-follow-user", kind: "message", role: "user", text: "go" },
+      { id: "stream-follow-assistant", kind: "message", role: "assistant", text: "partial" },
+    ];
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-stream-follow"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+
+    let scrollHeight = 2400;
+    setScrollerMetrics(scroller, 0, () => scrollHeight);
+
+    // Same `items` identity across every step — only the rendered text grew.
+    scrollHeight = 3000;
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(3000 - 720);
+
+    scrollHeight = 5000;
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(5000 - 720);
+    scrollSpy.mockRestore();
+  });
+
+  it("releases follow on wheel-up even before a scroll event lands", () => {
+    // The observer writes scrollTop every frame while streaming. If follow only
+    // released on `scroll` (async), a height change racing ahead of it would yank
+    // the user straight back to the bottom — i.e. they could never scroll away.
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const { container } = render(
+      <Messages
+        items={[
+          { id: "wheel-release-user", kind: "message", role: "user", text: "go" },
+          { id: "wheel-release-assistant", kind: "message", role: "assistant", text: "partial" },
+        ]}
+        threadId="thread-wheel-release"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 2400;
+    setScrollerMetrics(scroller, 0, () => scrollHeight);
+
+    // Wheel up only — deliberately no `scroll` event behind it.
+    fireEvent.wheel(scroller, { deltaY: -120 });
+    scroller.scrollTop = 900;
+
+    scrollHeight = 5000;
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(900);
+
+    // Scrolling back to the bottom re-arms follow — the guard must not latch.
+    scroller.scrollTop = 5000 - 720;
+    fireEvent.scroll(scroller);
+    scrollHeight = 6000;
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(6000 - 720);
+
+    scrollSpy.mockRestore();
+  });
+
+  it("stops following streaming growth once the user scrolls up", () => {
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const { container } = render(
+      <Messages
+        items={[
+          { id: "stream-release-user", kind: "message", role: "user", text: "go" },
+          { id: "stream-release-assistant", kind: "message", role: "assistant", text: "partial" },
+        ]}
+        threadId="thread-stream-release"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+
+    let scrollHeight = 2400;
+    setScrollerMetrics(scroller, 0, () => scrollHeight);
+
+    // User scrolls up mid-stream to read history: follow releases.
+    scroller.scrollTop = 400;
+    fireEvent.scroll(scroller);
+
+    scrollHeight = 5000;
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(400);
+    scrollSpy.mockRestore();
+  });
+
+  it("re-pins to the bottom after the conversation settles and the timeline back-fills", async () => {
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const renderWith = (thinking: boolean, extra: boolean) => (
+      <Messages
+        items={[
+          {
+            id: "settle-repin-1",
+            kind: "message",
+            role: "assistant",
+            text: "first chunk",
+          },
+          ...(extra
+            ? [
+                {
+                  id: "settle-repin-2",
+                  kind: "message" as const,
+                  role: "assistant" as const,
+                  text: "second chunk",
+                },
+              ]
+            : []),
+        ]}
+        threadId="thread-settle-repin"
+        workspaceId="ws-1"
+        isThinking={thinking}
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    // Thread is already open and idle (initial bottom-pin has run, so it will
+    // not re-fire on settle), then the user sends a new turn.
+    const { container, rerender } = render(renderWith(false, false));
+    const scroller = getMessagesScroller(container);
+    rerender(renderWith(true, false));
+    // User is parked at the bottom while streaming — auto-follow stays armed.
+    setScrollerMetrics(scroller, 1680, 2400); // 2400 - 1680 - 720 = 0, at bottom
+    fireEvent.scroll(scroller);
+
+    // Conversation settles (isThinking true -> false): opens the settle window.
+    rerender(renderWith(false, false));
+    // Let the 320ms finalizing window close so the auto-follow finalizing scroll
+    // is excluded; the settle re-pin window (800ms) is still open.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 380));
+    });
+
+    // The curtain back-fills and the rows measure taller than estimated, so
+    // scrollHeight grows after the pin: the re-pin must chase it to the bottom.
+    setScrollerMetrics(scroller, 0, 3200);
+    rerender(renderWith(false, true));
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(3200 - 720);
+    scrollSpy.mockRestore();
+  });
+
+  it("does not re-pin on settle back-fill when the user has scrolled up", async () => {
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const renderWith = (thinking: boolean, extra: boolean) => (
+      <Messages
+        items={[
+          {
+            id: "settle-norepin-1",
+            kind: "message",
+            role: "assistant",
+            text: "first chunk",
+          },
+          ...(extra
+            ? [
+                {
+                  id: "settle-norepin-2",
+                  kind: "message" as const,
+                  role: "assistant" as const,
+                  text: "second chunk",
+                },
+              ]
+            : []),
+        ]}
+        threadId="thread-settle-norepin"
+        workspaceId="ws-1"
+        isThinking={thinking}
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    // Thread is already open and idle (initial bottom-pin has run), then the
+    // user sends a new turn and scrolls up mid-stream to read history.
+    const { container, rerender } = render(renderWith(false, false));
+    const scroller = getMessagesScroller(container);
+    rerender(renderWith(true, false));
+    // User scrolls up to read history during streaming — auto-follow released.
+    setScrollerMetrics(scroller, 400, 2400); // far from the bottom
+    fireEvent.scroll(scroller);
+
+    rerender(renderWith(false, false));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 380));
+    });
+
+    // Curtain back-fills, but the user is not at the bottom: must not yank down.
+    rerender(renderWith(false, true));
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(400);
     scrollSpy.mockRestore();
   });
 
@@ -1058,15 +1386,17 @@ describe("Messages live behavior", () => {
         selectedOpenAppId=""
       />
     );
-    const { rerender } = render(renderMessages(true));
+    const { container, rerender } = render(renderMessages(true));
+    const scroller = getMessagesScroller(container);
+    setScrollerMetrics(scroller, 0, 2400);
 
-    expect(scrollSpy).not.toHaveBeenCalled();
-    scrollSpy.mockClear();
+    // Still streaming: the initial bottom pin must stay out of the way.
+    expect(scroller.scrollTop).toBe(0);
 
     rerender(renderMessages(false));
 
     await waitFor(() => {
-      expect(scrollSpy).toHaveBeenCalledWith({ behavior: "instant", block: "end" });
+      expect(scroller.scrollTop).toBe(2400 - 720);
     });
     scrollSpy.mockRestore();
   });
