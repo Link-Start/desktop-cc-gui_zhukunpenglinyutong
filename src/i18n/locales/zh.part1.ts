@@ -168,6 +168,7 @@ const zhPart1 = {
     codexProviderChoiceTitle: "供应商选择",
     codexProviderDiskConfigLabel: "磁盘配置",
     codexProviderCustomConfigLabel: "自定义配置",
+    codexProviderSelectedTip: "已选择，点击左侧 Codex 即可直接开启会话",
     sessionActionsGroup: "新建会话",
     newSessionInFolder: "在 {{name}} 中新建会话",
     activateWorkspace: "切到主区",

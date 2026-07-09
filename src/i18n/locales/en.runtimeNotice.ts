@@ -60,6 +60,10 @@ const enRuntimeNotice = {
       unavailable: "{{engine}} is not installed. Install it first.",
       requiresLogin: "{{engine}} requires sign-in",
     },
+    codex: {
+      providerSelected:
+        "{{name}} selected. Click the Codex entry to create a session.",
+    },
     claude: {
       resumeCommandCopied:
         "Claude resume command copied. If the TUI /resume picker does not show this GUI session, run claude --resume {{sessionId}} or /resume {{sessionId}} explicitly.",

@@ -27,6 +27,24 @@ import {
   type CodexProviderProfileOption,
 } from "../../threads/constants/codexProviderProfiles";
 
+const CODEX_LAST_PROVIDER_PROFILE_KEY = "codexLastProviderProfileId";
+
+function readCodexLastProviderProfileId(): string | null {
+  try {
+    return window.localStorage.getItem(CODEX_LAST_PROVIDER_PROFILE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeCodexLastProviderProfileId(id: string) {
+  try {
+    window.localStorage.setItem(CODEX_LAST_PROVIDER_PROFILE_KEY, id);
+  } catch {
+    // ignore storage write failures
+  }
+}
+
 export type WorkspaceMenuIconKind =
   | "engine-claude"
   | "engine-codex"
@@ -51,6 +69,10 @@ export type WorkspaceMenuAction = {
   statusLabel?: string | null;
   refreshable?: boolean;
   refreshing?: boolean;
+  selected?: boolean;
+  keepMenuOpen?: boolean;
+  /** Hint shown inside the submenu after one of its children is selected. */
+  selectionHint?: string;
   onSelect: () => void;
   onRefresh?: () => Promise<void> | void;
   children?: WorkspaceMenuAction[];
@@ -252,7 +274,9 @@ export function useSidebarMenus({
       if (action.unavailable) {
         return;
       }
-      closeWorkspaceMenu();
+      if (!action.keepMenuOpen) {
+        closeWorkspaceMenu();
+      }
       action.onSelect();
     },
     [closeWorkspaceMenu],
@@ -509,6 +533,10 @@ export function useSidebarMenus({
     [enabledEngines],
   );
 
+  const [codexSelectedProfileId, setCodexSelectedProfileId] = useState<
+    string | null
+  >(() => readCodexLastProviderProfileId());
+
   const buildSessionMenuGroup = useCallback(
     (
       workspace: WorkspaceInfo,
@@ -550,6 +578,9 @@ export function useSidebarMenus({
         },
         ...codexProviderProfiles.filter((profile) => profile.source === "managed"),
       ];
+      const codexSelectedProfile =
+        codexProfiles.find((profile) => profile.id === codexSelectedProfileId) ??
+        codexProfiles[0];
       const actions = [
         {
           id: "new-session-shared",
@@ -576,10 +607,12 @@ export function useSidebarMenus({
           label: t("workspace.engineCodex"),
           iconKind: "engine-codex",
           submenuTitle: t("sidebar.codexProviderChoiceTitle"),
+          selectionHint: t("sidebar.codexProviderSelectedTip"),
           ...resolveEngineActionMeta(workspace, "codex"),
           onSelect: async () => {
             const threadId = await runAddAgent("codex", {
-              providerProfileId: CODEX_DISK_PROVIDER_PROFILE_ID,
+              providerProfileId: codexSelectedProfile.id,
+              providerProfile: codexSelectedProfile,
             });
             await handleCreatedSession(threadId);
           },
@@ -592,12 +625,18 @@ export function useSidebarMenus({
                 : t("sidebar.codexProviderCustomConfigLabel"),
             iconKind: "engine-codex" as const,
             ...resolveEngineActionMeta(workspace, "codex"),
-            onSelect: async () => {
-              const threadId = await runAddAgent("codex", {
-                providerProfileId: profile.id,
-                providerProfile: profile,
+            selected: profile.id === codexSelectedProfile.id,
+            keepMenuOpen: true,
+            onSelect: () => {
+              writeCodexLastProviderProfileId(profile.id);
+              setCodexSelectedProfileId(profile.id);
+              pushGlobalRuntimeNotice({
+                severity: "info",
+                category: "runtime",
+                messageKey: "runtimeNotice.codex.providerSelected",
+                messageParams: { name: profile.name },
+                dedupeKey: "codex-provider-selected",
               });
-              await handleCreatedSession(threadId);
             },
           })),
         },
@@ -645,6 +684,7 @@ export function useSidebarMenus({
       onAddSharedAgent,
       onAssignNewSessionToFolder,
       codexProviderProfiles,
+      codexSelectedProfileId,
       resolveEngineActionMeta,
       isEngineSessionEntryVisible,
     ],
@@ -674,6 +714,7 @@ export function useSidebarMenus({
             id: child.id,
             unavailable: child.unavailable,
             statusLabel: child.statusLabel ?? null,
+            selected: child.selected ?? false,
           })) ?? null,
         })) ?? [],
       );
@@ -687,6 +728,7 @@ export function useSidebarMenus({
             id: child.id,
             unavailable: child.unavailable,
             statusLabel: child.statusLabel ?? null,
+            selected: child.selected ?? false,
           })) ?? null,
         })),
       );

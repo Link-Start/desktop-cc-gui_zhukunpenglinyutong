@@ -21,6 +21,7 @@ function createCodexAction(): WorkspaceMenuAction {
     label: "Codex",
     iconKind: "engine-codex",
     submenuTitle: "Provider selection",
+    selectionHint: "Selected. Click Codex to create a session.",
     onSelect: vi.fn(),
     children: [
       {
@@ -28,6 +29,7 @@ function createCodexAction(): WorkspaceMenuAction {
         label: "Disk config",
         badgeLabel: "Disk config",
         iconKind: "engine-codex",
+        keepMenuOpen: true,
         onSelect: vi.fn(),
       },
       {
@@ -35,6 +37,7 @@ function createCodexAction(): WorkspaceMenuAction {
         label: "OpenAI",
         badgeLabel: "Custom config",
         iconKind: "engine-codex",
+        keepMenuOpen: true,
         onSelect: vi.fn(),
       },
     ],
@@ -114,6 +117,45 @@ describe("SidebarWorkspaceMenuOverlay", () => {
     expect(screen.getByText("OpenAI")).toBeTruthy();
     expect(screen.getAllByText("Disk config")).toHaveLength(2);
     expect(screen.getByText("Custom config")).toBeTruthy();
+  });
+
+  it("shows the selection hint after picking a provider that keeps the menu open", () => {
+    const codexAction = createCodexAction();
+    const onAction = vi.fn();
+
+    render(
+      <SidebarWorkspaceMenuOverlay
+        menu={{
+          x: 32,
+          y: 28,
+          groups: [
+            {
+              id: "new-session",
+              label: "New session",
+              actions: [codexAction],
+            },
+          ],
+        }}
+        t={t}
+        onClose={vi.fn()}
+        onAction={onAction}
+        renderIcon={() => null}
+      />,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("menuitem", { name: "Codex" }));
+    expect(
+      screen.queryByText("Selected. Click Codex to create a session."),
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /OpenAI/ }));
+
+    expect(onAction).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "provider-openai" }),
+    );
+    expect(
+      screen.getByText("Selected. Click Codex to create a session."),
+    ).toBeTruthy();
   });
 
   it("opens the child flyout to the left of the root menu near the viewport edge", () => {

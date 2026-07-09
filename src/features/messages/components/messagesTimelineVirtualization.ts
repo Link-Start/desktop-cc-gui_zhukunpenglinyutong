@@ -620,18 +620,31 @@ export function resolveVirtualizedTimelineScopeReset(input: {
       shouldMeasure: false,
     };
   }
+  // 虚拟化刚翻开（previousScopeKey=null）必须立即重测，不能等 stableHistoryView：
+  // TanStack 在 enabled=false 期间会清空 itemSizeCache（getMeasurements 的 disabled
+  // 分支），发送消息使 isWorking=true、门槛从 48 降到 16 时虚拟化带着空缓存翻开，
+  // 全部行按估高摆放（长回复封顶 260px），新气泡/working 指示会叠进上一条长回复
+  // 的真实高度区间；此时四条重测路径全被工作态门禁挡住，重叠会一直持续到首个
+  // delta 触发 liveRowRemeasure 才自愈。
+  if (input.previousScopeKey === null) {
+    if (input.hasPendingJump || !input.hasScrollElement) {
+      return {
+        nextScopeKey: null,
+        shouldResetScroll: false,
+        shouldMeasure: false,
+      };
+    }
+    return {
+      nextScopeKey: input.nextScopeKey,
+      shouldResetScroll: false,
+      shouldMeasure: true,
+    };
+  }
   if (!input.stableHistoryView || input.hasPendingJump || !input.hasScrollElement) {
     return {
       nextScopeKey: input.previousScopeKey,
       shouldResetScroll: false,
       shouldMeasure: false,
-    };
-  }
-  if (input.previousScopeKey === null) {
-    return {
-      nextScopeKey: input.nextScopeKey,
-      shouldResetScroll: false,
-      shouldMeasure: true,
     };
   }
   if (
