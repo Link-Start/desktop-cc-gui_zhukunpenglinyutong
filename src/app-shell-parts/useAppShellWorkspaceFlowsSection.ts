@@ -73,6 +73,7 @@ export type WorkspaceShellBoundary = {
   alertError: (message: string) => void;
   appSettings: WorkspaceShellSettings;
   clearDraftForThread: (threadId: string) => void;
+  closeSettings: () => void;
   closeTerminalPanel: () => void;
   collapseRightPanel: () => void;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
@@ -80,7 +81,7 @@ export type WorkspaceShellBoundary = {
   exitDiffView: () => void;
   handleToggleTerminal: () => void;
   isCompact: boolean;
-  listThreadsForWorkspaceTracked: (workspace: WorkspaceInfo) => Promise<unknown> | unknown;
+  listThreadsForWorkspaceTracked: (workspace: WorkspaceInfo) => Promise<unknown>;
   openTerminal: () => unknown;
   queueSaveSettings: (
     settings: WorkspaceShellSettings,
@@ -131,6 +132,7 @@ export function useAppShellWorkspaceFlowsSection(
     alertError,
     appSettings,
     clearDraftForThread,
+    closeSettings,
     closeTerminalPanel,
     collapseRightPanel,
     connectWorkspace,
@@ -495,6 +497,49 @@ export function useAppShellWorkspaceFlowsSection(
     };
   }, [navigateToThread]);
 
+  const handleOpenMailSession = useCallback(
+    (target: {
+      sessionId: string;
+      workspaceId: string;
+      threadId: string;
+      turnId: string;
+    }) => {
+      const workspace =
+        workspaces.find((entry) => entry.id === target.workspaceId) ?? null;
+      const threadId = target.threadId?.trim();
+      if (!workspace || !threadId) {
+        alertError(t("settings.emailOpenSessionUnavailable"));
+        return;
+      }
+      closeSettings();
+      navigateToThread(target.workspaceId, threadId);
+      const hasThread = (threadsByWorkspace[target.workspaceId] ?? []).some(
+        (thread) => thread.id === threadId,
+      );
+      if (!hasThread) {
+        void listThreadsForWorkspaceTracked(workspace).catch((error) => {
+          addDebugEntry({
+            id: `${Date.now()}-email-mail-session-open-fallback-error`,
+            timestamp: Date.now(),
+            source: "error",
+            label: "email/mail-session open fallback",
+            payload: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+    },
+    [
+      addDebugEntry,
+      alertError,
+      closeSettings,
+      listThreadsForWorkspaceTracked,
+      navigateToThread,
+      t,
+      threadsByWorkspace,
+      workspaces,
+    ],
+  );
+
   const handleSelectStatusPanelSubagent = useCallback(
     (agent: any) => {
       const target = agent.navigationTarget;
@@ -625,6 +670,7 @@ export function useAppShellWorkspaceFlowsSection(
     handleSelectOpenAppId,
     runLatestThreadSwitchWork,
     navigateToThread,
+    handleOpenMailSession,
     handleOpenClaudeTui,
     handleSelectStatusPanelSubagent,
     openAppIconById,

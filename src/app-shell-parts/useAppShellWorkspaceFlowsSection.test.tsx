@@ -123,6 +123,7 @@ function createContext(overrides: Partial<Parameters<typeof useAppShellWorkspace
     alertError: vi.fn(),
     appSettings: { workspaceGroups: [] },
     clearDraftForThread: vi.fn(),
+    closeSettings: vi.fn(),
     closeTerminalPanel: vi.fn(),
     collapseRightPanel: vi.fn(),
     connectWorkspace: vi.fn(),
@@ -244,6 +245,72 @@ describe("useAppShellWorkspaceFlowsSection", () => {
     expect(context.collapseRightPanel).not.toHaveBeenCalled();
     expect(context.setActiveThreadId).toHaveBeenCalledWith("thread-2", "ws-1");
     expect(context.setActiveEngine).toHaveBeenCalledWith("codex");
+  });
+
+  it("opens a known mail session and closes settings without reloading threads", () => {
+    const context = createContext();
+    const { result } = renderHook(() =>
+      useAppShellWorkspaceFlowsSection(context),
+    );
+
+    act(() => {
+      result.current.handleOpenMailSession({
+        sessionId: "mail-session-1",
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+      });
+    });
+
+    expect(context.closeSettings).toHaveBeenCalledTimes(1);
+    expect(context.selectWorkspace).toHaveBeenCalledWith("ws-1");
+    expect(context.setActiveThreadId).toHaveBeenCalledWith("thread-1", "ws-1");
+    expect(context.listThreadsForWorkspaceTracked).not.toHaveBeenCalled();
+  });
+
+  it("reloads workspace threads when a mail session thread is not listed", () => {
+    const context = createContext({
+      threadsByWorkspace: { "ws-1": [] },
+      listThreadsForWorkspaceTracked: vi.fn().mockResolvedValue(undefined),
+    });
+    const { result } = renderHook(() =>
+      useAppShellWorkspaceFlowsSection(context),
+    );
+
+    act(() => {
+      result.current.handleOpenMailSession({
+        sessionId: "mail-session-1",
+        workspaceId: "ws-1",
+        threadId: "thread-missing",
+        turnId: "turn-1",
+      });
+    });
+
+    expect(context.listThreadsForWorkspaceTracked).toHaveBeenCalledWith(
+      context.workspaces[0],
+    );
+  });
+
+  it("rejects a mail session without a valid workspace or thread", () => {
+    const context = createContext();
+    const { result } = renderHook(() =>
+      useAppShellWorkspaceFlowsSection(context),
+    );
+
+    act(() => {
+      result.current.handleOpenMailSession({
+        sessionId: "mail-session-1",
+        workspaceId: "missing-workspace",
+        threadId: " ",
+        turnId: "turn-1",
+      });
+    });
+
+    expect(context.alertError).toHaveBeenCalledWith(
+      "settings.emailOpenSessionUnavailable",
+    );
+    expect(context.closeSettings).not.toHaveBeenCalled();
+    expect(context.setActiveThreadId).not.toHaveBeenCalled();
   });
 
   it("drops stale thread switch work after a rapid foreground navigation", async () => {
