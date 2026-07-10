@@ -127,7 +127,7 @@ describe("WorkspaceNoteCardPanel", () => {
     });
   }
 
-  it("starts with capture editor collapsed and expands on plus", async () => {
+  it("keeps quick capture available and clears the draft from the new-note action", async () => {
     render(
       <WorkspaceNoteCardPanel
         workspaceId="ws-1"
@@ -139,16 +139,17 @@ describe("WorkspaceNoteCardPanel", () => {
     await flushListLoad();
     vi.useRealTimers();
 
-    expect(screen.queryByTestId("workspace-note-card-rich-input")).toBeNull();
+    const editor = screen.getByTestId("workspace-note-card-rich-input") as HTMLTextAreaElement;
+    fireEvent.change(editor, { target: { value: "draft" } });
 
     fireEvent.click(screen.getByRole("button", { name: "noteCards.new" }));
 
     await waitFor(() => {
-      expect(screen.queryByTestId("workspace-note-card-rich-input")).not.toBeNull();
+      expect(editor.value).toBe("");
     });
   });
 
-  it("expands the editor when selecting a note card", async () => {
+  it("loads a selected note into the focused editor and keeps the list item visible", async () => {
     render(
       <WorkspaceNoteCardPanel
         workspaceId="ws-1"
@@ -160,13 +161,14 @@ describe("WorkspaceNoteCardPanel", () => {
     await flushListLoad();
     vi.useRealTimers();
 
-    expect(screen.queryByTestId("workspace-note-card-rich-input")).toBeNull();
-
     fireEvent.click(screen.getByRole("button", { name: /发布清单/ }));
 
     await waitFor(() => {
-      expect(screen.queryByTestId("workspace-note-card-rich-input")).not.toBeNull();
+      expect(
+        (screen.getByTestId("workspace-note-card-rich-input") as HTMLTextAreaElement).value,
+      ).toBe("先构建再发布");
     });
+    expect(screen.getByRole("button", { name: /发布清单/ }).getAttribute("aria-pressed")).toBe("true");
     expect(noteCardsFacade.get).toHaveBeenCalledWith(
       expect.objectContaining({
         noteId: "note-1",
@@ -301,5 +303,48 @@ describe("WorkspaceNoteCardPanel", () => {
         workspaceId: "ws-1",
       }),
     );
+  });
+
+  it("sends the current query to the active collection and clears it accessibly", async () => {
+    render(
+      <WorkspaceNoteCardPanel
+        workspaceId="ws-1"
+        workspaceName="demo"
+        workspacePath="/tmp/demo"
+      />,
+    );
+
+    await flushListLoad();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "noteCards.searchPlaceholder" }), {
+      target: { value: "release" },
+    });
+
+    await flushListLoad();
+    vi.useRealTimers();
+
+    expect(noteCardsFacade.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        archived: false,
+        query: "release",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "noteCards.archive" }));
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+    });
+
+    expect(noteCardsFacade.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        archived: true,
+        query: "release",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "noteCards.clearSearch" }));
+    expect(
+      (screen.getByRole("textbox", { name: "noteCards.searchPlaceholder" }) as HTMLInputElement).value,
+    ).toBe("");
   });
 });

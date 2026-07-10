@@ -122,6 +122,7 @@ export type CenterMode =
   | "chat"
   | "diff"
   | "editor"
+  | "notes"
   | "memory"
   | "projectMap"
   | "intentCanvas"

@@ -36,6 +36,7 @@ type DesktopLayoutProps = {
   messagesNode: ReactNode;
   gitDiffViewerNode: ReactNode;
   fileViewPanelNode: ReactNode;
+  noteCardsPanelNode: ReactNode;
   fileComparePanelNode?: ReactNode;
   projectMapPanelNode?: ReactNode;
   intentCanvasPanelNode?: ReactNode;
@@ -79,6 +80,7 @@ export function DesktopLayout({
   messagesNode,
   gitDiffViewerNode,
   fileViewPanelNode,
+  noteCardsPanelNode,
   fileComparePanelNode = null,
   projectMapPanelNode = null,
   intentCanvasPanelNode = null,
@@ -99,12 +101,14 @@ export function DesktopLayout({
   const diffLayerRef = useRef<HTMLDivElement | null>(null);
   const chatLayerRef = useRef<HTMLDivElement | null>(null);
   const editorLayerRef = useRef<HTMLDivElement | null>(null);
+  const noteCardsLayerRef = useRef<HTMLDivElement | null>(null);
   const projectMapLayerRef = useRef<HTMLDivElement | null>(null);
   const intentCanvasLayerRef = useRef<HTMLDivElement | null>(null);
   const fileCompareLayerRef = useRef<HTMLDivElement | null>(null);
   const memoryLayerRef = useRef<HTMLDivElement | null>(null);
   const splitResizeCleanupRef = useRef<(() => void) | null>(null);
   const isEditorSplitMode = centerMode === "editor";
+  const isNoteCardsSplitMode = centerMode === "notes";
   const isEditorHorizontalSplitMode =
     isEditorSplitMode && editorSplitLayout === "horizontal";
   const isEditorSplitChatVisible =
@@ -115,7 +119,7 @@ export function DesktopLayout({
     !isEditorFileMaximized;
   const isBrowserDockSplitVisible = centerMode === "chat" && Boolean(browserDockNode);
   const shouldPlaceComposerInChatColumn =
-    isEditorSplitChatVisible || isBrowserDockSplitVisible;
+    isEditorSplitChatVisible || isBrowserDockSplitVisible || isNoteCardsSplitMode;
   const hasBottomPanel = Boolean(planPanelNode);
   const shouldShowComposerBelowContent =
     centerMode !== "projectMap" &&
@@ -129,6 +133,7 @@ export function DesktopLayout({
     const diffLayer = diffLayerRef.current;
     const chatLayer = chatLayerRef.current;
     const editorLayer = editorLayerRef.current;
+    const noteCardsLayer = noteCardsLayerRef.current;
     const projectMapLayer = projectMapLayerRef.current;
     const intentCanvasLayer = intentCanvasLayerRef.current;
     const fileCompareLayer = fileCompareLayerRef.current;
@@ -137,6 +142,7 @@ export function DesktopLayout({
       { ref: diffLayer, mode: "diff" as const },
       { ref: chatLayer, mode: "chat" as const },
       { ref: editorLayer, mode: "editor" as const },
+      { ref: noteCardsLayer, mode: "notes" as const },
       { ref: projectMapLayer, mode: "projectMap" as const },
       { ref: intentCanvasLayer, mode: "intentCanvas" as const },
       { ref: fileCompareLayer, mode: "fileCompare" as const },
@@ -146,7 +152,7 @@ export function DesktopLayout({
       if (!ref) continue;
       const isInteractive =
         centerMode === mode ||
-        (isEditorSplitChatVisible && mode === "chat") ||
+        ((isEditorSplitChatVisible || isNoteCardsSplitMode) && mode === "chat") ||
         (isEditorSplitProjectMapVisible && mode === "projectMap");
       if (isInteractive) {
         ref.removeAttribute("inert");
@@ -160,7 +166,7 @@ export function DesktopLayout({
       for (const { ref, mode } of layers) {
         const isInteractive =
           centerMode === mode ||
-          (isEditorSplitChatVisible && mode === "chat") ||
+          ((isEditorSplitChatVisible || isNoteCardsSplitMode) && mode === "chat") ||
           (isEditorSplitProjectMapVisible && mode === "projectMap");
         if (ref && !isInteractive && ref.contains(activeElement)) {
           activeElement.blur();
@@ -168,7 +174,7 @@ export function DesktopLayout({
         }
       }
     }
-  }, [centerMode, isEditorSplitChatVisible, isEditorSplitProjectMapVisible]);
+  }, [centerMode, isEditorSplitChatVisible, isEditorSplitProjectMapVisible, isNoteCardsSplitMode]);
 
   useEffect(() => {
     return () => {
@@ -313,6 +319,74 @@ export function DesktopLayout({
     },
     [],
   );
+  const handleNoteCardsSplitPointerDown = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+      const divider = event.currentTarget;
+      const splitRoot = divider.closest(".content.is-note-cards-split") as HTMLElement | null;
+      if (!splitRoot) {
+        return;
+      }
+      const chatLayer = splitRoot.querySelector(
+        ".content-layer--note-cards-companion",
+      ) as HTMLElement | null;
+      const noteCardsLayer = splitRoot.querySelector(
+        ".content-layer--note-cards",
+      ) as HTMLElement | null;
+      if (!chatLayer || !noteCardsLayer) {
+        return;
+      }
+      const chatRect = chatLayer.getBoundingClientRect();
+      const noteCardsRect = noteCardsLayer.getBoundingClientRect();
+      const totalWidth = chatRect.width + noteCardsRect.width;
+      if (totalWidth <= 0) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const startX = event.clientX;
+      const startNoteCardsWidth = noteCardsRect.width;
+      const minNoteCardsWidth = Math.max(420, totalWidth * 0.48);
+      const maxNoteCardsWidth = Math.min(totalWidth - 280, totalWidth * 0.76);
+      if (maxNoteCardsWidth <= minNoteCardsWidth) {
+        return;
+      }
+
+      document.body.classList.add("note-cards-split-resizing");
+
+      const cleanup = () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+        window.removeEventListener("pointercancel", handlePointerUp);
+        document.body.classList.remove("note-cards-split-resizing");
+        splitResizeCleanupRef.current = null;
+      };
+
+      const handlePointerMove = (moveEvent: globalThis.PointerEvent) => {
+        const deltaX = moveEvent.clientX - startX;
+        const nextNoteCardsWidth = Math.min(
+          maxNoteCardsWidth,
+          Math.max(minNoteCardsWidth, startNoteCardsWidth - deltaX),
+        );
+        const nextRatio = (nextNoteCardsWidth / totalWidth) * 100;
+        splitRoot.style.setProperty("--note-cards-split-ratio", nextRatio.toFixed(2));
+      };
+
+      const handlePointerUp = () => {
+        cleanup();
+      };
+
+      splitResizeCleanupRef.current?.();
+      splitResizeCleanupRef.current = cleanup;
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+      window.addEventListener("pointercancel", handlePointerUp);
+    },
+    [],
+  );
 
   if (showKanban) {
     return (
@@ -383,6 +457,8 @@ export function DesktopLayout({
                 {approvalToastsNode}
                 <div
                   className={`content${isEditorSplitMode ? " is-editor-split" : ""}${
+                    isNoteCardsSplitMode ? " is-note-cards-split" : ""
+                  }${
                     isBrowserDockSplitVisible ? " is-browser-dock-split" : ""
                   }${
                     isEditorSplitMode
@@ -457,14 +533,34 @@ export function DesktopLayout({
                     {fileComparePanelNode}
                   </div>
                   <div
+                    className={`content-layer content-layer--note-cards ${
+                      isNoteCardsSplitMode ? "is-active" : "is-hidden"
+                    }`}
+                    aria-hidden={!isNoteCardsSplitMode}
+                    ref={noteCardsLayerRef}
+                  >
+                    {noteCardsPanelNode}
+                  </div>
+                  {isNoteCardsSplitMode ? (
+                    <div
+                      className="content-note-cards-split-divider"
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label={t("layout.resizeNoteCardsSplit")}
+                      onPointerDown={handleNoteCardsSplitPointerDown}
+                    />
+                  ) : null}
+                  <div
                     className={`content-layer content-layer--chat ${
-                      centerMode === "chat" || isEditorSplitChatVisible
+                      centerMode === "chat" || isEditorSplitChatVisible || isNoteCardsSplitMode
                         ? "is-active"
                         : "is-hidden"
                     }${
                       isEditorSplitChatVisible ? " content-layer--editor-companion" : ""
+                    }${
+                      isNoteCardsSplitMode ? " content-layer--note-cards-companion" : ""
                     }`}
-                    aria-hidden={centerMode !== "chat" && !isEditorSplitChatVisible}
+                    aria-hidden={centerMode !== "chat" && !isEditorSplitChatVisible && !isNoteCardsSplitMode}
                     ref={chatLayerRef}
                   >
                     {messagesNode}

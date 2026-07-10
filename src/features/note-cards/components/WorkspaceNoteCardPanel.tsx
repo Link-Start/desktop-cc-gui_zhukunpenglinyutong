@@ -2,14 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import Archive from "lucide-react/dist/esm/icons/archive";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import ImagePlus from "lucide-react/dist/esm/icons/image-plus";
-import Maximize2 from "lucide-react/dist/esm/icons/maximize-2";
-import Minimize2 from "lucide-react/dist/esm/icons/minimize-2";
 import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen";
 import Plus from "lucide-react/dist/esm/icons/plus";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Save from "lucide-react/dist/esm/icons/save";
+import Search from "lucide-react/dist/esm/icons/search";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2";
 import X from "lucide-react/dist/esm/icons/x";
@@ -89,6 +87,7 @@ export function WorkspaceNoteCardPanel({
 }: WorkspaceNoteCardPanelProps) {
   const { t, i18n } = useTranslation();
   const [collection, setCollection] = useState<NoteCardCollection>("active");
+  const [query, setQuery] = useState("");
   const [items, setItems] = useState<WorkspaceNoteCardSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,9 +98,6 @@ export function WorkspaceNoteCardPanel({
   const [titleDraft, setTitleDraft] = useState("");
   const [bodyDraft, setBodyDraft] = useState("");
   const [attachmentDrafts, setAttachmentDrafts] = useState<string[]>([]);
-  const [pendingEditorOpen, setPendingEditorOpen] = useState(false);
-  const [editorCollapsed, setEditorCollapsed] = useState(true);
-  const [editorExpanded, setEditorExpanded] = useState(false);
   const [imagePreview, setImagePreview] = useState<NoteCardImagePreview | null>(null);
   const [saving, setSaving] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -134,8 +130,9 @@ export function WorkspaceNoteCardPanel({
     setSelectedId(null);
     setSelectedWorkspaceScope(null);
     setSelectedNote(null);
-    setEditorCollapsed(true);
-    setEditorExpanded(false);
+    setTitleDraft("");
+    setBodyDraft("");
+    setAttachmentDrafts([]);
     setError(null);
   }, [collection]);
 
@@ -143,9 +140,7 @@ export function WorkspaceNoteCardPanel({
     setItems([]);
     setLoading(false);
     setDetailLoading(false);
-    setPendingEditorOpen(false);
-    setEditorCollapsed(true);
-    setEditorExpanded(false);
+    setQuery("");
     setImagePreview(null);
     resetDraft();
   }, [resetDraft, workspaceScopeKey]);
@@ -157,23 +152,7 @@ export function WorkspaceNoteCardPanel({
     setCollection("active");
     setSelectedId(focusNoteId);
     setSelectedWorkspaceScope(workspaceScopeKey);
-    setEditorCollapsed(false);
-    setEditorExpanded(false);
   }, [focusNoteId, focusRequestKey, workspaceId, workspaceScopeKey]);
-
-  useEffect(() => {
-    if (!archived && selectedId) {
-      setEditorCollapsed(false);
-    }
-  }, [archived, selectedId]);
-
-  useEffect(() => {
-    if (!archived && pendingEditorOpen) {
-      setEditorCollapsed(false);
-      setEditorExpanded(false);
-      setPendingEditorOpen(false);
-    }
-  }, [archived, pendingEditorOpen]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -194,7 +173,7 @@ export function WorkspaceNoteCardPanel({
           workspaceName,
           workspacePath,
           archived,
-          query: null,
+          query: query.trim() || null,
           page: 0,
           pageSize: 200,
         })
@@ -236,6 +215,7 @@ export function WorkspaceNoteCardPanel({
     };
   }, [
     archived,
+    query,
     refreshNonce,
     selectedId,
     workspaceId,
@@ -295,8 +275,11 @@ export function WorkspaceNoteCardPanel({
     if (loading) {
       return t("noteCards.loading");
     }
+    if (query.trim()) {
+      return t("noteCards.emptySearch");
+    }
     return archived ? t("noteCards.emptyArchive") : t("noteCards.emptyPool");
-  }, [archived, loading, t, workspaceId]);
+  }, [archived, loading, query, t, workspaceId]);
 
   const formatDate = useCallback(
     (value?: number | null) => {
@@ -423,8 +406,6 @@ export function WorkspaceNoteCardPanel({
         });
         if (selectedId === noteId) {
           resetDraft();
-          setEditorCollapsed(true);
-          setEditorExpanded(false);
         }
         refreshList();
       } catch (archiveError) {
@@ -485,8 +466,6 @@ export function WorkspaceNoteCardPanel({
         });
         if (selectedId === noteId) {
           resetDraft();
-          setEditorCollapsed(true);
-          setEditorExpanded(false);
         }
         refreshList();
       } catch (deleteError) {
@@ -500,58 +479,65 @@ export function WorkspaceNoteCardPanel({
     (noteId: string) => {
       setSelectedId(noteId);
       setSelectedWorkspaceScope(workspaceScopeKey);
-      if (!archived) {
-        setEditorCollapsed(false);
-      }
     },
-    [archived, workspaceScopeKey],
+    [workspaceScopeKey],
   );
 
   const handleCreateNote = useCallback(() => {
-    setPendingEditorOpen(true);
     if (archived) {
       setCollection("active");
     }
     resetDraft();
   }, [archived, resetDraft]);
 
-  const handleCollapseEditor = useCallback(() => {
-    setEditorCollapsed(true);
-    setEditorExpanded(false);
-  }, []);
-
   const previewNote = selectedNote;
   const saveLabel = selectedId && !archived ? t("noteCards.saveUpdate") : t("noteCards.saveCreate");
-  const editorToggleLabel = editorExpanded ? t("noteCards.restoreEditor") : t("noteCards.maximizeEditor");
-  const editorCollapseLabel = editorCollapsed ? t("noteCards.expandEditor") : t("noteCards.collapseEditor");
   const attachImageLabel = t("noteCards.attachImage");
   const editorHintLabel = t("noteCards.editorHint");
   const storageHint = t("noteCards.storageHint", {
     path: buildNoteCardStorageHintPath(projectName),
   });
-  const shouldShowExpandedEditor = !archived && !editorCollapsed;
-  const listItems = useMemo(
-    () => (selectedId && shouldShowExpandedEditor ? items.filter((item) => item.id !== selectedId) : items),
-    [items, selectedId, shouldShowExpandedEditor],
-  );
-  const isListEmpty = listItems.length === 0;
-  const shouldShowList = listItems.length > 0 || (!selectedId && items.length === 0);
+  const isListEmpty = items.length === 0;
 
   return (
-    <div
-      className={`workspace-note-cards-panel${
-        editorExpanded && shouldShowExpandedEditor ? " is-editor-expanded" : ""
-      }`}
-    >
+    <div className="workspace-note-cards-panel">
       <header className="workspace-note-cards-topbar">
         <div className="workspace-note-cards-topbar-main">
           <span className="workspace-note-cards-title-icon" aria-hidden>
             <NotebookPen size={16} />
           </span>
-
+          <div className="workspace-note-cards-title-block">
+            <h2>{t("noteCards.title")}</h2>
+            <p>{t("noteCards.subtitle")}</p>
+          </div>
+          <div className="workspace-note-cards-header-actions">
+            <button
+              type="button"
+              className="ghost icon-button"
+              onClick={refreshList}
+              aria-label={t("noteCards.refresh")}
+              title={t("noteCards.refresh")}
+            >
+              <RefreshCw size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="workspace-note-cards-primary-action"
+              onClick={handleCreateNote}
+              aria-label={t("noteCards.new")}
+              title={t("noteCards.new")}
+            >
+              <Plus size={14} aria-hidden />
+              <span>{t("noteCards.new")}</span>
+            </button>
+          </div>
+        </div>
+        <div className="workspace-note-cards-toolbar">
           <div className="workspace-note-cards-collection-switch" role="tablist" aria-label={t("noteCards.title")}>
             <button
               type="button"
+              role="tab"
+              aria-selected={!archived}
               className={`workspace-note-cards-collection-tab${!archived ? " is-active" : ""}`}
               onClick={() => setCollection("active")}
             >
@@ -559,68 +545,117 @@ export function WorkspaceNoteCardPanel({
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={archived}
               className={`workspace-note-cards-collection-tab${archived ? " is-active" : ""}`}
               onClick={() => setCollection("archive")}
             >
               {t("noteCards.archive")}
             </button>
           </div>
-
-          <div className="workspace-note-cards-header-actions">
-            <button
-              type="button"
-              className="ghost icon-button"
-              onClick={handleCreateNote}
-              aria-label={t("noteCards.new")}
-              title={t("noteCards.new")}
-            >
-              <Plus size={14} aria-hidden />
-            </button>
-          </div>
+          <label className="workspace-note-cards-search">
+            <Search size={14} aria-hidden />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t("noteCards.searchPlaceholder")}
+              aria-label={t("noteCards.searchPlaceholder")}
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label={t("noteCards.clearSearch")}
+                title={t("noteCards.clearSearch")}
+              >
+                <X size={13} aria-hidden />
+              </button>
+            ) : null}
+          </label>
         </div>
-        <p className="workspace-note-cards-storage-hint">{storageHint}</p>
       </header>
 
+      <section className={`workspace-note-cards-list${isListEmpty ? " is-empty" : ""}`}>
+        {isListEmpty ? (
+          <div className="workspace-note-cards-empty">{emptyMessage}</div>
+        ) : (
+          items.map((item) => {
+            const isSelected = item.id === selectedId;
+            return (
+              <article
+                key={item.id}
+                className={`workspace-note-cards-card${isSelected ? " is-selected" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="workspace-note-cards-card-main"
+                  onClick={() => handleSelectCard(item.id)}
+                  aria-pressed={isSelected}
+                >
+                  <div className="workspace-note-cards-card-head">
+                    <strong>{item.title || t("noteCards.untitled")}</strong>
+                    {item.imageCount > 0 ? (
+                      <span className="workspace-note-cards-card-badge">
+                        {t("noteCards.imageCount", { count: item.imageCount })}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p>{item.plainTextExcerpt || t("noteCards.previewEmpty")}</p>
+                  <div className="workspace-note-cards-card-meta">
+                    <span>{t("noteCards.updatedAt", { time: formatDate(item.updatedAt) })}</span>
+                    {item.archived ? <span>{t("noteCards.archivedState")}</span> : null}
+                  </div>
+                </button>
+                <div className="workspace-note-cards-card-actions">
+                  {archived ? (
+                    <button
+                      type="button"
+                      className="ghost workspace-note-cards-icon-action"
+                      onClick={() => void handleRestore(item.id)}
+                      aria-label={t("noteCards.restore")}
+                      title={t("noteCards.restore")}
+                    >
+                      <Undo2 size={13} aria-hidden />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ghost workspace-note-cards-icon-action"
+                      onClick={() => void handleArchive(item.id)}
+                      aria-label={t("noteCards.archiveAction")}
+                      title={t("noteCards.archiveAction")}
+                    >
+                      <Archive size={13} aria-hidden />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="ghost workspace-note-cards-icon-action workspace-note-cards-danger"
+                    onClick={() => void handleDelete(item.id, item.title)}
+                    aria-label={t("noteCards.deleteAction")}
+                    title={t("noteCards.deleteAction")}
+                  >
+                    <Trash2 size={13} aria-hidden />
+                  </button>
+                </div>
+              </article>
+            );
+          })
+        )}
+      </section>
+
       {!archived ? (
-        <section
-          className={`workspace-note-cards-editor${editorCollapsed ? " is-collapsed" : ""}`}
-        >
+        <section className="workspace-note-cards-editor">
           <div className="workspace-note-cards-editor-head">
             <div className="workspace-note-cards-editor-copy" title={editorHintLabel}>
               <h3>{selectedId ? t("noteCards.editorEdit") : t("noteCards.editorCreate")}</h3>
-              <span>{editorHintLabel}</span>
+              <span>{selectedId ? t("noteCards.selectedHint") : t("noteCards.editorHintShort")}</span>
             </div>
             <div className="workspace-note-cards-head-actions">
-              <button
-                type="button"
-                className="ghost workspace-note-cards-inline-action workspace-note-cards-icon-action"
-                onClick={() => {
-                  if (editorCollapsed) {
-                    setEditorCollapsed(false);
-                    return;
-                  }
-                  handleCollapseEditor();
-                }}
-                aria-label={editorCollapseLabel}
-                title={editorCollapseLabel}
-              >
-                {editorCollapsed ? <ChevronDown size={14} aria-hidden /> : <ChevronUp size={14} aria-hidden />}
-              </button>
-              {shouldShowExpandedEditor ? (
+              {selectedId ? (
                 <button
                   type="button"
-                  className="ghost workspace-note-cards-inline-action workspace-note-cards-icon-action"
-                  onClick={() => setEditorExpanded((value) => !value)}
-                  aria-label={editorToggleLabel}
-                  title={editorToggleLabel}
-                >
-                  {editorExpanded ? <Minimize2 size={14} aria-hidden /> : <Maximize2 size={14} aria-hidden />}
-                </button>
-              ) : null}
-              {shouldShowExpandedEditor && selectedId ? (
-                <button
-                  type="button"
-                  className="ghost workspace-note-cards-inline-action workspace-note-cards-icon-action workspace-note-cards-danger"
+                  className="ghost workspace-note-cards-icon-action workspace-note-cards-danger"
                   onClick={() => void handleDelete(selectedId, selectedNote?.title ?? titleDraft)}
                   aria-label={t("noteCards.deleteAction")}
                   title={t("noteCards.deleteAction")}
@@ -628,10 +663,10 @@ export function WorkspaceNoteCardPanel({
                   <Trash2 size={14} aria-hidden />
                 </button>
               ) : null}
-              {shouldShowExpandedEditor && selectedId ? (
+              {selectedId ? (
                 <button
                   type="button"
-                  className="ghost workspace-note-cards-clear workspace-note-cards-icon-action"
+                  className="ghost workspace-note-cards-icon-action"
                   onClick={resetDraft}
                   aria-label={t("noteCards.clear")}
                   title={t("noteCards.clear")}
@@ -641,56 +676,52 @@ export function WorkspaceNoteCardPanel({
               ) : null}
             </div>
           </div>
-          {shouldShowExpandedEditor ? (
-            <div className="workspace-note-cards-editor-body">
-              <input
-                className="workspace-note-cards-title-input"
-                value={titleDraft}
-                onChange={(event) => setTitleDraft(event.target.value)}
-                placeholder={t("noteCards.titlePlaceholder")}
-              />
-
-              <RichTextInput
-                key={editorExpanded ? "expanded" : "default"}
-                value={bodyDraft}
-                onChange={setBodyDraft}
-                attachments={attachmentDrafts}
-                attachmentWorkspaceId={workspaceId}
-                onAttachImages={handleAttachImages}
-                onRemoveAttachment={handleRemoveAttachment}
-                placeholder={t("noteCards.bodyPlaceholder")}
-                enableResize
-                initialHeight={editorExpanded ? 520 : 180}
-                minHeight={editorExpanded ? 340 : 140}
-                maxHeight={editorExpanded ? 1600 : 320}
-                className="workspace-note-cards-rich-input"
-                footerClassName="workspace-note-cards-rich-footer"
-                footerLeft={(
-                  <button
-                    type="button"
-                    className="ghost workspace-note-cards-inline-action workspace-note-cards-icon-action"
-                    onClick={() => void handlePickImages()}
-                    aria-label={attachImageLabel}
-                    title={attachImageLabel}
-                  >
-                    <ImagePlus size={14} aria-hidden />
-                  </button>
-                )}
-                footerRight={(
-                  <button
-                    type="button"
-                    className="workspace-note-cards-save workspace-note-cards-icon-action"
-                    onClick={() => void handleSave()}
-                    disabled={saving || !workspaceId}
-                    aria-label={saveLabel}
-                    title={saveLabel}
-                  >
-                    <Save size={14} aria-hidden />
-                  </button>
-                )}
-              />
-            </div>
-          ) : null}
+          <div className="workspace-note-cards-editor-body">
+            <input
+              className="workspace-note-cards-title-input"
+              value={titleDraft}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              placeholder={t("noteCards.titlePlaceholder")}
+              aria-label={t("noteCards.titlePlaceholder")}
+            />
+            <RichTextInput
+              value={bodyDraft}
+              onChange={setBodyDraft}
+              attachments={attachmentDrafts}
+              attachmentWorkspaceId={workspaceId}
+              onAttachImages={handleAttachImages}
+              onRemoveAttachment={handleRemoveAttachment}
+              placeholder={t("noteCards.bodyPlaceholder")}
+              enableResize={false}
+              initialHeight={190}
+              minHeight={150}
+              maxHeight={520}
+              className="workspace-note-cards-rich-input"
+              footerClassName="workspace-note-cards-rich-footer"
+              footerLeft={(
+                <button
+                  type="button"
+                  className="ghost workspace-note-cards-icon-action"
+                  onClick={() => void handlePickImages()}
+                  aria-label={attachImageLabel}
+                  title={attachImageLabel}
+                >
+                  <ImagePlus size={14} aria-hidden />
+                </button>
+              )}
+              footerRight={(
+                <button
+                  type="button"
+                  className="workspace-note-cards-save"
+                  onClick={() => void handleSave()}
+                  disabled={saving || !workspaceId}
+                >
+                  <Save size={14} aria-hidden />
+                  <span>{saveLabel}</span>
+                </button>
+              )}
+            />
+          </div>
         </section>
       ) : (
         <section className="workspace-note-cards-preview-panel">
@@ -778,77 +809,7 @@ export function WorkspaceNoteCardPanel({
         <div className="workspace-note-cards-error">{error}</div>
       ) : null}
 
-      {shouldShowList ? (
-        <section className={`workspace-note-cards-list${isListEmpty ? " is-empty" : ""}`}>
-          {isListEmpty ? (
-            <div className="workspace-note-cards-empty">{emptyMessage}</div>
-          ) : (
-            listItems.map((item) => {
-              const isSelected = item.id === selectedId;
-              return (
-                <article
-                  key={item.id}
-                  className={`workspace-note-cards-card${isSelected ? " is-selected" : ""}`}
-                >
-                  <button
-                    type="button"
-                    className="workspace-note-cards-card-main"
-                    onClick={() => handleSelectCard(item.id)}
-                  >
-                    <div className="workspace-note-cards-card-head">
-                      <strong>{item.title || t("noteCards.untitled")}</strong>
-                      {item.imageCount > 0 ? (
-                        <span className="workspace-note-cards-card-badge">
-                          {t("noteCards.imageCount", { count: item.imageCount })}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p>{item.plainTextExcerpt || t("noteCards.previewEmpty")}</p>
-                    <div className="workspace-note-cards-card-meta">
-                      <span>{t("noteCards.updatedAt", { time: formatDate(item.updatedAt) })}</span>
-                      {item.archived ? (
-                        <span>{t("noteCards.archivedState")}</span>
-                      ) : null}
-                    </div>
-                  </button>
-                  <div className="workspace-note-cards-card-actions">
-                    {archived ? (
-                      <button
-                        type="button"
-                        className="ghost workspace-note-cards-inline-action workspace-note-cards-icon-action"
-                        onClick={() => void handleRestore(item.id)}
-                        aria-label={t("noteCards.restore")}
-                        title={t("noteCards.restore")}
-                      >
-                        <Undo2 size={14} aria-hidden />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="ghost workspace-note-cards-inline-action workspace-note-cards-icon-action"
-                        onClick={() => void handleArchive(item.id)}
-                        aria-label={t("noteCards.archiveAction")}
-                        title={t("noteCards.archiveAction")}
-                      >
-                        <Archive size={14} aria-hidden />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="ghost workspace-note-cards-inline-action workspace-note-cards-icon-action workspace-note-cards-danger"
-                      onClick={() => void handleDelete(item.id, item.title)}
-                      aria-label={t("noteCards.deleteAction")}
-                      title={t("noteCards.deleteAction")}
-                    >
-                      <Trash2 size={14} aria-hidden />
-                    </button>
-                  </div>
-                </article>
-              );
-            })
-          )}
-        </section>
-      ) : null}
+      <p className="workspace-note-cards-storage-hint" title={storageHint}>{storageHint}</p>
 
       {imagePreview ? (
         <ImagePreviewOverlay

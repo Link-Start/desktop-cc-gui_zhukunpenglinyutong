@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ComponentProps } from "react";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { DesktopLayout } from "./DesktopLayout";
 
@@ -31,6 +31,7 @@ function renderDesktopLayout(overrides: Partial<ComponentProps<typeof DesktopLay
       messagesNode={<div>messages</div>}
       gitDiffViewerNode={<div>git-diff-viewer</div>}
       fileViewPanelNode={<div>file-viewer</div>}
+      noteCardsPanelNode={<div>note-cards</div>}
       rightPanelToolbarNode={<div>right-toolbar</div>}
       gitDiffPanelNode={<div>activity-panel</div>}
       planPanelNode={<div>plan-panel</div>}
@@ -151,5 +152,50 @@ describe("DesktopLayout", () => {
 
     expect(chatLayer?.contains(composer)).toBe(false);
     expect(composer.parentElement?.className).toContain("main");
+  });
+
+  it("places the conversation left of note cards and keeps Composer in the conversation column", () => {
+    cleanup();
+    const { container, getByText } = renderDesktopLayout({ centerMode: "notes" });
+
+    const content = container.querySelector(".content.is-note-cards-split");
+    const noteCardsLayer = container.querySelector(".content-layer--note-cards");
+    const chatLayer = container.querySelector(".content-layer--note-cards-companion");
+    const composer = getByText("composer");
+    const divider = container.querySelector(".content-note-cards-split-divider");
+
+    expect(content).toBeTruthy();
+    expect(noteCardsLayer?.contains(getByText("note-cards"))).toBe(true);
+    expect(noteCardsLayer?.getAttribute("aria-hidden")).toBe("false");
+    expect(chatLayer?.contains(getByText("messages"))).toBe(true);
+    expect(chatLayer?.contains(composer)).toBe(true);
+    expect(divider?.getAttribute("role")).toBe("separator");
+    expect(divider?.getAttribute("aria-orientation")).toBe("vertical");
+    expect(divider?.getAttribute("aria-label")).toBe("layout.resizeNoteCardsSplit");
+  });
+
+  it("resizes the right note-card column while preserving minimum widths", () => {
+    cleanup();
+    const { container } = renderDesktopLayout({ centerMode: "notes" });
+
+    const content = container.querySelector(".content.is-note-cards-split") as HTMLElement;
+    const noteCardsLayer = container.querySelector(".content-layer--note-cards") as HTMLElement;
+    const chatLayer = container.querySelector(".content-layer--note-cards-companion") as HTMLElement;
+    const divider = container.querySelector(".content-note-cards-split-divider") as HTMLElement;
+
+    vi.spyOn(noteCardsLayer, "getBoundingClientRect").mockReturnValue({
+      width: 600,
+    } as DOMRect);
+    vi.spyOn(chatLayer, "getBoundingClientRect").mockReturnValue({
+      width: 300,
+    } as DOMRect);
+
+    fireEvent.pointerDown(divider, { button: 0, clientX: 300 });
+    fireEvent.pointerMove(window, { clientX: 360 });
+
+    expect(content.style.getPropertyValue("--note-cards-split-ratio")).toBe("60.00");
+
+    fireEvent.pointerUp(window);
+    expect(document.body.classList.contains("note-cards-split-resizing")).toBe(false);
   });
 });

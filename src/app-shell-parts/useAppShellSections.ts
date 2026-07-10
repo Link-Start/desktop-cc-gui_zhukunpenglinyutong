@@ -741,7 +741,8 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     (!isCompact
       ? (centerMode === "chat" ||
           centerMode === "diff" ||
-          centerMode === "editor") &&
+          centerMode === "editor" ||
+          centerMode === "notes") &&
         !showSpecHub &&
         !showWorkspaceHome
       : (isTablet ? tabletTab : activeTab) === "codex" && !showWorkspaceHome);

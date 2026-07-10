@@ -1523,6 +1523,14 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onOpenProjectMap();
         return;
       }
+      if (tabId === "notes") {
+        onFilePanelModeChange("notes");
+        setCenterMode(centerMode === "notes" ? "chat" : "notes");
+        return;
+      }
+      if (centerMode === "notes") {
+        setCenterMode("chat");
+      }
       onFilePanelModeChange(tabId);
     },
     [
@@ -1558,7 +1566,10 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   });
 
   let gitDiffPanelNode: ReactNode;
-  if (options.filePanelMode === "files" && options.activeWorkspace) {
+  if (
+    (options.filePanelMode === "files" || options.filePanelMode === "notes") &&
+    options.activeWorkspace
+  ) {
     gitDiffPanelNode = (
       <FileTreePanel
         workspaceId={options.activeWorkspace.id}
@@ -1571,7 +1582,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         sourceVersion={options.fileTreeSourceVersion}
         isLoading={options.fileTreeLoading}
         loadError={options.fileTreeLoadError}
-        filePanelMode={options.filePanelMode}
+        filePanelMode="files"
         onFilePanelModeChange={options.onFilePanelModeChange}
         onInsertText={options.onInsertComposerText}
         onOpenFile={options.onOpenFile}
@@ -1597,16 +1608,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         filePanelMode={options.filePanelMode}
         onFilePanelModeChange={options.onFilePanelModeChange}
         onOpenFile={options.onOpenFile}
-      />
-    );
-  } else if (options.filePanelMode === "notes") {
-    gitDiffPanelNode = (
-      <WorkspaceNoteCardPanel
-        workspaceId={options.activeWorkspace?.id ?? null}
-        workspaceName={options.activeWorkspace?.name ?? null}
-        workspacePath={options.activeWorkspace?.path ?? null}
-        focusNoteId={options.focusedWorkspaceNoteId ?? null}
-        focusRequestKey={options.focusedWorkspaceNoteRequestKey ?? 0}
       />
     );
   } else if (options.filePanelMode === "prompts") {
@@ -1849,6 +1850,16 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         />
       </Suspense>
     ) : null;
+
+  const noteCardsPanelNode = options.centerMode === "notes" ? (
+    <WorkspaceNoteCardPanel
+      workspaceId={options.activeWorkspace?.id ?? null}
+      workspaceName={options.activeWorkspace?.name ?? null}
+      workspacePath={options.activeWorkspace?.path ?? null}
+      focusNoteId={options.focusedWorkspaceNoteId ?? null}
+      focusRequestKey={options.focusedWorkspaceNoteRequestKey ?? 0}
+    />
+  ) : null;
 
   const fileComparePanelNode = options.centerMode === "fileCompare" ? (
     <WorkspaceFileComparePanel
@@ -2286,6 +2297,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     gitDiffPanelNode,
     gitDiffViewerNode,
     fileViewPanelNode,
+    noteCardsPanelNode,
     fileComparePanelNode,
     projectMapPanelNode,
     intentCanvasPanelNode,

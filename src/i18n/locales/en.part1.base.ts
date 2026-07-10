@@ -137,6 +137,7 @@ const enPart1Base = {
     resizeSidebar: "Resize sidebar",
     resizeRightPanel: "Resize right panel",
     resizeEditorSplit: "Resize editor split",
+    resizeNoteCardsSplit: "Resize conversation and notes split",
     resizePlanPanel: "Resize plan panel",
     resizeRuntimeConsole: "Resize run console",
     resizeProjects: "Resize projects",
