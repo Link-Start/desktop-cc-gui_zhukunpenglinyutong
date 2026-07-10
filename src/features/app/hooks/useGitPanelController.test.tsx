@@ -488,6 +488,97 @@ describe("useGitPanelController editor tabs", () => {
     expect(result.current.activeEditorFilePath).toBe("src/App.tsx");
   });
 
+  it("keeps workspace-relative file tree paths unchanged when a nested git root is configured", () => {
+    const { result } = renderHook(() =>
+      useGitPanelController(
+        makeProps({
+          activeWorkspace: {
+            ...workspace,
+            path: "/tmp/ER-QI",
+            settings: {
+              ...workspace.settings,
+              gitRoot: "ftrd-docs",
+            },
+          },
+        }),
+      ),
+    );
+
+    act(() => {
+      result.current.handleOpenFile("ftrd-docs/二期文档/接口文档.md");
+    });
+
+    expect(result.current.openFileTabs).toEqual([
+      "ftrd-docs/二期文档/接口文档.md",
+    ]);
+    expect(result.current.activeEditorFilePath).toBe(
+      "ftrd-docs/二期文档/接口文档.md",
+    );
+  });
+
+  it("maps repo-relative git paths to workspace-relative paths for nested git roots", () => {
+    const { result } = renderHook(() =>
+      useGitPanelController(
+        makeProps({
+          activeWorkspace: {
+            ...workspace,
+            path: "/tmp/ER-QI",
+            settings: {
+              ...workspace.settings,
+              gitRoot: "ftrd-docs",
+            },
+          },
+        }),
+      ),
+    );
+
+    act(() => {
+      result.current.handleOpenFile("二期文档/接口文档.md", undefined, {
+        pathDomain: "git",
+      });
+    });
+
+    expect(result.current.openFileTabs).toEqual([
+      "ftrd-docs/二期文档/接口文档.md",
+    ]);
+    expect(result.current.activeEditorFilePath).toBe(
+      "ftrd-docs/二期文档/接口文档.md",
+    );
+  });
+
+  it("does not prefix git paths when the workspace is the repository root", () => {
+    const { result } = renderHook(() =>
+      useGitPanelController(
+        makeProps({
+          activeWorkspace: {
+            ...workspace,
+            name: "springboot-demo",
+            path: "/tmp/springboot-demo",
+            settings: {
+              ...workspace.settings,
+              gitRoot: "/tmp/springboot-demo",
+            },
+          },
+        }),
+      ),
+    );
+
+    act(() => {
+      result.current.handleOpenFile(
+        "src/main/java/com/example/demo/logging/Field.java",
+        undefined,
+        { pathDomain: "git" },
+      );
+    });
+
+    expect(result.current.openFileTabs).toEqual([
+      "src/main/java/com/example/demo/logging/Field.java",
+    ]);
+    expect(result.current.activeEditorFilePath).toBe(
+      "src/main/java/com/example/demo/logging/Field.java",
+    );
+  });
+
   it("restores open file tabs when switching back to a workspace", () => {
     const { result, rerender } = renderHook(
       ({ activeWorkspace }: { activeWorkspace: WorkspaceInfo }) =>

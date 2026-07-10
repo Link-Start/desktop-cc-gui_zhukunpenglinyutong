@@ -11,7 +11,11 @@ import { useGitLog } from "../../git/hooks/useGitLog";
 import { useGitCommitDiffs } from "../../git/hooks/useGitCommitDiffs";
 import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
 import type { GitLineMarkers } from "../../files/utils/gitLineMarkers";
-import { resolveWorkspaceRelativePath } from "../../../utils/workspacePaths";
+import {
+  resolveGitRootWorkspacePrefix,
+  resolveGitStatusPathCandidates,
+  resolveWorkspaceRelativePath,
+} from "../../../utils/workspacePaths";
 import type { FileCompareSession } from "../../files/types/fileCompare";
 import { FILE_COMPARE_MAX_WORKSPACE_FILES } from "../../files/types/fileCompare";
 
@@ -126,7 +130,35 @@ export type CenterMode =
 export type OpenFileOptions = {
   highlightMarkers?: GitLineMarkers | null;
   editorSplitCompanion?: EditorSplitCompanion;
+  pathDomain?: "workspace" | "git";
 };
+
+function resolveEditorOpenPath(
+  workspace: WorkspaceInfo | null,
+  path: string,
+  pathDomain: OpenFileOptions["pathDomain"] = "workspace",
+) {
+  const workspaceRelativePath = resolveWorkspaceRelativePath(workspace?.path, path);
+  if (pathDomain !== "git" || !workspace?.path) {
+    return workspaceRelativePath;
+  }
+
+  const gitRootWorkspacePrefix = resolveGitRootWorkspacePrefix(
+    workspace.path,
+    workspace.settings.gitRoot,
+  );
+  if (!gitRootWorkspacePrefix) {
+    return workspaceRelativePath;
+  }
+
+  return (
+    resolveGitStatusPathCandidates(
+      workspace.path,
+      gitRootWorkspacePrefix,
+      path,
+    )[0] ?? workspaceRelativePath
+  );
+}
 
 type WorkspaceFileTabsState = {
   openTabs: string[];
@@ -489,7 +521,11 @@ export function useGitPanelController({
       location?: EditorNavigationLocation,
       options?: OpenFileOptions,
     ) => {
-      const normalizedPath = resolveWorkspaceRelativePath(activeWorkspace?.path, path);
+      const normalizedPath = resolveEditorOpenPath(
+        activeWorkspace,
+        path,
+        options?.pathDomain,
+      );
       setFileTabsByWorkspace((states) =>
         updateWorkspaceFileTabs(states, fileTabWorkspaceKey, (current) => ({
           openTabs: current.openTabs.includes(normalizedPath)
@@ -529,7 +565,7 @@ export function useGitPanelController({
       }
     },
     [
-      activeWorkspace?.path,
+      activeWorkspace,
       fileTabWorkspaceKey,
       isCompact,
       onOpenEditorLayoutRequest,
