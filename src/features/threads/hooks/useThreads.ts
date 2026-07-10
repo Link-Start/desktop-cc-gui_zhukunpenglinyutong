@@ -899,8 +899,22 @@ export function useThreads({
     [rememberThreadAlias, renameCompletionEmailIntentThread, resolveCanonicalThreadId],
   );
 
+  // Mirrors the side-state migration the Claude pending rebind performs in
+  // useThreadTurnEvents (alias table, custom names, auto-title, memory keys)
+  // so canonical thread-id resolution keeps working after an optimistic codex
+  // pending thread is renamed to its real backend id.
+  const handleCodexPendingThreadFinalized = useCallback(
+    (workspaceId: string, pendingThreadId: string, realThreadId: string) => {
+      renameCustomNameKey(workspaceId, pendingThreadId, realThreadId);
+      renameAutoTitlePendingKey(workspaceId, pendingThreadId, realThreadId);
+      renamePendingMemoryCaptureKey(pendingThreadId, realThreadId);
+    },
+    [renameAutoTitlePendingKey, renameCustomNameKey, renamePendingMemoryCaptureKey],
+  );
+
   const {
     startThreadForWorkspace,
+    finalizeCodexPendingThread,
     startSharedSessionForWorkspace,
     forkThreadForWorkspace,
     forkSessionFromMessageForWorkspace,
@@ -947,6 +961,7 @@ export function useThreads({
     onRenameThreadTitleMapping: (workspaceId, oldThreadId, _newThreadId) => {
       clearAutoTitlePending(workspaceId, oldThreadId);
     },
+    onCodexPendingThreadFinalized: handleCodexPendingThreadFinalized,
     sessionAttributionMode,
     useUnifiedHistoryLoader,
   });
@@ -1878,6 +1893,7 @@ export function useThreads({
     forkThreadForWorkspace,
     updateThreadParent,
     startThreadForWorkspace,
+    finalizeCodexPendingThread,
     resolveOpenCodeAgent,
     resolveOpenCodeVariant,
     onInputMemoryCaptured: handleInputMemoryCaptured,
@@ -2727,6 +2743,7 @@ export function useThreads({
     isThreadAutoNaming,
     startThread,
     startThreadForWorkspace,
+    finalizeCodexPendingThread,
     startSharedSessionForWorkspace,
     forkThreadForWorkspace,
     forkSessionFromMessageForWorkspace,

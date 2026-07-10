@@ -1057,7 +1057,7 @@ button.diff-section-indicator:focus-visible {
 
 .diff-row {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-columns: 26px 16px minmax(0, 1fr) auto;
   column-gap: var(--git-filetree-row-gap);
   align-items: center;
   min-height: var(--git-filetree-row-min-height);
@@ -1071,6 +1071,11 @@ button.diff-section-indicator:focus-visible {
   font-size: var(--git-filetree-name-font-size);
   position: relative;
   --git-file-status-color: var(--text-emphasis);
+}
+
+.diff-row.git-filetree-row--tree {
+  width: 100%;
+  min-width: 0;
 }
 
 /* 提交勾选框：统一为 shadcn Checkbox 语言 —— 修复原本文件行(蓝)与分组行(绿)两种不一致的勾选态 */
@@ -1205,9 +1210,10 @@ button.diff-section-indicator:focus-visible {
   align-items: center;
   justify-content: flex-end;
   justify-self: end;
-  min-width: 0;
-  grid-column: 3;
+  min-width: max-content;
+  grid-column: 4;
   gap: 4px;
+  white-space: nowrap;
 }
 
 .diff-row:hover {
@@ -1408,7 +1414,7 @@ button.diff-section-indicator:focus-visible {
 }
 
 .diff-file-icon {
-  grid-column: 1;
+  grid-column: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1429,8 +1435,9 @@ button.diff-section-indicator:focus-visible {
   align-items: center;
   gap: 0;
   min-width: 0;
-  grid-column: 2;
+  grid-column: 3;
   overflow: hidden;
+  white-space: nowrap;
 }
 
 .diff-path {
@@ -1438,16 +1445,23 @@ button.diff-section-indicator:focus-visible {
   align-items: center;
   font-size: inherit;
   color: var(--text-emphasis);
-  flex-shrink: 0;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
 }
 
 .diff-name {
   display: flex;
-  flex-shrink: 0;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
 }
 
 .diff-name-base {
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .diff-name-ext {
@@ -1473,8 +1487,9 @@ button.diff-section-indicator:focus-visible {
 }
 
 .diff-status-letter {
-  width: 18px;
-  height: 22px;
+  grid-column: 1;
+  width: 24px;
+  height: auto;
   border: 0;
   border-radius: var(--diff-radius-sm);
   background: transparent;
@@ -1488,21 +1503,7 @@ button.diff-section-indicator:focus-visible {
   font-size: var(--git-filetree-status-font-size);
   font-weight: 700;
   line-height: 1;
-  cursor: pointer;
-}
-
-.diff-status-letter:hover {
-  background: var(--surface-control-hover);
-}
-
-.diff-status-letter:focus-visible {
-  outline: 2px solid var(--border-accent-soft);
-  outline-offset: 1px;
-}
-
-.diff-status-letter:disabled {
   cursor: default;
-  opacity: 0.55;
 }
 
 .diff-section-tree-list.git-filetree-list--tree .git-filetree-folder-row::before,

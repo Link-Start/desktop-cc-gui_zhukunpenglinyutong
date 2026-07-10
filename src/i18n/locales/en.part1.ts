@@ -24,6 +24,8 @@ const enPart1 = {
     codexProviderChoiceTitle: "Provider selection",
     codexProviderDiskConfigLabel: "Disk config",
     codexProviderCustomConfigLabel: "Custom config",
+    codexProviderSelectedTip:
+      "Selected. Click Codex on the left to start a session.",
     sessionActionsGroup: "New Session",
     newSessionInFolder: "New session in {{name}}",
     activateWorkspace: "Open in main panel",

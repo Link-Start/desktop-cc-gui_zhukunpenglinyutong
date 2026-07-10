@@ -1,3 +1,5 @@
+import { getComposerEnginePrefForEngine } from "../features/composer/hooks/composerEnginePrefsStore";
+
 export type ComposerSessionSelection = {
   modelId: string | null;
   effort: string | null;
@@ -174,4 +176,20 @@ export function shouldInheritComposerSelectionFromClaudeForkParent(input: {
       !input.hasCandidate &&
       input.hasParentSelection,
   );
+}
+
+// Seed a brand-new conversation with the model/effort the user last chose for its
+// engine. Codex keeps its own global-selection path, so it opts out here.
+export function resolveEngineDefaultComposerSelection(
+  threadId: string,
+): ComposerSessionSelection | null {
+  const engine = resolveThreadEngine(threadId);
+  if (!engine || engine === "codex") {
+    return null;
+  }
+  const pref = getComposerEnginePrefForEngine(engine);
+  if (pref.modelId === null && pref.effort === null) {
+    return null;
+  }
+  return { modelId: pref.modelId, effort: pref.effort };
 }

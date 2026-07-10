@@ -1421,7 +1421,9 @@ export const GenericToolBlock = memo(function GenericToolBlock({
       <Marker
         {...(isInteractive ? { onClick: handleClick } : {})}
         className={cn(
-          'gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+          // pr-3 与 ToolMarkerShell 一致：左侧不留内边距，图标才能和上下相邻的
+          // 文件行 / Explore 行在同一条竖直基线上。
+          'gap-2 rounded-md pr-3 py-1.5 text-sm transition-colors',
           isInteractive && 'cursor-pointer select-none hover:bg-accent/50',
         )}
       >

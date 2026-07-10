@@ -30,6 +30,11 @@ export type UseThreadActionsOptions = {
     oldThreadId: string,
     newThreadId: string,
   ) => void;
+  onCodexPendingThreadFinalized?: (
+    workspaceId: string,
+    pendingThreadId: string,
+    realThreadId: string,
+  ) => void;
   rememberThreadAlias?: (oldThreadId: string, newThreadId: string) => void;
   clearThreadAlias?: (oldThreadId: string) => void;
   resolveWorkspacePath?: (workspaceId: string) => string | null;

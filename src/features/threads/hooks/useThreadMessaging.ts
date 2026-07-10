@@ -260,6 +260,10 @@ type UseThreadMessagingOptions = {
       providerProfileId?: string | null;
     },
   ) => Promise<string | null>;
+  finalizeCodexPendingThread?: (
+    workspaceId: string,
+    pendingThreadId: string,
+  ) => Promise<string | null>;
   resolveOpenCodeAgent?: (threadId: string | null) => string | null;
   resolveOpenCodeVariant?: (threadId: string | null) => string | null;
   onInputMemoryCaptured?: (payload: {
@@ -317,6 +321,7 @@ export function useThreadMessaging({
   forkThreadForWorkspace,
   updateThreadParent,
   startThreadForWorkspace,
+  finalizeCodexPendingThread,
   resolveOpenCodeAgent,
   resolveOpenCodeVariant,
   onInputMemoryCaptured,
@@ -372,6 +377,50 @@ export function useThreadMessaging({
         const retrySend = sendMessageToThreadRef.current;
         if (reconciledThreadId && retrySend) {
           await retrySend(workspace, reconciledThreadId, text, images, options);
+          return;
+        }
+      }
+      if (threadId.startsWith("codex-pending-")) {
+        // Optimistic codex thread: swap in the real backend thread id before
+        // the first message leaves. The backend start was prewarmed at
+        // creation, so this usually resolves instantly.
+        const finalizedThreadId = finalizeCodexPendingThread
+          ? await finalizeCodexPendingThread(workspace.id, threadId)
+          : null;
+        const retrySend = sendMessageToThreadRef.current;
+        if (finalizedThreadId && retrySend) {
+          // finalize never returns the pending id itself (it resolves to the
+          // real backend id or null), so always re-enter with the resolved id
+          // instead of falling through and sending the pending id upstream.
+          await retrySend(workspace, finalizedThreadId, text, images, options);
+          return;
+        } else {
+          // finalize returns null both when the backend start failed and when
+          // the pending thread was deleted mid-flight; only surface the
+          // failure (and keep the typed text recoverable) if it still exists.
+          if (getThreadEngine(workspace.id, threadId)) {
+            dispatch({
+              type: "upsertItem",
+              workspaceId: workspace.id,
+              threadId,
+              item: {
+                id: `optimistic-user-${Date.now()}-${Math.random()
+                  .toString(36)
+                  .slice(2, 8)}`,
+                kind: "message",
+                role: "user",
+                text: messageText,
+                images: images.length > 0 ? images : undefined,
+              },
+              hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+            });
+            pushThreadErrorMessage(
+              workspace.id,
+              threadId,
+              t("errors.failedToCreateSession"),
+            );
+            safeMessageActivity();
+          }
           return;
         }
       }
@@ -1737,8 +1786,10 @@ export function useThreadMessaging({
       createRecoveryAttempt,
       dispatch,
       effort,
+      finalizeCodexPendingThread,
       geminiSessionIdByPendingThreadRef,
       getCustomName,
+      getThreadEngine,
       isClaudePendingThreadAwaitingNativeSession,
       markProcessing,
       model,

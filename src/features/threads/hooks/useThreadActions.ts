@@ -123,6 +123,7 @@ export function useThreadActions({
   updateThreadParent,
   onThreadTitleMappingsLoaded,
   onRenameThreadTitleMapping,
+  onCodexPendingThreadFinalized,
   rememberThreadAlias,
   clearThreadAlias,
   resolveWorkspacePath,
@@ -230,6 +231,7 @@ export function useThreadActions({
 
   const {
     startThreadForWorkspace,
+    finalizeCodexPendingThread,
     startSharedSessionForWorkspace,
     forkThreadForWorkspace,
     forkClaudeSessionFromMessageForWorkspace,
@@ -239,6 +241,7 @@ export function useThreadActions({
     dispatch,
     itemsByThread,
     loadedThreadsRef,
+    onCodexPendingThreadFinalized,
     onDebug,
     renameThreadTitleMapping,
     resumeThreadForWorkspace,
@@ -1401,6 +1404,7 @@ export function useThreadActions({
 
   return {
     startThreadForWorkspace,
+    finalizeCodexPendingThread,
     startSharedSessionForWorkspace,
     forkThreadForWorkspace,
     forkSessionFromMessageForWorkspace,

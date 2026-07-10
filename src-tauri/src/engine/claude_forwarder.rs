@@ -97,7 +97,12 @@ pub(crate) struct ClaudeForwarderState {
     assistant_item_id: String,
     reasoning_item_id: String,
     turn_id: String,
+    /// 当前「段」的正文累计。前端在每个 item/started(tool) 上 incrementAgentSegment，
+    /// 后续正文会落到新的 assistant item，因此这里也在 ToolStarted 上清零，
+    /// 让 TurnCompleted 的 item/completed 只携带最后一段的正文。
     accumulated_agent_text: String,
+    /// 整轮是否流出过非空正文 delta（决定 completed 是否回退到 turn result 文本）。
+    saw_agent_text_delta: bool,
     pub(crate) last_runtime_sync_queued_at: Option<Instant>,
     event_count: u64,
     pub(crate) delta_count: u64,
@@ -119,6 +124,7 @@ impl ClaudeForwarderState {
             reasoning_item_id,
             turn_id,
             accumulated_agent_text: String::new(),
+            saw_agent_text_delta: false,
             last_runtime_sync_queued_at: None,
             event_count: 0,
             delta_count: 0,
@@ -272,15 +278,27 @@ where
 
     if let EngineEvent::TextDelta { text, .. } = &event {
         state.accumulated_agent_text.push_str(text);
+        if !text.trim().is_empty() {
+            state.saw_agent_text_delta = true;
+        }
+    }
+
+    // 工具边界：ToolStarted 与前端的 incrementAgentSegment 一一对应（ToolStarted 恒
+    // 映射为 item/started 的 commandExecution / fileChange / mcpToolCall）。本段就此收口，
+    // 后续正文属于下一段的 assistant item。
+    if matches!(event, EngineEvent::ToolStarted { .. }) {
+        state.accumulated_agent_text.clear();
     }
 
     if let EngineEvent::TurnCompleted { result, .. } = &event {
         let fallback_text = extract_turn_result_text(result.as_ref()).unwrap_or_default();
         let completed_text = if should_prefer_turn_result_text(result.as_ref()) {
             fallback_text
-        } else if state.accumulated_agent_text.trim().is_empty() {
+        } else if !state.saw_agent_text_delta {
             fallback_text
         } else {
+            // 只落最后一段。若最后一段为空（回合以工具收尾），completed_text 为空，
+            // 下方 guard 会跳过 emit——早先各段的正文已由前端在分段前灌回 reducer。
             state.accumulated_agent_text.clone()
         };
         if !completed_text.trim().is_empty() {

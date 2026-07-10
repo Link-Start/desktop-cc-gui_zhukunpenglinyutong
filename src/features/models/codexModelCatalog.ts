@@ -15,6 +15,27 @@ const STANDARD_CODEX_REASONING_EFFORTS = [
 
 export const CODEX_MODEL_CATALOG: CodexModelCatalogEntry[] = [
   {
+    id: "gpt-5.6-sol",
+    label: "gpt-5.6-sol",
+    description: "Latest frontier agentic coding model.",
+    supportedReasoningEfforts: STANDARD_CODEX_REASONING_EFFORTS,
+    defaultReasoningEffort: "medium",
+  },
+  {
+    id: "gpt-5.6-terra",
+    label: "gpt-5.6-terra",
+    description: "Balanced agentic coding model for everyday work.",
+    supportedReasoningEfforts: STANDARD_CODEX_REASONING_EFFORTS,
+    defaultReasoningEffort: "medium",
+  },
+  {
+    id: "gpt-5.6-luna",
+    label: "gpt-5.6-luna",
+    description: "Fast and affordable agentic coding model.",
+    supportedReasoningEfforts: STANDARD_CODEX_REASONING_EFFORTS,
+    defaultReasoningEffort: "medium",
+  },
+  {
     id: "gpt-5.5",
     label: "gpt-5.5",
     description: "Frontier model for complex coding, research, and real-world work.",

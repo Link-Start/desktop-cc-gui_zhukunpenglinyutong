@@ -347,6 +347,13 @@ fn is_thread_resume_not_ready_error_message(message: &str) -> bool {
         || is_thread_resume_rollout_pending_error_message(message)
 }
 
+fn should_soft_ready_for_not_ready_reason(
+    reason: &str,
+    soft_ready_on_rollout_pending: bool,
+) -> bool {
+    soft_ready_on_rollout_pending && is_thread_resume_rollout_pending_error_message(reason)
+}
+
 fn is_thread_not_found_response(value: &Value) -> bool {
     extract_error_message_from_response(value)
         .as_deref()
@@ -380,6 +387,7 @@ async fn wait_for_thread_resume_ready(
     thread_id: &str,
     timeout_duration: Duration,
     context: &str,
+    soft_ready_on_rollout_pending: bool,
 ) -> Result<(), String> {
     let mut last_thread_not_ready_reason: Option<String> = None;
     for attempt_index in 0..=THREAD_RESUME_READY_RETRY_DELAYS_MS.len() {
@@ -388,7 +396,7 @@ async fn wait_for_thread_resume_ready(
                 sleep(Duration::from_millis(*delay_ms)).await;
             }
         }
-        match session
+        let not_ready_reason = match session
             .send_request_with_timeout(
                 "thread/resume",
                 json!({ "threadId": thread_id }),
@@ -398,53 +406,59 @@ async fn wait_for_thread_resume_ready(
         {
             Ok(response) => match validate_thread_resume_ready_response(&response, thread_id) {
                 Ok(true) => return Ok(()),
-                Ok(false) => {
-                    let reason = extract_error_message_from_response(&response)
-                        .unwrap_or_else(|| "thread not found".to_string());
-                    last_thread_not_ready_reason = Some(reason.clone());
-                    log::warn!(
-                        "[thread/resume][ready_retry] workspace_id={} thread_id={} context={} outcome=thread_not_ready attempt={} next_retry={} reason={}",
-                        workspace_id,
-                        thread_id,
-                        context,
-                        attempt_index + 1,
-                        attempt_index < THREAD_RESUME_READY_RETRY_DELAYS_MS.len(),
-                        reason
-                    );
-                }
+                Ok(false) => extract_error_message_from_response(&response)
+                    .unwrap_or_else(|| "thread not found".to_string()),
                 Err(error) => return Err(error),
             },
-            Err(error) if is_thread_resume_not_ready_error_message(&error) => {
-                last_thread_not_ready_reason = Some(error.clone());
-                log::warn!(
-                    "[thread/resume][ready_retry] workspace_id={} thread_id={} context={} outcome=thread_not_ready attempt={} next_retry={} reason={}",
-                    workspace_id,
-                    thread_id,
-                    context,
-                    attempt_index + 1,
-                    attempt_index < THREAD_RESUME_READY_RETRY_DELAYS_MS.len(),
-                    error
-                );
-            }
+            Err(error) if is_thread_resume_not_ready_error_message(&error) => error,
             Err(error) => return Err(error),
+        };
+        if should_soft_ready_for_not_ready_reason(&not_ready_reason, soft_ready_on_rollout_pending)
+        {
+            log_thread_resume_rollout_pending_soft_ready(
+                workspace_id,
+                thread_id,
+                context,
+                &not_ready_reason,
+            );
+            return Ok(());
         }
+        log::warn!(
+            "[thread/resume][ready_retry] workspace_id={} thread_id={} context={} outcome=thread_not_ready attempt={} next_retry={} reason={}",
+            workspace_id,
+            thread_id,
+            context,
+            attempt_index + 1,
+            attempt_index < THREAD_RESUME_READY_RETRY_DELAYS_MS.len(),
+            not_ready_reason
+        );
+        last_thread_not_ready_reason = Some(not_ready_reason);
     }
     let last_reason =
         last_thread_not_ready_reason.unwrap_or_else(|| "thread not found".to_string());
     if is_thread_resume_rollout_pending_error_message(&last_reason) {
-        log::warn!(
-            "[thread/resume][ready_retry] workspace_id={} thread_id={} context={} outcome=rollout_pending_soft_ready reason={}",
-            workspace_id,
-            thread_id,
-            context,
-            last_reason
-        );
+        log_thread_resume_rollout_pending_soft_ready(workspace_id, thread_id, context, &last_reason);
         return Ok(());
     }
     Err(format!(
         "thread not ready after bounded resume retry: {}",
         last_reason
     ))
+}
+
+fn log_thread_resume_rollout_pending_soft_ready(
+    workspace_id: &str,
+    thread_id: &str,
+    context: &str,
+    reason: &str,
+) {
+    log::warn!(
+        "[thread/resume][ready_retry] workspace_id={} thread_id={} context={} outcome=rollout_pending_soft_ready reason={}",
+        workspace_id,
+        thread_id,
+        context,
+        reason
+    );
 }
 
 async fn retry_turn_start_after_thread_resume(
@@ -467,6 +481,7 @@ async fn retry_turn_start_after_thread_resume(
         thread_id,
         timeout_duration,
         "turn-start",
+        false,
     )
     .await?;
     for (attempt_index, delay_ms) in TURN_START_THREAD_NOT_FOUND_RETRY_DELAYS_MS
@@ -690,12 +705,16 @@ pub(crate) async fn confirm_thread_ready_after_start_core(
 ) -> Result<(), String> {
     let session_key = session_key_for_provider(&workspace_id, provider_profile_id.as_deref());
     let session = get_session_clone(sessions, &session_key).await?;
+    // A freshly started thread has no rollout file until the first turn is
+    // sent, so "no rollout found" is its normal state: soft-ready immediately
+    // instead of burning the full retry ladder (~5.8s) on every new session.
     wait_for_thread_resume_ready(
         &session,
         &workspace_id,
         &thread_id,
         Duration::from_millis(THREAD_START_READY_CONFIRM_TIMEOUT_MS),
         "thread-start",
+        true,
     )
     .await
     .map_err(|error| {
@@ -1055,7 +1074,8 @@ mod tests {
         is_collaboration_mode_capability_error, is_thread_not_found_error_message,
         is_thread_not_found_response, is_thread_resume_rollout_pending_error_message,
         normalize_custom_spec_root, normalize_preferred_language, resolve_execution_policy,
-        validate_thread_resume_ready_response, validate_thread_start_response,
+        should_soft_ready_for_not_ready_reason, validate_thread_resume_ready_response,
+        validate_thread_start_response,
         INVALID_THREAD_START_RESPONSE_ERROR_PREFIX,
     };
     use serde_json::{json, Value};
@@ -1110,6 +1130,26 @@ mod tests {
         assert!(!is_thread_not_found_response(&json!({
             "error": { "message": "model not found" }
         })));
+    }
+
+    #[test]
+    fn rollout_pending_soft_ready_short_circuits_only_when_enabled() {
+        // thread-start confirmation: a brand-new thread has no rollout file
+        // until the first turn, so rollout-pending must soft-ready immediately.
+        assert!(should_soft_ready_for_not_ready_reason(
+            "no rollout found for thread id thread-1",
+            true
+        ));
+        // turn-start retry path keeps the bounded retry ladder.
+        assert!(!should_soft_ready_for_not_ready_reason(
+            "no rollout found for thread id thread-1",
+            false
+        ));
+        // A genuinely unknown thread must never soft-ready early.
+        assert!(!should_soft_ready_for_not_ready_reason(
+            "thread not found: thread-1",
+            true
+        ));
     }
 
     #[test]

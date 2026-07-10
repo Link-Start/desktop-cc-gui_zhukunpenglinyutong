@@ -46,6 +46,7 @@ type UseSelectedComposerSessionOptions = {
   activeThreadId: string | null;
   activeWorkspaceId: string | null;
   resolveCanonicalThreadId: (threadId: string) => string;
+  engineDefaultSelectionReady?: boolean;
   /**
    * Supplies the durable per-engine "last used" selection so a brand-new
    * conversation opens with the model/effort the user last chose for that engine.
@@ -78,6 +79,7 @@ export function useSelectedComposerSession({
   activeThreadId,
   activeWorkspaceId,
   resolveCanonicalThreadId,
+  engineDefaultSelectionReady = true,
   resolveEngineDefaultComposerSelection,
 }: UseSelectedComposerSessionOptions): UseSelectedComposerSessionResult {
   const [selectedComposerSelectionBySessionKey, setSelectedComposerSelectionBySessionKey] =
@@ -246,7 +248,11 @@ export function useSelectedComposerSession({
         shouldApplyDraftToNextThreadRef.current = false;
         writeClientStoreValue("composer", sessionKey, candidate);
       }
-      if (!hasCandidate && activeThreadId.includes("-pending-")) {
+      if (
+        !hasCandidate &&
+        engineDefaultSelectionReady &&
+        activeThreadId.includes("-pending-")
+      ) {
         const engineDefault = normalizeComposerSessionSelectionForThread(
           activeThreadId,
           resolveEngineDefaultComposerSelection?.(activeThreadId) ?? null,
@@ -278,6 +284,7 @@ export function useSelectedComposerSession({
     activeThreadId,
     activeWorkspaceId,
     draftComposerSelection,
+    engineDefaultSelectionReady,
     resolveEngineDefaultComposerSelection,
     resolveSelectedComposerSessionKey,
     selectedComposerSelectionBySessionKey,

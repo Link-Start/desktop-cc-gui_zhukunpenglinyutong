@@ -1697,7 +1697,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           stagedFiles={canonicalGitPanelChanges.stagedFiles}
           unstagedFiles={canonicalGitPanelChanges.unstagedFiles}
           onSelectFile={options.onSelectDiff}
-          onOpenFile={options.onOpenFile}
+          onOpenFile={(path) =>
+            options.onOpenFile(path, undefined, { pathDomain: "git" })
+          }
           selectedPath={sidebarSelectedDiffPath}
           logEntries={options.gitLogEntries}
           logTotal={options.gitLogTotal}

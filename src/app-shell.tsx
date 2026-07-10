@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useWorkspaceDropZone } from "./features/workspaces/hooks/useWorkspaceDropZone";
 import { useThreads } from "./features/threads/hooks/useThreads";
 import { useGitPanelController } from "./features/app/hooks/useGitPanelController";
 import { useGitRemote } from "./features/git/hooks/useGitRemote";
 import { useGitRepoScan } from "./features/git/hooks/useGitRepoScan";
-import { useGitActions } from "./features/git/hooks/useGitActions";
 import { useAutoExitEmptyDiff } from "./features/git/hooks/useAutoExitEmptyDiff";
 import { useModels } from "./features/models/hooks/useModels";
 import { useCollaborationModes } from "./features/collaboration/hooks/useCollaborationModes";
@@ -13,11 +11,9 @@ import { useSkills } from "./features/skills/hooks/useSkills";
 import { useCustomCommands } from "./features/commands/hooks/useCustomCommands";
 import { useCustomPrompts } from "./features/prompts/hooks/useCustomPrompts";
 import { useWorkspaceFiles } from "./features/workspaces/hooks/useWorkspaceFiles";
-import { useGitBranches } from "./features/git/hooks/useGitBranches";
 import { useDebugLog } from "./features/debug/hooks/useDebugLog";
 import { useWorkspaceRefreshOnFocus } from "./features/workspaces/hooks/useWorkspaceRefreshOnFocus";
 import { useWorkspaceRestore } from "./features/workspaces/hooks/useWorkspaceRestore";
-import { useOpenPaths } from "./features/workspaces/hooks/useOpenPaths";
 import { useLayoutController } from "./features/app/hooks/useLayoutController";
 import { useAppSettingsController } from "./features/app/hooks/useAppSettingsController";
 import { useUpdaterController } from "./features/app/hooks/useUpdaterController";
@@ -27,7 +23,6 @@ import { useComposerEditorState } from "./features/composer/hooks/useComposerEdi
 import { useDictationController } from "./features/app/hooks/useDictationController";
 import { useComposerController } from "./features/app/hooks/useComposerController";
 import { useEngineController } from "./features/engine/hooks/useEngineController";
-import { resolveClaudePendingThreadModelRefreshKey } from "./features/engine/utils/claudeModelRefresh";
 import { useRenameThreadPrompt } from "./features/threads/hooks/useRenameThreadPrompt";
 import { useDeleteThreadPrompt } from "./features/threads/hooks/useDeleteThreadPrompt";
 import { useWorktreePrompt } from "./features/workspaces/hooks/useWorktreePrompt";
@@ -44,28 +39,15 @@ import { useCopyThread } from "./features/threads/hooks/useCopyThread";
 import { useKanbanStore } from "./features/kanban/hooks/useKanbanStore";
 import { useGitCommitController } from "./features/app/hooks/useGitCommitController";
 import { forceRefreshAgents } from "./features/composer/components/ChatInputBox/providers";
-import {
-  normalizeFsPath,
-  resolveWorkspaceRelativePath,
-} from "./utils/workspacePaths";
-import {
-  buildDetachedFileExplorerSession,
-  openOrFocusDetachedFileExplorer,
-} from "./features/files/detachedFileExplorer";
-import { pickWorkspacePath } from "./services/tauri";
+import { normalizeFsPath } from "./utils/workspacePaths";
 import type {
   AppMode,
   ComposerEditorSettings,
 } from "./types";
-import { resolveThreadEngine } from "./app-shell-parts/selectedComposerSession";
-import { getComposerEnginePrefForEngine } from "./features/composer/hooks/composerEnginePrefsStore";
+import { resolveEngineDefaultComposerSelection } from "./app-shell-parts/selectedComposerSession";
 import { useCodeCssVars } from "./features/app/hooks/useCodeCssVars";
 import { useAccountSwitching } from "./features/app/hooks/useAccountSwitching";
-import { pushErrorToast } from "./services/toasts";
-import {
-  extractPlanFromTimelineItems,
-  resolveThreadScopedCollaborationModeSync,
-} from "./app-shell-parts/utils";
+import { extractPlanFromTimelineItems } from "./app-shell-parts/utils";
 import { useAppShellPromptActionsSection } from "./app-shell-parts/useAppShellPromptActionsSection";
 import { useAppShellSearchRadarSection } from "./app-shell-parts/useAppShellSearchRadarSection";
 import { useAppShellSearchAndComposerSection } from "./app-shell-parts/useAppShellSearchAndComposerSection";
@@ -73,6 +55,9 @@ import { useAppShellSections } from "./app-shell-parts/useAppShellSections";
 import { useAppShellLayoutNodesSection } from "./app-shell-parts/useAppShellLayoutNodesSection";
 import { renderAppShell } from "./app-shell-parts/renderAppShell";
 import { useOpenCodeSelection } from "./app-shell-parts/useOpenCodeSelection";
+import { useOpenCodeThreadBinding } from "./app-shell-parts/useOpenCodeThreadBinding";
+import { useGitStatusRefreshOnTurnSettle } from "./app-shell-parts/useGitStatusRefreshOnTurnSettle";
+import { useAppShellGitWorkspaceOpsSection } from "./app-shell-parts/useAppShellGitWorkspaceOpsSection";
 import { useSelectedAgentSession } from "./app-shell-parts/useSelectedAgentSession";
 import { useSelectedComposerSession } from "./app-shell-parts/useSelectedComposerSession";
 import { APP_SHELL_LEGACY_CONTEXT_DEFAULTS } from "./app-shell-parts/legacyContextDefaults";
@@ -86,6 +71,10 @@ import { useAppShellWorkspaceFlowsSection } from "./app-shell-parts/useAppShellW
 import { defineRuntimeThreadShellBoundary } from "./app-shell-parts/runtimeThreadBoundary";
 import { useAppShellWorkspaceHomeState } from "./app-shell-parts/useAppShellWorkspaceHomeState";
 import { useModelConfigRefresh } from "./app-shell-parts/useModelConfigRefresh";
+import { useWorkspacePathsIntake } from "./app-shell-parts/useWorkspacePathsIntake";
+import { useAppShellWorktreeChromeSection } from "./app-shell-parts/useAppShellWorktreeChromeSection";
+import { useCollaborationModeThreadSync } from "./app-shell-parts/useCollaborationModeThreadSync";
+import { useClaudeModelRefreshOnNewThread } from "./app-shell-parts/useClaudeModelRefreshOnNewThread";
 import { useAppShellComposerModelSection } from "./app-shell-parts/useAppShellComposerModelSection";
 import { useAppShellViewStateSection } from "./app-shell-parts/useAppShellViewStateSection";
 import { defineAppShellRuntimeActions } from "./app-shell-parts/appShellActionBoundaries";
@@ -632,103 +621,37 @@ export function AppShell() {
     initialLoadEnabled: workspaceFilesInitialLoadEnabled,
     pollingEnabled: workspaceFilesPollingEnabled,
   });
-  const { branches, checkoutBranch, createBranch } = useGitBranches({
-    activeWorkspace,
-    onDebug: addDebugEntry,
-  });
-  const handleCheckoutBranch = async (name: string) => {
-    await checkoutBranch(name);
-    refreshGitStatus();
-  };
-  const handleCreateBranch = async (name: string) => {
-    await createBranch(name);
-    refreshGitStatus();
-  };
-  const alertError = useCallback((error: unknown) => {
-    alert(error instanceof Error ? error.message : String(error));
-  }, []);
-  const handleOpenDetachedFileExplorer = useCallback(
-    async (initialFilePath?: string | null) => {
-      if (!activeWorkspace) {
-        return;
-      }
-      try {
-        await openOrFocusDetachedFileExplorer(
-          buildDetachedFileExplorerSession({
-            workspaceId: activeWorkspace.id,
-            workspacePath: activeWorkspace.path,
-            workspaceName: activeWorkspace.name,
-            gitRoot: activeWorkspace.settings.gitRoot ?? null,
-            initialFilePath,
-          }),
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        pushErrorToast({
-          title: t("files.openDetachedExplorer"),
-          message,
-        });
-      }
-    },
-    [activeWorkspace, t],
-  );
   const {
-    applyWorktreeChanges: handleApplyWorktreeChanges,
-    revertAllGitChanges: handleRevertAllGitChanges,
-    revertGitFile: handleRevertGitFile,
-    stageGitAll: handleStageGitAll,
-    stageGitFile: handleStageGitFile,
-    unstageGitFile: handleUnstageGitFile,
+    activeGitRoot,
+    alertError,
+    branches,
+    checkoutBranch,
+    createBranch,
+    fileStatus,
+    handleApplyWorktreeChanges,
+    handleCheckoutBranch,
+    handleCreateBranch,
+    handleOpenDetachedFileExplorer,
+    handlePickGitRoot,
+    handleRevertAllGitChanges,
+    handleRevertGitFile,
+    handleSetGitRoot,
+    handleStageGitAll,
+    handleStageGitFile,
+    handleUnstageGitFile,
     worktreeApplyError,
     worktreeApplyLoading,
     worktreeApplySuccess,
-  } = useGitActions({
+  } = useAppShellGitWorkspaceOpsSection({
     activeWorkspace,
-    onRefreshGitStatus: refreshGitStatus,
-    onRefreshGitDiffs: refreshGitDiffs,
-    onError: alertError,
+    addDebugEntry,
+    clearGitRootCandidates,
+    gitStatus,
+    refreshGitDiffs,
+    refreshGitStatus,
+    t,
+    updateWorkspaceSettings,
   });
-  const activeGitRoot = activeWorkspace?.settings.gitRoot ?? null;
-  const handleSetGitRoot = useCallback(
-    async (path: string | null) => {
-      if (!activeWorkspace) {
-        return;
-      }
-      await updateWorkspaceSettings(activeWorkspace.id, {
-        gitRoot: path,
-      });
-      clearGitRootCandidates();
-      refreshGitStatus();
-    },
-    [
-      activeWorkspace,
-      clearGitRootCandidates,
-      refreshGitStatus,
-      updateWorkspaceSettings,
-    ],
-  );
-  const handlePickGitRoot = useCallback(async () => {
-    if (!activeWorkspace) {
-      return;
-    }
-    const selection = await pickWorkspacePath();
-    if (!selection) {
-      return;
-    }
-    const relativeRoot = resolveWorkspaceRelativePath(
-      activeWorkspace.path,
-      selection,
-    );
-    const nextRoot = relativeRoot === "" ? null : relativeRoot;
-    await handleSetGitRoot(nextRoot);
-  }, [activeWorkspace, handleSetGitRoot]);
-  const fileStatus = !gitStatus.isGitRepository
-    ? t("git.noRepositoriesFound")
-    : gitStatus.error
-      ? t("git.statusUnavailable")
-      : gitStatus.files.length > 0
-        ? t("git.filesChanged", { count: gitStatus.files.length })
-        : t("git.workingTreeClean");
 
   const { textareaHeight, onTextareaHeightChange } = useComposerEditorState();
 
@@ -888,73 +811,24 @@ export function AppShell() {
     runWithCreateSessionLoading,
   });
 
-  useEffect(() => {
-    syncActiveOpenCodeThread(activeThreadId);
-  }, [activeThreadId, syncActiveOpenCodeThread]);
+  const {
+    handleSelectOpenCodeAgent,
+    handleSelectOpenCodeVariant,
+    selectedOpenCodeAgent,
+    selectedOpenCodeVariant,
+  } = useOpenCodeThreadBinding({
+    activeThreadId,
+    resolveOpenCodeAgentForThread,
+    resolveOpenCodeVariantForThread,
+    selectOpenCodeAgentForThread,
+    selectOpenCodeVariantForThread,
+    syncActiveOpenCodeThread,
+  });
 
-  // git status 的自动刷新从「每次消息活动(onMessageActivity, 500ms 防抖)」收敛为
-  // 「回合结束刷一次」：消息活动链在事件稀疏期每次都会真的执行 git status 子进程，
-  // 且 Agent 改文件期间结果必变 → setStatus 换引用 → 一次 100ms+ 的根渲染。
-  // 回合结束(任一线程 isProcessing true→false)才是文件状态的稳定观察点；
-  // 外部 git 变化仍由 useGitStatus 的周期轮询兜底。
-  const processingByThreadRef = useRef<Record<string, boolean>>({});
-  useEffect(() => {
-    const previous = processingByThreadRef.current;
-    const next: Record<string, boolean> = {};
-    let anyTurnSettled = false;
-    for (const [threadId, status] of Object.entries(threadStatusById)) {
-      const isProcessing = status?.isProcessing ?? false;
-      next[threadId] = isProcessing;
-      if (previous[threadId] && !isProcessing) {
-        anyTurnSettled = true;
-      }
-    }
-    processingByThreadRef.current = next;
-    if (anyTurnSettled) {
-      queueGitStatusRefresh();
-    }
-  }, [queueGitStatusRefresh, threadStatusById]);
-
-  const selectedOpenCodeAgent = useMemo(
-    () => resolveOpenCodeAgentForThread(activeThreadId),
-    [activeThreadId, resolveOpenCodeAgentForThread],
-  );
-
-  const selectedOpenCodeVariant = useMemo(
-    () => resolveOpenCodeVariantForThread(activeThreadId),
-    [activeThreadId, resolveOpenCodeVariantForThread],
-  );
-
-  const handleSelectOpenCodeAgent = useCallback(
-    (agentId: string | null) => {
-      selectOpenCodeAgentForThread(activeThreadId, agentId);
-    },
-    [activeThreadId, selectOpenCodeAgentForThread],
-  );
-
-  const handleSelectOpenCodeVariant = useCallback(
-    (variant: string | null) => {
-      selectOpenCodeVariantForThread(activeThreadId, variant);
-    },
-    [activeThreadId, selectOpenCodeVariantForThread],
-  );
-
-  // Seed a brand-new conversation with the model/effort the user last chose for its
-  // engine. Codex keeps its own global-selection path, so it opts out here.
-  const resolveEngineDefaultComposerSelection = useCallback(
-    (threadId: string) => {
-      const engine = resolveThreadEngine(threadId);
-      if (!engine || engine === "codex") {
-        return null;
-      }
-      const pref = getComposerEnginePrefForEngine(engine);
-      if (pref.modelId === null && pref.effort === null) {
-        return null;
-      }
-      return { modelId: pref.modelId, effort: pref.effort };
-    },
-    [],
-  );
+  useGitStatusRefreshOnTurnSettle({
+    queueGitStatusRefresh,
+    threadStatusById,
+  });
   const {
     selectedComposerSelection,
     handleSelectComposerSelection,
@@ -964,6 +838,7 @@ export function AppShell() {
     activeThreadId,
     activeWorkspaceId,
     resolveCanonicalThreadId,
+    engineDefaultSelectionReady: !appSettingsLoading,
     resolveEngineDefaultComposerSelection,
     onDebug: addDebugEntry,
   });
@@ -1026,36 +901,13 @@ export function AppShell() {
     onDebug: addDebugEntry,
   });
 
-  const claudeModelRefreshThreadKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const refreshKey = resolveClaudePendingThreadModelRefreshKey({
-      activeEngine,
-      activeThreadId,
-      activeWorkspaceId,
-    });
-    if (!refreshKey) {
-      return;
-    }
-    if (claudeModelRefreshThreadKeyRef.current === refreshKey) {
-      return;
-    }
-    claudeModelRefreshThreadKeyRef.current = refreshKey;
-    addDebugEntry({
-      id: `${Date.now()}-claude-model-refresh-on-new-thread`,
-      timestamp: Date.now(),
-      source: "client",
-      label: "engine/models refresh on new claude thread",
-      payload: { workspaceId: activeWorkspaceId, threadId: activeThreadId },
-    });
-    void refreshEngineModels("claude");
-  }, [
+  useClaudeModelRefreshOnNewThread({
     activeEngine,
     activeThreadId,
     activeWorkspaceId,
     addDebugEntry,
     refreshEngineModels,
-  ]);
+  });
 
   const { handleUserInputSubmitWithPlanApply, handleExitPlanModeExecute } =
     usePlanApplyHandlers({
@@ -1201,45 +1053,17 @@ export function AppShell() {
   const activePlan = activeThreadId
     ? (timelinePlan ?? planByThread[activeThreadId] ?? null)
     : timelinePlan;
-  useEffect(() => {
-    activeThreadIdForModeRef.current = activeThreadId;
-  }, [activeThreadId, activeThreadIdForModeRef]);
-
-  useEffect(() => {
-    const claudePlanCodeDefault =
-      getComposerEnginePrefForEngine("claude").collaborationModeId === "plan"
-        ? "plan"
-        : "code";
-    const syncResult = resolveThreadScopedCollaborationModeSync({
-      activeEngine,
-      activeThreadId,
-      mappedMode: activeThreadId
-        ? (collaborationUiModeByThread[activeThreadId] ?? null)
-        : null,
-      selectedCollaborationModeId,
-      lastSyncedThreadId: lastCodexModeSyncThreadRef.current,
-      newThreadDefaultMode:
-        activeEngine === "claude" ? claudePlanCodeDefault : "code",
-    });
-    if (!syncResult) {
-      return;
-    }
-    lastCodexModeSyncThreadRef.current = syncResult.nextSyncedThreadId;
-    codexComposerModeRef.current = syncResult.nextMode;
-    if (syncResult.shouldUpdateSelectedMode && syncResult.nextMode) {
-      setSelectedCollaborationModeId(syncResult.nextMode);
-      return;
-    }
-  }, [
+  useCollaborationModeThreadSync({
     activeEngine,
     activeThreadId,
+    activeThreadIdForModeRef,
     appSettingsLoading,
     codexComposerModeRef,
     collaborationUiModeByThread,
     lastCodexModeSyncThreadRef,
     selectedCollaborationModeId,
     setSelectedCollaborationModeId,
-  ]);
+  });
   const {
     closePlanPanel,
     hasActivePlan,
@@ -1326,6 +1150,7 @@ export function AppShell() {
     isReviewing,
     steerEnabled: appSettings.experimentalSteerEnabled,
     activeEngine,
+    resolveCanonicalThreadId,
     connectWorkspace,
     startThreadForWorkspace,
     sendUserMessage,
@@ -1452,6 +1277,7 @@ export function AppShell() {
     resolveCloneProjectContext,
     handleSelectOpenAppId,
     navigateToThread,
+    handleOpenMailSession,
     handleOpenClaudeTui,
     handleSelectStatusPanelSubagent,
     openAppIconById,
@@ -1475,6 +1301,7 @@ export function AppShell() {
     alertError,
     appSettings,
     clearDraftForThread,
+    closeSettings,
     closeTerminalPanel,
     collapseRightPanel,
     connectWorkspace,
@@ -1521,48 +1348,6 @@ export function AppShell() {
     workspaces,
   });
 
-  const handleOpenMailSession = useCallback(
-    (target: {
-      sessionId: string;
-      workspaceId: string;
-      threadId: string;
-      turnId: string;
-    }) => {
-      const workspace =
-        workspaces.find((entry) => entry.id === target.workspaceId) ?? null;
-      const threadId = target.threadId?.trim();
-      if (!workspace || !threadId) {
-        alertError(t("settings.emailOpenSessionUnavailable"));
-        return;
-      }
-      closeSettings();
-      navigateToThread(target.workspaceId, threadId);
-      const hasThread = (threadsByWorkspace[target.workspaceId] ?? []).some(
-        (thread) => thread.id === threadId,
-      );
-      if (!hasThread) {
-        void listThreadsForWorkspaceTracked(workspace).catch((error) => {
-          addDebugEntry({
-            id: `${Date.now()}-email-mail-session-open-fallback-error`,
-            timestamp: Date.now(),
-            source: "error",
-            label: "email/mail-session open fallback",
-            payload: error instanceof Error ? error.message : String(error),
-          });
-        });
-      }
-    },
-    [
-      addDebugEntry,
-      alertError,
-      closeSettings,
-      listThreadsForWorkspaceTracked,
-      navigateToThread,
-      t,
-      threadsByWorkspace,
-      workspaces,
-    ],
-  );
   const {
     worktreePrompt,
     worktreeCreateResult,
@@ -1640,67 +1425,29 @@ export function AppShell() {
     updatePrompt,
   });
 
-  const isWorktreeWorkspace = activeWorkspace?.kind === "worktree";
-  const activeParentWorkspace = isWorktreeWorkspace
-    ? (workspacesById.get(activeWorkspace?.parentId ?? "") ?? null)
-    : null;
-  const worktreeLabel = isWorktreeWorkspace
-    ? (activeWorkspace?.worktree?.branch ?? activeWorkspace?.name ?? null)
-    : null;
-  const activeRenamePrompt =
-    renameWorktreePrompt?.workspaceId === activeWorkspace?.id
-      ? renameWorktreePrompt
-      : null;
-  const worktreeRename =
-    isWorktreeWorkspace && activeWorkspace
-      ? {
-          name: activeRenamePrompt?.name ?? worktreeLabel ?? "",
-          error: activeRenamePrompt?.error ?? null,
-          notice: renameWorktreeNotice,
-          isSubmitting: activeRenamePrompt?.isSubmitting ?? false,
-          isDirty: activeRenamePrompt
-            ? activeRenamePrompt.name.trim() !==
-              activeRenamePrompt.originalName.trim()
-            : false,
-          upstream:
-            renameWorktreeUpstreamPrompt?.workspaceId === activeWorkspace.id
-              ? {
-                  oldBranch: renameWorktreeUpstreamPrompt.oldBranch,
-                  newBranch: renameWorktreeUpstreamPrompt.newBranch,
-                  error: renameWorktreeUpstreamPrompt.error,
-                  isSubmitting: renameWorktreeUpstreamPrompt.isSubmitting,
-                  onConfirm: confirmRenameWorktreeUpstream,
-                }
-              : null,
-          onFocus: handleOpenRenameWorktree,
-          onChange: handleRenameWorktreeChange,
-          onCancel: handleRenameWorktreeCancel,
-          onCommit: handleRenameWorktreeConfirm,
-        }
-      : null;
-  const baseWorkspaceRef = useRef(activeParentWorkspace ?? activeWorkspace);
-
-  useEffect(() => {
-    baseWorkspaceRef.current = activeParentWorkspace ?? activeWorkspace;
-  }, [activeParentWorkspace, activeWorkspace]);
-
-  useEffect(() => {
-    if (!isPhone) {
-      return;
-    }
-    if (!activeWorkspace && activeTab !== "projects") {
-      setActiveTab("projects");
-    }
-  }, [activeTab, activeWorkspace, isPhone]);
-
-  useEffect(() => {
-    if (!isTablet) {
-      return;
-    }
-    if (activeTab === "projects") {
-      setActiveTab("codex");
-    }
-  }, [activeTab, isTablet]);
+  const {
+    activeParentWorkspace,
+    activeRenamePrompt,
+    baseWorkspaceRef,
+    isWorktreeWorkspace,
+    worktreeLabel,
+    worktreeRename,
+  } = useAppShellWorktreeChromeSection({
+    activeTab,
+    activeWorkspace,
+    confirmRenameWorktreeUpstream,
+    handleOpenRenameWorktree,
+    handleRenameWorktreeCancel,
+    handleRenameWorktreeChange,
+    handleRenameWorktreeConfirm,
+    isPhone,
+    isTablet,
+    renameWorktreeNotice,
+    renameWorktreePrompt,
+    renameWorktreeUpstreamPrompt,
+    setActiveTab,
+    workspacesById,
+  });
 
   const { isMacDesktop, isWindowsDesktop } =
     useAppShellDesktopChrome(activeWorkspace);
@@ -1749,34 +1496,16 @@ export function AppShell() {
     onDebug: addDebugEntry,
   });
 
-  const handleDropWorkspacePaths = useCallback(
-    async (paths: string[]) => {
-      const uniquePaths = Array.from(
-        new Set(paths.filter((path) => path.length > 0)),
-      );
-      if (uniquePaths.length === 0) {
-        return;
-      }
-      uniquePaths.forEach((path) => {
-        void handleAddWorkspaceFromPath(path);
-      });
-    },
-    [handleAddWorkspaceFromPath],
-  );
-
-  useOpenPaths({
-    onOpenPaths: handleDropWorkspacePaths,
-  });
-
   const {
-    dropTargetRef: workspaceDropTargetRef,
-    isDragOver: isWorkspaceDropActive,
-    handleDragOver: handleWorkspaceDragOver,
-    handleDragEnter: handleWorkspaceDragEnter,
-    handleDragLeave: handleWorkspaceDragLeave,
-    handleDrop: handleWorkspaceDrop,
-  } = useWorkspaceDropZone({
-    onDropPaths: handleDropWorkspacePaths,
+    handleDropWorkspacePaths,
+    handleWorkspaceDragEnter,
+    handleWorkspaceDragLeave,
+    handleWorkspaceDragOver,
+    handleWorkspaceDrop,
+    isWorkspaceDropActive,
+    workspaceDropTargetRef,
+  } = useWorkspacePathsIntake({
+    handleAddWorkspaceFromPath,
   });
 
   const runtimeThreadBoundary = defineRuntimeThreadShellBoundary({

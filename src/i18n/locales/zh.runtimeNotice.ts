@@ -53,6 +53,9 @@ const zhRuntimeNotice = {
       unavailable: "{{engine}} 未安装，请先安装",
       requiresLogin: "{{engine}} 需先登录",
     },
+    codex: {
+      providerSelected: "已选择 {{name}}，点击 Codex 即可直接创建会话",
+    },
     claude: {
       resumeCommandCopied:
         "Claude 恢复命令已复制。如果 TUI 的 /resume picker 看不到这个 GUI 会话，请显式运行 claude --resume {{sessionId}} 或 /resume {{sessionId}}。",

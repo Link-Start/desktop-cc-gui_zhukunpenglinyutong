@@ -7,6 +7,18 @@ const zhModels = {
     refreshConfigFailed: "刷新失败：{{message}}",
     claude: {},
     codex: {
+      gpt56sol: {
+        label: "gpt-5.6-sol",
+        description: "最新的前沿 agentic coding 模型",
+      },
+      gpt56terra: {
+        label: "gpt-5.6-terra",
+        description: "适合日常工作的均衡 agentic coding 模型",
+      },
+      gpt56luna: {
+        label: "gpt-5.6-luna",
+        description: "快速且经济的 agentic coding 模型",
+      },
       gpt55: {
         label: "gpt-5.5",
         description: "适合复杂编码、研究与真实工作流的前沿模型",

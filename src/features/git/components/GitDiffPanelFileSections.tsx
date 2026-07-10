@@ -17,6 +17,7 @@ import { getFileTreeIconSvg } from "../../files/utils/fileTreeIcons";
 import { GitDiffPanelSectionActions } from "./GitDiffPanelSectionActions";
 import {
   type InclusionState,
+  InclusionToggle,
   getFileInclusionState,
   normalizeDiffPath,
 } from "./GitDiffPanelInclusion";
@@ -186,7 +187,7 @@ export function DiffFileRow({
 
   return (
     <div
-      className={`diff-row git-filetree-row ${isActive ? "active" : ""} ${isSelected ? "selected" : ""}`}
+      className={`diff-row git-filetree-row${treeItem ? " git-filetree-row--tree" : ""} ${isActive ? "active" : ""} ${isSelected ? "selected" : ""}`}
       style={treeRowStyle}
       data-section={section}
       data-status={file.status}
@@ -219,10 +220,13 @@ export function DiffFileRow({
       }}
       onContextMenu={onContextMenu}
     >
+      <span className={`diff-status-letter ${statusClass}`} aria-hidden>
+        {statusLetter}
+      </span>
       <span className="diff-file-icon" aria-hidden>
         <GitFileTreeIcon name={name ?? ""} />
       </span>
-      <div className="diff-file">
+      <div className="diff-file" title={file.path}>
         <div className="diff-path">
           <span className="diff-name">
             <span className="diff-name-base">{base}</span>
@@ -305,24 +309,16 @@ export function DiffFileRow({
           )}
         </div>
         {!mutationDisabled ? (
-          <button
-            type="button"
-            className={`diff-status-letter ${statusClass} is-${inclusionState}`}
+          <InclusionToggle
+            state={inclusionState}
+            label={inclusionLabel}
             disabled={inclusionDisabled}
-            aria-label={inclusionLabel}
-            title={inclusionLabel}
-            onClick={(event) => {
-              event.stopPropagation();
+            stopPropagation
+            onToggle={() => {
               void onSetCommitSelection?.([file.path], inclusionState !== "all");
             }}
-          >
-            {statusLetter}
-          </button>
-        ) : (
-          <span className={`diff-status-letter ${statusClass}`} aria-hidden>
-            {statusLetter}
-          </span>
-        )}
+          />
+        ) : null}
       </div>
     </div>
   );

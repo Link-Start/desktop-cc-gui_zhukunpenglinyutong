@@ -30,6 +30,7 @@ import {
 import { previewThreadName } from "../../../utils/threadItems";
 import { resolveThreadStabilityDiagnostic } from "../utils/stabilityDiagnostics";
 import { hasCodexBackgroundHelperPreview } from "../utils/codexBackgroundHelpers";
+import { isCodexPrewarmThreadStart } from "../utils/codexPendingPrewarm";
 import { renameLiveAssistantTextThread } from "../utils/liveAssistantTextChannel";
 import type { ThreadAction } from "./useThreadsReducer";
 
@@ -358,6 +359,15 @@ export function useThreadTurnEvents({
       }
       if (isCodexBackgroundHelperThread(threadId, thread)) {
         dispatch({ type: "hideThread", workspaceId, threadId });
+        return;
+      }
+      // 乐观创建的 codex 会话在后台预热了真实线程，app-server 会为它推一条
+      // thread/started。首次发消息 finalize 换绑前放它进侧边栏，就会和
+      // `codex-pending-*` 条目并列成两条空会话。
+      if (
+        inferEngineFromThreadId(threadId) === "codex" &&
+        isCodexPrewarmThreadStart(workspaceId, threadId)
+      ) {
         return;
       }
       if (isThreadHidden(workspaceId, threadId)) {

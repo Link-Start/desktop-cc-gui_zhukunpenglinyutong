@@ -442,6 +442,37 @@ describe("messagesTimelineVirtualization", () => {
     });
   });
 
+  it("measures immediately when virtualization flips on mid-turn instead of waiting for stable view", () => {
+    // enabled=false 期间 TanStack 会清空行高缓存；发送消息触发 OFF→ON 翻转时若等
+    // stableHistoryView，估高摆放的重叠会持续到首个 delta 才自愈。
+    expect(resolveVirtualizedTimelineScopeReset({
+      previousScopeKey: null,
+      nextScopeKey: "ws-1 thread-1 20 60 virtualized",
+      shouldVirtualize: true,
+      stableHistoryView: false,
+      hasPendingJump: false,
+      hasScrollElement: true,
+    })).toEqual({
+      nextScopeKey: "ws-1 thread-1 20 60 virtualized",
+      shouldResetScroll: false,
+      shouldMeasure: true,
+    });
+
+    // 滚动元素还没就绪时不消耗首挂载信号，保持 null 让下一次 effect 重试。
+    expect(resolveVirtualizedTimelineScopeReset({
+      previousScopeKey: null,
+      nextScopeKey: "ws-1 thread-1 20 60 virtualized",
+      shouldVirtualize: true,
+      stableHistoryView: false,
+      hasPendingJump: false,
+      hasScrollElement: false,
+    })).toEqual({
+      nextScopeKey: null,
+      shouldResetScroll: false,
+      shouldMeasure: false,
+    });
+  });
+
   it("resets stale scroll scope only for a new stable virtualized history thread", () => {
     expect(resolveVirtualizedTimelineScopeReset({
       previousScopeKey: "ws-1\u0000thread-old\u0000200",

@@ -7,9 +7,9 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-24.md`
-- **Total Sessions**: 965
-- **Last Active**: 2026-07-07
+- **Active File**: `journal-25.md`
+- **Total Sessions**: 970
+- **Last Active**: 2026-07-10
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-24.md` | ~1857 | Active |
+| `journal-25.md` | ~53 | Active |
+| `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
 | `journal-21.md` | ~1970 | Archived |
@@ -52,6 +53,11 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 970 | 2026-07-10 | 添加 Codex 5.6 系列模型 | `94de14e6` | `ui-refactoring` |
+| 969 | 2026-07-10 | 修复 Git 子仓库文件打开路径 | `20772025` | `ui-refactoring` |
+| 968 | 2026-07-09 | 合并 0.6.9 版本分支 | `0dda924d` | `feature/ui-reactoring-2` |
+| 967 | 2026-07-09 | 归档实时对话渲染 OpenSpec 提案 | `de030a26` | `feature/ui-reactoring-2` |
+| 966 | 2026-07-09 | 修复 Hub Git 文件列表选择 UI | `a0706b04` | `feature/ui-reactoring-2` |
 | 965 | 2026-07-07 | 支持浏览器网页多元素点选上下文 | `1e96af3c` | `feature/ui-reactoring-2` |
 | 964 | 2026-07-07 | 修复消息流式滚动更新回环 | `5b672863` | `ui-refactoring` |
 | 963 | 2026-07-07 | 修复焦点跟随重新开启滚底 | `8ad0eff7` | `ui-refactoring` |

@@ -5,6 +5,9 @@ import { CODEX_MODELS } from './types';
 describe('CODEX_MODELS', () => {
   it('matches the current Codex built-in model list', () => {
     expect(CODEX_MODELS.map(model => model.id)).toEqual([
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
       'gpt-5.5',
       'gpt-5.4',
       'gpt-5.4-mini',

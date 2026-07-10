@@ -242,3 +242,51 @@ Conversation message rendering MUST avoid committing semantically unchanged help
 - **THEN** the message render surface MUST commit the new helper state
 - **AND** existing live row visibility and latest reasoning auto-expand behavior MUST remain intact
 
+### Requirement: Live assistant text MAY bypass root reducer while preserving final transcript convergence
+
+During an active streaming turn, the message surface MUST support visible assistant body growth through a transient live-text channel instead of requiring every text delta to mutate the root conversation item array.
+
+#### Scenario: live text grows when item identity remains stable
+
+- **WHEN** an assistant message is streaming
+- **AND** new body text arrives through the live assistant text channel
+- **AND** the durable conversation item array identity does not change for that delta
+- **THEN** the visible assistant row MUST still be able to show the new text
+- **AND** the message surface MUST NOT depend solely on parent array identity or `scrollKey` changes as proof of live text growth
+
+#### Scenario: completion converges to durable transcript state
+
+- **WHEN** a streaming assistant message completes after using transient live text
+- **THEN** the durable reducer/history settlement path MUST converge to the final assistant body
+- **AND** the final transcript MUST NOT depend on the transient live channel remaining populated
+
+#### Scenario: live text is scoped to the current assistant item
+
+- **WHEN** multiple threads or assistant items are active or restored
+- **THEN** live text channel subscriptions MUST be scoped by thread/item identity
+- **AND** text published for one assistant item MUST NOT appear in another thread or item
+
+### Requirement: Live bottom-follow MUST react to rendered content growth
+
+When live assistant text is delivered through a path that does not mutate the root conversation item array for every delta, the message surface MUST still keep bottom-follow behavior tied to actual rendered content growth.
+
+#### Scenario: streaming height growth keeps viewport pinned during follow window
+
+- **WHEN** a conversation is actively streaming
+- **AND** the message timeline's rendered height grows
+- **AND** bottom-follow is currently allowed by the streaming follow window
+- **THEN** the viewport MUST remain at the true bottom of the scroll container
+- **AND** the behavior MUST NOT depend solely on reducer item identity or `scrollKey` changes
+
+#### Scenario: direct bottom scroll includes container padding
+
+- **WHEN** the user or live follow behavior scrolls to the latest output
+- **THEN** the scroll target MUST be the scroll container's true bottom
+- **AND** bottom padding MUST NOT remain below the viewport solely because a bottom sentinel used `scrollIntoView`
+
+#### Scenario: deliberate scroll-away releases bottom-follow
+
+- **WHEN** the user intentionally scrolls upward during a live conversation
+- **THEN** automatic bottom-follow MUST pause
+- **AND** later rendered height growth MUST NOT force the viewport back to bottom until a follow window or explicit user action allows it
+

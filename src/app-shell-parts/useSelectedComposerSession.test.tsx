@@ -347,6 +347,49 @@ describe("useSelectedComposerSession", () => {
     );
   });
 
+  it("waits for engine defaults to be ready before seeding a pending thread", async () => {
+    type HookProps = { engineDefaultSelectionReady: boolean };
+    let engineDefaultSelection: { modelId: string; effort: string } | null = null;
+    const resolveEngineDefaultComposerSelection = () => engineDefaultSelection;
+
+    const { result, rerender } = renderHook(
+      ({ engineDefaultSelectionReady }: HookProps) =>
+        useSelectedComposerSession({
+          activeWorkspaceId: "ws-a",
+          activeThreadId: "claude-pending-late-settings",
+          resolveCanonicalThreadId: (threadId: string) => threadId,
+          engineDefaultSelectionReady,
+          resolveEngineDefaultComposerSelection,
+        }),
+      {
+        initialProps: {
+          engineDefaultSelectionReady: false,
+        },
+      },
+    );
+
+    expect(result.current.selectedComposerSelection).toBeNull();
+    expect(writeClientStoreValue).not.toHaveBeenCalled();
+
+    engineDefaultSelection = {
+      modelId: "fable-5",
+      effort: "high",
+    };
+    rerender({ engineDefaultSelectionReady: true });
+
+    await waitFor(() => {
+      expect(result.current.selectedComposerSelection).toEqual({
+        modelId: "fable-5",
+        effort: "high",
+      });
+    });
+    expect(writeClientStoreValue).toHaveBeenCalledWith(
+      "composer",
+      "selectedModelByThread.ws-a:claude-pending-late-settings",
+      { modelId: "fable-5", effort: "high" },
+    );
+  });
+
   it("does not override a thread's own stored selection with the engine default", async () => {
     composerStore["selectedModelByThread.ws-a:claude-pending-2"] = {
       modelId: "claude-opus-4-8",

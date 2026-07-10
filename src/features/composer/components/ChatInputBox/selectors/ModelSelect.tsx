@@ -28,6 +28,9 @@ interface ModelSelectProps {
 }
 
 const MODEL_LABEL_KEYS: Record<string, string> = {
+  'gpt-5.6-sol': 'models.codex.gpt56sol.label',
+  'gpt-5.6-terra': 'models.codex.gpt56terra.label',
+  'gpt-5.6-luna': 'models.codex.gpt56luna.label',
   'gpt-5.5': 'models.codex.gpt55.label',
   'gpt-5.4': 'models.codex.gpt54.label',
   'gpt-5.4-mini': 'models.codex.gpt54mini.label',
@@ -37,6 +40,9 @@ const MODEL_LABEL_KEYS: Record<string, string> = {
 };
 
 const MODEL_DESCRIPTION_KEYS: Record<string, string> = {
+  'gpt-5.6-sol': 'models.codex.gpt56sol.description',
+  'gpt-5.6-terra': 'models.codex.gpt56terra.description',
+  'gpt-5.6-luna': 'models.codex.gpt56luna.description',
   'gpt-5.5': 'models.codex.gpt55.description',
   'gpt-5.4': 'models.codex.gpt54.description',
   'gpt-5.4-mini': 'models.codex.gpt54mini.description',

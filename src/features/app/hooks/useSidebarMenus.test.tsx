@@ -482,6 +482,85 @@ describe("useSidebarMenus", () => {
     ]);
   });
 
+  it("remembers the last picked Codex provider for direct main-entry creation", async () => {
+    window.localStorage.removeItem("codexLastProviderProfileId");
+    const handlers = createHandlers();
+    const { result } = renderHook(() =>
+      useSidebarMenus({
+        ...handlers,
+        codexProviderProfiles: [
+          {
+            id: "provider-openai",
+            name: "OpenAI",
+            source: "managed",
+          },
+        ],
+      }),
+    );
+
+    const openMenuAndGetCodexAction = async () => {
+      await act(async () => {
+        const event = {
+          clientX: 160,
+          clientY: 120,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
+        result.current.showWorkspaceMenu(event, workspace);
+      });
+      return result.current.workspaceMenuState?.groups
+        .find((group) => group.id === "new-session")
+        ?.actions.find((action) => action.id === "new-session-codex");
+    };
+
+    // No memory yet: main entry falls back to the disk profile.
+    const codexAction = await openMenuAndGetCodexAction();
+    expect(
+      codexAction?.children?.find((child) => child.selected)?.id,
+    ).toBe("new-session-codex-provider-__disk__");
+    await act(async () => {
+      await codexAction?.onSelect();
+    });
+    expect(handlers.onAddAgent).toHaveBeenLastCalledWith(
+      workspace,
+      "codex",
+      expect.objectContaining({ providerProfileId: "__disk__" }),
+    );
+
+    // Picking a submenu provider only selects it (no session created).
+    handlers.onAddAgent.mockClear();
+    await act(async () => {
+      await codexAction?.children
+        ?.find((child) => child.id === "new-session-codex-provider-provider-openai")
+        ?.onSelect();
+    });
+    expect(handlers.onAddAgent).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("codexLastProviderProfileId")).toBe(
+      "provider-openai",
+    );
+    expect(pushGlobalRuntimeNoticeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageKey: "runtimeNotice.codex.providerSelected",
+        messageParams: { name: "OpenAI" },
+      }),
+    );
+
+    // The rebuilt menu shows the check on the picked provider and the
+    // main entry now creates with it directly.
+    const reopenedAction = await openMenuAndGetCodexAction();
+    expect(
+      reopenedAction?.children?.find((child) => child.selected)?.id,
+    ).toBe("new-session-codex-provider-provider-openai");
+    await act(async () => {
+      await reopenedAction?.onSelect();
+    });
+    expect(handlers.onAddAgent).toHaveBeenLastCalledWith(
+      workspace,
+      "codex",
+      expect.objectContaining({ providerProfileId: "provider-openai" }),
+    );
+  });
+
   it("triggers create action when Gemini entry is clicked", async () => {
     const handlers = createHandlers();
     const { result } = renderHook(() => useSidebarMenus(handlers));

@@ -197,6 +197,31 @@ The Git diff panel MUST expose explicit file-scoped preview affordances, and liv
 - **THEN** the system MUST allow that review flow to enter editable review mode for the same file
 - **AND** saving from that review flow MUST refresh the Git panel's live diff state
 
+### Requirement: Git Diff Panel File Opens MUST Resolve Repository Paths To Workspace Paths
+
+Git status and diff entries are repository-relative, while the file editor read pipeline consumes workspace-relative paths. The Git Diff panel MUST explicitly route changed-file open requests through a Git-path domain before invoking the shared editor open flow.
+
+#### Scenario: Nested git root file open adds workspace prefix
+
+- **GIVEN** the active workspace path is a parent directory of the configured Git root
+- **AND** a changed file row path is relative to that Git root
+- **WHEN** the user opens that changed file from the Git Diff panel
+- **THEN** the editor open request MUST resolve the path to a workspace-relative path by prefixing the Git root's workspace-relative segment
+- **AND** the shared file read pipeline MUST receive the resolved workspace-relative path
+
+#### Scenario: Workspace root git file open does not add visual root label
+
+- **GIVEN** the active workspace path is the configured Git root
+- **WHEN** the user opens a changed file from the Git Diff panel
+- **THEN** the editor open request MUST preserve the repository-relative file path
+- **AND** it MUST NOT prefix the visible repository root name used by tree rendering
+
+#### Scenario: Non-Git file open entrypoints remain workspace-relative
+
+- **WHEN** a file is opened from the workspace file tree, search results, activity surface, Project Map evidence, or any other non-Git changed-file row entrypoint
+- **THEN** the shared editor open flow MUST treat the input as workspace-relative or absolute workspace path according to the existing workspace file contract
+- **AND** it MUST NOT apply the Git root prefix mapping unless the caller explicitly declares the path as Git-domain input
+
 ### Requirement: Remote Backend Git Diff Panel Reads
 
 The Git Diff panel SHALL execute read-only repository discovery and diff/status reads against the active backend location. In remote daemon mode, desktop Git commands for status, root scanning, diffs, file full diff, and remote URL lookup MUST delegate to daemon RPC instead of reading local desktop workspace state or filesystem paths.
@@ -480,4 +505,3 @@ The Git Diff panel SHALL expose a manual refresh affordance for the active works
 - **WHEN** the manual refresh affordance is added
 - **THEN** the existing active/background Git status polling cadence SHALL remain unchanged
 - **AND** existing Git diff, root scan, commit, stage, unstage, discard, and preview actions SHALL remain available.
-

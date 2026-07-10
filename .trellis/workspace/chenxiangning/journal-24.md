@@ -1855,3 +1855,140 @@ Review:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 966: 修复 Hub Git 文件列表选择 UI
+
+**Date**: 2026-07-09
+**Task**: 修复 Hub Git 文件列表选择 UI
+**Branch**: `feature/ui-reactoring-2`
+
+### Summary
+
+恢复 Hub Git 文件列表提交复选框，将文件行对齐外部 Git worktree 的 status/icon/path/meta 四列结构，修复 tree/flat 列表中状态字母换行问题，并在 frontend component spec 中固化 Git file list selection surface 契约。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a0706b04` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 967: 归档实时对话渲染 OpenSpec 提案
+
+**Date**: 2026-07-09
+**Task**: 归档实时对话渲染 OpenSpec 提案
+**Branch**: `feature/ui-reactoring-2`
+
+### Summary
+
+补齐并归档 externalize-live-assistant-text-channel 与 fix-live-bottom-follow-scroll-control 两个 OpenSpec change，覆盖 liveAssistantTextChannel 外置正文通道、root render 降噪、floating ScrollControl 与 ResizeObserver bottom-follow 行为，并同步主 specs。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `de030a26` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 968: 合并 0.6.9 版本分支
+
+**Date**: 2026-07-09
+**Task**: 合并 0.6.9 版本分支
+**Branch**: `feature/ui-reactoring-2`
+
+### Summary
+
+将 upstream/chore/bump-version-0.6.9 合并到 feature/ui-reactoring-2，保留当前分支已有 Git UI 与 OpenSpec 归档提交；本次上游变更仅同步 package.json、package-lock.json、src-tauri/tauri.conf.json 的版本号到 0.6.9。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0dda924d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 969: 修复 Git 子仓库文件打开路径
+
+**Date**: 2026-07-10
+**Task**: 修复 Git 子仓库文件打开路径
+**Branch**: `ui-refactoring`
+
+### Summary
+
+修复 Git 变更树在 workspace 父目录包含子 Git repo 时打开文件漏掉子仓库前缀的问题，并补充 git-panel-diff-view OpenSpec 契约。
+
+### Main Changes
+
+- 修复 `useGitPanelController`：新增 Git-domain path 解析，复用 `resolveGitRootWorkspacePrefix` 与 `resolveGitStatusPathCandidates`，只在调用方显式声明 `pathDomain: "git"` 时把 repo-relative path 映射为 workspace-relative path。
+- 调整 `useLayoutNodes`：仅 Git Diff panel 的 changed-file open 入口传入 `{ pathDomain: "git" }`，普通 file tree/search/activity/Project Map 等入口保持默认 workspace path，避免路径规则扩散。
+- 增加 `useGitPanelController` 回归测试：覆盖 nested git root 补前缀、workspace root 等于 git root 不补视觉 repo name、普通 workspace-relative file tree path 不受 gitRoot 影响。
+- 更新 `openspec/specs/git-panel-diff-view/spec.md`：记录 Git status/diff path 为 repository-relative、editor read pipeline 为 workspace-relative 的行为契约。
+- 验证：`pnpm vitest run src/features/app/hooks/useGitPanelController.test.tsx` 通过；`pnpm typecheck` 通过；`openspec validate --specs --strict --no-interactive` 通过；`git diff --check` 通过。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `20772025` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

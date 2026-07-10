@@ -1013,7 +1013,15 @@ describe("useThreads UX integration", () => {
       const threadId = `thread-${index + 1}`;
       now += 100;
       await act(async () => {
-        await result.current.startThread();
+        // Optimistic codex create returns a pending id; finalize swaps in the
+        // real backend thread id like the first-send path does.
+        const pendingThreadId = await result.current.startThread();
+        if (pendingThreadId) {
+          await result.current.finalizeCodexPendingThread(
+            "ws-1",
+            pendingThreadId,
+          );
+        }
         handlers?.onAgentMessageCompleted?.({
           workspaceId: "ws-1",
           threadId,

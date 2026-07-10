@@ -33,6 +33,7 @@ import {
 import {
   appendLiveAssistantText,
   clearLiveAssistantText,
+  drainLiveAssistantTextTail,
 } from "../utils/liveAssistantTextChannel";
 import { isLiveTextExternalizationEnabled } from "../utils/realtimePerfFlags";
 import {
@@ -1185,6 +1186,24 @@ export function useThreadItemEvents({
         "image_generation_end",
       ].includes(itemType);
       if (shouldMarkProcessing && shouldIncrementAgentSegment && isToolItem) {
+        // A4 live-text 外部化：本段正文只有建壳首段落进了 reducer，其余都停在通道里。
+        // 分段前必须把尾段灌回，否则 incrementAgentSegment 之后通道条目会被下一段的
+        // 首 delta 顶掉，本段正文永久丢失。dispatch 必须早于 incrementAgentSegment，
+        // 好让 reducer 用「旧 segment」解析出本段的 assistant item id。
+        // hasCustomName: true 表示灌回不参与线程自动命名（与中断 drain 一致）。
+        if (LIVE_TEXT_EXTERNALIZATION_ENABLED) {
+          const liveTextTail = drainLiveAssistantTextTail(threadId);
+          if (liveTextTail) {
+            dispatch({
+              type: "appendAgentDelta",
+              workspaceId,
+              threadId,
+              itemId: liveTextTail.itemId,
+              delta: liveTextTail.tailDelta,
+              hasCustomName: true,
+            });
+          }
+        }
         dispatch({ type: "incrementAgentSegment", threadId });
       }
 

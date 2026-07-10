@@ -11,6 +11,12 @@ import {
   normalizeRateLimits,
   normalizeTokenUsage,
 } from "../utils/threadNormalize";
+import {
+  registerCodexPrewarm,
+  releaseCodexPrewarm,
+  resetCodexPendingPrewarmForTests,
+  settleCodexPrewarm,
+} from "../utils/codexPendingPrewarm";
 import { useThreadTurnEvents } from "./useThreadTurnEvents";
 import { workspaceScopedHas } from "./workspaceScopedMap";
 
@@ -151,6 +157,7 @@ describe("useThreadTurnEvents", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearGlobalRuntimeNotices();
+    resetCodexPendingPrewarmForTests();
     vi.mocked(engineInterrupt).mockResolvedValue();
     vi.mocked(engineInterruptTurn).mockResolvedValue();
   });
@@ -198,6 +205,83 @@ describe("useThreadTurnEvents", () => {
       1_700_000_000_000,
     );
     expect(safeMessageActivity).toHaveBeenCalled();
+  });
+
+  it("suppresses the thread/started raised by an in-flight codex prewarm", () => {
+    // 乐观创建刚发出 thread/start，真 id 未知：此刻到达的 codex thread/started
+    // 只可能是预热自己触发的，放进侧边栏就会与 codex-pending-* 并列成两条空会话。
+    registerCodexPrewarm("ws-1", "codex-pending-1");
+    const { result, dispatch, recordThreadActivity, safeMessageActivity } =
+      makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", {
+        id: "thread-1",
+        preview: "A brand new thread",
+      });
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(recordThreadActivity).not.toHaveBeenCalled();
+    expect(safeMessageActivity).not.toHaveBeenCalled();
+  });
+
+  it("narrows prewarm suppression to the real thread id once the start resolves", () => {
+    registerCodexPrewarm("ws-1", "codex-pending-1");
+    settleCodexPrewarm("codex-pending-1", "thread-1");
+    const { result, dispatch } = makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", { id: "thread-1" });
+    });
+    expect(dispatch).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", { id: "thread-other" });
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "thread-other",
+      engine: "codex",
+    });
+  });
+
+  it("stops suppressing the real thread once the pending thread is finalized", () => {
+    registerCodexPrewarm("ws-1", "codex-pending-1");
+    settleCodexPrewarm("codex-pending-1", "thread-1");
+    releaseCodexPrewarm("codex-pending-1");
+    const { result, dispatch } = makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", { id: "thread-1" });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      engine: "codex",
+    });
+  });
+
+  it("still hides codex background helper threads inside a prewarm window", () => {
+    registerCodexPrewarm("ws-1", "codex-pending-1");
+    const { result, dispatch } = makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", {
+        id: "thread-helper",
+        preview:
+          "Generate a concise title for a coding chat thread from the first user message.",
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "hideThread",
+      workspaceId: "ws-1",
+      threadId: "thread-helper",
+    });
   });
 
   it("keeps codex provider metadata from thread started events", () => {

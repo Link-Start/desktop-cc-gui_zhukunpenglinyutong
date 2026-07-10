@@ -389,7 +389,7 @@ describe("GitDiffPanel", () => {
       />,
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Toggle commit selection: file.txt" }),
+      screen.getByRole("checkbox", { name: "Toggle commit selection: file.txt" }),
     );
     await chooseCodexEnglishCommitMessage();
 
@@ -411,7 +411,7 @@ describe("GitDiffPanel", () => {
       />,
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Toggle commit selection: file.txt" }),
+      screen.getByRole("checkbox", { name: "Toggle commit selection: file.txt" }),
     );
     await chooseCodexEnglishCommitMessage();
 
@@ -430,7 +430,7 @@ describe("GitDiffPanel", () => {
         unstagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
       />,
     );
-    const selectionToggle = screen.getByRole("button", {
+    const selectionToggle = screen.getByRole("checkbox", {
       name: "Toggle commit selection: file.txt",
     });
     fireEvent.click(selectionToggle);
@@ -467,11 +467,15 @@ describe("GitDiffPanel", () => {
 
     const section = document.querySelector(".diff-section.git-filetree-section");
     const folderRow = document.querySelector(".diff-tree-folder-row.git-filetree-folder-row");
-    const fileRow = document.querySelector(".diff-row.git-filetree-row");
+    const fileRow = document.querySelector(".diff-row.git-filetree-row.git-filetree-row--tree");
+    const fileRowChildren = Array.from(fileRow?.children ?? []);
 
     expect(section).toBeTruthy();
     expect(folderRow).toBeTruthy();
     expect(fileRow).toBeTruthy();
+    expect(fileRowChildren[0]?.classList.contains("diff-status-letter")).toBe(true);
+    expect(fileRowChildren[1]?.classList.contains("diff-file-icon")).toBe(true);
+    expect(fileRow?.querySelector(".diff-row-meta .diff-status-letter")).toBeNull();
     expect(document.querySelector(".diff-counts-inline.git-filetree-badge")).toBeNull();
   });
 
@@ -546,7 +550,7 @@ describe("GitDiffPanel", () => {
     );
 
     expect(document.querySelector(".git-filetree-section-header.is-compact")).toBeTruthy();
-    expect(screen.queryByText("desktop-cc-gui")).toBeNull();
+    expect(screen.getByText("desktop-cc-gui")).toBeTruthy();
     expect(screen.getByLabelText("Changes (1)")).toBeTruthy();
   });
 
@@ -564,7 +568,7 @@ describe("GitDiffPanel", () => {
     );
 
     expect(document.querySelectorAll(".git-filetree-section-header.is-compact")).toHaveLength(2);
-    expect(screen.queryByText("codex-2026-03-12-v0.2.7")).toBeNull();
+    expect(screen.getAllByText("codex-2026-03-12-v0.2.7")).toHaveLength(2);
   });
 
   it("renders compact flat summary in single-section flat mode", () => {
@@ -633,7 +637,7 @@ describe("GitDiffPanel", () => {
 
     const toggle = screen.getByRole("button", { name: "Changes (1)" });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.queryByText("desktop-cc-gui")).toBeNull();
+    expect(screen.getByText("desktop-cc-gui")).toBeTruthy();
     expect(screen.getByLabelText("src/alpha.ts")).toBeTruthy();
 
     fireEvent.click(toggle);
@@ -817,11 +821,11 @@ describe("GitDiffPanel", () => {
     );
 
     const rowMeta = document.querySelector('.diff-row[data-path="file.txt"] .diff-row-meta');
-    const selectionToggle = screen.getByRole("button", {
+    const selectionToggle = screen.getByRole("checkbox", {
       name: "Toggle commit selection: file.txt",
     });
     expect(rowMeta?.lastElementChild).toBe(selectionToggle);
-    expect(selectionToggle.classList.contains("diff-status-letter")).toBe(true);
+    expect(selectionToggle.classList.contains("git-commit-scope-toggle")).toBe(true);
 
     fireEvent.click(selectionToggle);
     expect(onSelectFile).not.toHaveBeenCalled();
@@ -942,6 +946,30 @@ describe("GitDiffPanel", () => {
     expect(onStageAllChanges).toHaveBeenCalledTimes(1);
   });
 
+  it("toggles the unstaged commit scope from the section checkbox", () => {
+    const onCommit = vi.fn();
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        gitDiffListView="flat"
+        onCommit={onCommit}
+        commitMessage="feat: selective commit"
+        onGenerateCommitMessage={vi.fn()}
+        unstagedFiles={[
+          { path: "file-a.txt", status: "M", additions: 1, deletions: 0 },
+          { path: "file-b.txt", status: "M", additions: 2, deletions: 0 },
+        ]}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Toggle commit selection: Changes" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+
+    expect(onCommit).toHaveBeenCalledWith(["file-a.txt", "file-b.txt"]);
+  });
+
   it("keeps tree mode unstage-all action behavior", async () => {
     const onUnstageFile = vi.fn();
     render(
@@ -982,7 +1010,7 @@ describe("GitDiffPanel", () => {
         ]}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Toggle commit selection: file.txt" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Toggle commit selection: file.txt" }));
     expect(onStageFile).not.toHaveBeenCalled();
     expect(screen.getByText("1 file selected for commit")).toBeTruthy();
 
@@ -1018,12 +1046,12 @@ describe("GitDiffPanel", () => {
     ).toBeNull();
 
     fireEvent.click(
-      screen.getByRole("button", {
+      screen.getByRole("checkbox", {
         name: "Toggle commit selection: src/pending-a.ts",
       }),
     );
     fireEvent.click(
-      screen.getByRole("button", {
+      screen.getByRole("checkbox", {
         name: "Toggle commit selection: src/pending-b.ts",
       }),
     );
@@ -1053,7 +1081,7 @@ describe("GitDiffPanel", () => {
       />,
     );
 
-    const hybridToggles = screen.getAllByRole("button", {
+    const hybridToggles = screen.getAllByRole("checkbox", {
       name: "Toggle commit selection: src/hybrid.ts",
     });
     expect(hybridToggles).toHaveLength(2);

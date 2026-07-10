@@ -1,7 +1,8 @@
+import Check from "lucide-react/dist/esm/icons/check";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { CSSProperties, MouseEvent, ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { WorkspaceMenuAction } from "../hooks/useSidebarMenus";
 
 type SidebarWorkspaceMenuOverlayProps = {
@@ -81,6 +82,7 @@ export function SidebarWorkspaceMenuOverlay({
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null);
   const [submenuPosition, setSubmenuPosition] =
     useState<SidebarWorkspaceSubmenuPosition | null>(null);
+  const [showSelectionHint, setShowSelectionHint] = useState(false);
 
   const openSubmenuAction = useMemo(
     () =>
@@ -98,6 +100,7 @@ export function SidebarWorkspaceMenuOverlay({
   const closeSubmenu = useCallback(() => {
     setOpenSubmenuId(null);
     setSubmenuPosition(null);
+    setShowSelectionHint(false);
   }, []);
 
   const openSubmenu = useCallback((action: WorkspaceMenuAction, trigger: HTMLElement) => {
@@ -106,6 +109,7 @@ export function SidebarWorkspaceMenuOverlay({
       return;
     }
 
+    setShowSelectionHint((prev) => (openSubmenuId === action.id ? prev : false));
     setSubmenuPosition(
       resolveWorkspaceSubmenuPosition(
         trigger.getBoundingClientRect(),
@@ -114,27 +118,19 @@ export function SidebarWorkspaceMenuOverlay({
       ),
     );
     setOpenSubmenuId(action.id);
-  }, [closeSubmenu]);
+  }, [closeSubmenu, openSubmenuId]);
 
+  // Clicking a parent with children runs its default action directly;
+  // the submenu stays reachable via hover (onMouseEnter).
   const handleAction = useCallback(
-    (action: WorkspaceMenuAction, event?: MouseEvent<HTMLElement>) => {
+    (action: WorkspaceMenuAction) => {
       if (action.unavailable) {
-        return;
-      }
-      if (action.children && action.children.length > 0) {
-        if (openSubmenuId === action.id) {
-          closeSubmenu();
-          return;
-        }
-        if (event?.currentTarget) {
-          openSubmenu(action, event.currentTarget);
-        }
         return;
       }
       closeSubmenu();
       onAction(action);
     },
-    [closeSubmenu, onAction, openSubmenu, openSubmenuId],
+    [closeSubmenu, onAction],
   );
 
   return (
@@ -192,7 +188,19 @@ export function SidebarWorkspaceMenuOverlay({
                     }
                     closeSubmenu();
                   }}
-                  onClick={(event) => handleAction(action, event)}
+                  onKeyDown={(event) => {
+                    // Keyboard path to the submenu the aria-haspopup promises;
+                    // hover remains the pointer path.
+                    if (
+                      event.key === "ArrowRight" &&
+                      action.children?.length &&
+                      !action.unavailable
+                    ) {
+                      event.preventDefault();
+                      openSubmenu(action, event.currentTarget);
+                    }
+                  }}
+                  onClick={() => handleAction(action)}
                 >
                   <span
                     className={`sidebar-workspace-menu-item-icon sidebar-workspace-menu-item-icon-${action.iconKind}${
@@ -285,12 +293,16 @@ export function SidebarWorkspaceMenuOverlay({
             <button
               key={child.id}
               type="button"
-              role="menuitem"
+              role="menuitemradio"
+              aria-checked={child.selected ?? false}
               className={`sidebar-workspace-menu-item${
                 child.unavailable ? " is-unavailable" : ""
               }`}
               disabled={child.unavailable}
-              onClick={() => onAction(child)}
+              onClick={() => {
+                onAction(child);
+                setShowSelectionHint(Boolean(child.keepMenuOpen));
+              }}
             >
               <span
                 className={`sidebar-workspace-menu-item-icon sidebar-workspace-menu-item-icon-${child.iconKind}${
@@ -308,6 +320,13 @@ export function SidebarWorkspaceMenuOverlay({
                   {child.badgeLabel}
                 </span>
               ) : null}
+              {child.selected ? (
+                <Check
+                  className="sidebar-workspace-menu-item-check"
+                  size={13}
+                  aria-hidden
+                />
+              ) : null}
               {child.unavailable ? (
                 <span className="sidebar-workspace-menu-item-unavailable">
                   ({child.statusLabel ?? t("sidebar.unavailableTag")})
@@ -315,6 +334,11 @@ export function SidebarWorkspaceMenuOverlay({
               ) : null}
             </button>
           ))}
+          {showSelectionHint && openSubmenuAction.selectionHint ? (
+            <div className="sidebar-workspace-submenu-hint" role="status">
+              {openSubmenuAction.selectionHint}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

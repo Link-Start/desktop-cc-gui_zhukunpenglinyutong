@@ -536,7 +536,7 @@ function DiffTreeSection({
           aria-label={title}
           onKeyDownCapture={handleTreeKeyDownCapture}
         >
-        {hasTreeNodes && hasRootFolderName && !useCompactHeader && (
+        {hasTreeNodes && hasRootFolderName && (
           <div className="diff-tree-folder-group">
             <div
               className="diff-tree-folder-row git-filetree-folder-row"
@@ -625,48 +625,6 @@ function DiffTreeSection({
               </div>
             )}
           </div>
-        )}
-        {hasTreeNodes && useCompactHeader && !rootCollapsed && (
-          <>
-            {Array.from(tree.folders.values()).map((folder) => renderFolder(folder, 1, rootFolderKey))}
-            {tree.files.map((file) => {
-              const isSelected = selectedFiles.size > 1 && selectedFiles.has(file.path);
-              const isActive = selectedPath === file.path;
-              return (
-                <DiffFileRow
-                  key={`${section}-${file.path}`}
-                  file={file}
-                  isSelected={isSelected}
-                  isActive={isActive}
-                  section={section}
-                  inclusionState={getFileInclusionState(
-                    file.path,
-                    includedPathSet,
-                    excludedPathSet,
-                    partialPathSet,
-                  )}
-                  inclusionDisabled={Boolean(
-                    isFileMutationDisabled(file) ||
-                      isCommitPathLocked?.(file.path),
-                  )}
-                  indentLevel={1}
-                  showDirectory={false}
-                  treeItem
-                  treeDepth={2}
-                  treeParentFolderKey={rootFolderKey}
-                  onClick={(event) => onFileClick(event, file.path, section)}
-                  onKeySelect={() => onSelectFile?.(file.path)}
-                  onOpenInlinePreview={() => onOpenInlinePreview?.(file.path)}
-                  onOpenPreview={() => onOpenFilePreview?.(file, section)}
-                  onContextMenu={(event) => onShowFileMenu(event, file.path, section)}
-                  onStageFile={onStageFile}
-                  onUnstageFile={onUnstageFile}
-                  onDiscardFile={onDiscardFile}
-                  onSetCommitSelection={onSetCommitSelection}
-                />
-              );
-            })}
-          </>
         )}
         {hasTreeNodes && !hasRootFolderName && (
           <>

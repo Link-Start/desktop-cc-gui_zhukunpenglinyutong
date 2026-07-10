@@ -75,6 +75,80 @@ const sidebarNodeWithTopbar = isValidElement(props.children)
 - modal/dialog 必须具备 `role="dialog"` + `aria-modal`（若为 modal）。
 - 鼠标可操作项需考虑 keyboard path。
 
+## Scenario: Git File List Selection Surface
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `src/features/git/components/GitDiffPanel*`、`src/features/git-history/components/GitHistoryWorktreePanel.tsx`、`src/styles/diff.css` 或 `src/styles/git-history*.css` 中的 Git changed-file list / worktree file list。
+- 目标：Hub Git 文件列表与外部 Git worktree 文件列表保持同一视觉契约，避免 status、filename、checkbox 在 narrow panel 中漂移成两行或语义混用。
+
+### 2. Signatures
+
+- Hub 文件行：`DiffFileRow({ file, section, inclusionState, treeItem, showDirectory, onSetCommitSelection })`
+- 提交范围控件：`InclusionToggle({ state, label, onToggle, disabled?, stopPropagation? })`
+- 外部参考行：`GitHistoryWorktreePanel` 的 `.git-history-worktree-file-row`
+- 样式契约：`.diff-row.git-filetree-row` MUST use four grid columns: `status / icon / path / meta`。
+
+### 3. Contracts
+
+- `DiffFileRow` 的直接 children 顺序 MUST 为：`.diff-status-letter`、`.diff-file-icon`、`.diff-file`、`.diff-row-meta`。
+- `.diff-status-letter` MUST be read-only visual status. It MUST NOT be a commit selection button and MUST NOT live inside `.diff-row-meta`。
+- commit selection MUST use `InclusionToggle` with `role="checkbox"` and an accessible label from `git.commitSelectionToggleFile` or `git.commitSelectionToggleScope`。
+- `.diff-row-meta` MUST contain only row actions, stats-like metadata, and commit selection controls; it MUST stay in the rightmost grid column and use nowrap semantics.
+- `tree` mode rows MUST keep the same file row contract as `flat` mode. Tree indentation can be applied by row padding/CSS variables, but MUST NOT introduce a second status line.
+- When repository root is known in tree mode, the root folder row SHOULD remain visible so the hierarchy mirrors the external Git file structure.
+- Selection controls MUST stop propagation so clicking checkbox does not select/open the file row.
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| Hub flat list | `status / icon / filename + dir / meta + checkbox` 同一行 | `(U)/(A)/(M)` 单独占一行 |
+| Hub tree list | folder hierarchy visible; file row remains four-column | tree file row 使用不同 DOM 顺序导致样式 drift |
+| commit selection | checkbox toggles commit scope only | status letter 兼任 checkbox 或触发行 click |
+| narrow panel | filename/path ellipsis; meta 不换行 | checkbox/status 被挤到下一行 |
+| external worktree reference | Hub follows `GitHistoryWorktreePanel` row contract | 两套 Git file list 各自发明 row layout |
+
+### 5. Good / Base / Bad Cases
+
+- Good：`DiffFileRow` renders status as a leading span and `InclusionToggle` as the last child inside `.diff-row-meta`。
+- Good：`GitDiffPanel.test.tsx` asserts `.diff-status-letter` is the first row child and no status exists inside `.diff-row-meta`。
+- Base：flat mode may show directory tail in `.diff-dir`; tree mode may hide directory tail because folder hierarchy already conveys it.
+- Bad：把 `.diff-status-letter` 做成 button，既显示 `M/U/A` 又承担 commit selection。
+- Bad：为了修 narrow width 给 status 加 `display: block` 或把 status 放在 file cell 前的独立 text node。
+
+### 6. Tests Required
+
+- `GitDiffPanel.test.tsx` MUST cover file commit selection by `getByRole("checkbox", { name: "Toggle commit selection: <path>" })`。
+- Tests MUST assert the file row DOM order: status letter before icon, and no `.diff-row-meta .diff-status-letter`。
+- Tests MUST cover section-level checkbox selection when `GitDiffPanelSectionActions` renders.
+- Tree tests MUST cover root folder visibility when `gitRoot` is present.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```tsx
+<div className="diff-row-meta">
+  <button className="diff-status-letter" aria-label={inclusionLabel}>
+    {statusLetter}
+  </button>
+</div>
+```
+
+#### Correct
+
+```tsx
+<span className="diff-status-letter" aria-hidden>
+  {statusLetter}
+</span>
+<span className="diff-file-icon" aria-hidden />
+<div className="diff-file" title={file.path} />
+<div className="diff-row-meta">
+  <InclusionToggle label={inclusionLabel} state={inclusionState} stopPropagation onToggle={...} />
+</div>
+```
+
 ## Scenario: Topbar Consolidated Command Menus
 
 ### 1. Scope / Trigger

@@ -660,6 +660,188 @@ async fn claude_forwarder_captures_burst_gap_and_preserves_streamed_final_text()
     );
 }
 
+#[tokio::test]
+async fn claude_forwarder_completed_text_carries_only_the_trailing_segment() {
+    let runtime_ops = FakeClaudeRuntimeOps::default();
+    let mut state = ClaudeForwarderState::new(
+        "thread-1".to_string(),
+        "assistant-1".to_string(),
+        "reasoning-1".to_string(),
+        "turn-1".to_string(),
+    );
+    let mut emitted = Vec::<AppServerEvent>::new();
+
+    // 正文 → 工具 → 正文：前端在 item/started(tool) 上 incrementAgentSegment，
+    // 尾段正文落到新的 assistant item。completed 只能带最后一段，否则整轮文字
+    // 会被重灌进最后一段，造成前面各段内容重复。
+    for event in [
+        EngineEvent::TextDelta {
+            workspace_id: "ws-1".to_string(),
+            text: "first segment.".to_string(),
+        },
+        EngineEvent::ToolStarted {
+            workspace_id: "ws-1".to_string(),
+            tool_id: "tool-1".to_string(),
+            tool_name: "bash".to_string(),
+            input: None,
+        },
+        EngineEvent::TextDelta {
+            workspace_id: "ws-1".to_string(),
+            text: "second segment.".to_string(),
+        },
+    ] {
+        handle_claude_forwarder_event(event, None, &mut state, &runtime_ops, &mut |event| {
+            emitted.push(event)
+        })
+        .await;
+    }
+    let finished = handle_claude_forwarder_event(
+        EngineEvent::TurnCompleted {
+            workspace_id: "ws-1".to_string(),
+            result: Some(json!({ "text": "fallback final" })),
+        },
+        None,
+        &mut state,
+        &runtime_ops,
+        &mut |event| emitted.push(event),
+    )
+    .await;
+
+    assert!(finished);
+    let completed_agent = emitted
+        .iter()
+        .find(|event| {
+            event
+                .message
+                .pointer("/params/item/type")
+                .and_then(|value| value.as_str())
+                == Some("agentMessage")
+        })
+        .expect("synthetic completed agent event");
+    assert_eq!(
+        completed_agent
+            .message
+            .pointer("/params/item/text")
+            .and_then(|value| value.as_str()),
+        Some("second segment."),
+    );
+}
+
+#[tokio::test]
+async fn claude_forwarder_skips_completed_text_when_turn_ends_on_a_tool() {
+    let runtime_ops = FakeClaudeRuntimeOps::default();
+    let mut state = ClaudeForwarderState::new(
+        "thread-1".to_string(),
+        "assistant-1".to_string(),
+        "reasoning-1".to_string(),
+        "turn-1".to_string(),
+    );
+    let mut emitted = Vec::<AppServerEvent>::new();
+
+    // 回合以工具收尾：尾段无正文。不能回退到整轮 result 文本（会把整轮内容
+    // 重复灌进最后一段）；前面各段的正文已由前端在分段前灌回 reducer。
+    for event in [
+        EngineEvent::TextDelta {
+            workspace_id: "ws-1".to_string(),
+            text: "only segment.".to_string(),
+        },
+        EngineEvent::ToolStarted {
+            workspace_id: "ws-1".to_string(),
+            tool_id: "tool-1".to_string(),
+            tool_name: "bash".to_string(),
+            input: None,
+        },
+    ] {
+        handle_claude_forwarder_event(event, None, &mut state, &runtime_ops, &mut |event| {
+            emitted.push(event)
+        })
+        .await;
+    }
+    handle_claude_forwarder_event(
+        EngineEvent::TurnCompleted {
+            workspace_id: "ws-1".to_string(),
+            result: Some(json!({ "text": "only segment." })),
+        },
+        None,
+        &mut state,
+        &runtime_ops,
+        &mut |event| emitted.push(event),
+    )
+    .await;
+
+    let agent_completed_count = emitted
+        .iter()
+        .filter(|event| {
+            event
+                .message
+                .pointer("/params/item/type")
+                .and_then(|value| value.as_str())
+                == Some("agentMessage")
+        })
+        .count();
+    assert_eq!(
+        agent_completed_count,
+        0,
+        "methods={:?}",
+        emitted_methods(&emitted),
+    );
+}
+
+#[tokio::test]
+async fn claude_forwarder_falls_back_to_result_text_when_nothing_streamed() {
+    let runtime_ops = FakeClaudeRuntimeOps::default();
+    let mut state = ClaudeForwarderState::new(
+        "thread-1".to_string(),
+        "assistant-1".to_string(),
+        "reasoning-1".to_string(),
+        "turn-1".to_string(),
+    );
+    let mut emitted = Vec::<AppServerEvent>::new();
+
+    handle_claude_forwarder_event(
+        EngineEvent::ToolStarted {
+            workspace_id: "ws-1".to_string(),
+            tool_id: "tool-1".to_string(),
+            tool_name: "bash".to_string(),
+            input: None,
+        },
+        None,
+        &mut state,
+        &runtime_ops,
+        &mut |event| emitted.push(event),
+    )
+    .await;
+    handle_claude_forwarder_event(
+        EngineEvent::TurnCompleted {
+            workspace_id: "ws-1".to_string(),
+            result: Some(json!({ "text": "fallback final" })),
+        },
+        None,
+        &mut state,
+        &runtime_ops,
+        &mut |event| emitted.push(event),
+    )
+    .await;
+
+    let completed_agent = emitted
+        .iter()
+        .find(|event| {
+            event
+                .message
+                .pointer("/params/item/type")
+                .and_then(|value| value.as_str())
+                == Some("agentMessage")
+        })
+        .expect("fallback completed agent event");
+    assert_eq!(
+        completed_agent
+            .message
+            .pointer("/params/item/text")
+            .and_then(|value| value.as_str()),
+        Some("fallback final"),
+    );
+}
+
 #[test]
 fn extract_turn_result_text_supports_nested_payload() {
     let payload = json!({

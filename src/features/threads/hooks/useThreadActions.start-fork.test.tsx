@@ -88,7 +88,7 @@ describe("useThreadActions start/fork", () => {
     clearGlobalRuntimeNotices();
   });
 
-  it("starts a thread and activates it by default", async () => {
+  it("starts an optimistic codex pending thread and prewarms the backend start", async () => {
     vi.mocked(startThread).mockResolvedValue({
       result: { thread: { id: "thread-1" } },
     });
@@ -100,17 +100,17 @@ describe("useThreadActions start/fork", () => {
       threadId = await result.current.startThreadForWorkspace("ws-1");
     });
 
-    expect(threadId).toBe("thread-1");
+    expect(threadId).toMatch(/^codex-pending-/);
     expect(startThread).toHaveBeenCalledWith("ws-1");
     expect(dispatch).toHaveBeenCalledWith({
       type: "ensureThread",
       workspaceId: "ws-1",
-      threadId: "thread-1",
+      threadId,
       engine: "codex",
     });
     expect(dispatch).toHaveBeenCalledWith({
       type: "markCodexAcceptedTurn",
-      threadId: "thread-1",
+      threadId,
       fact: "empty-draft",
       source: "thread-start",
       timestamp: expect.any(Number),
@@ -118,66 +118,239 @@ describe("useThreadActions start/fork", () => {
     expect(dispatch).toHaveBeenCalledWith({
       type: "setActiveThreadId",
       workspaceId: "ws-1",
-      threadId: "thread-1",
+      threadId,
     });
-    expect(loadedThreadsRef.current["thread-1"]).toBe(true);
+    expect(threadId ? loadedThreadsRef.current[threadId] : false).toBe(true);
   });
 
-  it("reuses one in-flight codex start for concurrent callers", async () => {
-    let resolveStart:
-      | ((value: { result: { thread: { id: string } } }) => void)
-      | null = null;
-    vi.mocked(startThread).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveStart = resolve;
-        }),
-    );
+  it("finalizes an optimistic codex pending thread into the real backend thread", async () => {
+    vi.mocked(startThread).mockResolvedValue({
+      result: { thread: { id: "thread-1" } },
+    });
 
     const { result, dispatch, loadedThreadsRef } = renderActions();
 
-    let firstStart: Promise<string | null>;
-    let secondStart: Promise<string | null>;
+    let pendingThreadId: string | null = null;
     await act(async () => {
-      firstStart = result.current.startThreadForWorkspace("ws-1", {
-        activate: false,
-      });
-      secondStart = result.current.startThreadForWorkspace("ws-1", {
-        activate: true,
-      });
+      pendingThreadId = await result.current.startThreadForWorkspace("ws-1");
     });
 
-    expect(startThread).toHaveBeenCalledTimes(1);
-
+    let finalizedThreadId: string | null = null;
     await act(async () => {
-      resolveStart?.({ result: { thread: { id: "thread-shared" } } });
+      finalizedThreadId = await result.current.finalizeCodexPendingThread(
+        "ws-1",
+        pendingThreadId!,
+      );
     });
 
-    await expect(firstStart!).resolves.toBe("thread-shared");
-    await expect(secondStart!).resolves.toBe("thread-shared");
+    expect(finalizedThreadId).toBe("thread-1");
     expect(startThread).toHaveBeenCalledTimes(1);
-    expect(
-      dispatch.mock.calls.filter(([action]) => action.type === "ensureThread"),
-    ).toHaveLength(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "renameThreadId",
+      workspaceId: "ws-1",
+      oldThreadId: pendingThreadId,
+      newThreadId: "thread-1",
+    });
     expect(dispatch).toHaveBeenCalledWith({
       type: "ensureThread",
       workspaceId: "ws-1",
-      threadId: "thread-shared",
+      threadId: "thread-1",
       engine: "codex",
     });
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "markCodexAcceptedTurn",
-      threadId: "thread-shared",
-      fact: "empty-draft",
-      source: "thread-start",
-      timestamp: expect.any(Number),
+    expect(loadedThreadsRef.current["thread-1"]).toBe(true);
+    expect(loadedThreadsRef.current[pendingThreadId!]).toBeUndefined();
+  });
+
+  it("returns the same real thread id for concurrent finalize calls", async () => {
+    vi.mocked(startThread).mockResolvedValue({
+      result: { thread: { id: "thread-shared" } },
     });
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "setActiveThreadId",
-      workspaceId: "ws-1",
-      threadId: "thread-shared",
+
+    const { result } = renderActions();
+
+    let pendingThreadId: string | null = null;
+    await act(async () => {
+      pendingThreadId = await result.current.startThreadForWorkspace("ws-1");
     });
-    expect(loadedThreadsRef.current["thread-shared"]).toBe(true);
+
+    let first: string | null = null;
+    let second: string | null = null;
+    await act(async () => {
+      [first, second] = await Promise.all([
+        result.current.finalizeCodexPendingThread("ws-1", pendingThreadId!),
+        result.current.finalizeCodexPendingThread("ws-1", pendingThreadId!),
+      ]);
+    });
+
+    expect(first).toBe("thread-shared");
+    expect(second).toBe("thread-shared");
+    expect(startThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats the explicit disk provider selection as an optimistic create", async () => {
+    vi.mocked(startThread).mockResolvedValue({
+      result: { thread: { id: "thread-1" } },
+    });
+
+    const { result, dispatch } = renderActions();
+
+    let threadId: string | null = null;
+    await act(async () => {
+      // The sidebar new-session menu always sends the __disk__ profile id;
+      // it must not be mistaken for a managed provider (sync path).
+      threadId = await result.current.startThreadForWorkspace("ws-1", {
+        providerProfileId: "__disk__",
+      });
+    });
+
+    expect(threadId).toMatch(/^codex-pending-/);
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ensureThread",
+        threadId,
+        engine: "codex",
+        providerProfileId: "__disk__",
+        providerProfileSource: "disk",
+      }),
+    );
+  });
+
+  it("creates distinct pending threads for rapid consecutive codex creates", async () => {
+    vi.mocked(startThread)
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-a" } } })
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-b" } } });
+
+    const { result } = renderActions();
+
+    let firstThreadId: string | null = null;
+    let secondThreadId: string | null = null;
+    await act(async () => {
+      [firstThreadId, secondThreadId] = await Promise.all([
+        result.current.startThreadForWorkspace("ws-1", { activate: false }),
+        result.current.startThreadForWorkspace("ws-1", { activate: true }),
+      ]);
+    });
+
+    expect(firstThreadId).toMatch(/^codex-pending-/);
+    expect(secondThreadId).toMatch(/^codex-pending-/);
+    expect(firstThreadId).not.toBe(secondThreadId);
+    expect(startThread).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not resurrect a pending thread deleted while the start was in flight", async () => {
+    vi.mocked(startThread).mockResolvedValue({
+      result: { thread: { id: "thread-1" } },
+    });
+
+    const { result, dispatch, loadedThreadsRef } = renderActions();
+
+    let pendingThreadId: string | null = null;
+    await act(async () => {
+      pendingThreadId = await result.current.startThreadForWorkspace("ws-1");
+    });
+
+    // The delete flow flips the loaded flag to false before finalize runs.
+    loadedThreadsRef.current[pendingThreadId!] = false;
+    dispatch.mockClear();
+
+    let finalizedThreadId: string | null = null;
+    await act(async () => {
+      finalizedThreadId = await result.current.finalizeCodexPendingThread(
+        "ws-1",
+        pendingThreadId!,
+      );
+    });
+
+    expect(finalizedThreadId).toBeNull();
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "renameThreadId" }),
+    );
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "ensureThread" }),
+    );
+  });
+
+  it("does not mint a retry backend thread for a deleted pending thread", async () => {
+    vi.mocked(startThread)
+      .mockRejectedValueOnce(new Error("runtime offline"))
+      .mockResolvedValue({ result: { thread: { id: "thread-orphan" } } });
+
+    const { result, loadedThreadsRef } = renderActions();
+
+    let pendingThreadId: string | null = null;
+    await act(async () => {
+      pendingThreadId = await result.current.startThreadForWorkspace("ws-1");
+    });
+
+    // Delete lands after the failed prewarm but before finalize retries.
+    loadedThreadsRef.current[pendingThreadId!] = false;
+
+    let finalizedThreadId: string | null = null;
+    await act(async () => {
+      finalizedThreadId = await result.current.finalizeCodexPendingThread(
+        "ws-1",
+        pendingThreadId!,
+      );
+    });
+
+    expect(finalizedThreadId).toBeNull();
+    // Only the prewarm attempt reached the backend; the failure retry must
+    // not create an orphan thread for a deleted pending session.
+    expect(startThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("replays the finalized id for late callers holding the pending id", async () => {
+    vi.mocked(startThread).mockResolvedValue({
+      result: { thread: { id: "thread-1" } },
+    });
+
+    const { result } = renderActions();
+
+    let pendingThreadId: string | null = null;
+    await act(async () => {
+      pendingThreadId = await result.current.startThreadForWorkspace("ws-1");
+    });
+
+    await act(async () => {
+      await result.current.finalizeCodexPendingThread("ws-1", pendingThreadId!);
+    });
+
+    // A caller that recorded the pending id (e.g. a kanban task) sends again
+    // after the rename removed the loaded flag for the pending id.
+    let replayedThreadId: string | null = null;
+    await act(async () => {
+      replayedThreadId = await result.current.finalizeCodexPendingThread(
+        "ws-1",
+        pendingThreadId!,
+      );
+    });
+
+    expect(replayedThreadId).toBe("thread-1");
+    expect(startThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries the backend start on finalize when the prewarm failed", async () => {
+    vi.mocked(startThread)
+      .mockRejectedValueOnce(new Error("codex exploded"))
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-retry" } } });
+
+    const { result } = renderActions();
+
+    let pendingThreadId: string | null = null;
+    await act(async () => {
+      pendingThreadId = await result.current.startThreadForWorkspace("ws-1");
+    });
+
+    let finalizedThreadId: string | null = null;
+    await act(async () => {
+      finalizedThreadId = await result.current.finalizeCodexPendingThread(
+        "ws-1",
+        pendingThreadId!,
+      );
+    });
+
+    expect(finalizedThreadId).toBe("thread-retry");
+    expect(startThread).toHaveBeenCalledTimes(2);
   });
 
   it("does not reuse in-flight codex starts across provider profiles", async () => {
@@ -271,7 +444,7 @@ describe("useThreadActions start/fork", () => {
     });
   });
 
-  it("reconnects workspace and retries when codex start thread reports not connected", async () => {
+  it("reconnects workspace and retries inside the prewarmed codex start", async () => {
     vi.mocked(startThread)
       .mockRejectedValueOnce(new Error("workspace not connected"))
       .mockResolvedValueOnce({
@@ -280,12 +453,20 @@ describe("useThreadActions start/fork", () => {
 
     const { result, dispatch, loadedThreadsRef } = renderActions();
 
-    let threadId: string | null = null;
+    let pendingThreadId: string | null = null;
     await act(async () => {
-      threadId = await result.current.startThreadForWorkspace("ws-1");
+      pendingThreadId = await result.current.startThreadForWorkspace("ws-1");
     });
 
-    expect(threadId).toBe("thread-retry");
+    let finalizedThreadId: string | null = null;
+    await act(async () => {
+      finalizedThreadId = await result.current.finalizeCodexPendingThread(
+        "ws-1",
+        pendingThreadId!,
+      );
+    });
+
+    expect(finalizedThreadId).toBe("thread-retry");
     expect(connectWorkspace).toHaveBeenCalledWith("ws-1");
     expect(startThread).toHaveBeenCalledTimes(2);
     expect(dispatch).toHaveBeenCalledWith({
@@ -294,39 +475,30 @@ describe("useThreadActions start/fork", () => {
       threadId: "thread-retry",
       engine: "codex",
     });
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "setActiveThreadId",
-      workspaceId: "ws-1",
-      threadId: "thread-retry",
-    });
     expect(loadedThreadsRef.current["thread-retry"]).toBe(true);
   });
 
-  it("starts a thread when start_thread returns result.threadId", async () => {
+  it("finalizes when start_thread returns result.threadId", async () => {
     vi.mocked(startThread).mockResolvedValue({
       result: { threadId: "thread-1" },
     });
 
-    const { result, dispatch, loadedThreadsRef } = renderActions();
+    const { result } = renderActions();
 
-    let threadId: string | null = null;
+    let pendingThreadId: string | null = null;
     await act(async () => {
-      threadId = await result.current.startThreadForWorkspace("ws-1");
+      pendingThreadId = await result.current.startThreadForWorkspace("ws-1");
     });
 
-    expect(threadId).toBe("thread-1");
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "ensureThread",
-      workspaceId: "ws-1",
-      threadId: "thread-1",
-      engine: "codex",
+    let finalizedThreadId: string | null = null;
+    await act(async () => {
+      finalizedThreadId = await result.current.finalizeCodexPendingThread(
+        "ws-1",
+        pendingThreadId!,
+      );
     });
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "setActiveThreadId",
-      workspaceId: "ws-1",
-      threadId: "thread-1",
-    });
-    expect(loadedThreadsRef.current["thread-1"]).toBe(true);
+
+    expect(finalizedThreadId).toBe("thread-1");
   });
 
   it("shows a runtime warning when codex hook-safe fallback creates the thread", async () => {
@@ -355,12 +527,21 @@ describe("useThreadActions start/fork", () => {
       },
     });
 
-    let threadId: string | null = null;
+    let pendingThreadId: string | null = null;
     await act(async () => {
-      threadId = await result.current.startThreadForWorkspace("ws-1");
+      pendingThreadId = await result.current.startThreadForWorkspace("ws-1");
+    });
+    expect(getGlobalRuntimeNoticesSnapshot()).toEqual([]);
+
+    let finalizedThreadId: string | null = null;
+    await act(async () => {
+      finalizedThreadId = await result.current.finalizeCodexPendingThread(
+        "ws-1",
+        pendingThreadId!,
+      );
     });
 
-    expect(threadId).toBe("thread-fallback");
+    expect(finalizedThreadId).toBe("thread-fallback");
     expect(dispatch).toHaveBeenCalledWith({
       type: "ensureThread",
       workspaceId: "ws-1",
@@ -534,16 +715,18 @@ describe("useThreadActions start/fork", () => {
 
     const { result, dispatch } = renderActions();
 
+    let threadId: string | null = null;
     await act(async () => {
-      await result.current.startThreadForWorkspace("ws-1", {
+      threadId = await result.current.startThreadForWorkspace("ws-1", {
         activate: false,
       });
     });
 
+    expect(threadId).toMatch(/^codex-pending-/);
     expect(dispatch).toHaveBeenCalledWith({
       type: "ensureThread",
       workspaceId: "ws-1",
-      threadId: "thread-2",
+      threadId,
       engine: "codex",
     });
     expect(dispatch).not.toHaveBeenCalledWith(
