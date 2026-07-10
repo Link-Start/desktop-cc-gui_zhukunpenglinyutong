@@ -3,8 +3,24 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitLogEntry } from "../../../types";
 
+const mockPreviewSave = vi.fn(async () => true);
+const mockPreviewDiscard = vi.fn();
 const mockEditableDiffReviewSurface = vi.fn((props: Record<string, unknown>) => (
   <div data-testid="git-diff-viewer">
+    {typeof props.onDirtyChange === "function" ? (
+      <button type="button" onClick={() => {
+        if (typeof props.onDraftActionsChange === "function") {
+          (props.onDraftActionsChange as (actions: unknown) => void)({
+            save: mockPreviewSave,
+            discard: mockPreviewDiscard,
+            isSaving: false,
+          });
+        }
+        (props.onDirtyChange as (dirty: boolean) => void)(true);
+      }}>
+        Mock dirty preview
+      </button>
+    ) : null}
     {typeof props.onRequestClose === "function" ? (
       <button type="button" onClick={() => (props.onRequestClose as () => void)()}>
         Mock close preview
@@ -83,6 +99,12 @@ vi.mock("react-i18next", () => ({
         "menu.maximize": "Maximize",
         "common.restore": "Restore",
         "common.close": "Close",
+        "files.unsavedChanges": "Unsaved changes",
+        "files.unsavedChangesCloseDescription": "Changes will be lost.",
+        "files.saveAndClose": "Save and close",
+        "files.saving": "Saving...",
+        "files.continueEditing": "Continue editing",
+        "files.discardChangesAction": "Discard changes",
       };
       const template = translations[key] ?? key;
       if (!options) {
@@ -132,6 +154,9 @@ const baseProps = {
 afterEach(() => {
   cleanup();
   mockEditableDiffReviewSurface.mockClear();
+  mockPreviewSave.mockReset();
+  mockPreviewSave.mockResolvedValue(true);
+  mockPreviewDiscard.mockReset();
   window.localStorage.clear();
 });
 
@@ -1213,6 +1238,107 @@ describe("GitDiffPanel", () => {
     await waitFor(() => {
       expect(document.querySelector(".git-history-diff-modal")).toBeNull();
     });
+  });
+
+  it("uses the custom unsaved-changes dialog before closing a dirty preview", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        gitDiffListView="flat"
+        unstagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
+        diffEntries={[{
+          path: "file.txt",
+          status: "M",
+          diff: "diff --git a/file.txt b/file.txt\n@@ -1 +1 @@\n-old\n+new\n",
+        }]}
+      />,
+    );
+
+    fireEvent.doubleClick(screen.getByLabelText("file.txt"));
+    fireEvent.click(screen.getByRole("button", { name: "Mock dirty preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mock close preview" }));
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Unsaved changes" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Continue editing" }));
+    expect(document.querySelector(".git-history-diff-modal")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock close preview" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: "Unsaved changes" })).toBeNull());
+    expect(document.querySelector(".git-history-diff-modal")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock close preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    expect(mockPreviewDiscard).toHaveBeenCalledOnce();
+    await waitFor(() => expect(document.querySelector(".git-history-diff-modal")).toBeNull());
+  });
+
+  it("keeps a dirty preview open when Git refresh removes the current file", async () => {
+    const initialProps = {
+      ...baseProps,
+      gitDiffListView: "flat" as const,
+      unstagedFiles: [{ path: "file.txt", status: "M", additions: 1, deletions: 0 }],
+      diffEntries: [{
+        path: "file.txt",
+        status: "M",
+        diff: "diff --git a/file.txt b/file.txt\n@@ -1 +1 @@\n-old\n+new\n",
+      }],
+    };
+    const { rerender } = render(<GitDiffPanel {...initialProps} />);
+
+    fireEvent.doubleClick(screen.getByLabelText("file.txt"));
+    fireEvent.click(screen.getByRole("button", { name: "Mock dirty preview" }));
+    rerender(
+      <GitDiffPanel
+        {...initialProps}
+        unstagedFiles={[]}
+        diffEntries={[]}
+      />,
+    );
+
+    expect(screen.getByRole("alertdialog", { name: "Unsaved changes" })).toBeTruthy();
+    expect(document.querySelector(".git-history-diff-modal")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Continue editing" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog", { name: "Unsaved changes" })).toBeNull();
+    });
+    expect(document.querySelector(".git-history-diff-modal")).toBeTruthy();
+  });
+
+  it("saves a dirty preview before closing and stays open when saving fails", async () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        gitDiffListView="flat"
+        unstagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
+        diffEntries={[{
+          path: "file.txt",
+          status: "M",
+          diff: "diff --git a/file.txt b/file.txt\n@@ -1 +1 @@\n-old\n+new\n",
+        }]}
+      />,
+    );
+
+    fireEvent.doubleClick(screen.getByLabelText("file.txt"));
+    fireEvent.click(screen.getByRole("button", { name: "Mock dirty preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mock close preview" }));
+    mockPreviewSave.mockResolvedValueOnce(false);
+    fireEvent.click(screen.getByRole("button", { name: "Save and close" }));
+
+    await waitFor(() => expect(mockPreviewSave).toHaveBeenCalledOnce());
+    expect(screen.getByRole("alertdialog", { name: "Unsaved changes" })).toBeTruthy();
+    expect(document.querySelector(".git-history-diff-modal")).toBeTruthy();
+
+    const retrySaveButton = await waitFor(() => {
+      const button = screen.getByRole<HTMLButtonElement>("button", { name: "Save and close" });
+      expect(button.disabled).toBe(false);
+      return button;
+    });
+    fireEvent.click(retrySaveButton);
+    await waitFor(() => expect(mockPreviewSave).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(document.querySelector(".git-history-diff-modal")).toBeNull());
   });
 
   it("keeps root summary visible and in first content row for non-git workspace path", () => {

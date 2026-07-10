@@ -65,15 +65,18 @@ function AlertDialogViewport({
 function AlertDialogPopup({
   className,
   bottomStickOnMobile = true,
+  modalLayer = false,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
   bottomStickOnMobile?: boolean
+  modalLayer?: boolean
 }) {
   return (
     <AlertDialogPortal>
-      <AlertDialogBackdrop />
+      <AlertDialogBackdrop className={modalLayer ? "z-[2300]" : undefined} />
       <AlertDialogViewport
         className={cn(
+          modalLayer && "z-[2300]",
           bottomStickOnMobile &&
             "max-sm:grid-rows-[1fr_auto] max-sm:p-0 max-sm:pt-12",
         )}

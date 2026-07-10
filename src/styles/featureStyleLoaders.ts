@@ -84,9 +84,12 @@ export function loadSpecHubStyles() {
 }
 
 export function loadGitHistoryStyles() {
-  return loadStyles([
-    () => import("./git-history.css"),
-  ]);
+  return Promise.all([
+    loadDiffStyles(),
+    loadStyles([
+      () => import("./git-history.css"),
+    ]),
+  ]).then(() => undefined);
 }
 
 export function loadKanbanStyles() {

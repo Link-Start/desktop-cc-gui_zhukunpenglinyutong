@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   readExternalAbsoluteFile,
   readExternalSpecFile,
@@ -98,6 +98,7 @@ export function useFileDocumentState({
   const requestIdRef = useRef(0);
   const saveRequestIdRef = useRef(0);
   const saveInFlightRef = useRef(false);
+  const saveInFlightPromiseRef = useRef<Promise<boolean> | null>(null);
   const latestContentRef = useRef(content);
   const latestDocumentSnapshotRef = useRef(documentSnapshot);
   const fileReadTargetDomain = fileReadTarget.domain;
@@ -121,7 +122,7 @@ export function useFileDocumentState({
 
   latestContentRef.current = content;
   latestDocumentSnapshotRef.current = documentSnapshot;
-  const isDirty = useMemo(() => content !== savedContentRef.current, [content]);
+  const isDirty = content !== savedContentRef.current;
   latestIsDirtyRef.current = isDirty;
 
   const replaceDocumentSnapshot = useCallback((nextContent: string, nextTruncated: boolean) => {
@@ -201,6 +202,7 @@ export function useFileDocumentState({
     requestIdRef.current += 1;
     saveRequestIdRef.current += 1;
     saveInFlightRef.current = false;
+    saveInFlightPromiseRef.current = null;
     const currentRequest = requestIdRef.current;
     setIsLoading(true);
     setIsSaving(false);
@@ -258,6 +260,9 @@ export function useFileDocumentState({
     readPromise
       .then((response) => {
         if (cancelled || currentRequest !== requestIdRef.current) return;
+        if (latestIsDirtyRef.current) {
+          return;
+        }
         const nextContent = response.content ?? "";
         const nextTruncated = Boolean(response.truncated);
         latestContentRef.current = nextContent;
@@ -306,81 +311,105 @@ export function useFileDocumentState({
     workspaceRelativeFilePath,
   ]);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(() => {
     const contentToSave = latestContentRef.current;
     const latestIsDirty = contentToSave !== savedContentRef.current;
-    if (!latestIsDirty || isSaving || truncated || saveInFlightRef.current) {
-      return false;
+    if (!latestIsDirty) {
+      return Promise.resolve(true);
+    }
+    if (truncated) {
+      return Promise.resolve(false);
+    }
+    if (saveInFlightRef.current && saveInFlightPromiseRef.current) {
+      return saveInFlightPromiseRef.current;
     }
     const saveRequestId = saveRequestIdRef.current + 1;
     saveRequestIdRef.current = saveRequestId;
     saveInFlightRef.current = true;
     setIsSaving(true);
-    try {
-      if (
-        fileReadTargetDomain === "external-spec" &&
-        customSpecRoot &&
-        fileReadExternalSpecLogicalPath
-      ) {
-        await writeExternalSpecFile(
-          workspaceId,
-          customSpecRoot,
-          fileReadExternalSpecLogicalPath,
-          contentToSave,
-        );
-      } else if (fileReadTargetDomain === "external-absolute") {
-        throw new Error(externalAbsoluteReadOnlyMessage);
-      } else if (fileReadTargetDomain === "invalid") {
-        throw new Error("Invalid file path");
-      } else {
-        await writeWorkspaceFile(workspaceId, workspaceRelativeFilePath, contentToSave);
-      }
-      if (saveRequestId !== saveRequestIdRef.current) {
-        return false;
-      }
-      savedContentRef.current = contentToSave;
-      latestIsDirtyRef.current = false;
-      externalDiskSnapshotRef.current = {
-        content: contentToSave,
-        truncated,
-      };
-      writeFileDocumentSessionCache(fileReadTargetKey, {
-        documentSnapshot: createFileDocumentSnapshot(
-          contentToSave,
+    const savePromise = (async () => {
+      try {
+        if (
+          fileReadTargetDomain === "external-spec" &&
+          customSpecRoot &&
+          fileReadExternalSpecLogicalPath
+        ) {
+          await writeExternalSpecFile(
+            workspaceId,
+            customSpecRoot,
+            fileReadExternalSpecLogicalPath,
+            contentToSave,
+          );
+        } else if (fileReadTargetDomain === "external-absolute") {
+          throw new Error(externalAbsoluteReadOnlyMessage);
+        } else if (fileReadTargetDomain === "invalid") {
+          throw new Error("Invalid file path");
+        } else {
+          await writeWorkspaceFile(workspaceId, workspaceRelativeFilePath, contentToSave);
+        }
+        if (saveRequestId !== saveRequestIdRef.current) {
+          return false;
+        }
+        savedContentRef.current = contentToSave;
+        latestIsDirtyRef.current = latestContentRef.current !== contentToSave;
+        externalDiskSnapshotRef.current = {
+          content: contentToSave,
           truncated,
-          documentSnapshot.snapshotVersion + 1,
-        ),
-        savedContent: contentToSave,
-        externalDiskSnapshot: externalDiskSnapshotRef.current,
-      });
-      return true;
-    } catch (saveError) {
-      if (saveRequestId !== saveRequestIdRef.current) {
+        };
+        writeFileDocumentSessionCache(fileReadTargetKey, {
+          documentSnapshot: latestDocumentSnapshotRef.current,
+          savedContent: contentToSave,
+          externalDiskSnapshot: externalDiskSnapshotRef.current,
+        });
+        return !latestIsDirtyRef.current;
+      } catch (saveError) {
+        if (saveRequestId !== saveRequestIdRef.current) {
+          return false;
+        }
+        pushErrorToast({
+          title: "Failed to save file",
+          message: saveError instanceof Error ? saveError.message : String(saveError),
+        });
         return false;
+      } finally {
+        if (saveRequestId === saveRequestIdRef.current) {
+          saveInFlightRef.current = false;
+          saveInFlightPromiseRef.current = null;
+          setIsSaving(false);
+        }
       }
-      pushErrorToast({
-        title: "Failed to save file",
-        message: saveError instanceof Error ? saveError.message : String(saveError),
-      });
-      return false;
-    } finally {
-      if (saveRequestId === saveRequestIdRef.current) {
-        saveInFlightRef.current = false;
-        setIsSaving(false);
-      }
-    }
+    })();
+    saveInFlightPromiseRef.current = savePromise;
+    return savePromise;
   }, [
     customSpecRoot,
     externalAbsoluteReadOnlyMessage,
     fileReadExternalSpecLogicalPath,
     fileReadTargetKey,
     fileReadTargetDomain,
-    isSaving,
-    documentSnapshot.snapshotVersion,
     truncated,
     workspaceId,
     workspaceRelativeFilePath,
   ]);
+
+  const handleDiscard = useCallback(() => {
+    const savedContent = savedContentRef.current;
+    latestContentRef.current = savedContent;
+    latestIsDirtyRef.current = false;
+    setDocumentSnapshot((current) => {
+      const nextSnapshot = createFileDocumentSnapshot(
+        savedContent,
+        current.truncated,
+        current.snapshotVersion + 1,
+      );
+      writeFileDocumentSessionCache(fileReadTargetKey, {
+        documentSnapshot: nextSnapshot,
+        savedContent,
+        externalDiskSnapshot: externalDiskSnapshotRef.current,
+      });
+      return nextSnapshot;
+    });
+  }, [fileReadTargetKey]);
 
   return {
     content,
@@ -398,5 +427,6 @@ export function useFileDocumentState({
     latestIsDirtyRef,
     externalDiskSnapshotRef,
     handleSave,
+    handleDiscard,
   };
 }

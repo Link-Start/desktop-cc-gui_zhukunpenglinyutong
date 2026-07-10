@@ -33,9 +33,10 @@ type WorkspaceFileComparePanelProps = {
   onClose: () => void;
 };
 
-type CompareColumnDraft = {
+export type CompareColumnDraft = {
   id: string;
   label: string;
+  title?: string;
   content: string;
   isDirty: boolean;
   isSaving: boolean;
@@ -44,6 +45,7 @@ type CompareColumnDraft = {
   saveError: string | null;
   truncated: boolean;
   readOnlyReason: string | null;
+  editable: boolean;
   onChange: (value: string) => void;
   onSave: () => Promise<boolean> | boolean;
 };
@@ -68,7 +70,7 @@ function fileNameFromPath(path: string) {
   return parts[parts.length - 1] ?? path;
 }
 
-function useEditorTheme() {
+export function useFileCompareEditorTheme() {
   const [editorTheme, setEditorTheme] = useState<EditorTheme>(() => resolveEditorTheme());
 
   useEffect(() => {
@@ -180,6 +182,7 @@ function WorkspaceCompareColumn({
       saveError,
       truncated: documentState.truncated,
       readOnlyReason,
+      editable: canEdit,
       onChange: canEdit ? documentState.setContent : () => {},
       onSave: handleSave,
     });
@@ -202,7 +205,7 @@ function WorkspaceCompareColumn({
   return null;
 }
 
-function CompareEditorColumn({
+export function CompareEditorColumn({
   draft,
   editorTheme,
   markers,
@@ -223,7 +226,8 @@ function CompareEditorColumn({
   const { languageExtensions } = useLanguageExtensions(
     draft.id.startsWith("scratch-") ? null : draft.id,
   );
-  const isReadOnly = Boolean(draft.readOnlyReason || draft.error || draft.truncated);
+  const isReadOnly = !draft.editable || Boolean(draft.readOnlyReason || draft.error || draft.truncated);
+  const shouldRenderPlainText = Boolean(draft.readOnlyReason || draft.error || draft.truncated);
 
   useEffect(() => {
     if (!activeLineNumber || isReadOnly) {
@@ -245,11 +249,13 @@ function CompareEditorColumn({
     <section className="file-compare-column" aria-label={draft.label}>
       <div className="file-compare-column-header">
         <div className="file-compare-column-title" title={draft.label}>
-          <span className="file-compare-column-name">{fileNameFromPath(draft.label)}</span>
+          <span className="file-compare-column-name">
+            {draft.title ?? fileNameFromPath(draft.label)}
+          </span>
           <span className="file-compare-column-path">{draft.label}</span>
         </div>
         <div className="file-compare-column-actions">
-          {draft.isDirty ? (
+          {draft.editable && draft.isDirty ? (
             <span className="file-compare-dirty" title={t("files.unsavedChanges")} />
           ) : null}
           {draft.saveError ? (
@@ -260,16 +266,18 @@ function CompareEditorColumn({
               title={draft.saveError}
             />
           ) : null}
-          <button
-            type="button"
-            className="ghost file-compare-save"
-            onClick={() => void draft.onSave()}
-            disabled={!draft.isDirty || draft.isSaving || isReadOnly}
-            aria-label={t("files.save")}
-            title={t("files.save")}
-          >
-            <Save size={14} aria-hidden />
-          </button>
+          {draft.editable ? (
+            <button
+              type="button"
+              className="ghost file-compare-save"
+              onClick={() => void draft.onSave()}
+              disabled={!draft.isDirty || draft.isSaving || isReadOnly}
+              aria-label={t("files.save")}
+              title={t("files.save")}
+            >
+              <Save size={14} aria-hidden />
+            </button>
+          ) : null}
         </div>
       </div>
       {draft.isLoading ? (
@@ -282,7 +290,7 @@ function CompareEditorColumn({
         <div className="file-compare-state">{draft.readOnlyReason}</div>
       ) : null}
       <div className="file-compare-editor">
-        {isReadOnly ? (
+        {shouldRenderPlainText ? (
           <pre className="file-compare-readonly-content">{draft.content}</pre>
         ) : (
           <FileCodeMirrorEditor
@@ -308,6 +316,7 @@ function CompareEditorColumn({
             handleSave={() => {
               void draft.onSave();
             }}
+            editable={!isReadOnly}
           />
         )}
       </div>
@@ -324,7 +333,7 @@ export function WorkspaceFileComparePanel({
   onClose,
 }: WorkspaceFileComparePanelProps) {
   const { t } = useTranslation();
-  const editorTheme = useEditorTheme();
+  const editorTheme = useFileCompareEditorTheme();
   const scrollSyncingRef = useRef(false);
   const [draftsById, setDraftsById] = useState<Record<string, CompareColumnDraft>>({});
   const [scratchTexts, setScratchTexts] = useState({ left: "", right: "" });
@@ -385,6 +394,7 @@ export function WorkspaceFileComparePanel({
         saveError: null,
         truncated: false,
         readOnlyReason: null,
+        editable: true,
         onChange: (value) =>
           setScratchTexts((current) =>
             current.left === value ? current : { ...current, left: value },
@@ -402,6 +412,7 @@ export function WorkspaceFileComparePanel({
         saveError: null,
         truncated: false,
         readOnlyReason: null,
+        editable: true,
         onChange: (value) =>
           setScratchTexts((current) =>
             current.right === value ? current : { ...current, right: value },

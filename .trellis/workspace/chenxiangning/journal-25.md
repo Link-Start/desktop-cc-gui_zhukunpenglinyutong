@@ -51,3 +51,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 971: Git 可编辑双栏差异预览
+
+**Date**: 2026-07-10
+**Task**: Git 可编辑双栏差异预览
+**Branch**: `feature/v-0.7.0`
+
+### Summary
+
+完成 IDEA-style workspace diff 双栏直接编辑，保留原 Toolbar 与只读 fallback；修复 dirty/save/cache refresh 竞态、未保存关闭保护和 Git 冷启动样式依赖，并通过 focused tests、lint、typecheck、build 与 OpenSpec strict validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `942776b3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
