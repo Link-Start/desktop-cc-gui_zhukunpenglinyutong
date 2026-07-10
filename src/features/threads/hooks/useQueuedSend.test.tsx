@@ -23,6 +23,7 @@ const makeOptions = (
   isReviewing: false,
   steerEnabled: false,
   activeWorkspace: workspace,
+  resolveCanonicalThreadId: (threadId: string) => threadId,
   connectWorkspace: vi.fn().mockResolvedValue(undefined),
   startThreadForWorkspace: vi.fn().mockResolvedValue("thread-1"),
   sendUserMessage: vi.fn().mockResolvedValue(undefined),
@@ -285,6 +286,85 @@ describe("useQueuedSend", () => {
 
     expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
     expect(options.sendUserMessage).toHaveBeenCalledWith("pending queue item", []);
+  });
+
+  it("migrates queued codex pending messages when the alias confirms the rebind", async () => {
+    const pendingThreadId = "codex-pending-1700000000000-alias1";
+    const realThreadId = "0198f3a2-real-codex-thread";
+    const options = makeOptions({
+      activeEngine: "codex",
+      activeThreadId: pendingThreadId,
+      isProcessing: true,
+      steerEnabled: true,
+      resolveCanonicalThreadId: (threadId: string) =>
+        threadId === pendingThreadId ? realThreadId : threadId,
+    });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("pending codex item");
+    });
+
+    await act(async () => {
+      rerender({ ...options, activeThreadId: realThreadId, isProcessing: true });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
+      rerender({ ...options, activeThreadId: realThreadId, isProcessing: false });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspace,
+      realThreadId,
+      "pending codex item",
+      [],
+      undefined,
+    );
+  });
+
+  it("does not migrate codex pending queue when switching to an unrelated codex thread", async () => {
+    const pendingThreadId = "codex-pending-1700000000000-alias2";
+    const options = makeOptions({
+      activeEngine: "codex",
+      activeThreadId: pendingThreadId,
+      isProcessing: true,
+      steerEnabled: true,
+      // No alias recorded: the pending thread was never finalized to this id.
+      resolveCanonicalThreadId: (threadId: string) => threadId,
+    });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("stays on pending thread");
+    });
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "0198f3a2-unrelated-codex-thread",
+        isProcessing: false,
+      });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
+    expect(result.current.activeQueue).toHaveLength(0);
+    expect(
+      result.current.queuedByThread[pendingThreadId]?.map((item) => item.text),
+    ).toEqual(["stays on pending thread"]);
   });
 
   it("retries queued send after failure", async () => {

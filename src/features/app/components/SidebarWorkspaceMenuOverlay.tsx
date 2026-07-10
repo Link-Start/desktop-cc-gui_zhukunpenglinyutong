@@ -188,6 +188,18 @@ export function SidebarWorkspaceMenuOverlay({
                     }
                     closeSubmenu();
                   }}
+                  onKeyDown={(event) => {
+                    // Keyboard path to the submenu the aria-haspopup promises;
+                    // hover remains the pointer path.
+                    if (
+                      event.key === "ArrowRight" &&
+                      action.children?.length &&
+                      !action.unavailable
+                    ) {
+                      event.preventDefault();
+                      openSubmenu(action, event.currentTarget);
+                    }
+                  }}
                   onClick={() => handleAction(action)}
                 >
                   <span

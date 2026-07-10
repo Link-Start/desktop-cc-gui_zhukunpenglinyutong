@@ -389,10 +389,11 @@ export function useThreadMessaging({
           : null;
         const retrySend = sendMessageToThreadRef.current;
         if (finalizedThreadId && retrySend) {
-          if (finalizedThreadId !== threadId) {
-            await retrySend(workspace, finalizedThreadId, text, images, options);
-            return;
-          }
+          // finalize never returns the pending id itself (it resolves to the
+          // real backend id or null), so always re-enter with the resolved id
+          // instead of falling through and sending the pending id upstream.
+          await retrySend(workspace, finalizedThreadId, text, images, options);
+          return;
         } else {
           // finalize returns null both when the backend start failed and when
           // the pending thread was deleted mid-flight; only surface the

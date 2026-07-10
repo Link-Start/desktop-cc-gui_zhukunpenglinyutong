@@ -270,6 +270,35 @@ describe("useThreadActions start/fork", () => {
     );
   });
 
+  it("does not mint a retry backend thread for a deleted pending thread", async () => {
+    vi.mocked(startThread)
+      .mockRejectedValueOnce(new Error("runtime offline"))
+      .mockResolvedValue({ result: { thread: { id: "thread-orphan" } } });
+
+    const { result, loadedThreadsRef } = renderActions();
+
+    let pendingThreadId: string | null = null;
+    await act(async () => {
+      pendingThreadId = await result.current.startThreadForWorkspace("ws-1");
+    });
+
+    // Delete lands after the failed prewarm but before finalize retries.
+    loadedThreadsRef.current[pendingThreadId!] = false;
+
+    let finalizedThreadId: string | null = null;
+    await act(async () => {
+      finalizedThreadId = await result.current.finalizeCodexPendingThread(
+        "ws-1",
+        pendingThreadId!,
+      );
+    });
+
+    expect(finalizedThreadId).toBeNull();
+    // Only the prewarm attempt reached the backend; the failure retry must
+    // not create an orphan thread for a deleted pending session.
+    expect(startThread).toHaveBeenCalledTimes(1);
+  });
+
   it("replays the finalized id for late callers holding the pending id", async () => {
     vi.mocked(startThread).mockResolvedValue({
       result: { thread: { id: "thread-1" } },

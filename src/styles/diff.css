@@ -1074,7 +1074,6 @@ button.diff-section-indicator:focus-visible {
 }
 
 .diff-row.git-filetree-row--tree {
-  grid-template-columns: 26px 16px minmax(0, 1fr) auto;
   width: 100%;
   min-width: 0;
 }
@@ -1505,20 +1504,6 @@ button.diff-section-indicator:focus-visible {
   font-weight: 700;
   line-height: 1;
   cursor: default;
-}
-
-.diff-status-letter:hover {
-  background: transparent;
-}
-
-.diff-status-letter:focus-visible {
-  outline: 2px solid var(--border-accent-soft);
-  outline-offset: 1px;
-}
-
-.diff-status-letter:disabled {
-  cursor: default;
-  opacity: 0.55;
 }
 
 .diff-section-tree-list.git-filetree-list--tree .git-filetree-folder-row::before,

@@ -1150,6 +1150,7 @@ export function AppShell() {
     isReviewing,
     steerEnabled: appSettings.experimentalSteerEnabled,
     activeEngine,
+    resolveCanonicalThreadId,
     connectWorkspace,
     startThreadForWorkspace,
     sendUserMessage,

@@ -24,6 +24,7 @@ type UseQueuedSendOptions = {
   steerEnabled: boolean;
   activeWorkspace: WorkspaceInfo | null;
   activeEngine?: EngineType;
+  resolveCanonicalThreadId: (threadId: string) => string;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   startThreadForWorkspace: (
     workspaceId: string,
@@ -277,6 +278,7 @@ export function useQueuedSend({
   steerEnabled,
   activeWorkspace,
   activeEngine = "claude",
+  resolveCanonicalThreadId,
   connectWorkspace,
   startThreadForWorkspace,
   sendUserMessage,
@@ -372,14 +374,14 @@ export function useQueuedSend({
     const isClaudeSessionTransition =
       oldThreadId.startsWith("claude-pending-") && newThreadId.startsWith("claude:");
     // Optimistic codex threads rename from `codex-pending-*` to a bare
-    // backend thread id (codex ids carry no engine prefix).
+    // backend thread id (codex ids carry no engine prefix), so id shape alone
+    // cannot distinguish the finalize rebind from the user manually switching
+    // to another codex thread. Require the alias the finalize flow records
+    // (onCodexPendingThreadFinalized -> rememberThreadAlias) to confirm that
+    // newThreadId really is oldThreadId's finalized identity.
     const isCodexSessionTransition =
       oldThreadId.startsWith("codex-pending-") &&
-      !newThreadId.includes("-pending-") &&
-      !newThreadId.startsWith("claude:") &&
-      !newThreadId.startsWith("gemini:") &&
-      !newThreadId.startsWith("opencode:") &&
-      !newThreadId.startsWith("shared:");
+      resolveCanonicalThreadId(oldThreadId) === newThreadId;
     if (!isClaudeSessionTransition && !isCodexSessionTransition) {
       return;
     }
@@ -449,7 +451,7 @@ export function useQueuedSend({
       delete next[oldThreadId];
       return next;
     });
-  }, [activeThreadId]);
+  }, [activeThreadId, resolveCanonicalThreadId]);
 
   const buildQueuedMessage = useCallback(
     (

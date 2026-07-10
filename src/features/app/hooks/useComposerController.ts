@@ -26,6 +26,7 @@ export function useComposerController({
   isReviewing,
   steerEnabled,
   activeEngine,
+  resolveCanonicalThreadId,
   connectWorkspace,
   startThreadForWorkspace,
   sendUserMessage,
@@ -60,6 +61,7 @@ export function useComposerController({
   isReviewing: boolean;
   steerEnabled: boolean;
   activeEngine?: EngineType;
+  resolveCanonicalThreadId: (threadId: string) => string;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   startThreadForWorkspace: (
     workspaceId: string,
@@ -137,6 +139,7 @@ export function useComposerController({
     steerEnabled,
     activeWorkspace,
     activeEngine,
+    resolveCanonicalThreadId,
     connectWorkspace,
     startThreadForWorkspace,
     sendUserMessage,

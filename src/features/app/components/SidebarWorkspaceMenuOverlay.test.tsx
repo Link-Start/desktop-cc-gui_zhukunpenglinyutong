@@ -226,4 +226,36 @@ describe("SidebarWorkspaceMenuOverlay", () => {
     expect(submenu.style.getPropertyValue("--sidebar-workspace-submenu-x")).toBe("70px");
     expect(submenu.style.getPropertyValue("--sidebar-workspace-submenu-y")).toBe("96px");
   });
+
+  it("opens the child flyout with ArrowRight on the parent menu item", () => {
+    const codexAction = createCodexAction();
+
+    render(
+      <SidebarWorkspaceMenuOverlay
+        menu={{
+          x: 32,
+          y: 28,
+          groups: [
+            {
+              id: "new-session",
+              label: "New session",
+              actions: [codexAction],
+            },
+          ],
+        }}
+        t={t}
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+        renderIcon={() => null}
+      />,
+    );
+
+    const trigger = screen.getByRole("menuitem", { name: "Codex" });
+    expect(screen.queryByRole("menu", { name: "Codex" })).toBeNull();
+
+    fireEvent.keyDown(trigger, { key: "ArrowRight" });
+
+    expect(screen.getByRole("menu", { name: "Codex" })).toBeTruthy();
+    expect(screen.getByRole("menuitemradio", { name: /OpenAI/ })).toBeTruthy();
+  });
 });

@@ -396,7 +396,7 @@ async fn wait_for_thread_resume_ready(
                 sleep(Duration::from_millis(*delay_ms)).await;
             }
         }
-        match session
+        let not_ready_reason = match session
             .send_request_with_timeout(
                 "thread/resume",
                 json!({ "threadId": thread_id }),
@@ -406,57 +406,33 @@ async fn wait_for_thread_resume_ready(
         {
             Ok(response) => match validate_thread_resume_ready_response(&response, thread_id) {
                 Ok(true) => return Ok(()),
-                Ok(false) => {
-                    let reason = extract_error_message_from_response(&response)
-                        .unwrap_or_else(|| "thread not found".to_string());
-                    if should_soft_ready_for_not_ready_reason(
-                        &reason,
-                        soft_ready_on_rollout_pending,
-                    ) {
-                        log_thread_resume_rollout_pending_soft_ready(
-                            workspace_id,
-                            thread_id,
-                            context,
-                            &reason,
-                        );
-                        return Ok(());
-                    }
-                    last_thread_not_ready_reason = Some(reason.clone());
-                    log::warn!(
-                        "[thread/resume][ready_retry] workspace_id={} thread_id={} context={} outcome=thread_not_ready attempt={} next_retry={} reason={}",
-                        workspace_id,
-                        thread_id,
-                        context,
-                        attempt_index + 1,
-                        attempt_index < THREAD_RESUME_READY_RETRY_DELAYS_MS.len(),
-                        reason
-                    );
-                }
+                Ok(false) => extract_error_message_from_response(&response)
+                    .unwrap_or_else(|| "thread not found".to_string()),
                 Err(error) => return Err(error),
             },
-            Err(error) if is_thread_resume_not_ready_error_message(&error) => {
-                if should_soft_ready_for_not_ready_reason(&error, soft_ready_on_rollout_pending) {
-                    log_thread_resume_rollout_pending_soft_ready(
-                        workspace_id,
-                        thread_id,
-                        context,
-                        &error,
-                    );
-                    return Ok(());
-                }
-                last_thread_not_ready_reason = Some(error.clone());
-                log::warn!(
-                    "[thread/resume][ready_retry] workspace_id={} thread_id={} context={} outcome=thread_not_ready attempt={} next_retry={} reason={}",
-                    workspace_id,
-                    thread_id,
-                    context,
-                    attempt_index + 1,
-                    attempt_index < THREAD_RESUME_READY_RETRY_DELAYS_MS.len(),
-                    error
-                );
-            }
+            Err(error) if is_thread_resume_not_ready_error_message(&error) => error,
             Err(error) => return Err(error),
+        };
+        if should_soft_ready_for_not_ready_reason(&not_ready_reason, soft_ready_on_rollout_pending)
+        {
+            log_thread_resume_rollout_pending_soft_ready(
+                workspace_id,
+                thread_id,
+                context,
+                &not_ready_reason,
+            );
+            return Ok(());
         }
+        log::warn!(
+            "[thread/resume][ready_retry] workspace_id={} thread_id={} context={} outcome=thread_not_ready attempt={} next_retry={} reason={}",
+            workspace_id,
+            thread_id,
+            context,
+            attempt_index + 1,
+            attempt_index < THREAD_RESUME_READY_RETRY_DELAYS_MS.len(),
+            not_ready_reason
+        );
+        last_thread_not_ready_reason = Some(not_ready_reason);
     }
     let last_reason =
         last_thread_not_ready_reason.unwrap_or_else(|| "thread not found".to_string());

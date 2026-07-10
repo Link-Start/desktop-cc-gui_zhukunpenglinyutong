@@ -128,6 +128,20 @@ export function useThreadActionsSessionRuntime({
     Record<string, CodexPendingStartEntry | undefined>
   >({});
 
+  const reconnectWorkspaceBeforeThreadStart = useCallback(
+    async (workspaceId: string) => {
+      onDebug?.({
+        id: `${Date.now()}-client-workspace-reconnect-before-thread-start`,
+        timestamp: Date.now(),
+        source: "client",
+        label: "workspace/reconnect before thread start",
+        payload: { workspaceId },
+      });
+      await connectWorkspaceService(workspaceId);
+    },
+    [onDebug],
+  );
+
   const requestCodexThreadStart = useCallback(
     async (workspaceId: string): Promise<Record<string, unknown> | null> => {
       try {
@@ -136,18 +150,11 @@ export function useThreadActionsSessionRuntime({
         if (!isWorkspaceNotConnectedError(error)) {
           throw error;
         }
-        onDebug?.({
-          id: `${Date.now()}-client-workspace-reconnect-before-thread-start`,
-          timestamp: Date.now(),
-          source: "client",
-          label: "workspace/reconnect before thread start",
-          payload: { workspaceId },
-        });
-        await connectWorkspaceService(workspaceId);
+        await reconnectWorkspaceBeforeThreadStart(workspaceId);
         return (await startThreadService(workspaceId)) ?? null;
       }
     },
-    [onDebug],
+    [reconnectWorkspaceBeforeThreadStart],
   );
 
   const beginCodexPendingThreadStart = useCallback(
@@ -204,11 +211,35 @@ export function useThreadActionsSessionRuntime({
         // around, like kanban task records): replay the resolved id.
         return existingEntry.finalizedThreadId;
       }
+      // The delete flow flips this flag to false. Checked before every step
+      // that could mint a backend thread (initial start, failure retry) and
+      // before the dispatches below, so a finalize racing a delete neither
+      // creates an orphan backend thread nor resurrects the deleted thread.
+      const bailIfPendingThreadDeleted = () => {
+        if (loadedThreadsRef.current[pendingThreadId] === true) {
+          return false;
+        }
+        delete codexPendingStartByThreadIdRef.current[pendingThreadId];
+        onDebug?.({
+          id: `${Date.now()}-client-thread-start-finalize-stale`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "thread/start finalize skipped for deleted pending thread",
+          payload: { workspaceId, pendingThreadId },
+        });
+        return true;
+      };
+      if (bailIfPendingThreadDeleted()) {
+        return null;
+      }
       let entry =
         existingEntry ??
         beginCodexPendingThreadStart(workspaceId, pendingThreadId, null);
       let response = await entry.promise;
       if (!extractThreadId(response ?? undefined)) {
+        if (bailIfPendingThreadDeleted()) {
+          return null;
+        }
         // Prewarm failed (offline, runtime restart...): retry once. The
         // synchronous check-and-replace keeps concurrent finalize calls on
         // one shared retry promise instead of minting duplicate threads.
@@ -228,17 +259,7 @@ export function useThreadActionsSessionRuntime({
         // A concurrent finalize won the race while we awaited the start.
         return currentEntry.finalizedThreadId;
       }
-      if (loadedThreadsRef.current[pendingThreadId] !== true) {
-        // The pending thread was deleted while the start was in flight (the
-        // delete flow flips this flag to false). Dropping out here keeps the
-        // deleted thread from being resurrected by the dispatches below.
-        onDebug?.({
-          id: `${Date.now()}-client-thread-start-finalize-stale`,
-          timestamp: Date.now(),
-          source: "client",
-          label: "thread/start finalize skipped for deleted pending thread",
-          payload: { workspaceId, pendingThreadId },
-        });
+      if (bailIfPendingThreadDeleted()) {
         return null;
       }
       const realThreadId = extractThreadId(response ?? undefined);
@@ -441,15 +462,8 @@ export function useThreadActionsSessionRuntime({
           return resolveStartedThread(response);
         } catch (error) {
           if (isWorkspaceNotConnectedError(error)) {
-            onDebug?.({
-              id: `${Date.now()}-client-workspace-reconnect-before-thread-start`,
-              timestamp: Date.now(),
-              source: "client",
-              label: "workspace/reconnect before thread start",
-              payload: { workspaceId },
-            });
             try {
-              await connectWorkspaceService(workspaceId);
+              await reconnectWorkspaceBeforeThreadStart(workspaceId);
               const retryResponse = await startThreadWithOptionalMetadata();
               onDebug?.({
                 id: `${Date.now()}-server-thread-start-retry`,
@@ -507,7 +521,13 @@ export function useThreadActionsSessionRuntime({
         }
       }
     },
-    [beginCodexPendingThreadStart, dispatch, loadedThreadsRef, onDebug],
+    [
+      beginCodexPendingThreadStart,
+      dispatch,
+      loadedThreadsRef,
+      onDebug,
+      reconnectWorkspaceBeforeThreadStart,
+    ],
   );
 
   const startSharedSessionForWorkspace = useMemo(

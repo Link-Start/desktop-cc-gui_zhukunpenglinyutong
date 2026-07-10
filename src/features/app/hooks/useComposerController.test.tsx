@@ -57,6 +57,7 @@ function makeOptions(
     isReviewing: false,
     steerEnabled: false,
     activeEngine: "codex",
+    resolveCanonicalThreadId: (threadId: string) => threadId,
     connectWorkspace: vi.fn(async () => undefined),
     startThreadForWorkspace: vi.fn(async () => "thread-1"),
     sendUserMessage: vi.fn(async () => undefined),

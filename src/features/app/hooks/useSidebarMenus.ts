@@ -635,7 +635,10 @@ export function useSidebarMenus({
                 category: "runtime",
                 messageKey: "runtimeNotice.codex.providerSelected",
                 messageParams: { name: profile.name },
-                dedupeKey: "codex-provider-selected",
+                // Per-profile key: a same-key merge keeps the old notice's
+                // messageParams, so a shared key would keep showing the
+                // previous provider's name on consecutive picks.
+                dedupeKey: `codex-provider-selected-${profile.id}`,
               });
             },
           })),

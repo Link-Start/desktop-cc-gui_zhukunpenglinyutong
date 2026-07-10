@@ -522,7 +522,7 @@ export function useGitPanelController({
       options?: OpenFileOptions,
     ) => {
       const normalizedPath = resolveEditorOpenPath(
-        activeWorkspace,
+        activeWorkspaceRef.current,
         path,
         options?.pathDomain,
       );
@@ -565,7 +565,6 @@ export function useGitPanelController({
       }
     },
     [
-      activeWorkspace,
       fileTabWorkspaceKey,
       isCompact,
       onOpenEditorLayoutRequest,
