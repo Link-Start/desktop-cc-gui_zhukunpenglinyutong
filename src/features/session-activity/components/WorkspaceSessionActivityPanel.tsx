@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import Bot from "lucide-react/dist/esm/icons/bot";
@@ -12,11 +12,12 @@ import ListTodo from "lucide-react/dist/esm/icons/list-todo";
 import Package from "lucide-react/dist/esm/icons/package";
 import Search from "lucide-react/dist/esm/icons/search";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
-import X from "lucide-react/dist/esm/icons/x";
 import type { CSSProperties, ReactNode } from "react";
 import FileIcon from "../../../components/FileIcon";
+import { UnsavedChangesDialog } from "../../../components/ui/UnsavedChangesDialog";
 import { resolveWorkspaceRelativePath } from "../../../utils/workspacePaths";
 import { WorkspaceEditableDiffReviewSurface } from "../../git/components/WorkspaceEditableDiffReviewSurface";
+import type { EditableDiffDraftActions } from "../../git/components/WorkspaceEditableDiffCompare";
 import {
   buildSemanticDiffSummary,
   type SemanticEvidenceRef,
@@ -734,9 +735,13 @@ export function WorkspaceSessionActivityPanel({
   const [selectedDiffPreviewEntry, setSelectedDiffPreviewEntry] =
     useState<SessionActivityFileChangeEntry | null>(null);
   const [isDiffPreviewMaximized, setIsDiffPreviewMaximized] = useState(false);
+  const [isDiffPreviewDirty, setIsDiffPreviewDirty] = useState(false);
+  const [isDiffPreviewSaveInFlight, setIsDiffPreviewSaveInFlight] = useState(false);
+  const [isUnsavedCloseDialogOpen, setIsUnsavedCloseDialogOpen] = useState(false);
   const [diffPreviewStyle, setDiffPreviewStyle] = useState<"split" | "unified">("split");
   const [diffPreviewHeaderControlsTarget, setDiffPreviewHeaderControlsTarget] =
     useState<HTMLDivElement | null>(null);
+  const diffPreviewDraftActionsRef = useRef<EditableDiffDraftActions | null>(null);
   const selectedDiffPreviewGitPath = selectedDiffPreviewEntry
     ? resolveWorkspaceRelativePath(workspacePath, selectedDiffPreviewEntry.filePath)
     : null;
@@ -1377,9 +1382,42 @@ export function WorkspaceSessionActivityPanel({
     if (!entry.diff?.trim() && !workspaceId) {
       return;
     }
+    setIsDiffPreviewDirty(false);
     setSelectedDiffPreviewEntry(entry);
     setIsDiffPreviewMaximized(false);
   };
+  const closeDiffPreviewNow = useCallback(() => {
+    setIsDiffPreviewDirty(false);
+    setIsUnsavedCloseDialogOpen(false);
+    setSelectedDiffPreviewEntry(null);
+    setIsDiffPreviewMaximized(false);
+  }, []);
+  const discardAndCloseDiffPreview = useCallback(() => {
+    diffPreviewDraftActionsRef.current?.discard();
+    closeDiffPreviewNow();
+  }, [closeDiffPreviewNow]);
+  const closeDiffPreview = useCallback(() => {
+    if (isDiffPreviewDirty) {
+      setIsUnsavedCloseDialogOpen(true);
+      return;
+    }
+    closeDiffPreviewNow();
+  }, [closeDiffPreviewNow, isDiffPreviewDirty]);
+  const handleDiffPreviewDraftActionsChange = useCallback(
+    (actions: EditableDiffDraftActions | null) => {
+      diffPreviewDraftActionsRef.current = actions;
+      setIsDiffPreviewSaveInFlight(actions?.isSaving ?? false);
+    },
+    [],
+  );
+  const saveAndCloseDiffPreview = useCallback(async () => {
+    const saved = await diffPreviewDraftActionsRef.current?.save();
+    if (!saved) {
+      return false;
+    }
+    closeDiffPreviewNow();
+    return true;
+  }, [closeDiffPreviewNow]);
 
   const handleToggleTurnGroup = (groupId: string) => {
     setCollapsedTurnGroupIds((current) => {
@@ -2147,7 +2185,7 @@ export function WorkspaceSessionActivityPanel({
             <div
               className="git-history-diff-modal-overlay is-popup"
               role="presentation"
-              onClick={() => setSelectedDiffPreviewEntry(null)}
+              onClick={closeDiffPreview}
             >
               <div
                 className={`git-history-diff-modal ${isDiffPreviewMaximized ? "is-maximized" : ""}`}
@@ -2191,15 +2229,6 @@ export function WorkspaceSessionActivityPanel({
                         {isDiffPreviewMaximized ? "❐" : "□"}
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      className="git-history-diff-modal-close"
-                      onClick={() => setSelectedDiffPreviewEntry(null)}
-                      aria-label={t("common.close")}
-                      title={t("common.close")}
-                    >
-                      <X size={14} />
-                    </button>
                   </div>
                 </div>
                 <div className="git-history-diff-modal-viewer">
@@ -2220,6 +2249,7 @@ export function WorkspaceSessionActivityPanel({
                     embeddedAnchorVariant="modal-pager"
                     toolbarLayout="inline-actions"
                     headerControlsTarget={diffPreviewHeaderControlsTarget}
+                    onRequestClose={closeDiffPreview}
                     fullDiffSourceKey={[
                       selectedDiffPreviewGitPath ?? selectedDiffPreviewEntry.filePath,
                       selectedDiffPreviewEntry.statusLetter,
@@ -2232,6 +2262,8 @@ export function WorkspaceSessionActivityPanel({
                     focusSelectedFileOnly
                     allowEditing
                     onRequestGitStatusRefresh={onRefreshGitStatus}
+                    onDirtyChange={setIsDiffPreviewDirty}
+                    onDraftActionsChange={handleDiffPreviewDraftActionsChange}
                     onCreateCodeAnnotation={onCreateCodeAnnotation}
                     onRemoveCodeAnnotation={onRemoveCodeAnnotation}
                     codeAnnotations={codeAnnotations}
@@ -2243,6 +2275,13 @@ export function WorkspaceSessionActivityPanel({
             document.body,
           )
         : null}
+      <UnsavedChangesDialog
+        open={isUnsavedCloseDialogOpen}
+        isSaving={isDiffPreviewSaveInFlight}
+        onContinueEditing={() => setIsUnsavedCloseDialogOpen(false)}
+        onDiscard={discardAndCloseDiffPreview}
+        onSaveAndClose={saveAndCloseDiffPreview}
+      />
       {stickyChildSessionSummaries.length > 0 ? (
         <div
           className="session-activity-related-toolbar"

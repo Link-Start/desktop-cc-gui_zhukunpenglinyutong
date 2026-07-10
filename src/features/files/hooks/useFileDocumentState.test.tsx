@@ -162,7 +162,8 @@ describe("useFileDocumentState", () => {
     });
 
     await expect(firstSave).resolves.toBe(true);
-    await expect(secondSave).resolves.toBe(false);
+    await expect(secondSave).resolves.toBe(true);
+    expect(result.current.isDirty).toBe(false);
     expect(vi.mocked(pushErrorToast)).not.toHaveBeenCalled();
     expect(vi.mocked(readExternalSpecFile)).not.toHaveBeenCalled();
     expect(vi.mocked(readExternalAbsoluteFile)).not.toHaveBeenCalled();
@@ -209,6 +210,49 @@ describe("useFileDocumentState", () => {
     );
   });
 
+  it("keeps edits made during an in-flight save dirty", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "const value = 1;",
+      truncated: false,
+    });
+    let resolveSave!: () => void;
+    vi.mocked(writeWorkspaceFile).mockImplementation(
+      () => new Promise<void>((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    const { result } = renderHook(
+      (props: HookProps) => useFileDocumentState(props),
+      {
+        initialProps: {
+          workspaceId: "ws-edit-during-save",
+          customSpecRoot: null,
+          workspaceRelativeFilePath: "src/value.ts",
+          fileReadTarget: makeWorkspaceTarget("src/value.ts"),
+          skipTextRead: false,
+          externalAbsoluteReadOnlyMessage: "read only",
+        },
+      },
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    act(() => result.current.setContent("const value = 2;"));
+
+    let savePromise!: Promise<boolean>;
+    act(() => {
+      savePromise = result.current.handleSave();
+    });
+    act(() => result.current.setContent("const value = 3;"));
+    await act(async () => {
+      resolveSave();
+      await savePromise;
+    });
+
+    await expect(savePromise).resolves.toBe(false);
+    expect(result.current.content).toBe("const value = 3;");
+    expect(result.current.savedContentRef.current).toBe("const value = 2;");
+    expect(result.current.isDirty).toBe(true);
+  });
+
   it("refreshes clean cached content from disk when reopening the same file", async () => {
     let diskContent = "const value = 1;";
     vi.mocked(readWorkspaceFile).mockImplementation(async () => ({
@@ -248,6 +292,45 @@ describe("useFileDocumentState", () => {
       expect(secondRender.result.current.content).toBe("const value = 2;");
     });
     expect(readWorkspaceFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not overwrite edits made while a clean cached file refreshes from disk", async () => {
+    let resolveRefresh!: (value: { content: string; truncated: boolean }) => void;
+    vi.mocked(readWorkspaceFile)
+      .mockResolvedValueOnce({ content: "const value = 1;", truncated: false })
+      .mockImplementationOnce(
+        () => new Promise((resolve) => {
+          resolveRefresh = resolve;
+        }),
+      );
+    const initialProps: HookProps = {
+      workspaceId: "ws-clean-cache-edit-race",
+      customSpecRoot: null,
+      workspaceRelativeFilePath: "src/value.ts",
+      fileReadTarget: makeWorkspaceTarget("src/value.ts"),
+      skipTextRead: false,
+      externalAbsoluteReadOnlyMessage: "read only",
+    };
+    const firstRender = renderHook((props: HookProps) => useFileDocumentState(props), {
+      initialProps,
+    });
+    await waitFor(() => expect(firstRender.result.current.isLoading).toBe(false));
+    firstRender.unmount();
+
+    const secondRender = renderHook((props: HookProps) => useFileDocumentState(props), {
+      initialProps,
+    });
+    expect(secondRender.result.current.content).toBe("const value = 1;");
+    act(() => {
+      secondRender.result.current.setContent("const localDraft = 2;");
+    });
+    await act(async () => {
+      resolveRefresh({ content: "const disk = 3;", truncated: false });
+      await Promise.resolve();
+    });
+
+    expect(secondRender.result.current.content).toBe("const localDraft = 2;");
+    expect(secondRender.result.current.isDirty).toBe(true);
   });
 
   it("keeps dirty cached drafts instead of overwriting them with disk content", async () => {
@@ -293,5 +376,42 @@ describe("useFileDocumentState", () => {
       expect(secondRender.result.current.isDirty).toBe(true);
     });
     expect(readWorkspaceFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("discards a dirty cached draft and reopens from the saved source", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "const value = 1;",
+      truncated: false,
+    });
+    const initialProps: HookProps = {
+      workspaceId: "ws-discard-cache",
+      customSpecRoot: null,
+      workspaceRelativeFilePath: "src/value.ts",
+      fileReadTarget: makeWorkspaceTarget("src/value.ts"),
+      skipTextRead: false,
+      externalAbsoluteReadOnlyMessage: "read only",
+    };
+    const firstRender = renderHook((props: HookProps) => useFileDocumentState(props), {
+      initialProps,
+    });
+
+    await waitFor(() => expect(firstRender.result.current.isLoading).toBe(false));
+    act(() => {
+      firstRender.result.current.setContent("const draft = 2;");
+      firstRender.result.current.handleDiscard();
+    });
+    await waitFor(() => {
+      expect(firstRender.result.current.content).toBe("const value = 1;");
+      expect(firstRender.result.current.isDirty).toBe(false);
+    });
+    firstRender.unmount();
+
+    const secondRender = renderHook((props: HookProps) => useFileDocumentState(props), {
+      initialProps,
+    });
+    await waitFor(() => {
+      expect(secondRender.result.current.content).toBe("const value = 1;");
+      expect(secondRender.result.current.isDirty).toBe(false);
+    });
   });
 });

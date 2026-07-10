@@ -8,6 +8,7 @@ import type {
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { loadDiffStyles } from "../../../styles/featureStyleLoaders";
+import { useFeatureStylesReady } from "../../../styles/useFeatureStylesReady";
 import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right";
 import Check from "lucide-react/dist/esm/icons/check";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
@@ -26,6 +27,7 @@ import { createPortal } from "react-dom";
 import { matchesShortcutForPlatform } from "../../../utils/shortcuts";
 import { formatRelativeTime } from "../../../utils/time";
 import FileIcon from "../../../components/FileIcon";
+import { UnsavedChangesDialog } from "../../../components/ui/UnsavedChangesDialog";
 import { CommitMessageEngineIcon } from "./CommitMessageEngineIcon";
 import {
   CommitButton,
@@ -48,6 +50,7 @@ import {
   type DiffTreeFolderNode,
 } from "../utils/diffTree";
 import { WorkspaceEditableDiffReviewSurface } from "./WorkspaceEditableDiffReviewSurface";
+import type { EditableDiffDraftActions } from "./WorkspaceEditableDiffCompare";
 import { GitDiffPanelSectionActions } from "./GitDiffPanelSectionActions";
 import {
   getFileInclusionState,
@@ -716,7 +719,16 @@ function GitLogEntryRow({
   );
 }
 
-export function GitDiffPanel({
+export function GitDiffPanel(props: GitDiffPanelProps) {
+  const stylesReady = useFeatureStylesReady(loadDiffStyles);
+  if (!stylesReady) {
+    return null;
+  }
+
+  return <GitDiffPanelImpl {...props} />;
+}
+
+function GitDiffPanelImpl({
   workspaceId = null,
   workspacePath = null,
   mode,
@@ -807,9 +819,6 @@ export function GitDiffPanel({
   onRemoveCodeAnnotation,
   codeAnnotations = [],
 }: GitDiffPanelProps) {
-  useEffect(() => {
-    void loadDiffStyles();
-  }, []);
   const { t } = useTranslation();
   // Multi-select state for file list
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
@@ -828,7 +837,11 @@ export function GitDiffPanel({
     null,
   );
   const [isPreviewModalMaximized, setIsPreviewModalMaximized] = useState(false);
+  const [isPreviewModalDirty, setIsPreviewModalDirty] = useState(false);
+  const [isPreviewSaveInFlight, setIsPreviewSaveInFlight] = useState(false);
+  const [isUnsavedCloseDialogOpen, setIsUnsavedCloseDialogOpen] = useState(false);
   const [previewHeaderControlsTarget, setPreviewHeaderControlsTarget] = useState<HTMLDivElement | null>(null);
+  const previewDraftActionsRef = useRef<EditableDiffDraftActions | null>(null);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [commitMessageMenuEngine, setCommitMessageMenuEngine] = useState<CommitMessageEngine>("claude");
   const [isGitRootPanelOpen, setIsGitRootPanelOpen] = useState(
@@ -880,10 +893,36 @@ export function GitDiffPanel({
     () => (previewFile ? diffEntries.find((entry) => entry.path === previewFile.path) ?? null : null),
     [diffEntries, previewFile],
   );
-  const closePreviewModal = useCallback(() => {
+  const closePreviewModalNow = useCallback(() => {
+    setIsPreviewModalDirty(false);
+    setIsPreviewSaveInFlight(false);
+    setIsUnsavedCloseDialogOpen(false);
     setPreviewFile(null);
     setIsPreviewModalMaximized(false);
   }, []);
+  const discardAndClosePreviewModal = useCallback(() => {
+    previewDraftActionsRef.current?.discard();
+    closePreviewModalNow();
+  }, [closePreviewModalNow]);
+  const closePreviewModal = useCallback(() => {
+    if (isPreviewModalDirty) {
+      setIsUnsavedCloseDialogOpen(true);
+      return;
+    }
+    closePreviewModalNow();
+  }, [closePreviewModalNow, isPreviewModalDirty]);
+  const handlePreviewDraftActionsChange = useCallback((actions: EditableDiffDraftActions | null) => {
+    previewDraftActionsRef.current = actions;
+    setIsPreviewSaveInFlight(actions?.isSaving ?? false);
+  }, []);
+  const saveAndClosePreviewModal = useCallback(async () => {
+    const saved = await previewDraftActionsRef.current?.save();
+    if (!saved) {
+      return false;
+    }
+    closePreviewModalNow();
+    return true;
+  }, [closePreviewModalNow]);
 
   const handleOpenInlinePreview = useCallback(
     (path: string) => {
@@ -895,6 +934,7 @@ export function GitDiffPanel({
   );
 
   const handleOpenFilePreview = useCallback((file: DiffFile, section: "staged" | "unstaged") => {
+    setIsPreviewModalDirty(false);
     setIsPreviewModalMaximized(false);
     setPreviewFile({ ...file, section });
   }, []);
@@ -1092,22 +1132,30 @@ export function GitDiffPanel({
     setCollapsedSections(new Set());
     setDiscardDialogPaths(null);
     setDiscardDialogSubmitting(false);
-    setPreviewFile((current) => {
-      if (!current) {
-        return null;
-      }
-      const exists = allFiles.some(
-        (file) => file.path === current.path && file.section === current.section,
-      );
-      return exists ? current : null;
-    });
-  }, [allFiles, filesKey]);
+    if (!previewFile) {
+      return;
+    }
+    const previewFileStillExists = allFiles.some(
+      (file) => file.path === previewFile.path && file.section === previewFile.section,
+    );
+    if (previewFileStillExists) {
+      return;
+    }
+    if (isPreviewModalDirty) {
+      setIsUnsavedCloseDialogOpen(true);
+      return;
+    }
+    closePreviewModalNow();
+  }, [allFiles, closePreviewModalNow, filesKey, isPreviewModalDirty, previewFile]);
 
   useEffect(() => {
     if (!previewFile) {
       return;
     }
     const handleWindowKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (isUnsavedCloseDialogOpen) {
+        return;
+      }
       if (event.key === "Escape") {
         closePreviewModal();
       }
@@ -1116,7 +1164,7 @@ export function GitDiffPanel({
     return () => {
       window.removeEventListener("keydown", handleWindowKeyDown);
     };
-  }, [closePreviewModal, previewFile]);
+  }, [closePreviewModal, isUnsavedCloseDialogOpen, previewFile]);
 
   useEffect(() => {
     if (!isModeMenuOpen) {
@@ -2432,10 +2480,6 @@ export function GitDiffPanel({
                     <WorkspaceEditableDiffReviewSurface
                       workspaceId={workspaceId}
                       workspacePath={workspacePath}
-                      gitStatusFiles={[
-                        ...stagedFiles,
-                        ...unstagedFiles,
-                      ]}
                       files={[
                         {
                           filePath: previewFile.path,
@@ -2463,6 +2507,8 @@ export function GitDiffPanel({
                       allowEditing
                       onRequestRefreshReview={onRefreshGitDiffs}
                       onRequestGitStatusRefresh={onRefreshGitStatus}
+                      onDirtyChange={setIsPreviewModalDirty}
+                      onDraftActionsChange={handlePreviewDraftActionsChange}
                       onCreateCodeAnnotation={onCreateCodeAnnotation}
                       onRemoveCodeAnnotation={onRemoveCodeAnnotation}
                       codeAnnotations={codeAnnotations}
@@ -2477,6 +2523,13 @@ export function GitDiffPanel({
             document.body,
           )
         : null}
+      <UnsavedChangesDialog
+        open={isUnsavedCloseDialogOpen}
+        isSaving={isPreviewSaveInFlight}
+        onContinueEditing={() => setIsUnsavedCloseDialogOpen(false)}
+        onDiscard={discardAndClosePreviewModal}
+        onSaveAndClose={saveAndClosePreviewModal}
+      />
       {discardDialogPaths ? (
         <div
           className="diff-danger-dialog-overlay"

@@ -52,6 +52,7 @@ export type FileCodeMirrorEditorProps = {
   lastReportedLineRangeRef: { current: string };
   saveFileShortcut: string | null | undefined;
   handleSave: () => void;
+  editable?: boolean;
 };
 
 export type FileCodeMirrorLineGap = {
@@ -176,6 +177,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     lastReportedLineRangeRef,
     saveFileShortcut,
     handleSave,
+    editable = true,
   } = props;
   const codeMirrorRef = useRef<ReactCodeMirrorRef | null>(null);
 
@@ -276,6 +278,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
 
   const composedExtensions: ReactCodeMirrorProps["extensions"] = useMemo(
     () => [
+      EditorView.editable.of(editable),
       saveKeymapExt,
       editorNavigationKeymapExt,
       ctrlClickDefinitionExt,
@@ -296,6 +299,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
       languageExtensions,
       persistentSearchExtension,
       saveKeymapExt,
+      editable,
     ],
   );
 

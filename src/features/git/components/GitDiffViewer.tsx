@@ -42,6 +42,7 @@ type GitDiffViewerProps = {
   stickyHeaderMode?: "full" | "controls-only";
   embeddedAnchorVariant?: "default" | "modal-pager";
   showContentModeControls?: boolean;
+  toolbarOnly?: boolean;
   headerControlsTarget?: HTMLElement | null;
   onRequestClose?: (() => void) | null;
   fullDiffLoader?: ((path: string) => Promise<string>) | null;
@@ -65,6 +66,9 @@ type GitDiffViewerProps = {
     CodeAnnotationSource,
     "embedded-diff-view" | "modal-diff-view"
   >;
+  contentMode?: "all" | "focused";
+  initialContentMode?: "all" | "focused";
+  onContentModeChange?: (path: string, mode: "all" | "focused") => void;
 };
 
 function normalizePatchName(name: string) {
@@ -526,6 +530,7 @@ export function GitDiffViewer({
   stickyHeaderMode = "full",
   embeddedAnchorVariant = "default",
   showContentModeControls,
+  toolbarOnly = false,
   headerControlsTarget = null,
   onRequestClose = null,
   fullDiffLoader = null,
@@ -546,6 +551,9 @@ export function GitDiffViewer({
   onRemoveCodeAnnotation,
   codeAnnotations = [],
   codeAnnotationSurface = "embedded-diff-view",
+  contentMode: controlledContentMode,
+  initialContentMode = "focused",
+  onContentModeChange,
 }: GitDiffViewerProps) {
   const { t } = useTranslation();
   const [resolvedHeaderControlsTarget, setResolvedHeaderControlsTarget] = useState<HTMLElement | null>(null);
@@ -563,7 +571,7 @@ export function GitDiffViewer({
   const onActivePathChangeRef = useRef(onActivePathChange);
   const rowResizeObserversRef = useRef(new Map<Element, ResizeObserver>());
   const rowNodesByPathRef = useRef(new Map<string, HTMLDivElement>());
-  const hasActivePathHandler = Boolean(onActivePathChange);
+  const hasActivePathHandler = !toolbarOnly && Boolean(onActivePathChange);
   const effectiveDiffs = useMemo(() => {
     if (listView !== "tree") {
       return diffs;
@@ -582,7 +590,7 @@ export function GitDiffViewer({
     return map;
   }, [effectiveDiffs]);
   const rowVirtualizer = useVirtualizer({
-    count: effectiveDiffs.length,
+    count: toolbarOnly ? 0 : effectiveDiffs.length,
     getScrollElement: () => containerRef.current,
     estimateSize: () => 260,
     overscan: 6,
@@ -725,6 +733,9 @@ export function GitDiffViewer({
   }, [effectiveDiffs, rowVirtualizer, hasActivePathHandler]);
 
   const diffStats = useMemo(() => {
+    if (toolbarOnly) {
+      return { additions: 0, deletions: 0 };
+    }
     let additions = 0;
     let deletions = 0;
     for (const entry of effectiveDiffs) {
@@ -751,7 +762,7 @@ export function GitDiffViewer({
       }
     }
     return { additions, deletions };
-  }, [effectiveDiffs]);
+  }, [effectiveDiffs, toolbarOnly]);
   const handleScrollToFirstFile = useCallback(() => {
     if (!effectiveDiffs.length) {
       return;
@@ -766,6 +777,7 @@ export function GitDiffViewer({
     rowVirtualizer.scrollToIndex(0, { align: "start" });
   }, [effectiveDiffs.length, rowVirtualizer]);
   const handleFileContentModeChange = useCallback((path: string, mode: "all" | "focused") => {
+    onContentModeChange?.(path, mode);
     if (mode === "focused") {
       setLoadingFullDiffByPath((prev) => {
         if (!prev[path]) {
@@ -775,13 +787,13 @@ export function GitDiffViewer({
       });
     }
     setFileContentModes((prev) => {
-      const current = prev[path] ?? "focused";
+      const current = prev[path] ?? initialContentMode;
       if (current === mode) {
         return prev;
       }
       return { ...prev, [path]: mode };
     });
-  }, []);
+  }, [initialContentMode, onContentModeChange]);
 
   useEffect(() => {
     setFullDiffByPath({});
@@ -834,15 +846,15 @@ export function GitDiffViewer({
   }, [fullDiffLoader, workspaceId]);
 
   const fullDiffTargetPath = useMemo(() => {
-    if (!shouldShowContentModeControls) {
+    if (toolbarOnly || !shouldShowContentModeControls) {
       return null;
     }
     const path = stickyEntry?.path ?? selectedPath;
     if (!path) {
       return null;
     }
-    return (fileContentModes[path] ?? "focused") === "all" ? path : null;
-  }, [fileContentModes, selectedPath, shouldShowContentModeControls, stickyEntry?.path]);
+    return (controlledContentMode ?? fileContentModes[path] ?? initialContentMode) === "all" ? path : null;
+  }, [controlledContentMode, fileContentModes, initialContentMode, selectedPath, shouldShowContentModeControls, stickyEntry?.path, toolbarOnly]);
 
   const collectChangeAnchors = useCallback((path: string) => {
     const row = rowNodesByPathRef.current.get(path);
@@ -904,8 +916,8 @@ export function GitDiffViewer({
     if (!shouldShowContentModeControls || !stickyEntry) {
       return false;
     }
-    return (fileContentModes[stickyEntry.path] ?? "focused") === "all";
-  }, [fileContentModes, shouldShowContentModeControls, stickyEntry]);
+    return (controlledContentMode ?? fileContentModes[stickyEntry.path] ?? initialContentMode) === "all";
+  }, [controlledContentMode, fileContentModes, initialContentMode, shouldShowContentModeControls, stickyEntry]);
   const showAnchorBar = !error && Boolean(stickyEntry) && isStickyAllMode;
   const showEmbeddedAnchorBar = showAnchorBar && stickyHeaderMode === "controls-only";
   const effectiveHeaderControlsTarget = headerControlsTarget ?? resolvedHeaderControlsTarget;
@@ -1072,24 +1084,26 @@ export function GitDiffViewer({
                     <div className="diff-viewer-header-mode" role="group" aria-label={t("git.diffContentMode")}>
                       {(() => {
                         const activePath = stickyEntry.path;
-                        const isAll = (fileContentModes[activePath] ?? "focused") === "all";
+                        const isAll = (controlledContentMode ?? fileContentModes[activePath] ?? initialContentMode) === "all";
                         const isLoadingFull = Boolean(loadingFullDiffByPath[activePath]);
                         const hasFullDiff = Boolean(fullDiffByPath[activePath]?.trim());
                         const hasError = Boolean(fullDiffErrorByPath[activePath]);
-                        const statusLabel = hasError
-                          ? t("git.fullDiffStatusError")
-                          : isLoadingFull
-                            ? t("git.fullDiffStatusLoading")
-                            : hasFullDiff
-                              ? t("git.fullDiffStatusReady")
-                              : t("git.fullDiffStatusEmpty");
+                        const statusLabel = toolbarOnly
+                          ? t("git.fullDiffStatusReady")
+                          : hasError
+                            ? t("git.fullDiffStatusError")
+                            : isLoadingFull
+                              ? t("git.fullDiffStatusLoading")
+                              : hasFullDiff
+                                ? t("git.fullDiffStatusReady")
+                                : t("git.fullDiffStatusEmpty");
                         const allLabel = isAll
                           ? `${t("git.viewAllContent")} (${statusLabel})`
                           : t("git.viewAllContent");
                         return (
                           <button
                             type="button"
-                            className={`diff-viewer-header-mode-button ${(fileContentModes[stickyEntry.path] ?? "focused") === "all" ? "active" : ""}`}
+                            className={`diff-viewer-header-mode-button ${(controlledContentMode ?? fileContentModes[stickyEntry.path] ?? initialContentMode) === "all" ? "active" : ""}`}
                             onClick={() => handleFileContentModeChange(stickyEntry.path, "all")}
                             title={hasError ? fullDiffErrorByPath[activePath] : undefined}
                           >
@@ -1100,7 +1114,7 @@ export function GitDiffViewer({
                       })()}
                       <button
                         type="button"
-                        className={`diff-viewer-header-mode-button ${(fileContentModes[stickyEntry.path] ?? "focused") === "focused" ? "active" : ""}`}
+                        className={`diff-viewer-header-mode-button ${(controlledContentMode ?? fileContentModes[stickyEntry.path] ?? initialContentMode) === "focused" ? "active" : ""}`}
                         onClick={() => handleFileContentModeChange(stickyEntry.path, "focused")}
                       >
                         <span className="diff-viewer-inline-mode-icon diff-viewer-inline-mode-icon-focused" aria-hidden />
@@ -1174,24 +1188,26 @@ export function GitDiffViewer({
                     <div className="diff-viewer-header-mode" role="group" aria-label={t("git.diffContentMode")}>
                       {(() => {
                         const activePath = stickyEntry.path;
-                        const isAll = (fileContentModes[activePath] ?? "focused") === "all";
+                        const isAll = (controlledContentMode ?? fileContentModes[activePath] ?? initialContentMode) === "all";
                         const isLoadingFull = Boolean(loadingFullDiffByPath[activePath]);
                         const hasFullDiff = Boolean(fullDiffByPath[activePath]?.trim());
                         const hasError = Boolean(fullDiffErrorByPath[activePath]);
-                        const statusLabel = hasError
-                          ? t("git.fullDiffStatusError")
-                          : isLoadingFull
-                            ? t("git.fullDiffStatusLoading")
-                            : hasFullDiff
-                              ? t("git.fullDiffStatusReady")
-                              : t("git.fullDiffStatusEmpty");
+                        const statusLabel = toolbarOnly
+                          ? t("git.fullDiffStatusReady")
+                          : hasError
+                            ? t("git.fullDiffStatusError")
+                            : isLoadingFull
+                              ? t("git.fullDiffStatusLoading")
+                              : hasFullDiff
+                                ? t("git.fullDiffStatusReady")
+                                : t("git.fullDiffStatusEmpty");
                         const allLabel = isAll
                           ? `${t("git.viewAllContent")} (${statusLabel})`
                           : t("git.viewAllContent");
                         return (
                           <button
                             type="button"
-                            className={`diff-viewer-header-mode-button ${(fileContentModes[stickyEntry.path] ?? "focused") === "all" ? "active" : ""}`}
+                            className={`diff-viewer-header-mode-button ${(controlledContentMode ?? fileContentModes[stickyEntry.path] ?? initialContentMode) === "all" ? "active" : ""}`}
                             onClick={() => handleFileContentModeChange(stickyEntry.path, "all")}
                             title={hasError ? fullDiffErrorByPath[activePath] : undefined}
                           >
@@ -1202,7 +1218,7 @@ export function GitDiffViewer({
                       })()}
                       <button
                         type="button"
-                        className={`diff-viewer-header-mode-button ${(fileContentModes[stickyEntry.path] ?? "focused") === "focused" ? "active" : ""}`}
+                        className={`diff-viewer-header-mode-button ${(controlledContentMode ?? fileContentModes[stickyEntry.path] ?? initialContentMode) === "focused" ? "active" : ""}`}
                         onClick={() => handleFileContentModeChange(stickyEntry.path, "focused")}
                       >
                         <span className="diff-viewer-inline-mode-icon diff-viewer-inline-mode-icon-focused" aria-hidden />
@@ -1226,7 +1242,7 @@ export function GitDiffViewer({
             </div>
           </div>
         )}
-        {showAnchorBar && stickyEntry && !showEmbeddedAnchorBar && (
+        {!toolbarOnly && showAnchorBar && stickyEntry && !showEmbeddedAnchorBar && (
           <div
             className="diff-viewer-anchor-floating"
             role="group"
@@ -1235,18 +1251,18 @@ export function GitDiffViewer({
             {anchorControls}
           </div>
         )}
-        {error && <div className="diff-viewer-empty">{error}</div>}
-        {!error && isLoading && effectiveDiffs.length > 0 && (
+        {!toolbarOnly && error && <div className="diff-viewer-empty">{error}</div>}
+        {!toolbarOnly && !error && isLoading && effectiveDiffs.length > 0 && (
           <div className="diff-viewer-loading diff-viewer-loading-overlay">
             {t("git.refreshingDiff")}
           </div>
         )}
-        {!error && !isLoading && !effectiveDiffs.length && (
+        {!toolbarOnly && !error && !isLoading && !effectiveDiffs.length && (
           <div className="diff-viewer-empty">
             {listView === "tree" ? t("git.selectFileToViewDiff") : t("git.noChangesDetected")}
           </div>
         )}
-        {!error && effectiveDiffs.length > 0 && (
+        {!toolbarOnly && !error && effectiveDiffs.length > 0 && (
           <div
             className="diff-viewer-list"
             ref={listRef}
@@ -1281,7 +1297,7 @@ export function GitDiffViewer({
                     />
                   ) : (
                     (() => {
-                      const contentMode = fileContentModes[entry.path] ?? "focused";
+                      const contentMode = controlledContentMode ?? fileContentModes[entry.path] ?? initialContentMode;
                       const fullDiff = fullDiffByPath[entry.path];
                       const diffText = contentMode === "all" && fullDiff?.trim()
                         ? fullDiff
@@ -1307,7 +1323,7 @@ export function GitDiffViewer({
           </div>
         )}
         </div>
-        {showEmbeddedAnchorBar && stickyEntry && (
+        {!toolbarOnly && showEmbeddedAnchorBar && stickyEntry && (
           <div className="diff-viewer-anchor-dock" role="group" aria-label="Change anchors">
             {anchorControls}
           </div>

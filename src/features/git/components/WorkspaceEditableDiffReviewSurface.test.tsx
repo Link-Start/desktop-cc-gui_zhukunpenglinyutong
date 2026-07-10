@@ -1,0 +1,246 @@
+/** @vitest-environment jsdom */
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => ({
+      "common.close": "Close",
+      "files.unsavedChanges": "Unsaved changes",
+      "files.unsavedChangesCloseDescription": "Changes will be lost.",
+      "files.saveAndClose": "Save and close",
+      "files.saving": "Saving...",
+      "files.continueEditing": "Continue editing",
+      "files.discardChangesAction": "Discard changes",
+      "files.readOnly": "Read only",
+      "files.editableDiff.title": "Editable diff",
+    }[key] ?? key),
+  }),
+}));
+
+vi.mock("../../../services/tauri", () => ({
+  getGitFileFullDiff: vi.fn(async () => ""),
+}));
+
+vi.mock("./GitDiffViewer", () => ({
+  GitDiffViewer: ({
+    onRequestClose,
+    onDiffStyleChange,
+    onContentModeChange,
+    selectedPath,
+    toolbarOnly,
+  }: {
+    onRequestClose?: () => void;
+    onDiffStyleChange?: (style: "split" | "unified") => void;
+    onContentModeChange?: (path: string, mode: "all" | "focused") => void;
+    selectedPath: string;
+    toolbarOnly?: boolean;
+  }) => (
+    <div data-toolbar-only={toolbarOnly ? "true" : "false"}>
+      Read-only diff viewer
+      <button type="button" onClick={() => onDiffStyleChange?.("split")}>Dual panel</button>
+      <button type="button" onClick={() => onDiffStyleChange?.("unified")}>Single column</button>
+      <button type="button" onClick={() => onContentModeChange?.(selectedPath, "all")}>All content</button>
+      <button type="button" onClick={() => onContentModeChange?.(selectedPath, "focused")}>Focused content</button>
+      {onRequestClose ? <button type="button" onClick={onRequestClose}>Close</button> : null}
+    </div>
+  ),
+}));
+
+vi.mock("./WorkspaceEditableDiffCompare", () => ({
+  WorkspaceEditableDiffCompare: ({ onDirtyChange, onDraftActionsChange }: {
+    onDirtyChange: (isDirty: boolean) => void;
+    onDraftActionsChange: (actions: {
+      save: () => Promise<boolean>;
+      discard: () => void;
+      isSaving: boolean;
+    }) => void;
+  }) => (
+    <div>
+      IDEA compare
+      <button type="button" onClick={() => {
+        onDraftActionsChange({
+          save: mockSaveDraft,
+          discard: mockDiscardDraft,
+          isSaving: false,
+        });
+        onDirtyChange(true);
+      }}>Make dirty</button>
+    </div>
+  ),
+}));
+
+const mockSaveDraft = vi.fn(async () => true);
+const mockDiscardDraft = vi.fn();
+
+import { WorkspaceEditableDiffReviewSurface } from "./WorkspaceEditableDiffReviewSurface";
+
+const editableFile = {
+  filePath: "example.ts",
+  status: "M",
+  additions: 1,
+  deletions: 1,
+  diff: "@@ -1 +1 @@\n-before\n+after\n",
+};
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  mockSaveDraft.mockReset();
+  mockSaveDraft.mockResolvedValue(true);
+  mockDiscardDraft.mockReset();
+});
+
+describe("WorkspaceEditableDiffReviewSurface", () => {
+  it("opens editable text diffs directly in the IDEA compare surface", () => {
+    render(
+      <WorkspaceEditableDiffReviewSurface
+        workspaceId="workspace-1"
+        workspacePath="/repo"
+        files={[editableFile]}
+        allowEditing
+      />,
+    );
+
+    expect(screen.getByText("IDEA compare")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /edit/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "Dual panel" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Single column" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "All content" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Focused content" })).toBeTruthy();
+    expect(document.querySelector(".editable-diff-review-viewer.is-toolbar-only")).toBeTruthy();
+    expect(document.querySelector('[data-toolbar-only="true"]')).toBeTruthy();
+  });
+
+  it("returns to the original renderer for focused-content review", () => {
+    render(
+      <WorkspaceEditableDiffReviewSurface
+        workspaceId="workspace-1"
+        workspacePath="/repo"
+        files={[editableFile]}
+        allowEditing
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Focused content" }));
+
+    expect(screen.queryByText("IDEA compare")).toBeNull();
+    expect(document.querySelector(".editable-diff-review-viewer.is-toolbar-only")).toBeNull();
+  });
+
+  it("keeps deleted files in the read-only diff viewer", () => {
+    render(
+      <WorkspaceEditableDiffReviewSurface
+        workspaceId="workspace-1"
+        workspacePath="/repo"
+        files={[{ ...editableFile, status: "D" }]}
+        allowEditing
+      />,
+    );
+
+    expect(screen.getByText("Read-only diff viewer")).toBeTruthy();
+    expect(screen.queryByText("IDEA compare")).toBeNull();
+  });
+
+  it("delegates dirty close to the parent without opening a native confirm", () => {
+    const onRequestClose = vi.fn();
+    const confirmSpy = vi.spyOn(window, "confirm");
+    render(
+      <WorkspaceEditableDiffReviewSurface
+        workspaceId="workspace-1"
+        workspacePath="/repo"
+        files={[editableFile]}
+        allowEditing
+        onRequestClose={onRequestClose}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Make dirty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(onRequestClose).toHaveBeenCalledOnce();
+  });
+
+  it("keeps editing when the custom unsaved-changes dialog is cancelled", () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    render(
+      <WorkspaceEditableDiffReviewSurface
+        workspaceId="workspace-1"
+        workspacePath="/repo"
+        files={[editableFile]}
+        allowEditing
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Make dirty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Focused content" }));
+    expect(screen.getByRole("alertdialog", { name: "Unsaved changes" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Continue editing" }));
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.getByText("IDEA compare")).toBeTruthy();
+    expect(document.querySelector(".editable-diff-review-viewer.is-toolbar-only")).toBeTruthy();
+  });
+
+  it("discards the draft and applies a pending view-mode change", () => {
+    const onDirtyChange = vi.fn();
+    render(
+      <WorkspaceEditableDiffReviewSurface
+        workspaceId="workspace-1"
+        workspacePath="/repo"
+        files={[editableFile]}
+        allowEditing
+        onDirtyChange={onDirtyChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Make dirty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Focused content" }));
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(mockDiscardDraft).toHaveBeenCalledOnce();
+    expect(screen.queryByText("IDEA compare")).toBeNull();
+    expect(document.querySelector(".editable-diff-review-viewer.is-toolbar-only")).toBeNull();
+  });
+
+  it("saves before applying a pending view-mode change", async () => {
+    render(
+      <WorkspaceEditableDiffReviewSurface
+        workspaceId="workspace-1"
+        workspacePath="/repo"
+        files={[editableFile]}
+        allowEditing
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Make dirty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Focused content" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and close" }));
+
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledOnce());
+    expect(screen.queryByText("IDEA compare")).toBeNull();
+    expect(screen.getByText("Read-only diff viewer")).toBeTruthy();
+  });
+
+  it("keeps the dialog and editable compare open when save fails", async () => {
+    mockSaveDraft.mockResolvedValueOnce(false);
+    render(
+      <WorkspaceEditableDiffReviewSurface
+        workspaceId="workspace-1"
+        workspacePath="/repo"
+        files={[editableFile]}
+        allowEditing
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Make dirty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Focused content" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and close" }));
+
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledOnce());
+    expect(screen.getByRole("alertdialog", { name: "Unsaved changes" })).toBeTruthy();
+    expect(screen.getByText("IDEA compare")).toBeTruthy();
+  });
+});

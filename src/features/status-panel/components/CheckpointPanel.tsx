@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import CircleAlert from "lucide-react/dist/esm/icons/circle-alert";
@@ -9,9 +9,11 @@ import TriangleAlert from "lucide-react/dist/esm/icons/triangle-alert";
 import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizontal";
 import type { TFunction } from "i18next";
 import { WorkspaceEditableDiffReviewSurface } from "../../git/components/WorkspaceEditableDiffReviewSurface";
+import type { EditableDiffDraftActions } from "../../git/components/WorkspaceEditableDiffCompare";
 import type { CodeAnnotationBridgeProps } from "../../code-annotations/types";
 import { FileIcon } from "../../messages/components/toolBlocks/FileIcon";
 import { resolveWorkspaceRelativePath } from "../../../utils/workspacePaths";
+import { UnsavedChangesDialog } from "../../../components/ui/UnsavedChangesDialog";
 import type { GitFileStatus } from "../../../types";
 import type {
   CheckpointAction,
@@ -105,8 +107,14 @@ export const CheckpointPanel = memo(function CheckpointPanel({
 }: CheckpointPanelProps) {
   const { t } = useTranslation();
   const [isDiffModalMaximized, setIsDiffModalMaximized] = useState(false);
+  const [isDiffModalDirty, setIsDiffModalDirty] = useState(false);
+  const [isDiffSaveInFlight, setIsDiffSaveInFlight] = useState(false);
+  const [pendingDiffAction, setPendingDiffAction] = useState<
+    { kind: "close" } | { kind: "select"; path: string } | null
+  >(null);
   const [diffHeaderControlsTarget, setDiffHeaderControlsTarget] =
     useState<HTMLElement | null>(null);
+  const diffDraftActionsRef = useRef<EditableDiffDraftActions | null>(null);
   const [diffStyle, setDiffStyle] = useState<"split" | "unified">("split");
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
   const [isNoticeDismissed, setIsNoticeDismissed] = useState(false);
@@ -208,6 +216,60 @@ export const CheckpointPanel = memo(function CheckpointPanel({
     sidebarFiles.find((entry) => entry.filePath === activeDiffPath) ?? null;
   const activeDiffEntry =
     diffEntries.find((entry) => entry.path === activeDiffPath) ?? null;
+  const discardAndCloseDiffModal = useCallback(() => {
+    setIsDiffModalDirty(false);
+    setPendingDiffAction(null);
+    setSelectedDiffPath(null);
+    setIsDiffModalMaximized(false);
+  }, []);
+  const closeDiffModal = useCallback(() => {
+    if (isDiffModalDirty) {
+      setPendingDiffAction({ kind: "close" });
+      return;
+    }
+    discardAndCloseDiffModal();
+  }, [discardAndCloseDiffModal, isDiffModalDirty]);
+  const selectDiffPath = useCallback((path: string) => {
+    if (isDiffModalDirty) {
+      setPendingDiffAction({ kind: "select", path });
+      return;
+    }
+    setSelectedDiffPath(path);
+  }, [isDiffModalDirty]);
+  const handleDiscardPendingDiffAction = useCallback(() => {
+    const action = pendingDiffAction;
+    diffDraftActionsRef.current?.discard();
+    setPendingDiffAction(null);
+    setIsDiffModalDirty(false);
+    if (action?.kind === "select") {
+      setSelectedDiffPath(action.path);
+      return;
+    }
+    if (action?.kind === "close") {
+      setSelectedDiffPath(null);
+      setIsDiffModalMaximized(false);
+    }
+  }, [pendingDiffAction]);
+  const handleSavePendingDiffAction = useCallback(async () => {
+    const action = pendingDiffAction;
+    const saved = await diffDraftActionsRef.current?.save();
+    if (!saved) {
+      return false;
+    }
+    setPendingDiffAction(null);
+    setIsDiffModalDirty(false);
+    if (action?.kind === "select") {
+      setSelectedDiffPath(action.path);
+    } else if (action?.kind === "close") {
+      setSelectedDiffPath(null);
+      setIsDiffModalMaximized(false);
+    }
+    return true;
+  }, [pendingDiffAction]);
+  const handleDiffDraftActionsChange = useCallback((actions: EditableDiffDraftActions | null) => {
+    diffDraftActionsRef.current = actions;
+    setIsDiffSaveInFlight(actions?.isSaving ?? false);
+  }, []);
   const activeDiffGitPath = activeDiffFile
     ? resolveWorkspaceRelativePath(workspacePath, activeDiffFile.filePath)
     : null;
@@ -707,10 +769,7 @@ export const CheckpointPanel = memo(function CheckpointPanel({
             <div
               className="git-history-diff-modal-overlay is-popup checkpoint-diff-modal-overlay"
               role="presentation"
-              onClick={() => {
-                setSelectedDiffPath(null);
-                setIsDiffModalMaximized(false);
-              }}
+              onClick={closeDiffModal}
             >
               <div
                 className={`git-history-diff-modal checkpoint-diff-modal${
@@ -778,7 +837,6 @@ export const CheckpointPanel = memo(function CheckpointPanel({
                       <WorkspaceEditableDiffReviewSurface
                         workspaceId={workspaceId}
                         workspacePath={workspacePath}
-                        gitStatusFiles={[...stagedFiles, ...unstagedFiles]}
                         files={[
                           {
                             filePath: activeDiffGitPath,
@@ -802,13 +860,12 @@ export const CheckpointPanel = memo(function CheckpointPanel({
                         ].join(":")}
                         diffStyle={diffStyle}
                         onDiffStyleChange={setDiffStyle}
-                        onRequestClose={() => {
-                          setSelectedDiffPath(null);
-                          setIsDiffModalMaximized(false);
-                        }}
+                        onRequestClose={closeDiffModal}
                         focusSelectedFileOnly
                         allowEditing
                         onRequestGitStatusRefresh={onRefreshGitStatus}
+                        onDirtyChange={setIsDiffModalDirty}
+                        onDraftActionsChange={handleDiffDraftActionsChange}
                         onCreateCodeAnnotation={onCreateCodeAnnotation}
                         onRemoveCodeAnnotation={onRemoveCodeAnnotation}
                         codeAnnotations={codeAnnotations}
@@ -856,7 +913,7 @@ export const CheckpointPanel = memo(function CheckpointPanel({
                             className={`checkpoint-diff-sidebar-item${
                               selected ? " is-active" : ""
                             }`}
-                            onClick={() => setSelectedDiffPath(file.filePath)}
+                            onClick={() => selectDiffPath(file.filePath)}
                           >
                             <span
                               className={`git-history-file-status git-status-${file.status.toLowerCase()}`}
@@ -881,6 +938,13 @@ export const CheckpointPanel = memo(function CheckpointPanel({
             document.body,
           )
         : null}
+      <UnsavedChangesDialog
+        open={pendingDiffAction !== null}
+        isSaving={isDiffSaveInFlight}
+        onContinueEditing={() => setPendingDiffAction(null)}
+        onDiscard={handleDiscardPendingDiffAction}
+        onSaveAndClose={handleSavePendingDiffAction}
+      />
     </div>
   );
 });

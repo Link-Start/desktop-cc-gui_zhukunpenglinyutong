@@ -1,18 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import Pencil from "lucide-react/dist/esm/icons/pencil";
 import FileIcon from "../../../components/FileIcon";
-import type { GitFileStatus, OpenAppTarget } from "../../../types";
+import { UnsavedChangesDialog } from "../../../components/ui/UnsavedChangesDialog";
 import { getGitFileFullDiff } from "../../../services/tauri";
 import { computeDiffFromUnifiedPatch } from "../../messages/utils/diffUtils";
-import { FileViewPanel } from "../../files/components/FileViewPanel";
 import { resolveFileRenderProfile } from "../../files/utils/fileRenderProfile";
 import {
   resolveFileReadTarget,
   resolveWorkspaceRelativePath,
 } from "../../../utils/workspacePaths";
 import { GitDiffViewer } from "./GitDiffViewer";
+import {
+  WorkspaceEditableDiffCompare,
+  type EditableDiffDraftActions,
+} from "./WorkspaceEditableDiffCompare";
 import type {
   CodeAnnotationDraftInput,
   CodeAnnotationSelection,
@@ -40,7 +42,6 @@ type NormalizedEditableDiffReviewFile = EditableDiffReviewFile & {
 type WorkspaceEditableDiffReviewSurfaceProps = {
   workspaceId: string | null;
   workspacePath?: string | null;
-  gitStatusFiles?: GitFileStatus[];
   files: EditableDiffReviewFile[];
   selectedPath?: string | null;
   onSelectedPathChange?: (path: string) => void;
@@ -57,17 +58,13 @@ type WorkspaceEditableDiffReviewSurfaceProps = {
   allowEditing?: boolean;
   onRequestRefreshReview?: (() => void | Promise<void>) | null;
   onRequestGitStatusRefresh?: (() => void) | null;
-  openTargets?: OpenAppTarget[];
-  openAppIconById?: Record<string, string>;
-  selectedOpenAppId?: string;
-  onSelectOpenAppId?: (id: string) => void;
+  onDirtyChange?: (isDirty: boolean) => void;
+  onDraftActionsChange?: (actions: EditableDiffDraftActions | null) => void;
   onCreateCodeAnnotation?: (annotation: CodeAnnotationDraftInput) => void;
   onRemoveCodeAnnotation?: (annotationId: string) => void;
   codeAnnotations?: CodeAnnotationSelection[];
   codeAnnotationSurface?: "embedded-diff-view" | "modal-diff-view";
 };
-
-const EMPTY_OPEN_TARGETS: OpenAppTarget[] = [];
 
 function resolveReviewFileName(file: EditableDiffReviewFile, reviewPath: string) {
   const explicit = file.fileName?.trim();
@@ -119,7 +116,6 @@ function resolveReadOnlyHint(
 export function WorkspaceEditableDiffReviewSurface({
   workspaceId,
   workspacePath = null,
-  gitStatusFiles,
   files,
   selectedPath = null,
   onSelectedPathChange,
@@ -136,10 +132,8 @@ export function WorkspaceEditableDiffReviewSurface({
   allowEditing = false,
   onRequestRefreshReview = null,
   onRequestGitStatusRefresh = null,
-  openTargets = EMPTY_OPEN_TARGETS,
-  openAppIconById = {},
-  selectedOpenAppId = "",
-  onSelectOpenAppId,
+  onDirtyChange,
+  onDraftActionsChange,
   onCreateCodeAnnotation,
   onRemoveCodeAnnotation,
   codeAnnotations = [],
@@ -159,11 +153,14 @@ export function WorkspaceEditableDiffReviewSurface({
     [files, workspacePath],
   );
   const [reviewFiles, setReviewFiles] = useState<NormalizedEditableDiffReviewFile[]>(normalizedFiles);
-  const [mode, setMode] = useState<"diff" | "edit">("diff");
   const [localSelectedPath, setLocalSelectedPath] = useState<string | null>(
     selectedPath ?? normalizedFiles[0]?.reviewPath ?? null,
   );
-  const [, setIsDirty] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [contentMode, setContentMode] = useState<"all" | "focused">("all");
+  const [pendingDiscardAction, setPendingDiscardAction] = useState<(() => void) | null>(null);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
+  const draftActionsRef = useRef<EditableDiffDraftActions | null>(null);
 
   useEffect(() => {
     setReviewFiles(normalizedFiles);
@@ -181,6 +178,10 @@ export function WorkspaceEditableDiffReviewSurface({
       return normalizedFiles[0]?.reviewPath ?? null;
     });
   }, [normalizedFiles, selectedPath]);
+
+  useEffect(() => {
+    setContentMode("all");
+  }, [selectedPath]);
 
   const activeReviewPath = selectedPath ?? localSelectedPath;
   const activeFile =
@@ -221,12 +222,18 @@ export function WorkspaceEditableDiffReviewSurface({
       if (nextPath === activeReviewPath) {
         return;
       }
-      setMode("diff");
-      setIsDirty(false);
-      setLocalSelectedPath(nextPath);
-      onSelectedPathChange?.(nextPath);
+      const selectPath = () => {
+        setContentMode("all");
+        setLocalSelectedPath(nextPath);
+        onSelectedPathChange?.(nextPath);
+      };
+      if (isDirty) {
+        setPendingDiscardAction(() => selectPath);
+        return;
+      }
+      selectPath();
     },
-    [activeReviewPath, onSelectedPathChange],
+    [activeReviewPath, isDirty, onSelectedPathChange],
   );
 
   const handleRefreshActiveFile = useCallback(async () => {
@@ -266,32 +273,76 @@ export function WorkspaceEditableDiffReviewSurface({
 
   const handleSaveSuccess = useCallback(() => {
     setIsDirty(false);
+    onDirtyChange?.(false);
     void handleRefreshActiveFile();
     void onRequestRefreshReview?.();
     onRequestGitStatusRefresh?.();
-  }, [handleRefreshActiveFile, onRequestGitStatusRefresh, onRequestRefreshReview]);
+  }, [handleRefreshActiveFile, onDirtyChange, onRequestGitStatusRefresh, onRequestRefreshReview]);
 
-  const handleExitEditMode = useCallback(() => {
-    setMode("diff");
-  }, []);
+  const handleDirtyChange = useCallback((nextIsDirty: boolean) => {
+    setIsDirty(nextIsDirty);
+    onDirtyChange?.(nextIsDirty);
+  }, [onDirtyChange]);
+
+  const handleDraftActionsChange = useCallback((actions: EditableDiffDraftActions | null) => {
+    draftActionsRef.current = actions;
+    setIsDraftSaving(actions?.isSaving ?? false);
+    onDraftActionsChange?.(actions);
+  }, [onDraftActionsChange]);
+
+  const handleRequestClose = useCallback(() => {
+    onRequestClose?.();
+  }, [onRequestClose]);
+
+  const requestViewModeChange = useCallback((changeMode: () => void) => {
+    if (!isDirty) {
+      changeMode();
+      return;
+    }
+    setPendingDiscardAction(() => changeMode);
+  }, [isDirty]);
+
+  const handleDiffStyleChange = useCallback((style: "split" | "unified") => {
+    if (style === diffStyle) {
+      return;
+    }
+    requestViewModeChange(() => onDiffStyleChange?.(style));
+  }, [diffStyle, onDiffStyleChange, requestViewModeChange]);
+
+  const handleContentModeChange = useCallback((_path: string, mode: "all" | "focused") => {
+    if (mode === contentMode) {
+      return;
+    }
+    requestViewModeChange(() => setContentMode(mode));
+  }, [contentMode, requestViewModeChange]);
+
+  const handleDiscardPendingAction = useCallback(() => {
+    const action = pendingDiscardAction;
+    draftActionsRef.current?.discard();
+    setPendingDiscardAction(null);
+    setIsDirty(false);
+    onDirtyChange?.(false);
+    action?.();
+  }, [onDirtyChange, pendingDiscardAction]);
+
+  const handleSavePendingAction = useCallback(async () => {
+    const action = pendingDiscardAction;
+    const saved = await draftActionsRef.current?.save();
+    if (!saved) {
+      return false;
+    }
+    setPendingDiscardAction(null);
+    action?.();
+    return true;
+  }, [pendingDiscardAction]);
 
   const shouldShowSidebar = showSidebar && reviewFiles.length > 1;
   const shouldInlineToolbarActions = toolbarLayout === "inline-actions" && Boolean(headerControlsTarget);
+  const shouldShowEditableCompare =
+    canEdit && diffStyle === "split" && contentMode === "all";
   const toolbarActions = (
     <div className="editable-diff-review-toolbar-actions">
-      {mode === "diff" ? (
-        <button
-          type="button"
-          className="editable-diff-review-action"
-          onClick={() => setMode("edit")}
-          disabled={!canEdit}
-          title={canEdit ? t("files.edit") : readOnlyHint ?? t("files.readOnly")}
-        >
-          <Pencil size={14} aria-hidden />
-          <span>{t("files.edit")}</span>
-        </button>
-      ) : null}
-      {mode === "diff" && readOnlyHint ? (
+      {!canEdit && readOnlyHint ? (
         <span className="editable-diff-review-readonly-hint">{readOnlyHint}</span>
       ) : null}
     </div>
@@ -305,7 +356,7 @@ export function WorkspaceEditableDiffReviewSurface({
             <div className="editable-diff-review-toolbar">
               <div className="editable-diff-review-toolbar-copy">
                 <span className="editable-diff-review-toolbar-kicker">
-                  {mode === "edit" ? t("files.edit") : t("git.previewModalAction")}
+                  {canEdit ? t("files.editableDiff.title") : t("git.previewModalAction")}
                 </span>
                 <span className="editable-diff-review-toolbar-title">
                   {activeFile?.reviewPath ?? t("git.diffUnavailable")}
@@ -316,29 +367,7 @@ export function WorkspaceEditableDiffReviewSurface({
           )}
       <div className="editable-diff-review-layout">
         <div className="editable-diff-review-main">
-          {mode === "edit" && activeFile ? (
-            <FileViewPanel
-              workspaceId={workspaceId ?? ""}
-              workspacePath={workspacePath ?? ""}
-              filePath={activeFile.reviewPath}
-              gitStatusFiles={gitStatusFiles}
-              openTabs={[activeFile.reviewPath]}
-              activeTabPath={activeFile.reviewPath}
-              openTargets={openTargets}
-              openAppIconById={openAppIconById}
-              selectedOpenAppId={selectedOpenAppId}
-              onSelectOpenAppId={onSelectOpenAppId ?? (() => undefined)}
-              onClose={handleExitEditMode}
-              headerLayout="single-row"
-              singleRowLeadingLabel={t("files.preview")}
-              onSingleRowLeadingAction={handleExitEditMode}
-              onSaveSuccess={handleSaveSuccess}
-              onDirtyChange={setIsDirty}
-              onCreateCodeAnnotation={onCreateCodeAnnotation}
-              onRemoveCodeAnnotation={onRemoveCodeAnnotation}
-              codeAnnotations={codeAnnotations}
-            />
-          ) : (
+          <div className={shouldShowEditableCompare ? "editable-diff-review-viewer is-toolbar-only" : "editable-diff-review-viewer"}>
             <GitDiffViewer
               workspaceId={workspaceId}
               diffs={visibleDiffs}
@@ -349,18 +378,51 @@ export function WorkspaceEditableDiffReviewSurface({
               stickyHeaderMode={stickyHeaderMode}
               embeddedAnchorVariant={embeddedAnchorVariant}
               showContentModeControls
+              toolbarOnly={shouldShowEditableCompare}
               headerControlsTarget={headerControlsTarget}
-              onRequestClose={onRequestClose}
+              onRequestClose={handleRequestClose}
               fullDiffSourceKey={fullDiffSourceKey}
               diffStyle={diffStyle}
-              onDiffStyleChange={onDiffStyleChange}
+              onDiffStyleChange={handleDiffStyleChange}
+              contentMode={contentMode}
+              initialContentMode="all"
+              onContentModeChange={handleContentModeChange}
               onActivePathChange={focusSelectedFileOnly ? undefined : handleSelectPath}
               onCreateCodeAnnotation={onCreateCodeAnnotation}
               onRemoveCodeAnnotation={onRemoveCodeAnnotation}
               codeAnnotations={codeAnnotations}
               codeAnnotationSurface={codeAnnotationSurface}
             />
-          )}
+          </div>
+          {shouldShowEditableCompare && activeFile && workspaceId && workspacePath ? (
+            <WorkspaceEditableDiffCompare
+              workspaceId={workspaceId}
+              workspacePath={workspacePath}
+              filePath={activeFile.reviewPath}
+              diff={activeFile.diff}
+              onSaveSuccess={handleSaveSuccess}
+              onDirtyChange={handleDirtyChange}
+              onDraftActionsChange={handleDraftActionsChange}
+              fallback={(
+                <GitDiffViewer
+                  workspaceId={workspaceId}
+                  diffs={visibleDiffs}
+                  selectedPath={activeFile.reviewPath}
+                  isLoading={false}
+                  error={null}
+                  listView="flat"
+                  stickyHeaderMode="full"
+                  onRequestClose={null}
+                  fullDiffSourceKey={fullDiffSourceKey}
+                  diffStyle={diffStyle}
+                  onCreateCodeAnnotation={onCreateCodeAnnotation}
+                  onRemoveCodeAnnotation={onRemoveCodeAnnotation}
+                  codeAnnotations={codeAnnotations}
+                  codeAnnotationSurface={codeAnnotationSurface}
+                />
+              )}
+            />
+          ) : null}
         </div>
         {shouldShowSidebar ? (
           <aside className="editable-diff-review-sidebar">
@@ -398,6 +460,13 @@ export function WorkspaceEditableDiffReviewSurface({
           </aside>
         ) : null}
       </div>
+      <UnsavedChangesDialog
+        open={pendingDiscardAction !== null}
+        isSaving={isDraftSaving}
+        onContinueEditing={() => setPendingDiscardAction(null)}
+        onDiscard={handleDiscardPendingAction}
+        onSaveAndClose={handleSavePendingAction}
+      />
     </div>
   );
 }
