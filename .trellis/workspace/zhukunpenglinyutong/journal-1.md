@@ -1533,3 +1533,46 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 33: 新增 v0.7.0 版本更新日志
+
+**Date**: 2026-07-10
+**Task**: 新增 v0.7.0 版本更新日志
+**Branch**: `chore/bump-version-0.7.0`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+根据 PR #812 的全部提交记录整理并撰写 v0.7.0 版本 CHANGELOG（中英双语，沿用既有格式）。
+
+| 分类 | 内容 |
+|------|------|
+| Features | AskUserQuestion MCP 桥（default/acceptEdits 模式 + bearer token 鉴权 + 卡片锚定）、MCP 服务器设置面板、可编辑双栏 diff、AI 提交信息「使用上次配置」、会话标题改进、原生菜单本地化 |
+| Improvements | 流式卡顿四项定点优化、@-mention 补全 memo 化、包体积缩减（资源去重 + release profile） |
+| Fixes | /compact 120s 硬上限移除、斜杠命令提问历史可见、exit-plan 去重复活、本地开发前置检查、WebView 图片粘贴、中文菜单文案 |
+
+**Updated Files**:
+- `CHANGELOG.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9e60c711` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
