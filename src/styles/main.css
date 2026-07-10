@@ -1252,7 +1252,8 @@ body[data-panel-resizing="true"] .main {
 }
 
 .app.layout-desktop.layout-swapped .main:not(.settings-open):not(.spec-focus) .composer,
-.app.layout-desktop.layout-swapped .main:not(.settings-open):not(.spec-focus) .debug-panel {
+.app.layout-desktop.layout-swapped .main:not(.settings-open):not(.spec-focus) .debug-panel,
+.app.layout-desktop.layout-swapped .main:not(.settings-open):not(.spec-focus) .terminal-panel {
   grid-column: 2;
 }
 
