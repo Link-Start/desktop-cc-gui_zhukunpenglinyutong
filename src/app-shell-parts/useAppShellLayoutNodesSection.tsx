@@ -1516,7 +1516,7 @@ export function useAppShellLayoutNodesSection(
     setFocusedWorkspaceNoteRequestKey((value) => value + 1);
     closeSettings();
     setAppMode("chat");
-    setCenterMode("chat");
+    setCenterMode("notes");
     setFilePanelMode("notes");
     expandRightPanel();
     if (isCompact) {
@@ -1544,6 +1544,7 @@ export function useAppShellLayoutNodesSection(
     gitDiffPanelNode,
     gitDiffViewerNode,
     fileViewPanelNode,
+    noteCardsPanelNode,
     fileComparePanelNode,
     projectMapPanelNode,
     intentCanvasPanelNode,
@@ -2051,6 +2052,7 @@ export function useAppShellLayoutNodesSection(
     gitDiffPanelNode,
     gitDiffViewerNode,
     fileViewPanelNode,
+    noteCardsPanelNode,
     fileComparePanelNode,
     projectMapPanelNode,
     intentCanvasPanelNode,

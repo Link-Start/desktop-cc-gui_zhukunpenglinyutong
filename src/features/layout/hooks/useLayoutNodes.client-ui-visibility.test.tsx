@@ -333,6 +333,9 @@ vi.mock("../components/PanelTabs", () => ({
           files
         </button>
       ) : null}
+      <button type="button" onClick={() => onSelect("notes")}>
+        notes
+      </button>
     </div>
   ),
 }));
@@ -1255,6 +1258,26 @@ describe("useLayoutNodes client UI visibility", () => {
     fireEvent.click(screen.getByRole("button", { name: "projectMap" }));
 
     expect(onOpenProjectMap).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens note cards as a center surface and keeps the toolbar selection", async () => {
+    clientUiVisibilityMock.visiblePanels.add("rightActivityToolbar");
+    clientUiVisibilityMock.visibleControls.add("rightToolbar.notes");
+    const setCenterMode = vi.fn();
+    const onFilePanelModeChange = vi.fn();
+    const { result } = await renderUseLayoutNodes(
+      createLayoutOptions({
+        centerMode: "chat",
+        setCenterMode,
+        onFilePanelModeChange,
+      }),
+    );
+
+    render(<>{result.current.rightPanelToolbarNode}</>);
+    fireEvent.click(screen.getByRole("button", { name: "notes" }));
+
+    expect(onFilePanelModeChange).toHaveBeenCalledWith("notes");
+    expect(setCenterMode).toHaveBeenCalledWith("notes");
   });
 
   it("toggles the Project Map toolbar icon off from editor companion mode", async () => {

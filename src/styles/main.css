@@ -1320,6 +1320,90 @@ body[data-panel-resizing="true"] .main {
   padding-top: var(--main-topbar-height);
 }
 
+.content.is-note-cards-split {
+  flex-direction: row;
+  padding-top: var(--main-topbar-height);
+}
+
+.content.is-note-cards-split .content-layer--note-cards,
+.content.is-note-cards-split .content-layer--note-cards-companion {
+  position: relative;
+  inset: auto;
+  top: auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.content.is-note-cards-split .content-layer--note-cards {
+  order: 3;
+  flex: 0 0 calc(var(--note-cards-split-ratio, 66.667) * 1%);
+  min-width: 420px;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.content.is-note-cards-split .content-layer--note-cards-companion {
+  order: 1;
+  flex: 1 1 auto;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-messages);
+}
+
+.content-note-cards-split-divider {
+  display: none;
+}
+
+.content.is-note-cards-split .content-note-cards-split-divider {
+  display: block;
+  order: 2;
+  flex: 0 0 8px;
+  position: relative;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.content.is-note-cards-split .content-note-cards-split-divider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--border-subtle);
+  transform: translateX(-0.5px);
+}
+
+.content.is-note-cards-split .content-note-cards-split-divider:hover::after,
+.content.is-note-cards-split .content-note-cards-split-divider:focus-visible::after,
+.note-cards-split-resizing .content-note-cards-split-divider::after {
+  width: 2px;
+  background: var(--accent-primary, #2563eb);
+}
+
+.content.is-note-cards-split .content-note-cards-split-divider:focus-visible {
+  outline: 2px solid var(--accent-primary, #2563eb);
+  outline-offset: -2px;
+}
+
+.note-cards-split-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.content.is-note-cards-split .content-layer--note-cards-companion > .messages-shell,
+.content.is-note-cards-split .content-layer--note-cards-companion > .workspace-chat-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.content.is-note-cards-split .content-layer--note-cards-companion > .composer {
+  flex: 0 0 auto;
+  grid-column: auto;
+  grid-row: auto;
+}
+
 .content.is-editor-split .content-layer--editor,
 .content.is-editor-split .content-layer--editor-companion {
   position: relative;

@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+import type { ComponentProps } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
@@ -135,7 +136,10 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   ),
 }));
 
-function renderComposer(onSend = vi.fn(() => Promise.resolve())) {
+function renderComposer(
+  onSend = vi.fn(() => Promise.resolve()),
+  overrides: Partial<ComponentProps<typeof Composer>> = {},
+) {
   return render(
     <Composer
       onSend={onSend}
@@ -166,6 +170,7 @@ function renderComposer(onSend = vi.fn(() => Promise.resolve())) {
       dictationEnabled={false}
       activeWorkspaceId="ws-1"
       activeThreadId="thread-1"
+      {...overrides}
     />,
   );
 }
@@ -220,5 +225,29 @@ describe("Composer context ledger governance", () => {
     expect(screen.getByTestId("readiness-context-summary").textContent).toBe(
       "items:1 · groups:1",
     );
+  });
+
+  it("idempotently adds an externally requested note to the existing context selection", async () => {
+    const noteCard = {
+      id: "note-1",
+      title: "发布清单",
+      plainTextExcerpt: "先构建再发布",
+      bodyMarkdown: "# 发布清单",
+      updatedAt: 1,
+      archived: false,
+      imageCount: 0,
+      previewAttachments: [],
+    };
+
+    renderComposer(undefined, {
+      externalNoteCardSelectionRequest: {
+        requestId: 1,
+        noteCard,
+      },
+    });
+
+    await act(async () => Promise.resolve());
+    expect(screen.getByText("发布清单")).toBeTruthy();
+    expect(screen.getByText("composer.noteCardSelectionHint")).toBeTruthy();
   });
 });

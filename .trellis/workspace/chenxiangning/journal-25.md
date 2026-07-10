@@ -84,3 +84,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 972: 优化中央便签工作台交互
+
+**Date**: 2026-07-11
+**Task**: 优化中央便签工作台交互
+**Branch**: `feature/v-0.7.1`
+
+### Summary
+
+完成便签 Master-Detail 工作台、草稿保护、显式保存状态、归档撤销、Composer 引用与分栏比例持久化；补齐中英文文案、可访问交互和目标测试，同步主规范并归档两次便签 OpenSpec change。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c8eb17ba` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
