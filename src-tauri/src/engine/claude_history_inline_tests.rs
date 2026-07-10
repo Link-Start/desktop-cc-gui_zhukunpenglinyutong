@@ -1112,6 +1112,41 @@ fn local_control_classifier_detects_displayable_and_hidden_events() {
 }
 
 #[test]
+fn slash_command_user_prompt_with_args_stays_visible() {
+    let skill_question = json!({
+        "message": {
+            "role": "user",
+            "content": "<command-message>aimax:code-review</command-message>\n<command-name>/aimax:code-review</command-name>\n<command-args>审查PR802，并告诉我他解决了什么问题，我应不应该合并他</command-args>"
+        }
+    });
+    let resume_command = json!({
+        "message": {
+            "role": "user",
+            "content": "<command-name>/resume</command-name>"
+        }
+    });
+    let empty_args_command = json!({
+        "message": {
+            "role": "user",
+            "content": "<command-message>clear</command-message>\n<command-name>/clear</command-name>\n<command-args></command-args>"
+        }
+    });
+
+    assert_eq!(
+        classify_claude_history_entry(&skill_question),
+        ClaudeHistoryEntryClassification::Normal
+    );
+    assert!(matches!(
+        classify_claude_history_entry(&resume_command),
+        ClaudeHistoryEntryClassification::Hidden(ClaudeHistoryHiddenReason::InternalRecord)
+    ));
+    assert!(matches!(
+        classify_claude_history_entry(&empty_args_command),
+        ClaudeHistoryEntryClassification::Hidden(ClaudeHistoryHiddenReason::InternalRecord)
+    ));
+}
+
+#[test]
 fn continuation_summary_classifier_detects_synthetic_runtime_without_keyword_overfiltering() {
     let synthetic_summary = json!({
         "uuid": "synthetic-summary",

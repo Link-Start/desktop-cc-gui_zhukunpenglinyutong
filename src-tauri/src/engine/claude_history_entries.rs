@@ -261,6 +261,22 @@ fn is_synthetic_continuation_summary(entry: &Value, msg: &Value, text: &str) -> 
     role == "user" && has_synthetic_continuation_provenance(entry, msg)
 }
 
+fn has_non_empty_command_args(text: &str) -> bool {
+    let Some(start) = text.find("<command-args>") else {
+        return false;
+    };
+    let after = &text[start + "<command-args>".len()..];
+    let Some(end) = after.find("</command-args>") else {
+        return false;
+    };
+    !after[..end].trim().is_empty()
+}
+
+fn is_user_role(entry: &Value, msg: &Value) -> bool {
+    entry.get("role").and_then(Value::as_str) == Some("user")
+        || msg.get("role").and_then(Value::as_str) == Some("user")
+}
+
 fn classify_claude_local_control_text(
     entry: &Value,
     msg: &Value,
@@ -296,6 +312,12 @@ fn classify_claude_local_control_text(
         || trimmed.starts_with("<command-args>")
         || trimmed.starts_with("<local-command-caveat>")
     {
+        // 带非空 <command-args> 的斜杠命令记录是用户的真实提问(如 GUI 技能命令
+        // /aimax:code-review),必须按普通用户消息展示,由前端展示层还原标签;
+        // 无参数的控制命令(/resume、/clear 等)才是内部噪声,维持隐藏。
+        if is_user_role(entry, msg) && has_non_empty_command_args(trimmed) {
+            return ClaudeHistoryEntryClassification::Normal;
+        }
         return ClaudeHistoryEntryClassification::Hidden(ClaudeHistoryHiddenReason::InternalRecord);
     }
 

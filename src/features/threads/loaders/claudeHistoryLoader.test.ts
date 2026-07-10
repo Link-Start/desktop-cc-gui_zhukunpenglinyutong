@@ -414,6 +414,42 @@ describe("parseClaudeHistoryMessages", () => {
     });
   });
 
+  it("keeps slash-command user prompts with real args visible as user messages", () => {
+    const skillQuestionText = [
+      "<command-message>aimax:code-review</command-message>",
+      "<command-name>/aimax:code-review</command-name>",
+      "<command-args>审查PR802，并告诉我他解决了什么问题，我应不应该合并他</command-args>",
+    ].join("\n");
+    const items = parseClaudeHistoryMessages([
+      {
+        kind: "message",
+        id: "skill-question",
+        role: "user",
+        text: skillQuestionText,
+      },
+      {
+        kind: "message",
+        id: "resume-command",
+        role: "user",
+        text: "<command-name>/resume</command-name>",
+      },
+      {
+        kind: "message",
+        id: "empty-args-command",
+        role: "user",
+        text: "<command-message>clear</command-message>\n<command-name>/clear</command-name>\n<command-args></command-args>",
+      },
+    ]);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: "skill-question",
+      kind: "message",
+      role: "user",
+      text: skillQuestionText,
+    });
+  });
+
   it("preserves backend-formatted Claude control events as tool items", () => {
     const items = parseClaudeHistoryMessages([
       {

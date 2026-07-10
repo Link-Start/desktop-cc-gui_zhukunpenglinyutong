@@ -344,6 +344,12 @@ function sanitizeClaudeLocalControlText(text: string) {
   return stripAnsiEscapeSequences(cleaned).trim();
 }
 
+const COMMAND_ARGS_CONTENT_REGEX = /<command-args>([\s\S]*?)<\/command-args>/i;
+
+function hasNonEmptyCommandArgs(text: string) {
+  return Boolean(COMMAND_ARGS_CONTENT_REGEX.exec(text)?.[1]?.trim());
+}
+
 function extractTurnIdFromRawMessage(rawMessage: Record<string, unknown>) {
   const turn = asRecord(rawMessage.turn);
   return asString(
@@ -518,6 +524,13 @@ function classifyClaudeLocalControlMessage(
     text.trim().startsWith("<command-args>") ||
     text.trim().startsWith("<local-command-caveat>")
   ) {
+    // 带非空 <command-args> 的斜杠命令记录是用户的真实提问(如 GUI 技能命令
+    // /aimax:code-review),必须走普通消息路径,由展示层的
+    // extractCommandMessageDisplayText 还原为纯文本;无参数的控制命令
+    // (/resume、/clear 等)才是内部噪声,维持隐藏。
+    if (role === "user" && hasNonEmptyCommandArgs(text)) {
+      return { kind: "normal" };
+    }
     return { kind: "hidden", reason: "internal-record" };
   }
   if (
