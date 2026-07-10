@@ -1621,3 +1621,12 @@ fn write_json_atomically_replaces_existing_file() {
 
     let _ = fs::remove_dir_all(&temp_dir);
 }
+
+#[test]
+fn orphan_sweep_on_startup_must_not_block_lock_diagnostics() {
+    let ledger_source = include_str!("ledger.rs");
+    assert!(
+        !ledger_source.contains("diagnostics.blocking_lock()"),
+        "startup orphan sweep runs during daemon bootstrap and must not use blocking_lock"
+    );
+}
