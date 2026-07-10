@@ -190,6 +190,7 @@ const enPart5 = {
     generateCommitMessageEngineClaude: "Use Claude engine",
     generateCommitMessageEngineGemini: "Use Gemini engine",
     generateCommitMessageEngineOpenCode: "Use OpenCode engine",
+    generateCommitMessageLastConfig: "Use last configuration",
     commitMessageRequiresCodex: "AI commit message generation requires the Codex CLI. Install it with: npm install -g @openai/codex",
     // Git log and status
     noMessage: "No message",

@@ -97,6 +97,17 @@ describe("MainHeader topbar session tabs integration", () => {
     },
   );
 
+  it("stamps each tab with its engine for the branded underline", () => {
+    renderHeaderWithWidth(1280);
+
+    expect(
+      screen.getByRole("tab", { name: "Codex · Session A" }).getAttribute("data-engine"),
+    ).toBe("codex");
+    expect(
+      screen.getByRole("tab", { name: "Claude · Session B" }).getAttribute("data-engine"),
+    ).toBe("claude");
+  });
+
   it("keeps draggable blank lanes around the topbar session tabs", () => {
     renderHeaderWithWidth(1280);
 

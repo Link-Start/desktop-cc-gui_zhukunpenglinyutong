@@ -1,3 +1,55 @@
+import type {
+  CommitMessageEngine,
+  CommitMessageLanguage,
+} from "../services/tauri";
+
+const LAST_COMMIT_MESSAGE_CONFIG_KEY = "ccgui.git.lastCommitMessageConfig";
+const COMMIT_MESSAGE_ENGINES: readonly CommitMessageEngine[] = [
+  "claude",
+  "codex",
+  "gemini",
+  "opencode",
+];
+const COMMIT_MESSAGE_LANGUAGES: readonly CommitMessageLanguage[] = ["zh", "en"];
+
+export type LastCommitMessageConfig = {
+  engine: CommitMessageEngine;
+  language: CommitMessageLanguage;
+};
+
+export function readLastCommitMessageConfig(): LastCommitMessageConfig | null {
+  try {
+    const raw = window.localStorage.getItem(LAST_COMMIT_MESSAGE_CONFIG_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<LastCommitMessageConfig>;
+    if (
+      !COMMIT_MESSAGE_ENGINES.includes(parsed.engine as CommitMessageEngine) ||
+      !COMMIT_MESSAGE_LANGUAGES.includes(parsed.language as CommitMessageLanguage)
+    ) {
+      return null;
+    }
+    return {
+      engine: parsed.engine as CommitMessageEngine,
+      language: parsed.language as CommitMessageLanguage,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastCommitMessageConfig(config: LastCommitMessageConfig): void {
+  try {
+    window.localStorage.setItem(
+      LAST_COMMIT_MESSAGE_CONFIG_KEY,
+      JSON.stringify(config),
+    );
+  } catch {
+    // localStorage unavailable — the quick option simply stays disabled
+  }
+}
+
 export function shouldApplyCommitMessage(
   activeWorkspaceId: string | null,
   requestWorkspaceId: string,

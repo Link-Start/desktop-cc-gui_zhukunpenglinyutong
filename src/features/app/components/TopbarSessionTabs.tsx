@@ -59,6 +59,7 @@ function TopbarSessionTabsImpl({
           role="tab"
           tabIndex={0}
           className={`topbar-session-tab${tab.isActive ? " is-active" : ""}`}
+          data-engine={tab.engineType}
           aria-selected={tab.isActive}
           aria-label={`${tab.engineLabel} · ${tab.label}`}
           title={`${tab.engineLabel} · ${tab.label}`}

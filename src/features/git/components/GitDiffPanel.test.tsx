@@ -45,6 +45,7 @@ vi.mock("react-i18next", () => ({
         "git.generateCommitMessageEngineClaude": "Use Claude engine",
         "git.generateCommitMessageEngineGemini": "Use Gemini engine",
         "git.generateCommitMessageEngineOpenCode": "Use OpenCode engine",
+        "git.generateCommitMessageLastConfig": "Use last configuration",
         "git.listFlat": "Flat",
         "git.listTree": "Tree",
         "git.listView": "List view",
@@ -131,6 +132,7 @@ const baseProps = {
 afterEach(() => {
   cleanup();
   mockEditableDiffReviewSurface.mockClear();
+  window.localStorage.clear();
 });
 
 async function chooseCodexEnglishCommitMessage() {
@@ -376,6 +378,48 @@ describe("GitDiffPanel", () => {
     await waitFor(() => {
       expect(onGenerateCommitMessage).toHaveBeenCalledWith("en", "codex");
     });
+  });
+
+  it("disables the last-config quick option when no previous generation exists", async () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        onGenerateCommitMessage={vi.fn()}
+        unstagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
+
+    const quickOption = await screen.findByRole("menuitem", {
+      name: "Use last configuration",
+    });
+    expect((quickOption as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("regenerates directly with the remembered engine and language from the quick option", async () => {
+    const onGenerateCommitMessage = vi.fn();
+
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        onGenerateCommitMessage={onGenerateCommitMessage}
+        unstagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
+      />,
+    );
+    await chooseCodexEnglishCommitMessage();
+    await waitFor(() => {
+      expect(onGenerateCommitMessage).toHaveBeenCalledWith("en", "codex");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Use last configuration" }),
+    );
+
+    await waitFor(() => {
+      expect(onGenerateCommitMessage).toHaveBeenCalledTimes(2);
+    });
+    expect(onGenerateCommitMessage).toHaveBeenLastCalledWith("en", "codex");
   });
 
   it("passes selected commit scope when generating commit message from the commit section", async () => {
