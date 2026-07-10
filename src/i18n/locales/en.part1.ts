@@ -973,6 +973,9 @@ const enPart1 = {
       environmentTitle: "Environment details",
       configServersTitle: "Config-defined servers",
       runtimeServersTitle: "Runtime servers",
+      runtimeServersClaudeDesc:
+        "Servers reported by the last Claude run in this workspace, including the built-in AskUserQuestion server (ccgui).",
+      builtInBadge: "Built-in",
       sessionOverviewTitle: "Session overview",
       noConfigServers:
         "No servers were discovered from the known config source.",

@@ -1074,6 +1074,9 @@ const zhPart1 = {
       environmentTitle: "环境详情",
       configServersTitle: "配置文件里的服务",
       runtimeServersTitle: "运行时服务",
+      runtimeServersClaudeDesc:
+        "本工作区上次 Claude 运行时报告的服务，包含内置的 AskUserQuestion 服务（ccgui）。",
+      builtInBadge: "内置",
       sessionOverviewTitle: "当前会话概览",
       noConfigServers: "在对应配置来源里暂未发现 MCP 服务。",
       noRuntimeServers: "当前没有读到运行时服务。",

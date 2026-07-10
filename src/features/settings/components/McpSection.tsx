@@ -17,6 +17,7 @@ import {
 } from "../../../services/tauri";
 import { isWindowsPlatform } from "../../../utils/platform";
 import { isLikelyWindowsFsPath, normalizeFsPath } from "../../../utils/workspacePaths";
+import { getClaudeMcpRuntimeSnapshot } from "../../threads/utils/claudeMcpRuntimeSnapshot";
 import { Button } from "@/components/ui/button";
 import { EngineIcon } from "../../engine/components/EngineIcon";
 import {
@@ -51,6 +52,11 @@ type OpenCodeMcpServer = {
 type OpenCodeSnapshot = {
   mcpEnabled: boolean;
   mcpServers: OpenCodeMcpServer[];
+};
+
+type ClaudeRuntimeServer = {
+  name: string;
+  status: string | null;
 };
 
 type EngineDescriptor = {
@@ -200,6 +206,9 @@ export function McpSection({
   const [openCodeSnapshot, setOpenCodeSnapshot] = useState<OpenCodeSnapshot | null>(
     null,
   );
+  const [claudeRuntimeServers, setClaudeRuntimeServers] = useState<ClaudeRuntimeServer[]>(
+    [],
+  );
   const mountedRef = useRef(true);
   const loadSequenceRef = useRef(0);
 
@@ -259,6 +268,15 @@ export function McpSection({
         if (canCommit()) {
           setCodexServers([]);
         }
+      }
+
+      // Claude reports its live MCP servers (including our built-in AskUserQuestion
+      // "ccgui" server) via the init event, captured in the runtime snapshot. This
+      // is the accurate "is it connected?" signal — the config list can't show a
+      // server injected at spawn via --mcp-config.
+      if (canCommit()) {
+        const snapshot = workspaceId ? getClaudeMcpRuntimeSnapshot(workspaceId) : null;
+        setClaudeRuntimeServers(snapshot?.mcpServers ?? []);
       }
 
       if (selectedEngine === "opencode") {
@@ -705,6 +723,42 @@ export function McpSection({
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {selectedEngine === "claude" ? (
+                <div className="settings-mcp-codex-card">
+                  <div className="settings-mcp-panel-title">
+                    <Server size={15} />
+                    {t("settings.mcpPanel.runtimeServersTitle")}
+                  </div>
+                  <div className="settings-mcp-server-meta">
+                    {t("settings.mcpPanel.runtimeServersClaudeDesc")}
+                  </div>
+                  {claudeRuntimeServers.length === 0 ? (
+                    <div className="settings-inline-muted">{t("settings.mcpPanel.noRuntimeServers")}</div>
+                  ) : (
+                    <div className="settings-mcp-list">
+                      {claudeRuntimeServers.map((server) => (
+                        <div key={`claude-runtime-${server.name}`} className="settings-mcp-server-row">
+                          <div>
+                            <div className="settings-mcp-server-name">
+                              <Server size={14} />
+                              {server.name}
+                              {server.name === "ccgui" ? (
+                                <span className="settings-mcp-auth">
+                                  {t("settings.mcpPanel.builtInBadge")}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <span className="settings-mcp-auth">
+                            {server.status ?? t("settings.mcpPanel.statusUnknown")}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
