@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-24.md`
-- **Total Sessions**: 968
-- **Last Active**: 2026-07-09
+- **Total Sessions**: 969
+- **Last Active**: 2026-07-10
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-24.md` | ~1956 | Active |
+| `journal-24.md` | ~1994 | Active |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
 | `journal-21.md` | ~1970 | Archived |
@@ -52,6 +52,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 969 | 2026-07-10 | 修复 Git 子仓库文件打开路径 | `20772025` | `ui-refactoring` |
 | 968 | 2026-07-09 | 合并 0.6.9 版本分支 | `0dda924d` | `feature/ui-reactoring-2` |
 | 967 | 2026-07-09 | 归档实时对话渲染 OpenSpec 提案 | `de030a26` | `feature/ui-reactoring-2` |
 | 966 | 2026-07-09 | 修复 Hub Git 文件列表选择 UI | `a0706b04` | `feature/ui-reactoring-2` |

@@ -1954,3 +1954,41 @@ Review:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 969: 修复 Git 子仓库文件打开路径
+
+**Date**: 2026-07-10
+**Task**: 修复 Git 子仓库文件打开路径
+**Branch**: `ui-refactoring`
+
+### Summary
+
+修复 Git 变更树在 workspace 父目录包含子 Git repo 时打开文件漏掉子仓库前缀的问题，并补充 git-panel-diff-view OpenSpec 契约。
+
+### Main Changes
+
+- 修复 `useGitPanelController`：新增 Git-domain path 解析，复用 `resolveGitRootWorkspacePrefix` 与 `resolveGitStatusPathCandidates`，只在调用方显式声明 `pathDomain: "git"` 时把 repo-relative path 映射为 workspace-relative path。
+- 调整 `useLayoutNodes`：仅 Git Diff panel 的 changed-file open 入口传入 `{ pathDomain: "git" }`，普通 file tree/search/activity/Project Map 等入口保持默认 workspace path，避免路径规则扩散。
+- 增加 `useGitPanelController` 回归测试：覆盖 nested git root 补前缀、workspace root 等于 git root 不补视觉 repo name、普通 workspace-relative file tree path 不受 gitRoot 影响。
+- 更新 `openspec/specs/git-panel-diff-view/spec.md`：记录 Git status/diff path 为 repository-relative、editor read pipeline 为 workspace-relative 的行为契约。
+- 验证：`pnpm vitest run src/features/app/hooks/useGitPanelController.test.tsx` 通过；`pnpm typecheck` 通过；`openspec validate --specs --strict --no-interactive` 通过；`git diff --check` 通过。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `20772025` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
