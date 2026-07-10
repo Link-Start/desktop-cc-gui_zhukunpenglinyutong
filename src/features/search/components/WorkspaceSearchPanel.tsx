@@ -254,7 +254,7 @@ export function WorkspaceSearchPanel({
           <div className="workspace-search-limit">{t("files.searchLimitReached")}</div>
         ) : null}
 
-        <div className="workspace-search-results">
+        <div className="workspace-search-results scrollable">
           {!workspaceId ? null : !isSearchMode ? null : searchLoading || searchError ? null :
             !searchResults || searchResults.files.length === 0 ? (
               <div className="workspace-search-empty">{t("files.noMatchesFound")}</div>

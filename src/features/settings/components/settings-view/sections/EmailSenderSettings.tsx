@@ -1022,7 +1022,7 @@ export function EmailSenderSettings({
                     <X size={14} aria-hidden />
                   </Button>
                 </div>
-                <div className="settings-mail-detail-scroll">
+                <div className="settings-mail-detail-scroll scrollable">
                   {selectedTimeline.length === 0 ? (
                     <div className="settings-help">{t("settings.emailTimelineEmpty")}</div>
                   ) : (

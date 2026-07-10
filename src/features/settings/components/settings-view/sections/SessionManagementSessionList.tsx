@@ -58,7 +58,7 @@ export function SessionListSection({
           <div className="text-sm text-muted-foreground">{description}</div>
         ) : null}
       </div>
-      <ul className="settings-project-sessions-list">
+      <ul className="settings-project-sessions-list scrollable">
         {entries.map((entry) => {
           const selectionKey = buildWorkspaceSessionSelectionKey(entry);
           const selected = Boolean(selectedIds[selectionKey]);

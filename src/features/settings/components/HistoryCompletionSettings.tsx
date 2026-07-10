@@ -119,7 +119,7 @@ export function HistoryCompletionSettings() {
       </button>
 
       {showList && (
-        <div className="history-list-container">
+        <div className="history-list-container scrollable">
           {historyItems.length === 0 ? (
             <>
               <div className="history-empty">

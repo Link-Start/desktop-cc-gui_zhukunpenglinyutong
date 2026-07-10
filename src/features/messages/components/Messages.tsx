@@ -2407,7 +2407,7 @@ export const Messages = memo(function Messages({
         onScrollToAnchor={requestScrollToAnchor}
       />
       <div
-        className="messages"
+        className="messages scrollable"
         ref={containerRef}
         onScroll={updateAutoScroll}
       >
