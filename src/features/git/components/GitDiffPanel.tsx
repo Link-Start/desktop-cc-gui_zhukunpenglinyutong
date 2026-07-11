@@ -1729,8 +1729,6 @@ function GitDiffPanelImpl({
       const engineItems: Array<{ engine: CommitMessageEngine; label: string }> = [
         { engine: "codex", label: t("git.generateCommitMessageEngineCodex") },
         { engine: "claude", label: t("git.generateCommitMessageEngineClaude") },
-        { engine: "gemini", label: t("git.generateCommitMessageEngineGemini") },
-        { engine: "opencode", label: t("git.generateCommitMessageEngineOpenCode") },
       ];
       setGitContextMenu({
         ...position,

@@ -166,3 +166,51 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 974: 移除 Gemini 和 OpenCode 前端入口
+
+**Date**: 2026-07-11
+**Task**: 移除 Gemini 和 OpenCode 前端入口
+**Branch**: `feature/v-0.7.1`
+
+### Summary
+
+收敛 MCP 与 Git commit 菜单为 Claude/Codex 双引擎
+
+### Main Changes
+
+目标：在不扩散 backend/shared contract 的前提下，移除 MCP / Skills、Git Diff 和 Git History worktree 三个前端入口中的 Gemini/OpenCode 可见内容。
+
+主要改动：
+- McpSection 页面只展示 Claude/Codex，并在页面 boundary 过滤 legacy engine status，删除 OpenCode snapshot side effect。
+- GitDiffPanel 与 GitHistoryWorktreePanel 的 commit message engine menu 只保留 Codex/Claude。
+- OpenSpec change 记录 5.7-5.9 三个独立 frontend slice。
+
+验证：
+- McpSection focused tests 4/4。
+- GitDiffPanel focused tests 56/56。
+- GitHistoryWorktreePanel focused tests 19/19。
+- npm run typecheck、npm run lint、OpenSpec strict validation、git diff --check 通过。
+- 完整 npm run test 在未修改的 Sidebar.test.tsx 存在 3 个既有失败，单文件重跑可复现；未纳入本次范围。
+
+边界：未修改 CheckpointCommitDialog、legacy last-config compatibility、shared CommitMessageEngine、services 或 Rust backend。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `be0aa7a2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
