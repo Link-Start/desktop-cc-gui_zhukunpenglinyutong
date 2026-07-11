@@ -3,32 +3,29 @@
 ## Purpose
 
 Defines the vibecoding browser agent behavior contract.
-
 ## Requirements
-
 ### Requirement: Browser Dock SHALL provide a client-owned embedded web surface
 
-The system SHALL provide a Browser Dock inside the vibecoding or orchestration workspace surface so users can view web pages inside the client without replacing the main application webview.
+The system SHALL provide a Browser Dock as a client-owned detached workspace browser window backed by a browser-specific WebView renderer so users can view web pages inside the client without replacing the main application webview.
 
 #### Scenario: user opens Browser Dock from the global toolbar
 - **WHEN** the user clicks the Browser Dock icon in the top global toolbar
-- **THEN** the system SHALL open Browser Dock in the main content area
-- **AND** Browser Dock SHALL appear as a right-side companion panel beside the conversation
-- **AND** the conversation SHALL remain visible and usable on the left side
-- **AND** Browser Dock SHALL NOT open as a blocking modal, popover, or floating overlay for its primary workspace view
-
-#### Scenario: user resizes the Browser Dock split
-- **WHEN** Browser Dock is open beside the conversation
-- **AND** the user drags the splitter between the conversation and Browser Dock
-- **THEN** the system SHALL resize the two panels horizontally
-- **AND** the system SHALL preserve minimum usable widths for both panels
-- **AND** the resize interaction SHALL NOT close Browser Dock or interrupt the active conversation
+- **THEN** the system SHALL open or focus the detached Browser Dock flow for the active workspace
+- **AND** the Browser Agent renderer SHALL open in a separate client-owned browser window rather than navigating the main application webview
+- **AND** the main conversation SHALL remain available in the main application window
+- **AND** Browser Dock SHALL NOT open as a blocking modal or transient popover for its primary workspace view
 
 #### Scenario: user opens a page inside Browser Dock
 - **WHEN** the user enters an allowed `http` or `https` URL in Browser Dock
 - **THEN** the system SHALL create or reuse a workspace-scoped browser session
 - **AND** the page SHALL render inside a browser-specific WebView rather than navigating the main application window
 - **AND** the system SHALL show URL, title, loading state, and error state when available
+
+#### Scenario: Browser Dock renderer opens at a usable default size
+- **WHEN** the system opens the Browser Agent renderer window
+- **THEN** the window SHALL use a default size large enough for ordinary web pages to render without narrow-viewport deformation
+- **AND** the window SHALL preserve minimum usable dimensions for the toolbar, content viewport, and selection affordances
+- **AND** the sizing change SHALL NOT alter browser session identity, capture semantics, or AI attachment semantics
 
 #### Scenario: browser navigation does not break main app navigation policy
 - **WHEN** a Browser Dock session navigates to an external page
@@ -225,3 +222,4 @@ Browser Agent implementation SHALL remain modular enough to pass repository larg
 - **WHEN** Browser Agent MVP is considered complete
 - **THEN** the implementation SHALL be compatible with `npm run check:large-files:near-threshold`
 - **AND** the implementation SHALL be compatible with `npm run check:large-files:gate`
+

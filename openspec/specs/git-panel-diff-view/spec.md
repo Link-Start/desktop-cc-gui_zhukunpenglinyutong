@@ -6,24 +6,25 @@ Defines the git-panel-diff-view behavior contract, covering Dual List View Modes
 ## Requirements
 ### Requirement: Dual List View Modes
 
-The Git panel SHALL support two file-list view modes: `flat` and `tree`.
+The Git panel SHALL keep Diff-specific mode actions discoverable from the `Diff`
+mode menu without requiring a separate always-visible toolbar row.
 
-#### Scenario: Default mode remains flat
+#### Scenario: repository switcher opens from the Diff menu
 
-- **WHEN** user opens Git panel for a workspace without saved preference
-- **THEN** panel SHALL render file list in flat mode
+- **WHEN** the active Git panel mode is `diff`
+- **AND** repository scanning is available for the workspace
+- **WHEN** the user opens the `Diff` mode menu
+- **THEN** the menu SHALL include an action to switch the Git repository used by the Diff panel
+- **AND** selecting that action SHALL open the existing repository selector panel
+- **AND** the selector SHALL continue using the existing scan, clear, and select repository behavior.
 
-#### Scenario: User switches to tree mode
+#### Scenario: Git changes section header uses compact neutral controls
 
-- **WHEN** user clicks the view switch control to `tree`
-- **THEN** panel SHALL render changed files grouped by directory hierarchy
-
-#### Scenario: Mode preference persistence
-
-- **WHEN** user selects a view mode and reopens the workspace
-- **THEN** the selected mode SHALL be restored
-
----
+- **WHEN** the Git Diff panel renders staged or unstaged changes in flat or tree list mode
+- **THEN** the section title SHALL keep staged and unstaged labels in the normal section text color instead of using success/green status color
+- **AND** the section count SHALL render with the project shadcn Badge compact secondary treatment
+- **AND** the manual refresh action SHALL stay hidden until the section header is hovered or keyboard-focused, matching the section Stage/Unstage action reveal behavior
+- **AND** modified file status markers shown as `M` SHALL use the warning/yellow status color rather than the info/blue accent.
 
 ### Requirement: Tree Hierarchy Interaction
 
@@ -224,30 +225,16 @@ Git status and diff entries are repository-relative, while the file editor read 
 
 ### Requirement: Remote Backend Git Diff Panel Reads
 
-The Git Diff panel SHALL execute read-only repository discovery and diff/status reads against the active backend location. In remote daemon mode, desktop Git commands for status, root scanning, diffs, file full diff, and remote URL lookup MUST delegate to daemon RPC instead of reading local desktop workspace state or filesystem paths.
+The Git Diff panel SHALL treat non-Git workspace diff reads as an empty,
+non-error state across local Tauri and remote daemon backends.
 
-#### Scenario: Remote workspace root scan uses daemon repository state
+#### Scenario: non-Git workspace does not emit diff command failures
 
-- **WHEN** the app is in remote daemon mode and the user scans Git roots from the Git Diff panel
-- **THEN** the desktop command MUST call daemon RPC `list_git_roots` with the requested `workspaceId` and `depth`
-- **AND** the returned repository candidates MUST come from daemon-side workspace paths
-
-#### Scenario: Remote diff panel reads use daemon repository state
-
-- **WHEN** the app is in remote daemon mode and the Git Diff panel refreshes status, changed file diffs, full file diff, or remote URL
-- **THEN** the corresponding desktop command MUST call daemon RPC for that Git method
-- **AND** it MUST NOT resolve Git repositories from local desktop filesystem state
-
-#### Scenario: Local diff panel behavior remains unchanged
-
-- **WHEN** the app is in local backend mode and the Git Diff panel refreshes Git state
-- **THEN** existing local Tauri Git command behavior, return shape, and error semantics MUST be preserved
-
-#### Scenario: Remote scan error settles loading state
-
-- **WHEN** daemon-side Git root scanning returns an error such as `workspace not found`
-- **THEN** the Git Diff panel MUST surface the error through the existing scan error state
-- **AND** the loading state MUST settle
+- **WHEN** the active workspace root has no `.git` marker
+- **THEN** Git status SHALL report `isGitRepository: false`
+- **AND** automatic Git Diff preload SHALL NOT call `get_git_diffs`
+- **AND** local Tauri and remote daemon `get_git_diffs` SHALL return an empty diff list if called
+- **AND** the client SHALL NOT write a runtime/internal command failure notice for the non-Git diff path.
 
 ### Requirement: Git Diff Panel SHALL Use Canonical Change Projection
 
@@ -505,3 +492,15 @@ The Git Diff panel SHALL expose a manual refresh affordance for the active works
 - **WHEN** the manual refresh affordance is added
 - **THEN** the existing active/background Git status polling cadence SHALL remain unchanged
 - **AND** existing Git diff, root scan, commit, stage, unstage, discard, and preview actions SHALL remain available.
+
+### Requirement: Git Diff Status Polling Cadence
+
+The Git Diff panel SHALL use a 15s Git status polling cadence for both active
+and background modes.
+
+#### Scenario: active and background polling use the same cadence
+
+- **WHEN** a Git workspace remains open in active or background polling mode
+- **THEN** the next Git status refresh SHALL be scheduled after 15s
+- **AND** heavy changesets SHALL NOT extend the cadence beyond 15s.
+

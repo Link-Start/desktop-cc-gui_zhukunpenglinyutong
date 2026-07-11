@@ -13,6 +13,8 @@ non-error state across local Tauri and remote daemon backends.
 - **AND** local Tauri and remote daemon `get_git_diffs` SHALL return an empty diff list if called
 - **AND** the client SHALL NOT write a runtime/internal command failure notice for the non-Git diff path.
 
+## ADDED Requirements
+
 ### Requirement: Git Diff Status Polling Cadence
 
 The Git Diff panel SHALL use a 15s Git status polling cadence for both active

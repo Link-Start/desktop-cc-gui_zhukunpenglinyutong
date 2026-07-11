@@ -159,3 +159,57 @@ Asynchronous work scheduled by one tab MUST NOT mutate another tab after activat
 - **THEN** file A work MUST verify file identity and render epoch before commit
 - **AND** failed verification MUST drop the result without mutating file B's visible state
 
+### Requirement: File tabs MUST be remembered per workspace during the app session
+
+The system SHALL keep open file tab identity and active file scoped to the current workspace while the app session is running.
+
+#### Scenario: switching back restores workspace file tabs
+
+- **GIVEN** workspace A has file A1 and file A2 open
+- **AND** file A2 is the active file
+- **WHEN** the user switches to workspace B and then back to workspace A
+- **THEN** workspace A MUST restore file A1 and file A2 as open tabs
+- **AND** workspace A MUST restore file A2 as the active file
+
+#### Scenario: another workspace has independent file tabs
+
+- **GIVEN** workspace A has file A open
+- **WHEN** the user switches to workspace B and opens file B
+- **THEN** workspace B MUST show only workspace B's file tab state
+- **AND** workspace A's open tab memory MUST remain available for later restoration
+
+#### Scenario: closing all tabs clears only the current workspace
+
+- **GIVEN** workspace A and workspace B each have open file tabs
+- **WHEN** the user closes all file tabs while workspace A is active
+- **THEN** workspace A MUST clear its file tab state
+- **AND** workspace B MUST retain its file tab state
+
+### Requirement: 文件树多选 SHALL expose compare action without breaking existing selection semantics
+
+系统 SHALL 在文件树多选文件后提供文件对比入口，并保持现有多选、拖拽、双击打开和多 Tab 打开语义不变。
+
+#### Scenario: context menu preserves selected set for compare
+- **GIVEN** 用户已在文件树中选中多个文件
+- **WHEN** 用户在已选集合中的任一文件上打开右键菜单
+- **THEN** 系统 SHALL 保留当前 selected set
+- **AND** 文件对比动作 SHALL 使用该 selected set 中按可见树顺序排列的文件路径
+
+#### Scenario: right-click outside selection resets compare target
+- **GIVEN** 用户已在文件树中选中多个文件
+- **WHEN** 用户在未选中的另一个文件上打开右键菜单
+- **THEN** 系统 SHALL 按现有语义切换为单选
+- **AND** 文件对比动作 SHALL 不得误用旧 selected set
+
+#### Scenario: compare action does not open normal editor tabs
+- **GIVEN** 用户从文件树右键菜单选择文件对比
+- **WHEN** compare surface opens
+- **THEN** 系统 SHALL NOT add the selected files to normal editor tab list unless the user separately opens them
+- **AND** existing editor tabs SHALL remain unchanged
+
+#### Scenario: multi-file drag remains unchanged
+- **GIVEN** 用户已在文件树中选中多个文件
+- **WHEN** 用户从选中集合发起拖拽
+- **THEN** 系统 SHALL continue carrying the selected paths as a drag batch
+- **AND** 新增文件对比动作 SHALL NOT alter drag payload semantics
+

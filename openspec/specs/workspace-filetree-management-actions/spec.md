@@ -3,26 +3,31 @@
 ## Purpose
 
 Defines the workspace filetree management actions behavior contract.
-
 ## Requirements
-
 ### Requirement: File Tree SHALL Provide Workspace File Management Actions
-The system SHALL expose consistent file and folder management actions from the workspace file tree, including Copy, Paste, Rename, Duplicate, Create File, Create Folder, Move to Trash, Copy Path, and Reveal.
 
-#### Scenario: File row management actions are available
-- **WHEN** the user opens the context menu for a file row in the workspace file tree
-- **THEN** the menu SHALL expose file management actions for Copy, Duplicate, Rename, Copy Path, Reveal, and Move to Trash
-- **AND** Paste SHALL target the file parent directory when a valid internal clipboard item is available
+The system SHALL expose consistent file and folder management actions from the workspace file tree,
+including Copy, Paste, Rename, Duplicate, Create File, Create Folder, Move to Trash, Copy Path,
+Reveal, and root-level header shortcuts for Create File, Create Folder, and Refresh.
 
-#### Scenario: Folder row management actions are available
-- **WHEN** the user opens the context menu for a folder row in the workspace file tree
-- **THEN** the menu SHALL expose folder management actions for New File, New Folder, Copy, Paste, Duplicate, Rename, Copy Path, Reveal, and Move to Trash
-- **AND** Paste SHALL target the selected folder path when a valid internal clipboard item is available
+#### Scenario: Root header exposes root creation and refresh actions
 
-#### Scenario: Actions share one operation feedback path
-- **WHEN** a file management action succeeds or fails
-- **THEN** the file tree SHALL show a visible operation notice or error
-- **AND** the system MUST NOT silently swallow the result of the action
+- **WHEN** the workspace file tree renders its sticky root header
+- **THEN** the left side SHALL display the active workspace root label normalized to uppercase
+- **AND** the right side SHALL expose icon-only actions for New File, New Folder, and Refresh
+- **AND** the primary workspace file tree SHALL render only those three root header actions unless an explicit non-primary surface enables optional detached explorer or Spec Hub actions
+- **AND** these actions SHALL use accessible labels from existing file-tree i18n copy
+- **AND** the root header visual treatment SHALL remain minimal, token-based, use compact low-stroke icons, use a transparent background, and separate from the file list with a light bottom divider
+- **AND** the header MUST NOT expose Move to Trash as a root-level action
+
+#### Scenario: Root header actions reuse existing root operation chain
+
+- **WHEN** the user selects New File from the root header
+- **THEN** the existing new-file prompt SHALL open with the workspace root as parent
+- **WHEN** the user selects New Folder from the root header
+- **THEN** the existing new-folder prompt SHALL open with the workspace root as parent
+- **WHEN** the user selects Refresh from the root header
+- **THEN** the file tree SHALL clear lazy directory cache and invoke the existing refresh callback
 
 ### Requirement: Copy SHALL Store An Internal File Tree Clipboard Item
 The system SHALL treat File Tree Copy as an internal application clipboard action that records the selected workspace item without mutating the filesystem or overwriting the operating system clipboard.
@@ -197,3 +202,4 @@ The system SHALL use a platform-neutral IPC path contract and platform-aware bac
 - **WHEN** Linux desktop clipboard integration cannot provide external file source paths
 - **THEN** this change SHALL leave file-tree external import deferred
 - **AND** internal Copy, Paste, Duplicate, and Rename SHALL remain available
+

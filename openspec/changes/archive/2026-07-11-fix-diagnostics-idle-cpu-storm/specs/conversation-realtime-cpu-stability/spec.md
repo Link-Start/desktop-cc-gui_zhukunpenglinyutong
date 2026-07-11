@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Diagnostics Persistence Must Not Create Idle CPU Storms
 

@@ -1,6 +1,6 @@
 ## MODIFIED Requirements
 
-### Requirement: Browser Dock SHALL provide a client-owned browser surface
+### Requirement: Browser Dock SHALL provide a client-owned embedded web surface
 
 The system SHALL provide a Browser Dock as a client-owned detached workspace browser window backed by a browser-specific WebView renderer so users can view web pages inside the client without replacing the main application webview.
 

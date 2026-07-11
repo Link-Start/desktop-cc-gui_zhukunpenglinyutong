@@ -114,6 +114,8 @@ editable review 的右栏保存链路 MUST 复用现有 workspace file editor co
 - **THEN** 系统 MUST 显示“无差异”或等效空态
 - **AND** MUST NOT 继续渲染保存前的旧 diff 内容
 
+## ADDED Requirements
+
 ### Requirement: Editable Review MUST Preserve Typing Responsiveness
 
 editable review MUST 将 source text 视为 urgent user-input state，并限制非必要的隐藏 renderer 与 diff alignment 工作。
