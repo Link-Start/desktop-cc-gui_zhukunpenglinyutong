@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
-import type { OpenCodeStatusSnapshot } from "../../opencode/types";
 import { McpSection } from "./McpSection";
 
 type SelectMockContextValue = {
@@ -126,7 +125,6 @@ vi.mock("@/components/ui/select", async () => {
 
 vi.mock("../../../services/tauri", () => ({
   detectEngines: vi.fn(),
-  getOpenCodeStatusSnapshot: vi.fn(),
   listGlobalMcpServers: vi.fn(),
   listMcpServerStatus: vi.fn(),
 }));
@@ -137,7 +135,6 @@ vi.mock("../../../utils/platform", () => ({
 
 import {
   detectEngines,
-  getOpenCodeStatusSnapshot,
   listGlobalMcpServers,
   listMcpServerStatus,
 } from "../../../services/tauri";
@@ -256,35 +253,6 @@ describe("McpSection", () => {
         ],
       },
     });
-    const openCodeSnapshot: OpenCodeStatusSnapshot = {
-      providerHealth: {
-        provider: "openrouter",
-        connected: true,
-        credentialCount: 1,
-        matched: true,
-        authenticatedProviders: ["openrouter"],
-        error: null,
-      },
-      mcpEnabled: true,
-      mcpServers: [
-        {
-          name: "browser",
-          enabled: true,
-          status: "ok",
-          permissionHint: "network",
-        },
-      ],
-      mcpRaw: "{\"browser\":true}",
-      managedToggles: true,
-      provider: "openrouter",
-      sessionId: "session-1",
-      model: "gpt-5",
-      agent: "default",
-      variant: "balanced",
-      tokenUsage: 123,
-      contextWindow: 200000,
-    };
-    vi.mocked(getOpenCodeStatusSnapshot).mockResolvedValue(openCodeSnapshot);
   });
 
   it("renders engine-specific rules and opens the engine select menu", async () => {
@@ -301,53 +269,22 @@ describe("McpSection", () => {
     expect(screen.getAllByText("Config-defined servers").length).toBeGreaterThan(0);
     expect(screen.getAllByText("github").length).toBeGreaterThan(0);
     expect(screen.getByText("search_repos")).toBeTruthy();
+    expect(screen.getByText("2 / 2 installed")).toBeTruthy();
     expect(screen.queryByRole("switch")).toBeNull();
 
     fireEvent.click(screen.getByRole("combobox", { name: "Select engine to inspect" }));
-    expect(await screen.findByRole("option", { name: "OpenCode" })).toBeTruthy();
+    expect(await screen.findByRole("option", { name: "Claude Code" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Codex" })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "Gemini" })).toBeNull();
+    expect(screen.queryByRole("option", { name: "OpenCode" })).toBeNull();
+    expect(screen.queryByText("Gemini")).toBeNull();
+    expect(screen.queryByText("OpenCode")).toBeNull();
 
     unmount();
   });
 
-  it("keeps overview inventory aligned with the selected engine after switching", async () => {
-    vi.mocked(getOpenCodeStatusSnapshot).mockResolvedValue({
-      providerHealth: {
-        provider: "openrouter",
-        connected: true,
-        credentialCount: 1,
-        matched: true,
-        authenticatedProviders: ["openrouter"],
-        error: null,
-      },
-      mcpEnabled: true,
-      mcpServers: [
-        {
-          name: "browser",
-          enabled: true,
-          status: "ok",
-          permissionHint: "network",
-        },
-        {
-          name: "docs",
-          enabled: true,
-          status: "ok",
-          permissionHint: null,
-        },
-      ],
-      mcpRaw: "{\"browser\":true,\"docs\":true}",
-      managedToggles: true,
-      provider: "openrouter",
-      sessionId: "session-1",
-      model: "gpt-5",
-      agent: "default",
-      variant: "balanced",
-      tokenUsage: 123,
-      contextWindow: 200000,
-    });
-
-    const { rerender } = render(
-      <McpSection activeWorkspace={workspace} activeEngine="codex" />,
-    );
+  it("keeps overview inventory aligned with the supported engine selection", async () => {
+    render(<McpSection activeWorkspace={workspace} activeEngine="codex" />);
 
     await screen.findByText("search_repos");
 
@@ -358,22 +295,22 @@ describe("McpSection", () => {
     expect(within(selectedOverviewCard as HTMLElement).getByText("Codex")).toBeTruthy();
     expect(screen.getAllByText("1 servers · 1 tools").length).toBeGreaterThan(0);
 
-    rerender(<McpSection activeWorkspace={workspace} activeEngine="opencode" />);
+    fireEvent.click(screen.getByRole("combobox", { name: "Select engine to inspect" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Claude Code" }));
 
     await waitFor(() => {
-      expect(screen.getAllByText("2 servers · 0 tools").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("1 servers · 0 tools").length).toBeGreaterThan(0);
       const switchedOverviewCard = screen
         .getByText("Selected engine")
         .closest(".settings-mcp-overview-card");
       expect(switchedOverviewCard).toBeTruthy();
-      expect(within(switchedOverviewCard as HTMLElement).getByText("OpenCode")).toBeTruthy();
-      expect(screen.getByText("browser")).toBeTruthy();
-      expect(screen.getByText("docs")).toBeTruthy();
+      expect(within(switchedOverviewCard as HTMLElement).getByText("Claude Code")).toBeTruthy();
+      expect(screen.getAllByText("filesystem").length).toBeGreaterThan(0);
       expect(screen.queryByText("search_repos")).toBeNull();
     });
   });
 
-  it("shows bridge-backed config servers for Gemini and strips runtime tool prefixes case-insensitively", async () => {
+  it("strips Codex runtime tool prefixes case-insensitively", async () => {
     vi.mocked(listMcpServerStatus).mockResolvedValue({
       result: {
         data: [
@@ -390,27 +327,10 @@ describe("McpSection", () => {
       },
     });
 
-    const { rerender } = render(
-      <McpSection activeWorkspace={workspace} activeEngine="codex" />,
-    );
+    render(<McpSection activeWorkspace={workspace} activeEngine="codex" />);
 
     await screen.findByText("search_repos");
     expect(screen.queryByText("mcp__github__search_repos")).toBeNull();
-
-    rerender(<McpSection activeWorkspace={workspace} activeEngine="gemini" />);
-
-    await waitFor(() => {
-      expect(screen.queryByText("Loading…")).toBeNull();
-    });
-
-    const geminiOverviewCard = screen
-      .getByText("Selected engine")
-      .closest(".settings-mcp-overview-card");
-    expect(geminiOverviewCard).toBeTruthy();
-    expect(within(geminiOverviewCard as HTMLElement).getByText("Gemini")).toBeTruthy();
-    expect(screen.getAllByText("1 servers · 0 tools").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Config-defined servers").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("github").length).toBeGreaterThan(0);
   });
 
   it("shows Windows-style config paths when backend paths are Windows-style", async () => {

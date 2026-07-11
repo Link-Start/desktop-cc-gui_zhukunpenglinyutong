@@ -10,7 +10,6 @@ import TriangleAlert from "lucide-react/dist/esm/icons/triangle-alert";
 import type { EngineStatus, EngineType, WorkspaceInfo } from "../../../types";
 import {
   detectEngines,
-  getOpenCodeStatusSnapshot,
   listGlobalMcpServers,
   listMcpServerStatus,
   type GlobalMcpServerEntry,
@@ -42,25 +41,15 @@ type CodexMcpServer = {
   templatesCount: number;
 };
 
-type OpenCodeMcpServer = {
-  name: string;
-  enabled: boolean;
-  status: string | null;
-  permissionHint: string | null;
-};
-
-type OpenCodeSnapshot = {
-  mcpEnabled: boolean;
-  mcpServers: OpenCodeMcpServer[];
-};
-
 type ClaudeRuntimeServer = {
   name: string;
   status: string | null;
 };
 
+type SupportedEngineType = Extract<EngineType, "claude" | "codex">;
+
 type EngineDescriptor = {
-  engineType: EngineType;
+  engineType: SupportedEngineType;
   titleKey: string;
   modeKey: string;
   scopeKey: string;
@@ -87,24 +76,6 @@ const ORDERED_ENGINES: EngineDescriptor[] = [
     sourceKey: "settings.mcpPanel.ruleSourceCodex",
     refreshKey: "settings.mcpPanel.ruleRefreshRuntime",
     runtimeKey: "settings.mcpPanel.ruleRuntimeCodex",
-  },
-  {
-    engineType: "gemini",
-    titleKey: "settings.mcpPanel.engineGemini",
-    modeKey: "settings.mcpPanel.ruleModeConfigOnly",
-    scopeKey: "settings.mcpPanel.ruleScopeGemini",
-    sourceKey: "settings.mcpPanel.ruleSourceGemini",
-    refreshKey: "settings.mcpPanel.ruleRefreshConfig",
-    runtimeKey: "settings.mcpPanel.ruleRuntimeConfigOnly",
-  },
-  {
-    engineType: "opencode",
-    titleKey: "settings.mcpPanel.engineOpenCode",
-    modeKey: "settings.mcpPanel.ruleModeSessionRead",
-    scopeKey: "settings.mcpPanel.ruleScopeOpenCode",
-    sourceKey: "settings.mcpPanel.ruleSourceOpenCode",
-    refreshKey: "settings.mcpPanel.ruleRefreshRuntime",
-    runtimeKey: "settings.mcpPanel.ruleRuntimeOpenCode",
   },
 ];
 
@@ -168,20 +139,20 @@ function parseCodexMcpServers(raw: unknown): CodexMcpServer[] {
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-function normalizeEngineType(engine: string | null): EngineType {
-  if (engine === "claude" || engine === "codex" || engine === "gemini" || engine === "opencode") {
+function normalizeEngineType(engine: string | null): SupportedEngineType {
+  if (engine === "claude" || engine === "codex") {
     return engine;
   }
   return "codex";
 }
 
-function getEngineIcon(engineType: EngineType) {
+function getEngineIcon(engineType: SupportedEngineType) {
   return <EngineIcon engine={engineType} size={16} />;
 }
 
 function getEngineStatusBadgeKey(
-  engineType: EngineType,
-  activeEngine: EngineType,
+  engineType: SupportedEngineType,
+  activeEngine: SupportedEngineType,
   status: EngineStatus | null,
 ) {
   if (engineType === activeEngine) {
@@ -200,12 +171,11 @@ export function McpSection({
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [engineStatuses, setEngineStatuses] = useState<EngineStatus[]>([]);
+  const [engineStatuses, setEngineStatuses] = useState<
+    Array<EngineStatus & { engineType: SupportedEngineType }>
+  >([]);
   const [codexServers, setCodexServers] = useState<CodexMcpServer[]>([]);
   const [globalServers, setGlobalServers] = useState<GlobalMcpServerEntry[]>([]);
-  const [openCodeSnapshot, setOpenCodeSnapshot] = useState<OpenCodeSnapshot | null>(
-    null,
-  );
   const [claudeRuntimeServers, setClaudeRuntimeServers] = useState<ClaudeRuntimeServer[]>(
     [],
   );
@@ -213,7 +183,9 @@ export function McpSection({
   const loadSequenceRef = useRef(0);
 
   const normalizedActiveEngine = normalizeEngineType(activeEngine);
-  const [selectedEngine, setSelectedEngine] = useState<EngineType>(normalizedActiveEngine);
+  const [selectedEngine, setSelectedEngine] = useState<SupportedEngineType>(
+    normalizedActiveEngine,
+  );
   const workspaceId = activeWorkspace?.id ?? null;
 
   const loadMcp = useCallback(async () => {
@@ -230,7 +202,10 @@ export function McpSection({
 
     try {
       try {
-        const statuses = await detectEngines();
+        const statuses = (await detectEngines()).filter(
+          (status): status is EngineStatus & { engineType: SupportedEngineType } =>
+            status.engineType === "claude" || status.engineType === "codex",
+        );
         if (canCommit()) {
           setEngineStatuses(statuses);
         }
@@ -279,45 +254,13 @@ export function McpSection({
         setClaudeRuntimeServers(snapshot?.mcpServers ?? []);
       }
 
-      if (selectedEngine === "opencode") {
-        if (!workspaceId) {
-          if (canCommit()) {
-            setOpenCodeSnapshot(null);
-          }
-          loadErrors.push(t("settings.mcpPanel.workspaceRequired"));
-        } else {
-          try {
-            const snapshot = await getOpenCodeStatusSnapshot({ workspaceId });
-            if (canCommit()) {
-              setOpenCodeSnapshot({
-                mcpEnabled: snapshot.mcpEnabled,
-                mcpServers: (snapshot.mcpServers ?? []).map((item) => ({
-                  name: item.name,
-                  enabled: item.enabled,
-                  status: item.status ?? null,
-                  permissionHint: item.permissionHint ?? null,
-                })),
-              });
-            }
-          } catch (loadError) {
-            if (canCommit()) {
-              setOpenCodeSnapshot(null);
-            }
-            loadErrors.push(loadError instanceof Error ? loadError.message : String(loadError));
-          }
-        }
-      } else {
-        if (canCommit()) {
-          setOpenCodeSnapshot(null);
-        }
-      }
     } finally {
       if (canCommit()) {
         setError(loadErrors[0] ?? null);
         setLoading(false);
       }
     }
-  }, [selectedEngine, t, workspaceId]);
+  }, [workspaceId]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -336,7 +279,7 @@ export function McpSection({
   }, [normalizedActiveEngine]);
 
   const engineStatusMap = useMemo(() => {
-    const map = new Map<EngineType, EngineStatus>();
+    const map = new Map<SupportedEngineType, EngineStatus>();
     engineStatuses.forEach((status) => {
       map.set(status.engineType, status);
     });
@@ -356,10 +299,7 @@ export function McpSection({
     if (selectedEngine === "claude") {
       return claudeConfigServers;
     }
-    if (selectedEngine === "codex" || selectedEngine === "gemini") {
-      return ccguiConfigServers;
-    }
-    return [];
+    return ccguiConfigServers;
   }, [ccguiConfigServers, claudeConfigServers, selectedEngine]);
 
   const isWindowsHost = useMemo(() => {
@@ -394,19 +334,12 @@ export function McpSection({
   }, [ccguiConfigServers, codexServers]);
 
   const visibleServerCount = useMemo(() => {
-    if (selectedEngine === "opencode") {
-      return openCodeSnapshot?.mcpServers.length ?? 0;
-    }
     if (selectedEngine === "codex") {
       return codexVisibleServerCount;
     }
-    if (selectedEngine === "claude" || selectedEngine === "gemini") {
-      return selectedConfigServers.length;
-    }
-    return 0;
+    return selectedConfigServers.length;
   }, [
     codexVisibleServerCount,
-    openCodeSnapshot?.mcpServers.length,
     selectedConfigServers.length,
     selectedEngine,
   ]);
@@ -428,24 +361,13 @@ export function McpSection({
   ) ?? ORDERED_ENGINES[1];
   const selectedStatus = engineStatusMap.get(selectedEngine) ?? null;
   const getConfigPaths = useCallback(
-    (engineType: EngineType): string[] => {
-      if (engineType === "opencode") {
-        return [
-          t("settings.mcpPanel.pathWorkspaceSession"),
-          t("settings.mcpPanel.pathRuntimeInjection"),
-        ];
-      }
-
+    (engineType: SupportedEngineType): string[] => {
       if (isWindowsHost) {
         switch (engineType) {
           case "claude":
             return ["%USERPROFILE%\\.claude.json", "%USERPROFILE%\\.claude\\settings.json"];
           case "codex":
             return ["%USERPROFILE%\\.ccgui\\config.json", "%USERPROFILE%\\.codex\\config.toml"];
-          case "gemini":
-            return ["%USERPROFILE%\\.gemini\\settings.json", "%USERPROFILE%\\.ccgui\\config.json"];
-          default:
-            return [];
         }
       }
 
@@ -454,13 +376,9 @@ export function McpSection({
           return ["~/.claude.json", "~/.claude/settings.json"];
         case "codex":
           return ["~/.ccgui/config.json", "~/.codex/config.toml"];
-        case "gemini":
-          return ["~/.gemini/settings.json", "~/.ccgui/config.json"];
-        default:
-          return [];
       }
     },
-    [isWindowsHost, t],
+    [isWindowsHost],
   );
 
   return (
@@ -666,11 +584,7 @@ export function McpSection({
                     <div className="settings-mcp-detail-row">
                       <span className="settings-mcp-detail-label">{t("settings.mcpPanel.detailRuntimeStatus")}</span>
                       <span className="settings-mcp-detail-value">
-                        {selectedEngine === "opencode"
-                          ? workspaceId
-                            ? t("settings.mcpPanel.runtimeStatusOpenCodeReady")
-                            : t("settings.mcpPanel.runtimeStatusWorkspaceRequired")
-                          : selectedEngine === "codex"
+                        {selectedEngine === "codex"
                             ? workspaceId
                               ? t("settings.mcpPanel.runtimeStatusCodexReady")
                               : t("settings.mcpPanel.runtimeStatusWorkspaceOptional")
@@ -687,7 +601,7 @@ export function McpSection({
                 </div>
               </div>
 
-              {selectedEngine === "claude" || selectedEngine === "gemini" ? (
+              {selectedEngine === "claude" ? (
                 <div className="settings-mcp-codex-card">
                   <div className="settings-mcp-panel-title">
                     <FolderTree size={15} />
@@ -851,76 +765,6 @@ export function McpSection({
                 </Fragment>
               ) : null}
 
-              {selectedEngine === "opencode" ? (
-                <Fragment>
-                  <div className="settings-mcp-codex-card">
-                    <div className="settings-mcp-panel-title">
-                      <ShieldCheck size={15} />
-                      {t("settings.mcpPanel.sessionOverviewTitle")}
-                    </div>
-                    {openCodeSnapshot ? (
-                      <div className="settings-mcp-rule-list">
-                        <div className="settings-mcp-detail-row">
-                          <span className="settings-mcp-detail-label">{t("settings.mcpPanel.globalToggle")}</span>
-                          <span className="settings-mcp-detail-value">
-                            {openCodeSnapshot.mcpEnabled
-                              ? t("settings.mcpPanel.enabled")
-                              : t("settings.mcpPanel.disabled")}
-                          </span>
-                        </div>
-                        <div className="settings-mcp-detail-row">
-                          <span className="settings-mcp-detail-label">{t("settings.mcpPanel.detailWorkspace")}</span>
-                          <span className="settings-mcp-detail-value">
-                            {activeWorkspace?.name ?? t("settings.mcpPanel.valueUnavailable")}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="settings-inline-muted">
-                        {workspaceId
-                          ? t("settings.mcpPanel.noOpenCodeSnapshot")
-                          : t("settings.mcpPanel.workspaceRequired")}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="settings-mcp-codex-card">
-                    <div className="settings-mcp-panel-title">
-                      <Server size={15} />
-                      {t("settings.mcpPanel.runtimeServersTitle")}
-                    </div>
-                    {!openCodeSnapshot ? (
-                      <div className="settings-inline-muted">
-                        {workspaceId
-                          ? t("settings.mcpPanel.noOpenCodeSnapshot")
-                          : t("settings.mcpPanel.workspaceRequired")}
-                      </div>
-                    ) : openCodeSnapshot.mcpServers.length === 0 ? (
-                      <div className="settings-inline-muted">{t("settings.mcpPanel.noRuntimeServers")}</div>
-                    ) : (
-                      <div className="settings-mcp-list">
-                        {openCodeSnapshot.mcpServers.map((server) => (
-                          <div key={`opencode-${server.name}`} className="settings-mcp-server-row">
-                            <div>
-                              <div className="settings-mcp-server-name">
-                                <Server size={14} />
-                                {server.name}
-                              </div>
-                              <div className="settings-mcp-server-meta">
-                                {server.status ?? t("settings.mcpPanel.statusUnknown")}
-                                {server.permissionHint ? ` · ${server.permissionHint}` : ""}
-                              </div>
-                            </div>
-                            <span className="settings-mcp-auth">
-                              {server.enabled ? t("settings.mcpPanel.enabled") : t("settings.mcpPanel.disabled")}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </Fragment>
-              ) : null}
         </div>
       </div>
 

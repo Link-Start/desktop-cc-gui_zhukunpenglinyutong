@@ -126,6 +126,9 @@ describe("GitHistoryWorktreePanel", () => {
     });
     fireEvent.click(generateButton);
     const codexItem = await screen.findByRole("menuitem", { name: "Use Codex engine" });
+    expect(screen.getByRole("menuitem", { name: "Use Claude engine" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Use Gemini engine" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Use OpenCode engine" })).toBeNull();
     await act(async () => {
       fireEvent.click(codexItem);
       await new Promise((resolve) => window.setTimeout(resolve, 0));
