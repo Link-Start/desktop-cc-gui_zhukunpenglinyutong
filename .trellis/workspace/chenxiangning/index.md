@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-25.md`
-- **Total Sessions**: 972
+- **Total Sessions**: 973
 - **Last Active**: 2026-07-11
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~119 | Active |
+| `journal-25.md` | ~168 | Active |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +53,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 973 | 2026-07-11 | 校准 OpenSpec 提案并归档完成变更 | `1d7e88fc` | `feature/v-0.7.1` |
 | 972 | 2026-07-11 | 优化中央便签工作台交互 | `c8eb17ba` | `feature/v-0.7.1` |
 | 971 | 2026-07-10 | Git 可编辑双栏差异预览 | `942776b3` | `feature/v-0.7.0` |
 | 970 | 2026-07-10 | 添加 Codex 5.6 系列模型 | `94de14e6` | `ui-refactoring` |

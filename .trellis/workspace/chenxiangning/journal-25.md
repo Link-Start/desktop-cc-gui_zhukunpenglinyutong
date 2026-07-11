@@ -117,3 +117,52 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 973: 校准 OpenSpec 提案并归档完成变更
+
+**Date**: 2026-07-11
+**Task**: 校准 OpenSpec 提案并归档完成变更
+**Branch**: `feature/v-0.7.1`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## 工作摘要
+
+- 按 `tasks=100% + strict validation` 口径归档 18 个已完成 OpenSpec changes，并同步 delta specs 到主 specs。
+- 校准 4 个失效的 delta Requirement 锚点/section，确保 OpenSpec archive 原子同步成功。
+- 补充 2 份 design、7 份 verification，并恢复 2 个 sidebar loading change 的 proposal/design/tasks/spec deltas。
+- 更新 `openspec/project.md`：active=12、archive=581、main specs=383，明确结构校验不等于实现验证。
+
+## 验证
+
+- `openspec validate --all --strict --no-interactive`: 395 passed, 0 failed。
+- OpenSpec consistency check: 执行成功，保留历史 main spec 标题格式警告。
+- 提交范围仅为 `openspec/**`，未修改产品代码、配置、脚本或测试。
+
+## 提交
+
+- `1d7e88fc docs(openspec): 校准提案并归档已完成变更`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1d7e88fc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
