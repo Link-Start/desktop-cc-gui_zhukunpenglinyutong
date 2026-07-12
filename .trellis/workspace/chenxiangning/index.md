@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-25.md`
-- **Total Sessions**: 977
+- **Total Sessions**: 978
 - **Last Active**: 2026-07-13
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~315 | Active |
+| `journal-25.md` | ~348 | Active |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +53,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 978 | 2026-07-13 | 根治 Sidebar 首次启动会话行更新回环 | `db663a44` | `feature/v-0.7.2` |
 | 977 | 2026-07-13 | 根治 Tooltip 启动更新回环 | `0d2c5cad` | `feature/v-0.7.2` |
 | 976 | 2026-07-13 | 全局搜索结果分层 | `2577fd6f` | `feature/v-0.7.2` |
 | 975 | 2026-07-12 | 修复 Tooltip 更新回环与会话空白 | `a463a259` | `feature/v-0.7.1` |
