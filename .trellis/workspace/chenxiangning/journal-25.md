@@ -247,3 +247,69 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 976: 全局搜索结果分层
+
+**Date**: 2026-07-13
+**Task**: 全局搜索结果分层
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+全局搜索结果按内容类型分层展示，文件标题改为 basename，完整路径保留为位置元数据，并完成搜索回归与 OpenSpec 验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2577fd6f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 977: 根治 Tooltip 启动更新回环
+
+**Date**: 2026-07-13
+**Task**: 根治 Tooltip 启动更新回环
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+将 TooltipIconButton 从 Radix PopperAnchor/SlotClone 状态机迁移到 native button + Floating UI portal，保留原有视觉、定位和交互能力，并完成 Tauri 冷启动人工验收。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0d2c5cad` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

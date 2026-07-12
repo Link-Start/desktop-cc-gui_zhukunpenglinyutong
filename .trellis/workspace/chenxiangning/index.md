@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-25.md`
-- **Total Sessions**: 975
-- **Last Active**: 2026-07-12
+- **Total Sessions**: 977
+- **Last Active**: 2026-07-13
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~249 | Active |
+| `journal-25.md` | ~315 | Active |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +53,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 977 | 2026-07-13 | 根治 Tooltip 启动更新回环 | `0d2c5cad` | `feature/v-0.7.2` |
+| 976 | 2026-07-13 | 全局搜索结果分层 | `2577fd6f` | `feature/v-0.7.2` |
 | 975 | 2026-07-12 | 修复 Tooltip 更新回环与会话空白 | `a463a259` | `feature/v-0.7.1` |
 | 974 | 2026-07-11 | 移除 Gemini 和 OpenCode 前端入口 | `be0aa7a2` | `feature/v-0.7.1` |
 | 973 | 2026-07-11 | 校准 OpenSpec 提案并归档完成变更 | `1d7e88fc` | `feature/v-0.7.1` |

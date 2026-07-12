@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SearchResult } from "../types";
-import { SearchPalette } from "./SearchPalette";
+import { groupSearchResults, SearchPalette } from "./SearchPalette";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -33,6 +33,70 @@ function makeResult(): SearchResult {
 describe("SearchPalette", () => {
   afterEach(() => {
     cleanup();
+  });
+
+  it("groups mixed results by kind while preserving flat result indexes", () => {
+    const skill = makeResult();
+    const firstFile: SearchResult = {
+      id: "file:w-1:first.ts",
+      kind: "file",
+      title: "first.ts",
+      score: 20,
+    };
+    const secondFile: SearchResult = {
+      id: "file:w-1:second.ts",
+      kind: "file",
+      title: "second.ts",
+      score: 30,
+    };
+
+    expect(groupSearchResults([skill, firstFile, secondFile])).toEqual([
+      {
+        kind: "file",
+        entries: [
+          { result: firstFile, resultIndex: 1 },
+          { result: secondFile, resultIndex: 2 },
+        ],
+      },
+      { kind: "skill", entries: [{ result: skill, resultIndex: 0 }] },
+    ]);
+  });
+
+  it("keeps selection and Enter activation bound to the original flat result index", () => {
+    const skill = makeResult();
+    const file: SearchResult = {
+      id: "file:w-1:config.ts",
+      kind: "file",
+      title: "config.ts",
+      score: 20,
+    };
+    const onSelect = vi.fn();
+
+    render(
+      <SearchPalette
+        isOpen
+        scope="global"
+        contentFilters={["all"]}
+        workspaceName="mossx"
+        query="config"
+        results={[skill, file]}
+        selectedIndex={0}
+        onQueryChange={() => undefined}
+        onMoveSelection={() => undefined}
+        onSelect={onSelect}
+        onScopeChange={() => undefined}
+        onContentFilterToggle={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getAllByText("searchPalette.typeFile")).toHaveLength(2);
+    expect(screen.getAllByText("searchPalette.typeSkill")).toHaveLength(2);
+    expect(document.querySelectorAll(".search-palette-result-group-title")).toHaveLength(2);
+    expect(screen.getByText(skill.title).closest("button")?.classList.contains("is-active")).toBe(true);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(onSelect).toHaveBeenCalledWith(skill);
   });
 
   it("does not select result when pressing Enter during IME composition", () => {

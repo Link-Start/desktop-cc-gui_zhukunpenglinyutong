@@ -94,6 +94,7 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.40.0",
     "@excalidraw/excalidraw": "^0.18.1",
+    "@floating-ui/react-dom": "2.1.7",
     "@hello-pangea/dnd": "^18.0.1",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-virtual": "^3.13.18",

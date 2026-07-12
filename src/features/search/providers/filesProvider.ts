@@ -1,6 +1,10 @@
 import type { SearchResult } from "../types";
 import { readSharedWorkspaceFileIndex } from "../../workspaces/utils/sharedWorkspaceFileIndex";
 
+function fileNameFromPath(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+}
+
 export function searchFiles(
   query: string,
   files: string[],
@@ -25,7 +29,7 @@ export function searchFiles(
     results.push({
       id: `file:${workspaceId}:${path}`,
       kind: "file",
-      title: path,
+      title: fileNameFromPath(path),
       subtitle: "File",
       score: index === 0 ? 20 : 200 + index,
       workspaceId,

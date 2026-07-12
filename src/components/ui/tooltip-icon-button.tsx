@@ -1,12 +1,24 @@
 import {
   useCallback,
   useEffect,
+  useId,
+  useMemo,
   useRef,
   useState,
   type ButtonHTMLAttributes,
   type ReactNode,
 } from "react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
+import { createPortal } from "react-dom";
+import {
+  autoUpdate,
+  flip,
+  offset,
+  shift,
+  useFloating,
+  type Placement,
+} from "@floating-ui/react-dom";
+import { cn } from "../../lib/utils";
+import { TOOLTIP_POPUP_CLASS_NAME } from "./tooltip";
 
 type TooltipSide = "top" | "right" | "bottom" | "left";
 type TooltipAlign = "start" | "center" | "end";
@@ -51,6 +63,25 @@ export function TooltipIconButton({
   ...buttonProps
 }: TooltipIconButtonProps) {
   const [open, setOpen] = useState(false);
+  const tooltipId = useId();
+  const placement = useMemo<Placement>(
+    () =>
+      tooltipAlign === "center"
+        ? tooltipSide
+        : `${tooltipSide}-${tooltipAlign}`,
+    [tooltipAlign, tooltipSide],
+  );
+  const middleware = useMemo(
+    () => [offset(tooltipSideOffset), flip(), shift({ padding: 8 })],
+    [tooltipSideOffset],
+  );
+  const { refs, floatingStyles, placement: resolvedPlacement } = useFloating({
+    open,
+    placement,
+    strategy: "fixed",
+    middleware,
+    whileElementsMounted: autoUpdate,
+  });
   // Opening synchronously on mouseenter turns every pointer crossing into a
   // portal mount + forced reflow. Honor `delay` so only a dwell opens it.
   const openTimerRef = useRef<number | null>(null);
@@ -107,13 +138,13 @@ export function TooltipIconButton({
   }, [disabled, closeNow]);
 
   return (
-    <Tooltip open={open} onOpenChange={setOpen} disabled={disabled}>
-      <TooltipTrigger
-        render={<button />}
-        delay={delay}
+    <>
+      <button
+        ref={refs.setReference}
         type={type}
         title={title}
         aria-label={ariaLabel ?? label}
+        aria-describedby={open ? tooltipId : undefined}
         disabled={disabled}
         onMouseEnter={(event) => {
           onMouseEnter?.(event);
@@ -154,17 +185,23 @@ export function TooltipIconButton({
         {...buttonProps}
       >
         {children}
-      </TooltipTrigger>
-      {open && (
-        <TooltipContent
-          side={tooltipSide}
-          align={tooltipAlign}
-          sideOffset={tooltipSideOffset}
-          className={tooltipClassName}
-        >
-          {label}
-        </TooltipContent>
-      )}
-    </Tooltip>
+      </button>
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={refs.setFloating}
+              id={tooltipId}
+              role="tooltip"
+              data-slot="tooltip-popup"
+              data-side={resolvedPlacement.split("-")[0]}
+              className={cn(TOOLTIP_POPUP_CLASS_NAME, tooltipClassName)}
+              style={floatingStyles}
+            >
+              {label}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
