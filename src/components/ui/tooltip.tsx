@@ -46,17 +46,28 @@ function Tooltip({
 }
 
 function TooltipTrigger({
-  // `render` and `delay` were base-ui Trigger props. Radix renders a button
-  // by default and resolves delay at the provider/root level, so both are
-  // accepted for backward compatibility and intentionally not forwarded.
-  render: _render,
+  // Preserve the previous base-ui `render` contract through Radix composition.
+  render,
   delay: _delay,
+  children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger> & {
   render?: React.ReactElement
   delay?: number
 }) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+  if (render) {
+    return (
+      <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} asChild>
+        {children === undefined ? render : React.cloneElement(render, undefined, children)}
+      </TooltipPrimitive.Trigger>
+    )
+  }
+
+  return (
+    <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props}>
+      {children}
+    </TooltipPrimitive.Trigger>
+  )
 }
 
 function TooltipPopup({

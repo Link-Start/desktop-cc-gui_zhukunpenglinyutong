@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { Tooltip, TooltipTrigger } from "./tooltip";
 import { TooltipIconButton } from "./tooltip-icon-button";
 
 function renderTooltipButton(props: Partial<Parameters<typeof TooltipIconButton>[0]> = {}) {
@@ -12,6 +13,20 @@ function renderTooltipButton(props: Partial<Parameters<typeof TooltipIconButton>
   );
 
   return screen.getByRole("button", { name: props["aria-label"] ?? "Hide right sidebar" });
+}
+
+function SidebarToggleLayout({ inTopbar }: { inTopbar: boolean }) {
+  const toggle = (
+    <TooltipIconButton label="Hide right sidebar" className="sidebar-toggle">
+      <span aria-hidden>icon</span>
+    </TooltipIconButton>
+  );
+
+  return inTopbar ? (
+    <header data-testid="topbar-host">{toggle}</header>
+  ) : (
+    <aside data-testid="sidebar-host">{toggle}</aside>
+  );
 }
 
 async function openTooltip(button: HTMLElement) {
@@ -42,6 +57,88 @@ describe("TooltipIconButton", () => {
     const button = renderTooltipButton({ title: "Native fallback" });
 
     expect(button.getAttribute("title")).toBe("Native fallback");
+  });
+
+  it("keeps one stable native trigger across equivalent rerenders", () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = render(
+      <TooltipIconButton label="Hide right sidebar" className="sidebar-toggle">
+        <span aria-hidden>icon</span>
+      </TooltipIconButton>,
+    );
+    const initialButton = screen.getByRole("button", { name: "Hide right sidebar" });
+
+    try {
+      for (let index = 0; index < 64; index += 1) {
+        view.rerender(
+          <TooltipIconButton label="Hide right sidebar" className="sidebar-toggle">
+            <span aria-hidden>icon</span>
+          </TooltipIconButton>,
+        );
+      }
+
+      const currentButton = screen.getByRole("button", { name: "Hide right sidebar" });
+      expect(currentButton).toBe(initialButton);
+      expect(currentButton.className).toContain("sidebar-toggle");
+      expect(currentButton.querySelectorAll("button")).toHaveLength(0);
+      expect(
+        consoleErrorSpy.mock.calls.some((call) =>
+          call.some((entry) => String(entry).includes("Maximum update depth exceeded")),
+        ),
+      ).toBe(false);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("preserves the caller-owned trigger element through Radix composition", () => {
+    render(
+      <Tooltip>
+        <TooltipTrigger render={<button data-trigger-owner="caller" />}>
+          Toggle sidebar
+        </TooltipTrigger>
+      </Tooltip>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Toggle sidebar" }).getAttribute("data-trigger-owner"),
+    ).toBe("caller");
+  });
+
+  it("preserves children for a direct Radix trigger", () => {
+    render(
+      <Tooltip>
+        <TooltipTrigger>Workspace session</TooltipTrigger>
+      </Tooltip>,
+    );
+
+    expect(screen.getByRole("button", { name: "Workspace session" })).toBeTruthy();
+  });
+
+  it("does not enter an update loop when the sidebar trigger changes layout hosts", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = render(<SidebarToggleLayout inTopbar={false} />);
+
+    try {
+      for (let index = 0; index < 16; index += 1) {
+        const button = screen.getByRole("button", { name: "Hide right sidebar" });
+        await act(async () => {
+          fireEvent.mouseEnter(button);
+          await vi.advanceTimersByTimeAsync(250);
+        });
+        expect(document.querySelector('[data-slot="tooltip-popup"]')).toBeTruthy();
+
+        view.rerender(<SidebarToggleLayout inTopbar={index % 2 === 0} />);
+      }
+
+      expect(
+        consoleErrorSpy.mock.calls.some((call) =>
+          call.some((entry) => String(entry).includes("Maximum update depth exceeded")),
+        ),
+      ).toBe(false);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   it("closes the custom tooltip when the trigger is clicked", async () => {

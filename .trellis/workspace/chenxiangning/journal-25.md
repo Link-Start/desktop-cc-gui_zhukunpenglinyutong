@@ -214,3 +214,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 975: 修复 Tooltip 更新回环与会话空白
+
+**Date**: 2026-07-12
+**Task**: 修复 Tooltip 更新回环与会话空白
+**Branch**: `feature/v-0.7.1`
+
+### Summary
+
+定位生产 React #185 到 sidebar toggle 的 Radix TooltipTrigger/PopperAnchor 链路，恢复 Base UI render element 通过 Radix asChild composition 的兼容契约，并保留 direct TooltipTrigger children，修复左侧 workspace session 空白回归。新增 caller-owned trigger、64 次稳定 rerender、sidebar/topbar host 搬迁与 direct children 回归测试。验证：Tooltip/ThreadList/PinnedThreadList 聚焦测试 41/41，通过 typecheck、lint、OpenSpec strict validation；全量 npm test 在既有 Sidebar.test.tsx 三处 stale assertion 停止（menuitem vs menuitemradio 两处、runtime notice DOM order 一处），未修改该范围。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a463a259` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
