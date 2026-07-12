@@ -280,3 +280,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 977: 根治 Tooltip 启动更新回环
+
+**Date**: 2026-07-13
+**Task**: 根治 Tooltip 启动更新回环
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+将 TooltipIconButton 从 Radix PopperAnchor/SlotClone 状态机迁移到 native button + Floating UI portal，保留原有视觉、定位和交互能力，并完成 Tauri 冷启动人工验收。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0d2c5cad` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
