@@ -313,3 +313,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 978: 根治 Sidebar 首次启动会话行更新回环
+
+**Date**: 2026-07-13
+**Task**: 根治 Sidebar 首次启动会话行更新回环
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+将会话行 Tooltip 定位状态改为交互时按需挂载，删除确认改用稳定 virtual anchor；补齐 StrictMode、AppShell、focus 和 Escape 回归测试，并完成新安装包首次启动人工验收。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db663a44` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

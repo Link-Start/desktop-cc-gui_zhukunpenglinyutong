@@ -1,14 +1,5 @@
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from "@/components/ui/popover";
-import {
-  Tooltip,
-  TooltipPopup,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { memo, useEffect } from "react";
+import { FloatingTooltipButton } from "@/components/ui/floating-tooltip-button";
+import { memo, useEffect, useRef } from "react";
 import type { CSSProperties, MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -17,13 +8,13 @@ import type { ThreadMoveFolderTarget } from "../hooks/useSidebarMenus";
 import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
 import { EngineIcon } from "../../engine/components/EngineIcon";
 import { SharedSessionIcon } from "../../shared-session/components/SharedSessionIcon";
-import { ThreadDeleteConfirmBubble } from "../../threads/components/ThreadDeleteConfirmBubble";
 import { resolveCodexProviderLabel } from "../utils/codexProviderLabel";
 import {
   ThreadRowStatusProvider,
   useThreadRowStatus,
   type ThreadStatusMap,
 } from "./threadRowStatusStore";
+import { ThreadDeleteConfirmPopover } from "./ThreadDeleteConfirmPopover";
 
 type PinnedThreadRow = {
   thread: ThreadSummary;
@@ -130,7 +121,10 @@ const PinnedThreadRowItem = memo(function PinnedThreadRowItem({
   const runtimeBadge = status?.isReviewing
     ? { label: t("threads.runtimeReviewing"), severity: "reviewing" as const }
     : status?.isProcessing
-      ? { label: t("threads.runtimeProcessing"), severity: "processing" as const }
+      ? {
+          label: t("threads.runtimeProcessing"),
+          severity: "processing" as const,
+        }
       : null;
   const isProcessing = Boolean(status?.isProcessing);
   const canPin = depth === 0;
@@ -160,147 +154,127 @@ const PinnedThreadRowItem = memo(function PinnedThreadRowItem({
   const isDeleteConfirmOpen =
     deleteConfirmWorkspaceId === workspaceId &&
     deleteConfirmThreadId === thread.id;
+  const rowButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  return (
-    <Popover
-      open={isDeleteConfirmOpen}
-      onOpenChange={(open) => {
-        if (!open) {
-          onCancelDeleteConfirm?.();
+  const rowButton = (
+    <FloatingTooltipButton
+      ref={rowButtonRef}
+      tooltipLabel={thread.name}
+      tooltipSide="top"
+      tooltipAlign="start"
+      tooltipSideOffset={4}
+      tooltipClassName="max-w-[400px] break-words"
+      tooltipDelay={450}
+      tooltipDisabled={isDeleteConfirmOpen}
+      className={`thread-row ${
+        workspaceId === activeWorkspaceId && thread.id === activeThreadId
+          ? "active"
+          : ""
+      }${isDeleteConfirmOpen ? " has-delete-confirm" : ""}${
+        canPin ? " has-pin-toggle" : ""
+      }`}
+      style={indentStyle}
+      onClick={() => onSelectThread(workspaceId, thread.id)}
+      onContextMenu={(event) =>
+        onShowThreadMenu(
+          event,
+          workspaceId,
+          thread.id,
+          canPin,
+          thread.sizeBytes,
+          contextMenuMoveFolderTargets,
+          thread.folderId ?? null,
+          canArchive,
+          workspacePath,
+        )
+      }
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelectThread(workspaceId, thread.id);
         }
       }}
     >
-      <Tooltip>
-        <PopoverAnchor asChild>
-          <TooltipTrigger
-            delay={450}
-            className={`thread-row ${
-              workspaceId === activeWorkspaceId && thread.id === activeThreadId
-                ? "active"
-                : ""
-            }${isDeleteConfirmOpen ? " has-delete-confirm" : ""}${
-              canPin ? " has-pin-toggle" : ""
-            }`}
-            style={indentStyle}
-            onClick={() => onSelectThread(workspaceId, thread.id)}
-            onContextMenu={(event) =>
-              onShowThreadMenu(
-                event,
-                workspaceId,
-                thread.id,
-                canPin,
-                thread.sizeBytes,
-                contextMenuMoveFolderTargets,
-                thread.folderId ?? null,
-                canArchive,
-                workspacePath,
-              )
-            }
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onSelectThread(workspaceId, thread.id);
-              }
-            }}
-          >
-            <span className={`thread-status ${statusClass}`} aria-hidden />
-            {canPin && onToggleThreadPin && (
-              <span
-                className={`thread-pin-toggle${isPinned ? " is-pinned" : ""}`}
-                role="button"
-                aria-label={isPinned ? t("threads.unpin") : t("threads.pin")}
-                title={isPinned ? t("threads.unpin") : t("threads.pin")}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onToggleThreadPin(workspaceId, thread.id);
-                }}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-              >
-                <span className="thread-pin-toggle-icon" aria-hidden />
-              </span>
-            )}
-            <span
-              className={`thread-engine-badge ${
-                isSharedThread
-                  ? "thread-engine-shared"
-                  : `thread-engine-${engineSource}`
-              }${isProcessing ? " is-processing" : ""}`}
-              title={engineTitle}
-            >
-              {isSharedThread ? (
-                <SharedSessionIcon size={12} />
-              ) : (
-                <EngineIcon engine={engineSource} size={12} />
-              )}
-            </span>
-            {showProxyBadge && (
-              <ProxyStatusBadge
-                proxyUrl={systemProxyUrl}
-                label={t("threads.proxyBadge")}
-                variant="compact"
-                className="thread-proxy-badge"
-              />
-            )}
-            <span className="thread-name">{thread.name}</span>
-            <div className="thread-meta">
-              {isAutoNaming && (
-                <span className="thread-auto-naming">
-                  {t("threads.autoNaming")}
-                </span>
-              )}
-              {showProviderLabels && providerLabel ? (
-                <span
-                  className={`thread-provider-label${
-                    isProviderUnavailable ? " is-unavailable" : ""
-                  }`}
-                  title={providerLabel}
-                >
-                  {providerLabel}
-                </span>
-              ) : null}
-              {runtimeBadge ? (
-                <span
-                  className={`thread-runtime-badge thread-runtime-badge--${runtimeBadge.severity}`}
-                >
-                  {runtimeBadge.label}
-                </span>
-              ) : null}
-              {relativeTime && !runtimeBadge ? (
-                <span className="thread-time">{relativeTime}</span>
-              ) : null}
-            </div>
-          </TooltipTrigger>
-        </PopoverAnchor>
-        <TooltipPopup
-          side="top"
-          align="start"
-          sideOffset={4}
-          className="max-w-[400px] break-words"
+      <span className={`thread-status ${statusClass}`} aria-hidden />
+      {canPin && onToggleThreadPin && (
+        <span
+          className={`thread-pin-toggle${isPinned ? " is-pinned" : ""}`}
+          role="button"
+          aria-label={isPinned ? t("threads.unpin") : t("threads.pin")}
+          title={isPinned ? t("threads.unpin") : t("threads.pin")}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onToggleThreadPin(workspaceId, thread.id);
+          }}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
         >
-          {thread.name}
-        </TooltipPopup>
-      </Tooltip>
-      {isDeleteConfirmOpen && (
-        <PopoverContent
-          side="right"
-          align="start"
-          sideOffset={10}
-          className="thread-delete-popover-shell"
-          onOpenAutoFocus={(event) => event.preventDefault()}
-        >
-          <ThreadDeleteConfirmBubble
-            threadName={thread.name}
-            isDeleting={deleteConfirmBusy}
-            onCancel={() => onCancelDeleteConfirm?.()}
-            onConfirm={() => onConfirmDeleteConfirm?.()}
-          />
-        </PopoverContent>
+          <span className="thread-pin-toggle-icon" aria-hidden />
+        </span>
       )}
-    </Popover>
+      <span
+        className={`thread-engine-badge ${
+          isSharedThread
+            ? "thread-engine-shared"
+            : `thread-engine-${engineSource}`
+        }${isProcessing ? " is-processing" : ""}`}
+        title={engineTitle}
+      >
+        {isSharedThread ? (
+          <SharedSessionIcon size={12} />
+        ) : (
+          <EngineIcon engine={engineSource} size={12} />
+        )}
+      </span>
+      {showProxyBadge && (
+        <ProxyStatusBadge
+          proxyUrl={systemProxyUrl}
+          label={t("threads.proxyBadge")}
+          variant="compact"
+          className="thread-proxy-badge"
+        />
+      )}
+      <span className="thread-name">{thread.name}</span>
+      <div className="thread-meta">
+        {isAutoNaming && (
+          <span className="thread-auto-naming">{t("threads.autoNaming")}</span>
+        )}
+        {showProviderLabels && providerLabel ? (
+          <span
+            className={`thread-provider-label${
+              isProviderUnavailable ? " is-unavailable" : ""
+            }`}
+            title={providerLabel}
+          >
+            {providerLabel}
+          </span>
+        ) : null}
+        {runtimeBadge ? (
+          <span
+            className={`thread-runtime-badge thread-runtime-badge--${runtimeBadge.severity}`}
+          >
+            {runtimeBadge.label}
+          </span>
+        ) : null}
+        {relativeTime && !runtimeBadge ? (
+          <span className="thread-time">{relativeTime}</span>
+        ) : null}
+      </div>
+    </FloatingTooltipButton>
+  );
+  return (
+    <ThreadDeleteConfirmPopover
+      open={isDeleteConfirmOpen}
+      anchorRef={rowButtonRef}
+      trigger={rowButton}
+      threadName={thread.name}
+      isDeleting={deleteConfirmBusy}
+      onCancel={onCancelDeleteConfirm}
+      onConfirm={onConfirmDeleteConfirm}
+    />
   );
 });
 

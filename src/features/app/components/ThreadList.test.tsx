@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { ThreadSummary } from "../../../types";
 import { DEFAULT_VISIBLE_THREAD_ROOT_COUNT } from "../constants";
 import { ThreadList } from "./ThreadList";
+import { ScrollArea } from "../../../components/ui/scroll-area";
 
 // Mock react-i18next
 vi.mock("react-i18next", () => ({
@@ -32,14 +34,17 @@ vi.mock("react-i18next", () => ({
         "threads.runtimeProcessing": "Processing",
         "threads.runtimeReviewing": "Reviewing",
         "threads.deleteThreadTitle": "Delete conversation",
-        "threads.deleteThreadMessage": "Are you sure you want to delete this thread?",
+        "threads.deleteThreadMessage":
+          "Are you sure you want to delete this thread?",
         "threads.deleteThreadHint": "This cannot be undone.",
         "threads.delete": "Delete",
         "common.cancel": "Cancel",
         "common.deleting": "Deleting",
       };
       const template = translations[key] || key;
-      return template.replace(/\{\{(\w+)\}\}/g, (_, token: string) => String(options?.[token] ?? ""));
+      return template.replace(/\{\{(\w+)\}\}/g, (_, token: string) =>
+        String(options?.[token] ?? ""),
+      );
     },
     i18n: { language: "en", changeLanguage: vi.fn() },
   }),
@@ -87,6 +92,57 @@ const baseProps = {
 };
 
 describe("ThreadList", () => {
+  it("hydrates multiple rows in StrictMode without mounting Radix row anchors", () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const rows = Array.from({ length: 8 }, (_, index) => ({
+      thread: {
+        ...thread,
+        id: `thread-${index + 10}`,
+        name: `Thread ${index + 1}`,
+      },
+      depth: 0,
+    }));
+
+    try {
+      const { container } = render(
+        <StrictMode>
+          <ScrollArea style={{ width: 320, height: 480 }}>
+            <ThreadList
+              {...baseProps}
+              unpinnedRows={rows}
+              totalThreadRoots={rows.length}
+              visibleThreadRootCount={rows.length}
+              isExpanded
+            />
+          </ScrollArea>
+        </StrictMode>,
+      );
+
+      expect(container.querySelectorAll(".thread-row")).toHaveLength(
+        rows.length,
+      );
+      expect(
+        container.querySelector('[data-slot="tooltip-trigger"]'),
+      ).toBeNull();
+      expect(
+        container.querySelector('[data-slot="popover-anchor"]'),
+      ).toBeNull();
+      expect(
+        consoleErrorSpy.mock.calls.some((call) =>
+          call.some((entry) =>
+            /Maximum update depth exceeded|Minified React error #185/.test(
+              String(entry),
+            ),
+          ),
+        ),
+      ).toBe(false);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   it("renders active row and handles click/context menu", () => {
     const onSelectThread = vi.fn();
     const onShowThreadMenu = vi.fn();
@@ -180,7 +236,9 @@ describe("ThreadList", () => {
     if (!row) {
       throw new Error("Missing thread row");
     }
-    const pinButton = row.querySelector(".thread-pin-toggle") as HTMLButtonElement | null;
+    const pinButton = row.querySelector(
+      ".thread-pin-toggle",
+    ) as HTMLButtonElement | null;
     expect(pinButton).toBeTruthy();
     if (!pinButton) {
       throw new Error("Missing pin toggle");
@@ -300,13 +358,19 @@ describe("ThreadList", () => {
 
     const parentRow = screen.getByText("Alpha").closest(".thread-row");
     expect(parentRow?.classList.contains("is-subagent-parent")).toBe(true);
-    expect(parentRow?.classList.contains("is-active-subagent-parent")).toBe(true);
-    // Subagent trees collapse by default; expand to reveal the child session row.
-    fireEvent.click(parentRow?.querySelector(".thread-tree-expander") as HTMLElement);
-    expect(parentRow?.getAttribute("aria-expanded")).toBe("true");
-    expect(parentRow?.querySelector(".thread-tree-expander")?.getAttribute("aria-label")).toBe(
-      "Collapse subagent tree",
+    expect(parentRow?.classList.contains("is-active-subagent-parent")).toBe(
+      true,
     );
+    // Subagent trees collapse by default; expand to reveal the child session row.
+    fireEvent.click(
+      parentRow?.querySelector(".thread-tree-expander") as HTMLElement,
+    );
+    expect(parentRow?.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      parentRow
+        ?.querySelector(".thread-tree-expander")
+        ?.getAttribute("aria-label"),
+    ).toBe("Collapse subagent tree");
     const childRow = screen.getByText("Nested Agent").closest(".thread-row");
     expect(childRow).toBeTruthy();
     if (!childRow) {
@@ -316,10 +380,15 @@ describe("ThreadList", () => {
     expect(childRow.classList.contains("is-active-subagent-group")).toBe(true);
     expect(childRow.querySelector(".thread-subagent-branch")).toBeNull();
     expect(childRow.querySelector(".thread-engine-badge")).toBeNull();
-    expect(childRow.querySelector(".thread-subagent-tag")?.textContent).toBe("Subagent");
+    expect(childRow.querySelector(".thread-subagent-tag")?.textContent).toBe(
+      "Subagent",
+    );
 
     fireEvent.click(childRow);
-    expect(onSelectThread).toHaveBeenCalledWith("ws-1", "claude:agent-parent-agent");
+    expect(onSelectThread).toHaveBeenCalledWith(
+      "ws-1",
+      "claude:agent-parent-agent",
+    );
   });
 
   it("does not expose subagent parent controls on deeper nested child rows", () => {
@@ -363,7 +432,9 @@ describe("ThreadList", () => {
 
     const topLevelRow = screen.getByText("Alpha").closest(".thread-row");
     // Subagent trees collapse by default; expand the top-level parent to reveal its child.
-    fireEvent.click(topLevelRow?.querySelector(".thread-tree-expander") as HTMLElement);
+    fireEvent.click(
+      topLevelRow?.querySelector(".thread-tree-expander") as HTMLElement,
+    );
     const midRow = screen.getByText("Mid Agent").closest(".thread-row");
     expect(topLevelRow?.classList.contains("is-subagent-parent")).toBe(true);
     expect(topLevelRow?.querySelector(".thread-tree-expander")).toBeTruthy();
@@ -405,7 +476,9 @@ describe("ThreadList", () => {
 
     // Subagent trees collapse by default; expand the parent to reveal the pending child.
     fireEvent.click(
-      screen.getByText("Alpha").closest(".thread-row")
+      screen
+        .getByText("Alpha")
+        .closest(".thread-row")
         ?.querySelector(".thread-tree-expander") as HTMLElement,
     );
     const childRow = screen.getByText("Nested Agent").closest(".thread-row");
@@ -480,7 +553,14 @@ describe("ThreadList", () => {
     const onCancelDeleteConfirm = vi.fn();
     const onConfirmDeleteConfirm = vi.fn();
 
-    render(
+    const view = render(<ThreadList {...baseProps} />);
+    const row = screen
+      .getByText("Alpha")
+      .closest<HTMLButtonElement>(".thread-row");
+    expect(row).toBeTruthy();
+    row?.focus();
+
+    view.rerender(
       <ThreadList
         {...baseProps}
         deleteConfirmWorkspaceId="ws-1"
@@ -490,13 +570,21 @@ describe("ThreadList", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog", { name: "Delete conversation" })).toBeTruthy();
+    expect(
+      screen.getByRole("dialog", { name: "Delete conversation" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Alpha").closest(".thread-row")).toBe(row);
+    expect(document.activeElement).toBe(row);
+    expect(row?.closest('[data-slot="popover-anchor"]')).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(onConfirmDeleteConfirm).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancelDeleteConfirm).toHaveBeenCalledTimes(1);
+
+    view.rerender(<ThreadList {...baseProps} />);
+    expect(screen.getByText("Alpha").closest(".thread-row")).toBe(row);
   });
 
   it("shows auto naming loading badge when thread is auto naming", () => {
@@ -518,12 +606,26 @@ describe("ThreadList", () => {
         {...baseProps}
         hideExitedSessions
         unpinnedRows={[
-          { thread: { id: "thread-running", name: "Running", updatedAt: 2 }, depth: 0 },
-          { thread: { id: "thread-exited", name: "Exited", updatedAt: 1 }, depth: 0 },
+          {
+            thread: { id: "thread-running", name: "Running", updatedAt: 2 },
+            depth: 0,
+          },
+          {
+            thread: { id: "thread-exited", name: "Exited", updatedAt: 1 },
+            depth: 0,
+          },
         ]}
         threadStatusById={{
-          "thread-running": { isProcessing: true, hasUnread: false, isReviewing: false },
-          "thread-exited": { isProcessing: false, hasUnread: false, isReviewing: false },
+          "thread-running": {
+            isProcessing: true,
+            hasUnread: false,
+            isReviewing: false,
+          },
+          "thread-exited": {
+            isProcessing: false,
+            hasUnread: false,
+            isReviewing: false,
+          },
         }}
       />,
     );
@@ -540,14 +642,39 @@ describe("ThreadList", () => {
         {...baseProps}
         hideExitedSessions
         unpinnedRows={[
-          { thread: { id: "thread-parent", name: "Parent", updatedAt: 3 }, depth: 0 },
-          { thread: { id: "thread-child", name: "Running child", updatedAt: 2 }, depth: 1 },
-          { thread: { id: "thread-exited", name: "Exited sibling", updatedAt: 1 }, depth: 0 },
+          {
+            thread: { id: "thread-parent", name: "Parent", updatedAt: 3 },
+            depth: 0,
+          },
+          {
+            thread: { id: "thread-child", name: "Running child", updatedAt: 2 },
+            depth: 1,
+          },
+          {
+            thread: {
+              id: "thread-exited",
+              name: "Exited sibling",
+              updatedAt: 1,
+            },
+            depth: 0,
+          },
         ]}
         threadStatusById={{
-          "thread-parent": { isProcessing: false, hasUnread: false, isReviewing: false },
-          "thread-child": { isProcessing: true, hasUnread: false, isReviewing: false },
-          "thread-exited": { isProcessing: false, hasUnread: false, isReviewing: false },
+          "thread-parent": {
+            isProcessing: false,
+            hasUnread: false,
+            isReviewing: false,
+          },
+          "thread-child": {
+            isProcessing: true,
+            hasUnread: false,
+            isReviewing: false,
+          },
+          "thread-exited": {
+            isProcessing: false,
+            hasUnread: false,
+            isReviewing: false,
+          },
         }}
       />,
     );
@@ -564,10 +691,17 @@ describe("ThreadList", () => {
         {...baseProps}
         hideExitedSessions
         unpinnedRows={[
-          { thread: { id: "thread-exited", name: "Exited", updatedAt: 1 }, depth: 0 },
+          {
+            thread: { id: "thread-exited", name: "Exited", updatedAt: 1 },
+            depth: 0,
+          },
         ]}
         threadStatusById={{
-          "thread-exited": { isProcessing: false, hasUnread: false, isReviewing: false },
+          "thread-exited": {
+            isProcessing: false,
+            hasUnread: false,
+            isReviewing: false,
+          },
         }}
       />,
     );
@@ -577,11 +711,7 @@ describe("ThreadList", () => {
   });
 
   it("renders only relative time inline when size is available", () => {
-    const { container } = render(
-      <ThreadList
-        {...baseProps}
-      />,
-    );
+    const { container } = render(<ThreadList {...baseProps} />);
 
     const meta = container.querySelector(".thread-meta");
     expect(meta).toBeTruthy();
@@ -599,7 +729,11 @@ describe("ThreadList", () => {
       <ThreadList
         {...baseProps}
         threadStatusById={{
-          "thread-1": { isProcessing: true, hasUnread: false, isReviewing: false },
+          "thread-1": {
+            isProcessing: true,
+            hasUnread: false,
+            isReviewing: false,
+          },
         }}
       />,
     );
@@ -615,7 +749,11 @@ describe("ThreadList", () => {
       <ThreadList
         {...baseProps}
         threadStatusById={{
-          "thread-1": { isProcessing: true, hasUnread: false, isReviewing: false },
+          "thread-1": {
+            isProcessing: true,
+            hasUnread: false,
+            isReviewing: false,
+          },
         }}
       />,
     );
@@ -639,7 +777,11 @@ describe("ThreadList", () => {
         systemProxyEnabled
         systemProxyUrl="http://127.0.0.1:7890"
         threadStatusById={{
-          "thread-1": { isProcessing: true, hasUnread: false, isReviewing: false },
+          "thread-1": {
+            isProcessing: true,
+            hasUnread: false,
+            isReviewing: false,
+          },
         }}
       />,
     );
@@ -648,7 +790,9 @@ describe("ThreadList", () => {
     const badge = row?.querySelector(".thread-proxy-badge");
     expect(badge).toBeTruthy();
     expect(badge?.textContent ?? "").toBe("");
-    expect(badge?.classList.contains("proxy-status-badge--animated")).toBe(false);
+    expect(badge?.classList.contains("proxy-status-badge--animated")).toBe(
+      false,
+    );
   });
 
   it("keeps an unchanged target row stable across unrelated status updates", () => {
@@ -672,8 +816,16 @@ describe("ThreadList", () => {
         {...baseProps}
         unpinnedRows={rows}
         threadStatusById={{
-          "thread-1": { isProcessing: false, hasUnread: true, isReviewing: false },
-          "thread-other": { isProcessing: false, hasUnread: false, isReviewing: false },
+          "thread-1": {
+            isProcessing: false,
+            hasUnread: true,
+            isReviewing: false,
+          },
+          "thread-other": {
+            isProcessing: false,
+            hasUnread: false,
+            isReviewing: false,
+          },
         }}
         onThreadRowRender={onThreadRowRender}
       />,
@@ -687,7 +839,11 @@ describe("ThreadList", () => {
           {...baseProps}
           unpinnedRows={rows}
           threadStatusById={{
-            "thread-1": { isProcessing: false, hasUnread: true, isReviewing: false },
+            "thread-1": {
+              isProcessing: false,
+              hasUnread: true,
+              isReviewing: false,
+            },
             "thread-other": {
               isProcessing: index % 2 === 0,
               hasUnread: false,
@@ -762,49 +918,49 @@ describe("ThreadList", () => {
   });
 });
 
-  it("marks the list as virtualized when 200 threads are present", () => {
-    const longRows = Array.from({ length: 200 }, (_, index) => ({
-      thread: {
-        id: `thread-long-${index}`,
-        name: `Thread ${index}`,
-        updatedAt: 1_700_000_000_000 + index,
-        engineSource: "codex" as const,
-      },
-      depth: 0,
-    }));
-    const { container } = render(
-      <ThreadList
-        {...baseProps}
-        unpinnedRows={longRows}
-        totalThreadRoots={longRows.length}
-        visibleThreadRootCount={longRows.length}
-        isExpanded={false}
-      />,
-    );
-    const listEl = container.querySelector(".thread-list");
-    expect(listEl).toBeTruthy();
-    expect(listEl?.getAttribute("data-virtualized")).toBe("true");
-    const spacer = container.querySelector(".thread-list-virtual-spacer");
-    expect(spacer).toBeTruthy();
-    // The whole point of virtualization: with 200 rows, the DOM MUST NOT
-    // mount all 200 .thread-row elements at once. With estimateSize=36 and
-    // overscan=8 and no measured scroll element in jsdom, the virtualizer
-    // may report zero items; in that case the bound is "fewer than 200"
-    // rows in the DOM. Either way, the count must stay bounded.
-    const mountedRows = container.querySelectorAll(".thread-row").length;
-    expect(mountedRows).toBeLessThan(200);
-  });
+it("marks the list as virtualized when 200 threads are present", () => {
+  const longRows = Array.from({ length: 200 }, (_, index) => ({
+    thread: {
+      id: `thread-long-${index}`,
+      name: `Thread ${index}`,
+      updatedAt: 1_700_000_000_000 + index,
+      engineSource: "codex" as const,
+    },
+    depth: 0,
+  }));
+  const { container } = render(
+    <ThreadList
+      {...baseProps}
+      unpinnedRows={longRows}
+      totalThreadRoots={longRows.length}
+      visibleThreadRootCount={longRows.length}
+      isExpanded={false}
+    />,
+  );
+  const listEl = container.querySelector(".thread-list");
+  expect(listEl).toBeTruthy();
+  expect(listEl?.getAttribute("data-virtualized")).toBe("true");
+  const spacer = container.querySelector(".thread-list-virtual-spacer");
+  expect(spacer).toBeTruthy();
+  // The whole point of virtualization: with 200 rows, the DOM MUST NOT
+  // mount all 200 .thread-row elements at once. With estimateSize=36 and
+  // overscan=8 and no measured scroll element in jsdom, the virtualizer
+  // may report zero items; in that case the bound is "fewer than 200"
+  // rows in the DOM. Either way, the count must stay bounded.
+  const mountedRows = container.querySelectorAll(".thread-row").length;
+  expect(mountedRows).toBeLessThan(200);
+});
 
-  it("does not virtualize a small thread list", () => {
-    const { container } = render(
-      <ThreadList
-        {...baseProps}
-        totalThreadRoots={2}
-        visibleThreadRootCount={2}
-        isExpanded={false}
-      />,
-    );
-    const listEl = container.querySelector(".thread-list");
-    expect(listEl?.getAttribute("data-virtualized")).toBeNull();
-    expect(container.querySelector(".thread-list-virtual-spacer")).toBeNull();
-  });
+it("does not virtualize a small thread list", () => {
+  const { container } = render(
+    <ThreadList
+      {...baseProps}
+      totalThreadRoots={2}
+      visibleThreadRootCount={2}
+      isExpanded={false}
+    />,
+  );
+  const listEl = container.querySelector(".thread-list");
+  expect(listEl?.getAttribute("data-virtualized")).toBeNull();
+  expect(container.querySelector(".thread-list-virtual-spacer")).toBeNull();
+});
