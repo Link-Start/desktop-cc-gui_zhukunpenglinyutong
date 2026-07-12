@@ -355,6 +355,7 @@ type ComposerProps = {
   selectedCodeAnnotations?: CodeAnnotationSelection[];
   onRemoveCodeAnnotation?: (annotationId: string) => void;
   onClearCodeAnnotations?: () => void;
+  externalNoteCardSelectionRequest?: ComposerNoteCardSelectionRequest | null;
 };
 
 type ManualMemorySelection = {
@@ -368,7 +369,7 @@ type ManualMemorySelection = {
   tags: string[];
 };
 
-type NoteCardSelection = {
+export type NoteCardSelection = {
   id: string;
   title: string;
   plainTextExcerpt: string;
@@ -382,6 +383,11 @@ type NoteCardSelection = {
     contentType: string;
     absolutePath: string;
   }>;
+};
+
+export type ComposerNoteCardSelectionRequest = {
+  requestId: number;
+  noteCard: NoteCardSelection;
 };
 
 const EMPTY_ITEMS: ConversationItem[] = [];
@@ -604,6 +610,7 @@ function ComposerImpl({
   selectedCodeAnnotations = [],
   onRemoveCodeAnnotation,
   onClearCodeAnnotations,
+  externalNoteCardSelectionRequest = null,
 }: ComposerProps) {
   const { t } = useTranslation();
   const isCodexEngine = selectedEngine === "codex";
@@ -656,6 +663,7 @@ function ComposerImpl({
   const [rewindMode, setRewindMode] = useState<RewindMode>("messages-and-files");
   const rewindInFlightRef = useRef(false);
   const handledRewindDialogRequestIdRef = useRef<number | null>(null);
+  const handledNoteCardSelectionRequestIdRef = useRef<number | null>(null);
   const lastExpandedHeightRef = useRef(Math.max(textareaHeight, COMPOSER_EXPAND_HEIGHT));
   const composerInputInteractionTimerRef = useRef<number | null>(null);
   const [isComposerInputInteractionActive, setIsComposerInputInteractionActive] = useState(false);
@@ -978,6 +986,23 @@ function ComposerImpl({
       return [...prev, noteCard];
     });
   }, []);
+
+  useEffect(() => {
+    if (
+      !externalNoteCardSelectionRequest ||
+      handledNoteCardSelectionRequestIdRef.current === externalNoteCardSelectionRequest.requestId
+    ) {
+      return;
+    }
+    handledNoteCardSelectionRequestIdRef.current = externalNoteCardSelectionRequest.requestId;
+    const requestedNoteCard = externalNoteCardSelectionRequest.noteCard;
+    setSelectedNoteCards((previous) =>
+      previous.some((entry) => entry.id === requestedNoteCard.id)
+        ? previous
+        : [...previous, requestedNoteCard],
+    );
+    chatInputRef.current?.focus();
+  }, [externalNoteCardSelectionRequest]);
 
   const handleSelectSkill = useCallback((skillName: string) => {
     const normalized = skillName.trim();

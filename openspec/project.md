@@ -1,7 +1,7 @@
 # Project Context
 
 - Type: OpenSpec Workspace
-- Updated At: 2026-06-23T10:00:47+08:00
+- Updated At: 2026-07-11T20:28:14+08:00
 - Scope: governance snapshot for the current `mossx` repository workspace
 - Product version fact: `ccgui@0.5.13` from `package.json` and `src-tauri/tauri.conf.json`
 
@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: tracked active changes = `4`, archive changes = `521`, main specs = `357`
+- Current workspace state: tracked active changes = `12`, archive changes = `581`, main specs = `383`
 
 ## Entry Surfaces
 
@@ -54,35 +54,64 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 ## Current Inventory
 
-- Active changes: `4`
-- Archive changes: `521`
-- Main specs: `357`
+- Active changes: `12`
+- Archive changes: `581`
+- Main specs: `383`
 - Completed task sets still active: `0`
 - Ready-for-implementation task sets: `0`
-- Demand-pool proposal directories without `proposal.md` / `tasks.md`: `3`
+- Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
 
 ## Active Changes
 
-Active OpenSpec changes after the 2026-06-23 closure batch:
+Active OpenSpec changes after the 2026-07-11 closure batch:
 
-- `2026-06-22-release-pipeline-cache-sccache`
-  - Status: implementation/verification in progress; `tasks.md` shows 7/13 complete.
-  - Archive gate remains blocked by live release run evidence, artifact verification, sccache cache-size monitoring, PR fallback note, and final archive task.
-- `2026-06-18-add-shortcuts-overview-and-conflict-detection`
-  - Status: demand-pool proposal; no `tasks.md` and no spec delta yet.
-  - Next step: add explicit proposal/design/tasks/spec delta before implementation or archive.
-- `2026-06-18-extend-editor-file-tab-lifecycle`
-  - Status: demand-pool proposal; no `tasks.md` and no spec delta yet.
-  - Next step: add explicit proposal/design/tasks/spec delta before implementation or archive.
-- `2026-06-18-extend-search-palette-with-commands`
-  - Status: demand-pool proposal; no `tasks.md` and no spec delta yet.
-  - Next step: add explicit proposal/design/tasks/spec delta before implementation or archive.
+- `add-askuserquestion-default-mode-mcp-bridge` — 10/12; blocked on deferred `cargo test` and manual multi-select queue acceptance.
+- `add-linux-native-menu-localization` — 3/5; blocked on deferred Rust validation and Linux startup localization smoke test.
+- `optimize-conversation-streaming-render-perf` — 7/8; implementation verification passed, but archive remains blocked on rebuilt-app performance trace evidence.
+- `add-claude-runtime-mcp-servers-panel` — 5/6; blocked on manual Claude runtime-server panel QA.
+- `harden-conversation-rendering-for-large-history` — 33/36; blocked on heavy-history manual evidence, performance budget finalization, and human acceptance.
+- `fix-codex-thread-start-continuity-and-recovery` — 24/26; implementation tasks are complete; commit and mandatory Trellis session record remain.
+- `enable-claude-lightweight-streaming-and-frame-attribution` — 15/18; blocked on human FPS/visual fidelity acceptance and final archive.
+- `2026-06-24-retire-opencode-and-gemini-cli` — 1/45; large cross-layer implementation backlog, not an archive candidate.
+- `2026-06-24-infer-thread-rename-from-claude-codex-jsonl` — 0/31; planned implementation backlog, not an archive candidate.
+- `2026-06-22-release-pipeline-cache-sccache` — 7/13; blocked on live release run, artifact, cache-size, and fallback evidence.
+- `fix-sidebar-session-catalog-progressive-loading` — 0/8; documentation-restored backlog covering bounded first-page projection, continuation semantics, stale-result rejection, and large-history evidence.
+- `redesign-workspace-sidebar-session-loading` — 0/11; documentation-restored cross-capability backlog covering staged hydration, per-workspace deduplication, stale-result rejection, and engine-scoped continuity.
+
+Calibration rule: `openspec validate --strict` proves artifact structure only. Implementation verification requires the evidence explicitly named by each change's remaining tasks; no active change is considered verified solely because its schema validates.
 
 ## P1 Performance Execution Order
 
 The previous v0.5.11 performance and recovery follow-up chain has been archived. Future performance work should open a new chain instead of reusing the archived change directories.
 
 ## Recent Archive / Sync Snapshot
+
+### 2026-07-11 Completion-Based Closure Batch
+
+Archived 18 changes whose task sets were 100% complete and whose individual strict OpenSpec validation passed:
+
+- `reduce-idle-chrome-render-cost`
+- `add-idea-style-editable-workspace-diff`
+- `fix-claude-manual-compact-wall-clock-cap`
+- `add-browser-page-selector-and-window-sizing`
+- `fix-streaming-conversation-jank`
+- `ratchet-large-file-new-files`
+- `restore-git-switch-in-diff-menu`
+- `fix-windows-titlebar-drag-latency`
+- `fix-non-git-diff-scan-noise`
+- `fix-live-auto-follow-rearm-scroll`
+- `fix-git-diff-stats-display`
+- `fix-editor-file-maximize-and-workspace-file-tabs`
+- `fix-diagnostics-idle-cpu-storm`
+- `fix-client-store-bloat-and-write-cost`
+- `fix-codex-startup-cli-probe`
+- `add-workspace-file-compare-tool`
+- `add-message-anchor-bottom-jump`
+- `add-filetree-root-header-actions`
+
+The archive synced 18 delta sets into main specs, creating four capabilities: `ui-chrome-idle-render-cost`, `conversation-streaming-performance`, `client-storage-performance`, and `workspace-file-compare-tool`. Four initially rejected deltas were calibrated before retry: three new requirements were moved from `MODIFIED` to `ADDED`, and one Browser Dock requirement anchor was aligned to the current main-spec title. Counts after archive: active=12, archive=581, specs=383.
+
+Archive policy for this batch was explicitly completion-based (`tasks=100%` plus strict OpenSpec validation), not a claim that every change had a standalone implementation verification report. In particular, archived historical evidence for `fix-diagnostics-idle-cpu-storm` retains its prior blocked verification note.
 
 ### 2026-06-23 v0.5.13 Closure Batch
 
@@ -228,6 +257,8 @@ npm run check:large-files
 
 ## Update History
 
+- 2026-07-11: Completed a documentation-only calibration pass. Added missing designs for Linux native-menu localization and Claude runtime MCP servers, added seven evidence-oriented verification reports, and restored two empty sidebar loading changes with proposal/design/tasks/spec deltas. No product code, configuration, scripts, or tests were modified; both restored changes remain 0% complete pending implementation/evidence review.
+- 2026-07-11: Archived 18 completion-based changes, synced their delta specs, calibrated four stale delta anchors/sections, and refreshed the active backlog to 12 changes. Current tracked counts are active=12, archive=581, specs=383.
 - 2026-06-23: Archived 9 verified v0.5.13 changes and synced their deltas into main specs. Current tracked counts are active=4, archive=521, specs=357. Remaining active set is one in-progress release pipeline cache change plus three demand-pool proposals without `tasks.md` or spec deltas.
 - 2026-06-12: Reconciled active OpenSpec workspace after code rollback. Active changes are the five P1 performance chain changes: `composer-and-message-row-render-budget`, `renderer-resource-backpressure`, `backend-io-cache-and-bridge-payload-budget`, `workspace-tree-and-large-file-listing-budget`, and `markdown-off-main-thread-pipeline`. Current tracked counts are active=5, archive=472, specs=328. Each active change validates individually under strict mode.
 - 2026-06-11: Archived `lazy-markdown-runtime` after moving full Markdown parser dependencies behind `FullMarkdownRuntime`, preserving focused Markdown behavior tests, and syncing message markdown streaming compatibility deltas. Current tracked counts are active=3, archive=469, specs=328. Spec-only strict validation passed.

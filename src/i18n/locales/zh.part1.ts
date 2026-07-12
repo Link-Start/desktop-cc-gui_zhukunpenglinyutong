@@ -137,6 +137,7 @@ const zhPart1 = {
     resizeSidebar: "调整侧边栏宽度",
     resizeRightPanel: "调整右侧面板宽度",
     resizeEditorSplit: "调整编辑区分栏宽度",
+    resizeNoteCardsSplit: "调整对话与便签分栏宽度",
     resizePlanPanel: "调整计划面板高度",
     resizeRuntimeConsole: "调整运行控制台高度",
     resizeProjects: "调整项目列表宽度",
@@ -2539,6 +2540,10 @@ const zhPart1 = {
     thinkingLabel: "思考",
     thinkingProcess: "思考过程",
     finalMessageBoundary: "最终消息",
+    turnFilesChanged: {
+      title_other: "已编辑 {{count}} 个文件",
+      showMore_other: "再显示 {{count}} 个文件",
+    },
     noThinkingContent: "无思考内容",
     hiddenThinkingContent: "思考内容已按当前设置隐藏",
     generating: "生成中…",

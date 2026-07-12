@@ -128,7 +128,7 @@ export function FilePreviewPopover({
             </div>
           </div>
           {imageSrc ? (
-            <div className="file-preview-image">
+            <div className="file-preview-image scrollable">
               <img src={imageSrc} alt={path} />
             </div>
           ) : (
@@ -178,7 +178,7 @@ export function FilePreviewPopover({
               </button>
             </div>
           </div>
-          <div className="file-preview-lines" role="list">
+          <div className="file-preview-lines scrollable" role="list">
             {lines.map((_, index) => {
               const html = highlightedLines[index] ?? "&nbsp;";
               const isSelected =

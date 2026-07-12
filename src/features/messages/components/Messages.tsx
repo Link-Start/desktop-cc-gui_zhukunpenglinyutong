@@ -62,6 +62,10 @@ import {
   type MessagesHistoryExpansionMode,
 } from "./messagesLiveWindow";
 import {
+  buildTurnFileChangesByBoundaryId,
+  mergeTurnFileChangesSummaries,
+} from "../utils/turnFileChanges";
+import {
   isAssistantMessageConversationItem,
   isReasoningConversationItem,
   isUserMessageConversationItem,
@@ -2240,6 +2244,12 @@ export const Messages = memo(function Messages({
   const assistantFinalBoundarySet = useMemo(() => {
     return buildAssistantFinalBoundarySet(timelinePresentationItems);
   }, [timelinePresentationItems]);
+  const turnFileChangesByBoundaryId = useMemo(() => {
+    return buildTurnFileChangesByBoundaryId(timelinePresentationItems);
+  }, [timelinePresentationItems]);
+  const sessionFileChangesSummary = useMemo(() => {
+    return mergeTurnFileChangesSummaries(turnFileChangesByBoundaryId.values());
+  }, [turnFileChangesByBoundaryId]);
   const assistantLiveTurnFinalBoundarySuppressedSet = useMemo(() => {
     const ids = new Set<string>();
     if (!liveAssistantMessageId) {
@@ -2397,7 +2407,7 @@ export const Messages = memo(function Messages({
         onScrollToAnchor={requestScrollToAnchor}
       />
       <div
-        className="messages"
+        className="messages scrollable"
         ref={containerRef}
         onScroll={updateAutoScroll}
       >
@@ -2448,6 +2458,7 @@ export const Messages = memo(function Messages({
           messageActionTargetByAssistantId={messageActionTargets.targetByAssistantId}
           messageCopyTextByAssistantId={messageActionTargets.copyTextByAssistantId}
           latestFinalAssistantMessageId={messageActionTargets.latestFinalAssistantMessageId}
+          hasPendingUserTurn={messageActionTargets.hasPendingUserTurn}
           pendingJumpMessageId={pendingJumpMessageId}
           onPendingJumpTargetReady={handlePendingJumpTargetReady}
           onForkFromMessage={onForkFromMessage}
@@ -2493,6 +2504,8 @@ export const Messages = memo(function Messages({
           suppressedUserMemoryContextMessageIds={suppressedUserMemoryContextMessageIds}
           threadId={threadId}
           toggleExpanded={toggleExpanded}
+          turnFileChangesByBoundaryId={turnFileChangesByBoundaryId}
+          sessionFileChangesSummary={sessionFileChangesSummary}
           suppressedUserNoteCardContextMessageIds={suppressedUserNoteCardContextMessageIds}
           claudeHistoryTranscriptFallbackActive={claudeHistoryTranscriptFallbackActive}
           hasVisibleUserInputRequest={hasVisibleUserInputRequest}

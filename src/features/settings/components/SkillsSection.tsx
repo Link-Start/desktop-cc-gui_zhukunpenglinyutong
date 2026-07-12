@@ -1087,7 +1087,7 @@ export function SkillsSection({
                 <div className="settings-skills-tree-root">
                   {engineRootSummary || primaryEngineRootPath}
                 </div>
-                <div className="settings-skills-tree-scroll">
+                <div className="settings-skills-tree-scroll scrollable">
                   {rootTreeLoading ? (
                     <div className="settings-skills-tree-state">{t("settings.skillsPanel.treeLoading")}</div>
                   ) : rootTreeError ? (
@@ -1209,7 +1209,7 @@ export function SkillsSection({
                         {t("settings.skillsPanel.detailDirectoryHint", { count: selectedDirectoryChildCount })}
                       </div>
                     ) : (
-                      <div className="settings-skills-content-wrap">
+                      <div className="settings-skills-content-wrap scrollable">
                         {selectedFileIsImage ? (
                           selectedImageSrc ? (
                             <div className="fvp-image-preview">

@@ -1356,7 +1356,7 @@ export function CodexSection({
                   </span>
                 </div>
                 {installerState.logLines.length > 0 ? (
-                  <pre className="settings-installer-log-output">
+                  <pre className="settings-installer-log-output scrollable">
                     {installerState.logLines
                       .map((line) => {
                         const stream = line.stream

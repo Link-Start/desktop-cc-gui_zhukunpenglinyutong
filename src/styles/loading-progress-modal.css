@@ -7,12 +7,13 @@
 .loading-progress-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(8, 12, 20, 0.52);
-  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--background), transparent 30%);
+  backdrop-filter: blur(4px);
 }
 
 .app.reduced-transparency .loading-progress-modal-backdrop {
   backdrop-filter: none;
+  background: color-mix(in srgb, var(--background), transparent 8%);
 }
 
 .loading-progress-modal-card {
@@ -20,23 +21,19 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(380px, calc(100vw - 28px));
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--border-stronger), transparent 28%);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--surface-card-strong), #0f172a 5%) 0%,
-      color-mix(in srgb, var(--surface-card), #0b1320 4%) 100%
-    );
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
+  width: min(360px, calc(100vw - 28px));
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.24);
   padding: 16px;
   box-sizing: border-box;
 }
 
 .loading-progress-modal-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
@@ -45,7 +42,7 @@
   min-width: 0;
   flex: 1;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
 }
 
@@ -53,12 +50,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--border-accent), transparent 34%);
-  background: color-mix(in srgb, var(--surface-active), transparent 40%);
-  color: #93c5fd;
+  width: 32px;
+  height: 32px;
+  border-radius: calc(var(--radius) - 4px);
+  border: 1px solid var(--border);
+  background: var(--muted);
+  color: var(--muted-foreground);
   flex: 0 0 auto;
 }
 
@@ -72,31 +69,17 @@
 
 .loading-progress-modal-text h3 {
   margin: 0;
-  color: var(--text-strong);
-  font-size: 16px;
-  line-height: 1.25;
-  font-weight: 700;
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 600;
 }
 
 .loading-progress-modal-text p {
-  margin: 6px 0 0;
-  color: var(--text-subtle);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.loading-progress-modal-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 84px;
-  min-height: 32px;
-  padding: 0 10px;
-  border-radius: 6px;
-  flex: 0 0 auto;
+  margin: 2px 0 0;
+  color: var(--muted-foreground);
   font-size: 12px;
-  line-height: 1;
-  white-space: nowrap;
+  line-height: 1.45;
 }
 
 @keyframes loading-progress-modal-spin {
@@ -111,7 +94,7 @@
 
 @media (max-width: 640px) {
   .loading-progress-modal-card {
-    width: min(360px, calc(100vw - 20px));
+    width: min(340px, calc(100vw - 20px));
     padding: 14px;
   }
 }

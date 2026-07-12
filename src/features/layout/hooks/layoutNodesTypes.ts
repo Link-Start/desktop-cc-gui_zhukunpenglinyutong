@@ -1218,6 +1218,7 @@ export type LayoutNodesResult = {
   gitDiffPanelNode: ReactNode;
   gitDiffViewerNode: ReactNode;
   fileViewPanelNode: ReactNode;
+  noteCardsPanelNode: ReactNode;
   fileComparePanelNode: ReactNode;
   projectMapPanelNode: ReactNode;
   intentCanvasPanelNode: ReactNode;

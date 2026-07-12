@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import LoaderCircle from "lucide-react/dist/esm/icons/loader-circle";
+import { Button } from "@/components/ui/button";
 
 type LoadingProgressDialogProps = {
   title: string;
@@ -50,16 +51,18 @@ export function LoadingProgressDialog({
               ) : null}
             </div>
           </div>
-          <button
+          <Button
             ref={closeButtonRef}
             type="button"
-            className="ghost loading-progress-modal-close"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
             onClick={onClose}
             aria-label={t("workspace.loadingProgressRunInBackground")}
             title={t("workspace.loadingProgressRunInBackground")}
           >
             {t("workspace.loadingProgressRunInBackground")}
-          </button>
+          </Button>
         </header>
       </div>
     </div>

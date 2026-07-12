@@ -563,19 +563,19 @@ export function RuntimePoolSection({
         {t("settings.runtimePanelDescription")}
       </div>
 
-      <Card className="border-slate-200/80 bg-white/95 shadow-sm dark:border-slate-800/90 dark:bg-slate-950/95 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <Card>
         <CardHeader className="gap-3 px-4 py-4 md:px-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-2">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-slate-100 text-slate-700 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100">
+                <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-lg border bg-muted text-foreground">
                   <SquareTerminal size={16} />
                 </div>
-                <CardTitle className="text-[1rem] leading-none text-slate-900 dark:text-slate-50">
+                <CardTitle className="text-[1rem] leading-none text-foreground">
                   {t("settings.runtimePoolTitle")}
                 </CardTitle>
               </div>
-              <CardDescription className="max-w-3xl pl-11 text-[12px] leading-5 text-slate-500 dark:text-slate-400/90">
+              <CardDescription className="max-w-3xl pl-11 text-[12px] leading-5 text-muted-foreground">
                 {t("settings.runtimePoolDescription")}
               </CardDescription>
             </div>
@@ -586,7 +586,7 @@ export function RuntimePoolSection({
                 void loadSnapshot();
               }}
               disabled={runtimeLoading}
-              className="h-7.5 shrink-0 rounded-full px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="h-7.5 shrink-0 rounded-full px-3 text-[12px]"
             >
               <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
               {t("settings.refresh")}
@@ -600,16 +600,14 @@ export function RuntimePoolSection({
               return (
                 <div
                   key={item.key}
-                  className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/85 px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.035]"
+                  className="flex min-w-0 items-center gap-3 rounded-xl border bg-muted/40 px-3 py-2.5"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-600 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200">
-                    <Icon className="h-3.5 w-3.5" />
-                  </div>
+                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0">
-                    <div className="truncate text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    <div className="truncate text-xs text-muted-foreground">
                       {item.label}
                     </div>
-                    <div className="mt-1 text-[1.15rem] font-semibold leading-none text-slate-900 dark:text-slate-50">
+                    <div className="mt-0.5 text-xl font-semibold leading-none tabular-nums">
                       {item.value}
                     </div>
                   </div>
@@ -620,12 +618,12 @@ export function RuntimePoolSection({
         </CardContent>
       </Card>
 
-      <Card className="mt-3 border-slate-200/80 bg-white/95 shadow-sm dark:border-slate-800/90 dark:bg-slate-950/95 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <Card className="mt-3">
         <CardHeader className="space-y-1 px-4 py-4 md:px-5">
-          <CardTitle className="text-[15px] dark:text-slate-50">
+          <CardTitle className="text-[15px]">
             {t("settings.runtimeSessionEngineTitle")}
           </CardTitle>
-          <CardDescription className="text-[12px] leading-5 dark:text-slate-400/90">
+          <CardDescription className="text-[12px] leading-5">
             {t("settings.runtimeSessionEngineDescription")}
           </CardDescription>
         </CardHeader>
@@ -634,15 +632,15 @@ export function RuntimePoolSection({
             {sessionEngineCards.map((item) => (
               <div
                 key={item.engine}
-                className="rounded-2xl border border-slate-200/80 bg-slate-50/75 px-3.5 py-3 dark:border-white/10 dark:bg-white/[0.035]"
+                className="rounded-xl border bg-muted/40 px-3.5 py-3"
               >
-                <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100">
+                <div className="text-[13px] font-semibold text-foreground">
                   {item.label}
                 </div>
-                <div className="mt-2 text-[1.2rem] font-semibold leading-none text-slate-900 dark:text-slate-50">
+                <div className="mt-2 text-[1.2rem] font-semibold leading-none text-foreground">
                   {item.count}
                 </div>
-                <div className="mt-2 text-[11px] leading-4 text-slate-500 dark:text-slate-400/90">
+                <div className="mt-2 text-[11px] leading-4 text-muted-foreground">
                   {t("settings.runtimeSessionEngineActiveLabel")} {item.activeCount}
                 </div>
               </div>
@@ -652,27 +650,27 @@ export function RuntimePoolSection({
       </Card>
 
       <div className="mt-3 grid gap-3 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card className="border-slate-200/80 bg-white/95 shadow-sm dark:border-slate-800/90 dark:bg-slate-950/95 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+        <Card>
           <CardHeader className="space-y-1 px-4 py-4 md:px-5">
-            <CardTitle className="text-[15px] dark:text-slate-50">
+            <CardTitle className="text-[15px]">
               {t("settings.runtimeEngineObservationTitle")}
             </CardTitle>
-            <CardDescription className="text-[12px] leading-5 dark:text-slate-400/90">
+            <CardDescription className="text-[12px] leading-5">
               {t("settings.runtimeEngineObservationDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 px-4 pb-4 pt-0 md:px-5">
-            <div className="rounded-2xl border border-blue-200/75 bg-blue-50/70 px-3.5 py-2.5 text-[12px] leading-5 text-blue-800 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-100">
+            <div className="rounded-xl border bg-muted/40 px-3.5 py-2.5 text-[12px] leading-5 text-muted-foreground">
               {t("settings.runtimeEngineObservationScopeNote")}
             </div>
             <div className="grid gap-2 md:grid-cols-2">
               {engineObservabilityCards.map((item) => (
                 <div
                   key={item.engine}
-                  className="rounded-2xl border border-slate-200/80 bg-slate-50/75 px-3.5 py-3 dark:border-white/10 dark:bg-white/[0.035]"
+                  className="rounded-xl border bg-muted/40 px-3.5 py-3"
                 >
-                  <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100">{item.label}</div>
-                  <div className="mt-2 grid gap-x-3 gap-y-1 text-[12px] leading-5 text-slate-600 dark:text-slate-300/88 sm:grid-cols-2">
+                  <div className="text-[13px] font-semibold text-foreground">{item.label}</div>
+                  <div className="mt-2 grid gap-x-3 gap-y-1 text-[12px] leading-5 text-muted-foreground sm:grid-cols-2">
                     <div>{t("settings.runtimeSessionCountLabel")} {item.sessionCount}</div>
                     <div>{t("settings.runtimeTrackedRootProcessCountLabel")} {item.trackedRootProcesses}</div>
                     <div>{t("settings.runtimeTrackedProcessTreeCountLabel")} {item.trackedTotalProcesses}</div>
@@ -695,21 +693,21 @@ export function RuntimePoolSection({
               ))}
             </div>
 
-            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/75 px-3.5 py-3 dark:border-white/10 dark:bg-white/[0.035]">
-              <div className="flex items-center gap-2 text-[13px] font-semibold text-slate-900 dark:text-slate-100">
+            <div className="rounded-xl border bg-muted/40 px-3.5 py-3">
+              <div className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
                 <BadgeCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                 {t("settings.runtimePolicyTitle")}
               </div>
-              <div className="mt-1 text-[12px] leading-5 text-slate-500 dark:text-slate-400/90">
+              <div className="mt-1 text-[12px] leading-5 text-muted-foreground">
                 {t("settings.runtimePolicyDescription")}
               </div>
-              <div className="mt-3 overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 dark:border-white/10 dark:bg-slate-900/80">
+              <div className="mt-3 overflow-hidden rounded-lg border bg-background">
                 <div className="flex items-start justify-between gap-3 px-3 py-2.5">
                   <div className="min-w-0">
-                    <div className="text-[13px] font-medium text-slate-900 dark:text-slate-100">
+                    <div className="text-[13px] font-medium text-foreground">
                       {t("settings.runtimeRestoreThreadsOnlyOnLaunch")}
                     </div>
-                    <div className="mt-0.5 text-[11px] leading-4 text-slate-500 dark:text-slate-400/90">
+                    <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
                       {t("settings.runtimeRestoreThreadsOnlyOnLaunchDesc")}
                     </div>
                   </div>
@@ -723,13 +721,13 @@ export function RuntimePoolSection({
                     }
                   />
                 </div>
-                <div className="border-t border-slate-200/80 dark:border-white/10" />
+                <div className="border-t" />
                 <div className="flex items-start justify-between gap-3 px-3 py-2.5">
                   <div className="min-w-0">
-                    <div className="text-[13px] font-medium text-slate-900 dark:text-slate-100">
+                    <div className="text-[13px] font-medium text-foreground">
                       {t("settings.runtimeForceCleanupOnExit")}
                     </div>
-                    <div className="mt-0.5 text-[11px] leading-4 text-slate-500 dark:text-slate-400/90">
+                    <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
                       {t("settings.runtimeForceCleanupOnExitDesc")}
                     </div>
                   </div>
@@ -743,13 +741,13 @@ export function RuntimePoolSection({
                     }
                   />
                 </div>
-                <div className="border-t border-slate-200/80 dark:border-white/10" />
+                <div className="border-t" />
                 <div className="flex items-start justify-between gap-3 px-3 py-2.5">
                   <div className="min-w-0">
-                    <div className="text-[13px] font-medium text-slate-900 dark:text-slate-100">
+                    <div className="text-[13px] font-medium text-foreground">
                       {t("settings.runtimeOrphanSweepOnLaunch")}
                     </div>
-                    <div className="mt-0.5 text-[11px] leading-4 text-slate-500 dark:text-slate-400/90">
+                    <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
                       {t("settings.runtimeOrphanSweepOnLaunchDesc")}
                     </div>
                   </div>
@@ -768,15 +766,15 @@ export function RuntimePoolSection({
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 bg-white/95 shadow-sm dark:border-slate-800/90 dark:bg-slate-950/95 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+        <Card>
           <CardHeader className="gap-2 px-4 py-4 md:px-5">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 space-y-1">
-                <CardTitle className="flex items-center gap-2 text-[15px] dark:text-slate-50">
+                <CardTitle className="flex items-center gap-2 text-[15px]">
                   <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
                   {t("settings.runtimeBudgetTitle")}
                 </CardTitle>
-                <CardDescription className="max-w-[34rem] text-[11px] leading-4.5 dark:text-slate-400/90">
+                <CardDescription className="max-w-[34rem] text-[11px] leading-4.5">
                   {t("settings.runtimeBudgetDescription")}
                 </CardDescription>
               </div>
@@ -798,7 +796,7 @@ export function RuntimePoolSection({
                     void loadSnapshot();
                   }}
                   disabled={runtimeLoading}
-                  className="h-7.5 rounded-full px-3 text-[11px] dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800"
+                  className="h-7.5 rounded-full px-3 text-[11px]"
                 >
                   {t("settings.refresh")}
                 </Button>
@@ -808,7 +806,7 @@ export function RuntimePoolSection({
           <CardContent className="px-4 pb-4 pt-0 md:px-5">
             <div className="grid gap-2 sm:grid-cols-3">
               <div className="min-w-0 space-y-0.5">
-                <Label className="text-[11px] font-medium leading-4 text-slate-700 dark:text-slate-200" htmlFor="runtime-hot">
+                <Label className="text-[11px] font-medium leading-4 text-foreground" htmlFor="runtime-hot">
                   {t("settings.runtimeMaxHot")}
                 </Label>
                 <Input
@@ -817,14 +815,14 @@ export function RuntimePoolSection({
                   onChange={(event) => setHotDraft(event.target.value)}
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  className="h-7.5 rounded-xl border-slate-200 bg-slate-50/75 px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900/80"
+                  className="h-7.5 text-[12px]"
                 />
-                <div className="text-[10px] leading-4 text-slate-500 dark:text-slate-400/90">
+                <div className="text-[10px] leading-4 text-muted-foreground">
                   {t("settings.runtimeMaxHotHelp")}
                 </div>
               </div>
               <div className="min-w-0 space-y-0.5">
-                <Label className="text-[11px] font-medium leading-4 text-slate-700 dark:text-slate-200" htmlFor="runtime-warm">
+                <Label className="text-[11px] font-medium leading-4 text-foreground" htmlFor="runtime-warm">
                   {t("settings.runtimeMaxWarm")}
                 </Label>
                 <Input
@@ -833,14 +831,14 @@ export function RuntimePoolSection({
                   onChange={(event) => setWarmDraft(event.target.value)}
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  className="h-7.5 rounded-xl border-slate-200 bg-slate-50/75 px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900/80"
+                  className="h-7.5 text-[12px]"
                 />
-                <div className="text-[10px] leading-4 text-slate-500 dark:text-slate-400/90">
+                <div className="text-[10px] leading-4 text-muted-foreground">
                   {t("settings.runtimeMaxWarmHelp")}
                 </div>
               </div>
               <div className="min-w-0 space-y-0.5">
-                <Label className="text-[11px] font-medium leading-4 text-slate-700 dark:text-slate-200" htmlFor="runtime-ttl">
+                <Label className="text-[11px] font-medium leading-4 text-foreground" htmlFor="runtime-ttl">
                   {t("settings.runtimeWarmTtl")}
                 </Label>
                 <Input
@@ -850,9 +848,9 @@ export function RuntimePoolSection({
                   inputMode="numeric"
                   pattern="[0-9]*"
                   max={14400}
-                  className="h-7.5 rounded-xl border-slate-200 bg-slate-50/75 px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900/80"
+                  className="h-7.5 text-[12px]"
                 />
-                <div className="text-[10px] leading-4 text-slate-500 dark:text-slate-400/90">
+                <div className="text-[10px] leading-4 text-muted-foreground">
                   {t("settings.runtimeWarmTtlHelp")}
                 </div>
               </div>
@@ -870,17 +868,17 @@ export function RuntimePoolSection({
         </Card>
       ) : null}
 
-      <Card className="mt-3 border-slate-200/80 bg-white/95 shadow-sm dark:border-slate-800/90 dark:bg-slate-950/95 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <Card className="mt-3">
         <CardHeader className="space-y-2 px-4 py-4 md:px-5">
           <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
             <div className="space-y-1">
-              <CardTitle className="text-[15px] dark:text-slate-50">{t("settings.runtimeRowsTitle")}</CardTitle>
-              <CardDescription className="text-[12px] leading-5 dark:text-slate-400/90">
+              <CardTitle className="text-[15px]">{t("settings.runtimeRowsTitle")}</CardTitle>
+              <CardDescription className="text-[12px] leading-5">
                 {t("settings.runtimeRowsDescription")}
               </CardDescription>
             </div>
             {runtimeSnapshot ? (
-              <Badge className="max-w-full whitespace-normal rounded-full text-[11px] leading-4 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200" variant="secondary">
+              <Badge className="max-w-full whitespace-normal rounded-full text-[11px] leading-4" variant="secondary">
                 {t("settings.runtimeDiagnosticsLine", {
                   cleaned: runtimeSnapshot.diagnostics.orphanEntriesCleaned,
                   failed: runtimeSnapshot.diagnostics.orphanEntriesFailed,
@@ -900,19 +898,19 @@ export function RuntimePoolSection({
               return (
                 <div
                   key={`${row.engine}:${row.workspaceId}`}
-                  className="rounded-2xl border border-slate-200/80 bg-slate-50/75 px-3.5 py-3 dark:border-white/10 dark:bg-white/[0.035]"
+                  className="rounded-xl border bg-muted/40 px-3.5 py-3"
                 >
                   <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-start gap-2">
-                        <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100">
+                        <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg border bg-background text-foreground">
                           <StatusIcon className="h-3.5 w-3.5" />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-50">
+                          <div className="text-[13px] font-semibold text-foreground">
                             {row.workspaceName}
                           </div>
-                          <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                          <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                             {row.engine}
                           </div>
                         </div>
@@ -920,7 +918,7 @@ export function RuntimePoolSection({
                           {getRuntimeStateLabel(t, row.state)}
                         </Badge>
                         {row.evictCandidate ? (
-                          <Badge className="h-5.5 rounded-full px-2 text-[10px] dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-200" variant="outline">
+                          <Badge className="h-5.5 rounded-full px-2 text-[10px]" variant="outline">
                             {row.evictionReason ?? t("settings.runtimeStateEvictable")}
                           </Badge>
                         ) : null}
@@ -930,7 +928,7 @@ export function RuntimePoolSection({
                           </Badge>
                         ) : null}
                         {row.pinned ? (
-                          <Badge className="h-5.5 rounded-full px-2 text-[10px] dark:border-slate-600 dark:bg-slate-800/70 dark:text-slate-100" variant="secondary">
+                          <Badge className="h-5.5 rounded-full px-2 text-[10px]" variant="secondary">
                             {t("settings.runtimePin")}
                           </Badge>
                         ) : null}
@@ -941,13 +939,13 @@ export function RuntimePoolSection({
                         ) : null}
                       </div>
 
-                      <div className="grid gap-x-4 gap-y-1.5 text-[12px] leading-5 text-slate-600 dark:text-slate-300/88 lg:grid-cols-2">
+                      <div className="grid gap-x-4 gap-y-1.5 text-[12px] leading-5 text-muted-foreground lg:grid-cols-2">
                         <div className="min-w-0">
-                          <span className="font-medium text-slate-900 dark:text-slate-100">{t("settings.runtimePathLabel")}</span>{" "}
+                          <span className="font-medium text-foreground">{t("settings.runtimePathLabel")}</span>{" "}
                           <span className="break-all">{row.workspacePath}</span>
                         </div>
                         <div className="min-w-0">
-                          <span className="font-medium text-slate-900 dark:text-slate-100">{t("settings.runtimeLeaseSourcesLabel")}</span>{" "}
+                          <span className="font-medium text-foreground">{t("settings.runtimeLeaseSourcesLabel")}</span>{" "}
                           {row.leaseSources.join(" · ") || "—"}
                           {` · ${t("settings.runtimeTurnLeaseCountLabel", {
                             count: row.turnLeaseCount,
@@ -956,7 +954,7 @@ export function RuntimePoolSection({
                           })}`}
                         </div>
                         <div className="min-w-0">
-                          <span className="font-medium text-slate-900 dark:text-slate-100">{t("settings.runtimeProtectionLabel")}</span>{" "}
+                          <span className="font-medium text-foreground">{t("settings.runtimeProtectionLabel")}</span>{" "}
                           {row.activeWorkProtected
                             ? getActiveWorkLabel(t, row.activeWorkReason)
                             : row.pinned
@@ -964,7 +962,7 @@ export function RuntimePoolSection({
                               : t("settings.runtimeProtectionIdle")}
                         </div>
                         <div className="min-w-0">
-                          <span className="font-medium text-slate-900 dark:text-slate-100">{t("settings.runtimeProcessLabel")}</span>{" "}
+                          <span className="font-medium text-foreground">{t("settings.runtimeProcessLabel")}</span>{" "}
                           {row.pid
                             ? t("settings.runtimePidLabel", { pid: row.pid })
                             : "—"}
@@ -1000,11 +998,11 @@ export function RuntimePoolSection({
                           {row.wrapperKind ? ` · ${row.wrapperKind}` : ""}
                         </div>
                         <div className="min-w-0">
-                          <span className="font-medium text-slate-900 dark:text-slate-100">{t("settings.runtimeBinaryLabel")}</span>{" "}
+                          <span className="font-medium text-foreground">{t("settings.runtimeBinaryLabel")}</span>{" "}
                           <span className="break-all">{row.resolvedBin ?? "—"}</span>
                         </div>
                         <div className="min-w-0">
-                          <span className="font-medium text-slate-900 dark:text-slate-100">{t("settings.runtimeStartupStateLabel")}</span>{" "}
+                          <span className="font-medium text-foreground">{t("settings.runtimeStartupStateLabel")}</span>{" "}
                           {getRuntimeStartupStateLabel(t, row.startupState)}
                           {row.lastRecoverySource ? ` · ${t("settings.runtimeRecoverySourceLabel")} ${row.lastRecoverySource}` : ""}
                           {row.foregroundWorkSource ? ` · ${t("settings.runtimeForegroundSourceLabel")} ${row.foregroundWorkSource}` : ""}
@@ -1013,7 +1011,7 @@ export function RuntimePoolSection({
                           {row.foregroundWorkTurnId ? ` · ${t("settings.runtimeForegroundTurnLabel")} ${row.foregroundWorkTurnId}` : ""}
                         </div>
                         <div className="min-w-0">
-                          <span className="font-medium text-slate-900 dark:text-slate-100">{t("settings.runtimeRecentChurnLabel")}</span>{" "}
+                          <span className="font-medium text-foreground">{t("settings.runtimeRecentChurnLabel")}</span>{" "}
                           {t("settings.runtimeRecentSpawnCountLabel", {
                             count: row.recentSpawnCount ?? 0,
                           })}
@@ -1026,7 +1024,7 @@ export function RuntimePoolSection({
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400/90">
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                         <div className="inline-flex items-center gap-1.5">
                           <Clock3 className="h-3.5 w-3.5" />
                           {t("settings.runtimeStartedAtLabel")} {formatTimestamp(row.startedAtMs)}
@@ -1043,11 +1041,11 @@ export function RuntimePoolSection({
                       || row.lastReplaceReason
                       || row.lastProbeFailure
                       || row.foregroundWorkState ? (
-                        <details className="group rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 dark:border-white/10 dark:bg-slate-900/70">
-                          <summary className="cursor-pointer list-none text-[11px] font-medium text-slate-600 outline-none marker:content-none dark:text-slate-300">
+                        <details className="group rounded-xl border bg-background px-3 py-2">
+                          <summary className="cursor-pointer list-none text-[11px] font-medium text-muted-foreground outline-none marker:content-none">
                             <span className="inline-flex items-center gap-2">
                               <span>{t("settings.runtimeRowDetailsSummary")}</span>
-                              <span className="text-[10px] text-slate-400 transition-transform group-open:rotate-90 dark:text-slate-500">
+                              <span className="text-[10px] text-muted-foreground transition-transform group-open:rotate-90">
                                 ›
                               </span>
                             </span>
@@ -1142,7 +1140,7 @@ export function RuntimePoolSection({
                           }}
                           disabled={runtimeSaving}
                           title={row.pinned ? t("settings.runtimeUnpinHelp") : t("settings.runtimePinHelp")}
-                          className="h-7.5 rounded-full px-3 text-[11px] dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="h-7.5 rounded-full px-3 text-[11px]"
                         >
                           <Pin className="mr-1.5 h-3.5 w-3.5" />
                           {row.pinned ? t("settings.runtimeUnpin") : t("settings.runtimePin")}
@@ -1155,7 +1153,7 @@ export function RuntimePoolSection({
                           }}
                           disabled={runtimeSaving}
                           title={t("settings.runtimeReleaseHelp")}
-                          className="h-7.5 rounded-full px-3 text-[11px] dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="h-7.5 rounded-full px-3 text-[11px]"
                         >
                           <Snowflake className="mr-1.5 h-3.5 w-3.5" />
                           {t("settings.runtimeRelease")}
@@ -1168,13 +1166,13 @@ export function RuntimePoolSection({
                           }}
                           disabled={runtimeSaving}
                           title={t("settings.runtimeCloseHelp")}
-                          className="h-7.5 rounded-full px-3 text-[11px] dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="h-7.5 rounded-full px-3 text-[11px]"
                         >
                           <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                           {t("settings.runtimeClose")}
                         </Button>
                       </div>
-                      <div className="flex flex-col gap-1 text-[11px] leading-4 text-slate-500 dark:text-slate-400/90 xl:items-end">
+                      <div className="flex flex-col gap-1 text-[11px] leading-4 text-muted-foreground xl:items-end">
                         <span>{row.pinned ? t("settings.runtimeUnpinHelp") : t("settings.runtimePinHelp")}</span>
                         <span>{t("settings.runtimeReleaseHelp")}</span>
                         <span>{t("settings.runtimeCloseHelp")}</span>
@@ -1185,26 +1183,26 @@ export function RuntimePoolSection({
               );
             })
           ) : isRuntimeTransientEmpty ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-7 text-center dark:border-white/10 dark:bg-white/[0.03]">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200/80 bg-white dark:border-white/10 dark:bg-slate-900">
-                <RefreshCw className="h-4.5 w-4.5 animate-spin text-slate-500 dark:text-slate-300" />
+            <div className="rounded-xl border border-dashed bg-muted/30 px-6 py-7 text-center">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border bg-background">
+                <RefreshCw className="h-4.5 w-4.5 animate-spin text-muted-foreground" />
               </div>
-              <div className="mt-3 text-[13px] font-medium text-slate-900 dark:text-slate-100">
+              <div className="mt-3 text-[13px] font-medium text-foreground">
                 {t("settings.loading")}
               </div>
-              <div className="mt-1.5 text-[12px] leading-5 text-slate-500 dark:text-slate-400/90">
+              <div className="mt-1.5 text-[12px] leading-5 text-muted-foreground">
                 {t("settings.runtimeRowsDescription")}
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-7 text-center dark:border-white/10 dark:bg-white/[0.03]">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200/80 bg-white dark:border-white/10 dark:bg-slate-900">
-                <SquareTerminal className="h-4.5 w-4.5 text-slate-500 dark:text-slate-300" />
+            <div className="rounded-xl border border-dashed bg-muted/30 px-6 py-7 text-center">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border bg-background">
+                <SquareTerminal className="h-4.5 w-4.5 text-muted-foreground" />
               </div>
-              <div className="mt-3 text-[13px] font-medium text-slate-900 dark:text-slate-100">
+              <div className="mt-3 text-[13px] font-medium text-foreground">
                 {t("settings.runtimePoolEmpty")}
               </div>
-              <div className="mt-1.5 text-[12px] leading-5 text-slate-500 dark:text-slate-400/90">
+              <div className="mt-1.5 text-[12px] leading-5 text-muted-foreground">
                 {t("settings.runtimeEmptyDescription")}
               </div>
             </div>

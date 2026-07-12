@@ -1934,7 +1934,7 @@ export function FileTreePanel({
       </div>
       <div
         ref={fileTreeListRef}
-        className={`file-tree-list${shouldVirtualizeFileTree ? " is-virtualized" : ""}`}
+        className={`file-tree-list scrollable${shouldVirtualizeFileTree ? " is-virtualized" : ""}`}
         data-file-tree-row-count={visibleFileTreeRows.length}
       >
         {showLoading ? (

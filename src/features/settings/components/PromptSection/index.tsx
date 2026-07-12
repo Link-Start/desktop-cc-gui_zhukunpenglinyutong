@@ -625,7 +625,7 @@ export function PromptSection({
                           {t("settings.prompt.argumentHintLabel")}: {prompt.argumentHint}
                         </div>
                       )}
-                      <div className="settings-prompt-content-preview">
+                      <div className="settings-prompt-content-preview scrollable">
                         {prompt.content}
                       </div>
                     </div>
@@ -680,7 +680,7 @@ export function PromptSection({
                           {t("settings.prompt.argumentHintLabel")}: {prompt.argumentHint}
                         </div>
                       )}
-                      <div className="settings-prompt-content-preview">
+                      <div className="settings-prompt-content-preview scrollable">
                         {prompt.content}
                       </div>
                     </div>

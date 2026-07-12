@@ -39,6 +39,7 @@ type AppLayoutProps = {
   gitDiffPanelNode: ReactNode;
   gitDiffViewerNode: ReactNode;
   fileViewPanelNode: ReactNode;
+  noteCardsPanelNode: ReactNode;
   fileComparePanelNode: ReactNode;
   projectMapPanelNode: ReactNode;
   intentCanvasPanelNode: ReactNode;
@@ -95,6 +96,7 @@ export const AppLayout = memo(function AppLayout({
   gitDiffPanelNode,
   gitDiffViewerNode,
   fileViewPanelNode,
+  noteCardsPanelNode,
   fileComparePanelNode,
   projectMapPanelNode,
   intentCanvasPanelNode,
@@ -199,6 +201,7 @@ export const AppLayout = memo(function AppLayout({
       messagesNode={messagesNode}
       gitDiffViewerNode={gitDiffViewerNode}
       fileViewPanelNode={fileViewPanelNode}
+      noteCardsPanelNode={noteCardsPanelNode}
       fileComparePanelNode={fileComparePanelNode}
       projectMapPanelNode={projectMapPanelNode}
       intentCanvasPanelNode={intentCanvasPanelNode}

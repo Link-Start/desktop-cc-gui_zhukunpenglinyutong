@@ -462,7 +462,7 @@ export function ProjectSessionManagementSection({
                             aria-label={t("workspace.searchProjects")}
                           />
                         </div>
-                        <div className="settings-project-sessions-workspace-list">
+                        <div className="settings-project-sessions-workspace-list scrollable">
                           {filteredWorkspaceSections.map((section) => (
                             <div
                               key={section.id ?? "ungrouped"}
@@ -611,7 +611,7 @@ export function ProjectSessionManagementSection({
                   {t("settings.projectSessionLoading")}
                 </div>
               ) : null}
-              <ul className="settings-project-sessions-list">
+              <ul className="settings-project-sessions-list scrollable">
               {orderedThreads.map((thread) => {
                 const selected = Boolean(selectedIds[thread.id]);
                 const engineType = resolveEngineType(thread.engineSource);

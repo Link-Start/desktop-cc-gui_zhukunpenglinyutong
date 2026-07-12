@@ -43,6 +43,8 @@ import {
   WorkingIndicator,
 } from "./MessagesRows";
 import { ConversationRowErrorBoundary } from "./ConversationRowErrorBoundary";
+import { TurnFilesChangedCard } from "./TurnFilesChangedCard";
+import type { TurnFileChangesSummary } from "../utils/turnFileChanges";
 import { MessagesOutlineFloater } from "./MessagesOutlineFloater";
 import type { MarkdownOutlineEntry } from "../../markdown/fastMarkdownRenderer";
 import { useMessageOutlineActive } from "../hooks/useMessageOutlineActive";
@@ -194,6 +196,7 @@ type MessagesTimelineProps = {
   messageActionTargetByAssistantId: Map<string, string>;
   messageCopyTextByAssistantId: Map<string, string>;
   latestFinalAssistantMessageId: string | null;
+  hasPendingUserTurn: boolean;
   pendingJumpMessageId: string | null;
   onPendingJumpTargetReady: (messageId: string) => void;
   onForkFromMessage?: (messageId: string) => void;
@@ -253,6 +256,8 @@ type MessagesTimelineProps = {
   suppressedUserNoteCardContextMessageIds: Set<string>;
   threadId: string | null;
   toggleExpanded: (id: string) => void;
+  turnFileChangesByBoundaryId: Map<string, TurnFileChangesSummary>;
+  sessionFileChangesSummary: TurnFileChangesSummary | null;
   claudeHistoryTranscriptFallbackActive: boolean;
   hasVisibleUserInputRequest: boolean;
   historyExpansionActive: boolean;
@@ -350,6 +355,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   messageActionTargetByAssistantId,
   messageCopyTextByAssistantId,
   latestFinalAssistantMessageId,
+  hasPendingUserTurn,
   pendingJumpMessageId,
   onPendingJumpTargetReady,
   onForkFromMessage,
@@ -396,6 +402,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   suppressedUserNoteCardContextMessageIds,
   threadId,
   toggleExpanded,
+  turnFileChangesByBoundaryId,
+  sessionFileChangesSummary,
   claudeHistoryTranscriptFallbackActive,
   hasVisibleUserInputRequest,
   historyExpansionActive,
@@ -1427,6 +1435,14 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         renderItem.isFinal === true &&
         assistantFinalBoundarySet.has(renderItem.id) &&
         !assistantLiveTurnFinalBoundarySuppressedSet.has(renderItem.id);
+      // 空闲时最后一轮的汇总由时间线末尾的会话累计卡承载，内联卡只回溯更早轮次；
+      // 一旦有新回合进行中（hasPendingUserTurn），末尾累计卡会落到新问题之后，
+      // 此时改由这一轮的内联卡把汇总钉在它自己的回合边界上。
+      const turnFilesChangedSummary =
+        shouldRenderFinalBoundary &&
+        (renderItem.id !== latestFinalAssistantMessageId || hasPendingUserTurn)
+          ? turnFileChangesByBoundaryId.get(renderItem.id) ?? null
+          : null;
       const finalMetaParts: string[] = [];
       if (typeof renderItem.finalCompletedAt === "number" && renderItem.finalCompletedAt > 0) {
         finalMetaParts.push(formatCompletedTimeMs(renderItem.finalCompletedAt));
@@ -1620,6 +1636,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               }
             />
           </div>
+          {turnFilesChangedSummary && (
+            <TurnFilesChangedCard summary={turnFilesChangedSummary} />
+          )}
           {shouldRenderFinalBoundary && (
             <Marker
               variant="separator"
@@ -2201,6 +2220,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           </div>
         )}
         {shouldVirtualizeTimeline ? renderVirtualProjectionRows() : renderStaticProjectionRows()}
+        {sessionFileChangesSummary && !hasPendingUserTurn && (
+          <div className="messages-session-files-changed">
+            <TurnFilesChangedCard summary={sessionFileChangesSummary} />
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
     </div>

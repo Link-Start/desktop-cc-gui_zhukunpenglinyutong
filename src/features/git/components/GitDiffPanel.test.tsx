@@ -398,7 +398,13 @@ describe("GitDiffPanel", () => {
         unstagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
       />,
     );
-    await chooseCodexEnglishCommitMessage();
+    fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
+    expect(await screen.findByRole("menuitem", { name: "Use Codex engine" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Use Claude engine" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Use Gemini engine" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Use OpenCode engine" })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Use Codex engine" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Generate English commit message" }));
 
     await waitFor(() => {
       expect(onGenerateCommitMessage).toHaveBeenCalledWith("en", "codex");

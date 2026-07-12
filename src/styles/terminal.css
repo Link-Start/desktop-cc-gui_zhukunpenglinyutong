@@ -3,14 +3,14 @@
   background: var(--surface-debug);
   display: flex;
   flex-direction: column;
-  grid-column: 1 / -1;
+  grid-column: 1;
   grid-row: 5;
   height: var(--terminal-panel-height, 220px);
   width: 100%;
   -webkit-app-region: no-drag;
-  --terminal-background: var(--theme-terminal-background, #11151b);
-  --terminal-foreground: var(--theme-terminal-foreground, #d9dee7);
-  --terminal-cursor: var(--theme-terminal-cursor, #d9dee7);
+  --terminal-background: var(--theme-terminal-background, var(--surface-debug));
+  --terminal-foreground: var(--theme-terminal-foreground, var(--text-stronger));
+  --terminal-cursor: var(--theme-terminal-cursor, var(--text-stronger));
   --terminal-selection: var(
     --theme-terminal-selection,
     rgba(60, 140, 220, 0.4)
@@ -46,7 +46,6 @@
   gap: 0;
   padding: 0;
   min-height: 34px;
-  border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
   font-size: 12px;
 }
@@ -182,7 +181,6 @@
   border-radius: 0;
   overflow: hidden;
   background: var(--terminal-background);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
   box-sizing: border-box;
 }
 
@@ -201,6 +199,28 @@
 
 .terminal-surface .xterm-viewport {
   height: 100% !important;
+}
+
+/* xterm 的 viewport 常驻 overflow-y: scroll。不主题化时,深色模式下系统默认
+   的浅色滚动槽会在深色终端上形成一条扎眼的亮竖条。让滚动槽透明(露出终端
+   背景)、滑块随全局滚动条色淡显,消除亮条同时保留滚动能力。 */
+.terminal-surface .xterm-viewport::-webkit-scrollbar {
+  width: 9px;
+}
+
+.terminal-surface .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-surface .xterm-viewport::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  background-color: var(--sb-thumb-color);
+}
+
+.terminal-surface .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--terminal-foreground) 40%, transparent);
 }
 
 .terminal-surface .composition-view {

@@ -5,17 +5,13 @@
 Defines the large-file-modularization-governance behavior contract, covering Oversized File Detection Baseline.
 ## Requirements
 ### Requirement: Oversized File Detection Baseline
+
 The system SHALL maintain version-traceable baseline artifacts for large-file governance, including a human-readable report and a machine-readable debt ledger keyed by the matched governance policy.
 
-#### Scenario: Hard-debt baseline capture
-- **WHEN** the large-file governance baseline scan runs for hard-debt tracking
-- **THEN** every file whose line count exceeds its matched policy fail threshold MUST be recorded with path, line count, matched policy id, warn threshold, fail threshold, and priority tier
-- **AND** the machine-readable baseline output MUST be committed in version control so later scans can compare debt growth
-
-#### Scenario: Watchlist report generation
-- **WHEN** the large-file governance watchlist scan runs
-- **THEN** every file whose line count exceeds its matched policy warn threshold MUST be listed in the human-readable report
-- **AND** the report MUST include the matched policy id and active threshold information for triage
+#### Scenario: New-file ratchet baseline capture
+- **WHEN** the large-file governance scanner runs in `new-file` scope
+- **THEN** every governed file whose line count exceeds the configured `newFileFailThreshold` MUST be recorded with path, line count, matched policy id, warn threshold, effective fail threshold, and priority tier
+- **AND** the machine-readable ratchet baseline MUST be committed separately from the hard-debt baseline so current 800+ files are not confused with policy fail-threshold hard debt
 
 ### Requirement: Tiered Refactor Queue Governance
 The system SHALL resolve each scanned file against an ordered set of governance policies and use the matched policy to determine thresholds, refactor priority, and staged modularization order.
@@ -71,36 +67,16 @@ The system SHALL require incremental extraction behind compatibility facades for
 
 The system SHALL provide CI sentry checks that enforce domain-aware hard gates and baseline-aware debt growth controls, while keeping near-threshold watch output visible for triage.
 
-#### Scenario: Hard gate for new oversized debt
+#### Scenario: Hard gate for new ratchet debt
+- **WHEN** a pull request introduces a governed file whose line count exceeds `newFileFailThreshold`
+- **AND** the file is absent from the committed new-file ratchet baseline
+- **THEN** CI sentry MUST fail the hard gate
+- **AND** the failure output MUST classify the finding as `status=new` and `threshold=new-file-ratchet`
 
-- **WHEN** a pull request introduces a new file whose line count exceeds the matched policy fail threshold
-- **THEN** CI sentry MUST fail the check
-- **AND** remediation guidance MUST be shown in logs
-
-#### Scenario: Hard gate for growing legacy debt
-
-- **WHEN** a file already tracked in the baseline exceeds the matched policy fail threshold and its current line count is greater than the baseline line count
-- **THEN** CI sentry MUST fail the check
-- **AND** the failure output MUST show both the baseline line count and the current line count
-
-#### Scenario: near-threshold watch stays advisory in high-frequency CI
-
-- **WHEN** large-file governance runs for pull_request or push events
-- **THEN** the blocking job MUST run parser tests and the hard-debt gate
-- **AND** near-threshold watch output MUST NOT be required for the pull_request or push job to pass
-- **AND** near-threshold watch MUST remain available through manual or scheduled advisory execution
-
-#### Scenario: large-file sentry hard gate remains cross-platform
-
-- **WHEN** large-file hard-debt governance checks run in CI
-- **THEN** parser tests and hard-debt gate MUST run on ubuntu-latest, macos-latest, and windows-latest
-- **AND** file matching and path output MUST remain platform-neutral
-
-#### Scenario: advisory watch artifact remains inspectable
-
-- **WHEN** the advisory near-threshold watch is run manually or by schedule
-- **THEN** it MUST produce the same near-threshold JSON artifact shape used by governance evidence readers
-- **AND** it MUST NOT change hard-debt gate pass/fail semantics
+#### Scenario: Current ratchet baseline files keep legacy hard-debt semantics
+- **WHEN** a file is present in the new-file ratchet baseline and remains below its matched policy fail threshold
+- **THEN** CI sentry MUST NOT fail solely because the file exceeds `newFileFailThreshold`
+- **AND** if that file later exceeds the matched policy fail threshold, the existing hard-debt baseline semantics MUST still classify it as new, retained, reduced, or regressed according to the hard-debt baseline
 
 ### Requirement: Completion Criteria for Governance Milestones
 
@@ -199,3 +175,4 @@ Feature stylesheet splits SHALL preserve selector contracts when cohesive style 
 - **WHEN** Project Map inspector/detail styles grow the main stylesheet beyond the style hard-fail threshold
 - **THEN** those styles MAY move to a feature-local imported stylesheet
 - **AND** existing class names and component markup SHALL remain compatible
+

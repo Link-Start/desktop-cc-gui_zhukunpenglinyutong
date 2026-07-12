@@ -2565,6 +2565,12 @@ const enPart1 = {
     thinkingLabel: "Thinking",
     thinkingProcess: "Thinking Process",
     finalMessageBoundary: "Final Message",
+    turnFilesChanged: {
+      title_one: "Edited {{count}} file",
+      title_other: "Edited {{count}} files",
+      showMore_one: "Show {{count}} more file",
+      showMore_other: "Show {{count}} more files",
+    },
     noThinkingContent: "No thinking content",
     hiddenThinkingContent: "Thinking content is hidden by the current setting.",
     generating: "Generating…",

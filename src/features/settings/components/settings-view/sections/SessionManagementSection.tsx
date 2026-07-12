@@ -1835,7 +1835,7 @@ export function SessionManagementSection({
                 <div className="settings-project-sessions-nav-title">
                   {t("settings.workspacePickerLabel")}
                 </div>
-                <div className="settings-project-sessions-nav-list">
+                <div className="settings-project-sessions-nav-list scrollable">
                   {workspaceOptions.map((option) => {
                     const active = option.id === workspaceId;
                     return (
@@ -2497,7 +2497,7 @@ export function SessionManagementSection({
                 </button>
               </div>
             </header>
-            <div className="settings-session-curtain-messages">
+            <div className="settings-session-curtain-messages scrollable">
               {sessionCurtain.isLoading ? (
                 <div className="settings-session-curtain-empty">
                   {t("settings.sessionManagementCurtainLoading")}

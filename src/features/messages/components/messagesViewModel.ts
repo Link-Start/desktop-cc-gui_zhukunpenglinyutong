@@ -22,6 +22,8 @@ export type MessageActionTargets = {
   targetByAssistantId: Map<string, string>;
   copyTextByAssistantId: Map<string, string>;
   latestFinalAssistantMessageId: string | null;
+  // 最近一条用户消息之后尚无最终回复 = 有新回合正在进行中。
+  hasPendingUserTurn: boolean;
 };
 
 export type HistoryExpansionScrollSnapshot = {
@@ -114,6 +116,7 @@ export function buildMessageActionTargets(items: ConversationItem[]): MessageAct
   const copyTextByAssistantId = new Map<string, string>();
   let latestUserMessageId: string | null = null;
   let latestFinalAssistantMessageId: string | null = null;
+  let hasPendingUserTurn = false;
   let assistantTurnTextParts: string[] = [];
   for (const item of items) {
     if (item.kind !== "message") {
@@ -121,6 +124,7 @@ export function buildMessageActionTargets(items: ConversationItem[]): MessageAct
     }
     if (item.role === "user") {
       latestUserMessageId = item.id;
+      hasPendingUserTurn = true;
       assistantTurnTextParts = [];
       continue;
     }
@@ -133,6 +137,7 @@ export function buildMessageActionTargets(items: ConversationItem[]): MessageAct
     assistantTurnTextParts.push(item.text);
     if (item.isFinal === true) {
       latestFinalAssistantMessageId = item.id;
+      hasPendingUserTurn = false;
       copyTextByAssistantId.set(item.id, assistantTurnTextParts.join("\n\n"));
       assistantTurnTextParts = [];
     }
@@ -141,6 +146,7 @@ export function buildMessageActionTargets(items: ConversationItem[]): MessageAct
     targetByAssistantId,
     copyTextByAssistantId,
     latestFinalAssistantMessageId,
+    hasPendingUserTurn,
   };
 }
 

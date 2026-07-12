@@ -1978,7 +1978,8 @@
   position: relative;
   transition:
     background-color 0.16s ease,
-    color 0.16s ease;
+    color 0.16s ease,
+    padding-left 0.16s ease;
   /* Reset button styles */
   background: transparent;
   border: none;
@@ -1986,7 +1987,10 @@
   text-align: left;
 }
 
-.thread-row.has-pin-toggle {
+/* Pin 图标仅在悬停/聚焦时淡入，左侧留白也随之腾出；
+   平时保持紧凑，不为按钮预留固定的一列空间 */
+.thread-row.has-pin-toggle:hover,
+.thread-row.has-pin-toggle:focus-within {
   padding-left: calc(24px + var(--thread-indent, 0px));
 }
 

@@ -53,11 +53,49 @@ export function languageFromPath(path?: string | null) {
   return resolvePreviewLanguageFromPath(path);
 }
 
+// highlightLine is pure in (text, language), but it runs Prism per line and is
+// called inside diff/preview render loops on every re-render. Without a cache a
+// large diff re-tokenizes thousands of lines on each parent commit — the cause
+// of multi-second style-recalc on WebKitGTK. LRU-cache the result (same Map idiom
+// as fastMarkdownRenderer/cache.ts); a hit also returns the *same string*, so
+// dangerouslySetInnerHTML consumers can skip re-writing the DOM.
+const MAX_HIGHLIGHT_CACHE_ENTRIES = 4000;
+const highlightCache = new Map<string, string>();
+
+function readHighlightCache(cacheKey: string) {
+  const cached = highlightCache.get(cacheKey);
+  if (cached === undefined) {
+    return undefined;
+  }
+  highlightCache.delete(cacheKey);
+  highlightCache.set(cacheKey, cached);
+  return cached;
+}
+
+function writeHighlightCache(cacheKey: string, html: string) {
+  highlightCache.delete(cacheKey);
+  highlightCache.set(cacheKey, html);
+  while (highlightCache.size > MAX_HIGHLIGHT_CACHE_ENTRIES) {
+    const oldestKey = highlightCache.keys().next().value;
+    if (oldestKey === undefined) {
+      break;
+    }
+    highlightCache.delete(oldestKey);
+  }
+}
+
 export function highlightLine(text: string, language?: string | null) {
   if (!language || !(Prism.languages as Record<string, unknown>)[language]) {
     return escapeHtml(text);
   }
-  return sanitizePrismHtml(
+  const cacheKey = `${language}\0${text}`;
+  const cached = readHighlightCache(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const html = sanitizePrismHtml(
     Prism.highlight(text, Prism.languages[language] as Grammar, language),
   );
+  writeHighlightCache(cacheKey, html);
+  return html;
 }

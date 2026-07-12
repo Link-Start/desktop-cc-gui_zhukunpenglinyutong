@@ -434,7 +434,7 @@ export function AgentSettingsSection({ active }: AgentSettingsSectionProps) {
                 <div>{t("settings.agent.importDialog.columnName")}</div>
                 <div>{t("settings.agent.importDialog.columnId")}</div>
               </div>
-              <div className="settings-agent-table-body">
+              <div className="settings-agent-table-body scrollable">
                 {agentList.map((agent) => {
                   const checked = agentExport.selectedIds.has(agent.id);
                   return (
@@ -619,7 +619,7 @@ export function AgentSettingsSection({ active }: AgentSettingsSectionProps) {
                     <div>{t("settings.agent.importDialog.columnId")}</div>
                     <div>{t("settings.agent.importDialog.columnStatus")}</div>
                   </div>
-                  <div className="settings-agent-table-body">
+                  <div className="settings-agent-table-body scrollable">
                     {agentImport.preview.items.map((item) => {
                       const agent = item.data;
                       const checked = agentImport.selectedIds.has(agent.id);

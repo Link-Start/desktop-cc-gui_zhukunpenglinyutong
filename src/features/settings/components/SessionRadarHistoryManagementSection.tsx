@@ -266,7 +266,7 @@ export function SessionRadarHistoryManagementSection({
           {orderedEntries.length === 0 ? (
             <div className="settings-project-sessions-empty">{t("settings.radarHistoryEmpty")}</div>
           ) : (
-            <ul className="settings-project-sessions-list">
+            <ul className="settings-project-sessions-list scrollable">
               {orderedEntries.map((entry) => {
                 const selected = Boolean(selectedIds[entry.id]);
                 return (
