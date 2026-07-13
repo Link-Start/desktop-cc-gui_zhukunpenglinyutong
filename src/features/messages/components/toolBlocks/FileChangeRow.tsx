@@ -77,9 +77,8 @@ interface FileChangeRowProps {
   /** 展开后无 diff 预览时的回退展开体（如原始工具输出） */
   fallbackBody?: ReactNode;
   /**
-   * @deprecated 文件名已统一为纯文本展示，不再作为可点链接（对齐 EditToolBlock 的历史/渲染态口径）。
-   * 保留该 prop 仅为兼容既有调用链，避免跨 ToolBlockRenderer→Messages→renderAppShell 的删除级联。
-   * ponytail: 惰性 prop（上限：死管线）。彻底移除请沿上述链一并清理 onOpenDiffPath 与相关测试。
+   * inline diff 缺失时的 canonical Git diff fallback。
+   * 调用方负责限定可 fallback 的 change kind；有 inline diff 时始终优先展开本行。
    */
   onOpenDiffPath?: (path: string) => void;
   defaultExpanded?: boolean;
@@ -126,6 +125,7 @@ export const FileChangeRow = memo(function FileChangeRow({
   canExpand = false,
   loadDiff,
   fallbackBody,
+  onOpenDiffPath,
   defaultExpanded = false,
   wrapperClassName,
 }: FileChangeRowProps) {
@@ -140,6 +140,22 @@ export const FileChangeRow = memo(function FileChangeRow({
     [expanded, loadDiff],
   );
   const hasDiff = (preview?.lines.length ?? 0) > 0;
+  const canOpenMissingDiff = !canExpand && Boolean(onOpenDiffPath);
+
+  const handleToggle = () => {
+    if (canExpand) {
+      setExpanded((prev) => !prev);
+      return;
+    }
+    if (!onOpenDiffPath) {
+      return;
+    }
+    try {
+      void Promise.resolve(onOpenDiffPath(filePath)).catch(() => undefined);
+    } catch {
+      // Host navigation 的同步/异步失败都不能破坏 conversation surface。
+    }
+  };
 
   const body = canExpand ? (
     <div className={TOOL_MARKER_BODY_CLASS}>
@@ -153,9 +169,9 @@ export const FileChangeRow = memo(function FileChangeRow({
       label={t('tools.editFile')}
       labelHidden
       wrapperClassName={wrapperClassName}
-      interactive={canExpand}
+      interactive={canExpand || canOpenMissingDiff}
       expanded={expanded}
-      onToggle={canExpand ? () => setExpanded((prev) => !prev) : undefined}
+      onToggle={canExpand || canOpenMissingDiff ? handleToggle : undefined}
       trailing={<ToolStatusIcon status={status} />}
       body={body}
     >

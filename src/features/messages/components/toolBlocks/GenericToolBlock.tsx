@@ -393,6 +393,25 @@ function collectDiffStats(diff?: string): DiffStats {
   return { additions, deletions };
 }
 
+function isStructuredDiffText(value: string): boolean {
+  const normalized = value.trim();
+  if (!normalized) {
+    return false;
+  }
+  if (
+    normalized.startsWith('diff --git ') ||
+    normalized.startsWith('@@ ') ||
+    normalized.startsWith('*** Begin Patch')
+  ) {
+    return true;
+  }
+  const lines = normalized.split('\n');
+  return (
+    lines.some((line) => line.startsWith('--- ')) &&
+    lines.some((line) => line.startsWith('+++ '))
+  );
+}
+
 function getFirstStringFieldCaseInsensitive(
   source: Record<string, unknown> | null,
   keys: string[],
@@ -1090,11 +1109,11 @@ export const GenericToolBlock = memo(function GenericToolBlock({
     );
   }, [parsedArgs]);
   const outputStats = useMemo(
-    () => collectDiffStats(item.output),
+    () => collectDiffStats(isStructuredDiffText(item.output ?? '') ? item.output : undefined),
     [item.output],
   );
   const outputDiffText = useMemo(
-    () => item.output ?? '',
+    () => (isStructuredDiffText(item.output ?? '') ? item.output ?? '' : ''),
     [item.output],
   );
   const shouldDeferToolOutput =
@@ -1408,7 +1427,11 @@ export const GenericToolBlock = memo(function GenericToolBlock({
               loadDiff={
                 diffText ? () => unifiedDiffToPreview(diffText) : undefined
               }
-              onOpenDiffPath={onOpenDiffPath}
+              onOpenDiffPath={
+                change.normalizedKind === 'added' && !diffText
+                  ? onOpenDiffPath
+                  : undefined
+              }
             />
           );
         })}

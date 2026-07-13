@@ -79,6 +79,41 @@ describe("FileChangeRow", () => {
     expect(onOpenDiffPath).not.toHaveBeenCalled();
   });
 
+  it("opens the canonical diff when inline diff is unavailable", () => {
+    const onOpenDiffPath = vi.fn();
+    const view = render(
+      <FileChangeRow
+        filePath="src/New.tsx"
+        additions={0}
+        deletions={0}
+        status="completed"
+        onOpenDiffPath={onOpenDiffPath}
+      />,
+    );
+
+    fireEvent.click(view.container.querySelector('[data-slot="marker"]') as HTMLElement);
+    expect(onOpenDiffPath).toHaveBeenCalledOnce();
+    expect(onOpenDiffPath).toHaveBeenCalledWith("src/New.tsx");
+  });
+
+  it("isolates canonical diff navigation failures", () => {
+    const view = render(
+      <FileChangeRow
+        filePath="src/New.tsx"
+        additions={0}
+        deletions={0}
+        status="completed"
+        onOpenDiffPath={() => {
+          throw new Error("navigation unavailable");
+        }}
+      />,
+    );
+
+    expect(() => {
+      fireEvent.click(view.container.querySelector('[data-slot="marker"]') as HTMLElement);
+    }).not.toThrow();
+  });
+
   it("renders a non-expandable display row when canExpand is false", () => {
     const view = render(
       <FileChangeRow
