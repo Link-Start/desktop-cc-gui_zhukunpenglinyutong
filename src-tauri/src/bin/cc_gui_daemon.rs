@@ -1881,6 +1881,11 @@ async fn handle_rpc_request(
             let session_id = parse_string(&params, "sessionId")?;
             state.load_gemini_session(workspace_path, session_id).await
         }
+        "load_codex_session" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let session_id = parse_string(&params, "sessionId")?;
+            state.load_codex_session(workspace_id, session_id).await
+        }
         "delete_gemini_session" => {
             let workspace_path = parse_string(&params, "workspacePath")?;
             let session_id = parse_string(&params, "sessionId")?;
@@ -2263,4 +2268,16 @@ fn main() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod ccgui_repair_regression_tests {
+    #[test]
+    fn daemon_dispatch_exposes_codex_history_loader() {
+        let daemon_dispatch = include_str!("cc_gui_daemon.rs");
+        assert!(
+            daemon_dispatch.contains("\"load_codex_session\" =>"),
+            "daemon dispatch is missing load_codex_session"
+        );
+    }
 }

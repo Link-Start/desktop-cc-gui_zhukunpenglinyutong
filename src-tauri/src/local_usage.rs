@@ -288,6 +288,14 @@ pub(crate) async fn load_codex_session(
     session_id: String,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
+    load_codex_session_for_workspace(&state.workspaces, workspace_id, session_id).await
+}
+
+pub(crate) async fn load_codex_session_for_workspace(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    workspace_id: String,
+    session_id: String,
+) -> Result<Value, String> {
     let workspace_id = workspace_id.trim().to_string();
     let session_id = session_id.trim().to_string();
     if workspace_id.is_empty() {
@@ -301,7 +309,7 @@ pub(crate) async fn load_codex_session(
     }
 
     let (workspace_path, sessions_roots) = {
-        let workspaces = state.workspaces.lock().await;
+        let workspaces = workspaces.lock().await;
         let entry = workspaces
             .get(&workspace_id)
             .ok_or_else(|| "workspace not found".to_string())?;

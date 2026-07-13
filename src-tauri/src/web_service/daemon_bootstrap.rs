@@ -74,14 +74,25 @@ pub(crate) async fn maybe_start_local_daemon_for_remote(
         command.arg("--insecure-no-auth");
     }
 
-    if let Ok(data_dir) = app.path().app_data_dir() {
-        command.arg("--data-dir").arg(data_dir);
+    let (data_dir, fallback_stderr) = match app.path().app_data_dir() {
+        Ok(dir) => (Some(dir), None),
+        Err(_) => (None, Some(capture_fallback_stderr_tmpdir())),
+    };
+    if let Some(ref dir) = data_dir {
+        command.arg("--data-dir").arg(dir);
     }
+
+    let daemon_stderr = data_dir
+        .as_ref()
+        .map(|dir| dir.as_path())
+        .and_then(capture_daemon_stderr)
+        .or(fallback_stderr)
+        .unwrap_or(Stdio::null());
 
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(daemon_stderr);
 
     command.spawn().map_err(|error| {
         format!(
@@ -539,6 +550,30 @@ fn daemon_binary_names() -> &'static [&'static str] {
     {
         &["cc_gui_daemon", "moss_x_daemon", "moss-x-daemon"]
     }
+}
+
+/// Open a log file in the daemon's data directory to capture stderr output.
+/// Returns `Stdio::null()` if the file cannot be opened (degradation, not a crash).
+fn capture_daemon_stderr(base: &Path) -> Option<Stdio> {
+    let path = base.join("daemon_stderr.log");
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .ok()
+        .map(Stdio::from)
+}
+
+/// Fallback stderr capture when `app_data_dir` is unavailable.
+fn capture_fallback_stderr_tmpdir() -> Stdio {
+    let path = std::env::temp_dir().join("cc_gui_daemon_stderr.log");
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .ok()
+        .map(Stdio::from)
+        .unwrap_or(Stdio::null())
 }
 
 fn find_in_path(binary: &str) -> Option<PathBuf> {

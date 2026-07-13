@@ -2227,6 +2227,15 @@ impl DaemonState {
         serde_json::to_value(result).map_err(|error| error.to_string())
     }
 
+    pub(super) async fn load_codex_session(
+        &self,
+        workspace_id: String,
+        session_id: String,
+    ) -> Result<Value, String> {
+        local_usage::load_codex_session_for_workspace(&self.workspaces, workspace_id, session_id)
+            .await
+    }
+
     pub(super) async fn hydrate_claude_deferred_image(
         &self,
         workspace_path: String,
