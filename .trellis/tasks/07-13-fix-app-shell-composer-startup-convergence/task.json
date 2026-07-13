@@ -1,7 +1,7 @@
 {
-  "id": "fix-sidebar-scroll-area-react19-ref-loop",
-  "name": "fix-sidebar-scroll-area-react19-ref-loop",
-  "title": "修复 Sidebar ScrollArea React 19 ref 回环 (OpenSpec: fix-sidebar-scroll-area-react19-ref-loop)",
+  "id": "fix-app-shell-composer-startup-convergence",
+  "name": "fix-app-shell-composer-startup-convergence",
+  "title": "[P0] 修复 AppShell composer 冷启动收敛 (OpenSpec: fix-app-shell-composer-startup-convergence)",
   "description": "",
   "status": "planning",
   "dev_type": "frontend",
