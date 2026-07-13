@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-25.md`
-- **Total Sessions**: 981
+- **Total Sessions**: 982
 - **Last Active**: 2026-07-13
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~457 | Active |
+| `journal-25.md` | ~490 | Active |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +53,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 982 | 2026-07-13 | 修复 Sidebar ScrollArea React 19 ref 回环 | `28851873` | `feature/v-0.7.2` |
 | 981 | 2026-07-13 | 修复 Messages 自动滚底锚点更新回环 | `b27891b0` | `feature/v-0.7.2` |
 | 980 | 2026-07-13 | 补充 v0.7.2 发布记录并延长 Codex 健康检查超时 | `76c52d81`, `cf17256e` | `feature/v-0.7.2` |
 | 979 | 2026-07-13 | 收口 Web 资源分发与首次启动稳定性 | `1173ae67`, `27c501a7` | `feature/v-0.7.2` |

@@ -455,3 +455,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 982: 修复 Sidebar ScrollArea React 19 ref 回环
+
+**Date**: 2026-07-13
+**Task**: 修复 Sidebar ScrollArea React 19 ref 回环
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+将 radix-ui 内 ScrollArea scoped override 到 1.2.14，补充 React 19 StrictMode ref 连续性回归测试，并完成 OpenSpec、构建与用户实机验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `28851873` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
