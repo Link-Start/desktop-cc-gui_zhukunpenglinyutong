@@ -82,6 +82,20 @@
  * scrollbar, unaffected). Vendor config dialogs still fall back to the platform
  * scrollbar.
  */
+
+/* ── 统一滚动条几何 (Unified scrollbar geometry) ──
+ * 全项目滚动条共用这套变量，避免各处 4/6/8/9px 各行其是。
+ * --sb-size        通道/预留宽度
+ * --sb-thumb-inset 滑块四周透明留白 (T R B L)，配合 background-clip:content-box：
+ *                  内容侧(L) 4px 留白 → 不贴内容；容器缘侧(R) 2px → 贴边；
+ *                  纵向滑块可视宽 = --sb-size - L - R = 4px（细）。
+ */
+:root {
+  --sb-size: 10px;
+  --sb-thumb-radius: 999px;
+  --sb-thumb-inset: 2px 2px 2px 4px;
+}
+
 html,
 body {
   scrollbar-width: thin;
@@ -102,8 +116,8 @@ body {
 html::-webkit-scrollbar,
 body::-webkit-scrollbar,
 .scrollable::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: var(--sb-size);
+  height: var(--sb-size);
 }
 
 html::-webkit-scrollbar-track,
@@ -116,8 +130,10 @@ html::-webkit-scrollbar-thumb,
 body::-webkit-scrollbar-thumb,
 .scrollable::-webkit-scrollbar-thumb {
   background-color: var(--scrollbar-thumb);
-  border-radius: 4px;
-  border: 2px solid transparent;
+  border-radius: var(--sb-thumb-radius);
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--sb-thumb-inset);
   background-clip: content-box;
 }
 

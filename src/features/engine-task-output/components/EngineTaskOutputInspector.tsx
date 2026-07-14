@@ -213,7 +213,7 @@ export const EngineTaskOutputInspector = memo(function EngineTaskOutputInspector
           ) : null}
         </div>
         {snapshot.recentOutput ? (
-          <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2.5 font-mono text-[11px] leading-relaxed text-foreground">
+          <pre className="scrollable m-0 max-h-[220px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2.5 font-mono text-[11px] leading-relaxed text-foreground">
             {snapshot.recentOutput}
           </pre>
         ) : (

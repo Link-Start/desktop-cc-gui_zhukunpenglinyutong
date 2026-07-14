@@ -55,7 +55,10 @@ function ScrollBar({
   return (
     <ScrollAreaPrimitive.ScrollAreaScrollbar
       className={cn(
-        "m-1 flex opacity-0 transition-opacity delay-300 duration-[2000ms] data-[orientation=horizontal]:h-1.5 data-[orientation=vertical]:w-1.5 data-[orientation=horizontal]:flex-col data-hovering:opacity-100 data-scrolling:opacity-100 data-hovering:delay-0 data-scrolling:delay-0 data-hovering:duration-[2000ms] data-scrolling:duration-[2000ms]",
+        // 与原生滚动条(base.css --sb-*)统一：10px 通道，滑块推向容器边缘，
+        // 内容侧留 4px(ps-1)、边缘侧留 2px(pe/pb-[2px])，可视滑块细到 4px；
+        // 纵向贴右缘(无 mr)、横向贴底缘(无 mb)，只留主轴方向 4px 边距。
+        "flex opacity-0 transition-opacity delay-300 duration-[2000ms] data-[orientation=vertical]:w-2.5 data-[orientation=vertical]:my-1 data-[orientation=vertical]:ps-1 data-[orientation=vertical]:pe-[2px] data-[orientation=horizontal]:h-2.5 data-[orientation=horizontal]:mx-1 data-[orientation=horizontal]:flex-col data-[orientation=horizontal]:pt-1 data-[orientation=horizontal]:pb-[2px] data-hovering:opacity-100 data-scrolling:opacity-100 data-hovering:delay-0 data-scrolling:delay-0 data-hovering:duration-[2000ms] data-scrolling:duration-[2000ms]",
         className,
       )}
       data-slot="scroll-area-scrollbar"

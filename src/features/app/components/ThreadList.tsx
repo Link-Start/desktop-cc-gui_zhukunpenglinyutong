@@ -674,7 +674,7 @@ export function ThreadList({
     <ThreadRowStatusProvider threadStatusById={threadStatusById}>
       <div
         ref={threadListRef}
-        className={`thread-list${nested ? " thread-list-nested" : ""}`}
+        className={`thread-list scrollable${nested ? " thread-list-nested" : ""}`}
         data-virtualized={shouldVirtualizeThreads ? "true" : undefined}
       >
         {shouldVirtualizeThreads ? (

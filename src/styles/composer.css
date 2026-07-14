@@ -274,7 +274,8 @@
 }
 
 .composer-browser-context-detail::-webkit-scrollbar {
-  width: 8px;
+  width: var(--sb-size);
+  height: var(--sb-size);
 }
 
 .composer-browser-context-detail::-webkit-scrollbar-track {
@@ -283,7 +284,11 @@
 
 .composer-browser-context-detail::-webkit-scrollbar-thumb {
   background: rgb(var(--browser-context-accent-rgb) / 0.24);
-  border-radius: 999px;
+  border-radius: var(--sb-thumb-radius);
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--sb-thumb-inset);
+  background-clip: content-box;
 }
 
 .composer-browser-context-detail::-webkit-scrollbar-thumb:hover {

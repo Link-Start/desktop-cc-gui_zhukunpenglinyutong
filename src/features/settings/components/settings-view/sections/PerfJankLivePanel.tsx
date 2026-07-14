@@ -205,7 +205,7 @@ export function PerfJankLivePanel() {
             </div>
             <ul
               aria-label={t("settings.perfJankLiveTitle")}
-              className="mt-2 max-h-72 space-y-1 overflow-y-auto rounded-md border border-border bg-muted/30 p-2 font-mono text-xs leading-5"
+              className="scrollable mt-2 max-h-72 space-y-1 overflow-y-auto rounded-md border border-border bg-muted/30 p-2 font-mono text-xs leading-5"
               style={{ listStyle: "none", margin: "8px 0 0", paddingLeft: 8 }}
             >
               {visibleRows.map((row) => (

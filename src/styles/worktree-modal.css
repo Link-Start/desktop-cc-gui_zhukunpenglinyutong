@@ -456,12 +456,17 @@
 }
 
 .worktree-modal-dropdown-panel::-webkit-scrollbar {
-  width: 8px;
+  width: var(--sb-size);
+  height: var(--sb-size);
 }
 
 .worktree-modal-dropdown-panel::-webkit-scrollbar-thumb {
-  border-radius: 999px;
+  border-radius: var(--sb-thumb-radius);
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--sb-thumb-inset);
   background: color-mix(in srgb, var(--text-subtle), transparent 42%);
+  background-clip: content-box;
 }
 
 .worktree-modal-dropdown-empty {
