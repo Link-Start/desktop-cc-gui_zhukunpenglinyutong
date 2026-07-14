@@ -64,6 +64,7 @@ export type TerminalSessionState = {
   hasSession: boolean;
   readyKey: string | null;
   cleanupTerminalSession: (workspaceId: string, terminalId: string) => void;
+  getSelection: () => string;
 };
 
 function appendBuffer(existing: string | undefined, data: string): string {
@@ -175,6 +176,16 @@ export function useTerminalSession({
 
   const writeToTerminal = useCallback((data: string) => {
     terminalRef.current?.write(data);
+  }, []);
+
+  // 用户拖蓝的高亮由 xterm 内部选区模型绘制(.xterm 是 user-select: none,
+  // 根本不存在浏览器原生选区),所以选区文本只能从内部模型读。
+  const getSelection = useCallback(() => {
+    const terminal = terminalRef.current;
+    if (!terminal || !terminal.hasSelection()) {
+      return "";
+    }
+    return terminal.getSelection().trim();
   }, []);
 
   const refreshTerminal = useCallback(() => {
@@ -475,5 +486,6 @@ export function useTerminalSession({
     hasSession,
     readyKey,
     cleanupTerminalSession,
+    getSelection,
   };
 }

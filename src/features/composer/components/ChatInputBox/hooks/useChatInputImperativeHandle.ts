@@ -7,7 +7,8 @@ export interface UseChatInputImperativeHandleOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
   getTextContent: () => string;
   invalidateCache: () => void;
-  isExternalUpdateRef: MutableRefObject<boolean>;
+  /** Set to the written text so input handlers can tell echoes from real edits. */
+  isExternalUpdateRef: MutableRefObject<string | null>;
   setHasContent: (hasContent: boolean) => void;
   adjustHeight: () => void;
   focusInput: () => void;
@@ -43,7 +44,7 @@ export function useChatInputImperativeHandle({
       },
       setValue: (newValue: string) => {
         if (!editableRef.current) return;
-        isExternalUpdateRef.current = true;
+        isExternalUpdateRef.current = newValue;
         editableRef.current.innerText = newValue;
         setHasContent(!!newValue.trim());
         adjustHeight();

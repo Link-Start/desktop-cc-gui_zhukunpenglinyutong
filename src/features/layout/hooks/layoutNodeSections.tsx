@@ -109,6 +109,7 @@ export function buildTerminalDockNode({
       containerRef={terminalState.containerRef}
       status={terminalState.status}
       message={terminalState.message}
+      getSelection={terminalState.getSelection}
       onInsertText={onInsertComposerText}
     />
   ) : null;

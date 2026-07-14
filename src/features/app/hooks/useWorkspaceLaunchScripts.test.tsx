@@ -25,6 +25,7 @@ const terminalState: TerminalSessionState = {
   hasSession: false,
   readyKey: null,
   cleanupTerminalSession: vi.fn(),
+  getSelection: () => "",
 };
 
 function makeWorkspace(launchScripts: LaunchScriptEntry[]): WorkspaceInfo {

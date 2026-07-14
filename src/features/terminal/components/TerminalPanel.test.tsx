@@ -1,52 +1,83 @@
 // @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resolveTerminalSelection } from "./TerminalPanel";
+import { TerminalPanel } from "./TerminalPanel";
 
-function mockDomSelection(text: string, node: Node | null): void {
-  vi.spyOn(window, "getSelection").mockReturnValue({
-    rangeCount: text ? 1 : 0,
-    anchorNode: node,
-    focusNode: node,
-    toString: () => text,
-  } as unknown as Selection);
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
+function renderPanel(getSelection: () => string, onInsertText = vi.fn()) {
+  render(
+    <TerminalPanel
+      containerRef={createRef<HTMLDivElement>()}
+      status="ready"
+      message=""
+      getSelection={getSelection}
+      onInsertText={onInsertText}
+    />,
+  );
+  return onInsertText;
 }
 
-describe("resolveTerminalSelection", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+function rightClickTerminal() {
+  const surface = document.querySelector(".terminal-surface");
+  expect(surface).not.toBeNull();
+  fireEvent.contextMenu(surface as Element, { clientX: 40, clientY: 40 });
+}
+
+afterEach(() => {
+  cleanup();
+});
+
+describe("TerminalPanel", () => {
+  it("sends the xterm selection to the composer from the context menu", () => {
+    const onInsertText = renderPanel(() => "desktop-cc-gui");
+
+    rightClickTerminal();
+    fireEvent.click(screen.getByText("terminal.sendSelectionToComposer"));
+
+    expect(onInsertText).toHaveBeenCalledTimes(1);
+    expect(onInsertText).toHaveBeenCalledWith("desktop-cc-gui");
   });
 
-  it("returns the native selection when it lives inside the terminal", () => {
-    const container = document.createElement("div");
-    const inner = document.createTextNode("desktop-cc-gui");
-    container.appendChild(inner);
-    mockDomSelection("desktop-cc-gui", inner);
+  it("sends the exact selection on every invocation without accumulating", () => {
+    const onInsertText = renderPanel(() => "desktop-cc-gui");
 
-    expect(resolveTerminalSelection(container)).toBe("desktop-cc-gui");
+    for (let i = 0; i < 3; i++) {
+      rightClickTerminal();
+      fireEvent.click(screen.getByText("terminal.sendSelectionToComposer"));
+    }
+
+    expect(onInsertText.mock.calls).toEqual([
+      ["desktop-cc-gui"],
+      ["desktop-cc-gui"],
+      ["desktop-cc-gui"],
+    ]);
   });
 
-  it("trims the native selection text", () => {
-    const container = document.createElement("div");
-    const inner = document.createTextNode("  hi  ");
-    container.appendChild(inner);
-    mockDomSelection("  hi  ", inner);
+  it("does not open the menu when the terminal has no selection", () => {
+    renderPanel(() => "");
 
-    expect(resolveTerminalSelection(container)).toBe("hi");
+    rightClickTerminal();
+
+    expect(screen.queryByText("terminal.sendSelectionToComposer")).toBeNull();
   });
 
-  it("returns empty when the native selection is outside the terminal", () => {
-    const container = document.createElement("div");
-    const outside = document.createTextNode("elsewhere");
-    mockDomSelection("elsewhere", outside);
+  it("does not cache a previous selection once it is cleared", () => {
+    let selection = "desktop-cc-gui";
+    renderPanel(() => selection);
 
-    // 不回退 xterm 内部选区，越界一律视为无选中，避免误抓整屏。
-    expect(resolveTerminalSelection(container)).toBe("");
-  });
+    rightClickTerminal();
+    // 关闭菜单但不发送。
+    fireEvent.keyDown(window, { key: "Escape" });
+    selection = "";
 
-  it("returns empty when there is no native selection", () => {
-    const container = document.createElement("div");
-    mockDomSelection("", null);
+    rightClickTerminal();
 
-    expect(resolveTerminalSelection(container)).toBe("");
+    expect(screen.queryByText("terminal.sendSelectionToComposer")).toBeNull();
   });
 });

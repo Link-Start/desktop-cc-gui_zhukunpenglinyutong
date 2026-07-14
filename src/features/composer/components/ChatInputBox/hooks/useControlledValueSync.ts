@@ -5,7 +5,8 @@ export interface UseControlledValueSyncOptions {
   value: string | undefined;
   editableRef: React.RefObject<HTMLDivElement | null>;
   isComposingRef: MutableRefObject<boolean>;
-  isExternalUpdateRef: MutableRefObject<boolean>;
+  /** Set to the written text so input handlers can tell echoes from real edits. */
+  isExternalUpdateRef: MutableRefObject<string | null>;
   getTextContent: () => string;
   setHasContent: (hasContent: boolean) => void;
   adjustHeight: () => void;
@@ -49,7 +50,7 @@ export function useControlledValueSync({
     const currentText = getTextContent();
 
     if (currentText !== value) {
-      isExternalUpdateRef.current = true;
+      isExternalUpdateRef.current = value;
 
       editableRef.current.innerText = value;
       setHasContent(!!value.trim());
