@@ -73,7 +73,7 @@ export const EditToolBlock = memo(function EditToolBlock({
       loadDiff={hasInlineDiff ? loadDiff : undefined}
       fallbackBody={
         !hasInlineDiff && item.output ? (
-          <pre className="m-0 max-h-[300px] overflow-auto whitespace-pre-wrap break-words p-2.5 font-mono text-xs text-muted-foreground">
+          <pre className="scrollable m-0 max-h-[300px] overflow-auto whitespace-pre-wrap break-words p-2.5 font-mono text-xs text-muted-foreground">
             {item.output}
           </pre>
         ) : undefined

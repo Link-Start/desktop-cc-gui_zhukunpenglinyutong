@@ -63,7 +63,6 @@ import type { MessagesPresentationMode } from "./messagesLiveWindow";
 import {
   formatCompletedTimeMs,
   type MessagesEngine,
-  resolveProvenanceEngineLabel,
   shouldHideCodexCanvasCommandCard,
 } from "./messagesRenderUtils";
 import { resolveUserMessagePresentation } from "./messagesUserPresentation";
@@ -247,6 +246,7 @@ type MessagesTimelineProps = {
   proxyUrl: string | null;
   reasoningMetaById: Map<string, ReturnType<typeof parseReasoning>>;
   requestAutoScroll: () => void;
+  requestBottomConvergence: () => void;
   selectedExitPlanExecutionByItemKey: Record<string, Extract<AccessMode, "default" | "full-access">>;
   scrollElementRef: RefObject<HTMLDivElement | null>;
   showFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
@@ -393,6 +393,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   proxyUrl,
   reasoningMetaById,
   requestAutoScroll,
+  requestBottomConvergence,
   selectedExitPlanExecutionByItemKey,
   scrollElementRef,
   showFileLinkMenu,
@@ -460,6 +461,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const hydrationRemeasureRafRef = useRef<number | null>(null);
   const lightweightRemeasureRafRef = useRef<number | null>(null);
   const liveRowRemeasureRafRef = useRef<number | null>(null);
+  // scope reset / 虚拟化翻开重测的 rAF 句柄：不走 effect per-run cleanup（发送瞬间
+  // 依赖连续变化会把重测在执行前吊销），只在切会话与卸载时取消。
+  const scopeResetRemeasureRafRef = useRef<number | null>(null);
   const lastTimelineRenderWeightDiagnosticRef = useRef<{
     at: number;
     signature: string;
@@ -494,6 +498,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     if (typeof window !== "undefined" && lightweightRemeasureRafRef.current !== null) {
       window.cancelAnimationFrame(lightweightRemeasureRafRef.current);
       lightweightRemeasureRafRef.current = null;
+    }
+    if (typeof window !== "undefined" && scopeResetRemeasureRafRef.current !== null) {
+      window.cancelAnimationFrame(scopeResetRemeasureRafRef.current);
+      scopeResetRemeasureRafRef.current = null;
     }
   }, [threadId, workspaceId]);
 
@@ -1033,6 +1041,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         window.cancelAnimationFrame(lightweightRemeasureRafRef.current);
         lightweightRemeasureRafRef.current = null;
       }
+      if (typeof window !== "undefined" && scopeResetRemeasureRafRef.current !== null) {
+        window.cancelAnimationFrame(scopeResetRemeasureRafRef.current);
+        scopeResetRemeasureRafRef.current = null;
+      }
     };
   }, []);
 
@@ -1294,33 +1306,41 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       hasScrollElement: Boolean(scrollElement),
     });
     lastVirtualizedTimelineScopeResetRef.current = reset.nextScopeKey;
-    if (!reset.shouldResetScroll && !reset.shouldMeasure) {
-      return undefined;
+    if (!reset.shouldPinBottomWhenArmed && !reset.shouldMeasure) {
+      return;
     }
-    // 历史会话应默认落在底部（最新消息处），而不是顶部。
-    const pinScrollToBottom =
-      scrollElement && reset.shouldResetScroll
-        ? () => {
-            scrollElement.scrollTo({ top: scrollElement.scrollHeight, behavior: "auto" });
-          }
-        : null;
+    // 历史会话应默认落在底部（最新消息处），而不是顶部；虚拟化 OFF↔ON 翻转的
+    // 整体重排同样需要落位（回调内部判定用户是否仍 parked 在底部）。
+    const pinScrollToBottom = scrollElement && reset.shouldPinBottomWhenArmed
+      ? requestBottomConvergence
+      : null;
     pinScrollToBottom?.();
+    if (!reset.shouldMeasure) {
+      return;
+    }
     if (typeof window === "undefined") {
       remeasureTimelineVirtualizerRows(timelineVirtualizer);
-      return undefined;
+      return;
     }
-    const raf = window.requestAnimationFrame(() => {
+    // rAF 句柄放 ref、只在卸载时取消：本 effect 的依赖（isThinking/isWorking/scope key）
+    // 在发送消息瞬间会于同一帧内连续变化，若在 per-run cleanup 里取消，翻开重测会在
+    // 执行前被吊销；而 resolver 的首翻信号已被消费、工作态分支又拒绝重排，重测就此
+    // 丢失——所有行保持估高摆放，新气泡/working 指示叠进上一条长回复的真实高度区间，
+    // 直到首个 delta 的 liveRowRemeasure 才自愈（实测重叠可持续数秒）。
+    if (scopeResetRemeasureRafRef.current !== null) {
+      window.cancelAnimationFrame(scopeResetRemeasureRafRef.current);
+    }
+    scopeResetRemeasureRafRef.current = window.requestAnimationFrame(() => {
+      scopeResetRemeasureRafRef.current = null;
       remeasureTimelineVirtualizerRows(timelineVirtualizer);
       // 重测把估高替换为真实行高、总高度随之变化，需再钉一次底部。
       pinScrollToBottom?.();
     });
-    return () => {
-      window.cancelAnimationFrame(raf);
-    };
   }, [
     isThinking,
     isWorking,
     pendingJumpMessageId,
+    requestBottomConvergence,
     scrollElementRef,
     shouldVirtualizeTimeline,
     timelineVirtualizer,
@@ -1712,14 +1732,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       const isExpanded = expandedItems.has(renderItem.id);
       const selectedExitPlanExecutionMode =
         selectedExitPlanExecutionByItemKey[`${threadId ?? "no-thread"}:${renderItem.id}`] ?? null;
-      const provenanceLabel = resolveProvenanceEngineLabel(renderItem.engineSource);
       return (
         <div key={`tool:${renderItem.id}`} className="message-tool-block-shell">
-          {provenanceLabel ? (
-            <div className="message-provenance-row">
-              <span className="message-provenance-badge">{provenanceLabel}</span>
-            </div>
-          ) : null}
           <ToolBlockRenderer
             item={renderItem}
             workspaceId={workspaceId}

@@ -74,6 +74,7 @@ struct RunningWebServer {
 pub(crate) struct WebServiceRuntime {
     rpc_endpoint: String,
     rpc_auth_token: Option<String>,
+    data_dir: PathBuf,
     default_port: u16,
     running: Option<RunningWebServer>,
     last_error: Option<String>,
@@ -84,10 +85,12 @@ impl WebServiceRuntime {
         rpc_endpoint: String,
         rpc_auth_token: Option<String>,
         default_port: u16,
+        data_dir: PathBuf,
     ) -> Self {
         Self {
             rpc_endpoint,
             rpc_auth_token,
+            data_dir,
             default_port: sanitize_port(default_port),
             running: None,
             last_error: None,
@@ -129,7 +132,7 @@ impl WebServiceRuntime {
             .map_err(|err| format!("failed to read bound address: {err}"))?
             .port();
         let addresses = build_access_addresses(bound_port);
-        let assets_root = resolve_web_assets_root();
+        let assets_root = resolve_web_assets_root(Some(&self.data_dir));
         if assets_root.is_none() {
             eprintln!(
                 "[web-service] frontend assets not found, fallback pages only (set {WEB_ASSETS_ENV_KEY})"
@@ -1180,13 +1183,14 @@ fn build_web_tauri_shim_script() -> String {
     )
 }
 
-fn resolve_web_assets_root() -> Option<PathBuf> {
+fn resolve_web_assets_root(data_dir: Option<&Path>) -> Option<PathBuf> {
     let env_assets_root = env::var_os(WEB_ASSETS_ENV_KEY).map(PathBuf::from);
     let cwd = env::current_dir().ok();
     let current_exe = env::current_exe().ok();
     let appdir = env::var_os("APPDIR").map(PathBuf::from);
     let candidates = collect_web_asset_candidates_for_platform(
         env_assets_root.as_deref(),
+        data_dir,
         cwd.as_deref(),
         current_exe.as_deref(),
         appdir.as_deref(),
@@ -1221,6 +1225,7 @@ fn is_valid_web_assets_root(candidate: &Path) -> bool {
 
 fn collect_web_asset_candidates_for_platform(
     env_assets_root: Option<&Path>,
+    data_dir: Option<&Path>,
     cwd: Option<&Path>,
     current_exe: Option<&Path>,
     appdir: Option<&Path>,
@@ -1231,6 +1236,9 @@ fn collect_web_asset_candidates_for_platform(
     if let Some(path) = env_assets_root {
         candidates.push(path.to_path_buf());
         candidates.push(path.join("dist"));
+    }
+    if let Some(data_dir) = data_dir {
+        candidates.push(data_dir.join("web-assets/current"));
     }
     if let Some(cwd) = cwd {
         append_asset_candidates(cwd, &mut candidates);
@@ -1390,6 +1398,7 @@ mod tests {
         let candidates = collect_web_asset_candidates_for_platform(
             None,
             None,
+            None,
             Some(Path::new("/tmp/.mount_ccgui_abc/usr/bin/cc_gui_daemon")),
             Some(Path::new("/tmp/.mount_ccgui_abc")),
             true,
@@ -1404,6 +1413,7 @@ mod tests {
         let candidates = collect_web_asset_candidates_for_platform(
             None,
             None,
+            None,
             Some(Path::new("/tmp/.mount_ccgui_abc/usr/bin/cc_gui_daemon")),
             None,
             true,
@@ -1416,6 +1426,7 @@ mod tests {
     #[test]
     fn web_asset_candidates_do_not_add_linux_bundle_layout_for_non_daemon_exe() {
         let candidates = collect_web_asset_candidates_for_platform(
+            None,
             None,
             None,
             Some(Path::new("/opt/other-app/current/bin/helper")),
@@ -1433,6 +1444,7 @@ mod tests {
         let candidates = collect_web_asset_candidates_for_platform(
             None,
             None,
+            None,
             Some(Path::new("/tmp/.mount_ccgui_abc/usr/bin/cc_gui_daemon")),
             Some(Path::new("/tmp/.mount_ccgui_abc")),
             false,
@@ -1440,6 +1452,48 @@ mod tests {
 
         assert!(!candidates
             .contains(&Path::new("/tmp/.mount_ccgui_abc/usr/lib/ccgui/dist").to_path_buf()));
+    }
+
+    #[test]
+    fn web_asset_candidates_include_managed_data_directory() {
+        let candidates = collect_web_asset_candidates_for_platform(
+            None,
+            Some(Path::new("/tmp/ccgui-data")),
+            None,
+            None,
+            None,
+            false,
+        );
+
+        assert_eq!(
+            candidates.first().map(|path| path.as_path()),
+            Some(Path::new("/tmp/ccgui-data/web-assets/current"))
+        );
+    }
+
+    #[test]
+    fn explicit_web_assets_override_precedes_managed_data_directory() {
+        let candidates = collect_web_asset_candidates_for_platform(
+            Some(Path::new("/tmp/explicit-assets")),
+            Some(Path::new("/tmp/ccgui-data")),
+            None,
+            None,
+            None,
+            false,
+        );
+
+        assert_eq!(
+            candidates
+                .iter()
+                .take(3)
+                .map(|path| path.as_path())
+                .collect::<Vec<_>>(),
+            vec![
+                Path::new("/tmp/explicit-assets"),
+                Path::new("/tmp/explicit-assets/dist"),
+                Path::new("/tmp/ccgui-data/web-assets/current"),
+            ]
+        );
     }
 
     #[test]

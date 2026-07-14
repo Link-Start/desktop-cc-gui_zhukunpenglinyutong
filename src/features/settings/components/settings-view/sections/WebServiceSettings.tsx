@@ -2,14 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AppSettings } from "@/types";
 import {
   getDaemonStatus,
+  getWebAssetsStatus,
   getWebServerStatus,
+  installWebAssets,
+  installWebAssetsFromFile,
+  pickWebAssetsArchive,
   startDaemon,
   startWebServer,
   stopDaemon,
   stopWebServer,
   type DaemonStatus,
   type WebServerStatus,
+  type WebAssetsStatus,
 } from "@/services/tauri";
+import { WebAssetsPackageSection } from "./WebAssetsPackageSection";
 
 type WebServiceSettingsProps = {
   t: (key: string) => string;
@@ -29,6 +35,8 @@ type WebServiceAction =
   | "daemon-stop"
   | "daemon-refresh"
   | null;
+
+type WebAssetsAction = "checking" | "installing" | "selecting-local" | "installing-local" | null;
 
 function parseWebServicePort(raw: string): number | null {
   const trimmed = raw.trim();
@@ -54,6 +62,21 @@ function normalizeFixedWebServiceToken(
 ): string | null {
   const normalized = value?.trim() ?? "";
   return normalized || null;
+}
+
+function isLoopbackRpcEndpoint(endpoint: string): boolean {
+  const host = endpoint
+    .trim()
+    .replace(/^[a-z]+:\/\//i, "")
+    .split("/", 1)[0]
+    ?.toLowerCase();
+  return Boolean(
+    host === "localhost" ||
+      host?.startsWith("localhost:") ||
+      host === "::1" ||
+      host?.startsWith("[::1]:") ||
+      host?.startsWith("127."),
+  );
 }
 
 export function generateFixedWebServiceToken(
@@ -90,6 +113,9 @@ function humanizeWebServiceError(
   if (raw.startsWith("WEB_SERVICE_STOP_TIMEOUT")) {
     return t("settings.webServiceErrorStopTimeout");
   }
+  if (raw.startsWith("WEB_ASSETS_NOT_READY")) {
+    return t("settings.webServiceErrorAssetsNotReady");
+  }
   if (raw.includes("Failed to connect to remote backend")) {
     return t("settings.webServiceErrorDaemonUnavailable");
   }
@@ -105,14 +131,14 @@ export function WebServiceSettings({
   onUpdateAppSettings,
   generateFixedToken = generateFixedWebServiceToken,
 }: WebServiceSettingsProps) {
-  const [portDraft, setPortDraft] = useState(
-    String(appSettings.webServicePort ?? 3080),
-  );
-  const [fixedTokenDraft, setFixedTokenDraft] = useState(
-    appSettings.webServiceToken ?? "",
-  );
+  const [portDraft, setPortDraft] = useState(String(appSettings.webServicePort ?? 3080));
+  const [fixedTokenDraft, setFixedTokenDraft] = useState(appSettings.webServiceToken ?? "");
   const [status, setStatus] = useState<WebServerStatus | null>(null);
   const [daemonStatus, setDaemonStatus] = useState<DaemonStatus | null>(null);
+  const [webAssetsStatus, setWebAssetsStatus] = useState<WebAssetsStatus | null>(null);
+  const [webAssetsAction, setWebAssetsAction] = useState<WebAssetsAction>("checking");
+  const [webAssetsError, setWebAssetsError] = useState<string | null>(null);
+  const [webAssetsNotice, setWebAssetsNotice] = useState<string | null>(null);
   const [action, setAction] = useState<WebServiceAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [showToken, setShowToken] = useState(false);
@@ -123,6 +149,11 @@ export function WebServiceSettings({
   const rpcEndpoint =
     status?.rpcEndpoint || daemonStatus?.host || appSettings.remoteBackendHost;
   const daemonRunning = Boolean(daemonStatus?.running);
+  const webAssetsReady = webAssetsStatus?.state === "ready";
+  const webAssetsRequired =
+    isLoopbackRpcEndpoint(rpcEndpoint) &&
+    webAssetsStatus?.installationRequired !== false;
+  const webAssetsAvailable = !webAssetsRequired || webAssetsReady;
   const webPort = status?.webPort ?? parsedPort ?? appSettings.webServicePort;
   const addresses = status?.addresses ?? [];
   const rawToken = status?.webAccessToken ?? null;
@@ -183,10 +214,43 @@ export function WebServiceSettings({
     }
   }, [t]);
 
+  const refreshWebAssetsStatus = useCallback(async (announce = false) => {
+    setWebAssetsAction("checking");
+    setWebAssetsError(null);
+    if (announce) {
+      setWebAssetsNotice(t("settings.webServiceAssetsRecheckProgress"));
+    }
+    try {
+      const next = await getWebAssetsStatus();
+      setWebAssetsStatus(next);
+      setWebAssetsError(next.lastError);
+      if (announce) {
+        setWebAssetsNotice(
+          next.lastError
+            ? null
+            : next.state === "ready"
+              ? t("settings.webServiceAssetsRecheckSuccess").replace(
+                  "{{version}}",
+                  next.installedVersion ?? next.requiredVersion,
+                )
+              : t("settings.webServiceAssetsRecheckComplete"),
+        );
+      }
+    } catch (assetsError) {
+      setWebAssetsNotice(null);
+      setWebAssetsError(
+        assetsError instanceof Error ? assetsError.message : String(assetsError),
+      );
+    } finally {
+      setWebAssetsAction(null);
+    }
+  }, [t]);
+
   useEffect(() => {
     void refreshStatus();
     void refreshDaemonStatus();
-  }, [refreshDaemonStatus, refreshStatus]);
+    void refreshWebAssetsStatus();
+  }, [refreshDaemonStatus, refreshStatus, refreshWebAssetsStatus]);
 
   useEffect(() => {
     setPortDraft(String(appSettings.webServicePort ?? 3080));
@@ -279,6 +343,10 @@ export function WebServiceSettings({
   }, [appSettings, generateFixedToken, onUpdateAppSettings]);
 
   const handleStart = useCallback(async () => {
+    if (!webAssetsAvailable) {
+      setError(t("settings.webServiceAssetsRequired"));
+      return;
+    }
     if (parsedPort == null) {
       setError(t("settings.webServicePortInvalid"));
       return;
@@ -305,7 +373,66 @@ export function WebServiceSettings({
     } finally {
       setAction(null);
     }
-  }, [fixedTokenDraftNormalized, parsedPort, savePort, t]);
+  }, [fixedTokenDraftNormalized, parsedPort, savePort, t, webAssetsAvailable]);
+
+  const handleInstallWebAssets = useCallback(async () => {
+    setWebAssetsAction("installing");
+    setWebAssetsError(null);
+    setWebAssetsNotice(t("settings.webServiceAssetsInstallProgress"));
+    try {
+      const next = await installWebAssets();
+      setWebAssetsStatus(next);
+      setWebAssetsError(next.lastError);
+      setWebAssetsNotice(
+        next.lastError || next.state !== "ready"
+          ? null
+          : t("settings.webServiceAssetsInstallSuccess").replace(
+              "{{version}}",
+              next.installedVersion ?? next.requiredVersion,
+            ),
+      );
+    } catch (assetsError) {
+      setWebAssetsNotice(null);
+      setWebAssetsError(
+        assetsError instanceof Error ? assetsError.message : String(assetsError),
+      );
+    } finally {
+      setWebAssetsAction(null);
+    }
+  }, [t]);
+
+  const handleInstallLocalWebAssets = useCallback(async () => {
+    setWebAssetsAction("selecting-local");
+    setWebAssetsError(null);
+    setWebAssetsNotice(t("settings.webServiceAssetsSelectLocalProgress"));
+    try {
+      const archivePath = await pickWebAssetsArchive();
+      if (!archivePath) {
+        setWebAssetsNotice(null);
+        return;
+      }
+      setWebAssetsAction("installing-local");
+      setWebAssetsNotice(t("settings.webServiceAssetsInstallLocalProgress"));
+      const next = await installWebAssetsFromFile(archivePath);
+      setWebAssetsStatus(next);
+      setWebAssetsError(next.lastError);
+      setWebAssetsNotice(
+        next.lastError || next.state !== "ready"
+          ? null
+          : t("settings.webServiceAssetsInstallLocalSuccess").replace(
+              "{{version}}",
+              next.installedVersion ?? next.requiredVersion,
+            ),
+      );
+    } catch (assetsError) {
+      setWebAssetsNotice(null);
+      setWebAssetsError(
+        assetsError instanceof Error ? assetsError.message : String(assetsError),
+      );
+    } finally {
+      setWebAssetsAction(null);
+    }
+  }, [t]);
 
   const handleStop = useCallback(async () => {
     setAction("stop");
@@ -399,6 +526,23 @@ export function WebServiceSettings({
         {t("settings.webServiceTitle")}
       </div>
       <div className="settings-help">{t("settings.webServiceDescription")}</div>
+
+      <WebAssetsPackageSection
+        t={t}
+        status={webAssetsStatus}
+        action={webAssetsAction}
+        error={webAssetsError}
+        notice={webAssetsNotice}
+        onInstall={() => {
+          void handleInstallWebAssets();
+        }}
+        onInstallLocal={() => {
+          void handleInstallLocalWebAssets();
+        }}
+        onRefresh={() => {
+          void refreshWebAssetsStatus(true);
+        }}
+      />
 
       <label className="settings-field-label" htmlFor="web-service-port">
         {t("settings.webServicePort")}
@@ -544,7 +688,7 @@ export function WebServiceSettings({
             onClick={() => {
               void handleStart();
             }}
-            disabled={isBusy || parsedPort == null}
+            disabled={isBusy || parsedPort == null || !webAssetsAvailable}
           >
             {action === "start"
               ? t("settings.running")

@@ -117,6 +117,9 @@ import {
   setMainWindowOpacity,
   fetchClaudeProviderModels,
   reorderClaudeProviders,
+  getWebAssetsStatus,
+  installWebAssets,
+  installWebAssetsFromFile,
 } from "./tauri";
 import { resetRuntimeModeStateForTests } from "./tauri/runtimeMode";
 import {
@@ -179,6 +182,34 @@ describe("tauri invoke wrappers", () => {
     clearWebRuntimeFlag();
     resetRuntimeModeStateForTests();
     resetStartupTraceForTests();
+  });
+
+  it("maps Web assets status and install commands without payload drift", async () => {
+    const invokeMock = vi.mocked(invoke);
+    const readyStatus = {
+      state: "ready" as const,
+      installedVersion: "0.7.2",
+      requiredVersion: "0.7.2",
+      lastError: null,
+      installationRequired: true,
+    };
+    invokeMock
+      .mockResolvedValueOnce(readyStatus)
+      .mockResolvedValueOnce(readyStatus)
+      .mockResolvedValueOnce(readyStatus);
+
+    await expect(getWebAssetsStatus()).resolves.toEqual(readyStatus);
+    await expect(installWebAssets()).resolves.toEqual(readyStatus);
+    await expect(
+      installWebAssetsFromFile("/tmp/ccgui-web-assets_0.7.2.zip"),
+    ).resolves.toEqual(readyStatus);
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "get_web_assets_status");
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "install_web_assets");
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      3,
+      "install_web_assets_from_file",
+      { archivePath: "/tmp/ccgui-web-assets_0.7.2.zip" },
+    );
   });
 
   it("uses codex_bin for addWorkspace", async () => {

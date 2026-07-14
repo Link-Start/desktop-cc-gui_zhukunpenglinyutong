@@ -84,7 +84,6 @@ import {
   normalizeMessageImageSrc,
   OPENCODE_NON_STREAMING_HINT_DELAY_MS,
   resolveAgentTaskDisplaySummary,
-  resolveProvenanceEngineLabel,
   shouldDisplayWorkingActivityLabel,
 } from "./messagesRenderUtils";
 
@@ -1238,7 +1237,6 @@ export const MessageRow = memo(function MessageRow({
       renderCostMs: readHighResolutionNowMs() - renderStartedAtMs,
     });
   }, [displayText.length, isStreaming, item.id, item.role, renderStartedAtMs, threadId]);
-  const provenanceLabel = resolveProvenanceEngineLabel(item.engineSource);
   const runtimeReconnectHint = useMemo(
     () => (
       item.role === "assistant"
@@ -1257,11 +1255,6 @@ export const MessageRow = memo(function MessageRow({
 
   const bubbleNode = (
     <div className={`bubble message-bubble${agentTaskNotification ? " message-bubble-agent-task" : ""}`}>
-      {item.role === "assistant" && provenanceLabel ? (
-        <div className="message-provenance-row">
-          <span className="message-provenance-badge">{provenanceLabel}</span>
-        </div>
-      ) : null}
       {agentTaskNotification && agentTaskDisplay ? (
         <Card className="message-agent-task-card gap-3 rounded-[8px] p-4 before:rounded-[7px]">
           <div className="flex items-center gap-3">
@@ -1775,7 +1768,6 @@ export const ReasoningRow = memo(function ReasoningRow({
     : isLive
       ? t("messages.thinkingProcess")
       : t("messages.thinkingLabel");
-  const provenanceLabel = resolveProvenanceEngineLabel(item.engineSource);
   return (
     <div className={`thinking-block${isExpanded ? " is-expanded" : ""}${isLive ? " is-live" : ""}`}>
       <button
@@ -1785,11 +1777,6 @@ export const ReasoningRow = memo(function ReasoningRow({
       >
         <span className="thinking-header-copy">
           <span className="thinking-title">{title}</span>
-          {provenanceLabel ? (
-            <span className="message-provenance-badge thinking-provenance-badge">
-              {provenanceLabel}
-            </span>
-          ) : null}
         </span>
         <span
           className={`codicon thinking-icon ${isExpanded ? "codicon-chevron-down" : "codicon-chevron-right"}`}

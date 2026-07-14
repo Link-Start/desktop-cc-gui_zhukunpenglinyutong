@@ -8,6 +8,71 @@ permissions:
   pull-requests: write
 
 jobs:
+  build_web_assets:
+    name: web assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Web assets
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+        run: |
+          set -euo pipefail
+          npm run build
+          VERSION=$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          config = json.loads(Path("src-tauri/tauri.conf.json").read_text())
+          print(config["version"])
+          PY
+          )
+          python3 - "$VERSION" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          version = sys.argv[1]
+          manifest = {
+              "schemaVersion": 1,
+              "assetsVersion": version,
+              "entrypoint": "index.html",
+          }
+          Path("dist/manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+
+          test -f dist/index.html
+          test -d dist/assets
+          mkdir -p release-artifacts
+          ARCHIVE="ccgui-web-assets_${VERSION}.zip"
+          (cd dist && zip -q -r "../release-artifacts/${ARCHIVE}" .)
+          (cd release-artifacts && sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256")
+          unzip -t "release-artifacts/${ARCHIVE}"
+          unzip -Z1 "release-artifacts/${ARCHIVE}" > release-artifacts/web-assets-entries.txt
+          grep -Fxq "manifest.json" release-artifacts/web-assets-entries.txt
+          grep -Fxq "index.html" release-artifacts/web-assets-entries.txt
+          grep -Eq '^assets/.+' release-artifacts/web-assets-entries.txt
+
+      - name: Upload Web assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-assets
+          path: |
+            release-artifacts/ccgui-web-assets_*.zip
+            release-artifacts/ccgui-web-assets_*.zip.sha256
+          if-no-files-found: error
+
   build_macos:
     name: macos (${{ matrix.arch }})
     runs-on: ${{ matrix.platform }}
@@ -350,9 +415,18 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     needs:
+      - build_web_assets
       - build_macos
       - build_linux
       - build_windows
+    if: >-
+      ${{
+        always() &&
+        !cancelled() &&
+        needs.build_macos.result == 'success' &&
+        needs.build_linux.result == 'success' &&
+        needs.build_windows.result == 'success'
+      }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -376,6 +450,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: windows-x64
+          path: release-artifacts
+
+      - name: Download Web assets
+        if: ${{ needs.build_web_assets.result == 'success' }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: web-assets
           path: release-artifacts
 
       - name: Build latest.json
@@ -529,6 +611,8 @@ jobs:
             "release-artifacts/*.AppImage*" \
             "release-artifacts/*-setup.exe" \
             "release-artifacts/*-setup.exe.sig" \
+            "release-artifacts/ccgui-web-assets_*.zip" \
+            "release-artifacts/ccgui-web-assets_*.zip.sha256" \
             "release-artifacts/latest.json"
           do
             for f in $pattern; do

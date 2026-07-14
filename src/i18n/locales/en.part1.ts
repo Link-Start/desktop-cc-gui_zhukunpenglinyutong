@@ -2130,6 +2130,34 @@ const enPart1 = {
     webServiceTitle: "Web service",
     webServiceDescription:
       "Manage the browser-accessible Web service exposed by the daemon.",
+    webServiceAssetsTitle: "Web frontend assets",
+    webServiceAssetsChecking: "Checking",
+    webServiceAssetsMissing: "Not installed",
+    webServiceAssetsInstalling: "Downloading and installing",
+    webServiceAssetsReady: "Installed ({{version}})",
+    webServiceAssetsFailed: "Check or installation failed",
+    webServiceAssetsInstall: "Download and install",
+    webServiceAssetsReinstall: "Download and reinstall",
+    webServiceAssetsInstallLocal: "Choose local package",
+    webServiceAssetsSelectingLocal: "Choosing package",
+    webServiceAssetsInstallingLocal: "Installing local package",
+    webServiceAssetsRecheck: "Check again",
+    webServiceAssetsRechecking: "Checking",
+    webServiceAssetsInstallProgress:
+      "Downloading, verifying, and installing Web frontend assets from the Release...",
+    webServiceAssetsInstallSuccess:
+      "Download and installation complete. Current version: {{version}}.",
+    webServiceAssetsRecheckProgress: "Checking Web frontend assets again...",
+    webServiceAssetsRecheckSuccess:
+      "Check complete. Current assets version: {{version}}.",
+    webServiceAssetsRecheckComplete: "Check complete. Assets status updated.",
+    webServiceAssetsSelectLocalProgress:
+      "Choosing a local Web frontend assets package...",
+    webServiceAssetsInstallLocalProgress:
+      "Verifying and installing the local Web frontend assets package...",
+    webServiceAssetsInstallLocalSuccess:
+      "Local package installation complete. Current version: {{version}}.",
+    webServiceAssetsRequired: "Install the Web frontend assets first.",
     webServicePort: "Web port",
     webServicePortAriaLabel: "Web service port",
     webServicePortInvalid: "Port must be an integer between 1024 and 65535.",
@@ -2185,6 +2213,7 @@ const enPart1 = {
       "Daemon is unreachable. Check remote host and ensure daemon is running.",
     webServiceErrorDaemonAuth:
       "Daemon authentication failed. Verify remote backend token.",
+    webServiceErrorAssetsNotReady: "Install the Web frontend assets first.",
     emailTitle: "Email sender",
     emailDescription:
       "Configure SMTP sending, read-only inbound checks, and mail-driven session management.",

@@ -247,3 +247,359 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 976: 全局搜索结果分层
+
+**Date**: 2026-07-13
+**Task**: 全局搜索结果分层
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+全局搜索结果按内容类型分层展示，文件标题改为 basename，完整路径保留为位置元数据，并完成搜索回归与 OpenSpec 验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2577fd6f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 977: 根治 Tooltip 启动更新回环
+
+**Date**: 2026-07-13
+**Task**: 根治 Tooltip 启动更新回环
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+将 TooltipIconButton 从 Radix PopperAnchor/SlotClone 状态机迁移到 native button + Floating UI portal，保留原有视觉、定位和交互能力，并完成 Tauri 冷启动人工验收。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0d2c5cad` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 978: 根治 Sidebar 首次启动会话行更新回环
+
+**Date**: 2026-07-13
+**Task**: 根治 Sidebar 首次启动会话行更新回环
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+将会话行 Tooltip 定位状态改为交互时按需挂载，删除确认改用稳定 virtual anchor；补齐 StrictMode、AppShell、focus 和 Escape 回归测试，并完成新安装包首次启动人工验收。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db663a44` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 979: 收口 Web 资源分发与首次启动稳定性
+
+**Date**: 2026-07-13
+**Task**: 收口 Web 资源分发与首次启动稳定性
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 模块 | 完成内容 |
+|---|---|
+| React 稳定性 | 将 radix-ui 内的 @radix-ui/react-presence 固定到 1.1.6，修复生产包首次启动 React #185 崩溃。 |
+| Web 资源安装 | 完成 GitHub Release ZIP 下载、SHA-256 校验、本地包选择、原子覆盖安装、状态检测与操作反馈。 |
+| Daemon 服务 | 从应用数据目录的 web-assets/current 加载前端资源，并保留失败时的有效已安装版本。 |
+| Release | 新增可选 Web 资源产物；Web ZIP 缺失或构建失败不阻断 macOS、Windows、Linux 原有发布。 |
+
+**验证结果**：typecheck、lint、build、174 个 focused frontend tests、20 个 Rust tests、runtime contracts、OpenSpec strict validation、release archive smoke 均通过；完整测试仅保留 3 个与本次 diff 无关的 Sidebar 既有失败。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1173ae67` | (see git log) |
+| `27c501a7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 980: 补充 v0.7.2 发布记录并延长 Codex 健康检查超时
+
+**Date**: 2026-07-13
+**Task**: 补充 v0.7.2 发布记录并延长 Codex 健康检查超时
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+补充 v0.7.1/v0.7.2 中英文发布日志；将 Codex GUI、workspace core 与 daemon 的 session health probe timeout 从 3 秒统一调整为 15 秒，降低冷启动时正常 runtime 被过早清理的概率。cargo check 与 git diff --check 通过；全仓库 cargo fmt --check 仍受既有未格式化文件影响。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `76c52d81` | (see git log) |
+| `cf17256e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 981: 修复 Messages 自动滚底锚点更新回环
+
+**Date**: 2026-07-13
+**Task**: 修复 Messages 自动滚底锚点更新回环
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+定位并修复 long conversation streaming、virtualized row measurement 与 bottom-follow 共同触发的 active anchor state feedback。near-bottom 时稳定选择 latest user anchor，scroll-away 后保留原 viewport geometry tracking；补充 focused regression test 与 OpenSpec change，相关测试、lint、typecheck、build 和 strict validation 均通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b27891b0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 982: 修复 Sidebar ScrollArea React 19 ref 回环
+
+**Date**: 2026-07-13
+**Task**: 修复 Sidebar ScrollArea React 19 ref 回环
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+将 radix-ui 内 ScrollArea scoped override 到 1.2.14，补充 React 19 StrictMode ref 连续性回归测试，并完成 OpenSpec、构建与用户实机验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `28851873` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 983: 修复 AppShell composer 冷启动状态回环
+
+**Date**: 2026-07-13
+**Task**: 修复 AppShell composer 冷启动状态回环
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+切断 composer selection cache state 对 reload layout effect 的自反馈，保证 pending 到 canonical selection 连续迁移，并移除 React Scan 内部 signal 强写；相关回归、lint、typecheck、build、OpenSpec 与用户实机验证通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0c198dc7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 984: 补齐新增文件 diff 入口
+
+**Date**: 2026-07-14
+**Task**: 补齐新增文件 diff 入口
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+消息幕布对 added 且缺少 inline diff 的文件复用 canonical Git diff 入口；保留已有 inline preview 与其他 change kind 行为，并补充 focused tests 和 OpenSpec artifacts。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8b8b919b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 985: 统一对话幕布钉底与回刷时序
+
+**Date**: 2026-07-14
+**Task**: 统一对话幕布钉底与回刷时序
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## 对话幕布统一钉底与生命周期收口
+
+| 项目 | 内容 |
+|---|---|
+| Scroll owner | 将 history、live、settle、Timeline 与右下角控制统一到单一 convergence owner。 |
+| Late render | 保留即时反馈，并增加 100/300/1000/2000ms true-bottom checkpoints。 |
+| Lifecycle | 修复 active-first、同 thread 关闭重开、连续多轮 settle 与 lightweight/oversized 回刷时序。 |
+| Stability | stable edge 零写入，避免 scroll/anchor/measure 反馈环与 Maximum update depth。 |
+| Verification | 相关扩大回归 91 passed / 5 skipped；typecheck、ESLint、OpenSpec strict 404/404 通过。全量测试仍由 3 个既有 Sidebar 断言失败阻断。 |
+
+**关键文件**：
+- `src/features/messages/components/Messages.tsx`
+- `src/features/messages/components/messagesScrollConvergence.ts`
+- `src/features/messages/components/MessagesTimeline.tsx`
+- `src/features/messages/components/ScrollControl.tsx`
+- `openspec/changes/unify-conversation-scroll-bottom-convergence/`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cb028740` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

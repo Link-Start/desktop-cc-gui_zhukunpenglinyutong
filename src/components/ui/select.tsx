@@ -124,7 +124,7 @@ function SelectPopup({
         <div className="relative h-full min-w-(--radix-select-trigger-width) rounded-lg border bg-popover not-dark:bg-clip-padding shadow-lg/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
           <SelectPrimitive.Viewport
             className={cn(
-              "max-h-(--radix-select-content-available-height) overflow-y-auto p-1",
+              "scrollable max-h-(--radix-select-content-available-height) overflow-y-auto p-1",
               className,
             )}
             data-slot="select-list"

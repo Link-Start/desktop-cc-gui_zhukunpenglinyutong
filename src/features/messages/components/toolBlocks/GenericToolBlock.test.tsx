@@ -351,6 +351,58 @@ describe("GenericToolBlock", () => {
     expect(screen.queryByText("-0")).toBeNull();
   });
 
+  it("opens canonical diff only for added files without inline diff", () => {
+    const onOpenDiffPath = vi.fn();
+    const view = render(
+      <GenericToolBlock
+        item={{
+          ...fileChangeItem,
+          id: "tool-added-no-diff",
+          output: "## Created file\n\n- first item\n- second item",
+          changes: [
+            { path: "src/New.tsx", kind: "added" },
+            { path: "src/Modified.tsx", kind: "modified" },
+          ],
+        }}
+        isExpanded
+        onToggle={vi.fn()}
+        onOpenDiffPath={onOpenDiffPath}
+      />,
+    );
+
+    const rows = view.container.querySelectorAll('[data-slot="marker"]');
+    expect(rows).toHaveLength(2);
+    fireEvent.click(rows[0] as HTMLElement);
+    fireEvent.click(rows[1] as HTMLElement);
+
+    expect(onOpenDiffPath).toHaveBeenCalledOnce();
+    expect(onOpenDiffPath).toHaveBeenCalledWith("src/New.tsx");
+    expect(screen.queryByText("-2")).toBeNull();
+  });
+
+  it("keeps added files with inline diff on the inline preview path", () => {
+    const onOpenDiffPath = vi.fn();
+    const view = render(
+      <GenericToolBlock
+        item={{
+          ...fileChangeItem,
+          id: "tool-added-with-diff",
+          changes: [
+            { path: "src/New.tsx", kind: "added", diff: "@@ -0,0 +1 @@\n+const x = 1;" },
+          ],
+        }}
+        isExpanded
+        onToggle={vi.fn()}
+        onOpenDiffPath={onOpenDiffPath}
+      />,
+    );
+
+    fireEvent.click(view.container.querySelector('[data-slot="marker"]') as HTMLElement);
+
+    expect(onOpenDiffPath).not.toHaveBeenCalled();
+    expect(screen.getByText("const x = 1;")).toBeTruthy();
+  });
+
   it("omits file-count label for single file changes", () => {
     render(
       <GenericToolBlock
@@ -447,7 +499,8 @@ describe("GenericToolBlock", () => {
     // diff 仅在展开该行后出现，且不回退到原始输出面板
     expect(document.querySelector(".tool-change-inline-diff")).toBeNull();
     fireEvent.click(view.container.querySelector('[data-slot="marker"]')!);
-    expect(screen.getByText("-1 +1")).toBeTruthy();
+    expect(screen.getByText("old")).toBeTruthy();
+    expect(screen.getByText("new")).toBeTruthy();
     expect(document.querySelector(".tool-change-inline-diff")).toBeTruthy();
     expect(document.querySelector(".tool-output-raw-pre")).toBeNull();
   });
@@ -487,7 +540,8 @@ describe("GenericToolBlock", () => {
     expect(screen.getAllByText("-1").length).toBeGreaterThan(0);
     expect(document.querySelector(".tool-output-raw-pre")).toBeNull();
     fireEvent.click(view.container.querySelector('[data-slot="marker"]')!);
-    expect(screen.getByText("-1 +1")).toBeTruthy();
+    expect(screen.getByText("old")).toBeTruthy();
+    expect(screen.getByText("new")).toBeTruthy();
   });
 
   it("matches path hints with absolute/relative compatibility for stats fallback", () => {

@@ -94,6 +94,7 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.40.0",
     "@excalidraw/excalidraw": "^0.18.1",
+    "@floating-ui/react-dom": "2.1.7",
     "@hello-pangea/dnd": "^18.0.1",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-virtual": "^3.13.18",
@@ -135,6 +136,12 @@
     "viewerjs": "^1.11.7",
     "web-vitals": "^4.2.4",
     "xlsx": "^0.18.5"
+  },
+  "overrides": {
+    "radix-ui": {
+      "@radix-ui/react-presence": "1.1.6",
+      "@radix-ui/react-scroll-area": "1.2.14"
+    }
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.6",

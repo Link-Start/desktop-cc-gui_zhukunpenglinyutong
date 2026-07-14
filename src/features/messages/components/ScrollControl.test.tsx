@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ScrollControl } from "./ScrollControl";
+import { startConversationScrollConvergence } from "./messagesScrollConvergence";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -63,16 +64,27 @@ function nextFrames(count: number) {
   });
 }
 
+function renderScrollControl(container: HTMLDivElement) {
+  return render(
+    <ScrollControl
+      containerRef={{ current: container }}
+      onRequestScrollToEdge={(edge) => {
+        startConversationScrollConvergence(container, { edge, motion: "smooth" });
+      }}
+    />,
+  );
+}
+
 describe("ScrollControl", () => {
   it("stays hidden until the user scrolls", () => {
     const { container } = makeContainer();
-    render(<ScrollControl containerRef={{ current: container }} />);
+    renderScrollControl(container);
     expect(screen.queryByTestId("messages-scroll-control")).toBeNull();
   });
 
   it("shows a back-to-bottom control on downward scroll and scrolls to the bottom on click", async () => {
     const { container } = makeContainer({ scrollTop: 300 });
-    render(<ScrollControl containerRef={{ current: container }} />);
+    renderScrollControl(container);
 
     fireEvent.wheel(container, { deltaY: 120 });
 
@@ -86,7 +98,7 @@ describe("ScrollControl", () => {
 
   it("shows a back-to-top control on upward scroll and scrolls to the top on click", async () => {
     const { container } = makeContainer({ scrollTop: 300 });
-    render(<ScrollControl containerRef={{ current: container }} />);
+    renderScrollControl(container);
 
     fireEvent.wheel(container, { deltaY: -120 });
 
@@ -101,7 +113,7 @@ describe("ScrollControl", () => {
   // 一次性 scrollTo({behavior:"smooth"}) 会停在旧目标(1500)上，这正是「点了只滚一段」。
   it("keeps chasing the bottom when content grows mid-scroll (virtualized rows landing)", async () => {
     const { container, state } = makeContainer({ scrollTop: 300 });
-    render(<ScrollControl containerRef={{ current: container }} />);
+    renderScrollControl(container);
 
     fireEvent.wheel(container, { deltaY: 120 });
     const button = await screen.findByTestId("messages-scroll-control");
@@ -118,7 +130,7 @@ describe("ScrollControl", () => {
   it("stays hidden when already near the bottom, even on a downward scroll", async () => {
     // distanceFromBottom = 2000 - 1500 - 500 = 0 < THRESHOLD(100)
     const { container } = makeContainer({ scrollTop: 1500 });
-    render(<ScrollControl containerRef={{ current: container }} />);
+    renderScrollControl(container);
 
     fireEvent.wheel(container, { deltaY: 120 });
 
@@ -127,20 +139,18 @@ describe("ScrollControl", () => {
     );
   });
 
-  it("abandons the programmatic scroll as soon as the user takes over with the wheel", async () => {
+  it("reports the existing edge direction to the shared scroll owner", async () => {
     const { container } = makeContainer({ scrollTop: 300 });
-    render(<ScrollControl containerRef={{ current: container }} />);
+    const onRequestScrollToEdge = vi.fn();
+    render(
+      <ScrollControl
+        containerRef={{ current: container }}
+        onRequestScrollToEdge={onRequestScrollToEdge}
+      />,
+    );
 
-    fireEvent.wheel(container, { deltaY: 120 });
-    const button = await screen.findByTestId("messages-scroll-control");
-    fireEvent.click(button);
-
-    await nextFrames(2);
     fireEvent.wheel(container, { deltaY: -10 });
-    const positionAtTakeover = container.scrollTop;
-
-    // 用户接管后，程序化动画不得继续推进。
-    await nextFrames(4);
-    expect(container.scrollTop).toBe(positionAtTakeover);
+    fireEvent.click(await screen.findByTestId("messages-scroll-control"));
+    expect(onRequestScrollToEdge).toHaveBeenCalledWith("top");
   });
 });

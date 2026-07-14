@@ -186,6 +186,26 @@
   line-height: 1.5;
 }
 
+.search-palette-result-group + .search-palette-result-group {
+  margin-top: 8px;
+}
+
+.search-palette-result-group-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 7px 10px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
 .search-palette-result {
   appearance: none;
   margin: 0;

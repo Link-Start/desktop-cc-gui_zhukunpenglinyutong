@@ -39,6 +39,7 @@
 - 涉及 UI -> service -> tauri/rust 的跨层变更，额外读：
   - `../guides/cross-layer-thinking-guide.md`
   - `../guides/code-reuse-thinking-guide.md`
+- 涉及 Web Service assets 检测/安装状态或启动 gate 时，额外读 `../backend/web-assets-package-contract.md`。
 - 涉及 Claude 上下文用量窗体、`ThreadTokenUsage` 或 token indicator 时，额外读 [Claude Context Usage Display](./claude-context-usage-display.md)。
 - 涉及 AI model JSON、structured output、`Return pure JSON only` prompt、`JSON.parse(response.text)` 或模型输出 repair 时，额外读 [Model Structured Output Contract](./model-structured-output.md)。
 - 涉及 Tauri window/webview builder、Browser Agent child WebView、`src/services/dragDrop.ts` 或 Composer 外部文件/文件夹拖拽时，额外读 [Desktop Drag-Drop Contract](./desktop-drag-drop.md)。

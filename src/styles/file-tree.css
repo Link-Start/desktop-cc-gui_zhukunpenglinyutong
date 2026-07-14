@@ -289,7 +289,10 @@
   gap: 0;
   overflow-y: auto;
   flex: 1;
-  padding-right: 1px;
+  /* 抵消 .file-tree-panel 的 8px 右内边距，让滚动条贴到面板右边框（对齐左侧 sidebar 观感）；
+     等量 padding-right 保证行内容不会压到滚动条下方 */
+  margin-right: -8px;
+  padding-right: 8px;
   padding-top: 0;
   min-height: 0;
 }

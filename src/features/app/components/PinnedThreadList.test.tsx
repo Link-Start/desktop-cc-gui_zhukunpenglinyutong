@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { ThreadSummary } from "../../../types";
 import { PinnedThreadList } from "./PinnedThreadList";
+import { ScrollArea } from "../../../components/ui/scroll-area";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -49,6 +51,49 @@ const baseProps = {
 };
 
 describe("PinnedThreadList", () => {
+  it("hydrates pinned rows in StrictMode without mounting Radix row anchors", () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const rows = Array.from({ length: 6 }, (_, index) => ({
+      thread: { ...thread, id: `pinned-${index}`, name: `Pinned ${index + 1}` },
+      depth: 0,
+      workspaceId: "ws-1",
+      workspacePath: "/tmp/ws-1",
+    }));
+
+    try {
+      const { container } = render(
+        <StrictMode>
+          <ScrollArea style={{ width: 320, height: 480 }}>
+            <PinnedThreadList {...baseProps} rows={rows} />
+          </ScrollArea>
+        </StrictMode>,
+      );
+
+      expect(container.querySelectorAll(".thread-row")).toHaveLength(
+        rows.length,
+      );
+      expect(
+        container.querySelector('[data-slot="tooltip-trigger"]'),
+      ).toBeNull();
+      expect(
+        container.querySelector('[data-slot="popover-anchor"]'),
+      ).toBeNull();
+      expect(
+        consoleErrorSpy.mock.calls.some((call) =>
+          call.some((entry) =>
+            /Maximum update depth exceeded|Minified React error #185/.test(
+              String(entry),
+            ),
+          ),
+        ),
+      ).toBe(false);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   it("renders pinned rows and handles click/context menu", () => {
     const onSelectThread = vi.fn();
     const onShowThreadMenu = vi.fn();
@@ -140,7 +185,12 @@ describe("PinnedThreadList", () => {
         {...baseProps}
         rows={[
           { thread, depth: 0, workspaceId: "ws-1", workspacePath: "/tmp/ws-1" },
-          { thread: otherThread, depth: 0, workspaceId: "ws-2", workspacePath: "/tmp/ws-2" },
+          {
+            thread: otherThread,
+            depth: 0,
+            workspaceId: "ws-2",
+            workspacePath: "/tmp/ws-2",
+          },
         ]}
         onSelectThread={onSelectThread}
         onShowThreadMenu={onShowThreadMenu}
@@ -218,7 +268,14 @@ describe("PinnedThreadList", () => {
     const { container } = render(
       <PinnedThreadList
         {...baseProps}
-        rows={[{ thread: otherThread, depth: 0, workspaceId: "ws-2", workspacePath: "/tmp/ws-2" }]}
+        rows={[
+          {
+            thread: otherThread,
+            depth: 0,
+            workspaceId: "ws-2",
+            workspacePath: "/tmp/ws-2",
+          },
+        ]}
         activeWorkspaceId="ws-1"
         activeThreadId={null}
         systemProxyEnabled
@@ -230,7 +287,9 @@ describe("PinnedThreadList", () => {
     const badge = row?.querySelector(".thread-proxy-badge");
     expect(badge).toBeTruthy();
     expect(badge?.textContent ?? "").toBe("");
-    expect(badge?.classList.contains("proxy-status-badge--animated")).toBe(false);
+    expect(badge?.classList.contains("proxy-status-badge--animated")).toBe(
+      false,
+    );
   });
 
   it("keeps an unchanged pinned row stable across unrelated status updates", () => {
@@ -256,8 +315,16 @@ describe("PinnedThreadList", () => {
         {...baseProps}
         rows={rows}
         threadStatusById={{
-          "thread-1": { isProcessing: false, hasUnread: true, isReviewing: false },
-          "thread-2": { isProcessing: false, hasUnread: false, isReviewing: false },
+          "thread-1": {
+            isProcessing: false,
+            hasUnread: true,
+            isReviewing: false,
+          },
+          "thread-2": {
+            isProcessing: false,
+            hasUnread: false,
+            isReviewing: false,
+          },
         }}
         onPinnedThreadRowRender={onPinnedThreadRowRender}
       />,
@@ -271,7 +338,11 @@ describe("PinnedThreadList", () => {
           {...baseProps}
           rows={rows}
           threadStatusById={{
-            "thread-1": { isProcessing: false, hasUnread: true, isReviewing: false },
+            "thread-1": {
+              isProcessing: false,
+              hasUnread: true,
+              isReviewing: false,
+            },
             "thread-2": {
               isProcessing: index % 2 === 0,
               hasUnread: false,

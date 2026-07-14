@@ -437,8 +437,8 @@ describe("messagesTimelineVirtualization", () => {
       hasScrollElement: true,
     })).toEqual({
       nextScopeKey: "ws-1 thread-1 200 120 virtualized",
-      shouldResetScroll: false,
       shouldMeasure: true,
+      shouldPinBottomWhenArmed: true,
     });
   });
 
@@ -454,8 +454,8 @@ describe("messagesTimelineVirtualization", () => {
       hasScrollElement: true,
     })).toEqual({
       nextScopeKey: "ws-1 thread-1 20 60 virtualized",
-      shouldResetScroll: false,
       shouldMeasure: true,
+      shouldPinBottomWhenArmed: true,
     });
 
     // 滚动元素还没就绪时不消耗首挂载信号，保持 null 让下一次 effect 重试。
@@ -468,8 +468,38 @@ describe("messagesTimelineVirtualization", () => {
       hasScrollElement: false,
     })).toEqual({
       nextScopeKey: null,
-      shouldResetScroll: false,
       shouldMeasure: false,
+      shouldPinBottomWhenArmed: false,
+    });
+  });
+
+  it("requests armed bottom placement when virtualization flips off", () => {
+    // ON→OFF 同样是整体布局重排：估高换回真实高度，parked 在底部的视口会离底。
+    expect(resolveVirtualizedTimelineScopeReset({
+      previousScopeKey: "ws-1\u0000thread-1\u000020\u000060\u0000virtualized",
+      nextScopeKey: "ws-1\u0000thread-1\u000020\u000060\u0000static",
+      shouldVirtualize: false,
+      stableHistoryView: true,
+      hasPendingJump: false,
+      hasScrollElement: true,
+    })).toEqual({
+      nextScopeKey: null,
+      shouldMeasure: false,
+      shouldPinBottomWhenArmed: true,
+    });
+
+    // 尚未虚拟化过（previous=null）时保持 OFF 不产生任何落位请求。
+    expect(resolveVirtualizedTimelineScopeReset({
+      previousScopeKey: null,
+      nextScopeKey: "ws-1\u0000thread-1\u00008\u000020\u0000static",
+      shouldVirtualize: false,
+      stableHistoryView: true,
+      hasPendingJump: false,
+      hasScrollElement: true,
+    })).toEqual({
+      nextScopeKey: null,
+      shouldMeasure: false,
+      shouldPinBottomWhenArmed: false,
     });
   });
 
@@ -483,8 +513,8 @@ describe("messagesTimelineVirtualization", () => {
       hasScrollElement: true,
     })).toEqual({
       nextScopeKey: "ws-1\u0000thread-new\u0000200",
-      shouldResetScroll: true,
       shouldMeasure: true,
+      shouldPinBottomWhenArmed: true,
     });
 
     expect(resolveVirtualizedTimelineScopeReset({
@@ -496,8 +526,8 @@ describe("messagesTimelineVirtualization", () => {
       hasScrollElement: true,
     })).toEqual({
       nextScopeKey: "ws-1\u0000thread-new\u0000200",
-      shouldResetScroll: false,
       shouldMeasure: false,
+      shouldPinBottomWhenArmed: false,
     });
   });
 
@@ -511,8 +541,8 @@ describe("messagesTimelineVirtualization", () => {
       hasScrollElement: true,
     })).toEqual({
       nextScopeKey: "ws-1\u0000thread-1\u0000205\u0000135\u0000virtualized",
-      shouldResetScroll: false,
       shouldMeasure: true,
+      shouldPinBottomWhenArmed: false,
     });
   });
 
@@ -524,7 +554,7 @@ describe("messagesTimelineVirtualization", () => {
       stableHistoryView: false,
       hasPendingJump: false,
       hasScrollElement: true,
-    }).shouldResetScroll).toBe(false);
+    }).shouldPinBottomWhenArmed).toBe(false);
 
     expect(resolveVirtualizedTimelineScopeReset({
       previousScopeKey: "ws-1\u0000thread-old\u0000200",
@@ -533,7 +563,7 @@ describe("messagesTimelineVirtualization", () => {
       stableHistoryView: true,
       hasPendingJump: true,
       hasScrollElement: true,
-    }).shouldResetScroll).toBe(false);
+    }).shouldPinBottomWhenArmed).toBe(false);
   });
 
   it("clears pending scroll-end fallback when virtualizer unmounts", () => {

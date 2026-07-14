@@ -616,8 +616,13 @@ export function resolveVirtualizedTimelineScopeReset(input: {
   if (!input.shouldVirtualize) {
     return {
       nextScopeKey: null,
-      shouldResetScroll: false,
       shouldMeasure: false,
+      // 虚拟化 ON→OFF 也是整体布局重排：估高摆放换回真实高度，scrollHeight 跳变，
+      // parked 在底部的视口会被甩到半空，需要一次落位收敛（armed 与否由调用方判定）。
+      shouldPinBottomWhenArmed:
+        input.previousScopeKey !== null &&
+        !input.hasPendingJump &&
+        input.hasScrollElement,
     };
   }
   // 虚拟化刚翻开（previousScopeKey=null）必须立即重测，不能等 stableHistoryView：
@@ -630,21 +635,23 @@ export function resolveVirtualizedTimelineScopeReset(input: {
     if (input.hasPendingJump || !input.hasScrollElement) {
       return {
         nextScopeKey: null,
-        shouldResetScroll: false,
         shouldMeasure: false,
+        shouldPinBottomWhenArmed: false,
       };
     }
     return {
       nextScopeKey: input.nextScopeKey,
-      shouldResetScroll: false,
       shouldMeasure: true,
+      // OFF→ON 翻开瞬间总高度塌缩到估高之和，浏览器把 scrollTop 钳位后重测回填，
+      // 视口会离开真实底部；parked 在底部的用户需要一次落位收敛追回。
+      shouldPinBottomWhenArmed: true,
     };
   }
   if (!input.stableHistoryView || input.hasPendingJump || !input.hasScrollElement) {
     return {
       nextScopeKey: input.previousScopeKey,
-      shouldResetScroll: false,
       shouldMeasure: false,
+      shouldPinBottomWhenArmed: false,
     };
   }
   if (
@@ -653,14 +660,14 @@ export function resolveVirtualizedTimelineScopeReset(input: {
   ) {
     return {
       nextScopeKey: input.nextScopeKey,
-      shouldResetScroll: false,
       shouldMeasure: input.previousScopeKey !== input.nextScopeKey,
+      shouldPinBottomWhenArmed: false,
     };
   }
   return {
     nextScopeKey: input.nextScopeKey,
-    shouldResetScroll: true,
     shouldMeasure: true,
+    shouldPinBottomWhenArmed: true,
   };
 }
 

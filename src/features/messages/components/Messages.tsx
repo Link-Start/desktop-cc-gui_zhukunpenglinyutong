@@ -107,7 +107,6 @@ import {
   findLatestAssistantTextLength,
   isMessagesScrollNearBottom,
   mergeReadableRecoveryItems,
-  scrollContainerToBottom,
   resolveActiveUserInputRequest,
   resolveActiveMessageAnchor,
   resolveCollapsedTimelineItems,
@@ -141,10 +140,31 @@ import type {
   LastVisibleTextReport,
   MessagesProps,
 } from "./messagesTypes";
+import {
+  resolveConversationScrollEdgeTarget,
+  startConversationScrollConvergence,
+  type ConversationScrollEdge,
+  type ConversationScrollMotion,
+} from "./messagesScrollConvergence";
 
 const EMPTY_TASK_RUNS: NonNullable<MessagesProps["taskRuns"]> = [];
 
 const ANCHOR_TITLE_MAX_LENGTH = 60;
+const AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS = [100, 300, 1_000, 2_000] as const;
+// 回声指纹环上限与容差：环覆盖最近若干帧的读/写位置即可，指纹匹配按 ±2px 容忍
+// 亚像素舍入；真实用户拖动/翻页的落点几乎不可能恰好命中程序化写入位置。
+const PROGRAMMATIC_SCROLL_ECHO_LIMIT = 16;
+const PROGRAMMATIC_SCROLL_ECHO_TOLERANCE_PX = 2;
+
+type ConversationScrollIntent =
+  | "history-open"
+  | "live-follow"
+  | "turn-settle"
+  | "explicit-control";
+
+function isFocusFollowScrollIntent(intent: ConversationScrollIntent | null) {
+  return intent === "live-follow" || intent === "turn-settle";
+}
 
 /**
  * Derive a short, human-readable label for an anchor dot from the raw
@@ -427,12 +447,23 @@ export const Messages = memo(function Messages({
   // 非流式期的「跟随窗口」deadline：打开会话钉底、对话结束回刷幕布落地，都在窗口内
   // 允许内容长高时把视口按回底部。isThinking 下降沿用于开启收尾窗口。
   const stickToBottomDeadlineRef = useRef(0);
+  const stickToBottomIntentRef = useRef<"history-open" | "turn-settle" | null>(null);
   const settleRepinPrevThinkingRef = useRef(isThinking);
   const pendingHistoryExpansionModeRef = useRef<MessagesHistoryExpansionMode>(null);
   const messageNodeByIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const agentTaskNodeByTaskIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const agentTaskNodeByToolUseIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const autoScrollRef = useRef(true);
+  const activeScrollConvergenceCancelRef = useRef<(() => void) | null>(null);
+  const activeProgrammaticScrollEdgeRef = useRef<ConversationScrollEdge | null>(null);
+  const activeProgrammaticScrollMotionRef = useRef<ConversationScrollMotion | null>(null);
+  const activeScrollIntentRef = useRef<ConversationScrollIntent | null>(null);
+  // 程序化滚动观察指纹环：收敛帧、请求合流、内容高度回调等「我们自己的代码」读到或
+  // 写下的 scrollTop 都进环（跨 run 滚动保留）。WebKit scroll 事件异步派发，钳位或收敛
+  // 写入产生的事件可能在几何继续变化后才送达；活跃收敛期间事件位置命中指纹 = 程序化
+  // 回声，不能按 near-bottom 误判成用户上滚（发消息后跳顶滞留的根因）；未命中的位置
+  // 才是真实用户滚动（拖滚动条/触摸/翻页键），照常释放跟随。
+  const programmaticScrollTopEchoRef = useRef<number[]>([]);
   const initialBottomPinScopeRef = useRef<string | null>(null);
   const anchorUpdateRafRef = useRef<number | null>(null);
   const lastRenderSnapshotRef = useRef<LastRenderSnapshot | null>(null);
@@ -668,24 +699,174 @@ export const Messages = memo(function Messages({
     return resolveActiveMessageAnchor(containerRef.current, messageNodeByIdRef.current);
   }, []);
 
+  const recordProgrammaticScrollObservation = useCallback((value: number) => {
+    const echoes = programmaticScrollTopEchoRef.current;
+    if (echoes[echoes.length - 1] === value) {
+      return;
+    }
+    echoes.push(value);
+    if (echoes.length > PROGRAMMATIC_SCROLL_ECHO_LIMIT) {
+      echoes.splice(0, echoes.length - PROGRAMMATIC_SCROLL_ECHO_LIMIT);
+    }
+  }, []);
+
+  const cancelScrollConvergence = useCallback(() => {
+    activeScrollConvergenceCancelRef.current?.();
+    activeScrollConvergenceCancelRef.current = null;
+    activeProgrammaticScrollEdgeRef.current = null;
+    activeProgrammaticScrollMotionRef.current = null;
+    activeScrollIntentRef.current = null;
+  }, []);
+
+  const cancelFocusFollowConvergence = useCallback(() => {
+    if (isFocusFollowScrollIntent(activeScrollIntentRef.current)) {
+      cancelScrollConvergence();
+    }
+  }, [cancelScrollConvergence]);
+
+  const requestScrollConvergence = useCallback(
+    (
+      edge: ConversationScrollEdge,
+      motion: ConversationScrollMotion,
+      intent: ConversationScrollIntent,
+      options?: {
+        recheckDelaysMs?: readonly number[];
+        shouldContinue?: () => boolean;
+      },
+    ) => {
+      const container = containerRef.current;
+      if (!container) {
+        return;
+      }
+      // 显式 icon navigation 使用 smooth motion，优先于期间到来的自动 instant intent；
+      // smooth 自己会逐帧追踪可变 target，自动路径无需抢占成为第二个 writer。
+      if (
+        intent !== "explicit-control" &&
+        activeScrollIntentRef.current === "explicit-control" &&
+        activeProgrammaticScrollMotionRef.current === "smooth"
+      ) {
+        return;
+      }
+      // 合流/新建 run 前先吸收当前位置：settle 停帧窗口内发生的钳位也要进指纹环，
+      // 否则迟到的回声事件会拿旧环误判成用户上滚。
+      recordProgrammaticScrollObservation(container.scrollTop);
+      if (
+        activeScrollIntentRef.current === intent &&
+        activeProgrammaticScrollEdgeRef.current === edge &&
+        activeProgrammaticScrollMotionRef.current === motion &&
+        Math.abs(resolveConversationScrollEdgeTarget(container, edge) - container.scrollTop) <= 1
+      ) {
+        return;
+      }
+      cancelScrollConvergence();
+      activeProgrammaticScrollEdgeRef.current = edge;
+      activeProgrammaticScrollMotionRef.current = motion;
+      activeScrollIntentRef.current = intent;
+      let cancelCurrentRun: (() => void) | null = null;
+      cancelCurrentRun = startConversationScrollConvergence(container, {
+        edge,
+        motion,
+        recheckDelaysMs: options?.recheckDelaysMs,
+        shouldContinue: options?.shouldContinue,
+        onFrameObservation: (observedScrollTop, appliedScrollTop) => {
+          recordProgrammaticScrollObservation(observedScrollTop);
+          recordProgrammaticScrollObservation(appliedScrollTop);
+        },
+        onComplete: () => {
+          if (activeScrollConvergenceCancelRef.current !== cancelCurrentRun) {
+            return;
+          }
+          activeScrollConvergenceCancelRef.current = null;
+          activeProgrammaticScrollEdgeRef.current = null;
+          activeProgrammaticScrollMotionRef.current = null;
+          activeScrollIntentRef.current = null;
+        },
+      });
+      activeScrollConvergenceCancelRef.current = cancelCurrentRun;
+    },
+    [cancelScrollConvergence, recordProgrammaticScrollObservation],
+  );
+
+  // scope 切换必须在新的 history initial-pin layout effect 之前清掉旧 run；若放在
+  // passive cleanup，新会话刚启动的 convergence 会被随后到达的旧 cleanup 误杀。
+  useLayoutEffect(() => {
+    cancelScrollConvergence();
+    initialBottomPinScopeRef.current = null;
+    autoScrollRef.current = true;
+    stickToBottomDeadlineRef.current = 0;
+    stickToBottomIntentRef.current = null;
+  }, [cancelScrollConvergence, renderScopeKey]);
+
   const requestAutoScroll = useCallback(() => {
-    if (!liveAutoFollowEnabled || !isWorking) {
-      return;
-    }
     // Respect a manual scroll-up: never yank the user back to the bottom.
-    if (!autoScrollRef.current || !containerRef.current) {
+    if (
+      !liveAutoFollowEnabledRef.current ||
+      !autoScrollRef.current ||
+      !containerRef.current ||
+      (!isWorkingRef.current && !isAssistantFinalizingRef.current)
+    ) {
       return;
     }
-    // Always instant for programmatic scroll requests to avoid blocking input.
-    scrollContainerToBottom(containerRef.current);
-  }, [isWorking, liveAutoFollowEnabled]);
+    requestScrollConvergence("bottom", "instant", "live-follow", {
+      recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
+      shouldContinue: () =>
+        liveAutoFollowEnabledRef.current &&
+        autoScrollRef.current &&
+        (isWorkingRef.current || isAssistantFinalizingRef.current),
+    });
+  }, [requestScrollConvergence]);
 
   const rearmAutoFollowToBottom = useCallback(() => {
     autoScrollRef.current = true;
-    if (containerRef.current) {
-      scrollContainerToBottom(containerRef.current);
+    requestScrollConvergence("bottom", "instant", "live-follow", {
+      recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
+      shouldContinue: () =>
+        liveAutoFollowEnabledRef.current &&
+        autoScrollRef.current &&
+        (isWorkingRef.current || isAssistantFinalizingRef.current),
+    });
+  }, [requestScrollConvergence]);
+
+  const requestHistoryBottomConvergence = useCallback(() => {
+    requestScrollConvergence("bottom", "instant", "history-open", {
+      recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
+      shouldContinue: () =>
+        autoScrollRef.current && Date.now() <= stickToBottomDeadlineRef.current,
+    });
+  }, [requestScrollConvergence]);
+
+  // Timeline 布局形态切换（虚拟化 OFF↔ON、thread scope reset）会整体重排行高：
+  // 总高度先塌缩到估高之和、scrollTop 被浏览器钳位，再由重测回填真实高度，parked
+  // 在底部的视口会被甩到半空。这属于「落位」而非「跟随」——与 history-open 同契约，
+  // 不受焦点跟随开关约束；但只在用户仍停在底部（autoScrollRef）时执行，避免夺回
+  // 主动上滚后的阅读位置。
+  const requestTimelineLayoutBottomConvergence = useCallback(() => {
+    if (!autoScrollRef.current) {
+      return;
     }
-  }, []);
+    stickToBottomIntentRef.current = "history-open";
+    stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
+    requestHistoryBottomConvergence();
+  }, [requestHistoryBottomConvergence]);
+
+  const requestSettleBottomConvergence = useCallback(() => {
+    requestScrollConvergence("bottom", "instant", "turn-settle", {
+      recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
+      shouldContinue: () =>
+        liveAutoFollowEnabledRef.current &&
+        autoScrollRef.current &&
+        Date.now() <= stickToBottomDeadlineRef.current,
+    });
+  }, [requestScrollConvergence]);
+
+  const handleScrollControlRequest = useCallback(
+    (edge: ConversationScrollEdge) => {
+      autoScrollRef.current = edge === "bottom";
+      setPendingJumpMessageId(null);
+      requestScrollConvergence(edge, "smooth", "explicit-control");
+    },
+    [requestScrollConvergence],
+  );
 
   const scrollToAgentTaskCard = useCallback((request: AgentTaskScrollRequest | null) => {
     if (!request) {
@@ -776,7 +957,8 @@ export const Messages = memo(function Messages({
     setActiveAnchorId(null);
     previousAssistantThinkingRef.current = false;
     previousAssistantThreadIdRef.current = threadId;
-  }, [threadId, workspaceId]);
+  }, [cancelScrollConvergence, threadId, workspaceId]);
+  useEffect(() => cancelScrollConvergence, [cancelScrollConvergence]);
   useEffect(() => {
     scrollToAgentTaskCard(agentTaskScrollRequest);
   }, [agentTaskScrollRequest, scrollToAgentTaskCard]);
@@ -833,6 +1015,9 @@ export const Messages = memo(function Messages({
           liveAutoFollowEnabledRef.current = nextLiveAutoFollowEnabled;
           setLiveAutoFollowEnabled(nextLiveAutoFollowEnabled);
         }
+        if (!nextLiveAutoFollowEnabled) {
+          cancelFocusFollowConvergence();
+        }
         if (!wasLiveAutoFollowEnabled && nextLiveAutoFollowEnabled && isWorking) {
           rearmAutoFollowToBottom();
         }
@@ -857,6 +1042,11 @@ export const Messages = memo(function Messages({
         if (liveAutoFollowEnabledRef.current !== nextLiveAutoFollowEnabled) {
           liveAutoFollowEnabledRef.current = nextLiveAutoFollowEnabled;
           setLiveAutoFollowEnabled(nextLiveAutoFollowEnabled);
+        }
+        if (!nextLiveAutoFollowEnabled) {
+          cancelFocusFollowConvergence();
+        } else if (isWorking) {
+          rearmAutoFollowToBottom();
         }
         return;
       }
@@ -883,7 +1073,7 @@ export const Messages = memo(function Messages({
       );
       window.removeEventListener("storage", handleStorage);
     };
-  }, [isWorking, rearmAutoFollowToBottom]);
+  }, [cancelFocusFollowConvergence, isWorking, rearmAutoFollowToBottom]);
   useEffect(() => {
     if (!liveAutoFollowEnabled || !isWorking) {
       return;
@@ -1808,8 +1998,12 @@ export const Messages = memo(function Messages({
         anchorUpdateRafRef.current = null;
         const anchorStartedAt =
           typeof performance === "undefined" ? 0 : performance.now();
+        const container = containerRef.current;
+        const latestAnchorId = messageAnchors[messageAnchors.length - 1]?.id ?? null;
         const nextActiveAnchor =
-          computeActiveAnchor() ?? messageAnchors[messageAnchors.length - 1]?.id ?? null;
+          container && isNearBottom(container)
+            ? latestAnchorId
+            : computeActiveAnchor() ?? latestAnchorId;
         const elapsedMs =
           typeof performance === "undefined"
             ? 0
@@ -1825,7 +2019,14 @@ export const Messages = memo(function Messages({
         commitActiveAnchorId(nextActiveAnchor, reason);
       });
     },
-    [commitActiveAnchorId, computeActiveAnchor, hasAnchorRail, messageAnchors, threadId],
+    [
+      commitActiveAnchorId,
+      computeActiveAnchor,
+      hasAnchorRail,
+      isNearBottom,
+      messageAnchors,
+      threadId,
+    ],
   );
   const revealAllHistoryItems = useCallback((mode: "manual" | "jump") => {
     pendingHistoryExpansionModeRef.current = mode;
@@ -1861,12 +2062,41 @@ export const Messages = memo(function Messages({
     if (!container) {
       return;
     }
+    const activeProgrammaticEdge = activeProgrammaticScrollEdgeRef.current;
+    const activeProgrammaticMotion = activeProgrammaticScrollMotionRef.current;
+    if (activeProgrammaticEdge && activeProgrammaticMotion === "smooth") {
+      autoScrollRef.current = activeProgrammaticEdge === "bottom";
+      scheduleAnchorUpdate("scroll");
+      return;
+    }
+    if (activeProgrammaticEdge) {
+      // instant 自动钉底期间，scroll 事件可能是程序化回声：WebKit 异步派发下，钳位
+      // /收敛写入产生的事件常在几何继续变化（迟到测高回填）之后才送达，此刻按
+      // near-bottom 判定会把布局噪声误判成用户上滚，解除跟随并杀掉收敛 run（发送
+      // 消息后跳顶滞留的根因）。只有事件位置命中 run 的读/写指纹才按回声豁免；
+      // 未命中说明是真实用户滚动（拖滚动条/触摸等），走下方正常释放语义。
+      const eventScrollTop = container.scrollTop;
+      const isProgrammaticEcho = programmaticScrollTopEchoRef.current.some(
+        (value) =>
+          Math.abs(value - eventScrollTop) <= PROGRAMMATIC_SCROLL_ECHO_TOLERANCE_PX,
+      );
+      if (isProgrammaticEcho) {
+        autoScrollRef.current = activeProgrammaticEdge === "bottom";
+        scheduleAnchorUpdate("scroll");
+        return;
+      }
+    }
     // Auto-follow tracks the user's real scroll position: stick to the bottom
     // only while the viewport is actually near the bottom. Scrolling up cancels
     // the follow; scrolling back to the bottom re-enables it.
-    autoScrollRef.current = isNearBottom(container);
+    const nearBottom = isNearBottom(container);
+    autoScrollRef.current = nearBottom;
+    if (!nearBottom) {
+      cancelScrollConvergence();
+    }
     scheduleAnchorUpdate("scroll");
   }, [
+    cancelScrollConvergence,
     isNearBottom,
     scheduleAnchorUpdate,
   ]);
@@ -2088,9 +2318,6 @@ export const Messages = memo(function Messages({
   );
 
   useEffect(() => {
-    if (!bottomRef.current) {
-      return undefined;
-    }
     if (!liveAutoFollowEnabled || (!isWorking && !isAssistantFinalizing)) {
       return undefined;
     }
@@ -2103,26 +2330,14 @@ export const Messages = memo(function Messages({
     if (!shouldScroll) {
       return undefined;
     }
-    let raf = 0;
-    const target = bottomRef.current;
-    // Use instant scroll during streaming to avoid blocking the main thread
-    // with smooth-scroll animations that compete with keyboard input events.
-    const scrollBehavior =
-      isThinking || isAssistantFinalizing ? "instant" as const : "smooth" as const;
-    raf = window.requestAnimationFrame(() => {
-      target.scrollIntoView({ behavior: scrollBehavior, block: "end" });
-    });
-    return () => {
-      if (raf) {
-        window.cancelAnimationFrame(raf);
-      }
-    };
+    requestAutoScroll();
+    return undefined;
   }, [
     isAssistantFinalizing,
     isNearBottom,
-    isThinking,
     isWorking,
     liveAutoFollowEnabled,
+    requestAutoScroll,
     scrollKey,
   ]);
 
@@ -2142,25 +2357,22 @@ export const Messages = memo(function Messages({
       initialBottomPinScopeRef.current = scope;
       return undefined;
     }
-    if (isWorking || isThinking) {
-      return undefined;
-    }
     const container = containerRef.current;
     if (!container) {
       return;
     }
     initialBottomPinScopeRef.current = scope;
     autoScrollRef.current = true;
-    scrollContainerToBottom(container);
+    stickToBottomIntentRef.current = "history-open";
+    stickToBottomDeadlineRef.current = Date.now() + INITIAL_BOTTOM_PIN_BUDGET_MS;
+    requestHistoryBottomConvergence();
     // 落位只对此刻的高度有效：虚拟化行还是估算高度、content-visibility:auto 的屏外行
     // 要进视口才真实布局，底部长消息被系统性低估（估高封顶 260px，真实常上千）。
     // 开一个跟随窗口，让下方的内容高度观察器把迟到的测量一路追到底。
-    stickToBottomDeadlineRef.current = Date.now() + INITIAL_BOTTOM_PIN_BUDGET_MS;
   }, [
     isHistoryLoading,
-    isThinking,
-    isWorking,
     pendingJumpMessageId,
+    requestHistoryBottomConvergence,
     threadId,
     timelinePresentationItems,
     workspaceId,
@@ -2169,13 +2381,18 @@ export const Messages = memo(function Messages({
   // 对话结束（isThinking true→false）后开一个收尾跟随窗口：live 尾窗回刷成全量
   // timeline 时几百条历史带着估算高度插进列表，scrollHeight 暴涨；且全量渲染源经
   // useDeferredValue 延后数帧才落地。窗口内的高度变化都由观察器钉回底部。
-  useEffect(() => {
+  useLayoutEffect(() => {
     const wasThinking = settleRepinPrevThinkingRef.current;
     settleRepinPrevThinkingRef.current = isThinking;
     if (wasThinking && !isThinking) {
+      if (!liveAutoFollowEnabledRef.current || !autoScrollRef.current) {
+        return;
+      }
+      stickToBottomIntentRef.current = "turn-settle";
       stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
+      requestSettleBottomConvergence();
     }
-  }, [isThinking]);
+  }, [isThinking, requestSettleBottomConvergence]);
 
   // ── 底部跟随的真正驱动：内容高度变化 ───────────────────────────────────
   // 曾经唯一的驱动是依赖 scrollKey 的 auto-follow effect，而 scrollKey 由 items 末条的
@@ -2197,27 +2414,39 @@ export const Messages = memo(function Messages({
   useEffect(() => {
     const container = containerRef.current;
     const content = container?.querySelector<HTMLElement>(".messages-timeline-root");
-    if (!container || !content || typeof ResizeObserver === "undefined") {
+    if (!container) {
       return undefined;
     }
     const handleWheel = (event: WheelEvent) => {
+      cancelScrollConvergence();
       if (event.deltaY < 0) {
         autoScrollRef.current = false;
       }
     };
     container.addEventListener("wheel", handleWheel, { passive: true });
+    if (!content || typeof ResizeObserver === "undefined") {
+      return () => container.removeEventListener("wheel", handleWheel);
+    }
     const observer = new ResizeObserver(() => {
-      if (!liveAutoFollowEnabledRef.current || !autoScrollRef.current) {
+      // 高度塌缩（虚拟化翻开/live 尾窗裁剪）会让浏览器钳位 scrollTop，这里是钳位后
+      // 最早的程序化观察点：先把当前位置吸进指纹环，迟到的钳位 scroll 事件才不会被
+      // 误判成用户上滚。
+      recordProgrammaticScrollObservation(container.scrollTop);
+      if (!autoScrollRef.current) {
         return;
       }
-      const insideFollowWindow =
-        isWorkingRef.current ||
-        isAssistantFinalizingRef.current ||
-        Date.now() <= stickToBottomDeadlineRef.current;
-      if (!insideFollowWindow) {
+      if (isWorkingRef.current || isAssistantFinalizingRef.current) {
+        requestAutoScroll();
         return;
       }
-      scrollContainerToBottom(container);
+      if (Date.now() > stickToBottomDeadlineRef.current) {
+        return;
+      }
+      if (stickToBottomIntentRef.current === "history-open") {
+        requestHistoryBottomConvergence();
+      } else if (stickToBottomIntentRef.current === "turn-settle") {
+        requestSettleBottomConvergence();
+      }
     });
     observer.observe(content);
     return () => {
@@ -2225,7 +2454,14 @@ export const Messages = memo(function Messages({
       container.removeEventListener("wheel", handleWheel);
     };
     // threadId：切会话时重新绑定，避免时间线根节点被换掉后观察到已脱离文档的旧节点。
-  }, [threadId]);
+  }, [
+    cancelScrollConvergence,
+    recordProgrammaticScrollObservation,
+    requestAutoScroll,
+    requestHistoryBottomConvergence,
+    requestSettleBottomConvergence,
+    threadId,
+  ]);
 
   const groupedEntries = useMemo(
     () => groupToolItems(timelinePresentationItems),
@@ -2496,6 +2732,7 @@ export const Messages = memo(function Messages({
           proxyUrl={proxyUrl}
           reasoningMetaById={reasoningMetaById}
           requestAutoScroll={requestAutoScroll}
+          requestBottomConvergence={requestTimelineLayoutBottomConvergence}
           selectedExitPlanExecutionByItemKey={selectedExitPlanExecutionByItemKey}
           scrollElementRef={containerRef}
           showFileLinkMenu={showFileLinkMenu}
@@ -2518,7 +2755,10 @@ export const Messages = memo(function Messages({
           workspaceId={workspaceId}
         />
       </div>
-      <ScrollControl containerRef={containerRef} />
+      <ScrollControl
+        containerRef={containerRef}
+        onRequestScrollToEdge={handleScrollControlRequest}
+      />
       {fileLinkMenu ? (
         <RendererContextMenu
           menu={fileLinkMenu}

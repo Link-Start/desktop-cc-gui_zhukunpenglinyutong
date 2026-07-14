@@ -512,16 +512,19 @@ describe("Messages virtualized jump behavior", () => {
       text: `${oversizedMarkdown}\n\n${index + 1}`,
     }));
 
-    render(
+    const renderWith = (threadId: string | null, visibleItems: ConversationItem[]) => (
       <Messages
-        items={items}
-        threadId="thread-oversized-prompt"
+        items={visibleItems}
+        threadId={threadId}
         workspaceId="ws-heavy"
         isThinking={false}
         activeEngine="claude"
         openTargets={[]}
         selectedOpenAppId=""
-      />,
+      />
+    );
+    const { container, rerender } = render(
+      renderWith("thread-oversized-prompt", items),
     );
 
     expect(screen.getByText("Oversized conversation opened in lightweight mode")).toBeTruthy();
@@ -529,5 +532,82 @@ describe("Messages virtualized jump behavior", () => {
     expect(screen.getAllByRole("button", { name: "Render details" }).length)
       .toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Retry full detail" })).toBeNull();
+
+    const scroller = container.querySelector(".messages") as HTMLDivElement;
+    let scrollTop = 0;
+    Object.defineProperties(scroller, {
+      clientHeight: { configurable: true, value: 720 },
+      scrollHeight: { configurable: true, value: 4_000 },
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = value;
+        },
+      },
+    });
+
+    rerender(renderWith(null, []));
+    rerender(renderWith("thread-oversized-prompt", items));
+
+    expect(screen.getByText("Oversized conversation opened in lightweight mode")).toBeTruthy();
+    expect(scroller.scrollTop).toBe(4_000 - 720);
+  });
+
+  it("keeps the flip-open remeasure alive across same-frame dependency churn", () => {
+    // 回归：发送消息瞬间 isThinking/isWorking/scope key 在同一帧内连续变化，翻开
+    // 虚拟化时安排的 rAF 重测若挂在 effect per-run cleanup 上会在执行前被吊销；
+    // resolver 的首翻信号已被消费、工作态分支又拒绝重排 → 全部行保持估高摆放，
+    // 新气泡/working 指示叠进上一条长回复的真实高度区间，直到首个 delta 才自愈。
+    const rafCallbacks = new Map<number, FrameRequestCallback>();
+    let nextRafId = 0;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      nextRafId += 1;
+      rafCallbacks.set(nextRafId, callback);
+      return nextRafId;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+      rafCallbacks.delete(id);
+    });
+    try {
+      const buildItems = (count: number): ConversationItem[] =>
+        Array.from({ length: count }, (_, index) => ({
+          id: `flip-u${index + 1}`,
+          kind: "message" as const,
+          role: "user" as const,
+          text: `message ${index + 1}`,
+        }));
+      const renderWith = (items: ConversationItem[], thinking: boolean) => (
+        <Messages
+          items={items}
+          threadId="thread-flip-remeasure"
+          workspaceId="ws-flip"
+          isThinking={thinking}
+          activeEngine="claude"
+          openTargets={[]}
+          selectedOpenAppId=""
+        />
+      );
+      // idle 20 行 < 48：未虚拟化；发送后 isThinking=true、流式门槛 16 → 翻开。
+      const { rerender } = render(renderWith(buildItems(20), false));
+      rerender(renderWith(buildItems(20), true));
+      // 同一帧内依赖继续变化（新行插入 → scope key 变化），effect 重跑。
+      rerender(renderWith(buildItems(21), true));
+      measureMock.mockClear();
+      measureElementMock.mockClear();
+      act(() => {
+        const pending = [...rafCallbacks.values()];
+        rafCallbacks.clear();
+        for (const callback of pending) {
+          callback(performance.now());
+        }
+      });
+      // 翻开重测必须在下一帧存活执行（mock 虚拟器无 elementsCache → 走全量 measure）。
+      expect(
+        measureMock.mock.calls.length + measureElementMock.mock.calls.length,
+      ).toBeGreaterThan(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

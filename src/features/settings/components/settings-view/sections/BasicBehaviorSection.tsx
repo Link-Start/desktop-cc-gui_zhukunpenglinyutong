@@ -588,7 +588,7 @@ export function BasicBehaviorSection({
                     >
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="settings-sound-select-popup">
                       {soundOptions.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}

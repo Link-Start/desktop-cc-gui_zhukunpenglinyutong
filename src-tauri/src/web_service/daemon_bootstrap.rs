@@ -40,24 +40,12 @@ pub(crate) async fn maybe_start_local_daemon_for_remote(
     let daemon_binary = resolve_or_build_daemon_binary(app).await?;
 
     let mut command = crate::utils::async_command(&daemon_binary);
-    // Packaged builds no longer bundle a dist copy for the web service; export
-    // the embedded frontend once per version and point the daemon at it. Dev
-    // builds keep resolving the repo dist through the daemon's own candidates.
+    // Managed assets are optional for daemon RPC. When ready, pass the standard
+    // directory explicitly; the daemon also probes data-dir for long-lived
+    // processes that were started before installation.
     if !cfg!(debug_assertions) {
-        let app_for_export = app.clone();
-        let export_result = tauri::async_runtime::spawn_blocking(move || {
-            super::assets_export::ensure_web_assets_export(&app_for_export)
-        })
-        .await
-        .map_err(|error| error.to_string())
-        .and_then(|result| result);
-        match export_result {
-            Ok(assets_dir) => {
-                command.env("MOSSX_WEB_ASSETS_DIR", &assets_dir);
-            }
-            Err(error) => {
-                log::warn!("[web-service] failed to export web assets for daemon: {error}");
-            }
+        if let Some(assets_dir) = super::assets_package::ready_assets_dir(app) {
+            command.env("MOSSX_WEB_ASSETS_DIR", assets_dir);
         }
     }
     command.arg("--listen").arg(&resolved_host);
@@ -114,6 +102,11 @@ pub(crate) async fn get_local_daemon_status(state: &AppState) -> DaemonControlSt
         host,
         last_error: None,
     }
+}
+
+pub(crate) async fn is_local_daemon_configured(state: &AppState) -> bool {
+    let (host, _) = read_remote_host_and_token(state).await;
+    is_local_loopback_host(&host)
 }
 
 pub(crate) async fn start_local_daemon_for_remote(

@@ -12,6 +12,8 @@ const TooltipCreateHandle = () => ({})
 // thread rows mount/unmount a body portal (forced reflow per crossing), which
 // reads as whole-app jank. Uncontrolled tooltips must wait for a dwell.
 const DEFAULT_TOOLTIP_DELAY_MS = 500
+const TOOLTIP_POPUP_CLASS_NAME =
+  "z-50 relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) text-balance rounded-md border bg-popover not-dark:bg-clip-padding text-popover-foreground text-xs shadow-md/5 px-(--viewport-inline-padding) py-1 [--viewport-inline-padding:--spacing(2)] transition-[width,height,scale,opacity] before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-md)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-starting-style:scale-98 data-ending-style:opacity-0 data-starting-style:opacity-0 data-instant:duration-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]"
 
 function TooltipProvider({
   delayDuration = DEFAULT_TOOLTIP_DELAY_MS,
@@ -46,28 +48,10 @@ function Tooltip({
 }
 
 function TooltipTrigger({
-  // Preserve the previous base-ui `render` contract through Radix composition.
-  render,
   delay: _delay,
-  children,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Trigger> & {
-  render?: React.ReactElement
-  delay?: number
-}) {
-  if (render) {
-    return (
-      <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} asChild>
-        {children === undefined ? render : React.cloneElement(render, undefined, children)}
-      </TooltipPrimitive.Trigger>
-    )
-  }
-
-  return (
-    <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props}>
-      {children}
-    </TooltipPrimitive.Trigger>
-  )
+}: React.ComponentProps<typeof TooltipPrimitive.Trigger> & { delay?: number }) {
+  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
 }
 
 function TooltipPopup({
@@ -89,10 +73,7 @@ function TooltipPopup({
         align={align}
         side={side}
         sideOffset={sideOffset}
-        className={cn(
-          "z-50 relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) text-balance rounded-md border bg-popover not-dark:bg-clip-padding text-popover-foreground text-xs shadow-md/5 px-(--viewport-inline-padding) py-1 [--viewport-inline-padding:--spacing(2)] transition-[width,height,scale,opacity] before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-md)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-starting-style:scale-98 data-ending-style:opacity-0 data-starting-style:opacity-0 data-instant:duration-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
-          className,
-        )}
+        className={cn(TOOLTIP_POPUP_CLASS_NAME, className)}
         data-slot="tooltip-popup"
         {...props}
       >
@@ -104,6 +85,7 @@ function TooltipPopup({
 
 export {
   TooltipCreateHandle,
+  TOOLTIP_POPUP_CLASS_NAME,
   TooltipProvider,
   Tooltip,
   TooltipTrigger,

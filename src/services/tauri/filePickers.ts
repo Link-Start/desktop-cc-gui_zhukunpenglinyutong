@@ -33,3 +33,15 @@ export async function pickFiles(): Promise<string[]> {
   }
   return Array.isArray(selection) ? selection : [selection];
 }
+
+export async function pickWebAssetsArchive(): Promise<string | null> {
+  const selection = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: "Web assets ZIP", extensions: ["zip"] }],
+  });
+  if (!selection || Array.isArray(selection)) {
+    return null;
+  }
+  return selection;
+}

@@ -1,18 +1,30 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Tooltip, TooltipTrigger } from "./tooltip";
 import { TooltipIconButton } from "./tooltip-icon-button";
+import { SidebarCollapseButton } from "../../features/layout/components/SidebarToggleControls";
 
-function renderTooltipButton(props: Partial<Parameters<typeof TooltipIconButton>[0]> = {}) {
+function renderTooltipButton(
+  props: Partial<Parameters<typeof TooltipIconButton>[0]> = {},
+) {
   render(
     <TooltipIconButton label="Hide right sidebar" {...props}>
       <span aria-hidden>icon</span>
     </TooltipIconButton>,
   );
 
-  return screen.getByRole("button", { name: props["aria-label"] ?? "Hide right sidebar" });
+  return screen.getByRole("button", {
+    name: props["aria-label"] ?? "Hide right sidebar",
+  });
 }
 
 function SidebarToggleLayout({ inTopbar }: { inTopbar: boolean }) {
@@ -60,30 +72,41 @@ describe("TooltipIconButton", () => {
   });
 
   it("keeps one stable native trigger across equivalent rerenders", () => {
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     const view = render(
       <TooltipIconButton label="Hide right sidebar" className="sidebar-toggle">
         <span aria-hidden>icon</span>
       </TooltipIconButton>,
     );
-    const initialButton = screen.getByRole("button", { name: "Hide right sidebar" });
+    const initialButton = screen.getByRole("button", {
+      name: "Hide right sidebar",
+    });
 
     try {
       for (let index = 0; index < 64; index += 1) {
         view.rerender(
-          <TooltipIconButton label="Hide right sidebar" className="sidebar-toggle">
+          <TooltipIconButton
+            label="Hide right sidebar"
+            className="sidebar-toggle"
+          >
             <span aria-hidden>icon</span>
           </TooltipIconButton>,
         );
       }
 
-      const currentButton = screen.getByRole("button", { name: "Hide right sidebar" });
+      const currentButton = screen.getByRole("button", {
+        name: "Hide right sidebar",
+      });
       expect(currentButton).toBe(initialButton);
       expect(currentButton.className).toContain("sidebar-toggle");
       expect(currentButton.querySelectorAll("button")).toHaveLength(0);
       expect(
         consoleErrorSpy.mock.calls.some((call) =>
-          call.some((entry) => String(entry).includes("Maximum update depth exceeded")),
+          call.some((entry) =>
+            String(entry).includes("Maximum update depth exceeded"),
+          ),
         ),
       ).toBe(false);
     } finally {
@@ -91,49 +114,97 @@ describe("TooltipIconButton", () => {
     }
   });
 
-  it("preserves the caller-owned trigger element through Radix composition", () => {
+  it("renders a direct Radix button trigger without Slot composition", () => {
     render(
       <Tooltip>
-        <TooltipTrigger render={<button data-trigger-owner="caller" />}>
-          Toggle sidebar
+        <TooltipTrigger data-trigger-owner="radix">
+          Workspace session
         </TooltipTrigger>
       </Tooltip>,
     );
 
-    expect(
-      screen.getByRole("button", { name: "Toggle sidebar" }).getAttribute("data-trigger-owner"),
-    ).toBe("caller");
-  });
-
-  it("preserves children for a direct Radix trigger", () => {
-    render(
-      <Tooltip>
-        <TooltipTrigger>Workspace session</TooltipTrigger>
-      </Tooltip>,
-    );
-
-    expect(screen.getByRole("button", { name: "Workspace session" })).toBeTruthy();
+    const trigger = screen.getByRole("button", { name: "Workspace session" });
+    expect(trigger.getAttribute("data-trigger-owner")).toBe("radix");
+    expect(trigger.querySelector("button")).toBeNull();
   });
 
   it("does not enter an update loop when the sidebar trigger changes layout hosts", async () => {
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     const view = render(<SidebarToggleLayout inTopbar={false} />);
 
     try {
       for (let index = 0; index < 16; index += 1) {
-        const button = screen.getByRole("button", { name: "Hide right sidebar" });
+        const button = screen.getByRole("button", {
+          name: "Hide right sidebar",
+        });
         await act(async () => {
           fireEvent.mouseEnter(button);
           await vi.advanceTimersByTimeAsync(250);
         });
-        expect(document.querySelector('[data-slot="tooltip-popup"]')).toBeTruthy();
+        expect(
+          document.querySelector('[data-slot="tooltip-popup"]'),
+        ).toBeTruthy();
 
         view.rerender(<SidebarToggleLayout inTopbar={index % 2 === 0} />);
       }
 
       expect(
         consoleErrorSpy.mock.calls.some((call) =>
-          call.some((entry) => String(entry).includes("Maximum update depth exceeded")),
+          call.some((entry) =>
+            String(entry).includes("Maximum update depth exceeded"),
+          ),
+        ),
+      ).toBe(false);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("keeps the real sidebar collapse trigger stable through StrictMode host remounts", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const sidebarProps = {
+      isCompact: false,
+      sidebarCollapsed: false,
+      rightPanelCollapsed: false,
+      onCollapseSidebar: vi.fn(),
+      onExpandSidebar: vi.fn(),
+      onCollapseRightPanel: vi.fn(),
+      onExpandRightPanel: vi.fn(),
+    };
+    const renderSidebarToggle = (inTopbar: boolean) => (
+      <StrictMode>
+        {inTopbar ? (
+          <header data-testid="real-topbar-host">
+            <SidebarCollapseButton {...sidebarProps} />
+          </header>
+        ) : (
+          <aside data-testid="real-sidebar-host">
+            <SidebarCollapseButton {...sidebarProps} />
+          </aside>
+        )}
+      </StrictMode>
+    );
+    const view = render(renderSidebarToggle(false));
+
+    try {
+      for (let index = 0; index < 16; index += 1) {
+        const button = screen.getByRole("button", {
+          name: "sidebar.hideThreadsSidebar",
+        });
+        await openTooltip(button);
+        expect(button.querySelectorAll("button")).toHaveLength(0);
+        view.rerender(renderSidebarToggle(index % 2 === 0));
+      }
+
+      expect(
+        consoleErrorSpy.mock.calls.some((call) =>
+          call.some((entry) =>
+            String(entry).includes("Maximum update depth exceeded"),
+          ),
         ),
       ).toBe(false);
     } finally {
@@ -159,6 +230,48 @@ describe("TooltipIconButton", () => {
 
     expect(onClick).toHaveBeenCalledTimes(1);
     expect(document.querySelector('[data-slot="tooltip-popup"]')).toBeNull();
+  });
+
+  it("closes the custom tooltip with Escape while preserving trigger focus", async () => {
+    const button = renderTooltipButton();
+    const matches = button.matches.bind(button);
+    vi.spyOn(button, "matches").mockImplementation(
+      (selector) => selector === ":focus-visible" || matches(selector),
+    );
+
+    await act(async () => {
+      button.focus();
+      fireEvent.focus(button);
+    });
+    expect(document.querySelector('[data-slot="tooltip-popup"]')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.keyDown(button, { key: "Escape" });
+    });
+
+    expect(document.querySelector('[data-slot="tooltip-popup"]')).toBeNull();
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("keeps the styled portal surface and requested placement without Radix Tooltip", async () => {
+    const button = renderTooltipButton({
+      tooltipSide: "right",
+      tooltipAlign: "start",
+      tooltipClassName: "custom-tooltip-surface",
+    });
+
+    await openTooltip(button);
+
+    const popup = document.querySelector<HTMLElement>(
+      '[data-slot="tooltip-popup"]',
+    );
+    expect(popup?.parentElement).toBe(document.body);
+    expect(popup?.getAttribute("role")).toBe("tooltip");
+    expect(popup?.getAttribute("data-side")).toBe("right");
+    expect(popup?.classList.contains("custom-tooltip-surface")).toBe(true);
+    expect(popup?.classList.contains("bg-popover")).toBe(true);
+    expect(popup?.style.position).toBe("fixed");
+    expect(button.getAttribute("aria-describedby")).toBe(popup?.id);
   });
 
   it("closes the custom tooltip when the window loses focus", async () => {

@@ -34,6 +34,14 @@ export type DaemonStatus = {
   lastError?: string | null;
 };
 
+export type WebAssetsStatus = {
+  state: "missing" | "ready" | "failed";
+  installedVersion: string | null;
+  requiredVersion: string;
+  lastError: string | null;
+  installationRequired: boolean;
+};
+
 export async function startWebServer(options: { port?: number | null; token?: string | null }): Promise<WebServerStatus> {
   return invoke<WebServerStatus>("start_web_server", {
     port: options.port ?? null,
@@ -59,6 +67,20 @@ export async function startDaemon(): Promise<DaemonStatus> {
 
 export async function stopDaemon(): Promise<DaemonStatus> {
   return invoke<DaemonStatus>("stop_daemon");
+}
+
+export async function getWebAssetsStatus(): Promise<WebAssetsStatus> {
+  return invoke<WebAssetsStatus>("get_web_assets_status");
+}
+
+export async function installWebAssets(): Promise<WebAssetsStatus> {
+  return invoke<WebAssetsStatus>("install_web_assets");
+}
+
+export async function installWebAssetsFromFile(
+  archivePath: string,
+): Promise<WebAssetsStatus> {
+  return invoke<WebAssetsStatus>("install_web_assets_from_file", { archivePath });
 }
 
 // ==================== Engine API ====================

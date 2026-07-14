@@ -79,11 +79,13 @@ describe("Messages live behavior", () => {
     scrollHeight: number | (() => number) = 2400,
   ) => {
     let currentScrollTop = scrollTop;
+    let scrollTopWriteCount = 0;
     Object.defineProperty(scroller, "scrollTop", {
       configurable: true,
       get: () => currentScrollTop,
       set: (value: number) => {
         currentScrollTop = value;
+        scrollTopWriteCount += 1;
       },
     });
     Object.defineProperty(scroller, "clientHeight", {
@@ -94,7 +96,24 @@ describe("Messages live behavior", () => {
       configurable: true,
       get: () => (typeof scrollHeight === "function" ? scrollHeight() : scrollHeight),
     });
+    return {
+      getScrollTopWriteCount: () => scrollTopWriteCount,
+    };
   };
+
+  const setMessageOffsetTop = (container: HTMLElement, messageId: string, offsetTop: number) => {
+    const message = container.querySelector(`[data-message-anchor-id="${messageId}"]`);
+    expect(message).toBeTruthy();
+    Object.defineProperty(message, "offsetTop", {
+      configurable: true,
+      value: offsetTop,
+    });
+  };
+
+  const getActiveAnchorDashIndex = (container: HTMLElement) =>
+    [...container.querySelectorAll(".messages-anchor-dash")].findIndex((dash) =>
+      dash.classList.contains("is-active"),
+    );
 
   it("scrolls the messages container when receiving a jump-to-message event", () => {
     const items: ConversationItem[] = [
@@ -786,10 +805,7 @@ describe("Messages live behavior", () => {
 
   it("disables auto-follow scrolling when live auto-follow toggle is off", () => {
     window.localStorage.setItem("ccgui.messages.live.autoFollow", "0");
-    const scrollSpy = vi
-      .spyOn(HTMLElement.prototype, "scrollIntoView")
-      .mockImplementation(() => {});
-    const { rerender } = render(
+    const { container, rerender } = render(
       <Messages
         items={[
           {
@@ -807,6 +823,9 @@ describe("Messages live behavior", () => {
         selectedOpenAppId=""
       />,
     );
+    const scroller = getMessagesScroller(container);
+    const metrics = setScrollerMetrics(scroller, 400, 2_000);
+    const baselineWrites = metrics.getScrollTopWriteCount();
 
     rerender(
       <Messages
@@ -833,15 +852,11 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(scrollSpy).not.toHaveBeenCalled();
-    scrollSpy.mockRestore();
+    expect(metrics.getScrollTopWriteCount()).toBe(baselineWrites);
   });
 
   it("stops auto-follow after the user scrolls up, then resumes at the bottom", async () => {
     window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
-    const scrollSpy = vi
-      .spyOn(HTMLElement.prototype, "scrollIntoView")
-      .mockImplementation(() => {});
     const renderWith = (extraChunk: boolean) => (
       <Messages
         items={[
@@ -877,29 +892,70 @@ describe("Messages live behavior", () => {
     setScrollerMetrics(scroller, 400, 2000);
     fireEvent.scroll(scroller);
 
-    let baselineCalls = scrollSpy.mock.calls.length;
     rerender(renderWith(true));
     await Promise.resolve();
-    expect(scrollSpy.mock.calls.length).toBe(baselineCalls);
+    expect(scroller.scrollTop).toBe(400);
 
     // User scrolls back to the bottom — auto-follow re-arms.
     rerender(renderWith(false));
-    setScrollerMetrics(scroller, 1280, 2000); // 2000 - 1280 - 720 = 0, at bottom
+    let scrollHeight = 2000;
+    setScrollerMetrics(scroller, 1280, () => scrollHeight); // true bottom
     fireEvent.scroll(scroller);
 
-    baselineCalls = scrollSpy.mock.calls.length;
     rerender(renderWith(true));
-    await waitFor(() => {
-      expect(scrollSpy.mock.calls.length).toBeGreaterThan(baselineCalls);
-    });
-    scrollSpy.mockRestore();
+    scrollHeight = 2500;
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(2500 - 720);
+  });
+
+  it("keeps the latest anchor stable at the bottom and tracks the viewport after scroll-away", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { container } = render(
+        <Messages
+          items={[
+            { id: "anchor-user-old", kind: "message", role: "user", text: "older" },
+            { id: "anchor-assistant-old", kind: "message", role: "assistant", text: "reply" },
+            { id: "anchor-user-latest", kind: "message", role: "user", text: "latest" },
+          ]}
+          threadId="thread-bottom-anchor-stability"
+          workspaceId="ws-1"
+          isThinking
+          activeEngine="codex"
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
+      const scroller = getMessagesScroller(container);
+      setMessageOffsetTop(container, "anchor-user-old", 1_760);
+      setMessageOffsetTop(container, "anchor-user-latest", 320);
+
+      // At the true bottom, transient virtual-row geometry must not pull the
+      // active state back to an older anchor.
+      setScrollerMetrics(scroller, 1_680, 2_400);
+      for (let index = 0; index < 12; index += 1) {
+        fireEvent.scroll(scroller);
+      }
+      await waitFor(() => expect(getActiveAnchorDashIndex(container)).toBe(1));
+
+      // Once the user leaves the bottom, preserve the existing viewport probe.
+      scroller.scrollTop = 400;
+      setMessageOffsetTop(container, "anchor-user-old", 480);
+      setMessageOffsetTop(container, "anchor-user-latest", 1_760);
+      fireEvent.scroll(scroller);
+      await waitFor(() => expect(getActiveAnchorDashIndex(container)).toBe(0));
+
+      const updateDepthErrors = consoleErrorSpy.mock.calls.filter((call) =>
+        call.some((entry) => String(entry).includes("Maximum update depth exceeded")),
+      );
+      expect(updateDepthErrors).toHaveLength(0);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   it("re-arms auto-follow and returns to the bottom when focus follow is re-enabled", async () => {
     window.localStorage.setItem("ccgui.messages.live.autoFollow", "0");
-    const scrollSpy = vi
-      .spyOn(HTMLElement.prototype, "scrollIntoView")
-      .mockImplementation(() => {});
     const renderWith = (extraChunk: boolean) => (
       <Messages
         items={[
@@ -931,10 +987,10 @@ describe("Messages live behavior", () => {
     const { container, rerender } = render(renderWith(false));
 
     const scroller = getMessagesScroller(container);
-    setScrollerMetrics(scroller, 400, 2000);
+    let scrollHeight = 2000;
+    setScrollerMetrics(scroller, 400, () => scrollHeight);
     fireEvent.scroll(scroller);
 
-    scrollSpy.mockClear();
     await act(async () => {
       window.dispatchEvent(
         new CustomEvent(MESSAGES_LIVE_CONTROLS_UPDATED_EVENT, {
@@ -946,12 +1002,64 @@ describe("Messages live behavior", () => {
     // Re-arming snaps the viewport back to the true bottom.
     expect(scroller.scrollTop).toBe(2000 - 720);
 
-    const baselineCalls = scrollSpy.mock.calls.length;
     rerender(renderWith(true));
-    await waitFor(() => {
-      expect(scrollSpy.mock.calls.length).toBeGreaterThan(baselineCalls);
-    });
-    scrollSpy.mockRestore();
+    scrollHeight = 2500;
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(2500 - 720);
+  });
+
+  it("cancels pending live rechecks when focus follow is disabled", () => {
+    vi.useFakeTimers();
+    try {
+      window.localStorage.setItem("ccgui.messages.live.autoFollow", "0");
+      const { container } = render(
+        <Messages
+          items={[
+            {
+              id: "assistant-live-cancel-recheck",
+              kind: "message",
+              role: "assistant",
+              text: "streaming",
+            },
+          ]}
+          threadId="thread-live-cancel-recheck"
+          workspaceId="ws-1"
+          isThinking
+          processingStartedAt={Date.now() - 1_000}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2_000;
+      setScrollerMetrics(scroller, 400, () => scrollHeight);
+      fireEvent.scroll(scroller);
+
+      act(() => {
+        window.dispatchEvent(
+          new CustomEvent(MESSAGES_LIVE_CONTROLS_UPDATED_EVENT, {
+            detail: { liveAutoFollowEnabled: true },
+          }),
+        );
+      });
+      expect(scroller.scrollTop).toBe(2_000 - 720);
+
+      act(() => {
+        window.dispatchEvent(
+          new CustomEvent(MESSAGES_LIVE_CONTROLS_UPDATED_EVENT, {
+            detail: { liveAutoFollowEnabled: false },
+          }),
+        );
+      });
+      scrollHeight = 3_000;
+      act(() => {
+        vi.advanceTimersByTime(2_100);
+      });
+
+      expect(scroller.scrollTop).toBe(2_000 - 720);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("chases late row measurements so opening a thread lands at the true bottom", async () => {
@@ -984,7 +1092,179 @@ describe("Messages live behavior", () => {
     scrollHeight = 3600;
     notifyContentResized();
     expect(scroller.scrollTop).toBe(3600 - 720);
+
+    // ResizeObserver 已经写到底后，virtualizer 可能在同一收敛窗口里修正 scrollTop，
+    // 且不再产生新的 content resize。owner 必须靠后续帧验证追回 true bottom。
+    scroller.scrollTop = 900;
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(scroller.scrollTop).toBe(3600 - 720);
     scrollSpy.mockRestore();
+  });
+
+  it("finishes history placement at the 2s checkpoint with focus follow off", () => {
+    vi.useFakeTimers();
+    try {
+      window.localStorage.setItem("ccgui.messages.live.autoFollow", "0");
+      const renderWith = (items: ConversationItem[], loading: boolean) => (
+        <Messages
+          items={items}
+          threadId="thread-history-focus-off"
+          workspaceId="ws-1"
+          isThinking={false}
+          isHistoryLoading={loading}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />
+      );
+      const historyItems: ConversationItem[] = [
+        { id: "history-focus-off-1", kind: "message", role: "user", text: "hello" },
+        {
+          id: "history-focus-off-2",
+          kind: "message",
+          role: "assistant",
+          text: "late measured answer",
+        },
+      ];
+      const { container, rerender } = render(renderWith([], true));
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2_400;
+      setScrollerMetrics(scroller, 0, () => scrollHeight);
+
+      rerender(renderWith(historyItems, false));
+      expect(scroller.scrollTop).toBe(2_400 - 720);
+
+      act(() => {
+        vi.advanceTimersByTime(1_100);
+      });
+      scrollHeight = 4_000;
+      act(() => {
+        vi.advanceTimersByTime(900);
+      });
+
+      expect(scroller.scrollTop).toBe(4_000 - 720);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not mistake active-first settlement for a missing history placement", () => {
+    vi.useFakeTimers();
+    try {
+      const items: ConversationItem[] = [
+        { id: "active-first-user", kind: "message", role: "user", text: "run" },
+        {
+          id: "active-first-assistant",
+          kind: "message",
+          role: "assistant",
+          text: "working",
+        },
+      ];
+      const renderWith = (thinking: boolean, loading: boolean) => (
+        <Messages
+          items={items}
+          threadId="thread-active-first-history"
+          workspaceId="ws-1"
+          isThinking={thinking}
+          isHistoryLoading={loading}
+          processingStartedAt={Date.now() - 1_000}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />
+      );
+      const { container, rerender } = render(renderWith(true, true));
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2_400;
+      setScrollerMetrics(scroller, 0, () => scrollHeight);
+
+      rerender(renderWith(true, false));
+      expect(scroller.scrollTop).toBe(2_400 - 720);
+
+      fireEvent.wheel(scroller, { deltaY: -120 });
+      scroller.scrollTop = 400;
+      fireEvent.scroll(scroller);
+      rerender(renderWith(false, false));
+      scrollHeight = 4_000;
+      act(() => {
+        vi.advanceTimersByTime(2_100);
+      });
+
+      expect(scroller.scrollTop).toBe(400);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("restarts history placement when the same cached thread is closed and reopened", () => {
+    vi.useFakeTimers();
+    try {
+      const historyItems: ConversationItem[] = [
+        { id: "reopen-user", kind: "message", role: "user", text: "question" },
+        { id: "reopen-assistant", kind: "message", role: "assistant", text: "answer" },
+      ];
+      const renderWith = (threadId: string | null, items: ConversationItem[]) => (
+        <Messages
+          items={items}
+          threadId={threadId}
+          workspaceId="ws-reopen"
+          isThinking={false}
+          isHistoryLoading={false}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />
+      );
+      const { container, rerender } = render(renderWith(null, []));
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2_400;
+      setScrollerMetrics(scroller, 0, () => scrollHeight);
+
+      rerender(renderWith("thread-reopen", historyItems));
+      expect(scroller.scrollTop).toBe(2_400 - 720);
+
+      rerender(renderWith(null, []));
+      scroller.scrollTop = 0;
+      rerender(renderWith("thread-reopen", historyItems));
+      expect(scroller.scrollTop).toBe(2_400 - 720);
+
+      act(() => {
+        vi.advanceTimersByTime(1_100);
+      });
+      scrollHeight = 4_000;
+      act(() => {
+        vi.advanceTimersByTime(900);
+      });
+      expect(scroller.scrollTop).toBe(4_000 - 720);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not emit redundant scroll writes for duplicate history resize signals", async () => {
+    const { container } = render(
+      <Messages
+        items={[
+          { id: "history-stable-1", kind: "message", role: "user", text: "hello" },
+          { id: "history-stable-2", kind: "message", role: "assistant", text: "done" },
+        ]}
+        threadId="thread-history-stable-resize"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+    const metrics = setScrollerMetrics(scroller, 1_680, 2_400);
+
+    notifyContentResized();
+    notifyContentResized();
+    notifyContentResized();
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    expect(metrics.getScrollTopWriteCount()).toBe(0);
   });
 
   it("attaches the content observer on the first frame, before history lands", () => {
@@ -1145,6 +1425,47 @@ describe("Messages live behavior", () => {
     scrollSpy.mockRestore();
   });
 
+  it("keeps following when a programmatic-echo scroll event lands after late geometry growth", () => {
+    // 回归：发送消息触发虚拟化翻开/live 尾窗裁剪时总高度先塌缩再回填。WebKit 的
+    // scroll 事件异步派发，钉底写入产生的事件可能在高度回填之后才送达——事件位置
+    // 离新底部很远，但它是程序化回声而非用户上滚，不能解除跟随并杀掉收敛 run。
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const { container } = render(
+      <Messages
+        items={[
+          { id: "echo-user", kind: "message", role: "user", text: "go" },
+          { id: "echo-assistant", kind: "message", role: "assistant", text: "partial" },
+        ]}
+        threadId="thread-echo"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+
+    let scrollHeight = 2400;
+    setScrollerMetrics(scroller, 1680, () => scrollHeight);
+
+    // 内容变化触发 live-follow 收敛：写入 scrollTop=1680（真实底部），进入回声指纹。
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(1680);
+
+    // 迟到测高把总高度回填到 6000，随后旧写入的 scroll 事件才送达（位置仍是 1680，
+    // 距新底部 3600px）。指纹命中 → 跟随保持武装，不得释放。
+    scrollHeight = 6000;
+    fireEvent.scroll(scroller);
+
+    // 下一次内容高度信号应把视口追回新的真实底部，而不是滞留在 1680。
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(6000 - 720);
+    scrollSpy.mockRestore();
+  });
+
   it("re-pins to the bottom after the conversation settles and the timeline back-fills", async () => {
     window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
     const scrollSpy = vi
@@ -1190,7 +1511,7 @@ describe("Messages live behavior", () => {
     // Conversation settles (isThinking true -> false): opens the settle window.
     rerender(renderWith(false, false));
     // Let the 320ms finalizing window close so the auto-follow finalizing scroll
-    // is excluded; the settle re-pin window (800ms) is still open.
+    // is excluded; the settle re-pin window is still open.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 380));
     });
@@ -1256,6 +1577,41 @@ describe("Messages live behavior", () => {
     notifyContentResized();
     expect(scroller.scrollTop).toBe(400);
     scrollSpy.mockRestore();
+  });
+
+  it("re-pins after every settlement across multiple turns", () => {
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    const renderWith = (thinking: boolean, turnCount: number) => (
+      <Messages
+        items={Array.from({ length: turnCount + 1 }, (_, index) => ({
+          id: `multi-turn-assistant-${index}`,
+          kind: "message" as const,
+          role: "assistant" as const,
+          text: index === turnCount && thinking ? "streaming" : `settled ${index}`,
+        }))}
+        threadId="thread-multi-turn-settle"
+        workspaceId="ws-1"
+        isThinking={thinking}
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(renderWith(false, 0));
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 2_400;
+    setScrollerMetrics(scroller, scrollHeight - 720, () => scrollHeight);
+    fireEvent.scroll(scroller);
+
+    for (let turn = 1; turn <= 3; turn += 1) {
+      scrollHeight += 400;
+      rerender(renderWith(true, turn));
+      expect(scroller.scrollTop).toBe(scrollHeight - 720);
+
+      scrollHeight += 600;
+      rerender(renderWith(false, turn));
+      expect(scroller.scrollTop).toBe(scrollHeight - 720);
+    }
   });
 
   it("ignores duplicate live auto-follow enabled events", async () => {

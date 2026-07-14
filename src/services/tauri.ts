@@ -1,4 +1,9 @@
-export { pickFiles, pickImageFiles, pickWorkspacePath } from "./tauri/filePickers";
+export {
+  pickFiles,
+  pickImageFiles,
+  pickWebAssetsArchive,
+  pickWorkspacePath,
+} from "./tauri/filePickers";
 export { getConfigModel, listWorkspaces } from "./tauri/workspaceConfig";
 export {
   compactThreadContext,
@@ -477,7 +482,10 @@ export {
 } from "./tauri/workspaceFiles";
 export {
   getDaemonStatus,
+  getWebAssetsStatus,
   getWebServerStatus,
+  installWebAssets,
+  installWebAssetsFromFile,
   startDaemon,
   startWebServer,
   stopDaemon,
@@ -492,6 +500,7 @@ export {
   getEngineStatus,
   switchEngine,
 } from "./tauri/appServer";
+export type { WebAssetsStatus } from "./tauri/appServer";
 export type {
   DaemonStatus,
   EngineActiveProcessDiagnostics,

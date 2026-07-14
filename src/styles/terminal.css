@@ -205,7 +205,8 @@
    的浅色滚动槽会在深色终端上形成一条扎眼的亮竖条。让滚动槽透明(露出终端
    背景)、滑块随全局滚动条色淡显,消除亮条同时保留滚动能力。 */
 .terminal-surface .xterm-viewport::-webkit-scrollbar {
-  width: 9px;
+  width: var(--sb-size);
+  height: var(--sb-size);
 }
 
 .terminal-surface .xterm-viewport::-webkit-scrollbar-track {
@@ -213,10 +214,15 @@
 }
 
 .terminal-surface .xterm-viewport::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  border: 2px solid transparent;
+  border-radius: var(--sb-thumb-radius);
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--sb-thumb-inset);
   background-clip: content-box;
-  background-color: var(--sb-thumb-color);
+  /* fallback 到 --scrollbar-thumb:滚动条样式收窄后,全局 `*` 不再兜底赋值
+     --sb-thumb-color,此处裸用会解析失败使滑块透明。终端不套用 .scrollable,
+     故直接取全局滚动条色还原原本表现。 */
+  background-color: var(--sb-thumb-color, var(--scrollbar-thumb));
 }
 
 .terminal-surface .xterm-viewport::-webkit-scrollbar-thumb:hover {

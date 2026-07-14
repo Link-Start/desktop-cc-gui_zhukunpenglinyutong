@@ -9,9 +9,32 @@ import type { SearchContentFilter, SearchResult, SearchScope } from "../types";
 const INVISIBLE_QUERY_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g;
 // Debounce before the typed query reaches the app-shell root (see commitQuery below).
 const SEARCH_QUERY_DEBOUNCE_MS = 150;
+const SEARCH_RESULT_KIND_ORDER: SearchResult["kind"][] = [
+  "file",
+  "kanban",
+  "thread",
+  "message",
+  "history",
+  "skill",
+  "command",
+];
+
+type SearchResultGroup = {
+  kind: SearchResult["kind"];
+  entries: Array<{ result: SearchResult; resultIndex: number }>;
+};
 
 function sanitizeSearchQueryInput(value: string): string {
   return value.replace(INVISIBLE_QUERY_CHARS_REGEX, "");
+}
+
+export function groupSearchResults(results: SearchResult[]): SearchResultGroup[] {
+  return SEARCH_RESULT_KIND_ORDER.map((kind) => ({
+    kind,
+    entries: results.flatMap((result, resultIndex) =>
+      result.kind === kind ? [{ result, resultIndex }] : [],
+    ),
+  })).filter((group) => group.entries.length > 0);
 }
 
 type SearchPaletteProps = {
@@ -151,6 +174,7 @@ export function SearchPalette({
     () => (shouldShowResults ? results : []),
     [results, shouldShowResults],
   );
+  const resultGroups = useMemo(() => groupSearchResults(visibleResults), [visibleResults]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -279,43 +303,50 @@ export function SearchPalette({
               </div>
             </div>
           ) : (
-            visibleResults.map((result, index) => (
-              <button
-                key={result.id}
-                type="button"
-                className={`search-palette-result${index === selectedIndex ? " is-active" : ""}`}
-                onClick={() => onSelect(result)}
-              >
-                <span className="search-palette-result-main">
-                  <span className="search-palette-result-title">{result.title}</span>
-                  {result.subtitle ? (
-                    <span className="search-palette-result-subtitle">{result.subtitle}</span>
-                  ) : null}
-                  <span className="search-palette-result-tags">
-                    {result.workspaceName ? (
-                      <span className="search-palette-result-tag">
-                        {t("searchPalette.projectTag")}: {result.workspaceName}
+            resultGroups.map((group) => (
+              <section className="search-palette-result-group" key={group.kind}>
+                <h2 className="search-palette-result-group-title">
+                  {badgeLabelByKind[group.kind]}
+                </h2>
+                {group.entries.map(({ result, resultIndex }) => (
+                  <button
+                    key={result.id}
+                    type="button"
+                    className={`search-palette-result${resultIndex === selectedIndex ? " is-active" : ""}`}
+                    onClick={() => onSelect(result)}
+                  >
+                    <span className="search-palette-result-main">
+                      <span className="search-palette-result-title">{result.title}</span>
+                      {result.subtitle ? (
+                        <span className="search-palette-result-subtitle">{result.subtitle}</span>
+                      ) : null}
+                      <span className="search-palette-result-tags">
+                        {result.workspaceName ? (
+                          <span className="search-palette-result-tag">
+                            {t("searchPalette.projectTag")}: {result.workspaceName}
+                          </span>
+                        ) : null}
+                        <span className="search-palette-result-tag">
+                          {t("searchPalette.typeTag")}: {badgeLabelByKind[result.kind]}
+                        </span>
+                        {result.sourceKind ? (
+                          <span className="search-palette-result-tag">
+                            {t("searchPalette.sourceTag")}: {sourceLabelByKind[result.sourceKind]}
+                          </span>
+                        ) : null}
+                        {result.locationLabel ? (
+                          <span className="search-palette-result-tag">
+                            {t("searchPalette.locationTag")}: {result.locationLabel}
+                          </span>
+                        ) : null}
                       </span>
-                    ) : null}
-                    <span className="search-palette-result-tag">
-                      {t("searchPalette.typeTag")}: {badgeLabelByKind[result.kind]}
                     </span>
-                    {result.sourceKind ? (
-                      <span className="search-palette-result-tag">
-                        {t("searchPalette.sourceTag")}: {sourceLabelByKind[result.sourceKind]}
-                      </span>
-                    ) : null}
-                    {result.locationLabel ? (
-                      <span className="search-palette-result-tag">
-                        {t("searchPalette.locationTag")}: {result.locationLabel}
-                      </span>
-                    ) : null}
-                  </span>
-                </span>
-                <span className={`search-palette-kind-badge search-kind-${result.kind}`}>
-                  {badgeLabelByKind[result.kind]}
-                </span>
-              </button>
+                    <span className={`search-palette-kind-badge search-kind-${result.kind}`}>
+                      {badgeLabelByKind[result.kind]}
+                    </span>
+                  </button>
+                ))}
+              </section>
             ))
           )}
         </div>

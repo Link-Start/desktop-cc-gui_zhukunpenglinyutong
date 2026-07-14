@@ -263,8 +263,8 @@
 .project-map-relationship-dashboard-grid::-webkit-scrollbar,
 .project-map-relationship-file-list::-webkit-scrollbar,
 .project-map-relationship-edge-list::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: var(--sb-size);
+  height: var(--sb-size);
 }
 
 .project-map-relationship-scan-panel::-webkit-scrollbar-thumb,
@@ -272,10 +272,12 @@
 .project-map-relationship-dashboard-grid::-webkit-scrollbar-thumb,
 .project-map-relationship-file-list::-webkit-scrollbar-thumb,
 .project-map-relationship-edge-list::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 999px;
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--sb-thumb-inset);
+  border-radius: var(--sb-thumb-radius);
   background: color-mix(in srgb, var(--project-map-accent) 44%, var(--project-map-border));
-  background-clip: padding-box;
+  background-clip: content-box;
 }
 
 .project-map-relationship-scan-panel header {

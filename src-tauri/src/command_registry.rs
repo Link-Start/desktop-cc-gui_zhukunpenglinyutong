@@ -63,6 +63,9 @@ pub(crate) fn invoke_handler(
         crate::web_service::get_daemon_status,
         crate::web_service::start_daemon,
         crate::web_service::stop_daemon,
+        crate::web_service::get_web_assets_status,
+        crate::web_service::install_web_assets,
+        crate::web_service::install_web_assets_from_file,
         // Agents
         crate::agents::agent_list,
         crate::agents::agent_add,

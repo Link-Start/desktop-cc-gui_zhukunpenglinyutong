@@ -1466,7 +1466,8 @@
 }
 
 .file-list-container::-webkit-scrollbar {
-  width: 6px;
+  width: var(--sb-size);
+  height: var(--sb-size);
 }
 
 .file-list-container::-webkit-scrollbar-track {
@@ -1475,7 +1476,11 @@
 
 .file-list-container::-webkit-scrollbar-thumb {
   background-color: var(--sb-thumb-color);
-  border-radius: 3px;
+  border-radius: var(--sb-thumb-radius);
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--sb-thumb-inset);
+  background-clip: content-box;
 }
 
 .file-list-container:hover::-webkit-scrollbar-thumb:hover {
@@ -1568,7 +1573,8 @@
 }
 
 .bash-group-timeline::-webkit-scrollbar {
-  width: 6px;
+  width: var(--sb-size);
+  height: var(--sb-size);
 }
 
 .bash-group-timeline::-webkit-scrollbar-track {
@@ -1577,7 +1583,11 @@
 
 .bash-group-timeline::-webkit-scrollbar-thumb {
   background-color: var(--sb-thumb-color);
-  border-radius: 3px;
+  border-radius: var(--sb-thumb-radius);
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--sb-thumb-inset);
+  background-clip: content-box;
 }
 
 .bash-group-timeline:hover::-webkit-scrollbar-thumb:hover {

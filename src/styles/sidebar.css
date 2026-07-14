@@ -476,7 +476,7 @@
   align-items: center;
   min-height: var(--sidebar-row-height-workspace);
   width: 100%;
-  padding: 2px 8px;
+  padding: 2px 8px 2px 2px;
   gap: 6px;
   color: var(--text-muted);
   border-radius: var(--sidebar-row-radius);
@@ -1966,9 +1966,9 @@
 .thread-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-height: var(--sidebar-row-height-thread);
-  padding: 2px 8px 2px calc(10px + var(--thread-indent, 0px));
+  padding: 2px 8px 2px calc(14px + var(--thread-indent, 0px));
   border-radius: var(--sidebar-row-radius);
   color: var(--text-quiet);
   font-size: var(--sidebar-content-font-size);

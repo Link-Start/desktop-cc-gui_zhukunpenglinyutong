@@ -280,6 +280,13 @@
   border-radius: 10px;
 }
 
+/* Popup is portaled to <body>, so it lives outside .settings-section-basic.
+   Keep option labels on one line — the default grid item lets CJK text
+   collapse to a 1-char-wide column and stack vertically. */
+.settings-sound-select-popup [data-slot="select-item"] {
+  white-space: nowrap;
+}
+
 .settings-section-basic .settings-sound-select-row-shadcn .settings-sound-test-btn {
   min-width: 92px;
   min-height: 38px;
@@ -918,6 +925,59 @@
 
 .settings-section-basic .settings-field-row {
   gap: 8px;
+}
+
+.settings-section-basic .web-service-assets-row {
+  align-items: center;
+}
+
+.settings-section-basic .web-service-assets-status {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  gap: 8px;
+}
+
+.settings-section-basic .web-service-assets-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #9ca3af;
+}
+
+.settings-section-basic .web-service-assets-status-dot--ready {
+  background: #16a34a;
+}
+
+.settings-section-basic .web-service-assets-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.settings-section-basic .web-service-assets-log {
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+  margin: 4px 0 0;
+  gap: 6px;
+}
+
+.settings-section-basic .web-service-assets-log.is-active {
+  color: var(--settings-basic-text-muted);
+}
+
+.settings-section-basic .web-service-assets-log.is-success {
+  color: #15803d;
+}
+
+.settings-section-basic .settings-help--danger {
+  color: var(--danger-text, #dc2626);
 }
 
 .settings-section-basic .settings-field-row .settings-select-wrap {

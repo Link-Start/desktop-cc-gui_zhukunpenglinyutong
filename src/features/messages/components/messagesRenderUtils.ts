@@ -153,25 +153,6 @@ export function toConversationEngine(engine: MessagesEngine): ConversationEngine
   return "codex";
 }
 
-export function resolveProvenanceEngineLabel(
-  engineSource: string | null | undefined,
-): string | null {
-  const normalized = (engineSource ?? "").trim().toLowerCase();
-  if (normalized === "claude") {
-    return "Claude";
-  }
-  if (normalized === "gemini") {
-    return "Gemini";
-  }
-  if (normalized === "opencode") {
-    return "OpenCode";
-  }
-  if (normalized === "codex") {
-    return "Codex";
-  }
-  return null;
-}
-
 export function resolveRenderableItems({
   legacyItems,
   legacyThreadId: _legacyThreadId,

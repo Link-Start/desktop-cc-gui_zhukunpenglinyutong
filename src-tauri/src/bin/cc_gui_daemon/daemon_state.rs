@@ -170,6 +170,7 @@ impl DaemonState {
             config.listen.to_string(),
             config.token.clone(),
             app_settings.web_service_port,
+            config.data_dir.clone(),
         );
         if let Err(error) = proxy_core::apply_app_proxy_settings(&app_settings) {
             eprintln!("[proxy] failed to apply persisted proxy settings: {error}");

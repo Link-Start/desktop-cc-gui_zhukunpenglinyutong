@@ -1,23 +1,12 @@
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from "@/components/ui/popover";
-import {
-  Tooltip,
-  TooltipPopup,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { FloatingTooltipButton } from "@/components/ui/floating-tooltip-button";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type {
+  CSSProperties,
+  KeyboardEvent,
+  MouseEvent,
+  ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import type { EngineType, ThreadSummary } from "../../../types";
@@ -25,7 +14,6 @@ import type { ThreadMoveFolderTarget } from "../hooks/useSidebarMenus";
 import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
 import { EngineIcon } from "../../engine/components/EngineIcon";
 import { SharedSessionIcon } from "../../shared-session/components/SharedSessionIcon";
-import { ThreadDeleteConfirmBubble } from "../../threads/components/ThreadDeleteConfirmBubble";
 import { resolveCodexProviderLabel } from "../utils/codexProviderLabel";
 import { getExitedSessionRowVisibility } from "../utils/exitedSessionRows";
 import {
@@ -40,6 +28,7 @@ import {
   type SidebarVirtualItem,
 } from "./sidebarVirtualItems";
 import { getThreadRowProjection } from "../utils/threadRowProjection";
+import { ThreadDeleteConfirmPopover } from "./ThreadDeleteConfirmPopover";
 
 type ThreadRow = {
   thread: ThreadSummary;
@@ -215,7 +204,10 @@ const ThreadRowItem = memo(function ThreadRowItem({
   const runtimeBadge = status?.isReviewing
     ? { label: t("threads.runtimeReviewing"), severity: "reviewing" as const }
     : status?.isProcessing
-      ? { label: t("threads.runtimeProcessing"), severity: "processing" as const }
+      ? {
+          label: t("threads.runtimeProcessing"),
+          severity: "processing" as const,
+        }
       : null;
   const isProcessing = rowProjection.isProcessing;
   const showProxyBadge = systemProxyEnabled && isProcessing;
@@ -226,177 +218,141 @@ const ThreadRowItem = memo(function ThreadRowItem({
   const engineIconType = engineSource as EngineType;
   const providerLabel = resolveCodexProviderLabel(thread);
   const isProviderUnavailable = thread.providerAvailability === "unavailable";
-  return (
-    <Popover
-      open={isDeleteConfirmOpen}
-      onOpenChange={(open) => {
-        if (!open) {
-          onCancelDeleteConfirm?.();
+  const rowButtonRef = useRef<HTMLButtonElement | null>(null);
+  const rowButton = (
+    <FloatingTooltipButton
+      ref={rowButtonRef}
+      tooltipLabel={thread.name}
+      tooltipSide="top" tooltipAlign="start" tooltipSideOffset={4}
+      tooltipClassName="max-w-[400px] break-words" tooltipDisabled={isDeleteConfirmOpen}
+      type="button"
+      className={`thread-row ${isActiveThread ? "active" : ""}${
+        isDeleteConfirmOpen ? " has-delete-confirm" : ""
+      }${canPin ? " has-pin-toggle" : ""}${hasChildren ? " has-child-threads" : ""}${
+        isSubagentParent ? " is-subagent-parent" : ""
+      }${isActiveSubagentParent ? " is-active-subagent-parent" : ""}${
+        isSubagentThread ? " is-subagent" : ""
+      }${isActiveSubagentGroup ? " is-active-subagent-group" : ""}${
+        isPendingSubagent ? " is-pending-subagent" : ""
+      }${thread.isDegraded ? " is-degraded" : ""}`}
+      style={indentStyle} aria-expanded={isSubagentParent ? !isSubagentParentCollapsed : undefined}
+      onClick={() => onSelectThread(nestedWorkspaceId, selectTargetThreadId)}
+      onContextMenu={(event) => {
+        if (isPendingSubagent) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        onShowThreadMenu(
+          event,
+          nestedWorkspaceId,
+          thread.id,
+          canPin,
+          thread.sizeBytes,
+          contextMenuMoveFolderTargets,
+          thread.folderId ?? null,
+          canArchive,
+          workspacePath,
+        );
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelectThread(nestedWorkspaceId, selectTargetThreadId);
         }
       }}
     >
-      <Tooltip>
-        <PopoverAnchor asChild>
-          <TooltipTrigger
-            type="button"
-            className={`thread-row ${
-              isActiveThread ? "active" : ""
-            }${isDeleteConfirmOpen ? " has-delete-confirm" : ""}${
-              canPin ? " has-pin-toggle" : ""
-            }${hasChildren ? " has-child-threads" : ""}${
-              isSubagentParent ? " is-subagent-parent" : ""
-            }${isActiveSubagentParent ? " is-active-subagent-parent" : ""}${
-              isSubagentThread ? " is-subagent" : ""
-            }${isActiveSubagentGroup ? " is-active-subagent-group" : ""}${
-              isPendingSubagent ? " is-pending-subagent" : ""
-            }${thread.isDegraded ? " is-degraded" : ""}`}
-            style={indentStyle}
-            aria-expanded={
-              isSubagentParent ? !isSubagentParentCollapsed : undefined
-            }
-            onClick={() => {
-              onSelectThread(nestedWorkspaceId, selectTargetThreadId);
-            }}
-            onContextMenu={(event) => {
-              if (isPendingSubagent) {
-                event.preventDefault();
-                event.stopPropagation();
-                return;
-              }
-              onShowThreadMenu(
-                event,
-                nestedWorkspaceId,
-                thread.id,
-                canPin,
-                thread.sizeBytes,
-                contextMenuMoveFolderTargets,
-                thread.folderId ?? null,
-                canArchive,
-                workspacePath,
-              );
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onSelectThread(nestedWorkspaceId, selectTargetThreadId);
-              }
-            }}
-          >
-            <span className={`thread-status ${statusClass}`} aria-hidden />
-            {canPin && onToggleThreadPin && (
-              <span
-                className={`thread-pin-toggle${isPinned ? " is-pinned" : ""}`}
-                role="button"
-                aria-label={isPinned ? t("threads.unpin") : t("threads.pin")}
-                title={isPinned ? t("threads.unpin") : t("threads.pin")}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onToggleThreadPin(nestedWorkspaceId, thread.id);
-                }}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-              >
-                <span className="thread-pin-toggle-icon" aria-hidden />
-              </span>
-            )}
-            {isSubagentThread ? (
-              <span className="thread-subagent-tag" title={engineTitle}>
-                {t("threads.subagentTag")}
-              </span>
-            ) : (
-              <span
-                className={`thread-engine-badge ${
-                  isSharedThread ? "thread-engine-shared" : `thread-engine-${engineSource}`
-                }${isProcessing ? " is-processing" : ""}`}
-                title={engineTitle}
-              >
-                {isSharedThread ? (
-                  <SharedSessionIcon size={12} />
-                ) : (
-                  <EngineIcon engine={engineIconType} size={12} />
-                )}
-              </span>
-            )}
-            {showProxyBadge && (
-              <ProxyStatusBadge
-                proxyUrl={systemProxyUrl}
-                label={t("threads.proxyBadge")}
-                variant="compact"
-                className="thread-proxy-badge"
-              />
-            )}
-            <span className="thread-name">{thread.name}</span>
-            <div className="thread-meta">
-              {isSubagentParent && (
-                <span
-                  className={`thread-tree-expander${
-                    isSubagentParentCollapsed ? " is-collapsed" : ""
-                  }`}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={subagentTreeToggleLabel}
-                  title={subagentTreeToggleLabel}
-                  onClick={(event) => toggleSubagentParent(event, thread.id)}
-                  onKeyDown={(event) => handleSubagentParentKeyDown(event, thread.id)}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                />
-              )}
-              {isAutoNaming && (
-                <span className="thread-auto-naming">{t("threads.autoNaming")}</span>
-              )}
-              {showProviderLabels && providerLabel ? (
-                <span
-                  className={`thread-provider-label${
-                    isProviderUnavailable ? " is-unavailable" : ""
-                  }`}
-                  title={providerLabel}
-                >
-                  {providerLabel}
-                </span>
-              ) : null}
-              {runtimeBadge ? (
-                <span className={`thread-runtime-badge thread-runtime-badge--${runtimeBadge.severity}`}>
-                  {runtimeBadge.label}
-                </span>
-              ) : null}
-              {relativeTime && !runtimeBadge ? (
-                <span className="thread-time">{relativeTime}</span>
-              ) : null}
-            </div>
-          </TooltipTrigger>
-        </PopoverAnchor>
-        <TooltipPopup
-          side="top"
-          align="start"
-          sideOffset={4}
-          className="max-w-[400px] break-words"
+      <span className={`thread-status ${statusClass}`} aria-hidden />
+      {canPin && onToggleThreadPin && (
+        <span
+          className={`thread-pin-toggle${isPinned ? " is-pinned" : ""}`}
+          role="button"
+          aria-label={isPinned ? t("threads.unpin") : t("threads.pin")}
+          title={isPinned ? t("threads.unpin") : t("threads.pin")}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onToggleThreadPin(nestedWorkspaceId, thread.id);
+          }}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
         >
-          {thread.name}
-        </TooltipPopup>
-      </Tooltip>
-      {isDeleteConfirmOpen && (
-        <PopoverContent
-          side="right"
-          align="start"
-          sideOffset={10}
-          className="thread-delete-popover-shell"
-          onOpenAutoFocus={(event) => event.preventDefault()}
-        >
-          <ThreadDeleteConfirmBubble
-            threadName={thread.name}
-            isDeleting={deleteConfirmBusy}
-            onCancel={() => onCancelDeleteConfirm?.()}
-            onConfirm={() => onConfirmDeleteConfirm?.()}
-          />
-        </PopoverContent>
+          <span className="thread-pin-toggle-icon" aria-hidden />
+        </span>
       )}
-    </Popover>
+      {isSubagentThread ? (
+        <span className="thread-subagent-tag" title={engineTitle}>
+          {t("threads.subagentTag")}
+        </span>
+      ) : (
+        <span
+          className={`thread-engine-badge ${
+            isSharedThread
+              ? "thread-engine-shared"
+              : `thread-engine-${engineSource}`
+          }${isProcessing ? " is-processing" : ""}`}
+          title={engineTitle}
+        >
+          {isSharedThread ? (
+            <SharedSessionIcon size={12} />
+          ) : (
+            <EngineIcon engine={engineIconType} size={12} />
+          )}
+        </span>
+      )}
+        {showProxyBadge && (
+        <ProxyStatusBadge proxyUrl={systemProxyUrl} label={t("threads.proxyBadge")}
+          variant="compact" className="thread-proxy-badge" />
+      )}
+      <span className="thread-name">{thread.name}</span>
+      <div className="thread-meta">
+        {isSubagentParent && (
+          <span
+            className={`thread-tree-expander${
+              isSubagentParentCollapsed ? " is-collapsed" : ""
+            }`}
+            role="button"
+            tabIndex={0}
+            aria-label={subagentTreeToggleLabel}
+            title={subagentTreeToggleLabel}
+            onClick={(event) => toggleSubagentParent(event, thread.id)}
+            onKeyDown={(event) => handleSubagentParentKeyDown(event, thread.id)}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          />
+        )}
+        {isAutoNaming && <span className="thread-auto-naming">{t("threads.autoNaming")}</span>}
+        {showProviderLabels && providerLabel ? (
+          <span
+            className={`thread-provider-label${
+              isProviderUnavailable ? " is-unavailable" : ""
+            }`}
+            title={providerLabel}
+          >
+            {providerLabel}
+          </span>
+        ) : null}
+        {runtimeBadge ? <span className={`thread-runtime-badge thread-runtime-badge--${runtimeBadge.severity}`}>
+          {runtimeBadge.label}
+        </span> : null}
+        {relativeTime && !runtimeBadge ? <span className="thread-time">{relativeTime}</span> : null}
+      </div>
+    </FloatingTooltipButton>
+  );
+  return (
+    <ThreadDeleteConfirmPopover
+      open={isDeleteConfirmOpen}
+      anchorRef={rowButtonRef}
+      trigger={rowButton}
+      threadName={thread.name}
+      isDeleting={deleteConfirmBusy}
+      onCancel={onCancelDeleteConfirm}
+      onConfirm={onConfirmDeleteConfirm}
+    />
   );
 });
 
@@ -474,40 +430,50 @@ export function ThreadList({
   const { t } = useTranslation();
   const indentUnit = nested ? 10 : 14;
   const threadListRef = useRef<HTMLDivElement | null>(null);
-  const [expandedParentThreadIds, setExpandedParentThreadIds] = useState<Set<string>>(
-    () => new Set(),
+  const [expandedParentThreadIds, setExpandedParentThreadIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const isExitedThread = useCallback(
+    (thread: ThreadSummary) => {
+      if (isPendingSubagentThread(thread)) {
+        return false;
+      }
+      const status = threadStatusById[thread.id];
+      return !status?.isProcessing && !status?.isReviewing;
+    },
+    [threadStatusById],
   );
-  const isExitedThread = useCallback((thread: ThreadSummary) => {
-    if (isPendingSubagentThread(thread)) {
-      return false;
-    }
-    const status = threadStatusById[thread.id];
-    return !status?.isProcessing && !status?.isReviewing;
-  }, [threadStatusById]);
-  const { visiblePinnedRows, visibleUnpinnedRows, hiddenExitedCount } = useMemo(() => {
-    const pinnedVisibility = getExitedSessionRowVisibility(pinnedRows, {
-      hideExitedSessions,
-      isExitedThread,
-    });
-    const unpinnedVisibility = getExitedSessionRowVisibility(unpinnedRows, {
-      hideExitedSessions,
-      isExitedThread,
-    });
+  const { visiblePinnedRows, visibleUnpinnedRows, hiddenExitedCount } =
+    useMemo(() => {
+      const pinnedVisibility = getExitedSessionRowVisibility(pinnedRows, {
+        hideExitedSessions,
+        isExitedThread,
+      });
+      const unpinnedVisibility = getExitedSessionRowVisibility(unpinnedRows, {
+        hideExitedSessions,
+        isExitedThread,
+      });
 
-    return {
-      visiblePinnedRows: pinnedVisibility.visibleRows,
-      visibleUnpinnedRows: unpinnedVisibility.visibleRows,
-      hiddenExitedCount:
-        pinnedVisibility.hiddenExitedCount + unpinnedVisibility.hiddenExitedCount,
-    };
-  }, [hideExitedSessions, isExitedThread, pinnedRows, unpinnedRows]);
+      return {
+        visiblePinnedRows: pinnedVisibility.visibleRows,
+        visibleUnpinnedRows: unpinnedVisibility.visibleRows,
+        hiddenExitedCount:
+          pinnedVisibility.hiddenExitedCount +
+          unpinnedVisibility.hiddenExitedCount,
+      };
+    }, [hideExitedSessions, isExitedThread, pinnedRows, unpinnedRows]);
   const showHiddenExitedSummary = useMemo(
     () =>
       hideExitedSessions &&
       hiddenExitedCount > 0 &&
       visiblePinnedRows.length === 0 &&
       visibleUnpinnedRows.length === 0,
-    [hiddenExitedCount, hideExitedSessions, visiblePinnedRows.length, visibleUnpinnedRows.length],
+    [
+      hiddenExitedCount,
+      hideExitedSessions,
+      visiblePinnedRows.length,
+      visibleUnpinnedRows.length,
+    ],
   );
   const contextMenuMoveFolderTargets =
     moveFolderTargets.length > 0 ? moveFolderTargets : undefined;
@@ -516,7 +482,8 @@ export function ThreadList({
     [expandedParentThreadIds, visiblePinnedRows],
   );
   const displayedUnpinnedRows = useMemo(
-    () => filterCollapsedThreadRows(visibleUnpinnedRows, expandedParentThreadIds),
+    () =>
+      filterCollapsedThreadRows(visibleUnpinnedRows, expandedParentThreadIds),
     [expandedParentThreadIds, visibleUnpinnedRows],
   );
   const rowsBySidebarVirtualKey = useMemo(() => {
@@ -545,13 +512,11 @@ export function ThreadList({
         hasMoreThreads: false,
         isEmpty: false,
       }),
-    [
-      displayedPinnedRows,
-      displayedUnpinnedRows,
-      workspaceId,
-    ],
+    [displayedPinnedRows, displayedUnpinnedRows, workspaceId],
   );
-  const shouldVirtualizeThreads = shouldVirtualizeSidebarList(sidebarVirtualItems.length);
+  const shouldVirtualizeThreads = shouldVirtualizeSidebarList(
+    sidebarVirtualItems.length,
+  );
   const threadRowVirtualizer = useVirtualizer({
     count: shouldVirtualizeThreads ? sidebarVirtualItems.length : 0,
     getScrollElement: () => threadListRef.current,
@@ -567,20 +532,29 @@ export function ThreadList({
       (row) => row.thread.id === activeThreadId,
     );
     return activeRow?.thread.parentThreadId ?? null;
-  }, [activeThreadId, activeWorkspaceId, visiblePinnedRows, visibleUnpinnedRows, workspaceId]);
-  const toggleSubagentParent = useCallback((event: MouseEvent, threadId: string) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setExpandedParentThreadIds((current) => {
-      const next = new Set(current);
-      if (next.has(threadId)) {
-        next.delete(threadId);
-      } else {
-        next.add(threadId);
-      }
-      return next;
-    });
-  }, []);
+  }, [
+    activeThreadId,
+    activeWorkspaceId,
+    visiblePinnedRows,
+    visibleUnpinnedRows,
+    workspaceId,
+  ]);
+  const toggleSubagentParent = useCallback(
+    (event: MouseEvent, threadId: string) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setExpandedParentThreadIds((current) => {
+        const next = new Set(current);
+        if (next.has(threadId)) {
+          next.delete(threadId);
+        } else {
+          next.add(threadId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
   const handleSubagentParentKeyDown = useCallback(
     (event: KeyboardEvent, threadId: string) => {
       if (event.key !== "Enter" && event.key !== " ") {
@@ -600,7 +574,11 @@ export function ThreadList({
     },
     [],
   );
-  const renderThreadRow = ({ thread, depth, hasChildren = false }: ThreadRow) => {
+  const renderThreadRow = ({
+    thread,
+    depth,
+    hasChildren = false,
+  }: ThreadRow) => {
     const relativeTime = getThreadTime(thread);
     const isActiveThread =
       workspaceId === activeWorkspaceId && thread.id === activeThreadId;
@@ -614,7 +592,8 @@ export function ThreadList({
     const isActiveSubagentGroup =
       isSubagentThread &&
       workspaceId === activeWorkspaceId &&
-      (thread.parentThreadId === activeThreadId || thread.parentThreadId === activeThreadParentId);
+      (thread.parentThreadId === activeThreadId ||
+        thread.parentThreadId === activeThreadParentId);
     const isActiveSubagentParent =
       isSubagentParent &&
       workspaceId === activeWorkspaceId &&
@@ -626,7 +605,9 @@ export function ThreadList({
       ? t("threads.subagentTreeExpand")
       : t("threads.subagentTreeCollapse");
     const selectTargetThreadId =
-      isPendingSubagent && thread.parentThreadId ? thread.parentThreadId : thread.id;
+      isPendingSubagent && thread.parentThreadId
+        ? thread.parentThreadId
+        : thread.id;
     const canArchive =
       !isPendingSubagent && !isSharedThread && !thread.id.startsWith("shared:");
     const engineSource: EngineType = thread.engineSource ?? "codex";
@@ -638,13 +619,13 @@ export function ThreadList({
           : engineSource === "opencode"
             ? "OpenCode"
             : "Codex";
-    const engineTitle =
-      isSharedThread
-        ? `Shared Session · ${baseEngineTitle}`
-        : baseEngineTitle;
+    const engineTitle = isSharedThread
+      ? `Shared Session · ${baseEngineTitle}`
+      : baseEngineTitle;
 
     const isDeleteConfirmOpen =
-      deleteConfirmWorkspaceId === workspaceId && deleteConfirmThreadId === thread.id;
+      deleteConfirmWorkspaceId === workspaceId &&
+      deleteConfirmThreadId === thread.id;
 
     return (
       <ThreadRowItem
@@ -693,40 +674,46 @@ export function ThreadList({
     <ThreadRowStatusProvider threadStatusById={threadStatusById}>
       <div
         ref={threadListRef}
-        className={`thread-list${nested ? " thread-list-nested" : ""}`}
+        className={`thread-list scrollable${nested ? " thread-list-nested" : ""}`}
         data-virtualized={shouldVirtualizeThreads ? "true" : undefined}
       >
         {shouldVirtualizeThreads ? (
           <>
-          <div
-            className="thread-list-virtual-spacer"
-            style={{ height: `${threadRowVirtualizer.getTotalSize()}px` }}
-          >
-            {threadRowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const item = sidebarVirtualItems[virtualRow.index];
-              if (!item) {
-                return null;
-              }
-              const content = renderSidebarVirtualItem(item, rowsBySidebarVirtualKey, renderThreadRow);
-              if (!content) {
-                return null;
-              }
-              return (
-                <div
-                  key={virtualRow.key}
-                  ref={threadRowVirtualizer.measureElement}
-                  data-index={virtualRow.index}
-                  className="thread-list-virtual-row"
-                  style={{ transform: `translateY(${virtualRow.start}px)` }}
-                >
-                  {content}
-                </div>
-              );
-            })}
-          </div>
+            <div
+              className="thread-list-virtual-spacer"
+              style={{ height: `${threadRowVirtualizer.getTotalSize()}px` }}
+            >
+              {threadRowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const item = sidebarVirtualItems[virtualRow.index];
+                if (!item) {
+                  return null;
+                }
+                const content = renderSidebarVirtualItem(
+                  item,
+                  rowsBySidebarVirtualKey,
+                  renderThreadRow,
+                );
+                if (!content) {
+                  return null;
+                }
+                return (
+                  <div
+                    key={virtualRow.key}
+                    ref={threadRowVirtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    className="thread-list-virtual-row"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    {content}
+                  </div>
+                );
+              })}
+            </div>
             {showHiddenExitedSummary && (
               <div className="thread-list-hidden-summary">
-                {t("threads.exitedSessionsHidden", { count: hiddenExitedCount })}
+                {t("threads.exitedSessionsHidden", {
+                  count: hiddenExitedCount,
+                })}
               </div>
             )}
             {totalThreadRoots > visibleThreadRootCount && (
@@ -743,32 +730,35 @@ export function ThreadList({
             {showLoadOlder &&
               nextCursor &&
               (isExpanded || totalThreadRoots <= visibleThreadRootCount) && (
-              <button
-                className="thread-more"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onLoadOlderThreads(workspaceId);
-                }}
-                disabled={isPaging}
-              >
-                {isPaging
-                  ? t("threads.loading")
-                  : totalThreadRoots === 0
-                    ? t("threads.searchOlder")
-                    : t("threads.loadOlder")}
-              </button>
-            )}
+                <button
+                  className="thread-more"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onLoadOlderThreads(workspaceId);
+                  }}
+                  disabled={isPaging}
+                >
+                  {isPaging
+                    ? t("threads.loading")
+                    : totalThreadRoots === 0
+                      ? t("threads.searchOlder")
+                      : t("threads.loadOlder")}
+                </button>
+              )}
           </>
         ) : (
           <>
             {displayedPinnedRows.map((row) => renderThreadRow(row))}
-            {displayedPinnedRows.length > 0 && displayedUnpinnedRows.length > 0 && (
-              <div className="thread-list-separator" aria-hidden="true" />
-            )}
+            {displayedPinnedRows.length > 0 &&
+              displayedUnpinnedRows.length > 0 && (
+                <div className="thread-list-separator" aria-hidden="true" />
+              )}
             {displayedUnpinnedRows.map((row) => renderThreadRow(row))}
             {showHiddenExitedSummary && (
               <div className="thread-list-hidden-summary">
-                {t("threads.exitedSessionsHidden", { count: hiddenExitedCount })}
+                {t("threads.exitedSessionsHidden", {
+                  count: hiddenExitedCount,
+                })}
               </div>
             )}
             {totalThreadRoots > visibleThreadRootCount && (
@@ -785,21 +775,21 @@ export function ThreadList({
             {showLoadOlder &&
               nextCursor &&
               (isExpanded || totalThreadRoots <= visibleThreadRootCount) && (
-              <button
-                className="thread-more"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onLoadOlderThreads(workspaceId);
-                }}
-                disabled={isPaging}
-              >
-                {isPaging
-                  ? t("threads.loading")
-                  : totalThreadRoots === 0
-                    ? t("threads.searchOlder")
-                    : t("threads.loadOlder")}
-              </button>
-            )}
+                <button
+                  className="thread-more"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onLoadOlderThreads(workspaceId);
+                  }}
+                  disabled={isPaging}
+                >
+                  {isPaging
+                    ? t("threads.loading")
+                    : totalThreadRoots === 0
+                      ? t("threads.searchOlder")
+                      : t("threads.loadOlder")}
+                </button>
+              )}
           </>
         )}
       </div>

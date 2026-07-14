@@ -1080,7 +1080,8 @@
 }
 
 .git-history-branch-worktree-diff-files-list::-webkit-scrollbar {
-  width: 9px;
+  width: var(--sb-size);
+  height: var(--sb-size);
 }
 
 .git-history-branch-worktree-diff-files-list::-webkit-scrollbar-track {
@@ -1088,8 +1089,10 @@
 }
 
 .git-history-branch-worktree-diff-files-list::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  border: 2px solid transparent;
+  border-radius: var(--sb-thumb-radius);
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--sb-thumb-inset);
   background-clip: content-box;
   background-color: var(--sb-thumb-color);
 }

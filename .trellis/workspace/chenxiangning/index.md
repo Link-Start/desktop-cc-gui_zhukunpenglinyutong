@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-25.md`
-- **Total Sessions**: 975
-- **Last Active**: 2026-07-12
+- **Total Sessions**: 985
+- **Last Active**: 2026-07-14
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~249 | Active |
+| `journal-25.md` | ~605 | Active |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +53,16 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 985 | 2026-07-14 | 统一对话幕布钉底与回刷时序 | `cb028740` | `feature/v-0.7.2` |
+| 984 | 2026-07-14 | 补齐新增文件 diff 入口 | `8b8b919b` | `feature/v-0.7.2` |
+| 983 | 2026-07-13 | 修复 AppShell composer 冷启动状态回环 | `0c198dc7` | `feature/v-0.7.2` |
+| 982 | 2026-07-13 | 修复 Sidebar ScrollArea React 19 ref 回环 | `28851873` | `feature/v-0.7.2` |
+| 981 | 2026-07-13 | 修复 Messages 自动滚底锚点更新回环 | `b27891b0` | `feature/v-0.7.2` |
+| 980 | 2026-07-13 | 补充 v0.7.2 发布记录并延长 Codex 健康检查超时 | `76c52d81`, `cf17256e` | `feature/v-0.7.2` |
+| 979 | 2026-07-13 | 收口 Web 资源分发与首次启动稳定性 | `1173ae67`, `27c501a7` | `feature/v-0.7.2` |
+| 978 | 2026-07-13 | 根治 Sidebar 首次启动会话行更新回环 | `db663a44` | `feature/v-0.7.2` |
+| 977 | 2026-07-13 | 根治 Tooltip 启动更新回环 | `0d2c5cad` | `feature/v-0.7.2` |
+| 976 | 2026-07-13 | 全局搜索结果分层 | `2577fd6f` | `feature/v-0.7.2` |
 | 975 | 2026-07-12 | 修复 Tooltip 更新回环与会话空白 | `a463a259` | `feature/v-0.7.1` |
 | 974 | 2026-07-11 | 移除 Gemini 和 OpenCode 前端入口 | `be0aa7a2` | `feature/v-0.7.1` |
 | 973 | 2026-07-11 | 校准 OpenSpec 提案并归档完成变更 | `1d7e88fc` | `feature/v-0.7.1` |

@@ -19,6 +19,10 @@ const stopWebServerMock = vi.fn();
 const getDaemonStatusMock = vi.fn();
 const startDaemonMock = vi.fn();
 const stopDaemonMock = vi.fn();
+const getWebAssetsStatusMock = vi.fn();
+const installWebAssetsMock = vi.fn();
+const installWebAssetsFromFileMock = vi.fn();
+const pickWebAssetsArchiveMock = vi.fn();
 
 vi.mock("@/services/tauri", () => ({
   getWebServerStatus: (...args: unknown[]) => getWebServerStatusMock(...args),
@@ -27,6 +31,13 @@ vi.mock("@/services/tauri", () => ({
   getDaemonStatus: (...args: unknown[]) => getDaemonStatusMock(...args),
   startDaemon: (...args: unknown[]) => startDaemonMock(...args),
   stopDaemon: (...args: unknown[]) => stopDaemonMock(...args),
+  getWebAssetsStatus: (...args: unknown[]) =>
+    getWebAssetsStatusMock(...args),
+  installWebAssets: (...args: unknown[]) => installWebAssetsMock(...args),
+  installWebAssetsFromFile: (...args: unknown[]) =>
+    installWebAssetsFromFileMock(...args),
+  pickWebAssetsArchive: (...args: unknown[]) =>
+    pickWebAssetsArchiveMock(...args),
 }));
 
 const baseSettings = {
@@ -57,6 +68,28 @@ describe("WebServiceSettings", () => {
       host: "127.0.0.1:4732",
       lastError: null,
     });
+    getWebAssetsStatusMock.mockResolvedValue({
+      state: "ready",
+      installedVersion: "0.7.2",
+      requiredVersion: "0.7.2",
+      lastError: null,
+      installationRequired: true,
+    });
+    installWebAssetsMock.mockResolvedValue({
+      state: "ready",
+      installedVersion: "0.7.2",
+      requiredVersion: "0.7.2",
+      lastError: null,
+      installationRequired: true,
+    });
+    installWebAssetsFromFileMock.mockResolvedValue({
+      state: "ready",
+      installedVersion: "0.7.2",
+      requiredVersion: "0.7.2",
+      lastError: null,
+      installationRequired: true,
+    });
+    pickWebAssetsArchiveMock.mockResolvedValue(null);
   });
   afterEach(() => {
     cleanup();
@@ -474,5 +507,370 @@ describe("WebServiceSettings", () => {
       expect(getWebServerStatusMock).toHaveBeenCalledTimes(2);
     });
     expect(screen.getByText("settings.webServiceDaemonRunning")).toBeTruthy();
+  });
+
+  it("blocks Web Service start until missing assets are installed", async () => {
+    getWebAssetsStatusMock.mockResolvedValue({
+      state: "missing",
+      installedVersion: null,
+      requiredVersion: "0.7.2",
+      lastError: null,
+      installationRequired: true,
+    });
+    getWebServerStatusMock.mockResolvedValue({
+      running: false,
+      rpcEndpoint: "127.0.0.1:4732",
+      webPort: 3080,
+      addresses: [],
+      webAccessToken: null,
+      lastError: null,
+    });
+
+    render(
+      <WebServiceSettings
+        t={identityTranslator}
+        appSettings={baseSettings}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    await screen.findByText("settings.webServiceAssetsMissing");
+    const startButton = screen.getByRole("button", {
+      name: "settings.webServiceStart",
+    }) as HTMLButtonElement;
+    expect(startButton.disabled).toBe(true);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "settings.webServiceAssetsInstall",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(installWebAssetsMock).toHaveBeenCalledTimes(1);
+      expect(
+        screen.getByText("settings.webServiceAssetsReady"),
+      ).toBeTruthy();
+      expect(startButton.disabled).toBe(false);
+    });
+  });
+
+  it("keeps install recovery available after an assets installation failure", async () => {
+    getWebAssetsStatusMock.mockResolvedValue({
+      state: "failed",
+      installedVersion: null,
+      requiredVersion: "0.7.2",
+      lastError: "checksum mismatch",
+      installationRequired: true,
+    });
+
+    render(
+      <WebServiceSettings
+        t={identityTranslator}
+        appSettings={baseSettings}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    await screen.findByText("settings.webServiceAssetsFailed");
+    expect(screen.getByText("checksum mismatch")).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "settings.webServiceAssetsInstall",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "settings.webServiceAssetsRecheck",
+      }),
+    ).toBeTruthy();
+  });
+
+  it("keeps remote reinstall available when current assets are ready", async () => {
+    render(
+      <WebServiceSettings
+        t={identityTranslator}
+        appSettings={baseSettings}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    const reinstallButton = await screen.findByRole("button", {
+      name: "settings.webServiceAssetsReinstall",
+    });
+    fireEvent.click(reinstallButton);
+
+    await waitFor(() => {
+      expect(installWebAssetsMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("reports a failed reinstall without disabling valid current assets", async () => {
+    installWebAssetsMock.mockResolvedValue({
+      state: "ready",
+      installedVersion: "0.7.2",
+      requiredVersion: "0.7.2",
+      lastError: "failed to download Web assets checksum: 404 Not Found",
+      installationRequired: true,
+    });
+
+    render(
+      <WebServiceSettings
+        t={identityTranslator}
+        appSettings={baseSettings}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "settings.webServiceAssetsReinstall",
+      }),
+    );
+
+    await screen.findByText(
+      "failed to download Web assets checksum: 404 Not Found",
+    );
+    expect(
+      screen.queryByText("settings.webServiceAssetsInstallSuccess"),
+    ).toBeNull();
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "settings.webServiceStart",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+  });
+
+  it("shows button-level progress while rechecking Web assets", async () => {
+    let resolveRecheck: (status: unknown) => void = () => undefined;
+    getWebAssetsStatusMock
+      .mockResolvedValueOnce({
+        state: "ready",
+        installedVersion: "0.7.2",
+        requiredVersion: "0.7.2",
+        lastError: null,
+        installationRequired: true,
+      })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveRecheck = resolve;
+        }),
+      );
+
+    render(
+      <WebServiceSettings
+        t={identityTranslator}
+        appSettings={baseSettings}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "settings.webServiceAssetsRecheck",
+      }),
+    );
+
+    const checkingButton = await screen.findByRole("button", {
+      name: "settings.webServiceAssetsRechecking",
+    });
+    expect(
+      screen.getByText("settings.webServiceAssetsRecheckProgress"),
+    ).toBeTruthy();
+    expect(checkingButton.getAttribute("aria-busy")).toBe("true");
+    expect((checkingButton as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (screen.getByRole("button", {
+        name: "settings.webServiceAssetsReinstall",
+      }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    resolveRecheck({
+      state: "ready",
+      installedVersion: "0.7.2",
+      requiredVersion: "0.7.2",
+      lastError: null,
+      installationRequired: true,
+    });
+
+    const recheckButton = await screen.findByRole("button", {
+      name: "settings.webServiceAssetsRecheck",
+    });
+    expect(
+      screen.getByText("settings.webServiceAssetsRecheckSuccess"),
+    ).toBeTruthy();
+    expect(recheckButton.getAttribute("aria-busy")).toBe("false");
+    expect((recheckButton as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("installs a selected local Web assets package", async () => {
+    getWebAssetsStatusMock.mockResolvedValue({
+      state: "missing",
+      installedVersion: null,
+      requiredVersion: "0.7.2",
+      lastError: null,
+      installationRequired: true,
+    });
+    pickWebAssetsArchiveMock.mockResolvedValue(
+      "/tmp/ccgui-web-assets_0.7.2.zip",
+    );
+
+    render(
+      <WebServiceSettings
+        t={identityTranslator}
+        appSettings={baseSettings}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "settings.webServiceAssetsInstallLocal",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(installWebAssetsFromFileMock).toHaveBeenCalledWith(
+        "/tmp/ccgui-web-assets_0.7.2.zip",
+      );
+      expect(screen.getByText("settings.webServiceAssetsReady")).toBeTruthy();
+      expect(
+        screen.getByText("settings.webServiceAssetsInstallLocalSuccess"),
+      ).toBeTruthy();
+    });
+  });
+
+  it("keeps the current status when local package selection is canceled", async () => {
+    getWebAssetsStatusMock.mockResolvedValue({
+      state: "missing",
+      installedVersion: null,
+      requiredVersion: "0.7.2",
+      lastError: null,
+      installationRequired: true,
+    });
+
+    render(
+      <WebServiceSettings
+        t={identityTranslator}
+        appSettings={baseSettings}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "settings.webServiceAssetsInstallLocal",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(pickWebAssetsArchiveMock).toHaveBeenCalledTimes(1);
+    });
+    expect(installWebAssetsFromFileMock).not.toHaveBeenCalled();
+    expect(screen.getByText("settings.webServiceAssetsMissing")).toBeTruthy();
+    expect(
+      screen.queryByText("settings.webServiceAssetsSelectLocalProgress"),
+    ).toBeNull();
+  });
+
+  it("keeps Web assets installation single-flight", async () => {
+    getWebAssetsStatusMock.mockResolvedValue({
+      state: "missing",
+      installedVersion: null,
+      requiredVersion: "0.7.2",
+      lastError: null,
+      installationRequired: true,
+    });
+    let resolveInstall: (status: unknown) => void = () => undefined;
+    installWebAssetsMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveInstall = resolve;
+      }),
+    );
+
+    render(
+      <WebServiceSettings
+        t={identityTranslator}
+        appSettings={baseSettings}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    const installButton = await screen.findByRole("button", {
+      name: "settings.webServiceAssetsInstall",
+    });
+    fireEvent.click(installButton);
+
+    const installingButton = await screen.findByRole("button", {
+      name: "settings.webServiceAssetsInstalling",
+    });
+    expect((installingButton as HTMLButtonElement).disabled).toBe(true);
+    expect(installingButton.getAttribute("aria-busy")).toBe("true");
+    expect(
+      screen.getByText("settings.webServiceAssetsInstallProgress"),
+    ).toBeTruthy();
+    fireEvent.click(installingButton);
+    expect(installWebAssetsMock).toHaveBeenCalledTimes(1);
+
+    resolveInstall({
+      state: "ready",
+      installedVersion: "0.7.2",
+      requiredVersion: "0.7.2",
+      lastError: null,
+      installationRequired: true,
+    });
+    await screen.findByText("settings.webServiceAssetsReady");
+    expect(
+      screen.getByText("settings.webServiceAssetsInstallSuccess"),
+    ).toBeTruthy();
+  });
+
+  it.each([
+    {
+      name: "remote daemon",
+      rpcEndpoint: "10.0.0.8:4732",
+      installationRequired: true,
+    },
+    {
+      name: "development build",
+      rpcEndpoint: "127.0.0.1:4732",
+      installationRequired: false,
+    },
+  ])("does not gate $name on local managed assets", async (scenario) => {
+    getWebAssetsStatusMock.mockResolvedValue({
+      state: "missing",
+      installedVersion: null,
+      requiredVersion: "0.7.2",
+      lastError: null,
+      installationRequired: scenario.installationRequired,
+    });
+    getWebServerStatusMock.mockResolvedValue({
+      running: false,
+      rpcEndpoint: scenario.rpcEndpoint,
+      webPort: 3080,
+      addresses: [],
+      webAccessToken: null,
+      lastError: null,
+    });
+
+    render(
+      <WebServiceSettings
+        t={identityTranslator}
+        appSettings={{
+          ...baseSettings,
+          remoteBackendHost: scenario.rpcEndpoint,
+        }}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    const startButton = await screen.findByRole("button", {
+      name: "settings.webServiceStart",
+    });
+    await waitFor(() => {
+      expect((startButton as HTMLButtonElement).disabled).toBe(false);
+    });
   });
 });
