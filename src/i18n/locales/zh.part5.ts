@@ -584,6 +584,7 @@ const zhPart5 = {
     title: "终端",
     tabTitle: "终端 {{number}}",
     claudeTuiResumeTitle: "Claude TUI",
+    sendSelectionToComposer: "发送到输入框",
   },
 
   // 更新

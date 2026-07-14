@@ -420,6 +420,7 @@ const enPart2 = {
     loadFilesFailed: "Failed to load file list.",
     mentionFile: "Mention {{name}}",
     mentionInChat: "Mention in chat",
+    sendPathToComposer: "Send path to composer",
     refreshFiles: "Refresh file list",
     retryLoadFiles: "Retry loading",
     selectWorkspaceToSearch: "Select a workspace before searching.",

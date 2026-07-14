@@ -1758,6 +1758,24 @@ export function FileTreePanel({
             await copyPath(relativePath);
           },
         },
+        ...(isRootActionTarget
+          ? []
+          : [
+              {
+                type: "item" as const,
+                id: "send-path-to-composer",
+                label: t("files.sendPathToComposer"),
+                onSelect: () => {
+                  setFileTreeContextMenu(null);
+                  const absolutePath = resolvePath(relativePath);
+                  if (typeof window !== "undefined" && window.handleFilePathFromJava) {
+                    window.handleFilePathFromJava(absolutePath);
+                    return;
+                  }
+                  onInsertText?.(`@${absolutePath}${isFolder ? "" : " "}`);
+                },
+              },
+            ]),
         ...(shouldShowCompareAction
           ? [
               {

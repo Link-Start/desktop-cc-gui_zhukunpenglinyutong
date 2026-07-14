@@ -586,6 +586,7 @@ const enPart5 = {
     title: "Terminal",
     tabTitle: "Terminal {{number}}",
     claudeTuiResumeTitle: "Claude TUI",
+    sendSelectionToComposer: "Send to composer",
   },
 
   // Update

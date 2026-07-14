@@ -2271,6 +2271,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     onNewTerminal: options.onNewTerminal,
     onCloseTerminal: options.onCloseTerminal,
     onResizeTerminal: options.onResizeTerminal,
+    onInsertComposerText: options.onInsertComposerText,
   });
 
   const { debugPanelNode, debugPanelFullNode } = buildDebugPanelNodes({

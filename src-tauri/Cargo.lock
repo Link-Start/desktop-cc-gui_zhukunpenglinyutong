@@ -575,6 +575,7 @@ dependencies = [
  "dirs 5.0.1",
  "encoding_rs",
  "fix-path-env",
+ "flate2",
  "git2",
  "hmac",
  "ignore",

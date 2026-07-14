@@ -397,6 +397,7 @@ const zhPart2 = {
     loadFilesFailed: "文件列表加载失败。",
     mentionFile: "提及 {{name}}",
     mentionInChat: "在聊天中提及",
+    sendPathToComposer: "发送路径到输入框",
     refreshFiles: "刷新文件列表",
     retryLoadFiles: "重试加载",
     selectWorkspaceToSearch: "请先选择一个工作区后再搜索。",

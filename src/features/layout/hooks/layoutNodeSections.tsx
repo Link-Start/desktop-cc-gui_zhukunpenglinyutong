@@ -89,6 +89,7 @@ export type BuildTerminalDockNodeInput = {
   onNewTerminal: () => void;
   onCloseTerminal: (terminalId: string) => void;
   onResizeTerminal: (event: MouseEvent<Element>) => void;
+  onInsertComposerText: (text: string) => void;
 };
 
 export function buildTerminalDockNode({
@@ -101,12 +102,14 @@ export function buildTerminalDockNode({
   onNewTerminal,
   onCloseTerminal,
   onResizeTerminal,
+  onInsertComposerText,
 }: BuildTerminalDockNodeInput): ReactNode {
   const terminalPanelNode = terminalState ? (
     <TerminalPanel
       containerRef={terminalState.containerRef}
       status={terminalState.status}
       message={terminalState.message}
+      onInsertText={onInsertComposerText}
     />
   ) : null;
 
