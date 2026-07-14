@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { normalizeMarkdownMathForMessage } from "../../markdown/markdownMath";
 import { Markdown, prewarmKatexAssets } from "./Markdown";
 
 describe("Markdown math rendering", () => {
@@ -254,6 +255,64 @@ describe("Markdown math rendering", () => {
     await waitFor(() => {
       expect(container.querySelectorAll(".katex-display").length).toBeGreaterThanOrEqual(2);
     });
+  });
+
+  it("preserves ordered-list boundaries for multiline bracket display math", async () => {
+    const value = [
+      "1. 准备两个模板：",
+      "   \\[",
+      "   B_0,\\qquad B_{180}=R_\\pi B_0;",
+      "   \\]",
+      "",
+      "2. 比较两个分数：",
+      "   \\[",
+      "   \\Delta=|s_0-s_{180}|;",
+      "   \\]",
+      "",
+      "后续正文必须保持普通文本。",
+    ].join("\n");
+
+    const { container } = render(
+      <Markdown value={value} className="markdown" codeBlockStyle="message" />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelectorAll(".katex, .katex-error").length).toBeGreaterThan(0);
+    });
+    expect(container.querySelectorAll(".katex-display").length).toBe(2);
+    expect(container.querySelector(".katex-error")).toBeFalsy();
+    expect(container.textContent).toContain("后续正文必须保持普通文本。");
+    expect(
+      Array.from(container.querySelectorAll(".katex")).some((node) =>
+        node.textContent?.includes("后续正文必须保持普通文本。"),
+      ),
+    ).toBe(false);
+  });
+
+  it("does not rewrap parenthesized latex inside bracket display math", async () => {
+    const value = [
+      "\\[",
+      "(\\theta,t_x,t_y),",
+      "\\]",
+    ].join("\n");
+    const normalized = normalizeMarkdownMathForMessage(value);
+
+    expect(normalized).toContain([
+      "$$",
+      "(\\theta,t_x,t_y),",
+      "$$",
+    ].join("\n"));
+    expect(normalized).not.toContain("$\\theta,t_x,t_y$");
+
+    const { container } = render(
+      <Markdown value={value} className="markdown" codeBlockStyle="message" />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector(".katex-display")).toBeTruthy();
+    });
+    expect(container.querySelector(".katex-error")).toBeFalsy();
+    expect(container.querySelector(".katex-display .katex")).toBeTruthy();
   });
 
   it("does not double-wrap existing multi-line display math blocks", async () => {

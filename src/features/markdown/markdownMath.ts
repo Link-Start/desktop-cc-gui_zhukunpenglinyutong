@@ -229,6 +229,51 @@ function hasUnescapedDollar(value: string) {
   return false;
 }
 
+type DollarMathRange = {
+  start: number;
+  end: number;
+};
+
+function collectDollarMathRanges(value: string): DollarMathRange[] {
+  const ranges: DollarMathRange[] = [];
+  let opening: { start: number; delimiterLength: 1 | 2 } | null = null;
+
+  for (let index = 0; index < value.length; index += 1) {
+    if (opening?.delimiterLength === 1 && value[index] === "\n") {
+      opening = null;
+      continue;
+    }
+    if (value[index] !== "$" || !isUnescapedCharacter(value, index)) {
+      continue;
+    }
+
+    const delimiterLength = value[index + 1] === "$" ? 2 : 1;
+    if (!opening) {
+      opening = { start: index, delimiterLength };
+      index += delimiterLength - 1;
+      continue;
+    }
+    if (opening.delimiterLength === 2 && delimiterLength === 1) {
+      continue;
+    }
+    if (opening.delimiterLength === 1 && delimiterLength === 2) {
+      ranges.push({ start: opening.start, end: index + 1 });
+      opening = null;
+      continue;
+    }
+
+    ranges.push({ start: opening.start, end: index + delimiterLength });
+    opening = null;
+    index += delimiterLength - 1;
+  }
+
+  return ranges;
+}
+
+function isInsideDollarMathRange(ranges: DollarMathRange[], index: number) {
+  return ranges.some((range) => index > range.start && index < range.end);
+}
+
 function normalizeMalformedDisplayMathSegments(value: string) {
   if (!value.includes("$$")) {
     return value;
@@ -442,9 +487,112 @@ function normalizeStandaloneMathDisplayLinesWithLineMap(value: string): Markdown
   };
 }
 
-function normalizeCommonMathDelimiters(value: string) {
+type StandaloneBracketDisplayMathDelimiter = {
+  kind: "open" | "close";
+  prefix: string;
+};
+
+function parseStandaloneBracketDisplayMathDelimiterLine(
+  line: string,
+): StandaloneBracketDisplayMathDelimiter | null {
+  const match = /^((?:[ \t]*>[ \t]*)*[ \t]*)(\\+)(\S)[ \t]*$/.exec(line);
+  const delimiter = match?.[3];
+  if (!match || (delimiter !== "[" && delimiter !== "]")) {
+    return null;
+  }
+  return {
+    kind: delimiter === "[" ? "open" : "close",
+    prefix: match[1] ?? "",
+  };
+}
+
+function isStandaloneBracketDisplayMathWrapper(
+  source: string,
+  startIndex: number,
+  endIndex: number,
+) {
+  const openingLineStart = source.lastIndexOf("\n", startIndex - 1) + 1;
+  const openingLineEndCandidate = source.indexOf("\n", startIndex);
+  const openingLineEnd = openingLineEndCandidate >= 0
+    ? openingLineEndCandidate
+    : source.length;
+  const closingLineStart = source.lastIndexOf("\n", endIndex - 1) + 1;
+  const closingLineEndCandidate = source.indexOf("\n", endIndex + 1);
+  const closingLineEnd = closingLineEndCandidate >= 0
+    ? closingLineEndCandidate
+    : source.length;
+  const opener = parseStandaloneBracketDisplayMathDelimiterLine(
+    source.slice(openingLineStart, openingLineEnd).replace(/\r$/, ""),
+  );
+  const closer = parseStandaloneBracketDisplayMathDelimiterLine(
+    source.slice(closingLineStart, closingLineEnd).replace(/\r$/, ""),
+  );
+  return opener?.kind === "open" && closer?.kind === "close";
+}
+
+function normalizeStandaloneBracketDisplayMathBlocks(value: string) {
+  if (!value.includes("\\[")) {
+    return value;
+  }
+
+  const lines = value.split(/\r?\n/);
   let changed = false;
-  let normalized = value.replace(
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const opener = parseStandaloneBracketDisplayMathDelimiterLine(lines[lineIndex] ?? "");
+    if (opener?.kind !== "open") {
+      continue;
+    }
+
+    let closingLineIndex = -1;
+    for (
+      let candidateIndex = lineIndex + 1;
+      candidateIndex < lines.length;
+      candidateIndex += 1
+    ) {
+      const candidate = parseStandaloneBracketDisplayMathDelimiterLine(
+        lines[candidateIndex] ?? "",
+      );
+      if (!candidate) {
+        continue;
+      }
+      if (candidate.kind === "open" || candidate.prefix !== opener.prefix) {
+        break;
+      }
+      closingLineIndex = candidateIndex;
+      break;
+    }
+
+    if (closingLineIndex < 0) {
+      continue;
+    }
+
+    const expression = lines
+      .slice(lineIndex + 1, closingLineIndex)
+      .map((line) =>
+        opener.prefix && line.startsWith(opener.prefix)
+          ? line.slice(opener.prefix.length)
+          : line,
+      )
+      .join("\n")
+      .trim();
+    if (!looksLikeInlineLatexExpression(expression)) {
+      continue;
+    }
+
+    lines[lineIndex] = `${opener.prefix}$$`;
+    lines[closingLineIndex] = `${opener.prefix}$$`;
+    changed = true;
+    lineIndex = closingLineIndex;
+  }
+
+  return changed ? lines.join("\n") : value;
+}
+
+function normalizeCommonMathDelimiters(value: string) {
+  let normalized = normalizeStandaloneBracketDisplayMathBlocks(value);
+  let changed = normalized !== value;
+  normalized = normalized.replace(
     /(\\+)\(\s*([^\n]*?)\s*(\\+)\)/g,
     (
       match,
@@ -486,6 +634,12 @@ function normalizeCommonMathDelimiters(value: string) {
       if (!hasSafeDisplayLatexWrapperBoundary(source, endIndex)) {
         return match;
       }
+      // A standalone pair that survived the line-aware pass is unmatched,
+      // nested, or crosses Markdown containers. Keep it intact instead of
+      // letting this generic fallback flatten its line prefixes.
+      if (isStandaloneBracketDisplayMathWrapper(source, offset, endIndex)) {
+        return match;
+      }
       changed = true;
       if (isInlineMathWrapperInProseContext(source, offset, endIndex)) {
         return `$${expression}$`;
@@ -494,9 +648,13 @@ function normalizeCommonMathDelimiters(value: string) {
     },
   );
 
+  const dollarMathRanges = collectDollarMathRanges(normalized);
   normalized = normalized.replace(
     /[（(]\s*(\\[A-Za-z][^()\n（）]*?)\s*[）)]/g,
     (match, inner: string, offset: number, source: string) => {
+      if (isInsideDollarMathRange(dollarMathRanges, offset)) {
+        return match;
+      }
       if (!looksLikeInlineLatexExpression(inner)) {
         return match;
       }

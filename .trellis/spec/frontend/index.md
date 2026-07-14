@@ -24,6 +24,7 @@
 | [Hook Guidelines](./hook-guidelines.md) | hook 编排、async safety、bridge 调用约束 | Active |
 | [State Management](./state-management.md) | local/global/persistent/runtime state 边界 | Active |
 | [Quality Guidelines](./quality-guidelines.md) | 禁止项、必做项、review checklist | Active |
+| [Markdown Math Normalization Idempotence](./quality-guidelines.md#markdown-math-normalization-must-preserve-container-and-math-range-idempotence) | Markdown container prefix、math-range idempotence 与回归口径 | Active |
 | [CodeMirror State-Coupled Extensions 不可跨越 Lazy Boundary](./quality-guidelines.md#codemirror-state-coupled-extensions-不可跨越-lazy-boundary) | 任何把 `@codemirror/*` state-coupled extension 拆到 lazy 边界后的硬性禁止 | Active |
 | [Type Safety](./type-safety.md) | strict TypeScript 与 boundary mapping 规则 | Active |
 

@@ -45,6 +45,86 @@ describe("fileMarkdownDocument", () => {
     expect(compiled.lineMap[6]).toBe(5);
   });
 
+  it("keeps list container prefixes while normalizing bracket display math", () => {
+    const rawMarkdown = [
+      "1. 模板关系",
+      "   \\[",
+      "   B_0,\\qquad B_{180}=R_\\pi B_0;",
+      "   \\]",
+      "",
+      "target paragraph",
+    ].join("\n");
+    const compiled = compileFileMarkdownDocument({
+      documentKey: "ws:workspace/list-math.md",
+      rawMarkdown,
+      rendererProfile: "file-markdown-github",
+    });
+
+    expect(compiled.body).toContain([
+      "   $$",
+      "   B_0,\\qquad B_{180}=R_\\pi B_0;",
+      "   $$",
+    ].join("\n"));
+    expect(compiled.lineMap).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it("keeps blockquote prefixes while normalizing bracket display math", () => {
+    const compiled = compileFileMarkdownDocument({
+      documentKey: "ws:workspace/quote-math.md",
+      rawMarkdown: [
+        "> 公式如下：",
+        "> \\[",
+        "> \\Delta=|s_0-s_{180}|;",
+        "> \\]",
+      ].join("\n"),
+      rendererProfile: "file-markdown-github",
+    });
+
+    expect(compiled.body).toContain([
+      "> $$",
+      "> \\Delta=|s_0-s_{180}|;",
+      "> $$",
+    ].join("\n"));
+    expect(compiled.lineMap).toEqual([1, 2, 3, 4]);
+  });
+
+  it("leaves unmatched bracket display delimiters unchanged", () => {
+    const rawMarkdown = [
+      "1. 未完成公式",
+      "   \\[",
+      "   x^2+y^2",
+      "",
+      "后续正文。",
+    ].join("\n");
+    const compiled = compileFileMarkdownDocument({
+      documentKey: "ws:workspace/unmatched-math.md",
+      rawMarkdown,
+      rendererProfile: "file-markdown-github",
+    });
+
+    expect(compiled.body).toBe(rawMarkdown);
+    expect(compiled.lineMap).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("does not pair standalone bracket delimiters across containers", () => {
+    const rawMarkdown = [
+      "1. 不兼容边界",
+      "   \\[",
+      "   x^2",
+      "\\]",
+      "",
+      "后续正文。",
+    ].join("\n");
+    const compiled = compileFileMarkdownDocument({
+      documentKey: "ws:workspace/cross-container-math.md",
+      rawMarkdown,
+      rendererProfile: "file-markdown-github",
+    });
+
+    expect(compiled.body).toBe(rawMarkdown);
+    expect(compiled.lineMap).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
     it("selects a bounded render strategy for markdown with many heavy blocks", () => {
     const rawMarkdown = Array.from({ length: 24 }, (_, index) => [
       "```mermaid",

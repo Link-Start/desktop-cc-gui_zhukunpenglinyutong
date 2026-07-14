@@ -334,3 +334,49 @@ import("@codemirror/search").then(({ search }) => setExtension(search({ top: tru
 ### 历史回归
 
 - 2026-06-11 `lazy-file-preview-dependencies` change 中曾尝试将 `@codemirror/search` 拆到 `FileCodeMirrorEditor` lazy 边界后，CI / 单元测试通过，但 Tauri 桌面中 Cmd+F 出现"开了但跳不回原文位置、replace 不同步"等 regression。该 change 已撤回并把 `@codemirror/search` 留在 file panel 启动路径上。详见 `openspec/changes/lazy-file-preview-dependencies/proposal.md` 的 *Withdrawn Optimization* 章节和 `openspec/docs/lazy-state-extension-regression-2026-06-11.md`。
+
+## Markdown Math Normalization MUST Preserve Container and Math-Range Idempotence
+
+### Scope / Trigger
+
+- Trigger：修改 `src/features/markdown/markdownMath.ts`、消息 Markdown math compatibility、file Markdown preview math normalization，或新增 delimiter / prose heuristic。
+- 目标：多 pass normalization 不能破坏 Markdown container boundary，也不能再次改写已经建立的 math range。
+
+### Signatures
+
+- `normalizeMarkdownMathForMessage(value: string): string`
+- `normalizeMarkdownMathForFilePreview(value: string): MarkdownMathNormalizationResult`
+- Shared implementation：`normalizeCommonMathDelimiters(value: string)`
+
+### Contracts
+
+- Normalization MUST operate on render-time copies；不得修改 canonical message、Codex JSONL 或 persisted file source。
+- Standalone `\\[` / `\\]` delimiter lines 只有在 opener / closer 具有相同 whitespace/blockquote prefix 时才可转换。
+- 成功转换 MUST 只替换两条 delimiter lines；formula body 与 source line count MUST remain unchanged。
+- Generic inline/fallback regex MUST NOT flatten unresolved standalone delimiters across list、blockquote 或 root containers。
+- 一旦 `$...$` / `$$...$$` range 已建立，后续 plain-parentheses 或其它 inline heuristic MUST treat its body as immutable math content；禁止 nested dollar wrapping。
+- Rich message 与 file preview MUST reuse the shared pure normalizer；lightweight streaming path MUST remain outside this heavy normalization chain。
+
+### Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| ordered-list standalone display | opener/body/closer 留在同一 list container | delimiter 退回 root，跨段吞入 prose |
+| blockquote/nested prefix | exact delimiter-line prefix preserved | 去掉 `>` 或 continuation indentation |
+| incompatible/unmatched delimiters | candidate unchanged | generic regex 跨 container 配对 |
+| display body starts with `(\\theta,...)` | parentheses 留在 display expression 内 | 转成 `$\\theta...$` 后再塞入 `$$...$$` |
+| file preview normalization | normalized line count 与 `lineMap` 稳定 | 为 delimiter conversion 插入/删除 source lines |
+| lightweight streaming | 保持原 lightweight path | 每个 delta 执行 full math normalization |
+
+### Good / Base / Bad Cases
+
+- Good：line-aware pass 原位把 `   \\[` / `   \\]` 改成 `   $$`，并在 plain-parentheses pass 前 guard established dollar math ranges。
+- Base：root-level `\\[x^2\\]`、inline `\\(x_i\\)` 与既有 `$...$` 继续使用原 compatibility behavior。
+- Bad：全局 `replace(/\\\\\[/, "$$")` 后重排 body，或让 `($\\theta$)` / `$$ $\\theta$ $$` 进入 `remark-math`。
+
+### Tests Required
+
+- Message DOM regression：断言预期 `.katex-display` 数量、`.katex-error` 为 0、后续 prose 不在 `.katex` subtree。
+- Pure normalization assertion：锁定 parenthesized display body 不出现 nested single-dollar delimiters。
+- File preview regression：覆盖 list、blockquote、unmatched/incompatible prefix 与 `lineMap`。
+- 若问题来自真实会话，verification artifact SHOULD 记录匿名化 fixture 或 session UUID replay 结果，但 test MUST NOT 依赖用户 home directory。
