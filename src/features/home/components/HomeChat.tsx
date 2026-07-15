@@ -87,6 +87,7 @@ export function HomeChat({
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId)
     ?? workspaces[0]
     ?? null;
+  const showUsageIndicator = selectedEngine !== "codex";
   const deferredWorkspaceQuery = useDeferredValue(workspaceQuery.trim().toLowerCase());
   const filteredWorkspaces = deferredWorkspaceQuery.length === 0
     ? workspaces
@@ -231,10 +232,11 @@ export function HomeChat({
                 {branchControl?.branchName ? (
                   <ComposerBranchBadge {...branchControl} />
                 ) : null}
-                {/* 首页尚无会话用量，指示器以空态常驻在行末，与对话视图布局一致 */}
-                <div className="composer-branch-row-usage">
-                  <TokenIndicator percentage={null} />
-                </div>
+                {showUsageIndicator ? (
+                  <div className="composer-branch-row-usage">
+                    <TokenIndicator percentage={null} />
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </section>

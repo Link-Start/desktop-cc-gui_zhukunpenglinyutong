@@ -184,7 +184,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       providerModelCatalogs,
       permissionMode = 'bypassPermissions',
       currentProvider = 'claude',
-      providerProfileLabel = null,
       providerAvailability,
       providerVersions,
       providerStatusLabels,
@@ -1692,7 +1691,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               models={models}
               permissionMode={permissionMode}
               currentProvider={currentProvider}
-              providerProfileLabel={providerProfileLabel}
               workspaceId={workspaceId}
               providerAvailability={providerAvailability}
               providerVersions={providerVersions}

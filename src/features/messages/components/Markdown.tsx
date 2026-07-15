@@ -50,7 +50,6 @@ import {
 } from "../../../utils/markdownCodeRegions";
 import { highlightLine } from "../../../utils/syntax";
 import { CodeBlockCopyButton, CodeBlockLanguageBadge } from "./codeBlockLanguageIcon";
-import { detectCodexLeadMarker, type CodexLeadMarkerConfig } from "../constants/codexLeadMarkers";
 import { parseToolCallBlocks, type Block } from "../utils/toolCallBlocks";
 import {
   createMessageMarkdownOptionsHash,
@@ -96,7 +95,6 @@ type MarkdownProps = {
   progressiveReveal?: boolean;
   progressiveRevealStepMs?: number;
   progressiveRevealChunkChars?: number;
-  codexLeadMarkerConfig?: CodexLeadMarkerConfig;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
   onRenderedValueChange?: (value: string) => void;
@@ -167,7 +165,6 @@ function areMarkdownPropsEqual(prev: MarkdownProps, next: MarkdownProps) {
     prev.progressiveReveal === next.progressiveReveal &&
     prev.progressiveRevealStepMs === next.progressiveRevealStepMs &&
     prev.progressiveRevealChunkChars === next.progressiveRevealChunkChars &&
-    prev.codexLeadMarkerConfig === next.codexLeadMarkerConfig &&
     prev.onOpenFileLink === next.onOpenFileLink &&
     prev.onOpenFileLinkMenu === next.onOpenFileLinkMenu &&
     prev.onRenderedValueChange === next.onRenderedValueChange &&
@@ -693,19 +690,6 @@ function MermaidFallback() {
   );
 }
 
-function flattenNodeText(node: ReactNode): string {
-  if (typeof node === "string" || typeof node === "number") {
-    return String(node);
-  }
-  if (Array.isArray(node)) {
-    return node.map(flattenNodeText).join("");
-  }
-  if (isValidElement<{ children?: ReactNode }>(node)) {
-    return flattenNodeText(node.props?.children);
-  }
-  return "";
-}
-
 function countMarkdownTableRowsFromNode(node: unknown): number {
   if (!node || typeof node !== "object") {
     return 0;
@@ -868,7 +852,6 @@ export const Markdown = memo(function Markdown({
   progressiveReveal = false,
   progressiveRevealStepMs = PROGRESSIVE_REVEAL_STEP_MS,
   progressiveRevealChunkChars = PROGRESSIVE_REVEAL_CHUNK_CHARS,
-  codexLeadMarkerConfig,
   onOpenFileLink,
   onOpenFileLinkMenu,
   onRenderedValueChange,
@@ -1195,7 +1178,6 @@ export const Markdown = memo(function Markdown({
   // Memoize ReactMarkdown components to prevent full re-initialization on every render.
   // This is critical: when components/plugins change reference, ReactMarkdown
   // discards its entire internal HAST tree and re-parses from scratch.
-  const enableCodexLeadEnhancement = className?.includes("markdown-codex-canvas") ?? false;
   const components = useMemo<FullMarkdownComponents>(() => {
     const result: FullMarkdownComponents = {
       a: ({ href, children }) => {
@@ -1304,22 +1286,6 @@ export const Markdown = memo(function Markdown({
       },
     };
 
-    if (enableCodexLeadEnhancement) {
-      result.p = ({ children }) => {
-        const plainText = flattenNodeText(children);
-        const lead = detectCodexLeadMarker(plainText, codexLeadMarkerConfig);
-        if (!lead) {
-          return <p>{children}</p>;
-        }
-        return (
-          <p className={`markdown-lead-paragraph markdown-lead-${lead.tone}`}>
-            <span className="markdown-lead-icon" aria-hidden>{lead.icon}</span>
-            <span className="markdown-lead-text">{children}</span>
-          </p>
-        );
-      };
-    }
-
     if (codeBlockStyle === "message") {
       result.pre = ({ node, children }) => (
         <PreBlock
@@ -1348,8 +1314,6 @@ export const Markdown = memo(function Markdown({
   }, [
     handleFileLinkClick,
     handleFileLinkContextMenu,
-    enableCodexLeadEnhancement,
-    codexLeadMarkerConfig,
     codeBlockStyle,
     codeBlockCopyUseModifier,
     onOpenFileLink,
@@ -1362,7 +1326,6 @@ export const Markdown = memo(function Markdown({
   // 数学检测跟随实际渲染内容（KaTeX 只为渲染出的内容加载）。
   const hasMathContent = useMemo(() => detectMathContent(renderValue), [renderValue]);
   const markdownPrecomputeOptionsHash = useMemo(() => createMessageMarkdownOptionsHash({
-    codexLeadEnhanced: enableCodexLeadEnhancement,
     codeBlockStyle,
     hasFileLinkHandlers: Boolean(onOpenFileLink || onOpenFileLinkMenu),
     hasMathContent,
@@ -1370,7 +1333,6 @@ export const Markdown = memo(function Markdown({
     softBreaks,
   }), [
     codeBlockStyle,
-    enableCodexLeadEnhancement,
     hasMathContent,
     onOpenFileLink,
     onOpenFileLinkMenu,

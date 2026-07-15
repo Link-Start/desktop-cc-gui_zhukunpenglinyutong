@@ -70,6 +70,7 @@ describe("HomeChat", () => {
     expect(markup).toContain("Composer node");
     expect(markup).toContain("home-chat-engine-mark");
     expect(markup).toContain("home-chat-composer-meta");
+    expect(markup).toContain("composer-branch-row-usage");
   });
 
   it("keeps the composer mounted inside the dedicated host container", () => {
@@ -141,6 +142,18 @@ describe("HomeChat", () => {
     expect(markup).not.toContain("What the agents are doing");
     expect(markup).not.toContain("home-chat-run-card");
     expect(markup).not.toContain("home-chat-run-detail");
+  });
+
+  it("hides the home usage indicator for Codex but keeps it for Claude", () => {
+    const codexMarkup = renderToStaticMarkup(
+      <HomeChat {...baseProps} selectedEngine="codex" />,
+    );
+    const claudeMarkup = renderToStaticMarkup(
+      <HomeChat {...baseProps} selectedEngine="claude" />,
+    );
+
+    expect(codexMarkup).not.toContain("composer-branch-row-usage");
+    expect(claudeMarkup).toContain("composer-branch-row-usage");
   });
 
   it("does not render recent conversations on the home page", () => {

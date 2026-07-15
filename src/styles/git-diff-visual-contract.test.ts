@@ -14,6 +14,13 @@ function getCssRuleBlock(selector: string): string {
 }
 
 describe("git diff visual contract", () => {
+  it("keeps the diff file list vertically scrollable without horizontal overflow", () => {
+    const diffListRule = getCssRuleBlock(".diff-list");
+
+    expect(diffListRule).toContain("overflow-x: hidden");
+    expect(diffListRule).toContain("overflow-y: auto");
+  });
+
   it("keeps the manual refresh action hidden until the section header is active", () => {
     const rootActionRule = getCssRuleBlock(".diff-tree-summary-root-action");
 

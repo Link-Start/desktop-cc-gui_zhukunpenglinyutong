@@ -416,11 +416,34 @@
 
 .workspace-children {
   position: relative;
+  display: grid;
+  grid-template-rows: 1fr;
+  margin: 2px 0 0;
+  padding-left: 0;
+  opacity: 1;
+  transform: translateY(0);
+  overflow: hidden;
+  transition:
+    grid-template-rows 0.18s cubic-bezier(0.2, 0, 0, 1),
+    opacity 0.16s ease,
+    transform 0.18s cubic-bezier(0.2, 0, 0, 1),
+    margin-top 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.workspace-children.is-collapsed {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+}
+
+.workspace-children-inner {
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  margin: 2px 0 0;
-  padding-left: 0;
 }
 
 .workspace-children::before {
@@ -578,6 +601,74 @@
 .workspace-folder-btn:hover,
 .workspace-folder-btn[aria-expanded="true"] {
   color: var(--text-strong);
+}
+
+.workspace-collapse-toggle {
+  position: relative;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.workspace-collapse-toggle:hover,
+.workspace-collapse-toggle:focus-visible {
+  background: var(--surface-hover-strong);
+  color: var(--text-strong);
+}
+
+.workspace-collapse-toggle.is-session-running {
+  color: inherit;
+}
+
+.workspace-collapse-toggle:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--border-accent) 62%, transparent);
+  outline-offset: 1px;
+}
+
+.workspace-collapse-toggle-folder-icon,
+.workspace-collapse-toggle-affordance-icon {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+
+.workspace-collapse-toggle-folder-icon {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.workspace-collapse-toggle-affordance-icon {
+  opacity: 0;
+  transform: scale(0.88);
+}
+
+.workspace-row:hover .workspace-collapse-toggle-folder-icon,
+.workspace-collapse-toggle:focus-visible .workspace-collapse-toggle-folder-icon {
+  opacity: 0;
+  transform: scale(0.88);
+}
+
+.workspace-row:hover .workspace-collapse-toggle-affordance-icon,
+.workspace-collapse-toggle:focus-visible .workspace-collapse-toggle-affordance-icon {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .workspace-exited-toggle {

@@ -943,14 +943,14 @@
   margin-top: 1.6em;
 }
 
-/* shadcn typography blockquote: border-l-2 pl-6 italic（保持正文色，不变灰） */
+/* 普通消息引用按 Codex 风格保持正文流，不额外渲染 quote rail/callout。 */
 .markdown :where(blockquote) {
-  padding-left: 1.5em;
-  border-left: 2px solid var(--border);
+  padding-left: 0;
+  border-left: 0;
   background: transparent;
   border-radius: 0;
   color: inherit;
-  font-style: italic;
+  font-style: normal;
 }
 
 .markdown .markdown-alert-label {
@@ -1022,67 +1022,6 @@
 .markdown .markdown-alert-label-caution {
   color: #b91c1c;
   background: color-mix(in srgb, #dc2626 12%, transparent);
-}
-
-.message.assistant .markdown-codex-canvas .markdown-lead-paragraph {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 6px 0;
-  padding: 4px 0 4px 10px;
-  border: none;
-  border-left: 3px solid var(--border-strong);
-  border-radius: 0;
-  background: color-mix(in srgb, var(--surface-command) 56%, transparent);
-  box-shadow: none;
-}
-
-.message.assistant .markdown-codex-canvas .markdown-lead-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: auto;
-  height: auto;
-  border-radius: 0;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-strongest, var(--text-stronger));
-  background: transparent;
-  border: none;
-  flex: 0 0 auto;
-}
-
-.message.assistant .markdown-codex-canvas .markdown-lead-text {
-  font-weight: 650;
-  letter-spacing: 0.01em;
-}
-
-.message.assistant .markdown-codex-canvas .markdown-lead-plan {
-  border-left-color: color-mix(in srgb, #2563eb 55%, var(--border-strong));
-}
-
-.message.assistant .markdown-codex-canvas .markdown-lead-result {
-  border-left-color: color-mix(in srgb, #16a34a 58%, var(--border-strong));
-}
-
-.message.assistant .markdown-codex-canvas .markdown-lead-verify {
-  border-left-color: color-mix(in srgb, #0ea5e9 55%, var(--border-strong));
-}
-
-.message.assistant .markdown-codex-canvas .markdown-lead-summary {
-  border-left-color: color-mix(in srgb, #7c3aed 45%, var(--border-strong));
-}
-
-.message.assistant .markdown-codex-canvas .markdown-lead-risk {
-  border-left-color: color-mix(in srgb, #f59e0b 58%, var(--border-strong));
-}
-
-.message.assistant .markdown-codex-canvas .markdown-lead-decision {
-  border-left-color: color-mix(in srgb, #0ea5e9 52%, var(--border-strong));
-}
-
-.message.assistant .markdown-codex-canvas .markdown-lead-next {
-  border-left-color: color-mix(in srgb, #2563eb 56%, var(--border-strong));
 }
 
 /* shadcn typography table: 全框线（均匀）+ 偶数行 even:bg-muted 斑马纹 + bold 表头

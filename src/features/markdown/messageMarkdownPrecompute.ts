@@ -34,7 +34,6 @@ export type MessageMarkdownRendererOptions = {
   softBreaks: boolean;
   codeBlockStyle: "default" | "message";
   preserveFormatting: boolean;
-  codexLeadEnhanced: boolean;
   hasFileLinkHandlers: boolean;
   hasMathContent: boolean;
 };
@@ -99,7 +98,6 @@ let nextRequestOrdinal = 1;
 
 export function createMessageMarkdownOptionsHash(options: MessageMarkdownRendererOptions) {
   return hashStableString(JSON.stringify({
-    codexLeadEnhanced: options.codexLeadEnhanced,
     codeBlockStyle: options.codeBlockStyle,
     hasFileLinkHandlers: options.hasFileLinkHandlers,
     hasMathContent: options.hasMathContent,

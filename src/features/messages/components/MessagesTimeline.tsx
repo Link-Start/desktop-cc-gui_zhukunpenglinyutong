@@ -2234,7 +2234,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           </div>
         )}
         {shouldVirtualizeTimeline ? renderVirtualProjectionRows() : renderStaticProjectionRows()}
-        {sessionFileChangesSummary && !hasPendingUserTurn && (
+        {sessionFileChangesSummary && !isWorking && !hasPendingUserTurn && (
           <div className="messages-session-files-changed">
             <TurnFilesChangedCard summary={sessionFileChangesSummary} />
           </div>

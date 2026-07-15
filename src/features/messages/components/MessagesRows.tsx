@@ -591,9 +591,13 @@ export const WorkingIndicator = memo(function WorkingIndicator({
   );
   const supportsStreamActivityPhaseFx =
     activeEngine === "codex" || activeEngine === "claude" || activeEngine === "gemini";
+  const visualStreamActivityPhase =
+    activeEngine === "codex" && streamActivityPhase === "ingress"
+      ? "waiting"
+      : streamActivityPhase;
   const streamPhaseClass =
-    supportsStreamActivityPhaseFx && streamActivityPhase !== "idle"
-      ? ` is-${streamActivityPhase}`
+    supportsStreamActivityPhaseFx && visualStreamActivityPhase !== "idle"
+      ? ` is-${visualStreamActivityPhase}`
       : "";
   const nonStreamingHintText = t("messages.nonStreamingHint");
   const resolvedNonStreamingHint =
@@ -1062,20 +1066,13 @@ export const MessageRow = memo(function MessageRow({
     });
     deferredImageObjectUrlsRef.current.clear();
   }, [revokeTrackedDeferredImageState]);
-  const useCodexCanvasMarkdown = presentationProfile
-    ? presentationProfile.codexCanvasMarkdown
-    : activeEngine === "codex";
   const useStagedMarkdownThrottle = shouldUseStagedStreamingMarkdown(
     activeEngine,
     presentationProfile,
   );
-  const markdownClassName =
-    item.role === "assistant" && useCodexCanvasMarkdown
-      ? "markdown markdown-codex-canvas"
-      : "markdown";
   const resolvedMarkdownClassName = isStreaming
-    ? `${markdownClassName} markdown-live-streaming`
-    : markdownClassName;
+    ? "markdown markdown-live-streaming"
+    : "markdown";
   const streamingMarkdownComplexityCacheRef = useRef<{
     value: string;
     complexity: StreamingMarkdownComplexity;

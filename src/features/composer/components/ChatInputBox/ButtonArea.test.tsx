@@ -179,31 +179,6 @@ describe("ButtonArea custom model storage refresh", () => {
     expect(screen.getByTestId("reasoning-select")).toBeTruthy();
   });
 
-  it("renders the active provider tag before the send control", () => {
-    const { container } = render(
-      <ButtonArea
-        currentProvider="codex"
-        providerProfileLabel="codex-tui/openai"
-        models={[]}
-        selectedModel=""
-        hasInputContent
-        onSubmit={vi.fn()}
-        shortcutActions={[]}
-      />,
-    );
-
-    const providerTag = container.querySelector(".button-area-provider-tag");
-    const sendButton = container.querySelector(".submit-button");
-
-    expect(providerTag).toBeTruthy();
-    expect(sendButton).toBeTruthy();
-    if (!providerTag || !sendButton) {
-      throw new Error("provider tag and send button should render");
-    }
-    expect(providerTag.textContent).toBe("codex-tui/openai");
-    expect(providerTag.compareDocumentPosition(sendButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
   it("renders the status panel toggle inside the tool menu", () => {
     const onToggleStatusPanel = vi.fn();
 

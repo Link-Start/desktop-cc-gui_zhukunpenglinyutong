@@ -869,6 +869,7 @@ button.diff-section-indicator:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-x: hidden;
   overflow-y: auto;
   flex: 1;
   padding-right: 2px;

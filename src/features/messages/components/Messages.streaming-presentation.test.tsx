@@ -3,6 +3,7 @@ import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../types";
 import type { GroupedEntry } from "../utils/groupToolItems";
+import type { TurnFileChangesSummary } from "../utils/turnFileChanges";
 
 const timelineSnapshots = vi.hoisted(() => ({
   entries: [] as Array<{
@@ -12,6 +13,8 @@ const timelineSnapshots = vi.hoisted(() => ({
     liveAssistantIsFinal: boolean | null;
     liveAssistantText: string | null;
     presentationMode: string;
+    sessionFileChangesSummary: TurnFileChangesSummary | null;
+    isWorking: boolean;
   }>,
 }));
 
@@ -31,6 +34,8 @@ vi.mock("./MessagesTimeline", () => ({
     threadId: string | null;
     liveAssistantItem: Extract<ConversationItem, { kind: "message" }> | null;
     presentationMode: string;
+    sessionFileChangesSummary: TurnFileChangesSummary | null;
+    isWorking: boolean;
   }) => {
     timelineSnapshots.entries.push({
       assistantFinalBoundaryIds: Array.from(props.assistantFinalBoundarySet),
@@ -39,6 +44,8 @@ vi.mock("./MessagesTimeline", () => ({
       liveAssistantIsFinal: props.liveAssistantItem?.isFinal ?? null,
       liveAssistantText: props.liveAssistantItem?.text ?? null,
       presentationMode: props.presentationMode,
+      sessionFileChangesSummary: props.sessionFileChangesSummary,
+      isWorking: props.isWorking,
     });
     return <div data-testid="messages-timeline-probe" />;
   },
@@ -286,5 +293,78 @@ describe("Messages streaming presentation contract", () => {
     expect(
       expandedStreamingSnapshot?.renderedTexts.some((text) => text === "历史回复 1"),
     ).toBe(false);
+  });
+
+  it("keeps the session file-change summary gated while Codex is still working", async () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "更新文件",
+      },
+      {
+        id: "tool-file-change-1",
+        kind: "tool",
+        toolType: "fileChange",
+        title: "File changes",
+        detail: "",
+        status: "completed",
+        changes: [
+          {
+            path: "src/App.tsx",
+            kind: "modified",
+            diff: "@@ -1,1 +1,1 @@\n-old\n+new",
+          },
+        ],
+      },
+      {
+        id: "assistant-1",
+        kind: "message",
+        role: "assistant",
+        text: "还在总结",
+        isFinal: true,
+      },
+    ];
+
+    const view = render(
+      <Messages
+        items={items}
+        threadId="thread-codex-file-summary"
+        workspaceId="ws-1"
+        isThinking
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        timelineSnapshots.entries.some(
+          (entry) => entry.isWorking && entry.sessionFileChangesSummary !== null,
+        ),
+      ).toBe(true);
+    });
+
+    view.rerender(
+      <Messages
+        items={items}
+        threadId="thread-codex-file-summary"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        timelineSnapshots.entries.some(
+          (entry) => !entry.isWorking && entry.sessionFileChangesSummary !== null,
+        ),
+      ).toBe(true);
+    });
   });
 });

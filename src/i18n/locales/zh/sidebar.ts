@@ -29,6 +29,8 @@ const sidebar = {
     sessionActionsGroup: "新建会话",
     newSessionInFolder: "在 {{name}} 中新建会话",
     activateWorkspace: "切到主区",
+    collapseWorkspace: "收起工作区会话",
+    expandWorkspace: "展开工作区会话",
     workspaceActionsGroup: "工作区操作",
     setWorkspaceAlias: "设置别名",
     workspaceAliasPrompt:

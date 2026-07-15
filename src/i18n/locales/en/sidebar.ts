@@ -29,6 +29,8 @@ const sidebar = {
     sessionActionsGroup: "New Session",
     newSessionInFolder: "New session in {{name}}",
     activateWorkspace: "Open in main panel",
+    collapseWorkspace: "Collapse workspace sessions",
+    expandWorkspace: "Expand workspace sessions",
     workspaceActionsGroup: "Workspace Actions",
     setWorkspaceAlias: "Set alias",
     workspaceAliasPrompt:

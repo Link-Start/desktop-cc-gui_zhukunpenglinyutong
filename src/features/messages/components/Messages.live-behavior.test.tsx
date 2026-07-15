@@ -537,7 +537,7 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").not.toContain("echo done");
   });
 
-  it.each(["codex", "claude", "gemini"] as const)(
+  it.each(["claude", "gemini"] as const)(
     "switches %s working spinner between waiting and ingress phases",
     (activeEngine) => {
       vi.useFakeTimers();
@@ -608,6 +608,69 @@ describe("Messages live behavior", () => {
       }
     },
   );
+
+  it("keeps Codex working spinner visually aligned with Claude Code baseline", () => {
+    vi.useFakeTimers();
+    try {
+      const baseItems: ConversationItem[] = [
+        {
+          id: "user-codex-stream-phase",
+          kind: "message",
+          role: "user",
+          text: "继续输出",
+        },
+        {
+          id: "assistant-codex-stream-phase",
+          kind: "message",
+          role: "assistant",
+          text: "",
+        },
+      ];
+
+      const { container, rerender } = render(
+        <Messages
+          items={baseItems}
+          threadId="thread-1"
+          workspaceId="ws-1"
+          isThinking
+          processingStartedAt={Date.now() - 1_000}
+          activeEngine="codex"
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
+
+      const waitingNode = container.querySelector(".working");
+      expect(waitingNode?.className ?? "").toContain("is-waiting");
+
+      rerender(
+        <Messages
+          items={[
+            baseItems[0]!,
+            {
+              id: "assistant-codex-stream-phase",
+              kind: "message",
+              role: "assistant",
+              text: "增量片段",
+            },
+          ]}
+          threadId="thread-1"
+          workspaceId="ws-1"
+          isThinking
+          processingStartedAt={Date.now() - 1_000}
+          activeEngine="codex"
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
+
+      const stillWaitingNode = container.querySelector(".working");
+      expect(stillWaitingNode?.className ?? "").toContain("is-waiting");
+      expect(stillWaitingNode?.className ?? "").not.toContain("is-ingress");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it("shows a working indicator while context compaction is in progress", () => {
     const { container } = render(
@@ -735,7 +798,72 @@ describe("Messages live behavior", () => {
     );
   });
 
-  it.each(["codex", "claude", "gemini"] as const)(
+  it("defers the Codex session file-change summary until the turn is no longer working", async () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-codex-file-summary",
+        kind: "message",
+        role: "user",
+        text: "更新文件",
+      },
+      {
+        id: "tool-codex-file-summary",
+        kind: "tool",
+        toolType: "fileChange",
+        title: "File changes",
+        detail: "",
+        status: "completed",
+        changes: [
+          {
+            path: "src/App.tsx",
+            kind: "modified",
+            diff: "@@ -1,1 +1,1 @@\n-old\n+new",
+          },
+        ],
+      },
+      {
+        id: "assistant-codex-file-summary",
+        kind: "message",
+        role: "assistant",
+        text: "生产代码已改，继续验证。",
+        isFinal: true,
+      },
+    ];
+
+    const view = render(
+      <Messages
+        items={items}
+        threadId="thread-codex-file-summary"
+        workspaceId="ws-1"
+        isThinking
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("messages.turnFilesChanged.title")).toBeNull();
+    });
+
+    view.rerender(
+      <Messages
+        items={items}
+        threadId="thread-codex-file-summary"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("messages.turnFilesChanged.title")).toBeTruthy();
+    });
+  });
+
+  it.each(["claude", "gemini"] as const)(
     "detects ingress for %s even when chunk length is unchanged",
     (activeEngine) => {
       vi.useFakeTimers();

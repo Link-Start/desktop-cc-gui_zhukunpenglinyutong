@@ -52,6 +52,10 @@ export type WorkspaceMenuIconKind =
   | "engine-gemini"
   | "new-shared"
   | "alias"
+  | "activate"
+  | "exited-sessions-hidden"
+  | "exited-sessions-visible"
+  | "new-folder"
   | "reload"
   | "remove"
   | "new-worktree"
@@ -142,6 +146,11 @@ type SidebarMenuHandlers = {
     sessionId: string;
   }) => void;
   onReloadWorkspaceThreads: (workspaceId: string) => void;
+  onActivateWorkspace?: (workspaceId: string) => void;
+  onCreateSessionFolder?: (workspaceId: string) => void;
+  onToggleExitedSessions?: (workspacePath: string) => void;
+  shouldShowExitedSessionsToggle?: (workspace: WorkspaceInfo) => boolean;
+  isExitedSessionsHidden?: (workspacePath: string) => boolean;
   onDeleteWorkspace: (workspaceId: string) => void;
   onDeleteWorktree: (workspaceId: string) => void;
   onRenameWorkspaceAlias: (workspace: WorkspaceInfo) => void;
@@ -190,6 +199,11 @@ export function useSidebarMenus({
   onOpenThreadFolderPicker,
   onOpenClaudeTui,
   onReloadWorkspaceThreads,
+  onActivateWorkspace,
+  onCreateSessionFolder,
+  onToggleExitedSessions,
+  shouldShowExitedSessionsToggle,
+  isExitedSessionsHidden,
   onDeleteWorkspace,
   onDeleteWorktree,
   onRenameWorkspaceAlias,
@@ -978,6 +992,10 @@ export function useSidebarMenus({
       event.stopPropagation();
       const workspaceId = workspace.id;
       const { x, y } = resolveWorkspaceMenuPosition(event);
+      const hideExitedSessions = isExitedSessionsHidden?.(workspace.path) ?? false;
+      const showExitedSessionsToggle =
+        Boolean(onToggleExitedSessions) &&
+        (shouldShowExitedSessionsToggle?.(workspace) ?? false);
 
       const groups: WorkspaceMenuGroup[] = [
         buildSessionMenuGroup(workspace),
@@ -985,12 +1003,46 @@ export function useSidebarMenus({
           id: "workspace-actions",
           label: t("sidebar.workspaceActionsGroup"),
           actions: [
+            ...(onActivateWorkspace
+              ? [
+                  {
+                    id: "activate-workspace",
+                    label: t("sidebar.activateWorkspace"),
+                    iconKind: "activate" as const,
+                    onSelect: () => onActivateWorkspace(workspaceId),
+                  },
+                ]
+              : []),
             {
               id: "reload-threads",
               label: t("threads.reloadThreads"),
               iconKind: "reload",
               onSelect: () => onReloadWorkspaceThreads(workspaceId),
             },
+            ...(showExitedSessionsToggle && onToggleExitedSessions
+              ? [
+                  {
+                    id: "toggle-exited-sessions",
+                    label: hideExitedSessions
+                      ? t("threads.showExitedSessions")
+                      : t("threads.hideExitedSessions"),
+                    iconKind: hideExitedSessions
+                      ? ("exited-sessions-hidden" as const)
+                      : ("exited-sessions-visible" as const),
+                    onSelect: () => onToggleExitedSessions(workspace.path),
+                  },
+                ]
+              : []),
+            ...(onCreateSessionFolder
+              ? [
+                  {
+                    id: "create-session-folder",
+                    label: t("sidebar.newSessionFolder"),
+                    iconKind: "new-folder" as const,
+                    onSelect: () => onCreateSessionFolder(workspaceId),
+                  },
+                ]
+              : []),
             {
               id: "rename-workspace-alias",
               label: t("sidebar.setWorkspaceAlias"),
@@ -1034,6 +1086,11 @@ export function useSidebarMenus({
       buildSessionMenuGroup,
       resolveWorkspaceMenuPosition,
       onReloadWorkspaceThreads,
+      onActivateWorkspace,
+      onCreateSessionFolder,
+      onToggleExitedSessions,
+      shouldShowExitedSessionsToggle,
+      isExitedSessionsHidden,
       onDeleteWorkspace,
       onRenameWorkspaceAlias,
       onAddWorktreeAgent,

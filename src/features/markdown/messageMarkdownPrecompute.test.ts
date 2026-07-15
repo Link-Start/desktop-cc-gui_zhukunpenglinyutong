@@ -16,7 +16,6 @@ const rendererOptions: MessageMarkdownRendererOptions = {
   softBreaks: false,
   codeBlockStyle: "message",
   preserveFormatting: false,
-  codexLeadEnhanced: false,
   hasFileLinkHandlers: true,
   hasMathContent: false,
 };

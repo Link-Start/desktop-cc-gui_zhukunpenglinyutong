@@ -908,8 +908,8 @@
   --composer-submit-button-bg-hover: #1d4ed8;
   --composer-submit-button-shadow: rgba(37, 99, 235, 0.28);
   --composer-submit-button-shadow-hover: rgba(37, 99, 235, 0.36);
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   background: var(--composer-submit-button-bg);
   color: #ffffff;
   box-shadow: 0 8px 22px var(--composer-submit-button-shadow);

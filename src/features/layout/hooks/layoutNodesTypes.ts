@@ -284,7 +284,7 @@ export type LayoutNodesFlatOptions = {
   findInFileShortcut: string | null;
   toggleGitDiffListViewShortcut: string | null;
   onOpenSpecHub: () => void;
-  onOpenWorkspaceHome: () => void;
+  onOpenWorkspaceHome: (workspaceId?: string) => void;
   updaterState: UpdateState;
   onUpdate: () => void;
   onDismissUpdate: () => void;

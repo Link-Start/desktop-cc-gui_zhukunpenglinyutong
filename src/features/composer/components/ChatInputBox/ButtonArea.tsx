@@ -54,7 +54,6 @@ export const ButtonArea = ({
   streamActivityPhase = 'idle',
   permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
-  providerProfileLabel = null,
   providerAvailability,
   providerVersions,
   reasoningEffort = null,
@@ -340,11 +339,6 @@ export const ButtonArea = ({
             <div className="button-area-main-surface">
               {mainSurface}
             </div>
-          ) : null}
-          {providerProfileLabel ? (
-            <span className="button-area-provider-tag" title={providerProfileLabel}>
-              {providerProfileLabel}
-            </span>
           ) : null}
           {isLoading ? (
             <Button

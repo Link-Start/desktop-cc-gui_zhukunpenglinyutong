@@ -129,6 +129,16 @@ describe("client typography font-size coverage", () => {
     );
   });
 
+  it("keeps ordinary message blockquotes visually plain", () => {
+    const blockquoteRule = getCssRuleBlock(messagesCss, ".markdown :where(blockquote)");
+    const alertRule = getCssRuleBlock(messagesCss, ".markdown :where(blockquote.markdown-alert)");
+
+    expect(blockquoteRule).toContain("padding-left: 0;");
+    expect(blockquoteRule).toContain("border-left: 0;");
+    expect(blockquoteRule).toContain("font-style: normal;");
+    expect(alertRule).toContain("border: 1px solid var(--border);");
+  });
+
   it("routes session activity readable text through client typography tokens", () => {
     expect(getCssRuleBlock(sessionActivityCss, ".session-activity-panel")).toContain(
       "--session-activity-content-font-size: var(--client-content-font-size, 12px);",

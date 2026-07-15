@@ -37,7 +37,9 @@ vi.mock("react-i18next", () => ({
         "sidebar.codexProviderDiskConfigLabel": "Disk config",
         "sidebar.codexProviderCustomConfigLabel": "Custom config",
         "sidebar.workspaceActionsGroup": "Workspace actions",
+        "sidebar.activateWorkspace": "Open in main panel",
         "sidebar.setWorkspaceAlias": "Set alias",
+        "sidebar.newSessionFolder": "New folder",
         "workspace.engineClaudeCode": "Claude Code",
         "workspace.engineCodex": "Codex",
         "workspace.engineOpenCode": "OpenCode",
@@ -146,6 +148,11 @@ function createHandlers() {
     onOpenThreadFolderPicker: vi.fn(),
     onOpenClaudeTui: vi.fn(),
     onReloadWorkspaceThreads: vi.fn(),
+    onActivateWorkspace: vi.fn(),
+    onCreateSessionFolder: vi.fn(),
+    onToggleExitedSessions: vi.fn(),
+    shouldShowExitedSessionsToggle: vi.fn(() => true),
+    isExitedSessionsHidden: vi.fn(() => false),
     onDeleteWorkspace: vi.fn(),
     onDeleteWorktree: vi.fn(),
     onRenameWorkspaceAlias: vi.fn(),
@@ -433,6 +440,48 @@ describe("useSidebarMenus", () => {
 
     expect(sessionActions.map((action) => action.id)).not.toContain("new-session-gemini");
     expect(sessionActions.map((action) => action.id)).not.toContain("new-session-opencode");
+  });
+
+  it("moves workspace quick actions into the workspace actions menu group", async () => {
+    const handlers = createHandlers();
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    await act(async () => {
+      const event = {
+        clientX: 160,
+        clientY: 120,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
+      result.current.showWorkspaceMenu(event, workspace);
+    });
+
+    const workspaceActions =
+      result.current.workspaceMenuState?.groups.find((group) => group.id === "workspace-actions")
+        ?.actions ?? [];
+
+    expect(workspaceActions.map((action) => action.id)).toEqual([
+      "activate-workspace",
+      "reload-threads",
+      "toggle-exited-sessions",
+      "create-session-folder",
+      "rename-workspace-alias",
+      "remove-workspace",
+      "new-worktree-agent",
+      "new-clone-agent",
+    ]);
+
+    act(() => {
+      workspaceActions.find((action) => action.id === "activate-workspace")?.onSelect();
+      workspaceActions.find((action) => action.id === "reload-threads")?.onSelect();
+      workspaceActions.find((action) => action.id === "toggle-exited-sessions")?.onSelect();
+      workspaceActions.find((action) => action.id === "create-session-folder")?.onSelect();
+    });
+
+    expect(handlers.onActivateWorkspace).toHaveBeenCalledWith("ws-1");
+    expect(handlers.onReloadWorkspaceThreads).toHaveBeenCalledWith("ws-1");
+    expect(handlers.onToggleExitedSessions).toHaveBeenCalledWith("/tmp/mossx");
+    expect(handlers.onCreateSessionFolder).toHaveBeenCalledWith("ws-1");
   });
 
   it("labels Codex provider choices by config source", async () => {

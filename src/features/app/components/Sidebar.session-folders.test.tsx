@@ -35,6 +35,7 @@ vi.mock("react-i18next", () => ({
         "common.delete": "Delete",
         "sidebar.sessionActionsGroup": "New Session",
         "sidebar.newSessionInFolder": "New session in project",
+        "sidebar.workspaceActionsGroup": "Workspace actions",
         "sidebar.toggleSearch": "Toggle search",
         "sidebar.searchProjects": "Search projects",
         "sidebar.activateWorkspace": "Open in main panel",
@@ -142,6 +143,11 @@ vi.mock("../../../services/tauri", async (importOriginal) => {
 vi.mock("../../../services/toasts", () => ({
   pushErrorToast: vi.fn(),
 }));
+
+function openWorkspaceActionsMenu() {
+  fireEvent.click(screen.getByRole("button", { name: "New Session" }));
+  return screen.getByRole("menu", { name: "Workspace actions" });
+}
 
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({ scaleFactor: () => 1 }),
@@ -353,7 +359,8 @@ describe("Sidebar workspace session folders", () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "New folder" }));
+    const workspaceActionsMenu = openWorkspaceActionsMenu();
+    fireEvent.click(within(workspaceActionsMenu).getByRole("menuitem", { name: "New folder" }));
     const draftInput = screen.getByLabelText("Folder name");
     fireEvent.change(draftInput, { target: { value: " Inbox " } });
     fireEvent.keyDown(draftInput, { key: "Enter" });

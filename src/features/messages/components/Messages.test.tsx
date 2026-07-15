@@ -406,17 +406,17 @@ describe("Messages", () => {
     );
   });
 
-  it("enhances lead keywords only on codex assistant markdown", async () => {
+  it("keeps Codex verification progress visually plain", async () => {
     const items: ConversationItem[] = [
       {
         id: "assistant-lead-1",
         kind: "message",
         role: "assistant",
-        text: "PLAN\n\n执行内容",
+        text: "Typecheck 通过。最后跑 ESLint，确认没有静态问题。\n\n~~runtime-ready~~",
       },
     ];
 
-    const { container, rerender } = render(
+    const { container } = render(
       <Messages
         items={items}
         threadId="thread-1"
@@ -429,32 +429,22 @@ describe("Messages", () => {
     );
 
     await waitFor(() => {
-      expect(container.querySelector(".markdown-lead-paragraph")).toBeTruthy();
-      expect(container.querySelector(".markdown-codex-canvas")).toBeTruthy();
+      expect(container.querySelector("del")?.textContent).toBe("runtime-ready");
     });
-
-    rerender(
-      <Messages
-        items={items}
-        threadId="thread-1"
-        workspaceId="ws-1"
-        isThinking={false}
-        activeEngine="claude"
-        openTargets={[]}
-        selectedOpenAppId=""
-      />,
+    expect(container.textContent ?? "").toContain(
+      "Typecheck 通过。最后跑 ESLint，确认没有静态问题。",
     );
-
     expect(container.querySelector(".markdown-lead-paragraph")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("✅");
   });
 
-  it("applies codex markdown visual style through presentation profile", () => {
+  it("keeps the Codex presentation profile text-neutral", async () => {
     const items: ConversationItem[] = [
       {
         id: "assistant-profile-1",
         kind: "message",
         role: "assistant",
-        text: "PLAN\n\n执行内容",
+        text: "PLAN\n\n执行内容\n\n~~runtime-ready~~",
       },
     ];
     const { container } = render(
@@ -479,7 +469,10 @@ describe("Messages", () => {
       />,
     );
 
-    expect(container.querySelector(".markdown-codex-canvas")).toBeTruthy();
+    await waitFor(() => {
+      expect(container.querySelector("del")?.textContent).toBe("runtime-ready");
+    });
+    expect(container.querySelector(".markdown-codex-canvas")).toBeNull();
   });
 
   it("hides TodoWrite tool blocks from chat stream", () => {
@@ -575,13 +568,13 @@ describe("Messages", () => {
     expect(container.textContent ?? "").toContain("现在我继续读取 README.md");
   });
 
-  it("matches extended lead keywords with semantic icons", async () => {
+  it("keeps next-step wording visually plain", async () => {
     const items: ConversationItem[] = [
       {
         id: "assistant-lead-next-1",
         kind: "message",
         role: "assistant",
-        text: "下一步建议\n\n继续补齐验收。",
+        text: "下一步建议\n\n继续补齐验收。\n\n~~runtime-ready~~",
       },
     ];
 
@@ -598,9 +591,39 @@ describe("Messages", () => {
     );
 
     await waitFor(() => {
-      expect(container.querySelector(".markdown-lead-next")).toBeTruthy();
-      expect(container.querySelector(".markdown-lead-icon")?.textContent ?? "").toContain("🚀");
+      expect(container.querySelector("del")?.textContent).toBe("runtime-ready");
     });
+    expect(container.textContent ?? "").toContain("下一步建议");
+    expect(container.querySelector(".markdown-lead-next")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("🚀");
+  });
+
+  it("preserves emoji explicitly written by the assistant", async () => {
+    const items: ConversationItem[] = [
+      {
+        id: "assistant-explicit-emoji-1",
+        kind: "message",
+        role: "assistant",
+        text: "✅ 已完成\n\n~~runtime-ready~~",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector("del")?.textContent).toBe("runtime-ready");
+    });
+    expect(container.textContent ?? "").toContain("✅ 已完成");
   });
 
   it("collapses pathological fragmented paragraphs in assistant markdown", () => {

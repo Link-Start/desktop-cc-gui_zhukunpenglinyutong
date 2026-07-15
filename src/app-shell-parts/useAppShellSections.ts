@@ -843,35 +843,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     });
   }, [t]);
 
-  const handleOpenWorkspaceHome = useCallback(() => {
-    exitDiffView();
-    resetPullRequestSelection();
-    setHomeOpen(false);
-    setAppMode("chat");
-    setCenterMode("chat");
-    setActiveTab("codex");
-    if (activeWorkspaceId) {
-      setWorkspaceHomeWorkspaceId(activeWorkspaceId);
-      selectWorkspace(activeWorkspaceId);
-      setActiveThreadId(null, activeWorkspaceId);
-      return;
-    }
-    setWorkspaceHomeWorkspaceId(null);
-    selectHome();
-  }, [
-    activeWorkspaceId,
-    exitDiffView,
-    resetPullRequestSelection,
-    setActiveTab,
-    setAppMode,
-    setCenterMode,
-    setHomeOpen,
-    setWorkspaceHomeWorkspaceId,
-    selectHome,
-    selectWorkspace,
-    setActiveThreadId,
-  ]);
-
   const handleOpenHomeChat = useCallback(() => {
     exitDiffView();
     resetPullRequestSelection();
@@ -896,6 +867,23 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     setActiveWorkspaceId,
     setHomeOpen,
     setWorkspaceHomeWorkspaceId,
+  ]);
+
+  const handleOpenWorkspaceHome = useCallback((workspaceId?: string) => {
+    const targetWorkspaceId = workspaceId ?? activeWorkspaceId;
+    handleOpenHomeChat();
+    if (!targetWorkspaceId) {
+      return;
+    }
+    setActiveTab("codex");
+    setActiveWorkspaceId(targetWorkspaceId);
+    setActiveThreadId(null, targetWorkspaceId);
+  }, [
+    activeWorkspaceId,
+    handleOpenHomeChat,
+    setActiveTab,
+    setActiveThreadId,
+    setActiveWorkspaceId,
   ]);
 
   const handleSelectHomeWorkspace = useCallback(
