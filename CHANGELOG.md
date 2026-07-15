@@ -2,6 +2,44 @@
 
 ---
 
+##### **2026年7月15日（v0.7.3）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.7.3`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(i18n)`: 语言支持扩展到 10 种，并在设置页提供语言下拉入口，语言解析、切换与持久化流程同步覆盖新语言
+- `feat(sidebar)`: 侧栏线程列表 hydration 前显示加载占位，避免工作区会话恢复期间出现空白区域
+- `feat(ui)`: 对齐 Codex 消息渲染与 workspace navigation，收敛 Codex 输出展示、侧栏 workspace 卡片和相关导航行为
+
+🔧 Improvements
+- `refactor(i18n)`: 将中英文大体积 part locale 拆分为 per-namespace locale folder，降低翻译文件维护与局部更新成本
+- `build(i18n)`: 新增本地化构建、抽取、分块检查与 merge workflow，为多语言扩展提供可重复的脚本链路
+
+🐛 Fixes
+- `fix(terminal)`: 终端选中文本发送到 Composer 时不再重复插入内容，并补充外部输入回显回归覆盖
+- `fix(markdown)`: 保留 Markdown / LaTeX 公式容器边界并避免重复包裹，兼容紧凑多行公式写法
+- `fix(settings)`: 语言选择器改用 native select，移除 Radix portaled popup 几何计算链，修复 WebView UI Scale 大于 100% 时出现页面级空白浮层的问题
+
+English:
+
+✨ Features
+- Bump the app version to `0.7.3` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(i18n)`: expand language support to 10 languages and add a language dropdown in settings, with language resolution, switching, and persistence updated for the expanded set
+- `feat(sidebar)`: show a loading placeholder before thread-list hydration so restored workspaces no longer present a blank sidebar area
+- `feat(ui)`: align Codex message rendering and workspace navigation, tightening Codex output presentation, workspace cards, and related sidebar navigation behavior
+
+🔧 Improvements
+- `refactor(i18n)`: split large English and Chinese part locale files into per-namespace locale folders to make translation maintenance and localized updates more targeted
+- `build(i18n)`: add repeatable localization scripts for build, extraction, chunk checks, and merge workflows
+
+🐛 Fixes
+- `fix(terminal)`: prevent duplicated text when sending a terminal selection to the Composer, with regression coverage for external input echo behavior
+- `fix(markdown)`: preserve Markdown / LaTeX math container boundaries and avoid duplicate wrapping, including compact multi-line formula layouts
+- `fix(settings)`: move the language selector to a native select and remove the Radix portaled-popup geometry path, fixing the page-sized blank popup at WebView UI Scale values above 100%
+
+---
+
 ##### **2026年7月13日（v0.7.2）**
 
 中文：
