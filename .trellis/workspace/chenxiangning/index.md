@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-25.md`
-- **Total Sessions**: 998
+- **Total Sessions**: 999
 - **Last Active**: 2026-07-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~1038 | Active |
+| `journal-25.md` | ~1071 | Active |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +53,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 999 | 2026-07-16 | 更新 0.7.3 分析与变更记录 | `fa834842528278781acc71b4d9dee5cca33aec52` | `feature/v-0.7.3` |
 | 998 | 2026-07-16 | 统一 Git 文件列表与差异预览链路 | `a90a136e220e14bf641b39583be48623edbd8f55` | `feature/v-0.7.3` |
 | 997 | 2026-07-16 | 修复大文件 Diff 对齐与跨平台换行保存 | `031f4563f5a5f908f279f43b231fd442de757295` | `feature/v-0.7.3` |
 | 996 | 2026-07-16 | 修复 Codex 已结束会话 loading 复活 | `7f90d84c` | `feature/v-0.7.3` |

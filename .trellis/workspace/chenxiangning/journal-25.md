@@ -1036,3 +1036,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 999: 更新 0.7.3 分析与变更记录
+
+**Date**: 2026-07-16
+**Task**: 更新 0.7.3 分析与变更记录
+**Branch**: `feature/v-0.7.3`
+
+### Summary
+
+基于当前客户端代码更新快捷键与优先级分析文档，并按既有中英文格式补充 0.7.3 CHANGELOG。验证：staged file audit 与 git diff check 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fa834842528278781acc71b4d9dee5cca33aec52` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
