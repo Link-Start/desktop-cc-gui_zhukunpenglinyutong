@@ -637,3 +637,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 987: 稳健兼容对话紧凑多行公式
+
+**Date**: 2026-07-15
+**Task**: 稳健兼容对话紧凑多行公式
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+合并 PR #834 后补齐 compact display math 的 fail-closed 边界处理、消息渲染回归测试与 OpenSpec 验证闭环。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3369ff28` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

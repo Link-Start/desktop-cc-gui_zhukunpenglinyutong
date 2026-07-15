@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-25.md`
-- **Total Sessions**: 986
+- **Total Sessions**: 987
 - **Last Active**: 2026-07-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~639 | Active |
+| `journal-25.md` | ~672 | Active |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +53,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 987 | 2026-07-15 | 稳健兼容对话紧凑多行公式 | `3369ff28` | `feature/v-0.7.2` |
 | 986 | 2026-07-15 | 合并 PR #834 公式容器边界修复 | `af276865` | `feature/v-0.7.2` |
 | 985 | 2026-07-14 | 统一对话幕布钉底与回刷时序 | `cb028740` | `feature/v-0.7.2` |
 | 984 | 2026-07-14 | 补齐新增文件 diff 入口 | `8b8b919b` | `feature/v-0.7.2` |
