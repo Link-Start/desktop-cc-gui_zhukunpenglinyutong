@@ -772,3 +772,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 991: 合并并审查 Codex 子代理侧栏投影修复
+
+**Date**: 2026-07-15
+**Task**: 合并并审查 Codex 子代理侧栏投影修复
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+将 PR #837 以 no-ff 合并到 feature/v-0.7.2；语义融合 yode workspace journal 冲突，保留双方三条 session；核对 source diff 与 capability sentinels，复跑 Sidebar、thread normalization、Rust local_usage/codex/session_management/daemon 回归，并通过 typecheck、lint、runtime contracts、OpenSpec strict validation。Review 未发现 blocker 或新增回归。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0470eb43` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

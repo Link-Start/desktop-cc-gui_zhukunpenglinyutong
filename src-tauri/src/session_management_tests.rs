@@ -39,6 +39,59 @@
     }
 
     #[test]
+    fn global_codex_catalog_entry_preserves_parent_session_id() {
+        let summary: crate::types::LocalUsageSessionSummary = serde_json::from_value(
+            serde_json::json!({
+                "sessionId": "child-session",
+                "parentSessionId": "parent-session",
+                "timestamp": 123,
+                "model": "gpt-5",
+                "usage": {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "cacheWriteTokens": 0,
+                    "cacheReadTokens": 0,
+                    "totalTokens": 0
+                },
+                "cost": 0.0,
+                "summary": "Aristotle"
+            }),
+        )
+        .expect("deserialize local summary");
+
+        let entry = build_global_codex_catalog_entry(
+            &summary,
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+
+        assert_eq!(entry.session_id, "child-session");
+        assert_eq!(entry.parent_session_id.as_deref(), Some("parent-session"));
+    }
+
+    #[test]
+    fn codex_catalog_dedupe_counts_one_child_per_canonical_session() {
+        let parent = catalog_entry("parent-session", "ws-1", Some("Project"), None);
+        let mut child = catalog_entry("child-session", "ws-1", Some("Project"), None);
+        child.parent_session_id = Some("parent-session".to_string());
+
+        let entries = dedupe_catalog_entries_and_apply_children_counts(vec![
+            parent,
+            child.clone(),
+            child,
+        ]);
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(
+            entries
+                .iter()
+                .find(|entry| entry.session_id == "parent-session")
+                .and_then(|entry| entry.children_count),
+            Some(1)
+        );
+    }
+
+    #[test]
     fn catalog_page_preserves_next_cursor_from_scan_lookahead_entry() {
         let entries = (0..26)
             .map(|index| {

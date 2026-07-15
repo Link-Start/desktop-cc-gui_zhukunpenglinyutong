@@ -7,6 +7,7 @@ import {
   mergeDegradedClaudeContinuitySummaries,
   mergeDegradedCodexContinuitySummaries,
   mergeGeminiSessionSummaries,
+  resolveThreadSourceMeta,
   seedLastGoodEngineIntoMerged,
   selectRecoveredNewThreadDecision,
   selectRecoveredNewThreadSummary,
@@ -16,6 +17,20 @@ import {
 } from "./useThreadActions.helpers";
 
 describe("useThreadActions.helpers", () => {
+  it("maps Codex local fallback parentSessionId into parentThreadId", () => {
+    expect(
+      resolveThreadSourceMeta({
+        source: "cli",
+        parentSessionId: "parent-session",
+      }),
+    ).toEqual({
+      source: "cli",
+      provider: undefined,
+      sourceLabel: "cli",
+      parentThreadId: "parent-session",
+    });
+  });
+
   it("keeps quoted broken-pipe explanations in history matching", () => {
     const staleItems: ConversationItem[] = [
       {

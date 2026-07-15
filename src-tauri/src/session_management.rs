@@ -2655,7 +2655,7 @@ fn build_global_codex_catalog_entry(
         session_id: summary.session_id.clone(),
         stable_session_key: None,
         canonical_session_id: Some(summary.session_id.clone()),
-        parent_session_id: None,
+        parent_session_id: summary.parent_session_id.clone(),
         workspace_id: SESSION_CATALOG_UNASSIGNED_WORKSPACE_ID.to_string(),
         workspace_label: None,
         engine: "codex".to_string(),

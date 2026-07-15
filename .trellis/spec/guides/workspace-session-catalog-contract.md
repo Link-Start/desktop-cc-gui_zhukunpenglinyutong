@@ -21,6 +21,13 @@
 - `assign_workspace_session_folders_core(...) -> WorkspaceSessionBatchMutationResponse`
 - `useThreadActionsSessionCatalog(...).loadActiveProjectCatalogSessions`
 - `buildWorkspaceSessionSelectionKey(entry)`
+- `parse_codex_session_summary(...) -> Option<LocalUsageSessionSummary>`
+- `scan_codex_session_summaries(...) -> Vec<LocalUsageSessionSummary>`
+- `merge_duplicate_codex_session_summary(existing, candidate)`
+- `merge_unified_codex_thread_entries(...) -> Vec<Value>`
+- `dedupe_catalog_entries_and_apply_children_counts(...) -> Vec<WorkspaceSessionCatalogEntry>`
+- `LocalUsageSessionSummary.parentSessionId?: string`
+- `resolveThreadSourceMeta(rawThread).parentThreadId?: string`
 
 ### 3. Contracts
 
@@ -34,6 +41,9 @@
 - Codex catalog source discovery MUST include managed provider homes under `codex-provider-homes/*/{sessions,archived_sessions}` in addition to disk/default and workspace Codex homes. Provider-home rows still MUST prove workspace ownership through source evidence such as `cwd`; provider id alone MUST NOT prove membership.
 - Codex provider binding metadata MAY overlay `providerProfileId/source/name/availability` on an already discovered row. Metadata alone MUST NOT create an active strict catalog row. If a session is discovered from a provider home whose provider profile is no longer configured, the row MUST remain visible as managed provider history with `providerAvailability=unavailable`; it MUST NOT be rewritten to disk.
 - Codex source completeness MUST distinguish disk/default/workspace roots from managed provider-home roots via `WorkspaceSessionCatalogSourceStatus.sourceKind` values such as `disk` and `provider-home`. Provider-home source diagnostics MUST degrade the Codex `provider-home` status and surface through `sourceStatuses[].diagnostics` instead of converting omitted provider-backed rows into authoritative deletion evidence. Frontend continuity may retain last-good provider-backed Codex rows while this Codex status is partial/degraded.
+- Codex rollout `session_meta.payload.source.subagent.thread_spawn` 是 parent relationship 的 source fact。scanner MUST 兼容 snake_case / camelCase，保留首次有效 `parent_thread_id`，且后续 copied parent `session_meta` MUST NOT 覆盖 child canonical UUID 或 relationship。
+- Codex child display title MUST 按 `agent_nickname` → `agent_path` basename → existing user-summary fallback 的顺序解析。不同 child UUID MUST NOT 因标题相同被合并；同一 canonical child UUID 的多个 physical rollout files MUST 在 usage aggregation 与 bounded truncation 前收敛为一个 source fact，usage/cost 不求和，并合并 aliases 与 relationship/title evidence。
+- Codex workspace/global catalog、native local-thread fallback 与 daemon adapter MUST 输出 `parentSessionId`；frontend boundary MUST normalize 为 `ThreadSummary.parentThreadId`，并复用既有 Sidebar tree projection。local/live merge 若保留 rollout filename alias 作为 visible row id，MUST 同时保留 canonical `canonicalSessionId`，并把当前可见 parent 的 canonical UUID 解析为 visible parent id。child usage/cost/transcript 仍属于 child 自己，禁止改写为 parent UUID 或从统计中删除。
 - Mutation writes MUST route by the row owner workspace and stable key, not by the currently selected aggregate workspace. Batch mutation results SHOULD expose `ownerWorkspaceId` and `stableSessionKey` for frontend reconciliation.
 - Stable metadata key MUST be `engine + ownerWorkspaceId + canonicalSessionId`; new writes use stable key while reads may keep legacy bare `sessionId` compatibility.
 - Source-fact cache is read-through acceleration only. It may cache bounded source facts, diagnostics, fingerprint, scanner/schema version, and cache metrics; it MUST NOT cache owner workspace, strict membership, archive/folder/custom title overlay, display window, selected state, or processing state.
@@ -52,16 +62,51 @@
 | settings delete success | remove deleted ids from sidebar/list/cache/curtain derived state | degraded fallback revives deleted row or leaves deleted curtain loading |
 | source-fact cache hit | rerun ownership resolver and metadata overlay | reuse cached owner/membership |
 | cache missing/corrupt/deleted | direct scan and rebuild when possible | convert cache failure into authoritative empty |
+| Codex child rollout contains structured subagent source | preserve child UUID，project `parentSessionId`，title 使用 agent identity | 把 child 当顶层 row，或用 inherited parent prompt 作为同名标题 |
+| later copied parent metadata appears in child rollout | keep first valid child identity / relationship | overwrite child UUID、parent link 或 agent title |
+| two files share one child canonical UUID | converge by canonical identity | 按 physical path 显示两条，或按 title 合并其他 distinct child UUID |
+| duplicate rollout lies inside bounded scan window | dedupe before limit；one page slot and one usage evidence | duplicate consumes multiple slots、false end-of-page 或 usage double count |
+| visible parent id is a rollout filename alias | child link resolves canonical parent UUID to visible parent id | child remains a root because ids differ |
 
-### 5. Tests Required
+### 5. Good / Base / Bad Cases
+
+- Good：child rollout 保留自己的 UUID、usage 与 transcript，同时携带 `parentSessionId`；Sidebar 显示一个 parent root 与多个 agent-labelled children。
+- Base：普通 Codex session 没有 structured subagent metadata，继续使用既有 summary/title 与顶层 projection。
+- Bad：按 title 去重、把 child UUID 改成 parent UUID、忽略 object-form `source`，或只修 authoritative catalog 而遗漏 native/daemon fallback。
+
+### 6. Tests Required
 
 - Rust tests for parent/child owner resolution, ambiguous sibling, cwd/project-dir conflict, source completeness, and metadata orphan behavior.
 - Rust mutation tests for archive, unarchive, delete, and folder assignment routing by owner workspace and stable key.
 - Rust cache tests for hit/miss/stale/schema mismatch/corrupt/deleted rebuild, plus cache exclusion of transcript body and organization overlay.
+- Rust parser/source tests for snake_case/camelCase subagent metadata、agent path basename fallback、later parent metadata sticky behavior，以及 canonical child UUID 在 aggregation/limit 前 dedupe（assert aliases、relationship/title、non-additive usage）。
+- Rust catalog/native/daemon mapping tests MUST assert `parentSessionId` survives every local projection。
+- Rust local/live merge tests MUST combine canonical ids、rollout aliases 与 parent relationship，并 assert `canonicalSessionId` 和 visible `parentSessionId` 同时正确；catalog test MUST assert duplicate child 只计一次 `childrenCount`。
 - Vitest coverage for Sidebar catalog normalization preserving child owner rows, Session Management stable selection keys, native empty not clearing catalog rows, and Workspace Home not deriving session membership from `recentThreads`.
+- Vitest coverage MUST assert raw Codex `parentSessionId -> ThreadSummary.parentThreadId`，且 parent + child tree 只产生一个 root。
 - Contract validation: `openspec validate <change-id> --strict --no-interactive`, `cargo test --manifest-path src-tauri/Cargo.toml session_management claude_history`, focused Vitest for thread/settings session paths, `npm run typecheck`, and `npm run check:runtime-contracts`.
 
-### 6. Wrong vs Correct
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```rust
+WorkspaceSessionCatalogEntry {
+    parent_session_id: None,
+    title: inherited_parent_prompt,
+    // distinct Codex child rollouts become duplicate-looking roots
+}
+```
+
+#### Correct
+
+```rust
+WorkspaceSessionCatalogEntry {
+    parent_session_id: summary.parent_session_id,
+    title: summary.summary.unwrap_or_else(|| "Codex Session".to_string()),
+    // child canonical UUID remains unchanged
+}
+```
 
 #### Wrong
 

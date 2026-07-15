@@ -430,6 +430,61 @@ fn scan_codex_summaries_merges_disk_and_multiple_provider_homes_for_workspace() 
 }
 
 #[test]
+fn scan_codex_summaries_dedupes_physical_rollouts_by_canonical_id() {
+    let base =
+        std::env::temp_dir().join(format!("ccgui-codex-canonical-dedupe-{}", Uuid::new_v4()));
+    let root = base.join("sessions");
+    let day_key = "2026-01-19";
+    write_named_session_file(
+        &root,
+        day_key,
+        "rollout-child-copy-a",
+        &[
+            r#"{"timestamp":"2026-01-19T12:00:00.000Z","type":"session_meta","payload":{"id":"child-session","cwd":"/tmp/project-alpha","source":{"subagent":{"thread_spawn":{"parent_thread_id":"parent-session","agent_nickname":"Aristotle"}}}}}"#
+                .to_string(),
+            r#"{"timestamp":"2026-01-19T12:00:01.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":10,"cached_input_tokens":0,"output_tokens":2}}}}"#
+                .to_string(),
+        ],
+    );
+    write_named_session_file(
+        &root,
+        day_key,
+        "rollout-child-copy-b",
+        &[
+            r#"{"timestamp":"2026-01-19T12:05:00.000Z","type":"session_meta","payload":{"id":"child-session","cwd":"/tmp/project-alpha","source":"cli"}}"#
+                .to_string(),
+            r#"{"timestamp":"2026-01-19T12:05:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"Inherited parent prompt"}}"#
+                .to_string(),
+            r#"{"timestamp":"2026-01-19T12:05:02.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":20,"cached_input_tokens":0,"output_tokens":3}}}}"#
+                .to_string(),
+        ],
+    );
+
+    let summaries = scan_codex_session_summaries(
+        Some(Path::new("/tmp/project-alpha")),
+        std::slice::from_ref(&root),
+    )
+    .expect("scan summaries");
+
+    assert_eq!(summaries.len(), 1);
+    let summary = &summaries[0];
+    assert_eq!(summary.session_id, "child-session");
+    assert_eq!(summary.parent_session_id.as_deref(), Some("parent-session"));
+    assert_eq!(summary.summary.as_deref(), Some("Aristotle"));
+    assert_eq!(summary.usage.input_tokens, 20);
+    assert_eq!(summary.usage.output_tokens, 3);
+    assert_eq!(
+        summary.session_id_aliases,
+        vec![
+            "rollout-child-copy-a".to_string(),
+            "rollout-child-copy-b".to_string(),
+        ]
+    );
+
+    fs::remove_dir_all(base).ok();
+}
+
+#[test]
 fn scan_codex_provider_home_summary_excludes_other_workspace() {
     let base = std::env::temp_dir().join(format!("ccgui-provider-homes-scope-{}", Uuid::new_v4()));
     let provider_root = base
@@ -1540,6 +1595,61 @@ fn parse_codex_session_summary_prefers_session_meta_id_over_rollout_filename() {
         summary.session_id_aliases,
         vec!["rollout-2026-01-19T12-00-00-session-alpha".to_string()]
     );
+}
+
+#[test]
+fn parse_codex_session_summary_preserves_subagent_parent_and_agent_title() {
+    let root = make_temp_sessions_root();
+    let day_key = "2026-01-19";
+    let workspace_path = Path::new("/tmp/project-alpha");
+    let session_path = write_named_session_file(
+        &root,
+        day_key,
+        "rollout-2026-01-19T12-00-00-child-session",
+        &[
+            r#"{"timestamp":"2026-01-19T12:00:00.000Z","type":"session_meta","payload":{"id":"child-session","cwd":"/tmp/project-alpha","source":{"subagent":{"thread_spawn":{"parent_thread_id":"parent-session","depth":1,"agent_path":"/root/geometry-audit","agent_nickname":"Aristotle"}}},"originator":"codex-tui"}}"#
+                .to_string(),
+            r#"{"timestamp":"2026-01-19T12:00:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"一张图里有一个大圆A，请分析。"}}"#
+                .to_string(),
+            r#"{"timestamp":"2026-01-19T12:00:02.000Z","type":"session_meta","payload":{"id":"parent-session","cwd":"/tmp/project-alpha","source":"cli","originator":"codex-tui"}}"#
+                .to_string(),
+        ],
+    );
+
+    let summary = parse_codex_session_summary(session_path.as_path(), Some(workspace_path))
+        .expect("parse summary")
+        .expect("summary exists");
+    let serialized = serde_json::to_value(&summary).expect("serialize summary");
+
+    assert_eq!(summary.session_id, "child-session");
+    assert_eq!(serialized["parentSessionId"], "parent-session");
+    assert_eq!(summary.summary.as_deref(), Some("Aristotle"));
+}
+
+#[test]
+fn parse_codex_session_summary_reads_camel_case_subagent_path_title() {
+    let root = make_temp_sessions_root();
+    let day_key = "2026-01-19";
+    let workspace_path = Path::new("/tmp/project-alpha");
+    let session_path = write_named_session_file(
+        &root,
+        day_key,
+        "rollout-2026-01-19T12-00-00-child-session",
+        &[
+            r#"{"timestamp":"2026-01-19T12:00:00.000Z","type":"session_meta","payload":{"id":"child-session","cwd":"/tmp/project-alpha","source":{"subAgent":{"threadSpawn":{"parentThreadId":"parent-session","agentPath":"C:\\agents\\geometry-audit"}}},"originator":"codex-tui"}}"#
+                .to_string(),
+            r#"{"timestamp":"2026-01-19T12:00:01.000Z","type":"event_msg","payload":{"type":"userMessage","message":"这段继承的父会话提示不应成为子代理标题。"}}"#
+                .to_string(),
+        ],
+    );
+
+    let summary = parse_codex_session_summary(session_path.as_path(), Some(workspace_path))
+        .expect("parse summary")
+        .expect("summary exists");
+
+    assert_eq!(summary.session_id, "child-session");
+    assert_eq!(summary.parent_session_id.as_deref(), Some("parent-session"));
+    assert_eq!(summary.summary.as_deref(), Some("geometry-audit"));
 }
 
 #[test]

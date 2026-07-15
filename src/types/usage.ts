@@ -77,6 +77,7 @@ export type LocalUsageUsageData = {
 export type LocalUsageSessionSummary = {
   sessionId: string;
   sessionIdAliases?: string[];
+  parentSessionId?: string | null;
   timestamp: number;
   model: string;
   usage: LocalUsageUsageData;

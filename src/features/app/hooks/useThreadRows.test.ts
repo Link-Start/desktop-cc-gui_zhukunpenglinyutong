@@ -8,6 +8,36 @@ import { useThreadRows } from "./useThreadRows";
 const getPinTimestamp = () => null;
 
 describe("useThreadRows", () => {
+  it("renders Codex subagent sessions under one parent root", () => {
+    const parent: ThreadSummary = {
+      id: "parent-session",
+      name: "Parent",
+      updatedAt: 100,
+      engineSource: "codex",
+    };
+    const child: ThreadSummary = {
+      id: "child-session",
+      name: "Aristotle",
+      parentThreadId: "parent-session",
+      updatedAt: 200,
+      engineSource: "codex",
+    };
+
+    const { result } = renderHook(() => useThreadRows({}));
+    const rows = result.current.getThreadRows(
+      [parent, child],
+      false,
+      "ws-1",
+      getPinTimestamp,
+    );
+
+    expect(rows.totalRoots).toBe(1);
+    expect(rows.unpinnedRows.map((row) => [row.thread.id, row.depth])).toEqual([
+      ["parent-session", 0],
+      ["child-session", 1],
+    ]);
+  });
+
   it("keeps a recent child session visible by sorting roots by subtree activity", () => {
     const parent: ThreadSummary = {
       id: "claude:parent",

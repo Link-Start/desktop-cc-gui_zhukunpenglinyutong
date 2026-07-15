@@ -819,14 +819,106 @@ fn scan_codex_session_summaries(
         collect_jsonl_files(root, &mut files, &mut seen_files);
     }
 
-    let mut sessions = Vec::new();
+    let mut sessions_by_id = HashMap::<String, LocalUsageSessionSummary>::new();
     for file in files {
         if let Some(summary) = parse_codex_session_summary(&file, workspace_path)? {
-            sessions.push(summary);
+            if let Some(existing) = sessions_by_id.get_mut(&summary.session_id) {
+                merge_duplicate_codex_session_summary(existing, summary);
+            } else {
+                sessions_by_id.insert(summary.session_id.clone(), summary);
+            }
         }
     }
-    sessions.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    let mut sessions = sessions_by_id.into_values().collect::<Vec<_>>();
+    sessions.sort_by(|left, right| {
+        right
+            .timestamp
+            .cmp(&left.timestamp)
+            .then_with(|| left.session_id.cmp(&right.session_id))
+    });
     Ok(sessions)
+}
+
+fn merge_duplicate_codex_session_summary(
+    existing: &mut LocalUsageSessionSummary,
+    mut candidate: LocalUsageSessionSummary,
+) {
+    let candidate_is_preferred = candidate
+        .timestamp
+        .cmp(&existing.timestamp)
+        .then_with(|| {
+            candidate
+                .usage
+                .total_tokens
+                .cmp(&existing.usage.total_tokens)
+        })
+        .then_with(|| candidate.file_size_bytes.cmp(&existing.file_size_bytes))
+        .then_with(|| {
+            existing
+                .physical_path
+                .as_deref()
+                .unwrap_or_default()
+                .cmp(candidate.physical_path.as_deref().unwrap_or_default())
+        })
+        .is_gt();
+    if candidate_is_preferred {
+        std::mem::swap(existing, &mut candidate);
+    }
+
+    let latest_timestamp = existing.timestamp.max(candidate.timestamp);
+    let relation_was_missing = existing.parent_session_id.is_none();
+    if relation_was_missing && candidate.parent_session_id.is_some() {
+        existing.parent_session_id = candidate.parent_session_id.clone();
+        if candidate.summary.is_some() {
+            existing.summary = candidate.summary.clone();
+        }
+    }
+    if existing.summary.is_none() {
+        existing.summary = candidate.summary.clone();
+    }
+    if existing.cwd.is_none() {
+        existing.cwd = candidate.cwd.clone();
+    }
+    if existing.source.is_none() {
+        existing.source = candidate.source.clone();
+    }
+    if existing.provider.is_none() {
+        existing.provider = candidate.provider.clone();
+    }
+    if existing.provider_profile_id.is_none() {
+        existing.provider_profile_id = candidate.provider_profile_id.clone();
+    }
+    if existing.provider_profile_source.is_none() {
+        existing.provider_profile_source = candidate.provider_profile_source.clone();
+    }
+    if existing.provider_profile_name.is_none() {
+        existing.provider_profile_name = candidate.provider_profile_name.clone();
+    }
+    if existing.provider_availability.is_none() {
+        existing.provider_availability = candidate.provider_availability.clone();
+    }
+    if existing.physical_path.is_none() {
+        existing.physical_path = candidate.physical_path.clone();
+    }
+    if candidate.usage.total_tokens > existing.usage.total_tokens {
+        existing.usage = candidate.usage.clone();
+        existing.cost = candidate.cost;
+    }
+    existing.timestamp = latest_timestamp;
+    existing.file_size_bytes = match (existing.file_size_bytes, candidate.file_size_bytes) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (Some(value), None) | (None, Some(value)) => Some(value),
+        (None, None) => None,
+    };
+    existing.modified_lines = existing.modified_lines.max(candidate.modified_lines);
+    existing
+        .session_id_aliases
+        .extend(candidate.session_id_aliases);
+    existing.session_id_aliases.sort();
+    existing.session_id_aliases.dedup();
+    existing
+        .session_id_aliases
+        .retain(|alias| !alias.trim().is_empty() && alias != &existing.session_id);
 }
 
 fn collect_jsonl_files(root: &Path, output: &mut Vec<PathBuf>, seen: &mut HashSet<PathBuf>) {
@@ -866,6 +958,7 @@ fn parse_codex_session_summary(
     let mut provider: Option<String> = None;
     let mut cwd: Option<String> = None;
     let mut canonical_session_id: Option<String> = None;
+    let mut subagent_metadata: Option<CodexSubagentSessionMetadata> = None;
     let mut latest_timestamp = 0_i64;
     let mut previous_totals: Option<UsageTotals> = None;
     let mut match_known = workspace_path.is_none();
@@ -968,6 +1061,9 @@ fn parse_codex_session_summary(
             saw_session_signal = true;
             if canonical_session_id.is_none() {
                 canonical_session_id = extract_session_id_from_session_value(&value);
+            }
+            if subagent_metadata.is_none() {
+                subagent_metadata = extract_codex_subagent_metadata_from_session_value(&value);
             }
             if let Some(detected_cwd) = extract_cwd(&value) {
                 if cwd.is_none() {
@@ -1163,7 +1259,14 @@ fn parse_codex_session_summary(
             .as_millis() as i64
     };
 
-    let summary = summary.or(response_item_user_summary);
+    let parent_session_id = subagent_metadata
+        .as_ref()
+        .map(|metadata| metadata.parent_session_id.clone());
+    let summary = subagent_metadata
+        .as_ref()
+        .and_then(codex_subagent_display_title)
+        .or(summary)
+        .or(response_item_user_summary);
     let provider_profile_id = infer_managed_codex_provider_profile_id_from_session_path(path);
     let provider_profile_source = provider_profile_id
         .as_ref()
@@ -1176,6 +1279,7 @@ fn parse_codex_session_summary(
     Ok(Some(LocalUsageSessionSummary {
         session_id,
         session_id_aliases,
+        parent_session_id,
         timestamp,
         cwd,
         model,
@@ -1405,6 +1509,88 @@ fn normalize_non_empty_string(value: Option<&str>) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
+}
+
+#[derive(Debug, Clone)]
+struct CodexSubagentSessionMetadata {
+    parent_session_id: String,
+    agent_nickname: Option<String>,
+    agent_path: Option<String>,
+}
+
+fn extract_codex_subagent_metadata_from_session_value(
+    value: &Value,
+) -> Option<CodexSubagentSessionMetadata> {
+    let root = value.as_object()?;
+    let payload = root.get("payload").and_then(Value::as_object);
+    let session_meta = payload
+        .and_then(|payload| payload.get("session_meta"))
+        .and_then(Value::as_object)
+        .or_else(|| {
+            payload
+                .and_then(|payload| payload.get("sessionMeta"))
+                .and_then(Value::as_object)
+        });
+
+    for object in [Some(root), payload, session_meta].into_iter().flatten() {
+        let Some(source) = object
+            .get("source")
+            .or_else(|| object.get("sessionSource"))
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+        let Some(subagent) = source
+            .get("subagent")
+            .or_else(|| source.get("subAgent"))
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+        let Some(thread_spawn) = subagent
+            .get("thread_spawn")
+            .or_else(|| subagent.get("threadSpawn"))
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+        let Some(parent_session_id) =
+            read_string_from_object(thread_spawn, &["parent_thread_id", "parentThreadId"])
+        else {
+            continue;
+        };
+        return Some(CodexSubagentSessionMetadata {
+            parent_session_id,
+            agent_nickname: read_string_from_object(
+                thread_spawn,
+                &["agent_nickname", "agentNickname"],
+            ),
+            agent_path: read_string_from_object(thread_spawn, &["agent_path", "agentPath"]),
+        });
+    }
+
+    None
+}
+
+fn codex_subagent_display_title(metadata: &CodexSubagentSessionMetadata) -> Option<String> {
+    metadata.agent_nickname.clone().or_else(|| {
+        metadata
+            .agent_path
+            .as_deref()
+            .and_then(portable_path_basename)
+    })
+}
+
+fn portable_path_basename(path: &str) -> Option<String> {
+    let trimmed = path
+        .trim()
+        .trim_end_matches(|character| character == '/' || character == '\\');
+    if trimmed.is_empty() {
+        return None;
+    }
+    trimmed
+        .rsplit(|character| character == '/' || character == '\\')
+        .find_map(|segment| normalize_non_empty_string(Some(segment)))
 }
 
 fn extract_session_id_from_session_value(value: &Value) -> Option<String> {
@@ -1744,6 +1930,7 @@ fn parse_claude_session_summary(path: &Path) -> Result<Option<LocalUsageSessionS
     Ok(Some(LocalUsageSessionSummary {
         session_id,
         session_id_aliases: Vec::new(),
+        parent_session_id: None,
         timestamp,
         cwd: None,
         model,

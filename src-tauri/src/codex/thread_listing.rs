@@ -294,6 +294,44 @@ fn thread_entry_timestamp(entry: &Value) -> i64 {
         .max(0)
 }
 
+fn normalize_parent_session_ids_to_visible_entry_ids(entries: &mut [Value]) {
+    let mut visible_id_by_identifier = HashMap::<String, String>::new();
+    for entry in entries.iter() {
+        let Some(visible_id) = thread_entry_id(entry) else {
+            continue;
+        };
+        visible_id_by_identifier.insert(visible_id.clone(), visible_id.clone());
+        for key in ["canonicalSessionId", "canonical_session_id"] {
+            if let Some(identifier) =
+                normalize_optional_string(entry.get(key).and_then(Value::as_str))
+            {
+                visible_id_by_identifier.insert(identifier, visible_id.clone());
+            }
+        }
+    }
+
+    for entry in entries.iter_mut() {
+        let Some(entry_map) = entry.as_object_mut() else {
+            continue;
+        };
+        let parent_session_id = entry_map
+            .get("parentSessionId")
+            .or_else(|| entry_map.get("parent_session_id"))
+            .and_then(Value::as_str)
+            .and_then(|value| normalize_optional_string(Some(value)));
+        let Some(visible_parent_id) = parent_session_id
+            .as_deref()
+            .and_then(|parent_id| visible_id_by_identifier.get(parent_id))
+        else {
+            continue;
+        };
+        entry_map.insert(
+            "parentSessionId".to_string(),
+            Value::String(visible_parent_id.clone()),
+        );
+    }
+}
+
 pub(crate) fn build_local_codex_session_preview(summary: Option<String>, model: String) -> String {
     let preview = summary
         .map(|value| value.trim().to_string())
@@ -314,6 +352,7 @@ fn build_local_codex_thread_entry(
         "id": session.session_id,
         "engine": "codex",
         "canonicalSessionId": session.session_id,
+        "parentSessionId": session.parent_session_id,
         "attributionStatus": "strict-match",
         "preview": preview,
         "title": title,
@@ -326,6 +365,36 @@ fn build_local_codex_thread_entry(
         "provider": provider,
         "sourceLabel": source_label
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_codex_thread_entry_preserves_parent_session_id() {
+        let summary: LocalUsageSessionSummary = serde_json::from_value(json!({
+            "sessionId": "child-session",
+            "parentSessionId": "parent-session",
+            "timestamp": 123,
+            "model": "gpt-5",
+            "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "cacheWriteTokens": 0,
+                "cacheReadTokens": 0,
+                "totalTokens": 0
+            },
+            "cost": 0.0,
+            "summary": "Aristotle"
+        }))
+        .expect("deserialize local summary");
+
+        let entry = build_local_codex_thread_entry("/tmp/project-alpha", &summary);
+
+        assert_eq!(entry["id"], "child-session");
+        assert_eq!(entry["parentSessionId"], "parent-session");
+    }
 }
 
 pub(crate) fn codex_session_identifier_candidates(
@@ -470,8 +539,14 @@ pub(crate) fn merge_unified_codex_thread_entries(
                 if let Some(value) = local.get("sizeBytes").filter(|value| !value.is_null()) {
                     existing.insert("sizeBytes".to_string(), value.clone());
                 }
+                if let Some(value) = local
+                    .get("canonicalSessionId")
+                    .filter(|value| !value.is_null())
+                {
+                    existing.insert("canonicalSessionId".to_string(), value.clone());
+                }
                 ensure_thread_entry_workspace_cwd(existing, workspace_path);
-                for key in ["source", "provider", "sourceLabel"] {
+                for key in ["source", "provider", "sourceLabel", "parentSessionId"] {
                     let missing = match existing.get(key) {
                         None => true,
                         Some(value) => {
@@ -489,6 +564,9 @@ pub(crate) fn merge_unified_codex_thread_entries(
                     }
                 }
             }
+            for candidate in ids {
+                id_to_index.insert(candidate, existing_index);
+            }
             continue;
         }
         let next_index = merged_entries.len();
@@ -497,6 +575,8 @@ pub(crate) fn merge_unified_codex_thread_entries(
         }
         merged_entries.push(local_entry);
     }
+
+    normalize_parent_session_ids_to_visible_entry_ids(&mut merged_entries);
 
     merged_entries.sort_by(|left, right| {
         let left_timestamp = thread_entry_timestamp(left);

@@ -127,6 +127,21 @@ fn build_catalog_page(
     }
 }
 
+fn dedupe_catalog_entries_and_apply_children_counts(
+    entries: Vec<WorkspaceSessionCatalogEntry>,
+) -> Vec<WorkspaceSessionCatalogEntry> {
+    let mut deduped = Vec::new();
+    let mut seen_ids = HashSet::new();
+    for entry in entries {
+        if !seen_ids.insert(build_catalog_entry_dedupe_key(&entry)) {
+            continue;
+        }
+        deduped.push(entry);
+    }
+    apply_children_counts(&mut deduped);
+    deduped
+}
+
 fn catalog_entry_sort_key(entry: &WorkspaceSessionCatalogEntry) -> String {
     entry
         .stable_session_key
@@ -285,7 +300,7 @@ async fn build_workspace_scope_catalog_data(
                         session_id,
                         stable_session_key: None,
                         canonical_session_id: Some(summary.session_id.clone()),
-                        parent_session_id: None,
+                        parent_session_id: summary.parent_session_id,
                         workspace_id: owner_workspace_id.clone(),
                         workspace_label: Some(workspace.name.clone()),
                         engine: "codex".to_string(),
@@ -612,16 +627,8 @@ async fn build_workspace_scope_catalog_data(
         &metadata_by_workspace_id,
         &source_statuses,
     );
-    apply_children_counts(&mut entries);
 
-    let mut deduped = Vec::new();
-    let mut seen_ids = HashSet::new();
-    for entry in entries {
-        if !seen_ids.insert(build_catalog_entry_dedupe_key(&entry)) {
-            continue;
-        }
-        deduped.push(entry);
-    }
+    let deduped = dedupe_catalog_entries_and_apply_children_counts(entries);
 
     Ok(WorkspaceScopeCatalogData {
         scope_kind,

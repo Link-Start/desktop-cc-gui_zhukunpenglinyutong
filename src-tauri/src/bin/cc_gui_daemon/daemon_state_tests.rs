@@ -37,6 +37,26 @@ fn daemon_codex_local_thread_response_marks_live_unavailable() {
 }
 
 #[test]
+fn daemon_codex_local_thread_entry_preserves_parent_session_id() {
+    let mut session = codex_summary("child-session", 20);
+    session.parent_session_id = Some("parent-session".to_string());
+
+    let response = build_codex_daemon_local_thread_response(
+        "/repo",
+        vec![session],
+        None,
+        Some(1),
+        &HashMap::new(),
+    );
+    let entry = &response["result"]["data"][0];
+
+    assert_eq!(
+        entry.get("parentSessionId").and_then(Value::as_str),
+        Some("parent-session")
+    );
+}
+
+#[test]
 fn daemon_codex_empty_thread_response_still_marks_partial_source() {
     let response =
         build_codex_daemon_empty_thread_response(CODEX_DAEMON_LOCAL_THREAD_LIST_PARTIAL_SOURCE);

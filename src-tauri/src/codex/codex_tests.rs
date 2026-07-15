@@ -111,6 +111,7 @@ fn merge_unified_codex_thread_entries_dedupes_and_keeps_metadata_stable() {
         LocalUsageSessionSummary {
             session_id: "thread-dup".to_string(),
             session_id_aliases: Vec::new(),
+            parent_session_id: None,
             timestamp: 110,
             cwd: None,
             model: "openai/gpt-5".to_string(),
@@ -130,6 +131,7 @@ fn merge_unified_codex_thread_entries_dedupes_and_keeps_metadata_stable() {
         LocalUsageSessionSummary {
             session_id: "thread-local".to_string(),
             session_id_aliases: Vec::new(),
+            parent_session_id: None,
             timestamp: 105,
             cwd: None,
             model: "openai/gpt-5-mini".to_string(),
@@ -199,6 +201,7 @@ fn merge_unified_codex_thread_entries_replaces_generic_vscode_source() {
     let local_sessions = vec![LocalUsageSessionSummary {
         session_id: "thread-dup".to_string(),
         session_id_aliases: Vec::new(),
+        parent_session_id: None,
         timestamp: 110,
         cwd: None,
         model: "openai/gpt-5".to_string(),
@@ -244,6 +247,7 @@ fn merge_unified_codex_thread_entries_matches_session_id_aliases() {
     let local_sessions = vec![LocalUsageSessionSummary {
         session_id: "session-123".to_string(),
         session_id_aliases: vec!["rollout-2026-04-10T10-00-00-session-123".to_string()],
+        parent_session_id: None,
         timestamp: 110,
         cwd: None,
         model: "openai/gpt-5".to_string(),
@@ -281,6 +285,113 @@ fn merge_unified_codex_thread_entries_matches_session_id_aliases() {
 }
 
 #[test]
+fn merge_unified_codex_thread_entries_dedupes_child_rollouts_and_keeps_parent() {
+    let live_entries = vec![json!({
+        "id": "child-session",
+        "preview": "live child",
+        "updatedAt": 120,
+        "createdAt": 120
+    })];
+    let local_sessions = vec![
+        LocalUsageSessionSummary {
+            session_id: "child-session".to_string(),
+            parent_session_id: Some("parent-session".to_string()),
+            timestamp: 110,
+            model: "gpt-5".to_string(),
+            summary: Some("Aristotle".to_string()),
+            ..Default::default()
+        },
+        LocalUsageSessionSummary {
+            session_id: "child-session".to_string(),
+            parent_session_id: Some("parent-session".to_string()),
+            timestamp: 100,
+            model: "gpt-5".to_string(),
+            summary: Some("Aristotle".to_string()),
+            ..Default::default()
+        },
+    ];
+    let workspace_session_ids: HashSet<String> = local_sessions
+        .iter()
+        .flat_map(codex_session_identifier_candidates)
+        .collect();
+
+    let merged = merge_unified_codex_thread_entries(
+        live_entries,
+        &local_sessions,
+        &workspace_session_ids,
+        "/tmp/workspace",
+        10,
+    );
+
+    assert_eq!(merged.len(), 1);
+    assert_eq!(merged[0]["id"], "child-session");
+    assert_eq!(merged[0]["parentSessionId"], "parent-session");
+}
+
+#[test]
+fn merge_unified_codex_thread_entries_resolves_parent_to_visible_alias() {
+    let parent_alias = "rollout-2026-04-10T10-00-00-parent-session";
+    let child_alias = "rollout-2026-04-10T10-01-00-child-session";
+    let live_entries = vec![
+        json!({
+            "id": parent_alias,
+            "preview": "live parent",
+            "updatedAt": 100,
+            "createdAt": 100
+        }),
+        json!({
+            "id": child_alias,
+            "preview": "live child",
+            "updatedAt": 110,
+            "createdAt": 110
+        }),
+    ];
+    let local_sessions = vec![
+        LocalUsageSessionSummary {
+            session_id: "parent-session".to_string(),
+            session_id_aliases: vec![parent_alias.to_string()],
+            timestamp: 100,
+            model: "gpt-5".to_string(),
+            summary: Some("Parent".to_string()),
+            ..Default::default()
+        },
+        LocalUsageSessionSummary {
+            session_id: "child-session".to_string(),
+            session_id_aliases: vec![child_alias.to_string()],
+            parent_session_id: Some("parent-session".to_string()),
+            timestamp: 110,
+            model: "gpt-5".to_string(),
+            summary: Some("Aristotle".to_string()),
+            ..Default::default()
+        },
+    ];
+    let workspace_session_ids: HashSet<String> = local_sessions
+        .iter()
+        .flat_map(codex_session_identifier_candidates)
+        .collect();
+
+    let merged = merge_unified_codex_thread_entries(
+        live_entries,
+        &local_sessions,
+        &workspace_session_ids,
+        "/tmp/workspace",
+        10,
+    );
+    let parent = merged
+        .iter()
+        .find(|entry| entry["id"] == parent_alias)
+        .expect("visible parent");
+    let child = merged
+        .iter()
+        .find(|entry| entry["id"] == child_alias)
+        .expect("visible child");
+
+    assert_eq!(parent["canonicalSessionId"], "parent-session");
+    assert_eq!(child["canonicalSessionId"], "child-session");
+    assert_eq!(child["parentSessionId"], parent_alias);
+}
+
+#[test]
 fn merge_unified_codex_thread_entries_filters_background_helper_sessions() {
     let live_entries = vec![
         json!({
@@ -306,6 +417,7 @@ fn merge_unified_codex_thread_entries_filters_background_helper_sessions() {
         LocalUsageSessionSummary {
             session_id: "session-memory-helper".to_string(),
             session_id_aliases: vec!["thread-memory-helper".to_string()],
+            parent_session_id: None,
             timestamp: 125,
             cwd: None,
             model: "openai/gpt-5".to_string(),
@@ -328,6 +440,7 @@ fn merge_unified_codex_thread_entries_filters_background_helper_sessions() {
         LocalUsageSessionSummary {
             session_id: "thread-visible-local".to_string(),
             session_id_aliases: Vec::new(),
+            parent_session_id: None,
             timestamp: 90,
             cwd: None,
             model: "openai/gpt-5".to_string(),
@@ -422,6 +535,7 @@ fn merge_unified_codex_thread_entries_backfills_workspace_cwd_for_mapped_live_ro
     let local_sessions = vec![LocalUsageSessionSummary {
         session_id: "session-123".to_string(),
         session_id_aliases: vec!["rollout-2026-04-10T10-00-00-session-123".to_string()],
+        parent_session_id: None,
         timestamp: 110,
         cwd: None,
         model: "openai/gpt-5".to_string(),

@@ -437,6 +437,7 @@ fn parse_gemini_session_summary(path: &Path) -> Result<Option<LocalUsageSessionS
     Ok(Some(LocalUsageSessionSummary {
         session_id,
         session_id_aliases: Vec::new(),
+        parent_session_id: None,
         timestamp,
         cwd: None,
         model,

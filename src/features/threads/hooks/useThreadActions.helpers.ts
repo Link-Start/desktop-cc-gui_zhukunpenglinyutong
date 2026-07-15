@@ -1570,7 +1570,10 @@ function normalizeThreadMetaValue(value: unknown): string | undefined {
 
 export function resolveThreadSourceMeta(
   thread: Record<string, unknown>,
-): Pick<ThreadSummary, "source" | "provider" | "sourceLabel"> {
+): Pick<
+  ThreadSummary,
+  "source" | "provider" | "sourceLabel" | "parentThreadId"
+> {
   const source =
     normalizeThreadMetaValue(thread.source) ??
     normalizeThreadMetaValue(thread.sessionSource);
@@ -1581,10 +1584,16 @@ export function resolveThreadSourceMeta(
   const sourceLabel =
     normalizeThreadMetaValue(thread.sourceLabel) ??
     (source && provider ? `${source}/${provider}` : (source ?? provider));
+  const parentThreadId =
+    normalizeThreadMetaValue(thread.parentThreadId) ??
+    normalizeThreadMetaValue(thread.parentSessionId) ??
+    normalizeThreadMetaValue(thread.parent_thread_id) ??
+    normalizeThreadMetaValue(thread.parent_session_id);
   return {
     source,
     provider,
     sourceLabel,
+    ...(parentThreadId ? { parentThreadId } : {}),
   };
 }
 

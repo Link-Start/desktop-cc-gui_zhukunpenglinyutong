@@ -67,6 +67,7 @@ pub(super) fn build_codex_daemon_local_thread_entry(
         "id": &session.session_id,
         "engine": "codex",
         "canonicalSessionId": &session.session_id,
+        "parentSessionId": &session.parent_session_id,
         "attributionStatus": "strict-match",
         "preview": preview,
         "title": preview,
