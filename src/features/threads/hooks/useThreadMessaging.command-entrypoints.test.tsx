@@ -132,6 +132,7 @@ describe("useThreadMessaging command entrypoints", () => {
       itemsByThread?: Record<string, ConversationItem[]>;
       dispatch?: ReturnType<typeof vi.fn>;
       forkThreadForWorkspace?: ReturnType<typeof vi.fn>;
+      updateThreadParent?: ReturnType<typeof vi.fn>;
       resolveComposerSelection?: () => {
         id?: string | null;
         model: string | null;
@@ -153,6 +154,7 @@ describe("useThreadMessaging command entrypoints", () => {
     const startThreadForWorkspace =
       overrides.startThreadForWorkspace ?? vi.fn(async () => ensuredThreadId);
     const refreshThread = overrides.refreshThread ?? vi.fn(async () => null);
+    const updateThreadParent = overrides.updateThreadParent ?? vi.fn();
 
     const hook = renderHook(() =>
       useThreadMessaging({
@@ -189,14 +191,20 @@ describe("useThreadMessaging command entrypoints", () => {
         ensureThreadForWorkspace: async () => ensuredThreadId,
         refreshThread,
         forkThreadForWorkspace: overrides.forkThreadForWorkspace ?? vi.fn(async () => null),
-        updateThreadParent: vi.fn(),
+        updateThreadParent,
         startThreadForWorkspace,
         resolveComposerSelection: overrides.resolveComposerSelection,
         onDebug: vi.fn(),
       }),
     );
 
-    return { ...hook, dispatch, refreshThread, startThreadForWorkspace };
+    return {
+      ...hook,
+      dispatch,
+      refreshThread,
+      startThreadForWorkspace,
+      updateThreadParent,
+    };
   }
 
   it("uses opencode MCP command path when engine is opencode", async () => {
@@ -358,7 +366,7 @@ describe("useThreadMessaging command entrypoints", () => {
       result: { turn: { id: "turn-1" }, sessionId: "child-session-1" },
     });
     const forkThreadForWorkspace = vi.fn(async () => "claude-fork:parent-session:local-1");
-    const { result } = makeHook("claude", {
+    const { result, updateThreadParent } = makeHook("claude", {
       activeThreadId: "claude:parent-session",
       ensuredThreadId: "claude:parent-session",
       threadEngineById: {
@@ -383,6 +391,7 @@ describe("useThreadMessaging command entrypoints", () => {
     });
 
     expect(forkThreadForWorkspace).toHaveBeenCalledWith("ws-1", "claude:parent-session");
+    expect(updateThreadParent).not.toHaveBeenCalled();
     expect(engineSendMessage).toHaveBeenCalledWith(
       "ws-1",
       expect.objectContaining({
@@ -396,6 +405,26 @@ describe("useThreadMessaging command entrypoints", () => {
         forkSessionId: "parent-session",
       }),
     );
+  });
+
+  it("keeps a user-created Codex fork out of the subagent relationship store", async () => {
+    const forkThreadForWorkspace = vi.fn(async () => "codex:fork-child");
+    const { result, updateThreadParent } = makeHook("codex", {
+      activeThreadId: "codex:parent",
+      ensuredThreadId: "codex:parent",
+      threadEngineById: {
+        "codex:parent": "codex",
+        "codex:fork-child": "codex",
+      },
+      forkThreadForWorkspace,
+    });
+
+    await act(async () => {
+      await result.current.startFork("/fork");
+    });
+
+    expect(forkThreadForWorkspace).toHaveBeenCalledWith("ws-1", "codex:parent");
+    expect(updateThreadParent).not.toHaveBeenCalled();
   });
 
   it("ignores /review-like custom commands in review entrypoint", async () => {

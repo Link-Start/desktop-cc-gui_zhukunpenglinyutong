@@ -190,3 +190,21 @@ describe("useAppShellSections Kanban execution adapter contract", () => {
     expect(executionReturn).toContain("handleDispatchOrchestrationTask,");
   });
 });
+
+describe("useAppShellSections rewind adapter contract", () => {
+  it("marks message rewind with an explicit rewind operation", () => {
+    const source = readFileSync(
+      join(currentDir, "useAppShellSections.ts"),
+      "utf8",
+    );
+    const rewindHandler = source.slice(
+      source.indexOf("const handleRewindFromMessage = useCallback("),
+      source.indexOf(
+        "const handleSelectWorkspaceInstance",
+        source.indexOf("const handleRewindFromMessage = useCallback("),
+      ),
+    );
+
+    expect(rewindHandler).toContain('operation: "rewind"');
+  });
+});

@@ -280,6 +280,7 @@ describe("useAppShellLayoutNodesSection adapter contract", () => {
     expect(forkHandler).toContain("forkSessionFromMessageForWorkspace");
     expect(forkHandler).toContain("messageId");
     expect(forkHandler).toContain('mode: "messages-only"');
+    expect(forkHandler).toContain('operation: "fork"');
     expect(forkHandler).toContain(
       "providerProfileId: options?.providerProfileId ?? null",
     );
@@ -289,7 +290,7 @@ describe("useAppShellLayoutNodesSection adapter contract", () => {
     expect(forkHandler).toContain(
       'throw new Error("Fork did not return a child conversation.")',
     );
-    expect(forkHandler).toContain('typeof updateThreadParent === "function"');
+    expect(forkHandler).not.toContain("updateThreadParent(");
     expect(forkHandler).not.toContain('await startFork("/fork");');
     expect(forkHandler).not.toContain(
       "forkClaudeSessionFromMessageForWorkspace",

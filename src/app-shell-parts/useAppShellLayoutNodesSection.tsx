@@ -533,7 +533,6 @@ export function useAppShellLayoutNodesSection(
     unpinThread,
     updateCustomInstructions,
     updateSharedSessionEngineSelection,
-    updateThreadParent,
     updateWorkspaceSettings,
     updaterState,
     userInputRequests,
@@ -1429,17 +1428,13 @@ export function useAppShellLayoutNodesSection(
         {
           activate: true,
           mode: "messages-only",
+          operation: "fork",
           providerProfileId: options?.providerProfileId ?? null,
           providerProfile: options?.providerProfile ?? null,
         },
       );
       if (!forkedThreadId) {
         throw new Error("Fork did not return a child conversation.");
-      }
-      if (forkedThreadId && forkedThreadId !== activeThreadId) {
-        if (typeof updateThreadParent === "function") {
-          updateThreadParent(activeThreadId, [forkedThreadId]);
-        }
       }
     },
   );

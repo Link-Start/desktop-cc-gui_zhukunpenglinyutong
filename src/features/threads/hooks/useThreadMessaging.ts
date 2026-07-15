@@ -319,7 +319,6 @@ export function useThreadMessaging({
   ensureThreadForWorkspace,
   refreshThread,
   forkThreadForWorkspace,
-  updateThreadParent,
   startThreadForWorkspace,
   finalizeCodexPendingThread,
   resolveOpenCodeAgent,
@@ -2427,7 +2426,6 @@ export function useThreadMessaging({
     threadStatusById,
     codexCompactionInFlightByThreadRef: effectiveCodexCompactionInFlightByThreadRef,
     tokenUsageByThread,
-    updateThreadParent,
   });
 
   return {

@@ -1,5 +1,6 @@
 import type { ThreadSummary } from "../../../types";
 import { prepareThreadItems } from "../../../utils/threadItems";
+import { isClaudeForkThreadId } from "../utils/claudeForkThread";
 import type { ThreadState } from "./threadReducerTypes";
 
 export function attachReplacedThreadId(
@@ -194,7 +195,9 @@ export function renameThreadStateIdentity({
 
   const newThreadParentById = { ...state.threadParentById };
   if (newThreadParentById[oldThreadId]) {
-    newThreadParentById[newThreadId] = newThreadParentById[oldThreadId];
+    if (!isClaudeForkThreadId(oldThreadId)) {
+      newThreadParentById[newThreadId] = newThreadParentById[oldThreadId];
+    }
     delete newThreadParentById[oldThreadId];
   }
   for (const [threadId, parentId] of Object.entries(newThreadParentById)) {

@@ -79,6 +79,35 @@ describe("threadReducer", () => {
     expect(ids).toContain("claude-pending-bg");
   });
 
+  it("keeps a non-active Claude fork bootstrap thread during list refresh", () => {
+    const forkThreadId = "claude-fork:parent-session:local-1";
+    const base: ThreadState = {
+      ...initialState,
+      activeThreadIdByWorkspace: { "ws-1": "thread-main" },
+      threadsByWorkspace: {
+        "ws-1": [
+          { id: "thread-main", name: "Main", updatedAt: 200, engineSource: "codex" },
+          {
+            id: forkThreadId,
+            name: "fork-Parent session",
+            updatedAt: 190,
+            engineSource: "claude",
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      threads: [{ id: "thread-main", name: "Main", updatedAt: 300, engineSource: "codex" }],
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toContain(
+      forkThreadId,
+    );
+  });
+
   it("drops idle non-active pending threads during list refresh", () => {
     const base: ThreadState = {
       ...initialState,
@@ -785,6 +814,10 @@ describe("threadReducer", () => {
       activeTurnIdByThread: {
         [forkThreadId]: "turn-1",
       },
+      threadParentById: {
+        [forkThreadId]: "claude:parent-session",
+        "claude:real-subagent": forkThreadId,
+      },
     };
 
     const next = threadReducer(base, {
@@ -806,6 +839,10 @@ describe("threadReducer", () => {
     expect(next.threadsByWorkspace["ws-1"]?.[0]?.nativeThreadIds).toContain(forkThreadId);
     expect(next.threadStatusById["claude:child-session"]?.isProcessing).toBe(true);
     expect(next.activeTurnIdByThread["claude:child-session"]).toBe("turn-1");
+    expect(next.threadParentById["claude:child-session"]).toBeUndefined();
+    expect(next.threadParentById["claude:real-subagent"]).toBe(
+      "claude:child-session",
+    );
   });
 
   it("does not treat finalized Claude sessions as pending rename candidates", () => {

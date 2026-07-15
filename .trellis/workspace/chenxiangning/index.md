@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-25.md`
-- **Total Sessions**: 991
+- **Total Sessions**: 993
 - **Last Active**: 2026-07-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~807 | Active |
+| `journal-25.md` | ~873 | Active |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +53,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 993 | 2026-07-15 | 修复 Fork 会话投影与 Claude 幕布生命周期 | `a1fe352e` | `feature/v-0.7.3` |
+| 992 | 2026-07-15 | 修复新增文件空白 Diff 回退 | `28d1df33` | `feature/v-0.7.3` |
 | 991 | 2026-07-15 | 合并并审查 Codex 子代理侧栏投影修复 | `0470eb43` | `feature/v-0.7.2` |
 | 990 | 2026-07-15 | 审计周度代码变更并收口 OpenSpec | `84f00051` | `feature/v-0.7.2` |
 | 989 | 2026-07-15 | 更新 0.7.3 发布说明 | `83adce03` | `feature/v-0.7.2` |

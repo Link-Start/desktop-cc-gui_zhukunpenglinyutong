@@ -77,6 +77,7 @@ type ResumeThreadForWorkspace = (
 type RewindFromMessageOptions = {
   activate?: boolean;
   mode?: RewindMode;
+  operation?: "fork" | "rewind";
   providerProfileId?: string | null;
   providerProfile?: CodexProviderProfileOption | null;
 };
@@ -696,6 +697,7 @@ export function useThreadActionsSessionRuntime({
         return null;
       }
       const shouldActivate = options?.activate !== false;
+      const operation = options?.operation ?? "rewind";
       const rewindMode = normalizeRewindMode(options?.mode);
       const shouldRestoreFiles = shouldRestoreWorkspaceFiles(rewindMode);
       const shouldRewindSession = shouldRewindMessages(rewindMode);
@@ -799,7 +801,11 @@ export function useThreadActionsSessionRuntime({
         if (!shouldRewindSession) {
           return threadId;
         }
-        if (firstHistoryMessageId && resolvedMessageId === firstHistoryMessageId) {
+        if (
+          operation === "rewind" &&
+          firstHistoryMessageId &&
+          resolvedMessageId === firstHistoryMessageId
+        ) {
           await deleteClaudeSessionService(workspacePath, sessionId);
           delete loadedThreadsRef.current[threadId];
           dispatch({
@@ -830,6 +836,43 @@ export function useThreadActionsSessionRuntime({
             );
           }
           return null;
+        }
+        if (operation === "fork") {
+          dispatch({
+            type: "ensureThread",
+            workspaceId,
+            threadId: forkedThreadId,
+            engine: "claude",
+          });
+          const forkThreadName = resolveClaudeForkThreadName({
+            workspaceId,
+            parentThreadId: threadId,
+            threadsByWorkspace,
+            itemsByThread,
+          });
+          dispatch({
+            type: "setThreadName",
+            workspaceId,
+            threadId: forkedThreadId,
+            name: forkThreadName,
+          });
+          await setThreadTitleService(
+            workspaceId,
+            forkedThreadId,
+            forkThreadName,
+          ).catch(() => {
+            // Best-effort only. The in-memory sidebar title is already set.
+          });
+          if (shouldActivate) {
+            dispatch({
+              type: "setActiveThreadId",
+              workspaceId,
+              threadId: forkedThreadId,
+            });
+          }
+          loadedThreadsRef.current[forkedThreadId] = false;
+          await resumeThreadForWorkspace(workspaceId, forkedThreadId, true, true);
+          return forkedThreadId;
         }
         dispatch({
           type: "renameThreadId",
@@ -896,6 +939,7 @@ export function useThreadActionsSessionRuntime({
       onDebug,
       renameThreadTitleMapping,
       resumeThreadForWorkspace,
+      threadsByWorkspace,
       workspacePathsByIdRef,
     ],
   );

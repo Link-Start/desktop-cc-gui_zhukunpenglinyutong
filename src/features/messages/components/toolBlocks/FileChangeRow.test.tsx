@@ -96,6 +96,55 @@ describe("FileChangeRow", () => {
     expect(onOpenDiffPath).toHaveBeenCalledWith("src/New.tsx");
   });
 
+  it("opens the canonical diff when a non-empty preview has no renderable lines", () => {
+    const onOpenUnavailablePreview = vi.fn();
+    const loadDiff = vi.fn((): FileChangeDiffPreview => ({
+      lines: [{ kind: "hunk", text: "@@ -0,0 +1 @@" }],
+    }));
+    const view = render(
+      <FileChangeRow
+        filePath="src/New.tsx"
+        additions={1}
+        deletions={0}
+        status="completed"
+        canExpand
+        loadDiff={loadDiff}
+        onOpenUnavailablePreview={onOpenUnavailablePreview}
+      />,
+    );
+
+    expect(loadDiff).not.toHaveBeenCalled();
+    fireEvent.click(view.container.querySelector('[data-slot="marker"]') as HTMLElement);
+
+    expect(loadDiff).toHaveBeenCalledOnce();
+    expect(onOpenUnavailablePreview).toHaveBeenCalledWith("src/New.tsx");
+    expect(view.container.querySelector(".tool-change-inline-diff")).toBeNull();
+  });
+
+  it("keeps a renderable inline preview ahead of canonical fallback", () => {
+    const onOpenUnavailablePreview = vi.fn();
+    const loadDiff = vi.fn((): FileChangeDiffPreview => ({
+      lines: [{ kind: "add", text: "const value = 1;" }],
+    }));
+    const view = render(
+      <FileChangeRow
+        filePath="src/New.tsx"
+        additions={1}
+        deletions={0}
+        status="completed"
+        canExpand
+        loadDiff={loadDiff}
+        onOpenUnavailablePreview={onOpenUnavailablePreview}
+      />,
+    );
+
+    fireEvent.click(view.container.querySelector('[data-slot="marker"]') as HTMLElement);
+
+    expect(loadDiff).toHaveBeenCalledOnce();
+    expect(onOpenUnavailablePreview).not.toHaveBeenCalled();
+    expect(screen.getByText("const value = 1;")).toBeTruthy();
+  });
+
   it("isolates canonical diff navigation failures", () => {
     const view = render(
       <FileChangeRow

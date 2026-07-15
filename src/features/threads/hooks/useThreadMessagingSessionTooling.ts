@@ -66,7 +66,6 @@ type UseThreadMessagingSessionToolingOptions = {
     threadId: string,
     options?: { activate?: boolean; providerProfileId?: string | null },
   ) => Promise<string | null>;
-  updateThreadParent: (parentId: string, childIds: string[]) => void;
   pushThreadErrorMessage: (
     workspaceId: string,
     threadId: string,
@@ -133,7 +132,6 @@ export function useThreadMessagingSessionTooling({
   threadStatusById,
   codexCompactionInFlightByThreadRef,
   tokenUsageByThread,
-  updateThreadParent,
 }: UseThreadMessagingSessionToolingOptions) {
   const startContext = useCallback(
     async (_text: string) => {
@@ -1211,7 +1209,6 @@ export function useThreadMessagingSessionTooling({
       if (!threadId) {
         return;
       }
-      updateThreadParent(activeThreadId, [threadId]);
       if (rest) {
         await sendMessageToThread(activeWorkspace, threadId, rest, [], options);
       }
@@ -1221,7 +1218,6 @@ export function useThreadMessagingSessionTooling({
       activeWorkspace,
       forkThreadForWorkspace,
       sendMessageToThread,
-      updateThreadParent,
     ],
   );
 

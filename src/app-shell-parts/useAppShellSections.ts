@@ -213,6 +213,7 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
         {
           activate: true,
           mode: options?.mode,
+          operation: "rewind",
         },
       );
       if (!forkedThreadId) {

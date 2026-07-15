@@ -391,6 +391,61 @@ describe("ThreadList", () => {
     );
   });
 
+  it("renders user forks as roots while real subagents stay nested and collapsed", () => {
+    render(
+      <ThreadList
+        {...baseProps}
+        activeThreadId="claude-fork:parent:local-1"
+        unpinnedRows={[
+          {
+            thread: {
+              ...thread,
+              id: "claude:parent",
+              name: "Parent",
+              engineSource: "claude",
+            },
+            depth: 0,
+            hasChildren: true,
+          },
+          {
+            thread: {
+              ...nestedThread,
+              id: "claude:real-subagent",
+              parentThreadId: "claude:parent",
+              engineSource: "claude",
+            },
+            depth: 1,
+          },
+          {
+            thread: {
+              id: "claude-fork:parent:local-1",
+              name: "fork-Parent",
+              updatedAt: 1100,
+              engineSource: "claude",
+            },
+            depth: 0,
+          },
+        ]}
+      />,
+    );
+
+    const forkRow = screen.getByText("fork-Parent").closest(".thread-row");
+    expect(forkRow?.classList.contains("is-subagent")).toBe(false);
+    expect(forkRow?.querySelector(".thread-subagent-tag")).toBeNull();
+    expect(screen.queryByText("Nested Agent")).toBeNull();
+
+    const parentRow = screen.getByText("Parent").closest(".thread-row");
+    fireEvent.click(
+      parentRow?.querySelector(".thread-tree-expander") as HTMLElement,
+    );
+
+    const subagentRow = screen.getByText("Nested Agent").closest(".thread-row");
+    expect(subagentRow?.classList.contains("is-subagent")).toBe(true);
+    expect(subagentRow?.querySelector(".thread-subagent-tag")?.textContent).toBe(
+      "Subagent",
+    );
+  });
+
   it("does not expose subagent parent controls on deeper nested child rows", () => {
     render(
       <ThreadList

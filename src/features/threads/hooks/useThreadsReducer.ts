@@ -41,6 +41,7 @@ import {
   shouldDeduplicateCodexAssistantMessages,
 } from "./useThreadsReducerAssistantDedup";
 import { isOptimisticUserMessageId } from "../utils/queuedHandoffBubble";
+import { isClaudeForkThreadId } from "../utils/claudeForkThread";
 import { resolvePendingThreadIdForSession } from "../utils/threadPendingResolution";
 import {
   isProcessingGeneratedImageItem,
@@ -596,7 +597,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
           const newThreadParentById = { ...state.threadParentById };
           if (newThreadParentById[oldThreadId]) {
-            newThreadParentById[newThreadId] = newThreadParentById[oldThreadId];
+            if (!isClaudeForkThreadId(oldThreadId)) {
+              newThreadParentById[newThreadId] = newThreadParentById[oldThreadId];
+            }
             delete newThreadParentById[oldThreadId];
           }
           for (const [threadId, parentId] of Object.entries(newThreadParentById)) {
@@ -2378,13 +2381,13 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         }
       }
 
-      // Preserve non-active pending threads that are still anchored by realtime state.
-      // Without this, background CLI sessions can briefly appear as pending and then
-      // disappear on the next list refresh before local history indexing catches up.
+      // Preserve provisional runtime threads until native history can represent them.
+      // Claude Fork bootstraps have no native row before their first send, while other
+      // pending threads still require a realtime or folder anchor.
       const preservedThreadIds = new Set(visibleThreads.map((thread) => thread.id));
-      const pendingToPreserve = existingThreads.filter((thread) => {
+      const provisionalThreadsToPreserve = existingThreads.filter((thread) => {
         const threadId = thread.id;
-        if (!threadId.includes("-pending-")) {
+        if (!threadId.includes("-pending-") && !isClaudeForkThreadId(threadId)) {
           return false;
         }
         if (threadId === activeThreadId) {
@@ -2401,9 +2404,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         if (typeof thread.folderId === "string" && thread.folderId.trim().length > 0) {
           return true;
         }
-        return hasPendingThreadAnchor(threadId);
+        return isClaudeForkThreadId(threadId) || hasPendingThreadAnchor(threadId);
       });
-      pendingToPreserve.forEach((thread) => preservedThreadIds.add(thread.id));
+      provisionalThreadsToPreserve.forEach((thread) => preservedThreadIds.add(thread.id));
       const finalizedCodexToPreserve = shouldPreserveDegradedCodexFinalizedThreads
         ? existingThreads.filter((thread) => {
           const threadId = thread.id;
@@ -2440,7 +2443,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         preservedThreadIds.add(thread.id);
       });
       const mergedVisibleThreads =
-        pendingToPreserve.length > 0 ||
+        provisionalThreadsToPreserve.length > 0 ||
         finalizedCodexToPreserve.length > 0 ||
         locallyAcceptedCodexToPreserve.length > 0
           ? activeThreadId && visibleThreads[0]?.id === activeThreadId
@@ -2448,13 +2451,13 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
               visibleThreads[0],
               ...finalizedCodexToPreserve,
               ...locallyAcceptedCodexToPreserve,
-              ...pendingToPreserve,
+              ...provisionalThreadsToPreserve,
               ...visibleThreads.slice(1),
             ]
             : [
               ...finalizedCodexToPreserve,
               ...locallyAcceptedCodexToPreserve,
-              ...pendingToPreserve,
+              ...provisionalThreadsToPreserve,
               ...visibleThreads,
             ]
           : visibleThreads;
