@@ -670,3 +670,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 988: 修复界面缩放下语言选择器渲染
+
+**Date**: 2026-07-15
+**Task**: 修复界面缩放下语言选择器渲染
+**Branch**: `feature/v-0.7.2`
+
+### Summary
+
+将设置页语言选择器从 Radix Portal 改为带定制 closed-state 样式的原生 select，修复 macOS WebView 在 UI Scale 大于 100% 时下拉层异常；补充 8 个组件回归测试，同步并归档 OpenSpec。用户已在客户端验收通过；lint、typecheck、OpenSpec strict validation 通过，完整测试仅有既存且无关的 SettingsView 可见性文案用例失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `21bdde7a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
