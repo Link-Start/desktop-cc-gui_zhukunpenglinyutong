@@ -1213,6 +1213,108 @@ describe("GitDiffPanel", () => {
     expect(modal?.classList.contains("is-maximized")).toBe(false);
   });
 
+  it("opens the existing modal from an external path request", async () => {
+    const props = {
+      ...baseProps,
+      unstagedFiles: [
+        { path: "src/new-file.ts", status: "A", additions: 2, deletions: 0 },
+      ],
+      diffEntries: [
+        {
+          path: "src/new-file.ts",
+          status: "A",
+          diff: "@@ -0,0 +1,2 @@\n+one\n+two",
+        },
+      ],
+    };
+    const { rerender } = render(
+      <GitDiffPanel
+        {...props}
+        modalPreviewRequest={{ path: "src/new-file.ts", requestId: 1, maximized: true }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-diff-modal")?.classList.contains("is-maximized"))
+        .toBe(true);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Mock close preview" }));
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-diff-modal")).toBeNull();
+    });
+
+    rerender(
+      <GitDiffPanel
+        {...props}
+        modalPreviewRequest={{ path: "src/new-file.ts", requestId: 2, maximized: true }}
+      />,
+    );
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-diff-modal")).toBeTruthy();
+    });
+  });
+
+  it("keeps an external request for a missing path as a stable no-op", () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        modalPreviewRequest={{ path: "src/missing.ts", requestId: 1 }}
+      />,
+    );
+
+    expect(document.querySelector(".git-history-diff-modal")).toBeNull();
+  });
+
+  it("retries an external request when the Git file list arrives later", async () => {
+    const request = { path: "src/delayed.ts", requestId: 1, maximized: true };
+    const { rerender } = render(
+      <GitDiffPanel {...baseProps} modalPreviewRequest={request} />,
+    );
+    expect(document.querySelector(".git-history-diff-modal")).toBeNull();
+
+    rerender(
+      <GitDiffPanel
+        {...baseProps}
+        unstagedFiles={[
+          { path: "src/delayed.ts", status: "A", additions: 1, deletions: 0 },
+        ]}
+        diffEntries={[
+          { path: "src/delayed.ts", status: "A", diff: "@@ -0,0 +1 @@\n+new" },
+        ]}
+        modalPreviewRequest={request}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-diff-modal")?.classList.contains("is-maximized"))
+        .toBe(true);
+    });
+  });
+
+  it("opens a staged file from an external modal request", async () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        stagedFiles={[
+          { path: "src/staged.ts", status: "M", additions: 1, deletions: 1 },
+        ]}
+        diffEntries={[
+          {
+            path: "src/staged.ts",
+            status: "M",
+            diff: "@@ -1 +1 @@\n-old\n+new",
+          },
+        ]}
+        modalPreviewRequest={{ path: "src/staged.ts", requestId: 1, maximized: true }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-diff-modal")?.classList.contains("is-maximized"))
+        .toBe(true);
+    });
+  });
+
   it("routes preview modal close through GitDiffViewer external header controls", async () => {
     render(
       <GitDiffPanel

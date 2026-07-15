@@ -76,6 +76,7 @@ export type MessagesProps = {
   isPlanMode?: boolean;
   isPlanProcessing?: boolean;
   onOpenDiffPath?: (path: string) => void;
+  onPreviewFileDiff?: (path: string) => void;
   onOpenPlanPanel?: () => void;
   onExitPlanModeExecute?: (
     mode: Extract<AccessMode, "default" | "full-access">,

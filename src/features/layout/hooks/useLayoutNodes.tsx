@@ -33,6 +33,7 @@ import type {
 } from "../../composer/components/Composer";
 import { GitDiffViewer } from "../../git/components/GitDiffViewer";
 import { buildCanonicalGitChanges } from "../../git/utils/gitChangeModel";
+import type { GitModalPreviewRequest } from "../../git/components/GitDiffPanelTypes";
 import { FileTreePanel } from "../../files/components/FileTreePanel";
 import { WorkspaceFileComparePanel } from "../../files/components/WorkspaceFileComparePanel";
 import { WorkspaceSearchPanel } from "../../search/components/WorkspaceSearchPanel";
@@ -287,6 +288,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const { t } = useTranslation();
   const clientUiVisibility = useClientUiVisibility();
   const onOpenFile = options.onOpenFile;
+  const onFilePanelModeChange = options.onFilePanelModeChange;
   const [preferredDockStatusTab, setPreferredDockStatusTab] = useState<{
     tab: TabType;
     requestKey: number;
@@ -301,8 +303,11 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   >([]);
   const [noteCardSelectionRequest, setNoteCardSelectionRequest] =
     useState<ComposerNoteCardSelectionRequest | null>(null);
+  const [gitModalPreviewRequest, setGitModalPreviewRequest] =
+    useState<GitModalPreviewRequest | null>(null);
   const rewindDialogRequestSerialRef = useRef(0);
   const noteCardSelectionRequestSerialRef = useRef(0);
+  const gitModalPreviewRequestSerialRef = useRef(0);
   const activeThreadStatus = options.activeThreadId
     ? (options.threadStatusById[options.activeThreadId] ?? null)
     : null;
@@ -523,6 +528,36 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     [
       canonicalGitPanelChanges.stagedFiles,
       canonicalGitPanelChanges.unstagedFiles,
+    ],
+  );
+  const handlePreviewFileDiff = useCallback(
+    (path: string) => {
+      const normalizedPath = path.trim();
+      if (!normalizedPath) {
+        return;
+      }
+      const availablePaths = [
+        ...canonicalGitPanelChanges.stagedFiles,
+        ...canonicalGitPanelChanges.unstagedFiles,
+      ].map((file) => file.path);
+      const resolvedPath = resolveDiffPathFromWorkspacePath(
+        normalizedPath,
+        availablePaths,
+        activeWorkspacePath,
+      );
+      gitModalPreviewRequestSerialRef.current += 1;
+      setGitModalPreviewRequest({
+        path: resolvedPath ?? normalizedPath,
+        requestId: gitModalPreviewRequestSerialRef.current,
+        maximized: true,
+      });
+      onFilePanelModeChange("git");
+    },
+    [
+      activeWorkspacePath,
+      canonicalGitPanelChanges.stagedFiles,
+      canonicalGitPanelChanges.unstagedFiles,
+      onFilePanelModeChange,
     ],
   );
   const onGitDiffListViewChange = options.onGitDiffListViewChange;
@@ -968,6 +1003,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           isPlanMode: options.isPlanMode,
           isPlanProcessing: false,
           onOpenDiffPath: handleOpenDiffPath,
+          onPreviewFileDiff: handlePreviewFileDiff,
           onOpenPlanPanel: options.onOpenPlanPanel,
           onExitPlanModeExecute: options.handleExitPlanModeExecute,
           onOpenWorkspaceFile: options.onOpenFile,
@@ -1025,6 +1061,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.selectedCollaborationModeId,
       options.isPlanMode,
       handleOpenDiffPath,
+      handlePreviewFileDiff,
       options.onOpenPlanPanel,
       options.handleExitPlanModeExecute,
       options.onOpenFile,
@@ -1448,7 +1485,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
 
   const sidebarSelectedDiffPath =
     options.centerMode === "diff" ? options.selectedDiffPath : null;
-  const onFilePanelModeChange = options.onFilePanelModeChange;
   const onOpenProjectMap = options.onOpenProjectMap;
   const onOpenIntentCanvas = options.onOpenIntentCanvas;
   const onOpenSpecHub = options.onOpenSpecHub;
@@ -1725,6 +1761,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onOpenFile={(path) =>
             options.onOpenFile(path, undefined, { pathDomain: "git" })
           }
+          modalPreviewRequest={gitModalPreviewRequest}
           selectedPath={sidebarSelectedDiffPath}
           logEntries={options.gitLogEntries}
           logTotal={options.gitLogTotal}

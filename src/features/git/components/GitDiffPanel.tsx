@@ -822,6 +822,7 @@ function GitDiffPanelImpl({
   onCreateCodeAnnotation,
   onRemoveCodeAnnotation,
   codeAnnotations = [],
+  modalPreviewRequest = null,
 }: GitDiffPanelProps) {
   const { t } = useTranslation();
   // Multi-select state for file list
@@ -846,6 +847,7 @@ function GitDiffPanelImpl({
   const [isUnsavedCloseDialogOpen, setIsUnsavedCloseDialogOpen] = useState(false);
   const [previewHeaderControlsTarget, setPreviewHeaderControlsTarget] = useState<HTMLDivElement | null>(null);
   const previewDraftActionsRef = useRef<EditableDiffDraftActions | null>(null);
+  const handledModalPreviewRequestIdRef = useRef<number | null>(null);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [commitMessageMenuEngine, setCommitMessageMenuEngine] = useState<CommitMessageEngine>("claude");
   const [isGitRootPanelOpen, setIsGitRootPanelOpen] = useState(
@@ -937,11 +939,34 @@ function GitDiffPanelImpl({
     [onSelectFile],
   );
 
-  const handleOpenFilePreview = useCallback((file: DiffFile, section: "staged" | "unstaged") => {
+  const handleOpenFilePreview = useCallback((
+    file: DiffFile,
+    section: "staged" | "unstaged",
+    maximized = false,
+  ) => {
     setIsPreviewModalDirty(false);
-    setIsPreviewModalMaximized(false);
+    setIsPreviewModalMaximized(maximized);
     setPreviewFile({ ...file, section });
   }, []);
+  useEffect(() => {
+    if (
+      !modalPreviewRequest ||
+      handledModalPreviewRequestIdRef.current === modalPreviewRequest.requestId
+    ) {
+      return;
+    }
+    const requestedFile = allFiles.find(
+      (file) => normalizeDiffPath(file.path) === normalizeDiffPath(modalPreviewRequest.path),
+    );
+    if (requestedFile) {
+      handledModalPreviewRequestIdRef.current = modalPreviewRequest.requestId;
+      handleOpenFilePreview(
+        requestedFile,
+        requestedFile.section,
+        modalPreviewRequest.maximized === true,
+      );
+    }
+  }, [allFiles, handleOpenFilePreview, modalPreviewRequest]);
   const modeOptions = useMemo(
     () => [
       {

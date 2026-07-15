@@ -3,6 +3,12 @@ import type { GitHubIssue, GitHubPullRequest, GitLogEntry } from "../../../types
 import type { CodeAnnotationBridgeProps } from "../../code-annotations/types";
 import type { PanelTabId } from "../../layout/components/PanelTabs";
 
+export type GitModalPreviewRequest = {
+  path: string;
+  requestId: number;
+  maximized?: boolean;
+};
+
 export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   workspaceId?: string | null;
   workspacePath?: string | null;
@@ -72,6 +78,7 @@ export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   selectedPath?: string | null;
   onSelectFile?: (path: string | null) => void;
   onOpenFile?: (path: string) => void;
+  modalPreviewRequest?: GitModalPreviewRequest | null;
   stagedFiles: {
     path: string;
     status: string;

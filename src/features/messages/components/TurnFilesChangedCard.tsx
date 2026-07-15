@@ -18,6 +18,7 @@ const COLLAPSED_FILE_COUNT = 4;
 
 interface TurnFilesChangedCardProps {
   summary: TurnFileChangesSummary;
+  onPreviewFileDiff?: (path: string) => void;
 }
 
 function DiffStat({
@@ -52,7 +53,10 @@ function DiffStat({
 }
 
 export const TurnFilesChangedCard = memo(
-  function TurnFilesChangedCard({ summary }: TurnFilesChangedCardProps) {
+  function TurnFilesChangedCard({
+    summary,
+    onPreviewFileDiff,
+  }: TurnFilesChangedCardProps) {
     const { t } = useTranslation();
     const [showAll, setShowAll] = useState(false);
 
@@ -79,12 +83,8 @@ export const TurnFilesChangedCard = memo(
         <div className="pb-1">
           {visibleFiles.map((file) => {
             const fileName = getFileName(file.path) || file.path;
-            return (
-              <div
-                key={file.path}
-                className="flex w-full items-center gap-2 px-3 py-1"
-                title={file.path}
-              >
+            const content = (
+              <>
                 <span
                   className="flex size-4 shrink-0 items-center justify-center [&_svg]:size-4"
                   aria-hidden
@@ -100,6 +100,25 @@ export const TurnFilesChangedCard = memo(
                   deletions={file.deletions}
                   className="ml-auto text-xs"
                 />
+              </>
+            );
+            return onPreviewFileDiff ? (
+              <button
+                key={file.path}
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-1 text-left transition-colors hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-none"
+                title={file.path}
+                onClick={() => onPreviewFileDiff(file.path)}
+              >
+                {content}
+              </button>
+            ) : (
+              <div
+                key={file.path}
+                className="flex w-full items-center gap-2 px-3 py-1"
+                title={file.path}
+              >
+                {content}
               </div>
             );
           })}

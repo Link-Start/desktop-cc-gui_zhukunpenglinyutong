@@ -263,6 +263,7 @@ export const Messages = memo(function Messages({
   isPlanMode: _isPlanMode = false,
   isPlanProcessing: _isPlanProcessing = false,
   onOpenDiffPath,
+  onPreviewFileDiff,
   conversationState = null,
   presentationProfile = null,
   onOpenWorkspaceFile,
@@ -2717,6 +2718,7 @@ export const Messages = memo(function Messages({
           conversationLightweightModeEnabled={conversationLightweightModeEnabled}
           messageNodeByIdRef={messageNodeByIdRef}
           onOpenDiffPath={onOpenDiffPath}
+          onPreviewFileDiff={onPreviewFileDiff}
           onConversationDetailHydrationRequest={handleConversationDetailHydrationRequest}
           onConversationLightweightModeEnable={handleConversationLightweightModeEnable}
           onRecoverThreadRuntime={onRecoverThreadRuntime}

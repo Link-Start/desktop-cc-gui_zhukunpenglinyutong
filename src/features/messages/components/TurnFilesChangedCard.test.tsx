@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TurnFilesChangedCard } from "./TurnFilesChangedCard";
 import type { TurnFileChangesSummary } from "../utils/turnFileChanges";
@@ -55,5 +55,35 @@ describe("TurnFilesChangedCard", () => {
     render(<TurnFilesChangedCard summary={buildSummary(2)} />);
     expect(screen.getByText("file-0.ts").closest("button")).toBeNull();
     expect(screen.getByText("file-1.ts").closest("button")).toBeNull();
+  });
+
+  it("requests modal diff preview from an accessible file button", () => {
+    const onPreviewFileDiff = vi.fn();
+    render(
+      <TurnFilesChangedCard
+        summary={buildSummary(2)}
+        onPreviewFileDiff={onPreviewFileDiff}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /file-1\.ts/ }));
+
+    expect(onPreviewFileDiff).toHaveBeenCalledOnce();
+    expect(onPreviewFileDiff).toHaveBeenCalledWith("src/file-1.ts");
+  });
+
+  it("expands hidden files without requesting a modal preview", () => {
+    const onPreviewFileDiff = vi.fn();
+    render(
+      <TurnFilesChangedCard
+        summary={buildSummary(6)}
+        onPreviewFileDiff={onPreviewFileDiff}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("messages.turnFilesChanged.showMore"));
+
+    expect(screen.getByText("file-5.ts")).toBeTruthy();
+    expect(onPreviewFileDiff).not.toHaveBeenCalled();
   });
 });
