@@ -970,3 +970,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 997: 修复大文件 Diff 对齐与跨平台换行保存
+
+**Date**: 2026-07-16
+**Task**: 修复大文件 Diff 对齐与跨平台换行保存
+**Branch**: `feature/v-0.7.3`
+
+### Summary
+
+引入 bounded line alignment 与 unique-anchor fallback，按 diff block 导航并用运行时行高保持双栏像素对齐；保存时保留既有 CRLF/CR line ending，补齐 focused tests 与 OpenSpec change。验证：29 tests、ESLint、typecheck、git diff check、strict OpenSpec validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `031f4563f5a5f908f279f43b231fd442de757295` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

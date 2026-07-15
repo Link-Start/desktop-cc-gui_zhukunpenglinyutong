@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-25.md`
-- **Total Sessions**: 996
+- **Total Sessions**: 997
 - **Last Active**: 2026-07-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~972 | Active |
+| `journal-25.md` | ~1005 | Active |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +53,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 997 | 2026-07-16 | 修复大文件 Diff 对齐与跨平台换行保存 | `031f4563f5a5f908f279f43b231fd442de757295` | `feature/v-0.7.3` |
 | 996 | 2026-07-16 | 修复 Codex 已结束会话 loading 复活 | `7f90d84c` | `feature/v-0.7.3` |
 | 995 | 2026-07-15 | 已编辑文件最大化 Diff 预览 | `e902a0ae` | `feature/v-0.7.3` |
 | 994 | 2026-07-15 | 恢复幕布新增文件内联 Diff | `07ed4c70` | `feature/v-0.7.3` |
