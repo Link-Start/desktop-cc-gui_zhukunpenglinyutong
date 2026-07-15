@@ -805,3 +805,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 992: 修复新增文件空白 Diff 回退
+
+**Date**: 2026-07-15
+**Task**: 修复新增文件空白 Diff 回退
+**Branch**: `feature/v-0.7.3`
+
+### Summary
+
+审查并提交消息幕布新增文件 Diff fallback：仅 added 文件在 inline preview 不可渲染时跳转 canonical Git Diff，保留合法 inline preview 与 lazy parse；focused 38 tests、lint、typecheck、OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `28d1df33` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
