@@ -937,3 +937,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 996: 修复 Codex 已结束会话 loading 复活
+
+**Date**: 2026-07-16
+**Task**: 修复 Codex 已结束会话 loading 复活
+**Branch**: `feature/v-0.7.3`
+
+### Summary
+
+仅调整 Codex 前端 processing 启动权限：progress/content 事件不再把已结束会话重新置为 loading；保留显式新 turn 与 compaction 生命周期，并补齐并行会话、迟到事件和 compaction 回归测试；同步并归档 OpenSpec change。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7f90d84c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
