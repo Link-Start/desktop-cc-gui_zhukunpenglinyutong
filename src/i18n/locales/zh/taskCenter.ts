@@ -1,0 +1,67 @@
+// taskCenter — Simplified Chinese UI strings
+const taskCenter = {
+  taskCenter: {
+    title: "任务中心",
+    eyebrow: "Agent Runs",
+    workspaceHero: "当前最需要关注的运行",
+    statusFilter: "状态",
+    engineFilter: "引擎",
+    filterAll: "全部",
+    empty: "暂无任务运行记录",
+    summary: "共 {{total}} 条运行，其中 {{attention}} 条需要关注",
+    openedFromProjectMap:
+      "已从 Project Map 待处理队列打开 linked Run。这里展示真实 TaskRun 详情；如果没有会话按钮，说明这个 Run 尚未绑定真实会话。",
+    trigger: "触发方式",
+    updatedAt: "更新时间",
+    currentStep: "当前步骤",
+    latestOutput: "最新输出",
+    diagnostics: "诊断",
+    artifacts: "产物",
+    browserEvidence: "浏览器证据",
+    unavailable: "暂不可用",
+    noArtifacts: "暂无产物",
+    noBrowserEvidence: "暂无关联浏览器证据",
+    browserEvidenceCandidates: "候选项",
+    source: {
+      kanban: "看板",
+      orchestration: "编排",
+    },
+    browserEvidenceState: {
+      available: "可用",
+      stale: "已过时",
+      expired: "已过期",
+      degraded: "降级",
+      deleted: "已删除",
+      unsupported: "不支持",
+    },
+    status: {
+      queued: "排队中",
+      planning: "规划中",
+      running: "运行中",
+      waiting_input: "等待输入",
+      blocked: "已阻塞",
+      failed: "失败",
+      completed: "已完成",
+      canceled: "已取消",
+    },
+    action: {
+      openConversation: "打开会话",
+      openOrchestrationTask: "打开编排任务",
+      retry: "重试",
+      resume: "恢复",
+      cancel: "取消",
+      fork: "派生新运行",
+    },
+    nextStep: {
+      monitor: "运行仍在推进中，先观察当前步骤或必要时取消。",
+      openConversation: "下一步优先进入关联会话，补输入或查看最新输出。",
+      resume: "该运行已被阻塞，优先恢复并继续当前链路。",
+      retry: "本次运行已失败，优先重试或检查失败摘要。",
+      wait: "当前无需额外操作，等待本轮运行收敛。",
+      review: "先查看诊断和产物，再决定是否继续处理。",
+      fork: "可基于当前结果派生一条新运行继续推进。",
+    },
+  },
+};
+
+export default taskCenter;

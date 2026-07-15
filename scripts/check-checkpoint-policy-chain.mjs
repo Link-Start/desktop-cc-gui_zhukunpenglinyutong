@@ -4,8 +4,8 @@ import process from "node:process";
 
 const ROOT = process.cwd();
 const POLICY_DIR = path.join(ROOT, "src/features/status-panel/utils/policies");
-const ZH_LOCALE_FILE = path.join(ROOT, "src/i18n/locales/zh.part2.ts");
-const EN_LOCALE_FILE = path.join(ROOT, "src/i18n/locales/en.part2.ts");
+const ZH_LOCALE_DIR = path.join(ROOT, "src/i18n/locales/zh");
+const EN_LOCALE_DIR = path.join(ROOT, "src/i18n/locales/en");
 
 const requiredFiles = [
   "policyTypes.ts",
@@ -27,11 +27,19 @@ function readText(filePath) {
   return fs.readFileSync(filePath, "utf8");
 }
 
-function assertLocaleTokens(localeFile, tokens) {
-  const localeSource = readText(localeFile);
+function readLocaleSource(localeDir) {
+  return fs
+    .readdirSync(localeDir)
+    .filter((fileName) => fileName.endsWith(".ts"))
+    .map((fileName) => readText(path.join(localeDir, fileName)))
+    .join("\n");
+}
+
+function assertLocaleTokens(localeDir, tokens) {
+  const localeSource = readLocaleSource(localeDir);
   for (const token of tokens) {
     if (!localeSource.includes(token)) {
-      fail(`${path.relative(ROOT, localeFile)} missing i18n token "${token}"`);
+      fail(`${path.relative(ROOT, localeDir)} missing i18n token "${token}"`);
     }
   }
 }
@@ -109,8 +117,8 @@ const policyLocaleTokens = [
   "needs_review:",
   "no_contribution:",
 ];
-assertLocaleTokens(ZH_LOCALE_FILE, policyLocaleTokens);
-assertLocaleTokens(EN_LOCALE_FILE, policyLocaleTokens);
+assertLocaleTokens(ZH_LOCALE_DIR, policyLocaleTokens);
+assertLocaleTokens(EN_LOCALE_DIR, policyLocaleTokens);
 
 if (process.exitCode) {
   process.exit();

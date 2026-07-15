@@ -1,0 +1,115 @@
+import about from "./about";
+import activityPanel from "./activityPanel";
+import agentOrchestration from "./agentOrchestration";
+import app from "./app";
+import approval from "./approval";
+import askUserQuestion from "./askUserQuestion";
+import browserAgent from "./browserAgent";
+import chat from "./chat";
+import claudeModes from "./claudeModes";
+import clientDocumentation from "./clientDocumentation";
+import codexModes from "./codexModes";
+import common from "./common";
+import composer from "./composer";
+import config from "./config";
+import debug from "./debug";
+import engineTaskOutput from "./engineTaskOutput";
+import errors from "./errors";
+import files from "./files";
+import git from "./git";
+import home from "./home";
+import homeChat from "./homeChat";
+import intentCanvas from "./intentCanvas";
+import kanban from "./kanban";
+import layout from "./layout";
+import lockScreen from "./lockScreen";
+import memory from "./memory";
+import menu from "./menu";
+import messages from "./messages";
+import models from "./models";
+import modes from "./modes";
+import noteCards from "./noteCards";
+import panels from "./panels";
+import plan from "./plan";
+import projectMap from "./projectMap";
+import promptEnhancer from "./promptEnhancer";
+import prompts from "./prompts";
+import providers from "./providers";
+import reasoning from "./reasoning";
+import rewind from "./rewind";
+import runtimeNotice from "./runtimeNotice";
+import searchPalette from "./searchPalette";
+import settings from "./settings";
+import sidebar from "./sidebar";
+import specHub from "./specHub";
+import statusPanel from "./statusPanel";
+import tabbar from "./tabbar";
+import taskCenter from "./taskCenter";
+import terminal from "./terminal";
+import threadCompletion from "./threadCompletion";
+import threads from "./threads";
+import time from "./time";
+import tools from "./tools";
+import update from "./update";
+import usage from "./usage";
+import workspace from "./workspace";
+
+const en = {
+  ...about,
+  ...activityPanel,
+  ...agentOrchestration,
+  ...app,
+  ...approval,
+  ...askUserQuestion,
+  ...browserAgent,
+  ...chat,
+  ...claudeModes,
+  ...clientDocumentation,
+  ...codexModes,
+  ...common,
+  ...composer,
+  ...config,
+  ...debug,
+  ...engineTaskOutput,
+  ...errors,
+  ...files,
+  ...git,
+  ...home,
+  ...homeChat,
+  ...intentCanvas,
+  ...kanban,
+  ...layout,
+  ...lockScreen,
+  ...memory,
+  ...menu,
+  ...messages,
+  ...models,
+  ...modes,
+  ...noteCards,
+  ...panels,
+  ...plan,
+  ...projectMap,
+  ...promptEnhancer,
+  ...prompts,
+  ...providers,
+  ...reasoning,
+  ...rewind,
+  ...runtimeNotice,
+  ...searchPalette,
+  ...settings,
+  ...sidebar,
+  ...specHub,
+  ...statusPanel,
+  ...tabbar,
+  ...taskCenter,
+  ...terminal,
+  ...threadCompletion,
+  ...threads,
+  ...time,
+  ...tools,
+  ...update,
+  ...usage,
+  ...workspace,
+};
+
+export default en;

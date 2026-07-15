@@ -1,0 +1,80 @@
+// browserAgent — English UI strings
+const browserAgent = {
+  browserAgent: {
+    dock: {
+      description:
+        "Read key page facts first, then progressively enable navigation and element actions.",
+      disabled: "Disabled",
+      statusDisconnected: "Disconnected",
+      statusLoading: "Loading",
+      statusReady: "Readable",
+      statusClosed: "Closed",
+      statusNeedsAttention: "Needs attention",
+      statusPreparing: "Preparing",
+      emptyUrl: "Enter a page URL to open.",
+      blockedUrl: "This URL is blocked by Browser Agent policy.",
+      opened: "Browser Agent opened a browser tab.",
+      closed: "Browser Agent tab closed.",
+      busy: "Working",
+      open: "Open",
+      enable: "Enable",
+      enabled: "Browser Agent enabled.",
+      tabs: "Browser tabs",
+      newTab: "New browser tab",
+      openDock: "Browser",
+      panelTitle: "Browser Dock",
+      panelKicker:
+        "Open a page here, then attach its context to AI when needed.",
+      noWorkspace: "Select a workspace before opening Browser Dock.",
+      noPage:
+        "Open an allowed http/https page to launch the Browser Agent window.",
+      rendering: "Rendering page in Browser Agent window...",
+      windowOpened: "The page is open in a separate Browser Agent window.",
+      closePanel: "Close Browser Dock",
+      close: "Close Browser Agent session",
+      info: "Show Browser Agent details",
+      footnote:
+        "MVP does not store raw DOM, cookies, headers, or page secrets.",
+    },
+    composer: {
+      attach: "Attach browser context",
+      attaching: "Attaching browser context...",
+      attached: "Browser context attached",
+      visibleSnapshot: "Browser visible page snapshot",
+      selectedElement: "Selected page element",
+      selectedElementCount: "{{count}} selected page elements",
+      selectedElementFacts: "Selected page element facts",
+      selectedElementMore: "{{count}} more elements",
+      selectorHint: "Selector {{selector}}",
+      noRawApi: "Not API raw data",
+      remove: "Remove",
+      refresh: "Refresh browser context",
+      fresh: "ready",
+      stale: "refresh",
+      expired: "expired",
+      degraded: "degraded",
+      unsupported: "unsupported",
+      showDetails: "Show capture details",
+      hideDetails: "Hide details",
+      countSummary: "Page element counts",
+      headingCount: "Headings {{count}}",
+      linkCount: "Links {{count}}",
+      buttonCount: "Buttons {{count}}",
+      formCount: "Forms {{count}}",
+      readableBlockCount: "Readable blocks {{count}}",
+      visualEvidenceCount: "Visual clues {{count}}",
+      counts:
+        "Headings {{headings}} · links {{links}} · buttons {{buttons}} · forms {{forms}} · readable blocks {{readableBlocks}} · visual clues {{visualEvidence}} · code candidates {{candidates}}",
+      primaryContent: "Primary content",
+      readableBlocks: "Readable blocks {{count}}",
+      visualEvidence: "Visual clues {{count}}",
+      codeCandidates: "Code candidates {{count}}",
+      privacy:
+        "{{redacted}} redaction kind(s), {{omitted}} omitted sensitive source kind(s).",
+      noSession:
+        "No active Browser Agent session. Open a page in the Browser Dock first.",
+    },
+  },
+};
+
+export default browserAgent;

@@ -6,8 +6,8 @@ const ROOT = process.cwd();
 const PRICING_DIR = path.join(ROOT, "src/features/context-ledger/pricing");
 const COST_DIR = path.join(ROOT, "src/features/context-ledger/cost");
 const BUDGET_DIR = path.join(ROOT, "src/features/context-ledger/budget");
-const ZH_LOCALE_FILE = path.join(ROOT, "src/i18n/locales/zh.part2.ts");
-const EN_LOCALE_FILE = path.join(ROOT, "src/i18n/locales/en.part2.ts");
+const ZH_LOCALE_DIR = path.join(ROOT, "src/i18n/locales/zh");
+const EN_LOCALE_DIR = path.join(ROOT, "src/i18n/locales/en");
 
 const requiredFiles = [
   "pricing/pricingTypes.ts",
@@ -31,11 +31,19 @@ function readText(filePath) {
   return fs.readFileSync(filePath, "utf8");
 }
 
-function assertLocaleTokens(localeFile, tokens) {
-  const localeSource = readText(localeFile);
+function readLocaleSource(localeDir) {
+  return fs
+    .readdirSync(localeDir)
+    .filter((fileName) => fileName.endsWith(".ts"))
+    .map((fileName) => readText(path.join(localeDir, fileName)))
+    .join("\n");
+}
+
+function assertLocaleTokens(localeDir, tokens) {
+  const localeSource = readLocaleSource(localeDir);
   for (const token of tokens) {
     if (!localeSource.includes(token)) {
-      fail(`${path.relative(ROOT, localeFile)} missing i18n token "${token}"`);
+      fail(`${path.relative(ROOT, localeDir)} missing i18n token "${token}"`);
     }
   }
 }
@@ -97,8 +105,8 @@ const costBudgetLocaleTokens = [
   "warn:",
   "block:",
 ];
-assertLocaleTokens(ZH_LOCALE_FILE, costBudgetLocaleTokens);
-assertLocaleTokens(EN_LOCALE_FILE, costBudgetLocaleTokens);
+assertLocaleTokens(ZH_LOCALE_DIR, costBudgetLocaleTokens);
+assertLocaleTokens(EN_LOCALE_DIR, costBudgetLocaleTokens);
 
 if (process.exitCode) {
   process.exit();
