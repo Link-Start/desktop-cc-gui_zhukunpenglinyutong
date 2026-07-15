@@ -5,7 +5,7 @@
  * 单文件/多文件/分组处处像素与行为一致。
  * 口径：ToolMarkerShell（FilePen 描边图标 + 文件名 + 绿/红统计 + 靠右状态 + 折叠 diff 体）。
  */
-import { memo, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import FilePen from 'lucide-react/dist/esm/icons/file-pen';
 import { parseDiff } from '../../../../utils/diff';
@@ -45,8 +45,11 @@ export function unifiedDiffToPreview(
   maxLines = DEFAULT_DIFF_PREVIEW_MAX_LINES,
 ): FileChangeDiffPreview {
   const parsed = parseDiff(diffText);
-  const truncated = parsed.length > maxLines;
-  const visible = truncated ? parsed.slice(0, maxLines) : parsed;
+  const parsedLines = parsed.some((line) => line.type !== 'hunk' && line.type !== 'meta')
+    ? parsed
+    : parseApplyPatchFileBody(diffText);
+  const truncated = parsedLines.length > maxLines;
+  const visible = truncated ? parsedLines.slice(0, maxLines) : parsedLines;
   return {
     lines: visible.map(
       (line): FileChangeDiffLine => ({
@@ -65,6 +68,29 @@ export function unifiedDiffToPreview(
   };
 }
 
+function parseApplyPatchFileBody(diffText: string): ReturnType<typeof parseDiff> {
+  const lines = diffText.split(/\r?\n/);
+  const fileHeaderIndex = lines.findIndex((line) =>
+    /^\*\*\* (?:Add|Delete) File: /.test(line.trim()),
+  );
+  if (fileHeaderIndex < 0) {
+    return [];
+  }
+
+  const parsed: ReturnType<typeof parseDiff> = [];
+  for (const line of lines.slice(fileHeaderIndex + 1)) {
+    if (line.trim().startsWith('*** ')) {
+      break;
+    }
+    if (line.startsWith('+')) {
+      parsed.push({ type: 'add', oldLine: null, newLine: null, text: line.slice(1) });
+    } else if (line.startsWith('-')) {
+      parsed.push({ type: 'del', oldLine: null, newLine: null, text: line.slice(1) });
+    }
+  }
+  return parsed;
+}
+
 interface FileChangeRowProps {
   filePath: string;
   additions: number;
@@ -81,8 +107,6 @@ interface FileChangeRowProps {
    * 调用方负责限定可 fallback 的 change kind；有 inline diff 时始终优先展开本行。
    */
   onOpenDiffPath?: (path: string) => void;
-  /** inline payload 非空但解析不出可见内容时的 canonical fallback。 */
-  onOpenUnavailablePreview?: (path: string) => void;
   defaultExpanded?: boolean;
   wrapperClassName?: string;
 }
@@ -119,10 +143,6 @@ function renderDiffLines(preview: FileChangeDiffPreview): ReactNode {
   );
 }
 
-function hasRenderableDiffLines(preview: FileChangeDiffPreview): boolean {
-  return preview.lines.some((line) => line.kind !== 'hunk');
-}
-
 export const FileChangeRow = memo(function FileChangeRow({
   filePath,
   additions,
@@ -132,53 +152,24 @@ export const FileChangeRow = memo(function FileChangeRow({
   loadDiff,
   fallbackBody,
   onOpenDiffPath,
-  onOpenUnavailablePreview,
   defaultExpanded = false,
   wrapperClassName,
 }: FileChangeRowProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const previewCacheRef = useRef<{
-    loader: NonNullable<FileChangeRowProps['loadDiff']>;
-    preview: FileChangeDiffPreview;
-  } | null>(null);
   const fileName = getFileName(filePath) || filePath;
   const hasStats = additions > 0 || deletions > 0;
 
   // 仅在展开时解析 diff —— 折叠态不触发解析，保持性能守卫。
   const preview = useMemo(
-    () => {
-      if (!expanded || !loadDiff) {
-        return null;
-      }
-      const cached = previewCacheRef.current;
-      if (cached?.loader === loadDiff) {
-        return cached.preview;
-      }
-      const nextPreview = loadDiff();
-      previewCacheRef.current = { loader: loadDiff, preview: nextPreview };
-      return nextPreview;
-    },
+    () => (expanded && loadDiff ? loadDiff() : null),
     [expanded, loadDiff],
   );
-  const hasDiff = preview ? hasRenderableDiffLines(preview) : false;
+  const hasDiff = (preview?.lines.length ?? 0) > 0;
   const canOpenMissingDiff = !canExpand && Boolean(onOpenDiffPath);
 
   const handleToggle = () => {
     if (canExpand) {
-      if (!expanded && loadDiff && onOpenUnavailablePreview) {
-        const cached = previewCacheRef.current;
-        const nextPreview = cached?.loader === loadDiff ? cached.preview : loadDiff();
-        previewCacheRef.current = { loader: loadDiff, preview: nextPreview };
-        if (!hasRenderableDiffLines(nextPreview)) {
-          try {
-            void Promise.resolve(onOpenUnavailablePreview(filePath)).catch(() => undefined);
-          } catch {
-            // Host navigation 的同步/异步失败都不能破坏 conversation surface。
-          }
-          return;
-        }
-      }
       setExpanded((prev) => !prev);
       return;
     }

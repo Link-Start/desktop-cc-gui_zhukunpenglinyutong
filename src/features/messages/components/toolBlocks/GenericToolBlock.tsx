@@ -1432,11 +1432,6 @@ export const GenericToolBlock = memo(function GenericToolBlock({
                   ? onOpenDiffPath
                   : undefined
               }
-              onOpenUnavailablePreview={
-                change.normalizedKind === 'added' && diffText
-                  ? onOpenDiffPath
-                  : undefined
-              }
             />
           );
         })}

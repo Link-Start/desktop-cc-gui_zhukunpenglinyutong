@@ -403,39 +403,23 @@ describe("GenericToolBlock", () => {
     expect(screen.getByText("const x = 1;")).toBeTruthy();
   });
 
-  it("opens canonical diff for added files whose inline payload has only headers", () => {
+  it("keeps apply_patch added-file content inside the conversation canvas", () => {
     const onOpenDiffPath = vi.fn();
     const view = render(
       <GenericToolBlock
         item={{
           ...fileChangeItem,
-          id: "tool-added-header-only-diff",
+          id: "tool-added-apply-patch-diff",
           changes: [
-            { path: "src/New.tsx", kind: "added", diff: "@@ -0,0 +1 @@" },
-          ],
-        }}
-        isExpanded
-        onToggle={vi.fn()}
-        onOpenDiffPath={onOpenDiffPath}
-      />,
-    );
-
-    fireEvent.click(view.container.querySelector('[data-slot="marker"]') as HTMLElement);
-
-    expect(onOpenDiffPath).toHaveBeenCalledOnce();
-    expect(onOpenDiffPath).toHaveBeenCalledWith("src/New.tsx");
-    expect(view.container.querySelector(".tool-change-inline-diff")).toBeNull();
-  });
-
-  it("does not add empty-preview fallback to non-added files", () => {
-    const onOpenDiffPath = vi.fn();
-    const view = render(
-      <GenericToolBlock
-        item={{
-          ...fileChangeItem,
-          id: "tool-modified-header-only-diff",
-          changes: [
-            { path: "src/App.tsx", kind: "modified", diff: "@@ -1 +1 @@" },
+            {
+              path: "src/New.tsx",
+              kind: "added",
+              diff: [
+                "*** Add File: src/New.tsx",
+                "+const value = 1;",
+                "*** End Patch",
+              ].join("\n"),
+            },
           ],
         }}
         isExpanded
@@ -447,6 +431,7 @@ describe("GenericToolBlock", () => {
     fireEvent.click(view.container.querySelector('[data-slot="marker"]') as HTMLElement);
 
     expect(onOpenDiffPath).not.toHaveBeenCalled();
+    expect(screen.getByText("const value = 1;")).toBeTruthy();
   });
 
   it("omits file-count label for single file changes", () => {
