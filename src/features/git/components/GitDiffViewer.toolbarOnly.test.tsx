@@ -43,4 +43,29 @@ describe("GitDiffViewer toolbar-only mode", () => {
     expect(getGitFileFullDiff).not.toHaveBeenCalled();
     controlsTarget.remove();
   });
+
+  it("can hide the full-content control while retaining focused content", async () => {
+    render(
+      <GitDiffViewer
+        workspaceId="workspace-1"
+        diffs={[{
+          path: "example.ts",
+          status: "M",
+          diff: "@@ -1 +1 @@\n-before\n+after\n",
+        }]}
+        selectedPath="example.ts"
+        isLoading={false}
+        error={null}
+        showContentModeControls
+        showAllContentControl={false}
+        contentMode="focused"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "git.viewFocusedContent" })).toBeTruthy();
+    });
+    expect(screen.queryByRole("button", { name: /git\.viewAllContent/ })).toBeNull();
+    expect(getGitFileFullDiff).not.toHaveBeenCalled();
+  });
 });

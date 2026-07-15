@@ -46,6 +46,7 @@ type GitDiffViewerProps = {
   stickyHeaderMode?: "full" | "controls-only";
   embeddedAnchorVariant?: "default" | "modal-pager";
   showContentModeControls?: boolean;
+  showAllContentControl?: boolean;
   toolbarOnly?: boolean;
   headerControlsTarget?: HTMLElement | null;
   onRequestClose?: (() => void) | null;
@@ -559,6 +560,7 @@ export function GitDiffViewer({
   stickyHeaderMode = "full",
   embeddedAnchorVariant = "default",
   showContentModeControls,
+  showAllContentControl = true,
   toolbarOnly = false,
   headerControlsTarget = null,
   onRequestClose = null,
@@ -1111,7 +1113,7 @@ export function GitDiffViewer({
                   </div>
                   {shouldShowContentModeControls && (
                     <div className="diff-viewer-header-mode" role="group" aria-label={t("git.diffContentMode")}>
-                      {(() => {
+                      {showAllContentControl && (() => {
                         const activePath = stickyEntry.path;
                         const isAll = (controlledContentMode ?? fileContentModes[activePath] ?? initialContentMode) === "all";
                         const isLoadingFull = Boolean(loadingFullDiffByPath[activePath]);
@@ -1215,7 +1217,7 @@ export function GitDiffViewer({
                   </div>
                   {shouldShowContentModeControls && (
                     <div className="diff-viewer-header-mode" role="group" aria-label={t("git.diffContentMode")}>
-                      {(() => {
+                      {showAllContentControl && (() => {
                         const activePath = stickyEntry.path;
                         const isAll = (controlledContentMode ?? fileContentModes[activePath] ?? initialContentMode) === "all";
                         const isLoadingFull = Boolean(loadingFullDiffByPath[activePath]);

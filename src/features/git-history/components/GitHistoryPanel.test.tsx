@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { createPortal } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GitHistoryPanel, buildFileTreeItems, getDefaultColumnWidths } from "./GitHistoryPanel";
 
@@ -61,11 +62,51 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 }));
 
 vi.mock("./GitHistoryWorktreePanel", () => ({
-  GitHistoryWorktreePanel: () => <div data-testid="worktree-panel">worktree</div>,
+  GitHistoryWorktreePanel: ({
+    onOpenDiffPath,
+  }: {
+    onOpenDiffPath?: (path: string) => void;
+  }) => (
+    <div data-testid="worktree-panel">
+      <button
+        type="button"
+        onClick={() => onOpenDiffPath?.("src/worktree/ChangedFile.ts")}
+      >
+        open-worktree-preview
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../../git/components/GitDiffViewer", () => ({
   GitDiffViewer: () => <div data-testid="git-diff-viewer">diff-viewer</div>,
+}));
+
+vi.mock("../../git/components/WorkspaceEditableDiffReviewSurface", () => ({
+  WorkspaceEditableDiffReviewSurface: ({
+    headerControlsTarget,
+    onRequestClose,
+    readOnlyAlignedCompare,
+  }: {
+    headerControlsTarget?: HTMLElement | null;
+    onRequestClose?: (() => void) | null;
+    readOnlyAlignedCompare?: boolean;
+  }) => (
+    <div
+      data-testid="workspace-editable-diff-review-surface"
+      data-header-controls-target={headerControlsTarget ? "connected" : "missing"}
+      data-read-only-aligned-compare={readOnlyAlignedCompare ? "enabled" : "disabled"}
+    >
+      {headerControlsTarget && onRequestClose
+        ? createPortal(
+            <button type="button" aria-label="common.close" onClick={onRequestClose}>
+              close
+            </button>,
+            headerControlsTarget,
+          )
+        : null}
+    </div>
+  ),
 }));
 
 vi.mock("../../../services/clientStorage", () => ({
@@ -1360,7 +1401,7 @@ describe("GitHistoryPanel interactions", () => {
     expect(screen.queryByText("feat: stale first target only")).toBeNull();
   });
 
-  it("supports select commit -> click file -> open diff modal", async () => {
+  it("opens commit file preview with the canonical modal header controls", async () => {
     render(<GitHistoryPanel workspace={workspace as never} />);
 
     await waitFor(() => {
@@ -1370,13 +1411,85 @@ describe("GitHistoryPanel interactions", () => {
     fireEvent.click(screen.getByText("feat: one"));
 
     await waitFor(() => {
-      expect(screen.getByText("App.java")).toBeTruthy();
+      expect(screen.getByLabelText("src/main/java/com/demo/App.java")).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByText("App.java"));
+    fireEvent.click(screen.getByLabelText("src/main/java/com/demo/App.java"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("git-diff-viewer")).toBeTruthy();
+      expect(
+        screen.getByTestId("workspace-editable-diff-review-surface").getAttribute(
+          "data-header-controls-target",
+        ),
+      ).toBe("connected");
+      expect(
+        screen.getByTestId("workspace-editable-diff-review-surface").getAttribute(
+          "data-read-only-aligned-compare",
+        ),
+      ).toBe("enabled");
+    });
+
+    const previewDialog = screen.getByRole("dialog", {
+      name: "src/main/java/com/demo/App.java",
+    });
+    const closeActions = within(previewDialog).getAllByRole("button", { name: "common.close" });
+    expect(closeActions).toHaveLength(1);
+
+    fireEvent.click(closeActions[0]);
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "src/main/java/com/demo/App.java" }),
+      ).toBeNull();
+    });
+  });
+
+  it("opens working-tree preview with the canonical modal header controls", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+    const openPreviewButton = await screen.findByRole("button", {
+      name: "open-worktree-preview",
+    });
+
+    vi.mocked(tauriService.getGitStatus).mockResolvedValueOnce({
+      files: [
+        {
+          path: "src/worktree/ChangedFile.ts",
+          status: "M",
+          additions: 3,
+          deletions: 1,
+        },
+      ],
+      totalAdditions: 3,
+      totalDeletions: 1,
+    } as never);
+    vi.mocked(tauriService.getGitDiffs).mockResolvedValueOnce([
+      {
+        path: "src/worktree/ChangedFile.ts",
+        status: "M",
+        diff: "@@ -1 +1 @@\n-old\n+new",
+      },
+    ] as never);
+
+    fireEvent.click(openPreviewButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("workspace-editable-diff-review-surface").getAttribute(
+          "data-header-controls-target",
+        ),
+      ).toBe("connected");
+    });
+
+    const previewDialog = screen.getByRole("dialog", {
+      name: "src/worktree/ChangedFile.ts",
+    });
+    const closeActions = within(previewDialog).getAllByRole("button", { name: "common.close" });
+    expect(closeActions).toHaveLength(1);
+
+    fireEvent.click(closeActions[0]);
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "src/worktree/ChangedFile.ts" }),
+      ).toBeNull();
     });
   });
 

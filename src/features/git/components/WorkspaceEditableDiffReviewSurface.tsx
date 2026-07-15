@@ -15,6 +15,7 @@ import {
   WorkspaceEditableDiffCompare,
   type EditableDiffDraftActions,
 } from "./WorkspaceEditableDiffCompare";
+import { WorkspaceReadOnlyDiffCompare } from "./WorkspaceReadOnlyDiffCompare";
 import type {
   CodeAnnotationDraftInput,
   CodeAnnotationSelection,
@@ -50,12 +51,14 @@ type WorkspaceEditableDiffReviewSurfaceProps = {
   onRequestClose?: (() => void) | null;
   headerControlsTarget?: HTMLElement | null;
   fullDiffSourceKey?: string | null;
+  fullDiffLoader?: ((path: string) => Promise<string>) | null;
   embeddedAnchorVariant?: "default" | "modal-pager";
   stickyHeaderMode?: "full" | "controls-only";
   toolbarLayout?: "stacked" | "inline-actions";
   showSidebar?: boolean;
   focusSelectedFileOnly?: boolean;
   allowEditing?: boolean;
+  readOnlyAlignedCompare?: boolean;
   onRequestRefreshReview?: (() => void | Promise<void>) | null;
   onRequestGitStatusRefresh?: (() => void) | null;
   onDirtyChange?: (isDirty: boolean) => void;
@@ -124,12 +127,14 @@ export function WorkspaceEditableDiffReviewSurface({
   onRequestClose = null,
   headerControlsTarget = null,
   fullDiffSourceKey = null,
+  fullDiffLoader = null,
   embeddedAnchorVariant = "default",
   stickyHeaderMode = "full",
   toolbarLayout = "stacked",
   showSidebar = false,
   focusSelectedFileOnly = false,
   allowEditing = false,
+  readOnlyAlignedCompare = false,
   onRequestRefreshReview = null,
   onRequestGitStatusRefresh = null,
   onDirtyChange,
@@ -158,6 +163,7 @@ export function WorkspaceEditableDiffReviewSurface({
   );
   const [isDirty, setIsDirty] = useState(false);
   const [contentMode, setContentMode] = useState<"all" | "focused">("all");
+  const effectiveContentMode = readOnlyAlignedCompare ? "focused" : contentMode;
   const [pendingDiscardAction, setPendingDiscardAction] = useState<(() => void) | null>(null);
   const [isDraftSaving, setIsDraftSaving] = useState(false);
   const draftActionsRef = useRef<EditableDiffDraftActions | null>(null);
@@ -338,8 +344,10 @@ export function WorkspaceEditableDiffReviewSurface({
 
   const shouldShowSidebar = showSidebar && reviewFiles.length > 1;
   const shouldInlineToolbarActions = toolbarLayout === "inline-actions" && Boolean(headerControlsTarget);
-  const shouldShowEditableCompare =
-    canEdit && diffStyle === "split" && contentMode === "all";
+  const shouldShowAlignedCompare =
+    Boolean(activeFile)
+    && diffStyle === "split"
+    && canEdit;
   const toolbarActions = (
     <div className="editable-diff-review-toolbar-actions">
       {!canEdit && readOnlyHint ? (
@@ -367,7 +375,7 @@ export function WorkspaceEditableDiffReviewSurface({
           )}
       <div className="editable-diff-review-layout">
         <div className="editable-diff-review-main">
-          <div className={shouldShowEditableCompare ? "editable-diff-review-viewer is-toolbar-only" : "editable-diff-review-viewer"}>
+          <div className={shouldShowAlignedCompare ? "editable-diff-review-viewer is-toolbar-only" : "editable-diff-review-viewer"}>
             <GitDiffViewer
               workspaceId={workspaceId}
               diffs={visibleDiffs}
@@ -378,13 +386,15 @@ export function WorkspaceEditableDiffReviewSurface({
               stickyHeaderMode={stickyHeaderMode}
               embeddedAnchorVariant={embeddedAnchorVariant}
               showContentModeControls
-              toolbarOnly={shouldShowEditableCompare}
+              showAllContentControl={!readOnlyAlignedCompare}
+              toolbarOnly={shouldShowAlignedCompare}
               headerControlsTarget={headerControlsTarget}
               onRequestClose={handleRequestClose}
               fullDiffSourceKey={fullDiffSourceKey}
+              fullDiffLoader={readOnlyAlignedCompare ? null : fullDiffLoader}
               diffStyle={diffStyle}
               onDiffStyleChange={handleDiffStyleChange}
-              contentMode={contentMode}
+              contentMode={effectiveContentMode}
               initialContentMode="all"
               onContentModeChange={handleContentModeChange}
               onActivePathChange={focusSelectedFileOnly ? undefined : handleSelectPath}
@@ -394,34 +404,28 @@ export function WorkspaceEditableDiffReviewSurface({
               codeAnnotationSurface={codeAnnotationSurface}
             />
           </div>
-          {shouldShowEditableCompare && activeFile && workspaceId && workspacePath ? (
-            <WorkspaceEditableDiffCompare
-              workspaceId={workspaceId}
-              workspacePath={workspacePath}
-              filePath={activeFile.reviewPath}
-              diff={activeFile.diff}
-              onSaveSuccess={handleSaveSuccess}
-              onDirtyChange={handleDirtyChange}
-              onDraftActionsChange={handleDraftActionsChange}
-              fallback={(
-                <GitDiffViewer
-                  workspaceId={workspaceId}
-                  diffs={visibleDiffs}
-                  selectedPath={activeFile.reviewPath}
-                  isLoading={false}
-                  error={null}
-                  listView="flat"
-                  stickyHeaderMode="full"
-                  onRequestClose={null}
-                  fullDiffSourceKey={fullDiffSourceKey}
-                  diffStyle={diffStyle}
-                  onCreateCodeAnnotation={onCreateCodeAnnotation}
-                  onRemoveCodeAnnotation={onRemoveCodeAnnotation}
-                  codeAnnotations={codeAnnotations}
-                  codeAnnotationSurface={codeAnnotationSurface}
-                />
-              )}
-            />
+          {shouldShowAlignedCompare && activeFile ? (
+            canEdit && workspaceId && workspacePath ? (
+              <WorkspaceEditableDiffCompare
+                workspaceId={workspaceId}
+                workspacePath={workspacePath}
+                filePath={activeFile.reviewPath}
+                diff={activeFile.diff}
+                contentMode={effectiveContentMode}
+                onSaveSuccess={handleSaveSuccess}
+                onDirtyChange={handleDirtyChange}
+                onDraftActionsChange={handleDraftActionsChange}
+                headerControlsTarget={headerControlsTarget}
+              />
+            ) : (
+              <WorkspaceReadOnlyDiffCompare
+                filePath={activeFile.reviewPath}
+                diff={activeFile.diff}
+                loadFullDiff={fullDiffLoader}
+                useFullDiff={effectiveContentMode === "all"}
+                headerControlsTarget={headerControlsTarget}
+              />
+            )
           ) : null}
         </div>
         {shouldShowSidebar ? (

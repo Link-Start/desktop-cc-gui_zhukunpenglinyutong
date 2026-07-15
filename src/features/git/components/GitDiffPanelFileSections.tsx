@@ -33,6 +33,58 @@ export type DiffFile = {
 
 export const TREE_INDENT_STEP = 8;
 
+export function DiffFolderRow({
+  name,
+  iconName = name,
+  depth,
+  collapsed,
+  hasChildren = true,
+  indentStep = TREE_INDENT_STEP,
+  className = "",
+  onToggle,
+}: {
+  name: string;
+  iconName?: string;
+  depth: number;
+  collapsed: boolean;
+  hasChildren?: boolean;
+  indentStep?: number;
+  className?: string;
+  onToggle: () => void;
+}) {
+  const treeIndentPx = depth * indentStep;
+  return (
+    <div
+      className={`diff-tree-folder-row git-filetree-folder-row ${className}`}
+      style={{
+        paddingLeft: `${treeIndentPx}px`,
+        ["--git-tree-indent-x" as string]: `${Math.max(treeIndentPx - 5, 0)}px`,
+        ["--git-tree-line-opacity" as string]: getTreeLineOpacity(depth),
+      }}
+      data-tree-depth={depth + 1}
+      data-collapsed={hasChildren ? String(collapsed) : undefined}
+      role="treeitem"
+      tabIndex={0}
+      aria-level={depth + 1}
+      aria-label={name}
+      aria-expanded={hasChildren ? !collapsed : undefined}
+      onClick={() => hasChildren && onToggle()}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && hasChildren) {
+          event.preventDefault();
+          onToggle();
+        }
+      }}
+    >
+      <span className="diff-tree-folder-toggle" aria-hidden>
+        {hasChildren ? (collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />) : <span className="diff-tree-folder-spacer" />}
+      </span>
+      <GitFileTreeIcon name={iconName} isFolder isOpen={!collapsed} className="diff-tree-folder-icon" />
+      <span className="diff-tree-folder-name">{name}</span>
+    </div>
+  );
+}
+
 /**
  * Git 面板文件/文件夹图标：复用项目文件树的彩色类型图标（getFileTreeIconSvg），
  * 让提交面板与文件树的图标视觉保持一致，替代原先的单色 FileIcon。
@@ -123,6 +175,10 @@ function getStatusClass(status: string) {
 
 type DiffFileRowProps = {
   file: DiffFile;
+  className?: string;
+  inclusionClassName?: string;
+  statsClassName?: string;
+  showStats?: boolean;
   isSelected: boolean;
   isActive: boolean;
   section: "staged" | "unstaged";
@@ -146,6 +202,10 @@ type DiffFileRowProps = {
 
 export function DiffFileRow({
   file,
+  className = "",
+  inclusionClassName,
+  statsClassName = "",
+  showStats = false,
   isSelected,
   isActive,
   section,
@@ -187,7 +247,7 @@ export function DiffFileRow({
 
   return (
     <div
-      className={`diff-row git-filetree-row${treeItem ? " git-filetree-row--tree" : ""} ${isActive ? "active" : ""} ${isSelected ? "selected" : ""}`}
+      className={`diff-row git-filetree-row${treeItem ? " git-filetree-row--tree" : ""} ${isActive ? "active" : ""} ${isSelected ? "selected" : ""} ${className}`}
       style={treeRowStyle}
       data-section={section}
       data-status={file.status}
@@ -236,6 +296,16 @@ export function DiffFileRow({
         {showDirectory && dir && <div className="diff-dir">{dir}</div>}
       </div>
       <div className="diff-row-meta">
+        {showStats ? (
+          <span
+            className={`diff-counts-inline git-filetree-badge ${statsClassName}`}
+            aria-label={`+${file.additions} -${file.deletions}`}
+          >
+            <span className="is-add">+{file.additions}</span>
+            <span className="is-sep">/</span>
+            <span className="is-del">-{file.deletions}</span>
+          </span>
+        ) : null}
         <div className="diff-row-actions" role="group" aria-label={t("git.fileActions")}>
           {onOpenInlinePreview ? (
             <button
@@ -312,6 +382,7 @@ export function DiffFileRow({
           <InclusionToggle
             state={inclusionState}
             label={inclusionLabel}
+            className={inclusionClassName}
             disabled={inclusionDisabled}
             stopPropagation
             onToggle={() => {

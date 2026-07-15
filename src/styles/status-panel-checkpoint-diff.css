@@ -322,6 +322,10 @@
   overflow: hidden;
 }
 
+.editable-diff-compare.has-external-nav {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .editable-diff-compare-nav {
   min-width: 0;
   display: flex;
@@ -351,6 +355,14 @@
   justify-content: center;
 }
 
+.editable-diff-compare-nav.is-external {
+  order: -2;
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
 .editable-diff-compare-columns {
   display: grid;
   min-height: 0;
@@ -360,11 +372,6 @@
 
 .editable-diff-compare .file-compare-column {
   min-width: 360px;
-}
-
-.editable-diff-compare .file-compare-column-header {
-  min-height: 42px;
-  padding: 6px 10px;
 }
 
 .editable-diff-compare .file-compare-column:first-child .cm-content {

@@ -29,18 +29,27 @@ vi.mock("./GitDiffViewer", () => ({
     onContentModeChange,
     selectedPath,
     toolbarOnly,
+    showAllContentControl,
+    fullDiffLoader,
   }: {
     onRequestClose?: () => void;
     onDiffStyleChange?: (style: "split" | "unified") => void;
     onContentModeChange?: (path: string, mode: "all" | "focused") => void;
     selectedPath: string;
     toolbarOnly?: boolean;
+    showAllContentControl?: boolean;
+    fullDiffLoader?: ((path: string) => Promise<string>) | null;
   }) => (
-    <div data-toolbar-only={toolbarOnly ? "true" : "false"}>
+    <div
+      data-toolbar-only={toolbarOnly ? "true" : "false"}
+      data-has-full-loader={fullDiffLoader ? "true" : "false"}
+    >
       Read-only diff viewer
       <button type="button" onClick={() => onDiffStyleChange?.("split")}>Dual panel</button>
       <button type="button" onClick={() => onDiffStyleChange?.("unified")}>Single column</button>
-      <button type="button" onClick={() => onContentModeChange?.(selectedPath, "all")}>All content</button>
+      {showAllContentControl !== false ? (
+        <button type="button" onClick={() => onContentModeChange?.(selectedPath, "all")}>All content</button>
+      ) : null}
       <button type="button" onClick={() => onContentModeChange?.(selectedPath, "focused")}>Focused content</button>
       {onRequestClose ? <button type="button" onClick={onRequestClose}>Close</button> : null}
     </div>
@@ -48,15 +57,16 @@ vi.mock("./GitDiffViewer", () => ({
 }));
 
 vi.mock("./WorkspaceEditableDiffCompare", () => ({
-  WorkspaceEditableDiffCompare: ({ onDirtyChange, onDraftActionsChange }: {
+  WorkspaceEditableDiffCompare: ({ onDirtyChange, onDraftActionsChange, contentMode }: {
     onDirtyChange: (isDirty: boolean) => void;
     onDraftActionsChange: (actions: {
       save: () => Promise<boolean>;
       discard: () => void;
       isSaving: boolean;
     }) => void;
+    contentMode?: "all" | "focused";
   }) => (
-    <div>
+    <div data-content-mode={contentMode}>
       IDEA compare
       <button type="button" onClick={() => {
         onDraftActionsChange({
@@ -67,6 +77,12 @@ vi.mock("./WorkspaceEditableDiffCompare", () => ({
         onDirtyChange(true);
       }}>Make dirty</button>
     </div>
+  ),
+}));
+
+vi.mock("./WorkspaceReadOnlyDiffCompare", () => ({
+  WorkspaceReadOnlyDiffCompare: ({ useFullDiff }: { useFullDiff?: boolean }) => (
+    <div data-full-diff={useFullDiff ? "true" : "false"}>Read-only aligned compare</div>
   ),
 }));
 
@@ -92,6 +108,25 @@ afterEach(() => {
 });
 
 describe("WorkspaceEditableDiffReviewSurface", () => {
+  it("keeps explicit read-only commit review in the legacy focused patch body", () => {
+    render(
+      <WorkspaceEditableDiffReviewSurface
+        workspaceId="workspace-1"
+        workspacePath="/repo"
+        files={[editableFile]}
+        readOnlyAlignedCompare
+      />,
+    );
+
+    expect(screen.queryByText("Read-only aligned compare")).toBeNull();
+    expect(screen.queryByText("IDEA compare")).toBeNull();
+    expect(screen.queryByRole("button", { name: "All content" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Focused content" })).toBeTruthy();
+    expect(document.querySelector('[data-toolbar-only="false"]')).toBeTruthy();
+    expect(document.querySelector('[data-has-full-loader="false"]')).toBeTruthy();
+    expect(document.querySelector(".editable-diff-review-viewer.is-toolbar-only")).toBeNull();
+  });
+
   it("opens editable text diffs directly in the IDEA compare surface", () => {
     render(
       <WorkspaceEditableDiffReviewSurface
@@ -110,9 +145,10 @@ describe("WorkspaceEditableDiffReviewSurface", () => {
     expect(screen.getByRole("button", { name: "Focused content" })).toBeTruthy();
     expect(document.querySelector(".editable-diff-review-viewer.is-toolbar-only")).toBeTruthy();
     expect(document.querySelector('[data-toolbar-only="true"]')).toBeTruthy();
+    expect(document.querySelector('[data-toolbar-only="false"]')).toBeNull();
   });
 
-  it("returns to the original renderer for focused-content review", () => {
+  it("keeps the aligned renderer for focused-content review", () => {
     render(
       <WorkspaceEditableDiffReviewSurface
         workspaceId="workspace-1"
@@ -124,8 +160,9 @@ describe("WorkspaceEditableDiffReviewSurface", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Focused content" }));
 
-    expect(screen.queryByText("IDEA compare")).toBeNull();
-    expect(document.querySelector(".editable-diff-review-viewer.is-toolbar-only")).toBeNull();
+    expect(screen.getByText("IDEA compare")).toBeTruthy();
+    expect(document.querySelector('[data-content-mode="focused"]')).toBeTruthy();
+    expect(document.querySelector(".editable-diff-review-viewer.is-toolbar-only")).toBeTruthy();
   });
 
   it("keeps deleted files in the read-only diff viewer", () => {
@@ -201,8 +238,9 @@ describe("WorkspaceEditableDiffReviewSurface", () => {
 
     expect(onDirtyChange).toHaveBeenLastCalledWith(false);
     expect(mockDiscardDraft).toHaveBeenCalledOnce();
-    expect(screen.queryByText("IDEA compare")).toBeNull();
-    expect(document.querySelector(".editable-diff-review-viewer.is-toolbar-only")).toBeNull();
+    expect(screen.getByText("IDEA compare")).toBeTruthy();
+    expect(document.querySelector('[data-content-mode="focused"]')).toBeTruthy();
+    expect(document.querySelector(".editable-diff-review-viewer.is-toolbar-only")).toBeTruthy();
   });
 
   it("saves before applying a pending view-mode change", async () => {
@@ -220,8 +258,8 @@ describe("WorkspaceEditableDiffReviewSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save and close" }));
 
     await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledOnce());
-    expect(screen.queryByText("IDEA compare")).toBeNull();
-    expect(screen.getByText("Read-only diff viewer")).toBeTruthy();
+    expect(screen.getByText("IDEA compare")).toBeTruthy();
+    expect(document.querySelector('[data-content-mode="focused"]')).toBeTruthy();
   });
 
   it("keeps the dialog and editable compare open when save fails", async () => {

@@ -39,6 +39,7 @@ import {
 } from "./GitDiffPanelCommitScope";
 import {
   DiffFileRow,
+  DiffFolderRow,
   DiffSection,
   type DiffFile,
   type DiffSectionProps,
@@ -368,60 +369,19 @@ function DiffTreeSection({
     (folder: DiffTreeFolderNode<DiffFile>, depth: number, parentKey?: string) => {
       const isCollapsed = collapsedFolders.has(folder.key);
       const hasChildren = folder.folders.size > 0 || folder.files.length > 0;
-      const treeIndentPx = depth * TREE_INDENT_STEP;
-      const folderStyle = {
-        paddingLeft: `${treeIndentPx}px`,
-        ["--git-tree-indent-x" as string]: `${Math.max(treeIndentPx - 5, 0)}px`,
-        ["--git-tree-line-opacity" as string]: getTreeLineOpacity(depth),
-      } as CSSProperties;
       const childTreeStyle = {
         ["--git-tree-branch-x" as string]: `${Math.max((depth + 1) * TREE_INDENT_STEP - 5, 0)}px`,
         ["--git-tree-branch-opacity" as string]: getTreeLineOpacity(depth + 1),
       } as CSSProperties;
       return (
         <div key={folder.key} className="diff-tree-folder-group">
-          <div
-            className="diff-tree-folder-row git-filetree-folder-row"
-            style={folderStyle}
-            data-folder-key={folder.key}
-            data-tree-depth={depth + 1}
-            data-collapsed={hasChildren ? String(isCollapsed) : undefined}
-            role="treeitem"
-            tabIndex={0}
-            aria-level={depth + 1}
-            aria-label={folder.name}
-            aria-expanded={hasChildren ? !isCollapsed : undefined}
-            onClick={() => {
-              if (hasChildren) {
-                onToggleFolder(folder.key);
-              }
-            }}
-            onKeyDown={(event) => {
-              const target = event.target as HTMLElement | null;
-              if (target?.closest("button")) {
-                return;
-              }
-              if ((event.key === "Enter" || event.key === " ") && hasChildren) {
-                event.preventDefault();
-                onToggleFolder(folder.key);
-              }
-            }}
-          >
-            <span className="diff-tree-folder-toggle" aria-hidden>
-              {hasChildren ? (
-                isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />
-              ) : (
-                <span className="diff-tree-folder-spacer" />
-              )}
-            </span>
-            <GitFileTreeIcon
-              name={folder.name}
-              isFolder
-              isOpen={!isCollapsed}
-              className="diff-tree-folder-icon"
-            />
-            <span className="diff-tree-folder-name">{folder.name}</span>
-          </div>
+          <DiffFolderRow
+            name={folder.name}
+            depth={depth}
+            collapsed={isCollapsed}
+            hasChildren={hasChildren}
+            onToggle={() => onToggleFolder(folder.key)}
+          />
           {!isCollapsed && (
             <div className="diff-tree-folder-children" style={childTreeStyle}>
               {Array.from(folder.folders.values()).map((child) =>
