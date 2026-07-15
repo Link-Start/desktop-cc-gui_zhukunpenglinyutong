@@ -618,11 +618,16 @@
 
 .fvp-line-annotation-button,
 .fvp-annotation-trigger {
-  border: 1px solid color-mix(in srgb, #2563eb 42%, var(--border-subtle));
-  background: color-mix(in srgb, #2563eb 10%, transparent);
-  color: #2563eb;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 94%, transparent);
+  color: var(--text-muted);
   border-radius: 999px;
   cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .fvp-line-annotation-button {
@@ -639,17 +644,26 @@
 }
 
 .fvp-annotation-trigger {
-  padding: 3px 10px;
-  font-size: 11px;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.fvp-line-annotation-button:hover,
+.fvp-annotation-trigger:hover {
+  border-color: color-mix(in srgb, var(--text-faint) 34%, var(--border-subtle));
+  background: color-mix(in srgb, var(--surface-hover) 68%, transparent);
+  color: var(--text-stronger);
 }
 
 .fvp-annotation-draft {
-  margin: 8px 12px 0;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, #2563eb 34%, var(--border-subtle));
-  background: color-mix(in srgb, #2563eb 7%, var(--surface-elevated));
-  box-shadow: 0 10px 24px color-mix(in srgb, #000 12%, transparent);
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
+  background: var(--bg-primary);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 8%, transparent);
 }
 
 .fvp-annotation-draft-inline,
@@ -662,10 +676,10 @@
 }
 
 .fvp-annotation-marker {
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, #2563eb 24%, var(--border-subtle));
-  background: color-mix(in srgb, #2563eb 5%, var(--surface-elevated));
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
+  background: var(--surface-panel);
   color: var(--text-muted);
 }
 
@@ -689,7 +703,7 @@
 }
 
 .fvp-annotation-title .codicon {
-  color: #2563eb;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -711,8 +725,8 @@
 }
 
 .fvp-annotation-remove:hover {
-  border-color: color-mix(in srgb, #2563eb 28%, var(--border-subtle));
-  background: color-mix(in srgb, #2563eb 8%, transparent);
+  border-color: color-mix(in srgb, var(--border-subtle) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-hover) 70%, transparent);
   color: var(--text-strong);
 }
 
@@ -733,9 +747,21 @@
 
 .fvp-annotation-draft-head {
   margin-bottom: 8px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 650;
   color: var(--text-strong);
+}
+
+.fvp-annotation-draft-head code,
+.fvp-annotation-marker-tools code {
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: color-mix(in srgb, var(--surface-control) 72%, transparent);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--code-font-family);
+  font-weight: 600;
 }
 
 .fvp-annotation-draft-input {
@@ -743,28 +769,83 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 58px;
+  min-height: 78px;
   resize: vertical;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
   border-radius: 8px;
-  padding: 8px;
-  background: var(--surface-panel);
+  padding: 10px 12px;
+  background: var(--bg-primary);
   color: var(--text-strong);
   font: inherit;
+  line-height: 1.5;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.fvp-annotation-draft-input::placeholder {
+  color: var(--text-faint);
+}
+
+.fvp-annotation-draft-input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--text-faint) 42%, var(--border-subtle));
+  background: var(--surface-panel);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text-faint) 12%, transparent);
 }
 
 .fvp-annotation-draft-actions {
   justify-content: flex-start;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.fvp-annotation-draft-actions button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
+  border-radius: 8px;
+  background: var(--surface-panel);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.fvp-annotation-draft-actions button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--text-faint) 34%, var(--border-subtle));
+  background: color-mix(in srgb, var(--surface-hover) 68%, transparent);
+  color: var(--text-stronger);
 }
 
 .fvp-annotation-submit {
-  border: none;
-  border-radius: 999px;
-  padding: 5px 12px;
-  background: #2563eb;
-  color: white;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
+  border-radius: 8px;
+  min-height: 28px;
+  padding: 0 12px;
+  background: var(--surface-panel);
+  color: var(--text-muted);
   cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  box-shadow: none;
+  transition:
+    opacity 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.fvp-annotation-submit:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--text-faint) 34%, var(--border-subtle));
+  background: color-mix(in srgb, var(--surface-hover) 68%, transparent);
+  color: var(--text-stronger);
 }
 
 .fvp-annotation-submit:disabled {
@@ -784,11 +865,14 @@
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding: 7px 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-accent) 28%, var(--border-subtle));
-  background: color-mix(in srgb, var(--surface-card) 94%, var(--surface-command));
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
+  border-radius: 12px;
+  background: var(--surface-panel);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 8%, transparent);
 }
 
 .fvp-preview-selection-toolbar > span {
@@ -1184,12 +1268,12 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  width: min(380px, calc(100% - 40px));
-  max-height: min(640px, calc(100% - 40px));
-  min-width: 300px;
+  width: min(320px, calc(100% - 40px));
+  max-height: min(520px, calc(100% - 40px));
+  min-width: 260px;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
-  border-radius: 14px;
+  border-radius: 12px;
   background:
     linear-gradient(
       180deg,
@@ -1197,11 +1281,11 @@
       color-mix(in srgb, var(--surface-control) 90%, transparent)
     );
   box-shadow:
-    0 24px 56px color-mix(in srgb, #000 22%, transparent),
+    0 16px 38px color-mix(in srgb, #000 16%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--surface-card) 76%, transparent);
   color: var(--fvp-reader-text);
   overflow: auto;
-  backdrop-filter: blur(16px) saturate(1.08);
+  backdrop-filter: blur(12px) saturate(1.04);
   pointer-events: auto;
 }
 
@@ -1218,8 +1302,8 @@
 
 .fvp-markdown-outline-layer .fvp-preview-outline-float {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: 14px;
+  right: 14px;
   z-index: 4;
 }
 
@@ -1227,33 +1311,48 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
+  width: 34px;
+  height: 34px;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--surface-card) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-card) 78%, transparent);
   box-shadow:
-    0 14px 34px color-mix(in srgb, #000 20%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--surface-card) 80%, transparent);
-  color: var(--fvp-reader-text);
+    0 10px 24px color-mix(in srgb, #000 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--surface-elevated) 68%, transparent);
+  color: var(--fvp-reader-muted);
   backdrop-filter: blur(12px);
   pointer-events: auto;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
 }
 
 .fvp-preview-outline-float-button:hover {
+  border-color: color-mix(in srgb, var(--border-subtle) 100%, transparent);
   background: color-mix(in srgb, var(--surface-hover) 82%, transparent);
+  color: var(--fvp-reader-text);
+  transform: translateY(-1px);
+}
+
+.fvp-preview-outline-float-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--text-faint) 12%, transparent),
+    0 10px 24px color-mix(in srgb, #000 12%, transparent);
 }
 
 .fvp-preview-outline-menu-icon {
   display: grid;
-  gap: 5px;
-  width: 26px;
+  gap: 3px;
+  width: 15px;
 }
 
 .fvp-preview-outline-menu-icon span {
   display: block;
-  height: 4px;
+  height: 2px;
   border-radius: 999px;
   background: currentColor;
 }
@@ -1262,7 +1361,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 14px 14px 12px;
+  padding: 12px 12px 10px;
   margin-bottom: 0;
   align-items: center;
   justify-content: space-between;
@@ -1273,7 +1372,7 @@
 
 .fvp-preview-outline .fvp-preview-section-header strong {
   color: var(--text-stronger);
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
@@ -1307,21 +1406,20 @@
 
 .fvp-preview-outline-pin-button {
   opacity: 1;
-  color: color-mix(in srgb, var(--status-error, #ef4444) 92%, #dc2626);
+  color: var(--fvp-reader-muted);
 }
 
 .fvp-preview-outline-pin-button:hover,
 .fvp-preview-outline-pin-button.is-active {
-  background: transparent;
-  color: color-mix(in srgb, var(--status-error, #ef4444) 96%, #b91c1c);
+  background: color-mix(in srgb, var(--surface-hover) 58%, transparent);
+  color: var(--fvp-reader-text);
 }
 
 .fvp-preview-outline-pin-icon {
   display: block;
-  width: 32px;
-  height: 32px;
+  width: 18px;
+  height: 18px;
   fill: currentColor;
-  filter: drop-shadow(0 1px 1px color-mix(in srgb, #000 22%, transparent));
   pointer-events: none;
   transform: rotate(90deg);
   transform-origin: 50% 50%;
@@ -1388,9 +1486,9 @@
   background: transparent;
   color: var(--fvp-reader-text);
   text-align: left;
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1.5;
-  padding: 7px 10px;
+  padding: 6px 9px;
   transition:
     background 140ms ease,
     color 140ms ease;
@@ -1406,7 +1504,7 @@
 .fvp-preview-outline-level {
   margin-left: 8px;
   color: var(--fvp-reader-muted);
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 800;
   flex: 0 0 auto;
 }
@@ -1600,21 +1698,25 @@
   --fvp-markdown-rule: color-mix(in srgb, var(--border-subtle) 78%, transparent);
   --fvp-markdown-inline-code-bg: color-mix(in srgb, var(--surface-control) 74%, transparent);
   --fvp-markdown-code-bg: color-mix(in srgb, var(--surface-card) 86%, transparent);
-  --fvp-markdown-title-accent: color-mix(in srgb, var(--text-accent) 82%, #79a6ff 18%);
-  --fvp-markdown-title-secondary: color-mix(in srgb, var(--text-stronger) 78%, var(--text-accent) 22%);
-  --fvp-markdown-title-tertiary: color-mix(in srgb, var(--text-stronger) 84%, #7bd3c7 16%);
-  --fvp-markdown-table-head-bg: color-mix(in srgb, var(--surface-control) 62%, #6f9cff 8%);
-  --fvp-markdown-table-stripe: color-mix(in srgb, var(--surface-control) 24%, #6f9cff 6%);
-  --fvp-markdown-quote-bg: color-mix(in srgb, var(--surface-control) 42%, #6f9cff 8%);
+  --fvp-markdown-title-accent: var(--text-stronger);
+  --fvp-markdown-title-secondary: var(--text-stronger);
+  --fvp-markdown-title-tertiary: var(--text-stronger);
+  --fvp-markdown-table-head-bg: var(--surface-control);
+  --fvp-markdown-table-stripe: color-mix(in srgb, var(--surface-control) 24%, transparent);
+  --fvp-markdown-quote-bg: color-mix(in srgb, var(--surface-control) 42%, transparent);
   --fvp-markdown-list-marker: color-mix(in srgb, var(--text-stronger) 90%, #000 10%);
 }
 
 .fvp-markdown-annotatable-block {
   position: relative;
   margin: 0;
-  padding: 1px 34px 1px 0;
-  border-radius: 10px;
+  padding: 1px 42px 1px 0;
+  border-radius: 12px;
   isolation: isolate;
+}
+
+.fvp-markdown-annotatable-block:has(.fvp-markdown-annotation-popover) {
+  z-index: 20;
 }
 
 .fvp-markdown-annotatable-block::after {
@@ -1627,28 +1729,30 @@
   pointer-events: none;
 }
 
-.fvp-markdown-annotatable-block:hover,
-.fvp-markdown-annotatable-block:focus-within {
-  box-shadow: inset 2px 0 0 color-mix(in srgb, #2563eb 44%, transparent);
-}
-
 .fvp-markdown-annotation-button {
   position: absolute;
-  top: 2px;
+  top: 0;
   right: 0;
   z-index: 1;
   opacity: 0;
-  border: 1px solid color-mix(in srgb, #2563eb 42%, var(--border-subtle));
-  border-radius: 999px;
-  padding: 3px 8px;
-  background: color-mix(in srgb, var(--surface-card) 94%, #2563eb 6%);
-  color: #2563eb;
-  box-shadow: 0 8px 18px color-mix(in srgb, #000 12%, transparent);
+  min-height: 26px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 86%, transparent);
+  border-radius: 9px;
+  padding: 0 8px;
+  background: var(--surface-panel);
+  color: var(--text-muted);
+  box-shadow: 0 8px 18px color-mix(in srgb, #000 8%, transparent);
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 650;
   line-height: 1.2;
   will-change: auto;
+  transition:
+    opacity 120ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
 }
 
 .fvp-markdown-annotatable-block:hover .fvp-markdown-annotation-button,
@@ -1658,19 +1762,27 @@
   opacity: 1;
 }
 
-.fvp-markdown-annotatable-block:has(.fvp-file-markdown-codeblock) {
-  padding-right: 0;
+.fvp-markdown-annotation-button:hover {
+  border-color: color-mix(in srgb, var(--text-faint) 34%, var(--border-subtle));
+  background: color-mix(in srgb, var(--surface-hover) 68%, var(--surface-panel));
+  color: var(--text-stronger);
+  transform: translateY(-1px);
 }
 
+.fvp-markdown-annotation-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--text-faint) 12%, transparent),
+    0 8px 18px color-mix(in srgb, #000 8%, transparent);
+}
+
+.fvp-markdown-annotatable-block:has(.fvp-file-markdown-codeblock),
 .fvp-markdown-annotatable-block:has(.fvp-file-markdown-table-wrap),
 .fvp-markdown-annotatable-block:has(.fvp-file-markdown-heavy-placeholder) {
   padding-right: 0;
 }
 
-.fvp-markdown-annotatable-block:has(.fvp-file-markdown-codeblock)::after {
-  width: 0;
-}
-
+.fvp-markdown-annotatable-block:has(.fvp-file-markdown-codeblock)::after,
 .fvp-markdown-annotatable-block:has(.fvp-file-markdown-table-wrap)::after,
 .fvp-markdown-annotatable-block:has(.fvp-file-markdown-heavy-placeholder)::after {
   width: 0;
@@ -1688,10 +1800,28 @@
 }
 
 .fvp-markdown-annotation-inline {
-  margin: 8px 0 12px;
+  margin: 10px 0 14px;
+}
+
+.fvp-markdown-annotation-popover {
+  position: absolute;
+  top: 32px;
+  right: 0;
+  left: auto;
+  z-index: 20;
+  width: min(680px, 100%);
+  transform: none;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  pointer-events: auto;
+}
+
+.fvp-markdown-annotation-popover .fvp-annotation-draft {
+  margin-top: 0;
 }
 
 .fvp-markdown-annotation-inline .fvp-annotation-draft-inline,
+.fvp-markdown-annotation-popover .fvp-annotation-draft-inline,
 .fvp-markdown-annotation-inline .fvp-annotation-marker {
   display: block;
   grid-column: auto;
@@ -1725,6 +1855,20 @@
   left: 0;
   z-index: 2;
   pointer-events: auto;
+  transform: translateY(-12px);
+}
+
+/* 草稿弹窗独立定位于「标注给 AI」按钮正下方（top 由 draftTop 内联给出）。 */
+.fvp-fast-markdown-annotation-draft {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 4;
+  pointer-events: auto;
+}
+
+.fvp-fast-markdown-annotation-draft .fvp-annotation-draft {
+  margin-top: 0;
 }
 
 .fvp-file-markdown :where(h1, h2, h3, h4, h5, h6) {
@@ -1758,7 +1902,7 @@
 
 .fvp-file-markdown :where(h4, h5, h6) {
   font-size: 1em;
-  color: color-mix(in srgb, var(--text-stronger) 88%, var(--text-accent) 12%);
+  color: var(--text-stronger);
 }
 
 .fvp-file-markdown :where(h1, h2, h3, h4, h5, h6):first-child {
@@ -1767,6 +1911,16 @@
 
 .fvp-file-markdown :where(p, ul, ol, pre, blockquote, table) {
   margin: 0 0 16px;
+}
+
+.fvp-file-markdown :where([align="center"]) {
+  text-align: center;
+}
+
+.fvp-file-markdown :where(img) {
+  display: inline-block;
+  max-width: 100%;
+  height: auto;
 }
 
 .fvp-file-markdown .katex {
@@ -1909,8 +2063,9 @@
 }
 
 .fvp-file-markdown :where(a) {
-  color: var(--text-accent);
+  color: var(--fvp-markdown-link, #0969da);
   text-decoration: none;
+  text-underline-offset: 0.14em;
 }
 
 .fvp-file-markdown :where(a:hover) {

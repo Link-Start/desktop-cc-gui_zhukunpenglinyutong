@@ -408,9 +408,6 @@ export function FileMarkdownPreviewFast({
       className="fvp-markdown-preview-frame"
       data-markdown-render-profile={rendererProfile ?? "rich-react"}
       data-markdown-fallback-reason={localFallbackReason ?? "none"}
-      data-markdown-annotation-overlay-count={String(
-        annotations.length + (annotationDraft ? 1 : 0),
-      )}
     >
       <div className="fvp-markdown-outline-layer">
         {shouldRenderOutline ? (

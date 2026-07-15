@@ -49,7 +49,48 @@ describe("FileMarkdownFastPreview annotation action", () => {
     fireEvent.click(actionButton);
 
     expect(onAnnotationStart).toHaveBeenCalledWith({ startLine: 3, endLine: 3 });
-    expect(preview.getAttribute("data-markdown-annotation-action-count")).toBe("2");
+    expect(preview.getAttribute("data-markdown-annotation-action-count")).toBeNull();
+    expect(
+      screen
+        .getByTestId("file-markdown-fast-annotation-layer")
+        .getAttribute("data-markdown-annotation-action-count"),
+    ).toBe("2");
+  });
+
+  it("keeps annotation overlay diagnostics off the fast HTML surface", () => {
+    vi.mocked(useFastMarkdownRender).mockReturnValue({
+      result: buildFastMarkdownResult(),
+      status: "ready",
+      resolvedProfile: "fast-html",
+      error: null,
+      shouldFallback: false,
+    });
+    const { rerender } = render(
+      <FileMarkdownFastPreview
+        value={"# Title\n\nbody\n"}
+        documentKey="docs/large.md"
+        annotationDraft={null}
+        renderAnnotationDraft={(draft) => <span>{draft.body}</span>}
+      />,
+    );
+    const preview = screen.getByTestId("file-markdown-fast-preview");
+
+    rerender(
+      <FileMarkdownFastPreview
+        value={"# Title\n\nbody\n"}
+        documentKey="docs/large.md"
+        annotationDraft={{ lineRange: { startLine: 3, endLine: 3 }, body: "draft" }}
+        renderAnnotationDraft={(draft) => <span>{draft.body}</span>}
+      />,
+    );
+
+    expect(screen.getByTestId("file-markdown-fast-preview")).toBe(preview);
+    expect(preview.getAttribute("data-markdown-annotation-overlay-count")).toBeNull();
+    expect(
+      screen
+        .getByTestId("file-markdown-fast-annotation-layer")
+        .getAttribute("data-markdown-annotation-overlay-count"),
+    ).toBe("1");
   });
 });
 

@@ -409,7 +409,11 @@ describe("FileMarkdownPreviewFast", () => {
     await waitFor(() => {
       const node = screen.queryByTestId("file-markdown-fast-preview");
       expect(node?.getAttribute("data-fast-renderer-marker")).toBe("ready");
-      expect(node?.getAttribute("data-markdown-annotation-overlay-count")).toBe("1");
+      expect(
+        screen
+          .getByTestId("file-markdown-fast-annotation-layer")
+          .getAttribute("data-markdown-annotation-overlay-count"),
+      ).toBe("1");
     });
     expect((await screen.findByTestId("fast-marker")).textContent).toBe("annotation-1");
     expect(onFallback).not.toHaveBeenCalledWith(
@@ -464,7 +468,11 @@ describe("FileMarkdownPreviewFast", () => {
     await waitFor(() => {
       const node = screen.getByTestId("file-markdown-fast-preview");
       expect(node.getAttribute("data-fast-renderer-marker")).toBe("ready");
-      expect(node.getAttribute("data-markdown-annotation-overlay-count")).toBe("2");
+      expect(
+        screen
+          .getByTestId("file-markdown-fast-annotation-layer")
+          .getAttribute("data-markdown-annotation-overlay-count"),
+      ).toBe("2");
     });
     expect(screen.getAllByTestId("fast-marker").map((node) => node.textContent)).toEqual([
       "nested-marker",
@@ -503,7 +511,11 @@ describe("FileMarkdownPreviewFast", () => {
     await waitFor(() => {
       const node = screen.getByTestId("file-markdown-fast-preview");
       expect(node.getAttribute("data-fast-renderer-marker")).toBe("ready");
-      expect(node.getAttribute("data-markdown-annotation-overlay-count")).toBe("0");
+      expect(
+        screen
+          .getByTestId("file-markdown-fast-annotation-layer")
+          .getAttribute("data-markdown-annotation-overlay-count"),
+      ).toBe("0");
     });
     expect(screen.queryByTestId("fast-marker")).toBeNull();
     expect(onFallback).not.toHaveBeenCalled();

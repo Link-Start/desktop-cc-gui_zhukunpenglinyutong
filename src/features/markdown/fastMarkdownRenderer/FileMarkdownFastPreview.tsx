@@ -29,9 +29,14 @@ type FastAnnotationOverlayItem = {
   actionTop: number | null;
   actionLineRange: CodeAnnotationLineRange | null;
   annotationTop: number;
+  draftTop: number;
   annotations: CodeAnnotationSelection[];
   draft: { lineRange: CodeAnnotationLineRange; body: string } | null;
 };
+
+// 草稿弹窗紧贴「标注给 AI」按钮下方：按钮顶部为 block.offsetTop + 2，
+// 按钮高度 ~26px，再留 6px 间距。ponytail: 与 file-view-panel.css 中按钮几何耦合。
+const FAST_ANNOTATION_DRAFT_TOP_OFFSET = 34;
 
 type FastMarkdownHtmlSurfaceProps = {
   className: string;
@@ -269,6 +274,7 @@ export function FileMarkdownFastPreview({
             endLine: anchor.endLine,
           },
           annotationTop: block.offsetTop + block.offsetHeight,
+          draftTop: block.offsetTop + FAST_ANNOTATION_DRAFT_TOP_OFFSET,
           annotations: [],
           draft: null,
         });
@@ -292,6 +298,7 @@ export function FileMarkdownFastPreview({
         actionTop: existingItem?.actionTop ?? null,
         actionLineRange: existingItem?.actionLineRange ?? null,
         annotationTop: block.offsetTop + block.offsetHeight,
+        draftTop: block.offsetTop + FAST_ANNOTATION_DRAFT_TOP_OFFSET,
         annotations: blockAnnotations,
         draft: shouldRenderDraft && annotationDraft ? annotationDraft : null,
       });
@@ -386,8 +393,6 @@ export function FileMarkdownFastPreview({
     "data-markdown-render-profile": resolvedProfile,
     "data-markdown-render-status": status,
     "data-markdown-fallback-reason": error?.message ?? "none",
-    "data-markdown-annotation-overlay-count": String(renderedAnnotationOverlayCount),
-    "data-markdown-annotation-action-count": String(renderedAnnotationActionCount),
   };
   if (result) {
     dataAttributes["data-markdown-content-hash"] = result.contentHash;
@@ -428,6 +433,9 @@ export function FileMarkdownFastPreview({
           />
           <div
             className="fvp-fast-markdown-annotation-layer"
+            data-testid="file-markdown-fast-annotation-layer"
+            data-markdown-annotation-overlay-count={String(renderedAnnotationOverlayCount)}
+            data-markdown-annotation-action-count={String(renderedAnnotationActionCount)}
             aria-hidden={annotationOverlayItems.length === 0 ? "true" : undefined}
           >
             {annotationOverlayItems.map((item) => (
@@ -451,7 +459,7 @@ export function FileMarkdownFastPreview({
                     {annotationActionLabel}
                   </button>
                 ) : null}
-                {item.annotations.length > 0 || item.draft ? (
+                {item.annotations.length > 0 ? (
                   <div
                     className="fvp-markdown-annotation-inline fvp-fast-markdown-annotation-inline"
                     style={{ top: item.annotationTop }}
@@ -463,11 +471,14 @@ export function FileMarkdownFastPreview({
                         </div>
                       ) : null,
                     )}
-                    {item.draft && renderAnnotationDraft ? (
-                      <div className="fvp-fast-markdown-annotation-draft">
-                        {renderAnnotationDraft(item.draft)}
-                      </div>
-                    ) : null}
+                  </div>
+                ) : null}
+                {item.draft && renderAnnotationDraft ? (
+                  <div
+                    className="fvp-fast-markdown-annotation-draft"
+                    style={{ top: item.draftTop }}
+                  >
+                    {renderAnnotationDraft(item.draft)}
                   </div>
                 ) : null}
               </Fragment>
@@ -525,6 +536,7 @@ function areFastAnnotationOverlayItemsEqual(
       previousItem.actionLineRange?.startLine !== nextItem.actionLineRange?.startLine ||
       previousItem.actionLineRange?.endLine !== nextItem.actionLineRange?.endLine ||
       previousItem.annotationTop !== nextItem.annotationTop ||
+      previousItem.draftTop !== nextItem.draftTop ||
       previousItem.draft?.body !== nextItem.draft?.body ||
       previousItem.draft?.lineRange.startLine !== nextItem.draft?.lineRange.startLine ||
       previousItem.draft?.lineRange.endLine !== nextItem.draft?.lineRange.endLine ||

@@ -468,6 +468,13 @@ function isHeavyCodeBlock(value: string) {
   );
 }
 
+function hasDocumentScopedMarkdownFeatures(value: string) {
+  return (
+    /^\s{0,3}\[[^\]\n]+]:\s+\S+/m.test(value) ||
+    /^\s{0,3}<([A-Za-z][\w:-]*)(?:\s[^>]*)?>[\s\S]*?^\s{0,3}<\/\1>\s*$/m.test(value)
+  );
+}
+
 function resolveMarkdownNodeLineRange(
   node: MarkdownPositionTreeNode,
   bodyStartLine: number,
@@ -649,7 +656,7 @@ function MarkdownAnnotatableBlock({
         ) : null,
       )}
       {annotationDraft && renderAnnotationDraft ? (
-        <div className="fvp-markdown-annotation-inline">
+        <div className="fvp-markdown-annotation-popover">
           {renderAnnotationDraft(annotationDraft)}
         </div>
       ) : null}
@@ -1170,10 +1177,34 @@ export function FileMarkdownPreview({
       renderProjection.kind === "rich"
         ? markdownBodyLineCount
         : visibleLineLimit;
+    const shouldRenderSingleMarkdownDocument = useMemo(
+      () =>
+        renderProjection.kind === "rich" &&
+        hasDocumentScopedMarkdownFeatures(compiledDocument.body),
+      [compiledDocument.body, renderProjection.kind],
+    );
+    const renderBlocks = useMemo(
+      () =>
+        shouldRenderSingleMarkdownDocument
+          ? [{
+              key: `${compiledDocument.cacheKey}:full`,
+              markdown: compiledDocument.body,
+              startLine: 1,
+              endLine: markdownBodyLineCount,
+            }]
+          : compiledDocument.blocks,
+      [
+        compiledDocument.blocks,
+        compiledDocument.body,
+        compiledDocument.cacheKey,
+        markdownBodyLineCount,
+        shouldRenderSingleMarkdownDocument,
+      ],
+    );
     const visibleMarkdownBlocks = useMemo(
       () =>
-        compiledDocument.blocks.filter((block) => block.startLine <= projectedLineLimit),
-      [compiledDocument.blocks, projectedLineLimit],
+        renderBlocks.filter((block) => block.startLine <= projectedLineLimit),
+      [projectedLineLimit, renderBlocks],
     );
     const markdownLineMap = compiledDocument.lineMap;
     const hasMathContent = useMemo(
@@ -1333,12 +1364,12 @@ export function FileMarkdownPreview({
     ]);
 
     const createMarkdownComponents = useCallback((blockStartLine: number, blockKey: string): Components => ({
-      a: ({ href, children }) => (
-        <a href={href} onClick={(event) => handleAnchorClick(event, href)}>
+      a: ({ href, children, node: _node, ...props }) => (
+        <a {...props} href={href} onClick={(event) => handleAnchorClick(event, href)}>
           {children}
         </a>
       ),
-      img: ({ src, alt }) => {
+      img: ({ src, alt, height, node: _node, width, ...props }) => {
         const resolvedImage = resolveFileMarkdownImageRenderSource(
           typeof src === "string" ? src : "",
           sourceFilePath,
@@ -1348,10 +1379,13 @@ export function FileMarkdownPreview({
         }
         return (
           <LocalImage
+            {...props}
             src={resolvedImage.src}
             localPath={resolvedImage.localPath}
             alt={typeof alt === "string" ? alt : "image"}
+            height={height}
             loading="lazy"
+            width={width}
             workspaceId={workspaceId}
             onClick={() =>
               setImageFullscreen({
@@ -1362,16 +1396,16 @@ export function FileMarkdownPreview({
           />
         );
       },
-      blockquote: ({ node, children }) => renderAnnotatableBlock("blockquote", node, children, blockStartLine),
-      h1: ({ node, children }) => renderAnnotatableBlock("h1", node, children, blockStartLine),
-      h2: ({ node, children }) => renderAnnotatableBlock("h2", node, children, blockStartLine),
-      h3: ({ node, children }) => renderAnnotatableBlock("h3", node, children, blockStartLine),
-      h4: ({ node, children }) => renderAnnotatableBlock("h4", node, children, blockStartLine),
-      h5: ({ node, children }) => renderAnnotatableBlock("h5", node, children, blockStartLine),
-      h6: ({ node, children }) => renderAnnotatableBlock("h6", node, children, blockStartLine),
-      ol: ({ node, children }) => renderAnnotatableBlock("ol", node, children, blockStartLine),
-      p: ({ node, children }) => renderAnnotatableBlock("p", node, children, blockStartLine),
-      ul: ({ node, children }) => renderAnnotatableBlock("ul", node, children, blockStartLine),
+      blockquote: ({ node, children, ...props }) => renderAnnotatableBlock("blockquote", node, children, blockStartLine, props),
+      h1: ({ node, children, ...props }) => renderAnnotatableBlock("h1", node, children, blockStartLine, props),
+      h2: ({ node, children, ...props }) => renderAnnotatableBlock("h2", node, children, blockStartLine, props),
+      h3: ({ node, children, ...props }) => renderAnnotatableBlock("h3", node, children, blockStartLine, props),
+      h4: ({ node, children, ...props }) => renderAnnotatableBlock("h4", node, children, blockStartLine, props),
+      h5: ({ node, children, ...props }) => renderAnnotatableBlock("h5", node, children, blockStartLine, props),
+      h6: ({ node, children, ...props }) => renderAnnotatableBlock("h6", node, children, blockStartLine, props),
+      ol: ({ node, children, ...props }) => renderAnnotatableBlock("ol", node, children, blockStartLine, props),
+      p: ({ node, children, ...props }) => renderAnnotatableBlock("p", node, children, blockStartLine, props),
+      ul: ({ node, children, ...props }) => renderAnnotatableBlock("ul", node, children, blockStartLine, props),
       table: ({ node, children }) => {
         const tableRevealKey = createHeavyBlockRevealKey({
           blockKey,

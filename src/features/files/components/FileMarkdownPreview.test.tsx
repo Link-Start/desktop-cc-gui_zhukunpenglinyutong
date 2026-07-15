@@ -116,6 +116,52 @@ describe("FileMarkdownPreview render budget", () => {
     );
   });
 
+  it("preserves README-style raw HTML alignment, image dimensions, and reference images", () => {
+    const markdown = [
+      '<div align="center">',
+      "",
+      "# Desktop CC GUI",
+      "",
+      '<img width="120" alt="ccgui icon" src="./icon.png" />',
+      "",
+      '<p align="center" class="readme-tagline" title="tagline">AI coding desktop client</p>',
+      "",
+      '<a href="https://trendshift.io/repositories/25546" title="trendshift"><img class="trendshift-badge" src="https://trendshift.io/api/badge/repositories/25546" alt="trendshift badge" width="250" height="55" /></a>',
+      "",
+      "![][github-stars-shield]",
+      "",
+      "</div>",
+      "",
+      "[github-stars-shield]: https://img.shields.io/github/stars/example/repo?style=flat-square",
+    ].join("\n");
+
+    const { container } = render(
+      <FileMarkdownPreview
+        documentKey="docs:readme-html"
+        value={markdown}
+        sourceFilePath="/repo/README.md"
+      />,
+    );
+
+    expect(container.querySelector('div[align="center"] h1')?.textContent).toBe("Desktop CC GUI");
+    const icon = screen.getByRole("img", { name: "ccgui icon" });
+    expect(icon.getAttribute("width")).toBe("120");
+    expect(icon.getAttribute("src")).toBe("asset://localhost//repo/icon.png");
+    const tagline = container.querySelector("p.readme-tagline");
+    expect(tagline?.getAttribute("align")).toBe("center");
+    expect(tagline?.getAttribute("title")).toBe("tagline");
+    const trendshiftBadge = screen.getByRole("img", { name: "trendshift badge" });
+    expect(trendshiftBadge.getAttribute("class")).toBe("trendshift-badge");
+    expect(trendshiftBadge.getAttribute("width")).toBe("250");
+    expect(trendshiftBadge.getAttribute("height")).toBe("55");
+    expect(trendshiftBadge.getAttribute("title")).toBeNull();
+    expect(
+      container.querySelector(
+        'img[src="https://img.shields.io/github/stars/example/repo?style=flat-square"]',
+      ),
+    ).toBeTruthy();
+  });
+
   it("keeps annotation draft rerenders inside the projected markdown window", () => {
     vi.useFakeTimers();
     const markdown = makeParagraphMarkdown(500);
@@ -141,6 +187,24 @@ describe("FileMarkdownPreview render budget", () => {
     expect(preview.getAttribute("data-markdown-render-projection")).toBe("progressive");
     expect(preview.getAttribute("data-markdown-visible-lines")).toBe("360");
     expect(preview.textContent).not.toContain("paragraph-500");
+  });
+
+  it("renders markdown annotation drafts as a popover outside normal document flow", () => {
+    const { container } = render(
+      <FileMarkdownPreview
+        documentKey="docs:annotation-popover"
+        value={"intro\n\nannotated paragraph\n\noutro"}
+        annotationDraft={{ lineRange: { startLine: 3, endLine: 3 }, body: "draft" }}
+        renderAnnotationDraft={() => <div data-testid="markdown-draft">draft</div>}
+      />,
+    );
+
+    const draft = screen.getByTestId("markdown-draft");
+    const popover = draft.closest(".fvp-markdown-annotation-popover");
+
+    expect(popover).toBeTruthy();
+    expect(draft.closest(".fvp-markdown-annotation-inline")).toBeNull();
+    expect(container.querySelectorAll(".fvp-markdown-annotation-popover")).toHaveLength(1);
   });
 
   it("defers heavy code blocks outside the visible lazy budget", () => {
