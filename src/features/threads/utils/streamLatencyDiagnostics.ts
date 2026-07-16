@@ -137,6 +137,12 @@ const STREAM_MITIGATION_PROFILES: Readonly<Record<StreamMitigationProfileId, Str
 };
 
 const snapshotByThread = new Map<string, ThreadStreamLatencySnapshot>();
+// useSyncExternalStore 的读取源。内部快照每个流式 delta 都换引用（计时/测量字段），
+// 若直接暴露给 getSnapshot，React 的渲染一致性检查会把每次 delta 判成 tearing 并强制
+// 同步重渲染——双会话高频流式下连环 50 次即 Maximum update depth (#185) 白屏。
+// 该 Map 只在可观察字段（shouldNotifyThreadStreamLatencySnapshotListeners）变化时更新，
+// 保证 getSnapshot 引用与订阅通知同步变化。
+const publishedSnapshotByThread = new Map<string, ThreadStreamLatencySnapshot>();
 const latestProviderConfigRequestByThread = new Map<string, number>();
 const visibleOutputStallTimerByThread = new Map<string, ReturnType<typeof setTimeout>>();
 const snapshotListeners = new Set<() => void>();
@@ -285,6 +291,7 @@ function updateThreadSnapshot(
   }
   snapshotByThread.set(threadId, next);
   if (shouldNotifyThreadStreamLatencySnapshotListeners(current, next)) {
+    publishedSnapshotByThread.set(threadId, next);
     notifySnapshotListeners();
   }
   return next;
@@ -1784,7 +1791,7 @@ function subscribeToThreadStreamLatencySnapshots(listener: () => void) {
 export function useThreadStreamLatencySnapshot(threadId: string | null) {
   return useSyncExternalStore(
     subscribeToThreadStreamLatencySnapshots,
-    () => (threadId ? snapshotByThread.get(threadId) ?? null : null),
+    () => (threadId ? publishedSnapshotByThread.get(threadId) ?? null : null),
     () => null,
   );
 }
@@ -1795,6 +1802,7 @@ export function resetThreadStreamLatencyDiagnosticsForTests() {
   });
   visibleOutputStallTimerByThread.clear();
   snapshotByThread.clear();
+  publishedSnapshotByThread.clear();
   latestProviderConfigRequestByThread.clear();
   streamLatencyTraceEnabledCache = null;
   notifySnapshotListeners();
