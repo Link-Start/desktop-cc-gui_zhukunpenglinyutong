@@ -32,6 +32,7 @@ function summary(repositoryRoot: string): GitRepositorySummary {
     modifiedCount: 0,
     untrackedCount: 0,
     conflictedCount: 0,
+    fileStatuses: [],
     isClean: true,
     error: null,
   };

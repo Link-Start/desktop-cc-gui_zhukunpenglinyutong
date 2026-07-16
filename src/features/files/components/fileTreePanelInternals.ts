@@ -242,6 +242,7 @@ export function buildTree(
   directories: string[],
   lazyLoadableDirectories: Set<string>,
   directoryMetadataByPath: Map<string, WorkspaceDirectoryEntry>,
+  collapseBoundaryPaths: Set<string> = EMPTY_SET,
 ): { nodes: FileTreeNode[]; folderPaths: Set<string> } {
   const root = new Map<string, FileTreeBuildNode>();
   const addNode = (
@@ -334,11 +335,17 @@ export function buildTree(
       const hasDirectFile = children.some((child) => child.type === "file");
       const directFolders = children.filter((child) => child.type === "folder");
       const hasLazyLoadableChild = directFolders.some((child) => child.isLazyLoadable);
-      if (node.isLazyLoadable || hasDirectFile || hasLazyLoadableChild || directFolders.length !== 1) {
+      if (
+        collapseBoundaryPaths.has(node.path) ||
+        node.isLazyLoadable ||
+        hasDirectFile ||
+        hasLazyLoadableChild ||
+        directFolders.length !== 1
+      ) {
         break;
       }
       const next = directFolders[0];
-      if (!next) {
+      if (!next || collapseBoundaryPaths.has(next.path)) {
         break;
       }
       labels.push(next.name);

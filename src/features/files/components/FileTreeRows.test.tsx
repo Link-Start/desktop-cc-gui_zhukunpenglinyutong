@@ -23,6 +23,7 @@ const repository: GitRepositorySummary = {
   modifiedCount: 2,
   untrackedCount: 0,
   conflictedCount: 0,
+  fileStatuses: [],
   isClean: false,
   error: null,
 };

@@ -78,6 +78,15 @@
   --status-warning: #ffaf55;
   --status-error: #ff6e6e;
   --status-unknown: #4d4d4d;
+  /* IDEA-inspired Git decoration palette — dark */
+  --git-status-added: #73d0a9;
+  --git-status-modified: #ffaa3e;
+  --git-status-deleted: #f07178;
+  --git-status-renamed: #82aaff;
+  --git-status-type-changed: #c792ea;
+  --git-status-conflict: #ff5370;
+  --git-repository-dirty: #82aaff;
+  --git-branch: #ffb37a;
   --select-caret: #999999;
   --tabbar-height: 56px;
   --ui-scale: 1;

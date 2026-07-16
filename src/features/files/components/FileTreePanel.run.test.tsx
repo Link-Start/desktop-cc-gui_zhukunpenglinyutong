@@ -134,6 +134,7 @@ describe("FileTreePanel run action isolation", () => {
       modifiedCount: 0,
       untrackedCount: 0,
       conflictedCount: 0,
+      fileStatuses: [],
       isClean: true,
       error: null,
     };
@@ -203,6 +204,7 @@ describe("FileTreePanel run action isolation", () => {
       modifiedCount: 1,
       untrackedCount: 0,
       conflictedCount: 0,
+      fileStatuses: [],
       isClean: false,
       error: null,
     };
@@ -263,6 +265,7 @@ describe("FileTreePanel run action isolation", () => {
           modifiedCount: 0,
           untrackedCount: 0,
           conflictedCount: 0,
+          fileStatuses: [],
           isClean: true,
           error: null,
         }]}
@@ -295,6 +298,7 @@ describe("FileTreePanel run action isolation", () => {
       modifiedCount: 0,
       untrackedCount: 0,
       conflictedCount: 0,
+      fileStatuses: [],
       isClean: true,
       error: null,
     };
@@ -593,6 +597,72 @@ describe("FileTreePanel run action isolation", () => {
     fireEvent.doubleClick(screen.getByRole("button", { name: /kmllm-search-showcar-py/ }));
     const fileLabel = screen.getByText("README.md");
     expect(fileLabel.className).toContain("git-m");
+  });
+
+  it("projects dirty file and folder colors for multiple repositories at once", () => {
+    const repository = (
+      repositoryRoot: string,
+      fileName: string,
+      status: "A" | "M" | "U",
+    ): GitRepositorySummary => ({
+      repositoryRoot,
+      displayName: repositoryRoot,
+      currentBranch: "main",
+      headState: "branch",
+      upstream: null,
+      ahead: 0,
+      behind: 0,
+      stagedCount: status === "A" ? 1 : 0,
+      modifiedCount: status === "M" ? 1 : 0,
+      untrackedCount: 0,
+      conflictedCount: status === "U" ? 1 : 0,
+      fileStatuses: [{ path: `src/${fileName}`, status }],
+      isClean: false,
+      error: null,
+    });
+
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        gitRoot="service-a"
+        files={["service-a/src/api.ts", "service-b/src/web.ts"]}
+        directories={["service-a", "service-a/src", "service-b", "service-b/src"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitRepositories={[
+          repository("service-a", "api.ts", "U"),
+          repository("service-b", "web.ts", "A"),
+        ]}
+        gitStatusFiles={[{
+          path: "src/api.ts",
+          status: "M",
+          additions: 1,
+          deletions: 0,
+        }]}
+      />,
+    );
+
+    const serviceALabel = screen.getByText("service-a");
+    const serviceBLabel = screen.getByText("service-b");
+    expect(serviceALabel.className).toContain("git-u");
+    expect(serviceBLabel.className).toContain("git-a");
+    expect(serviceALabel.closest(".file-tree-row")?.className).toContain("is-git-repository");
+    expect(serviceBLabel.closest(".file-tree-row")?.className).toContain("is-git-repository");
+
+    fireEvent.doubleClick(serviceALabel.closest("button") as HTMLButtonElement);
+    fireEvent.doubleClick(serviceBLabel.closest("button") as HTMLButtonElement);
+    fireEvent.doubleClick(screen.getAllByText("src")[0]?.closest("button") as HTMLButtonElement);
+    fireEvent.doubleClick(screen.getAllByText("src")[1]?.closest("button") as HTMLButtonElement);
+
+    expect(screen.getByText("api.ts").className).toContain("git-u");
+    expect(screen.getByText("web.ts").className).toContain("git-a");
   });
 
   it("does not apply subrepo repo-relative status to workspace root file with same name", () => {

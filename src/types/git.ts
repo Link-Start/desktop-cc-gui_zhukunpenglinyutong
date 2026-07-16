@@ -203,6 +203,11 @@ export type GitRepositoryHeadState =
   | "unborn"
   | "unavailable";
 
+export type GitRepositoryFileStatus = {
+  path: string;
+  status: "A" | "M" | "D" | "R" | "T" | "U";
+};
+
 export type GitRepositorySummary = {
   repositoryRoot: string;
   displayName: string;
@@ -215,6 +220,7 @@ export type GitRepositorySummary = {
   modifiedCount: number;
   untrackedCount: number;
   conflictedCount: number;
+  fileStatuses: GitRepositoryFileStatus[];
   isClean: boolean;
   error: string | null;
 };

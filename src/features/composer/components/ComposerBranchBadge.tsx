@@ -31,7 +31,7 @@ import type {
   GitRepositorySummary,
   GitBranchUpdateResult,
 } from "../../../types";
-import { gitRepositoryStatusTokens } from "../../git/utils/gitRepositorySummary";
+import { gitRepositoryStatusItems } from "../../git/utils/gitRepositorySummary";
 import { getGitBranchUpdateFeedback } from "../../git/utils/gitBranchUpdateFeedback";
 
 const EMPTY_BRANCHES: BranchInfo[] = [];
@@ -60,14 +60,21 @@ export type ComposerBranchControl = {
 };
 
 function RepositoryStatus({ repository }: { repository: GitRepositorySummary }) {
-  const statusTokens = gitRepositoryStatusTokens(repository);
+  const statusItems = gitRepositoryStatusItems(repository);
   return (
     <span
       className="composer-git-repository-status"
       title={repository.error ?? repository.upstream ?? undefined}
       aria-hidden
     >
-      {statusTokens.map((token, index) => <span key={`${token}:${index}`}>{token}</span>)}
+      {statusItems.map((item, index) => (
+        <span
+          key={`${item.label}:${index}`}
+          className={`composer-git-repository-token is-${item.kind}`}
+        >
+          {item.label}
+        </span>
+      ))}
     </span>
   );
 }

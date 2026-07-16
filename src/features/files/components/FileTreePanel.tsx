@@ -34,6 +34,7 @@ import type {
   GitRepositoryActionId,
   GitRepositoryActionRequest,
 } from "../../git/types/gitRepositoryActions";
+import { projectGitRepositoryFileStatuses } from "../../git/utils/gitRepositorySummary";
 import { languageFromPath } from "../../../utils/syntax";
 import {
   resolveGitRootWorkspacePrefix,
@@ -96,6 +97,20 @@ import {
 } from "./fileTreePanelInternals";
 
 const EMPTY_GIT_REPOSITORIES: GitRepositorySummary[] = [];
+const GIT_STATUS_PRIORITY: Record<string, number> = { U: 5, D: 4, A: 3, M: 2, R: 1, T: 0 };
+
+function assignGitStatusIfHigherPriority(
+  target: Map<string, string>,
+  path: string,
+  status: string,
+) {
+  const nextStatus = status.trim().toUpperCase();
+  const nextPriority = GIT_STATUS_PRIORITY[nextStatus];
+  if (nextPriority === undefined) return;
+  const currentStatus = target.get(path);
+  const currentPriority = currentStatus ? (GIT_STATUS_PRIORITY[currentStatus] ?? -1) : -1;
+  if (nextPriority > currentPriority) target.set(path, nextStatus);
+}
 
 type FileTreePanelProps = {
   workspaceId: string;
@@ -290,6 +305,10 @@ export function FileTreePanel({
     () => gitRepositories.find((repository) => repository.repositoryRoot === "") ?? null,
     [gitRepositories],
   );
+  const repositoryFolderPaths = useMemo(
+    () => new Set(repositorySummaryMap.keys()),
+    [repositorySummaryMap],
+  );
   const gitRootWorkspacePrefix = useMemo(
     () => resolveGitRootWorkspacePrefix(workspacePath, gitRoot),
     [gitRoot, workspacePath],
@@ -355,24 +374,32 @@ export function FileTreePanel({
   const normalizedLoadError =
     typeof loadError === "string" && loadError.trim().length > 0 ? loadError.trim() : null;
 
+  const aggregateGitStatusFiles = useMemo(
+    () => projectGitRepositoryFileStatuses(gitRepositories),
+    [gitRepositories],
+  );
+  const workspaceGitStatusEntries = useMemo(() => {
+    const entries: Array<{ path: string; status: string }> = [...aggregateGitStatusFiles];
+    for (const entry of gitStatusFiles ?? []) {
+      const entryPath = entry.path?.trim();
+      const entryStatus = entry.status?.trim();
+      if (!entryPath || !entryStatus) continue;
+      resolveGitStatusPathCandidates(
+        workspacePath,
+        gitRootWorkspacePrefix,
+        entryPath,
+      ).forEach((path) => entries.push({ path, status: entryStatus }));
+    }
+    return entries;
+  }, [aggregateGitStatusFiles, gitRootWorkspacePrefix, gitStatusFiles, workspacePath]);
+
   const gitStatusMap = useMemo(() => {
     const map = new Map<string, string>();
-    if (gitStatusFiles) {
-      for (const entry of gitStatusFiles) {
-        const entryPath = entry.path?.trim();
-        const entryStatus = entry.status?.trim();
-        if (!entryPath || !entryStatus) {
-          continue;
-        }
-        resolveGitStatusPathCandidates(
-          workspacePath,
-          gitRootWorkspacePrefix,
-          entryPath,
-        ).forEach((path) => map.set(path, entryStatus));
-      }
+    for (const entry of workspaceGitStatusEntries) {
+      assignGitStatusIfHigherPriority(map, entry.path, entry.status);
     }
     return map;
-  }, [gitRootWorkspacePrefix, gitStatusFiles, workspacePath]);
+  }, [workspaceGitStatusEntries]);
 
   const { nodes, folderPaths } = useMemo(
     () => buildTree(
@@ -380,12 +407,14 @@ export function FileTreePanel({
       mergedDirectories,
       effectiveLazyLoadableDirectories,
       directoryMetadataByPath,
+      repositoryFolderPaths,
     ),
     [
       effectiveLazyLoadableDirectories,
       directoryMetadataByPath,
       mergedDirectories,
       mergedFiles,
+      repositoryFolderPaths,
     ],
   );
   const gitignoredTreeNodeMap = useMemo(() => {
@@ -417,53 +446,32 @@ export function FileTreePanel({
     return next;
   }, [expandedFolders, folderPaths, gitignoredFolderAncestorPaths]);
   const folderGitStatusMap = useMemo(() => {
-    if (!gitStatusFiles || gitStatusFiles.length === 0) {
+    if (workspaceGitStatusEntries.length === 0) {
       return new Map<string, string>();
     }
-    const priority: Record<string, number> = { D: 4, A: 3, M: 2, R: 1, T: 0 };
     const map = new Map<string, string>();
     const assignIfHigherPriority = (folderPath: string, status: string) => {
-      const nextStatus = status.trim().toUpperCase();
-      const nextPriority = priority[nextStatus];
-      if (nextPriority === undefined) {
-        return;
-      }
-      const current = map.get(folderPath);
-      const currentPriority = current ? (priority[current] ?? -1) : -1;
-      if (nextPriority > currentPriority) {
-        map.set(folderPath, nextStatus);
-      }
+      assignGitStatusIfHigherPriority(map, folderPath, status);
     };
 
-    for (const entry of gitStatusFiles) {
+    for (const entry of workspaceGitStatusEntries) {
       const entryPath = entry.path?.trim();
       const entryStatus = entry.status?.trim();
       if (!entryPath || !entryStatus) {
         continue;
       }
-      const pathCandidates = resolveGitStatusPathCandidates(
-        workspacePath,
-        gitRootWorkspacePrefix,
-        entryPath,
-      );
-      pathCandidates.forEach((candidatePath) => {
-        const segments = candidatePath.split("/").filter(Boolean);
-        if (segments.length <= 1) {
-          return;
-        }
-        let folderPath = "";
-        for (let index = 0; index < segments.length - 1; index += 1) {
-          const segment = segments[index] ?? "";
-          folderPath = folderPath
-            ? `${folderPath}/${segment}`
-            : segment;
-          assignIfHigherPriority(folderPath, entryStatus);
-        }
-      });
+      const segments = entryPath.split("/").filter(Boolean);
+      if (segments.length <= 1) continue;
+      let folderPath = "";
+      for (let index = 0; index < segments.length - 1; index += 1) {
+        const segment = segments[index] ?? "";
+        folderPath = folderPath ? `${folderPath}/${segment}` : segment;
+        assignIfHigherPriority(folderPath, entryStatus);
+      }
     }
 
     return map;
-  }, [gitRootWorkspacePrefix, gitStatusFiles, workspacePath]);
+  }, [workspaceGitStatusEntries]);
 
   const visibleTreeNodeEntries = useMemo(() => {
     const entries: VisibleTreeNodeEntry[] = [];

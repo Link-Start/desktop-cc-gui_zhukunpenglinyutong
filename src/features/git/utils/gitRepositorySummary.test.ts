@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   areGitRepositorySummariesEqual,
   gitRepositoryStatusTokens,
+  gitRepositoryStatusItems,
   normalizeGitRepositorySummaries,
+  projectGitRepositoryFileStatuses,
 } from "./gitRepositorySummary";
 
 describe("gitRepositorySummary", () => {
@@ -15,6 +17,11 @@ describe("gitRepositorySummary", () => {
         head_state: "branch",
         staged_count: 1,
         modified_count: 2,
+        file_statuses: [
+          { path: "src\\index.ts", status: "m" },
+          { path: "../escape.ts", status: "M" },
+          { path: "/absolute.ts", status: "A" },
+        ],
       },
       {
         repositoryRoot: "",
@@ -32,7 +39,30 @@ describe("gitRepositorySummary", () => {
       currentBranch: "feature/test",
       stagedCount: 1,
       modifiedCount: 2,
+      fileStatuses: [{ path: "src/index.ts", status: "M" }],
     });
+  });
+
+  it("projects root and nested repository statuses into safe workspace paths", () => {
+    const repositories = normalizeGitRepositorySummaries([
+      {
+        repositoryRoot: "",
+        displayName: "workspace",
+        headState: "branch",
+        fileStatuses: [{ path: "README.md", status: "M" }],
+      },
+      {
+        repositoryRoot: "services\\api",
+        displayName: "api",
+        headState: "branch",
+        fileStatuses: [{ path: "src/index.ts", status: "A" }],
+      },
+    ]);
+
+    expect(projectGitRepositoryFileStatuses(repositories)).toEqual([
+      { path: "README.md", status: "M" },
+      { path: "services/api/src/index.ts", status: "A" },
+    ]);
   });
 
   it("compares semantic summary values instead of array identity", () => {
@@ -63,6 +93,11 @@ describe("gitRepositorySummary", () => {
       "HEAD",
       "↑2",
       "M1",
+    ]);
+    expect(repository ? gitRepositoryStatusItems(repository) : []).toEqual([
+      { label: "HEAD", kind: "branch" },
+      { label: "↑2", kind: "sync" },
+      { label: "M1", kind: "dirty" },
     ]);
   });
 });

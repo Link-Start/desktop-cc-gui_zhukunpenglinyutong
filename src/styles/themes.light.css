@@ -62,6 +62,15 @@
   --status-warning: rgba(215, 120, 20, 0.9);
   --status-error: rgba(200, 45, 45, 0.9);
   --status-unknown: rgba(24, 24, 27, 0.25);
+  /* IDEA-inspired Git decoration palette — light */
+  --git-status-added: #2e9d69;
+  --git-status-modified: #d97706;
+  --git-status-deleted: #c2414b;
+  --git-status-renamed: #2563eb;
+  --git-status-type-changed: #7c3fa3;
+  --git-status-conflict: #d32f4b;
+  --git-repository-dirty: #2563eb;
+  --git-branch: #c96b2c;
   --select-caret: rgba(24, 24, 27, 0.45);
 
   /* shadcn default theme tokens (zinc) — light */

@@ -2351,9 +2351,31 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
-  color: var(--accent-primary);
+  color: var(--text-muted);
   font-family: var(--code-font-family);
   font-size: 11px;
+}
+
+.composer-git-repository-token.is-branch {
+  color: var(--git-branch);
+  font-weight: 600;
+}
+
+.composer-git-repository-token.is-sync {
+  color: var(--text-muted);
+}
+
+.composer-git-repository-token.is-clean {
+  color: var(--git-status-added);
+}
+
+.composer-git-repository-token.is-dirty {
+  color: var(--git-status-modified);
+}
+
+.composer-git-repository-token.is-conflict,
+.composer-git-repository-token.is-error {
+  color: var(--git-status-conflict);
 }
 
 .composer-git-upstream {

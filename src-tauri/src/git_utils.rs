@@ -4,7 +4,7 @@ use std::path::{Component, Path, PathBuf};
 use git2::{BranchType, DiffOptions, ErrorCode, Repository, Status, StatusOptions, Tree};
 use ignore::WalkBuilder;
 
-use crate::types::{GitLogEntry, GitRepositorySummary, WorkspaceEntry};
+use crate::types::{GitLogEntry, GitRepositoryFileStatus, GitRepositorySummary, WorkspaceEntry};
 use crate::utils::normalize_git_path;
 
 pub(crate) fn image_mime_type(path: &str) -> Option<&'static str> {
@@ -91,8 +91,8 @@ pub(crate) fn diff_patch_to_string(patch: &mut git2::Patch) -> Result<String, gi
 #[cfg(test)]
 mod tests {
     use super::{
-        image_mime_type, list_git_repository_summaries, path_has_git_repository_marker,
-        resolve_git_root_for_scope,
+        compact_repository_status, image_mime_type, list_git_repository_summaries,
+        path_has_git_repository_marker, resolve_git_root_for_scope,
     };
     use crate::types::{WorkspaceEntry, WorkspaceKind, WorkspaceSettings};
     use git2::{Repository, Signature};
@@ -186,17 +186,22 @@ mod tests {
     fn repository_summaries_cover_root_nested_and_dirty_state() {
         let root = std::env::temp_dir().join(format!("ccgui-git-summary-{}", uuid::Uuid::new_v4()));
         let nested = root.join("packages").join("child");
+        let sibling = root.join("packages").join("sibling");
         let corrupt = root.join("packages").join("corrupt");
         fs::create_dir_all(&nested).expect("create roots");
+        fs::create_dir_all(&sibling).expect("create sibling root");
         fs::create_dir_all(corrupt.join(".git")).expect("create corrupt marker");
         let root_repo = Repository::init(&root).expect("init root repo");
         commit_initial_file(&root_repo, &root);
         let child_repo = Repository::init(&nested).expect("init child repo");
         commit_initial_file(&child_repo, &nested);
         fs::write(nested.join("untracked.txt"), "dirty").expect("write untracked file");
+        let sibling_repo = Repository::init(&sibling).expect("init sibling repo");
+        commit_initial_file(&sibling_repo, &sibling);
+        fs::write(sibling.join("tracked.txt"), "modified").expect("modify sibling file");
 
         let summaries = list_git_repository_summaries(&root, 4, 16);
-        assert_eq!(summaries.len(), 3);
+        assert_eq!(summaries.len(), 4);
         assert_eq!(summaries[0].repository_root, "");
         assert!(!summaries[0].is_clean);
         let child = summaries
@@ -204,15 +209,52 @@ mod tests {
             .find(|summary| summary.repository_root == "packages/child")
             .expect("child summary");
         assert_eq!(child.untracked_count, 1);
+        assert_eq!(
+            child.file_statuses,
+            vec![crate::types::GitRepositoryFileStatus {
+                path: "untracked.txt".to_string(),
+                status: "A".to_string(),
+            }]
+        );
         assert!(!child.is_clean);
+        let sibling_summary = summaries
+            .iter()
+            .find(|summary| summary.repository_root == "packages/sibling")
+            .expect("sibling summary");
+        assert_eq!(sibling_summary.modified_count, 1);
+        assert_eq!(sibling_summary.file_statuses[0].path, "tracked.txt");
+        assert_eq!(sibling_summary.file_statuses[0].status, "M");
         let unavailable = summaries
             .iter()
             .find(|summary| summary.repository_root == "packages/corrupt")
             .expect("corrupt summary");
         assert_eq!(unavailable.head_state, "unavailable");
         assert!(unavailable.error.is_some());
+        assert!(unavailable.file_statuses.is_empty());
 
         fs::remove_dir_all(&root).expect("cleanup summary root");
+    }
+
+    #[test]
+    fn compact_repository_status_prefers_conflict_and_worktree_state() {
+        assert_eq!(
+            compact_repository_status(git2::Status::CONFLICTED),
+            Some("U")
+        );
+        assert_eq!(compact_repository_status(git2::Status::WT_NEW), Some("A"));
+        assert_eq!(
+            compact_repository_status(git2::Status::WT_DELETED),
+            Some("D")
+        );
+        assert_eq!(
+            compact_repository_status(git2::Status::INDEX_RENAMED),
+            Some("R")
+        );
+        assert_eq!(
+            compact_repository_status(git2::Status::INDEX_TYPECHANGE),
+            Some("T")
+        );
+        assert_eq!(compact_repository_status(git2::Status::CURRENT), None);
     }
 }
 
@@ -410,9 +452,47 @@ fn unavailable_repository_summary(
         modified_count: 0,
         untracked_count: 0,
         conflicted_count: 0,
+        file_statuses: Vec::new(),
         is_clean: false,
         error: Some(error),
     }
+}
+
+fn compact_repository_status(status: Status) -> Option<&'static str> {
+    if status.contains(Status::CONFLICTED) {
+        return Some("U");
+    }
+    if status.contains(Status::WT_NEW) {
+        return Some("A");
+    }
+    if status.contains(Status::WT_DELETED) {
+        return Some("D");
+    }
+    if status.contains(Status::WT_RENAMED) {
+        return Some("R");
+    }
+    if status.contains(Status::WT_TYPECHANGE) {
+        return Some("T");
+    }
+    if status.contains(Status::WT_MODIFIED) {
+        return Some("M");
+    }
+    if status.contains(Status::INDEX_NEW) {
+        return Some("A");
+    }
+    if status.contains(Status::INDEX_DELETED) {
+        return Some("D");
+    }
+    if status.contains(Status::INDEX_RENAMED) {
+        return Some("R");
+    }
+    if status.contains(Status::INDEX_TYPECHANGE) {
+        return Some("T");
+    }
+    if status.contains(Status::INDEX_MODIFIED) {
+        return Some("M");
+    }
+    None
 }
 
 pub(crate) fn git_repository_summary(
@@ -498,8 +578,20 @@ pub(crate) fn git_repository_summary(
     let mut modified_count = 0;
     let mut untracked_count = 0;
     let mut conflicted_count = 0;
+    let mut file_statuses = Vec::with_capacity(statuses.len());
     for entry in statuses.iter() {
         let status = entry.status();
+        if let (Some(path), Some(compact_status)) =
+            (entry.path(), compact_repository_status(status))
+        {
+            let normalized_path = normalize_git_path(path);
+            if !normalized_path.is_empty() {
+                file_statuses.push(GitRepositoryFileStatus {
+                    path: normalized_path,
+                    status: compact_status.to_string(),
+                });
+            }
+        }
         if status.contains(Status::CONFLICTED) {
             conflicted_count += 1;
         }
@@ -535,6 +627,7 @@ pub(crate) fn git_repository_summary(
         modified_count,
         untracked_count,
         conflicted_count,
+        file_statuses,
         is_clean,
         error: head_error,
     }

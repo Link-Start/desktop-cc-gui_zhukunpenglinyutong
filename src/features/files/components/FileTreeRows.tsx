@@ -3,7 +3,10 @@ import type { TFunction } from "i18next";
 import type { GitRepositorySummary } from "../../../types";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import { getFileTreeIconSvg } from "../utils/fileTreeIcons";
-import { gitRepositoryStatusTokens } from "../../git/utils/gitRepositorySummary";
+import {
+  gitRepositoryStatusItems,
+  gitRepositoryStatusTokens,
+} from "../../git/utils/gitRepositorySummary";
 import type { DetachedFileTreeDragBridgePayload } from "../detachedFileTreeDragBridge";
 import {
   bindChatDropTargetsForTreeDrag,
@@ -121,13 +124,21 @@ function getFileTreeRowMetadata(node: FileTreeNode, state: FileTreeRowState) {
 
 function GitRepositoryStatus({ repository }: { repository: GitRepositorySummary }) {
   const statusTokens = gitRepositoryStatusTokens(repository);
+  const statusItems = gitRepositoryStatusItems(repository);
   return (
     <span
       className="file-tree-git-summary"
       aria-label={`${repository.displayName} Git ${statusTokens.join(" ")}`}
       title={repository.error ?? repository.upstream ?? undefined}
     >
-      {statusTokens.map((token, index) => <span key={`${token}:${index}`}>{token}</span>)}
+      {statusItems.map((item, index) => (
+        <span
+          key={`${item.label}:${index}`}
+          className={`file-tree-git-token is-${item.kind}`}
+        >
+          {item.label}
+        </span>
+      ))}
     </span>
   );
 }
