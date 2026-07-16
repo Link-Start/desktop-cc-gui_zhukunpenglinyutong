@@ -175,8 +175,9 @@ export type GitRepositoryStatusItem = {
 
 export function gitRepositoryStatusItems(
   repository: GitRepositorySummary,
+  precomputedTokens?: string[],
 ): GitRepositoryStatusItem[] {
-  const tokens = gitRepositoryStatusTokens(repository);
+  const tokens = precomputedTokens ?? gitRepositoryStatusTokens(repository);
   return tokens.map((label, index) => {
     if (repository.error && index === 0) return { label, kind: "error" };
     if (index === 0) return { label, kind: "branch" };

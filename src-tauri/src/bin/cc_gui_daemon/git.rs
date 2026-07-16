@@ -737,9 +737,11 @@ impl DaemonState {
         let entry = self.workspace_entry(&workspace_id).await?;
         let root = PathBuf::from(entry.path);
         let depth = depth.unwrap_or(2).clamp(1, 6);
-        Ok(crate::git_utils::list_git_repository_summaries(
-            &root, depth, 200,
-        ))
+        tokio::task::spawn_blocking(move || {
+            crate::git_utils::list_git_repository_summaries(&root, depth, 200)
+        })
+        .await
+        .map_err(|error| format!("Failed to scan git repositories: {error}"))
     }
 
     pub(crate) async fn get_git_status(
@@ -1617,15 +1619,15 @@ impl DaemonState {
         self.push_git(
             workspace_id,
             None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             repository_root,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
         )
         .await?;
         Ok(())

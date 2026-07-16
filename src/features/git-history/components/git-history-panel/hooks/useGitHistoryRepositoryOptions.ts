@@ -4,6 +4,19 @@ import type { GitRepositorySummary, WorkspaceInfo } from "../../../../../types";
 
 const HISTORY_REPOSITORY_SCAN_DEPTH = 2;
 
+function areRepositorySummariesEqual(
+  left: GitRepositorySummary[],
+  right: GitRepositorySummary[],
+) {
+  if (left === right) {
+    return true;
+  }
+  if (left.length !== right.length) {
+    return false;
+  }
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 type UseGitHistoryRepositoryOptionsProps = {
   workspace: WorkspaceInfo | null;
   repositoriesOverride?: GitRepositorySummary[];
@@ -24,7 +37,12 @@ export function useGitHistoryRepositoryOptions({
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     if (repositoriesOverride) {
-      setRepositories(repositoriesOverride);
+      // 同值守卫:调用方每渲染新建等值数组时保持旧引用,防渲染循环。
+      setRepositories((previous) =>
+        areRepositorySummariesEqual(previous, repositoriesOverride)
+          ? previous
+          : repositoriesOverride,
+      );
       return;
     }
     if (!workspace) {
@@ -32,7 +50,7 @@ export function useGitHistoryRepositoryOptions({
       return;
     }
 
-    setRepositories([]);
+    // 拉取期间不清空既有选项,由 requestId 保序让新结果覆盖,避免空闪。
     void listGitRepositorySummaries(workspace.id, HISTORY_REPOSITORY_SCAN_DEPTH)
       .then((summaries) => {
         if (requestIdRef.current === requestId) {

@@ -481,10 +481,15 @@ export function VendorSettingsPanel({
     [claudeModels, codexModels, dialogTarget],
   );
 
-  const engineNavItems: CliEngineNavItem[] = buildCliEngineNavItems({
-    claudeHasConfig: Boolean(claude.currentConfig),
-    codexHasConfig: codexGlobalConfigExists,
-  });
+  const claudeHasConfig = Boolean(claude.currentConfig);
+  const engineNavItems: CliEngineNavItem[] = useMemo(
+    () =>
+      buildCliEngineNavItems({
+        claudeHasConfig,
+        codexHasConfig: codexGlobalConfigExists,
+      }),
+    [claudeHasConfig, codexGlobalConfigExists],
+  );
   const filteredEngineNavItems = useMemo(() => {
     const normalizedQuery = cliSearchQuery.trim().toLowerCase();
     if (!normalizedQuery) {

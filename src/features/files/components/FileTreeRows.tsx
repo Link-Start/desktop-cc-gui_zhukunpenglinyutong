@@ -124,7 +124,7 @@ function getFileTreeRowMetadata(node: FileTreeNode, state: FileTreeRowState) {
 
 function GitRepositoryStatus({ repository }: { repository: GitRepositorySummary }) {
   const statusTokens = gitRepositoryStatusTokens(repository);
-  const statusItems = gitRepositoryStatusItems(repository);
+  const statusItems = gitRepositoryStatusItems(repository, statusTokens);
   return (
     <span
       className="file-tree-git-summary"

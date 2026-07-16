@@ -362,7 +362,16 @@ pub(crate) fn path_has_git_repository_marker(path: &Path) -> bool {
 fn should_skip_dir(name: &str) -> bool {
     matches!(
         name,
-        ".git" | "node_modules" | "dist" | "target" | "release-artifacts"
+        ".git"
+            | "node_modules"
+            | "dist"
+            | "target"
+            | "release-artifacts"
+            | ".venv"
+            | "vendor"
+            | "build"
+            | "__pycache__"
+            | ".cache"
     )
 }
 
@@ -590,26 +599,29 @@ pub(crate) fn git_repository_summary(
                     path: normalized_path,
                     status: compact_status.to_string(),
                 });
+                if status.contains(Status::CONFLICTED) {
+                    conflicted_count += 1;
+                }
+                if status.intersects(
+                    Status::INDEX_NEW
+                        | Status::INDEX_MODIFIED
+                        | Status::INDEX_DELETED
+                        | Status::INDEX_RENAMED
+                        | Status::INDEX_TYPECHANGE,
+                ) {
+                    staged_count += 1;
+                }
+                if status.contains(Status::WT_NEW) {
+                    untracked_count += 1;
+                } else if status.intersects(
+                    Status::WT_MODIFIED
+                        | Status::WT_DELETED
+                        | Status::WT_RENAMED
+                        | Status::WT_TYPECHANGE,
+                ) {
+                    modified_count += 1;
+                }
             }
-        }
-        if status.contains(Status::CONFLICTED) {
-            conflicted_count += 1;
-        }
-        if status.intersects(
-            Status::INDEX_NEW
-                | Status::INDEX_MODIFIED
-                | Status::INDEX_DELETED
-                | Status::INDEX_RENAMED
-                | Status::INDEX_TYPECHANGE,
-        ) {
-            staged_count += 1;
-        }
-        if status.contains(Status::WT_NEW) {
-            untracked_count += 1;
-        } else if status.intersects(
-            Status::WT_MODIFIED | Status::WT_DELETED | Status::WT_RENAMED | Status::WT_TYPECHANGE,
-        ) {
-            modified_count += 1;
         }
     }
     let is_clean =

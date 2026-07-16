@@ -7,6 +7,7 @@ import {
   openOrFocusDetachedFileExplorer,
 } from "../features/files/detachedFileExplorer";
 import { pickWorkspacePath } from "../services/tauri";
+import { useEventCallback } from "../utils/useEventCallback";
 import { resolveWorkspaceRelativePath } from "../utils/workspacePaths";
 import { pushErrorToast } from "../services/toasts";
 import { getGitBranchUpdateFeedback } from "../features/git/utils/gitBranchUpdateFeedback";
@@ -95,15 +96,15 @@ export function useAppShellGitWorkspaceOpsSection({
   const selectRepository = useCallback((repositoryRoot: string | null) => {
     setSelectedRepositoryRoot(repositoryRoot);
   }, []);
-  const handleCheckoutBranch = async (name: string) => {
+  const handleCheckoutBranch = useEventCallback(async (name: string) => {
     await checkoutBranch(name);
     refreshGitStatus();
-  };
-  const handleCreateBranch = async (name: string) => {
+  });
+  const handleCreateBranch = useEventCallback(async (name: string) => {
     await createBranch(name);
     refreshGitStatus();
-  };
-  const handleUpdateBranch = async (name: string, repositoryRootOverride?: string) => {
+  });
+  const handleUpdateBranch = useEventCallback(async (name: string, repositoryRootOverride?: string) => {
     const updateKey = repositoryRootOverride === undefined
       ? null
       : JSON.stringify([activeWorkspace?.id ?? null, repositoryRootOverride, name]);
@@ -155,7 +156,7 @@ export function useAppShellGitWorkspaceOpsSection({
     } finally {
       if (updateKey) updatingRepositoryBranchesRef.current.delete(updateKey);
     }
-  };
+  });
   const alertError = useCallback((error: unknown) => {
     alert(error instanceof Error ? error.message : String(error));
   }, []);

@@ -26,6 +26,7 @@ export function useGitRepositories({
   const inFlightRef = useRef<Promise<void> | null>(null);
   const consecutiveEmptyResponsesRef = useRef(0);
   const acceptedRepositoriesRef = useRef<GitRepositorySummary[]>([]);
+  const hasLoadedOnceRef = useRef(false);
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
 
@@ -33,6 +34,7 @@ export function useGitRepositories({
     if (!workspaceId || !isConnected) {
       acceptedRepositoriesRef.current = [];
       consecutiveEmptyResponsesRef.current = 0;
+      hasLoadedOnceRef.current = false;
       setRepositories([]);
       return Promise.resolve();
     }
@@ -41,7 +43,10 @@ export function useGitRepositories({
     }
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    setIsLoading(true);
+    // 已有数据后的兜底轮询不再翻转 isLoading,避免 45s 一次的 true→false 双根渲染。
+    if (!hasLoadedOnceRef.current) {
+      setIsLoading(true);
+    }
     const request = (async () => {
       try {
         const response = await listGitRepositorySummaries(
@@ -66,6 +71,7 @@ export function useGitRepositories({
           consecutiveEmptyResponsesRef.current = 0;
         }
         acceptedRepositoriesRef.current = accepted;
+        hasLoadedOnceRef.current = true;
         setRepositories((rendered) =>
           areGitRepositorySummariesEqual(rendered, accepted) ? rendered : accepted,
         );
@@ -107,6 +113,7 @@ export function useGitRepositories({
     inFlightRef.current = null;
     consecutiveEmptyResponsesRef.current = 0;
     acceptedRepositoriesRef.current = [];
+    hasLoadedOnceRef.current = false;
     setRepositories([]);
     setError(null);
     setIsLoading(false);

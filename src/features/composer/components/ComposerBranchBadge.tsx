@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import CheckIcon from "lucide-react/dist/esm/icons/check";
@@ -37,6 +37,9 @@ import { getGitBranchUpdateFeedback } from "../../git/utils/gitBranchUpdateFeedb
 const EMPTY_BRANCHES: BranchInfo[] = [];
 const EMPTY_BRANCH_ITEMS: GitBranchListItem[] = [];
 const EMPTY_REPOSITORIES: GitRepositorySummary[] = [];
+
+/** 切换仓库时的最小 loading 时长，保证 loading 态可见、避免闪烁 */
+const BRANCH_SWITCH_MIN_LOADING_MS = 120;
 
 export type ComposerBranchControl = {
   branchName: string;
@@ -178,7 +181,7 @@ function BranchScope({ id, label, expanded, onToggle, children }: BranchScopePro
   );
 }
 
-export function ComposerBranchBadge({
+function ComposerBranchBadgeComponent({
   branchName,
   branches = EMPTY_BRANCHES,
   localBranches = EMPTY_BRANCH_ITEMS,
@@ -293,6 +296,7 @@ export function ComposerBranchBadge({
 
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
+    setActiveRepositoryRoot(null);
     setQuery("");
     setError(null);
     setUpdateFeedback(null);
@@ -309,7 +313,7 @@ export function ComposerBranchBadge({
       try {
         await Promise.all([
           Promise.resolve(onSelectRepository?.(repositoryRoot)),
-          new Promise<void>((resolve) => window.setTimeout(resolve, 120)),
+          new Promise<void>((resolve) => window.setTimeout(resolve, BRANCH_SWITCH_MIN_LOADING_MS)),
         ]);
         setActiveRepositoryRoot(repositoryRoot);
         setQuery("");
@@ -344,7 +348,13 @@ export function ComposerBranchBadge({
       setActiveRepositoryRoot(onlyRoot);
       onSelectRepository?.(onlyRoot);
     } else {
-      setActiveRepositoryRoot(null);
+      // 仅在当前查看的仓库不再合法时才重置回仓库列表，
+      // 避免 repositories 引用刷新（轮询/更新操作）把用户弹出分支视图。
+      setActiveRepositoryRoot((prev) =>
+        prev !== null && !repositories.some((repository) => repository.repositoryRoot === prev)
+          ? null
+          : prev,
+      );
     }
   }, [menuOpen, onSelectRepository, repositories, selectedRepositoryRoot]);
 
@@ -542,5 +552,7 @@ export function ComposerBranchBadge({
     </div>
   );
 }
+
+export const ComposerBranchBadge = memo(ComposerBranchBadgeComponent);
 
 export default ComposerBranchBadge;

@@ -68,6 +68,7 @@ describe("CurrentCodexGlobalConfigCard", () => {
 
     renderCard({ onSaved });
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show Sensitive" }));
     const [configEditor, authEditor] = screen.getAllByRole("textbox");
 
     fireEvent.change(configEditor, {
@@ -87,5 +88,73 @@ describe("CurrentCodexGlobalConfigCard", () => {
       );
       expect(onSaved).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("masks auth.json secrets by default and reveals them on demand", () => {
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    const [, authEditor] = screen.getAllByRole("textbox") as HTMLTextAreaElement[];
+    expect(authEditor.value).not.toContain("secret");
+    expect(authEditor.value).toContain("******");
+    expect(authEditor.readOnly).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show Sensitive" }));
+    const [, revealedEditor] = screen.getAllByRole(
+      "textbox",
+    ) as HTMLTextAreaElement[];
+    expect(revealedEditor.value).toContain("secret");
+    expect(revealedEditor.readOnly).toBe(false);
+  });
+
+  it("only writes changed files and never writes an empty auth.json", async () => {
+    const onSaved = vi.fn();
+    writeGlobalCodexConfigTomlMock.mockResolvedValueOnce(undefined);
+
+    renderCard({ onSaved });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show Sensitive" }));
+    const [configEditor, authEditor] = screen.getAllByRole("textbox");
+
+    fireEvent.change(configEditor, {
+      target: { value: 'model = "gpt-5.2"\n' },
+    });
+    fireEvent.change(authEditor, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(writeGlobalCodexConfigTomlMock).toHaveBeenCalledWith(
+        'model = "gpt-5.2"\n',
+      );
+      expect(onSaved).toHaveBeenCalledTimes(1);
+    });
+    expect(writeGlobalCodexAuthJsonMock).not.toHaveBeenCalled();
+  });
+
+  it("shows a partial failure message when one write fails", async () => {
+    const onSaved = vi.fn();
+    writeGlobalCodexConfigTomlMock.mockRejectedValueOnce(new Error("disk full"));
+    writeGlobalCodexAuthJsonMock.mockResolvedValueOnce(undefined);
+
+    renderCard({ onSaved });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show Sensitive" }));
+    const [configEditor, authEditor] = screen.getAllByRole("textbox");
+
+    fireEvent.change(configEditor, {
+      target: { value: "not the same\n" },
+    });
+    fireEvent.change(authEditor, {
+      target: { value: '{"access_token":"next"}' },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Failed to write global config\.toml: disk full/),
+      ).toBeTruthy();
+    });
+    // Dialog stays open so the user can retry the failed write.
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
   });
 });

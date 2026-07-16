@@ -1211,6 +1211,8 @@ const settings = {
       "codexAuthConfigPath": "~/.codex/auth.json",
       "codexAuthConfigEmpty": "Nenhum auth.json global detectado.",
       "codexAuthConfigReadFailed": "Falha ao ler o auth.json global",
+      "codexGlobalConfigWriteFailed": "Failed to write global config.toml",
+      "codexAuthConfigWriteFailed": "Failed to write global auth.json",
       "codexAuthConfigTruncated": "O conteúdo de autenticação foi truncado porque o arquivo é muito grande.",
       "codexAuthConfigShowSensitive": "Mostrar dados sensíveis",
       "codexAuthConfigHideSensitive": "Ocultar dados sensíveis",

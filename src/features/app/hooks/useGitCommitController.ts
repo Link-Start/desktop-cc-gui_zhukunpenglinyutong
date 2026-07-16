@@ -64,7 +64,6 @@ type GitCommitController = {
   onPush: () => Promise<void>;
   onSync: () => Promise<void>;
   onCommitRepositories: (selections: RepositoryCommitSelection[]) => Promise<void>;
-  onCommitAndPushRepositories: (selections: RepositoryCommitSelection[]) => Promise<void>;
 };
 
 export function useGitCommitController({
@@ -440,10 +439,6 @@ export function useGitCommitController({
     (selections: RepositoryCommitSelection[]) => runRepositoryCommits(selections, false),
     [runRepositoryCommits],
   );
-  const handleCommitAndPushRepositories = useCallback(
-    (selections: RepositoryCommitSelection[]) => runRepositoryCommits(selections, true),
-    [runRepositoryCommits],
-  );
 
   return {
     commitMessage,
@@ -465,6 +460,5 @@ export function useGitCommitController({
     onPush: handlePush,
     onSync: handleSync,
     onCommitRepositories: handleCommitRepositories,
-    onCommitAndPushRepositories: handleCommitAndPushRepositories,
   };
 }

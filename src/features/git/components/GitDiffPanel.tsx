@@ -2163,7 +2163,7 @@ function GitDiffPanelImpl({
           ) : null}
           {!multiRepositoryMode ? <div className="diff-commit-workspace-content">
           {/* Show Push button when there are commits to push */}
-          {!multiRepositoryMode && commitsAhead > 0 && !stagedFiles.length && (
+          {commitsAhead > 0 && !stagedFiles.length && (
             <div className="push-section">
               {pushError && (
                 <div className="commit-message-error">{pushError}</div>
@@ -2185,10 +2185,10 @@ function GitDiffPanelImpl({
               </button>
             </div>
           )}
-          {!multiRepositoryMode && !error && !stagedFiles.length && !unstagedFiles.length && commitsAhead === 0 && (
+          {!error && !stagedFiles.length && !unstagedFiles.length && commitsAhead === 0 && (
             <div className="diff-empty">{t("git.noChangesDetected")}</div>
           )}
-          {!multiRepositoryMode && (stagedFiles.length > 0 || unstagedFiles.length > 0) && (
+          {(stagedFiles.length > 0 || unstagedFiles.length > 0) && (
             <>
               {stagedFiles.length > 0 &&
                 (gitDiffListView === "tree" ? (

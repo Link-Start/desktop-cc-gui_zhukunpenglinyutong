@@ -1330,6 +1330,8 @@ const settings = {
       codexAuthConfigPath: "~/.codex/auth.json",
       codexAuthConfigEmpty: "未检测到全局 auth.json。",
       codexAuthConfigReadFailed: "读取全局 auth.json 失败",
+      codexGlobalConfigWriteFailed: "写入全局 config.toml 失败",
+      codexAuthConfigWriteFailed: "写入全局 auth.json 失败",
       codexAuthConfigTruncated: "认证文件内容较长，当前展示为截断结果。",
       codexAuthConfigShowSensitive: "显示敏感信息",
       codexAuthConfigHideSensitive: "隐藏敏感信息",

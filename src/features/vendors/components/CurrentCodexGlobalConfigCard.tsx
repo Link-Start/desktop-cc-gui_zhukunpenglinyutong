@@ -34,6 +34,58 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+const SENSITIVE_KEY_PATTERN =
+  /(access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|password|secret)/i;
+
+function maskSecret(raw: string): string {
+  if (!raw) {
+    return "";
+  }
+  const trimmed = raw.trim();
+  if (trimmed.length <= 8) {
+    return "*".repeat(trimmed.length);
+  }
+  return `${trimmed.slice(0, 4)}${"*".repeat(8)}${trimmed.slice(-2)}`;
+}
+
+function redactAuthValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactAuthValue(item));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  const output: Record<string, unknown> = {};
+  for (const [key, nested] of entries) {
+    if (SENSITIVE_KEY_PATTERN.test(key)) {
+      output[key] = typeof nested === "string" ? maskSecret(nested) : "***";
+      continue;
+    }
+    output[key] = redactAuthValue(nested);
+  }
+  return output;
+}
+
+function redactAuthContent(content: string): string {
+  if (!content.trim()) {
+    return content;
+  }
+
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    const redacted = redactAuthValue(parsed);
+    return JSON.stringify(redacted, null, 2);
+  } catch {
+    return content.replace(
+      /("?(?:access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|password|secret)"?\s*:\s*)"([^"]*)"/gi,
+      (_match, prefix, value) => `${prefix}"${maskSecret(String(value))}"`,
+    );
+  }
+}
+
 export function CurrentCodexGlobalConfigCard({
   configLoading,
   configExists,
@@ -53,6 +105,7 @@ export function CurrentCodexGlobalConfigCard({
   const [authDraft, setAuthDraft] = useState(authContent);
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [authSensitiveVisible, setAuthSensitiveVisible] = useState(false);
 
   useEffect(() => {
     if (!editOpen) {
@@ -61,6 +114,7 @@ export function CurrentCodexGlobalConfigCard({
     setConfigDraft(configContent);
     setAuthDraft(authContent);
     setSaveError("");
+    setAuthSensitiveVisible(false);
   }, [authContent, configContent, editOpen]);
 
   useEffect(() => {
@@ -68,7 +122,8 @@ export function CurrentCodexGlobalConfigCard({
       return;
     }
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
         setEditOpen(false);
       }
     };
@@ -136,13 +191,50 @@ export function CurrentCodexGlobalConfigCard({
       }
     }
 
+    const configChanged = configDraft !== configContent;
+    // Never write auth.json with an empty draft: that would wipe credentials.
+    const authChanged = authDraft !== authContent && authDraft.trim() !== "";
+
+    if (!configChanged && !authChanged) {
+      setEditOpen(false);
+      return;
+    }
+
     setSaving(true);
     setSaveError("");
     try {
-      await Promise.all([
-        writeGlobalCodexConfigToml(configDraft),
-        writeGlobalCodexAuthJson(authDraft),
-      ]);
+      const writes: Array<{ label: string; run: () => Promise<void> }> = [];
+      if (configChanged) {
+        writes.push({
+          label: t("settings.vendor.codexGlobalConfigWriteFailed"),
+          run: () => writeGlobalCodexConfigToml(configDraft),
+        });
+      }
+      if (authChanged) {
+        writes.push({
+          label: t("settings.vendor.codexAuthConfigWriteFailed"),
+          run: () => writeGlobalCodexAuthJson(authDraft),
+        });
+      }
+
+      const results = await Promise.allSettled(writes.map((write) => write.run()));
+      const failures = results
+        .map((result, index) =>
+          result.status === "rejected"
+            ? `${writes[index].label}: ${errorMessage(result.reason)}`
+            : null,
+        )
+        .filter((message): message is string => Boolean(message));
+
+      if (failures.length > 0) {
+        // Partial success still refreshes the on-disk snapshot upstream.
+        if (failures.length < writes.length) {
+          await onSaved?.();
+        }
+        setSaveError(failures.join(" · "));
+        return;
+      }
+
       await onSaved?.();
       setEditOpen(false);
     } catch (error) {
@@ -229,6 +321,16 @@ export function CurrentCodexGlobalConfigCard({
                   <span className="vendor-current-config-title">
                     {t("settings.vendor.currentCodexAuthConfig")}
                   </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setAuthSensitiveVisible((value) => !value)}
+                  >
+                    {authSensitiveVisible
+                      ? t("settings.vendor.codexAuthConfigHideSensitive")
+                      : t("settings.vendor.codexAuthConfigShowSensitive")}
+                  </Button>
                   <code className="vendor-codex-global-config-path">
                     {t("settings.vendor.codexAuthConfigPath")}
                   </code>
@@ -237,13 +339,23 @@ export function CurrentCodexGlobalConfigCard({
                   className="vendor-json-editor vendor-official-json-editor"
                   aria-label={t("settings.vendor.currentCodexAuthConfig")}
                   data-codex-editor="auth"
-                  value={loading ? t("settings.loading") : authDraft}
+                  value={
+                    loading
+                      ? t("settings.loading")
+                      : authSensitiveVisible
+                        ? authDraft
+                        : redactAuthContent(authDraft)
+                  }
                   onChange={(event) => {
+                    if (!authSensitiveVisible) {
+                      return;
+                    }
                     setAuthDraft(event.target.value);
                     setSaveError("");
                   }}
                   onKeyDown={handleEditorKeyDown}
                   rows={10}
+                  readOnly={!authSensitiveVisible}
                   disabled={loading || saving}
                   spellCheck={false}
                 />
