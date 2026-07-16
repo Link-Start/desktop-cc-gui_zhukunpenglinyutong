@@ -1302,3 +1302,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1007: 完善多仓 Git History 仓库隔离
+
+**Date**: 2026-07-17
+**Task**: 完善多仓 Git History 仓库隔离
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+完成多仓 Git History 二级仓库选择、worktree scoped status/mutation/AI generation 与 repository lifecycle 隔离；补充异步切仓、同路径 selection、summary reset 回归测试，并同步 OpenSpec/Trellis contract。focused tests 71/71、lint、typecheck、runtime contracts、doctor strict 与 OpenSpec strict 均通过。全量测试被既有 Sidebar active tab CSS contract 失败阻断。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a215bac9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
