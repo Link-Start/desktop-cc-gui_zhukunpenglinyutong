@@ -238,6 +238,7 @@ vi.mock("../../../services/tauri", () => ({
   writeWorkspaceFile: vi.fn(),
   writeExternalSpecFile: vi.fn(),
   getGitFileFullDiff: vi.fn(),
+  getGitFileBlame: vi.fn(),
   getCodeIntelDefinition: vi.fn(),
   getCodeIntelReferences: vi.fn(),
 }));

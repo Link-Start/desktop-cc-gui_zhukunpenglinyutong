@@ -476,6 +476,7 @@ pub(crate) async fn get_git_push_preview(
                 .map(|parent| parent.id().to_string())
                 .collect(),
             refs: refs_map.get(&oid).cloned().unwrap_or_default(),
+            file_path: None,
         });
     }
 
@@ -1120,6 +1121,36 @@ pub(crate) async fn get_git_file_full_diff(
 }
 
 #[tauri::command]
+pub(crate) async fn get_git_file_blame(
+    workspace_id: String,
+    path: String,
+    repository_root: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<GitFileBlameResponse, String> {
+    if should_forward_git_remote(&state).await {
+        return forward_git_remote(
+            &state,
+            &app,
+            "get_git_file_blame",
+            json!({ "workspaceId": workspace_id.clone(), "path": path.clone(), "repositoryRoot": repository_root.clone() }),
+        )
+        .await;
+    }
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+    drop(workspaces);
+
+    let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
+    tokio::task::spawn_blocking(move || build_git_file_blame(&repo_root, &path))
+        .await
+        .map_err(|error| format!("Git blame worker failed: {error}"))?
+}
+
+#[tauri::command]
 pub(crate) async fn get_git_log(
     workspace_id: String,
     limit: Option<usize>,
@@ -1250,6 +1281,7 @@ pub(crate) async fn get_git_commit_history(
     date_from: Option<i64>,
     date_to: Option<i64>,
     snapshot_id: Option<String>,
+    path: Option<String>,
     offset: Option<usize>,
     limit: Option<usize>,
     repository_root: Option<String>,
@@ -1257,7 +1289,7 @@ pub(crate) async fn get_git_commit_history(
     state: State<'_, AppState>,
 ) -> Result<GitHistoryResponse, String> {
     if should_forward_git_remote(&state).await {
-        return forward_git_remote(&state, &app, "get_git_commit_history", json!({ "workspaceId": workspace_id.clone(), "branch": branch.clone(), "query": query.clone(), "author": author.clone(), "dateFrom": date_from, "dateTo": date_to, "snapshotId": snapshot_id.clone(), "offset": offset, "limit": limit, "repositoryRoot": repository_root.clone() })).await;
+        return forward_git_remote(&state, &app, "get_git_commit_history", json!({ "workspaceId": workspace_id.clone(), "branch": branch.clone(), "query": query.clone(), "author": author.clone(), "dateFrom": date_from, "dateTo": date_to, "snapshotId": snapshot_id.clone(), "path": path.clone(), "offset": offset, "limit": limit, "repositoryRoot": repository_root.clone() })).await;
     }
     let workspaces = state.workspaces.lock().await;
     let entry = workspaces
@@ -1267,14 +1299,30 @@ pub(crate) async fn get_git_commit_history(
     drop(workspaces);
 
     let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
+    let branch_filter = branch.map(|value| value.trim().to_string());
+    let branch_filter = branch_filter.filter(|value| !value.is_empty());
+    let path_filter = path
+        .as_deref()
+        .map(crate::shared::git_core::normalize_file_history_path)
+        .transpose()?;
+    let file_history_entries = if let Some(path) = path_filter.as_deref() {
+        Some(
+            crate::shared::git_core::list_file_history_entries(
+                &repo_root,
+                branch_filter.as_deref(),
+                path,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
     let repo = open_repository_at_root(&repo_root)?;
     let mut revwalk = repo.revwalk().map_err(|e| e.to_string())?;
     revwalk
         .set_sorting(Sort::TOPOLOGICAL | Sort::TIME)
         .map_err(|e| e.to_string())?;
 
-    let branch_filter = branch.map(|value| value.trim().to_string());
-    let branch_filter = branch_filter.filter(|value| !value.is_empty());
     let mut has_ref = false;
     if let Some(selected_branch) = branch_filter.as_ref() {
         let lower = selected_branch.to_lowercase();
@@ -1328,14 +1376,15 @@ pub(crate) async fn get_git_commit_history(
         .and_then(|head| head.target())
         .map(|oid| oid.to_string())
         .unwrap_or_else(|| "detached".to_string());
-    let current_snapshot_id = format!(
-        "{}:{}:{}:{}:{}:{}",
-        head_sha,
-        branch_filter.clone().unwrap_or_else(|| "HEAD".to_string()),
-        query_filter.clone().unwrap_or_default(),
-        author_filter.clone().unwrap_or_default(),
-        date_from.unwrap_or_default(),
-        date_to.unwrap_or_default()
+    let current_snapshot_id = crate::shared::git_core::build_git_history_snapshot_id(
+        &head_sha,
+        branch_filter.as_deref(),
+        query_filter.as_deref(),
+        author_filter.as_deref(),
+        date_from,
+        date_to,
+        repository_root.as_deref(),
+        path_filter.as_deref(),
     );
     if let Some(previous_snapshot_id) = provided_snapshot_id {
         if previous_snapshot_id != current_snapshot_id {
@@ -1344,8 +1393,21 @@ pub(crate) async fn get_git_commit_history(
     }
 
     let mut filtered = Vec::new();
-    for oid_result in revwalk {
-        let oid = oid_result.map_err(|e| e.to_string())?;
+    let mut historical_paths = HashMap::new();
+    let history_oids = match file_history_entries {
+        Some(entries) => entries
+            .into_iter()
+            .map(|entry| {
+                let oid = Oid::from_str(&entry.oid).map_err(|error| error.to_string())?;
+                historical_paths.insert(oid, entry.path);
+                Ok(oid)
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        None => revwalk
+            .map(|oid| oid.map_err(|error| error.to_string()))
+            .collect::<Result<Vec<_>, _>>()?,
+    };
+    for oid in history_oids {
         let commit = repo.find_commit(oid).map_err(|e| e.to_string())?;
         let commit_time = commit.time().seconds();
         if date_from.is_some_and(|value| commit_time < value) {
@@ -1397,6 +1459,7 @@ pub(crate) async fn get_git_commit_history(
             timestamp: commit_time,
             parents,
             refs,
+            file_path: historical_paths.get(&oid).cloned(),
         });
     }
 
@@ -1639,48 +1702,16 @@ pub(crate) async fn get_git_commit_diff(
         let Some(display_path) = display_path else {
             continue;
         };
-        let old_path_str = old_path.map(|path| path.to_string_lossy());
-        let new_path_str = new_path.map(|path| path.to_string_lossy());
         let display_path_str = display_path.to_string_lossy();
         let normalized_path = normalize_git_path(&display_path_str);
-        let old_image_mime = old_path_str.as_deref().and_then(image_mime_type);
-        let new_image_mime = new_path_str.as_deref().and_then(image_mime_type);
-        let is_image = old_image_mime.is_some() || new_image_mime.is_some();
-
-        if is_image {
-            let is_deleted = delta.status() == git2::Delta::Deleted;
-            let is_added = delta.status() == git2::Delta::Added;
-
-            let old_image_data = if !is_added && old_image_mime.is_some() {
-                parent_tree
-                    .as_ref()
-                    .and_then(|tree| old_path.and_then(|path| tree.get_path(path).ok()))
-                    .and_then(|entry| repo.find_blob(entry.id()).ok())
-                    .and_then(blob_to_base64)
-            } else {
-                None
-            };
-
-            let new_image_data = if !is_deleted && new_image_mime.is_some() {
-                new_path
-                    .and_then(|path| commit_tree.get_path(path).ok())
-                    .and_then(|entry| repo.find_blob(entry.id()).ok())
-                    .and_then(blob_to_base64)
-            } else {
-                None
-            };
-
-            results.push(GitCommitDiff {
-                path: normalized_path,
-                status: status_for_delta(delta.status()).to_string(),
-                diff: String::new(),
-                is_binary: true,
-                is_image: true,
-                old_image_data,
-                new_image_data,
-                old_image_mime: old_image_mime.map(str::to_string),
-                new_image_mime: new_image_mime.map(str::to_string),
-            });
+        if let Some(image_diff) = build_image_commit_diff(
+            &repo,
+            parent_tree.as_ref(),
+            &commit_tree,
+            &delta,
+            status_for_delta(delta.status()),
+        ) {
+            results.push(image_diff);
             continue;
         }
 

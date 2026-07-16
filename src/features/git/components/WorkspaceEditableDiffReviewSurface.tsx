@@ -416,6 +416,7 @@ export function WorkspaceEditableDiffReviewSurface({
                 filePath={activeFile.reviewPath}
                 workspaceFilePath={activeFile.workspaceRelativeFilePath}
                 diff={activeFile.diff}
+                fullDiffLoader={fullDiffLoader}
                 contentMode={effectiveContentMode}
                 onSaveSuccess={handleSaveSuccess}
                 onDirtyChange={handleDirtyChange}

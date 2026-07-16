@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
 import type { GitLogEntry } from "../../../types";
 
 const mockPreviewSave = vi.fn(async () => true);
@@ -161,6 +162,8 @@ afterEach(() => {
   mockPreviewSave.mockReset();
   mockPreviewSave.mockResolvedValue(true);
   mockPreviewDiscard.mockReset();
+  vi.mocked(invoke).mockReset();
+  vi.mocked(invoke).mockResolvedValue(null);
   window.localStorage.clear();
 });
 
@@ -210,7 +213,7 @@ describe("GitDiffPanel", () => {
         {...baseProps}
         workspaceId="workspace-1"
         workspacePath="/workspace"
-        gitRoot="services/api"
+        gitRoot="/workspace/services/api"
         unstagedFiles={[{ path: "src/App.tsx", status: "M", additions: 1, deletions: 1 }]}
         diffEntries={[{ path: "src/App.tsx", status: "M", diff: "@@ -1 +1 @@\n-old\n+new" }]}
         modalPreviewRequest={{ path: "src/App.tsx", requestId: 77, maximized: true }}
@@ -222,9 +225,16 @@ describe("GitDiffPanel", () => {
     });
     const previewProps = mockEditableDiffReviewSurface.mock.lastCall?.[0] as {
       files?: Array<{ workspaceRelativeFilePath?: string }>;
+      fullDiffLoader?: (path: string) => Promise<string>;
     };
     expect(previewProps.files?.[0]?.workspaceRelativeFilePath)
       .toBe("services/api/src/App.tsx");
+    await previewProps.fullDiffLoader?.("src/App.tsx");
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_git_file_full_diff", {
+      workspaceId: "workspace-1",
+      path: "src/App.tsx",
+      repositoryRoot: "services/api",
+    });
   });
   it("disables commit and shows explicit hint when only unstaged changes exist", () => {
     const onCommit = vi.fn();
@@ -508,6 +518,354 @@ describe("GitDiffPanel", () => {
         undefined,
         [{ repositoryRoot: "services/api", selectedPaths: ["pom.xml"] }],
       );
+    });
+  });
+
+  it("forwards repository identity when a multi-repository file row opens", () => {
+    const onOpenFile = vi.fn();
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        workspaceId="ws-1"
+        multiRepositoryMode
+        repositoryStatuses={[
+          {
+            repositoryRoot: "services/api",
+            displayName: "api",
+            branchName: "main",
+            stagedFiles: [],
+            unstagedFiles: [
+              { path: "pom.xml", status: "M", additions: 1, deletions: 0 },
+            ],
+            totalAdditions: 1,
+            totalDeletions: 0,
+            error: null,
+          },
+        ]}
+        onOpenFile={onOpenFile}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "pom.xml" }));
+
+    expect(onOpenFile).toHaveBeenCalledWith("pom.xml", "services/api");
+  });
+
+  it("opens the latest repository-scoped modal preview without same-path cross-talk", async () => {
+    let resolveFirstRepository: ((value: unknown) => void) | null = null;
+    vi.mocked(invoke).mockImplementation((command, args) => {
+      const repositoryRoot = args && !Array.isArray(args)
+        ? (args as Record<string, unknown>).repositoryRoot
+        : undefined;
+      if (command === "get_git_diffs" && repositoryRoot === "services/a") {
+        return new Promise((resolve) => {
+          resolveFirstRepository = resolve;
+        });
+      }
+      if (command === "get_git_diffs" && repositoryRoot === "services/b") {
+        return Promise.resolve([{
+          path: "pom.xml",
+          status: "M",
+          diff: "@@ -1 +1 @@\n-old-b\n+new-b",
+        }]);
+      }
+      if (command === "get_git_file_full_diff") {
+        return Promise.resolve("full scoped diff");
+      }
+      return Promise.resolve(null);
+    });
+
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        workspaceId="ws-1"
+        workspacePath="/workspace"
+        multiRepositoryMode
+        repositoryStatuses={[
+          {
+            repositoryRoot: "services/a",
+            displayName: "a",
+            branchName: "main",
+            stagedFiles: [],
+            unstagedFiles: [{ path: "pom.xml", status: "M", additions: 1, deletions: 1 }],
+            totalAdditions: 1,
+            totalDeletions: 1,
+            error: null,
+          },
+          {
+            repositoryRoot: "services/b",
+            displayName: "b",
+            branchName: "main",
+            stagedFiles: [],
+            unstagedFiles: [{ path: "pom.xml", status: "M", additions: 1, deletions: 1 }],
+            totalAdditions: 1,
+            totalDeletions: 1,
+            error: null,
+          },
+        ]}
+      />,
+    );
+
+    const previewButtons = document.querySelectorAll<HTMLButtonElement>(
+      '.diff-row[data-path="pom.xml"] .diff-row-action--preview-modal',
+    );
+    expect(previewButtons).toHaveLength(2);
+    fireEvent.click(previewButtons[0]);
+    fireEvent.click(previewButtons[1]);
+
+    await waitFor(() => {
+      expect(mockEditableDiffReviewSurface).toHaveBeenCalled();
+    });
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_git_diffs", {
+      workspaceId: "ws-1",
+      repositoryRoot: "services/a",
+    });
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_git_diffs", {
+      workspaceId: "ws-1",
+      repositoryRoot: "services/b",
+    });
+
+    const latestPreviewProps = mockEditableDiffReviewSurface.mock.lastCall?.[0] as {
+      files?: Array<{ diff?: string; workspaceRelativeFilePath?: string }>;
+      fullDiffLoader?: (path: string) => Promise<string>;
+    };
+    expect(latestPreviewProps.files?.[0]).toMatchObject({
+      diff: "@@ -1 +1 @@\n-old-b\n+new-b",
+      workspaceRelativeFilePath: "services/b/pom.xml",
+    });
+    await latestPreviewProps.fullDiffLoader?.("pom.xml");
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_git_file_full_diff", {
+      workspaceId: "ws-1",
+      path: "pom.xml",
+      repositoryRoot: "services/b",
+    });
+
+    await act(async () => {
+      resolveFirstRepository?.([{
+        path: "pom.xml",
+        status: "M",
+        diff: "@@ -1 +1 @@\n-old-a\n+new-a",
+      }]);
+    });
+    const settledPreviewProps = mockEditableDiffReviewSurface.mock.lastCall?.[0] as {
+      files?: Array<{ diff?: string; workspaceRelativeFilePath?: string }>;
+    };
+    expect(settledPreviewProps.files?.[0]).toMatchObject({
+      diff: "@@ -1 +1 @@\n-old-b\n+new-b",
+      workspaceRelativeFilePath: "services/b/pom.xml",
+    });
+  });
+
+  it("invalidates a pending repository preview when the workspace changes", async () => {
+    let resolveOldWorkspace: ((value: unknown) => void) | null = null;
+    vi.mocked(invoke).mockImplementation((command) => {
+      if (command === "get_git_diffs") {
+        return new Promise((resolve) => {
+          resolveOldWorkspace = resolve;
+        });
+      }
+      return Promise.resolve(null);
+    });
+    const repositoryStatuses = [{
+      repositoryRoot: "services/api",
+      displayName: "api",
+      branchName: "main",
+      stagedFiles: [],
+      unstagedFiles: [{ path: "pom.xml", status: "M", additions: 1, deletions: 1 }],
+      totalAdditions: 1,
+      totalDeletions: 1,
+      error: null,
+    }];
+    const { rerender } = render(
+      <GitDiffPanel
+        {...baseProps}
+        workspaceId="workspace-a"
+        workspacePath="/workspace-a"
+        multiRepositoryMode
+        repositoryStatuses={repositoryStatuses}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open diff preview modal" }));
+    expect(document.querySelector(".git-history-diff-modal")).toBeTruthy();
+
+    rerender(
+      <GitDiffPanel
+        {...baseProps}
+        workspaceId="workspace-b"
+        workspacePath="/workspace-b"
+        multiRepositoryMode
+        repositoryStatuses={repositoryStatuses}
+      />,
+    );
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-diff-modal")).toBeNull();
+    });
+
+    await act(async () => {
+      resolveOldWorkspace?.([{
+        path: "pom.xml",
+        status: "M",
+        diff: "@@ -1 +1 @@\n-old-a\n+new-a",
+      }]);
+    });
+    expect(document.querySelector(".git-history-diff-modal")).toBeNull();
+  });
+
+  it("preserves an explicit workspace-root repository scope", async () => {
+    vi.mocked(invoke).mockImplementation((command) => {
+      if (command === "get_git_diffs") {
+        return Promise.resolve([{
+          path: "pom.xml",
+          status: "M",
+          diff: "@@ -1 +1 @@\n-old\n+new",
+        }]);
+      }
+      if (command === "get_git_file_full_diff") {
+        return Promise.resolve("full root diff");
+      }
+      return Promise.resolve(null);
+    });
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        workspaceId="workspace-1"
+        workspacePath="/workspace"
+        multiRepositoryMode
+        repositoryStatuses={[{
+          repositoryRoot: "",
+          displayName: "workspace",
+          branchName: "main",
+          stagedFiles: [],
+          unstagedFiles: [{ path: "pom.xml", status: "M", additions: 1, deletions: 1 }],
+          totalAdditions: 1,
+          totalDeletions: 1,
+          error: null,
+        }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open diff preview modal" }));
+    await waitFor(() => expect(mockEditableDiffReviewSurface).toHaveBeenCalled());
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_git_diffs", {
+      workspaceId: "workspace-1",
+      repositoryRoot: "",
+    });
+    const latestPreviewProps = mockEditableDiffReviewSurface.mock.lastCall?.[0] as {
+      fullDiffLoader?: (path: string) => Promise<string>;
+    };
+    await latestPreviewProps.fullDiffLoader?.("pom.xml");
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_git_file_full_diff", {
+      workspaceId: "workspace-1",
+      path: "pom.xml",
+      repositoryRoot: "",
+    });
+  });
+
+  it("does not reopen a repository preview closed while its request is pending", async () => {
+    let resolvePendingPreview: ((value: unknown) => void) | null = null;
+    vi.mocked(invoke).mockImplementation((command) => {
+      if (command === "get_git_diffs") {
+        return new Promise((resolve) => {
+          resolvePendingPreview = resolve;
+        });
+      }
+      return Promise.resolve(null);
+    });
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        workspaceId="workspace-1"
+        workspacePath="/workspace"
+        multiRepositoryMode
+        repositoryStatuses={[{
+          repositoryRoot: "services/api",
+          displayName: "api",
+          branchName: "main",
+          stagedFiles: [],
+          unstagedFiles: [{ path: "pom.xml", status: "M", additions: 1, deletions: 1 }],
+          totalAdditions: 1,
+          totalDeletions: 1,
+          error: null,
+        }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open diff preview modal" }));
+    const overlay = document.querySelector<HTMLElement>(".git-history-diff-modal-overlay");
+    if (!overlay) {
+      throw new Error("Expected repository preview overlay to open");
+    }
+    fireEvent.click(overlay);
+    expect(document.querySelector(".git-history-diff-modal")).toBeNull();
+
+    await act(async () => {
+      resolvePendingPreview?.([{
+        path: "pom.xml",
+        status: "M",
+        diff: "@@ -1 +1 @@\n-old\n+new",
+      }]);
+    });
+    expect(document.querySelector(".git-history-diff-modal")).toBeNull();
+  });
+
+  it("settles a failed repository preview to unavailable", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation((command) => {
+      if (command === "get_git_diffs") {
+        return Promise.reject(new Error("scoped diff failed"));
+      }
+      return Promise.resolve(null);
+    });
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        workspaceId="workspace-1"
+        workspacePath="/workspace"
+        multiRepositoryMode
+        repositoryStatuses={[{
+          repositoryRoot: "services/api",
+          displayName: "api",
+          branchName: "main",
+          stagedFiles: [],
+          unstagedFiles: [{ path: "pom.xml", status: "M", additions: 1, deletions: 1 }],
+          totalAdditions: 1,
+          totalDeletions: 1,
+          error: null,
+        }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open diff preview modal" }));
+    expect(await screen.findByText("git.diffUnavailable")).toBeTruthy();
+    expect(screen.queryByText("common.loading")).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Failed to load repository-scoped git diff",
+      expect.any(Error),
+    );
+  });
+
+  it("closes a single-repository preview when the selected git root changes", async () => {
+    const previewProps = {
+      ...baseProps,
+      workspaceId: "workspace-1",
+      workspacePath: "/workspace",
+      gitRoot: "services/a",
+      unstagedFiles: [{ path: "pom.xml", status: "M", additions: 1, deletions: 1 }],
+      diffEntries: [{
+        path: "pom.xml",
+        status: "M",
+        diff: "@@ -1 +1 @@\n-old\n+new",
+      }],
+    };
+    const { rerender } = render(<GitDiffPanel {...previewProps} />);
+
+    fireEvent.doubleClick(screen.getByLabelText("pom.xml"));
+    expect(document.querySelector(".git-history-diff-modal")).toBeTruthy();
+
+    rerender(<GitDiffPanel {...previewProps} gitRoot="services/b" />);
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-diff-modal")).toBeNull();
     });
   });
 

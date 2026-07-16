@@ -17,6 +17,7 @@ import Pencil from "lucide-react/dist/esm/icons/pencil";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import Code from "lucide-react/dist/esm/icons/code";
 import FileSearch from "lucide-react/dist/esm/icons/file-search";
+import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizontal";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import Maximize2 from "lucide-react/dist/esm/icons/maximize-2";
 import Minimize2 from "lucide-react/dist/esm/icons/minimize-2";
@@ -40,7 +41,8 @@ import {
 import { highlightLine } from "../../../utils/syntax";
 import { OpenAppMenu } from "../../app/components/OpenAppMenu";
 import FileIcon from "../../../components/FileIcon";
-import type { GitFileStatus, OpenAppTarget } from "../../../types";
+import { RendererContextMenu } from "../../../components/ui/RendererContextMenu";
+import type { GitFileStatus, GitRepositorySummary, OpenAppTarget } from "../../../types";
 import type {
   CodeAnnotationDraftInput,
   CodeAnnotationLineRange,
@@ -81,6 +83,7 @@ import type { FileCodeMirrorEditorHandle } from "./FileCodeMirrorEditor";
 import { FileViewNavigationPanel } from "./FileViewNavigationPanel";
 import { useFileDocumentState } from "../hooks/useFileDocumentState";
 import { useFileExternalSync } from "../hooks/useFileExternalSync";
+import { useFileGitBlame } from "../hooks/useFileGitBlame";
 import { useFileNavigation } from "../hooks/useFileNavigation";
 import { useFilePreviewPayload } from "../hooks/useFilePreviewPayload";
 import {
@@ -113,6 +116,12 @@ import {
   type EditorTheme,
 } from "./fileViewPanelShared";
 import { resolveFileMarkdownFastFeatureFlags } from "../utils/fileMarkdownFeatureFlags";
+import {
+  FILE_GIT_BLAME_MAX_BYTES,
+  FILE_GIT_BLAME_MAX_LINES,
+  resolveGitBlameRepositoryPath,
+} from "../utils/gitBlame";
+import { resolveFileGitScope } from "../utils/fileGitScope";
 
 export { resolveEditorAnnotationWidgetOrder } from "./fileViewPanelShared";
 
@@ -128,6 +137,7 @@ type FileViewPanelProps = {
   workspaceName?: string | null;
   workspacePath: string;
   gitRoot?: string | null;
+  gitRepositories?: GitRepositorySummary[];
   customSpecRoot?: string | null;
   filePath: string;
   gitStatusFiles?: GitFileStatus[];
@@ -190,6 +200,7 @@ export function FileViewPanel({
   workspaceName = null,
   workspacePath,
   gitRoot = null,
+  gitRepositories,
   customSpecRoot = null,
   filePath,
   gitStatusFiles,
@@ -300,6 +311,10 @@ export function FileViewPanel({
   });
   const [draggingTabPath, setDraggingTabPath] = useState<string | null>(null);
   const [dragOverTabPath, setDragOverTabPath] = useState<string | null>(null);
+  const [gitBlameContextMenu, setGitBlameContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const activeAnnotationLineRange =
     annotationDraft?.source === "file-edit-mode"
       ? annotationDraft.lineRange
@@ -539,6 +554,53 @@ export function FileViewPanel({
   const [editorDraftDirty, setEditorDraftDirty] = useState(false);
   const effectiveIsDirty = isDirty || editorDraftDirty;
   latestIsDirtyRef.current = effectiveIsDirty;
+  const hasGitRepositoryInventory = Boolean(gitRepositories?.length);
+  const aggregateGitScope = useMemo(
+    () => gitRepositories?.length
+      ? resolveFileGitScope(workspaceRelativeFilePath, gitRepositories)
+      : null,
+    [gitRepositories, workspaceRelativeFilePath],
+  );
+  const configuredGitBlameRepositoryRoot = gitRootWorkspacePrefix || null;
+  const gitBlameRepositoryRoot = hasGitRepositoryInventory
+    ? aggregateGitScope?.repositoryRoot || null
+    : configuredGitBlameRepositoryRoot;
+  const gitBlamePath = useMemo(
+    () => hasGitRepositoryInventory
+      ? aggregateGitScope?.path ?? workspaceRelativeFilePath
+      : resolveGitBlameRepositoryPath(
+          workspaceRelativeFilePath,
+          configuredGitBlameRepositoryRoot,
+        ),
+    [
+      aggregateGitScope,
+      configuredGitBlameRepositoryRoot,
+      hasGitRepositoryInventory,
+      workspaceRelativeFilePath,
+    ],
+  );
+  const fileBelongsToGitRepository = hasGitRepositoryInventory
+    ? aggregateGitScope !== null
+    : !configuredGitBlameRepositoryRoot ||
+      workspaceRelativeFilePath === configuredGitBlameRepositoryRoot ||
+      workspaceRelativeFilePath.startsWith(`${configuredGitBlameRepositoryRoot}/`);
+  const gitBlameEligible =
+    canEditDocument &&
+    !skipTextRead &&
+    !truncated &&
+    !isLoading &&
+    fileReadTarget.domain === "workspace" &&
+    fileBelongsToGitRepository &&
+    documentSnapshot.byteLength <= FILE_GIT_BLAME_MAX_BYTES &&
+    documentSnapshot.lineCount <= FILE_GIT_BLAME_MAX_LINES;
+  const gitBlame = useFileGitBlame({
+    workspaceId,
+    repositoryRoot: gitBlameRepositoryRoot,
+    path: gitBlamePath,
+    renderToken: currentFileRenderToken,
+    eligible: gitBlameEligible,
+    isDirty: effectiveIsDirty,
+  });
   const typingDiagnosticsRef = useRef<FileEditorTypingDiagnosticsSession>(
     createFileEditorTypingDiagnosticsSession({
       workspaceId,
@@ -697,10 +759,14 @@ export function FileViewPanel({
     setExternalPendingRefresh(null);
     setExternalCompareOpen(false);
     setExternalAutoSyncAt(null);
+    if (gitBlame.enabled) {
+      gitBlame.refresh();
+    }
     onSaveSuccess?.();
   }, [
     flushEditorDraftToDocument,
     handleDocumentSave,
+    gitBlame,
     onSaveSuccess,
     setExternalChangeConflict,
     setExternalPendingRefresh,
@@ -708,6 +774,16 @@ export function FileViewPanel({
     setExternalCompareOpen,
     setExternalAutoSyncAt,
   ]);
+
+  const handleGitBlameContextMenu = useCallback(
+    (position: { x: number; y: number }) => {
+      if (!gitBlameEligible && !gitBlame.enabled) {
+        return;
+      }
+      setGitBlameContextMenu(position);
+    },
+    [gitBlame.enabled, gitBlameEligible],
+  );
   const {
     isDefinitionLoading,
     isReferencesLoading,
@@ -1599,6 +1675,37 @@ export function FileViewPanel({
             </div>
           ) : (
             <div className="fvp-action-group" role="group">
+              <button
+                type="button"
+                className={`ghost fvp-action-btn fvp-git-blame-toggle${
+                  gitBlame.enabled ? " is-active" : ""
+                }${gitBlame.status === "stale" ? " is-stale" : ""}${
+                  gitBlame.status === "error" ? " is-error" : ""
+                }`}
+                onClick={gitBlame.toggle}
+                disabled={!gitBlameEligible && !gitBlame.enabled}
+                aria-pressed={gitBlame.enabled}
+                aria-busy={gitBlame.status === "loading"}
+                title={
+                  gitBlame.error ??
+                  (!gitBlameEligible
+                    ? t("files.gitBlameUnavailable")
+                    : gitBlame.enabled
+                      ? t("files.gitBlameDisable")
+                      : t("files.gitBlameEnable"))
+                }
+              >
+                <GitCommitHorizontal size={14} aria-hidden />
+                <span>
+                  {gitBlame.status === "loading"
+                    ? t("files.gitBlameLoading")
+                    : gitBlame.status === "stale"
+                      ? t("files.gitBlameStale")
+                      : gitBlame.status === "error"
+                        ? t("files.gitBlameError")
+                        : t("files.gitBlame")}
+                </span>
+              </button>
               {onAssociateIntentCanvasCodeAnchor ? (
                 <button
                   type="button"
@@ -1960,6 +2067,12 @@ export function FileViewPanel({
       onActiveFileLineRangeChange={handleEditorLineRangeChange}
       languageExtensions={languageExtensions}
       gitLineMarkers={effectiveGitLineMarkers}
+      gitBlameEnabled={gitBlame.enabled}
+      gitBlameStatus={gitBlame.status}
+      gitBlameResponse={gitBlame.response}
+      onGitBlameContextMenu={
+        gitBlameEligible || gitBlame.enabled ? handleGitBlameContextMenu : undefined
+      }
       editorCodeAnnotations={editorCodeAnnotations}
       editorAnnotationDraft={editorAnnotationDraft}
       annotationWidgetLabels={annotationWidgetLabels}
@@ -2117,6 +2230,30 @@ export function FileViewPanel({
     </div>
   );
 
+  const renderGitBlameContextMenu = () =>
+    gitBlameContextMenu ? (
+      <RendererContextMenu
+        menu={{
+          ...gitBlameContextMenu,
+          label: t("files.gitBlameMenu"),
+          items: [
+            {
+              type: "item",
+              id: "toggle-git-blame",
+              label: gitBlame.enabled
+                ? t("files.gitBlameDisable")
+                : t("files.gitBlameEnable"),
+              disabled: !gitBlameEligible && !gitBlame.enabled,
+              onSelect: () => {
+                gitBlame.toggle();
+              },
+            },
+          ],
+        }}
+        onClose={() => setGitBlameContextMenu(null)}
+      />
+    ) : null;
+
   const renderNavigationPanel = () => (
     <FileViewNavigationPanel
       workspacePath={workspacePath}
@@ -2156,6 +2293,7 @@ export function FileViewPanel({
       <div className="fvp-body">{renderContent()}</div>
       {renderNavigationPanel()}
       {renderFooter()}
+      {renderGitBlameContextMenu()}
     </div>
   );
 }

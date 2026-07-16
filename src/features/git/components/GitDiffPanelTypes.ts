@@ -83,7 +83,7 @@ export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   onPickGitRoot?: () => void | Promise<void>;
   selectedPath?: string | null;
   onSelectFile?: (path: string | null) => void;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, repositoryRoot?: string | null) => void;
   modalPreviewRequest?: GitModalPreviewRequest | null;
   stagedFiles: {
     path: string;

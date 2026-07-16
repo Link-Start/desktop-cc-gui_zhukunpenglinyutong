@@ -404,6 +404,7 @@ export {
   getGitCommitHistory,
   getGitDiffs,
   getGitFileFullDiff,
+  getGitFileBlame,
   getGitHubIssues,
   getGitHubPullRequestComments,
   getGitHubPullRequestDiff,

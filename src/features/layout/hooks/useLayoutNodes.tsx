@@ -163,6 +163,11 @@ const FileViewPanel = lazy(() =>
     default: m.FileViewPanel,
   })),
 );
+const FileHistoryView = lazy(() =>
+  import("../../git-history/components/FileHistoryView").then((m) => ({
+    default: m.FileHistoryView,
+  })),
+);
 const ProjectMapPanel = lazy(() =>
   import("../../project-map/components/ProjectMapPanel").then((m) => ({
     default: m.ProjectMapPanel,
@@ -1765,6 +1770,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         gitStatusFiles={options.gitStatus.files}
         gitRepositories={options.gitRepositories}
         onGitRepositoryAction={handleFileTreeGitRepositoryAction}
+        onOpenFileHistory={options.onOpenFileHistory}
         gitignoredFiles={options.gitignoredFiles}
         gitignoredDirectories={options.gitignoredDirectories}
         onRefreshFiles={options.onRefreshFiles}
@@ -1867,8 +1873,11 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           stagedFiles={canonicalGitPanelChanges.stagedFiles}
           unstagedFiles={canonicalGitPanelChanges.unstagedFiles}
           onSelectFile={options.onSelectDiff}
-          onOpenFile={(path) =>
-            options.onOpenFile(path, undefined, { pathDomain: "git" })
+          onOpenFile={(path, repositoryRoot) =>
+            options.onOpenFile(path, undefined, {
+              pathDomain: "git",
+              repositoryRoot,
+            })
           }
           modalPreviewRequest={gitModalPreviewRequest}
           selectedPath={sidebarSelectedDiffPath}
@@ -1968,14 +1977,21 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     />
   );
 
-  const fileViewPanelNode =
-    options.editorFilePath && options.activeWorkspace ? (
+  const fileViewPanelNode = options.centerMode === "fileHistory" && options.fileHistoryTarget ? (
+    <Suspense fallback={<HeavyPanelFallback />}>
+      <FileHistoryView
+        target={options.fileHistoryTarget}
+        onClose={options.onCloseFileHistory ?? (() => undefined)}
+      />
+    </Suspense>
+  ) : options.editorFilePath && options.activeWorkspace ? (
       <Suspense fallback={<HeavyPanelFallback />}>
         <FileViewPanel
           workspaceId={options.activeWorkspace.id}
           workspaceName={options.activeWorkspace.name}
           workspacePath={options.activeWorkspace.path}
           gitRoot={options.gitRoot}
+          gitRepositories={options.gitRepositories}
           customSpecRoot={activeWorkspaceCustomSpecRoot}
           filePath={options.editorFilePath}
           navigationTarget={options.editorNavigationTarget}

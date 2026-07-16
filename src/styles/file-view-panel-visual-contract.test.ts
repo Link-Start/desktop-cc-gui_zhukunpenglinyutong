@@ -24,6 +24,24 @@ function getCssRuleBlock(css: string, selector: string): string {
 }
 
 describe("file view visual contracts", () => {
+  it("keeps Git Blame gutter stable and current-line details inline", () => {
+    expect(getCssRuleBlock(fileViewPanelCss, ".fvp-cm .cm-file-git-blame-gutter")).toContain(
+      "var(--border-subtle)",
+    );
+    expect(getCssRuleBlock(fileViewPanelCss, ".fvp-cm .cm-file-git-blame-marker")).toContain(
+      "text-overflow: ellipsis",
+    );
+    const inlineDetailsRule = getCssRuleBlock(
+      fileViewPanelCss,
+      ".fvp-cm .cm-file-git-blame-inline-details",
+    );
+    expect(inlineDetailsRule).toContain("max-width: min(520px, 48vw);");
+    expect(inlineDetailsRule).toContain("text-overflow: ellipsis;");
+    expect(
+      getCssRuleBlock(fileViewPanelCss, ".fvp-cm .cm-file-git-blame-marker.is-current"),
+    ).toBe("");
+  });
+
   it("does not draw an accent underline under the active file tab", () => {
     expect(getCssRuleBlock(fileViewPanelShellCss, ".fvp-tab.is-active::after")).toBe("");
   });

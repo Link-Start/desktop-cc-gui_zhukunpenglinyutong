@@ -166,6 +166,7 @@ export function DesktopLayout({
     centerMode !== "projectMap" &&
     centerMode !== "intentCanvas" &&
     centerMode !== "fileCompare" &&
+    centerMode !== "fileHistory" &&
     !shouldPlaceComposerInChatColumn &&
     !isEditorSplitProjectMapVisible &&
     !isEditorFileMaximized;
@@ -193,6 +194,7 @@ export function DesktopLayout({
       if (!ref) continue;
       const isInteractive =
         centerMode === mode ||
+        (mode === "editor" && centerMode === "fileHistory") ||
         ((isEditorSplitChatVisible || isNoteCardsSplitMode) && mode === "chat") ||
         (isEditorSplitProjectMapVisible && mode === "projectMap");
       if (isInteractive) {
@@ -207,6 +209,7 @@ export function DesktopLayout({
       for (const { ref, mode } of layers) {
         const isInteractive =
           centerMode === mode ||
+          (mode === "editor" && centerMode === "fileHistory") ||
           ((isEditorSplitChatVisible || isNoteCardsSplitMode) && mode === "chat") ||
           (isEditorSplitProjectMapVisible && mode === "projectMap");
         if (ref && !isInteractive && ref.contains(activeElement)) {
@@ -617,9 +620,9 @@ export function DesktopLayout({
                   </div>
                   <div
                     className={`content-layer content-layer--editor ${
-                      centerMode === "editor" ? "is-active" : "is-hidden"
+                      centerMode === "editor" || centerMode === "fileHistory" ? "is-active" : "is-hidden"
                     }`}
-                    aria-hidden={centerMode !== "editor"}
+                    aria-hidden={centerMode !== "editor" && centerMode !== "fileHistory"}
                     ref={editorLayerRef}
                   >
                     {fileViewPanelNode}

@@ -424,6 +424,18 @@
   color: var(--text-strong);
 }
 
+.fvp-action-group .fvp-git-blame-toggle.is-active {
+  color: var(--border-accent);
+}
+
+.fvp-action-group .fvp-git-blame-toggle.is-stale {
+  color: var(--text-warning);
+}
+
+.fvp-action-group .fvp-git-blame-toggle.is-error {
+  color: var(--text-danger);
+}
+
 .fvp-action-group .fvp-action-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--border-accent) 56%, transparent);
   outline-offset: 3px;
@@ -2357,6 +2369,55 @@
   color: var(--fvp-reader-fainter);
 }
 
+.fvp-cm .cm-file-git-blame-gutter {
+  border-left: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.fvp-cm .cm-file-git-blame-spacer,
+.fvp-cm .cm-file-git-blame-marker {
+  box-sizing: border-box;
+  display: block;
+  max-width: 210px;
+  padding: 0 8px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fvp-cm .cm-file-git-blame-spacer {
+  height: 0;
+  visibility: hidden;
+}
+
+.fvp-cm .cm-file-git-blame-marker.is-stale {
+  opacity: 0.55;
+}
+
+.fvp-cm .cm-file-git-blame-inline-details {
+  display: inline-block;
+  max-width: min(520px, 48vw);
+  margin-left: 24px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  font-style: italic;
+  line-height: inherit;
+  opacity: 0.72;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.fvp-cm .cm-file-git-blame-inline-details.is-stale {
+  opacity: 0.45;
+}
+
 .fvp-cm .cm-activeLineGutter {
   background: color-mix(in srgb, var(--surface-active) 24%, transparent);
 }
@@ -2833,6 +2894,40 @@
   background: color-mix(
     in srgb,
     color-mix(in srgb, #6bb3f0 14%, transparent) 72%,
+    var(--surface-active) 28%
+  );
+}
+
+.file-compare-column.is-diff-deletion
+  .file-compare-cm
+  .cm-line:is(.cm-git-modified-line, .cm-git-added-line) {
+  background: color-mix(in srgb, #f85149 20%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, #f85149 88%, var(--text-strong));
+}
+
+.file-compare-column.is-diff-addition
+  .file-compare-cm
+  .cm-line:is(.cm-git-modified-line, .cm-git-added-line) {
+  background: color-mix(in srgb, #3fb950 20%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, #3fb950 88%, var(--text-strong));
+}
+
+.file-compare-column.is-diff-deletion
+  .file-compare-cm
+  .cm-line.cm-activeLine:is(.cm-git-modified-line, .cm-git-added-line) {
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, #f85149 20%, transparent) 72%,
+    var(--surface-active) 28%
+  );
+}
+
+.file-compare-column.is-diff-addition
+  .file-compare-cm
+  .cm-line.cm-activeLine:is(.cm-git-modified-line, .cm-git-added-line) {
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, #3fb950 20%, transparent) 72%,
     var(--surface-active) 28%
   );
 }

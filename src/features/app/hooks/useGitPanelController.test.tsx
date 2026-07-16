@@ -587,6 +587,67 @@ describe("useGitPanelController editor tabs", () => {
     );
   });
 
+  it("uses an explicit repository root for same-named multi-repository files", () => {
+    const { result } = renderHook(() =>
+      useGitPanelController(
+        makeProps({
+          activeWorkspace: {
+            ...workspace,
+            path: "/tmp/ER-QI",
+            settings: {
+              ...workspace.settings,
+              gitRoot: "repo-a",
+            },
+          },
+        }),
+      ),
+    );
+
+    act(() => {
+      result.current.handleOpenFile("pom.xml", undefined, {
+        pathDomain: "git",
+        repositoryRoot: "repo-a",
+      });
+      result.current.handleOpenFile("pom.xml", undefined, {
+        pathDomain: "git",
+        repositoryRoot: "repo-b",
+      });
+    });
+
+    expect(result.current.openFileTabs).toEqual([
+      "repo-a/pom.xml",
+      "repo-b/pom.xml",
+    ]);
+    expect(result.current.activeEditorFilePath).toBe("repo-b/pom.xml");
+  });
+
+  it("preserves an explicit workspace-root repository over configured nested git root", () => {
+    const { result } = renderHook(() =>
+      useGitPanelController(
+        makeProps({
+          activeWorkspace: {
+            ...workspace,
+            path: "/tmp/ER-QI",
+            settings: {
+              ...workspace.settings,
+              gitRoot: "repo-a",
+            },
+          },
+        }),
+      ),
+    );
+
+    act(() => {
+      result.current.handleOpenFile("pom.xml", undefined, {
+        pathDomain: "git",
+        repositoryRoot: "",
+      });
+    });
+
+    expect(result.current.openFileTabs).toEqual(["pom.xml"]);
+    expect(result.current.activeEditorFilePath).toBe("pom.xml");
+  });
+
   it("does not prefix git paths when the workspace is the repository root", () => {
     const { result } = renderHook(() =>
       useGitPanelController(
@@ -783,5 +844,45 @@ describe("useGitPanelController file compare", () => {
     ).toBe(false);
     expect(result.current.centerMode).toBe("chat");
     expect(result.current.fileCompareSession).toBeNull();
+  });
+});
+
+describe("useGitPanelController file history", () => {
+  it("opens, switches, and closes the file history center surface", () => {
+    const { result } = renderHook(() => useGitPanelController(makeProps()));
+    const firstTarget = {
+      workspaceId: workspace.id,
+      workspacePath: workspace.path,
+      repositoryRoot: "",
+      path: "src/a.ts",
+      displayPath: "src/a.ts",
+    };
+
+    act(() => result.current.handleOpenFileHistory(firstTarget));
+    expect(result.current.centerMode).toBe("fileHistory");
+    expect(result.current.fileHistoryTarget).toEqual(firstTarget);
+
+    const secondTarget = { ...firstTarget, path: "src/b.ts", displayPath: "src/b.ts" };
+    act(() => result.current.handleOpenFileHistory(secondTarget));
+    expect(result.current.fileHistoryTarget).toEqual(secondTarget);
+
+    act(() => result.current.handleCloseFileHistory());
+    expect(result.current.centerMode).toBe("chat");
+    expect(result.current.fileHistoryTarget).toBeNull();
+  });
+
+  it("clears file history when another center surface opens", () => {
+    const { result } = renderHook(() => useGitPanelController(makeProps()));
+    act(() => result.current.handleOpenFileHistory({
+      workspaceId: workspace.id,
+      workspacePath: workspace.path,
+      repositoryRoot: "",
+      path: "README.md",
+      displayPath: "README.md",
+    }));
+    act(() => result.current.handleOpenFile("src/App.tsx"));
+
+    expect(result.current.centerMode).toBe("editor");
+    expect(result.current.fileHistoryTarget).toBeNull();
   });
 });

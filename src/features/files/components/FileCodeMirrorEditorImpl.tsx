@@ -6,14 +6,26 @@ import CodeMirror, {
 import {
   Decoration,
   EditorView,
+  GutterMarker,
+  ViewPlugin,
   WidgetType,
+  gutter,
   keymap,
+  lineNumbers,
   type DecorationSet,
+  type ViewUpdate,
 } from "@codemirror/view";
 import { closeSearchPanel, openSearchPanel, search, searchPanelOpen } from "@codemirror/search";
-import { StateEffect, StateField, type Extension } from "@codemirror/state";
+import { Compartment, StateEffect, StateField, type Extension } from "@codemirror/state";
 import type { CodeAnnotationSelection } from "../../code-annotations/types";
+import type { GitFileBlameResponse } from "../../../types";
 import type { GitLineMarkers } from "../utils/gitLineMarkers";
+import {
+  findGitBlameHunk,
+  formatGitBlameCompact,
+  formatGitBlameDetails,
+} from "../utils/gitBlame";
+import type { FileGitBlameStatus } from "../hooks/useFileGitBlame";
 import {
   codeAnnotationWidgetsExtension,
   gitLineMarkersExtension,
@@ -34,8 +46,13 @@ export type FileCodeMirrorEditorProps = {
   theme: ReactCodeMirrorProps["theme"];
   languageExtensions: ReactCodeMirrorProps["extensions"];
   gitLineMarkers: GitLineMarkers;
+  gitBlameEnabled?: boolean;
+  gitBlameStatus?: FileGitBlameStatus;
+  gitBlameResponse?: GitFileBlameResponse | null;
+  onGitBlameContextMenu?: (position: { x: number; y: number }) => void;
   fileCompareLineGaps?: FileCodeMirrorLineGap[];
   fileCompareCollapsedRanges?: FileCodeMirrorCollapsedRange[];
+  lineNumberLabels?: readonly (number | null)[] | null;
   codeAnnotations: CodeAnnotationSelection[];
   annotationDraft: FileAnnotationDraftState | null;
   annotationWidgetLabels: {
@@ -67,6 +84,175 @@ export type FileCodeMirrorCollapsedRange = {
 };
 
 const navigationLineFlashEffect = StateEffect.define<number | null>();
+
+type FileGitBlameGutterState = {
+  status: FileGitBlameStatus;
+  response: GitFileBlameResponse | null;
+};
+
+const EMPTY_GIT_BLAME_GUTTER_STATE: FileGitBlameGutterState = {
+  status: "disabled",
+  response: null,
+};
+export const setGitBlameGutterEffect = StateEffect.define<FileGitBlameGutterState>();
+const gitBlameGutterField = StateField.define<FileGitBlameGutterState>({
+  create: () => EMPTY_GIT_BLAME_GUTTER_STATE,
+  update(current, transaction) {
+    for (const effect of transaction.effects) {
+      if (effect.is(setGitBlameGutterEffect)) {
+        return effect.value;
+      }
+    }
+    return current;
+  },
+});
+
+class FileGitBlameMarker extends GutterMarker {
+  constructor(
+    private readonly compact: string,
+    private readonly details: string,
+    private readonly stale: boolean,
+  ) {
+    super();
+  }
+
+  eq(other: FileGitBlameMarker) {
+    return (
+      this.compact === other.compact &&
+      this.details === other.details &&
+      this.stale === other.stale
+    );
+  }
+
+  toDOM() {
+    const marker = document.createElement("span");
+    marker.className = `cm-file-git-blame-marker${this.stale ? " is-stale" : ""}`;
+    marker.title = this.details;
+    marker.setAttribute("aria-label", this.details);
+    const compact = document.createElement("span");
+    compact.className = "cm-file-git-blame-compact";
+    compact.textContent = this.compact;
+    marker.append(compact);
+    return marker;
+  }
+}
+
+class FileGitBlameDetailsWidget extends WidgetType {
+  constructor(
+    private readonly details: string,
+    private readonly stale: boolean,
+  ) {
+    super();
+  }
+
+  eq(other: FileGitBlameDetailsWidget) {
+    return this.details === other.details && this.stale === other.stale;
+  }
+
+  toDOM() {
+    const details = document.createElement("span");
+    details.className = `cm-file-git-blame-inline-details${this.stale ? " is-stale" : ""}`;
+    details.textContent = this.details;
+    details.title = this.details;
+    details.setAttribute("aria-label", this.details);
+    return details;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
+
+function buildFileGitBlameDetailsDecorations(view: EditorView) {
+  const blameState = view.state.field(gitBlameGutterField);
+  if (!blameState.response) {
+    return Decoration.none;
+  }
+  const currentLine = view.state.doc.lineAt(view.state.selection.main.head);
+  const hunk = findGitBlameHunk(blameState.response.hunks, currentLine.number);
+  if (!hunk) {
+    return Decoration.none;
+  }
+  return Decoration.set([
+    Decoration.widget({
+      widget: new FileGitBlameDetailsWidget(
+        formatGitBlameDetails(hunk),
+        blameState.status === "stale",
+      ),
+      side: 1,
+    }).range(currentLine.to),
+  ]);
+}
+
+const fileGitBlameDetailsPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildFileGitBlameDetailsDecorations(view);
+    }
+
+    update(update: ViewUpdate) {
+      if (
+        update.docChanged ||
+        update.selectionSet ||
+        update.startState.field(gitBlameGutterField) !==
+          update.state.field(gitBlameGutterField)
+      ) {
+        this.decorations = buildFileGitBlameDetailsDecorations(update.view);
+      }
+    }
+  },
+  {
+    decorations: (plugin) => plugin.decorations,
+  },
+);
+
+class FileGitBlameSpacerMarker extends GutterMarker {
+  toDOM() {
+    const spacer = document.createElement("span");
+    spacer.className = "cm-file-git-blame-spacer";
+    spacer.textContent = "0000-00-00 longest-author";
+    return spacer;
+  }
+}
+
+export function fileGitBlameGutterExtension(): Extension {
+  return [
+    gitBlameGutterField,
+    fileGitBlameDetailsPlugin,
+    gutter({
+      class: "cm-file-git-blame-gutter",
+      initialSpacer: () => new FileGitBlameSpacerMarker(),
+      lineMarker(view, line) {
+        const blameState = view.state.field(gitBlameGutterField);
+        const lineNumber = view.state.doc.lineAt(line.from).number;
+        const hunk = blameState.response
+          ? findGitBlameHunk(blameState.response.hunks, lineNumber)
+          : null;
+        if (!hunk) {
+          return null;
+        }
+        return new FileGitBlameMarker(
+          formatGitBlameCompact(hunk),
+          formatGitBlameDetails(hunk),
+          blameState.status === "stale",
+        );
+      },
+      lineMarkerChange(update) {
+        return (
+          update.selectionSet ||
+          update.startState.field(gitBlameGutterField) !==
+            update.state.field(gitBlameGutterField)
+        );
+      },
+    }),
+  ];
+}
+
+export function isFileGitBlameContextMenuTarget(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest(".cm-gutters"));
+}
 
 export function resolveFileCompareLineGapHeight(
   lineCount: number,
@@ -242,8 +428,13 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     theme,
     languageExtensions,
     gitLineMarkers,
+    gitBlameEnabled = false,
+    gitBlameStatus = "disabled",
+    gitBlameResponse = null,
+    onGitBlameContextMenu,
     fileCompareLineGaps = [],
     fileCompareCollapsedRanges = [],
+    lineNumberLabels = null,
     codeAnnotations,
     annotationDraft,
     annotationWidgetLabels,
@@ -258,6 +449,11 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     editable = true,
   } = props;
   const codeMirrorRef = useRef<ReactCodeMirrorRef | null>(null);
+  const gitBlameCompartment = useMemo(() => new Compartment(), []);
+  const gitBlameExtension = useMemo(() => fileGitBlameGutterExtension(), []);
+  const gitBlameInstalledRef = useRef(false);
+  const onGitBlameContextMenuRef = useRef(onGitBlameContextMenu);
+  onGitBlameContextMenuRef.current = onGitBlameContextMenu;
 
   // Keep a ref to the latest `handleSave` so the keymap (memoized on
   // shortcut) always invokes the most recent callback.
@@ -337,7 +533,34 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     [resolveDefinitionAtOffset],
   );
 
+  const gitBlameContextMenuExt = useMemo(
+    () =>
+      EditorView.domEventHandlers({
+        contextmenu: (event) => {
+          if (!isFileGitBlameContextMenuTarget(event.target)) {
+            return false;
+          }
+          const callback = onGitBlameContextMenuRef.current;
+          if (!callback) {
+            return false;
+          }
+          event.preventDefault();
+          callback({ x: event.clientX, y: event.clientY });
+          return true;
+        },
+      }),
+    [],
+  );
+
   const persistentSearchExtension = useMemo(() => search({ top: true }), []);
+  const historicalLineNumbersExtension = useMemo(
+    () => lineNumberLabels
+      ? lineNumbers({
+          formatNumber: (lineNumber) => String(lineNumberLabels[lineNumber - 1] ?? ""),
+        })
+      : null,
+    [lineNumberLabels],
+  );
   const annotationWidgetsExt = useMemo(
     () =>
       codeAnnotationWidgetsExtension({
@@ -360,11 +583,14 @@ export const FileCodeMirrorEditorImpl = forwardRef<
       saveKeymapExt,
       editorNavigationKeymapExt,
       ctrlClickDefinitionExt,
+      gitBlameContextMenuExt,
       persistentSearchExtension,
       annotationWidgetsExt,
       gitLineMarkersExtension(),
+      gitBlameCompartment.of([]),
       fileCompareLineGapsField,
       fileCompareCollapsedRangesField,
+      ...(historicalLineNumbersExtension ? [historicalLineNumbersExtension] : []),
       ...(Array.isArray(languageExtensions)
         ? languageExtensions
         : languageExtensions
@@ -375,6 +601,9 @@ export const FileCodeMirrorEditorImpl = forwardRef<
       annotationWidgetsExt,
       ctrlClickDefinitionExt,
       editorNavigationKeymapExt,
+      gitBlameCompartment,
+      gitBlameContextMenuExt,
+      historicalLineNumbersExtension,
       languageExtensions,
       persistentSearchExtension,
       saveKeymapExt,
@@ -449,6 +678,37 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     if (!view) {
       return;
     }
+    if (!gitBlameEnabled) {
+      if (gitBlameInstalledRef.current) {
+        view.dispatch({ effects: gitBlameCompartment.reconfigure([]) });
+        gitBlameInstalledRef.current = false;
+      }
+      return;
+    }
+    if (!gitBlameInstalledRef.current) {
+      view.dispatch({ effects: gitBlameCompartment.reconfigure(gitBlameExtension) });
+      gitBlameInstalledRef.current = true;
+    }
+    view.dispatch({
+      effects: setGitBlameGutterEffect.of({
+        status: gitBlameStatus,
+        response: gitBlameResponse,
+      }),
+    });
+  }, [
+    filePath,
+    gitBlameCompartment,
+    gitBlameEnabled,
+    gitBlameExtension,
+    gitBlameResponse,
+    gitBlameStatus,
+  ]);
+
+  useEffect(() => {
+    const view = codeMirrorRef.current?.view;
+    if (!view) {
+      return;
+    }
     view.dispatch({
       effects: setFileCompareLineGapsEffect.of(fileCompareLineGaps),
     });
@@ -472,6 +732,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
         value={value}
         onChange={onChange}
         onCreateEditor={(view) => {
+          gitBlameInstalledRef.current = false;
           view.dispatch({
             effects: [
               setGitLineMarkersEffect.of(gitLineMarkers),
@@ -479,6 +740,16 @@ export const FileCodeMirrorEditorImpl = forwardRef<
               setFileCompareCollapsedRangesEffect.of(fileCompareCollapsedRanges),
             ],
           });
+          if (gitBlameEnabled) {
+            view.dispatch({ effects: gitBlameCompartment.reconfigure(gitBlameExtension) });
+            gitBlameInstalledRef.current = true;
+            view.dispatch({
+              effects: setGitBlameGutterEffect.of({
+                status: gitBlameStatus,
+                response: gitBlameResponse,
+              }),
+            });
+          }
         }}
         onUpdate={(update) => {
           if (!update.selectionSet) {
@@ -500,7 +771,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
         theme={theme}
         className={className ?? "fvp-cm"}
         basicSetup={{
-          lineNumbers: true,
+          lineNumbers: lineNumberLabels === null,
           foldGutter: true,
           bracketMatching: true,
           closeBrackets: true,

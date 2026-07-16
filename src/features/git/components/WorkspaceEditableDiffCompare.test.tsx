@@ -218,6 +218,27 @@ describe("WorkspaceEditableDiffCompare", () => {
     expect(screen.queryByText("Read-only fallback")).toBeNull();
   });
 
+  it("uses the parent repository-scoped loader for baseline recovery", async () => {
+    const fullDiffLoader = vi.fn(async () => PATCH);
+    render(
+      <WorkspaceEditableDiffCompare
+        workspaceId="workspace-1"
+        workspacePath="/repo"
+        filePath="example.ts"
+        diff="not a unified patch"
+        fullDiffLoader={fullDiffLoader}
+        onSaveSuccess={vi.fn()}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      (await screen.findByLabelText("Previous version editor") as HTMLTextAreaElement).value,
+    ).toBe("const value = 'before';\n");
+    expect(fullDiffLoader).toHaveBeenCalledWith("example.ts");
+    expect(getGitFileFullDiff).not.toHaveBeenCalled();
+  });
+
   it("keeps the editable shell while the full diff request is pending", async () => {
     let resolveFullDiff: (diff: string) => void = () => {};
     getGitFileFullDiff.mockReturnValueOnce(new Promise((resolve) => {

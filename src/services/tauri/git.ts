@@ -6,6 +6,7 @@ import type {
   GitCommitDetails,
   GitCommitDiff,
   GitFileDiff,
+  GitFileBlameResponse,
   GitFileStatus,
   GitHistoryResponse,
   GitHubIssuesResponse,
@@ -84,6 +85,18 @@ export async function getGitFileFullDiff(
   });
 }
 
+export async function getGitFileBlame(
+  workspaceId: string,
+  path: string,
+  repositoryRoot?: string | null,
+): Promise<GitFileBlameResponse> {
+  return invoke("get_git_file_blame", {
+    workspaceId,
+    path,
+    ...(repositoryRoot == null ? {} : { repositoryRoot }),
+  });
+}
+
 export async function getGitLog(workspace_id: string, limit = 40): Promise<GitLogResponse> {
   return invoke("get_git_log", { workspaceId: workspace_id, limit });
 }
@@ -97,6 +110,7 @@ export async function getGitCommitHistory(
     dateFrom?: number | null;
     dateTo?: number | null;
     snapshotId?: string | null;
+    path?: string | null;
     offset?: number;
     limit?: number;
     repositoryRoot?: string | null;
@@ -110,6 +124,7 @@ export async function getGitCommitHistory(
     dateFrom: options?.dateFrom ?? null,
     dateTo: options?.dateTo ?? null,
     snapshotId: options?.snapshotId ?? null,
+    path: options?.path ?? null,
     offset: options?.offset ?? 0,
     limit: options?.limit ?? 100,
     ...(options?.repositoryRoot == null

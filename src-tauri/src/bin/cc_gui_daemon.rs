@@ -259,7 +259,6 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Command;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
-use uuid::Uuid;
 
 use backend::app_server::{spawn_workspace_session, WorkspaceSession};
 use backend::events::{AppServerEvent, EventSink, TerminalOutput};
@@ -270,10 +269,10 @@ use shared::{
 use storage::{read_settings, read_workspaces};
 use types::{
     AppSettings, BranchInfo, GitBranchCompareCommitSets, GitBranchListItem, GitBranchUpdateResult,
-    GitCommitDetails, GitCommitDiff, GitCommitFileChange, GitFileDiff, GitFileStatus,
-    GitHistoryCommit, GitHistoryResponse, GitHubIssue, GitHubIssuesResponse, GitHubPullRequest,
-    GitHubPullRequestComment, GitHubPullRequestDiff, GitHubPullRequestsResponse, GitLogEntry,
-    GitLogResponse, GitPrWorkflowDefaults, GitPrWorkflowResult, GitPrWorkflowStage,
+    GitCommitDetails, GitCommitDiff, GitCommitFileChange, GitFileBlameResponse, GitFileDiff,
+    GitFileStatus, GitHistoryCommit, GitHistoryResponse, GitHubIssue, GitHubIssuesResponse,
+    GitHubPullRequest, GitHubPullRequestComment, GitHubPullRequestDiff, GitHubPullRequestsResponse,
+    GitLogEntry, GitLogResponse, GitPrWorkflowDefaults, GitPrWorkflowResult, GitPrWorkflowStage,
     GitPushPreviewResponse, WorkspaceEntry, WorkspaceInfo, WorkspaceSettings, WorktreeSetupStatus,
 };
 use utils::normalize_git_path;
@@ -1064,6 +1063,15 @@ async fn handle_rpc_request(
                 .await?;
             Ok(Value::String(diff))
         }
+        "get_git_file_blame" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            let repository_root = parse_optional_string(&params, "repositoryRoot");
+            let response = state
+                .get_git_file_blame(workspace_id, path, repository_root)
+                .await?;
+            serde_json::to_value(response).map_err(|error| error.to_string())
+        }
         "get_git_log" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let limit = parse_optional_usize(&params, "limit");
@@ -1078,6 +1086,7 @@ async fn handle_rpc_request(
             let date_from = parse_optional_i64(&params, "dateFrom");
             let date_to = parse_optional_i64(&params, "dateTo");
             let snapshot_id = parse_optional_string(&params, "snapshotId");
+            let path = parse_optional_string(&params, "path");
             let offset = parse_optional_usize(&params, "offset").unwrap_or(0);
             let limit = parse_optional_usize(&params, "limit").unwrap_or(100);
             let repository_root = parse_optional_string(&params, "repositoryRoot");
@@ -1090,6 +1099,7 @@ async fn handle_rpc_request(
                     date_from,
                     date_to,
                     snapshot_id,
+                    path,
                     offset,
                     limit,
                     repository_root,

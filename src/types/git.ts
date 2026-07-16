@@ -20,6 +20,23 @@ export type GitFileDiff = {
   newImageMime?: string | null;
 };
 
+export type GitBlameHunk = {
+  startLine: number;
+  lineCount: number;
+  commitSha: string;
+  author: string;
+  authoredAt: number;
+  summary: string;
+  originalPath: string | null;
+};
+
+export type GitFileBlameResponse = {
+  path: string;
+  headSha: string;
+  lineCount: number;
+  hunks: GitBlameHunk[];
+};
+
 export type GitCommitDiff = {
   path: string;
   status: string;
@@ -71,6 +88,7 @@ export type GitHistoryCommit = {
   timestamp: number;
   parents: string[];
   refs: string[];
+  filePath?: string | null;
 };
 
 export type GitHistoryResponse = {

@@ -57,7 +57,7 @@ vi.mock("./GitDiffViewer", () => ({
 }));
 
 vi.mock("./WorkspaceEditableDiffCompare", () => ({
-  WorkspaceEditableDiffCompare: ({ onDirtyChange, onDraftActionsChange, contentMode }: {
+  WorkspaceEditableDiffCompare: ({ onDirtyChange, onDraftActionsChange, contentMode, fullDiffLoader }: {
     onDirtyChange: (isDirty: boolean) => void;
     onDraftActionsChange: (actions: {
       save: () => Promise<boolean>;
@@ -65,8 +65,12 @@ vi.mock("./WorkspaceEditableDiffCompare", () => ({
       isSaving: boolean;
     }) => void;
     contentMode?: "all" | "focused";
+    fullDiffLoader?: ((path: string) => Promise<string>) | null;
   }) => (
-    <div data-content-mode={contentMode}>
+    <div
+      data-content-mode={contentMode}
+      data-editable-has-full-loader={fullDiffLoader ? "true" : "false"}
+    >
       IDEA compare
       <button type="button" onClick={() => {
         onDraftActionsChange({
@@ -128,12 +132,14 @@ describe("WorkspaceEditableDiffReviewSurface", () => {
   });
 
   it("opens editable text diffs directly in the IDEA compare surface", () => {
+    const fullDiffLoader = vi.fn(async () => "full diff");
     render(
       <WorkspaceEditableDiffReviewSurface
         workspaceId="workspace-1"
         workspacePath="/repo"
         files={[editableFile]}
         allowEditing
+        fullDiffLoader={fullDiffLoader}
       />,
     );
 
@@ -146,6 +152,7 @@ describe("WorkspaceEditableDiffReviewSurface", () => {
     expect(document.querySelector(".editable-diff-review-viewer.is-toolbar-only")).toBeTruthy();
     expect(document.querySelector('[data-toolbar-only="true"]')).toBeTruthy();
     expect(document.querySelector('[data-toolbar-only="false"]')).toBeNull();
+    expect(document.querySelector('[data-editable-has-full-loader="true"]')).toBeTruthy();
   });
 
   it("keeps the aligned renderer for focused-content review", () => {

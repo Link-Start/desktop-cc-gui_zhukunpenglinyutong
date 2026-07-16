@@ -35,6 +35,7 @@ type WorkspaceEditableDiffCompareProps = {
   filePath: string;
   workspaceFilePath?: string;
   diff: string;
+  fullDiffLoader?: ((path: string) => Promise<string>) | null;
   contentMode?: "all" | "focused";
   onSaveSuccess: () => void;
   onDirtyChange: (isDirty: boolean) => void;
@@ -56,6 +57,7 @@ export function WorkspaceEditableDiffCompare({
   filePath,
   workspaceFilePath = filePath,
   diff,
+  fullDiffLoader = null,
   contentMode = "all",
   onSaveSuccess,
   onDirtyChange,
@@ -82,6 +84,10 @@ export function WorkspaceEditableDiffCompare({
   const [previousSource, setPreviousSource] = useState<string | null>(null);
   const [hasResolvedBaseline, setHasResolvedBaseline] = useState(false);
   const [activeDifferenceIndex, setActiveDifferenceIndex] = useState(0);
+  const loadFullDiff = useCallback(
+    (path: string) => fullDiffLoader?.(path) ?? getGitFileFullDiff(workspaceId, path),
+    [fullDiffLoader, workspaceId],
+  );
 
   useEffect(() => {
     void loadFileViewStyles();
@@ -115,7 +121,7 @@ export function WorkspaceEditableDiffCompare({
     }
 
     let cancelled = false;
-    void getGitFileFullDiff(workspaceId, filePath)
+    void loadFullDiff(filePath)
       .then((fullDiff) => {
         if (cancelled) {
           return;
@@ -141,6 +147,7 @@ export function WorkspaceEditableDiffCompare({
     documentState.isSaving,
     documentState.savedContentRef,
     filePath,
+    loadFullDiff,
     workspaceId,
   ]);
 

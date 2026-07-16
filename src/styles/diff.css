@@ -896,13 +896,13 @@ button.diff-section-indicator:focus-visible {
 .git-multi-repository-changes__content {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--git-filetree-row-gap);
 }
 
 .git-repository-change-group {
   overflow: hidden;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--git-filetree-row-radius);
   background: var(--surface-item);
 }
 
@@ -910,10 +910,11 @@ button.diff-section-indicator:focus-visible {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 10px;
+  gap: var(--git-filetree-row-gap);
+  min-height: var(--git-filetree-row-min-height);
+  padding: var(--git-filetree-row-pad-y) var(--git-filetree-row-pad-x);
   border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--git-filetree-name-font-size);
 }
 
 .git-repository-change-group__name,
@@ -926,6 +927,7 @@ button.diff-section-indicator:focus-visible {
 
 .git-repository-change-group__branch {
   color: var(--git-branch);
+  font-size: 11px;
 }
 
 .git-repository-change-group__count {

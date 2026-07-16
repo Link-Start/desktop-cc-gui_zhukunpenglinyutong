@@ -68,4 +68,54 @@ describe("GitMultiRepositoryChanges", () => {
       { repositoryRoot: "b", selectedPaths: ["pom.xml"] },
     ]);
   });
+
+  it("forwards modal preview with repository identity", () => {
+    const onOpenFilePreview = vi.fn();
+    render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[repositoryStatus("services/api")]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+        onOpenFilePreview={onOpenFilePreview}
+      />,
+    );
+
+    const previewButton = document.querySelector<HTMLButtonElement>(
+      '.diff-row[data-path="pom.xml"] .diff-row-action--preview-modal',
+    );
+    expect(previewButton).toBeTruthy();
+    fireEvent.click(previewButton as HTMLButtonElement);
+
+    expect(onOpenFilePreview).toHaveBeenCalledWith(
+      "services/api",
+      expect.objectContaining({ path: "pom.xml", status: "M" }),
+      "unstaged",
+    );
+  });
+
+  it("forwards direct file-row opens with repository identity", () => {
+    const onOpenFile = vi.fn();
+    render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[repositoryStatus("repo-a"), repositoryStatus("repo-b")]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+        onOpenFile={onOpenFile}
+      />,
+    );
+
+    const rows = document.querySelectorAll<HTMLElement>('.diff-row[data-path="pom.xml"]');
+    expect(rows).toHaveLength(2);
+    fireEvent.click(rows[0] as HTMLElement);
+    fireEvent.click(rows[1] as HTMLElement);
+    fireEvent.keyDown(rows[1] as HTMLElement, { key: "Enter" });
+
+    expect(onOpenFile).toHaveBeenNthCalledWith(1, "repo-a", "pom.xml");
+    expect(onOpenFile).toHaveBeenNthCalledWith(2, "repo-b", "pom.xml");
+    expect(onOpenFile).toHaveBeenNthCalledWith(3, "repo-b", "pom.xml");
+  });
 });

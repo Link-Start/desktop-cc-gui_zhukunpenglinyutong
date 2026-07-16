@@ -22,6 +22,7 @@
 | [Desktop Drag-Drop Contract](./desktop-drag-drop.md) | Tauri multi-WebView 外部文件/文件夹拖入 Composer 的跨层事件契约 | Active |
 | [Multi-Repository File Tree Git Decoration Contract](./git-repository-file-tree-decorations.md) | 多 Git repository aggregate status、safe path projection、folder decoration 与 theme token contract | Active |
 | [Multi-Repository Git Commit Workspace Contract](./multi-repository-git-commit-workspace.md) | repository-scoped Git identity、single/multi adaptive commit UI 与 partial success contract | Active |
+| [File History View Cross-Layer Contract](./file-history-view.md) | file-scoped history、rename-follow、snapshot identity、Desktop/daemon parity 与 stale guard | Active |
 | [Codex Provider Session UI Contract](./codex-provider-session-ui.md) | Codex provider selector、start/fork payload、thread metadata merge、sidebar/pinned/composer provider label contract | Active |
 | [Hook Guidelines](./hook-guidelines.md) | hook 编排、async safety、bridge 调用约束 | Active |
 | [State Management](./state-management.md) | local/global/persistent/runtime state 边界 | Active |

@@ -233,6 +233,7 @@ pub(crate) fn invoke_handler(
         crate::git::list_git_repository_summaries,
         crate::git::get_git_diffs,
         crate::git::get_git_file_full_diff,
+        crate::git::get_git_file_blame,
         crate::git::get_git_log,
         crate::git::get_git_commit_history,
         crate::git::get_git_commit_details,

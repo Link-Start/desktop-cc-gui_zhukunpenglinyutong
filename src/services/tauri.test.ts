@@ -16,9 +16,11 @@ import {
   generateThreadTitle,
   getGitHubIssues,
   getGitLog,
+  getGitCommitHistory,
   getGitPushPreview,
   getGitStatus,
   getGitDiffs,
+  getGitFileBlame,
   getOpenAppIcon,
   getModelList,
   getPromptsList,
@@ -1274,6 +1276,82 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("get_git_log", {
       workspaceId: "ws-3",
       limit: 40,
+    });
+  });
+
+  it("maps optional path and repository scope for git commit history", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      snapshotId: "snapshot-1",
+      total: 0,
+      offset: 0,
+      limit: 100,
+      hasMore: false,
+      commits: [],
+    });
+
+    await getGitCommitHistory("ws-3", {
+      path: "src/value.ts",
+      repositoryRoot: "packages/app",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("get_git_commit_history", {
+      workspaceId: "ws-3",
+      branch: null,
+      query: null,
+      author: null,
+      dateFrom: null,
+      dateTo: null,
+      snapshotId: null,
+      path: "src/value.ts",
+      offset: 0,
+      limit: 100,
+      repositoryRoot: "packages/app",
+    });
+  });
+
+  it("preserves the repository-wide git commit history payload when path is omitted", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      snapshotId: "snapshot-1",
+      total: 0,
+      offset: 0,
+      limit: 100,
+      hasMore: false,
+      commits: [],
+    });
+
+    await getGitCommitHistory("ws-3");
+
+    expect(invokeMock).toHaveBeenCalledWith("get_git_commit_history", {
+      workspaceId: "ws-3",
+      branch: null,
+      query: null,
+      author: null,
+      dateFrom: null,
+      dateTo: null,
+      snapshotId: null,
+      path: null,
+      offset: 0,
+      limit: 100,
+    });
+  });
+
+  it("maps repository scope for file blame", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      path: "src/value.ts",
+      headSha: "abc123",
+      lineCount: 1,
+      hunks: [],
+    });
+
+    await getGitFileBlame("ws-3", "src/value.ts", "packages/app");
+
+    expect(invokeMock).toHaveBeenCalledWith("get_git_file_blame", {
+      workspaceId: "ws-3",
+      path: "src/value.ts",
+      repositoryRoot: "packages/app",
     });
   });
 

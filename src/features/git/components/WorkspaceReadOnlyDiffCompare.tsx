@@ -30,9 +30,16 @@ type WorkspaceReadOnlyDiffCompareProps = {
 
 const EMPTY_MARKERS: GitLineMarkers = { added: [], modified: [] };
 
-export function buildReadOnlyCompareSources(diff: string): [string, string] {
+export type ReadOnlyCompareModel = {
+  sources: [string, string];
+  lineNumberLabels: [Array<number | null>, Array<number | null>];
+};
+
+export function buildReadOnlyCompareModel(diff: string): ReadOnlyCompareModel {
   const previousLines: string[] = [];
   const sourceLines: string[] = [];
+  const previousLineNumbers: Array<number | null> = [];
+  const sourceLineNumbers: Array<number | null> = [];
   let hasPreviousHunk = false;
 
   for (const line of parseDiff(diff)) {
@@ -40,6 +47,8 @@ export function buildReadOnlyCompareSources(diff: string): [string, string] {
       if (hasPreviousHunk) {
         previousLines.push("");
         sourceLines.push("");
+        previousLineNumbers.push(null);
+        sourceLineNumbers.push(null);
       }
       hasPreviousHunk = true;
       continue;
@@ -47,14 +56,25 @@ export function buildReadOnlyCompareSources(diff: string): [string, string] {
     if (line.type === "context") {
       previousLines.push(line.text);
       sourceLines.push(line.text);
+      previousLineNumbers.push(line.oldLine);
+      sourceLineNumbers.push(line.newLine);
     } else if (line.type === "del") {
       previousLines.push(line.text);
+      previousLineNumbers.push(line.oldLine);
     } else if (line.type === "add") {
       sourceLines.push(line.text);
+      sourceLineNumbers.push(line.newLine);
     }
   }
 
-  return [previousLines.join("\n"), sourceLines.join("\n")];
+  return {
+    sources: [previousLines.join("\n"), sourceLines.join("\n")],
+    lineNumberLabels: [previousLineNumbers, sourceLineNumbers],
+  };
+}
+
+export function buildReadOnlyCompareSources(diff: string): [string, string] {
+  return buildReadOnlyCompareModel(diff).sources;
 }
 
 export function WorkspaceReadOnlyDiffCompare({
@@ -95,7 +115,8 @@ export function WorkspaceReadOnlyDiffCompare({
     };
   }, [diff, filePath, loadFullDiff, useFullDiff]);
 
-  const sources = useMemo(() => buildReadOnlyCompareSources(resolvedDiff), [resolvedDiff]);
+  const compareModel = useMemo(() => buildReadOnlyCompareModel(resolvedDiff), [resolvedDiff]);
+  const { sources } = compareModel;
   const diffResult = useMemo(() => computeFileCompareDiff(sources), [sources]);
   const activeDifference = diffResult.changedBlocks[activeDifferenceIndex] ?? null;
   const canNavigateDifferences = diffResult.changedBlocks.length > 0;
@@ -120,7 +141,7 @@ export function WorkspaceReadOnlyDiffCompare({
         error: null,
         saveError: null,
         truncated: false,
-        readOnlyReason: t("files.readOnly"),
+        readOnlyReason: null,
         editable: false,
         onChange: () => {},
         onSave: () => false,
@@ -136,7 +157,7 @@ export function WorkspaceReadOnlyDiffCompare({
         error: null,
         saveError: null,
         truncated: false,
-        readOnlyReason: t("files.readOnly"),
+        readOnlyReason: null,
         editable: false,
         onChange: () => {},
         onSave: () => false,
@@ -232,8 +253,10 @@ export function WorkspaceReadOnlyDiffCompare({
             editorTheme={editorTheme}
             markers={markersByColumn[columnIndex] ?? EMPTY_MARKERS}
             lineGaps={diffResult.gapLineCountsByColumn[columnIndex] ?? []}
+            lineNumberLabels={compareModel.lineNumberLabels[columnIndex] ?? null}
             saveFileShortcut="cmd+s"
             activeLineNumber={activeDifference?.lineNumbersByColumn[columnIndex] ?? null}
+            diffTone={columnIndex === 0 ? "deletion" : "addition"}
           />
         ))}
       </div>

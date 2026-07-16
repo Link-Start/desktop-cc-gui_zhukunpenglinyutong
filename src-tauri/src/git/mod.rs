@@ -3,7 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
 use git2::{BranchType, DiffOptions, Oid, Repository, Sort, Status, StatusOptions};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -13,7 +12,8 @@ use tokio::time::{timeout, Duration};
 
 use crate::backend_budget::{estimate_json_payload_bytes, PayloadBudgetMetadata, ScanCacheState};
 use crate::git_utils::{
-    checkout_branch, commit_to_entry, diff_patch_to_string, diff_stats_for_path, image_mime_type,
+    build_git_file_blame, build_image_commit_diff, checkout_branch, commit_to_entry,
+    diff_patch_to_string, diff_stats_for_path, image_mime_type, read_image_base64,
     list_git_repository_summaries as scan_git_repository_summaries,
     list_git_roots as scan_git_roots, parse_github_repo, path_has_git_repository_marker,
     resolve_git_root, resolve_git_root_for_scope,
@@ -21,11 +21,11 @@ use crate::git_utils::{
 use crate::state::AppState;
 use crate::types::{
     BranchInfo, GitBranchCompareCommitSets, GitBranchListItem, GitBranchUpdateResult,
-    GitCommitDetails, GitCommitDiff, GitCommitFileChange, GitFileDiff, GitFileStatus,
-    GitHistoryCommit, GitHistoryResponse, GitHubIssue, GitHubIssuesResponse, GitHubPullRequest,
-    GitHubPullRequestComment, GitHubPullRequestDiff, GitHubPullRequestsResponse, GitLogResponse,
-    GitPrExistingPullRequest, GitPrWorkflowDefaults, GitPrWorkflowResult, GitPrWorkflowStage,
-    GitPushPreviewResponse, GitRepositorySummary,
+    GitCommitDetails, GitCommitDiff, GitCommitFileChange, GitFileBlameResponse, GitFileDiff,
+    GitFileStatus, GitHistoryCommit, GitHistoryResponse, GitHubIssue, GitHubIssuesResponse,
+    GitHubPullRequest, GitHubPullRequestComment, GitHubPullRequestDiff, GitHubPullRequestsResponse,
+    GitLogResponse, GitPrExistingPullRequest, GitPrWorkflowDefaults, GitPrWorkflowResult,
+    GitPrWorkflowStage, GitPushPreviewResponse, GitRepositorySummary,
 };
 use crate::utils::{git_env_path, normalize_git_path, resolve_git_binary};
 use validation::validate_local_branch_name;
@@ -84,6 +84,14 @@ pub(crate) const GIT_REMOTE_FORWARDING_MATRIX: &[GitRemoteForwardingEntry] = &[
         daemon_dispatch: "get_git_file_full_diff",
         forwarding: "implemented",
         coverage: "read-matrix",
+    },
+    GitRemoteForwardingEntry {
+        method: "get_git_file_blame",
+        category: "read",
+        desktop_module: "commands.rs",
+        daemon_dispatch: "get_git_file_blame",
+        forwarding: "implemented",
+        coverage: "file-view-blame",
     },
     GitRemoteForwardingEntry {
         method: "get_git_remote",
@@ -463,7 +471,6 @@ async fn forward_git_remote_unit(
 }
 
 const INDEX_SKIP_WORKTREE_FLAG: u16 = 0x4000;
-const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
 const MAX_COMMIT_DIFF_LINES: usize = 10_000;
 const GIT_COMMAND_TIMEOUT_SECS: u64 = 120;
 const PR_RANGE_MAX_CHANGED_FILES: usize = 240;
@@ -718,6 +725,7 @@ fn commit_to_history_commit(
         timestamp,
         parents,
         refs,
+        file_path: None,
     }
 }
 
@@ -762,29 +770,6 @@ fn parse_remote_branch(name: &str) -> Option<(String, String)> {
         return None;
     }
     Some((remote.to_string(), branch.to_string()))
-}
-
-fn encode_image_base64(data: &[u8]) -> Option<String> {
-    if data.len() > MAX_IMAGE_BYTES {
-        return None;
-    }
-    Some(STANDARD.encode(data))
-}
-
-fn blob_to_base64(blob: git2::Blob) -> Option<String> {
-    if blob.size() > MAX_IMAGE_BYTES {
-        return None;
-    }
-    encode_image_base64(blob.content())
-}
-
-fn read_image_base64(path: &Path) -> Option<String> {
-    let metadata = fs::metadata(path).ok()?;
-    if metadata.len() > MAX_IMAGE_BYTES as u64 {
-        return None;
-    }
-    let data = fs::read(path).ok()?;
-    encode_image_base64(&data)
 }
 
 async fn run_git_command(repo_root: &Path, args: &[&str]) -> Result<(), String> {
@@ -1920,7 +1905,8 @@ pub(crate) use commands::*;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::GitLogEntry;
+    use crate::types::{GitBlameHunk, GitLogEntry};
+    use serde_json::Value;
     use std::fs;
     use validation::validate_local_branch_name;
 
@@ -1957,6 +1943,56 @@ mod tests {
                 "Git remote forwarding matrix is missing category {category}"
             );
         }
+    }
+
+    #[test]
+    fn git_file_blame_daemon_contract_preserves_payload_and_response_shape() {
+        let daemon_dispatch = include_str!("../bin/cc_gui_daemon.rs");
+        let blame_arm = daemon_dispatch
+            .split("\"get_git_file_blame\" => {")
+            .nth(1)
+            .and_then(|tail| tail.split("\"get_git_log\" => {").next())
+            .expect("daemon blame dispatch arm");
+        for payload_field in ["workspaceId", "path", "repositoryRoot"] {
+            assert!(
+                blame_arm.contains(payload_field),
+                "daemon blame dispatch is missing payload field {payload_field}"
+            );
+        }
+        assert!(blame_arm.contains("serde_json::to_value(response)"));
+
+        let response = GitFileBlameResponse {
+            path: "src/main.rs".to_string(),
+            head_sha: "abc123".to_string(),
+            line_count: 2,
+            hunks: vec![GitBlameHunk {
+                start_line: 1,
+                line_count: 2,
+                commit_sha: "abc123".to_string(),
+                author: "Ada".to_string(),
+                authored_at: 1_700_000_000,
+                summary: "Initial commit".to_string(),
+                original_path: None,
+            }],
+        };
+        let value = serde_json::to_value(&response).expect("serialize blame response");
+        assert_eq!(value.get("headSha").and_then(Value::as_str), Some("abc123"));
+        assert_eq!(value.get("lineCount").and_then(Value::as_u64), Some(2));
+        let hunk = value
+            .get("hunks")
+            .and_then(Value::as_array)
+            .and_then(|hunks| hunks.first())
+            .expect("serialized blame hunk");
+        assert_eq!(hunk.get("startLine").and_then(Value::as_u64), Some(1));
+        assert_eq!(
+            hunk.get("authoredAt").and_then(Value::as_i64),
+            Some(1_700_000_000)
+        );
+        assert_eq!(
+            serde_json::from_value::<GitFileBlameResponse>(value)
+                .expect("deserialize blame response"),
+            response
+        );
     }
 
     #[test]
@@ -2080,6 +2116,74 @@ mod tests {
                 .unwrap_or_else(|error| panic!("checkout {target} failed: {error}"));
             assert_worktree_clean(&root);
         }
+    }
+
+    #[tokio::test]
+    async fn file_history_follows_root_file_rename() {
+        let (root, _repo) = create_temp_repo();
+        fs::write(root.join("before.txt"), "first\n").expect("write original file");
+        commit_all_with_message(&root, "create original").await;
+        fs::rename(root.join("before.txt"), root.join("after.txt")).expect("rename file");
+        commit_all_with_message(&root, "rename file").await;
+        fs::write(root.join("after.txt"), "first\nsecond\n").expect("edit renamed file");
+        commit_all_with_message(&root, "edit renamed file").await;
+
+        let oids = crate::shared::git_core::list_file_history_oids(&root, None, "after.txt")
+            .await
+            .expect("list file history");
+
+        assert_eq!(oids.len(), 3);
+        assert!(oids.iter().all(|oid| oid.len() == 40));
+
+        let option_like_ref = crate::shared::git_core::list_file_history_oids(
+            &root,
+            Some("--no-walk"),
+            "after.txt",
+        )
+        .await;
+        assert!(option_like_ref.is_err());
+    }
+
+    #[test]
+    fn file_history_rejects_invalid_paths() {
+        for path in [
+            "",
+            "/absolute.txt",
+            "../outside.txt",
+            "src/../../outside.txt",
+        ] {
+            assert!(crate::shared::git_core::normalize_file_history_path(path).is_err());
+        }
+        assert_eq!(
+            crate::shared::git_core::normalize_file_history_path("src\\main.rs")
+                .expect("normalize Windows path"),
+            "src/main.rs"
+        );
+    }
+
+    #[test]
+    fn file_history_path_participates_in_snapshot_identity() {
+        let first = crate::shared::git_core::build_git_history_snapshot_id(
+            "head",
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("packages/app"),
+            Some("src/first.ts"),
+        );
+        let second = crate::shared::git_core::build_git_history_snapshot_id(
+            "head",
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("packages/app"),
+            Some("src/second.ts"),
+        );
+        assert_ne!(first, second);
     }
 
     #[test]
@@ -2285,6 +2389,7 @@ mod tests {
                 timestamp: 100 + index as i64,
                 parents: Vec::new(),
                 refs: Vec::new(),
+                file_path: None,
             })
             .collect::<Vec<_>>();
         let (page, total, has_more) = paginate_history_commits(commits, 2, 2);

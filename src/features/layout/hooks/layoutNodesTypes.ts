@@ -16,6 +16,7 @@ import type {
   OpenFileOptions,
 } from "../../app/hooks/useGitPanelController";
 import type { FileCompareSession } from "../../files/types/fileCompare";
+import type { FileHistoryTarget } from "../../git-history/types";
 import type {
   ReviewPromptState,
   ReviewPromptStep,
@@ -354,6 +355,9 @@ export type LayoutNodesFlatOptions = {
   centerMode: CenterMode;
   setCenterMode: (mode: CenterMode) => void;
   fileCompareSession: FileCompareSession | null;
+  fileHistoryTarget?: FileHistoryTarget | null;
+  onOpenFileHistory?: (target: FileHistoryTarget) => void;
+  onCloseFileHistory?: () => void;
   editorSplitCompanion: "chat" | "projectMap";
   setEditorSplitCompanion: (companion: "chat" | "projectMap") => void;
   editorSplitLayout: "vertical" | "horizontal";
@@ -923,6 +927,9 @@ export type EditorLayoutNodesOptions = Pick<
   | "centerMode"
   | "setCenterMode"
   | "fileCompareSession"
+  | "fileHistoryTarget"
+  | "onOpenFileHistory"
+  | "onCloseFileHistory"
   | "editorSplitCompanion"
   | "setEditorSplitCompanion"
   | "editorSplitLayout"

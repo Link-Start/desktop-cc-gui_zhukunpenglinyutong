@@ -92,6 +92,14 @@ export function loadGitHistoryStyles() {
   ]).then(() => undefined);
 }
 
+export function loadFileHistoryStyles() {
+  return Promise.all([
+    loadDiffStyles(),
+    loadFileViewStyles(),
+    loadStyles([() => import("./file-history.css")]),
+  ]).then(() => undefined);
+}
+
 export function loadKanbanStyles() {
   return loadStyles([
     () => import("./kanban.css"),

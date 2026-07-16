@@ -1,5 +1,10 @@
-import type { GitHubPullRequest, GitLogEntry } from "../../../types";
-import type { CommitMessageEngine, CommitMessageLanguage } from "../../../services/tauri";
+import type { GitFileDiff, GitHubPullRequest, GitLogEntry } from "../../../types";
+import {
+  getGitDiffs,
+  getGitFileFullDiff,
+  type CommitMessageEngine,
+  type CommitMessageLanguage,
+} from "../../../services/tauri";
 import {
   readLastCommitMessageConfig,
   saveLastCommitMessageConfig,
@@ -68,7 +73,10 @@ import {
   type RendererContextMenuState,
 } from "../../../components/ui/RendererContextMenu";
 import type { GitDiffPanelProps } from "./GitDiffPanelTypes";
-import { resolveWorkspaceRelativePath } from "../../../utils/workspacePaths";
+import {
+  resolveGitRootWorkspacePrefix,
+  resolveWorkspaceRelativePath,
+} from "../../../utils/workspacePaths";
 import {
   GitMultiRepositoryChanges,
   type RepositoryCommitSelection,
@@ -80,6 +88,13 @@ type ModeMenuLayout = {
 };
 
 type GitDiffSectionKey = "staged" | "unstaged";
+
+type PreviewFileState = DiffFile & {
+  section: GitDiffSectionKey;
+  repositoryRoot: string | null;
+  scopedDiffEntry: GitFileDiff | null;
+  isDiffLoading: boolean;
+};
 
 function getPathLeafName(value: string | null | undefined): string {
   if (!value) {
@@ -831,9 +846,7 @@ function GitDiffPanelImpl({
   const gitStatusRefreshSpinTimerRef = useRef<number | null>(null);
   const gitStatusRefreshSpinRafRef = useRef<number | null>(null);
   const [isGitStatusRefreshing, setIsGitStatusRefreshing] = useState(false);
-  const [previewFile, setPreviewFile] = useState<(DiffFile & { section: "staged" | "unstaged" }) | null>(
-    null,
-  );
+  const [previewFile, setPreviewFile] = useState<PreviewFileState | null>(null);
   const [isPreviewModalMaximized, setIsPreviewModalMaximized] = useState(false);
   const [isPreviewModalDirty, setIsPreviewModalDirty] = useState(false);
   const [isPreviewSaveInFlight, setIsPreviewSaveInFlight] = useState(false);
@@ -841,6 +854,8 @@ function GitDiffPanelImpl({
   const [previewHeaderControlsTarget, setPreviewHeaderControlsTarget] = useState<HTMLDivElement | null>(null);
   const previewDraftActionsRef = useRef<EditableDiffDraftActions | null>(null);
   const handledModalPreviewRequestIdRef = useRef<number | null>(null);
+  const scopedPreviewRequestIdRef = useRef(0);
+  const previewContextKeyRef = useRef<string | null>(null);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [commitMessageMenuEngine, setCommitMessageMenuEngine] = useState<CommitMessageEngine>("claude");
   const [isGitRootPanelOpen, setIsGitRootPanelOpen] = useState(
@@ -889,10 +904,21 @@ function GitDiffPanelImpl({
     unstagedFiles: unstagedCommitFiles,
   });
   const previewDiffEntry = useMemo(
-    () => (previewFile ? diffEntries.find((entry) => entry.path === previewFile.path) ?? null : null),
+    () => {
+      if (!previewFile) {
+        return null;
+      }
+      if (previewFile.repositoryRoot !== null) {
+        return previewFile.scopedDiffEntry;
+      }
+      return diffEntries.find(
+        (entry) => normalizeDiffPath(entry.path) === normalizeDiffPath(previewFile.path),
+      ) ?? null;
+    },
     [diffEntries, previewFile],
   );
   const closePreviewModalNow = useCallback(() => {
+    scopedPreviewRequestIdRef.current += 1;
     setIsPreviewModalDirty(false);
     setIsPreviewSaveInFlight(false);
     setIsUnsavedCloseDialogOpen(false);
@@ -937,10 +963,99 @@ function GitDiffPanelImpl({
     section: "staged" | "unstaged",
     maximized = false,
   ) => {
+    scopedPreviewRequestIdRef.current += 1;
     setIsPreviewModalDirty(false);
     setIsPreviewModalMaximized(maximized);
-    setPreviewFile({ ...file, section });
+    setPreviewFile({
+      ...file,
+      section,
+      repositoryRoot: null,
+      scopedDiffEntry: null,
+      isDiffLoading: false,
+    });
   }, []);
+  const handleOpenRepositoryFilePreview = useCallback(async (
+    repositoryRoot: string,
+    file: DiffFile,
+    section: GitDiffSectionKey,
+  ) => {
+    if (!workspaceId) {
+      return;
+    }
+    const requestId = scopedPreviewRequestIdRef.current + 1;
+    scopedPreviewRequestIdRef.current = requestId;
+    setIsPreviewModalDirty(false);
+    setIsPreviewModalMaximized(false);
+    setPreviewFile({
+      ...file,
+      section,
+      repositoryRoot,
+      scopedDiffEntry: null,
+      isDiffLoading: true,
+    });
+    try {
+      const scopedDiffs = await getGitDiffs(workspaceId, repositoryRoot);
+      if (scopedPreviewRequestIdRef.current !== requestId) {
+        return;
+      }
+      const normalizedPath = normalizeDiffPath(file.path);
+      const scopedDiffEntry = scopedDiffs.find(
+        (entry) => normalizeDiffPath(entry.path) === normalizedPath,
+      ) ?? null;
+      setPreviewFile({
+        ...file,
+        section,
+        repositoryRoot,
+        scopedDiffEntry,
+        isDiffLoading: false,
+      });
+    } catch (error) {
+      if (scopedPreviewRequestIdRef.current !== requestId) {
+        return;
+      }
+      console.error("Failed to load repository-scoped git diff", error);
+      setPreviewFile({
+        ...file,
+        section,
+        repositoryRoot,
+        scopedDiffEntry: null,
+        isDiffLoading: false,
+      });
+    }
+  }, [workspaceId]);
+  const previewFullDiffLoader = useMemo(() => {
+    if (!workspaceId || !previewFile) {
+      return null;
+    }
+    const repositoryRoot = previewFile.repositoryRoot !== null
+      ? previewFile.repositoryRoot
+      : gitRoot === ""
+        ? ""
+        : workspacePath && gitRoot
+          ? resolveGitRootWorkspacePrefix(workspacePath, gitRoot)
+          : null;
+    if (repositoryRoot === null) {
+      return null;
+    }
+    return (path: string) => getGitFileFullDiff(workspaceId, path, repositoryRoot);
+  }, [gitRoot, previewFile, workspaceId, workspacePath]);
+  const previewContextKey = JSON.stringify([
+    workspaceId,
+    multiRepositoryMode ? "multi" : "single",
+    multiRepositoryMode ? null : gitRoot,
+  ]);
+  useEffect(() => {
+    if (previewContextKeyRef.current === null) {
+      previewContextKeyRef.current = previewContextKey;
+      return;
+    }
+    if (previewContextKeyRef.current === previewContextKey) {
+      return;
+    }
+    previewContextKeyRef.current = previewContextKey;
+    previewDraftActionsRef.current?.discard();
+    closePreviewModalNow();
+  }, [closePreviewModalNow, previewContextKey]);
   useEffect(() => {
     if (
       !modalPreviewRequest ||
@@ -2158,6 +2273,8 @@ function GitDiffPanelImpl({
               onStageFile={onStageRepositoryFile}
               onUnstageFile={onUnstageRepositoryFile}
               onStageAll={onStageRepositoryAll}
+              onOpenFile={(repositoryRoot, path) => onOpenFile?.(path, repositoryRoot)}
+              onOpenFilePreview={handleOpenRepositoryFilePreview}
               onRefresh={onRefreshRepositoryStatuses}
             />
           ) : null}
@@ -2572,7 +2689,7 @@ function GitDiffPanelImpl({
                           filePath: previewFile.path,
                           workspaceRelativeFilePath: resolveRepositoryWorkspaceFilePath(
                             workspacePath,
-                            gitRoot,
+                            previewFile.repositoryRoot ?? gitRoot,
                             previewFile.path,
                           ),
                           status: previewFile.status,
@@ -2593,12 +2710,19 @@ function GitDiffPanelImpl({
                       headerControlsTarget={previewHeaderControlsTarget}
                       onRequestClose={closePreviewModal}
                       fullDiffSourceKey={previewFile.path}
+                      fullDiffLoader={previewFullDiffLoader}
                       diffStyle={diffViewStyle}
                       onDiffStyleChange={onDiffViewStyleChange}
                       focusSelectedFileOnly
                       allowEditing
-                      onRequestRefreshReview={onRefreshGitDiffs}
-                      onRequestGitStatusRefresh={onRefreshGitStatus}
+                      onRequestRefreshReview={
+                        previewFile.repositoryRoot === null
+                          ? onRefreshGitDiffs
+                          : onRefreshRepositoryStatuses
+                      }
+                      onRequestGitStatusRefresh={
+                        previewFile.repositoryRoot === null ? onRefreshGitStatus : undefined
+                      }
                       onDirtyChange={setIsPreviewModalDirty}
                       onDraftActionsChange={handlePreviewDraftActionsChange}
                       onCreateCodeAnnotation={onCreateCodeAnnotation}
@@ -2606,6 +2730,8 @@ function GitDiffPanelImpl({
                       codeAnnotations={codeAnnotations}
                       codeAnnotationSurface="modal-diff-view"
                     />
+                  ) : previewFile.isDiffLoading ? (
+                    <div className="diff-empty">{t("common.loading")}</div>
                   ) : (
                     <div className="diff-empty">{t("git.diffUnavailable")}</div>
                   )}

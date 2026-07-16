@@ -121,6 +121,145 @@ afterEach(() => {
 });
 
 describe("FileTreePanel run action isolation", () => {
+  it("opens root repository file history from the file Git submenu", async () => {
+    const onOpenFileHistory = vi.fn();
+    const repository: GitRepositorySummary = {
+      repositoryRoot: "",
+      displayName: "workspace",
+      currentBranch: "main",
+      headState: "branch",
+      upstream: null,
+      ahead: 0,
+      behind: 0,
+      stagedCount: 0,
+      modifiedCount: 0,
+      untrackedCount: 0,
+      conflictedCount: 0,
+      fileStatuses: [],
+      isClean: true,
+      error: null,
+    };
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={["README.md"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        onOpenFileHistory={onOpenFileHistory}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitRepositories={[repository]}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "README.md" }));
+    const trigger = await screen.findByRole("menuitem", { name: "git.repositoryMenuTitle" });
+    fireEvent.mouseEnter(trigger);
+    const gitMenu = await screen.findByRole("menu", { name: "git.repositoryMenuTitle" });
+    fireEvent.click(within(gitMenu).getByRole("menuitem", { name: "git.repositoryMenuFileHistory" }));
+
+    expect(onOpenFileHistory).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      repositoryRoot: "",
+      path: "README.md",
+      displayPath: "README.md",
+    });
+  });
+
+  it("hides file history when the host has no open capability", () => {
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={["README.md"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitRepositories={[{
+          repositoryRoot: "",
+          displayName: "workspace",
+          currentBranch: "main",
+          headState: "branch",
+          upstream: null,
+          ahead: 0,
+          behind: 0,
+          stagedCount: 0,
+          modifiedCount: 0,
+          untrackedCount: 0,
+          conflictedCount: 0,
+          fileStatuses: [],
+          isClean: true,
+          error: null,
+        }]}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "README.md" }));
+    expect(screen.queryByRole("menuitem", { name: "git.repositoryMenuTitle" })).toBeNull();
+  });
+
+  it("opens nested repository file history with a repository-relative path", async () => {
+    const onOpenFileHistory = vi.fn();
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={["packages/app/src/main.ts"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        onOpenFileHistory={onOpenFileHistory}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitRepositories={[{
+          repositoryRoot: "packages/app",
+          displayName: "app",
+          currentBranch: "main",
+          headState: "branch",
+          upstream: null,
+          ahead: 0,
+          behind: 0,
+          stagedCount: 0,
+          modifiedCount: 0,
+          untrackedCount: 0,
+          conflictedCount: 0,
+          fileStatuses: [],
+          isClean: true,
+          error: null,
+        }]}
+      />,
+    );
+
+    fireEvent.doubleClick(screen.getByRole("button", { name: /packages/ }));
+    fireEvent.doubleClick(screen.getByRole("button", { name: /app/ }));
+    fireEvent.doubleClick(screen.getByRole("button", { name: /src/ }));
+    fireEvent.contextMenu(screen.getByRole("button", { name: "main.ts" }));
+    const trigger = await screen.findByRole("menuitem", { name: "git.repositoryMenuTitle" });
+    fireEvent.mouseEnter(trigger);
+    const gitMenu = await screen.findByRole("menu", { name: "git.repositoryMenuTitle" });
+    fireEvent.click(within(gitMenu).getByRole("menuitem", { name: "git.repositoryMenuFileHistory" }));
+
+    expect(onOpenFileHistory).toHaveBeenCalledWith(expect.objectContaining({
+      repositoryRoot: "packages/app",
+      path: "src/main.ts",
+      displayPath: "packages/app/src/main.ts",
+    }));
+  });
+
   it("shows the focused Git submenu only for an exact repository folder target", async () => {
     const repository: GitRepositorySummary = {
       repositoryRoot: "services/api",

@@ -35,6 +35,8 @@ import type {
   FileAnnotationDraftState,
 } from "./fileViewPanelShared";
 import type { GitLineMarkers } from "../utils/gitLineMarkers";
+import type { GitFileBlameResponse } from "../../../types";
+import type { FileGitBlameStatus } from "../hooks/useFileGitBlame";
 
 const EDITOR_CONTENT_PUBLISH_DELAY_MS = 120;
 
@@ -77,6 +79,10 @@ type FileViewBodyProps = {
   onActiveFileLineRangeChange?: (range: { startLine: number; endLine: number } | null) => void;
   languageExtensions: ReactCodeMirrorProps["extensions"];
   gitLineMarkers: GitLineMarkers;
+  gitBlameEnabled: boolean;
+  gitBlameStatus: FileGitBlameStatus;
+  gitBlameResponse: GitFileBlameResponse | null;
+  onGitBlameContextMenu?: (position: { x: number; y: number }) => void;
   editorCodeAnnotations: CodeAnnotationSelection[];
   editorAnnotationDraft: FileAnnotationDraftState | null;
   annotationWidgetLabels: {
@@ -576,6 +582,10 @@ export function FileViewBody({
   onActiveFileLineRangeChange,
   languageExtensions,
   gitLineMarkers,
+  gitBlameEnabled,
+  gitBlameStatus,
+  gitBlameResponse,
+  onGitBlameContextMenu,
   editorCodeAnnotations,
   editorAnnotationDraft,
   annotationWidgetLabels,
@@ -912,6 +922,10 @@ export function FileViewBody({
         theme={editorTheme}
         languageExtensions={languageExtensions}
         gitLineMarkers={gitLineMarkers}
+        gitBlameEnabled={gitBlameEnabled}
+        gitBlameStatus={gitBlameStatus}
+        gitBlameResponse={gitBlameResponse}
+        onGitBlameContextMenu={onGitBlameContextMenu}
         codeAnnotations={editorCodeAnnotations}
         annotationDraft={editorAnnotationDraft}
         annotationWidgetLabels={annotationWidgetLabels}

@@ -989,6 +989,22 @@ impl DaemonState {
         Ok(content)
     }
 
+    pub(crate) async fn get_git_file_blame(
+        &self,
+        workspace_id: String,
+        path: String,
+        repository_root: Option<String>,
+    ) -> Result<GitFileBlameResponse, String> {
+        let repo_root = self
+            .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
+            .await?;
+        tokio::task::spawn_blocking(move || {
+            crate::git_utils::build_git_file_blame(&repo_root, &path)
+        })
+        .await
+        .map_err(|error| format!("Git blame worker failed: {error}"))?
+    }
+
     pub(crate) async fn get_git_log(
         &self,
         workspace_id: String,
@@ -1035,6 +1051,7 @@ impl DaemonState {
         date_from: Option<i64>,
         date_to: Option<i64>,
         snapshot_id: Option<String>,
+        path: Option<String>,
         offset: usize,
         limit: usize,
         repository_root: Option<String>,
@@ -1042,34 +1059,58 @@ impl DaemonState {
         let repo_root = self
             .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
             .await?;
-        let repo = open_repository_at_root(&repo_root)?;
         let query = trim_optional(query).map(|entry| entry.to_lowercase());
         let author = trim_optional(author).map(|entry| entry.to_lowercase());
         let date_from = date_from.map(normalize_epoch_seconds);
         let date_to = date_to.map(normalize_epoch_seconds);
         let offset = offset.min(50_000);
         let limit = limit.clamp(1, 500);
-
-        let mut revwalk = repo.revwalk().map_err(|error| error.to_string())?;
-        revwalk
-            .set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
-            .map_err(|error| error.to_string())?;
-
-        if let Some(branch_name) = trim_optional(branch) {
-            let normalized = normalize_local_branch_ref(&branch_name);
-            let local_ref = format!("refs/heads/{normalized}");
-            if revwalk.push_ref(&local_ref).is_err() && revwalk.push_ref(&branch_name).is_err() {
-                return Err(format!("Branch or ref not found: {branch_name}"));
-            }
-        } else if let Some(head) = repo.head().ok().and_then(|value| value.target()) {
-            revwalk.push(head).map_err(|error| error.to_string())?;
+        let branch = trim_optional(branch);
+        let path = path
+            .as_deref()
+            .map(git_core::normalize_file_history_path)
+            .transpose()?;
+        let file_history_entries = if let Some(path) = path.as_deref() {
+            Some(git_core::list_file_history_entries(&repo_root, branch.as_deref(), path).await?)
         } else {
-            return Err("HEAD does not point to a commit".to_string());
-        }
-
+            None
+        };
+        let repo = open_repository_at_root(&repo_root)?;
+        let mut historical_paths = HashMap::new();
+        let history_oids = match file_history_entries {
+            Some(entries) => entries
+                .into_iter()
+                .map(|entry| {
+                    let oid = git2::Oid::from_str(&entry.oid).map_err(|error| error.to_string())?;
+                    historical_paths.insert(oid, entry.path);
+                    Ok(oid)
+                })
+                .collect::<Result<Vec<_>, String>>()?,
+            None => {
+                let mut revwalk = repo.revwalk().map_err(|error| error.to_string())?;
+                revwalk
+                    .set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
+                    .map_err(|error| error.to_string())?;
+                if let Some(branch_name) = branch.as_ref() {
+                    let normalized = normalize_local_branch_ref(branch_name);
+                    let local_ref = format!("refs/heads/{normalized}");
+                    if revwalk.push_ref(&local_ref).is_err()
+                        && revwalk.push_ref(branch_name).is_err()
+                    {
+                        return Err(format!("Branch or ref not found: {branch_name}"));
+                    }
+                } else if let Some(head) = repo.head().ok().and_then(|value| value.target()) {
+                    revwalk.push(head).map_err(|error| error.to_string())?;
+                } else {
+                    return Err("HEAD does not point to a commit".to_string());
+                }
+                revwalk
+                    .map(|oid| oid.map_err(|error| error.to_string()))
+                    .collect::<Result<Vec<_>, _>>()?
+            }
+        };
         let mut filtered = Vec::<GitHistoryCommit>::new();
-        for oid_result in revwalk {
-            let oid = oid_result.map_err(|error| error.to_string())?;
+        for oid in history_oids {
             let commit = repo.find_commit(oid).map_err(|error| error.to_string())?;
             let timestamp = commit.time().seconds();
             if let Some(lower_bound) = date_from {
@@ -1125,6 +1166,7 @@ impl DaemonState {
                 timestamp,
                 parents,
                 refs: Vec::new(),
+                file_path: historical_paths.get(&oid).cloned(),
             });
         }
 
@@ -1132,9 +1174,27 @@ impl DaemonState {
         let commits: Vec<GitHistoryCommit> =
             filtered.into_iter().skip(offset).take(limit).collect();
         let has_more = offset.saturating_add(commits.len()) < total;
-        let snapshot_id = trim_optional(snapshot_id).unwrap_or_else(|| Uuid::new_v4().to_string());
+        let head_sha = repo
+            .head()
+            .ok()
+            .and_then(|head| head.target())
+            .map(|oid| oid.to_string())
+            .unwrap_or_else(|| "detached".to_string());
+        let current_snapshot_id = git_core::build_git_history_snapshot_id(
+            &head_sha,
+            branch.as_deref(),
+            query.as_deref(),
+            author.as_deref(),
+            date_from,
+            date_to,
+            repository_root.as_deref(),
+            path.as_deref(),
+        );
+        if trim_optional(snapshot_id).is_some_and(|value| value != current_snapshot_id) {
+            return Err("History snapshot expired. Please refresh commits.".to_string());
+        }
         Ok(GitHistoryResponse {
-            snapshot_id,
+            snapshot_id: current_snapshot_id,
             total,
             offset,
             limit,
@@ -1325,16 +1385,26 @@ impl DaemonState {
 
         let mut files = Vec::<GitCommitDiff>::new();
         for (index, delta) in diff.deltas().enumerate() {
-            let display_path = delta
-                .new_file()
-                .path()
-                .or_else(|| delta.old_file().path())
+            let old_path = delta.old_file().path();
+            let new_path = delta.new_file().path();
+            let display_path = new_path
+                .or(old_path)
                 .map(|path| normalize_git_path(&path.to_string_lossy()))
                 .unwrap_or_default();
             if display_path.is_empty() {
                 continue;
             }
             let status = status_for_delta(delta.status()).to_string();
+            if let Some(image_diff) = crate::git_utils::build_image_commit_diff(
+                &repo,
+                parent_tree.as_ref(),
+                &tree,
+                &delta,
+                &status,
+            ) {
+                files.push(image_diff);
+                continue;
+            }
             let patch = git2::Patch::from_diff(&diff, index).map_err(|error| error.to_string())?;
             if let Some(mut patch) = patch {
                 let content =
@@ -2098,6 +2168,7 @@ impl DaemonState {
                     .map(|parent| parent.id().to_string())
                     .collect(),
                 refs: Vec::new(),
+                file_path: None,
             });
         }
 
@@ -2549,6 +2620,7 @@ impl DaemonState {
                         timestamp,
                         parents: Vec::new(),
                         refs: Vec::new(),
+                        file_path: None,
                     })
                 })
                 .collect()

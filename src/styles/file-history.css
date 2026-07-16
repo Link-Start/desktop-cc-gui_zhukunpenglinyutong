@@ -1,0 +1,199 @@
+.file-history-view {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  container: file-history / inline-size;
+}
+
+.file-history-header {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.file-history-heading {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.file-history-heading span {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-history-workbench {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  grid-template-columns: clamp(240px, 26%, 360px) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.file-history-commits {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+.file-history-list-summary,
+.file-history-diff-title {
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.file-history-list {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+
+.file-history-commit {
+  display: grid;
+  min-height: 68px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  padding: 10px 12px;
+  color: inherit;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  cursor: pointer;
+}
+
+.file-history-commit:hover,
+.file-history-commit.is-selected {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+
+.file-history-commit.is-selected {
+  box-shadow: inset 2px 0 var(--accent-primary);
+}
+
+.file-history-commit-summary,
+.file-history-commit-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-history-commit-summary {
+  font-weight: 600;
+}
+
+.file-history-commit-meta,
+.file-history-commit code {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.file-history-commit code {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.file-history-diff {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.file-history-diff > .editable-diff-compare {
+  width: 100%;
+  flex: 1;
+}
+
+.file-history-diff .editable-diff-compare-columns {
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+}
+
+.file-history-diff .editable-diff-compare .file-compare-column {
+  min-width: 0;
+}
+
+.file-history-state {
+  display: flex;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.file-history-state.is-error {
+  color: var(--color-danger, #dc2626);
+  flex-direction: column;
+}
+
+.file-history-state button,
+.file-history-load-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+}
+
+.file-history-loading-more,
+.file-history-load-retry {
+  width: 100%;
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  border: 0;
+  background: transparent;
+}
+
+@container file-history (max-width: 980px) {
+  .file-history-workbench {
+    grid-template-columns: clamp(210px, 32%, 280px) minmax(0, 1fr);
+  }
+
+  .file-history-heading span {
+    max-width: 44cqw;
+  }
+}
+
+@container file-history (max-width: 720px) {
+  .file-history-workbench {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(160px, 32%) minmax(0, 1fr);
+  }
+
+  .file-history-commits {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .file-history-heading span {
+    max-width: 58cqw;
+  }
+}

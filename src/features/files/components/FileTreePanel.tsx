@@ -41,6 +41,8 @@ import {
   resolveGitStatusPathCandidates,
 } from "../../../utils/workspacePaths";
 import { createFileDocumentSnapshot } from "../utils/fileDocumentSnapshot";
+import { resolveFileGitScope } from "../utils/fileGitScope";
+import type { FileHistoryTarget } from "../../git-history/types";
 import {
   writeDetachedFileTreeDragSnapshot,
   DETACHED_FILE_TREE_DRAG_BRIDGE_EVENT,
@@ -148,6 +150,7 @@ type FileTreePanelProps = {
   onGitRepositoryAction?: (
     request: GitRepositoryActionRequest,
   ) => void | Promise<void>;
+  onOpenFileHistory?: (target: FileHistoryTarget) => void;
 };
 
 type FileOpenLocation = {
@@ -197,6 +200,7 @@ export function FileTreePanel({
   gitignoredDirectories,
   onRefreshFiles,
   onGitRepositoryAction,
+  onOpenFileHistory,
 }: FileTreePanelProps) {
   useEffect(() => {
     void loadFileTreeStyles();
@@ -1756,6 +1760,14 @@ export function FileTreePanel({
           ? rootRepositorySummary
           : repositorySummaryMap.get(relativePath) ?? null
         : null;
+      const fileHistoryScope = !isFolder && onOpenFileHistory
+        ? resolveFileGitScope(relativePath, gitRepositories)
+        : null;
+      const fileHistoryRepository = fileHistoryScope
+        ? gitRepositories.find(
+            (repository) => repository.repositoryRoot.replace(/\\/g, "/") === fileHistoryScope.repositoryRoot,
+          ) ?? null
+        : null;
       const effectiveSelectedPaths = selectedNodePaths.has(relativePath)
         ? orderedSelectedNodePaths
         : isRootActionTarget
@@ -1820,6 +1832,28 @@ export function FileTreePanel({
             { type: "item" as const, id: "git-fetch", label: t("git.repositoryMenuFetch"), onSelect: () => runRepositoryAction("fetch") },
           ]
         : [];
+      const fileHistoryGitItems = fileHistoryScope
+        ? [
+            ...(fileHistoryRepository
+              ? [{ type: "label" as const, id: "git-file-target", label: fileHistoryRepository.displayName }]
+              : []),
+            {
+              type: "item" as const,
+              id: "git-file-history",
+              label: t("git.repositoryMenuFileHistory"),
+              onSelect: () => onOpenFileHistory?.({
+                workspaceId,
+                workspacePath,
+                repositoryRoot: fileHistoryScope.repositoryRoot,
+                path: fileHistoryScope.path,
+                displayPath: relativePath,
+              }),
+            },
+          ]
+        : [];
+      const gitItems = repositoryGitItems.length > 0
+        ? repositoryGitItems
+        : fileHistoryGitItems;
 
       const menuItems: RendererContextMenuItem[] = [
         {
@@ -1930,14 +1964,14 @@ export function FileTreePanel({
             await revealItemInDir(resolvePath(relativePath));
           },
         },
-        ...(repositorySummary
+        ...(gitItems.length > 0
           ? [
               { type: "separator" as const, id: "git-repository-separator" },
               {
                 type: "submenu" as const,
                 id: "git-repository",
                 label: t("git.repositoryMenuTitle"),
-                items: repositoryGitItems,
+                items: gitItems,
               },
             ]
           : []),
@@ -2000,6 +2034,8 @@ export function FileTreePanel({
       orderedSelectedNodePaths,
       addRepositoryToGitignore,
       onGitRepositoryAction,
+      onOpenFileHistory,
+      gitRepositories,
       repositorySummaryMap,
       rootRepositorySummary,
       resolveParentFolderForNode,
@@ -2007,6 +2043,8 @@ export function FileTreePanel({
       showOperationNotice,
       t,
       visibleTreePathTypeMap,
+      workspaceId,
+      workspacePath,
     ],
   );
 

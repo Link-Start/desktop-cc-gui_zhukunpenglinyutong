@@ -1,11 +1,17 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use git2::{BranchType, DiffOptions, ErrorCode, Repository, Status, StatusOptions, Tree};
 use ignore::WalkBuilder;
 
-use crate::types::{GitLogEntry, GitRepositoryFileStatus, GitRepositorySummary, WorkspaceEntry};
+use crate::types::{
+    GitBlameHunk, GitCommitDiff, GitFileBlameResponse, GitLogEntry, GitRepositoryFileStatus,
+    GitRepositorySummary, WorkspaceEntry,
+};
 use crate::utils::normalize_git_path;
+
+const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
 
 pub(crate) fn image_mime_type(path: &str) -> Option<&'static str> {
     let ext = Path::new(path)
@@ -24,6 +30,79 @@ pub(crate) fn image_mime_type(path: &str) -> Option<&'static str> {
     }
 }
 
+fn encode_image_base64(data: &[u8]) -> Option<String> {
+    if data.len() > MAX_IMAGE_BYTES {
+        return None;
+    }
+    Some(STANDARD.encode(data))
+}
+
+pub(crate) fn blob_to_base64(blob: git2::Blob) -> Option<String> {
+    if blob.size() > MAX_IMAGE_BYTES {
+        return None;
+    }
+    encode_image_base64(blob.content())
+}
+
+pub(crate) fn read_image_base64(path: &Path) -> Option<String> {
+    let metadata = std::fs::metadata(path).ok()?;
+    if metadata.len() > MAX_IMAGE_BYTES as u64 {
+        return None;
+    }
+    let data = std::fs::read(path).ok()?;
+    encode_image_base64(&data)
+}
+
+pub(crate) fn build_image_commit_diff(
+    repo: &Repository,
+    parent_tree: Option<&Tree<'_>>,
+    commit_tree: &Tree<'_>,
+    delta: &git2::DiffDelta<'_>,
+    status: &str,
+) -> Option<GitCommitDiff> {
+    let old_path = delta.old_file().path();
+    let new_path = delta.new_file().path();
+    let old_path_text = old_path.map(|path| path.to_string_lossy());
+    let new_path_text = new_path.map(|path| path.to_string_lossy());
+    let old_image_mime = old_path_text.as_deref().and_then(image_mime_type);
+    let new_image_mime = new_path_text.as_deref().and_then(image_mime_type);
+    if old_image_mime.is_none() && new_image_mime.is_none() {
+        return None;
+    }
+
+    let display_path = new_path.or(old_path)?;
+    let is_added = delta.status() == git2::Delta::Added;
+    let is_deleted = delta.status() == git2::Delta::Deleted;
+    let old_image_data = if !is_added && old_image_mime.is_some() {
+        parent_tree
+            .and_then(|tree| old_path.and_then(|path| tree.get_path(path).ok()))
+            .and_then(|entry| repo.find_blob(entry.id()).ok())
+            .and_then(blob_to_base64)
+    } else {
+        None
+    };
+    let new_image_data = if !is_deleted && new_image_mime.is_some() {
+        new_path
+            .and_then(|path| commit_tree.get_path(path).ok())
+            .and_then(|entry| repo.find_blob(entry.id()).ok())
+            .and_then(blob_to_base64)
+    } else {
+        None
+    };
+
+    Some(GitCommitDiff {
+        path: normalize_git_path(&display_path.to_string_lossy()),
+        status: status.to_string(),
+        diff: String::new(),
+        is_binary: true,
+        is_image: true,
+        old_image_data,
+        new_image_data,
+        old_image_mime: old_image_mime.map(str::to_string),
+        new_image_mime: new_image_mime.map(str::to_string),
+    })
+}
+
 pub(crate) fn commit_to_entry(commit: git2::Commit) -> GitLogEntry {
     let summary = commit.summary().unwrap_or("").to_string();
     let author = commit.author().name().unwrap_or("").to_string();
@@ -34,6 +113,135 @@ pub(crate) fn commit_to_entry(commit: git2::Commit) -> GitLogEntry {
         author,
         timestamp,
     }
+}
+
+const GIT_BLAME_MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
+const GIT_BLAME_MAX_LINES: usize = 50_000;
+
+fn validate_git_blame_path(path: &str) -> Result<String, String> {
+    let trimmed = path.trim();
+    let normalized = normalize_git_path(trimmed);
+    let has_windows_prefix = normalized.as_bytes().get(1) == Some(&b':');
+    if normalized.is_empty() {
+        return Err("Git blame path is required.".to_string());
+    }
+    if normalized.starts_with('/') || has_windows_prefix {
+        return Err("Invalid Git blame path: repository-relative path required.".to_string());
+    }
+    let relative = Path::new(&normalized);
+    if relative.is_absolute()
+        || relative.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+    {
+        return Err("Invalid Git blame path: repository-relative path required.".to_string());
+    }
+    Ok(normalized)
+}
+
+pub(crate) fn build_git_file_blame(
+    repo_root: &Path,
+    path: &str,
+) -> Result<GitFileBlameResponse, String> {
+    let normalized_path = validate_git_blame_path(path)?;
+    let canonical_repo_root = repo_root
+        .canonicalize()
+        .map_err(|error| format!("Failed to resolve Git blame repository root: {error}"))?;
+    let absolute_path = canonical_repo_root.join(&normalized_path);
+    let canonical_path = absolute_path
+        .canonicalize()
+        .map_err(|error| format!("Failed to resolve Git blame file {normalized_path}: {error}"))?;
+    if !canonical_path.starts_with(&canonical_repo_root) {
+        return Err("Invalid Git blame path: target resolves outside the repository.".to_string());
+    }
+    let metadata = std::fs::metadata(&canonical_path)
+        .map_err(|error| format!("Failed to inspect Git blame file {normalized_path}: {error}"))?;
+    if !metadata.is_file() {
+        return Err(format!("Git blame target is not a file: {normalized_path}"));
+    }
+    if metadata.len() > GIT_BLAME_MAX_FILE_BYTES {
+        return Err(format!(
+            "Git blame is unavailable for files larger than {GIT_BLAME_MAX_FILE_BYTES} bytes."
+        ));
+    }
+
+    let buffer = std::fs::read(&canonical_path)
+        .map_err(|error| format!("Failed to read Git blame file {normalized_path}: {error}"))?;
+    let line_count = buffer.iter().filter(|byte| **byte == b'\n').count() + 1;
+    if line_count > GIT_BLAME_MAX_LINES {
+        return Err(format!(
+            "Git blame is unavailable for files with more than {GIT_BLAME_MAX_LINES} lines."
+        ));
+    }
+
+    let repo = Repository::open_ext(
+        &canonical_repo_root,
+        git2::RepositoryOpenFlags::NO_SEARCH,
+        std::iter::empty::<&Path>(),
+    )
+    .map_err(|error| format!("Failed to open Git repository for blame: {error}"))?;
+    let head_sha = repo
+        .head()
+        .and_then(|head| head.peel_to_commit())
+        .map(|commit| commit.id().to_string())
+        .map_err(|error| format!("Failed to resolve Git HEAD for blame: {error}"))?;
+    let committed_blame = repo
+        .blame_file(Path::new(&normalized_path), None)
+        .map_err(|error| format!("Failed to blame {normalized_path}: {error}"))?;
+    let blame = committed_blame.blame_buffer(&buffer).map_err(|error| {
+        format!("Failed to map working tree blame for {normalized_path}: {error}")
+    })?;
+
+    let mut commit_metadata: HashMap<git2::Oid, (String, i64, String)> = HashMap::new();
+    let mut hunks = Vec::with_capacity(blame.len());
+    for hunk in blame.iter() {
+        let oid = hunk.final_commit_id();
+        let (author, authored_at, summary) = if oid.is_zero() {
+            (
+                "Uncommitted".to_string(),
+                0,
+                "Uncommitted changes".to_string(),
+            )
+        } else if let Some(metadata) = commit_metadata.get(&oid) {
+            metadata.clone()
+        } else {
+            let commit = repo.find_commit(oid).map_err(|error| {
+                format!("Failed to resolve blame commit {oid} for {normalized_path}: {error}")
+            })?;
+            let metadata = (
+                commit.author().name().unwrap_or("Unknown").to_string(),
+                commit.time().seconds(),
+                commit.summary().unwrap_or("").to_string(),
+            );
+            commit_metadata.insert(oid, metadata.clone());
+            metadata
+        };
+        hunks.push(GitBlameHunk {
+            start_line: hunk.final_start_line(),
+            line_count: hunk.lines_in_hunk(),
+            commit_sha: if oid.is_zero() {
+                String::new()
+            } else {
+                oid.to_string()
+            },
+            author,
+            authored_at,
+            summary,
+            original_path: hunk
+                .path()
+                .map(|original_path| normalize_git_path(&original_path.to_string_lossy())),
+        });
+    }
+
+    Ok(GitFileBlameResponse {
+        path: normalized_path,
+        head_sha,
+        line_count,
+        hunks,
+    })
 }
 
 pub(crate) fn checkout_branch(repo: &Repository, name: &str) -> Result<(), git2::Error> {
@@ -91,8 +299,8 @@ pub(crate) fn diff_patch_to_string(patch: &mut git2::Patch) -> Result<String, gi
 #[cfg(test)]
 mod tests {
     use super::{
-        compact_repository_status, image_mime_type, list_git_repository_summaries,
-        path_has_git_repository_marker, resolve_git_root_for_scope,
+        build_git_file_blame, compact_repository_status, image_mime_type,
+        list_git_repository_summaries, path_has_git_repository_marker, resolve_git_root_for_scope,
     };
     use crate::types::{WorkspaceEntry, WorkspaceKind, WorkspaceSettings};
     use git2::{Repository, Signature};
@@ -255,6 +463,50 @@ mod tests {
             Some("T")
         );
         assert_eq!(compact_repository_status(git2::Status::CURRENT), None);
+    }
+
+    #[test]
+    fn git_file_blame_returns_compressed_commit_hunks_and_uncommitted_lines() {
+        let root = std::env::temp_dir().join(format!("ccgui-git-blame-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create blame root");
+        let repo = Repository::init(&root).expect("init blame repo");
+        fs::write(root.join("tracked.txt"), "first\nsecond\n").expect("write blame file");
+        let mut index = repo.index().expect("open blame index");
+        index
+            .add_path(std::path::Path::new("tracked.txt"))
+            .expect("stage blame file");
+        index.write().expect("write blame index");
+        let tree_id = index.write_tree().expect("write blame tree");
+        let tree = repo.find_tree(tree_id).expect("find blame tree");
+        let signature = Signature::now("Blame Author", "blame@example.test").expect("signature");
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "initial blame",
+            &tree,
+            &[],
+        )
+        .expect("commit blame file");
+
+        let committed = build_git_file_blame(&root, "tracked.txt").expect("committed blame");
+        assert_eq!(committed.path, "tracked.txt");
+        assert_eq!(committed.hunks.len(), 1);
+        assert_eq!(committed.hunks[0].author, "Blame Author");
+        assert_eq!(committed.hunks[0].summary, "initial blame");
+
+        fs::write(root.join("tracked.txt"), "first\nchanged\n").expect("modify blame file");
+        let modified = build_git_file_blame(&root, "tracked.txt").expect("working blame");
+        assert!(modified.hunks.iter().any(|hunk| hunk.commit_sha.is_empty()));
+        assert!(modified
+            .hunks
+            .iter()
+            .any(|hunk| hunk.author == "Uncommitted"));
+        assert!(build_git_file_blame(&root, "../outside.txt").is_err());
+        assert!(build_git_file_blame(&root, "/tmp/outside.txt").is_err());
+        assert!(build_git_file_blame(&root, "C:\\outside.txt").is_err());
+
+        fs::remove_dir_all(&root).expect("cleanup blame root");
     }
 }
 

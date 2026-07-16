@@ -70,6 +70,27 @@ pub(crate) struct GitFileDiff {
     pub(crate) new_image_mime: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GitBlameHunk {
+    pub(crate) start_line: usize,
+    pub(crate) line_count: usize,
+    pub(crate) commit_sha: String,
+    pub(crate) author: String,
+    pub(crate) authored_at: i64,
+    pub(crate) summary: String,
+    pub(crate) original_path: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GitFileBlameResponse {
+    pub(crate) path: String,
+    pub(crate) head_sha: String,
+    pub(crate) line_count: usize,
+    pub(crate) hunks: Vec<GitBlameHunk>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct GitCommitDiff {
     pub(crate) path: String,
@@ -133,6 +154,12 @@ pub(crate) struct GitHistoryCommit {
     pub(crate) parents: Vec<String>,
     #[serde(default)]
     pub(crate) refs: Vec<String>,
+    #[serde(
+        default,
+        rename = "filePath",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) file_path: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
