@@ -1201,3 +1201,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1004: 稳定 Git 分支菜单并优化层级交互
+
+**Date**: 2026-07-16
+**Task**: 稳定 Git 分支菜单并优化层级交互
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+稳定多仓库分支摘要，增加内层分组折叠，精简文件树 Git 菜单并复用当前分支更新能力；统一分组与叶子分支 typography/indent。Focused Vitest 62/62、typecheck、lint、runtime contracts、large-file gate、OpenSpec strict validation 均通过；全量测试仍受未触碰的 Sidebar.styles 既有断言漂移阻塞。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `57e50e3d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

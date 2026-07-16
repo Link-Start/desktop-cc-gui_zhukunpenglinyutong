@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-25.md`
-- **Total Sessions**: 1003
+- **Total Sessions**: 1004
 - **Last Active**: 2026-07-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~1203 | Active |
+| `journal-25.md` | ~1236 | Active |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +53,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1004 | 2026-07-16 | 稳定 Git 分支菜单并优化层级交互 | `57e50e3d` | `feature/v-0.7.4` |
 | 1003 | 2026-07-16 | 完成多仓库 Git 命令中心 | `f242e9da` | `feature/v-0.7.4` |
 | 1002 | 2026-07-16 | 修复 Codex 新建磁盘会话 loading 常驻 | `0efde5a0` | `feature/v-0.7.4` |
 | 1001 | 2026-07-16 | 动态同步 Codex 模型推理强度 | `e79216d4` | `feature/v-0.7.3` |
