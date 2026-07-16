@@ -213,26 +213,19 @@ export function getDefaultColumnWidths(containerWidth: number): {
   commitsWidth: number;
 } {
   const safeWidth = Number.isFinite(containerWidth) && containerWidth > 0 ? containerWidth : 1600;
-  const splitterTotalWidth = VERTICAL_SPLITTER_SIZE * 3;
-  const minimumColumnsWidth =
-    OVERVIEW_MIN_WIDTH + BRANCHES_MIN_WIDTH + COMMITS_MIN_WIDTH + DETAILS_MIN_WIDTH;
+  const splitterTotalWidth = VERTICAL_SPLITTER_SIZE * 2;
+  const minimumColumnsWidth = BRANCHES_MIN_WIDTH + COMMITS_MIN_WIDTH + DETAILS_MIN_WIDTH;
   const availableColumnsWidth = Math.max(
     minimumColumnsWidth,
     safeWidth - splitterTotalWidth,
   );
 
-  let overviewWidth = Math.round((availableColumnsWidth * 3) / 10);
-  let branchesWidth = Math.round((availableColumnsWidth * 2) / 10);
-  let commitsWidth = Math.round((availableColumnsWidth * 3) / 10);
-  let detailsWidth = availableColumnsWidth - overviewWidth - branchesWidth - commitsWidth;
+  let branchesWidth = Math.round((availableColumnsWidth * 3) / 10);
+  let commitsWidth = Math.round((availableColumnsWidth * 4) / 10);
+  let detailsWidth = availableColumnsWidth - branchesWidth - commitsWidth;
 
-  const columns = [overviewWidth, branchesWidth, commitsWidth, detailsWidth];
-  const minimums = [
-    OVERVIEW_MIN_WIDTH,
-    BRANCHES_MIN_WIDTH,
-    COMMITS_MIN_WIDTH,
-    DETAILS_MIN_WIDTH,
-  ];
+  const columns = [branchesWidth, commitsWidth, detailsWidth];
+  const minimums = [BRANCHES_MIN_WIDTH, COMMITS_MIN_WIDTH, DETAILS_MIN_WIDTH];
 
   let deficit = 0;
   for (let index = 0; index < columns.length; index += 1) {
@@ -243,7 +236,7 @@ export function getDefaultColumnWidths(containerWidth: number): {
   }
 
   if (deficit > 0) {
-    const shrinkOrder = [2, 0, 1, 3];
+    const shrinkOrder = [1, 0, 2];
     for (const index of shrinkOrder) {
       if (deficit <= 0) {
         break;
@@ -258,6 +251,6 @@ export function getDefaultColumnWidths(containerWidth: number): {
     }
   }
 
-  [overviewWidth, branchesWidth, commitsWidth, detailsWidth] = columns;
-  return { overviewWidth, branchesWidth, commitsWidth };
+  [branchesWidth, commitsWidth, detailsWidth] = columns;
+  return { overviewWidth: OVERVIEW_MIN_WIDTH, branchesWidth, commitsWidth };
 }

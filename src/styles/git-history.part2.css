@@ -1603,19 +1603,14 @@
 
 @media (max-width: 1380px) {
   .git-history-main-grid {
-    grid-template-columns: minmax(200px, 0.8fr) minmax(310px, 1.1fr) minmax(330px, 1fr);
+    grid-template-columns: minmax(200px, 3fr) minmax(310px, 4fr) minmax(330px, 3fr);
   }
 }
 
 @media (max-width: 1120px) {
   .git-history-grid {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .git-history-overview {
-    border-right: none;
-    border-bottom: 1px solid var(--border-default);
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .git-history-main-grid {

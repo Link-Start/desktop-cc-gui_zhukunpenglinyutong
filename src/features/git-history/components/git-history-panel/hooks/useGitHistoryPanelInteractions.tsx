@@ -2090,11 +2090,8 @@ export function useGitHistoryPanelInteractions(scope: any) {
     document.body.style.userSelect = "none";
   }, [DETAILS_SPLIT_MAX, DETAILS_SPLIT_MIN, detailsBodyRef, setDetailsSplitRatio]);
 
-  const workbenchGridStyle = desktopSplitLayout
-    ? {
-        gridTemplateColumns: `${Math.round(overviewWidth)}px ${VERTICAL_SPLITTER_SIZE}px minmax(0, 1fr)`,
-      }
-    : undefined;
+  // ponytail: overview 仍挂载为顶部统计的数据源，但不再占用可见 grid column。
+  const workbenchGridStyle = undefined;
 
   const mainGridStyle = desktopSplitLayout
     ? {

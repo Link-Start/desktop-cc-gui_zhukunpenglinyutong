@@ -352,7 +352,8 @@
 
 .git-history-grid {
   display: grid;
-  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   width: 100%;
   flex: 1;
   min-height: 0;
@@ -363,12 +364,8 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(220px, 0.82fr) minmax(420px, 1.35fr) minmax(420px, 1.2fr);
+  grid-template-columns: minmax(220px, 3fr) minmax(420px, 4fr) minmax(420px, 3fr);
   overflow: hidden;
-}
-
-.git-history-grid.with-vertical-resizers .git-history-overview {
-  border-right: none;
 }
 
 .git-history-main-grid.with-vertical-resizers .git-history-branches,
@@ -408,6 +405,10 @@ body[data-git-history-column-resizing="true"] .git-history-vertical-resizer::aft
   padding: 10px;
   border-right: 1px solid var(--border-default);
   background: var(--git-history-pane-bg);
+}
+
+.git-history-overview[hidden] {
+  display: none;
 }
 
 .git-history-overview-toolbar {

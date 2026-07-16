@@ -350,15 +350,31 @@ describe("GitHistoryPanel helpers", () => {
     expect(items.map((item) => item.label)).toEqual(["a", "b", "c", "d.txt"]);
   });
 
-  it("returns sane default widths for 3:2:3:2 layout", () => {
+  it("returns exact 3:4:3 defaults for the visible desktop columns", () => {
     const widths = getDefaultColumnWidths(1600);
-    expect(widths.overviewWidth).toBeGreaterThan(0);
-    expect(widths.branchesWidth).toBeGreaterThan(0);
-    expect(widths.commitsWidth).toBeGreaterThan(0);
+    expect(widths.branchesWidth).toBe(475);
+    expect(widths.commitsWidth).toBe(634);
+    expect(1600 - 16 - widths.branchesWidth - widths.commitsWidth).toBe(475);
   });
 });
 
 describe("GitHistoryPanel interactions", () => {
+  it("shows only the branch, commit, and details columns", async () => {
+    const { container } = render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await screen.findByText("feat: one");
+
+    const overview = container.querySelector(".git-history-overview");
+    const mainGrid = container.querySelector(".git-history-main-grid");
+
+    expect(overview?.hasAttribute("hidden")).toBe(true);
+    expect(overview?.getAttribute("aria-hidden")).toBe("true");
+    expect(screen.queryByRole("button", { name: "open-worktree-preview" })).toBeNull();
+    expect(mainGrid?.querySelector(":scope > .git-history-branches")).toBeTruthy();
+    expect(mainGrid?.querySelector(":scope > .git-history-commits")).toBeTruthy();
+    expect(mainGrid?.querySelector(":scope > .git-history-details")).toBeTruthy();
+  });
+
   it("switches a multi-repository history target through the repository picker", async () => {
     const onSelectRepository = vi.fn();
     const onSelectWorkspace = vi.fn();
@@ -1557,10 +1573,12 @@ describe("GitHistoryPanel interactions", () => {
   });
 
   it("opens working-tree preview with the canonical modal header controls", async () => {
-    render(<GitHistoryPanel workspace={workspace as never} />);
-    const openPreviewButton = await screen.findByRole("button", {
-      name: "open-worktree-preview",
-    });
+    const { container } = render(<GitHistoryPanel workspace={workspace as never} />);
+    const overviewStatusSource = container.querySelector(".git-history-overview");
+    expect(overviewStatusSource?.hasAttribute("hidden")).toBe(true);
+    const openPreviewButton = within(overviewStatusSource as HTMLElement).getByText(
+      "open-worktree-preview",
+    );
 
     vi.mocked(tauriService.getGitStatus).mockResolvedValueOnce({
       files: [
