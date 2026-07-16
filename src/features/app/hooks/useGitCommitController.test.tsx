@@ -11,6 +11,7 @@ const mockGenerateCommitMessageWithEngine = vi.fn<
     language?: "zh" | "en",
     engine?: "codex" | "claude" | "gemini" | "opencode",
     selectedPaths?: string[],
+    repositorySelections?: Array<{ repositoryRoot: string; selectedPaths: string[] }>,
   ) => Promise<string>
 >();
 const mockPushGit = vi.fn<(workspaceId: string) => Promise<void>>();
@@ -31,7 +32,16 @@ vi.mock("../../../services/tauri", () => ({
     language?: "zh" | "en",
     engine?: "codex" | "claude" | "gemini" | "opencode",
     selectedPaths?: string[],
-  ) => mockGenerateCommitMessageWithEngine(workspaceId, language, engine, selectedPaths),
+    repositorySelections?: Array<{ repositoryRoot: string; selectedPaths: string[] }>,
+  ) => repositorySelections
+    ? mockGenerateCommitMessageWithEngine(
+      workspaceId,
+      language,
+      engine,
+      selectedPaths,
+      repositorySelections,
+    )
+    : mockGenerateCommitMessageWithEngine(workspaceId, language, engine, selectedPaths),
   pushGit: (workspaceId: string) => mockPushGit(workspaceId),
   syncGit: (workspaceId: string) => mockSyncGit(workspaceId),
   stageGitFile: (workspaceId: string, path: string) => mockStageGitFile(workspaceId, path),
@@ -246,6 +256,34 @@ describe("useGitCommitController", () => {
       "en",
       "codex",
       ["src\\staged.ts", "src/unstaged.ts"],
+    );
+  });
+
+  it("forwards repository-scoped selections when generating a multi-repository message", async () => {
+    const { result } = createController({
+      stagedFiles: [],
+      unstagedFiles: [],
+    });
+    const repositorySelections = [
+      { repositoryRoot: "services/api", selectedPaths: ["pom.xml"] },
+      { repositoryRoot: "services/web", selectedPaths: ["package.json"] },
+    ];
+
+    await act(async () => {
+      await result.current.onGenerateCommitMessage(
+        "zh",
+        "claude",
+        undefined,
+        repositorySelections,
+      );
+    });
+
+    expect(mockGenerateCommitMessageWithEngine).toHaveBeenCalledWith(
+      "ws-1",
+      "zh",
+      "claude",
+      undefined,
+      repositorySelections,
     );
   });
 });

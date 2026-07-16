@@ -5,6 +5,7 @@ import type {
   GitCommitDiff,
   GitFileDiff,
   GitHistoryCommit,
+  GitRepositorySummary,
   WorkspaceInfo,
 } from "../../../../../types";
 import type { CodeAnnotationBridgeProps } from "../../../../code-annotations/types";
@@ -18,6 +19,10 @@ export type GitHistoryPanelProps = CodeAnnotationBridgeProps & {
     name: string;
     workspaces: WorkspaceInfo[];
   }>;
+  selectedProjectWorkspaceId?: string | null;
+  repositories?: GitRepositorySummary[];
+  selectedRepositoryRoot?: string | null;
+  onSelectRepository?: (repositoryRoot: string) => Promise<void> | void;
   onSelectWorkspace?: (workspaceId: string) => void;
   onSelectWorkspacePath?: (path: string) => Promise<void> | void;
   onOpenDiffPath?: (path: string) => void;

@@ -6,6 +6,7 @@ import { WorkspaceEditableDiffReviewSurface } from "../../../../git/components/W
 
 export function renderGitHistoryPanelView(scope: any) {
   const {ActionSurface,CREATE_PR_PREVIEW_COMMIT_LIMIT,ChevronDown,ChevronLeft,ChevronRight,ChevronsDownUp,ChevronsUpDown,CircleAlert,CircleCheck,Cloud,CloudDownload,Copy,DEFAULT_DETAILS_SPLIT,DISABLE_HISTORY_ACTION_BUTTONS,Download,FileIcon,FileText,Folder,FolderOpen,FolderTree,GitBranch,GitCommit,GitDiffViewer,GitHistoryInlinePicker,GitHistoryProjectPicker,GitHistoryWorktreePanel,GitMerge,GitPullRequestCreate,HardDrive,LayoutGrid,LoaderCircle,MessageSquareText,Pencil,Plus,RefreshCw,Repeat,Search,ShieldAlert,Trash2,Upload,X,branchContextActions,branchContextMenu,branchContextMenuRef,branchContextMenuStyle,branchContextTrackingSummary,branchDiffState,branchQuery,branchesWidth,buildFileKey,clearOperationNotice,closeBranchContextMenu,closeBranchDiff,closeCreatePrDialog,closeForceDeleteDialog,closeRenameBranchDialog,closeWorktreePreview,codeAnnotations,commitContextMenu,commitContextMoreOpen,commitListRef,commitQuery,commitRowVirtualizer,commits,commitsWidth,comparePreviewDetailFile,comparePreviewDetailFileDiff,comparePreviewDiffEntries,comparePreviewFileKey,contextMoreDisabledReason,contextPrimaryActionGroups,contextWriteActions,createBranchCanConfirm,createBranchDialogOpen,createBranchName,createBranchNameInputRef,createBranchSource,createBranchSourceOptions,createBranchSubmitting,createPortal,createPrBaseBranchOptions,createPrBaseRepoOptions,createPrCanConfirm,createPrCanOpen,createPrCompareBranchOptions,createPrCopiedPrUrl,createPrCopiedRetryCommand,createPrDefaultsError,createPrDefaultsLoading,createPrDialogOpen,createPrForm,createPrHeadRepoOptions,createPrHeadRepositoryValue,createPrPreviewBaseOnlyCount,createPrPreviewBaseRef,createPrPreviewCommits,createPrPreviewDetails,createPrPreviewDetailsError,createPrPreviewDetailsLoading,createPrPreviewError,createPrPreviewExpanded,createPrPreviewHasMore,createPrPreviewHeadRef,createPrPreviewLoading,createPrPreviewSelectedCommit,createPrPreviewSelectedSha,createPrResult,createPrResultHeadline,createPrStages,createPrSubmitting,createPrToolbarDisabledReason,currentBranch,currentLocalBranchEntry,desktopSplitLayout,details,detailsBodyRef,detailsError,detailsLoading,detailsMessageContent,detailsSplitRatio,diffViewMode,emptyStateStatusText,expandedLocalScopes,expandedRemoteScopes,extractCommitBody,fallbackGitRoots,fallbackGitRootsError,fallbackGitRootsLoading,fallbackSelectingRoot,fetchDialogOpen,fetchSubmitting,fileTreeItems,forceDeleteCopiedPath,forceDeleteCountdown,forceDeleteDialogState,formatRelativeTime,getBranchLeafName,getBranchScope,getCommitActionIcon,getCurrentDefaultColumnWidths,getSpecialBranchBadges,getTreeLineOpacity,groupedLocalBranches,groupedRemoteBranches,handleBranchContextMenuKeyDown,handleBranchesSplitResizeStart,handleCommitsSplitResizeStart,handleConfirmCreatePr,handleConfirmFetch,handleConfirmPull,handleConfirmPush,handleConfirmRefresh,handleConfirmResetCommit,handleConfirmSync,handleCopyCreatePrRetryCommand,handleCopyCreatePrUrl,handleCopyForceDeleteWorktreePath,handleCreateBranch,handleCreateBranchConfirm,handleCreatePrHeadRepositoryChange,handleDeleteBranch,handleDetailsSplitResizeStart,handleFallbackGitRootSelect,handleFileTreeDirToggle,handleMergeBranch,handleOpenBranchContextMenu,handleOpenCommitContextMenu,handleOpenCreatePrDialog,handleOpenFetchDialog,handleOpenPullDialog,handleOpenPushDialog,handleOpenRefreshDialog,handleOpenRenameBranchDialog,handleOpenSyncDialog,handleOpenWorktreePreview,handleOverviewSplitResizeStart,handlePushPreviewDirToggle,handleRenameBranchConfirm,handleSelectBranchCompareCommit,handleSelectPullRemote,handleSelectPullTargetBranch,handleSelectPushRemote,handleSelectPushTargetBranch,handleSelectWorktreeDiffFile,handleToggleLocalScope,handleToggleRemoteScope,handleWorktreeSummaryChange,historyError,historyHasMore,historyLoading,historyLoadingMore,historyPreviewHeaderControlsTarget,historyTotal,isCreatePrDialogMaximized,isHistoryDiffModalMaximized,loadCreatePrCommitPreview,loadHistory,localSectionExpanded,localizeKnownGitError,localizedOperationName,mainGridRef,mainGridStyle,onCreateCodeAnnotation,onOpenDiffPath,onRemoveCodeAnnotation,onRequestClose,onSelectWorkspace,openPullTargetBranchMenu,openPushTargetBranchMenu,operationLoading,operationNotice,overviewCommitSectionCollapsed,overviewListView,overviewWidth,previewDetailFile,previewDetailFileDiff,previewDiffEntries,previewModalFullDiffLoader,projectOptions,projectSections,pullDialogOpen,pullNoCommit,pullNoVerify,pullOptionsMenuOpen,pullOptionsMenuRef,pullRemote,pullRemoteGroups,pullRemoteMenuOpen,pullRemoteMenuPlacement,pullRemotePickerRef,pullRemoteTrimmed,pullSelectedOptions,pullStrategy,pullSubmitting,pullTargetBranch,pullTargetBranchActiveScopeTab,pullTargetBranchFieldRef,pullTargetBranchGroups,pullTargetBranchMenuOpen,pullTargetBranchMenuPlacement,pullTargetBranchMenuRef,pullTargetBranchPickerRef,pullTargetBranchTrimmed,pushCanConfirm,pushCc,pushDialogOpen,pushForceWithLease,pushHasOutgoingCommits,pushIsNewBranchTarget,pushPreviewCommits,pushPreviewDetails,pushPreviewDetailsError,pushPreviewDetailsLoading,pushPreviewError,pushPreviewFileTreeItems,pushPreviewHasMore,pushPreviewLoading,pushPreviewModalDiffEntries,pushPreviewModalFile,pushPreviewModalFileDiff,pushPreviewModalFullDiffLoader,pushPreviewSelectedCommit,pushPreviewSelectedFileKey,pushPreviewSelectedSha,pushRemoteMenuOpen,pushRemoteMenuPlacement,pushRemoteOptions,pushRemotePickerRef,pushRemoteTrimmed,pushReviewers,pushRunHooks,pushSubmitting,pushTags,pushTargetBranch,pushTargetBranchActiveScopeTab,pushTargetBranchFieldRef,pushTargetBranchGroups,pushTargetBranchMenuOpen,pushTargetBranchMenuPlacement,pushTargetBranchMenuRef,pushTargetBranchPickerRef,pushTargetBranchTrimmed,pushTargetSummaryBranch,pushToGerrit,pushTopic,refreshAll,refreshDialogOpen,refreshSubmitting,remoteSectionExpanded,renameBranchCanConfirm,renameBranchDialogOpen,renameBranchName,renameBranchNameInputRef,renameBranchSource,renameBranchSubmitting,renameBranchToolbarDisabledReason,renderChangedFilesSummary,repositoryRootName,repositoryUnavailable,resetDialogOpen,resetMode,resetTargetCommit,resetTargetSha,runCommitAction,selectedBranch,selectedCommitSha,selectedFileKey,selectedLocalBranchForRename,setBranchQuery,setBranchesWidth,setCommitContextMenu,setCommitContextMoreOpen,setCommitQuery,setCommitsWidth,setComparePreviewFileKey,setCreateBranchDialogOpen,setCreateBranchName,setCreateBranchSource,setCreatePrForm,setCreatePrPreviewExpanded,setCreatePrPreviewSelectedSha,setDetailsSplitRatio,setDiffViewMode,setFallbackSelectingRoot,setFetchDialogOpen,setHistoryPreviewHeaderControlsTarget,setIsCreatePrDialogMaximized,setIsHistoryDiffModalMaximized,setLocalSectionExpanded,setOverviewCommitSectionCollapsed,setOverviewListView,setOverviewWidth,setPreviewFileKey,setPullDialogOpen,setPullNoCommit,setPullNoVerify,setPullOptionsMenuOpen,setPullRemoteMenuOpen,setPullStrategy,setPullTargetBranch,setPullTargetBranchActiveScopeTab,setPullTargetBranchMenuOpen,setPullTargetBranchQuery,setPushCc,setPushDialogOpen,setPushForceWithLease,setPushPreviewModalFileKey,setPushPreviewSelectedFileKey,setPushPreviewSelectedSha,setPushRemoteMenuOpen,setPushReviewers,setPushRunHooks,setPushTags,setPushTargetBranch,setPushTargetBranchActiveScopeTab,setPushTargetBranchMenuOpen,setPushTargetBranchQuery,setPushToGerrit,setPushTopic,setRefreshDialogOpen,setRemoteSectionExpanded,setRenameBranchName,setResetDialogOpen,setResetMode,setSelectedBranch,setSelectedCommitSha,setSelectedFileKey,setSyncDialogOpen,setWorkspaceSelectingId,shouldShowWorkspacePickerPage,statusLabel,strokeWidth,syncDialogOpen,syncPreviewCommits,syncPreviewError,syncPreviewLoading,syncPreviewTargetBranch,syncPreviewTargetFound,syncPreviewTargetRemote,syncSubmitting,t,trimRemotePrefix,updatePullRemoteMenuPlacement,updatePushRemoteMenuPlacement,virtualCommitRows,visiblePullTargetBranchGroups,visiblePushTargetBranchGroups,workbenchGridRef,workbenchGridStyle,workingTreeChangedFiles,workingTreeSummaryLabel,workingTreeTotalAdditions,workingTreeTotalDeletions,workspace,workspaceId,workspacePickerMessage,workspaceSelectingId,worktreePreviewDiffEntries,worktreePreviewDiffText,worktreePreviewError,worktreePreviewFile,worktreePreviewFullDiffLoader,worktreePreviewLoading} = scope;
+  const { repositories = [], selectedRepositoryRoot = null, onSelectRepository } = scope;
   const isWorktreeDiffMode = branchDiffState?.mode === "worktree";
   const branchDiffModeClassName = isWorktreeDiffMode ? "is-worktree-mode" : "is-branch-mode";
   const branchDiffTitle = branchDiffState
@@ -43,9 +44,39 @@ export function renderGitHistoryPanelView(scope: any) {
   const pullExampleCommand = `git pull ${pullRemote.trim() || "origin"} ${pullTargetSummary}${
     pullStrategy ? ` ${pullStrategy}` : ""
   }${pullNoCommit ? " --no-commit" : ""}${pullNoVerify ? " --no-verify" : ""}`;
+  const selectedProjectOption = projectSections
+    .flatMap((section: { options: Array<{ id: string; label: string; selected?: boolean }> }) => section.options)
+    .find((option: { selected?: boolean }) => option.selected);
+  const repositoryPickerEntries = repositories.map((repository) => ({
+    id: `repository:${encodeURIComponent(repository.repositoryRoot)}`,
+    label: repository.displayName,
+    repositoryRoot: repository.repositoryRoot,
+  }));
+  const selectedRepository = repositories.find(
+    (repository) => repository.repositoryRoot === selectedRepositoryRoot,
+  );
+  const repositoryPicker = repositoryPickerEntries.length > 1 && onSelectRepository ? (
+    <GitHistoryProjectPicker
+      sections={[{ id: null, name: "", options: repositoryPickerEntries }]}
+      selectedId={selectedRepository
+        ? `repository:${encodeURIComponent(selectedRepository.repositoryRoot)}`
+        : null}
+      selectedLabel={selectedRepository?.displayName ?? workspace?.name ?? t("git.historyProject")}
+      ariaLabel={t("git.chooseRepo")}
+      searchPlaceholder={t("workspace.searchProjects")}
+      emptyText={t("git.noRepositoriesFound")}
+      icon={<HardDrive size={13} />}
+      onSelect={(optionId) => {
+        const selected = repositoryPickerEntries.find((entry) => entry.id === optionId);
+        if (selected) {
+          void onSelectRepository(selected.repositoryRoot);
+        }
+      }}
+    />
+  ) : null;
 
   if (shouldShowWorkspacePickerPage) {
-    const canPickFallbackGitRoot = repositoryUnavailable && Boolean(workspace);
+    const canPickFallbackGitRoot = repositoryUnavailable && Boolean(workspace) && !repositoryPicker;
     const isEmptyStateSelecting = Boolean(fallbackSelectingRoot || workspaceSelectingId);
     return (
       <div className="git-history-workbench">
@@ -55,20 +86,21 @@ export function renderGitHistoryPanelView(scope: any) {
             {projectOptions.length > 0 && onSelectWorkspace ? (
               <GitHistoryProjectPicker
                 sections={projectSections}
-                selectedId={workspace?.id ?? null}
-                selectedLabel={workspace?.name ?? t("git.historyProject")}
+                selectedId={selectedProjectOption?.id ?? workspace?.id ?? null}
+                selectedLabel={selectedProjectOption?.label ?? workspace?.name ?? t("git.historyProject")}
                 ariaLabel={t("git.historyProject")}
                 searchPlaceholder={t("workspace.searchProjects")}
                 emptyText={t("workspace.noProjectsFound")}
                 disabled={isEmptyStateSelecting}
                 onSelect={(nextWorkspaceId) => {
-                  if (nextWorkspaceId && nextWorkspaceId !== workspace?.id) {
+                  if (nextWorkspaceId && nextWorkspaceId !== selectedProjectOption?.id) {
                     setWorkspaceSelectingId(nextWorkspaceId);
                     onSelectWorkspace(nextWorkspaceId);
                   }
                 }}
               />
             ) : null}
+            {repositoryPicker}
             {canPickFallbackGitRoot ? (
               <GitHistoryProjectPicker
                 sections={[
@@ -281,19 +313,20 @@ export function renderGitHistoryPanelView(scope: any) {
           {projectOptions.length > 0 && onSelectWorkspace ? (
             <GitHistoryProjectPicker
               sections={projectSections}
-              selectedId={workspace.id}
-              selectedLabel={workspace.name}
+              selectedId={selectedProjectOption?.id ?? workspace.id}
+              selectedLabel={selectedProjectOption?.label ?? workspace.name}
               ariaLabel={t("git.historyProject")}
               searchPlaceholder={t("workspace.searchProjects")}
               emptyText={t("workspace.noProjectsFound")}
               onSelect={(nextWorkspaceId) => {
-                if (nextWorkspaceId && nextWorkspaceId !== workspace.id) {
+                if (nextWorkspaceId && nextWorkspaceId !== selectedProjectOption?.id) {
                   setWorkspaceSelectingId(nextWorkspaceId);
                   onSelectWorkspace(nextWorkspaceId);
                 }
               }}
             />
           ) : null}
+          {repositoryPicker}
           <div className="git-history-toolbar-meta">
             <span className="git-history-head-pill">HEAD</span>
             <code className="git-history-current-branch">{currentBranch ?? workspace.name}</code>

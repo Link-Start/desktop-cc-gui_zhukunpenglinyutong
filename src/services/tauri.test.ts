@@ -124,6 +124,7 @@ import {
   getWebAssetsStatus,
   installWebAssets,
   installWebAssetsFromFile,
+  generateCommitMessage,
 } from "./tauri";
 import { resetRuntimeModeStateForTests } from "./tauri/runtimeMode";
 import {
@@ -186,6 +187,38 @@ describe("tauri invoke wrappers", () => {
     clearWebRuntimeFlag();
     resetRuntimeModeStateForTests();
     resetStartupTraceForTests();
+  });
+
+  it("maps repository-scoped commit message generation without changing legacy payloads", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValue("fix: generated");
+
+    await generateCommitMessage("ws-1", "zh", ["legacy.ts"]);
+    expect(invokeMock).toHaveBeenLastCalledWith("generate_commit_message", {
+      workspaceId: "ws-1",
+      language: "zh",
+      selectedPaths: ["legacy.ts"],
+    });
+
+    const repositorySelections = [
+      { repositoryRoot: "services/api", selectedPaths: ["pom.xml"] },
+      { repositoryRoot: "services/web", selectedPaths: ["package.json"] },
+    ];
+    await generateCommitMessage("ws-1", "en", undefined, repositorySelections);
+    expect(invokeMock).toHaveBeenLastCalledWith("generate_commit_message", {
+      workspaceId: "ws-1",
+      language: "en",
+      selectedPaths: undefined,
+      repositorySelections,
+    });
+
+    await generateCommitMessage("ws-1", "zh", undefined, []);
+    expect(invokeMock).toHaveBeenLastCalledWith("generate_commit_message", {
+      workspaceId: "ws-1",
+      language: "zh",
+      selectedPaths: undefined,
+      repositorySelections: [],
+    });
   });
 
   it("maps Web assets status and install commands without payload drift", async () => {
@@ -286,6 +319,7 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("get_git_status", {
       workspaceId: "ws-1",
+      repositoryRoot: null,
     });
     expect(
       getStartupTraceSnapshot().events.some(
@@ -362,6 +396,18 @@ describe("tauri invoke wrappers", () => {
         status: "failed",
       }),
     ]);
+  });
+
+  it("maps an explicit repository scope for Git History diff loading", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce([]);
+
+    await getGitDiffs("ws-1", "services/api");
+
+    expect(invokeMock).toHaveBeenCalledWith("get_git_diffs", {
+      workspaceId: "ws-1",
+      repositoryRoot: "services/api",
+    });
   });
 
   it("invokes codex runtime reload command", async () => {
@@ -1418,6 +1464,7 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("stage_git_all", {
       workspaceId: "ws-6",
+      repositoryRoot: null,
     });
   });
 
@@ -1461,6 +1508,7 @@ describe("tauri invoke wrappers", () => {
       topic: "topic-1",
       reviewers: "alice,bob",
       cc: "carol",
+      repositoryRoot: null,
     });
   });
 
@@ -1483,6 +1531,31 @@ describe("tauri invoke wrappers", () => {
       strategy: "--rebase",
       noCommit: false,
       noVerify: true,
+      repositoryRoot: null,
+    });
+  });
+
+  it("maps explicit repository scope for status and stage", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValue({
+      branchName: "main",
+      files: [],
+      stagedFiles: [],
+      unstagedFiles: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+    });
+
+    await getGitStatus("ws-1", "services/api");
+    await stageGitAll("ws-1", "services/api");
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "get_git_status", {
+      workspaceId: "ws-1",
+      repositoryRoot: "services/api",
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "stage_git_all", {
+      workspaceId: "ws-1",
+      repositoryRoot: "services/api",
     });
   });
 
@@ -1556,6 +1629,33 @@ describe("tauri invoke wrappers", () => {
       remote: "origin",
       branch: "main",
       limit: 120,
+    });
+  });
+
+  it("maps repository scope for git push preview", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      sourceBranch: "main",
+      targetRemote: "origin",
+      targetBranch: "main",
+      targetRef: "refs/remotes/origin/main",
+      targetFound: true,
+      hasMore: false,
+      commits: [],
+    });
+
+    await getGitPushPreview("ws-31", {
+      remote: "origin",
+      branch: "main",
+      repositoryRoot: "services/api",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("get_git_push_preview", {
+      workspaceId: "ws-31",
+      remote: "origin",
+      branch: "main",
+      limit: 120,
+      repositoryRoot: "services/api",
     });
   });
 

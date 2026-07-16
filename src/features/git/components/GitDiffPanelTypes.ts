@@ -1,7 +1,13 @@
-import type { CommitMessageEngine, CommitMessageLanguage } from "../../../services/tauri";
+import type {
+  CommitMessageEngine,
+  CommitMessageLanguage,
+  CommitMessageRepositorySelection,
+} from "../../../services/tauri";
 import type { GitHubIssue, GitHubPullRequest, GitLogEntry } from "../../../types";
 import type { CodeAnnotationBridgeProps } from "../../code-annotations/types";
 import type { PanelTabId } from "../../layout/components/PanelTabs";
+import type { RepositoryGitStatus } from "../hooks/useMultiRepositoryGitStatus";
+import type { RepositoryCommitSelection } from "./GitMultiRepositoryChanges";
 
 export type GitModalPreviewRequest = {
   path: string;
@@ -110,6 +116,7 @@ export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
     language?: CommitMessageLanguage,
     engine?: CommitMessageEngine,
     selectedPaths?: string[],
+    repositorySelections?: CommitMessageRepositorySelection[],
   ) => void | Promise<void>;
   onCommit?: (selectedPaths?: string[]) => void | Promise<void>;
   onCommitAndPush?: (selectedPaths?: string[]) => void | Promise<void>;
@@ -125,4 +132,13 @@ export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   commitsAhead?: number;
   onRefreshGitStatus?: () => void;
   onRefreshGitDiffs?: () => void;
+  multiRepositoryMode?: boolean;
+  repositoryStatuses?: RepositoryGitStatus[];
+  repositoryStatusesLoading?: boolean;
+  onRefreshRepositoryStatuses?: () => Promise<void> | void;
+  onStageRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
+  onUnstageRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
+  onStageRepositoryAll?: (repositoryRoot: string) => Promise<void>;
+  onCommitRepositories?: (selections: RepositoryCommitSelection[]) => Promise<void> | void;
+  repositoryCommitSummary?: string | null;
 };

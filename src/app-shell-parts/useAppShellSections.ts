@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getWorkspaceFiles } from "../services/tauri";
 import { pushErrorToast } from "../services/toasts";
@@ -768,25 +768,52 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
   const handleCloseGitHistoryPanel = useCallback(() => {
     setAppMode("chat");
   }, [setAppMode]);
+  const [gitHistoryWorkspaceId, setGitHistoryWorkspaceId] = useState<string | null>(null);
+  const [gitHistoryProjectWorkspaceId, setGitHistoryProjectWorkspaceId] = useState<string | null>(null);
+  const [gitHistoryRepositoryRoot, setGitHistoryRepositoryRoot] = useState<string | null>(null);
+  const gitHistorySelectionRequestRef = useRef(0);
   const normalizeWorkspacePath = useCallback(
     (path: string) => path.replace(/\\/g, "/").replace(/\/+$/, ""),
     [],
   );
-  const handleSelectWorkspacePathForGitHistory = useCallback(
-    async (path: string) => {
+  const gitHistoryWorkspace = useMemo(
+    () => (gitHistoryWorkspaceId ? workspacesById.get(gitHistoryWorkspaceId) : null) ?? activeWorkspace,
+    [activeWorkspace, gitHistoryWorkspaceId, workspacesById],
+  );
+  const gitHistoryProjectWorkspace = useMemo(
+    () => (gitHistoryProjectWorkspaceId
+      ? workspacesById.get(gitHistoryProjectWorkspaceId)
+      : null) ?? activeWorkspace,
+    [activeWorkspace, gitHistoryProjectWorkspaceId, workspacesById],
+  );
+
+  useEffect(() => {
+    gitHistorySelectionRequestRef.current += 1;
+    setGitHistoryWorkspaceId(activeWorkspaceId ?? null);
+    setGitHistoryProjectWorkspaceId(activeWorkspaceId ?? null);
+    setGitHistoryRepositoryRoot(null);
+  }, [activeWorkspaceId]);
+
+  const selectGitHistoryWorkspace = useCallback((workspaceId: string) => {
+    gitHistorySelectionRequestRef.current += 1;
+    setGitHistoryWorkspaceId(workspaceId);
+    setGitHistoryProjectWorkspaceId(workspaceId);
+    setGitHistoryRepositoryRoot(null);
+  }, []);
+
+  const selectGitHistoryWorkspacePath = useCallback(
+    async (path: string, repositoryRoot: string | null) => {
+      const requestId = gitHistorySelectionRequestRef.current + 1;
+      gitHistorySelectionRequestRef.current = requestId;
       const normalizedTarget = normalizeWorkspacePath(path);
       const existing = workspaces.find(
-        (entry: WorkspaceInfo) =>
-          normalizeWorkspacePath(entry.path) === normalizedTarget,
+        (entry: WorkspaceInfo) => normalizeWorkspacePath(entry.path) === normalizedTarget,
       );
-      if (existing) {
-        setActiveWorkspaceId(existing.id);
-        return;
-      }
       try {
-        const workspace = await addWorkspaceFromPath(path);
-        if (workspace) {
-          setActiveWorkspaceId(workspace.id);
+        const workspace = existing ?? await addWorkspaceFromPath(path, { activate: false });
+        if (workspace && gitHistorySelectionRequestRef.current === requestId) {
+          setGitHistoryWorkspaceId(workspace.id);
+          setGitHistoryRepositoryRoot(repositoryRoot);
         }
       } catch (error) {
         addDebugEntry({
@@ -798,13 +825,25 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
         });
       }
     },
-    [
-      addDebugEntry,
-      addWorkspaceFromPath,
-      normalizeWorkspacePath,
-      setActiveWorkspaceId,
-      workspaces,
-    ],
+    [addDebugEntry, addWorkspaceFromPath, normalizeWorkspacePath, workspaces],
+  );
+
+  const handleSelectWorkspacePathForGitHistory = useCallback(
+    async (path: string) => {
+      await selectGitHistoryWorkspacePath(path, null);
+    },
+    [selectGitHistoryWorkspacePath],
+  );
+  const handleSelectRepositoryForGitHistory = useCallback(
+    (repositoryRoot: string) => {
+      if (!gitHistoryProjectWorkspace) {
+        return;
+      }
+      gitHistorySelectionRequestRef.current += 1;
+      setGitHistoryWorkspaceId(gitHistoryProjectWorkspace.id);
+      setGitHistoryRepositoryRoot(repositoryRoot);
+    },
+    [gitHistoryProjectWorkspace],
   );
 
   const handleOpenSpecHub = useCallback(() => {
@@ -1117,6 +1156,11 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     showComposer,
     showGitDetail,
     handleCloseGitHistoryPanel,
+    handleSelectRepositoryForGitHistory,
+    selectGitHistoryWorkspace,
+    gitHistoryWorkspace,
+    gitHistoryProjectWorkspace,
+    gitHistoryRepositoryRoot,
     handleRefreshAccountRateLimits,
     dropOverlayActive,
     dropOverlayText,

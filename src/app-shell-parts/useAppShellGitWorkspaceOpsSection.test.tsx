@@ -159,6 +159,10 @@ describe("useAppShellGitWorkspaceOpsSection", () => {
     });
 
     expect(updateBranch).toHaveBeenCalledWith("main", "services/api");
+    expect(useGitBranches).toHaveBeenCalledWith(expect.objectContaining({
+      activeWorkspace: workspace,
+      repositoryRoot: null,
+    }));
     expect(refreshGitStatus).toHaveBeenCalledTimes(1);
     expect(pushErrorToast).toHaveBeenCalledWith(expect.objectContaining({
       title: "git.historyBranchMenuUpdate",

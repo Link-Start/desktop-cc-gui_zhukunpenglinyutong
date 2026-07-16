@@ -320,7 +320,7 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
   );
 
   const addWorkspaceFromPath = useCallback(
-    async (path: string) => {
+    async (path: string, options: { activate?: boolean } = {}) => {
       const selection = path.trim();
       if (!selection) {
         return null;
@@ -331,7 +331,9 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
           normalizeWorkspacePathForComparison(entry.path) === normalizedSelection,
       );
       if (existingWorkspace) {
-        setActiveWorkspaceId(existingWorkspace.id);
+        if (options.activate !== false) {
+          setActiveWorkspaceId(existingWorkspace.id);
+        }
         return existingWorkspace;
       }
       onDebug?.({
@@ -344,7 +346,9 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
       try {
         const workspace = await addWorkspaceService(selection, defaultCodexBin ?? null);
         setWorkspaces((prev) => [...prev, workspace]);
-        setActiveWorkspaceId(workspace.id);
+        if (options.activate !== false) {
+          setActiveWorkspaceId(workspace.id);
+        }
         return workspace;
       } catch (error) {
         onDebug?.({

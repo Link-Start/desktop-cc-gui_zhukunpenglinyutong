@@ -16,3 +16,38 @@ Please provide the complete commit message: the title should follow the Conventi
 
     format!("{intro}\n\nChanges:\n{diff}")
 }
+
+pub(super) fn combine_repository_diff_sections(sections: Vec<(String, String)>) -> String {
+    sections
+        .into_iter()
+        .filter(|(_, diff)| !diff.trim().is_empty())
+        .map(|(repository, diff)| format!("Repository: {repository}\n{diff}"))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::combine_repository_diff_sections;
+
+    #[test]
+    fn combines_non_empty_repository_diffs_with_stable_headings() {
+        assert!(combine_repository_diff_sections(Vec::new()).is_empty());
+        let combined = combine_repository_diff_sections(vec![
+            (
+                "services/api".to_string(),
+                "diff --git a/pom.xml".to_string(),
+            ),
+            ("services/empty".to_string(), "  ".to_string()),
+            (
+                "services/web".to_string(),
+                "diff --git a/package.json".to_string(),
+            ),
+        ]);
+
+        assert_eq!(
+            combined,
+            "Repository: services/api\ndiff --git a/pom.xml\n\nRepository: services/web\ndiff --git a/package.json"
+        );
+    }
+}

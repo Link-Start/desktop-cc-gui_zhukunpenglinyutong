@@ -870,10 +870,81 @@ button.diff-section-indicator:focus-visible {
   flex-direction: column;
   gap: 2px;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
   flex: 1;
   padding-right: 2px;
   min-height: 0;
+}
+
+.git-multi-repository-changes {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.diff-commit-workspace-content,
+.git-multi-repository-changes__content {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.git-multi-repository-changes__content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.git-repository-change-group {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-item);
+}
+
+.git-repository-change-group__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.git-repository-change-group__name,
+.git-repository-change-group__branch {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.git-repository-change-group__branch {
+  color: var(--git-branch);
+}
+
+.git-repository-change-group__count {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.git-repository-commit-summary {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.git-repository-change-group .diff-section {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
 }
 
 .diff-section {
@@ -1822,6 +1893,16 @@ button.diff-section-indicator:focus-visible {
   margin-bottom: 0;
   padding-bottom: 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-muted) 50%, transparent);
+}
+
+.git-commit-composer {
+  flex: 0 0 auto;
+  margin-top: 8px;
+  padding: 10px 0 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border-muted) 65%, transparent);
+  border-bottom: 0;
+  background: var(--surface-right-panel, var(--background));
+  box-shadow: 0 -8px 18px -18px color-mix(in srgb, var(--foreground) 45%, transparent);
 }
 
 .commit-message-input-wrapper {

@@ -77,7 +77,11 @@ export {
   updateEmailSenderSettings,
 } from "./tauri/email";
 export { setMenuAccelerators, updateMenuLabels } from "./tauri/menu";
-export type { CommitMessageEngine, CommitMessageLanguage } from "./tauri/commitMessage";
+export type {
+  CommitMessageEngine,
+  CommitMessageLanguage,
+  CommitMessageRepositorySelection,
+} from "./tauri/commitMessage";
 export {
   generateCommitMessage,
   generateCommitMessageWithEngine,

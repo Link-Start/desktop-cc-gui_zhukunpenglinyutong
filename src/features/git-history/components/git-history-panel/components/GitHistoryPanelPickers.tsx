@@ -80,6 +80,7 @@ export type GitHistoryPickerOption = {
   label: string;
   kind?: "main" | "worktree";
   parentLabel?: string | null;
+  selected?: boolean;
 };
 
 type GitHistoryPickerSection = {

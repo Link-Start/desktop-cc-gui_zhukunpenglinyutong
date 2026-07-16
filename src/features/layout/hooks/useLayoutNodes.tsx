@@ -1925,6 +1925,15 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           pushError={options.pushError}
           syncError={options.syncError}
           commitsAhead={options.commitsAhead}
+          multiRepositoryMode={options.multiRepositoryMode}
+          repositoryStatuses={options.repositoryStatuses}
+          repositoryStatusesLoading={options.repositoryStatusesLoading}
+          onRefreshRepositoryStatuses={options.onRefreshRepositoryStatuses}
+          onStageRepositoryFile={options.onStageRepositoryFile}
+          onUnstageRepositoryFile={options.onUnstageRepositoryFile}
+          onStageRepositoryAll={options.onStageRepositoryAll}
+          onCommitRepositories={options.onCommitRepositories}
+          repositoryCommitSummary={options.repositoryCommitSummary}
           onRefreshGitDiffs={options.refreshGitDiffs}
           onCreateCodeAnnotation={handleCreateCodeAnnotation}
           onRemoveCodeAnnotation={handleRemoveCodeAnnotation}

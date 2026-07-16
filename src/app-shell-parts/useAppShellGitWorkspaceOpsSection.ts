@@ -57,7 +57,6 @@ export function useAppShellGitWorkspaceOpsSection({
   });
   const [selectedRepositoryRoot, setSelectedRepositoryRoot] = useState<string | null>(null);
   const updatingRepositoryBranchesRef = useRef(new Set<string>());
-  const selectedRepositoryWorkspace = selectedRepositoryRoot === null ? null : activeWorkspace;
   const {
     branches,
     localBranches,
@@ -68,7 +67,7 @@ export function useAppShellGitWorkspaceOpsSection({
     createBranch,
     updateBranch,
   } = useGitBranches({
-    activeWorkspace: selectedRepositoryWorkspace,
+    activeWorkspace,
     onDebug: addDebugEntry,
     repositoryRoot: selectedRepositoryRoot,
     onMutationComplete: refreshRepositories,

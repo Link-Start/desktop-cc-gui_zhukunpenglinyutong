@@ -6,7 +6,9 @@ import FilePlus2 from "lucide-react/dist/esm/icons/file-plus-2";
 import FolderPlus from "lucide-react/dist/esm/icons/folder-plus";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import type { GitRepositorySummary } from "../../../types";
-import { gitRepositoryStatusTokens } from "../../git/utils/gitRepositorySummary";
+import {
+  gitRepositoryStatusItems,
+} from "../../git/utils/gitRepositorySummary";
 
 type FileTreeRootActionsProps = {
   rootLabel: string;
@@ -39,9 +41,9 @@ export function FileTreeRootActions({
 }: FileTreeRootActionsProps) {
   const { t } = useTranslation();
   const displayRootLabel = rootLabel.toUpperCase();
-  const repositoryStatus = repositorySummary
-    ? gitRepositoryStatusTokens(repositorySummary).join(" ")
-    : "";
+  const repositoryStatusItems = repositorySummary
+    ? gitRepositoryStatusItems(repositorySummary)
+    : [];
   const [spinningAction, setSpinningAction] = useState<string | null>(null);
   const spinTimerRef = useRef<number | null>(null);
   const spinRafRef = useRef<number | null>(null);
@@ -98,7 +100,14 @@ export function FileTreeRootActions({
             className="file-tree-root-git-summary"
             title={repositorySummary.error ?? repositorySummary.upstream ?? undefined}
           >
-            {repositoryStatus}
+            {repositoryStatusItems.map((item, index) => (
+              <span
+                key={`${item.label}:${index}`}
+                className={`file-tree-git-token is-${item.kind}`}
+              >
+                {item.label}
+              </span>
+            ))}
           </span>
         ) : null}
       </div>

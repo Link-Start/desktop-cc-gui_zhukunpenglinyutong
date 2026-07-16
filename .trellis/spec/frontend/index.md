@@ -20,6 +20,8 @@
 | [Claude Context Usage Display](./claude-context-usage-display.md) | Claude context usage view model、tooltip layout、pending/estimated/live display contract | Active |
 | [Model Structured Output Contract](./model-structured-output.md) | AI model JSON / structured payload normalization、validator、bounded repair contract | Active |
 | [Desktop Drag-Drop Contract](./desktop-drag-drop.md) | Tauri multi-WebView 外部文件/文件夹拖入 Composer 的跨层事件契约 | Active |
+| [Multi-Repository File Tree Git Decoration Contract](./git-repository-file-tree-decorations.md) | 多 Git repository aggregate status、safe path projection、folder decoration 与 theme token contract | Active |
+| [Multi-Repository Git Commit Workspace Contract](./multi-repository-git-commit-workspace.md) | repository-scoped Git identity、single/multi adaptive commit UI 与 partial success contract | Active |
 | [Codex Provider Session UI Contract](./codex-provider-session-ui.md) | Codex provider selector、start/fork payload、thread metadata merge、sidebar/pinned/composer provider label contract | Active |
 | [Hook Guidelines](./hook-guidelines.md) | hook 编排、async safety、bridge 调用约束 | Active |
 | [State Management](./state-management.md) | local/global/persistent/runtime state 边界 | Active |
@@ -44,6 +46,7 @@
 - 涉及 Claude 上下文用量窗体、`ThreadTokenUsage` 或 token indicator 时，额外读 [Claude Context Usage Display](./claude-context-usage-display.md)。
 - 涉及 AI model JSON、structured output、`Return pure JSON only` prompt、`JSON.parse(response.text)` 或模型输出 repair 时，额外读 [Model Structured Output Contract](./model-structured-output.md)。
 - 涉及 Tauri window/webview builder、Browser Agent child WebView、`src/services/dragDrop.ts` 或 Composer 外部文件/文件夹拖拽时，额外读 [Desktop Drag-Drop Contract](./desktop-drag-drop.md)。
+- 涉及 `GitRepositorySummary`、多 repository status scan、file tree Git decoration 或 repository summary token 时，额外读 [Multi-Repository File Tree Git Decoration Contract](./git-repository-file-tree-decorations.md)。
 - 涉及 Codex provider selector、`startThread` / `forkThread` payload、thread provider metadata、sidebar/pinned/composer provider label 或供应商管理 Codex tab 时，额外读 [Codex Provider Session UI Contract](./codex-provider-session-ui.md)。
 
 ## 项目事实基线（Project Facts）

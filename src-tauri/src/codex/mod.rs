@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -28,7 +29,7 @@ mod thread_listing;
 pub(crate) mod thread_mode_state;
 
 use self::args::resolve_workspace_codex_args;
-use self::commit_message::build_commit_message_prompt;
+use self::commit_message::{build_commit_message_prompt, combine_repository_diff_sections};
 pub(crate) use self::doctor::{run_claude_doctor_with_settings, run_codex_doctor_with_settings};
 pub(crate) use self::home::{resolve_default_codex_home, resolve_workspace_codex_home};
 pub(crate) use self::installer::{
@@ -59,6 +60,51 @@ use crate::shared::workspaces_core::disconnect_workspace_session_core;
 use crate::shared::{codex_core, thread_titles_core};
 use crate::state::AppState;
 use crate::types::{AppSettings, WorkspaceEntry};
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CommitMessageRepositorySelection {
+    repository_root: String,
+    selected_paths: Vec<String>,
+}
+
+async fn collect_commit_message_diff(
+    workspace_id: &str,
+    state: &State<'_, AppState>,
+    selected_paths: Option<&[String]>,
+    repository_selections: Option<&[CommitMessageRepositorySelection]>,
+) -> Result<String, String> {
+    let Some(repository_selections) = repository_selections else {
+        return crate::git::get_workspace_diff_for_commit_scope(
+            workspace_id,
+            state,
+            selected_paths,
+            None,
+        )
+        .await;
+    };
+    if repository_selections.is_empty() {
+        return Ok(String::new());
+    }
+
+    let mut sections = Vec::with_capacity(repository_selections.len());
+    for selection in repository_selections {
+        let diff = crate::git::get_workspace_diff_for_commit_scope(
+            workspace_id,
+            state,
+            Some(&selection.selected_paths),
+            Some(&selection.repository_root),
+        )
+        .await?;
+        let repository_label = if selection.repository_root.is_empty() {
+            "."
+        } else {
+            selection.repository_root.as_str()
+        };
+        sections.push((repository_label.to_string(), diff));
+    }
+    Ok(combine_repository_diff_sections(sections))
+}
 
 #[cfg(windows)]
 fn codex_windows_turn_developer_instructions(settings: &AppSettings) -> Option<String> {
@@ -1698,13 +1744,15 @@ pub(crate) async fn get_commit_message_prompt(
     workspace_id: String,
     language: Option<String>,
     selected_paths: Option<Vec<String>>,
+    repository_selections: Option<Vec<CommitMessageRepositorySelection>>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     // Get the diff from git
-    let diff = crate::git::get_workspace_diff_for_commit_scope(
+    let diff = collect_commit_message_diff(
         &workspace_id,
         &state,
         selected_paths.as_deref(),
+        repository_selections.as_deref(),
     )
     .await?;
 
@@ -1749,14 +1797,16 @@ pub(crate) async fn generate_commit_message(
     workspace_id: String,
     language: Option<String>,
     selected_paths: Option<Vec<String>>,
+    repository_selections: Option<Vec<CommitMessageRepositorySelection>>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<String, String> {
     // Get the diff from git
-    let diff = crate::git::get_workspace_diff_for_commit_scope(
+    let diff = collect_commit_message_diff(
         &workspace_id,
         &state,
         selected_paths.as_deref(),
+        repository_selections.as_deref(),
     )
     .await?;
 

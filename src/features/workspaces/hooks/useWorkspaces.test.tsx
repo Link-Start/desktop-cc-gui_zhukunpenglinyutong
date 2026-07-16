@@ -291,6 +291,26 @@ describe("useWorkspaces.addWorkspaceFromPath", () => {
     expect(result.current.workspaces).toHaveLength(1);
     expect(result.current.activeWorkspaceId).toBe("workspace-existing");
   });
+
+  it("can ensure a workspace path without changing the active workspace", async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([workspaceOne]);
+    vi.mocked(addWorkspace).mockResolvedValue({
+      ...workspaceOne,
+      id: "workspace-child",
+      name: "child",
+      path: "/tmp/ws-1/child",
+    });
+    const { result } = renderHook(() => useWorkspaces());
+    await act(async () => Promise.resolve());
+    const activeWorkspaceIdBeforeEnsure = result.current.activeWorkspaceId;
+
+    await act(async () => {
+      await result.current.addWorkspaceFromPath("/tmp/ws-1/child", { activate: false });
+    });
+
+    expect(result.current.activeWorkspaceId).toBe(activeWorkspaceIdBeforeEnsure);
+    expect(result.current.workspaces.some((entry) => entry.id === "workspace-child")).toBe(true);
+  });
 });
 
 describe("useWorkspaces.connectWorkspace", () => {

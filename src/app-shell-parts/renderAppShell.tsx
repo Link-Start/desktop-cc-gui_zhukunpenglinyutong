@@ -141,6 +141,9 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     gitDiffPanelNode,
     gitDiffViewerNode,
     gitHistoryPanelHeight,
+    gitHistoryProjectWorkspace,
+    gitHistoryRepositoryRoot,
+    gitHistoryWorkspace,
     gitPanelMode,
     gitStatus,
     groupedWorkspaces,
@@ -175,6 +178,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     handleSelectSearchResult,
     handleSelectWorkspaceInstance,
     handleSelectWorkspacePathForGitHistory,
+    handleSelectRepositoryForGitHistory,
     handleStartGuidedConversation,
     handleStartSharedConversation,
     handleStartWorkspaceConversation,
@@ -245,7 +249,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     selectedKanbanTaskId,
     selectedPullRequest,
     setActiveTab,
-    setActiveWorkspaceId,
     setAppSettings,
     setKanbanViewState,
     setReduceTransparency,
@@ -254,6 +257,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     setSearchPaletteQuery,
     setSearchPaletteSelectedIndex,
     setSearchScope,
+    selectGitHistoryWorkspace,
     settingsHighlightTarget,
     settingsOpen,
     settingsSection,
@@ -366,10 +370,13 @@ export function renderAppShell(ctx: RenderAppShellContext) {
   const gitHistoryNode = showGitHistory ? (
     <Suspense fallback={null}>
       <GitHistoryPanel
-        workspace={activeWorkspace}
+        workspace={gitHistoryWorkspace ?? activeWorkspace}
         workspaces={workspaces}
         groupedWorkspaces={groupedWorkspaces}
-        onSelectWorkspace={setActiveWorkspaceId}
+        selectedProjectWorkspaceId={gitHistoryProjectWorkspace?.id ?? null}
+        selectedRepositoryRoot={gitHistoryRepositoryRoot}
+        onSelectRepository={handleSelectRepositoryForGitHistory}
+        onSelectWorkspace={selectGitHistoryWorkspace}
         onSelectWorkspacePath={handleSelectWorkspacePathForGitHistory}
         onOpenDiffPath={handleSelectDiffForPanel}
         onRequestClose={handleCloseGitHistoryPanel}

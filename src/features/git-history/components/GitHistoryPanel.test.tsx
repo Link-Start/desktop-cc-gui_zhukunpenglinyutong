@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createPortal } from "react-dom";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GitHistoryPanel, buildFileTreeItems, getDefaultColumnWidths } from "./GitHistoryPanel";
 import { publishGitRepositoryActionIntent } from "../../git/types/gitRepositoryActions";
@@ -159,6 +160,7 @@ vi.mock("../../../services/tauri", () => ({
     totalAdditions: 0,
     totalDeletions: 0,
   })),
+  listGitRepositorySummaries: vi.fn(async () => []),
   getGitDiffs: vi.fn(async () => ({
     files: [],
     totalAdditions: 0,
@@ -345,6 +347,79 @@ describe("GitHistoryPanel helpers", () => {
 });
 
 describe("GitHistoryPanel interactions", () => {
+  it("switches a multi-repository history target through the repository picker", async () => {
+    const onSelectRepository = vi.fn();
+    const onSelectWorkspace = vi.fn();
+    function HistoryHarness() {
+      const [repositoryRoot, setRepositoryRoot] = useState("services/a");
+      return (
+        <GitHistoryPanel
+          workspace={workspace as never}
+          workspaces={[
+            workspace,
+            { ...workspace, id: "workspace-2", name: "Workspace Two" },
+          ] as never}
+          selectedProjectWorkspaceId={workspace.id}
+          repositories={[
+            { repositoryRoot: "services/a", displayName: "service-a" },
+            { repositoryRoot: "services/b", displayName: "service-b" },
+          ] as never}
+          selectedRepositoryRoot={repositoryRoot}
+          onSelectRepository={(nextRoot) => {
+            onSelectRepository(nextRoot);
+            setRepositoryRoot(nextRoot);
+          }}
+          onSelectWorkspace={onSelectWorkspace}
+        />
+      );
+    }
+    render(<HistoryHarness />);
+
+    expect(screen.getByRole("button", { name: "git.historyProject" })).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "git.chooseRepo" }));
+    fireEvent.click(screen.getByRole("option", { name: /service-b/ }));
+
+    expect(onSelectRepository).toHaveBeenCalledWith("services/b");
+    await waitFor(() => {
+      expect(tauriService.listGitBranches).toHaveBeenCalledWith("w1", "services/b");
+      expect(tauriService.getGitStatus).toHaveBeenCalledWith("w1", "services/b");
+      expect(tauriService.getGitCommitHistory).toHaveBeenCalledWith(
+        "w1",
+        expect.objectContaining({ repositoryRoot: "services/b" }),
+      );
+    });
+    fireEvent.click(screen.getByText("feat: one"));
+    await waitFor(() => {
+      expect(tauriService.getGitCommitDetails).toHaveBeenCalledWith(
+        "w1",
+        "a".repeat(40),
+        10_000,
+        "services/b",
+      );
+    });
+  });
+
+  it("keeps the legacy project picker without a redundant repository level for one repository", async () => {
+    render(
+      <GitHistoryPanel
+        workspace={workspace as never}
+        workspaces={[workspace] as never}
+        selectedProjectWorkspaceId={workspace.id}
+        repositories={[
+          { repositoryRoot: "", displayName: workspace.name },
+        ] as never}
+        onSelectWorkspace={vi.fn()}
+        onSelectRepository={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "git.historyProject" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "git.chooseRepo" })).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByText("feat: one")).toBeTruthy();
+    });
+  });
+
   it("opens the existing push dialog from a repository action intent", async () => {
     render(<GitHistoryPanel workspace={workspace as never} />);
     await waitFor(() => {

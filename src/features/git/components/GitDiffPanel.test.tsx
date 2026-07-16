@@ -171,6 +171,27 @@ async function chooseCodexEnglishCommitMessage() {
 }
 
 describe("GitDiffPanel", () => {
+  it("renders single-repository changes above the bottom commit composer", () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        stagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
+        commitMessage="fix: bottom composer"
+        onCommit={vi.fn()}
+        onGenerateCommitMessage={vi.fn()}
+      />,
+    );
+
+    const content = document.querySelector(".diff-commit-workspace-content");
+    const composer = document.querySelector(".git-commit-composer");
+    expect(content).toBeTruthy();
+    expect(composer).toBeTruthy();
+    expect(Boolean(
+      content && composer &&
+      (content.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING),
+    )).toBe(true);
+  });
+
   it("maps nested repository diff paths to cross-platform workspace file paths", () => {
     expect(resolveRepositoryWorkspaceFilePath("/workspace", "services/api", "src/App.tsx"))
       .toBe("services/api/src/App.tsx");
@@ -446,6 +467,47 @@ describe("GitDiffPanel", () => {
 
     await waitFor(() => {
       expect(onGenerateCommitMessage).toHaveBeenCalledWith("en", "codex");
+    });
+  });
+
+  it("forwards repository-scoped selections from the multi-repository AI button", async () => {
+    const onGenerateCommitMessage = vi.fn();
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        workspaceId="ws-1"
+        multiRepositoryMode
+        repositoryStatuses={[
+          {
+            repositoryRoot: "services/api",
+            displayName: "api",
+            branchName: "main",
+            stagedFiles: [],
+            unstagedFiles: [
+              { path: "pom.xml", status: "M", additions: 1, deletions: 0 },
+            ],
+            totalAdditions: 1,
+            totalDeletions: 0,
+            error: null,
+          },
+        ]}
+        commitMessage=""
+        onGenerateCommitMessage={onGenerateCommitMessage}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("checkbox", {
+      name: "Toggle commit selection: pom.xml",
+    }));
+    await chooseCodexEnglishCommitMessage();
+
+    await waitFor(() => {
+      expect(onGenerateCommitMessage).toHaveBeenCalledWith(
+        "en",
+        "codex",
+        undefined,
+        [{ repositoryRoot: "services/api", selectedPaths: ["pom.xml"] }],
+      );
     });
   });
 

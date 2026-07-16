@@ -32,7 +32,7 @@ function traceStartupInvoke<T>(
   return traceStartupCommand(commandLabel, scope, run);
 }
 
-export async function getGitStatus(workspace_id: string): Promise<{
+export async function getGitStatus(workspace_id: string, repositoryRoot?: string | null): Promise<{
   isGitRepository?: boolean;
   branchName: string;
   files: GitFileStatus[];
@@ -42,7 +42,7 @@ export async function getGitStatus(workspace_id: string): Promise<{
   totalDeletions: number;
 }> {
   return traceStartupInvoke("get_git_status", workspaceScope(workspace_id), () =>
-    invoke("get_git_status", { workspaceId: workspace_id }),
+    invoke("get_git_status", { workspaceId: workspace_id, repositoryRoot: repositoryRoot ?? null }),
   );
 }
 
@@ -60,14 +60,28 @@ export async function listGitRepositorySummaries(
   });
 }
 
-export async function getGitDiffs(workspace_id: string): Promise<GitFileDiff[]> {
+export async function getGitDiffs(
+  workspace_id: string,
+  repositoryRoot?: string | null,
+): Promise<GitFileDiff[]> {
   return traceStartupInvoke("get_git_diffs", workspaceScope(workspace_id), () =>
-    invoke("get_git_diffs", { workspaceId: workspace_id }),
+    invoke("get_git_diffs", {
+      workspaceId: workspace_id,
+      ...(repositoryRoot == null ? {} : { repositoryRoot }),
+    }),
   );
 }
 
-export async function getGitFileFullDiff(workspace_id: string, path: string): Promise<string> {
-  return invoke("get_git_file_full_diff", { workspaceId: workspace_id, path });
+export async function getGitFileFullDiff(
+  workspace_id: string,
+  path: string,
+  repositoryRoot?: string | null,
+): Promise<string> {
+  return invoke("get_git_file_full_diff", {
+    workspaceId: workspace_id,
+    path,
+    ...(repositoryRoot == null ? {} : { repositoryRoot }),
+  });
 }
 
 export async function getGitLog(workspace_id: string, limit = 40): Promise<GitLogResponse> {
@@ -85,6 +99,7 @@ export async function getGitCommitHistory(
     snapshotId?: string | null;
     offset?: number;
     limit?: number;
+    repositoryRoot?: string | null;
   },
 ): Promise<GitHistoryResponse> {
   return invoke("get_git_commit_history", {
@@ -97,6 +112,9 @@ export async function getGitCommitHistory(
     snapshotId: options?.snapshotId ?? null,
     offset: options?.offset ?? 0,
     limit: options?.limit ?? 100,
+    ...(options?.repositoryRoot == null
+      ? {}
+      : { repositoryRoot: options.repositoryRoot }),
   });
 }
 
@@ -106,6 +124,7 @@ export async function getGitPushPreview(
     remote: string;
     branch: string;
     limit?: number;
+    repositoryRoot?: string | null;
   },
 ): Promise<GitPushPreviewResponse> {
   return invoke("get_git_push_preview", {
@@ -113,6 +132,9 @@ export async function getGitPushPreview(
     remote: options.remote,
     branch: options.branch,
     limit: options.limit ?? 120,
+    ...(options.repositoryRoot == null
+      ? {}
+      : { repositoryRoot: options.repositoryRoot }),
   });
 }
 
@@ -154,11 +176,17 @@ export async function resolveGitCommitRef(workspace_id: string, target: string):
   });
 }
 
-export async function getGitCommitDetails(workspace_id: string, commitHash: string, maxDiffLines = 10_000): Promise<GitCommitDetails> {
+export async function getGitCommitDetails(
+  workspace_id: string,
+  commitHash: string,
+  maxDiffLines = 10_000,
+  repositoryRoot?: string | null,
+): Promise<GitCommitDetails> {
   return invoke("get_git_commit_details", {
     workspaceId: workspace_id,
     commitHash,
     maxDiffLines,
+    ...(repositoryRoot == null ? {} : { repositoryRoot }),
   });
 }
 
@@ -168,6 +196,7 @@ export async function getGitCommitDiff(
   options?: {
     path?: string | null;
     contextLines?: number;
+    repositoryRoot?: string | null;
   },
 ): Promise<GitCommitDiff[]> {
   return invoke("get_git_commit_diff", {
@@ -175,6 +204,9 @@ export async function getGitCommitDiff(
     sha,
     path: options?.path ?? null,
     contextLines: options?.contextLines ?? null,
+    ...(options?.repositoryRoot == null
+      ? {}
+      : { repositoryRoot: options.repositoryRoot }),
   });
 }
 
@@ -182,28 +214,28 @@ export async function getGitRemote(workspace_id: string): Promise<string | null>
   return invoke("get_git_remote", { workspaceId: workspace_id });
 }
 
-export async function stageGitFile(workspaceId: string, path: string) {
-  return invoke("stage_git_file", { workspaceId, path });
+export async function stageGitFile(workspaceId: string, path: string, repositoryRoot?: string | null) {
+  return invoke("stage_git_file", { workspaceId, path, repositoryRoot: repositoryRoot ?? null });
 }
 
-export async function stageGitAll(workspaceId: string): Promise<void> {
-  return invoke("stage_git_all", { workspaceId });
+export async function stageGitAll(workspaceId: string, repositoryRoot?: string | null): Promise<void> {
+  return invoke("stage_git_all", { workspaceId, repositoryRoot: repositoryRoot ?? null });
 }
 
-export async function unstageGitFile(workspaceId: string, path: string) {
-  return invoke("unstage_git_file", { workspaceId, path });
+export async function unstageGitFile(workspaceId: string, path: string, repositoryRoot?: string | null) {
+  return invoke("unstage_git_file", { workspaceId, path, repositoryRoot: repositoryRoot ?? null });
 }
 
-export async function revertGitFile(workspaceId: string, path: string) {
-  return invoke("revert_git_file", { workspaceId, path });
+export async function revertGitFile(workspaceId: string, path: string, repositoryRoot?: string | null) {
+  return invoke("revert_git_file", { workspaceId, path, repositoryRoot: repositoryRoot ?? null });
 }
 
-export async function revertGitAll(workspaceId: string) {
-  return invoke("revert_git_all", { workspaceId });
+export async function revertGitAll(workspaceId: string, repositoryRoot?: string | null) {
+  return invoke("revert_git_all", { workspaceId, repositoryRoot: repositoryRoot ?? null });
 }
 
-export async function commitGit(workspaceId: string, message: string): Promise<void> {
-  return invoke("commit_git", { workspaceId, message });
+export async function commitGit(workspaceId: string, message: string, repositoryRoot?: string | null): Promise<void> {
+  return invoke("commit_git", { workspaceId, message, repositoryRoot: repositoryRoot ?? null });
 }
 
 export type GitPushOptions = {
@@ -228,7 +260,7 @@ export type GitPullOptions = {
   noVerify?: boolean;
 };
 
-export async function pushGit(workspaceId: string, options?: GitPushOptions): Promise<void> {
+export async function pushGit(workspaceId: string, options?: GitPushOptions, repositoryRoot?: string | null): Promise<void> {
   return invoke("push_git", {
     workspaceId,
     remote: options?.remote ?? null,
@@ -240,10 +272,11 @@ export async function pushGit(workspaceId: string, options?: GitPushOptions): Pr
     topic: options?.topic ?? null,
     reviewers: options?.reviewers ?? null,
     cc: options?.cc ?? null,
+    repositoryRoot: repositoryRoot ?? null,
   });
 }
 
-export async function pullGit(workspaceId: string, options?: GitPullOptions): Promise<void> {
+export async function pullGit(workspaceId: string, options?: GitPullOptions, repositoryRoot?: string | null): Promise<void> {
   return invoke("pull_git", {
     workspaceId,
     remote: options?.remote ?? null,
@@ -251,15 +284,16 @@ export async function pullGit(workspaceId: string, options?: GitPullOptions): Pr
     strategy: options?.strategy ?? null,
     noCommit: options?.noCommit ?? null,
     noVerify: options?.noVerify ?? null,
+    repositoryRoot: repositoryRoot ?? null,
   });
 }
 
-export async function syncGit(workspaceId: string): Promise<void> {
-  return invoke("sync_git", { workspaceId });
+export async function syncGit(workspaceId: string, repositoryRoot?: string | null): Promise<void> {
+  return invoke("sync_git", { workspaceId, repositoryRoot: repositoryRoot ?? null });
 }
 
-export async function fetchGit(workspaceId: string, remote?: string | null): Promise<void> {
-  return invoke("git_fetch", { workspaceId, remote: remote ?? null });
+export async function fetchGit(workspaceId: string, remote?: string | null, repositoryRoot?: string | null): Promise<void> {
+  return invoke("git_fetch", { workspaceId, remote: remote ?? null, repositoryRoot: repositoryRoot ?? null });
 }
 
 export async function updateGitBranch(

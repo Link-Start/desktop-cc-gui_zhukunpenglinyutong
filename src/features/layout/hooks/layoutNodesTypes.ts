@@ -74,6 +74,8 @@ import type { RuntimeReconnectRecoveryCallbackResult } from "../../messages/comp
 import type { QueuedHandoffBubble } from "../../threads/utils/queuedHandoffBubble";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
 import type { CodexProviderProfileSelection } from "../../threads/constants/codexProviderProfiles";
+import type { RepositoryGitStatus } from "../../git/hooks/useMultiRepositoryGitStatus";
+import type { RepositoryCommitSelection } from "../../git/components/GitMultiRepositoryChanges";
 
 export type ThreadActivityStatus = {
   isProcessing: boolean;
@@ -510,6 +512,7 @@ export type LayoutNodesFlatOptions = {
     language?: "zh" | "en",
     engine?: "codex" | "claude" | "gemini" | "opencode",
     selectedPaths?: string[],
+    repositorySelections?: RepositoryCommitSelection[],
   ) => void | Promise<void>;
   onCommit?: (selectedPaths?: string[]) => void | Promise<void>;
   onCommitAndPush?: (selectedPaths?: string[]) => void | Promise<void>;
@@ -523,6 +526,15 @@ export type LayoutNodesFlatOptions = {
   pushError?: string | null;
   syncError?: string | null;
   commitsAhead?: number;
+  multiRepositoryMode?: boolean;
+  repositoryStatuses?: RepositoryGitStatus[];
+  repositoryStatusesLoading?: boolean;
+  onRefreshRepositoryStatuses?: () => Promise<void> | void;
+  onStageRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
+  onUnstageRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
+  onStageRepositoryAll?: (repositoryRoot: string) => Promise<void>;
+  onCommitRepositories?: (selections: RepositoryCommitSelection[]) => Promise<void> | void;
+  repositoryCommitSummary?: string | null;
   onSendPrompt: (text: string) => void | Promise<void>;
   onSendPromptToNewAgent: (text: string) => void | Promise<void>;
   onCreatePrompt: (data: {
@@ -1026,6 +1038,15 @@ export type GitLayoutNodesOptions = Pick<
   | "pushError"
   | "syncError"
   | "commitsAhead"
+  | "multiRepositoryMode"
+  | "repositoryStatuses"
+  | "repositoryStatusesLoading"
+  | "onRefreshRepositoryStatuses"
+  | "onStageRepositoryFile"
+  | "onUnstageRepositoryFile"
+  | "onStageRepositoryAll"
+  | "onCommitRepositories"
+  | "repositoryCommitSummary"
 >;
 
 export type ComposerLayoutNodesOptions = Pick<
