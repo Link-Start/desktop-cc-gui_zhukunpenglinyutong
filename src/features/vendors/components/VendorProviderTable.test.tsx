@@ -61,5 +61,30 @@ describe("VendorProviderTable", () => {
     );
 
     expect(screen.getByText("empty")).toBeTruthy();
+    expect(
+      document.querySelector(".vendor-provider-table-frame")?.getAttribute("data-empty"),
+    ).toBe("true");
+    expect(document.querySelector(".vendor-provider-table-stack")).toBeTruthy();
+  });
+
+  it("can hide the table header for compact official config blocks", () => {
+    const { container } = render(
+      <VendorProviderTable
+        loading={false}
+        empty={false}
+        emptyText="empty"
+        showHeader={false}
+        renderRows={() => (
+          <tbody data-slot="table-body">
+            <tr data-slot="table-row">
+              <td data-slot="table-cell">Provider A</td>
+            </tr>
+          </tbody>
+        )}
+      />,
+    );
+
+    expect(container.querySelector("thead")).toBeNull();
+    expect(screen.getByText("Provider A")).toBeTruthy();
   });
 });

@@ -831,6 +831,7 @@ vi.mock("react-i18next", () => ({
         "settings.preloadGitDiffsDesc": "Make viewing git diff faster.",
         // Codex section
         "settings.codexTitle": "Codex",
+        "settings.claudeDescription": "Configure Claude Code CLI providers and local settings used by ccgui.",
         "settings.codexDescription": "Configure the Codex CLI used by ccgui and validate the install.",
         "settings.defaultCodexPath": "Default Codex path",
         "settings.codexPlaceholder": "codex",
@@ -947,6 +948,15 @@ vi.mock("react-i18next", () => ({
           "Restored the official unified_exec config.",
         "settings.backgroundTerminalOfficialWriteReloadFailed":
           "Official unified_exec was written, but refreshing the current Codex runtime failed: {{message}}",
+        "settings.vendor.officialConfig": "Official Config",
+        "settings.vendor.edit": "Edit",
+        "settings.vendor.inUse": "In Use",
+        "settings.vendor.cancel": "Cancel",
+        "settings.vendor.currentCodexGlobalConfig": "Global Default Codex Config",
+        "settings.vendor.codexGlobalConfigPath": "~/.codex/config.toml",
+        "settings.vendor.currentCodexAuthConfig": "Global Auth Config",
+        "settings.vendor.codexAuthConfigPath": "~/.codex/auth.json",
+        "settings.vendor.dialog.saveChanges": "Save",
         "settings.codexRuntimeReloadNoConnectedSessions":
           "No Codex session is currently connected. The config has been updated and will apply on the next connection.",
         "settings.steerMode": "Follow-up fusion",

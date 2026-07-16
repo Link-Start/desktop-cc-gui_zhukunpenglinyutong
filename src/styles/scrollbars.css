@@ -1659,3 +1659,65 @@
 .git-history-worktree-section-list::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/*
+ * Settings uses the shared Radix ScrollArea viewport, not a named `.scrollable`
+ * node. Keep it on the same thin native-scrollbar contract as the rest of the
+ * app without widening the global selector surface.
+ */
+.settings-content [data-slot="scroll-area-viewport"] {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.settings-content [data-slot="scroll-area-viewport"]:hover {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.settings-content.settings-content--providers [data-slot="scroll-area-viewport"] {
+  scrollbar-width: none;
+  scrollbar-color: transparent transparent;
+}
+
+.settings-content.settings-content--providers
+  [data-slot="scroll-area-viewport"]:hover {
+  scrollbar-width: none;
+  scrollbar-color: transparent transparent;
+}
+
+.settings-content [data-slot="scroll-area-viewport"]::-webkit-scrollbar {
+  width: var(--sb-size);
+  height: var(--sb-size);
+}
+
+.settings-content.settings-content--providers
+  [data-slot="scroll-area-viewport"]::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-content [data-slot="scroll-area-viewport"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-content [data-slot="scroll-area-viewport"]::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: var(--sb-thumb-radius);
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--sb-thumb-inset);
+  background-clip: content-box;
+}
+
+.settings-content
+  [data-slot="scroll-area-viewport"]:hover::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+}
+
+.settings-content
+  [data-slot="scroll-area-viewport"]::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+.settings-content [data-slot="scroll-area-viewport"]::-webkit-scrollbar-corner {
+  background: transparent;
+}

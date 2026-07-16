@@ -57,6 +57,7 @@ import {
   startThread,
   startReview,
   writeGlobalAgentsMd,
+  writeGlobalCodexAuthJson,
   writeGlobalCodexConfigToml,
   writeAgentMd,
   writeClaudeMd,
@@ -120,7 +121,9 @@ import {
   hydrateClaudeDeferredImage,
   setMainWindowOpacity,
   fetchClaudeProviderModels,
+  readClaudeSettingsJson,
   reorderClaudeProviders,
+  saveClaudeSettingsJson,
   getWebAssetsStatus,
   installWebAssets,
   installWebAssetsFromFile,
@@ -285,6 +288,24 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("vendor_reorder_claude_providers", {
       orderedIds: ["provider-b", "provider-a"],
     });
+  });
+
+  it("maps Claude settings.json read and save requests", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce('{"model":"opus"}').mockResolvedValueOnce(undefined);
+
+    await expect(readClaudeSettingsJson()).resolves.toBe('{"model":"opus"}');
+    await saveClaudeSettingsJson('{"model":"sonnet"}');
+
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      1,
+      "vendor_read_claude_settings_json",
+    );
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      2,
+      "vendor_save_claude_settings_json",
+      { content: '{"model":"sonnet"}' },
+    );
   });
 
   it("maps native window opacity requests to the Tauri command", async () => {
@@ -1981,6 +2002,20 @@ describe("tauri invoke wrappers", () => {
       kind: "config",
       workspaceId: undefined,
       content: 'model = "gpt-5"',
+    });
+  });
+
+  it("writes global auth.json", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await writeGlobalCodexAuthJson('{"tokens":[]}');
+
+    expect(invokeMock).toHaveBeenCalledWith("file_write", {
+      scope: "global",
+      kind: "auth",
+      workspaceId: undefined,
+      content: '{"tokens":[]}',
     });
   });
 

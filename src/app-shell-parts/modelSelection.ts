@@ -188,7 +188,10 @@ export function getEffectiveSelectedEffort({
   if (!activeThreadSelection) {
     return normalizeEffort(selectedEffort, { fallbackToFirst: true });
   }
-  return normalizeEffort(activeThreadSelection.effort, { fallbackToFirst: true });
+  return (
+    normalizeEffort(activeThreadSelection.effort, { fallbackToFirst: true }) ??
+    normalizeEffort(selectedEffort, { fallbackToFirst: true })
+  );
 }
 
 export function getReasoningOptionsForModel(model: ModelOption | null): string[] {

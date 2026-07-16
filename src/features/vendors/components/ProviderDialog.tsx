@@ -3,6 +3,14 @@ import { useTranslation } from "react-i18next";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import EyeOff from "lucide-react/dist/esm/icons/eye-off";
 import Shield from "lucide-react/dist/esm/icons/shield";
+import SlidersHorizontal from "lucide-react/dist/esm/icons/sliders-horizontal";
+import deepseekIcon from "@lobehub/icons-static-svg/icons/deepseek-color.svg";
+import minimaxIcon from "@lobehub/icons-static-svg/icons/minimax-color.svg";
+import moonshotIcon from "@lobehub/icons-static-svg/icons/moonshot.svg";
+import openrouterIcon from "@lobehub/icons-static-svg/icons/openrouter-color.svg";
+import qwenIcon from "@lobehub/icons-static-svg/icons/qwen-color.svg";
+import xiaomimimoIcon from "@lobehub/icons-static-svg/icons/xiaomimimo.svg";
+import zhipuIcon from "@lobehub/icons-static-svg/icons/zhipu-color.svg";
 import { fetchClaudeProviderModels } from "../../../services/tauri";
 import type { ProviderConfig } from "../types";
 import { CLAUDE_PROVIDER_PRESETS } from "../types";
@@ -33,6 +41,17 @@ interface ProviderDialogProps {
     jsonConfig: string;
   }) => void;
 }
+
+const presetIconById = {
+  custom: { kind: "lucide", icon: SlidersHorizontal },
+  zhipu: { kind: "brand", src: zhipuIcon },
+  kimi: { kind: "brand", src: moonshotIcon },
+  deepseek: { kind: "brand", src: deepseekIcon },
+  minimax: { kind: "brand", src: minimaxIcon },
+  xiaomi: { kind: "brand", src: xiaomimimoIcon },
+  qwen: { kind: "brand", src: qwenIcon },
+  openrouter: { kind: "brand", src: openrouterIcon },
+} as const;
 
 export function buildDefaultClaudeProviderSettingsConfig(): ClaudeProviderSettingsTemplate {
   return {
@@ -314,100 +333,115 @@ export function ProviderDialog({
               {t("settings.vendor.dialog.presetGroup")}
             </div>
             <div className="vendor-preset-buttons">
-              {CLAUDE_PROVIDER_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className={`vendor-preset-btn ${
-                    activePreset === preset.id ? "active" : ""
-                  }`}
-                  onClick={() => handlePresetClick(preset.id)}
-                >
-                  {t(preset.nameKey)}
-                </button>
-              ))}
+              {CLAUDE_PROVIDER_PRESETS.map((preset) => {
+                const presetIcon = presetIconById[preset.id as keyof typeof presetIconById];
+                const PresetIcon = presetIcon.kind === "lucide" ? presetIcon.icon : null;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`vendor-preset-btn ${
+                      activePreset === preset.id ? "active" : ""
+                    }`}
+                    onClick={() => handlePresetClick(preset.id)}
+                  >
+                    <span className="vendor-preset-btn-icon" aria-hidden>
+                      {presetIcon.kind === "brand" ? (
+                        <img src={presetIcon.src} alt="" />
+                      ) : (
+                        PresetIcon ? <PresetIcon size={14} strokeWidth={2.1} /> : null
+                      )}
+                    </span>
+                    {t(preset.nameKey)}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div className="vendor-form-group">
-            <label>
-              {t("settings.vendor.dialog.providerName")}
-              <span className="vendor-required">
-                {t("settings.vendor.dialog.required")}
-              </span>
-            </label>
-            <input
-              type="text"
-              className="vendor-input"
-              placeholder={t("settings.vendor.dialog.providerNamePlaceholder")}
-              value={providerName}
-              onChange={(event) => setProviderName(event.target.value)}
-            />
-          </div>
-
-          <div className="vendor-form-group">
-            <label>{t("settings.vendor.dialog.remark")}</label>
-            <input
-              type="text"
-              className="vendor-input"
-              placeholder={t("settings.vendor.dialog.remarkPlaceholder")}
-              value={remark}
-              onChange={(event) => setRemark(event.target.value)}
-            />
-          </div>
-
-          <div className="vendor-form-group">
-            <label>
-              {t("settings.vendor.dialog.apiKey")}
-              <span className="vendor-required">
-                {t("settings.vendor.dialog.required")}
-              </span>
-            </label>
-            <div className="vendor-input-row">
+          <div className="vendor-form-grid vendor-form-grid-provider-meta">
+            <div className="vendor-form-group">
+              <label>
+                {t("settings.vendor.dialog.providerName")}
+                <span className="vendor-required">
+                  {t("settings.vendor.dialog.required")}
+                </span>
+              </label>
               <input
-                type={showApiKey ? "text" : "password"}
+                type="text"
                 className="vendor-input"
-                placeholder={t("settings.vendor.dialog.apiKeyPlaceholder")}
-                value={apiKey}
+                placeholder={t("settings.vendor.dialog.providerNamePlaceholder")}
+                value={providerName}
+                onChange={(event) => setProviderName(event.target.value)}
+              />
+            </div>
+
+            <div className="vendor-form-group">
+              <label>{t("settings.vendor.dialog.remark")}</label>
+              <input
+                type="text"
+                className="vendor-input"
+                placeholder={t("settings.vendor.dialog.remarkPlaceholder")}
+                value={remark}
+                onChange={(event) => setRemark(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="vendor-form-grid vendor-form-grid-provider-meta">
+            <div className="vendor-form-group">
+              <label>
+                {t("settings.vendor.dialog.apiUrl")}
+                <span className="vendor-required">
+                  {t("settings.vendor.dialog.required")}
+                </span>
+              </label>
+              <input
+                type="text"
+                className="vendor-input"
+                placeholder={t("settings.vendor.dialog.apiUrlPlaceholder")}
+                value={apiUrl}
                 onChange={(event) => {
-                  setApiKey(event.target.value);
-                  updateEnvField("ANTHROPIC_AUTH_TOKEN", event.target.value);
+                  setApiUrl(event.target.value);
+                  updateEnvField("ANTHROPIC_BASE_URL", event.target.value);
                 }}
               />
-              <button
-                type="button"
-                className="vendor-btn-icon"
-                onClick={() => setShowApiKey((current) => !current)}
-                title={showApiKey ? t("settings.vendor.hide") : t("settings.vendor.show")}
-              >
-                {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
+              <small className="vendor-hint">
+                {t("settings.vendor.dialog.apiUrlHint")}
+              </small>
             </div>
-            <small className="vendor-hint">
-              {t("settings.vendor.dialog.apiKeyHint")}
-            </small>
-          </div>
 
-          <div className="vendor-form-group">
-            <label>
-              {t("settings.vendor.dialog.apiUrl")}
-              <span className="vendor-required">
-                {t("settings.vendor.dialog.required")}
-              </span>
-            </label>
-            <input
-              type="text"
-              className="vendor-input"
-              placeholder={t("settings.vendor.dialog.apiUrlPlaceholder")}
-              value={apiUrl}
-              onChange={(event) => {
-                setApiUrl(event.target.value);
-                updateEnvField("ANTHROPIC_BASE_URL", event.target.value);
-              }}
-            />
-            <small className="vendor-hint">
-              {t("settings.vendor.dialog.apiUrlHint")}
-            </small>
+            <div className="vendor-form-group">
+              <label>
+                {t("settings.vendor.dialog.apiKey")}
+                <span className="vendor-required">
+                  {t("settings.vendor.dialog.required")}
+                </span>
+              </label>
+              <div className="vendor-input-row">
+                <input
+                  type={showApiKey ? "text" : "password"}
+                  className="vendor-input"
+                  placeholder={t("settings.vendor.dialog.apiKeyPlaceholder")}
+                  value={apiKey}
+                  onChange={(event) => {
+                    setApiKey(event.target.value);
+                    updateEnvField("ANTHROPIC_AUTH_TOKEN", event.target.value);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="vendor-btn-icon"
+                  onClick={() => setShowApiKey((current) => !current)}
+                  title={showApiKey ? t("settings.vendor.hide") : t("settings.vendor.show")}
+                >
+                  {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              <small className="vendor-hint">
+                {t("settings.vendor.dialog.apiKeyHint")}
+              </small>
+            </div>
           </div>
 
           <div className="vendor-form-group">

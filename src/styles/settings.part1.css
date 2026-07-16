@@ -18,11 +18,43 @@
   display: flex;
   align-items: center;
   height: var(--main-topbar-height,44px);
-  justify-content: space-between;
-  padding: 12px 16px;
+  justify-content: flex-start;
+  padding: 0 24px 0 calc(128px + var(--titlebar-inset-left, 0px));
   border-bottom: 1px solid var(--border-muted);
   background: var(--surface-topbar, var(--card));
   flex-shrink: 0;
+}
+
+.settings-header-copy {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 18px;
+  color: var(--text-strong);
+}
+
+.settings-header-title {
+  margin: 0;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.settings-header-description {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-subtle);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 /* Legacy overlay styles (kept for reference, no longer used) */

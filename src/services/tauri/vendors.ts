@@ -36,6 +36,14 @@ export async function getCurrentClaudeConfig(): Promise<VendorClaudeCurrentConfi
   return invoke<VendorClaudeCurrentConfig>("vendor_get_current_claude_config");
 }
 
+export async function readClaudeSettingsJson(): Promise<string> {
+  return invoke<string>("vendor_read_claude_settings_json");
+}
+
+export async function saveClaudeSettingsJson(content: string): Promise<void> {
+  return invoke("vendor_save_claude_settings_json", { content });
+}
+
 export async function getClaudeAlwaysThinkingEnabled(): Promise<boolean> {
   return invoke<boolean>("vendor_get_claude_always_thinking_enabled");
 }

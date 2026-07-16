@@ -43,6 +43,10 @@ export async function readGlobalCodexAuthJson(): Promise<GlobalCodexAuthResponse
   return fileRead("global", "auth");
 }
 
+export async function writeGlobalCodexAuthJson(content: string): Promise<void> {
+  return fileWrite("global", "auth", content);
+}
+
 export async function readAgentMd(workspaceId: string): Promise<AgentMdResponse> {
   return fileRead("workspace", "agents", workspaceId);
 }

@@ -1665,3 +1665,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 36: 合并远端 0.7.4 分支并保留本地设置改动
+
+**Date**: 2026-07-16
+**Task**: 合并远端 0.7.4 分支并保留本地设置改动
+**Branch**: `chore/bump-version-0.7.4`
+
+### Summary
+
+将 origin/chore/bump-version-0.7.4 合入当前分支，保留本地 settings/CLI 配置相关提交与远端多仓库 Git 命令中心、Codex pending draft 修复。验证通过：npm run typecheck；相关 Vitest 4 个文件 128 tests；cargo check 通过但保留既有 menu.rs dead_code warning。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eaae4011` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

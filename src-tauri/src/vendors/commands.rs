@@ -90,13 +90,21 @@ fn read_claude_settings() -> Result<serde_json::Map<String, Value>, String> {
     }
 }
 
-fn write_claude_settings(settings: &serde_json::Map<String, Value>) -> Result<(), String> {
+fn atomic_write_claude_settings_content(content: &str) -> Result<(), String> {
     let path = claude_settings_path()?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create claude settings dir: {}", e))?;
     }
 
+    let tmp_path = path.with_extension("json.tmp");
+    std::fs::write(&tmp_path, content)
+        .map_err(|e| format!("Failed to write claude settings temp file: {}", e))?;
+    std::fs::rename(&tmp_path, &path)
+        .map_err(|e| format!("Failed to rename claude settings temp file: {}", e))
+}
+
+fn write_claude_settings(settings: &serde_json::Map<String, Value>) -> Result<(), String> {
     // Ensure env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
     let mut settings = settings.clone();
     let env = settings
@@ -112,12 +120,27 @@ fn write_claude_settings(settings: &serde_json::Map<String, Value>) -> Result<()
     let content = serde_json::to_string_pretty(&Value::Object(settings))
         .map_err(|e| format!("Failed to serialize claude settings: {}", e))?;
 
-    // Atomic write: write to temp file first, then rename
-    let tmp_path = path.with_extension("json.tmp");
-    std::fs::write(&tmp_path, &content)
-        .map_err(|e| format!("Failed to write claude settings temp file: {}", e))?;
-    std::fs::rename(&tmp_path, &path)
-        .map_err(|e| format!("Failed to rename claude settings temp file: {}", e))
+    atomic_write_claude_settings_content(&content)
+}
+
+#[tauri::command]
+pub(crate) async fn vendor_read_claude_settings_json() -> Result<String, String> {
+    let settings = read_claude_settings()?;
+    serde_json::to_string_pretty(&Value::Object(settings))
+        .map_err(|e| format!("Failed to serialize ~/.claude/settings.json: {}", e))
+}
+
+#[tauri::command]
+pub(crate) async fn vendor_save_claude_settings_json(content: String) -> Result<(), String> {
+    let value: Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Invalid JSON in ~/.claude/settings.json: {}", e))?;
+    let settings = match value {
+        Value::Object(map) => map,
+        _ => return Err("~/.claude/settings.json must contain a JSON object.".to_string()),
+    };
+    let content = serde_json::to_string_pretty(&Value::Object(settings))
+        .map_err(|e| format!("Failed to serialize ~/.claude/settings.json: {}", e))?;
+    atomic_write_claude_settings_content(&content)
 }
 
 fn ensure_local_claude_settings_ready() -> Result<(), String> {

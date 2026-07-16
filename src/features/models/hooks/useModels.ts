@@ -182,6 +182,36 @@ const normalizeEffort = (value: unknown): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const normalizeReasoningEfforts = (
+  value: unknown,
+): ModelOption["supportedReasoningEfforts"] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((effort) => {
+    if (typeof effort === "string") {
+      const reasoningEffort = normalizeEffort(effort);
+      return reasoningEffort ? [{ reasoningEffort, description: "" }] : [];
+    }
+    if (!effort || typeof effort !== "object") {
+      return [];
+    }
+    const record = effort as Record<string, unknown>;
+    const reasoningEffort = normalizeEffort(
+      record.reasoningEffort ?? record.reasoning_effort,
+    );
+    if (!reasoningEffort) {
+      return [];
+    }
+    return [
+      {
+        reasoningEffort,
+        description: String(record.description ?? ""),
+      },
+    ];
+  });
+};
+
 const findModelByIdOrModel = (
   models: ModelOption[],
   idOrModel: string | null,
@@ -453,16 +483,9 @@ export function useModels({
         displayName: String(item.displayName ?? item.display_name ?? item.model ?? ""),
         description: String(item.description ?? ""),
         source: String(item.source ?? "unknown"),
-        supportedReasoningEfforts: Array.isArray(item.supportedReasoningEfforts)
-          ? item.supportedReasoningEfforts
-          : Array.isArray(item.supported_reasoning_efforts)
-            ? item.supported_reasoning_efforts.map((effort: any) => ({
-                reasoningEffort: String(
-                  effort.reasoningEffort ?? effort.reasoning_effort ?? "",
-                ),
-                description: String(effort.description ?? ""),
-              }))
-            : [],
+        supportedReasoningEfforts: normalizeReasoningEfforts(
+          item.supportedReasoningEfforts ?? item.supported_reasoning_efforts,
+        ),
         defaultReasoningEffort: normalizeEffort(
           item.defaultReasoningEffort ?? item.default_reasoning_effort,
         ),

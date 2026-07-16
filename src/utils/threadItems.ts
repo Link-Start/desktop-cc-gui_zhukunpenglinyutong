@@ -215,11 +215,15 @@ function extractReasoningText(value: unknown): string {
     return value;
   }
   if (Array.isArray(value)) {
-    return joinReasoningFragments(
-      value
-        .map((entry) => extractReasoningText(entry))
-        .filter(Boolean),
-    );
+    const fragments = value
+      .map((entry) => extractReasoningText(entry))
+      .filter(Boolean);
+    // 结构化条目（如 Codex summary_text 段落）是完整段落，用空行分隔；
+    // 纯字符串数组是流式 token 碎片，按原有规则无缝拼接。
+    if (value.some((entry) => typeof entry === "object" && entry !== null)) {
+      return fragments.map((fragment) => fragment.trim()).filter(Boolean).join("\n\n");
+    }
+    return joinReasoningFragments(fragments);
   }
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;

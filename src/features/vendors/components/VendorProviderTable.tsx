@@ -7,6 +7,7 @@ interface VendorProviderTableProps {
   empty: boolean;
   emptyText: ReactNode;
   includeDragColumn?: boolean;
+  showHeader?: boolean;
   renderRows: () => ReactNode;
 }
 
@@ -33,6 +34,7 @@ export function VendorProviderTable({
   empty,
   emptyText,
   includeDragColumn = false,
+  showHeader = true,
   renderRows,
 }: VendorProviderTableProps) {
   const { t } = useTranslation();
@@ -41,27 +43,35 @@ export function VendorProviderTable({
     <>
       {loading && <div className="vendor-loading">{t("settings.loading")}</div>}
 
-      <div className="vendor-provider-table-frame" data-slot="frame">
-        <Table className="vendor-provider-table">
-          <TableHeader>
-            <TableRow>
-              {includeDragColumn && (
-                <TableHead className="vendor-provider-table-drag-cell" />
-              )}
-              <TableHead>{t("settings.vendor.providerColumn")}</TableHead>
-              <TableHead className="vendor-provider-table-status-cell">
-                {t("settings.vendor.statusColumn")}
-              </TableHead>
-              <TableHead className="vendor-provider-table-actions-cell">
-                {t("settings.vendor.actionsColumn")}
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          {renderRows()}
-        </Table>
-      </div>
+      <div className="vendor-provider-table-stack">
+        <div
+          className="vendor-provider-table-frame"
+          data-empty={empty ? "true" : undefined}
+          data-slot="frame"
+        >
+          <Table className="vendor-provider-table">
+            {showHeader ? (
+              <TableHeader>
+                <TableRow>
+                  {includeDragColumn && (
+                    <TableHead className="vendor-provider-table-drag-cell" />
+                  )}
+                  <TableHead>{t("settings.vendor.providerColumn")}</TableHead>
+                  <TableHead className="vendor-provider-table-status-cell">
+                    {t("settings.vendor.statusColumn")}
+                  </TableHead>
+                  <TableHead className="vendor-provider-table-actions-cell">
+                    {t("settings.vendor.actionsColumn")}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+            ) : null}
+            {renderRows()}
+          </Table>
+        </div>
 
-      {!loading && empty && <div className="vendor-empty">{emptyText}</div>}
+        {!loading && empty && <div className="vendor-empty">{emptyText}</div>}
+      </div>
     </>
   );
 }

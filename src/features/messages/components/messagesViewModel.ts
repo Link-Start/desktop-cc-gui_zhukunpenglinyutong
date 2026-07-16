@@ -257,12 +257,8 @@ export function resolveVisibleMessageItems(options: {
     appendReasoningRuns,
     toConversationEngine(activeEngine),
   );
-  const collapseReasoningRuns = activeEngine !== "codex";
-  return collapseConsecutiveReasoningRuns(
-    deduped,
-    collapseReasoningRuns,
-    appendReasoningRuns,
-  );
+  // codex 也合并相邻思考块（与 session-activity 面板行为一致），中间有工具调用会自然断开。
+  return collapseConsecutiveReasoningRuns(deduped, true, appendReasoningRuns);
 }
 
 export function resolveCollapsedTimelineItems(options: {

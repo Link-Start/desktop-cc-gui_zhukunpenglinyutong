@@ -76,7 +76,7 @@ describe("modelSelection", () => {
     ).toBe("codex-alt");
   });
 
-  it("uses the active codex thread effort when the thread has its own composer selection", () => {
+  it("falls back to the shared Codex effort when the active thread effort is empty", () => {
     expect(
       getEffectiveSelectedEffort({
         activeEngine: "codex",
@@ -88,7 +88,7 @@ describe("modelSelection", () => {
         },
         reasoningOptions: ["medium", "high"],
       }),
-    ).toBeNull();
+    ).toBe("high");
   });
 
   it("falls back to the shared effort when the active codex thread has no composer selection", () => {

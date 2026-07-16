@@ -317,15 +317,12 @@ function resolveLiveRenderItem(
   item: ConversationItem,
   liveAssistantItem: Extract<ConversationItem, { kind: "message" }> | null,
   liveReasoningItem: Extract<ConversationItem, { kind: "reasoning" }> | null,
-  preserveMergedReasoningPrefix = false,
 ) {
   if (item.kind === "message" && liveAssistantItem?.id === item.id) {
     return liveAssistantItem;
   }
   if (item.kind === "reasoning" && liveReasoningItem?.id === item.id) {
-    if (!preserveMergedReasoningPrefix) {
-      return liveReasoningItem;
-    }
+    // 所有引擎都会产生相邻思考合并块，直接替换会把合并前缀顶掉。
     return resolveLiveReasoningRenderItem(item, liveReasoningItem);
   }
   return item;
@@ -1444,8 +1441,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       item,
       liveAssistantItem,
       liveReasoningItem,
-      // 与 messagesViewModel 的 appendReasoningRuns 同谓词:仅追加式引擎会产生合并块
-      activeEngine === "claude" || activeEngine === "gemini",
     );
     const renderKind = resolveNormalizedRenderKind(renderItem);
     if (renderKind === "message" && renderItem.kind === "message") {
