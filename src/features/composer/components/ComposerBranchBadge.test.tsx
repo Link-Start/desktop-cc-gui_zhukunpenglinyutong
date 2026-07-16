@@ -261,4 +261,61 @@ describe("ComposerBranchBadge", () => {
     expect(screen.getByText("service-a")).toBeTruthy();
     expect(screen.getByText("service-b")).toBeTruthy();
   });
+
+  it("collapses local and remote scopes independently and reveals matches during search", async () => {
+    render(
+      <ComposerBranchBadge
+        branchName="feature/test"
+        branches={[{ name: "feature/test", lastCommit: 1 }]}
+        localBranches={[{
+          name: "feature/test",
+          isCurrent: true,
+          isRemote: false,
+          remote: null,
+          upstream: "origin/feature/test",
+          lastCommit: 1,
+          headSha: "abc",
+          ahead: 0,
+          behind: 0,
+        }]}
+        remoteBranches={[{
+          name: "origin/feature/test",
+          isCurrent: false,
+          isRemote: true,
+          remote: "origin",
+          upstream: null,
+          lastCommit: 1,
+          headSha: "abc",
+          ahead: 0,
+          behind: 0,
+        }]}
+        repositories={repositories.slice(0, 1)}
+        onCheckout={vi.fn()}
+        onCreate={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /feature\/test/i }));
+    fireEvent.click(screen.getByRole("button", { name: "git.repositoryLocalBranches" }));
+    const localScope = screen.getByRole("button", { name: "feature" });
+    expect(localScope.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("test")).toBeNull();
+    fireEvent.click(localScope);
+    expect(localScope.getAttribute("aria-expanded")).toBe("true");
+    const localBranchLabel = screen.getByText("test");
+    expect(localBranchLabel.closest("[cmdk-item]")?.classList.contains("composer-git-branch-item")).toBe(true);
+    expect(localBranchLabel.closest(".composer-git-branch-scope-children")).toBeTruthy();
+    fireEvent.click(localScope);
+
+    fireEvent.click(screen.getByRole("button", { name: "git.repositoryRemoteBranches" }));
+    const remoteScope = screen.getByRole("button", { name: "origin / feature" });
+    expect(remoteScope.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "feature/test" } });
+    expect(localScope.getAttribute("aria-expanded")).toBe("true");
+    expect(remoteScope.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "" } });
+    expect(localScope.getAttribute("aria-expanded")).toBe("false");
+    expect(remoteScope.getAttribute("aria-expanded")).toBe("false");
+  });
 });

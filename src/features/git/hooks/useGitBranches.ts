@@ -204,11 +204,14 @@ export function useGitBranches({
   );
 
   const updateBranch = useCallback(
-    async (name: string) => {
+    async (name: string, repositoryRootOverride?: string) => {
       if (!workspaceId || !name) {
         return null;
       }
-      const result = await updateGitBranch(workspaceId, name, repositoryRoot);
+      const targetRepositoryRoot = repositoryRootOverride === undefined
+        ? repositoryRoot
+        : repositoryRootOverride;
+      const result = await updateGitBranch(workspaceId, name, targetRepositoryRoot);
       await refreshBranches();
       await onMutationComplete?.();
       return result;

@@ -32,6 +32,7 @@ import type {
   GitBranchUpdateResult,
 } from "../../../types";
 import { gitRepositoryStatusTokens } from "../../git/utils/gitRepositorySummary";
+import { getGitBranchUpdateFeedback } from "../../git/utils/gitBranchUpdateFeedback";
 
 const EMPTY_BRANCHES: BranchInfo[] = [];
 const EMPTY_BRANCH_ITEMS: GitBranchListItem[] = [];
@@ -83,7 +84,11 @@ function BranchRow({
   onSelect: (name: string) => void;
 }) {
   return (
-    <CommandItem value={branch.name} onSelect={() => onSelect(branch.name)}>
+    <CommandItem
+      className="composer-git-branch-item"
+      value={branch.name}
+      onSelect={() => onSelect(branch.name)}
+    >
       <GitBranch className="size-4 shrink-0 opacity-60" aria-hidden />
       <span className="min-w-0 flex-1 truncate">{displayName}</span>
       <span className="composer-git-branch-meta" aria-hidden>
@@ -110,6 +115,14 @@ type BranchSectionProps = {
   children: ReactNode;
 };
 
+type BranchScopeProps = {
+  id: string;
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+};
+
 function BranchSection({ id, label, expanded, onToggle, children }: BranchSectionProps) {
   return (
     <CommandGroup>
@@ -129,6 +142,32 @@ function BranchSection({ id, label, expanded, onToggle, children }: BranchSectio
       </button>
       {expanded ? <div id={`composer-git-section-${id}`}>{children}</div> : null}
     </CommandGroup>
+  );
+}
+
+function BranchScope({ id, label, expanded, onToggle, children }: BranchScopeProps) {
+  return (
+    <div className="composer-git-branch-scope-group">
+      <button
+        type="button"
+        className="composer-git-branch-scope"
+        aria-expanded={expanded}
+        aria-controls={id}
+        onClick={onToggle}
+      >
+        {expanded ? (
+          <ChevronDown className="size-3.5 shrink-0" aria-hidden />
+        ) : (
+          <ChevronRight className="size-3.5 shrink-0" aria-hidden />
+        )}
+        <span>{label}</span>
+      </button>
+      {expanded ? (
+        <div id={id} className="composer-git-branch-scope-children">
+          {children}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -162,6 +201,7 @@ export function ComposerBranchBadge({
     local: false,
     remote: false,
   });
+  const [expandedScopes, setExpandedScopes] = useState<Set<string>>(() => new Set());
   const [updatePending, setUpdatePending] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<{
     tone: "success" | "error";
@@ -251,6 +291,7 @@ export function ComposerBranchBadge({
     setUpdateFeedback(null);
     setSwitchingRepositoryRoot(null);
     setExpandedSections({ recent: false, local: false, remote: false });
+    setExpandedScopes(new Set());
   }, []);
 
   const handleSelectRepository = useCallback(
@@ -266,6 +307,7 @@ export function ComposerBranchBadge({
         setActiveRepositoryRoot(repositoryRoot);
         setQuery("");
         setExpandedSections({ recent: false, local: false, remote: false });
+        setExpandedScopes(new Set());
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : String(caughtError));
       } finally {
@@ -277,6 +319,15 @@ export function ComposerBranchBadge({
 
   const toggleSection = useCallback((section: keyof typeof expandedSections) => {
     setExpandedSections((current) => ({ ...current, [section]: !current[section] }));
+  }, []);
+
+  const toggleScope = useCallback((scopeKey: string) => {
+    setExpandedScopes((current) => {
+      const next = new Set(current);
+      if (next.has(scopeKey)) next.delete(scopeKey);
+      else next.add(scopeKey);
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -310,27 +361,7 @@ export function ComposerBranchBadge({
     try {
       const result = await onUpdate(effectiveCurrentBranch);
       if (!result) return;
-      const params = {
-        branch: result.branch || effectiveCurrentBranch,
-        path: result.worktreePath ?? "",
-      };
-      const message = result.status === "blocked"
-        ? result.reason === "diverged"
-          ? t("git.historyBranchUpdateBlockedDiverged", params)
-          : result.reason === "occupied_worktree"
-            ? t("git.historyBranchUpdateBlockedOccupiedWorktree", params)
-            : result.reason === "stale_ref"
-              ? t("git.historyBranchUpdateBlockedStaleRef", params)
-              : t("git.historyBranchUpdateBlockedNoUpstream", params)
-        : result.status === "no-op"
-          ? result.reason === "ahead_only"
-            ? t("git.historyBranchUpdateAheadOnly", params)
-            : t("git.historyBranchUpdateAlreadyUpToDate", params)
-          : t("git.historyBranchUpdateSuccess", params);
-      setUpdateFeedback({
-        tone: result.status === "blocked" ? "error" : "success",
-        message,
-      });
+      setUpdateFeedback(getGitBranchUpdateFeedback(t, result, effectiveCurrentBranch));
     } catch (caughtError) {
       setUpdateFeedback({
         tone: "error",
@@ -444,8 +475,16 @@ export function ComposerBranchBadge({
                     >
                       {localGroups.map(([scope, localItems]) => (
                         <div key={`local:${scope || "root"}`}>
-                          {scope ? <div className="composer-git-branch-scope">{scope}</div> : null}
-                          {localItems.map((branch) => <BranchRow key={`local:${branch.name}`} branch={branch} displayName={scope ? branch.name.slice(scope.length + 1) : branch.name} currentBranch={effectiveCurrentBranch} onSelect={(name) => void runAction(() => onCheckout(name))} />)}
+                          {scope ? (
+                            <BranchScope
+                              id={`composer-git-local-scope-${encodeURIComponent(scope)}`}
+                              label={scope}
+                              expanded={revealBranchSections || expandedScopes.has(`local:${scope}`)}
+                              onToggle={() => toggleScope(`local:${scope}`)}
+                            >
+                              {localItems.map((branch) => <BranchRow key={`local:${branch.name}`} branch={branch} displayName={branch.name.slice(scope.length + 1)} currentBranch={effectiveCurrentBranch} onSelect={(name) => void runAction(() => onCheckout(name))} />)}
+                            </BranchScope>
+                          ) : localItems.map((branch) => <BranchRow key={`local:${branch.name}`} branch={branch} displayName={branch.name} currentBranch={effectiveCurrentBranch} onSelect={(name) => void runAction(() => onCheckout(name))} />)}
                         </div>
                       ))}
                     </BranchSection>
@@ -459,8 +498,14 @@ export function ComposerBranchBadge({
                     >
                       {remoteGroups.map(({ remote, scope, branches: remoteItems }) => (
                         <div key={`${remote}:${scope}`}>
-                          <div className="composer-git-branch-scope">{remote}{scope ? ` / ${scope}` : ""}</div>
-                          {remoteItems.map((branch) => <BranchRow key={`remote:${branch.name}`} branch={branch} displayName={branch.name.split("/").at(-1) ?? branch.name} currentBranch={effectiveCurrentBranch} onSelect={(name) => void runAction(() => onCheckout(name))} />)}
+                          <BranchScope
+                            id={`composer-git-remote-scope-${encodeURIComponent(`${remote}:${scope}`)}`}
+                            label={`${remote}${scope ? ` / ${scope}` : ""}`}
+                            expanded={revealBranchSections || expandedScopes.has(`remote:${remote}:${scope}`)}
+                            onToggle={() => toggleScope(`remote:${remote}:${scope}`)}
+                          >
+                            {remoteItems.map((branch) => <BranchRow key={`remote:${branch.name}`} branch={branch} displayName={branch.name.split("/").at(-1) ?? branch.name} currentBranch={effectiveCurrentBranch} onSelect={(name) => void runAction(() => onCheckout(name))} />)}
+                          </BranchScope>
                         </div>
                       ))}
                     </BranchSection>

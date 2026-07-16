@@ -254,6 +254,90 @@ list_workspace_directory_children_inner_with_refresh(
 )
 ```
 
+## Scenario: Repository Summary Stability And Explicit Branch Mutation Scope
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `useGitRepositories`、`useGitBranches`、repository-scoped Git menu/action wiring，或任何 aggregate polling 会驱动 detail hook mount/unmount 的链路。
+- 目标：单次 transient empty response 不得擦除 last-known-good projection；write action 不得通过先切换 persisted selection 来推断 target。
+
+### 2. Signatures
+
+- Summary owner：`useGitRepositories(...).refreshRepositories(): Promise<void>`。
+- Scoped update：`updateBranch(name: string, repositoryRootOverride?: string): Promise<GitBranchUpdateResult | null>`。
+- UI intent：
+
+```typescript
+type GitRepositoryActionRequest =
+  | { action: "update"; repositoryRoot: string; branchName: string }
+  | { action: Exclude<GitRepositoryActionId, "update">; repositoryRoot: string };
+```
+
+### 3. Contracts
+
+- Aggregate owner MUST reject one empty normalized sample when the same connected workspace has a non-empty last-known-good collection；连续 confirmed empty MAY converge to `[]`。
+- Empty-sample counter/ref MUST be updated outside React state updater；state updater MUST remain pure under StrictMode double invocation。
+- Workspace identity change或 disconnected state MUST clear accepted snapshot、empty counter、selection 与 dependent detail state。
+- Repository write action MUST carry explicit `repositoryRoot` and required domain identity（Update 包含 `branchName`）。
+- Explicit root `""` MUST continue to mean workspace root；不得用 `||` 把它退化成 configured-root fallback。
+- Pending mutation dedupe key MUST include workspace identity、repository root 与 branch identity；success/no-op/blocked/error MUST settle visible feedback。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| valid summaries → one empty poll | 保留 accepted summaries 与 branch hook scope | 清 selection 导致 branch rows 闪空 |
+| two confirmed empty polls | 允许收敛为空 | 永久缓存已删除 repository |
+| workspace switch/disconnect | 清 snapshot/counter/pending scope | 复用前一 workspace state |
+| nested repository Update | `updateGitBranch(workspaceId, branchName, repositoryRoot)` | 先改 persisted `gitRoot` 再用 stale closure 更新 |
+| root repository Update | 显式传 `repositoryRoot=""` | 把空字符串当 missing scope |
+| duplicate pending Update | dedupe 且最终反馈只由原请求结算 | 并发执行相同 mutation |
+
+### 5. Good / Base / Bad Cases
+
+- Good：aggregate response 在 state updater 外决定 `accepted` snapshot，setter 只比较并发布该 snapshot。
+- Good：FileTree intent 同时携带 `repositoryRoot` 与 summary `currentBranch`，hook override 原样进入 service。
+- Base：不传 `repositoryRootOverride` 的 Composer Update 继续使用 hook 当前 selected repository。
+- Bad：在 `setRepositories(current => { emptyCountRef.current += 1; ... })` 中修改 ref；StrictMode 可能把一个 response 计为两次。
+- Bad：`await selectGitRoot(root); await updateBranch(branch)`；React state/closure 尚未收敛时可能更新旧 repository。
+
+### 6. Tests Required
+
+- `useGitRepositories.test.tsx` MUST cover valid → one empty retained → second empty accepted，以及 workspace switch stale-response rejection。
+- repository action test MUST assert `{ action: "update", repositoryRoot, branchName }` exact payload。
+- AppShell hook test MUST assert explicit root reaches `updateBranch(name, root)`、duplicate pending request is suppressed、error feedback settles。
+- FileTree test MUST assert detached/unborn/unavailable/no-current-branch Update is disabled。
+- 修改 service/command mapping 时追加 `npm run check:runtime-contracts`；只复用既有 mapping 时仍需运行该 gate。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+setRepositories((current) => {
+  emptyCountRef.current += 1;
+  return response.length === 0 ? [] : response;
+});
+
+await selectGitRoot(repositoryRoot);
+await updateBranch(branchName);
+```
+
+#### Correct
+
+```typescript
+const current = acceptedRepositoriesRef.current;
+const accepted = normalized.length === 0 && current.length > 0
+  ? current
+  : normalized;
+acceptedRepositoriesRef.current = accepted;
+setRepositories((rendered) =>
+  areGitRepositorySummariesEqual(rendered, accepted) ? rendered : accepted,
+);
+
+await updateBranch(branchName, repositoryRoot);
+```
+
 ## Testing 要求
 
 - 非 trivial hook 至少覆盖：

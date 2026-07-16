@@ -327,7 +327,10 @@ export type LayoutNodesFlatOptions = {
   onSelectGitRepository?: (repositoryRoot: string | null) => Promise<void> | void;
   onCheckoutBranch: (name: string) => Promise<void>;
   onCreateBranch: (name: string) => Promise<void>;
-  onUpdateBranch?: (name: string) => Promise<GitBranchUpdateResult | null>;
+  onUpdateBranch?: (
+    name: string,
+    repositoryRootOverride?: string,
+  ) => Promise<GitBranchUpdateResult | null>;
   onCopyThread: () => void | Promise<void>;
   onLockPanel?: () => void;
   onToggleTerminal: () => void;

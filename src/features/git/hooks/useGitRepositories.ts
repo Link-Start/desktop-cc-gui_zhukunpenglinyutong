@@ -24,11 +24,15 @@ export function useGitRepositories({
   const requestIdRef = useRef(0);
   const workspaceIdRef = useRef<string | null>(activeWorkspace?.id ?? null);
   const inFlightRef = useRef<Promise<void> | null>(null);
+  const consecutiveEmptyResponsesRef = useRef(0);
+  const acceptedRepositoriesRef = useRef<GitRepositorySummary[]>([]);
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
 
   const refreshRepositories = useCallback(() => {
     if (!workspaceId || !isConnected) {
+      acceptedRepositoriesRef.current = [];
+      consecutiveEmptyResponsesRef.current = 0;
       setRepositories([]);
       return Promise.resolve();
     }
@@ -51,8 +55,19 @@ export function useGitRepositories({
           return;
         }
         const normalized = normalizeGitRepositorySummaries(response);
-        setRepositories((current) =>
-          areGitRepositorySummariesEqual(current, normalized) ? current : normalized,
+        const current = acceptedRepositoriesRef.current;
+        let accepted = normalized;
+        if (normalized.length === 0 && current.length > 0) {
+          consecutiveEmptyResponsesRef.current += 1;
+          if (consecutiveEmptyResponsesRef.current === 1) {
+            accepted = current;
+          }
+        } else {
+          consecutiveEmptyResponsesRef.current = 0;
+        }
+        acceptedRepositoriesRef.current = accepted;
+        setRepositories((rendered) =>
+          areGitRepositorySummariesEqual(rendered, accepted) ? rendered : accepted,
         );
         setError(null);
       } catch (caughtError) {
@@ -90,6 +105,8 @@ export function useGitRepositories({
     workspaceIdRef.current = workspaceId;
     requestIdRef.current += 1;
     inFlightRef.current = null;
+    consecutiveEmptyResponsesRef.current = 0;
+    acceptedRepositoriesRef.current = [];
     setRepositories([]);
     setError(null);
     setIsLoading(false);

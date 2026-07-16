@@ -1770,7 +1770,9 @@ export function FileTreePanel({
         );
       }
 
-      const runRepositoryAction = async (action: GitRepositoryActionId) => {
+      const runRepositoryAction = async (
+        action: Exclude<GitRepositoryActionId, "update">,
+      ) => {
         if (!repositorySummary) return;
         if (action === "add-to-gitignore") {
           await addRepositoryToGitignore(repositorySummary.repositoryRoot);
@@ -1781,6 +1783,20 @@ export function FileTreePanel({
           repositoryRoot: repositorySummary.repositoryRoot,
         });
       };
+      const canUpdateRepository =
+        repositorySummary?.headState === "branch" &&
+        Boolean(repositorySummary.currentBranch) &&
+        !repositorySummary.error;
+      const runRepositoryUpdate = async () => {
+        if (!repositorySummary || !canUpdateRepository || !repositorySummary.currentBranch) {
+          return;
+        }
+        await onGitRepositoryAction?.({
+          action: "update",
+          repositoryRoot: repositorySummary.repositoryRoot,
+          branchName: repositorySummary.currentBranch,
+        });
+      };
       const repositoryGitItems = repositorySummary
         ? [
             { type: "label" as const, id: "git-target", label: repositorySummary.displayName },
@@ -1788,11 +1804,8 @@ export function FileTreePanel({
             { type: "item" as const, id: "git-stage-all", label: t("git.repositoryMenuStageAll"), onSelect: () => runRepositoryAction("stage-all") },
             { type: "item" as const, id: "git-ignore", label: t("git.repositoryMenuAddToGitignore"), disabled: repositorySummary.repositoryRoot.length === 0, onSelect: () => runRepositoryAction("add-to-gitignore") },
             { type: "separator" as const, id: "git-separator-diff" },
-            { type: "item" as const, id: "git-show-diff", label: t("git.repositoryMenuShowDiff"), onSelect: () => runRepositoryAction("show-diff") },
-            { type: "item" as const, id: "git-compare-revision", label: t("git.repositoryMenuCompareRevision"), onSelect: () => runRepositoryAction("compare-revision") },
-            { type: "item" as const, id: "git-compare-branch", label: t("git.repositoryMenuCompareBranch"), onSelect: () => runRepositoryAction("compare-branch") },
+            { type: "item" as const, id: "git-update", label: t("git.historyBranchMenuUpdate"), disabled: !canUpdateRepository, onSelect: runRepositoryUpdate },
             { type: "item" as const, id: "git-history", label: t("git.repositoryMenuHistory"), onSelect: () => runRepositoryAction("show-history") },
-            { type: "item" as const, id: "git-rollback", label: t("git.repositoryMenuRollback"), onSelect: () => runRepositoryAction("rollback") },
             { type: "separator" as const, id: "git-separator-remote" },
             { type: "item" as const, id: "git-push", label: t("git.repositoryMenuPush"), onSelect: () => runRepositoryAction("push") },
             { type: "item" as const, id: "git-pull", label: t("git.repositoryMenuPull"), onSelect: () => runRepositoryAction("pull") },

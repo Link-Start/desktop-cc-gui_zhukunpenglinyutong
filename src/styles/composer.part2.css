@@ -2298,6 +2298,7 @@
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
+  line-height: 20px;
   text-align: left;
 }
 
@@ -2309,10 +2310,39 @@
 }
 
 .composer-git-branch-scope {
-  padding: 4px 8px 2px 30px;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 4px 8px 4px 30px;
+  border: 0;
+  background: transparent;
   color: var(--text-tertiary);
-  font-family: var(--code-font-family);
-  font-size: 11px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: left;
+}
+
+.composer-git-branch-scope:hover,
+.composer-git-branch-scope:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.composer-git-branch-item {
+  min-height: 28px;
+  padding-left: 30px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.composer-git-branch-scope-children .composer-git-branch-item {
+  padding-left: 46px;
 }
 
 .composer-git-repository-status,

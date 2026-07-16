@@ -1,5 +1,6 @@
 export type GitRepositoryActionId =
   | "commit"
+  | "update"
   | "stage-all"
   | "add-to-gitignore"
   | "show-diff"
@@ -19,10 +20,16 @@ export type GitRepositoryActionId =
   | "manage-remotes"
   | "clone";
 
-export type GitRepositoryActionRequest = {
-  action: GitRepositoryActionId;
-  repositoryRoot: string;
-};
+export type GitRepositoryActionRequest =
+  | {
+      action: "update";
+      repositoryRoot: string;
+      branchName: string;
+    }
+  | {
+      action: Exclude<GitRepositoryActionId, "update">;
+      repositoryRoot: string;
+    };
 
 export type GitRepositoryActionIntent = GitRepositoryActionRequest & {
   requestId: number;
@@ -35,6 +42,7 @@ export const GIT_REPOSITORY_ACTION_LABEL_KEYS: Record<
   string
 > = {
   commit: "git.repositoryMenuCommit",
+  update: "git.historyBranchMenuUpdate",
   "stage-all": "git.repositoryMenuStageAll",
   "add-to-gitignore": "git.repositoryMenuAddToGitignore",
   "show-diff": "git.repositoryMenuShowDiff",

@@ -1155,6 +1155,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const changeGitPanelMode = options.onGitPanelModeChange;
   const changeAppMode = options.onAppModeChange;
   const stageGitAll = options.onStageGitAll;
+  const updateBranch = options.onUpdateBranch;
   const activeWorkspaceForClone = options.activeWorkspace;
   const addCloneAgent = options.onAddCloneAgent;
   const selectComposerGitRoot = useCallback(
@@ -1183,7 +1184,12 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     [changeAppMode, selectComposerGitRoot],
   );
   const handleFileTreeGitRepositoryAction = useCallback(
-    async ({ action, repositoryRoot }: GitRepositoryActionRequest) => {
+    async (request: GitRepositoryActionRequest) => {
+      const { action, repositoryRoot } = request;
+      if (action === "update") {
+        await updateBranch?.(request.branchName, repositoryRoot);
+        return;
+      }
       await selectComposerGitRoot(repositoryRoot);
       if (action === "stage-all") {
         await stageGitAll();
@@ -1214,6 +1220,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       activeWorkspaceForClone,
       addCloneAgent,
       selectComposerGitRoot,
+      updateBranch,
     ],
   );
   // Stabilize the composer branch-control object and diff-path handler so they

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useGitBranches } from "../features/git/hooks/useGitBranches";
 import { useGitRepositories } from "../features/git/hooks/useGitRepositories";
 import { useGitActions } from "../features/git/hooks/useGitActions";
@@ -9,6 +9,7 @@ import {
 import { pickWorkspacePath } from "../services/tauri";
 import { resolveWorkspaceRelativePath } from "../utils/workspacePaths";
 import { pushErrorToast } from "../services/toasts";
+import { getGitBranchUpdateFeedback } from "../features/git/utils/gitBranchUpdateFeedback";
 import type {
   DebugEntry,
   WorkspaceInfo,
@@ -55,6 +56,7 @@ export function useAppShellGitWorkspaceOpsSection({
     onDebug: addDebugEntry,
   });
   const [selectedRepositoryRoot, setSelectedRepositoryRoot] = useState<string | null>(null);
+  const updatingRepositoryBranchesRef = useRef(new Set<string>());
   const selectedRepositoryWorkspace = selectedRepositoryRoot === null ? null : activeWorkspace;
   const {
     branches,
@@ -102,10 +104,58 @@ export function useAppShellGitWorkspaceOpsSection({
     await createBranch(name);
     refreshGitStatus();
   };
-  const handleUpdateBranch = async (name: string) => {
-    const result = await updateBranch(name);
-    refreshGitStatus();
-    return result;
+  const handleUpdateBranch = async (name: string, repositoryRootOverride?: string) => {
+    const updateKey = repositoryRootOverride === undefined
+      ? null
+      : JSON.stringify([activeWorkspace?.id ?? null, repositoryRootOverride, name]);
+    if (updateKey && updatingRepositoryBranchesRef.current.has(updateKey)) {
+      return null;
+    }
+    if (updateKey) {
+      updatingRepositoryBranchesRef.current.add(updateKey);
+      pushErrorToast({
+        id: updateKey,
+        title: t("git.historyBranchMenuUpdate"),
+        message: t("git.historyRunningOperation", {
+          operation: t("git.historyBranchMenuUpdate"),
+        }),
+        variant: "info",
+        sticky: true,
+      });
+    }
+    try {
+      const result = await updateBranch(name, repositoryRootOverride);
+      refreshGitStatus();
+      if (result && repositoryRootOverride !== undefined) {
+        const feedback = getGitBranchUpdateFeedback(t, result, name);
+        pushErrorToast({
+          id: updateKey ?? undefined,
+          title: t("git.historyBranchMenuUpdate"),
+          message: feedback.message,
+          variant: feedback.tone,
+          durationMs: 4_000,
+        });
+      } else if (!result && updateKey) {
+        pushErrorToast({
+          id: updateKey,
+          title: t("git.historyBranchMenuUpdate"),
+          message: t("git.statusUnavailable"),
+          variant: "error",
+        });
+      }
+      return result;
+    } catch (error) {
+      if (repositoryRootOverride === undefined) throw error;
+      pushErrorToast({
+        id: updateKey ?? undefined,
+        title: t("git.historyBranchMenuUpdate"),
+        message: error instanceof Error ? error.message : String(error),
+        variant: "error",
+      });
+      return null;
+    } finally {
+      if (updateKey) updatingRepositoryBranchesRef.current.delete(updateKey);
+    }
   };
   const alertError = useCallback((error: unknown) => {
     alert(error instanceof Error ? error.message : String(error));
