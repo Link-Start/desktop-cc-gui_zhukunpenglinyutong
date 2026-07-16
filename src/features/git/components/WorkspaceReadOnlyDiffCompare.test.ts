@@ -29,7 +29,10 @@ vi.mock("../../files/components/WorkspaceFileComparePanel", () => ({
     }, draft.content),
 }));
 
-import { buildReadOnlyCompareSources } from "./WorkspaceReadOnlyDiffCompare";
+import {
+  buildReadOnlyCompareModel,
+  buildReadOnlyCompareSources,
+} from "./WorkspaceReadOnlyDiffCompare";
 import { WorkspaceReadOnlyDiffCompare } from "./WorkspaceReadOnlyDiffCompare";
 
 afterEach(cleanup);
@@ -54,6 +57,17 @@ describe("buildReadOnlyCompareSources", () => {
     ).toEqual([
       "old one\n\nold ten",
       "new one\n\nnew ten",
+    ]);
+  });
+
+  it("preserves old and new source coordinates across separated hunks", () => {
+    expect(
+      buildReadOnlyCompareModel(
+        "@@ -56,2 +60,2 @@\n same\n-old\n+new\n@@ -90 +94 @@\n-old later\n+new later\n",
+      ).lineNumberLabels,
+    ).toEqual([
+      [56, 57, null, 90],
+      [60, 61, null, 94],
     ]);
   });
 });

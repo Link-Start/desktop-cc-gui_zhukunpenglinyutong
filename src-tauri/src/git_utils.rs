@@ -299,7 +299,7 @@ pub(crate) fn diff_patch_to_string(patch: &mut git2::Patch) -> Result<String, gi
 #[cfg(test)]
 mod tests {
     use super::{
-        build_git_file_blame, compact_repository_status, image_mime_type,
+        build_git_file_blame, build_image_commit_diff, compact_repository_status, image_mime_type,
         list_git_repository_summaries, path_has_git_repository_marker, resolve_git_root_for_scope,
     };
     use crate::types::{WorkspaceEntry, WorkspaceKind, WorkspaceSettings};
@@ -340,6 +340,76 @@ mod tests {
         assert_eq!(image_mime_type("vector.SVG"), Some("image/svg+xml"));
         assert_eq!(image_mime_type("glyph.ico"), Some("image/x-icon"));
         assert_eq!(image_mime_type("readme.txt"), None);
+    }
+
+    #[test]
+    fn image_commit_diff_contains_shared_old_and_new_payloads() {
+        let root = std::env::temp_dir().join(format!("ccgui-image-diff-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create image diff root");
+        let repo = Repository::init(&root).expect("init image diff repo");
+        let signature = Signature::now("Moss Test", "moss@example.test").expect("signature");
+
+        fs::write(root.join("logo.png"), [0_u8, 1, 2]).expect("write first image");
+        let mut index = repo.index().expect("open index");
+        index
+            .add_path(std::path::Path::new("logo.png"))
+            .expect("stage first image");
+        index.write().expect("write first index");
+        let first_tree_id = index.write_tree().expect("write first tree");
+        let first_tree = repo.find_tree(first_tree_id).expect("find first tree");
+        let first_oid = repo
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                "first image",
+                &first_tree,
+                &[],
+            )
+            .expect("commit first image");
+        drop(first_tree);
+
+        fs::write(root.join("logo.png"), [3_u8, 4, 5]).expect("write second image");
+        let mut index = repo.index().expect("reopen index");
+        index
+            .add_path(std::path::Path::new("logo.png"))
+            .expect("stage second image");
+        index.write().expect("write second index");
+        let second_tree_id = index.write_tree().expect("write second tree");
+        let second_tree = repo.find_tree(second_tree_id).expect("find second tree");
+        let first_commit = repo.find_commit(first_oid).expect("find first commit");
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "second image",
+            &second_tree,
+            &[&first_commit],
+        )
+        .expect("commit second image");
+        let first_tree = first_commit.tree().expect("load first tree");
+        let diff = repo
+            .diff_tree_to_tree(Some(&first_tree), Some(&second_tree), None)
+            .expect("diff image trees");
+        let delta = diff.deltas().next().expect("image delta");
+
+        let image_diff =
+            build_image_commit_diff(&repo, Some(&first_tree), &second_tree, &delta, "M")
+                .expect("map image diff");
+        assert_eq!(image_diff.path, "logo.png");
+        assert!(image_diff.is_binary);
+        assert!(image_diff.is_image);
+        assert_eq!(image_diff.old_image_mime.as_deref(), Some("image/png"));
+        assert_eq!(image_diff.new_image_mime.as_deref(), Some("image/png"));
+        assert!(image_diff.old_image_data.is_some());
+        assert!(image_diff.new_image_data.is_some());
+
+        drop(diff);
+        drop(first_tree);
+        drop(first_commit);
+        drop(second_tree);
+        drop(repo);
+        fs::remove_dir_all(&root).expect("cleanup image diff root");
     }
 
     #[test]

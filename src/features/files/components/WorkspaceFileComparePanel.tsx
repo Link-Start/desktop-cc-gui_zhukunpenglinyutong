@@ -216,6 +216,8 @@ export function CompareEditorColumn({
   collapsedRanges = [],
   saveFileShortcut,
   activeLineNumber,
+  diffTone = null,
+  lineNumberLabels = null,
 }: {
   draft: CompareColumnDraft;
   editorTheme: EditorTheme;
@@ -224,6 +226,8 @@ export function CompareEditorColumn({
   collapsedRanges?: FileCompareCollapsedRange[];
   saveFileShortcut?: string | null;
   activeLineNumber: number | null;
+  diffTone?: "deletion" | "addition" | null;
+  lineNumberLabels?: readonly (number | null)[] | null;
 }) {
   const { t } = useTranslation();
   const cmRef = useRef<FileCodeMirrorEditorHandle | null>(null);
@@ -235,7 +239,7 @@ export function CompareEditorColumn({
   const shouldRenderPlainText = Boolean(draft.readOnlyReason || draft.error || draft.truncated);
 
   useEffect(() => {
-    if (!activeLineNumber || isReadOnly) {
+    if (!activeLineNumber || shouldRenderPlainText) {
       return;
     }
     const view = cmRef.current?.view;
@@ -248,10 +252,13 @@ export function CompareEditorColumn({
       scrollIntoView: true,
     });
     cmRef.current?.flashNavigationLine(activeLineNumber);
-  }, [activeLineNumber, isReadOnly]);
+  }, [activeLineNumber, shouldRenderPlainText]);
 
   return (
-    <section className="file-compare-column" aria-label={draft.label}>
+    <section
+      className={`file-compare-column${diffTone ? ` is-diff-${diffTone}` : ""}`}
+      aria-label={draft.label}
+    >
       <div className="file-compare-column-header">
         <div className="file-compare-column-title" title={draft.label}>
           <span className="file-compare-column-name">
@@ -309,6 +316,7 @@ export function CompareEditorColumn({
             gitLineMarkers={markers}
             fileCompareLineGaps={lineGaps}
             fileCompareCollapsedRanges={collapsedRanges}
+            lineNumberLabels={lineNumberLabels}
             codeAnnotations={EMPTY_ANNOTATIONS}
             annotationDraft={null}
             annotationWidgetLabels={EMPTY_ANNOTATION_LABELS}

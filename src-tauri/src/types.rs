@@ -154,11 +154,7 @@ pub(crate) struct GitHistoryCommit {
     pub(crate) parents: Vec<String>,
     #[serde(default)]
     pub(crate) refs: Vec<String>,
-    #[serde(
-        default,
-        rename = "filePath",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, rename = "filePath", skip_serializing_if = "Option::is_none")]
     pub(crate) file_path: Option<String>,
 }
 

@@ -25,7 +25,7 @@
 
 - [x] 5.1 [P0, 依赖 2.x/3.x/4.x] 运行 focused Vitest、focused Cargo tests、`npm run typecheck` 与 `npm run check:runtime-contracts`，记录通过项和环境阻塞。
 - [x] 5.2 [P0, 依赖 5.1] 运行 `openspec validate add-file-history-view --strict --no-interactive`，核对 code/spec/task parity，并更新所有已完成 checkbox。
-- [ ] 5.3 [P1, 依赖 5.2] 人工 smoke：root/nested repository 文件右键、rename history、commit switch、diff style、close/back；保留待用户体验确认项，不提前 archive。
+- [x] 5.3 [P1, 依赖 5.2] 人工 smoke：root/nested repository 文件右键、rename history、commit switch、diff style、close/back；用户已明确验收通过。
 
 ## 6. Adaptive layout 与 aligned compare 增量
 
@@ -41,7 +41,7 @@
 
 ## 8. Review closure：rename identity、line coordinates 与 binary parity
 
-- [ ] 8.1 [P0, 依赖 2.1/3.1] 让 path-scoped history 返回 optional commit-time `filePath`，File History 使用 exact historical path 请求 selected diff，并禁止 unrelated first-entry fallback；覆盖 rename fixture 与 component mapping tests。
-- [ ] 8.2 [P1, 依赖 7.1] 复用 `parseDiff()` 的 `oldLine/newLine` 为 historical CodeMirror 注入 optional gutter labels，覆盖 non-1/multi-hunk coordinates，禁止 padding/full-context workaround。
-- [ ] 8.3 [P1, 依赖 2.3/3.1] 复用 shared image helpers 对齐 Desktop/daemon image payload，并为 non-image binary 显示 explicit state；覆盖 Rust parity 与 frontend binary/image tests。
-- [ ] 8.4 [P0, 依赖 8.1/8.2/8.3] 运行 focused Vitest/Cargo、lint、typecheck、runtime contracts、diff check 与 strict OpenSpec validation；同步 Trellis contract 和 verification evidence。
+- [x] 8.1 [P0, 依赖 2.1/3.1] 让 path-scoped history 返回 optional commit-time `filePath`，File History 使用 exact historical path 请求 selected diff，并禁止 unrelated first-entry fallback；覆盖 rename fixture 与 component mapping tests。
+- [x] 8.2 [P1, 依赖 7.1] 复用 `parseDiff()` 的 `oldLine/newLine` 为 historical CodeMirror 注入 optional gutter labels，覆盖 non-1/multi-hunk coordinates，禁止 padding/full-context workaround。
+- [x] 8.3 [P1, 依赖 2.3/3.1] 复用 shared image helpers 对齐 Desktop/daemon image payload，并为 non-image binary 显示 explicit state；覆盖 Rust parity 与 frontend binary/image tests。
+- [x] 8.4 [P0, 依赖 8.1/8.2/8.3] 运行 focused Vitest/Cargo、lint、typecheck、runtime contracts、diff check 与 strict OpenSpec validation；同步 Trellis contract 和 verification evidence。

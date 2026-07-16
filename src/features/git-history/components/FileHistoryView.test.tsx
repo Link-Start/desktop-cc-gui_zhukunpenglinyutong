@@ -46,14 +46,14 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function history(...commits: Array<{ sha: string; summary: string }>): GitHistoryResponse {
+function history(...commits: Array<{ sha: string; summary: string; filePath?: string }>): GitHistoryResponse {
   return {
     snapshotId: "snapshot",
     total: commits.length,
     offset: 0,
     limit: 100,
     hasMore: false,
-    commits: commits.map(({ sha, summary }) => ({
+    commits: commits.map(({ sha, summary, filePath }) => ({
       sha,
       shortSha: sha.slice(0, 7),
       summary,
@@ -63,6 +63,7 @@ function history(...commits: Array<{ sha: string; summary: string }>): GitHistor
       timestamp: 1,
       parents: [],
       refs: [],
+      ...(filePath ? { filePath } : {}),
     })),
   };
 }
@@ -137,6 +138,43 @@ describe("FileHistoryView", () => {
     expect(compare.textContent).toBe("aligned diff");
   });
 
+  it("requests and renders a pre-rename commit with its historical path", async () => {
+    vi.mocked(getGitCommitHistory).mockResolvedValue(history({
+      sha: "aaaaaaa1",
+      summary: "Before rename",
+      filePath: "src/before.ts",
+    }));
+    vi.mocked(getGitCommitDiff).mockResolvedValue([
+      { path: "src/before.ts", status: "M", diff: "historical diff" },
+    ]);
+
+    render(<FileHistoryView target={{ ...targetA, path: "src/after.ts" }} onClose={vi.fn()} />);
+
+    await waitFor(() => expect(getGitCommitDiff).toHaveBeenCalledWith(
+      targetA.workspaceId,
+      "aaaaaaa1",
+      { path: "src/before.ts", repositoryRoot: "" },
+    ));
+    expect((await screen.findByTestId("read-only-diff-compare")).getAttribute("data-file-path"))
+      .toBe("src/before.ts");
+  });
+
+  it("does not render an unrelated first diff when the historical path is absent", async () => {
+    vi.mocked(getGitCommitHistory).mockResolvedValue(history({
+      sha: "aaaaaaa1",
+      summary: "Scoped commit",
+      filePath: "src/expected.ts",
+    }));
+    vi.mocked(getGitCommitDiff).mockResolvedValue([
+      { path: "src/unrelated.ts", status: "M", diff: "unrelated diff" },
+    ]);
+
+    render(<FileHistoryView target={targetA} onClose={vi.fn()} />);
+
+    expect(await screen.findByText("git.diffUnavailable")).toBeTruthy();
+    expect(screen.queryByText("unrelated diff")).toBeNull();
+  });
+
   it("keeps image history on the shared image-capable diff viewer", async () => {
     vi.mocked(getGitCommitHistory).mockResolvedValue(history({
       sha: "aaaaaaa1",
@@ -150,6 +188,20 @@ describe("FileHistoryView", () => {
 
     expect((await screen.findByTestId("image-diff-viewer")).textContent).toBe("assets/logo.png");
     expect(screen.queryByTestId("read-only-diff-compare")).toBeNull();
+  });
+
+  it("shows an explicit state for a non-image binary", async () => {
+    vi.mocked(getGitCommitHistory).mockResolvedValue(history({
+      sha: "aaaaaaa1",
+      summary: "Binary compare",
+    }));
+    vi.mocked(getGitCommitDiff).mockResolvedValue([
+      { path: targetA.path, status: "M", diff: "", isBinary: true, isImage: false },
+    ]);
+
+    render(<FileHistoryView target={targetA} onClose={vi.fn()} />);
+
+    expect(await screen.findByText("git.binaryFile")).toBeTruthy();
   });
 
   it("settles an empty history and retries a failed history request", async () => {

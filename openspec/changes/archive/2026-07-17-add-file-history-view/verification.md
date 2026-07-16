@@ -2,8 +2,8 @@
 
 ## Status
 
-**NOT READY FOR ARCHIVE** — 19/20 tasks complete. Automated gates pass for the
-File History scope; manual desktop smoke remains pending.
+**READY FOR ARCHIVE** — 24/24 tasks complete. Automated gates pass for the
+File History scope, and the user explicitly accepted the desktop smoke result.
 
 ## Automated Evidence (2026-07-17)
 
@@ -58,6 +58,29 @@ File History scope; manual desktop smoke remains pending.
 - [x] `git diff --check` — clean.
 - [x] `openspec validate add-file-history-view --strict --no-interactive` — valid after final task and evidence writeback.
 
+### Review closure: rename identity, line coordinates, binary parity
+
+- [x] Path-scoped history now returns each commit's repository-relative
+  `filePath`; selecting a pre-rename commit requests and exact-matches that
+  historical path, with no `diffs[0]` fallback.
+- [x] Historical read-only CodeMirror gutters now use unified-patch old/new
+  coordinates across non-1 and multi-hunk diffs; separator rows use blank labels.
+- [x] Desktop local and remote daemon selected-commit image mapping share one
+  helper with old/new MIME and base64 payload parity; non-image binary entries
+  render an explicit binary state.
+- [x] Focused Vitest — 3 files / 18 tests passed.
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml file_history --lib` —
+  3 passed, including exact pre/post-rename commit paths.
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml image_commit_diff --lib` —
+  1 passed, covering shared old/new image payloads.
+- [x] `cargo check --manifest-path src-tauri/Cargo.toml --bin cc_gui_daemon` — passed.
+- [x] `npm run lint`、`npm run typecheck`、`npm run check:runtime-contracts` — passed.
+- [x] `npm run doctor:strict` — runtime contracts、branding 与 strict doctor passed.
+- [x] `npm run check:large-files` — command passed in report mode；现存 baseline
+  findings 被报告，本增量未新增超限 frontend file。
+- [x] Scoped `rustfmt --check`、`git diff --check` 与 forbidden fallback/debug
+  scan — clean.
+
 ## Full-suite Observation
 
 `npm run test` reached batch 19/205 and stopped on the unrelated
@@ -68,15 +91,12 @@ failure is recorded rather than repaired across another change boundary.
 The focused failing test was rerun after this increment and remains unchanged;
 all 14 tests owned by the adaptive File History increment pass.
 
-## Outstanding Manual Gate
+## Manual Gate
 
-- [ ] Desktop smoke: root and nested repository file context menus, rename
-  history, rapid commit switching, previous/source aligned rendering, wide and
-  narrow container resizing, red/green changed-line decorations, read-only
-  navigation, retry states, and close/back behavior.
+- [x] Desktop smoke accepted by the user after File History layout、diff style、
+  read-only compare 与 navigation review.
 
 ## Archive Decision
 
-Do not archive until the manual desktop smoke is accepted. The unrelated full
-suite failure should also be resolved or independently attributed before a
-repository-wide green claim is made.
+The change is ready for archive. The unrelated full-suite Sidebar style failure
+remains independently attributed and is not included in this proposal's green claim.

@@ -19,6 +19,12 @@ export type FileHistoryTarget = {
   displayPath: string;
 };
 
+export type GitHistoryCommit = {
+  sha: string;
+  // path-scoped history 中该 commit 实际使用的 repository-relative path
+  filePath?: string | null;
+};
+
 getGitCommitHistory(workspaceId, {
   path?: string | null;
   repositoryRoot?: string | null;
@@ -45,6 +51,7 @@ CompareEditorColumn({
   lineGaps: FileCompareLineGap[];
   activeLineNumber: number | null;
   diffTone?: "deletion" | "addition" | null;
+  lineNumberLabels?: readonly (number | null)[] | null;
 }): JSX.Element
 ```
 
@@ -71,12 +78,14 @@ Daemon method 使用同字段顺序与语义，其中 pagination 的 `offset/lim
 ## 3. Contracts
 
 - `path === undefined/null`：保持 repository-wide revwalk、filters、pagination 与 DTO，不执行 `git log --follow`。
-- `path` present：先 normalize/validate，再以受控 argv 执行 `git log --follow --format=%H <ref> -- <path>`；只接受 40 位 hex OID，再由 `git2` 映射 `GitHistoryCommit`。
+- `path` present：先 normalize/validate，再以受控 argv 执行 `git log --follow --format=%H%x00 --name-only -z <ref> -- <path>`；只接受 40 位 hex OID，并将每个 OID 对应的 commit-time path 映射到 `GitHistoryCommit.filePath`。
 - `repositoryRoot === ""` 是 explicit workspace-root identity，禁止 truthy fallback；nested root 选择 longest path match，传给 backend 的 `path` 必须剥离 root prefix。
 - snapshot identity MUST 包含 HEAD、branch/query/author/date filters、`repositoryRoot` 与 normalized `path`；另一个 path 复用 snapshot 必须报 expired/mismatch。
 - Desktop remote forwarding 与 daemon dispatch MUST 原样保留 optional `path` 和 `repositoryRoot`。
 - `FileHistoryView` 首屏固定请求 100 条，只为 selected commit 请求 diff；history target 与 selected commit 分别使用 generation guard 拒绝 stale response。
-- selected text diff MUST 复用 `WorkspaceReadOnlyDiffCompare`，输出“上个版本 / 源代码”aligned CodeMirror panes；image entry MUST 保留 shared `GitDiffViewer` image rendering。File History 不得创建第二套 diff parser/renderer，也不得把历史内容变成 editable。
+- selected diff request MUST 使用 `selectedCommit.filePath ?? target.path`，并且 response 只能 exact-match 该 path；禁止以 `diffs[0]` 回退到无关文件。
+- selected text diff MUST 复用 `WorkspaceReadOnlyDiffCompare`，输出“上个版本 / 源代码”aligned CodeMirror panes；unified patch 的 old/new hunk coordinates MUST 作为 gutter label 传入 CodeMirror，跨 hunk separator 使用空 label，禁止重置为 1。
+- image entry MUST 保留 shared `GitDiffViewer` image rendering；Desktop local 与 remote daemon MUST 复用同一 image mapping，返回 old/new MIME 与 base64 payload。non-image binary MUST 显示 explicit binary state，不得伪装成 text diff 或 generic unavailable。File History 不得创建第二套 diff parser/renderer，也不得把历史内容变成 editable。
 - normal read-only compare MUST use `editable=false` + `readOnlyReason=null`，因此仍进入 `FileCodeMirrorEditor`；`readOnlyReason/error/truncated` 才允许触发 `.file-compare-readonly-content` fallback。禁止把 read-only 与 plain-text renderer 绑定。
 - previous column MUST pass `diffTone="deletion"`，source column MUST pass `diffTone="addition"`。Scoped CSS MUST 将 changed lines 分别渲染为 red/green，同时保留 shared markers、aligned gaps 与 syntax highlighting。
 - difference navigation MUST work for read-only CodeMirror。`CompareEditorColumn` 只在 plain-text fallback 时跳过 programmatic selection/scroll，不得仅因 `editable=false` 跳过。
@@ -95,6 +104,7 @@ Daemon method 使用同字段顺序与语义，其中 pagination 的 `offset/lim
 | Windows separators | normalize `\\` 为 `/` | 与 POSIX path 等价 |
 | absolute、drive prefix、empty、`.`、`..` | backend reject before Git query | explicit readable error |
 | rename chain | Git `--follow` OID sequence | 包含 rename 前 commits |
+| select pre-rename commit | request 使用该 commit 的 `filePath` | exact historical diff，不回退到 response 第一项 |
 | file A request 后切 file B | A late response ignored | B commits/error/diff 不变 |
 | commit A diff 后切 commit B | A late diff ignored | B diff/error 不变 |
 | path/snapshot mismatch | reject pagination | UI 可 Retry 首屏 |
@@ -103,6 +113,8 @@ Daemon method 使用同字段顺序与语义，其中 pagination 的 `offset/lim
 | narrow host container | history rail stacks above full-width compare | 不得依赖 `100vw`/viewport media query |
 | selected text diff | previous/source read-only panes + synchronized compare | 不得允许 edit 或复制 shared renderer |
 | selected image diff | shared image-capable viewer | 不得把 image entry 送进 CodeMirror 空文本列 |
+| selected non-image binary | explicit binary state | 不得显示 generic diff unavailable |
+| multi-hunk historical text | gutter 保留 old/new hunk line numbers | separator 为空，后续 hunk 不得从 1 重新计数 |
 | normal read-only text | CodeMirror + decorations + `editable=false` | 不得因 read-only reason 渲染 `<pre>` |
 | previous/source change | red deletion / green addition | 不得两栏都显示 generic blue modified |
 | difference navigation | read-only editor scrolls to active line | 不得把 programmatic navigation 当 mutation 禁用 |
@@ -117,9 +129,12 @@ Daemon method 使用同字段顺序与语义，其中 pagination 的 `offset/lim
 - Bad：history/diff promise resolve 后不核对 generation，旧文件或旧 commit 覆盖当前 UI。
 - Good：File History container 变窄时，layout 自己切换上下结构，right panel 是否打开不影响 breakpoint truth。
 - Good：historical text column 使用 `{ editable: false, readOnlyReason: null }`，因此 CodeMirror/markers 保留但 user mutation 被禁用。
+- Good：rename 前 commit 暴露 `filePath="src/before.ts"`，diff request 与 exact-match 都使用该 historical path。
+- Good：`@@ -56,2 +60,2 @@` 后接 `@@ -90 +94 @@` 时，两栏 gutter 分别延续为 `56,57,90` 与 `60,61,94`。
 - Bad：用 `@media (max-width: ...)` 推断 center surface 宽度，导致 window 很宽但 center panel 很窄时仍保持左右挤压。
 - Bad：为复刻 Diff UI 再写一套 previous/source reconstruction 或 CodeMirror columns。
 - Bad：用 `readOnlyReason: t("files.readOnly")` 表示普通只读，意外触发 `<pre>` fallback 并丢失全部 decorations。
+- Bad：selected response 未命中 path 时渲染 `diffs[0]`，可能把同一 commit 的另一个文件冒充目标文件。
 
 ## 6. Tests Required
 
@@ -128,12 +143,15 @@ Daemon method 使用同字段顺序与语义，其中 pagination 的 `offset/lim
 - `FileTreePanel.run.test.tsx`：assert root/nested file submenu payload；callback omitted 时无 Git dead entry。
 - `FileHistoryView.test.tsx`：用 deferred promises assert rapid file switch 与 commit switch 丢弃 late response。
 - `FileHistoryView.test.tsx`：assert selected entry 的 exact `filePath/diff` 传给 shared aligned read-only compare。
+- `FileHistoryView.test.tsx`：assert pre-rename commit 使用 historical `filePath`；unrelated first diff 不渲染；non-image binary 显示 explicit state。
 - `WorkspaceReadOnlyDiffCompare.test.ts`：assert previous/source reconstruction、read-only columns、difference navigation 与 stale full-diff guard。
+- `WorkspaceReadOnlyDiffCompare.test.ts`：assert multi-hunk old/new gutter labels 使用 patch coordinates，separator 为 `null`。
 - `WorkspaceFileComparePanel.compare-editor.test.tsx`：assert normal read-only draft renders CodeMirror with `editable=false`、semantic tone/markers、navigation dispatch；explicit unsupported reason retains plain-text fallback。
 - `file-history-layout.test.ts`：assert named container、bounded wide grid、narrow stacked rows、fluid two-pane column override。
 - `file-history-layout.test.ts`：assert deletion/addition scoped selectors 与 red/green theme colors 存在。
 - `useGitPanelController.test.tsx`：assert open/switch/close 与切换其他 center surface 后 target 清空。
-- Rust `git::tests`：真实 repository fixture assert root rename-follow、invalid paths 与不同 path snapshot identity。
+- Rust `git::tests`：真实 repository fixture assert root rename-follow 的 OID + commit-time path、invalid paths 与不同 path snapshot identity。
+- Rust `git_utils::tests`：assert shared image mapper 同时输出 old/new MIME 与 base64 payload；daemon target 必须 compile。
 - Gate：`npm run typecheck`、focused Vitest、`cargo test ... file_history --lib`、daemon target compile、`npm run check:runtime-contracts`、strict OpenSpec validation。
 
 ## 7. Wrong vs Correct
@@ -208,5 +226,19 @@ const draft = {
   markers={markers}
   diffTone="deletion"
   activeLineNumber={activeLineNumber}
+  lineNumberLabels={historicalLineNumbers}
 />
+```
+
+### Wrong: rename 后仍绑定当前 path
+
+```ts
+const selectedDiff = diffs.find((entry) => entry.path === target.path) ?? diffs[0];
+```
+
+### Correct: commit identity 绑定 historical path
+
+```ts
+const selectedFilePath = selectedCommit.filePath ?? target.path;
+const selectedDiff = diffs.find((entry) => entry.path === selectedFilePath) ?? null;
 ```

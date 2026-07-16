@@ -12,11 +12,11 @@ use tokio::time::{timeout, Duration};
 
 use crate::backend_budget::{estimate_json_payload_bytes, PayloadBudgetMetadata, ScanCacheState};
 use crate::git_utils::{
-    build_git_file_blame, build_image_commit_diff, checkout_branch, commit_to_entry,
-    diff_patch_to_string, diff_stats_for_path, image_mime_type, read_image_base64,
+    blob_to_base64, build_git_file_blame, build_image_commit_diff, checkout_branch,
+    commit_to_entry, diff_patch_to_string, diff_stats_for_path, image_mime_type,
     list_git_repository_summaries as scan_git_repository_summaries,
     list_git_roots as scan_git_roots, parse_github_repo, path_has_git_repository_marker,
-    resolve_git_root, resolve_git_root_for_scope,
+    read_image_base64, resolve_git_root, resolve_git_root_for_scope,
 };
 use crate::state::AppState;
 use crate::types::{
@@ -2128,19 +2128,19 @@ mod tests {
         fs::write(root.join("after.txt"), "first\nsecond\n").expect("edit renamed file");
         commit_all_with_message(&root, "edit renamed file").await;
 
-        let oids = crate::shared::git_core::list_file_history_oids(&root, None, "after.txt")
+        let entries = crate::shared::git_core::list_file_history_entries(&root, None, "after.txt")
             .await
             .expect("list file history");
 
-        assert_eq!(oids.len(), 3);
-        assert!(oids.iter().all(|oid| oid.len() == 40));
+        assert_eq!(entries.len(), 3);
+        assert!(entries.iter().all(|entry| entry.oid.len() == 40));
+        assert_eq!(entries[0].path, "after.txt");
+        assert_eq!(entries[1].path, "after.txt");
+        assert_eq!(entries[2].path, "before.txt");
 
-        let option_like_ref = crate::shared::git_core::list_file_history_oids(
-            &root,
-            Some("--no-walk"),
-            "after.txt",
-        )
-        .await;
+        let option_like_ref =
+            crate::shared::git_core::list_file_history_oids(&root, Some("--no-walk"), "after.txt")
+                .await;
         assert!(option_like_ref.is_err());
     }
 
