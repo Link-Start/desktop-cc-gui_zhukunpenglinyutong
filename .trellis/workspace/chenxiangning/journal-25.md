@@ -1401,3 +1401,70 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1010: 完善文件追溯与多仓路径隔离
+
+**Date**: 2026-07-17
+**Task**: 完善文件追溯与多仓路径隔离
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+完成 File History、Git Blame、多仓 Diff preview、文件直接打开与 repository scope 修复；相关测试、typecheck、lint 与 OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6031d97e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1011: 收口并归档文件历史视图
+
+**Date**: 2026-07-17
+**Task**: 收口并归档文件历史视图
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+完成 File History review closure：修复 rename historical path、真实 diff gutter 行号、Desktop/daemon image 与 binary parity；同步主 specs，归档 add-file-history-view，并通过 focused frontend/Rust、lint、typecheck、runtime contracts、strict doctor 与 OpenSpec strict validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `432a0f14` | (see git log) |
+| `1db3de6a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
