@@ -1040,6 +1040,14 @@ async fn handle_rpc_request(
             let roots = state.list_git_roots(workspace_id, depth).await?;
             serde_json::to_value(roots).map_err(|err| err.to_string())
         }
+        "list_git_repository_summaries" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let depth = parse_optional_usize(&params, "depth");
+            let summaries = state
+                .list_git_repository_summaries(workspace_id, depth)
+                .await?;
+            serde_json::to_value(summaries).map_err(|err| err.to_string())
+        }
         "get_git_diffs" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let diffs = state.get_git_diffs(workspace_id).await?;
@@ -1254,8 +1262,10 @@ async fn handle_rpc_request(
         "update_git_branch" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let branch_name = parse_string(&params, "branchName")?;
-            let result: GitBranchUpdateResult =
-                state.update_git_branch(workspace_id, branch_name).await?;
+            let repository_root = parse_optional_string(&params, "repositoryRoot");
+            let result: GitBranchUpdateResult = state
+                .update_git_branch(workspace_id, branch_name, repository_root)
+                .await?;
             serde_json::to_value(result).map_err(|error| error.to_string())
         }
         "cherry_pick_commit" => {
@@ -1309,18 +1319,25 @@ async fn handle_rpc_request(
         }
         "list_git_branches" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
-            state.list_git_branches(workspace_id).await
+            let repository_root = parse_optional_string(&params, "repositoryRoot");
+            state.list_git_branches(workspace_id, repository_root).await
         }
         "checkout_git_branch" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let name = parse_string(&params, "name")?;
-            state.checkout_git_branch(workspace_id, name).await?;
+            let repository_root = parse_optional_string(&params, "repositoryRoot");
+            state
+                .checkout_git_branch(workspace_id, name, repository_root)
+                .await?;
             Ok(json!({ "ok": true }))
         }
         "create_git_branch" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let name = parse_string(&params, "name")?;
-            state.create_git_branch(workspace_id, name).await?;
+            let repository_root = parse_optional_string(&params, "repositoryRoot");
+            state
+                .create_git_branch(workspace_id, name, repository_root)
+                .await?;
             Ok(json!({ "ok": true }))
         }
         "create_git_branch_from_branch" => {

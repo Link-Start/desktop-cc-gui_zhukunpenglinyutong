@@ -772,6 +772,33 @@ pub(crate) async fn list_git_roots(
     Ok(scan_git_roots(&root, depth, 200))
 }
 
+#[tauri::command]
+pub(crate) async fn list_git_repository_summaries(
+    workspace_id: String,
+    depth: Option<usize>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<GitRepositorySummary>, String> {
+    if should_forward_git_remote(&state).await {
+        return forward_git_remote(
+            &state,
+            &app,
+            "list_git_repository_summaries",
+            json!({ "workspaceId": workspace_id.clone(), "depth": depth }),
+        )
+        .await;
+    }
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+    drop(workspaces);
+    let workspace_root = PathBuf::from(entry.path);
+    let depth = depth.unwrap_or(2).clamp(1, 6);
+    Ok(scan_git_repository_summaries(&workspace_root, depth, 200))
+}
+
 /// Helper function to get the combined diff for a workspace (used by commit message generation)
 pub(crate) async fn get_workspace_diff(
     workspace_id: &str,

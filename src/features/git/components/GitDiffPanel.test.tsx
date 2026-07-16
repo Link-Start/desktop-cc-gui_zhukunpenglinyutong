@@ -124,8 +124,12 @@ vi.mock("./WorkspaceEditableDiffReviewSurface", () => ({
     mockEditableDiffReviewSurface(props),
 }));
 
-import { GitDiffPanel } from "./GitDiffPanel";
-import { buildDiffTree, compactDiffTree } from "./GitDiffPanel";
+import {
+  GitDiffPanel,
+  buildDiffTree,
+  compactDiffTree,
+  resolveRepositoryWorkspaceFilePath,
+} from "./GitDiffPanel";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(),
@@ -167,6 +171,40 @@ async function chooseCodexEnglishCommitMessage() {
 }
 
 describe("GitDiffPanel", () => {
+  it("maps nested repository diff paths to cross-platform workspace file paths", () => {
+    expect(resolveRepositoryWorkspaceFilePath("/workspace", "services/api", "src/App.tsx"))
+      .toBe("services/api/src/App.tsx");
+    expect(resolveRepositoryWorkspaceFilePath(
+      "C:\\workspace",
+      "services\\api",
+      "src\\App.tsx",
+    )).toBe("services/api/src/App.tsx");
+    expect(resolveRepositoryWorkspaceFilePath("/workspace", "services/api", "services/api/src/App.tsx"))
+      .toBe("services/api/src/App.tsx");
+  });
+
+  it("passes the nested repository workspace path into the preview loader", async () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        workspaceId="workspace-1"
+        workspacePath="/workspace"
+        gitRoot="services/api"
+        unstagedFiles={[{ path: "src/App.tsx", status: "M", additions: 1, deletions: 1 }]}
+        diffEntries={[{ path: "src/App.tsx", status: "M", diff: "@@ -1 +1 @@\n-old\n+new" }]}
+        modalPreviewRequest={{ path: "src/App.tsx", requestId: 77, maximized: true }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockEditableDiffReviewSurface).toHaveBeenCalled();
+    });
+    const previewProps = mockEditableDiffReviewSurface.mock.lastCall?.[0] as {
+      files?: Array<{ workspaceRelativeFilePath?: string }>;
+    };
+    expect(previewProps.files?.[0]?.workspaceRelativeFilePath)
+      .toBe("services/api/src/App.tsx");
+  });
   it("disables commit and shows explicit hint when only unstaged changes exist", () => {
     const onCommit = vi.fn();
     render(

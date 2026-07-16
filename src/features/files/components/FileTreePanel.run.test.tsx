@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { OpenAppTarget } from "../../../types";
+import type { GitRepositorySummary, OpenAppTarget } from "../../../types";
 
 const revealItemInDirMock = vi.fn(async () => undefined);
 const emitToMock = vi.fn(async () => undefined);
@@ -121,6 +121,162 @@ afterEach(() => {
 });
 
 describe("FileTreePanel run action isolation", () => {
+  it("shows the focused Git submenu only for an exact repository folder target", async () => {
+    const repository: GitRepositorySummary = {
+      repositoryRoot: "services/api",
+      displayName: "api",
+      currentBranch: "main",
+      headState: "branch",
+      upstream: "origin/main",
+      ahead: 0,
+      behind: 0,
+      stagedCount: 0,
+      modifiedCount: 0,
+      untrackedCount: 0,
+      conflictedCount: 0,
+      isClean: true,
+      error: null,
+    };
+    const onGitRepositoryAction = vi.fn();
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={["services/api/README.md", "services/web/README.md"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitRepositories={[repository]}
+        onGitRepositoryAction={onGitRepositoryAction}
+      />,
+    );
+
+    fireEvent.doubleClick(screen.getByRole("button", { name: /services/ }));
+    const apiRow = screen.getByRole("button", { name: /api/ });
+    fireEvent.contextMenu(apiRow);
+    const gitMenuTrigger = await screen.findByRole("menuitem", { name: "git.repositoryMenuTitle" });
+    fireEvent.mouseEnter(gitMenuTrigger);
+    const gitMenu = await screen.findByRole("menu", { name: "git.repositoryMenuTitle" });
+    const expectedMenuItems = [
+      "Commit", "StageAll", "AddToGitignore", "ShowDiff", "CompareRevision",
+      "CompareBranch", "History", "Rollback", "Push", "Pull", "Fetch",
+    ];
+    expectedMenuItems.forEach((item) => {
+      expect(within(gitMenu).getByRole("menuitem", {
+        name: `git.repositoryMenu${item}`,
+      })).toBeTruthy();
+    });
+    expect(within(gitMenu).queryByRole("menuitem", { name: "git.repositoryMenuMerge" })).toBeNull();
+    fireEvent.click(within(gitMenu).getByRole("menuitem", { name: "git.repositoryMenuHistory" }));
+    expect(onGitRepositoryAction).toHaveBeenCalledWith({
+      action: "show-history",
+      repositoryRoot: "services/api",
+    });
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: /web/ }));
+    expect(screen.queryByRole("menuitem", { name: "git.repositoryMenuTitle" })).toBeNull();
+  });
+
+  it("exposes the same Git submenu from a standalone repository root label", async () => {
+    const repository: GitRepositorySummary = {
+      repositoryRoot: "",
+      displayName: "workspace",
+      currentBranch: "main",
+      headState: "branch",
+      upstream: "origin/main",
+      ahead: 0,
+      behind: 0,
+      stagedCount: 0,
+      modifiedCount: 1,
+      untrackedCount: 0,
+      conflictedCount: 0,
+      isClean: false,
+      error: null,
+    };
+    const onGitRepositoryAction = vi.fn();
+    const { container } = render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={["README.md"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitRepositories={[repository]}
+        onGitRepositoryAction={onGitRepositoryAction}
+      />,
+    );
+
+    fireEvent.contextMenu(container.querySelector(".file-tree-root-label") as HTMLElement);
+    const trigger = await screen.findByRole("menuitem", { name: "git.repositoryMenuTitle" });
+    fireEvent.mouseEnter(trigger);
+    const gitMenu = await screen.findByRole("menu", { name: "git.repositoryMenuTitle" });
+    fireEvent.click(within(gitMenu).getByRole("menuitem", { name: "git.repositoryMenuHistory" }));
+    expect(onGitRepositoryAction).toHaveBeenCalledWith({
+      action: "show-history",
+      repositoryRoot: "",
+    });
+  });
+
+  it("adds an exact nested repository path to the workspace .gitignore once", async () => {
+    const repository: GitRepositorySummary = {
+      repositoryRoot: "services/api",
+      displayName: "api",
+      currentBranch: "main",
+      headState: "branch",
+      upstream: null,
+      ahead: 0,
+      behind: 0,
+      stagedCount: 0,
+      modifiedCount: 0,
+      untrackedCount: 0,
+      conflictedCount: 0,
+      isClean: true,
+      error: null,
+    };
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={["services/api/README.md"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitRepositories={[repository]}
+      />,
+    );
+
+    fireEvent.doubleClick(screen.getByRole("button", { name: /services/ }));
+    fireEvent.contextMenu(screen.getByRole("button", { name: /api/ }));
+    const trigger = await screen.findByRole("menuitem", { name: "git.repositoryMenuTitle" });
+    fireEvent.mouseEnter(trigger);
+    const gitMenu = await screen.findByRole("menu", { name: "git.repositoryMenuTitle" });
+    fireEvent.click(within(gitMenu).getByRole("menuitem", { name: "git.repositoryMenuAddToGitignore" }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("write_workspace_file", {
+        workspaceId: "workspace-1",
+        path: ".gitignore",
+        content: "services/api/\n",
+      });
+    });
+  });
+
   it("renders top-level entries directly without a workspace root row", () => {
     const { container } = render(
       <FileTreePanel

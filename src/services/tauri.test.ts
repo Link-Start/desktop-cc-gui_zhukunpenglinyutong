@@ -33,6 +33,10 @@ import {
   pushGit,
   pullGit,
   updateGitBranch,
+  listGitBranches,
+  listGitRepositorySummaries,
+  checkoutGitBranch,
+  createGitBranch,
   runWorkspaceCommand,
   runSpecCommand,
   resetGitCommit,
@@ -1492,11 +1496,41 @@ describe("tauri invoke wrappers", () => {
       worktreePath: null,
     });
 
-    await updateGitBranch("ws-33", "feature/demo");
+    await updateGitBranch("ws-33", "feature/demo", "services/api");
 
     expect(invokeMock).toHaveBeenCalledWith("update_git_branch", {
       workspaceId: "ws-33",
       branchName: "feature/demo",
+      repositoryRoot: "services/api",
+    });
+  });
+
+  it("maps repository-scoped Git command payloads", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValue([]);
+
+    await listGitRepositorySummaries("ws-scoped", 3);
+    await listGitBranches("ws-scoped", "services\\api");
+    await checkoutGitBranch("ws-scoped", "main", "services/api");
+    await createGitBranch("ws-scoped", "feature/new", "");
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "list_git_repository_summaries", {
+      workspaceId: "ws-scoped",
+      depth: 3,
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "list_git_branches", {
+      workspaceId: "ws-scoped",
+      repositoryRoot: "services\\api",
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(3, "checkout_git_branch", {
+      workspaceId: "ws-scoped",
+      name: "main",
+      repositoryRoot: "services/api",
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(4, "create_git_branch", {
+      workspaceId: "ws-scoped",
+      name: "feature/new",
+      repositoryRoot: "",
     });
   });
 

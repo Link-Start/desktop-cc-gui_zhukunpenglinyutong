@@ -14,8 +14,9 @@ use tokio::time::{timeout, Duration};
 use crate::backend_budget::{estimate_json_payload_bytes, PayloadBudgetMetadata, ScanCacheState};
 use crate::git_utils::{
     checkout_branch, commit_to_entry, diff_patch_to_string, diff_stats_for_path, image_mime_type,
+    list_git_repository_summaries as scan_git_repository_summaries,
     list_git_roots as scan_git_roots, parse_github_repo, path_has_git_repository_marker,
-    resolve_git_root,
+    resolve_git_root, resolve_git_root_for_scope,
 };
 use crate::state::AppState;
 use crate::types::{
@@ -24,7 +25,7 @@ use crate::types::{
     GitHistoryCommit, GitHistoryResponse, GitHubIssue, GitHubIssuesResponse, GitHubPullRequest,
     GitHubPullRequestComment, GitHubPullRequestDiff, GitHubPullRequestsResponse, GitLogResponse,
     GitPrExistingPullRequest, GitPrWorkflowDefaults, GitPrWorkflowResult, GitPrWorkflowStage,
-    GitPushPreviewResponse,
+    GitPushPreviewResponse, GitRepositorySummary,
 };
 use crate::utils::{git_env_path, normalize_git_path, resolve_git_binary};
 use validation::validate_local_branch_name;
@@ -59,6 +60,14 @@ pub(crate) const GIT_REMOTE_FORWARDING_MATRIX: &[GitRemoteForwardingEntry] = &[
         daemon_dispatch: "list_git_roots",
         forwarding: "implemented",
         coverage: "issue-633-root-scan",
+    },
+    GitRemoteForwardingEntry {
+        method: "list_git_repository_summaries",
+        category: "read",
+        desktop_module: "commands.rs",
+        daemon_dispatch: "list_git_repository_summaries",
+        forwarding: "implemented",
+        coverage: "multi-repository-summary",
     },
     GitRemoteForwardingEntry {
         method: "get_git_diffs",

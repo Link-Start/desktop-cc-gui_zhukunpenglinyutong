@@ -68,6 +68,9 @@
 }
 
 .file-tree-root-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -77,6 +80,25 @@
   font-weight: 500;
   line-height: 22px;
   text-transform: uppercase;
+}
+
+.file-tree-root-label.has-context-menu {
+  cursor: context-menu;
+}
+
+.file-tree-root-git-summary,
+.file-tree-git-summary {
+  color: var(--accent-primary);
+  font-family: var(--code-font-family);
+  font-size: 0.9em;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.file-tree-root-git-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .file-tree-root-actions {
@@ -769,12 +791,38 @@
   height: 16px;
 }
 
+.file-tree-row.is-git-repository .file-tree-icon {
+  color: var(--accent-primary);
+}
+
+.file-tree-row.is-git-repository .file-tree-icon-cell::after {
+  position: absolute;
+  right: -2px;
+  bottom: -1px;
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--surface-primary);
+  border-radius: 2px;
+  background: var(--accent-primary);
+  content: "";
+}
+
 .file-tree-name {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.2;
+}
+
+.file-tree-git-summary {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  margin-left: 7px;
+  padding-right: 22px;
 }
 
 .file-tree-action {

@@ -1,9 +1,16 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import GitBranch from "lucide-react/dist/esm/icons/git-branch";
+import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import CheckIcon from "lucide-react/dist/esm/icons/check";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import FolderGit2 from "lucide-react/dist/esm/icons/folder-git-2";
+import GitBranch from "lucide-react/dist/esm/icons/git-branch";
+import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizontal";
+import LoaderCircle from "lucide-react/dist/esm/icons/loader-circle";
 import PlusIcon from "lucide-react/dist/esm/icons/plus";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Upload from "lucide-react/dist/esm/icons/upload";
 import {
   Popover,
   PopoverContent,
@@ -16,37 +23,173 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from "@/components/ui/command";
-import type { BranchInfo } from "../../../types";
+import type {
+  BranchInfo,
+  GitBranchListItem,
+  GitRepositorySummary,
+  GitBranchUpdateResult,
+} from "../../../types";
+import { gitRepositoryStatusTokens } from "../../git/utils/gitRepositorySummary";
+
+const EMPTY_BRANCHES: BranchInfo[] = [];
+const EMPTY_BRANCH_ITEMS: GitBranchListItem[] = [];
+const EMPTY_REPOSITORIES: GitRepositorySummary[] = [];
 
 export type ComposerBranchControl = {
   branchName: string;
   branches: BranchInfo[];
+  localBranches?: GitBranchListItem[];
+  remoteBranches?: GitBranchListItem[];
+  currentBranch?: string | null;
+  repositories?: GitRepositorySummary[];
+  repositoriesLoading?: boolean;
+  repositoriesError?: string | null;
+  selectedRepositoryRoot?: string | null;
+  branchError?: string | null;
+  onSelectRepository?: (repositoryRoot: string | null) => Promise<void> | void;
   onCheckout: (name: string) => Promise<void> | void;
   onCreate: (name: string) => Promise<void> | void;
+  onUpdate?: (name: string) => Promise<GitBranchUpdateResult | null> | GitBranchUpdateResult | null;
+  onCommit?: (repositoryRoot: string) => Promise<void> | void;
+  onPush?: (repositoryRoot: string) => Promise<void> | void;
   /** worktree 工作区下禁用切换，仅展示当前分支 */
   disabled?: boolean;
 };
 
-/**
- * ComposerBranchBadge - 输入框下方的 git 分支胶囊
- * 使用 shadcn Popover + Command 组合框，逻辑精简：仅分支切换 / 新建。
- * worktree 工作区（disabled）下只读展示。
- */
+function RepositoryStatus({ repository }: { repository: GitRepositorySummary }) {
+  const statusTokens = gitRepositoryStatusTokens(repository);
+  return (
+    <span
+      className="composer-git-repository-status"
+      title={repository.error ?? repository.upstream ?? undefined}
+      aria-hidden
+    >
+      {statusTokens.map((token, index) => <span key={`${token}:${index}`}>{token}</span>)}
+    </span>
+  );
+}
+
+function BranchRow({
+  branch,
+  currentBranch,
+  displayName = branch.name,
+  onSelect,
+}: {
+  branch: GitBranchListItem;
+  currentBranch: string | null;
+  displayName?: string;
+  onSelect: (name: string) => void;
+}) {
+  return (
+    <CommandItem value={branch.name} onSelect={() => onSelect(branch.name)}>
+      <GitBranch className="size-4 shrink-0 opacity-60" aria-hidden />
+      <span className="min-w-0 flex-1 truncate">{displayName}</span>
+      <span className="composer-git-branch-meta" aria-hidden>
+        {branch.ahead > 0 ? `↑${branch.ahead}` : ""}
+        {branch.behind > 0 ? `↓${branch.behind}` : ""}
+      </span>
+      {branch.upstream ? (
+        <span className="composer-git-upstream" title={branch.upstream}>
+          {branch.upstream}
+        </span>
+      ) : null}
+      {branch.isCurrent || branch.name === currentBranch ? (
+        <CheckIcon className="size-4 shrink-0" aria-hidden />
+      ) : null}
+    </CommandItem>
+  );
+}
+
+type BranchSectionProps = {
+  id: "recent" | "local" | "remote";
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+};
+
+function BranchSection({ id, label, expanded, onToggle, children }: BranchSectionProps) {
+  return (
+    <CommandGroup>
+      <button
+        type="button"
+        className="composer-git-section-toggle"
+        aria-expanded={expanded}
+        aria-controls={`composer-git-section-${id}`}
+        onClick={onToggle}
+      >
+        {expanded ? (
+          <ChevronDown className="size-4 shrink-0" aria-hidden />
+        ) : (
+          <ChevronRight className="size-4 shrink-0" aria-hidden />
+        )}
+        <span>{label}</span>
+      </button>
+      {expanded ? <div id={`composer-git-section-${id}`}>{children}</div> : null}
+    </CommandGroup>
+  );
+}
+
 export function ComposerBranchBadge({
   branchName,
-  branches,
+  branches = EMPTY_BRANCHES,
+  localBranches = EMPTY_BRANCH_ITEMS,
+  remoteBranches = EMPTY_BRANCH_ITEMS,
+  currentBranch = null,
+  repositories = EMPTY_REPOSITORIES,
+  repositoriesLoading = false,
+  repositoriesError = null,
+  selectedRepositoryRoot = null,
+  branchError = null,
+  onSelectRepository,
   onCheckout,
   onCreate,
+  onUpdate,
+  onCommit,
+  onPush,
   disabled = false,
 }: ComposerBranchControl) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeRepositoryRoot, setActiveRepositoryRoot] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
-
+  const [switchingRepositoryRoot, setSwitchingRepositoryRoot] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState({
+    recent: false,
+    local: false,
+    remote: false,
+  });
+  const [updatePending, setUpdatePending] = useState(false);
+  const [updateFeedback, setUpdateFeedback] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
   const trimmedQuery = query.trim();
-
+  const revealBranchSections = trimmedQuery.length > 0;
+  const activeRepository = useMemo(
+    () =>
+      repositories.find(
+        (repository) => repository.repositoryRoot === activeRepositoryRoot,
+      ) ?? null,
+    [activeRepositoryRoot, repositories],
+  );
+  const selectedRepository = useMemo(
+    () =>
+      repositories.find(
+        (repository) => repository.repositoryRoot === selectedRepositoryRoot,
+      ) ?? null,
+    [repositories, selectedRepositoryRoot],
+  );
+  const triggerBranchName =
+    selectedRepository?.currentBranch ??
+    (selectedRepository?.headState === "detached" ? "HEAD" : branchName);
+  const effectiveCurrentBranch = currentBranch || triggerBranchName || null;
+  const showRepositoryList = repositories.length > 1 && activeRepositoryRoot === null;
+  const effectiveRepositoryRoot =
+    activeRepositoryRoot ?? selectedRepositoryRoot ?? repositories[0]?.repositoryRoot ?? "";
   const exactMatch = useMemo(
     () =>
       trimmedQuery
@@ -54,105 +197,156 @@ export function ComposerBranchBadge({
         : null,
     [branches, trimmedQuery],
   );
-
   const canCreate = trimmedQuery.length > 0 && !exactMatch;
+  const recentBranches = useMemo(
+    () => localBranches.slice().sort((a, b) => b.lastCommit - a.lastCommit).slice(0, 5),
+    [localBranches],
+  );
+  const localGroups = useMemo(() => {
+    const groups = new Map<string, GitBranchListItem[]>();
+    localBranches.forEach((branch) => {
+      const separatorIndex = branch.name.lastIndexOf("/");
+      const scope = separatorIndex > 0 ? branch.name.slice(0, separatorIndex) : "";
+      const group = groups.get(scope) ?? [];
+      group.push(branch);
+      groups.set(scope, group);
+    });
+    return Array.from(groups.entries());
+  }, [localBranches]);
+  const remoteGroups = useMemo(() => {
+    const groups = new Map<string, { remote: string; scope: string; branches: GitBranchListItem[] }>();
+    remoteBranches.forEach((branch) => {
+      const remote = branch.remote || branch.name.split("/")[0] || "origin";
+      const branchPath = branch.name.startsWith(`${remote}/`)
+        ? branch.name.slice(remote.length + 1)
+        : branch.name;
+      const separatorIndex = branchPath.lastIndexOf("/");
+      const scope = separatorIndex > 0 ? branchPath.slice(0, separatorIndex) : "";
+      const key = `${remote}:${scope}`;
+      const group = groups.get(key) ?? { remote, scope, branches: [] };
+      group.branches.push(branch);
+      groups.set(key, group);
+    });
+    return Array.from(groups.values());
+  }, [remoteBranches]);
 
   const branchValidationMessage = useMemo(() => {
-    if (trimmedQuery.length === 0) {
-      return null;
-    }
-    if (trimmedQuery === "." || trimmedQuery === "..") {
-      return t("workspace.branchCannotBeDot");
-    }
-    if (/\s/.test(trimmedQuery)) {
-      return t("workspace.branchCannotContainSpaces");
-    }
-    if (trimmedQuery.startsWith("/") || trimmedQuery.endsWith("/")) {
-      return t("workspace.branchCannotStartEndSlash");
-    }
-    if (trimmedQuery.endsWith(".lock")) {
-      return t("workspace.branchCannotEndLock");
-    }
-    if (trimmedQuery.includes("..")) {
-      return t("workspace.branchCannotContainDotDot");
-    }
-    if (trimmedQuery.includes("@{")) {
-      return t("workspace.branchCannotContainAtBrace");
-    }
-    const invalidChars = ["~", "^", ":", "?", "*", "[", "\\"];
-    if (invalidChars.some((char) => trimmedQuery.includes(char))) {
+    if (!trimmedQuery) return null;
+    if (trimmedQuery === "." || trimmedQuery === "..") return t("workspace.branchCannotBeDot");
+    if (/\s/.test(trimmedQuery)) return t("workspace.branchCannotContainSpaces");
+    if (trimmedQuery.startsWith("/") || trimmedQuery.endsWith("/")) return t("workspace.branchCannotStartEndSlash");
+    if (trimmedQuery.endsWith(".lock")) return t("workspace.branchCannotEndLock");
+    if (trimmedQuery.includes("..")) return t("workspace.branchCannotContainDotDot");
+    if (trimmedQuery.includes("@{")) return t("workspace.branchCannotContainAtBrace");
+    if (["~", "^", ":", "?", "*", "[", "\\"].some((char) => trimmedQuery.includes(char))) {
       return t("workspace.branchContainsInvalidChars");
     }
-    if (trimmedQuery.endsWith(".")) {
-      return t("workspace.branchCannotEndDot");
-    }
-    return null;
+    return trimmedQuery.endsWith(".") ? t("workspace.branchCannotEndDot") : null;
   }, [trimmedQuery, t]);
 
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
     setQuery("");
     setError(null);
+    setUpdateFeedback(null);
+    setSwitchingRepositoryRoot(null);
+    setExpandedSections({ recent: false, local: false, remote: false });
   }, []);
 
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      if (disabled) {
-        return;
-      }
-      if (next) {
-        setMenuOpen(true);
-      } else {
-        closeMenu();
-      }
-    },
-    [closeMenu, disabled],
-  );
-
-  const handleCheckout = useCallback(
-    async (name: string) => {
-      if (name === branchName) {
-        closeMenu();
-        return;
-      }
+  const handleSelectRepository = useCallback(
+    async (repositoryRoot: string) => {
+      if (switchingRepositoryRoot !== null) return;
+      setError(null);
+      setSwitchingRepositoryRoot(repositoryRoot);
       try {
-        await onCheckout(name);
-        closeMenu();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        await Promise.all([
+          Promise.resolve(onSelectRepository?.(repositoryRoot)),
+          new Promise<void>((resolve) => window.setTimeout(resolve, 120)),
+        ]);
+        setActiveRepositoryRoot(repositoryRoot);
+        setQuery("");
+        setExpandedSections({ recent: false, local: false, remote: false });
+      } catch (caughtError) {
+        setError(caughtError instanceof Error ? caughtError.message : String(caughtError));
+      } finally {
+        setSwitchingRepositoryRoot(null);
       }
     },
-    [branchName, closeMenu, onCheckout],
+    [onSelectRepository, switchingRepositoryRoot],
   );
 
-  const handleCreate = useCallback(async () => {
-    if (branchValidationMessage) {
-      setError(branchValidationMessage);
-      return;
-    }
-    if (!canCreate) {
-      return;
-    }
-    try {
-      await onCreate(trimmedQuery);
-      closeMenu();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, [branchValidationMessage, canCreate, closeMenu, onCreate, trimmedQuery]);
+  const toggleSection = useCallback((section: keyof typeof expandedSections) => {
+    setExpandedSections((current) => ({ ...current, [section]: !current[section] }));
+  }, []);
 
-  // worktree 工作区：只读展示当前分支，无下拉。
+  useEffect(() => {
+    if (!menuOpen) return;
+    if (repositories.length <= 1) {
+      const onlyRoot = repositories[0]?.repositoryRoot ?? selectedRepositoryRoot ?? "";
+      setActiveRepositoryRoot(onlyRoot);
+      onSelectRepository?.(onlyRoot);
+    } else {
+      setActiveRepositoryRoot(null);
+    }
+  }, [menuOpen, onSelectRepository, repositories, selectedRepositoryRoot]);
+
+  const runAction = useCallback(
+    async (action: () => Promise<void> | void, closeAfter = true) => {
+      try {
+        await action();
+        if (closeAfter) closeMenu();
+      } catch (caughtError) {
+        setError(caughtError instanceof Error ? caughtError.message : String(caughtError));
+      }
+    },
+    [closeMenu],
+  );
+
+  const handleUpdate = useCallback(async () => {
+    if (!onUpdate || !effectiveCurrentBranch || updatePending) return;
+    setError(null);
+    setUpdateFeedback(null);
+    setUpdatePending(true);
+    try {
+      const result = await onUpdate(effectiveCurrentBranch);
+      if (!result) return;
+      const params = {
+        branch: result.branch || effectiveCurrentBranch,
+        path: result.worktreePath ?? "",
+      };
+      const message = result.status === "blocked"
+        ? result.reason === "diverged"
+          ? t("git.historyBranchUpdateBlockedDiverged", params)
+          : result.reason === "occupied_worktree"
+            ? t("git.historyBranchUpdateBlockedOccupiedWorktree", params)
+            : result.reason === "stale_ref"
+              ? t("git.historyBranchUpdateBlockedStaleRef", params)
+              : t("git.historyBranchUpdateBlockedNoUpstream", params)
+        : result.status === "no-op"
+          ? result.reason === "ahead_only"
+            ? t("git.historyBranchUpdateAheadOnly", params)
+            : t("git.historyBranchUpdateAlreadyUpToDate", params)
+          : t("git.historyBranchUpdateSuccess", params);
+      setUpdateFeedback({
+        tone: result.status === "blocked" ? "error" : "success",
+        message,
+      });
+    } catch (caughtError) {
+      setUpdateFeedback({
+        tone: "error",
+        message: caughtError instanceof Error ? caughtError.message : String(caughtError),
+      });
+    } finally {
+      setUpdatePending(false);
+    }
+  }, [effectiveCurrentBranch, onUpdate, t, updatePending]);
+
   if (disabled) {
     return (
       <div className="composer-branch-badge">
-        <button
-          type="button"
-          className="composer-branch-badge-trigger"
-          disabled
-          title={branchName}
-        >
+        <button type="button" className="composer-branch-badge-trigger" disabled title={triggerBranchName}>
           <GitBranch size={13} aria-hidden className="composer-branch-badge-icon" />
-          <span className="composer-branch-badge-name">{branchName}</span>
+          <span className="composer-branch-badge-name">{triggerBranchName}</span>
         </button>
       </div>
     );
@@ -160,72 +354,135 @@ export function ComposerBranchBadge({
 
   return (
     <div className="composer-branch-badge">
-      <Popover open={menuOpen} onOpenChange={handleOpenChange}>
+      <Popover open={menuOpen} onOpenChange={(next) => (next ? setMenuOpen(true) : closeMenu())}>
         <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="composer-branch-badge-trigger"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            title={branchName}
-          >
+          <button type="button" className="composer-branch-badge-trigger" aria-haspopup="menu" aria-expanded={menuOpen} title={triggerBranchName}>
             <GitBranch size={13} aria-hidden className="composer-branch-badge-icon" />
-            <span className="composer-branch-badge-name">{branchName}</span>
+            <span className="composer-branch-badge-name">{triggerBranchName}</span>
             <ChevronDown size={12} aria-hidden className="composer-branch-badge-caret" />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" side="top" sideOffset={6} className="w-72 p-0">
+        <PopoverContent align="start" side="top" sideOffset={6} className="composer-git-command-center w-[32rem] max-w-[calc(100vw-2rem)] p-0">
           <Command>
-            <CommandInput
-              value={query}
-              onValueChange={(next) => {
-                setQuery(next);
-                setError(null);
-              }}
-              placeholder={t("workspace.searchOrCreateBranch")}
-              autoFocus
-              aria-label={t("workspace.searchBranches")}
-            />
-            {branchValidationMessage ? (
-              <div className="px-3 py-2 text-xs text-destructive">
-                {branchValidationMessage}
-              </div>
-            ) : null}
+            <CommandInput value={query} onValueChange={(value) => { setQuery(value); setError(null); }} placeholder={showRepositoryList ? t("git.switchRepository") : t("workspace.searchOrCreateBranch")} autoFocus aria-label={showRepositoryList ? t("git.switchRepository") : t("workspace.searchBranches")} />
             <CommandList>
-              <CommandEmpty>{t("workspace.noBranchesFound")}</CommandEmpty>
-              <CommandGroup>
-                {branches.map((branch) => (
-                  <CommandItem
-                    key={branch.name}
-                    value={branch.name}
-                    onSelect={() => handleCheckout(branch.name)}
-                  >
-                    <GitBranch className="size-4 shrink-0 opacity-60" aria-hidden />
-                    <span className="min-w-0 flex-1 truncate">{branch.name}</span>
-                    {branch.name === branchName ? (
-                      <CheckIcon className="size-4 shrink-0" aria-hidden />
-                    ) : null}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-              {canCreate && !branchValidationMessage ? (
-                <CommandGroup>
-                  <CommandItem
-                    value={trimmedQuery}
-                    onSelect={() => {
-                      void handleCreate();
-                    }}
-                  >
-                    <PlusIcon className="size-4 shrink-0" aria-hidden />
-                    <span className="min-w-0 flex-1 truncate">
-                      {t("workspace.createBranchNamed", { name: trimmedQuery })}
-                    </span>
-                  </CommandItem>
+              <CommandEmpty>{repositoriesLoading ? t("git.scanningRepositories") : t("workspace.noBranchesFound")}</CommandEmpty>
+              {showRepositoryList ? (
+                <CommandGroup heading={t("git.switchRepository")}>
+                  {repositories.map((repository) => (
+                    <CommandItem
+                      key={repository.repositoryRoot || "__root__"}
+                      value={`${repository.displayName} ${repository.repositoryRoot}`}
+                      disabled={switchingRepositoryRoot !== null}
+                      onSelect={() => void handleSelectRepository(repository.repositoryRoot)}
+                    >
+                      {switchingRepositoryRoot === repository.repositoryRoot ? (
+                        <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden />
+                      ) : (
+                        <FolderGit2 className="size-4 shrink-0 text-emerald-500" aria-hidden />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">{repository.displayName}</span>
+                      <RepositoryStatus repository={repository} />
+                      {switchingRepositoryRoot !== repository.repositoryRoot ? (
+                        <ChevronRight className="size-4 shrink-0 opacity-60" aria-hidden />
+                      ) : null}
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
-              ) : null}
+              ) : (
+                <>
+                  {repositories.length > 1 ? (
+                    <CommandGroup>
+                      <CommandItem value="__back_repositories" onSelect={() => { setActiveRepositoryRoot(null); setQuery(""); onSelectRepository?.(null); }}>
+                        <ArrowLeft className="size-4" aria-hidden />
+                        <span>{t("workspace.back")}</span>
+                        {activeRepository ? <span className="ml-auto truncate text-muted-foreground">{activeRepository.displayName}</span> : null}
+                      </CommandItem>
+                    </CommandGroup>
+                  ) : null}
+                  <CommandGroup>
+                    {onUpdate && effectiveCurrentBranch ? (
+                      <CommandItem value="__action_update" disabled={updatePending} onSelect={() => void handleUpdate()}>
+                        {updatePending ? (
+                          <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                        ) : (
+                          <RefreshCw className="size-4" aria-hidden />
+                        )}
+                        <span>{t("git.historyBranchMenuUpdate")}</span>
+                      </CommandItem>
+                    ) : null}
+                    {onCommit ? (
+                      <CommandItem value="__action_commit" onSelect={() => void runAction(() => onCommit(effectiveRepositoryRoot))}>
+                        <GitCommitHorizontal className="size-4" aria-hidden />
+                        <span>{t("git.commit")}</span>
+                      </CommandItem>
+                    ) : null}
+                    {onPush ? (
+                      <CommandItem value="__action_push" onSelect={() => void runAction(() => onPush(effectiveRepositoryRoot))}>
+                        <Upload className="size-4" aria-hidden />
+                        <span>{t("git.push")}</span>
+                      </CommandItem>
+                    ) : null}
+                  </CommandGroup>
+                  <CommandSeparator />
+                  {recentBranches.length > 0 ? (
+                    <BranchSection
+                      id="recent"
+                      label={t("git.repositoryRecentBranches")}
+                      expanded={revealBranchSections || expandedSections.recent}
+                      onToggle={() => toggleSection("recent")}
+                    >
+                      {recentBranches.map((branch) => <BranchRow key={`recent:${branch.name}`} branch={branch} currentBranch={effectiveCurrentBranch} onSelect={(name) => void runAction(() => onCheckout(name))} />)}
+                    </BranchSection>
+                  ) : null}
+                  {localGroups.length > 0 ? (
+                    <BranchSection
+                      id="local"
+                      label={t("git.repositoryLocalBranches")}
+                      expanded={revealBranchSections || expandedSections.local}
+                      onToggle={() => toggleSection("local")}
+                    >
+                      {localGroups.map(([scope, localItems]) => (
+                        <div key={`local:${scope || "root"}`}>
+                          {scope ? <div className="composer-git-branch-scope">{scope}</div> : null}
+                          {localItems.map((branch) => <BranchRow key={`local:${branch.name}`} branch={branch} displayName={scope ? branch.name.slice(scope.length + 1) : branch.name} currentBranch={effectiveCurrentBranch} onSelect={(name) => void runAction(() => onCheckout(name))} />)}
+                        </div>
+                      ))}
+                    </BranchSection>
+                  ) : null}
+                  {remoteGroups.length > 0 ? (
+                    <BranchSection
+                      id="remote"
+                      label={t("git.repositoryRemoteBranches")}
+                      expanded={revealBranchSections || expandedSections.remote}
+                      onToggle={() => toggleSection("remote")}
+                    >
+                      {remoteGroups.map(({ remote, scope, branches: remoteItems }) => (
+                        <div key={`${remote}:${scope}`}>
+                          <div className="composer-git-branch-scope">{remote}{scope ? ` / ${scope}` : ""}</div>
+                          {remoteItems.map((branch) => <BranchRow key={`remote:${branch.name}`} branch={branch} displayName={branch.name.split("/").at(-1) ?? branch.name} currentBranch={effectiveCurrentBranch} onSelect={(name) => void runAction(() => onCheckout(name))} />)}
+                        </div>
+                      ))}
+                    </BranchSection>
+                  ) : null}
+                  {canCreate && !branchValidationMessage ? (
+                    <CommandGroup>
+                      <CommandItem value={trimmedQuery} onSelect={() => void runAction(() => onCreate(trimmedQuery))}>
+                        <PlusIcon className="size-4 shrink-0" aria-hidden />
+                        <span className="min-w-0 flex-1 truncate">{t("workspace.createBranchNamed", { name: trimmedQuery })}</span>
+                      </CommandItem>
+                    </CommandGroup>
+                  ) : null}
+                </>
+              )}
             </CommandList>
-            {error ? (
-              <div className="px-3 py-2 text-xs text-destructive">{error}</div>
+            {updateFeedback || branchValidationMessage || error || branchError || repositoriesError ? (
+              <div
+                className={`px-3 py-2 text-xs ${updateFeedback?.tone === "success" ? "text-emerald-600" : "text-destructive"}`}
+                role={updateFeedback?.tone === "error" || branchValidationMessage || error || branchError || repositoriesError ? "alert" : "status"}
+              >
+                {updateFeedback?.message || branchValidationMessage || error || branchError || repositoriesError}
+              </div>
             ) : null}
           </Command>
         </PopoverContent>

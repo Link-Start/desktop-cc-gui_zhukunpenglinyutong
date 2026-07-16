@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { getGitFileFullDiff } = vi.hoisted(() => ({
@@ -237,10 +237,12 @@ describe("WorkspaceEditableDiffCompare", () => {
     expect(screen.queryByText("Diff unavailable")).toBeNull();
     expect(screen.queryByText("Read-only fallback")).toBeNull();
 
-    resolveFullDiff(PATCH);
-    expect(
-      (await screen.findByLabelText("Previous version editor") as HTMLTextAreaElement).value,
-    ).toBe("const value = 'before';\n");
+    await act(async () => resolveFullDiff(PATCH));
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("Previous version editor") as HTMLTextAreaElement).value,
+      ).toBe("const value = 'before';\n");
+    });
   });
 
   it("reconstructs the baseline from saved source when reopening a dirty cached draft", async () => {

@@ -203,6 +203,15 @@ export function useAppShellLayoutNodesSection(
     approvals,
     attachImages,
     branches,
+    branchError,
+    currentBranch,
+    localBranches,
+    remoteBranches,
+    repositories,
+    repositoriesLoading,
+    repositoryError,
+    selectedRepositoryRoot,
+    selectRepository,
     canFuseActiveQueue,
     canInterrupt,
     centerMode,
@@ -332,6 +341,7 @@ export function useAppShellLayoutNodesSection(
     handleCopyDebug,
     handleCopyThread,
     handleCreateBranch,
+    handleUpdateBranch,
     handleCreatePrompt,
     handleDebugClick,
     handleDeletePrompt,
@@ -1413,11 +1423,11 @@ export function useAppShellLayoutNodesSection(
   const handleGitSelectCommit = useEventCallback((entry: GitLogEntry) => {
     handleSelectCommit(entry.sha);
   });
-  const handleSelectGitRoot = useEventCallback((path: string) => {
-    void handleSetGitRoot(path);
+  const handleSelectGitRoot = useEventCallback(async (path: string) => {
+    await handleSetGitRoot(path);
   });
-  const handleClearGitRoot = useEventCallback(() => {
-    void handleSetGitRoot(null);
+  const handleClearGitRoot = useEventCallback(async () => {
+    await handleSetGitRoot(null);
   });
   const handleRequestContextCompaction = useEventCallback(() =>
     startCompact("/compact"),
@@ -1690,8 +1700,18 @@ export function useAppShellLayoutNodesSection(
       isWorktreeWorkspace,
       branchName: gitStatus.branchName,
       branches,
+      branchError,
+      branchCurrentName: currentBranch,
+      branchLocalItems: localBranches,
+      branchRemoteItems: remoteBranches,
+      gitRepositories: repositories,
+      gitRepositoriesLoading: repositoriesLoading,
+      gitRepositoriesError: repositoryError,
+      selectedGitRepositoryRoot: selectedRepositoryRoot,
+      onSelectGitRepository: selectRepository,
       onCheckoutBranch: handleCheckoutBranch,
       onCreateBranch: handleCreateBranch,
+      onUpdateBranch: handleUpdateBranch,
       onCopyThread: handleCopyThread,
       onLockPanel: handleLockPanel,
       onToggleTerminal: handleToggleTerminalPanel,

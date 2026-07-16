@@ -3,6 +3,7 @@ use super::*;
 #[tauri::command]
 pub(crate) async fn list_git_branches(
     workspace_id: String,
+    repository_root: Option<String>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
@@ -11,7 +12,7 @@ pub(crate) async fn list_git_branches(
             &state,
             &app,
             "list_git_branches",
-            json!({ "workspaceId": workspace_id.clone() }),
+            json!({ "workspaceId": workspace_id.clone(), "repositoryRoot": repository_root.clone() }),
         )
         .await;
     }
@@ -20,7 +21,7 @@ pub(crate) async fn list_git_branches(
         .get(&workspace_id)
         .ok_or("workspace not found")?
         .clone();
-    let repo_root = resolve_git_root(&entry)?;
+    let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
     if !path_has_git_repository_marker(&repo_root) {
         return Ok(json!({
             "branches": [],
@@ -457,6 +458,7 @@ async fn update_non_current_local_branch(
 pub(crate) async fn update_git_branch(
     workspace_id: String,
     branch_name: String,
+    repository_root: Option<String>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<GitBranchUpdateResult, String> {
@@ -465,16 +467,26 @@ pub(crate) async fn update_git_branch(
             &state,
             &app,
             "update_git_branch",
-            json!({ "workspaceId": workspace_id.clone(), "branchName": branch_name.clone() }),
+            json!({ "workspaceId": workspace_id.clone(), "branchName": branch_name.clone(), "repositoryRoot": repository_root.clone() }),
         )
         .await;
     }
-    update_git_branch_local(workspace_id, branch_name, state).await
+    update_git_branch_local_scoped(workspace_id, branch_name, repository_root, state).await
 }
 
+#[cfg(test)]
 async fn update_git_branch_local(
     workspace_id: String,
     branch_name: String,
+    state: State<'_, AppState>,
+) -> Result<GitBranchUpdateResult, String> {
+    update_git_branch_local_scoped(workspace_id, branch_name, None, state).await
+}
+
+async fn update_git_branch_local_scoped(
+    workspace_id: String,
+    branch_name: String,
+    repository_root: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<GitBranchUpdateResult, String> {
     let workspaces = state.workspaces.lock().await;
@@ -484,7 +496,7 @@ async fn update_git_branch_local(
         .clone();
     drop(workspaces);
 
-    let repo_root = resolve_git_root(&entry)?;
+    let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
     let normalized_branch = normalize_local_branch_ref(&branch_name);
     if normalized_branch.is_empty() {
         return Err("Branch name cannot be empty.".to_string());
@@ -578,6 +590,7 @@ async fn checkout_remote_branch_with_tracking(
 pub(crate) async fn checkout_git_branch(
     workspace_id: String,
     name: String,
+    repository_root: Option<String>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
@@ -586,7 +599,7 @@ pub(crate) async fn checkout_git_branch(
             &state,
             &app,
             "checkout_git_branch",
-            json!({ "workspaceId": workspace_id.clone(), "name": name.clone() }),
+            json!({ "workspaceId": workspace_id.clone(), "name": name.clone(), "repositoryRoot": repository_root.clone() }),
         )
         .await;
     }
@@ -609,7 +622,7 @@ pub(crate) async fn checkout_git_branch(
         Missing,
     }
 
-    let repo_root = resolve_git_root(&entry)?;
+    let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
     let normalized_local_name = normalize_local_branch_ref(trimmed_name);
     let checkout_target = {
         let repo = open_repository_at_root(&repo_root)?;
@@ -663,6 +676,7 @@ pub(crate) async fn checkout_git_branch(
 pub(crate) async fn create_git_branch(
     workspace_id: String,
     name: String,
+    repository_root: Option<String>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
@@ -671,7 +685,7 @@ pub(crate) async fn create_git_branch(
             &state,
             &app,
             "create_git_branch",
-            json!({ "workspaceId": workspace_id.clone(), "name": name.clone() }),
+            json!({ "workspaceId": workspace_id.clone(), "name": name.clone(), "repositoryRoot": repository_root.clone() }),
         )
         .await;
     }
@@ -680,7 +694,7 @@ pub(crate) async fn create_git_branch(
         .get(&workspace_id)
         .ok_or("workspace not found")?
         .clone();
-    let repo_root = resolve_git_root(&entry)?;
+    let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
     let repo = open_repository_at_root(&repo_root)?;
     let valid_name = validate_local_branch_name(&name)?;
     let head = repo.head().map_err(|e| e.to_string())?;
@@ -1339,6 +1353,37 @@ mod tests {
 
     fn setup_tracked_branch_fixture() -> (PathBuf, PathBuf) {
         setup_tracked_branch_fixture_with("branch-update-fixture", "feature/update-target")
+    }
+
+    #[tokio::test]
+    async fn scoped_checkout_does_not_change_sibling_repository() {
+        let workspace_root = create_temp_dir("scoped-checkout-isolation");
+        let repo_a = workspace_root.join("repo-a");
+        let repo_b = workspace_root.join("repo-b");
+        fs::create_dir_all(&repo_a).expect("create repo-a");
+        fs::create_dir_all(&repo_b).expect("create repo-b");
+        for repo_root in [&repo_a, &repo_b] {
+            run_git_sync(repo_root, &["init"]);
+            write_file(repo_root, "README.md", "base\n");
+            git_commit(repo_root, "initial");
+            run_git_sync(repo_root, &["branch", "feature/scoped"]);
+        }
+        let entry = test_workspace_entry("scoped-workspace", &workspace_root);
+        let scoped_root =
+            resolve_git_root_for_scope(&entry, Some("repo-a")).expect("resolve scoped repository");
+
+        checkout_existing_local_branch(&scoped_root, "feature/scoped")
+            .await
+            .expect("checkout scoped branch");
+
+        assert_eq!(
+            current_local_branch(&repo_a).expect("repo-a branch"),
+            Some("feature/scoped".to_string())
+        );
+        assert_ne!(
+            current_local_branch(&repo_b).expect("repo-b branch"),
+            Some("feature/scoped".to_string())
+        );
     }
 
     #[tokio::test]

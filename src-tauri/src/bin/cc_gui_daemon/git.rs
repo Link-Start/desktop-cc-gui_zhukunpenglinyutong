@@ -709,6 +709,15 @@ impl DaemonState {
         crate::git_utils::resolve_git_root(&entry)
     }
 
+    async fn git_repo_root_for_scope(
+        &self,
+        workspace_id: &str,
+        repository_root: Option<&str>,
+    ) -> Result<PathBuf, String> {
+        let entry = self.workspace_entry(workspace_id).await?;
+        crate::git_utils::resolve_git_root_for_scope(&entry, repository_root)
+    }
+
     pub(crate) async fn list_git_roots(
         &self,
         workspace_id: String,
@@ -718,6 +727,19 @@ impl DaemonState {
         let root = PathBuf::from(entry.path);
         let depth = depth.unwrap_or(2).clamp(1, 6);
         Ok(crate::git_utils::list_git_roots(&root, depth, 200))
+    }
+
+    pub(crate) async fn list_git_repository_summaries(
+        &self,
+        workspace_id: String,
+        depth: Option<usize>,
+    ) -> Result<Vec<crate::types::GitRepositorySummary>, String> {
+        let entry = self.workspace_entry(&workspace_id).await?;
+        let root = PathBuf::from(entry.path);
+        let depth = depth.unwrap_or(2).clamp(1, 6);
+        Ok(crate::git_utils::list_git_repository_summaries(
+            &root, depth, 200,
+        ))
     }
 
     pub(crate) async fn get_git_status(&self, workspace_id: String) -> Result<Value, String> {
@@ -1588,8 +1610,11 @@ impl DaemonState {
         &self,
         workspace_id: String,
         branch_name: String,
+        repository_root: Option<String>,
     ) -> Result<GitBranchUpdateResult, String> {
-        let repo_root = self.git_repo_root(&workspace_id).await?;
+        let repo_root = self
+            .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
+            .await?;
         let normalized_branch = normalize_local_branch_ref(&branch_name);
         if normalized_branch.is_empty() {
             return Err("Branch name cannot be empty.".to_string());
@@ -1602,8 +1627,7 @@ impl DaemonState {
             ));
         }
         if branch_state.is_current {
-            self.pull_git(workspace_id, None, None, None, None, None)
-                .await?;
+            git_core::run_git_command(&repo_root, &["pull"]).await?;
             return Ok(branch_update_result(
                 branch_state.branch_name.as_str(),
                 BRANCH_UPDATE_STATUS_SUCCESS,
@@ -1665,8 +1689,14 @@ impl DaemonState {
         Ok(())
     }
 
-    pub(crate) async fn list_git_branches(&self, workspace_id: String) -> Result<Value, String> {
-        let repo_root = self.git_repo_root(&workspace_id).await?;
+    pub(crate) async fn list_git_branches(
+        &self,
+        workspace_id: String,
+        repository_root: Option<String>,
+    ) -> Result<Value, String> {
+        let repo_root = self
+            .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
+            .await?;
         if !crate::git_utils::path_has_git_repository_marker(&repo_root) {
             return Ok(json!({
                 "branches": [],
@@ -1788,8 +1818,11 @@ impl DaemonState {
         &self,
         workspace_id: String,
         name: String,
+        repository_root: Option<String>,
     ) -> Result<(), String> {
-        let repo_root = self.git_repo_root(&workspace_id).await?;
+        let repo_root = self
+            .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
+            .await?;
         let trimmed = name.trim();
         if trimmed.is_empty() {
             return Err("Branch name cannot be empty.".to_string());
@@ -1817,8 +1850,11 @@ impl DaemonState {
         &self,
         workspace_id: String,
         name: String,
+        repository_root: Option<String>,
     ) -> Result<(), String> {
-        let repo_root = self.git_repo_root(&workspace_id).await?;
+        let repo_root = self
+            .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
+            .await?;
         let name = normalize_local_branch_ref(&name);
         if name.is_empty() {
             return Err("Branch name cannot be empty.".to_string());

@@ -16,6 +16,7 @@ import type {
   GitPrWorkflowDefaults,
   GitPrWorkflowResult,
   GitPushPreviewResponse,
+  GitRepositorySummary,
 } from "../../types";
 import { traceStartupCommand, type StartupWorkspaceScope } from "../../features/startup-orchestration/utils/startupTrace";
 
@@ -47,6 +48,16 @@ export async function getGitStatus(workspace_id: string): Promise<{
 
 export async function listGitRoots(workspace_id: string, depth: number): Promise<string[]> {
   return invoke("list_git_roots", { workspaceId: workspace_id, depth });
+}
+
+export async function listGitRepositorySummaries(
+  workspaceId: string,
+  depth = 2,
+): Promise<GitRepositorySummary[]> {
+  return invoke<GitRepositorySummary[]>("list_git_repository_summaries", {
+    workspaceId,
+    depth,
+  });
 }
 
 export async function getGitDiffs(workspace_id: string): Promise<GitFileDiff[]> {
@@ -251,8 +262,16 @@ export async function fetchGit(workspaceId: string, remote?: string | null): Pro
   return invoke("git_fetch", { workspaceId, remote: remote ?? null });
 }
 
-export async function updateGitBranch(workspaceId: string, branchName: string): Promise<GitBranchUpdateResult> {
-  return invoke<GitBranchUpdateResult>("update_git_branch", { workspaceId, branchName });
+export async function updateGitBranch(
+  workspaceId: string,
+  branchName: string,
+  repositoryRoot?: string | null,
+): Promise<GitBranchUpdateResult> {
+  return invoke<GitBranchUpdateResult>("update_git_branch", {
+    workspaceId,
+    branchName,
+    repositoryRoot: repositoryRoot ?? null,
+  });
 }
 
 export async function cherryPickCommit(workspaceId: string, commitHash: string): Promise<void> {
@@ -291,16 +310,38 @@ export async function getGitHubPullRequestComments(workspace_id: string, prNumbe
   });
 }
 
-export async function listGitBranches(workspaceId: string): Promise<GitBranchListResponse> {
-  return invoke<GitBranchListResponse>("list_git_branches", { workspaceId });
+export async function listGitBranches(
+  workspaceId: string,
+  repositoryRoot?: string | null,
+): Promise<GitBranchListResponse> {
+  return invoke<GitBranchListResponse>("list_git_branches", {
+    workspaceId,
+    repositoryRoot: repositoryRoot ?? null,
+  });
 }
 
-export async function checkoutGitBranch(workspaceId: string, name: string) {
-  return invoke("checkout_git_branch", { workspaceId, name });
+export async function checkoutGitBranch(
+  workspaceId: string,
+  name: string,
+  repositoryRoot?: string | null,
+) {
+  return invoke("checkout_git_branch", {
+    workspaceId,
+    name,
+    repositoryRoot: repositoryRoot ?? null,
+  });
 }
 
-export async function createGitBranch(workspaceId: string, name: string) {
-  return invoke("create_git_branch", { workspaceId, name });
+export async function createGitBranch(
+  workspaceId: string,
+  name: string,
+  repositoryRoot?: string | null,
+) {
+  return invoke("create_git_branch", {
+    workspaceId,
+    name,
+    repositoryRoot: repositoryRoot ?? null,
+  });
 }
 
 export async function createGitBranchFromBranch(workspaceId: string, name: string, sourceBranch: string) {

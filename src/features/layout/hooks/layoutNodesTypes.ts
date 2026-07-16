@@ -38,6 +38,9 @@ import type {
   DictationTranscript,
   EngineType,
   GitFileStatus,
+  GitBranchListItem,
+  GitBranchUpdateResult,
+  GitRepositorySummary,
   GitHubIssue,
   GitHubPullRequestComment,
   GitHubPullRequest,
@@ -313,8 +316,18 @@ export type LayoutNodesFlatOptions = {
   isWorktreeWorkspace: boolean;
   branchName: string;
   branches: BranchInfo[];
+  branchError?: string | null;
+  branchCurrentName?: string | null;
+  branchLocalItems?: GitBranchListItem[];
+  branchRemoteItems?: GitBranchListItem[];
+  gitRepositories?: GitRepositorySummary[];
+  gitRepositoriesLoading?: boolean;
+  gitRepositoriesError?: string | null;
+  selectedGitRepositoryRoot?: string | null;
+  onSelectGitRepository?: (repositoryRoot: string | null) => Promise<void> | void;
   onCheckoutBranch: (name: string) => Promise<void>;
   onCreateBranch: (name: string) => Promise<void>;
+  onUpdateBranch?: (name: string) => Promise<GitBranchUpdateResult | null>;
   onCopyThread: () => void | Promise<void>;
   onLockPanel?: () => void;
   onToggleTerminal: () => void;
@@ -473,8 +486,8 @@ export type LayoutNodesFlatOptions = {
   gitRootScanHasScanned: boolean;
   onGitRootScanDepthChange: (depth: number) => void;
   onScanGitRoots: () => void;
-  onSelectGitRoot: (path: string) => void;
-  onClearGitRoot: () => void;
+  onSelectGitRoot: (path: string) => void | Promise<void>;
+  onClearGitRoot: () => void | Promise<void>;
   onPickGitRoot: () => void | Promise<void>;
   onStageGitAll: () => Promise<void>;
   onStageGitFile: (path: string) => Promise<void>;
@@ -848,8 +861,18 @@ export type ChromeLayoutNodesOptions = Pick<
   | "isWorktreeWorkspace"
   | "branchName"
   | "branches"
+  | "branchError"
+  | "branchCurrentName"
+  | "branchLocalItems"
+  | "branchRemoteItems"
+  | "gitRepositories"
+  | "gitRepositoriesLoading"
+  | "gitRepositoriesError"
+  | "selectedGitRepositoryRoot"
+  | "onSelectGitRepository"
   | "onCheckoutBranch"
   | "onCreateBranch"
+  | "onUpdateBranch"
   | "onCopyThread"
   | "onLockPanel"
   | "onToggleTerminal"

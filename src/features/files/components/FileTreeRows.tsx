@@ -1,7 +1,9 @@
 import type { DragEvent, MouseEvent } from "react";
 import type { TFunction } from "i18next";
+import type { GitRepositorySummary } from "../../../types";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import { getFileTreeIconSvg } from "../utils/fileTreeIcons";
+import { gitRepositoryStatusTokens } from "../../git/utils/gitRepositorySummary";
 import type { DetachedFileTreeDragBridgePayload } from "../detachedFileTreeDragBridge";
 import {
   bindChatDropTargetsForTreeDrag,
@@ -35,6 +37,7 @@ export type FileTreeRowState = {
   selectedNodePaths: Set<string>;
   selectedNodePath: string | null;
   orderedSelectedNodePaths: string[];
+  repositorySummaryMap: Map<string, GitRepositorySummary>;
 };
 
 export type FileTreeRowHandlers = {
@@ -98,6 +101,9 @@ function getFileTreeRowMetadata(node: FileTreeNode, state: FileTreeRowState) {
     : state.mergedGitignoredFiles.has(node.path);
   const isSelected = state.selectedNodePaths.has(node.path);
   const isPrimarySelection = state.selectedNodePath === node.path;
+  const repositorySummary = isFolder
+    ? state.repositorySummaryMap.get(node.path) ?? null
+    : null;
 
   return {
     isFolder,
@@ -109,7 +115,21 @@ function getFileTreeRowMetadata(node: FileTreeNode, state: FileTreeRowState) {
     isGitignored,
     isSelected,
     isPrimarySelection,
+    repositorySummary,
   };
+}
+
+function GitRepositoryStatus({ repository }: { repository: GitRepositorySummary }) {
+  const statusTokens = gitRepositoryStatusTokens(repository);
+  return (
+    <span
+      className="file-tree-git-summary"
+      aria-label={`${repository.displayName} Git ${statusTokens.join(" ")}`}
+      title={repository.error ?? repository.upstream ?? undefined}
+    >
+      {statusTokens.map((token, index) => <span key={`${token}:${index}`}>{token}</span>)}
+    </span>
+  );
 }
 
 function FileTreeNodeRow({
@@ -199,7 +219,7 @@ function FileTreeNodeRow({
     <div className="file-tree-row-wrap">
       <button
         type="button"
-        className={`file-tree-row${row.isFolder ? " is-folder" : " is-file"}${row.isGitignored ? " is-gitignored" : ""}${row.isSelected ? " is-selected" : ""}${row.isPrimarySelection ? " is-primary" : ""}`}
+        className={`file-tree-row${row.isFolder ? " is-folder" : " is-file"}${row.repositorySummary ? " is-git-repository" : ""}${row.isGitignored ? " is-gitignored" : ""}${row.isSelected ? " is-selected" : ""}${row.isPrimarySelection ? " is-primary" : ""}`}
         style={{ paddingLeft: `${8 + depth * 12}px` }}
         onClick={(event) => {
           const isToggleSelect = event.metaKey || event.ctrlKey;
@@ -269,6 +289,9 @@ function FileTreeNodeRow({
           )}
         </span>
         <span className={`file-tree-name${row.gitStatusClass}`}>{node.name}</span>
+        {row.repositorySummary ? (
+          <GitRepositoryStatus repository={row.repositorySummary} />
+        ) : null}
       </button>
       <button
         type="button"

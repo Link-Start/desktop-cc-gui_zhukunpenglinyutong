@@ -3,6 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../types";
 import { useGitBranches } from "../features/git/hooks/useGitBranches";
+import { useGitRepositories } from "../features/git/hooks/useGitRepositories";
 import { useGitActions } from "../features/git/hooks/useGitActions";
 import { pickWorkspacePath } from "../services/tauri";
 import { useAppShellGitWorkspaceOpsSection } from "./useAppShellGitWorkspaceOpsSection";
@@ -13,6 +14,10 @@ vi.mock("../features/git/hooks/useGitBranches", () => ({
 
 vi.mock("../features/git/hooks/useGitActions", () => ({
   useGitActions: vi.fn(),
+}));
+
+vi.mock("../features/git/hooks/useGitRepositories", () => ({
+  useGitRepositories: vi.fn(),
 }));
 
 vi.mock("../features/files/detachedFileExplorer", () => ({
@@ -39,15 +44,26 @@ const workspace: WorkspaceInfo = {
 describe("useAppShellGitWorkspaceOpsSection", () => {
   const checkoutBranch = vi.fn().mockResolvedValue(undefined);
   const createBranch = vi.fn().mockResolvedValue(undefined);
+  const updateBranch = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useGitBranches).mockReturnValue({
       branches: [],
+      localBranches: [],
+      remoteBranches: [],
+      currentBranch: null,
       checkoutBranch,
       createBranch,
+      updateBranch,
       error: null,
       refreshBranches: vi.fn(),
+    });
+    vi.mocked(useGitRepositories).mockReturnValue({
+      repositories: [],
+      isLoading: false,
+      error: null,
+      refreshRepositories: vi.fn(),
     });
     vi.mocked(useGitActions).mockReturnValue({
       applyWorktreeChanges: vi.fn(),

@@ -1,10 +1,10 @@
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
-use git2::{DiffOptions, Repository, Tree};
+use git2::{BranchType, DiffOptions, ErrorCode, Repository, Status, StatusOptions, Tree};
 use ignore::WalkBuilder;
 
-use crate::types::{GitLogEntry, WorkspaceEntry};
+use crate::types::{GitLogEntry, GitRepositorySummary, WorkspaceEntry};
 use crate::utils::normalize_git_path;
 
 pub(crate) fn image_mime_type(path: &str) -> Option<&'static str> {
@@ -90,8 +90,40 @@ pub(crate) fn diff_patch_to_string(patch: &mut git2::Patch) -> Result<String, gi
 
 #[cfg(test)]
 mod tests {
-    use super::{image_mime_type, path_has_git_repository_marker};
+    use super::{
+        image_mime_type, list_git_repository_summaries, path_has_git_repository_marker,
+        resolve_git_root_for_scope,
+    };
+    use crate::types::{WorkspaceEntry, WorkspaceKind, WorkspaceSettings};
+    use git2::{Repository, Signature};
     use std::fs;
+
+    fn workspace_entry(path: &std::path::Path) -> WorkspaceEntry {
+        WorkspaceEntry {
+            id: "workspace".to_string(),
+            name: "Workspace".to_string(),
+            path: path.display().to_string(),
+            codex_bin: None,
+            kind: WorkspaceKind::Main,
+            parent_id: None,
+            worktree: None,
+            settings: WorkspaceSettings::default(),
+        }
+    }
+
+    fn commit_initial_file(repo: &Repository, root: &std::path::Path) {
+        fs::write(root.join("tracked.txt"), "tracked").expect("write tracked file");
+        let mut index = repo.index().expect("open index");
+        index
+            .add_path(std::path::Path::new("tracked.txt"))
+            .expect("stage tracked file");
+        index.write().expect("write index");
+        let tree_id = index.write_tree().expect("write tree");
+        let tree = repo.find_tree(tree_id).expect("find tree");
+        let signature = Signature::now("Moss Test", "moss@example.test").expect("signature");
+        repo.commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])
+            .expect("initial commit");
+    }
 
     #[test]
     fn image_mime_type_detects_known_extensions() {
@@ -120,6 +152,67 @@ mod tests {
         assert!(!path_has_git_repository_marker(&plain_dir));
 
         fs::remove_dir_all(&root).expect("cleanup temp git utils root");
+    }
+
+    #[test]
+    fn scoped_git_root_is_cross_platform_and_stays_inside_workspace() {
+        let root = std::env::temp_dir().join(format!("ccgui-git-scope-{}", uuid::Uuid::new_v4()));
+        let nested = root.join("nested").join("repo");
+        let plain = root.join("plain");
+        fs::create_dir_all(&root).expect("create workspace");
+        Repository::init(&root).expect("init root repo");
+        fs::create_dir_all(&nested).expect("create nested repo");
+        Repository::init(&nested).expect("init nested repo");
+        fs::create_dir_all(&plain).expect("create plain folder");
+        let entry = workspace_entry(&root);
+
+        assert_eq!(
+            resolve_git_root_for_scope(&entry, Some("nested/repo")).expect("slash scope"),
+            nested.canonicalize().expect("canonical nested")
+        );
+        assert_eq!(
+            resolve_git_root_for_scope(&entry, Some("nested\\repo")).expect("backslash scope"),
+            nested.canonicalize().expect("canonical nested")
+        );
+        assert!(resolve_git_root_for_scope(&entry, Some("../outside")).is_err());
+        assert!(resolve_git_root_for_scope(&entry, Some("/tmp/outside")).is_err());
+        assert!(resolve_git_root_for_scope(&entry, Some("C:\\outside")).is_err());
+        assert!(resolve_git_root_for_scope(&entry, Some("plain")).is_err());
+
+        fs::remove_dir_all(&root).expect("cleanup scoped root");
+    }
+
+    #[test]
+    fn repository_summaries_cover_root_nested_and_dirty_state() {
+        let root = std::env::temp_dir().join(format!("ccgui-git-summary-{}", uuid::Uuid::new_v4()));
+        let nested = root.join("packages").join("child");
+        let corrupt = root.join("packages").join("corrupt");
+        fs::create_dir_all(&nested).expect("create roots");
+        fs::create_dir_all(corrupt.join(".git")).expect("create corrupt marker");
+        let root_repo = Repository::init(&root).expect("init root repo");
+        commit_initial_file(&root_repo, &root);
+        let child_repo = Repository::init(&nested).expect("init child repo");
+        commit_initial_file(&child_repo, &nested);
+        fs::write(nested.join("untracked.txt"), "dirty").expect("write untracked file");
+
+        let summaries = list_git_repository_summaries(&root, 4, 16);
+        assert_eq!(summaries.len(), 3);
+        assert_eq!(summaries[0].repository_root, "");
+        assert!(!summaries[0].is_clean);
+        let child = summaries
+            .iter()
+            .find(|summary| summary.repository_root == "packages/child")
+            .expect("child summary");
+        assert_eq!(child.untracked_count, 1);
+        assert!(!child.is_clean);
+        let unavailable = summaries
+            .iter()
+            .find(|summary| summary.repository_root == "packages/corrupt")
+            .expect("corrupt summary");
+        assert_eq!(unavailable.head_state, "unavailable");
+        assert!(unavailable.error.is_some());
+
+        fs::remove_dir_all(&root).expect("cleanup summary root");
     }
 }
 
@@ -171,6 +264,53 @@ pub(crate) fn resolve_git_root(entry: &WorkspaceEntry) -> Result<PathBuf, String
     } else {
         Err(format!("Git root not found: {root}"))
     }
+}
+
+pub(crate) fn resolve_git_root_for_scope(
+    entry: &WorkspaceEntry,
+    repository_root: Option<&str>,
+) -> Result<PathBuf, String> {
+    let Some(repository_root) = repository_root else {
+        return resolve_git_root(entry);
+    };
+    let base = PathBuf::from(&entry.path);
+    let normalized = repository_root.trim().replace('\\', "/");
+    let has_windows_prefix = normalized
+        .as_bytes()
+        .get(1)
+        .is_some_and(|separator| *separator == b':');
+    if normalized.starts_with('/') || has_windows_prefix {
+        return Err("Invalid Git repository root: absolute paths are not allowed.".to_string());
+    }
+    let relative = Path::new(&normalized);
+    if relative.components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    }) {
+        return Err("Invalid Git repository root: path traversal is not allowed.".to_string());
+    }
+    let candidate = if normalized.is_empty() {
+        base.clone()
+    } else {
+        base.join(relative)
+    };
+    let canonical_base = base
+        .canonicalize()
+        .map_err(|error| format!("Failed to resolve workspace Git root: {error}"))?;
+    let canonical_candidate = candidate
+        .canonicalize()
+        .map_err(|error| format!("Git repository root not found: {error}"))?;
+    if !canonical_candidate.starts_with(&canonical_base) {
+        return Err(
+            "Invalid Git repository root: path resolves outside the workspace.".to_string(),
+        );
+    }
+    if !path_has_git_repository_marker(&canonical_candidate) {
+        return Err("Git repository root does not contain a .git marker.".to_string());
+    }
+    Ok(canonical_candidate)
 }
 
 pub(crate) fn path_has_git_repository_marker(path: &Path) -> bool {
@@ -242,4 +382,182 @@ pub(crate) fn list_git_roots(root: &Path, max_depth: usize, max_results: usize) 
 
     results.sort();
     results
+}
+
+fn repository_display_name(repo_root: &Path) -> String {
+    repo_root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(".")
+        .to_string()
+}
+
+fn unavailable_repository_summary(
+    repository_root: String,
+    repo_root: &Path,
+    error: String,
+) -> GitRepositorySummary {
+    GitRepositorySummary {
+        repository_root,
+        display_name: repository_display_name(repo_root),
+        current_branch: None,
+        head_state: "unavailable".to_string(),
+        upstream: None,
+        ahead: 0,
+        behind: 0,
+        staged_count: 0,
+        modified_count: 0,
+        untracked_count: 0,
+        conflicted_count: 0,
+        is_clean: false,
+        error: Some(error),
+    }
+}
+
+pub(crate) fn git_repository_summary(
+    workspace_root: &Path,
+    repository_root: &str,
+) -> GitRepositorySummary {
+    let repo_root = if repository_root.is_empty() {
+        workspace_root.to_path_buf()
+    } else {
+        workspace_root.join(repository_root)
+    };
+    let repo = match Repository::open_ext(
+        &repo_root,
+        git2::RepositoryOpenFlags::NO_SEARCH,
+        std::iter::empty::<&Path>(),
+    ) {
+        Ok(repo) => repo,
+        Err(error) => {
+            return unavailable_repository_summary(
+                repository_root.to_string(),
+                &repo_root,
+                format!("Failed to open Git repository: {error}"),
+            )
+        }
+    };
+
+    let (current_branch, head_state, head_error) = match repo.head() {
+        Ok(head) if head.is_branch() => (
+            head.shorthand().map(ToOwned::to_owned),
+            "branch".to_string(),
+            None,
+        ),
+        Ok(_) => (None, "detached".to_string(), None),
+        Err(error) if error.code() == ErrorCode::UnbornBranch => (None, "unborn".to_string(), None),
+        Err(error) => (
+            None,
+            "unavailable".to_string(),
+            Some(format!("Failed to resolve Git HEAD: {error}")),
+        ),
+    };
+
+    let mut upstream = None;
+    let mut ahead = 0;
+    let mut behind = 0;
+    if let Some(branch_name) = current_branch.as_deref() {
+        if let Ok(branch) = repo.find_branch(branch_name, BranchType::Local) {
+            if let Ok(upstream_branch) = branch.upstream() {
+                upstream = upstream_branch
+                    .get()
+                    .shorthand()
+                    .map(ToOwned::to_owned)
+                    .or_else(|| upstream_branch.get().name().map(ToOwned::to_owned));
+                if let (Some(local_oid), Some(upstream_oid)) =
+                    (branch.get().target(), upstream_branch.get().target())
+                {
+                    if let Ok((ahead_count, behind_count)) =
+                        repo.graph_ahead_behind(local_oid, upstream_oid)
+                    {
+                        ahead = ahead_count;
+                        behind = behind_count;
+                    }
+                }
+            }
+        }
+    }
+
+    let mut options = StatusOptions::new();
+    options
+        .include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .include_ignored(false);
+    let statuses = match repo.statuses(Some(&mut options)) {
+        Ok(statuses) => statuses,
+        Err(error) => {
+            return unavailable_repository_summary(
+                repository_root.to_string(),
+                &repo_root,
+                format!("Failed to read Git status: {error}"),
+            )
+        }
+    };
+    let mut staged_count = 0;
+    let mut modified_count = 0;
+    let mut untracked_count = 0;
+    let mut conflicted_count = 0;
+    for entry in statuses.iter() {
+        let status = entry.status();
+        if status.contains(Status::CONFLICTED) {
+            conflicted_count += 1;
+        }
+        if status.intersects(
+            Status::INDEX_NEW
+                | Status::INDEX_MODIFIED
+                | Status::INDEX_DELETED
+                | Status::INDEX_RENAMED
+                | Status::INDEX_TYPECHANGE,
+        ) {
+            staged_count += 1;
+        }
+        if status.contains(Status::WT_NEW) {
+            untracked_count += 1;
+        } else if status.intersects(
+            Status::WT_MODIFIED | Status::WT_DELETED | Status::WT_RENAMED | Status::WT_TYPECHANGE,
+        ) {
+            modified_count += 1;
+        }
+    }
+    let is_clean =
+        staged_count == 0 && modified_count == 0 && untracked_count == 0 && conflicted_count == 0;
+
+    GitRepositorySummary {
+        repository_root: repository_root.to_string(),
+        display_name: repository_display_name(&repo_root),
+        current_branch,
+        head_state,
+        upstream,
+        ahead,
+        behind,
+        staged_count,
+        modified_count,
+        untracked_count,
+        conflicted_count,
+        is_clean,
+        error: head_error,
+    }
+}
+
+pub(crate) fn list_git_repository_summaries(
+    workspace_root: &Path,
+    max_depth: usize,
+    max_results: usize,
+) -> Vec<GitRepositorySummary> {
+    if !workspace_root.is_dir() || max_results == 0 {
+        return Vec::new();
+    }
+    let mut roots = Vec::new();
+    if path_has_git_repository_marker(workspace_root) {
+        roots.push(String::new());
+    }
+    let remaining = max_results.saturating_sub(roots.len());
+    if remaining > 0 {
+        roots.extend(list_git_roots(workspace_root, max_depth, remaining));
+    }
+    roots
+        .iter()
+        .map(|repository_root| git_repository_summary(workspace_root, repository_root))
+        .collect()
 }

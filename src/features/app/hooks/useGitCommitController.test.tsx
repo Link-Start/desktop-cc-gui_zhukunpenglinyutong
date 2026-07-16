@@ -50,6 +50,7 @@ type MockGitStatus = {
 function createController(status: MockGitStatus) {
   const refreshGitStatus = vi.fn();
   const refreshGitLog = vi.fn();
+  const onMutationComplete = vi.fn().mockResolvedValue(undefined);
   const hook = renderHook(() =>
     useGitCommitController({
       activeWorkspace: {
@@ -66,10 +67,11 @@ function createController(status: MockGitStatus) {
       gitStatus: status as never,
       refreshGitStatus,
       refreshGitLog,
+      onMutationComplete,
     }),
   );
 
-  return { ...hook, refreshGitStatus, refreshGitLog };
+  return { ...hook, refreshGitStatus, refreshGitLog, onMutationComplete };
 }
 
 describe("useGitCommitController", () => {
@@ -110,7 +112,7 @@ describe("useGitCommitController", () => {
   });
 
   it("commits staged changes and refreshes git state", async () => {
-    const { result, refreshGitLog, refreshGitStatus } = createController({
+    const { result, refreshGitLog, refreshGitStatus, onMutationComplete } = createController({
       stagedFiles: [{ path: "src/file.ts", status: "M", additions: 1, deletions: 0 }],
       unstagedFiles: [],
     });
@@ -126,6 +128,7 @@ describe("useGitCommitController", () => {
     expect(mockCommitGit).toHaveBeenCalledWith("ws-1", "feat: selective commit");
     expect(refreshGitStatus).toHaveBeenCalledTimes(1);
     expect(refreshGitLog).toHaveBeenCalledTimes(1);
+    expect(onMutationComplete).toHaveBeenCalledTimes(1);
     expect(result.current.commitMessage).toBe("");
   });
 

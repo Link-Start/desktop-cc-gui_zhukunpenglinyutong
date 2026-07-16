@@ -1,22 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { BranchInfo, DebugEntry, WorkspaceInfo } from "../../../types";
+import type {
+  BranchInfo,
+  DebugEntry,
+  GitBranchListItem,
+  WorkspaceInfo,
+} from "../../../types";
 import {
   checkoutGitBranch,
   createGitBranch,
   listGitBranches,
+  updateGitBranch,
 } from "../../../services/tauri";
 import { normalizeGitBranchListResponse } from "../utils/gitBranchList";
 
 type UseGitBranchesOptions = {
   activeWorkspace: WorkspaceInfo | null;
   onDebug?: (entry: DebugEntry) => void;
+  repositoryRoot?: string | null;
+  onMutationComplete?: () => Promise<void> | void;
 };
 
-export function useGitBranches({ activeWorkspace, onDebug }: UseGitBranchesOptions) {
+export function useGitBranches({
+  activeWorkspace,
+  onDebug,
+  repositoryRoot,
+  onMutationComplete,
+}: UseGitBranchesOptions) {
   const [branches, setBranches] = useState<BranchInfo[]>([]);
+  const [localBranches, setLocalBranches] = useState<GitBranchListItem[]>([]);
+  const [remoteBranches, setRemoteBranches] = useState<GitBranchListItem[]>([]);
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const lastFetchedWorkspaceId = useRef<string | null>(null);
-  const inFlight = useRef(false);
+  const lastFetchedScope = useRef<string | null>(null);
+  const inFlightScope = useRef<string | null>(null);
+  const requestIdRef = useRef(0);
   const lastFailureSignature = useRef<{
     signature: string;
     count: number;
@@ -25,16 +42,21 @@ export function useGitBranches({ activeWorkspace, onDebug }: UseGitBranchesOptio
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
+  const scopeKey = workspaceId
+    ? `${workspaceId}:${repositoryRoot === undefined ? "configured" : repositoryRoot ?? "configured"}`
+    : null;
 
   const refreshBranches = useCallback(async () => {
     if (!workspaceId || !isConnected) {
       setBranches([]);
       return;
     }
-    if (inFlight.current) {
+    if (!scopeKey || inFlightScope.current === scopeKey) {
       return;
     }
-    inFlight.current = true;
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    inFlightScope.current = scopeKey;
     onDebug?.({
       id: `${Date.now()}-client-branches-list`,
       timestamp: Date.now(),
@@ -43,8 +65,11 @@ export function useGitBranches({ activeWorkspace, onDebug }: UseGitBranchesOptio
       payload: { workspaceId },
     });
     try {
-      const response = await listGitBranches(workspaceId);
+      const response = await listGitBranches(workspaceId, repositoryRoot);
       const normalized = normalizeGitBranchListResponse(response);
+      if (requestIdRef.current !== requestId) {
+        return;
+      }
       onDebug?.({
         id: `${Date.now()}-server-branches-list`,
         timestamp: Date.now(),
@@ -54,7 +79,10 @@ export function useGitBranches({ activeWorkspace, onDebug }: UseGitBranchesOptio
       });
       if (normalized.repositoryState === "not_git_repository") {
         setBranches([]);
-        lastFetchedWorkspaceId.current = workspaceId;
+        setLocalBranches([]);
+        setRemoteBranches([]);
+        setCurrentBranch(null);
+        lastFetchedScope.current = scopeKey;
         setError(null);
         onDebug?.({
           id: `${Date.now()}-server-branches-not-repository`,
@@ -66,11 +94,17 @@ export function useGitBranches({ activeWorkspace, onDebug }: UseGitBranchesOptio
         return;
       }
       setBranches(normalized.branches);
-      lastFetchedWorkspaceId.current = workspaceId;
+      setLocalBranches(normalized.localBranches);
+      setRemoteBranches(normalized.remoteBranches);
+      setCurrentBranch(normalized.currentBranch);
+      lastFetchedScope.current = scopeKey;
       setError(null);
       lastFailureSignature.current = null;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      if (requestIdRef.current !== requestId) {
+        return;
+      }
       setError(message);
       const signature = `${workspaceId}:${message}`;
       const now = Date.now();
@@ -101,19 +135,30 @@ export function useGitBranches({ activeWorkspace, onDebug }: UseGitBranchesOptio
         });
       }
     } finally {
-      inFlight.current = false;
+      if (inFlightScope.current === scopeKey) {
+        inFlightScope.current = null;
+      }
     }
-  }, [isConnected, onDebug, workspaceId]);
+  }, [isConnected, onDebug, repositoryRoot, scopeKey, workspaceId]);
+
+  useEffect(() => {
+    requestIdRef.current += 1;
+    setBranches([]);
+    setLocalBranches([]);
+    setRemoteBranches([]);
+    setCurrentBranch(null);
+    setError(null);
+  }, [scopeKey]);
 
   useEffect(() => {
     if (!workspaceId || !isConnected) {
       return;
     }
-    if (lastFetchedWorkspaceId.current === workspaceId && branches.length > 0) {
+    if (lastFetchedScope.current === scopeKey && branches.length > 0) {
       return;
     }
     refreshBranches();
-  }, [branches.length, isConnected, refreshBranches, workspaceId]);
+  }, [branches.length, isConnected, refreshBranches, scopeKey, workspaceId]);
 
   const recentBranches = useMemo(
     () => branches.slice().sort((a, b) => b.lastCommit - a.lastCommit),
@@ -132,10 +177,11 @@ export function useGitBranches({ activeWorkspace, onDebug }: UseGitBranchesOptio
         label: "git/branch/checkout",
         payload: { workspaceId, name },
       });
-      await checkoutGitBranch(workspaceId, name);
-      void refreshBranches();
+      await checkoutGitBranch(workspaceId, name, repositoryRoot);
+      await refreshBranches();
+      await onMutationComplete?.();
     },
-    [onDebug, refreshBranches, workspaceId],
+    [onDebug, onMutationComplete, refreshBranches, repositoryRoot, workspaceId],
   );
 
   const createBranch = useCallback(
@@ -150,17 +196,35 @@ export function useGitBranches({ activeWorkspace, onDebug }: UseGitBranchesOptio
         label: "git/branch/create",
         payload: { workspaceId, name },
       });
-      await createGitBranch(workspaceId, name);
-      void refreshBranches();
+      await createGitBranch(workspaceId, name, repositoryRoot);
+      await refreshBranches();
+      await onMutationComplete?.();
     },
-    [onDebug, refreshBranches, workspaceId],
+    [onDebug, onMutationComplete, refreshBranches, repositoryRoot, workspaceId],
+  );
+
+  const updateBranch = useCallback(
+    async (name: string) => {
+      if (!workspaceId || !name) {
+        return null;
+      }
+      const result = await updateGitBranch(workspaceId, name, repositoryRoot);
+      await refreshBranches();
+      await onMutationComplete?.();
+      return result;
+    },
+    [onMutationComplete, refreshBranches, repositoryRoot, workspaceId],
   );
 
   return {
     branches: recentBranches,
+    localBranches,
+    remoteBranches,
+    currentBranch,
     error,
     refreshBranches,
     checkoutBranch,
     createBranch,
+    updateBranch,
   };
 }

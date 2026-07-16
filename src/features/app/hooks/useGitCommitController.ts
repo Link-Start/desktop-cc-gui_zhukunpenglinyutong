@@ -30,6 +30,7 @@ type GitCommitControllerOptions = {
   gitStatus: GitStatusState;
   refreshGitStatus: () => void;
   refreshGitLog?: () => void;
+  onMutationComplete?: () => Promise<void> | void;
 };
 
 type GitCommitController = {
@@ -63,6 +64,7 @@ export function useGitCommitController({
   gitStatus,
   refreshGitStatus,
   refreshGitLog,
+  onMutationComplete,
 }: GitCommitControllerOptions): GitCommitController {
   const { t } = useTranslation();
   const [commitMessage, setCommitMessage] = useState("");
@@ -166,6 +168,7 @@ export function useGitCommitController({
       setCommitMessage("");
       refreshGitStatus();
       refreshGitLog?.();
+      await onMutationComplete?.();
       if (result.postCommitError) {
         setCommitError(result.postCommitError);
       }
@@ -180,6 +183,7 @@ export function useGitCommitController({
     commitMessage,
     refreshGitLog,
     refreshGitStatus,
+    onMutationComplete,
     runScopedCommit,
   ]);
 
@@ -203,6 +207,7 @@ export function useGitCommitController({
         return;
       }
       setCommitMessage("");
+      await onMutationComplete?.();
       if (result.postCommitError) {
         setCommitError(result.postCommitError);
         refreshGitStatus();
@@ -232,6 +237,7 @@ export function useGitCommitController({
     commitMessage,
     refreshGitLog,
     refreshGitStatus,
+    onMutationComplete,
     runScopedCommit,
   ]);
 
@@ -255,6 +261,7 @@ export function useGitCommitController({
         return;
       }
       setCommitMessage("");
+      await onMutationComplete?.();
       if (result.postCommitError) {
         setCommitError(result.postCommitError);
         refreshGitStatus();
@@ -284,6 +291,7 @@ export function useGitCommitController({
     commitMessage,
     refreshGitLog,
     refreshGitStatus,
+    onMutationComplete,
     runScopedCommit,
   ]);
 
@@ -297,12 +305,13 @@ export function useGitCommitController({
       await pushGit(activeWorkspace.id);
       refreshGitStatus();
       refreshGitLog?.();
+      await onMutationComplete?.();
     } catch (error) {
       setPushError(error instanceof Error ? error.message : String(error));
     } finally {
       setPushLoading(false);
     }
-  }, [activeWorkspace, pushLoading, refreshGitLog, refreshGitStatus]);
+  }, [activeWorkspace, onMutationComplete, pushLoading, refreshGitLog, refreshGitStatus]);
 
   const handleSync = useCallback(async () => {
     if (!activeWorkspace || syncLoading) {
@@ -314,12 +323,13 @@ export function useGitCommitController({
       await syncGit(activeWorkspace.id);
       refreshGitStatus();
       refreshGitLog?.();
+      await onMutationComplete?.();
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : String(error));
     } finally {
       setSyncLoading(false);
     }
-  }, [activeWorkspace, refreshGitLog, refreshGitStatus, syncLoading]);
+  }, [activeWorkspace, onMutationComplete, refreshGitLog, refreshGitStatus, syncLoading]);
 
   return {
     commitMessage,

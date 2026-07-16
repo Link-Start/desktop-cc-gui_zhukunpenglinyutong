@@ -33,6 +33,7 @@ type WorkspaceEditableDiffCompareProps = {
   workspaceId: string;
   workspacePath: string;
   filePath: string;
+  workspaceFilePath?: string;
   diff: string;
   contentMode?: "all" | "focused";
   onSaveSuccess: () => void;
@@ -53,6 +54,7 @@ export function WorkspaceEditableDiffCompare({
   workspaceId,
   workspacePath,
   filePath,
+  workspaceFilePath = filePath,
   diff,
   contentMode = "all",
   onSaveSuccess,
@@ -66,8 +68,8 @@ export function WorkspaceEditableDiffCompare({
   const reconstructedBaselineRef = useRef<{ diff: string; source: string } | null>(null);
   const renderProfile = useMemo(() => resolveFileRenderProfile(filePath), [filePath]);
   const fileReadTarget = useMemo(
-    () => resolveFileReadTarget(workspacePath, filePath, null),
-    [filePath, workspacePath],
+    () => resolveFileReadTarget(workspacePath, workspaceFilePath, null),
+    [workspaceFilePath, workspacePath],
   );
   const documentState = useFileDocumentState({
     workspaceId,
@@ -113,7 +115,7 @@ export function WorkspaceEditableDiffCompare({
     }
 
     let cancelled = false;
-    void getGitFileFullDiff(workspaceId, fileReadTarget.workspaceRelativePath)
+    void getGitFileFullDiff(workspaceId, filePath)
       .then((fullDiff) => {
         if (cancelled) {
           return;
@@ -138,7 +140,7 @@ export function WorkspaceEditableDiffCompare({
     documentState.isLoading,
     documentState.isSaving,
     documentState.savedContentRef,
-    fileReadTarget.workspaceRelativePath,
+    filePath,
     workspaceId,
   ]);
 

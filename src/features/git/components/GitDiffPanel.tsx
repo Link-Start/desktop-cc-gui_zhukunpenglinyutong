@@ -68,6 +68,7 @@ import {
   type RendererContextMenuState,
 } from "../../../components/ui/RendererContextMenu";
 import type { GitDiffPanelProps } from "./GitDiffPanelTypes";
+import { resolveWorkspaceRelativePath } from "../../../utils/workspacePaths";
 
 type ModeMenuLayout = {
   align: "left" | "right";
@@ -93,6 +94,25 @@ function normalizeRootPath(value: string | null | undefined) {
     return "";
   }
   return value.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+export function resolveRepositoryWorkspaceFilePath(
+  workspacePath: string | null | undefined,
+  gitRoot: string | null | undefined,
+  filePath: string,
+) {
+  const normalizedFilePath = normalizeDiffPath(filePath);
+  const repositoryRoot = normalizeDiffPath(
+    resolveWorkspaceRelativePath(workspacePath, gitRoot ?? ""),
+  ).replace(/\/+$/, "");
+  if (
+    !repositoryRoot ||
+    normalizedFilePath === repositoryRoot ||
+    normalizedFilePath.startsWith(`${repositoryRoot}/`)
+  ) {
+    return normalizedFilePath;
+  }
+  return `${repositoryRoot}/${normalizedFilePath}`;
 }
 
 function isMissingRepo(error: string | null | undefined) {
@@ -2489,6 +2509,11 @@ function GitDiffPanelImpl({
                       files={[
                         {
                           filePath: previewFile.path,
+                          workspaceRelativeFilePath: resolveRepositoryWorkspaceFilePath(
+                            workspacePath,
+                            gitRoot,
+                            previewFile.path,
+                          ),
                           status: previewFile.status,
                           additions: previewFile.additions,
                           deletions: previewFile.deletions,

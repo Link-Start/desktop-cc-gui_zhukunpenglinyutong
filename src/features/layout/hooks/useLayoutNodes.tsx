@@ -33,6 +33,10 @@ import type {
 } from "../../composer/components/Composer";
 import { GitDiffViewer } from "../../git/components/GitDiffViewer";
 import { buildCanonicalGitChanges } from "../../git/utils/gitChangeModel";
+import {
+  publishGitRepositoryActionIntent,
+  type GitRepositoryActionRequest,
+} from "../../git/types/gitRepositoryActions";
 import type { GitModalPreviewRequest } from "../../git/components/GitDiffPanelTypes";
 import { FileTreePanel } from "../../files/components/FileTreePanel";
 import { WorkspaceFileComparePanel } from "../../files/components/WorkspaceFileComparePanel";
@@ -118,7 +122,6 @@ import { resolvePresentationProfile } from "../../messages/presentation/presenta
 import { appendQueuedHandoffBubbleIfNeeded } from "../../threads/utils/queuedHandoffBubble";
 import { isBackgroundRenderGatingEnabled } from "../../threads/utils/realtimePerfFlags";
 import { useWorkspaceSessionActivity } from "../../session-activity/hooks/useWorkspaceSessionActivity";
-import { isPendingThreadId } from "../../threads/hooks/useThreadActions.helpers";
 import { useClientUiVisibility } from "../../client-ui-visibility/hooks/useClientUiVisibility";
 import {
   getHomeWorkspaceOptions,
@@ -346,10 +349,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const activeHistoryRestoredAtMs = options.activeThreadId
     ? (historyRestoredAtMsByThread[options.activeThreadId] ?? null)
     : null;
-  const activeThreadBootstrapLoading =
-    options.activeThreadId !== null &&
-    isPendingThreadId(options.activeThreadId) &&
-    options.activeItems.length === 0;
   const activeThreadHistoryLoading = options.activeThreadId
     ? options.historyLoadingByThreadId[options.activeThreadId] === true
     : false;
@@ -935,8 +934,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       conversationState,
       plan: options.plan,
       isThinking: isThreadThinking,
-      isHistoryLoading:
-        activeThreadHistoryLoading || activeThreadBootstrapLoading,
+      isHistoryLoading: activeThreadHistoryLoading,
       isContextCompacting: activeThreadStatus?.isContextCompacting ?? false,
       processingStartedAt: activeThreadStatus?.processingStartedAt ?? null,
       lastDurationMs: activeThreadStatus?.lastDurationMs ?? null,
@@ -969,7 +967,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       sidebarThreadStatusById,
       options.activeTokenUsage,
       options.activeRateLimits,
-      activeThreadBootstrapLoading,
     ],
   );
 
@@ -1153,6 +1150,72 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const rewindWorkspaceGitState = deriveRewindWorkspaceGitState(
     options.gitStatus,
   );
+  const selectGitRoot = options.onSelectGitRoot;
+  const clearGitRoot = options.onClearGitRoot;
+  const changeGitPanelMode = options.onGitPanelModeChange;
+  const changeAppMode = options.onAppModeChange;
+  const stageGitAll = options.onStageGitAll;
+  const activeWorkspaceForClone = options.activeWorkspace;
+  const addCloneAgent = options.onAddCloneAgent;
+  const selectComposerGitRoot = useCallback(
+    async (repositoryRoot: string) => {
+      if (repositoryRoot) {
+        await selectGitRoot(repositoryRoot);
+      } else {
+        await clearGitRoot();
+      }
+    },
+    [clearGitRoot, selectGitRoot],
+  );
+  const handleComposerGitCommit = useCallback(
+    async (repositoryRoot: string) => {
+      await selectComposerGitRoot(repositoryRoot);
+      changeGitPanelMode("diff");
+      onFilePanelModeChange("git");
+    },
+    [changeGitPanelMode, onFilePanelModeChange, selectComposerGitRoot],
+  );
+  const handleComposerGitPush = useCallback(
+    async (repositoryRoot: string) => {
+      await selectComposerGitRoot(repositoryRoot);
+      changeAppMode("gitHistory");
+    },
+    [changeAppMode, selectComposerGitRoot],
+  );
+  const handleFileTreeGitRepositoryAction = useCallback(
+    async ({ action, repositoryRoot }: GitRepositoryActionRequest) => {
+      await selectComposerGitRoot(repositoryRoot);
+      if (action === "stage-all") {
+        await stageGitAll();
+        return;
+      }
+      if (action === "clone" && activeWorkspaceForClone) {
+        await addCloneAgent(activeWorkspaceForClone);
+        return;
+      }
+      if (
+        action === "commit" ||
+        action === "show-diff" ||
+        action === "rollback" ||
+        action === "add-to-gitignore"
+      ) {
+        changeGitPanelMode("diff");
+        onFilePanelModeChange("git");
+        return;
+      }
+      publishGitRepositoryActionIntent({ action, repositoryRoot });
+      changeAppMode("gitHistory");
+    },
+    [
+      changeAppMode,
+      changeGitPanelMode,
+      onFilePanelModeChange,
+      stageGitAll,
+      activeWorkspaceForClone,
+      addCloneAgent,
+      selectComposerGitRoot,
+    ],
+  );
   // Stabilize the composer branch-control object and diff-path handler so they
   // don't recreate a new reference on every render (which would defeat the
   // memoized Composer). Behavior is identical to the previous inline literals.
@@ -1162,8 +1225,20 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         ? {
             branchName: options.branchName,
             branches: options.branches,
+            localBranches: options.branchLocalItems,
+            remoteBranches: options.branchRemoteItems,
+            currentBranch: options.branchCurrentName,
+            repositories: options.gitRepositories,
+            repositoriesLoading: options.gitRepositoriesLoading,
+            repositoriesError: options.gitRepositoriesError,
+            selectedRepositoryRoot: options.selectedGitRepositoryRoot,
+            branchError: options.branchError,
+            onSelectRepository: options.onSelectGitRepository,
             onCheckout: options.onCheckoutBranch,
             onCreate: options.onCreateBranch,
+            onUpdate: options.onUpdateBranch,
+            onCommit: handleComposerGitCommit,
+            onPush: handleComposerGitPush,
             disabled: options.isWorktreeWorkspace,
           }
         : null,
@@ -1171,8 +1246,20 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.activeWorkspace,
       options.branchName,
       options.branches,
+      options.branchLocalItems,
+      options.branchRemoteItems,
+      options.branchCurrentName,
+      options.gitRepositories,
+      options.gitRepositoriesLoading,
+      options.gitRepositoriesError,
+      options.selectedGitRepositoryRoot,
+      options.branchError,
+      options.onSelectGitRepository,
       options.onCheckoutBranch,
       options.onCreateBranch,
+      options.onUpdateBranch,
+      handleComposerGitCommit,
+      handleComposerGitPush,
       options.isWorktreeWorkspace,
     ],
   );
@@ -1669,6 +1756,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         showSpecHubAction={false}
         showDetachedExplorerAction={false}
         gitStatusFiles={options.gitStatus.files}
+        gitRepositories={options.gitRepositories}
+        onGitRepositoryAction={handleFileTreeGitRepositoryAction}
         gitignoredFiles={options.gitignoredFiles}
         gitignoredDirectories={options.gitignoredDirectories}
         onRefreshFiles={options.onRefreshFiles}

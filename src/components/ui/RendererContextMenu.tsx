@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export type RendererContextMenuLeafItem =
@@ -55,7 +55,7 @@ const MENU_LABEL_HEIGHT = 32;
 const MENU_SEPARATOR_HEIGHT = 9;
 const SUBMENU_WIDTH = 260;
 const SUBMENU_MAX_HEIGHT = 420;
-const SUBMENU_GAP = 6;
+const SUBMENU_GAP = 2;
 const SUBMENU_VERTICAL_PADDING = 16;
 const SUBMENU_ITEM_HEIGHT = 40;
 const SUBMENU_LABEL_HEIGHT = 32;
@@ -92,9 +92,10 @@ function estimateRendererContextSubmenuHeight(
   return Math.min(SUBMENU_MAX_HEIGHT, estimatedContentHeight);
 }
 
-function resolveRendererContextSubmenuPosition(
+export function resolveRendererContextSubmenuPosition(
   triggerRect: DOMRect,
   submenuHeight: number,
+  submenuWidth = SUBMENU_WIDTH,
 ): RendererContextSubmenuPosition {
   if (typeof window === "undefined") {
     return {
@@ -102,9 +103,9 @@ function resolveRendererContextSubmenuPosition(
       y: triggerRect.top,
     };
   }
-  const maxRightX = window.innerWidth - SUBMENU_WIDTH - VIEWPORT_PADDING;
+  const maxRightX = window.innerWidth - submenuWidth - VIEWPORT_PADDING;
   const rightX = triggerRect.right + SUBMENU_GAP;
-  const leftX = triggerRect.left - SUBMENU_WIDTH - SUBMENU_GAP;
+  const leftX = triggerRect.left - submenuWidth - SUBMENU_GAP;
   const shouldOpenRight = rightX <= maxRightX || leftX < VIEWPORT_PADDING;
   const x = shouldOpenRight
     ? Math.min(Math.max(rightX, VIEWPORT_PADDING), Math.max(VIEWPORT_PADDING, maxRightX))
@@ -123,6 +124,7 @@ export function RendererContextMenu({
   className = "renderer-context-menu",
 }: RendererContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const submenuRef = useRef<HTMLDivElement | null>(null);
   const submenuTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null);
   const [submenuPosition, setSubmenuPosition] =
@@ -170,6 +172,23 @@ export function RendererContextMenu({
     (item): item is Extract<RendererContextMenuItem, { type: "submenu" }> =>
       item.type === "submenu" && item.id === openSubmenuId,
   );
+
+  useLayoutEffect(() => {
+    if (!openSubmenuItem || !submenuRef.current) return;
+    const trigger = submenuTriggerRefs.current[openSubmenuItem.id];
+    if (!trigger) return;
+    const measuredWidth = submenuRef.current.getBoundingClientRect().width || SUBMENU_WIDTH;
+    const nextPosition = resolveRendererContextSubmenuPosition(
+      trigger.getBoundingClientRect(),
+      estimateRendererContextSubmenuHeight(openSubmenuItem.items),
+      measuredWidth,
+    );
+    setSubmenuPosition((current) =>
+      current?.x === nextPosition.x && current.y === nextPosition.y
+        ? current
+        : nextPosition,
+    );
+  }, [openSubmenuItem]);
 
   const renderLeafItem = (
     item: RendererContextMenuLeafItem,
@@ -314,6 +333,7 @@ export function RendererContextMenu({
       </div>
       {openSubmenuItem && submenuPosition ? (
         <div
+          ref={submenuRef}
           className={`${className} renderer-context-menu-flyout`}
           role="menu"
           aria-label={openSubmenuItem.label}

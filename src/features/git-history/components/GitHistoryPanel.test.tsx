@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { createPortal } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GitHistoryPanel, buildFileTreeItems, getDefaultColumnWidths } from "./GitHistoryPanel";
+import { publishGitRepositoryActionIntent } from "../../git/types/gitRepositoryActions";
 
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: ({ count }: { count: number }) => {
@@ -344,6 +345,22 @@ describe("GitHistoryPanel helpers", () => {
 });
 
 describe("GitHistoryPanel interactions", () => {
+  it("opens the existing push dialog from a repository action intent", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+    await waitFor(() => {
+      expect(screen.getByText("git.historyCreatePr")).toBeTruthy();
+    });
+
+    act(() => {
+      publishGitRepositoryActionIntent({
+        action: "push",
+        repositoryRoot: "services/api",
+      });
+    });
+
+    expect(await screen.findByText("git.historyPushDialogTitle")).toBeTruthy();
+  });
+
   it("renders create-pr action before pull and runs workflow after confirm", async () => {
     vi.mocked(tauriService.getGitBranchCompareCommits).mockResolvedValue({
       targetOnlyCommits: [

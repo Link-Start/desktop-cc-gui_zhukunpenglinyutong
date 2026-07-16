@@ -293,6 +293,24 @@ pub(crate) struct GitBranchListItem {
     pub(crate) upstream: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GitRepositorySummary {
+    pub(crate) repository_root: String,
+    pub(crate) display_name: String,
+    pub(crate) current_branch: Option<String>,
+    pub(crate) head_state: String,
+    pub(crate) upstream: Option<String>,
+    pub(crate) ahead: usize,
+    pub(crate) behind: usize,
+    pub(crate) staged_count: usize,
+    pub(crate) modified_count: usize,
+    pub(crate) untracked_count: usize,
+    pub(crate) conflicted_count: usize,
+    pub(crate) is_clean: bool,
+    pub(crate) error: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct GitBranchUpdateResult {
     pub(crate) branch: String,

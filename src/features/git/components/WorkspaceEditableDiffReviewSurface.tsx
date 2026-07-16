@@ -23,6 +23,7 @@ import type {
 
 export type EditableDiffReviewFile = {
   filePath: string;
+  workspaceRelativeFilePath?: string;
   status: string;
   additions: number;
   deletions: number;
@@ -87,7 +88,10 @@ function canEditReviewFile(
   if (!allowEditing || !file || file.status.toUpperCase() === "D") {
     return false;
   }
-  const fileReadTarget = resolveFileReadTarget(workspacePath, file.reviewPath);
+  const fileReadTarget = resolveFileReadTarget(
+    workspacePath,
+    file.workspaceRelativeFilePath ?? file.reviewPath,
+  );
   if (fileReadTarget.domain !== "workspace") {
     return false;
   }
@@ -410,6 +414,7 @@ export function WorkspaceEditableDiffReviewSurface({
                 workspaceId={workspaceId}
                 workspacePath={workspacePath}
                 filePath={activeFile.reviewPath}
+                workspaceFilePath={activeFile.workspaceRelativeFilePath}
                 diff={activeFile.diff}
                 contentMode={effectiveContentMode}
                 onSaveSuccess={handleSaveSuccess}

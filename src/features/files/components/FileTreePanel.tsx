@@ -25,7 +25,15 @@ import {
   type WorkspaceDirectoryEntry,
 } from "../../../services/tauri";
 import { appendWorkspaceFileListingBudgetDiagnostic } from "../../../services/rendererDiagnostics";
-import type { GitFileStatus, OpenAppTarget } from "../../../types";
+import type {
+  GitFileStatus,
+  GitRepositorySummary,
+  OpenAppTarget,
+} from "../../../types";
+import type {
+  GitRepositoryActionId,
+  GitRepositoryActionRequest,
+} from "../../git/types/gitRepositoryActions";
 import { languageFromPath } from "../../../utils/syntax";
 import {
   resolveGitRootWorkspacePrefix,
@@ -87,6 +95,8 @@ import {
   type VisibleTreeNodeEntry,
 } from "./fileTreePanelInternals";
 
+const EMPTY_GIT_REPOSITORIES: GitRepositorySummary[] = [];
+
 type FileTreePanelProps = {
   workspaceId: string;
   workspaceName?: string;
@@ -116,9 +126,13 @@ type FileTreePanelProps = {
   showDetachedExplorerAction?: boolean;
   crossWindowDragTargetLabel?: string | null;
   gitStatusFiles?: GitFileStatus[];
+  gitRepositories?: GitRepositorySummary[];
   gitignoredFiles?: Set<string>;
   gitignoredDirectories?: Set<string>;
   onRefreshFiles?: () => void;
+  onGitRepositoryAction?: (
+    request: GitRepositoryActionRequest,
+  ) => void | Promise<void>;
 };
 
 type FileOpenLocation = {
@@ -163,9 +177,11 @@ export function FileTreePanel({
   showDetachedExplorerAction = true,
   crossWindowDragTargetLabel = null,
   gitStatusFiles,
+  gitRepositories = EMPTY_GIT_REPOSITORIES,
   gitignoredFiles,
   gitignoredDirectories,
   onRefreshFiles,
+  onGitRepositoryAction,
 }: FileTreePanelProps) {
   useEffect(() => {
     void loadFileTreeStyles();
@@ -261,6 +277,18 @@ export function FileTreePanel({
   const workspaceRootLabel = useMemo(
     () => resolveWorkspaceRootLabel(workspacePath, workspaceName),
     [workspaceName, workspacePath],
+  );
+  const repositorySummaryMap = useMemo(
+    () => new Map(
+      gitRepositories
+        .filter((repository) => repository.repositoryRoot !== "")
+        .map((repository) => [repository.repositoryRoot, repository]),
+    ),
+    [gitRepositories],
+  );
+  const rootRepositorySummary = useMemo(
+    () => gitRepositories.find((repository) => repository.repositoryRoot === "") ?? null,
+    [gitRepositories],
   );
   const gitRootWorkspacePrefix = useMemo(
     () => resolveGitRootWorkspacePrefix(workspacePath, gitRoot),
@@ -1658,14 +1686,68 @@ export function FileTreePanel({
     crossWindowDragTargetLabel,
     lastCrossWindowDragBroadcastRef,
   ]);
+  const addRepositoryToGitignore = useCallback(
+    async (repositoryRoot: string) => {
+      if (!repositoryRoot) return;
+      const ignorePath = ".gitignore";
+      try {
+        const existingContent = files.includes(ignorePath)
+          ? (await readWorkspaceFile(workspaceId, ignorePath)).content
+          : "";
+        const normalizedRoot = repositoryRoot.replaceAll("\\", "/").replace(/\/+$/, "");
+        const ignoreEntry = `${normalizedRoot}/`;
+        const existingEntries = new Set(
+          existingContent.split(/\r?\n/).map((line) => line.trim()),
+        );
+        if (existingEntries.has(normalizedRoot) || existingEntries.has(ignoreEntry)) {
+          showOperationNotice(
+            "info",
+            t("git.repositoryMenuGitignoreExists", { path: ignoreEntry }),
+          );
+          return;
+        }
+        const separator = existingContent.length > 0 && !existingContent.endsWith("\n") ? "\n" : "";
+        await writeWorkspaceFile(
+          workspaceId,
+          ignorePath,
+          `${existingContent}${separator}${ignoreEntry}\n`,
+        );
+        refreshFileTree();
+        showOperationNotice(
+          "success",
+          t("git.repositoryMenuGitignoreAdded", { path: ignoreEntry }),
+        );
+      } catch (caughtError) {
+        showOperationNotice(
+          "error",
+          t("git.repositoryMenuGitignoreFailed", {
+            error: normalizeOperationError(caughtError),
+          }),
+        );
+      }
+    },
+    [
+      files,
+      normalizeOperationError,
+      refreshFileTree,
+      showOperationNotice,
+      t,
+      workspaceId,
+    ],
+  );
   const showContextMenu = useCallback(
-    (event: MouseEvent<HTMLButtonElement>, relativePath: string, isFolder: boolean) => {
+    (event: MouseEvent<HTMLElement>, relativePath: string, isFolder: boolean) => {
       event.preventDefault();
       event.stopPropagation();
 
       const parentFolder = resolveParentFolderForNode(relativePath, isFolder ? "folder" : "file");
       const isRootActionTarget = relativePath.length === 0;
       const itemKind = isFolder ? "folder" : "file";
+      const repositorySummary = isFolder
+        ? relativePath.length === 0
+          ? rootRepositorySummary
+          : repositorySummaryMap.get(relativePath) ?? null
+        : null;
       const effectiveSelectedPaths = selectedNodePaths.has(relativePath)
         ? orderedSelectedNodePaths
         : isRootActionTarget
@@ -1687,6 +1769,36 @@ export function FileTreePanel({
           }),
         );
       }
+
+      const runRepositoryAction = async (action: GitRepositoryActionId) => {
+        if (!repositorySummary) return;
+        if (action === "add-to-gitignore") {
+          await addRepositoryToGitignore(repositorySummary.repositoryRoot);
+          return;
+        }
+        await onGitRepositoryAction?.({
+          action,
+          repositoryRoot: repositorySummary.repositoryRoot,
+        });
+      };
+      const repositoryGitItems = repositorySummary
+        ? [
+            { type: "label" as const, id: "git-target", label: repositorySummary.displayName },
+            { type: "item" as const, id: "git-commit", label: t("git.repositoryMenuCommit"), onSelect: () => runRepositoryAction("commit") },
+            { type: "item" as const, id: "git-stage-all", label: t("git.repositoryMenuStageAll"), onSelect: () => runRepositoryAction("stage-all") },
+            { type: "item" as const, id: "git-ignore", label: t("git.repositoryMenuAddToGitignore"), disabled: repositorySummary.repositoryRoot.length === 0, onSelect: () => runRepositoryAction("add-to-gitignore") },
+            { type: "separator" as const, id: "git-separator-diff" },
+            { type: "item" as const, id: "git-show-diff", label: t("git.repositoryMenuShowDiff"), onSelect: () => runRepositoryAction("show-diff") },
+            { type: "item" as const, id: "git-compare-revision", label: t("git.repositoryMenuCompareRevision"), onSelect: () => runRepositoryAction("compare-revision") },
+            { type: "item" as const, id: "git-compare-branch", label: t("git.repositoryMenuCompareBranch"), onSelect: () => runRepositoryAction("compare-branch") },
+            { type: "item" as const, id: "git-history", label: t("git.repositoryMenuHistory"), onSelect: () => runRepositoryAction("show-history") },
+            { type: "item" as const, id: "git-rollback", label: t("git.repositoryMenuRollback"), onSelect: () => runRepositoryAction("rollback") },
+            { type: "separator" as const, id: "git-separator-remote" },
+            { type: "item" as const, id: "git-push", label: t("git.repositoryMenuPush"), onSelect: () => runRepositoryAction("push") },
+            { type: "item" as const, id: "git-pull", label: t("git.repositoryMenuPull"), onSelect: () => runRepositoryAction("pull") },
+            { type: "item" as const, id: "git-fetch", label: t("git.repositoryMenuFetch"), onSelect: () => runRepositoryAction("fetch") },
+          ]
+        : [];
 
       const menuItems: RendererContextMenuItem[] = [
         {
@@ -1797,6 +1909,17 @@ export function FileTreePanel({
             await revealItemInDir(resolvePath(relativePath));
           },
         },
+        ...(repositorySummary
+          ? [
+              { type: "separator" as const, id: "git-repository-separator" },
+              {
+                type: "submenu" as const,
+                id: "git-repository",
+                label: t("git.repositoryMenuTitle"),
+                items: repositoryGitItems,
+              },
+            ]
+          : []),
         ...(onInsertText && !isFolder
           ? [
               {
@@ -1854,6 +1977,10 @@ export function FileTreePanel({
       openNewFolderPrompt,
       onCompareFiles,
       orderedSelectedNodePaths,
+      addRepositoryToGitignore,
+      onGitRepositoryAction,
+      repositorySummaryMap,
+      rootRepositorySummary,
       resolveParentFolderForNode,
       selectedNodePaths,
       showOperationNotice,
@@ -1909,6 +2036,7 @@ export function FileTreePanel({
     selectedNodePaths,
     selectedNodePath,
     orderedSelectedNodePaths,
+    repositorySummaryMap,
   };
   const fileTreeRowHandlers: FileTreeRowHandlers = {
     setRangeSelection,
@@ -1938,6 +2066,7 @@ export function FileTreePanel({
         <div className="file-tree-root-row">
           <FileTreeRootActions
             rootLabel={workspaceRootLabel}
+            repositorySummary={rootRepositorySummary}
             onCreateFile={() => openNewFilePrompt("")}
             onCreateFolder={() => openNewFolderPrompt("")}
             onRefreshFiles={refreshFileTree}
@@ -1947,6 +2076,9 @@ export function FileTreePanel({
             onOpenSpecHub={onOpenSpecHub}
             showSpecHubAction={showSpecHubAction}
             showDetachedExplorerAction={showDetachedExplorerAction}
+            onRootContextMenu={rootRepositorySummary
+              ? (event) => showContextMenu(event, "", true)
+              : undefined}
           />
         </div>
       </div>

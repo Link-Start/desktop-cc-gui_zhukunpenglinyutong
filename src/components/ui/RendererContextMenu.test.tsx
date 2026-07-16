@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   clampRendererContextMenuPosition,
   RendererContextMenu,
+  resolveRendererContextSubmenuPosition,
   type RendererContextMenuState,
 } from "./RendererContextMenu";
 
@@ -205,7 +206,28 @@ describe("RendererContextMenu", () => {
 
     const submenu = screen.getByRole("menu", { name: "Move to folder" });
     expect(submenu.style.top).toBe("300px");
-    expect(submenu.style.left).toBe("522px");
+    expect(submenu.style.left).toBe("518px");
+  });
+
+  it("places a left flyout flush to the trigger using its actual width", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 700 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 500 });
+    const triggerRect = {
+      left: 580,
+      right: 680,
+      top: 100,
+      bottom: 140,
+      width: 100,
+      height: 40,
+      x: 580,
+      y: 100,
+      toJSON: () => ({}),
+    } as DOMRect;
+
+    expect(resolveRendererContextSubmenuPosition(triggerRect, 300, 220)).toEqual({
+      x: 358,
+      y: 100,
+    });
   });
 
   it("clamps the menu inside the viewport", () => {

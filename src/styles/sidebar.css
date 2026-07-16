@@ -877,8 +877,8 @@
 
 .renderer-context-menu-flyout {
   z-index: 1601;
-  min-width: 220px;
-  max-width: min(280px, calc(100vw - 24px));
+  width: min(260px, calc(100vw - 24px));
+  min-width: 0;
 }
 
 .sidebar-workspace-menu-group + .sidebar-workspace-menu-group {

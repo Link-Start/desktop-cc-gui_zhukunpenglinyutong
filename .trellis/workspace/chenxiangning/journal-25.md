@@ -1135,3 +1135,69 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1002: 修复 Codex 新建磁盘会话 loading 常驻
+
+**Date**: 2026-07-16
+**Task**: 修复 Codex 新建磁盘会话 loading 常驻
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+定位 e49a86e8 将 pending identity 误判为 history loading 的回归；删除 activeThreadBootstrapLoading，恢复 historyLoadingByThreadId single source of truth，补充 OpenSpec/Trellis artifacts 与 focused regression test。37/37 focused tests、ESLint、OpenSpec strict validation 通过；全量 typecheck 被既有未跟踪 ComposerBranchBadge.test.tsx matcher 类型错误阻塞。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0efde5a0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1003: 完成多仓库 Git 命令中心
+
+**Date**: 2026-07-16
+**Task**: 完成多仓库 Git 命令中心
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+实现多仓库发现与分支作用域、文件树 Git 状态和精简右键菜单、仓库切换 loading、默认折叠分支分组、独立仓库根菜单及嵌套仓库 diff 预览路径修复；完成专项测试、跨层门禁与 OpenSpec 验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f242e9da` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

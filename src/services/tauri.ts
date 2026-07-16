@@ -409,6 +409,7 @@ export {
   getGitWorktreeDiffAgainstBranch,
   getGitWorktreeDiffFileAgainstBranch,
   listGitBranches,
+  listGitRepositorySummaries,
   listGitRoots,
   mergeGitBranch,
   pullGit,

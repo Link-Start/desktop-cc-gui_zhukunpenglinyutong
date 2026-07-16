@@ -2283,6 +2283,58 @@
   gap: 6px;
 }
 
+.composer-git-command-center [cmdk-list] {
+  max-height: min(560px, 70vh);
+}
+
+.composer-git-section-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.composer-git-section-toggle:hover,
+.composer-git-section-toggle:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.composer-git-branch-scope {
+  padding: 4px 8px 2px 30px;
+  color: var(--text-tertiary);
+  font-family: var(--code-font-family);
+  font-size: 11px;
+}
+
+.composer-git-repository-status,
+.composer-git-branch-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-primary);
+  font-family: var(--code-font-family);
+  font-size: 11px;
+}
+
+.composer-git-upstream {
+  max-width: 140px;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .composer-branch-badge-search {
   display: flex;
   align-items: center;
