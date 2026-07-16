@@ -215,14 +215,43 @@ function extractReasoningText(value: unknown): string {
     return value;
   }
   if (Array.isArray(value)) {
+    // 结构化条目（如 Codex summary_text 段落）是完整段落，用空行分隔；
+    // 纯字符串数组是流式 token 碎片，按原有规则无缝拼接。
+    // 混合数组按元素类型分别处理：object 段落间空行，相邻 string 碎片无缝拼接。
+    if (value.some((entry) => typeof entry === "object" && entry !== null)) {
+      const segments: string[] = [];
+      let pendingStringFragments: string[] = [];
+      const flushStringFragments = () => {
+        if (pendingStringFragments.length === 0) {
+          return;
+        }
+        const joined = joinReasoningFragments(pendingStringFragments).trim();
+        if (joined) {
+          segments.push(joined);
+        }
+        pendingStringFragments = [];
+      };
+      value.forEach((entry) => {
+        const fragment = extractReasoningText(entry);
+        if (!fragment) {
+          return;
+        }
+        if (typeof entry === "object" && entry !== null) {
+          flushStringFragments();
+          const trimmed = fragment.trim();
+          if (trimmed) {
+            segments.push(trimmed);
+          }
+        } else {
+          pendingStringFragments.push(fragment);
+        }
+      });
+      flushStringFragments();
+      return segments.join("\n\n");
+    }
     const fragments = value
       .map((entry) => extractReasoningText(entry))
       .filter(Boolean);
-    // 结构化条目（如 Codex summary_text 段落）是完整段落，用空行分隔；
-    // 纯字符串数组是流式 token 碎片，按原有规则无缝拼接。
-    if (value.some((entry) => typeof entry === "object" && entry !== null)) {
-      return fragments.map((fragment) => fragment.trim()).filter(Boolean).join("\n\n");
-    }
     return joinReasoningFragments(fragments);
   }
   if (value && typeof value === "object") {

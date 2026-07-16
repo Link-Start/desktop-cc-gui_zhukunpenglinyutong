@@ -2507,7 +2507,7 @@ describe("SettingsView Shortcuts", () => {
     });
   });
 
-  it("does not close on Escape", () => {
+  it("closes on Escape only when no dialog is open", () => {
     let unmount = () => {};
     const onClose = vi.fn(() => {
       unmount();
@@ -2546,8 +2546,16 @@ describe("SettingsView Shortcuts", () => {
     );
     unmount = rendered.unmount;
 
+    // With a dialog open, Escape must not close the settings view.
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    document.body.appendChild(dialog);
     fireEvent.keyDown(window, { key: "Escape", bubbles: true });
-
     expect(onClose).not.toHaveBeenCalled();
+    dialog.remove();
+
+    // Without any dialog open, Escape closes the settings view.
+    fireEvent.keyDown(window, { key: "Escape", bubbles: true });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

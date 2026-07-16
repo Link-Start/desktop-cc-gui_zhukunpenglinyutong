@@ -91,9 +91,13 @@ export function GitMultiRepositoryChanges({
       const override = selectionOverrides[selectionKey(status.repositoryRoot, path)];
       return typeof override === "boolean" ? override : stagedPaths.has(path);
     };
-    const selectedPaths = orderedPaths.filter(isSelected);
+    const selectedPaths: string[] = [];
+    const excludedPaths: string[] = [];
+    orderedPaths.forEach((path) => {
+      if (isSelected(path)) selectedPaths.push(path);
+      else excludedPaths.push(path);
+    });
     const includedPaths = selectedPaths;
-    const excludedPaths = orderedPaths.filter((path) => !isSelected(path));
     const selectionState: InclusionState = selectedPaths.length === 0
       ? "none"
       : selectedPaths.length === orderedPaths.length
@@ -104,6 +108,8 @@ export function GitMultiRepositoryChanges({
       orderedPaths,
       stagedPaths,
       lockedPaths,
+      lockedPathsList: Array.from(lockedPaths),
+      isCommitPathLocked: (path: string) => lockedPaths.has(normalizeGitPath(path)),
       selectedPaths,
       includedPaths,
       excludedPaths,
@@ -141,7 +147,7 @@ export function GitMultiRepositoryChanges({
       <div className="git-multi-repository-changes__content">
         {isLoading && statuses.length === 0 ? <div className="diff-empty">{t("common.loading")}</div> : null}
         {!isLoading && statuses.length === 0 ? <div className="diff-empty">{t("git.noChangesDetected")}</div> : null}
-        {groups.map(({ status, orderedPaths, stagedPaths, lockedPaths, includedPaths, excludedPaths, selectionState }) => (
+        {groups.map(({ status, orderedPaths, stagedPaths, lockedPaths, lockedPathsList, isCommitPathLocked, includedPaths, excludedPaths, selectionState }) => (
           <section className="git-repository-change-group" key={status.repositoryRoot}>
           <header className="git-repository-change-group__header">
             <InclusionToggle
@@ -169,14 +175,14 @@ export function GitMultiRepositoryChanges({
               section="staged"
               includedPaths={includedPaths}
               excludedPaths={excludedPaths}
-              partialPaths={Array.from(lockedPaths)}
+              partialPaths={lockedPathsList}
               selectedFiles={EMPTY_SELECTED_FILES}
               selectedPath={null}
               onUnstageFile={onUnstageFile ? async (path) => {
                 await onUnstageFile(status.repositoryRoot, path);
                 await onRefresh?.();
               } : undefined}
-              isCommitPathLocked={(path) => lockedPaths.has(normalizeGitPath(path))}
+              isCommitPathLocked={isCommitPathLocked}
               onSetCommitSelection={(paths, selected) => setGroupSelection(status.repositoryRoot, paths, selected, stagedPaths)}
               onFileClick={() => {}}
               onShowFileMenu={() => {}}
@@ -189,7 +195,7 @@ export function GitMultiRepositoryChanges({
               section="unstaged"
               includedPaths={includedPaths}
               excludedPaths={excludedPaths}
-              partialPaths={Array.from(lockedPaths)}
+              partialPaths={lockedPathsList}
               selectedFiles={EMPTY_SELECTED_FILES}
               selectedPath={null}
               onStageAllChanges={onStageAll ? async () => {
@@ -200,7 +206,7 @@ export function GitMultiRepositoryChanges({
                 await onStageFile(status.repositoryRoot, path);
                 await onRefresh?.();
               } : undefined}
-              isCommitPathLocked={(path) => lockedPaths.has(normalizeGitPath(path))}
+              isCommitPathLocked={isCommitPathLocked}
               onSetCommitSelection={(paths, selected) => setGroupSelection(status.repositoryRoot, paths, selected, stagedPaths)}
               onFileClick={() => {}}
               onShowFileMenu={() => {}}

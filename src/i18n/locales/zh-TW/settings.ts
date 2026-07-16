@@ -1212,6 +1212,8 @@ const settings = {
       "codexAuthConfigPath": "~/.codex/auth.json",
       "codexAuthConfigEmpty": "未偵測到全域 auth.json。",
       "codexAuthConfigReadFailed": "讀取全域 auth.json 失敗",
+      "codexGlobalConfigWriteFailed": "Failed to write global config.toml",
+      "codexAuthConfigWriteFailed": "Failed to write global auth.json",
       "codexAuthConfigTruncated": "由於檔案過大，驗證內容已截斷。",
       "codexAuthConfigShowSensitive": "顯示敏感內容",
       "codexAuthConfigHideSensitive": "隱藏敏感內容",

@@ -1211,6 +1211,8 @@ const settings = {
       "codexAuthConfigPath": "~/.codex/auth.json",
       "codexAuthConfigEmpty": "전역 auth.json이 감지되지 않았습니다.",
       "codexAuthConfigReadFailed": "전역 auth.json을 읽지 못했습니다",
+      "codexGlobalConfigWriteFailed": "Failed to write global config.toml",
+      "codexAuthConfigWriteFailed": "Failed to write global auth.json",
       "codexAuthConfigTruncated": "파일이 너무 커서 인증 내용이 잘렸습니다.",
       "codexAuthConfigShowSensitive": "민감 정보 표시",
       "codexAuthConfigHideSensitive": "민감 정보 숨기기",

@@ -809,7 +809,9 @@ pub(crate) async fn list_git_repository_summaries(
     drop(workspaces);
     let workspace_root = PathBuf::from(entry.path);
     let depth = depth.unwrap_or(2).clamp(1, 6);
-    Ok(scan_git_repository_summaries(&workspace_root, depth, 200))
+    tokio::task::spawn_blocking(move || scan_git_repository_summaries(&workspace_root, depth, 200))
+        .await
+        .map_err(|error| format!("Failed to scan git repositories: {error}"))
 }
 
 /// Helper function to get the combined diff for a workspace (used by commit message generation)

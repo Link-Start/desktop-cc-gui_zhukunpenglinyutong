@@ -334,7 +334,9 @@ export function ProviderDialog({
             </div>
             <div className="vendor-preset-buttons">
               {CLAUDE_PROVIDER_PRESETS.map((preset) => {
-                const presetIcon = presetIconById[preset.id as keyof typeof presetIconById];
+                const presetIcon =
+                  presetIconById[preset.id as keyof typeof presetIconById] ??
+                  presetIconById.custom;
                 const PresetIcon = presetIcon.kind === "lucide" ? presetIcon.icon : null;
                 return (
                   <button

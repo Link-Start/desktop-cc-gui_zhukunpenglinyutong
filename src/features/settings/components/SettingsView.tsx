@@ -952,6 +952,17 @@ export function SettingsView({
         return;
       }
       const key = event.key.toLowerCase();
+      if (key === "escape") {
+        // Layered close: when any dialog is open, Escape only closes that
+        // dialog (handled by the dialog's own listener); otherwise close
+        // the settings view.
+        if (document.querySelector('[role="dialog"]')) {
+          return;
+        }
+        event.preventDefault();
+        onClose();
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && key === "w") {
         event.preventDefault();
         onClose();

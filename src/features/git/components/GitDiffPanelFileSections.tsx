@@ -3,7 +3,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   ReactNode,
 } from "react";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
@@ -200,7 +200,7 @@ type DiffFileRowProps = {
   onSetCommitSelection?: (paths: string[], selected: boolean) => void;
 };
 
-export function DiffFileRow({
+export const DiffFileRow = memo(function DiffFileRow({
   file,
   className = "",
   inclusionClassName,
@@ -393,7 +393,7 @@ export function DiffFileRow({
       </div>
     </div>
   );
-}
+});
 
 export type DiffSectionProps = {
   title: string;

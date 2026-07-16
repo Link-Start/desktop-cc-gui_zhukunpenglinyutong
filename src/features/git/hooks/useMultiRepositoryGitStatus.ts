@@ -33,6 +33,19 @@ function repositorySignature(repositories: GitRepositorySummary[]) {
   ]));
 }
 
+function areRepositoryStatusesEqual(
+  left: RepositoryGitStatus[],
+  right: RepositoryGitStatus[],
+) {
+  if (left === right) {
+    return true;
+  }
+  if (left.length !== right.length) {
+    return false;
+  }
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 export function useMultiRepositoryGitStatus(
   activeWorkspace: WorkspaceInfo | null,
   repositories: GitRepositorySummary[],
@@ -94,12 +107,14 @@ export function useMultiRepositoryGitStatus(
     if (requestIdRef.current !== requestId) {
       return;
     }
-    setStatuses(results);
+    setStatuses((previous) =>
+      areRepositoryStatusesEqual(previous, results) ? previous : results,
+    );
     setIsLoading(false);
   }, [isMultiRepository, repositories, workspaceId]);
 
   useEffect(() => {
-    requestIdRef.current += 1;
+    // refresh 顶部已自增 requestIdRef 使旧请求失效,这里无需重复自增。
     void refresh();
   }, [refresh, signature, workspaceId]);
 

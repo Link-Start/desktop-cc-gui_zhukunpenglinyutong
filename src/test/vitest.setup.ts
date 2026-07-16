@@ -956,6 +956,12 @@ vi.mock("react-i18next", () => ({
         "settings.vendor.codexGlobalConfigPath": "~/.codex/config.toml",
         "settings.vendor.currentCodexAuthConfig": "Global Auth Config",
         "settings.vendor.codexAuthConfigPath": "~/.codex/auth.json",
+        "settings.vendor.codexAuthConfigShowSensitive": "Show Sensitive",
+        "settings.vendor.codexAuthConfigHideSensitive": "Hide Sensitive",
+        "settings.vendor.codexGlobalConfigWriteFailed":
+          "Failed to write global config.toml",
+        "settings.vendor.codexAuthConfigWriteFailed":
+          "Failed to write global auth.json",
         "settings.vendor.dialog.saveChanges": "Save",
         "settings.codexRuntimeReloadNoConnectedSessions":
           "No Codex session is currently connected. The config has been updated and will apply on the next connection.",
