@@ -373,7 +373,7 @@ export function SettingsView({
   const { t } = useTranslation();
   const runCodexDoctor = onRunCodexDoctor ?? onRunDoctor;
   const [activeSection, setActiveSection] =
-    useState<SettingsViewSection>("providers");
+    useState<SettingsViewSection>("basic");
   const [basicSubTab, setBasicSubTab] = useState<
     | "appearance"
     | "behavior"
@@ -952,11 +952,6 @@ export function SettingsView({
         return;
       }
       const key = event.key.toLowerCase();
-      if (key === "escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
       if ((event.metaKey || event.ctrlKey) && key === "w") {
         event.preventDefault();
         onClose();
@@ -1688,9 +1683,98 @@ export function SettingsView({
     });
   };
 
+  const activeSectionHeader = useMemo(() => {
+    switch (activeSection) {
+      case "providers":
+      case "vendors":
+        return {
+          title: t("settings.sidebarProviders"),
+          description: t("settings.vendorsDescription"),
+        };
+      case "basic":
+        return {
+          title: t("settings.sidebarBasic"),
+          description: t("settings.basicDescription"),
+        };
+      case "project-management":
+        return {
+          title: t("settings.sidebarProjectManagement"),
+          description: t("settings.projectManagementDescription"),
+        };
+      case "mcp":
+        return {
+          title: t("settings.sidebarMcpSkills"),
+          description: t("settings.mcpSkillsDescription"),
+        };
+      case "permissions":
+        return {
+          title: t("settings.placeholder.permissions.title"),
+          description: t("settings.placeholder.permissions.desc"),
+        };
+      case "commit":
+        return {
+          title: t("settings.commit.title"),
+          description: t("settings.commit.description"),
+        };
+      case "agent-prompt-management":
+        return {
+          title: t("settings.sidebarAgentPromptManagement"),
+          description: t("settings.agentPromptManagementDescription"),
+        };
+      case "composer":
+        return {
+          title: t("settings.sidebarComposer"),
+          description: t("settings.composerDescription"),
+        };
+      case "dictation":
+        return {
+          title: t("settings.dictationTitle"),
+          description: t("settings.dictationDescription"),
+        };
+      case "git":
+        return {
+          title: t("settings.gitTitle"),
+          description: t("settings.gitDescription"),
+        };
+      case "runtime-environment":
+        return {
+          title: t("settings.sidebarRuntimeEnvironment"),
+          description: t("settings.runtimeEnvironmentDescription"),
+        };
+      case "other":
+        return {
+          title: t("settings.sidebarOther"),
+          description: t("settings.otherDescription"),
+        };
+      case "community":
+      case "about":
+        return {
+          title: t("settings.sidebarCommunity"),
+          description: t("about.tagline"),
+        };
+      case "experimental":
+        return {
+          title: t("settings.experimentalTitle"),
+          description: t("settings.experimentalDescription"),
+        };
+      default:
+        return {
+          title: t("settings.sidebarBasic"),
+          description: t("settings.basicDescription"),
+        };
+    }
+  }, [activeSection, t]);
+
   return (
     <div className="settings-embedded">
-      <div className="settings-header" />
+      <div className="settings-header" data-tauri-drag-region="true">
+        <div className="settings-header-copy">
+          <h1 className="settings-header-title">{activeSectionHeader.title}</h1>
+          <p className="settings-header-description">
+            {activeSectionHeader.description}
+          </p>
+        </div>
+      </div>
       <div
         className={`settings-body${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
       >
@@ -1709,21 +1793,21 @@ export function SettingsView({
           </button>
           <button
             type="button"
-            className={`settings-nav ${activeSection === "providers" || activeSection === "vendors" ? "active" : ""}`}
-            onClick={() => setActiveSection("providers")}
-            title={sidebarCollapsed ? t("settings.sidebarProviders") : ""}
-          >
-            <span className="codicon codicon-vm-connect" />
-            {!sidebarCollapsed && t("settings.sidebarProviders")}
-          </button>
-          <button
-            type="button"
             className={`settings-nav ${activeSection === "basic" ? "active" : ""}`}
             onClick={() => setActiveSection("basic")}
             title={sidebarCollapsed ? t("settings.sidebarBasic") : ""}
           >
             <Settings aria-hidden />
             {!sidebarCollapsed && t("settings.sidebarBasic")}
+          </button>
+          <button
+            type="button"
+            className={`settings-nav ${activeSection === "providers" || activeSection === "vendors" ? "active" : ""}`}
+            onClick={() => setActiveSection("providers")}
+            title={sidebarCollapsed ? t("settings.sidebarProviders") : ""}
+          >
+            <span className="codicon codicon-vm-connect" />
+            {!sidebarCollapsed && t("settings.sidebarProviders")}
           </button>
           <button
             type="button"
@@ -1883,7 +1967,13 @@ export function SettingsView({
             />
           </button>
         </aside>
-        <ScrollArea className="settings-content">
+        <ScrollArea
+          className={`settings-content ${
+            activeSection === "providers" || activeSection === "vendors"
+              ? "settings-content--providers"
+              : ""
+          }`}
+        >
           {shouldShowWorkspaceSelector && (
             <div className="settings-workspace-picker">
               <div className="settings-workspace-picker-label">
@@ -1917,12 +2007,6 @@ export function SettingsView({
               className="settings-section settings-section-basic"
               data-basic-tab={basicSubTab}
             >
-              <div className="settings-section-title">
-                {t("settings.sidebarBasic")}
-              </div>
-              <div className="settings-section-subtitle">
-                {t("settings.basicDescription")}
-              </div>
               <div className="settings-basic-tabs">
                 <button
                   type="button"
@@ -2109,12 +2193,6 @@ export function SettingsView({
               className="settings-section settings-section-tabbed"
               data-settings-tab={projectManagementSubTab}
             >
-              <div className="settings-section-title">
-                {t("settings.sidebarProjectManagement")}
-              </div>
-              <div className="settings-section-subtitle">
-                {t("settings.projectManagementDescription")}
-              </div>
               <div className="settings-basic-tabs">
                 <button
                   type="button"
@@ -2207,12 +2285,6 @@ export function SettingsView({
               className="settings-section settings-section-tabbed"
               data-settings-tab={mcpManagementSubTab}
             >
-              <div className="settings-section-title">
-                {t("settings.sidebarMcpSkills")}
-              </div>
-              <div className="settings-section-subtitle">
-                {t("settings.mcpSkillsDescription")}
-              </div>
               <div className="settings-basic-tabs">
                 <button
                   type="button"
@@ -2273,12 +2345,6 @@ export function SettingsView({
               className="settings-section settings-section-tabbed"
               data-settings-tab={agentPromptSubTab}
             >
-              <div className="settings-section-title">
-                {t("settings.sidebarAgentPromptManagement")}
-              </div>
-              <div className="settings-section-subtitle">
-                {t("settings.agentPromptManagementDescription")}
-              </div>
               <div className="settings-basic-tabs">
                 <button
                   type="button"
@@ -2329,8 +2395,8 @@ export function SettingsView({
           )}
           {activeSection === "other" && (
             <OtherSection
-              title={t("settings.sidebarOther")}
-              description={t("settings.otherDescription")}
+              title={null}
+              description={null}
               sessionRadarRecentCompletedSessions={
                 sessionRadarRecentCompletedSessions
               }
@@ -2344,12 +2410,6 @@ export function SettingsView({
               className="settings-section settings-section-tabbed"
               data-settings-tab={runtimeEnvironmentSubTab}
             >
-              <div className="settings-section-title">
-                {t("settings.sidebarRuntimeEnvironment")}
-              </div>
-              <div className="settings-section-subtitle">
-                {t("settings.runtimeEnvironmentDescription")}
-              </div>
               <div className="settings-basic-tabs">
                 <button
                   type="button"
@@ -2482,12 +2542,6 @@ export function SettingsView({
           />
           {activeSection === "git" && (
             <section className="settings-section">
-              <div className="settings-section-title">
-                {t("settings.gitTitle")}
-              </div>
-              <div className="settings-section-subtitle">
-                {t("settings.gitDescription")}
-              </div>
               <DetachedExternalChangeToggles
                 t={t}
                 appSettings={appSettings}
@@ -2499,12 +2553,6 @@ export function SettingsView({
           {/* about is now mapped to community above */}
           {activeSection === "experimental" && (
             <section className="settings-section">
-              <div className="settings-section-title">
-                {t("settings.experimentalTitle")}
-              </div>
-              <div className="settings-section-subtitle">
-                {t("settings.experimentalDescription")}
-              </div>
               {hasCodexHomeOverrides && (
                 <div className="settings-help">
                   {t("settings.experimentalWarning1")}

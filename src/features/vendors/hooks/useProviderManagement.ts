@@ -34,6 +34,8 @@ export function useProviderManagement() {
     isOpen: false,
     provider: null,
   });
+  const [claudeSettingsJsonDialogOpen, setClaudeSettingsJsonDialogOpen] =
+    useState(false);
 
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>({
     isOpen: false,
@@ -167,6 +169,18 @@ export function useProviderManagement() {
   const handleCloseProviderDialog = useCallback(() => {
     setProviderDialog({ isOpen: false, provider: null });
   }, []);
+
+  const handleOpenClaudeSettingsJsonDialog = useCallback(() => {
+    setClaudeSettingsJsonDialogOpen(true);
+  }, []);
+
+  const handleCloseClaudeSettingsJsonDialog = useCallback(() => {
+    setClaudeSettingsJsonDialogOpen(false);
+  }, []);
+
+  const handleClaudeSettingsJsonSaved = useCallback(() => {
+    void Promise.all([loadProviders(), loadCurrentConfig()]);
+  }, [loadProviders, loadCurrentConfig]);
 
   const handleSaveProvider = useCallback(
     async (data: {
@@ -319,12 +333,16 @@ export function useProviderManagement() {
     currentConfig,
     currentConfigLoading,
     providerDialog,
+    claudeSettingsJsonDialogOpen,
     deleteConfirm,
     loadProviders,
     loadCurrentConfig,
     handleEditProvider,
     handleAddProvider,
     handleCloseProviderDialog,
+    handleOpenClaudeSettingsJsonDialog,
+    handleCloseClaudeSettingsJsonDialog,
+    handleClaudeSettingsJsonSaved,
     handleSaveProvider,
     handleSwitchProvider,
     handleReorderProviders,

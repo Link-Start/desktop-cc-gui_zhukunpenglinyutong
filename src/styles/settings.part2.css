@@ -1718,12 +1718,41 @@
   --settings-content-fixed-width: 1080px;
   --settings-content-pad-top: 18px;
   --settings-content-pad-x: 30px;
+  --settings-content-pad-right: 12px;
   --settings-content-pad-bottom: 44px;
 }
 
+.settings-content.settings-content--providers {
+  --settings-content-pad-top: 0px;
+  --settings-content-pad-right: 0px;
+  --settings-content-pad-bottom: 0px;
+}
+
+.settings-content.settings-content--providers
+  > [data-slot="scroll-area-scrollbar"] {
+  display: none !important;
+}
+
+.settings-content.settings-content--providers > [data-slot="scroll-area-corner"] {
+  display: none !important;
+}
+
 .settings-content [data-slot="scroll-area-viewport"] {
-  padding: var(--settings-content-pad-top) var(--settings-content-pad-x)
-    var(--settings-content-pad-bottom);
+  padding: var(--settings-content-pad-top) var(--settings-content-pad-right)
+    var(--settings-content-pad-bottom) var(--settings-content-pad-x);
+}
+
+.settings-content
+  > [data-slot="scroll-area-scrollbar"][data-orientation="vertical"] {
+  width: 6px !important;
+  padding: 4px 1px !important;
+}
+
+.settings-content
+  > [data-slot="scroll-area-scrollbar"][data-orientation="vertical"]
+  [data-slot="scroll-area-thumb"] {
+  min-width: 4px;
+  background-color: var(--scrollbar-thumb);
 }
 
 /*
@@ -1741,6 +1770,7 @@
  */
 .settings-content [data-slot="scroll-area-viewport"] > div {
   display: block !important;
+  height: 100% !important;
   width: 100% !important;
   max-width: 100% !important;
 }

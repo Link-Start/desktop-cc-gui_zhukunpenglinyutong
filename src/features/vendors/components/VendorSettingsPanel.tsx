@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import LayoutList from "lucide-react/dist/esm/icons/layout-list";
 import PackagePlus from "lucide-react/dist/esm/icons/package-plus";
+import Search from "lucide-react/dist/esm/icons/search";
 import type { CodexCustomModel, CodexProviderConfig, VendorTab } from "../types";
 import { STORAGE_KEYS, validateCodexCustomModels } from "../types";
 import type { AppSettings, CodexUnifiedExecExternalStatus } from "../../../types";
@@ -10,12 +12,19 @@ import { useCodexProviderManagement } from "../hooks/useCodexProviderManagement"
 import { usePluginModels } from "../hooks/usePluginModels";
 import { ProviderList } from "./ProviderList";
 import { CodexProviderList } from "./CodexProviderList";
+import { ClaudeSettingsJsonDialog } from "./ClaudeSettingsJsonDialog";
 import { ProviderDialog } from "./ProviderDialog";
 import { CodexProviderDialog } from "./CodexProviderDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { CustomModelDialog } from "./CustomModelDialog";
 import { CurrentCodexGlobalConfigCard } from "./CurrentCodexGlobalConfigCard";
-import { buildCliEngineNavItems, CliIcon, type CliEngineNavItem } from "./cliEngineNav";
+import {
+  CLI_DOCS_HREF_BY_ID,
+  buildCliEngineNavItems,
+  CliIcon,
+  type CliEngineId,
+  type CliEngineNavItem,
+} from "./cliEngineNav";
 import {
   consumeVendorModelManagerRequest,
   VENDOR_MODEL_MANAGER_REQUEST_EVENT,
@@ -50,6 +59,66 @@ type VendorSettingsPanelProps = {
   handleReloadCodexRuntimeConfig: () => Promise<void>;
   onUpdateAppSettings: (next: AppSettings) => Promise<void>;
 };
+
+type CliBrandHeaderProps = {
+  id: CliEngineId;
+  title: string;
+  description: string;
+  helpLabel: string;
+  href?: string;
+  actions?: ReactNode;
+  monochromeLogo?: boolean;
+};
+
+function CliBrandHeader({
+  id,
+  title,
+  description,
+  helpLabel,
+  href,
+  actions,
+  monochromeLogo = false,
+}: CliBrandHeaderProps) {
+  return (
+    <div className="vendor-brand-header">
+      <div className="vendor-brand-main">
+        <span className="vendor-brand-logo" aria-hidden="true">
+          <CliIcon id={id} label={title} monochrome={monochromeLogo} />
+        </span>
+        <div className="vendor-brand-copy">
+          <div className="vendor-brand-title-row">
+            <h2 className="vendor-brand-title">{title}</h2>
+            {href ? (
+              <a
+                className="vendor-brand-help"
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                title={description}
+                aria-label={helpLabel}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void openUrl(href);
+                }}
+              >
+                ?
+              </a>
+            ) : (
+              <span
+                className="vendor-brand-help"
+                title={description}
+                aria-label={helpLabel}
+              >
+                ?
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      {actions ? <div className="vendor-brand-actions">{actions}</div> : null}
+    </div>
+  );
+}
 
 function collectProviderCustomModels(
   providers: CodexProviderConfig[],
@@ -86,7 +155,8 @@ export function VendorSettingsPanel({
   onUpdateAppSettings,
 }: VendorSettingsPanelProps) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<VendorTab>("claude");
+  const [activeCli, setActiveCli] = useState<CliEngineId>("claude");
+  const [cliSearchQuery, setCliSearchQuery] = useState("");
   const [dialogTarget, setDialogTarget] = useState<ModelDialogTarget>("claude");
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [modelDialogAddMode, setModelDialogAddMode] = useState(false);
@@ -198,7 +268,7 @@ export function VendorSettingsPanel({
       request.target === "codex"
         ? "codex"
         : "claude";
-    setActiveTab(target);
+    setActiveCli(target);
     openModelDialog(target, Boolean(request.addMode));
   }, [openModelDialog]);
 
@@ -219,11 +289,11 @@ export function VendorSettingsPanel({
   }, [loadCodexGlobalConfig]);
 
   useEffect(() => {
-    if (activeTab !== "codex") {
+    if (activeCli !== "codex") {
       return;
     }
     void refreshUnifiedExecExternalStatus();
-  }, [activeTab, refreshUnifiedExecExternalStatus]);
+  }, [activeCli, refreshUnifiedExecExternalStatus]);
 
   useEffect(() => {
     if (didRunLegacyMigrationRef.current) {
@@ -411,60 +481,69 @@ export function VendorSettingsPanel({
     [claudeModels, codexModels, dialogTarget],
   );
 
-  const handleUnsupportedCliClick = useCallback(
-    (label: string) => {
-      pushErrorToast({
-        title: label,
-        message: t("settings.vendor.cliComingSoon"),
-        variant: "info",
-      });
-    },
-    [t],
-  );
-
   const engineNavItems: CliEngineNavItem[] = buildCliEngineNavItems({
     claudeHasConfig: Boolean(claude.currentConfig),
     codexHasConfig: codexGlobalConfigExists,
   });
+  const filteredEngineNavItems = useMemo(() => {
+    const normalizedQuery = cliSearchQuery.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return engineNavItems;
+    }
+    return engineNavItems.filter((item) =>
+      item.label.toLowerCase().includes(normalizedQuery),
+    );
+  }, [cliSearchQuery, engineNavItems]);
 
   return (
     <div
       className={cn(
         "vendor-settings-panel",
-        "flex items-start",
+        "flex items-stretch",
         "-ml-[var(--settings-content-pad-x)]",
         "max-md:ml-0 max-md:flex-col",
       )}
     >
       <nav
         className={cn(
-          "vendor-engine-nav vendor-engine-nav-scroll sticky top-0 flex shrink-0 flex-col self-start",
+          "vendor-engine-nav vendor-engine-nav-scroll sticky top-0 flex min-h-0 shrink-0 flex-col self-stretch",
           "max-md:static max-md:w-full max-md:flex-row max-md:px-0",
         )}
         aria-label={t("settings.vendorsTitle")}
       >
-        {engineNavItems.map((item) => (
+        <label className="vendor-engine-search">
+          <Search size={16} aria-hidden="true" />
+          <input
+            type="search"
+            value={cliSearchQuery}
+            placeholder={t("settings.vendor.cliSearchPlaceholder", {
+              defaultValue: "搜索CLI",
+            })}
+            aria-label={t("settings.vendor.cliSearchPlaceholder", {
+              defaultValue: "搜索CLI",
+            })}
+            onChange={(event) => setCliSearchQuery(event.currentTarget.value)}
+          />
+        </label>
+        {filteredEngineNavItems.map((item) => (
           <button
             key={item.key}
             type="button"
             className={cn(
               "vendor-engine-tab flex w-full items-center text-left text-foreground transition-colors",
               "max-md:flex-1",
-              item.supported && activeTab === item.key && "vendor-engine-tab-active",
-              !item.supported && "vendor-engine-tab-disabled",
+              activeCli === item.key && "vendor-engine-tab-active",
+              !item.supported && "vendor-engine-tab-upcoming",
             )}
-            aria-current={item.supported && activeTab === item.key ? "true" : undefined}
-            aria-disabled={item.supported ? undefined : "true"}
-            onClick={() => {
-              if (item.supported) {
-                setActiveTab(item.key);
-                return;
-              }
-              handleUnsupportedCliClick(item.label);
-            }}
+            aria-current={activeCli === item.key ? "true" : undefined}
+            onClick={() => setActiveCli(item.key)}
           >
             <span className="vendor-engine-icon flex shrink-0 items-center justify-center border bg-background">
-              <CliIcon id={item.key} label={item.label} />
+              <CliIcon
+                id={item.key}
+                label={item.label}
+                monochrome={!item.supported}
+              />
             </span>
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
             {item.supported && item.hasConfig ? (
@@ -477,15 +556,18 @@ export function VendorSettingsPanel({
         ))}
       </nav>
 
-      <div className="vendor-settings-content min-w-0 flex-1">
-        <div className="vendor-section-heading">
-          <h3 className="vendor-section-title">{t("settings.vendorsTitle")}</h3>
-          <p className="vendor-section-desc">
-            {t("settings.vendorsDescription")}
-          </p>
-        </div>
-        {activeTab === "claude" ? (
+      <div className="vendor-settings-content min-w-0 flex-1 min-h-0">
+        {activeCli === "claude" ? (
           <div className="vendor-tab-content">
+            <CliBrandHeader
+              id="claude"
+              title="Claude Code CLI"
+              description={t("settings.claudeDescription")}
+              helpLabel={t("settings.vendor.openCliDocs", {
+                defaultValue: "Open docs",
+              })}
+              href={CLI_DOCS_HREF_BY_ID.claude}
+            />
             <ProviderList
               providers={claude.providers}
               loading={claude.loading}
@@ -505,6 +587,7 @@ export function VendorSettingsPanel({
                 </Button>
               }
               onAdd={claude.handleAddProvider}
+              onEditLocalSettings={claude.handleOpenClaudeSettingsJsonDialog}
               onEdit={claude.handleEditProvider}
               onDelete={claude.handleDeleteProvider}
               onSwitch={claude.handleSwitchProvider}
@@ -516,6 +599,11 @@ export function VendorSettingsPanel({
               onClose={claude.handleCloseProviderDialog}
               onSave={claude.handleSaveProvider}
             />
+            <ClaudeSettingsJsonDialog
+              isOpen={claude.claudeSettingsJsonDialogOpen}
+              onClose={claude.handleCloseClaudeSettingsJsonDialog}
+              onSaved={claude.handleClaudeSettingsJsonSaved}
+            />
             <DeleteConfirmDialog
               isOpen={claude.deleteConfirm.isOpen}
               providerName={claude.deleteConfirm.provider?.name ?? ""}
@@ -523,36 +611,17 @@ export function VendorSettingsPanel({
               onCancel={claude.cancelDeleteProvider}
             />
           </div>
-        ) : (
+        ) : activeCli === "codex" ? (
           <div className="vendor-tab-content">
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  try {
-                    await handleReloadCodexRuntimeConfig();
-                  } finally {
-                    await refreshUnifiedExecConfigViews();
-                  }
-                }}
-                disabled={codexReloadStatus === "reloading"}
-              >
-                {codexReloadStatus === "reloading"
-                  ? t("settings.codexRuntimeReloading")
-                  : t("settings.codexRuntimeReload")}
-              </Button>
-              <span
-                style={{
-                  fontSize: 13,
-                  color: "var(--text-secondary)",
-                  lineHeight: 1.4,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {t("settings.codexRuntimeReloadHint")}
-              </span>
-            </div>
+            <CliBrandHeader
+              id="codex"
+              title="Codex CLI"
+              description={t("settings.codexDescription")}
+              helpLabel={t("settings.vendor.openCliDocs", {
+                defaultValue: "Open docs",
+              })}
+              href={CLI_DOCS_HREF_BY_ID.codex}
+            />
             {codexReloadStatus !== "idle" && (
               <div className="settings-help">
                 {codexReloadStatus === "failed"
@@ -568,105 +637,135 @@ export function VendorSettingsPanel({
                 {codex.codexProviderError}
               </div>
             )}
-            <div className="vendor-codex-runtime-card">
-              <div className="vendor-codex-runtime-card-copy">
-                <div className="vendor-codex-runtime-card-title-row">
-                  <div className="vendor-codex-runtime-card-title">
-                    {t("settings.backgroundTerminal")}
+            <div className="vendor-provider-list vendor-codex-official-config-list">
+              <div className="vendor-list-header">
+                <span className="vendor-list-title">
+                  {t("settings.vendor.officialConfig")}
+                </span>
+              </div>
+
+              <CurrentCodexGlobalConfigCard
+                configLoading={codexGlobalConfigLoading}
+                configContent={codexGlobalConfigContent}
+                configExists={codexGlobalConfigExists}
+                configTruncated={codexGlobalConfigTruncated}
+                configError={codexGlobalConfigError}
+                authLoading={codexAuthConfigLoading}
+                authContent={codexAuthConfigContent}
+                authExists={codexAuthConfigExists}
+                authTruncated={codexAuthConfigTruncated}
+                authError={codexAuthConfigError}
+                onSaved={refreshUnifiedExecConfigViews}
+              />
+
+              <div className="settings-toggle-row vendor-codex-compact-setting">
+                <div className="vendor-codex-compact-setting-copy">
+                  <div className="vendor-plugin-model-entry-main">
+                    <div>
+                      <span className="vendor-plugin-model-entry-title">
+                        {t("settings.backgroundTerminal")}
+                      </span>
+                      {unifiedExecOfficialConfigDetail ? (
+                        <div className="settings-help">
+                          {unifiedExecOfficialConfigDetail}
+                        </div>
+                      ) : (
+                        <div className="settings-help">
+                          {t("settings.backgroundTerminalDesc")}
+                        </div>
+                      )}
+                      {unifiedExecOfficialDefaultDetail ? (
+                        <div className="settings-help">
+                          {unifiedExecOfficialDefaultDetail}
+                        </div>
+                      ) : null}
+                      {unifiedExecExternalStatusLoading ? (
+                        <div className="settings-help">{t("settings.loading")}</div>
+                      ) : null}
+                      {unifiedExecExternalStatusError ? (
+                        <div className="settings-help">
+                          {unifiedExecExternalStatusError}
+                        </div>
+                      ) : null}
+                      {unifiedExecActionNotice ? (
+                        <div className="settings-help">
+                          {unifiedExecActionNotice.message}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                  <span className="vendor-codex-runtime-card-badge">
-                    {t("settings.experimentalBadgeOfficial")}
-                  </span>
                 </div>
-                <div className="vendor-codex-runtime-card-description">
-                  {t("settings.backgroundTerminalDesc")}
-                </div>
-                <div className="settings-help">
-                  {t("settings.backgroundTerminalMarkerDesc")}
-                </div>
-                <div className="settings-help">
-                  {t("settings.backgroundTerminalOfficialActionsDesc")}
-                </div>
-                {unifiedExecOfficialDefaultDetail ? (
-                  <div className="settings-help">{unifiedExecOfficialDefaultDetail}</div>
-                ) : null}
-                {unifiedExecOfficialConfigDetail ? (
-                  <div className="settings-help">{unifiedExecOfficialConfigDetail}</div>
-                ) : null}
-                {unifiedExecExternalStatusLoading ? (
-                  <div className="settings-help">{t("settings.loading")}</div>
-                ) : null}
-                {unifiedExecExternalStatusError ? (
-                  <div className="settings-help">{unifiedExecExternalStatusError}</div>
-                ) : null}
-                {unifiedExecActionNotice ? (
-                  <div className="settings-help">{unifiedExecActionNotice.message}</div>
-                ) : null}
-                <div className="vendor-codex-runtime-card-actions">
-                  <Button
+                <div
+                  className="settings-segmented vendor-codex-runtime-segmented"
+                  role="group"
+                  aria-label={t("settings.backgroundTerminal")}
+                >
+                  <button
                     type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleSetUnifiedExecOfficialOverride(true)}
-                    disabled={unifiedExecActionBusy}
-                  >
-                    {t("settings.backgroundTerminalOfficialWriteEnabled")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleSetUnifiedExecOfficialOverride(false)}
-                    disabled={unifiedExecActionBusy}
-                  >
-                    {t("settings.backgroundTerminalOfficialWriteDisabled")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
+                    className={cn(
+                      "settings-segmented-btn",
+                      unifiedExecExternalStatus?.hasExplicitUnifiedExec !== true &&
+                        "active",
+                    )}
                     onClick={() => void handleRestoreUnifiedExecOfficialDefault()}
                     disabled={unifiedExecActionBusy}
                   >
                     {t("settings.backgroundTerminalFollowOfficial")}
-                  </Button>
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "settings-segmented-btn",
+                      unifiedExecExternalStatus?.hasExplicitUnifiedExec === true &&
+                        unifiedExecExternalStatus.explicitUnifiedExecValue === true &&
+                        "active",
+                    )}
+                    onClick={() => void handleSetUnifiedExecOfficialOverride(true)}
+                    disabled={unifiedExecActionBusy}
+                  >
+                    {t("settings.backgroundTerminalOfficialWriteEnabled")}
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "settings-segmented-btn",
+                      unifiedExecExternalStatus?.hasExplicitUnifiedExec === true &&
+                        unifiedExecExternalStatus.explicitUnifiedExecValue === false &&
+                        "active",
+                    )}
+                    onClick={() => void handleSetUnifiedExecOfficialOverride(false)}
+                    disabled={unifiedExecActionBusy}
+                  >
+                    {t("settings.backgroundTerminalOfficialWriteDisabled")}
+                  </button>
                 </div>
               </div>
-            </div>
-            <CurrentCodexGlobalConfigCard
-              configLoading={codexGlobalConfigLoading}
-              configContent={codexGlobalConfigContent}
-              configExists={codexGlobalConfigExists}
-              configTruncated={codexGlobalConfigTruncated}
-              configError={codexGlobalConfigError}
-              authLoading={codexAuthConfigLoading}
-              authContent={codexAuthConfigContent}
-              authExists={codexAuthConfigExists}
-              authTruncated={codexAuthConfigTruncated}
-              authError={codexAuthConfigError}
-            />
-            <div className="vendor-plugin-model-entry vendor-provider-label-toggle">
-              <div className="vendor-plugin-model-entry-main">
-                <LayoutList size={16} />
-                <div>
-                  <span className="vendor-plugin-model-entry-title">
-                    {t("settings.sidebarProviderLabels")}
-                  </span>
-                  <div className="settings-help">
-                    {t("settings.sidebarProviderLabelsDesc")}
+
+              <div className="settings-toggle-row vendor-codex-compact-setting">
+                <div className="vendor-codex-compact-setting-copy">
+                  <div className="vendor-plugin-model-entry-main">
+                    <LayoutList size={16} />
+                    <div>
+                      <span className="vendor-plugin-model-entry-title">
+                        {t("settings.sidebarProviderLabels")}
+                      </span>
+                      <div className="settings-help">
+                        {t("settings.sidebarProviderLabelsDesc")}
+                      </div>
+                    </div>
                   </div>
                 </div>
+                <Switch
+                  checked={appSettings.showSidebarProviderLabels === true}
+                  aria-label={t("settings.sidebarProviderLabels")}
+                  onCheckedChange={(checked) =>
+                    void onUpdateAppSettings({
+                      ...appSettings,
+                      showSidebarProviderLabels: checked,
+                    })
+                  }
+                />
               </div>
-              <Switch
-                checked={appSettings.showSidebarProviderLabels === true}
-                aria-label={t("settings.sidebarProviderLabels")}
-                onCheckedChange={(checked) =>
-                  void onUpdateAppSettings({
-                    ...appSettings,
-                    showSidebarProviderLabels: checked,
-                  })
-                }
-              />
             </div>
             <CodexProviderList
               providers={codex.codexProviders}
@@ -702,6 +801,32 @@ export function VendorSettingsPanel({
               onConfirm={codex.confirmDeleteCodexProvider}
               onCancel={codex.cancelDeleteCodexProvider}
             />
+          </div>
+        ) : (
+          <div className="vendor-tab-content">
+            <CliBrandHeader
+              id={activeCli}
+              title={
+                engineNavItems.find((item) => item.key === activeCli)?.label ??
+                activeCli
+              }
+              description={t("settings.vendor.cliComingSoon", {
+                defaultValue: "Support is coming soon.",
+              })}
+              helpLabel={t("settings.vendor.openCliDocs", {
+                defaultValue: "Open docs",
+              })}
+              href={
+                engineNavItems.find((item) => item.key === activeCli)?.docsUrl ??
+                CLI_DOCS_HREF_BY_ID.claude
+              }
+              monochromeLogo
+            />
+            <div className="vendor-empty">
+              {t("settings.vendor.cliComingSoonDetail", {
+                defaultValue: "正在适配此CLI，即将开放",
+              })}
+            </div>
           </div>
         )}
       </div>

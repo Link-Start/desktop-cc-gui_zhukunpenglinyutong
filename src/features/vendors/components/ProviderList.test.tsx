@@ -48,7 +48,7 @@ describe("buildClaudeProviderReorderIds", () => {
 });
 
 describe("ProviderList", () => {
-  it("renders local and active providers outside the draggable list", () => {
+  it("renders the official config first and third-party providers separately", () => {
     const { container } = render(
       <ProviderList
         providers={[
@@ -62,6 +62,7 @@ describe("ProviderList", () => {
         ]}
         loading={false}
         onAdd={vi.fn()}
+        onEditLocalSettings={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onSwitch={vi.fn()}
@@ -74,11 +75,16 @@ describe("ProviderList", () => {
     ).map((element) => element.textContent);
 
     expect(cardNames).toEqual([
-      "settings.vendor.localProviderName",
+      "settings.vendor.officialConfig",
       "ProviderB",
       "ProviderA",
       "ProviderC",
     ]);
+    expect(
+      Array.from(container.querySelectorAll(".vendor-list-title")).map(
+        (element) => element.textContent,
+      ),
+    ).toEqual(["settings.vendor.officialConfig", "settings.vendor.thirdPartyConfig"]);
     expect(
       container.querySelectorAll("[title='settings.vendor.dragToReorder']"),
     ).toHaveLength(2);
@@ -86,16 +92,21 @@ describe("ProviderList", () => {
 
   it("keeps enable, edit, and delete actions in the compact table", () => {
     const onSwitch = vi.fn();
+    const onEditLocalSettings = vi.fn();
     const onEdit = vi.fn();
     const onDelete = vi.fn();
+    const localProvider = provider("__local_settings_json__", {
+      isLocalProvider: true,
+    });
     const providerA = provider("a");
     const providerB = provider("b", { isActive: true });
 
     render(
       <ProviderList
-        providers={[providerA, providerB]}
+        providers={[localProvider, providerA, providerB]}
         loading={false}
         onAdd={vi.fn()}
+        onEditLocalSettings={onEditLocalSettings}
         onEdit={onEdit}
         onDelete={onDelete}
         onSwitch={onSwitch}
@@ -104,12 +115,14 @@ describe("ProviderList", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "settings.vendor.enable" }),
+      screen.getAllByRole("button", { name: "settings.vendor.enable" })[1],
     );
     fireEvent.click(screen.getAllByTitle("settings.vendor.edit")[0]);
+    fireEvent.click(screen.getAllByTitle("settings.vendor.edit")[1]);
     fireEvent.click(screen.getAllByTitle("settings.vendor.delete")[0]);
 
     expect(onSwitch).toHaveBeenCalledWith("a");
+    expect(onEditLocalSettings).toHaveBeenCalledTimes(1);
     expect(onEdit).toHaveBeenCalledWith(providerB);
     expect(onDelete).toHaveBeenCalledWith(providerB);
   });
@@ -120,6 +133,7 @@ describe("ProviderList", () => {
         providers={[provider("a", { name: "midsummer 自用1" })]}
         loading={false}
         onAdd={vi.fn()}
+        onEditLocalSettings={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onSwitch={vi.fn()}
@@ -144,6 +158,7 @@ describe("ProviderList", () => {
           <button type="button">settings.vendor.pluginModels</button>
         }
         onAdd={vi.fn()}
+        onEditLocalSettings={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onSwitch={vi.fn()}

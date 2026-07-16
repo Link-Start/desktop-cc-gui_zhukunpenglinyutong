@@ -34,7 +34,7 @@ export function CodexProviderList({
     <div className="vendor-provider-list">
       <div className="vendor-list-header">
         <span className="vendor-list-title">
-          {t("settings.vendor.allCodexProviders")}
+          {t("settings.vendor.thirdPartyConfig")}
         </span>
         <div className="vendor-list-actions">
           {headerActions}

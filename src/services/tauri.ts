@@ -148,6 +148,7 @@ export {
   writeAgentMd,
   writeClaudeMd,
   writeGlobalAgentsMd,
+  writeGlobalCodexAuthJson,
   writeGlobalCodexConfigToml,
 } from "./tauri/textFiles";
 export { getComputerUseBridgeStatus, runComputerUseActivationProbe, runComputerUseCodexBroker, runComputerUseHostContractDiagnostics } from "./tauri/computerUse";
@@ -312,12 +313,14 @@ export {
   fetchClaudeProviderModels,
   getClaudeAlwaysThinkingEnabled,
   getClaudeProviders,
+  readClaudeSettingsJson,
   getCodexProviders,
   getCurrentClaudeConfig,
   getGeminiVendorPreflight,
   getGeminiVendorSettings,
   reorderClaudeProviders,
   saveGeminiVendorSettings,
+  saveClaudeSettingsJson,
   setClaudeAlwaysThinkingEnabled,
   switchClaudeProvider,
   switchCodexProvider,

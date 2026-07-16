@@ -643,7 +643,31 @@ describe("SettingsView projects display", () => {
 });
 
 describe("SettingsView Display", () => {
-  it("opens CLI configuration by default when no external section is provided", async () => {
+  it("uses the titlebar for the active settings section title and description", async () => {
+    renderDisplaySection({ initialSection: null });
+    await flushSettingsViewEffects();
+
+    const header = document.querySelector(".settings-header") as HTMLElement | null;
+    if (!header) {
+      throw new Error("Expected settings header");
+    }
+
+    const headerQueries = within(header);
+    expect(headerQueries.getByText("Basic Settings")).toBeTruthy();
+    expect(headerQueries.getByText("settings.basicDescription")).toBeTruthy();
+    expect(
+      document.querySelector(".settings-content .settings-section-title"),
+    ).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings.sidebarProviders" }),
+    );
+
+    expect(headerQueries.getByText("settings.sidebarProviders")).toBeTruthy();
+    expect(headerQueries.getByText("settings.vendorsDescription")).toBeTruthy();
+  });
+
+  it("opens basic settings by default when no external section is provided", async () => {
     renderDisplaySection({ initialSection: null });
     await flushSettingsViewEffects();
     const sidebar = document.querySelector(
@@ -658,10 +682,10 @@ describe("SettingsView Display", () => {
       sidebarQueries.getByRole("button", {
         name: "settings.sidebarProviders",
       }).className,
-    ).toContain("active");
+    ).not.toContain("active");
     expect(
       sidebarQueries.getByRole("button", { name: "Basic Settings" }).className,
-    ).not.toContain("active");
+    ).toContain("active");
   });
 
   it("shows consolidated settings entries and keeps removed sidebar entries hidden", async () => {
@@ -715,10 +739,12 @@ describe("SettingsView Display", () => {
     });
     expect(
       Array.from(sidebar.querySelectorAll(".settings-nav")).indexOf(
-        providersEntry,
+        basicEntry,
       ),
     ).toBeLessThan(
-      Array.from(sidebar.querySelectorAll(".settings-nav")).indexOf(basicEntry),
+      Array.from(sidebar.querySelectorAll(".settings-nav")).indexOf(
+        providersEntry,
+      ),
     );
     expect(
       sidebarQueries.getByRole("button", { name: "Project Management" }),
@@ -2481,7 +2507,7 @@ describe("SettingsView Shortcuts", () => {
     });
   });
 
-  it("closes on Escape", async () => {
+  it("does not close on Escape", () => {
     let unmount = () => {};
     const onClose = vi.fn(() => {
       unmount();
@@ -2522,8 +2548,6 @@ describe("SettingsView Shortcuts", () => {
 
     fireEvent.keyDown(window, { key: "Escape", bubbles: true });
 
-    await waitFor(() => {
-      expect(onClose).toHaveBeenCalled();
-    });
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

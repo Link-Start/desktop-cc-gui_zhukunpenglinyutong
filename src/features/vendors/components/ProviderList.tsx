@@ -25,6 +25,7 @@ interface ProviderListProps {
   loading: boolean;
   headerActions?: ReactNode;
   onAdd: () => void;
+  onEditLocalSettings: () => void;
   onEdit: (provider: ProviderConfig) => void;
   onDelete: (provider: ProviderConfig) => void;
   onSwitch: (id: string) => void;
@@ -68,6 +69,7 @@ export function ProviderList({
   loading,
   headerActions,
   onAdd,
+  onEditLocalSettings,
   onEdit,
   onDelete,
   onSwitch,
@@ -114,6 +116,7 @@ export function ProviderList({
     options: {
       dragHandle?: ReactNode;
       isDragging?: boolean;
+      includeDragCell?: boolean;
       rowProps?: HTMLAttributes<HTMLTableRowElement>;
       rowRef?: Ref<HTMLTableRowElement>;
       rowStyle?: CSSProperties;
@@ -138,15 +141,17 @@ export function ProviderList({
           options.rowProps?.className,
         )}
       >
-        <td data-slot="table-cell" className="vendor-provider-table-drag-cell">
-          {options.dragHandle}
-        </td>
+        {options.includeDragCell !== false ? (
+          <td data-slot="table-cell" className="vendor-provider-table-drag-cell">
+            {options.dragHandle}
+          </td>
+        ) : null}
         <td data-slot="table-cell" className="vendor-provider-table-main-cell">
           <div className="vendor-card-info">
             <div className="vendor-card-name">
               {isLocalProvider && <FileText size={14} />}
               {isLocalProvider
-                ? t("settings.vendor.localProviderName")
+                ? t("settings.vendor.officialConfig")
                 : renderVendorProviderDisplayName(provider.name)}
               {provider.source === "cc-switch" && (
                 <Badge
@@ -203,7 +208,17 @@ export function ProviderList({
           data-slot="table-cell"
           className="vendor-provider-table-actions-cell"
         >
-          {!isLocalProvider && (
+          {isLocalProvider ? (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={onEditLocalSettings}
+              title={t("settings.vendor.edit")}
+              aria-label={t("settings.vendor.edit")}
+            >
+              <Pencil aria-hidden />
+            </Button>
+          ) : (
             <>
               <Button
                 variant="ghost"
@@ -231,9 +246,31 @@ export function ProviderList({
 
   return (
     <div className="vendor-provider-list">
+      {localProvider && (
+        <div className="vendor-provider-list">
+          <div className="vendor-list-header">
+            <span className="vendor-list-title">
+              {t("settings.vendor.officialConfig")}
+            </span>
+          </div>
+
+          <VendorProviderTable
+            loading={false}
+            empty={false}
+            emptyText=""
+            showHeader={false}
+            renderRows={() => (
+              <tbody className="vendor-provider-table-body" data-slot="table-body">
+                {renderProviderRow(localProvider, { includeDragCell: false })}
+              </tbody>
+            )}
+          />
+        </div>
+      )}
+
       <div className="vendor-list-header">
         <span className="vendor-list-title">
-          {t("settings.vendor.allProviders")}
+          {t("settings.vendor.thirdPartyConfig")}
         </span>
         <div className="vendor-list-actions">
           {headerActions}
@@ -245,17 +282,16 @@ export function ProviderList({
 
       <VendorProviderTable
         loading={loading}
-        empty={regularProviders.length === 0 && !localProvider}
+        empty={regularProviders.length === 0}
         emptyText={t("settings.vendor.emptyState")}
         includeDragColumn
         renderRows={() => (
           <>
-            {(localProvider || activeProvider) && (
+            {activeProvider && (
               <tbody
                 className="vendor-provider-table-body"
                 data-slot="table-body"
               >
-                {localProvider && renderProviderRow(localProvider)}
                 {activeProvider && renderProviderRow(activeProvider)}
               </tbody>
             )}

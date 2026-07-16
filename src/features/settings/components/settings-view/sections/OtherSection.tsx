@@ -29,8 +29,8 @@ import { CostBudgetSettingsSection } from "./CostBudgetSettingsSection";
 import { PerfJankLivePanel } from "./PerfJankLivePanel";
 
 type OtherSectionProps = {
-  title: string;
-  description: string;
+  title: string | null;
+  description: string | null;
   sessionRadarRecentCompletedSessions: SessionRadarEntry[];
   onDeleteSessionRadarHistory: (
     entries: SessionRadarEntry[],
@@ -112,8 +112,10 @@ export function OtherSection({
 
   return (
     <section className="settings-section">
-      <div className="settings-section-title">{title}</div>
-      <div className="settings-section-subtitle">{description}</div>
+      {title ? <div className="settings-section-title">{title}</div> : null}
+      {description ? (
+        <div className="settings-section-subtitle">{description}</div>
+      ) : null}
       <HistoryCompletionSettings />
       <Separator className="my-4" />
       <div className="settings-subsection-title">
