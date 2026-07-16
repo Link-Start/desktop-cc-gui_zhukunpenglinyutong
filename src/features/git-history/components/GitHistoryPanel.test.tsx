@@ -66,18 +66,30 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 vi.mock("./GitHistoryWorktreePanel", () => ({
   GitHistoryWorktreePanel: ({
     onOpenDiffPath,
+    repositoryRoot,
+    rootFolderName,
   }: {
     onOpenDiffPath?: (path: string) => void;
-  }) => (
-    <div data-testid="worktree-panel">
-      <button
-        type="button"
-        onClick={() => onOpenDiffPath?.("src/worktree/ChangedFile.ts")}
+    repositoryRoot?: string | null;
+    rootFolderName?: string;
+  }) => {
+    const [mountedRepositoryRoot] = useState(repositoryRoot);
+    return (
+      <div
+        data-testid="worktree-panel"
+        data-mounted-repository-root={mountedRepositoryRoot ?? "legacy"}
+        data-repository-root={repositoryRoot ?? "legacy"}
+        data-root-folder-name={rootFolderName}
       >
-        open-worktree-preview
-      </button>
-    </div>
-  ),
+        <button
+          type="button"
+          onClick={() => onOpenDiffPath?.("src/worktree/ChangedFile.ts")}
+        >
+          open-worktree-preview
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock("../../git/components/GitDiffViewer", () => ({
@@ -381,6 +393,15 @@ describe("GitHistoryPanel interactions", () => {
 
     expect(onSelectRepository).toHaveBeenCalledWith("services/b");
     await waitFor(() => {
+      expect(
+        screen.getByTestId("worktree-panel").getAttribute("data-repository-root"),
+      ).toBe("services/b");
+      expect(
+        screen.getByTestId("worktree-panel").getAttribute("data-mounted-repository-root"),
+      ).toBe("services/b");
+      expect(
+        screen.getByTestId("worktree-panel").getAttribute("data-root-folder-name"),
+      ).toBe("service-b");
       expect(tauriService.listGitBranches).toHaveBeenCalledWith("w1", "services/b");
       expect(tauriService.getGitStatus).toHaveBeenCalledWith("w1", "services/b");
       expect(tauriService.getGitCommitHistory).toHaveBeenCalledWith(

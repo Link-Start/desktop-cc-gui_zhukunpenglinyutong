@@ -51,6 +51,7 @@ import {
 
 type GitHistoryWorktreePanelProps = {
   workspaceId: string;
+  repositoryRoot?: string | null;
   listView: "flat" | "tree";
   commitSectionCollapsed?: boolean;
   rootFolderName?: string;
@@ -187,6 +188,7 @@ function getGroupInclusionState(
 
 export function GitHistoryWorktreePanel({
   workspaceId,
+  repositoryRoot = null,
   listView,
   commitSectionCollapsed = false,
   rootFolderName,
@@ -199,6 +201,48 @@ export function GitHistoryWorktreePanel({
   const resolvedRootFolderName = useMemo(
     () => rootFolderName?.trim() || getPathLeafName(workspaceId) || workspaceId,
     [rootFolderName, workspaceId],
+  );
+  const scopedStageGitFile = useCallback(
+    (targetWorkspaceId: string, path: string) =>
+      repositoryRoot === null
+        ? stageGitFile(targetWorkspaceId, path)
+        : stageGitFile(targetWorkspaceId, path, repositoryRoot),
+    [repositoryRoot],
+  );
+  const scopedStageGitAll = useCallback(
+    (targetWorkspaceId: string) =>
+      repositoryRoot === null
+        ? stageGitAll(targetWorkspaceId)
+        : stageGitAll(targetWorkspaceId, repositoryRoot),
+    [repositoryRoot],
+  );
+  const scopedUnstageGitFile = useCallback(
+    (targetWorkspaceId: string, path: string) =>
+      repositoryRoot === null
+        ? unstageGitFile(targetWorkspaceId, path)
+        : unstageGitFile(targetWorkspaceId, path, repositoryRoot),
+    [repositoryRoot],
+  );
+  const scopedRevertGitFile = useCallback(
+    (targetWorkspaceId: string, path: string) =>
+      repositoryRoot === null
+        ? revertGitFile(targetWorkspaceId, path)
+        : revertGitFile(targetWorkspaceId, path, repositoryRoot),
+    [repositoryRoot],
+  );
+  const scopedRevertGitAll = useCallback(
+    (targetWorkspaceId: string) =>
+      repositoryRoot === null
+        ? revertGitAll(targetWorkspaceId)
+        : revertGitAll(targetWorkspaceId, repositoryRoot),
+    [repositoryRoot],
+  );
+  const scopedCommitGit = useCallback(
+    (targetWorkspaceId: string, message: string) =>
+      repositoryRoot === null
+        ? commitGit(targetWorkspaceId, message)
+        : commitGit(targetWorkspaceId, message, repositoryRoot),
+    [repositoryRoot],
   );
 
   const [status, setStatus] = useState<GitStatusState>(EMPTY_STATUS);
@@ -224,7 +268,9 @@ export function GitHistoryWorktreePanel({
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     try {
-      const next = await getGitStatus(workspaceId);
+      const next = repositoryRoot === null
+        ? await getGitStatus(workspaceId)
+        : await getGitStatus(workspaceId, repositoryRoot);
       if (requestIdRef.current !== requestId) {
         return;
       }
@@ -249,14 +295,21 @@ export function GitHistoryWorktreePanel({
       const message = error instanceof Error ? error.message : String(error);
       setStatusError(message);
     }
-  }, [onSummaryChange, workspaceId]);
+  }, [onSummaryChange, repositoryRoot, workspaceId]);
 
   useEffect(() => {
     requestIdRef.current += 1;
     setStatus(EMPTY_STATUS);
+    onSummaryChange?.({
+      changedFiles: 0,
+      totalAdditions: 0,
+      totalDeletions: 0,
+    });
     setStatusError(null);
     setOperationError(null);
+    setCommitMessage("");
     setCommitMessageError(null);
+    setCommitMessageContextMenu(null);
     setDiscardDialogPaths(null);
     setCollapsedFolders(new Set());
     setDiscardAllDialogOpen(false);
@@ -267,7 +320,7 @@ export function GitHistoryWorktreePanel({
     return () => {
       window.clearInterval(timer);
     };
-  }, [refreshStatus, workspaceId]);
+  }, [onSummaryChange, refreshStatus]);
 
   useEffect(() => {
     return () => {
@@ -317,10 +370,16 @@ export function GitHistoryWorktreePanel({
     setDiscardDialogPaths(null);
     await handleMutation(async () => {
       for (const path of targetPaths) {
-        await revertGitFile(workspaceId, path);
+        await scopedRevertGitFile(workspaceId, path);
       }
     });
-  }, [discardDialogPaths, handleMutation, operationLoading, workspaceId]);
+  }, [
+    discardDialogPaths,
+    handleMutation,
+    operationLoading,
+    scopedRevertGitFile,
+    workspaceId,
+  ]);
 
   const handleDiscardAll = useCallback(() => {
     if (operationLoading || status.unstagedFiles.length === 0) {
@@ -334,8 +393,8 @@ export function GitHistoryWorktreePanel({
       return;
     }
     setDiscardAllDialogOpen(false);
-    await handleMutation(() => revertGitAll(workspaceId));
-  }, [handleMutation, operationLoading, workspaceId]);
+    await handleMutation(() => scopedRevertGitAll(workspaceId));
+  }, [handleMutation, operationLoading, scopedRevertGitAll, workspaceId]);
 
   const hasWorktreeChanges = status.stagedFiles.length > 0 || status.unstagedFiles.length > 0;
   const stagedFiles = useMemo(
@@ -432,12 +491,23 @@ export function GitHistoryWorktreePanel({
       setCommitMessageError(null);
       setCommitMessageLoading(true);
       try {
-        const generated = await generateCommitMessageWithEngine(
-          workspaceId,
-          language,
-          engine,
-          selectedPaths,
-        );
+        const generated = repositoryRoot === null
+          ? await generateCommitMessageWithEngine(
+              workspaceId,
+              language,
+              engine,
+              selectedPaths,
+            )
+          : await generateCommitMessageWithEngine(
+              workspaceId,
+              language,
+              engine,
+              undefined,
+              [{
+                repositoryRoot,
+                selectedPaths: selectedPaths ?? status.files.map((file) => file.path),
+              }],
+            );
         setCommitMessage(sanitizeGeneratedCommitMessage(generated));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -446,7 +516,7 @@ export function GitHistoryWorktreePanel({
         setCommitMessageLoading(false);
       }
     },
-    [commitLoading, commitMessageLoading, workspaceId],
+    [commitLoading, commitMessageLoading, repositoryRoot, status.files, workspaceId],
   );
 
   const showCommitMessageLanguageMenu = useCallback(
@@ -553,9 +623,9 @@ export function GitHistoryWorktreePanel({
           },
           selectedPaths: selectedPaths ?? selectedCommitPaths,
           commitMessage,
-          stageFile: stageGitFile,
-          unstageFile: unstageGitFile,
-          commit: commitGit,
+          stageFile: scopedStageGitFile,
+          unstageFile: scopedUnstageGitFile,
+          commit: scopedCommitGit,
           formatRestoreSelectionFailed: (error) =>
             t("git.commitRestoreSelectionFailed", { error }),
         });
@@ -582,6 +652,9 @@ export function GitHistoryWorktreePanel({
       onMutated,
       operationLoading,
       refreshStatus,
+      scopedCommitGit,
+      scopedStageGitFile,
+      scopedUnstageGitFile,
       selectedCommitPaths,
       status.stagedFiles,
       status.unstagedFiles,
@@ -662,8 +735,8 @@ export function GitHistoryWorktreePanel({
           onKeySelect={() => onOpenDiffPath?.(file.path)}
           onOpenPreview={() => onOpenDiffPath?.(file.path)}
           onContextMenu={() => undefined}
-          onStageFile={section === "unstaged" ? (path) => handleMutation(() => stageGitFile(workspaceId, path)) : undefined}
-          onUnstageFile={section === "staged" ? (path) => handleMutation(() => unstageGitFile(workspaceId, path)) : undefined}
+          onStageFile={section === "unstaged" ? (path) => handleMutation(() => scopedStageGitFile(workspaceId, path)) : undefined}
+          onUnstageFile={section === "staged" ? (path) => handleMutation(() => scopedUnstageGitFile(workspaceId, path)) : undefined}
           onDiscardFile={section === "unstaged" ? (path) => discardFiles([path]) : undefined}
           onSetCommitSelection={setCommitSelection}
         />
@@ -679,6 +752,8 @@ export function GitHistoryWorktreePanel({
       onOpenDiffPath,
       operationLoading,
       partialCommitPathSet,
+      scopedStageGitFile,
+      scopedUnstageGitFile,
       setCommitSelection,
       workspaceId,
     ],
@@ -870,12 +945,12 @@ export function GitHistoryWorktreePanel({
                 onSetCommitSelection={setCommitSelection}
                 onStageAllChanges={
                   compactSection === "unstaged"
-                    ? () => handleMutation(() => stageGitAll(workspaceId))
+                    ? () => handleMutation(() => scopedStageGitAll(workspaceId))
                     : undefined
                 }
                 onUnstageFile={
                   compactSection === "staged"
-                    ? (path) => handleMutation(() => unstageGitFile(workspaceId, path))
+                    ? (path) => handleMutation(() => scopedUnstageGitFile(workspaceId, path))
                     : undefined
                 }
                 onDiscardFiles={
@@ -902,7 +977,7 @@ export function GitHistoryWorktreePanel({
                   toggleableFilePaths={stagedToggleablePaths}
                   filePaths={stagedFilePaths}
                   onSetCommitSelection={setCommitSelection}
-                  onUnstageFile={(path) => handleMutation(() => unstageGitFile(workspaceId, path))}
+                  onUnstageFile={(path) => handleMutation(() => scopedUnstageGitFile(workspaceId, path))}
                 />
               </div>
               <div
@@ -929,7 +1004,7 @@ export function GitHistoryWorktreePanel({
                   toggleableFilePaths={unstagedToggleablePaths}
                   filePaths={unstagedFilePaths}
                   onSetCommitSelection={setCommitSelection}
-                  onStageAllChanges={() => handleMutation(() => stageGitAll(workspaceId))}
+                  onStageAllChanges={() => handleMutation(() => scopedStageGitAll(workspaceId))}
                   onDiscardFiles={() => {
                     handleDiscardAll();
                   }}

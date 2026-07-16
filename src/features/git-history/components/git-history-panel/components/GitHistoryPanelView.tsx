@@ -503,7 +503,9 @@ export function renderGitHistoryPanelView(scope: any) {
             </div>
           </div>
           <GitHistoryWorktreePanel
+            key={`${workspace.id}:${selectedRepositoryRoot === null ? "legacy" : `repository:${selectedRepositoryRoot}`}`}
             workspaceId={workspace.id}
+            repositoryRoot={selectedRepositoryRoot}
             listView={overviewListView}
             commitSectionCollapsed={overviewCommitSectionCollapsed}
             rootFolderName={repositoryRootName}

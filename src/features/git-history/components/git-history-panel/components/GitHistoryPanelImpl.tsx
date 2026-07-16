@@ -272,13 +272,28 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     onError: handleRepositoryOptionsError,
   });
   const repositoryRootName = useMemo(
-    () =>
-      getPathLeafName(workspace?.settings?.gitRoot) ||
-      getPathLeafName(workspace?.path) ||
-      workspace?.name?.trim() ||
-      workspace?.id ||
-      "",
-    [workspace?.id, workspace?.name, workspace?.path, workspace?.settings?.gitRoot],
+    () => {
+      const selectedRepositoryName = repositories.find(
+        (repository) => repository.repositoryRoot === selectedRepositoryRoot,
+      )?.displayName?.trim();
+      return (
+        selectedRepositoryName ||
+        getPathLeafName(selectedRepositoryRoot) ||
+        getPathLeafName(workspace?.settings?.gitRoot) ||
+        getPathLeafName(workspace?.path) ||
+        workspace?.name?.trim() ||
+        workspace?.id ||
+        ""
+      );
+    },
+    [
+      repositories,
+      selectedRepositoryRoot,
+      workspace?.id,
+      workspace?.name,
+      workspace?.path,
+      workspace?.settings?.gitRoot,
+    ],
   );
   const persistenceKey = useMemo(
     () => `gitHistoryPanel:${workspaceId ?? "default"}`,

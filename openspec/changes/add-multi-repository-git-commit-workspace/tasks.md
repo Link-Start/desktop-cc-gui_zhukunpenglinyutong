@@ -52,3 +52,16 @@
 - [x] 9.2 [P0] 为 Git History command flow 补齐 optional `repositoryRoot` mapping，并在 Tauri/daemon 复用 `resolve_git_root_for_scope`；依赖：9.1；验证：service payload 与 Rust scoped-root tests。
 - [x] 9.3 [P0] 补充切仓后的 branch/history/detail refresh 回归测试，禁止只验证 picker callback；依赖：9.1、9.2；验证：focused GitHistory/AppShell tests。
 - [x] 9.4 [P0] 同步 Trellis contract，并运行 focused tests、lint、typecheck、runtime contracts、Rust checks 与 strict OpenSpec validation；依赖：9.1-9.3；验证：全部通过或记录明确 pre-existing failure。
+
+## 10. Fix Git History Worktree Scope Parity
+
+- [x] 10.1 [P0] 将 Git History 左侧 `GitHistoryWorktreePanel` 接入 selected `repositoryRoot`，使 status、stage、unstage、revert、commit 与 AI commit message generation 使用同一 repository identity；依赖：9.2；验证：真实组件 A→B 切仓与 scoped mutation tests。
+- [x] 10.2 [P1] 左侧 worktree root label 跟随 selected repository，并在 scope change 时清理旧仓瞬态 state、拒绝 stale response；依赖：10.1；验证：旧文件不残留且 root label 更新。
+- [x] 10.3 [P0] 运行 focused Vitest、typecheck、runtime contracts 与 strict OpenSpec validation；依赖：10.1、10.2；验证：全部通过或记录明确 pre-existing failure。
+
+## 11. Isolate Git History Repository Lifetime
+
+- [x] 11.1 [P0] 将 `GitHistoryWorktreePanel` component key 绑定 `workspaceId + repositoryRoot`，严格区分 legacy `null`、workspace-root `""` 与 child root；依赖：10.1；验证：History repository picker 切换后 worktree component remount。
+- [x] 11.2 [P0] scope change 时立即清零 parent worktree summary，防止新仓 loading/error 期间残留旧仓统计；依赖：11.1；验证：summary callback 先收到 zero，失败后仍保持 zero。
+- [x] 11.3 [P0] 增加 in-flight mutation、in-flight AI generation 与 same-relative-path selection regression tests，确保旧 repository closure 不污染当前 repository UI；依赖：11.1；验证：focused GitHistory tests。
+- [x] 11.4 [P0] 同步 Trellis executable contract，并运行 focused tests、lint、typecheck、runtime contracts 与 strict OpenSpec validation；依赖：11.1-11.3；验证：全部通过或记录明确 pre-existing failure。

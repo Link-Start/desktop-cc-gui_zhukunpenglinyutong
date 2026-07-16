@@ -3,19 +3,22 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GitHistoryWorktreePanel } from "./GitHistoryWorktreePanel";
 
-const mockGetGitStatus = vi.fn<(workspaceId: string) => Promise<unknown>>();
-const mockCommitGit = vi.fn<(workspaceId: string, message: string) => Promise<void>>();
+const mockGetGitStatus = vi.fn<(workspaceId: string, repositoryRoot?: string | null) => Promise<unknown>>();
+const mockCommitGit = vi.fn<(workspaceId: string, message: string, repositoryRoot?: string | null) => Promise<void>>();
 const mockGenerateCommitMessage = vi.fn<
   (
     workspaceId: string,
     language?: "zh" | "en",
     engine?: "codex" | "claude" | "gemini" | "opencode",
     selectedPaths?: string[],
+    repositorySelections?: Array<{ repositoryRoot: string; selectedPaths: string[] }>,
   ) => Promise<string>
 >();
-const mockStageGitFile = vi.fn<(workspaceId: string, path: string) => Promise<void>>();
-const mockStageGitAll = vi.fn<(workspaceId: string) => Promise<void>>();
-const mockUnstageGitFile = vi.fn<(workspaceId: string, path: string) => Promise<void>>();
+const mockStageGitFile = vi.fn<(workspaceId: string, path: string, repositoryRoot?: string | null) => Promise<void>>();
+const mockStageGitAll = vi.fn<(workspaceId: string, repositoryRoot?: string | null) => Promise<void>>();
+const mockUnstageGitFile = vi.fn<(workspaceId: string, path: string, repositoryRoot?: string | null) => Promise<void>>();
+const mockRevertGitFile = vi.fn<(workspaceId: string, path: string, repositoryRoot?: string | null) => Promise<void>>();
+const mockRevertGitAll = vi.fn<(workspaceId: string, repositoryRoot?: string | null) => Promise<void>>();
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -71,19 +74,22 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../../../services/tauri", () => ({
-  commitGit: (workspaceId: string, message: string) => mockCommitGit(workspaceId, message),
+  commitGit: (...args: [string, string, (string | null)?]) => mockCommitGit(...args),
   generateCommitMessageWithEngine: (
-    workspaceId: string,
-    language?: "zh" | "en",
-    engine?: "codex" | "claude" | "gemini" | "opencode",
-    selectedPaths?: string[],
-  ) => mockGenerateCommitMessage(workspaceId, language, engine, selectedPaths),
-  getGitStatus: (workspaceId: string) => mockGetGitStatus(workspaceId),
-  revertGitAll: vi.fn(async () => undefined),
-  revertGitFile: vi.fn(async () => undefined),
-  stageGitAll: (workspaceId: string) => mockStageGitAll(workspaceId),
-  stageGitFile: (workspaceId: string, path: string) => mockStageGitFile(workspaceId, path),
-  unstageGitFile: (workspaceId: string, path: string) => mockUnstageGitFile(workspaceId, path),
+    ...args: [
+      string,
+      ("zh" | "en")?,
+      ("codex" | "claude" | "gemini" | "opencode")?,
+      string[]?,
+      Array<{ repositoryRoot: string; selectedPaths: string[] }>?,
+    ]
+  ) => mockGenerateCommitMessage(...args),
+  getGitStatus: (...args: [string, (string | null)?]) => mockGetGitStatus(...args),
+  revertGitAll: (...args: [string, (string | null)?]) => mockRevertGitAll(...args),
+  revertGitFile: (...args: [string, string, (string | null)?]) => mockRevertGitFile(...args),
+  stageGitAll: (...args: [string, (string | null)?]) => mockStageGitAll(...args),
+  stageGitFile: (...args: [string, string, (string | null)?]) => mockStageGitFile(...args),
+  unstageGitFile: (...args: [string, string, (string | null)?]) => mockUnstageGitFile(...args),
 }));
 
 describe("GitHistoryWorktreePanel", () => {
@@ -94,11 +100,15 @@ describe("GitHistoryWorktreePanel", () => {
     mockStageGitFile.mockReset();
     mockStageGitAll.mockReset();
     mockUnstageGitFile.mockReset();
+    mockRevertGitFile.mockReset();
+    mockRevertGitAll.mockReset();
     mockCommitGit.mockResolvedValue(undefined);
     mockGenerateCommitMessage.mockResolvedValue("Generated commit message");
     mockStageGitFile.mockResolvedValue(undefined);
     mockStageGitAll.mockResolvedValue(undefined);
     mockUnstageGitFile.mockResolvedValue(undefined);
+    mockRevertGitFile.mockResolvedValue(undefined);
+    mockRevertGitAll.mockResolvedValue(undefined);
     mockGetGitStatus.mockResolvedValue({
       branchName: "main",
       files: [
@@ -144,6 +154,22 @@ describe("GitHistoryWorktreePanel", () => {
       fireEvent.click(englishItem);
       await Promise.resolve();
     });
+  }
+
+  function renderScopedPanel(repositoryRoot: string, onSummaryChange?: (summary: {
+    changedFiles: number;
+    totalAdditions: number;
+    totalDeletions: number;
+  }) => void) {
+    return (
+      <GitHistoryWorktreePanel
+        key={`w1:repository:${repositoryRoot}`}
+        workspaceId="w1"
+        repositoryRoot={repositoryRoot}
+        listView="tree"
+        onSummaryChange={onSummaryChange}
+      />
+    );
   }
 
   it("renders unified file-tree semantic classes in tree mode", async () => {
@@ -192,6 +218,239 @@ describe("GitHistoryWorktreePanel", () => {
 
     await waitFor(() => {
       expect(mockStageGitFile).toHaveBeenCalledWith("w1", "src/feature/unstaged.ts");
+    });
+  });
+
+  it("reloads visible files and mutations when repository scope changes", async () => {
+    mockGetGitStatus.mockImplementation(async (_workspaceId, repositoryRoot) => {
+      const path = repositoryRoot === "services/b" ? "src/from-b.ts" : "src/from-a.ts";
+      return {
+        branchName: repositoryRoot === "services/b" ? "branch-b" : "branch-a",
+        files: [{ path, status: "M", additions: 1, deletions: 0 }],
+        stagedFiles: [],
+        unstagedFiles: [{ path, status: "M", additions: 1, deletions: 0 }],
+        totalAdditions: 1,
+        totalDeletions: 0,
+      };
+    });
+    const { rerender } = render(
+      <GitHistoryWorktreePanel
+        workspaceId="w1"
+        repositoryRoot="services/a"
+        rootFolderName="service-a"
+        listView="tree"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("src/from-a.ts")).toBeTruthy();
+    }, { timeout: 500 });
+    rerender(
+      <GitHistoryWorktreePanel
+        workspaceId="w1"
+        repositoryRoot="services/b"
+        rootFolderName="service-b"
+        listView="tree"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("src/from-b.ts")).toBeTruthy();
+    }, { timeout: 500 });
+    expect(screen.queryByLabelText("src/from-a.ts")).toBeNull();
+    expect(screen.getByText("service-b", { selector: ".diff-tree-folder-name" })).toBeTruthy();
+    expect(mockGetGitStatus).toHaveBeenCalledWith("w1", "services/b");
+
+    fireEvent.click(screen.getByRole("button", { name: "Stage file" }));
+    await waitFor(() => {
+      expect(mockStageGitFile).toHaveBeenCalledWith("w1", "src/from-b.ts", "services/b");
+    });
+  });
+
+  it("ignores a stale status response from the previously selected repository", async () => {
+    const staleStatus = {
+      branchName: "branch-a",
+      files: [{ path: "src/stale-a.ts", status: "M", additions: 1, deletions: 0 }],
+      stagedFiles: [],
+      unstagedFiles: [{ path: "src/stale-a.ts", status: "M", additions: 1, deletions: 0 }],
+      totalAdditions: 1,
+      totalDeletions: 0,
+    };
+    const currentStatus = {
+      branchName: "branch-b",
+      files: [{ path: "src/current-b.ts", status: "M", additions: 2, deletions: 0 }],
+      stagedFiles: [],
+      unstagedFiles: [{ path: "src/current-b.ts", status: "M", additions: 2, deletions: 0 }],
+      totalAdditions: 2,
+      totalDeletions: 0,
+    };
+    let resolveStaleStatus: (status: typeof staleStatus) => void = () => undefined;
+    const pendingStaleStatus = new Promise<typeof staleStatus>((resolve) => {
+      resolveStaleStatus = resolve;
+    });
+    mockGetGitStatus.mockImplementation(async (_workspaceId, repositoryRoot) =>
+      repositoryRoot === "services/a" ? pendingStaleStatus : currentStatus,
+    );
+    const { rerender } = render(
+      <GitHistoryWorktreePanel
+        workspaceId="w1"
+        repositoryRoot="services/a"
+        listView="tree"
+      />,
+    );
+    await waitFor(() => {
+      expect(mockGetGitStatus).toHaveBeenCalledWith("w1", "services/a");
+    });
+
+    rerender(
+      <GitHistoryWorktreePanel
+        workspaceId="w1"
+        repositoryRoot="services/b"
+        listView="tree"
+      />,
+    );
+    expect(await screen.findByLabelText("src/current-b.ts")).toBeTruthy();
+
+    await act(async () => {
+      resolveStaleStatus(staleStatus);
+      await pendingStaleStatus;
+    });
+    expect(screen.queryByLabelText("src/stale-a.ts")).toBeNull();
+    expect(screen.getByLabelText("src/current-b.ts")).toBeTruthy();
+  });
+
+  it("keeps a completed mutation from the previous repository out of the current view", async () => {
+    mockGetGitStatus.mockImplementation(async (_workspaceId, repositoryRoot) => {
+      const path = repositoryRoot === "services/b" ? "src/current-b.ts" : "src/current-a.ts";
+      return {
+        branchName: repositoryRoot === "services/b" ? "branch-b" : "branch-a",
+        files: [{ path, status: "M", additions: 1, deletions: 0 }],
+        stagedFiles: [],
+        unstagedFiles: [{ path, status: "M", additions: 1, deletions: 0 }],
+        totalAdditions: 1,
+        totalDeletions: 0,
+      };
+    });
+    let resolveStage: () => void = () => undefined;
+    const pendingStage = new Promise<void>((resolve) => {
+      resolveStage = resolve;
+    });
+    mockStageGitFile.mockReturnValue(pendingStage);
+    const { rerender } = render(renderScopedPanel("services/a"));
+
+    expect(await screen.findByLabelText("src/current-a.ts")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Stage file" }));
+    await waitFor(() => {
+      expect(mockStageGitFile).toHaveBeenCalledWith(
+        "w1",
+        "src/current-a.ts",
+        "services/a",
+      );
+    });
+
+    rerender(renderScopedPanel("services/b"));
+    expect(await screen.findByLabelText("src/current-b.ts")).toBeTruthy();
+    await act(async () => {
+      resolveStage();
+      await pendingStage;
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByLabelText("src/current-a.ts")).toBeNull();
+    expect(screen.getByLabelText("src/current-b.ts")).toBeTruthy();
+  });
+
+  it("ignores commit messages generated for a repository that is no longer selected", async () => {
+    let resolveGeneratedMessage: (message: string) => void = () => undefined;
+    const pendingGeneration = new Promise<string>((resolve) => {
+      resolveGeneratedMessage = resolve;
+    });
+    mockGenerateCommitMessage.mockReturnValue(pendingGeneration);
+    const { rerender } = render(renderScopedPanel("services/a"));
+
+    await chooseCodexEnglishCommitMessage();
+    await waitFor(() => {
+      expect(mockGenerateCommitMessage).toHaveBeenCalled();
+    });
+    rerender(renderScopedPanel("services/b"));
+    expect(await screen.findByRole("button", { name: "Generate commit message" })).toBeTruthy();
+
+    await act(async () => {
+      resolveGeneratedMessage("message from repository a");
+      await pendingGeneration;
+      await Promise.resolve();
+    });
+
+    expect((screen.getByPlaceholderText("Commit message") as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("resets same-path commit selection when repository identity changes", async () => {
+    mockGetGitStatus.mockResolvedValue({
+      branchName: "main",
+      files: [{ path: "pom.xml", status: "M", additions: 1, deletions: 0 }],
+      stagedFiles: [{ path: "pom.xml", status: "M", additions: 1, deletions: 0 }],
+      unstagedFiles: [],
+      totalAdditions: 1,
+      totalDeletions: 0,
+    });
+    const { rerender } = render(renderScopedPanel("services/a"));
+    const repositoryASelection = await screen.findByRole("checkbox", {
+      name: "Toggle commit selection: pom.xml",
+    });
+    expect(repositoryASelection.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(repositoryASelection);
+    expect(repositoryASelection.getAttribute("aria-checked")).toBe("false");
+
+    rerender(renderScopedPanel("services/b"));
+    await waitFor(() => {
+      expect(screen.getByRole("checkbox", {
+        name: "Toggle commit selection: pom.xml",
+      }).getAttribute("aria-checked")).toBe("true");
+    });
+  });
+
+  it("clears the previous repository summary before the next status resolves or fails", async () => {
+    const repositoryAStatus = {
+      branchName: "branch-a",
+      files: [{ path: "src/a.ts", status: "M", additions: 7, deletions: 2 }],
+      stagedFiles: [],
+      unstagedFiles: [{ path: "src/a.ts", status: "M", additions: 7, deletions: 2 }],
+      totalAdditions: 7,
+      totalDeletions: 2,
+    };
+    let rejectRepositoryBStatus: (error: Error) => void = () => undefined;
+    const pendingRepositoryBStatus = new Promise<never>((_resolve, reject) => {
+      rejectRepositoryBStatus = reject;
+    });
+    mockGetGitStatus.mockImplementation(async (_workspaceId, repositoryRoot) =>
+      repositoryRoot === "services/a" ? repositoryAStatus : pendingRepositoryBStatus,
+    );
+    const onSummaryChange = vi.fn();
+    const { rerender } = render(renderScopedPanel("services/a", onSummaryChange));
+    await waitFor(() => {
+      expect(onSummaryChange).toHaveBeenLastCalledWith({
+        changedFiles: 1,
+        totalAdditions: 7,
+        totalDeletions: 2,
+      });
+    });
+
+    rerender(renderScopedPanel("services/b", onSummaryChange));
+    await waitFor(() => {
+      expect(onSummaryChange).toHaveBeenLastCalledWith({
+        changedFiles: 0,
+        totalAdditions: 0,
+        totalDeletions: 0,
+      });
+    });
+    await act(async () => {
+      rejectRepositoryBStatus(new Error("repository b unavailable"));
+      await pendingRepositoryBStatus.catch(() => undefined);
+    });
+    expect(onSummaryChange).toHaveBeenLastCalledWith({
+      changedFiles: 0,
+      totalAdditions: 0,
+      totalDeletions: 0,
     });
   });
 
@@ -289,6 +548,28 @@ describe("GitHistoryWorktreePanel", () => {
     });
   });
 
+  it("scopes commit message generation to the selected repository", async () => {
+    render(
+      <GitHistoryWorktreePanel
+        workspaceId="w1"
+        repositoryRoot="services/b"
+        listView="tree"
+      />,
+    );
+
+    await chooseCodexEnglishCommitMessage();
+
+    await waitFor(() => {
+      expect(mockGenerateCommitMessage).toHaveBeenCalledWith(
+        "w1",
+        "en",
+        "codex",
+        undefined,
+        [{ repositoryRoot: "services/b", selectedPaths: ["src/staged.ts"] }],
+      );
+    });
+  });
+
   it("shows the same staged-default commit hint as the main git panel", async () => {
     render(<GitHistoryWorktreePanel workspaceId="w1" listView="tree" />);
 
@@ -328,6 +609,45 @@ describe("GitHistoryWorktreePanel", () => {
       expect(mockCommitGit).toHaveBeenCalledWith("w1", "feat: scoped history commit");
     });
     expect(mockStageGitAll).not.toHaveBeenCalled();
+  });
+
+  it("scopes selected-file commit mutations to the selected repository", async () => {
+    mockGetGitStatus.mockResolvedValue({
+      branchName: "main",
+      files: [{ path: "src/only-unstaged.ts", status: "M", additions: 1, deletions: 0 }],
+      stagedFiles: [],
+      unstagedFiles: [{ path: "src/only-unstaged.ts", status: "M", additions: 1, deletions: 0 }],
+      totalAdditions: 1,
+      totalDeletions: 0,
+    });
+    render(
+      <GitHistoryWorktreePanel
+        workspaceId="w1"
+        repositoryRoot="services/b"
+        listView="tree"
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("checkbox", {
+      name: "Toggle commit selection: src/only-unstaged.ts",
+    }));
+    fireEvent.change(screen.getByPlaceholderText("Commit message"), {
+      target: { value: "fix: scoped repository commit" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+
+    await waitFor(() => {
+      expect(mockStageGitFile).toHaveBeenCalledWith(
+        "w1",
+        "src/only-unstaged.ts",
+        "services/b",
+      );
+      expect(mockCommitGit).toHaveBeenCalledWith(
+        "w1",
+        "fix: scoped repository commit",
+        "services/b",
+      );
+    });
   });
 
   it("passes selected unstaged scope into commit message generation", async () => {
