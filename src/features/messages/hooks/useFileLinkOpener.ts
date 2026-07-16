@@ -47,12 +47,43 @@ function resolveConfiguredOpenTarget(
   };
 }
 
-function resolveFilePath(path: string, workspacePath?: string | null) {
+function isWindowsAbsolutePath(path: string) {
+  return /^[A-Za-z]:[\\/]/.test(path) || /^\\\\[^\\]+\\[^\\]+/.test(path);
+}
+
+function normalizeLocalFilePath(path: string) {
   const trimmed = path.trim();
+  if (/^file:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      const decodedPath = decodeURIComponent(url.pathname);
+      if (/^\/[A-Za-z]:[\\/]/.test(decodedPath)) {
+        return decodedPath.slice(1);
+      }
+      if (url.hostname && url.hostname !== "localhost") {
+        return `\\\\${url.hostname}${decodedPath.replace(/\//g, "\\")}`;
+      }
+      return decodedPath;
+    } catch {
+      return trimmed;
+    }
+  }
+  if (/^\/[A-Za-z]:[\\/]/.test(trimmed)) {
+    return trimmed.slice(1);
+  }
+  return trimmed;
+}
+
+function resolveFilePath(path: string, workspacePath?: string | null) {
+  const trimmed = normalizeLocalFilePath(path);
   if (!workspacePath) {
     return trimmed;
   }
-  if (trimmed.startsWith("/") || trimmed.startsWith("~/")) {
+  if (
+    trimmed.startsWith("/") ||
+    trimmed.startsWith("~/") ||
+    isWindowsAbsolutePath(trimmed)
+  ) {
     return trimmed;
   }
   const base = workspacePath.replace(/\/+$/, "");

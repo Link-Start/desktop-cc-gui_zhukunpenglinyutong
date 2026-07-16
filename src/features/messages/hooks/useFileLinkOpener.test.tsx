@@ -195,6 +195,26 @@ describe("useFileLinkOpener", () => {
     );
   });
 
+  it("opens Windows absolute file links without prefixing the workspace path", async () => {
+    openerMocks.openPath.mockResolvedValue(undefined);
+    const { result } = renderHook(() =>
+      useFileLinkOpener(
+        "D:\\workspace",
+        [makeOpenTarget("vscode", "VS Code")],
+        "vscode",
+        null,
+      ),
+    );
+
+    await act(async () => {
+      await result.current.openFileLink("D:\\outputs\\单页可编辑版PPTX.pptx#L3");
+    });
+
+    expect(openerMocks.openPath).toHaveBeenCalledWith(
+      "D:\\outputs\\单页可编辑版PPTX.pptx",
+    );
+  });
+
   it("builds context menu actions from the latest open target config", () => {
     const firstTargets = [makeOpenTarget("vscode", "VS Code")];
     const nextTargets = [makeOpenTarget("cursor", "Cursor")];
