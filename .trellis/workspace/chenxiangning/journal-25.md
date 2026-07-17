@@ -1567,3 +1567,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1015: 修复全局文件搜索索引补齐
+
+**Date**: 2026-07-17
+**Task**: 修复全局文件搜索索引补齐
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+复用完整 workspace file listing 补齐 active/global 文件搜索，增加 shallow/loading/partial/error 状态与重试语义、搜索面板提示和回归测试；通过 detached staged snapshot typecheck 与 20 项定向测试，并精准排除并发 API endpoint 搜索改动。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6aa59601` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
