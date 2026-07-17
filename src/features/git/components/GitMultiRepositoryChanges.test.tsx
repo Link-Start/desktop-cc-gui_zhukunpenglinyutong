@@ -273,6 +273,96 @@ describe("GitMultiRepositoryChanges", () => {
     expect(onOpenFile).toHaveBeenNthCalledWith(3, "repo-b", "pom.xml");
   });
 
+  it("opens repository-scoped rename destinations on click and Enter", () => {
+    const status = repositoryStatus("services/api");
+    status.unstagedFiles = [{
+      path: "archive/spec.md",
+      oldPath: "changes/spec.md",
+      status: "R",
+      additions: 0,
+      deletions: 0,
+    }];
+    const onOpenFile = vi.fn();
+    const onOpenFilePreview = vi.fn();
+    render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[status]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+        onOpenFile={onOpenFile}
+        onOpenFilePreview={onOpenFilePreview}
+      />,
+    );
+
+    const row = document.querySelector<HTMLElement>(
+      '.diff-row[data-path="archive/spec.md"]',
+    ) as HTMLElement;
+    fireEvent.click(row);
+    fireEvent.keyDown(row, { key: "Enter" });
+
+    expect(onOpenFile).toHaveBeenNthCalledWith(
+      1,
+      "services/api",
+      "archive/spec.md",
+    );
+    expect(onOpenFile).toHaveBeenNthCalledWith(
+      2,
+      "services/api",
+      "archive/spec.md",
+    );
+    expect(onOpenFile).not.toHaveBeenCalledWith(
+      "services/api",
+      "changes/spec.md",
+    );
+    expect(onOpenFilePreview).not.toHaveBeenCalled();
+  });
+
+  it("routes repository-scoped deleted rows to preview on click and Enter", () => {
+    const status = repositoryStatus("services/api");
+    status.unstagedFiles = [{
+      path: "src/deleted.ts",
+      status: "D",
+      additions: 0,
+      deletions: 1,
+    }];
+    const onOpenFile = vi.fn();
+    const onOpenFilePreview = vi.fn();
+    render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[status]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+        onOpenFile={onOpenFile}
+        onOpenFilePreview={onOpenFilePreview}
+      />,
+    );
+
+    const row = document.querySelector<HTMLElement>(
+      '.diff-row[data-path="src/deleted.ts"]',
+    ) as HTMLElement;
+    fireEvent.click(row);
+    fireEvent.keyDown(row, { key: "Enter" });
+
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(onOpenFilePreview).toHaveBeenCalledTimes(2);
+    expect(onOpenFilePreview).toHaveBeenNthCalledWith(
+      1,
+      "services/api",
+      expect.objectContaining({ path: "src/deleted.ts", status: "D" }),
+      "unstaged",
+    );
+    expect(onOpenFilePreview).toHaveBeenNthCalledWith(
+      2,
+      "services/api",
+      expect.objectContaining({ path: "src/deleted.ts", status: "D" }),
+      "unstaged",
+    );
+  });
+
   it("shows discard only for unstaged rows and forwards repository identity", () => {
     const onDiscardFile = vi.fn();
     const status = repositoryStatus("services/api");

@@ -72,34 +72,71 @@ Conversation timeline MUST 将一个 turn 的 canonical file-change facts 聚合
 - **WHEN** 前一 turn 有 file-change summary 且下一 turn 进入 pending
 - **THEN** 前一 summary card MUST 保持可见并归属于原 turn，直到正常 timeline projection 接管
 
-### Requirement: Sparse Added-File Facts MUST Preserve Canonical Diff Access
+### Requirement: Turn File Summary Rows MUST Request Modal Diff Preview
 
-当 conversation file-change fact 表示新增文件但不携带 inline diff 时，消息幕布 MUST 在不改变其他 change kind 行为的前提下，复用已有 Workspace Git diff navigation 保持该文件的 canonical diff 可达性。
+conversation turn 与 session file summary 中的文件行在 host 提供 preview capability 时 MUST 成为 accessible modal diff action，并且 MUST 保持 conversation Surface 不变。
 
-#### Scenario: added file without inline diff opens canonical Git diff
+#### Scenario: pointer activation opens modal request
 
-- **WHEN** 消息幕布收到 normalized kind 为 `added`、包含有效 `filePath`、但缺少 inline diff 的 file-change entry
-- **AND** tool output 为空或不满足 structured diff header contract
-- **AND** 当前 surface 提供 `onOpenDiffPath`
-- **THEN** 用户激活该 row MUST 调用 `onOpenDiffPath(filePath)`
-- **AND** 系统 MUST NOT 从 shell command 文本或当前磁盘内容伪造 event-time inline diff
-- **AND** 普通 CLI/Markdown output MUST NOT 被计入 diff `additions/deletions`
+- **WHEN** 用户点击“已编辑 N 个文件”卡片中的可见文件行
+- **THEN** 系统 MUST 使用该文件的完整 workspace-relative path 发出 modal diff preview request
+- **AND** request MUST 要求 modal 初始最大化
+- **AND** 系统 MUST NOT 调用 center-panel `onOpenDiffPath`
 
-#### Scenario: added file with inline diff keeps inline preview priority
+#### Scenario: keyboard activation matches pointer behavior
 
-- **WHEN** 新增文件 entry 已携带可解析的 inline diff
-- **THEN** 用户激活该 row MUST 展开现有 inline preview
-- **AND** 系统 MUST NOT 同时触发 Workspace Git diff navigation
+- **WHEN** 用户聚焦 summary file button 并按 Enter 或 Space
+- **THEN** 系统 MUST 发出与 pointer activation 相同的 modal preview request
 
-#### Scenario: other change kinds preserve existing missing-diff behavior
+#### Scenario: show-more remains independent
 
-- **WHEN** `modified`、`deleted` 或 `renamed` entry 缺少 inline diff
-- **THEN** 系统 MUST 保持其现有 row behavior
-- **AND** added-file fallback MUST NOT 被应用到这些 change kind
+- **WHEN** 用户激活“再显示 N 个文件”
+- **THEN** 系统 MUST 只展开隐藏文件
+- **AND** MUST NOT 发出任何 modal diff preview request
 
-#### Scenario: navigation callback is unavailable
+#### Scenario: preview capability unavailable
 
-- **WHEN** 新增文件 entry 缺少 inline diff 且当前 surface 未提供 `onOpenDiffPath`
-- **THEN** row MUST 保持稳定的非交互展示
+- **WHEN** host 未提供 modal preview callback
+- **THEN** summary files MUST 保持稳定的非交互展示
 - **AND** 系统 MUST NOT 抛出 runtime error
+
+#### Scenario: both summary placements share the action
+
+- **WHEN** 文件汇总渲染在历史回合边界或 timeline 末尾会话累计位置
+- **THEN** 两种 placement MUST 提供相同的 modal preview behavior
+
+### Requirement: Added-File Facts MUST Preserve Conversation Surface Behavior
+
+当 conversation file-change fact 已携带新增文件的 event-time patch content 时，消息幕布 MUST 在原 Surface 内提供 inline diff，不得因 patch format 差异隐式导航到 Workspace Git diff。
+
+#### Scenario: apply_patch added file expands inline
+
+- **WHEN** normalized kind 为 `added` 的 entry 携带 `*** Add File: <path>` 与后续 `+content`
+- **THEN** 用户激活该 row MUST 在 conversation canvas 原地展开
+- **AND** inline preview MUST 展示 preview limit 内的新增正文行
+- **AND** 系统 MUST NOT 调用 `onOpenDiffPath`
+
+#### Scenario: unified added-file diff keeps inline behavior
+
+- **WHEN** 新增文件 entry 携带包含 hunk 与可渲染 edit content 的 unified diff
+- **THEN** 用户激活该 row MUST 展开现有 inline preview
+- **AND** 系统 MUST NOT 触发 Workspace Git diff navigation
+
+#### Scenario: missing inline diff preserves existing fallback
+
+- **WHEN** added-file entry 完全缺失 inline diff
+- **THEN** 系统 MUST 保持变更前已有的 optional canonical fallback behavior
+- **AND** 本变更 MUST NOT 扩大到其他 change kind 或其他点击入口
+
+#### Scenario: conversation summary remains independent
+
+- **WHEN** file-change row 采用 unified 或 apply_patch inline preview
+- **THEN** `TurnFilesChangedCard` 的聚合与完成边界 MUST 保持不变
+- **AND** preview activation MUST NOT 通过 Surface navigation 使 conversation timeline 被替换
+
+#### Scenario: patch content remains event-time stable
+
+- **WHEN** 历史 file-change row 被重新渲染
+- **THEN** inline preview MUST 仅消费事件携带的 patch content
+- **AND** 系统 MUST NOT 读取当前磁盘内容覆盖历史 fact
 

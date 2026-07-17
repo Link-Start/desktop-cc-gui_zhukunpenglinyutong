@@ -93,6 +93,11 @@ Auto-follow, scroll restoration, and message jump work SHALL be scheduled so it 
 - **THEN** throttled auto-follow MUST respect the user's manual scroll intent
 - **AND** performance optimization MUST NOT force the viewport back to the live row unless the user re-enables follow behavior
 
+#### Scenario: static history updates do not trigger live auto-follow
+- **WHEN** a conversation receives or re-renders static history rows while no turn is working and no assistant finalization is pending
+- **THEN** live auto-follow MUST NOT call programmatic bottom scroll solely because those history rows changed
+- **AND** live auto-follow MAY resume when active work or assistant finalization is present
+
 ### Requirement: Timeline Virtualization SHALL Account For Render Weight
 
 Timeline virtualization SHALL consider render weight in addition to row count so image-heavy or long-content conversations can bound renderer memory and layout work before reaching the large-row threshold.

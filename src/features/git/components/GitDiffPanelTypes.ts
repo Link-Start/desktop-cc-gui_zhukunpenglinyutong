@@ -3,7 +3,12 @@ import type {
   CommitMessageLanguage,
   CommitMessageRepositorySelection,
 } from "../../../services/tauri";
-import type { GitHubIssue, GitHubPullRequest, GitLogEntry } from "../../../types";
+import type {
+  GitFileStatus,
+  GitHubIssue,
+  GitHubPullRequest,
+  GitLogEntry,
+} from "../../../types";
 import type { CodeAnnotationBridgeProps } from "../../code-annotations/types";
 import type { PanelTabId } from "../../layout/components/PanelTabs";
 import type { RepositoryGitStatus } from "../hooks/useMultiRepositoryGitStatus";
@@ -88,22 +93,8 @@ export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   onOpenFile?: (path: string, repositoryRoot?: string | null) => void;
   onOpenFileHistory?: (target: FileHistoryTarget) => void;
   modalPreviewRequest?: GitModalPreviewRequest | null;
-  stagedFiles: {
-    path: string;
-    status: string;
-    additions: number;
-    deletions: number;
-    isDiffOnlyFallback?: boolean;
-    mutationDisabled?: boolean;
-  }[];
-  unstagedFiles: {
-    path: string;
-    status: string;
-    additions: number;
-    deletions: number;
-    isDiffOnlyFallback?: boolean;
-    mutationDisabled?: boolean;
-  }[];
+  stagedFiles: GitFileStatus[];
+  unstagedFiles: GitFileStatus[];
   onStageAllChanges?: () => void | Promise<void>;
   onStageFile?: (path: string) => Promise<void> | void;
   onUnstageFile?: (path: string) => Promise<void> | void;

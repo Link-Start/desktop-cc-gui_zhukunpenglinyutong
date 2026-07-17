@@ -13,6 +13,7 @@ import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2";
 import { Badge } from "@/components/ui/badge";
+import type { GitFileStatus } from "../../../types";
 import { getFileTreeIconSvg } from "../../files/utils/fileTreeIcons";
 import { GitDiffPanelSectionActions } from "./GitDiffPanelSectionActions";
 import {
@@ -22,14 +23,11 @@ import {
   normalizeDiffPath,
 } from "./GitDiffPanelInclusion";
 
-export type DiffFile = {
-  path: string;
-  status: string;
-  additions: number;
-  deletions: number;
-  isDiffOnlyFallback?: boolean;
-  mutationDisabled?: boolean;
-};
+export type DiffFile = GitFileStatus;
+
+export function isDeletedDiffFile(file: Pick<DiffFile, "status">) {
+  return file.status.trim().toUpperCase() === "D";
+}
 
 export const TREE_INDENT_STEP = 8;
 
@@ -410,7 +408,10 @@ export type DiffSectionProps = {
   onToggleCollapsed?: () => void;
   selectedFiles: Set<string>;
   selectedPath: string | null;
-  onSelectFile?: (path: string | null) => void;
+  onActivateFile?: (
+    path: string,
+    section: "staged" | "unstaged",
+  ) => void;
   onStageAllChanges?: () => Promise<void> | void;
   onStageFile?: (path: string) => Promise<void> | void;
   onUnstageFile?: (path: string) => Promise<void> | void;
@@ -503,7 +504,7 @@ export function DiffSection({
   onToggleCollapsed,
   selectedFiles,
   selectedPath,
-  onSelectFile,
+  onActivateFile,
   onStageAllChanges,
   onStageFile,
   onUnstageFile,
@@ -648,7 +649,7 @@ export function DiffSection({
                     isCommitPathLocked?.(file.path),
                 )}
                 onClick={(event) => onFileClick(event, file.path, section)}
-                onKeySelect={() => onSelectFile?.(file.path)}
+                onKeySelect={() => onActivateFile?.(file.path, section)}
                 onOpenInlinePreview={() => onOpenInlinePreview?.(file.path)}
                 onOpenPreview={() => onOpenFilePreview?.(file, section)}
                 onContextMenu={(event) =>

@@ -145,12 +145,8 @@ Add to the Quick Navigation table in `index.md`:
 ### # Dependencies (if needed)
 
 ```bash
-# Install required dependencies (adjust for your package manager)
+# This repository enforces npm via preinstall.
 npm install <package>
-# or
-pnpm add <package>
-# or
-yarn add <package>
 ```
 
 ### [OK] Completed Changes

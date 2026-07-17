@@ -48,7 +48,7 @@
 7. handbook §10 根因 6(P2, 2-3 天)
 
 每阶段完成后:
-- 跑 `npm run typecheck && npm run lint && npm test` 全套
+- 跑 `npm run typecheck && npm run lint && npm run test` 全套
 - 跑 `bash scripts/perf-reproduce-jank.sh` 复现 + 采基线
 - 在 `jank-fix-progress.md` 记录数据
 

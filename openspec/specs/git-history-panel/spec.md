@@ -3,36 +3,7 @@
 ## Purpose
 
 Defines the git-history-panel behavior contract, covering Four-Region Git Log Workspace.
-
 ## Requirements
-### Requirement: Four-Region Git Log Workspace
-
-The system SHALL provide a four-region Git History workspace that mirrors the core interaction model of IDEA Git Log.
-
-#### Scenario: Open panel from sidebar
-
-- **WHEN** user clicks the Git History icon in the left sidebar rail
-- **THEN** the system opens a four-region panel:
-    - Left: overview (working tree summary)
-    - Left-center: branch list
-    - Right-center: commit log with graph
-    - Right: commit details (file list + commit message)
-
-#### Scenario: Right column split layout
-
-- **WHEN** the panel is open
-- **THEN** the right column SHALL be split vertically into:
-    - Top: changed files list
-    - Bottom: selected commit message
-
-#### Scenario: Click file to preview diff in modal
-
-- **WHEN** user clicks a file item in changed files list
-- **THEN** the system opens a modal diff preview for that file
-- **AND** commit details main layout SHALL remain unchanged
-
----
-
 ### Requirement: Panel State Persistence
 
 The system SHALL persist panel UI state to restore user context.
@@ -119,19 +90,41 @@ The panel SHALL expose clear operational states.
 
 ### Requirement: Theme and Visual Consistency
 
-The panel SHALL follow application theme variables.
+The panel SHALL follow application theme variables and SHALL present its title layer as integrated, non-clipping window chrome.
 
 #### Scenario: Dark theme
 
 - **WHEN** application is in dark mode
 - **THEN** panel and diff colors follow dark theme tokens with readable contrast
+- **AND** the title layer SHALL use subtle surface separation and a perceptible 1px bottom divider backed by a globally defined theme token
+- **AND** it SHALL NOT appear as an inset rounded card
 
 #### Scenario: Light theme
 
 - **WHEN** application is in light mode
 - **THEN** panel and diff colors follow light theme tokens with readable contrast
+- **AND** the title layer SHALL remain visually distinct without relying on dark-theme-only colors or an ambient card shadow
+- **AND** the 1px bottom divider SHALL remain perceptible against the light title surface
 
----
+#### Scenario: Title layer keeps interactive overlays visible
+
+- **WHEN** user opens a project or repository picker from the title layer
+- **THEN** the picker dropdown SHALL remain fully visible outside the title layer
+- **AND** the title layer SHALL NOT clip toolbar actions or control focus indicators
+- **AND** focusing one control SHALL NOT add a frame around the entire title layer
+
+#### Scenario: Title layer remains stable across panel states and widths
+
+- **WHEN** Git History renders its normal state, repository empty state, or a narrow viewport
+- **THEN** the title layer SHALL remain full-width and zero-radius with a consistent integrated chrome treatment
+- **AND** existing toolbar wrapping SHALL remain available without introducing horizontal overflow
+
+#### Scenario: Title layer uses compact vertical density
+
+- **WHEN** Git History renders the title layer on a viewport that fits the toolbar in one row
+- **THEN** decorative vertical padding SHALL be minimized so the title layer height is primarily determined by its interactive controls
+- **AND** project/repository pickers, action chips, and close action SHALL retain their existing control height and pointer target
+- **AND** the bottom divider SHALL remain visible without adding a second vertical spacer
 
 ### Requirement: Large History Performance Baseline
 
@@ -474,3 +467,204 @@ The system SHALL preserve visual semantics when large panel styles are split int
 - **WHEN** Git History related styles are modularized
 - **THEN** four-region layout structure, split areas, and critical interaction affordances MUST remain visually consistent
 - **AND** no clipping or overlap regressions SHALL be introduced in standard viewport sizes
+
+### Requirement: Git History file surfaces reuse the canonical changed-file renderer
+`GitHistoryWorktreePanel` 与 `GitHistoryPanelView` commit details MUST 复用 Git canonical changed-file renderer，而不是分别维护 file/folder row implementations。
+
+#### Scenario: Full Git worktree list switches view mode
+- **WHEN** 用户在 Git History worktree 区域切换 flat/tree mode
+- **THEN** shared renderer MUST preserve section、folder collapse、selection 与 mutation actions
+
+#### Scenario: Commit file activation opens preview command
+- **WHEN** 用户通过 mouse 或 keyboard 激活 commit details file row
+- **THEN** shared renderer MUST 向容器发出同一个 preview command
+
+### Requirement: Git History commit preview reuses the canonical modal chrome
+`GitHistoryPanelView` 的 commit file preview MUST 复用 canonical preview 的单行 header controls contract，不能在 shared review surface 外继续显示 legacy title/close toolbar。
+
+#### Scenario: Commit preview opens from the right changed-file tree
+- **WHEN** 用户点击 Git History 右侧 commit changed-file tree 中的文件
+- **THEN** Diff controls、maximize 与唯一 close action MUST 位于 modal 顶部同一行
+- **AND** modal MUST NOT 显示额外的“打开弹窗预览差异”或只读路径说明区
+- **AND** read-only commit patch MUST 使用 aligned compare renderer，不得回退到 legacy green/red `GitDiffViewer` body
+
+#### Scenario: Working-tree preview opens from the left changed-file list
+- **WHEN** 用户点击 Git History 左侧 working-tree changed-file list 中的文件
+- **THEN** editable Diff controls、maximize 与唯一 close action MUST 位于 modal 顶部同一行
+- **AND** modal MUST NOT 显示额外的“可编辑差异”与文件路径说明区
+
+### Requirement: Read-only commit preview renders full file context
+Git History commit preview 的 aligned read-only compare MUST 使用既有按需 `fullDiffLoader` 获取 full-context patch，不能只渲染 commit details 中的截断 patch hunks。
+
+#### Scenario: Full-context patch loads successfully
+- **WHEN** read-only commit preview 打开 text file 且 full-context request 成功
+- **THEN** previous/source 两列 MUST 包含未变更区段与差异区段
+- **AND** difference navigation MUST 基于 full-context sources 计算
+
+#### Scenario: Full-context request fails or becomes stale
+- **WHEN** request 失败，或用户在 request 返回前切换文件
+- **THEN** renderer MUST 保留当前文件的 initial patch fallback
+- **AND** stale response MUST NOT 覆盖新文件内容
+
+#### Scenario: User switches between region and full-file modes
+- **WHEN** 用户在 read-only split Diff 中切换“区域查看”与“全文查看”
+- **THEN** 两种模式 MUST 使用同一个 aligned compare renderer 与视觉规则
+- **AND** editable file 的区域模式 MUST 保留完整 document draft 与编辑能力，仅折叠 unchanged ranges
+- **AND** read-only commit file 的区域模式 MUST 使用 initial patch scope
+- **AND** 全文模式 MUST 使用完整 document 或 loaded full-context patch scope
+
+#### Scenario: Read-only commit preview uses region mode
+- **WHEN** Git History commit file preview 为 read-only 且用户选择“区域查看”
+- **THEN** modal MUST 使用 legacy `GitDiffViewer` patch body
+- **AND** MUST NOT 显示 aligned compare 的双列只读 document body
+- **AND** toolbar MUST 隐藏“全文查看”control，只保留“区域查看”
+- **AND** preview MUST NOT 请求 full-context Diff
+
+### Requirement: Three-Column Git Log Workspace
+
+The system SHALL provide a three-column Git History workspace focused on branch navigation, commit browsing, and commit details.
+
+#### Scenario: Open panel from sidebar
+
+- **WHEN** user clicks the Git History icon in the left sidebar rail
+- **THEN** the system opens a three-column panel:
+    - Left: branch list
+    - Center: commit log with graph
+    - Right: commit details (file list + commit message)
+- **AND** the panel MUST NOT visually expose the former overview/worktree region or include it in the accessibility tree
+- **AND** the three columns SHALL occupy the full available workbench width
+- **AND** hiding the region MUST NOT reset the toolbar worktree summary while its status source remains available
+
+#### Scenario: Right column split layout
+
+- **WHEN** the panel is open
+- **THEN** the right column SHALL be split vertically into:
+    - Top: changed files list
+    - Bottom: selected commit message
+
+#### Scenario: Desktop columns use a three-four-three default ratio
+
+- **WHEN** Git History opens in desktop split layout
+- **THEN** the system SHALL subtract the two visible vertical separators from the available width
+- **AND** branch, commit, and details columns SHALL receive the remaining width in a `3:4:3` default ratio
+- **AND** users SHALL retain the existing ability to resize the columns
+
+#### Scenario: Click file to preview diff in modal
+
+- **WHEN** user clicks a file item in changed files list
+- **THEN** the system opens a modal diff preview for that file
+- **AND** commit details main layout SHALL remain unchanged
+
+### Requirement: Git History changed files tree compacts safe directory chains
+
+The Git History selected-commit changed files tree and Push Preview changed files tree SHALL render consecutive directories as one dot-separated compact folder row only while every traversed directory has no direct files and exactly one child directory. The system MUST preserve repository-root visibility, canonical path identity, expansion behavior, file status, diff statistics, selection, and file-diff opening behavior.
+
+#### Scenario: Single-child package path is compacted
+
+- **WHEN** a changed file is located under a consecutive directory chain with no direct files or sibling directories
+- **THEN** the tree SHALL render that chain as one dot-separated folder row
+- **AND** the row SHALL use the deepest directory path as its canonical expansion identity
+
+#### Scenario: Directory branch stops compaction
+
+- **WHEN** a directory has two or more child directories
+- **THEN** the tree SHALL keep that directory as the current compact boundary
+- **AND** each child chain MAY compact independently below that boundary
+
+#### Scenario: Direct file stops compaction
+
+- **WHEN** a directory contains a direct changed file and one child directory
+- **THEN** the tree SHALL NOT compact across that directory boundary
+- **AND** the direct file and child directory SHALL remain visible at the correct hierarchy level
+
+#### Scenario: Repository root remains explicit
+
+- **WHEN** a repository label is available for the selected Git History scope
+- **THEN** the tree SHALL render the repository root as its own folder row
+- **AND** compact directory projection SHALL begin below that root
+
+#### Scenario: Compatible path identities survive compact labels
+
+- **WHEN** POSIX and Windows-style paths are projected or two real folder paths produce the same dotted display label
+- **THEN** path separators SHALL be normalized for hierarchy construction
+- **AND** each real folder path SHALL retain a distinct stable row identity
+
+#### Scenario: Existing file interactions remain path-based
+
+- **WHEN** the user expands a compact folder or selects a changed file
+- **THEN** folder state SHALL be updated by canonical path
+- **AND** file selection and diff opening SHALL continue targeting the original changed-file path
+
+### Requirement: Pull option explanations track current selection
+
+The Git History Pull Dialog SHALL dynamically explain the effect of the currently selected Pull options without
+changing option selection or execution behavior.
+
+#### Scenario: Explain default pull behavior
+
+- **WHEN** Pull Dialog is open without an explicit strategy or additive option
+- **THEN** the details area SHALL explain that remote changes are fetched and integration follows applicable Git configuration
+- **AND** the details area SHALL NOT promise a specific merge or rebase result
+
+#### Scenario: Explain one selected strategy
+
+- **WHEN** user selects one of `--rebase`, `--ff-only`, `--no-ff`, or `--squash`
+- **THEN** `Intent`, `Will Happen`, and `Will NOT Happen` SHALL update from the current selection
+- **AND** the explanation SHALL describe history shape, commit behavior, and relevant failure or manual-follow-up behavior
+- **AND** `--no-ff` and `--squash` SHALL be described as merge-path effects that do not by themselves
+  override an applicable Git rebase configuration
+
+#### Scenario: Explain additive options in strategy context
+
+- **WHEN** user selects `--no-commit` or `--no-verify`
+- **THEN** the details area SHALL explain the option in the context of the currently selected strategy
+- **AND** merge-only, redundant, or no-additional-effect combinations SHALL be stated explicitly
+
+#### Scenario: Explain representative combined selections
+
+- **WHEN** user selects a combination such as `--no-ff --no-commit`, `--ff-only --no-commit`,
+  `--squash --no-commit`, or `--rebase --no-commit --no-verify`
+- **THEN** the details area SHALL describe the combined outcome rather than concatenate context-free definitions
+- **AND** selected chips and command preview SHALL continue to show the original option combination
+
+#### Scenario: Keep explanation synchronized after removal
+
+- **WHEN** user deselects an option or removes a selected option chip
+- **THEN** the details area and command preview SHALL immediately reflect the remaining selection
+- **AND** no Pull command SHALL execute before confirmation
+
+#### Scenario: Preserve pull execution behavior
+
+- **WHEN** dynamic Pull explanations are rendered
+- **THEN** option availability, selection state, request payload, Git argument ordering, confirmation, and execution SHALL remain unchanged
+
+### Requirement: Pull options and final command are visually discoverable
+
+The Git History Pull Dialog SHALL expose modification options and visually distinguish the final command without
+changing option or execution semantics.
+
+#### Scenario: Show modification options when the dialog opens
+
+- **WHEN** user opens the Pull Dialog
+- **THEN** all Pull option controls SHALL be visible without an additional click
+- **AND** the existing toggle SHALL continue to allow manual collapse and expansion
+
+#### Scenario: Color command tokens without changing the command
+
+- **WHEN** the Pull command preview or `Example` is rendered
+- **THEN** command, remote, target branch, and selected options SHALL have visually distinguishable token styling
+- **AND** both surfaces SHALL expose the same complete, naturally readable command string and option ordering as before
+- **AND** technical command tokens SHALL opt out of automatic translation without assigning a prohibited
+  accessible name to `code` or generic elements
+
+#### Scenario: Announce dynamic option effects
+
+- **WHEN** the selected Pull option combination changes
+- **THEN** the current effect summary SHALL be exposed as a polite atomic status update
+- **AND** the visible `Intent`, `Will Happen`, and `Will NOT Happen` structure SHALL remain unchanged
+
+#### Scenario: Color Fetch, Sync, and Push operation surfaces
+
+- **WHEN** Fetch, Sync, or Push dialog renders a framed command, branch route, ahead/behind summary, or target branch value
+- **THEN** command, operator, remote, branch, option, and summary roles SHALL use the shared Git operation color language
+- **AND** the rendered natural text, input value, i18n copy, command ordering, selection state, request payload, and execution behavior SHALL remain unchanged

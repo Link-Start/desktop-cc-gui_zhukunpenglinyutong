@@ -1,6 +1,6 @@
 # frontend-prop-chain-stability
 
-> Follow-up change to [`realtime-input-and-io-isolation-2026-06`](../realtime-input-and-io-isolation-2026-06/).
+> Follow-up change to [`realtime-input-and-io-isolation-2026-06`](../2026-06-12-realtime-input-and-io-isolation-2026-06/).
 > 后者已落地 Rust 端 telemetry / reducer fast path / backend file I/O isolation / app server event batching / external change debouncer,但**frontend 端消费 batch channel 与 React shell domain context 拆分**留到本 change。
 
 ## Why

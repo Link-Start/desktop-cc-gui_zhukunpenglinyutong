@@ -19,8 +19,8 @@
 **Files:**
 - Reference: [add-context-ledger proposal](../../openspec/changes/archive/2026-05-03-add-context-ledger/proposal.md)
 - Reference: [add-context-ledger design](../../openspec/changes/archive/2026-05-03-add-context-ledger/design.md)
-- Reference: [add-agent-task-center proposal](../../openspec/changes/add-agent-task-center/proposal.md)
-- Reference: [add-agent-task-center design](../../openspec/changes/add-agent-task-center/design.md)
+- Reference: [add-agent-task-center proposal](../../openspec/changes/archive/2026-05-04-add-agent-task-center/proposal.md)
+- Reference: [add-agent-task-center design](../../openspec/changes/archive/2026-05-04-add-agent-task-center/design.md)
 
 **Step 1: Freeze implementation order**
 
@@ -29,8 +29,8 @@ Honor this order:
 - `Task Center` second
 
 Reason:
-- `Context Ledger` already has frontend truth sources in [Composer.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/composer/components/Composer.tsx), [memoryContextInjection.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/project-memory/utils/memoryContextInjection.ts), and [useThreadsReducer.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/threads/hooks/useThreadsReducer.ts)
-- `Task Center` currently has no run store, no independent surface, and execution semantics are still embedded in [useAppShellSections.ts](/Users/chenxiangning/code/AI/github/mossx/src/app-shell-parts/useAppShellSections.ts)
+- `Context Ledger` already has frontend truth sources in [Composer.tsx](../../src/features/composer/components/Composer.tsx), [memoryContextInjection.ts](../../src/features/project-memory/utils/memoryContextInjection.ts), and [useThreadsReducer.ts](../../src/features/threads/hooks/useThreadsReducer.ts)
+- `Task Center` currently has no run store, no independent surface, and execution semantics are still embedded in [useAppShellSections.ts](../../src/app-shell-parts/useAppShellSections.ts)
 
 **Step 2: Freeze phase-one defaults**
 
@@ -68,9 +68,9 @@ git commit -m "docs(plans): 新增账本与任务中心实施计划"
 - Create: `src/features/context-ledger/types.ts`
 - Create: `src/features/context-ledger/utils/contextLedgerProjection.ts`
 - Create: `src/features/context-ledger/utils/contextLedgerProjection.test.ts`
-- Modify: [src/features/composer/components/Composer.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/composer/components/Composer.tsx)
-- Reference: [src/features/project-memory/utils/memoryContextInjection.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/project-memory/utils/memoryContextInjection.ts)
-- Reference: [src/app-shell-parts/utils.ts](/Users/chenxiangning/code/AI/github/mossx/src/app-shell-parts/utils.ts)
+- Modify: [src/features/composer/components/Composer.tsx](../../src/features/composer/components/Composer.tsx)
+- Reference: [src/features/project-memory/utils/memoryContextInjection.ts](../../src/features/project-memory/utils/memoryContextInjection.ts)
+- Reference: [src/app-shell-parts/utils.ts](../../src/app-shell-parts/utils.ts)
 
 **Step 1: Write failing projection tests**
 
@@ -109,7 +109,7 @@ Keep phase-one fields aligned with OpenSpec:
 **Step 3: Implement pure projection builder**
 
 Projection inputs should come from existing frontend truth:
-- `selectedManualMemories` from [Composer.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/composer/components/Composer.tsx)
+- `selectedManualMemories` from [Composer.tsx](../../src/features/composer/components/Composer.tsx)
 - selected note cards and file references from composer state
 - `dualContextUsage` and compaction lifecycle from existing Codex dual-view inputs
 - active workspace/helper context only when already visible in send-preparation state
@@ -122,8 +122,8 @@ Do not:
 **Step 4: Reuse existing normalization helpers**
 
 Where possible, reuse logic from:
-- [memoryContextInjection.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/project-memory/utils/memoryContextInjection.ts) for deterministic text/estimate preparation
-- [Composer.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/composer/components/Composer.tsx) for selected manual memory and note-card state
+- [memoryContextInjection.ts](../../src/features/project-memory/utils/memoryContextInjection.ts) for deterministic text/estimate preparation
+- [Composer.tsx](../../src/features/composer/components/Composer.tsx) for selected manual memory and note-card state
 
 **Step 5: Run projection tests**
 
@@ -148,13 +148,13 @@ git commit -m "feat(context-ledger): 新增账本投影模型"
 - Create: `src/features/context-ledger/components/ContextLedgerPanel.tsx`
 - Create: `src/features/context-ledger/components/ContextLedgerPanel.test.tsx`
 - Create: `src/features/context-ledger/components/ContextLedgerEntryButton.tsx`
-- Modify: [src/features/composer/components/Composer.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/composer/components/Composer.tsx)
+- Modify: [src/features/composer/components/Composer.tsx](../../src/features/composer/components/Composer.tsx)
 - Modify: `src/features/composer/components/ChatInputBox/ContextBar.tsx`
 - Modify: `src/features/composer/components/ChatInputBox/ChatInputBox.tsx`
 - Modify: `src/features/composer/components/ChatInputBox/ChatInputBoxAdapter.tsx`
 - Modify: `src/features/composer/components/ChatInputBox/types.ts`
 - Create: `src/styles/context-ledger.css`
-- Modify: [src/bootstrap.ts](/Users/chenxiangning/code/AI/github/mossx/src/bootstrap.ts)
+- Modify: [src/bootstrap.ts](../../src/bootstrap.ts)
 - Modify: `src/i18n/locales/zh.part2.ts`
 - Modify: `src/i18n/locales/en.part2.ts`
 
@@ -203,7 +203,7 @@ Use a dedicated stylesheet:
 - `src/styles/context-ledger.css`
 
 Reason:
-- avoid growing [src/styles/composer.css](/Users/chenxiangning/code/AI/github/mossx/src/styles/composer.css) and its part files unnecessarily
+- avoid growing [src/styles/composer.css](../../src/styles/composer.css) and its part files unnecessarily
 
 **Step 5: Run component tests**
 
@@ -227,11 +227,11 @@ git commit -m "feat(context-ledger): 新增账本界面入口"
 ### Task 4: Lock Context Ledger Truthfulness To Existing Thread And Memory State
 
 **Files:**
-- Modify: [src/features/threads/hooks/useThreadsReducer.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/threads/hooks/useThreadsReducer.ts)
-- Modify: [src/features/threads/hooks/useThreadsReducer.compaction.test.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/threads/hooks/useThreadsReducer.compaction.test.ts)
-- Modify: [src/features/composer/components/Composer.context-dual-view.test.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/composer/components/Composer.context-dual-view.test.tsx)
-- Modify: [src/features/threads/hooks/useThreadMessaging.context-injection.test.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/threads/hooks/useThreadMessaging.context-injection.test.tsx)
-- Modify: [src/features/project-memory/hooks/useProjectMemory.test.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/project-memory/hooks/useProjectMemory.test.tsx)
+- Modify: [src/features/threads/hooks/useThreadsReducer.ts](../../src/features/threads/hooks/useThreadsReducer.ts)
+- Modify: [src/features/threads/hooks/useThreadsReducer.compaction.test.ts](../../src/features/threads/hooks/useThreadsReducer.compaction.test.ts)
+- Modify: [src/features/composer/components/Composer.context-dual-view.test.tsx](../../src/features/composer/components/Composer.context-dual-view.test.tsx)
+- Modify: [src/features/threads/hooks/useThreadMessaging.context-injection.test.tsx](../../src/features/threads/hooks/useThreadMessaging.context-injection.test.tsx)
+- Modify: [src/features/project-memory/hooks/useProjectMemory.test.tsx](../../src/features/project-memory/hooks/useProjectMemory.test.tsx)
 
 **Step 1: Add regression tests**
 
@@ -274,9 +274,9 @@ git commit -m "fix(context-ledger): 对齐压缩与记忆账本真值"
 - Create: `src/features/tasks/utils/taskRunStorage.test.ts`
 - Create: `src/features/tasks/utils/taskRunProjection.ts`
 - Create: `src/features/tasks/utils/taskRunProjection.test.ts`
-- Modify: [src/features/kanban/types.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/kanban/types.ts)
-- Modify: [src/features/kanban/utils/kanbanStorage.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/kanban/utils/kanbanStorage.ts)
-- Reference: [src/services/clientStorage.ts](/Users/chenxiangning/code/AI/github/mossx/src/services/clientStorage.ts)
+- Modify: [src/features/kanban/types.ts](../../src/features/kanban/types.ts)
+- Modify: [src/features/kanban/utils/kanbanStorage.ts](../../src/features/kanban/utils/kanbanStorage.ts)
+- Reference: [src/services/clientStorage.ts](../../src/services/clientStorage.ts)
 
 **Step 1: Write failing storage tests**
 
@@ -328,7 +328,7 @@ Reason:
 
 **Step 4: Extend Kanban task summary**
 
-Add a bounded latest-run summary field to [src/features/kanban/types.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/kanban/types.ts) instead of overloading `execution` further.
+Add a bounded latest-run summary field to [src/features/kanban/types.ts](../../src/features/kanban/types.ts) instead of overloading `execution` further.
 
 **Step 5: Run targeted tests**
 
@@ -350,12 +350,12 @@ git commit -m "feat(task-center): 新增任务运行记录存储"
 ### Task 6: Wire TaskRun Lifecycle Into Existing Kanban Execution Paths
 
 **Files:**
-- Modify: [src/app-shell-parts/useAppShellSections.ts](/Users/chenxiangning/code/AI/github/mossx/src/app-shell-parts/useAppShellSections.ts)
+- Modify: [src/app-shell-parts/useAppShellSections.ts](../../src/app-shell-parts/useAppShellSections.ts)
 - Create: `src/features/tasks/utils/taskRunCoordinator.ts`
 - Create: `src/features/tasks/utils/taskRunCoordinator.test.ts`
-- Reference: [src/app-shell-parts/utils.ts](/Users/chenxiangning/code/AI/github/mossx/src/app-shell-parts/utils.ts)
-- Reference: [src/features/kanban/utils/resultSnapshot.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/kanban/utils/resultSnapshot.ts)
-- Reference: [src/features/kanban/utils/blockedReason.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/kanban/utils/blockedReason.ts)
+- Reference: [src/app-shell-parts/utils.ts](../../src/app-shell-parts/utils.ts)
+- Reference: [src/features/kanban/utils/resultSnapshot.ts](../../src/features/kanban/utils/resultSnapshot.ts)
+- Reference: [src/features/kanban/utils/blockedReason.ts](../../src/features/kanban/utils/blockedReason.ts)
 
 **Step 1: Write failing coordinator tests**
 
@@ -391,7 +391,7 @@ Use existing pure functions instead of inventing new protocols:
 
 **Step 4: Integrate with current Kanban launch and scheduler paths**
 
-Touch the existing branches in [useAppShellSections.ts](/Users/chenxiangning/code/AI/github/mossx/src/app-shell-parts/useAppShellSections.ts):
+Touch the existing branches in [useAppShellSections.ts](../../src/app-shell-parts/useAppShellSections.ts):
 - `launchKanbanTaskExecution`
 - scheduler tick for recurring tasks
 - chained continuation block
@@ -428,12 +428,12 @@ git commit -m "feat(task-center): 接入任务运行生命周期"
 - Create: `src/features/tasks/components/TaskRunDetail.tsx`
 - Create: `src/features/tasks/hooks/useTaskCenter.ts`
 - Create: `src/styles/task-center.css`
-- Modify: [src/features/workspaces/components/WorkspaceHome.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/workspaces/components/WorkspaceHome.tsx)
-- Modify: [src/app-shell.tsx](/Users/chenxiangning/code/AI/github/mossx/src/app-shell.tsx)
-- Modify: [src/app-shell-parts/renderAppShell.tsx](/Users/chenxiangning/code/AI/github/mossx/src/app-shell-parts/renderAppShell.tsx)
+- Modify: [src/features/workspaces/components/WorkspaceHome.tsx](../../src/features/workspaces/components/WorkspaceHome.tsx)
+- Modify: [src/app-shell.tsx](../../src/app-shell.tsx)
+- Modify: [src/app-shell-parts/renderAppShell.tsx](../../src/app-shell-parts/renderAppShell.tsx)
 - Modify: `src/i18n/locales/zh.part2.ts`
 - Modify: `src/i18n/locales/en.part2.ts`
-- Modify: [src/bootstrap.ts](/Users/chenxiangning/code/AI/github/mossx/src/bootstrap.ts)
+- Modify: [src/bootstrap.ts](../../src/bootstrap.ts)
 
 **Step 1: Write failing Task Center view tests**
 

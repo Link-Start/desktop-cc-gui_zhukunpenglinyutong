@@ -10,7 +10,7 @@
 
 真正欠缺的是“可见性”而不是“能力从零实现”。因此 Phase 1 最稳的做法，是复用现有字段与启动链路，把已有能力整理成一个明确的 Launch Configuration 体验，而不是新增一套更强但更重的启动配置系统。
 
-这也符合“不影响正常功能”的约束：当前 `spawn_workspace_session` 仍然只吃 `codex_bin + codex_args`，[现有链路稳定]( /Users/chenxiangning/code/AI/github/mossx/src-tauri/src/backend/app_server.rs:591 )；如果首期就加 env、Apply、external reload ownership、remote parity，会把 blast radius 明显扩大。
+这也符合“不影响正常功能”的约束：当时 `spawn_workspace_session` 只使用 `codex_bin + codex_args`，[实现入口](../../../../src-tauri/src/backend/app_server.rs) 已存在；如果首期就加 env、Apply、external reload ownership、remote parity，会把 blast radius 明显扩大。
 
 ## Goals / Non-Goals
 

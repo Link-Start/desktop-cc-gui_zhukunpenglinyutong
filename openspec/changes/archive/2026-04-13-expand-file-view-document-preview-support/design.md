@@ -12,7 +12,7 @@
 - Tauri 前端不能为了方便直接开放任意文件系统读取能力。
 - 阻塞型文档解析不能直接跑在主线程，也不能在 Tokio 主运行时里做长耗时同步操作。
 - Windows/macOS 行为必须一致，不能让路径形态、文件名大小写或资源 URL 差异决定 preview 结果。
-- 仓库已存在 large-file hard gate：[`/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml`](/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml) 在 CI 中固定执行 `npm run check:large-files:gate`，因此新增 viewer、state hook 和 payload loader 必须按模块拆分，不能把复杂度重新堆回单个超大文件。
+- 仓库已存在 large-file hard gate：[`../../../../.github/workflows/large-file-governance.yml`](../../../../.github/workflows/large-file-governance.yml) 在 CI 中固定执行 `npm run check:large-files:gate`，因此新增 viewer、state hook 和 payload loader 必须按模块拆分，不能把复杂度重新堆回单个超大文件。
 - 这次提案必须优先做“收紧能力边界”，而不是看到支持名单就无脑把每种格式都扩成完整富预览；尤其 `doc` 只能承诺 best-effort 或显式 fallback，不能先承诺稳定高保真再把实现风险留给后面。
 
 ## Goals / Non-Goals
@@ -202,7 +202,7 @@ type PreviewRuntimeHandle = {
   - `FileTabularPreview.tsx`
   - `FileDocumentPreview.tsx`
   - `useFilePreviewPayload.ts`
-- 任一新增 viewer/hook 如果继续膨胀成超大文件，会被 [`/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml`](/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml) 里的 hard gate 拦下。
+- 任一新增 viewer/hook 如果继续膨胀成超大文件，会被 [`../../../../.github/workflows/large-file-governance.yml`](../../../../.github/workflows/large-file-governance.yml) 里的 hard gate 拦下。
 
 取舍：
 
@@ -242,7 +242,7 @@ type PreviewRuntimeHandle = {
   → Mitigation：所有 preview payload 请求统一先走路径归一化，再由单一 preview loader 生成结果。
 
 - [Risk] 新增 Office/PDF/表格 viewer 后再次触发 large-file 治理告警
-  → Mitigation：按 preview mode 拆 viewer 与 hook，并把 [`/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml`](/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml) 中的 `npm run check:large-files:gate` 纳入最终门禁。
+  → Mitigation：按 preview mode 拆 viewer 与 hook，并把 [`../../../../.github/workflows/large-file-governance.yml`](../../../../.github/workflows/large-file-governance.yml) 中的 `npm run check:large-files:gate` 纳入最终门禁。
 
 - [Risk] `pdf.js` worker 或资源路径在生产构建中失效
   → Mitigation：将 worker 打包/CSP/路径校验列为独立设计与验证任务，不接受“开发环境可用”作为完成标准。
@@ -257,7 +257,7 @@ type PreviewRuntimeHandle = {
 3. 为主窗口和 detached file explorer 同步切换到 preview mode 驱动链路。
 4. 先锁定 `pdf.js` worker 打包策略，再接 viewer，避免把生产构建风险后置。
 5. 补齐 Windows/macOS 路径样例、`convertFileSrc` 资源地址样例和 `CRLF/LF` CSV 样例。
-6. 跑通 [`/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml`](/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml) 对应的 `npm run check:large-files:gate`。
+6. 跑通 [`../../../../.github/workflows/large-file-governance.yml`](../../../../.github/workflows/large-file-governance.yml) 对应的 `npm run check:large-files:gate`。
 7. 若某一类 preview 引擎不稳定，可单独回退该 mode 到明确 fallback，不回退整个 render profile 契约。
 
 ## Open Questions

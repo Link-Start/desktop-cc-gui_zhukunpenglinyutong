@@ -791,36 +791,46 @@ impl DaemonState {
         let mut total_deletions = 0i64;
 
         for status_entry in statuses.iter() {
-            let Some(path) = status_entry.path() else {
-                continue;
-            };
-            if path.is_empty() {
-                continue;
-            }
             let status = status_entry.status();
-            let normalized_path = normalize_git_path(path);
-
             let index_status = status_for_index(status);
             let workdir_status = status_for_workdir(status);
-            let should_compute_path_diff_stats =
-                should_compute_diff_stats && !should_skip_diff_stats(&repo_root, path);
+            let index_identity = index_status
+                .is_some()
+                .then(|| {
+                    crate::git_utils::git_status_path_identity(
+                        &status_entry,
+                        crate::git_utils::GitStatusLayer::Index,
+                    )
+                })
+                .flatten();
+            let workdir_identity = workdir_status
+                .is_some()
+                .then(|| {
+                    crate::git_utils::git_status_path_identity(
+                        &status_entry,
+                        crate::git_utils::GitStatusLayer::Workdir,
+                    )
+                })
+                .flatten();
             let mut combined_additions = 0i64;
             let mut combined_deletions = 0i64;
-            if let Some(stage) = index_status {
+            if let (Some(stage), Some(identity)) = (index_status, index_identity.as_ref()) {
+                let should_compute_path_diff_stats = should_compute_diff_stats
+                    && !should_skip_diff_stats(&repo_root, &identity.path);
                 let (additions, deletions) = if should_compute_path_diff_stats {
-                    crate::git_utils::diff_stats_for_path(
+                    crate::git_utils::diff_stats_for_identity(
                         &repo,
                         head_tree.as_ref(),
-                        path,
-                        true,
-                        false,
+                        identity,
+                        crate::git_utils::GitStatusLayer::Index,
                     )
                     .unwrap_or((0, 0))
                 } else {
                     (0, 0)
                 };
                 staged_files.push(GitFileStatus {
-                    path: normalized_path.clone(),
+                    path: identity.path.clone(),
+                    old_path: identity.old_path.clone(),
                     status: stage.to_string(),
                     additions,
                     deletions,
@@ -830,21 +840,23 @@ impl DaemonState {
                 total_additions += additions;
                 total_deletions += deletions;
             }
-            if let Some(stage) = workdir_status {
+            if let (Some(stage), Some(identity)) = (workdir_status, workdir_identity.as_ref()) {
+                let should_compute_path_diff_stats = should_compute_diff_stats
+                    && !should_skip_diff_stats(&repo_root, &identity.path);
                 let (additions, deletions) = if should_compute_path_diff_stats {
-                    crate::git_utils::diff_stats_for_path(
+                    crate::git_utils::diff_stats_for_identity(
                         &repo,
                         head_tree.as_ref(),
-                        path,
-                        false,
-                        true,
+                        identity,
+                        crate::git_utils::GitStatusLayer::Workdir,
                     )
                     .unwrap_or((0, 0))
                 } else {
                     (0, 0)
                 };
                 unstaged_files.push(GitFileStatus {
-                    path: normalized_path.clone(),
+                    path: identity.path.clone(),
+                    old_path: identity.old_path.clone(),
                     status: stage.to_string(),
                     additions,
                     deletions,
@@ -854,9 +866,10 @@ impl DaemonState {
                 total_additions += additions;
                 total_deletions += deletions;
             }
-            if index_status.is_some() || workdir_status.is_some() {
+            if let Some(identity) = workdir_identity.as_ref().or(index_identity.as_ref()) {
                 files.push(GitFileStatus {
-                    path: normalized_path,
+                    path: identity.path.clone(),
+                    old_path: identity.old_path.clone(),
                     status: workdir_status.or(index_status).unwrap_or("--").to_string(),
                     additions: combined_additions,
                     deletions: combined_deletions,
@@ -896,7 +909,7 @@ impl DaemonState {
                 .recurse_untracked_dirs(true)
                 .show_untracked_content(true);
 
-            let diff = match head_tree.as_ref() {
+            let mut diff = match head_tree.as_ref() {
                 Some(tree) => repo
                     .diff_tree_to_workdir_with_index(Some(tree), Some(&mut options))
                     .map_err(|error| error.to_string())?,
@@ -904,6 +917,8 @@ impl DaemonState {
                     .diff_tree_to_workdir_with_index(None, Some(&mut options))
                     .map_err(|error| error.to_string())?,
             };
+            crate::git_utils::find_git_diff_renames(&mut diff)
+                .map_err(|error| error.to_string())?;
 
             let mut results = Vec::new();
             for (index, delta) in diff.deltas().enumerate() {
@@ -962,21 +977,23 @@ impl DaemonState {
         if trimmed_path.is_empty() {
             return Err("path is required".to_string());
         }
-        let diff_head =
-            git_core::run_git_diff(&repo_root, &["diff", "HEAD", "--", trimmed_path]).await;
+        let diff_paths = crate::git_utils::git_diff_paths_for_file(&repo_root, trimmed_path);
+        let mut diff_head_args = vec!["diff", "--find-renames", "HEAD", "--"];
+        diff_head_args.extend(diff_paths.iter().map(String::as_str));
+        let diff_head = git_core::run_git_diff(&repo_root, &diff_head_args).await;
         let mut content = match diff_head {
             Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
             Err(_) => String::new(),
         };
         if content.trim().is_empty() {
-            if let Ok(bytes) =
-                git_core::run_git_diff(&repo_root, &["diff", "--", trimmed_path]).await
-            {
+            let mut workdir_args = vec!["diff", "--find-renames", "--"];
+            workdir_args.extend(diff_paths.iter().map(String::as_str));
+            if let Ok(bytes) = git_core::run_git_diff(&repo_root, &workdir_args).await {
                 content = String::from_utf8_lossy(&bytes).to_string();
             }
-            if let Ok(bytes) =
-                git_core::run_git_diff(&repo_root, &["diff", "--cached", "--", trimmed_path]).await
-            {
+            let mut staged_args = vec!["diff", "--find-renames", "--cached", "--"];
+            staged_args.extend(diff_paths.iter().map(String::as_str));
+            if let Ok(bytes) = git_core::run_git_diff(&repo_root, &staged_args).await {
                 let staged = String::from_utf8_lossy(&bytes).to_string();
                 if !staged.trim().is_empty() {
                     if !content.trim().is_empty() {
@@ -1452,11 +1469,17 @@ impl DaemonState {
         let repo_root = self
             .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
             .await?;
-        let path = path.trim();
-        if path.is_empty() {
+        let paths = crate::git_utils::git_action_paths_for_file(
+            &repo_root,
+            &path,
+            crate::git_utils::GitStatusLayer::Workdir,
+        );
+        if paths.is_empty() {
             return Err("path is required".to_string());
         }
-        git_core::run_git_command(&repo_root, &["add", "-A", "--", path]).await?;
+        for path in paths {
+            git_core::run_git_command(&repo_root, &["add", "-A", "--", &path]).await?;
+        }
         Ok(())
     }
 
@@ -1481,11 +1504,17 @@ impl DaemonState {
         let repo_root = self
             .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
             .await?;
-        let path = path.trim();
-        if path.is_empty() {
+        let paths = crate::git_utils::git_action_paths_for_file(
+            &repo_root,
+            &path,
+            crate::git_utils::GitStatusLayer::Index,
+        );
+        if paths.is_empty() {
             return Err("path is required".to_string());
         }
-        git_core::run_git_command(&repo_root, &["restore", "--staged", "--", path]).await?;
+        for path in paths {
+            git_core::run_git_command(&repo_root, &["restore", "--staged", "--", &path]).await?;
+        }
         Ok(())
     }
 
@@ -1498,18 +1527,24 @@ impl DaemonState {
         let repo_root = self
             .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
             .await?;
-        let path = path.trim();
-        if path.is_empty() {
+        let paths = crate::git_utils::git_action_paths_for_file(
+            &repo_root,
+            &path,
+            crate::git_utils::GitStatusLayer::Workdir,
+        );
+        if paths.is_empty() {
             return Err("path is required".to_string());
         }
-        if git_core::run_git_command(
-            &repo_root,
-            &["restore", "--staged", "--worktree", "--", path],
-        )
-        .await
-        .is_err()
-        {
-            git_core::run_git_command(&repo_root, &["clean", "-f", "--", path]).await?;
+        for path in paths {
+            if git_core::run_git_command(
+                &repo_root,
+                &["restore", "--staged", "--worktree", "--", &path],
+            )
+            .await
+            .is_err()
+            {
+                git_core::run_git_command(&repo_root, &["clean", "-f", "--", &path]).await?;
+            }
         }
         Ok(())
     }

@@ -12,11 +12,11 @@
 
 </div>
 
-**ccgui** 是一个开源的 AI 编程桌面客户端。简单说：它把 Claude Code、Codex CLI、OpenCode 这些命令行 AI 编程工具，装进了一个好看好用的图形界面里。
+**ccgui** 是一个开源的 AI 编程桌面客户端。简单说：它把 Claude Code、Codex CLI、Gemini CLI、OpenCode 等命令行 AI 编程 runtime，放进一个统一的图形界面里。
 
-你不用再盯着黑乎乎的终端敲命令——打开 ccgui，选好项目，像聊天一样让 AI 帮你写代码、改 Bug、提交 Git。AI 改了哪些文件、跑了什么命令、花了多少钱，全都看得清清楚楚。
+你不用再盯着黑乎乎的终端敲命令——打开 ccgui，选好项目，像聊天一样让 AI 帮你写代码、改 Bug、提交 Git。文件与工具活动会实时展示；token 用量和预估费用则取决于当前 runtime 是否提供相应 metadata。
 
-应用基于 **Tauri 2 + React 19 + TypeScript + Rust** 开发，所有数据都存在你自己的电脑上，支持 macOS / Windows / Linux。
+应用基于 **Tauri 2 + React 19 + TypeScript + Rust** 开发，支持 macOS / Windows / Linux。应用设置、工作区索引和客户端状态默认在本机持久化；发送给 AI provider、Browser Agent、邮件服务或可选 remote/web service 的内容，遵循对应配置与第三方服务边界。
 
 > 本项目最初源自 [CodexMonitor](https://github.com/Dimillian/CodexMonitor)，现在已经成长为一个功能完整的多引擎 AI 编程客户端。
 
@@ -28,15 +28,15 @@
 
 ### 一个客户端，装下多个 AI 引擎
 
-- 同时支持 **Claude Code**、**Codex CLI**、**OpenCode**，随时切换，同一个项目里可以混着用。
-- 不挑渠道：官方 API、国内中转站、聚合平台、第三方供应商都能配，每个引擎可以保存多套 Provider 配置。
+- 当前注册 **Claude Code**、**Codex CLI**、**Gemini CLI**、**OpenCode** 四套 runtime adapter。Gemini 默认启用，OpenCode 可选启用；二者的退役仍是 active migration，并未交付。
+- Claude 与 Codex 支持多套 managed provider profile；Gemini、OpenCode 保留各自 runtime 提供的 provider/config 能力。
 - 会话不丢：关掉应用再打开，历史对话还在；会话断了可以接着聊，还能看每个会话用了多少上下文。
 
 ### 聊天框是为写代码设计的
 
 - 输入框支持 `@` 引用项目文件、斜杠命令、粘贴图片、上传附件。
-- AI 干活全程透明：改了哪个文件、跑了什么命令、读了什么内容，都有卡片实时展示。
-- 说错话了？消息支持**回退**（rewind）和**分叉**（fork），随时回到之前的状态重新来。
+- 支持展示的文件修改、shell/tool call 与读取操作会以实时卡片呈现。
+- Claude/Codex 会话在当前 runtime capability 支持时提供**回退**（rewind）和**分叉**（fork）。
 - 懒得打字可以用**语音输入**；提示词写不好，内置的**提示词增强**帮你润色。
 - 排队提问：AI 正在干活时，你可以把下一个问题先排上队。
 
@@ -51,22 +51,22 @@
 
 - **Plan 面板**：AI 的执行计划一步步列出来，做到哪了一眼看清。
 - **Kanban 看板**：任务卡片拖来拖去，管理整个迭代。
-- **任务中心**：每次 AI 执行都有记录，失败了能重试，随时翻执行日志。
+- **任务中心**：查看 Kanban/orchestration task run、日志和 artifact 摘要；仅在 run 与 engine 支持时提供 retry、resume、cancel 或 fork。
 - **意图画布**：在画布上拖节点做规划，想清楚再动手。
 
 ### 项目智能（ccgui 比较独特的部分）
 
 - **项目知识地图**：AI 扫描你的项目，生成可交互的结构图谱——文件关系、API 接口、模块依赖一目了然，还支持增量更新。
-- **项目记忆**：把项目的关键约定、踩过的坑存成长期记忆，AI 下次打开还记得。
-- **上下文账本**：AI 这次回答用了哪些上下文、各占多少，明明白白。
-- **用量统计**：token 消耗、费用、缓存命中率全有报表，还能设每月预算上限。
+- **项目记忆**：保存关键约定和经验；发送时可用 `@@` 手动选择，或显式开启 Memory Reference 检索后注入当前 turn。
+- **上下文账本**：展示已选择或继承的 context source，以及可用的 token/character estimate、freshness 和 attribution confidence。
+- **用量统计**：runtime 提供 metadata 时展示 token、cache 与预估费用。月度 budget threshold 只是本地视觉提醒，不会中断 runtime。
 
 ### 扩展和个性化
 
-- **MCP 市场、Skills 市场、插件市场**：点一下就能装，给 AI 加新本事。
-- **浏览器 Agent**：让 AI 能读网页内容，查文档不用复制粘贴。
-- **主题随便换**：15+ 内置主题（VS Code 风格）、自定义配色、窗口透明度、字体字号都能调。
-- **中英双语界面**，快捷键全部可自定义。
+- 可发现和管理已配置的 MCP server 与 Skills，并启用 bundled curated skills；MCP / Plugin marketplace 入口当前仍是 **Coming Soon**。
+- **浏览器 Agent**：打开策略允许的 HTTP(S) 页面并采集有界的只读 context；snapshot/navigation 会因平台降级，element/form action 尚不支持。
+- **21 个 VS Code 衍生主题**，并支持用户消息颜色、窗口透明度、UI/code 字体调整。
+- WebView UI 已提供 **10 种语言**。native desktop menu 当前只本地化中文与英文，其他 locale 回退中文；composer、panel、navigation 与 file action 快捷键可配置。
 - macOS / Windows / Linux 全平台，支持应用内**自动更新**。
 
 每个版本的详细更新内容，见 [CHANGELOG.md](./CHANGELOG.md)。
@@ -81,7 +81,7 @@
 | --- | --- |
 | macOS（M 系列芯片） | `aarch64.dmg` |
 | macOS（Intel 芯片） | `x64.dmg` |
-| Windows | `.exe` / `.msi` 安装包 |
+| Windows | `.exe`（NSIS）安装包 |
 | Linux | `.AppImage` |
 
 装好之后，在设置里配置好你的 AI 引擎（比如 Claude Code 的 API Key 或本地 CLI），添加一个项目文件夹，就可以开始用了。
@@ -171,8 +171,8 @@ desktop-cc-gui/
 │   │   ├── project-map/    #    项目知识地图
 │   │   └── ...             #    每个目录就是一个独立功能
 │   ├── components/         # 跨功能共享的通用 UI 组件
-│   ├── services/           # 业务逻辑；其中 tauri.ts 是前端调用 Rust 的桥梁
-│   ├── i18n/               # 中英文界面文案
+│   ├── services/           # 业务逻辑；services/tauri/* 放前端↔Rust wrapper
+│   ├── i18n/               # WebView UI 的 10 套 locale bundle
 │   ├── styles/             # 全局样式
 │   └── lib/ utils/         # 工具函数
 ├── src-tauri/              # Rust 后端
@@ -184,8 +184,8 @@ desktop-cc-gui/
 ### 改一个功能的套路
 
 1. **只改界面**：找到 `src/features/` 下对应的模块改就行。新组件直接放在该模块自己的目录里。
-2. **需要后端配合**：在 `src-tauri/src/` 对应模块里加一个 `#[tauri::command]`，再到 `src/services/tauri.ts` 里加一个调用封装，前端就能用了。
-3. **改了界面文字**：去 `src/i18n/` 里把中文和英文**都**加上，界面文字不允许硬编码。
+2. **需要后端配合**：在 `src-tauri/src/` 对应模块里加 `#[tauri::command]`，注册到 `src-tauri/src/command_registry.rs`，再把前端 wrapper 放进 `src/services/tauri/<domain>.ts`；需要统一出口时由 `src/services/tauri.ts` re-export。
+3. **改了界面文字**：必须走 i18n，并同步 `src/i18n/locales/` 下所有已发布 locale bundle；界面文字不允许硬编码。
 
 ### 常用命令
 
@@ -204,7 +204,7 @@ desktop-cc-gui/
 - 测试文件和源码放一起，命名 `xxx.test.ts` / `xxx.test.tsx`。
 - 框架是 [Vitest](https://vitest.dev/)，写法和 Jest 基本一样。
 - 重型集成测试命名为 `xxx.integration.test.tsx`，默认不跑，`npm run test:integration` 才跑。
-- Rust 端测试照常写在模块里，`cargo test` 跑。
+- Rust 端测试照常写在模块里，从仓库根目录用 `cargo test --manifest-path src-tauri/Cargo.toml` 跑。
 
 ---
 
@@ -212,11 +212,11 @@ desktop-cc-gui/
 
 规矩不多，但都有原因，提交前过一遍：
 
-1. **提交前跑三件套**：`npm run lint && npm run typecheck && npm run test`，全绿再提。CI 也会跑，本地先过省得来回折腾。
-2. **界面文字必须走 i18n**：所有用户能看到的文字都从 `src/i18n/` 取，中英文都要加，不许硬编码。
+1. **提交前跑三件套**：`npm run lint && npm run typecheck && npm run test`，全绿再提。当前 CI 只在 push 到 `main` 或手动 dispatch 时运行，因此提 PR 前必须先准备本地验证证据。
+2. **界面文字必须走 i18n**：所有用户可见文案都从 `src/i18n/` 取，并保持全部已发布 locale bundle 同步，不许硬编码。
 3. **组件就近放**：新组件先放自己 feature 的目录里；确实被多个功能复用了，再挪到 `src/components/`。
 4. **CSS 类名加功能前缀**：比如 Git 历史面板的样式类用 `git-history-*` 开头，避免不同功能的样式互相打架。
-5. **单个文件别超过 3000 行**：有脚本（`npm run check:large-files`）卡这个，文件太大就拆。
+5. **遵守大文件策略**：新文件使用 800 行 ratchet，既有区域使用 2600/2800/3000 行 hard threshold。`npm run check:large-files` 只出报告，阻断检查用 `npm run check:large-files:gate`。
 6. **TypeScript 严格模式**：别用 `any` 糊弄，类型写明白。
 7. **Rust 端写文件走统一封装**：用 `storage.rs` 提供的原子写入，不要直接 `write`，避免写一半断电把用户数据写坏。
 8. **加 Tauri command 前先搜一搜**：`command_registry` 里可能已经有现成的，别重复造。
@@ -224,7 +224,7 @@ desktop-cc-gui/
 
 ### Commit 信息怎么写
 
-格式：`type(scope): 做了什么`（[Conventional Commits](https://www.conventionalcommits.org/) 规范）。描述用中文或英文都行，格式对就好。
+默认使用中文主体的 [Conventional Commits](https://www.conventionalcommits.org/)：`type(scope): 中文动宾短句`。
 
 | type | 什么时候用 |
 | --- | --- |
@@ -241,7 +241,7 @@ desktop-cc-gui/
 ```text
 feat(composer): 支持粘贴图片自动转附件
 fix(git): 修复 diff 面板滚动位置丢失
-docs(readme): update setup guide
+docs(readme): 校准项目文档索引
 ```
 
 不要在 commit 信息里写 emoji，也不要带 AI 生成署名。
@@ -254,16 +254,20 @@ docs(readme): update setup guide
 2. 从 `main` 切一个分支，名字按 `feat/xxx`、`fix/xxx` 这种风格起。
 3. 改代码，本地把三件套跑绿（`lint` / `typecheck` / `test`）。
 4. 提 PR 到本仓库的 **`main` 分支**。标题按 commit 格式写，描述里说清楚：改了什么、为什么改、怎么验证的。
-5. CI 会自动跑 lint、类型检查、测试和构建；PR 审查里指出的中高风险问题需要修复后才能合并。
+5. 在 PR 中附上本地验证证据。当前 CI 只在 push 到 `main` 或手动 dispatch 时运行，不要假设打开 PR 会自动触发；审查指出的中高风险问题必须修复后才能合并。
 
 不知道从哪下手？看看 [Issues](https://github.com/zhukunpenglinyutong/desktop-cc-gui/issues)，挑一个感兴趣的开干。发现 Bug 或有新点子，也欢迎直接开 Issue 聊。
 
 ### 想深入了解项目内部？
 
-- `AGENTS.md` — 仓库规则总入口（用 AI 辅助开发本项目时必读）。
-- `.trellis/spec/` — 前端、后端的详细实现规范。
-- `openspec/` — 功能变更的提案与规格记录。
-- `docs/architecture/` — 架构治理文档。
+- [AGENTS.md](AGENTS.md) — 仓库规则总入口（用 AI 辅助开发本项目时必读）。
+- [项目文档总索引](docs/README.md) — 架构、性能、计划、研究和时间快照，并明确各自事实边界。
+- [.trellis/spec/](.trellis/spec/) — 前端、后端的详细实现规范。
+- [OpenSpec 工作区](openspec/README.md) — behavior specs、工作流与治理总览。
+- [主 capability spec 索引](openspec/specs/README.md) — 已同步到主线的全部 behavior contract。
+- [活跃提案索引](openspec/changes/README.md) — 当前变更、进度、归档门禁与 artifact 链接。
+- [归档提案索引](openspec/changes/archive/README.md) — 按月份和归档日期分组的完整历史提案。
+- [OpenSpec 审计 / evidence 索引](openspec/docs/README.md) — durable reference 与时间快照的分层入口。
 
 ---
 

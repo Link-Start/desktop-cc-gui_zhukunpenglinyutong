@@ -631,19 +631,19 @@ Refers to:
 - `/Users/chenxiangning/code/AI/github/Understand-Anything/understand-anything-plugin/skills/understand-explain/SKILL.md`
 - `/Users/chenxiangning/code/AI/github/Understand-Anything/understand-anything-plugin/skills/understand-onboard/SKILL.md`
 - `/Users/chenxiangning/code/AI/github/Understand-Anything/understand-anything-plugin/skills/understand-domain/SKILL.md`
-- `/Users/chenxiangning/code/AI/github/mossx/src/features/project-map/types.ts`
-- `/Users/chenxiangning/code/AI/github/mossx/src/features/project-map/components/ProjectMapPanel.tsx`
-- `/Users/chenxiangning/code/AI/github/mossx/src/features/project-map/hooks/useProjectMapDataset.ts`
-- `/Users/chenxiangning/code/AI/github/mossx/src/features/project-map/services/projectMapGenerationWorker.ts`
-- `/Users/chenxiangning/code/AI/github/mossx/src/features/project-map/services/projectMapPersistence.ts`
-- `/Users/chenxiangning/code/AI/github/mossx/src/features/project-map/utils/interactiveLayout.ts`
-- `/Users/chenxiangning/code/AI/github/mossx/src/features/project-map/utils/incrementalGeneration.ts`
-- `/Users/chenxiangning/code/AI/github/mossx/src/features/project-map/utils/display.ts`
-- `/Users/chenxiangning/code/AI/github/mossx/openspec/changes/add-agent-task-orchestration-center/proposal.md`
-- `/Users/chenxiangning/code/AI/github/mossx/openspec/changes/add-agent-task-orchestration-center/design.md`
-- `/Users/chenxiangning/code/AI/github/mossx/openspec/changes/add-agent-task-orchestration-center/tasks.md`
-- `/Users/chenxiangning/code/AI/github/mossx/openspec/changes/add-agent-task-orchestration-center/specs/project-xray-panel/spec.md`
-- `/Users/chenxiangning/code/AI/github/mossx/openspec/changes/add-agent-task-orchestration-center/specs/agent-task-orchestration-center/spec.md`
+- [`src/features/project-map/types.ts`](../../src/features/project-map/types.ts)
+- [`src/features/project-map/components/ProjectMapPanel.tsx`](../../src/features/project-map/components/ProjectMapPanel.tsx)
+- [`src/features/project-map/hooks/useProjectMapDataset.ts`](../../src/features/project-map/hooks/useProjectMapDataset.ts)
+- [`src/features/project-map/services/projectMapGenerationWorker.ts`](../../src/features/project-map/services/projectMapGenerationWorker.ts)
+- [`src/features/project-map/services/projectMapPersistence.ts`](../../src/features/project-map/services/projectMapPersistence.ts)
+- [`src/features/project-map/utils/interactiveLayout.ts`](../../src/features/project-map/utils/interactiveLayout.ts)
+- [`src/features/project-map/utils/incrementalGeneration.ts`](../../src/features/project-map/utils/incrementalGeneration.ts)
+- [`src/features/project-map/utils/display.ts`](../../src/features/project-map/utils/display.ts)
+- [`add-agent-task-orchestration-center/proposal.md`](../changes/archive/2026-06-03-add-agent-task-orchestration-center/proposal.md)
+- [`add-agent-task-orchestration-center/design.md`](../changes/archive/2026-06-03-add-agent-task-orchestration-center/design.md)
+- [`add-agent-task-orchestration-center/tasks.md`](../changes/archive/2026-06-03-add-agent-task-orchestration-center/tasks.md)
+- [`project-xray-panel/spec.md`](../changes/archive/2026-06-03-add-agent-task-orchestration-center/specs/project-xray-panel/spec.md)
+- [`agent-task-orchestration-center/spec.md`](../changes/archive/2026-06-03-add-agent-task-orchestration-center/specs/agent-task-orchestration-center/spec.md)
 
 Impact:
 

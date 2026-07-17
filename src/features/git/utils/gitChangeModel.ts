@@ -147,6 +147,9 @@ function copyStatusFile(file: GitFileStatus): GitFileStatus | null {
   }
   return {
     ...file,
+    ...(typeof file.oldPath === "string"
+      ? { oldPath: normalizeGitChangePath(file.oldPath) || undefined }
+      : {}),
     status: normalizeStatus(file.status) ?? file.status,
   };
 }
@@ -309,6 +312,12 @@ export function buildCanonicalGitChanges({
     ...canonicalUnstagedFiles,
   ]) {
     normalizedStatusPaths.add(normalizeGitChangePath(file.path));
+    if (normalizeStatus(file.status) === "R") {
+      const normalizedOldPath = normalizeGitChangePath(file.oldPath);
+      if (normalizedOldPath) {
+        normalizedStatusPaths.add(normalizedOldPath);
+      }
+    }
   }
 
   const fallbackFiles: GitFileStatus[] = [];

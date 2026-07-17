@@ -63,19 +63,18 @@ pub(crate) async fn get_git_status(
     let mut total_additions = 0i64;
     let mut total_deletions = 0i64;
     for entry in statuses.iter() {
-        let path = entry.path().unwrap_or("");
-        if path.is_empty() {
+        let entry_path = entry.path().unwrap_or("");
+        if entry_path.is_empty() {
             continue;
         }
         if let Some(index) = index.as_ref() {
-            if let Some(entry) = index.get_path(Path::new(path), 0) {
+            if let Some(entry) = index.get_path(Path::new(entry_path), 0) {
                 if entry.flags_extended & INDEX_SKIP_WORKTREE_FLAG != 0 {
                     continue;
                 }
             }
         }
         let status = entry.status();
-        let normalized_path = normalize_git_path(path);
         let include_index = status.intersects(
             Status::INDEX_NEW
                 | Status::INDEX_MODIFIED
@@ -90,20 +89,28 @@ pub(crate) async fn get_git_status(
                 | Status::WT_RENAMED
                 | Status::WT_TYPECHANGE,
         );
-        let should_compute_path_diff_stats =
-            should_compute_diff_stats && !should_skip_diff_stats(&repo_root, path);
+        let index_identity = include_index
+            .then(|| git_status_path_identity(&entry, GitStatusLayer::Index))
+            .flatten();
+        let workdir_identity = include_workdir
+            .then(|| git_status_path_identity(&entry, GitStatusLayer::Workdir))
+            .flatten();
         let mut combined_additions = 0i64;
         let mut combined_deletions = 0i64;
 
-        if include_index {
+        if let Some(identity) = index_identity.as_ref() {
+            let should_compute_path_diff_stats =
+                should_compute_diff_stats && !should_skip_diff_stats(&repo_root, &identity.path);
             let (additions, deletions) = if should_compute_path_diff_stats {
-                diff_stats_for_path(&repo, head_tree.as_ref(), path, true, false).unwrap_or((0, 0))
+                diff_stats_for_identity(&repo, head_tree.as_ref(), identity, GitStatusLayer::Index)
+                    .unwrap_or((0, 0))
             } else {
                 (0, 0)
             };
             if let Some(status_str) = status_for_index(status) {
                 staged_files.push(GitFileStatus {
-                    path: normalized_path.clone(),
+                    path: identity.path.clone(),
+                    old_path: identity.old_path.clone(),
                     status: status_str.to_string(),
                     additions,
                     deletions,
@@ -115,15 +122,24 @@ pub(crate) async fn get_git_status(
             total_deletions += deletions;
         }
 
-        if include_workdir {
+        if let Some(identity) = workdir_identity.as_ref() {
+            let should_compute_path_diff_stats =
+                should_compute_diff_stats && !should_skip_diff_stats(&repo_root, &identity.path);
             let (additions, deletions) = if should_compute_path_diff_stats {
-                diff_stats_for_path(&repo, head_tree.as_ref(), path, false, true).unwrap_or((0, 0))
+                diff_stats_for_identity(
+                    &repo,
+                    head_tree.as_ref(),
+                    identity,
+                    GitStatusLayer::Workdir,
+                )
+                .unwrap_or((0, 0))
             } else {
                 (0, 0)
             };
             if let Some(status_str) = status_for_workdir(status) {
                 unstaged_files.push(GitFileStatus {
-                    path: normalized_path.clone(),
+                    path: identity.path.clone(),
+                    old_path: identity.old_path.clone(),
                     status: status_str.to_string(),
                     additions,
                     deletions,
@@ -135,12 +151,13 @@ pub(crate) async fn get_git_status(
             total_deletions += deletions;
         }
 
-        if include_index || include_workdir {
+        if let Some(identity) = workdir_identity.as_ref().or(index_identity.as_ref()) {
             let status_str = status_for_workdir(status)
                 .or_else(|| status_for_index(status))
                 .unwrap_or("--");
             files.push(GitFileStatus {
-                path: normalized_path,
+                path: identity.path.clone(),
+                old_path: identity.old_path.clone(),
                 status: status_str.to_string(),
                 additions: combined_additions,
                 deletions: combined_deletions,
@@ -199,7 +216,7 @@ pub(crate) async fn stage_git_file(
     let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
     // If libgit2 reports a rename, we want a single UI action to stage both the
     // old + new paths so the change actually moves to the staged section.
-    for path in action_paths_for_file(&repo_root, &path) {
+    for path in action_paths_for_file(&repo_root, &path, GitStatusLayer::Workdir) {
         run_git_command(&repo_root, &["add", "-A", "--", &path]).await?;
     }
     Ok(())
@@ -259,7 +276,7 @@ pub(crate) async fn unstage_git_file(
     };
 
     let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
-    for path in action_paths_for_file(&repo_root, &path) {
+    for path in action_paths_for_file(&repo_root, &path, GitStatusLayer::Index) {
         run_git_command(&repo_root, &["restore", "--staged", "--", &path]).await?;
     }
     Ok(())
@@ -291,7 +308,7 @@ pub(crate) async fn revert_git_file(
     };
 
     let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
-    for path in action_paths_for_file(&repo_root, &path) {
+    for path in action_paths_for_file(&repo_root, &path, GitStatusLayer::Workdir) {
         if run_git_command(
             &repo_root,
             &["restore", "--staged", "--worktree", "--", &path],
@@ -888,7 +905,7 @@ pub(crate) async fn get_git_diffs(
             .recurse_untracked_dirs(true)
             .show_untracked_content(true);
 
-        let diff = match head_tree.as_ref() {
+        let mut diff = match head_tree.as_ref() {
             Some(tree) => repo
                 .diff_tree_to_workdir_with_index(Some(tree), Some(&mut options))
                 .map_err(|e| e.to_string())?,
@@ -896,6 +913,7 @@ pub(crate) async fn get_git_diffs(
                 .diff_tree_to_workdir_with_index(None, Some(&mut options))
                 .map_err(|e| e.to_string())?,
         };
+        find_git_diff_renames(&mut diff).map_err(|e| e.to_string())?;
 
         let mut results = Vec::new();
         let mut total_diff_bytes = 0usize;
@@ -1049,17 +1067,19 @@ pub(crate) async fn get_git_file_full_diff(
 
     let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
     let normalized_path = normalize_git_path(&path);
+    let diff_paths = git_diff_paths_for_file(&repo_root, &normalized_path);
     let full_diff = {
-        let args = [
-            "diff",
-            "HEAD",
-            "--unified=999999",
-            "--",
-            normalized_path.as_str(),
+        let mut args = vec![
+            "diff".to_string(),
+            "--find-renames".to_string(),
+            "--unified=999999".to_string(),
+            "HEAD".to_string(),
+            "--".to_string(),
         ];
+        args.extend(diff_paths.iter().cloned());
         let git_bin = resolve_git_binary().map_err(|e| format!("Failed to run git: {e}"))?;
         let output = crate::utils::async_command(git_bin)
-            .args(args)
+            .args(&args)
             .current_dir(&repo_root)
             .env("PATH", git_env_path())
             .output()
@@ -1081,15 +1101,17 @@ pub(crate) async fn get_git_file_full_diff(
         let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
 
         let mut options = DiffOptions::new();
+        for path in &diff_paths {
+            options.pathspec(path);
+        }
         options
-            .pathspec(&normalized_path)
             .include_untracked(true)
             .recurse_untracked_dirs(true)
             .show_untracked_content(true)
             .context_lines(200_000)
             .interhunk_lines(200_000);
 
-        let diff = match head_tree.as_ref() {
+        let mut diff = match head_tree.as_ref() {
             Some(tree) => repo
                 .diff_tree_to_workdir_with_index(Some(tree), Some(&mut options))
                 .map_err(|e| e.to_string())?,
@@ -1097,6 +1119,7 @@ pub(crate) async fn get_git_file_full_diff(
                 .diff_tree_to_workdir_with_index(None, Some(&mut options))
                 .map_err(|e| e.to_string())?,
         };
+        find_git_diff_renames(&mut diff).map_err(|e| e.to_string())?;
 
         for (index, _delta) in diff.deltas().enumerate() {
             let patch = match git2::Patch::from_diff(&diff, index) {

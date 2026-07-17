@@ -47,6 +47,8 @@ impl<'de> Deserialize<'de> for WorkspaceSessionAttributionMode {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct GitFileStatus {
     pub(crate) path: String,
+    #[serde(default, rename = "oldPath", skip_serializing_if = "Option::is_none")]
+    pub(crate) old_path: Option<String>,
     pub(crate) status: String,
     pub(crate) additions: i64,
     pub(crate) deletions: i64,
@@ -1936,9 +1938,34 @@ pub(crate) struct CodexProviderConfig {
 #[cfg(test)]
 mod tests {
     use super::{
-        AppSettings, BackendMode, EmailSenderProvider, EmailSenderSecurity, WorkspaceEntry,
-        WorkspaceGroup, WorkspaceKind, WorkspaceSessionAttributionMode, WorkspaceSettings,
+        AppSettings, BackendMode, EmailSenderProvider, EmailSenderSecurity, GitFileStatus,
+        WorkspaceEntry, WorkspaceGroup, WorkspaceKind, WorkspaceSessionAttributionMode,
+        WorkspaceSettings,
     };
+
+    #[test]
+    fn git_file_status_serializes_optional_rename_source_as_old_path() {
+        let renamed = GitFileStatus {
+            path: "archive/spec.md".to_string(),
+            old_path: Some("changes/spec.md".to_string()),
+            status: "R".to_string(),
+            additions: 0,
+            deletions: 0,
+        };
+        let renamed_json = serde_json::to_value(renamed).expect("serialize rename status");
+        assert_eq!(renamed_json["path"], "archive/spec.md");
+        assert_eq!(renamed_json["oldPath"], "changes/spec.md");
+
+        let modified = GitFileStatus {
+            path: "src/app.ts".to_string(),
+            old_path: None,
+            status: "M".to_string(),
+            additions: 1,
+            deletions: 0,
+        };
+        let modified_json = serde_json::to_value(modified).expect("serialize modified status");
+        assert!(modified_json.get("oldPath").is_none());
+    }
 
     #[test]
     fn app_settings_round_trips_last_composer_prefs_by_engine() {

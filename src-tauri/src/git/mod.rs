@@ -13,10 +13,13 @@ use tokio::time::{timeout, Duration};
 use crate::backend_budget::{estimate_json_payload_bytes, PayloadBudgetMetadata, ScanCacheState};
 use crate::git_utils::{
     blob_to_base64, build_git_file_blame, build_image_commit_diff, checkout_branch,
-    commit_to_entry, diff_patch_to_string, diff_stats_for_path, image_mime_type,
+    commit_to_entry, diff_patch_to_string, diff_stats_for_identity, find_git_diff_renames,
+    git_action_paths_for_file as action_paths_for_file, git_diff_paths_for_file,
+    git_status_path_identity, image_mime_type,
     list_git_repository_summaries as scan_git_repository_summaries,
     list_git_roots as scan_git_roots, parse_github_repo, path_has_git_repository_marker,
-    read_image_base64, resolve_git_root, resolve_git_root_for_scope,
+    read_image_base64, resolve_git_root, resolve_git_root_for_scope, GitStatusLayer,
+    GitStatusPathIdentity,
 };
 use crate::state::AppState;
 use crate::types::{
@@ -818,68 +821,6 @@ async fn run_git_command(repo_root: &Path, args: &[&str]) -> Result<(), String> 
     Err(detail.to_string())
 }
 
-fn action_paths_for_file(repo_root: &Path, path: &str) -> Vec<String> {
-    let target = normalize_git_path(path).trim().to_string();
-    if target.is_empty() {
-        return Vec::new();
-    }
-
-    let repo = match open_repository_at_root(repo_root) {
-        Ok(repo) => repo,
-        Err(_) => return vec![target],
-    };
-
-    let mut status_options = StatusOptions::new();
-    status_options
-        .include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .renames_head_to_index(true)
-        .renames_index_to_workdir(true)
-        .include_ignored(false);
-
-    let statuses = match repo.statuses(Some(&mut status_options)) {
-        Ok(statuses) => statuses,
-        Err(_) => return vec![target],
-    };
-
-    for entry in statuses.iter() {
-        let status = entry.status();
-        if !(status.contains(Status::WT_RENAMED) || status.contains(Status::INDEX_RENAMED)) {
-            continue;
-        }
-        let delta = entry.index_to_workdir().or_else(|| entry.head_to_index());
-        let Some(delta) = delta else {
-            continue;
-        };
-        let (Some(old_path), Some(new_path)) = (delta.old_file().path(), delta.new_file().path())
-        else {
-            continue;
-        };
-        let old_path = normalize_git_path(old_path.to_string_lossy().as_ref());
-        let new_path = normalize_git_path(new_path.to_string_lossy().as_ref());
-        if old_path != target && new_path != target {
-            continue;
-        }
-        if old_path == new_path || new_path.is_empty() {
-            return vec![target];
-        }
-        let mut result = Vec::new();
-        if !old_path.is_empty() {
-            result.push(old_path);
-        }
-        if !new_path.is_empty() && !result.contains(&new_path) {
-            result.push(new_path);
-        }
-        return if result.is_empty() {
-            vec![target]
-        } else {
-            result
-        };
-    }
-
-    vec![target]
-}
-
 fn parse_upstream_ref(name: &str) -> Option<(String, String)> {
     let trimmed = name.strip_prefix("refs/remotes/").unwrap_or(name);
     let mut parts = trimmed.splitn(2, '/');
@@ -1161,7 +1102,7 @@ fn collect_index_diff(
     }
 
     let index = repo.index().map_err(|e| e.to_string())?;
-    let diff = match head_tree {
+    let mut diff = match head_tree {
         Some(tree) => repo
             .diff_tree_to_index(Some(tree), Some(&index), Some(&mut options))
             .map_err(|e| e.to_string())?,
@@ -1169,6 +1110,7 @@ fn collect_index_diff(
             .diff_tree_to_index(None, Some(&index), Some(&mut options))
             .map_err(|e| e.to_string())?,
     };
+    find_git_diff_renames(&mut diff).map_err(|e| e.to_string())?;
 
     Ok(build_combined_diff(&diff))
 }
@@ -1193,7 +1135,7 @@ fn collect_worktree_diff(
         }
     }
 
-    let diff = match head_tree {
+    let mut diff = match head_tree {
         Some(tree) => repo
             .diff_tree_to_workdir_with_index(Some(tree), Some(&mut options))
             .map_err(|e| e.to_string())?,
@@ -1201,6 +1143,7 @@ fn collect_worktree_diff(
             .diff_tree_to_workdir_with_index(None, Some(&mut options))
             .map_err(|e| e.to_string())?,
     };
+    find_git_diff_renames(&mut diff).map_err(|e| e.to_string())?;
 
     Ok(build_combined_diff(&diff))
 }
@@ -1227,6 +1170,27 @@ fn normalize_commit_scope_path(path: &str) -> String {
     normalize_git_path(path).trim_matches('/').to_string()
 }
 
+fn register_commit_scope_identity(
+    identities_by_path: &mut HashMap<String, Vec<String>>,
+    identity: &GitStatusPathIdentity,
+) {
+    let mut action_paths = Vec::new();
+    if let Some(old_path) = identity.old_path.as_ref() {
+        action_paths.push(old_path.clone());
+    }
+    if !action_paths.contains(&identity.path) {
+        action_paths.push(identity.path.clone());
+    }
+    for alias in &action_paths {
+        let normalized_alias = normalize_commit_scope_path(alias);
+        if !normalized_alias.is_empty() {
+            identities_by_path
+                .entry(normalized_alias)
+                .or_insert_with(|| action_paths.clone());
+        }
+    }
+}
+
 fn build_commit_scope_diff_plan(
     repo: &Repository,
     selected_paths: &[String],
@@ -1247,16 +1211,6 @@ fn build_commit_scope_diff_plan(
     let mut unstaged_by_normalized_path = HashMap::new();
 
     for entry in statuses.iter() {
-        let raw_path = entry.path().unwrap_or("").trim();
-        if raw_path.is_empty() {
-            continue;
-        }
-
-        let normalized_path = normalize_commit_scope_path(raw_path);
-        if normalized_path.is_empty() {
-            continue;
-        }
-
         let status = entry.status();
         if status.intersects(
             Status::INDEX_NEW
@@ -1265,9 +1219,9 @@ fn build_commit_scope_diff_plan(
                 | Status::INDEX_RENAMED
                 | Status::INDEX_TYPECHANGE,
         ) {
-            staged_by_normalized_path
-                .entry(normalized_path.clone())
-                .or_insert_with(|| raw_path.to_string());
+            if let Some(identity) = git_status_path_identity(&entry, GitStatusLayer::Index) {
+                register_commit_scope_identity(&mut staged_by_normalized_path, &identity);
+            }
         }
 
         if status.intersects(
@@ -1277,9 +1231,9 @@ fn build_commit_scope_diff_plan(
                 | Status::WT_RENAMED
                 | Status::WT_TYPECHANGE,
         ) {
-            unstaged_by_normalized_path
-                .entry(normalized_path)
-                .or_insert_with(|| raw_path.to_string());
+            if let Some(identity) = git_status_path_identity(&entry, GitStatusLayer::Workdir) {
+                register_commit_scope_identity(&mut unstaged_by_normalized_path, &identity);
+            }
         }
     }
 
@@ -1294,16 +1248,20 @@ fn build_commit_scope_diff_plan(
             continue;
         }
 
-        if let Some(raw_path) = staged_by_normalized_path.get(&normalized_path) {
-            if seen_index_paths.insert(raw_path.clone()) {
-                index_paths.push(raw_path.clone());
+        if let Some(raw_paths) = staged_by_normalized_path.get(&normalized_path) {
+            for raw_path in raw_paths {
+                if seen_index_paths.insert(raw_path.clone()) {
+                    index_paths.push(raw_path.clone());
+                }
             }
             continue;
         }
 
-        if let Some(raw_path) = unstaged_by_normalized_path.get(&normalized_path) {
-            if seen_worktree_paths.insert(raw_path.clone()) {
-                worktree_only_paths.push(raw_path.clone());
+        if let Some(raw_paths) = unstaged_by_normalized_path.get(&normalized_path) {
+            for raw_path in raw_paths {
+                if seen_worktree_paths.insert(raw_path.clone()) {
+                    worktree_only_paths.push(raw_path.clone());
+                }
             }
         }
     }
@@ -2284,6 +2242,39 @@ mod tests {
     }
 
     #[test]
+    fn collect_commit_scope_diff_resolves_staged_rename_destination() {
+        let (root, repo) = create_temp_repo();
+        fs::write(root.join("before.txt"), "rename content\n").expect("write source file");
+        let mut index = repo.index().expect("repo index");
+        index
+            .add_path(Path::new("before.txt"))
+            .expect("stage source file");
+        let tree_id = index.write_tree().expect("write source tree");
+        let tree = repo.find_tree(tree_id).expect("find source tree");
+        let signature = git2::Signature::now("Test", "test@example.com").expect("signature");
+        repo.commit(Some("HEAD"), &signature, &signature, "init", &tree, &[])
+            .expect("commit source file");
+        drop(tree);
+
+        fs::rename(root.join("before.txt"), root.join("after.txt")).expect("rename source file");
+        let mut index = repo.index().expect("repo index");
+        index
+            .remove_path(Path::new("before.txt"))
+            .expect("remove source path");
+        index
+            .add_path(Path::new("after.txt"))
+            .expect("stage destination path");
+        index.write().expect("write renamed index");
+
+        let selected_paths = vec!["after.txt".to_string()];
+        let diff =
+            collect_commit_scope_diff(&root, Some(&selected_paths)).expect("collect rename diff");
+
+        assert!(diff.contains("before.txt"));
+        assert!(diff.contains("after.txt"));
+    }
+
+    #[test]
     fn collect_commit_scope_diff_keeps_staged_first_fallback_without_explicit_scope() {
         let (root, repo) = create_temp_repo();
         fs::write(root.join("staged.txt"), "staged\n").expect("write staged file");
@@ -2362,8 +2353,55 @@ mod tests {
         index.add_path(Path::new("b.txt")).expect("add new path");
         index.write().expect("write index");
 
-        let paths = action_paths_for_file(&root, "b.txt");
+        let paths = action_paths_for_file(&root, "b.txt", GitStatusLayer::Index);
         assert_eq!(paths, vec!["a.txt".to_string(), "b.txt".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn chained_rename_stage_and_unstage_mutate_the_intended_layer() {
+        let (stage_root, _stage_repo) = create_temp_repo();
+        fs::write(stage_root.join("a.txt"), "hello\n").expect("write staged fixture");
+        commit_all_with_message(&stage_root, "init staged fixture").await;
+        run_git_command(&stage_root, &["mv", "a.txt", "b.txt"])
+            .await
+            .expect("stage a to b rename");
+        fs::rename(stage_root.join("b.txt"), stage_root.join("c.txt"))
+            .expect("rename b to c in workdir");
+
+        for path in action_paths_for_file(&stage_root, "c.txt", GitStatusLayer::Workdir) {
+            run_git_command(&stage_root, &["add", "-A", "--", &path])
+                .await
+                .expect("stage workdir rename path");
+        }
+        let stage_index = open_repository_at_root(&stage_root)
+            .expect("open staged repo")
+            .index()
+            .expect("open staged index");
+        assert!(stage_index.get_path(Path::new("a.txt"), 0).is_none());
+        assert!(stage_index.get_path(Path::new("b.txt"), 0).is_none());
+        assert!(stage_index.get_path(Path::new("c.txt"), 0).is_some());
+
+        let (unstage_root, _unstage_repo) = create_temp_repo();
+        fs::write(unstage_root.join("a.txt"), "hello\n").expect("write unstaged fixture");
+        commit_all_with_message(&unstage_root, "init unstaged fixture").await;
+        run_git_command(&unstage_root, &["mv", "a.txt", "b.txt"])
+            .await
+            .expect("stage a to b rename");
+        fs::rename(unstage_root.join("b.txt"), unstage_root.join("c.txt"))
+            .expect("rename b to c in workdir");
+
+        for path in action_paths_for_file(&unstage_root, "b.txt", GitStatusLayer::Index) {
+            run_git_command(&unstage_root, &["restore", "--staged", "--", &path])
+                .await
+                .expect("unstage index rename path");
+        }
+        let unstage_index = open_repository_at_root(&unstage_root)
+            .expect("open unstaged repo")
+            .index()
+            .expect("open unstaged index");
+        assert!(unstage_index.get_path(Path::new("a.txt"), 0).is_some());
+        assert!(unstage_index.get_path(Path::new("b.txt"), 0).is_none());
+        assert!(unstage_index.get_path(Path::new("c.txt"), 0).is_none());
     }
 
     #[test]

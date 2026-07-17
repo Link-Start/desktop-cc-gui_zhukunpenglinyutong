@@ -7,9 +7,9 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-25.md`
-- **Total Sessions**: 1023
-- **Last Active**: 2026-07-17
+- **Active File**: `journal-26.md`
+- **Total Sessions**: 1027
+- **Last Active**: 2026-07-18
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~1906 | Active |
+| `journal-26.md` | ~73 | Active |
+| `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +54,10 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1027 | 2026-07-18 | 修复 Git 重命名与删除文件路径身份 | `e3c8e569` | `feature/v-0.7.4` |
+| 1026 | 2026-07-18 | 校准项目文档与索引 | `f897e112` | `feature/v-0.7.4` |
+| 1025 | 2026-07-17 | 归档近完成 OpenSpec 提案并建立全量索引 | `f75ccf8e`, `c1e2bba9`, `947f7150` | `feature/v-0.7.4` |
+| 1024 | 2026-07-17 | 归档已验证 OpenSpec 提案 | `aa6ca752`, `ed1234a2`, `ccdf84d7` | `feature/v-0.7.4` |
 | 1023 | 2026-07-17 | 优化 Git 操作说明与命令视觉 | `e0c5f293` | `feature/v-0.7.4` |
 | 1022 | 2026-07-17 | 迁移 Git Diff 选择器并完成兼容性收口 | `b3f48d24` | `feature/v-0.7.4` |
 | 1021 | 2026-07-17 | 优化 Git History 标题栏视觉层级与密度 | `7b7dfc71` | `feature/v-0.7.4` |

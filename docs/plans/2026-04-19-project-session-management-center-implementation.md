@@ -13,9 +13,9 @@
 ### Task 1: Freeze Scope And Contracts
 
 **Files:**
-- Reference: [proposal.md](/Users/chenxiangning/code/AI/github/mossx/openspec/changes/project-session-management-center/proposal.md)
-- Reference: [design.md](/Users/chenxiangning/code/AI/github/mossx/openspec/changes/project-session-management-center/design.md)
-- Reference: [workspace-session-management spec](/Users/chenxiangning/code/AI/github/mossx/openspec/changes/project-session-management-center/specs/workspace-session-management/spec.md)
+- Reference: [proposal.md](../../openspec/changes/archive/2026-04-19-project-session-management-center/proposal.md)
+- Reference: [design.md](../../openspec/changes/archive/2026-04-19-project-session-management-center/design.md)
+- Reference: [workspace-session-management spec](../../openspec/changes/archive/2026-04-19-project-session-management-center/specs/workspace-session-management/spec.md)
 
 **Step 1: Freeze implementation defaults**
 
@@ -60,10 +60,10 @@ git commit -m "docs: freeze project session management implementation contract"
 ### Task 2: Backend Catalog Read Path
 
 **Files:**
-- Modify: [src-tauri/src/command_registry.rs](/Users/chenxiangning/code/AI/github/mossx/src-tauri/src/command_registry.rs)
-- Modify: [src-tauri/src/state.rs](/Users/chenxiangning/code/AI/github/mossx/src-tauri/src/state.rs)
-- Modify: [src-tauri/src/codex/mod.rs](/Users/chenxiangning/code/AI/github/mossx/src-tauri/src/codex/mod.rs)
-- Modify: [src-tauri/src/storage.rs](/Users/chenxiangning/code/AI/github/mossx/src-tauri/src/storage.rs)
+- Modify: [src-tauri/src/command_registry.rs](../../src-tauri/src/command_registry.rs)
+- Modify: [src-tauri/src/state.rs](../../src-tauri/src/state.rs)
+- Modify: [src-tauri/src/codex/mod.rs](../../src-tauri/src/codex/mod.rs)
+- Modify: [src-tauri/src/storage.rs](../../src-tauri/src/storage.rs)
 - Create: `src-tauri/src/session_management.rs`
 - Test: `src-tauri/src/session_management/tests.rs` or colocated module tests
 
@@ -115,8 +115,8 @@ cargo test --manifest-path src-tauri/Cargo.toml session_management
 
 **Files:**
 - Modify: `src-tauri/src/session_management.rs`
-- Modify: [src-tauri/src/local_usage/session_delete.rs](/Users/chenxiangning/code/AI/github/mossx/src-tauri/src/local_usage/session_delete.rs)
-- Modify: [src-tauri/src/shared/codex_core.rs](/Users/chenxiangning/code/AI/github/mossx/src-tauri/src/shared/codex_core.rs)
+- Modify: [src-tauri/src/local_usage/session_delete.rs](../../src-tauri/src/local_usage/session_delete.rs)
+- Modify: [src-tauri/src/shared/codex_core.rs](../../src-tauri/src/shared/codex_core.rs)
 - Test: backend session management tests
 
 **Step 1: Implement `archive_workspace_sessions`**
@@ -158,8 +158,8 @@ cargo test --manifest-path src-tauri/Cargo.toml session_management local_usage
 ### Task 4: Frontend Service And Types
 
 **Files:**
-- Modify: [src/services/tauri.ts](/Users/chenxiangning/code/AI/github/mossx/src/services/tauri.ts)
-- Modify: [src/types.ts](/Users/chenxiangning/code/AI/github/mossx/src/types.ts)
+- Modify: [src/services/tauri.ts](../../src/services/tauri.ts)
+- Modify: [src/types.ts](../../src/types.ts)
 - Create: `src/features/session-management/types.ts`
 - Create: `src/features/session-management/services/sessionManagement.ts`
 - Test: service mapping tests
@@ -196,9 +196,9 @@ npm run test -- sessionManagement tauri
 ### Task 5: Dedicated Settings Page
 
 **Files:**
-- Modify: [src/features/settings/components/SettingsView.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/settings/components/SettingsView.tsx)
-- Modify: [src/features/settings/components/settings-view/settingsViewAppearance.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/settings/components/settings-view/settingsViewAppearance.ts)
-- Modify: [src/features/settings/components/settings-view/sections/OtherSection.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/settings/components/settings-view/sections/OtherSection.tsx)
+- Modify: [src/features/settings/components/SettingsView.tsx](../../src/features/settings/components/SettingsView.tsx)
+- Modify: [src/features/settings/components/settings-view/settingsViewAppearance.ts](../../src/features/settings/components/settings-view/settingsViewAppearance.ts)
+- Modify: [src/features/settings/components/settings-view/sections/OtherSection.tsx](../../src/features/settings/components/settings-view/sections/OtherSection.tsx)
 - Create: `src/features/session-management/components/SessionManagementView.tsx`
 - Create: `src/features/session-management/hooks/useWorkspaceSessionCatalog.ts`
 - Create: `src/features/session-management/utils/*`
@@ -248,9 +248,9 @@ Cover:
 ### Task 6: Main UI Active-Only Visibility Projection
 
 **Files:**
-- Modify: [src/features/threads/hooks/useThreadActions.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/threads/hooks/useThreadActions.ts)
-- Modify: [src/features/threads/hooks/useThreadActions.helpers.ts](/Users/chenxiangning/code/AI/github/mossx/src/features/threads/hooks/useThreadActions.helpers.ts)
-- Modify: [src/features/workspaces/components/WorkspaceHome.tsx](/Users/chenxiangning/code/AI/github/mossx/src/features/workspaces/components/WorkspaceHome.tsx)
+- Modify: [src/features/threads/hooks/useThreadActions.ts](../../src/features/threads/hooks/useThreadActions.ts)
+- Modify: [src/features/threads/hooks/useThreadActions.helpers.ts](../../src/features/threads/hooks/useThreadActions.helpers.ts)
+- Modify: [src/features/workspaces/components/WorkspaceHome.tsx](../../src/features/workspaces/components/WorkspaceHome.tsx)
 - Modify: `src/features/app/components/Sidebar.tsx`
 - Modify: `src/features/layout/hooks/topbarSessionTabs.ts`
 - Test: existing thread/topbar/home tests
@@ -293,7 +293,7 @@ npm run test -- useThreadActions WorkspaceHome topbarSessionTabs Sidebar
 
 **Files:**
 - Modify: relevant frontend/backend tests
-- Reference: [tasks.md](/Users/chenxiangning/code/AI/github/mossx/openspec/changes/project-session-management-center/tasks.md)
+- Reference: [tasks.md](../../openspec/changes/archive/2026-04-19-project-session-management-center/tasks.md)
 
 **Step 1: Validate real pagination**
 
@@ -331,7 +331,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ### Task 8: Rollout And Recovery
 
 **Files:**
-- Reference: [design.md](/Users/chenxiangning/code/AI/github/mossx/openspec/changes/project-session-management-center/design.md)
+- Reference: [design.md](../../openspec/changes/archive/2026-04-19-project-session-management-center/design.md)
 
 **Step 1: Roll out backend contract first**
 

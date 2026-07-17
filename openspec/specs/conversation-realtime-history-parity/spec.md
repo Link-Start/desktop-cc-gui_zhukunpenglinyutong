@@ -103,7 +103,7 @@ structured tool facts and user-readable control events MUST retain their transcr
 
 ### Requirement: Presentation State MUST Not Become Durable Transcript Fact
 
-presentation-only state MUST remain outside durable transcript parity checks.
+presentation-only state MUST remain outside durable transcript parity checks, and restoring-history presentation MUST derive from an actual history restore lifecycle rather than provisional thread identity.
 
 #### Scenario: history loading placeholder does not persist as message
 
@@ -117,6 +117,13 @@ presentation-only state MUST remain outside durable transcript parity checks.
 - **THEN** the message surface MAY show a scoped restoring-history status instead of the generic empty-thread placeholder
 - **AND** that status MUST clear when history restore settles or the selected thread changes
 - **AND** the restoring-history status MUST NOT be persisted, replayed, or counted as a conversation item
+
+#### Scenario: freshly created pending draft is not history loading
+
+- **WHEN** the user creates a new conversation whose provisional thread identity is pending
+- **AND** the draft has no visible conversation items yet
+- **THEN** the message surface MUST present the normal empty conversation state
+- **AND** it MUST NOT infer restoring-history status from the pending identity alone
 
 #### Scenario: Markdown presentation convergence does not change fact identity
 

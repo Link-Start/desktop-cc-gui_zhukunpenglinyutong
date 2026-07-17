@@ -17,13 +17,13 @@ Before submitting or committing, use this checklist to ensure work completeness.
 
 ```bash
 # Must pass
-pnpm lint
-pnpm type-check
-pnpm test
+npm run lint
+npm run typecheck
+npm run test
 ```
 
-- [ ] `pnpm lint` passes with 0 errors?
-- [ ] `pnpm type-check` passes with no type errors?
+- [ ] `npm run lint` passes with 0 errors?
+- [ ] `npm run typecheck` passes with no type errors?
 - [ ] Tests pass?
 - [ ] No `console.log` statements (use logger)?
 - [ ] No non-null assertions (the `x!` operator)?
@@ -97,7 +97,7 @@ If the change spans multiple layers:
 
 ```bash
 # 1. Code checks
-pnpm lint && pnpm type-check
+npm run lint && npm run typecheck
 
 # 2. View changes
 git status

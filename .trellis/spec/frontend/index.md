@@ -38,7 +38,7 @@
 - 涉及 `useEffect`、polling、listener 时先读 [Hook Guidelines](./hook-guidelines.md)。
 - 涉及 refactor 或大文件修改时先读 [Quality Guidelines](./quality-guidelines.md)。
 - 涉及 CodeMirror / `@uiw/react-codemirror` 拆分 lazy 边界、压缩 startup bundle 时，先读 [CodeMirror State-Coupled Extensions 不可跨越 Lazy Boundary](./quality-guidelines.md#codemirror-state-coupled-extensions-不可跨越-lazy-boundary)。
-- 涉及多 session 并行 / 长 turn 实时对话 / 性能卡顿排查时,额外读 [Parallel Conversation Runtime Residuals](./parallel-conversation-runtime-residuals.md) + [docs/perf/parallel-conversation-jank-handbook.md](../../docs/perf/parallel-conversation-jank-handbook.md)。
+- 涉及多 session 并行 / 长 turn 实时对话 / 性能卡顿排查时，额外读 [Parallel Conversation Runtime Residuals](./parallel-conversation-runtime-residuals.md) + [docs/perf/parallel-conversation-jank-handbook.md](../../../docs/perf/parallel-conversation-jank-handbook.md)。
 - 涉及 live conversation message / Markdown / timeline render path 时，额外读 [Messages Streaming Render Contract](./messages-streaming-render-contract.md)。
 - 涉及 UI -> service -> tauri/rust 的跨层变更，额外读：
   - `../guides/cross-layer-thinking-guide.md`

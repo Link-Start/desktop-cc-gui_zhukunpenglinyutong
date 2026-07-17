@@ -53,6 +53,63 @@ describe("gitChangeModel", () => {
     });
   });
 
+  it("preserves normalized rename source identity", () => {
+    const renamedFile: GitFileStatus = {
+      path: "archive/spec.md",
+      oldPath: "changes\\spec.md",
+      status: "R",
+      additions: 0,
+      deletions: 0,
+    };
+    const result = buildCanonicalGitChanges({
+      files: [renamedFile],
+      unstagedFiles: [renamedFile],
+      diffs: [],
+    });
+
+    expect(result.files[0]).toMatchObject({
+      path: "archive/spec.md",
+      oldPath: "changes/spec.md",
+      status: "R",
+    });
+    expect(result.unstagedFiles[0]?.oldPath).toBe("changes/spec.md");
+  });
+
+  it("does not synthesize an old-path delete fallback for a canonical rename", () => {
+    const renamedFile: GitFileStatus = {
+      path: "archive/spec.md",
+      oldPath: "changes/spec.md",
+      status: "R",
+      additions: 1,
+      deletions: 0,
+    };
+    const result = buildCanonicalGitChanges({
+      files: [renamedFile],
+      unstagedFiles: [renamedFile],
+      diffs: [
+        diffFile(
+          "archive/spec.md",
+          "diff --git a/archive/spec.md b/archive/spec.md\n@@ -1 +1,2 @@\n old\n+new",
+          "A",
+        ),
+        diffFile(
+          "changes/spec.md",
+          "diff --git a/changes/spec.md b/changes/spec.md\ndeleted file mode 100644\n--- a/changes/spec.md\n+++ /dev/null\n@@ -1 +0,0 @@\n-old",
+          "D",
+        ),
+      ],
+    });
+
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0]).toMatchObject({
+      path: "archive/spec.md",
+      oldPath: "changes/spec.md",
+      status: "R",
+    });
+    expect(result.files[0]?.isDiffOnlyFallback).toBeUndefined();
+    expect(result.unstagedFiles).toHaveLength(1);
+  });
+
   it("fills missing status stats from matching diff evidence", () => {
     const result = buildCanonicalGitChanges({
       files: [statusFile("CHANGELOG.md", "M", 0, 0)],

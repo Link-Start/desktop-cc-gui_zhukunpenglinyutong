@@ -32,7 +32,7 @@ export function useGitDiffs(
       files
         .map(
           (file) =>
-            `${file.path}:${file.status}:${file.additions}:${file.deletions}`,
+            `${file.path}:${file.oldPath ?? ""}:${file.status}:${file.additions}:${file.deletions}`,
         )
         .sort()
         .join("|"),

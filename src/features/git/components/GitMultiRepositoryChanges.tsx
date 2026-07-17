@@ -1,10 +1,20 @@
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import type { CommitMessageEngine } from "../../../services/tauri";
 import type { RepositoryGitStatus } from "../hooks/useMultiRepositoryGitStatus";
 import { normalizeGitPath } from "../utils/commitScope";
-import { DiffSection, type DiffFile } from "./GitDiffPanelFileSections";
+import {
+  DiffSection,
+  type DiffFile,
+  isDeletedDiffFile,
+} from "./GitDiffPanelFileSections";
 import { InclusionToggle, type InclusionState } from "./GitDiffPanelInclusion";
 import { CommitMessageEngineIcon } from "./CommitMessageEngineIcon";
 
@@ -155,6 +165,19 @@ export function GitMultiRepositoryChanges({
   const selectedCount = selections.reduce((count, selection) => count + selection.selectedPaths.length, 0);
   const canCommit = commitMessage.trim().length > 0 && selectedCount > 0 && !commitLoading;
   const canGenerateCommitMessage = selectedCount > 0 && !commitMessageLoading && !commitLoading;
+  const activateRepositoryFile = useCallback((
+    status: RepositoryGitStatus,
+    path: string,
+    section: RepositorySection,
+  ) => {
+    const file = (section === "staged" ? status.stagedFiles : status.unstagedFiles)
+      .find((candidate) => candidate.path === path);
+    if (file && isDeletedDiffFile(file)) {
+      onOpenFilePreview?.(status.repositoryRoot, file, section);
+      return;
+    }
+    onOpenFile?.(status.repositoryRoot, path);
+  }, [onOpenFile, onOpenFilePreview]);
 
   const setGroupSelection = (repositoryRoot: string, paths: string[], selected: boolean, stagedPaths: Set<string>) => {
     setSelectionOverrides((previous) => {
@@ -244,16 +267,16 @@ export function GitMultiRepositoryChanges({
               onToggleCollapsed={() => toggleSectionCollapsed(status.repositoryRoot, "staged")}
               selectedFiles={EMPTY_SELECTED_FILES}
               selectedPath={null}
-              onSelectFile={(path) => {
-                if (path) onOpenFile?.(status.repositoryRoot, path);
-              }}
+              onActivateFile={(path, section) =>
+                activateRepositoryFile(status, path, section)
+              }
               onUnstageFile={onUnstageFile ? async (path) => {
                 await onUnstageFile(status.repositoryRoot, path);
                 await onRefresh?.();
               } : undefined}
               isCommitPathLocked={isCommitPathLocked}
               onSetCommitSelection={(paths, selected) => setGroupSelection(status.repositoryRoot, paths, selected, stagedPaths)}
-              onFileClick={(_event, path) => onOpenFile?.(status.repositoryRoot, path)}
+              onFileClick={(_event, path) => activateRepositoryFile(status, path, "staged")}
               onOpenFilePreview={(file, section) => onOpenFilePreview?.(
                 status.repositoryRoot,
                 file,
@@ -285,9 +308,9 @@ export function GitMultiRepositoryChanges({
               onToggleCollapsed={() => toggleSectionCollapsed(status.repositoryRoot, "unstaged")}
               selectedFiles={EMPTY_SELECTED_FILES}
               selectedPath={null}
-              onSelectFile={(path) => {
-                if (path) onOpenFile?.(status.repositoryRoot, path);
-              }}
+              onActivateFile={(path, section) =>
+                activateRepositoryFile(status, path, section)
+              }
               onStageAllChanges={onStageAll ? async () => {
                 await onStageAll(status.repositoryRoot);
                 await onRefresh?.();
@@ -299,7 +322,7 @@ export function GitMultiRepositoryChanges({
               onDiscardFile={onDiscardFile ? (path) => onDiscardFile(status.repositoryRoot, path) : undefined}
               isCommitPathLocked={isCommitPathLocked}
               onSetCommitSelection={(paths, selected) => setGroupSelection(status.repositoryRoot, paths, selected, stagedPaths)}
-              onFileClick={(_event, path) => onOpenFile?.(status.repositoryRoot, path)}
+              onFileClick={(_event, path) => activateRepositoryFile(status, path, "unstaged")}
               onOpenFilePreview={(file, section) => onOpenFilePreview?.(
                 status.repositoryRoot,
                 file,

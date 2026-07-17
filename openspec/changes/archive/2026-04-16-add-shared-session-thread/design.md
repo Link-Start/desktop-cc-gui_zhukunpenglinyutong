@@ -7,7 +7,7 @@
 - `conversationCurtainContracts.ts` 与现有 realtime/history loader 已经把不同引擎的事件归一化到统一幕布状态，这是本提案最大的可复用基础。
 - `useThreadActions.ts` 当前仍按 native engine 选择 history loader 与会话恢复路径；`start_thread` / `send_user_message` / `resume_thread` 也主要围绕 native thread 展开。
 - Rust 侧已有原子写入与文件锁基础设施（`storage.rs`、`client_storage.rs`），足够承接新的 backend-owned shared store。
-- 仓库已经启用大文件治理门禁 [large-file-governance.yml](/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml)，其 hard gate 要求新增超大文件必须在同一 PR 内完成拆分；对应策略见 [large-file-governance-playbook.md](/Users/chenxiangning/code/AI/github/mossx/docs/architecture/large-file-governance-playbook.md)。
+- 仓库已经启用大文件治理门禁 [large-file-governance.yml](../../../../.github/workflows/large-file-governance.yml)，其 hard gate 要求新增超大文件必须在同一 PR 内完成拆分；对应策略见 [large-file-governance-playbook.md](../../../../docs/architecture/large-file-governance-playbook.md)。
 
 这说明 `shared session` 不应该被实现成“某个引擎 thread 的 UI 马甲”，而应该是一个新的会话聚合层：上层提供单一共享对话，下层把每个 turn 路由给某个 native engine 执行，并把结果回写到一份 canonical conversation log。
 

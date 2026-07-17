@@ -2317,6 +2317,88 @@ describe("GitDiffPanel", () => {
     expect(onSelectFile).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["mouse click", (row: HTMLElement) => fireEvent.click(row), "flat" as const],
+    ["Enter", (row: HTMLElement) => fireEvent.keyDown(row, { key: "Enter" }), "tree" as const],
+  ])("opens a renamed destination with %s", (_activation, activate, gitDiffListView) => {
+    const onSelectFile = vi.fn();
+    const onOpenFile = vi.fn();
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        gitDiffListView={gitDiffListView}
+        onSelectFile={onSelectFile}
+        onOpenFile={onOpenFile}
+        unstagedFiles={[
+          {
+            path: "archive/spec.md",
+            oldPath: "changes/spec.md",
+            status: "R",
+            additions: 0,
+            deletions: 0,
+          },
+        ]}
+      />,
+    );
+
+    activate(
+      document.querySelector<HTMLElement>(
+        '.diff-row[data-path="archive/spec.md"]',
+      ) as HTMLElement,
+    );
+
+    expect(onOpenFile).toHaveBeenCalledOnce();
+    expect(onOpenFile).toHaveBeenCalledWith("archive/spec.md");
+    expect(onOpenFile).not.toHaveBeenCalledWith("changes/spec.md");
+    expect(onSelectFile).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["mouse click", (row: HTMLElement) => fireEvent.click(row)],
+    ["Space", (row: HTMLElement) => fireEvent.keyDown(row, { key: " " })],
+  ])("routes deleted row %s activation to read-only diff preview", (_activation, activate) => {
+    const onOpenFile = vi.fn();
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        workspaceId="ws-1"
+        workspacePath="/workspace"
+        onOpenFile={onOpenFile}
+        diffEntries={[
+          {
+            path: "src/deleted.ts",
+            status: "D",
+            diff: "@@ -1 +0,0 @@\n-export {};",
+          },
+        ]}
+        unstagedFiles={[
+          {
+            path: "src/deleted.ts",
+            status: "D",
+            additions: 0,
+            deletions: 1,
+          },
+        ]}
+      />,
+    );
+
+    activate(
+      document.querySelector<HTMLElement>(
+        '.diff-row[data-path="src/deleted.ts"]',
+      ) as HTMLElement,
+    );
+
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(document.querySelector(".git-history-diff-modal")).toBeTruthy();
+    const previewProps = mockEditableDiffReviewSurface.mock.lastCall?.[0] as {
+      files?: Array<{ filePath?: string; status?: string }>;
+    };
+    expect(previewProps.files?.[0]).toMatchObject({
+      filePath: "src/deleted.ts",
+      status: "D",
+    });
+  });
+
   it("opens modal preview from explicit action without triggering row selection", () => {
     const onSelectFile = vi.fn();
     const onCreateCodeAnnotation = vi.fn();

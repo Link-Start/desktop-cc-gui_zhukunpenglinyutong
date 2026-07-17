@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkspaceInfo } from "../../../types";
+import type { GitFileStatus, WorkspaceInfo } from "../../../types";
 import { getGitStatus } from "../../../services/tauri";
 import { useGitStatus } from "./useGitStatus";
 
@@ -32,7 +32,7 @@ const makeStatus = (
   fileCount = 0,
   isGitRepository = true,
 ) => {
-  const files = Array.from({ length: fileCount }, (_, index) => ({
+  const files: GitFileStatus[] = Array.from({ length: fileCount }, (_, index) => ({
     path: `src/file-${index}.ts`,
     status: "M",
     additions: 1,
@@ -117,6 +117,39 @@ describe("useGitStatus", () => {
 
     expect(getGitStatusMock).toHaveBeenCalledTimes(2);
     expect(result.current.status).toBe(initialStatus);
+
+    unmount();
+  });
+
+  it("publishes a new status when rename source identity changes", async () => {
+    const firstStatus = makeStatus("main", 0, 0, 1);
+    const secondStatus = makeStatus("main", 0, 0, 1);
+    firstStatus.files[0]!.oldPath = "src/old-a.ts";
+    firstStatus.stagedFiles[0]!.oldPath = "src/old-a.ts";
+    secondStatus.files[0]!.oldPath = "src/old-b.ts";
+    secondStatus.stagedFiles[0]!.oldPath = "src/old-b.ts";
+    const getGitStatusMock = vi.mocked(getGitStatus);
+    getGitStatusMock
+      .mockResolvedValueOnce(firstStatus)
+      .mockResolvedValueOnce(secondStatus);
+
+    const { result, unmount } = renderHook(
+      ({ active }: { active: WorkspaceInfo | null }) => useGitStatus(active),
+      { initialProps: { active: workspace } },
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const initialStatus = result.current.status;
+
+    await act(async () => {
+      vi.advanceTimersByTime(15000);
+      await Promise.resolve();
+    });
+
+    expect(result.current.status).not.toBe(initialStatus);
+    expect(result.current.status.files[0]?.oldPath).toBe("src/old-b.ts");
 
     unmount();
   });

@@ -12,11 +12,11 @@
 
 </div>
 
-**ccgui** is an open-source desktop client for AI coding. In plain words: it takes command-line AI coding tools like Claude Code, Codex CLI, and OpenCode, and wraps them in a friendly graphical interface.
+**ccgui** is an open-source desktop client for AI coding. In plain words: it brings command-line AI coding runtimes such as Claude Code, Codex CLI, Gemini CLI, and OpenCode into one graphical interface.
 
-No more staring at a black terminal. Open ccgui, pick a project, and chat with AI to write code, fix bugs, and commit to Git. Which files the AI touched, which commands it ran, how much it cost — everything is visible at a glance.
+No more staring at a black terminal. Open ccgui, pick a project, and chat with AI to write code, fix bugs, and commit to Git. File and tool activity is visible as it happens; token usage and estimated cost appear when the selected runtime supplies the required metadata.
 
-The app is built with **Tauri 2 + React 19 + TypeScript + Rust**. All your data stays on your own machine, and it runs on macOS, Windows, and Linux.
+The app is built with **Tauri 2 + React 19 + TypeScript + Rust** and runs on macOS, Windows, and Linux. App settings, workspace indexes, and client state are persisted locally by default. Content sent to an AI provider, Browser Agent, email service, or an optional remote/web service follows the boundary of that configured service.
 
 > This project originated from [CodexMonitor](https://github.com/Dimillian/CodexMonitor) and has grown into a full-featured multi-engine AI coding client.
 
@@ -28,15 +28,15 @@ The app is built with **Tauri 2 + React 19 + TypeScript + Rust**. All your data 
 
 ### One client, multiple AI engines
 
-- Supports **Claude Code**, **Codex CLI**, and **OpenCode** — switch anytime, or mix them within the same project.
-- Works with any channel: official APIs, regional relays, aggregators, and third-party providers. Each engine can keep multiple provider profiles.
+- Registers runtime adapters for **Claude Code**, **Codex CLI**, **Gemini CLI**, and **OpenCode**. Gemini is enabled by default; OpenCode is optional. Their planned retirement remains an active migration, not shipped behavior.
+- Claude and Codex support managed provider profiles. Gemini and OpenCode retain the provider/configuration model exposed by their own runtimes.
 - Sessions survive restarts: close the app and your conversation history is still there. Resume broken sessions and see how much context each one is using.
 
 ### A chat box designed for coding
 
 - The input box supports `@` file references, slash commands, pasted images, and attachments.
-- Everything the AI does is transparent: file edits, shell commands, and reads all show up as live cards.
-- Said something wrong? Messages support **rewind** and **fork** — jump back to any earlier point and try again.
+- Supported file edits, shell/tool calls, and reads show up as live cards.
+- Claude/Codex sessions expose **rewind** and **fork** where the current runtime capability supports them.
 - Too lazy to type? Use **voice dictation**. Bad at prompts? The built-in **prompt enhancer** polishes them for you.
 - Queue follow-ups: while the AI is busy, line up your next question.
 
@@ -51,22 +51,22 @@ The app is built with **Tauri 2 + React 19 + TypeScript + Rust**. All your data 
 
 - **Plan panel**: the AI's execution plan listed step by step, so you always know where it is.
 - **Kanban board**: drag task cards around to manage your iteration.
-- **Task Center**: every AI run is recorded — retry failures and inspect execution logs anytime.
+- **Task Center**: inspect Kanban/orchestration task runs, logs, and artifact summaries; retry, resume, cancel, or fork when the run and engine support that action.
 - **Intent Canvas**: sketch your plan on a canvas before writing any code.
 
 ### Project intelligence (the part that makes ccgui different)
 
 - **Project Map**: the AI scans your project and builds an interactive knowledge graph — file relations, API contracts, and module dependencies at a glance, with incremental updates.
-- **Project Memory**: store key conventions and hard-earned lessons as long-term memory the AI remembers next time.
-- **Context Ledger**: see exactly which context sources went into each answer and how much each one weighs.
-- **Usage stats**: token consumption, cost, and cache hit rates in clear reports, plus a monthly budget cap.
+- **Project Memory**: store key conventions and lessons, then inject selected memories with `@@` or explicitly enable Memory Reference retrieval for the current turn.
+- **Context Ledger**: inspect selected or inherited context sources together with available token/character estimates, freshness, and attribution confidence.
+- **Usage stats**: inspect token, cache, and estimated-cost metadata when the runtime provides it. Monthly budget thresholds are local visual guidance; they do not interrupt the runtime.
 
 ### Extensions and personalization
 
-- **MCP market, Skills market, Plugin market**: one click to install and give the AI new abilities.
-- **Browser Agent**: let the AI read web pages, so you stop copy-pasting docs.
-- **Themes galore**: 15+ built-in themes (VS Code style), custom colors, window transparency, and adjustable fonts.
-- **Bilingual UI** (English / Chinese) and fully customizable keyboard shortcuts.
+- Discover and manage available MCP servers and Skills, and enable bundled curated skills. MCP/Plugin marketplace entries are currently **Coming Soon**.
+- **Browser Agent**: open policy-allowed HTTP(S) pages and collect bounded read-only context. Snapshot/navigation support can degrade by platform; element and form actions are not yet supported.
+- **21 built-in VS Code-derived themes**, plus user-message color, window transparency, and UI/code font controls.
+- The WebView UI ships **10 languages**. The native desktop menu is localized for Chinese and English today; other locales fall back to Chinese. Composer, panel, navigation, and file-action shortcuts are configurable.
 - macOS / Windows / Linux, with in-app **auto-update**.
 
 For what changed in each release, see [CHANGELOG.md](./CHANGELOG.md).
@@ -81,7 +81,7 @@ Grab the installer for your platform from the [Releases page](https://github.com
 | --- | --- |
 | macOS (Apple Silicon) | `aarch64.dmg` |
 | macOS (Intel) | `x64.dmg` |
-| Windows | `.exe` / `.msi` |
+| Windows | `.exe` (NSIS) |
 | Linux | `.AppImage` |
 
 After installing, configure your AI engine in Settings (e.g. a Claude Code API key or local CLI), add a project folder, and you're good to go.
@@ -171,8 +171,8 @@ desktop-cc-gui/
 │   │   ├── project-map/    #    Project knowledge map
 │   │   └── ...             #    Each folder is a self-contained feature
 │   ├── components/         # Shared UI components used across features
-│   ├── services/           # Business logic; tauri.ts is the frontend↔Rust bridge
-│   ├── i18n/               # English / Chinese UI strings
+│   ├── services/           # Business logic; services/tauri/* contains frontend↔Rust wrappers
+│   ├── i18n/               # 10 shipped WebView locale bundles
 │   ├── styles/             # Global styles
 │   └── lib/ utils/         # Utility functions
 ├── src-tauri/              # Rust backend
@@ -184,8 +184,8 @@ desktop-cc-gui/
 ### The typical workflow for changing a feature
 
 1. **UI-only change**: find the matching module under `src/features/` and edit there. New components live inside that feature's own folder.
-2. **Needs backend support**: add a `#[tauri::command]` in the matching `src-tauri/src/` module, then add a wrapper in `src/services/tauri.ts`, and the frontend can call it.
-3. **Changed any UI text**: add **both** English and Chinese strings in `src/i18n/` — hardcoded UI text is not allowed.
+2. **Needs backend support**: add a `#[tauri::command]` in the matching `src-tauri/src/` module, register it in `src-tauri/src/command_registry.rs`, and add the frontend wrapper under `src/services/tauri/<domain>.ts` (re-export it from `src/services/tauri.ts` when needed).
+3. **Changed any UI text**: route it through i18n and keep every shipped bundle under `src/i18n/locales/` synchronized — hardcoded UI text is not allowed.
 
 ### Everyday commands
 
@@ -204,7 +204,7 @@ desktop-cc-gui/
 - Test files sit next to the source, named `xxx.test.ts` / `xxx.test.tsx`.
 - The framework is [Vitest](https://vitest.dev/) — it works almost exactly like Jest.
 - Heavy integration tests are named `xxx.integration.test.tsx`; they're skipped by default and run with `npm run test:integration`.
-- Rust tests go in their modules as usual and run with `cargo test`.
+- Rust tests go in their modules as usual and run from the repository root with `cargo test --manifest-path src-tauri/Cargo.toml`.
 
 ---
 
@@ -212,11 +212,11 @@ desktop-cc-gui/
 
 Not many rules, but each exists for a reason. Run through them before submitting:
 
-1. **Run the big three before committing**: `npm run lint && npm run typecheck && npm run test` — all green before you push. CI runs them too; passing locally saves round trips.
-2. **UI text must go through i18n**: every user-visible string comes from `src/i18n/`, in both English and Chinese. No hardcoding.
+1. **Run the big three before committing**: `npm run lint && npm run typecheck && npm run test` — all green before you push. The current CI workflow runs on pushes to `main` and by manual dispatch, so local evidence is required before opening a PR.
+2. **UI text must go through i18n**: every user-visible string comes from `src/i18n/`, and every shipped locale bundle must remain synchronized. No hardcoding.
 3. **Keep components close to home**: new components start inside their own feature folder; promote to `src/components/` only once they're genuinely reused across features.
 4. **Prefix CSS classes by feature**: e.g. the Git history panel uses `git-history-*` class names, so styles from different features don't fight each other.
-5. **Keep files under 3000 lines**: a script (`npm run check:large-files`) enforces this — split files that grow too big.
+5. **Respect the large-file policy**: new files use an 800-line ratchet and existing areas use 2600/2800/3000-line hard thresholds. `npm run check:large-files` reports; `npm run check:large-files:gate` is the blocking check.
 6. **TypeScript strict mode**: don't paper over things with `any`; write real types.
 7. **Rust file writes go through the shared helper**: use the atomic write in `storage.rs` instead of raw `write`, so a crash mid-write can't corrupt user data.
 8. **Search before adding a Tauri command**: `command_registry` may already have what you need — don't reinvent it.
@@ -224,7 +224,7 @@ Not many rules, but each exists for a reason. Run through them before submitting
 
 ### Writing commit messages
 
-Format: `type(scope): what you did` (the [Conventional Commits](https://www.conventionalcommits.org/) convention). The description can be in English or Chinese — just keep the format right.
+Use [Conventional Commits](https://www.conventionalcommits.org/) with a Chinese action phrase by default: `type(scope): 中文动宾短句`.
 
 | type | When to use |
 | --- | --- |
@@ -239,9 +239,9 @@ Format: `type(scope): what you did` (the [Conventional Commits](https://www.conv
 Real examples:
 
 ```text
-feat(composer): support pasting images as attachments
+feat(composer): 支持粘贴图片转为附件
 fix(git): 修复 diff 面板滚动位置丢失
-docs(readme): update setup guide
+docs(readme): 校准项目文档索引
 ```
 
 No emoji in commit messages, and no AI-generated signatures.
@@ -254,16 +254,20 @@ No emoji in commit messages, and no AI-generated signatures.
 2. Branch off `main`, named like `feat/xxx` or `fix/xxx`.
 3. Make your changes and get the big three green locally (`lint` / `typecheck` / `test`).
 4. Open a PR against this repo's **`main` branch**. Title in commit format; in the description, explain what changed, why, and how you verified it.
-5. CI automatically runs lint, type checks, tests, and builds. Medium/high-risk findings from the PR review must be fixed before merging.
+5. Attach local verification evidence to the PR. The current CI workflow runs on pushes to `main` and by manual dispatch; do not assume that opening a PR starts it automatically. Medium/high-risk review findings must be fixed before merging.
 
 Not sure where to start? Browse the [Issues](https://github.com/zhukunpenglinyutong/desktop-cc-gui/issues) and pick one that interests you. Found a bug or have an idea? Open an issue and let's talk.
 
 ### Want to dig deeper into the project's internals?
 
-- `AGENTS.md` — the entry point for repository rules (required reading if you develop this project with AI assistance).
-- `.trellis/spec/` — detailed frontend and backend implementation specs.
-- `openspec/` — proposals and specs for behavior changes.
-- `docs/architecture/` — architecture governance docs.
+- [AGENTS.md](AGENTS.md) — the entry point for repository rules (required reading if you develop this project with AI assistance).
+- [Documentation hub](docs/README.md) — architecture, performance, plans, research, and dated evidence with explicit truth boundaries.
+- [.trellis/spec/](.trellis/spec/) — detailed frontend and backend implementation specs.
+- [OpenSpec workspace](openspec/README.md) — behavior specs, workflow, and governance overview.
+- [Main capability spec index](openspec/specs/README.md) — all synced mainline behavior contracts.
+- [Active proposal index](openspec/changes/README.md) — current changes, progress, closure gates, and artifact links.
+- [Archived proposal index](openspec/changes/archive/README.md) — all archived proposals grouped by month and archive date.
+- [OpenSpec audit/evidence index](openspec/docs/README.md) — durable references and dated governance snapshots.
 
 ---
 

@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use git2::{BranchType, DiffOptions, ErrorCode, Repository, Status, StatusOptions, Tree};
+use git2::{
+    BranchType, Delta, DiffOptions, ErrorCode, Repository, Status, StatusEntry, StatusOptions, Tree,
+};
 use ignore::WalkBuilder;
 
 use crate::types::{
@@ -253,39 +255,213 @@ pub(crate) fn checkout_branch(repo: &Repository, name: &str) -> Result<(), git2:
     Ok(())
 }
 
-pub(crate) fn diff_stats_for_path(
+pub(crate) fn find_git_diff_renames(diff: &mut git2::Diff<'_>) -> Result<(), git2::Error> {
+    let mut options = git2::DiffFindOptions::new();
+    options.renames(true).for_untracked(true);
+    diff.find_similar(Some(&mut options))
+}
+
+pub(crate) fn git_status_identity_paths(identity: &GitStatusPathIdentity) -> Vec<String> {
+    let mut paths = Vec::with_capacity(2);
+    if let Some(old_path) = identity.old_path.as_ref() {
+        paths.push(old_path.clone());
+    }
+    if !paths.contains(&identity.path) {
+        paths.push(identity.path.clone());
+    }
+    paths
+}
+
+pub(crate) fn diff_stats_for_identity(
     repo: &Repository,
     head_tree: Option<&Tree>,
-    path: &str,
-    include_index: bool,
-    include_workdir: bool,
+    identity: &GitStatusPathIdentity,
+    layer: GitStatusLayer,
 ) -> Result<(i64, i64), git2::Error> {
-    let mut additions = 0i64;
-    let mut deletions = 0i64;
-
-    if include_index {
-        let mut options = DiffOptions::new();
-        options.pathspec(path).include_untracked(true);
-        let diff = repo.diff_tree_to_index(head_tree, None, Some(&mut options))?;
-        let stats = diff.stats()?;
-        additions += stats.insertions() as i64;
-        deletions += stats.deletions() as i64;
+    let mut options = DiffOptions::new();
+    for path in git_status_identity_paths(identity) {
+        options.pathspec(path);
     }
-
-    if include_workdir {
-        let mut options = DiffOptions::new();
+    if layer == GitStatusLayer::Workdir {
         options
-            .pathspec(path)
             .include_untracked(true)
             .recurse_untracked_dirs(true)
             .show_untracked_content(true);
-        let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
-        let stats = diff.stats()?;
-        additions += stats.insertions() as i64;
-        deletions += stats.deletions() as i64;
     }
 
-    Ok((additions, deletions))
+    let mut diff = match layer {
+        GitStatusLayer::Index => repo.diff_tree_to_index(head_tree, None, Some(&mut options))?,
+        GitStatusLayer::Workdir => repo.diff_index_to_workdir(None, Some(&mut options))?,
+    };
+    find_git_diff_renames(&mut diff)?;
+    let stats = diff.stats()?;
+    Ok((stats.insertions() as i64, stats.deletions() as i64))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GitStatusLayer {
+    Index,
+    Workdir,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GitStatusPathIdentity {
+    pub(crate) path: String,
+    pub(crate) old_path: Option<String>,
+}
+
+fn normalized_status_path(path: Option<&Path>) -> Option<String> {
+    let path = path?;
+    let normalized = normalize_git_path(&path.to_string_lossy());
+    (!normalized.is_empty()).then_some(normalized)
+}
+
+pub(crate) fn git_status_path_identity(
+    entry: &StatusEntry<'_>,
+    layer: GitStatusLayer,
+) -> Option<GitStatusPathIdentity> {
+    let fallback_path = entry
+        .path()
+        .map(normalize_git_path)
+        .filter(|path| !path.is_empty());
+    let delta = match layer {
+        GitStatusLayer::Index => entry.head_to_index(),
+        GitStatusLayer::Workdir => entry.index_to_workdir(),
+    };
+    let Some(delta) = delta else {
+        return fallback_path.map(|path| GitStatusPathIdentity {
+            path,
+            old_path: None,
+        });
+    };
+
+    let old_path = normalized_status_path(delta.old_file().path());
+    let new_path = normalized_status_path(delta.new_file().path());
+    let path = if delta.status() == Delta::Deleted {
+        old_path.clone().or(new_path)
+    } else {
+        new_path.or_else(|| old_path.clone())
+    }
+    .or(fallback_path)?;
+    let old_path = (delta.status() == Delta::Renamed)
+        .then_some(old_path)
+        .flatten()
+        .filter(|old_path| old_path != &path);
+
+    Some(GitStatusPathIdentity { path, old_path })
+}
+
+fn git_statuses_with_renames(repo: &Repository) -> Result<git2::Statuses<'_>, git2::Error> {
+    let mut status_options = StatusOptions::new();
+    status_options
+        .include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .renames_head_to_index(true)
+        .renames_index_to_workdir(true)
+        .include_ignored(false);
+    repo.statuses(Some(&mut status_options))
+}
+
+pub(crate) fn git_action_paths_for_file(
+    repo_root: &Path,
+    path: &str,
+    layer: GitStatusLayer,
+) -> Vec<String> {
+    let target = normalize_git_path(path).trim().to_string();
+    if target.is_empty() {
+        return Vec::new();
+    }
+
+    let repo = match Repository::open_ext(
+        repo_root,
+        git2::RepositoryOpenFlags::NO_SEARCH,
+        std::iter::empty::<&Path>(),
+    ) {
+        Ok(repo) => repo,
+        Err(_) => return vec![target],
+    };
+    let statuses = match git_statuses_with_renames(&repo) {
+        Ok(statuses) => statuses,
+        Err(_) => return vec![target],
+    };
+
+    for entry in statuses.iter() {
+        let Some(identity) = git_status_path_identity(&entry, layer) else {
+            continue;
+        };
+        let Some(old_path) = identity.old_path.as_ref() else {
+            continue;
+        };
+        if old_path != &target && identity.path != target {
+            continue;
+        }
+        return git_status_identity_paths(&identity);
+    }
+
+    vec![target]
+}
+
+pub(crate) fn git_diff_paths_for_file(repo_root: &Path, path: &str) -> Vec<String> {
+    let target = normalize_git_path(path).trim().to_string();
+    if target.is_empty() {
+        return Vec::new();
+    }
+
+    let repo = match Repository::open_ext(
+        repo_root,
+        git2::RepositoryOpenFlags::NO_SEARCH,
+        std::iter::empty::<&Path>(),
+    ) {
+        Ok(repo) => repo,
+        Err(_) => return vec![target],
+    };
+    let statuses = match git_statuses_with_renames(&repo) {
+        Ok(statuses) => statuses,
+        Err(_) => return vec![target],
+    };
+    let mut rename_pairs = Vec::new();
+    for entry in statuses.iter() {
+        for layer in [GitStatusLayer::Index, GitStatusLayer::Workdir] {
+            let Some(identity) = git_status_path_identity(&entry, layer) else {
+                continue;
+            };
+            let Some(old_path) = identity.old_path else {
+                continue;
+            };
+            rename_pairs.push((old_path, identity.path));
+        }
+    }
+
+    let mut connected_paths = HashSet::from([target.clone()]);
+    loop {
+        let mut expanded = false;
+        for (old_path, new_path) in &rename_pairs {
+            if !connected_paths.contains(old_path) && !connected_paths.contains(new_path) {
+                continue;
+            }
+            expanded |= connected_paths.insert(old_path.clone());
+            expanded |= connected_paths.insert(new_path.clone());
+        }
+        if !expanded {
+            break;
+        }
+    }
+
+    let mut paths = Vec::new();
+    for (old_path, new_path) in rename_pairs {
+        if connected_paths.contains(&old_path) && connected_paths.contains(&new_path) {
+            if !paths.contains(&old_path) {
+                paths.push(old_path);
+            }
+            if !paths.contains(&new_path) {
+                paths.push(new_path);
+            }
+        }
+    }
+    if paths.is_empty() {
+        paths.push(target);
+    }
+    paths
 }
 
 pub(crate) fn diff_patch_to_string(patch: &mut git2::Patch) -> Result<String, git2::Error> {
@@ -299,11 +475,14 @@ pub(crate) fn diff_patch_to_string(patch: &mut git2::Patch) -> Result<String, gi
 #[cfg(test)]
 mod tests {
     use super::{
-        build_git_file_blame, build_image_commit_diff, compact_repository_status, image_mime_type,
+        build_git_file_blame, build_image_commit_diff, compact_repository_status,
+        diff_stats_for_identity, find_git_diff_renames, git_action_paths_for_file,
+        git_diff_paths_for_file, git_status_path_identity, image_mime_type,
         list_git_repository_summaries, path_has_git_repository_marker, resolve_git_root_for_scope,
+        GitStatusLayer,
     };
     use crate::types::{WorkspaceEntry, WorkspaceKind, WorkspaceSettings};
-    use git2::{Repository, Signature};
+    use git2::{Delta, DiffOptions, Repository, Signature, Status, StatusOptions};
     use std::fs;
 
     fn workspace_entry(path: &std::path::Path) -> WorkspaceEntry {
@@ -320,7 +499,11 @@ mod tests {
     }
 
     fn commit_initial_file(repo: &Repository, root: &std::path::Path) {
-        fs::write(root.join("tracked.txt"), "tracked").expect("write tracked file");
+        fs::write(
+            root.join("tracked.txt"),
+            "tracked line 1\ntracked line 2\ntracked line 3\n",
+        )
+        .expect("write tracked file");
         let mut index = repo.index().expect("open index");
         index
             .add_path(std::path::Path::new("tracked.txt"))
@@ -331,6 +514,234 @@ mod tests {
         let signature = Signature::now("Moss Test", "moss@example.test").expect("signature");
         repo.commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])
             .expect("initial commit");
+    }
+
+    fn rename_status_options() -> StatusOptions {
+        let mut options = StatusOptions::new();
+        options
+            .include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .renames_head_to_index(true)
+            .renames_index_to_workdir(true)
+            .include_ignored(false);
+        options
+    }
+
+    #[test]
+    fn status_path_identity_uses_staged_rename_destination() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-status-rename-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create status rename root");
+        let repo = Repository::init(&root).expect("init status rename repo");
+        commit_initial_file(&repo, &root);
+
+        fs::rename(root.join("tracked.txt"), root.join("renamed.txt")).expect("rename file");
+        let mut index = repo.index().expect("open index");
+        index
+            .remove_path(std::path::Path::new("tracked.txt"))
+            .expect("remove old path");
+        index
+            .add_path(std::path::Path::new("renamed.txt"))
+            .expect("add renamed path");
+        index.write().expect("write renamed index");
+
+        let mut options = rename_status_options();
+        let statuses = repo.statuses(Some(&mut options)).expect("read statuses");
+        let entry = statuses
+            .iter()
+            .find(|entry| entry.status().contains(Status::INDEX_RENAMED))
+            .expect("staged rename entry");
+        let identity =
+            git_status_path_identity(&entry, GitStatusLayer::Index).expect("rename identity");
+
+        assert_eq!(identity.path, "renamed.txt");
+        assert_eq!(identity.old_path.as_deref(), Some("tracked.txt"));
+        assert_eq!(
+            git_action_paths_for_file(&root, "renamed.txt", GitStatusLayer::Index),
+            vec!["tracked.txt".to_string(), "renamed.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn status_path_identity_uses_workdir_rename_destination() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-status-rename-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create status rename root");
+        let repo = Repository::init(&root).expect("init status rename repo");
+        commit_initial_file(&repo, &root);
+
+        fs::rename(root.join("tracked.txt"), root.join("renamed.txt")).expect("rename file");
+
+        let mut options = rename_status_options();
+        let statuses = repo.statuses(Some(&mut options)).expect("read statuses");
+        let entry = statuses
+            .iter()
+            .find(|entry| entry.status().contains(Status::WT_RENAMED))
+            .expect("workdir rename entry");
+        let identity =
+            git_status_path_identity(&entry, GitStatusLayer::Workdir).expect("rename identity");
+
+        assert_eq!(identity.path, "renamed.txt");
+        assert_eq!(identity.old_path.as_deref(), Some("tracked.txt"));
+    }
+
+    #[test]
+    fn diff_detection_preserves_unchanged_rename_patch() {
+        let root = std::env::temp_dir().join(format!("ccgui-diff-rename-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create diff rename root");
+        let repo = Repository::init(&root).expect("init diff rename repo");
+        commit_initial_file(&repo, &root);
+        fs::rename(root.join("tracked.txt"), root.join("renamed.txt")).expect("rename file");
+
+        let head_tree = repo
+            .head()
+            .expect("head")
+            .peel_to_tree()
+            .expect("head tree");
+        let mut diff_options = DiffOptions::new();
+        diff_options
+            .include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .show_untracked_content(true);
+        let mut diff = repo
+            .diff_tree_to_workdir_with_index(Some(&head_tree), Some(&mut diff_options))
+            .expect("workdir diff");
+        find_git_diff_renames(&mut diff).expect("detect rename");
+        let deltas = diff.deltas().collect::<Vec<_>>();
+
+        assert_eq!(deltas.len(), 1);
+        assert_eq!(deltas[0].status(), Delta::Renamed);
+        assert_eq!(
+            deltas[0].new_file().path(),
+            Some(std::path::Path::new("renamed.txt"))
+        );
+        let mut patch = git2::Patch::from_diff(&diff, 0)
+            .expect("build rename patch")
+            .expect("rename patch");
+        let patch_text = super::diff_patch_to_string(&mut patch).expect("render rename patch");
+        assert!(patch_text.contains("rename from tracked.txt"));
+        assert!(patch_text.contains("rename to renamed.txt"));
+    }
+
+    #[test]
+    fn diff_detection_and_stats_preserve_modified_rename_identity() {
+        let root = std::env::temp_dir().join(format!("ccgui-diff-rename-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create diff rename root");
+        let repo = Repository::init(&root).expect("init diff rename repo");
+        commit_initial_file(&repo, &root);
+
+        fs::rename(root.join("tracked.txt"), root.join("renamed.txt")).expect("rename file");
+        fs::write(
+            root.join("renamed.txt"),
+            "tracked line 1\ntracked line 2\ntracked line 3\nadded line\n",
+        )
+        .expect("modify renamed file");
+
+        let mut status_options = rename_status_options();
+        let statuses = repo
+            .statuses(Some(&mut status_options))
+            .expect("read statuses");
+        let entry = statuses
+            .iter()
+            .find(|entry| entry.status().contains(Status::WT_RENAMED))
+            .expect("workdir rename entry");
+        let identity =
+            git_status_path_identity(&entry, GitStatusLayer::Workdir).expect("rename identity");
+        let head_tree = repo
+            .head()
+            .expect("head")
+            .peel_to_tree()
+            .expect("head tree");
+
+        assert_eq!(
+            diff_stats_for_identity(&repo, Some(&head_tree), &identity, GitStatusLayer::Workdir,)
+                .expect("rename stats"),
+            (1, 0)
+        );
+
+        let mut diff_options = DiffOptions::new();
+        diff_options
+            .include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .show_untracked_content(true);
+        let mut diff = repo
+            .diff_tree_to_workdir_with_index(Some(&head_tree), Some(&mut diff_options))
+            .expect("workdir diff");
+        find_git_diff_renames(&mut diff).expect("detect rename");
+        let deltas = diff.deltas().collect::<Vec<_>>();
+
+        assert_eq!(deltas.len(), 1);
+        assert_eq!(deltas[0].status(), Delta::Renamed);
+        assert_eq!(
+            deltas[0].new_file().path(),
+            Some(std::path::Path::new("renamed.txt"))
+        );
+    }
+
+    #[test]
+    fn action_paths_honor_layer_for_chained_rename() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-chain-rename-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create chained rename root");
+        let repo = Repository::init(&root).expect("init chained rename repo");
+        commit_initial_file(&repo, &root);
+
+        fs::rename(root.join("tracked.txt"), root.join("indexed.txt")).expect("rename into index");
+        let mut index = repo.index().expect("open index");
+        index
+            .remove_path(std::path::Path::new("tracked.txt"))
+            .expect("remove tracked path");
+        index
+            .add_path(std::path::Path::new("indexed.txt"))
+            .expect("add indexed path");
+        index.write().expect("write renamed index");
+        fs::rename(root.join("indexed.txt"), root.join("workdir.txt")).expect("rename in workdir");
+
+        let expected_index_paths = vec!["tracked.txt".to_string(), "indexed.txt".to_string()];
+        let expected_workdir_paths = vec!["indexed.txt".to_string(), "workdir.txt".to_string()];
+        for target in ["tracked.txt", "indexed.txt"] {
+            assert_eq!(
+                git_action_paths_for_file(&root, target, GitStatusLayer::Index),
+                expected_index_paths
+            );
+        }
+        for target in ["indexed.txt", "workdir.txt"] {
+            assert_eq!(
+                git_action_paths_for_file(&root, target, GitStatusLayer::Workdir),
+                expected_workdir_paths
+            );
+        }
+        assert_eq!(
+            git_diff_paths_for_file(&root, "workdir.txt"),
+            vec![
+                "tracked.txt".to_string(),
+                "indexed.txt".to_string(),
+                "workdir.txt".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn status_path_identity_keeps_deleted_historical_path() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-status-delete-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create status delete root");
+        let repo = Repository::init(&root).expect("init status delete repo");
+        commit_initial_file(&repo, &root);
+
+        fs::remove_file(root.join("tracked.txt")).expect("delete tracked file");
+
+        let mut options = rename_status_options();
+        let statuses = repo.statuses(Some(&mut options)).expect("read statuses");
+        let entry = statuses
+            .iter()
+            .find(|entry| entry.status().contains(Status::WT_DELETED))
+            .expect("deleted entry");
+        let identity =
+            git_status_path_identity(&entry, GitStatusLayer::Workdir).expect("delete identity");
+
+        assert_eq!(identity.path, "tracked.txt");
+        assert_eq!(identity.old_path, None);
     }
 
     #[test]

@@ -96,7 +96,7 @@
   - turn 级单引擎路由与引擎切换测试
   - 会话列表 / Tabs / 消息流 / session activity 的 shared session 可见性回归
 - File governance
-  - 必须遵守大文件门禁 [large-file-governance.yml](/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml) 与配套治理文档 [large-file-governance-playbook.md](/Users/chenxiangning/code/AI/github/mossx/docs/architecture/large-file-governance-playbook.md)。
+  - 必须遵守大文件门禁 [large-file-governance.yml](../../../../.github/workflows/large-file-governance.yml) 与配套治理文档 [large-file-governance-playbook.md](../../../../docs/architecture/large-file-governance-playbook.md)。
   - 本次功能若触达接近阈值或超阈值文件，必须在同一 PR 内完成模块化拆分或桥接抽离，不接受“先堆进去、后续再拆”。
   - 共享会话相关代码优先新增到独立模块/目录，再通过 facade、selector、loader、adapter 或 command bridge 接入现有入口文件。
 
@@ -114,5 +114,5 @@
 - 现有原生会话的创建、发送、恢复与显示行为必须保持不变；`Gemini / OpenCode` 不得因为 shared session 改造而回退。
 - shared pending binding 的重绑定必须具备 freshness/uniqueness 保护，陈旧 placeholder 不得影响后续事件路由与 thread 归属。
 - 涉及 shared session 的新增存储与恢复链路必须在 `Windows / macOS` 上采用等价语义，不得出现路径硬编码、分隔符假设或平台特化文件操作导致的单平台可用实现。
-- 本次功能实现完成后，PR/CI 必须通过 [large-file-governance.yml](/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml) 对应的大文件门禁检查；若触发阈值修复，修复必须在同一 PR 中完成。
+- 本次功能实现完成后，PR/CI 必须通过 [large-file-governance.yml](../../../../.github/workflows/large-file-governance.yml) 对应的大文件门禁检查；若触发阈值修复，修复必须在同一 PR 中完成。
 - 共享会话的业务实现必须以新增模块为主、桥接接入为辅；主集成文件仅允许保留最小挂载、分流与 facade 级改动。

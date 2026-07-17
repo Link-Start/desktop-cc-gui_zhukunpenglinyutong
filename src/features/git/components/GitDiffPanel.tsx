@@ -50,6 +50,7 @@ import {
   type DiffSectionProps,
   getTreeLineOpacity,
   GitFileTreeIcon,
+  isDeletedDiffFile,
   renderSectionCountBadge,
   renderSectionIndicator,
   TREE_INDENT_STEP,
@@ -205,7 +206,7 @@ function DiffTreeSection({
   partialPaths,
   selectedFiles,
   selectedPath,
-  onSelectFile,
+  onActivateFile,
   onStageAllChanges,
   onStageFile,
   onUnstageFile,
@@ -444,7 +445,7 @@ function DiffTreeSection({
                     treeDepth={depth + 2}
                     treeParentFolderKey={parentKey ?? folder.key}
                     onClick={(event) => onFileClick(event, file.path, section)}
-                    onKeySelect={() => onSelectFile?.(file.path)}
+                    onKeySelect={() => onActivateFile?.(file.path, section)}
                     onOpenInlinePreview={() => onOpenInlinePreview?.(file.path)}
                     onOpenPreview={() => onOpenFilePreview?.(file, section)}
                     onContextMenu={(event) => onShowFileMenu(event, file.path, section)}
@@ -465,7 +466,7 @@ function DiffTreeSection({
       onFileClick,
       onOpenInlinePreview,
       onOpenFilePreview,
-      onSelectFile,
+      onActivateFile,
       onShowFileMenu,
       includedPathSet,
       excludedPathSet,
@@ -609,7 +610,7 @@ function DiffTreeSection({
                       treeDepth={2}
                       treeParentFolderKey={rootFolderKey}
                       onClick={(event) => onFileClick(event, file.path, section)}
-                      onKeySelect={() => onSelectFile?.(file.path)}
+                      onKeySelect={() => onActivateFile?.(file.path, section)}
                       onOpenInlinePreview={() => onOpenInlinePreview?.(file.path)}
                       onOpenPreview={() => onOpenFilePreview?.(file, section)}
                       onContextMenu={(event) => onShowFileMenu(event, file.path, section)}
@@ -652,7 +653,7 @@ function DiffTreeSection({
                   treeItem
                   treeDepth={1}
                   onClick={(event) => onFileClick(event, file.path, section)}
-                  onKeySelect={() => onSelectFile?.(file.path)}
+                  onKeySelect={() => onActivateFile?.(file.path, section)}
                   onOpenInlinePreview={() => onOpenInlinePreview?.(file.path)}
                   onOpenPreview={() => onOpenFilePreview?.(file, section)}
                   onContextMenu={(event) => onShowFileMenu(event, file.path, section)}
@@ -1239,11 +1240,35 @@ function GitDiffPanelImpl({
     onRefreshGitDiffs?.();
   }, [onRefreshGitDiffs, onRefreshGitStatus]);
 
+  const handleFileActivation = useCallback(
+    (path: string, section: "staged" | "unstaged") => {
+      setSelectedFiles(new Set([path]));
+      setLastClickedFile(path);
+      const file = (section === "staged" ? stagedFiles : unstagedFiles).find(
+        (candidate) => candidate.path === path,
+      );
+      if (file && isDeletedDiffFile(file)) {
+        handleOpenFilePreview(file, section);
+      } else if (onOpenFile) {
+        onOpenFile(path);
+      } else {
+        onSelectFile?.(path);
+      }
+    },
+    [
+      handleOpenFilePreview,
+      onOpenFile,
+      onSelectFile,
+      stagedFiles,
+      unstagedFiles,
+    ],
+  );
+
   const handleFileClick = useCallback(
     (
       event: ReactMouseEvent<HTMLDivElement>,
       path: string,
-      _section: "staged" | "unstaged",
+      section: "staged" | "unstaged",
     ) => {
       const isMetaKey = event.metaKey || event.ctrlKey;
       const isShiftKey = event.shiftKey;
@@ -1278,16 +1303,14 @@ function GitDiffPanelImpl({
         }
       } else {
         // Regular click: select single file and view it
-        setSelectedFiles(new Set([path]));
-        setLastClickedFile(path);
-        if (onOpenFile) {
-          onOpenFile(path);
-        } else {
-          onSelectFile?.(path);
-        }
+        handleFileActivation(path, section);
       }
     },
-    [lastClickedFile, allFiles, onOpenFile, onSelectFile],
+    [
+      allFiles,
+      handleFileActivation,
+      lastClickedFile,
+    ],
   );
 
   // Clear selection when files change
@@ -2508,7 +2531,7 @@ function GitDiffPanelImpl({
                     onToggleCollapsed={() => handleToggleSection("staged")}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
-                    onSelectFile={onSelectFile}
+                    onActivateFile={handleFileActivation}
                     onUnstageFile={onUnstageFile}
                     onDiscardFile={onRevertFile ? discardFile : undefined}
                     onDiscardFiles={onRevertFile ? discardFiles : undefined}
@@ -2536,7 +2559,7 @@ function GitDiffPanelImpl({
                     onToggleCollapsed={() => handleToggleSection("staged")}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
-                    onSelectFile={onSelectFile}
+                    onActivateFile={handleFileActivation}
                     onUnstageFile={onUnstageFile}
                     onDiscardFile={onRevertFile ? discardFile : undefined}
                     onDiscardFiles={onRevertFile ? discardFiles : undefined}
@@ -2564,7 +2587,7 @@ function GitDiffPanelImpl({
                     onToggleCollapsed={() => handleToggleSection("unstaged")}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
-                    onSelectFile={onSelectFile}
+                    onActivateFile={handleFileActivation}
                     onStageAllChanges={onStageAllChanges}
                     onStageFile={onStageFile}
                     onDiscardFile={onRevertFile ? discardFile : undefined}
@@ -2593,7 +2616,7 @@ function GitDiffPanelImpl({
                     onToggleCollapsed={() => handleToggleSection("unstaged")}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
-                    onSelectFile={onSelectFile}
+                    onActivateFile={handleFileActivation}
                     onStageAllChanges={onStageAllChanges}
                     onStageFile={onStageFile}
                     onDiscardFile={onRevertFile ? discardFile : undefined}

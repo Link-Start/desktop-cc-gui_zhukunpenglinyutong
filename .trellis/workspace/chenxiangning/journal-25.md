@@ -1904,3 +1904,73 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1024: 归档已验证 OpenSpec 提案
+
+**Date**: 2026-07-17
+**Task**: 归档已验证 OpenSpec 提案
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+归档 22 个 artifacts/tasks 完成且 strict validation 通过的 OpenSpec changes，按首次入库顺序同步共享 capability deltas；补齐一处 stale Requirement rename；刷新 inventory 至 active=15、archive=626、main specs=402。验证 openspec validate --all --strict 与 git diff --check 通过，未修改产品代码；同步归档两个已完成 Trellis tasks。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `aa6ca752` | (see git log) |
+| `ed1234a2` | (see git log) |
+| `ccdf84d7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1025: 归档近完成 OpenSpec 提案并建立全量索引
+
+**Date**: 2026-07-17
+**Task**: 归档近完成 OpenSpec 提案并建立全量索引
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+归档 5 个近完成 OpenSpec change 并同步 7 个 main capability；建立覆盖 10 个活跃与 631 个归档 proposal 的两级索引；更新双语 README、OpenSpec project/config 当前事实；严格验证 414/414 通过、链接与 typecheck 通过；归档两个已完成的 Codex continuity Trellis task。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f75ccf8e` | (see git log) |
+| `c1e2bba9` | (see git log) |
+| `947f7150` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

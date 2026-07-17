@@ -17,7 +17,7 @@
 - [x] 3.2 接入 `tabular-preview` viewer，统一支持 `csv/xls/xlsx` 的表格预览 `[P0][依赖:2.1][输入: 表格文件 file-backed 或文本 payload][输出: 表格预览组件与 sheet/row/col 截断策略][验证: csv/xls/xlsx 都能看到稳定表格结果，且 `xls/xlsx` 默认不经无界 bytes IPC]`
 - [x] 3.3 将 `csv` 保持为“表格预览 + 原始文本编辑”双模式 `[P0][依赖:3.2][输入: CSV 打开与保存链路][输出: csv 预览/编辑切换行为][验证: 编辑保存后重新进入表格预览可见最新内容]`
 - [x] 3.4 将 `png/jpg/jpeg` 纳入统一 preview matrix，并验证仍走现有 image preview 链路 `[P1][依赖:1.3][输入: 图片文件样例][输出: image-preview parity 验证结果][验证: 主窗口和 detached window 结果一致]`
-- [x] 3.5 按 preview mode 拆分 viewer 组件与 payload hook，避免把复杂度堆回 `FileViewPanel` `[P0][依赖:1.3,2.1][输入: 现有 FileViewPanel 结构与 large-file 门禁要求][输出: 独立的 PDF / 表格 / 文档 viewer 与 payload hook 模块][验证: 新增实现结构可通过 `/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml` 对应的 `npm run check:large-files:gate`]`
+- [x] 3.5 按 preview mode 拆分 viewer 组件与 payload hook，避免把复杂度堆回 `FileViewPanel` `[P0][依赖:1.3,2.1][输入: 现有 FileViewPanel 结构与 large-file 门禁要求][输出: 独立的 PDF / 表格 / 文档 viewer 与 payload hook 模块][验证: 新增实现结构可通过 `.github/workflows/large-file-governance.yml` 对应的 `npm run check:large-files:gate`]`
 - [x] 3.6 为 PDF/表格/文档 preview 建立统一 cleanup 契约 `[P0][依赖:3.1,3.2,3.5][输入: worker、object URL、临时句柄、异步解析任务][输出: viewer dispose/cancel 机制][验证: 切 tab、关文件、关 detached window 后不残留 worker、object URL 或旧请求回灌]`
 
 ## 4. 跨窗口与降级稳定性
@@ -30,4 +30,4 @@
 - [x] 5.1 补齐 preview mode 判定测试、payload 边界测试与 Windows/macOS 兼容测试 `[P0][依赖:4.2][输入: 各类型与路径形态样例][输出: 自动化测试集][验证: 九种文件类型全部有断言覆盖，且 `.doc` 仅断言 best-effort/fallback 语义，不断言稳定富预览]`
 - [x] 5.2 补齐主窗口 / detached parity 测试和手测矩阵 `[P0][依赖:4.1][输入: main/detached surface 链路][输出: parity 回归用例与手测 checklist][验证: 两个 surface 对同一文件不出现 preview mode 漂移，也不出现资源清理分叉]`
 - [x] 5.3 补齐 viewer 生命周期与请求取消测试 `[P0][依赖:3.6,4.1][输入: 切 tab、关文件、关 detached window 场景][输出: cleanup 回归用例][验证: worker/object URL/request 不残留，旧结果不会回灌新文件]`
-- [x] 5.4 执行 large-file hard gate 并留痕 `[P0][依赖:3.5,5.1,5.2,5.3][输入: 完整改动后的文件查看实现][输出: `npm run check:large-files:gate` 结果与对应 CI 门禁说明][验证: 与 `/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml` 保持一致，未新增超大文件]`
+- [x] 5.4 执行 large-file hard gate 并留痕 `[P0][依赖:3.5,5.1,5.2,5.3][输入: 完整改动后的文件查看实现][输出: `npm run check:large-files:gate` 结果与对应 CI 门禁说明][验证: 与 `.github/workflows/large-file-governance.yml` 保持一致，未新增超大文件]`

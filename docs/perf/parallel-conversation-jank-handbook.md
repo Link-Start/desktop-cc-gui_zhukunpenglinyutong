@@ -944,7 +944,7 @@ it('clears src when out of viewport', async () => {
 
 每个阶段完成后:
 
-- 跑 `npm run typecheck` + `npm run lint` + `npm test` 全套,确认无回归。
+- 跑 `npm run typecheck` + `npm run lint` + `npm run test` 全套，确认无回归。
 - 跑 §1 复现步骤,记录卡顿改善程度(切 workspace 响应时间 / 帧时间 / 内存)。
 - 在 `docs/perf/jank-fix-progress.md` 记录本次修复的根因 + 数据 + 验收结果。
 

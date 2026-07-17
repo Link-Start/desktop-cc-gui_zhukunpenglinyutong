@@ -1,5 +1,6 @@
 export type GitFileStatus = {
   path: string;
+  oldPath?: string | null;
   status: string;
   additions: number;
   deletions: number;

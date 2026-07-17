@@ -4,38 +4,40 @@
 
 This SOP covers client-side realtime conversation CPU optimizations for:
 
-- `mossx.perf.realtimeBatching`
-- `mossx.perf.reducerNoopGuard`
-- `mossx.perf.incrementalDerivation`
-- `mossx.perf.debugLightPath`
+- `ccgui.perf.realtimeBatching`
+- `ccgui.perf.reducerNoopGuard`
+- `ccgui.perf.incrementalDerivation`
+- `ccgui.perf.debugLightPath`
 
 No protocol/schema migration is involved. Rollback does not require data migration.
+
+> Current code source: `src/features/threads/utils/realtimePerfFlags.ts`. The four flags in this SOP currently default to enabled in production; `localStorage` values are diagnostic overrides, not a durable settings schema.
 
 ## Compatibility and Stability Hard Gates
 
 Before release:
 
 1. Run boundary guard and parity tests:
-   - `pnpm perf:realtime:boundary-guard`
-   - `pnpm vitest run src/features/threads/contracts/realtimeHistoryParity.test.ts`
+   - `npm run perf:realtime:boundary-guard`
+   - `npx vitest run src/features/threads/contracts/realtimeHistoryParity.test.ts`
 2. Generate replay reports:
-   - `pnpm perf:realtime:report`
+   - `npm run perf:realtime:report`
 3. Confirm report gates:
    - 5-minute: CPU drop >= 30%, peak frame-load proxy drop >= 25%.
    - 60-minute: semantic hash parity, zero integrity failures, no stuck processing.
 
 ## Rollout Plan
 
-### Stage 0: Baseline Validation
+### Stage 0: Controlled Baseline Validation
 
-- Keep all realtime perf flags disabled.
+- For a controlled comparison only, set all four `ccgui.perf.*` overrides to `0`, reload, and record the disabled-path baseline.
 - Record baseline report from `docs/research/realtime-cpu/baseline-report.md`.
 
 ### Stage 1: Enable Batching and No-Op Guard
 
 - Enable:
-  - `mossx.perf.realtimeBatching=1`
-  - `mossx.perf.reducerNoopGuard=1`
+  - `ccgui.perf.realtimeBatching=1`
+  - `ccgui.perf.reducerNoopGuard=1`
 - Keep incremental derivation and debug light path unchanged.
 - Validate:
   - no event loss
@@ -44,15 +46,15 @@ Before release:
 
 ### Stage 2: Enable Incremental Derivation
 
-- Enable `mossx.perf.incrementalDerivation=1`.
+- Enable `ccgui.perf.incrementalDerivation=1`.
 - Validate:
   - unchanged threads keep reference stability where expected
   - activity/radar changed-thread refresh remains duplicate-free.
 
 ### Stage 3: Enable Debug Light Path (Default)
 
-- Enable `mossx.perf.debugLightPath=1`.
-- Keep `mossx.debug.threadSessionMirror=0` by default.
+- Enable `ccgui.perf.debugLightPath=1`.
+- Keep `ccgui.debug.threadSessionMirror=0` by default.
 - Validate debug critical events still present (`error`, lifecycle boundaries, warnings).
 
 ## Monitoring Checklist
@@ -73,13 +75,13 @@ Before release:
 If regression appears, rollback in strict order:
 
 1. Disable batching:
-   - `mossx.perf.realtimeBatching=0`
+   - `ccgui.perf.realtimeBatching=0`
 2. Disable incremental derivation:
-   - `mossx.perf.incrementalDerivation=0`
+   - `ccgui.perf.incrementalDerivation=0`
 3. Disable reducer no-op guard:
-   - `mossx.perf.reducerNoopGuard=0`
+   - `ccgui.perf.reducerNoopGuard=0`
 4. Disable debug light path only if debug payload completeness is the issue:
-   - `mossx.perf.debugLightPath=0`
+   - `ccgui.perf.debugLightPath=0`
 
 After each step:
 
@@ -93,4 +95,3 @@ After each step:
 - any non-empty `missingAgentMessages` / `missingToolOutputs`
 - `stuckProcessingThreads` not empty
 - peak frame-load proxy regresses above baseline.
-

@@ -13,7 +13,7 @@
 - 目标 3：保证主窗口文件查看面板与 detached file explorer 对同一文件类型使用同一 preview mode 和同一降级语义。
 - 目标 4：坚持 Tauri 边界最小化，避免让前端直接拿到超出工作区范围的任意文件访问能力。
 - 目标 5：在 Windows 和 macOS 下保持一致行为，尤其是路径归一化、`convertFileSrc` 资源地址、大小写差异和大文件降级策略。
-- 目标 6：所有实现拆分必须满足仓库门禁 [`/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml`](/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml) 的 hard gate，避免把新 preview viewer 再次堆回单个超大文件。
+- 目标 6：所有实现拆分必须满足仓库门禁 [`../../../../.github/workflows/large-file-governance.yml`](../../../../.github/workflows/large-file-governance.yml) 的 hard gate，避免把新 preview viewer 再次堆回单个超大文件。
 
 ### 边界
 
@@ -45,7 +45,7 @@
 - 为大文档、大表格、大 PDF 和异常输入建立确定性降级策略，避免空白面板、卡死或未捕获异常。
 - 为文件预览加载边界引入工作区校验、payload 上限与“小文件 bytes / 大文件 file-backed”分层，避免前端直接获得危险的任意路径读取能力，也避免大二进制在 IPC 中无脑复制。
 - 明确 Win/mac 兼容写法：所有 preview payload 请求先做路径归一化；Windows 侧按大小写不敏感、反斜杠和 UNC/盘符路径兼容处理，macOS 侧按绝对路径恢复、URL 编码和 `convertFileSrc` 资源地址一致性处理；`csv` 预览需兼容 `CRLF` 与 `LF`。
-- 将实现纳入仓库 large-file hard gate，明确以 [`/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml`](/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml) 中的 `npm run check:large-files:gate` 作为必须通过的门禁。
+- 将实现纳入仓库 large-file hard gate，明确以 [`../../../../.github/workflows/large-file-governance.yml`](../../../../.github/workflows/large-file-governance.yml) 中的 `npm run check:large-files:gate` 作为必须通过的门禁。
 - 将 preview worker、object URL、临时文件引用和异步解析任务纳入生命周期治理，避免在 tab 切换或 detached window 关闭后残留资源。
 
 ## 技术方案对比与取舍
@@ -87,7 +87,7 @@
   - Word 文档提取引擎需要在设计阶段锁定为 Rust 侧提取方案或受控 JS 方案
 - 测试影响：
   - 需要新增 preview mode 判定测试、payload loader 边界测试、Windows/macOS 路径兼容测试，以及主窗口 / detached parity 测试。
-  - 需要将新 viewer 组件与状态拆分纳入 [`/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml`](/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml) 的 hard gate 审查范围，确保 CI 持续执行 `npm run check:large-files:gate`。
+  - 需要将新 viewer 组件与状态拆分纳入 [`../../../../.github/workflows/large-file-governance.yml`](../../../../.github/workflows/large-file-governance.yml) 的 hard gate 审查范围，确保 CI 持续执行 `npm run check:large-files:gate`。
 
 ## 验收标准
 
@@ -99,5 +99,5 @@
 - `pdf/xls/xlsx` 等高成本文件默认不得通过无界 bytes IPC 整包传输；若进入 bytes 模式，必须满足明确的小文件预算。
 - Windows 风格路径、大小写变体路径与 macOS 恢复出的绝对路径，不得导致 preview mode 解析不一致。
 - Windows 下的盘符路径、UNC 路径与大小写变体，macOS 下的恢复绝对路径、URL 编码路径与 `convertFileSrc` 生成地址，必须收敛到同一 preview payload 语义。
-- 最终实现若引入新的 viewer、hook 或 loader 拆分，必须通过 [`/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml`](/Users/chenxiangning/code/AI/github/mossx/.github/workflows/large-file-governance.yml) 中定义的 hard gate，不得通过新增超大文件换取实现速度。
+- 最终实现若引入新的 viewer、hook 或 loader 拆分，必须通过 [`../../../../.github/workflows/large-file-governance.yml`](../../../../.github/workflows/large-file-governance.yml) 中定义的 hard gate，不得通过新增超大文件换取实现速度。
 - tab 切换、文件关闭、surface 销毁和 detached window 关闭后，不得残留 PDF worker、表格 worker、object URL 或未取消的解析任务。

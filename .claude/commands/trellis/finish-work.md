@@ -12,13 +12,13 @@ Before submitting or committing, use this checklist to ensure work completeness.
 
 ```bash
 # Must pass
-pnpm lint
-pnpm type-check
-pnpm test
+npm run lint
+npm run typecheck
+npm run test
 ```
 
-- [ ] `pnpm lint` passes with 0 errors?
-- [ ] `pnpm type-check` passes with no type errors?
+- [ ] `npm run lint` passes with 0 errors?
+- [ ] `npm run typecheck` passes with no type errors?
 - [ ] Tests pass?
 - [ ] No `console.log` statements (use logger)?
 - [ ] No non-null assertions (the `x!` operator)?
@@ -26,7 +26,10 @@ pnpm test
 
 ### 1.5. Test Coverage
 
-Check if your change needs new or updated tests (see `.trellis/spec/unit-test/conventions.md`):
+Check whether your change needs new or updated tests against the current project sources:
+
+- Frontend: `.trellis/spec/frontend/quality-guidelines.md` and colocated Vitest patterns
+- Backend: `.trellis/spec/backend/quality-guidelines.md` and colocated Rust tests
 
 - [ ] New pure function → unit test added?
 - [ ] Bug fix → regression test added in `test/regression.test.ts`?
@@ -102,7 +105,7 @@ If the change spans multiple layers:
 
 ```bash
 # 1. Code checks
-pnpm lint && pnpm type-check
+npm run lint && npm run typecheck
 
 # 2. View changes
 git status

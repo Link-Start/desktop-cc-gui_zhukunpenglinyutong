@@ -49,6 +49,7 @@ function areGitFileStatusesEqual(
     return (
       rightFile !== undefined &&
       leftFile.path === rightFile.path &&
+      leftFile.oldPath === rightFile.oldPath &&
       leftFile.status === rightFile.status &&
       leftFile.additions === rightFile.additions &&
       leftFile.deletions === rightFile.deletions &&

@@ -108,7 +108,7 @@ Keep this managed block so 'trellis update' can refresh the instructions.
 
 ### Render Perf Baseline
 
-- AppShell 根渲染单次阻塞主线程 100~350ms；改动对话/流式/后台任务链路前，读 `docs/perf/render-jank-knife-experiments-2026-07-08.md`（四层根因）。
+- 2026-07-08 实验基线曾观察到 AppShell 根渲染单次阻塞主线程 100~350ms；该数值是有日期的历史测量，不是永久 current value。改动对话/流式/后台任务链路前，读 `docs/perf/render-jank-knife-experiments-2026-07-08.md`（四层根因），并以重新测量结果为准。
 - 硬红线：① 高频 setState（每事件/日志/轮询级）禁挂根 hook 链；② 数组追加型 setState 禁入根链；③ 根链 store 用事件驱动 + ≥30s 兜底轮询，禁秒级轮询；④ 流式正文走 `liveAssistantTextChannel`（flag `liveTextExternalization` 默认开），禁恢复逐 delta dispatch 进 reducer。
 - 渲染风暴排查用归因面板 + React `memoizedUpdaters` 追踪（复现指南见上述文档 §七）；react-scan 2~3x 放大，测量前关。
 
