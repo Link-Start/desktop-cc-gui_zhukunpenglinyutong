@@ -34,3 +34,8 @@
 - **WHEN** 历史 file-change row 被重新渲染
 - **THEN** inline preview MUST 仅消费事件携带的 patch content
 - **AND** 系统 MUST NOT 读取当前磁盘内容覆盖历史 fact
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Sparse Added-File Facts MUST Preserve Canonical Diff Access`
+- TO: `### Requirement: Added-File Facts MUST Preserve Conversation Surface Behavior`

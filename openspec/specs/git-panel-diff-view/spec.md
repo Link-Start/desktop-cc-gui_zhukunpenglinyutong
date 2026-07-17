@@ -687,3 +687,180 @@ The Git Diff panel SHALL expose `Git -> 显示文件历史` for a changed-file r
 - **WHEN** workspace path, repository topology, or File History callback identity changes while a Git Diff file menu is open
 - **THEN** the system SHALL close that file menu
 - **AND** the previous History target SHALL NOT remain activatable.
+
+### Requirement: Git changed-file surfaces share one renderer contract
+主 Source Control、Git History worktree 与 commit details changed-file surfaces MUST 通过 canonical adapter 使用同一 flat/tree topology、file row 与 folder row renderer；页面容器 MUST NOT 维护等价的平行 row/tree JSX。
+
+#### Scenario: Worktree surfaces render the same file model
+- **WHEN** 主 Source Control 与 Git History worktree 展示同一组 staged/unstaged files
+- **THEN** 两处 MUST 使用相同 status、path、folder、keyboard activation 与 collapse semantics
+
+#### Scenario: Commit details uses read-only shared rows
+- **WHEN** commit details 展示 historical changed files
+- **THEN** 它 MUST 使用相同 shared renderer，并仅通过 adapter 禁用 worktree mutation actions
+
+### Requirement: Shared changed-file renderer preserves domain actions
+共享 renderer MUST 通过 typed callbacks/slots 接收 selection、inclusion、stage、unstage、discard 与 preview commands，且 MUST NOT 自行执行 Git service calls。
+
+#### Scenario: Worktree action remains scoped
+- **WHEN** 用户在 shared row 点击 stage、unstage、discard 或 inclusion control
+- **THEN** renderer MUST 调用所属页面注入的 command，并阻止 row activation 抢占该 action
+
+### Requirement: Git panel groups changed files by repository when necessary
+The Git panel MUST use repository grouping only when multiple dirty repositories are visible, while preserving the existing single-repository file list contract。
+
+#### Scenario: Single repository file list
+- **WHEN** commit workspace contains exactly one dirty repository
+- **THEN** file rows SHALL preserve existing flat/tree layout、status、preview 与 inclusion controls
+- **AND** no redundant repository group header SHALL be rendered
+
+#### Scenario: Multi repository file list
+- **WHEN** commit workspace contains multiple dirty repositories
+- **THEN** each repository SHALL have an accessible group header with repository name、branch and file count
+- **AND** file rows within the group SHALL preserve existing status、preview and inclusion controls
+
+### Requirement: Repository group selection composes with file selection
+Repository headers and file rows MUST expose one coherent tri-state selection model scoped to their repository。
+
+#### Scenario: Toggle an entire repository group
+- **WHEN** user toggles a repository group inclusion control
+- **THEN** all committable files in that repository SHALL change inclusion state
+- **AND** files in other repositories SHALL remain unchanged
+
+#### Scenario: Repository group is partially selected
+- **WHEN** only part of a repository's committable files are included
+- **THEN** repository header SHALL expose mixed selection state
+
+### Requirement: Multi-Repository Changed-File Direct Opens MUST Preserve Repository Identity
+
+The Git Diff panel MUST carry the owning `repositoryRoot` with every multi-repository changed-file direct-open request until the repository-relative path is projected into the shared workspace-relative editor path.
+
+#### Scenario: Click a changed file in a nested repository
+
+- **WHEN** 用户单击 multi-repository changed-file row
+- **THEN** editor MUST open the file under that row's owning `repositoryRoot`
+- **AND** the open action MUST NOT depend on or mutate the configured single-repository `gitRoot`
+
+#### Scenario: Same relative path exists in different repositories
+
+- **WHEN** two repositories each expose a changed file with the same repository-relative path
+- **AND** 用户依次单击两个 rows
+- **THEN** each open request MUST resolve to its distinct workspace-relative path
+- **AND** one repository MUST NOT reuse the other repository's tab identity
+
+#### Scenario: Workspace-root repository is explicitly selected by the row
+
+- **WHEN** a multi-repository row belongs to the workspace-root repository represented by an empty `repositoryRoot`
+- **THEN** its repository-relative path MUST remain workspace-relative without an added nested-root prefix
+- **AND** a configured nested `gitRoot` MUST NOT override the explicit workspace-root identity
+
+#### Scenario: Existing single-repository file open remains compatible
+
+- **WHEN** a single-repository changed-file caller omits a repository override
+- **THEN** the editor MUST continue resolving Git-domain paths through the configured `gitRoot`
+- **AND** non-Git file entrypoints MUST continue treating their paths as workspace-domain inputs
+
+### Requirement: Multi-Repository File Actions MUST Keep One Repository Scope Contract
+
+Every multi-repository changed-file action that consumes a repository-relative path MUST either carry its owning `repositoryRoot` or intentionally operate on an already projected workspace-relative path.
+
+#### Scenario: Repository-aware action audit
+
+- **WHEN** direct open, modal preview, stage, unstage, commit selection, file tree decoration and file history entrypoints are exercised for multiple repositories
+- **THEN** each Git-domain action MUST preserve the owning repository identity
+- **AND** changed-file direct-open handlers MUST NOT be replaced by noop adapters
+
+### Requirement: Multi-Repository Changed-File Preview Preserves Repository Identity
+
+The Git Diff panel MUST open multi-repository changed-file modal previews using repository-scoped identity and MUST reuse the canonical editable review surface.
+
+#### Scenario: Open preview from a multi-repository file row
+
+- **WHEN** 用户点击 multi-repository changed-file row 的 modal preview action
+- **THEN** Git Diff panel MUST 打开现有 unified preview modal
+- **AND** patch 与 full-context diff reads MUST 使用该 row 所属的 `repositoryRoot`
+- **AND** workspace edit target MUST resolve through the same repository root
+
+#### Scenario: Same relative path exists in different repositories
+
+- **WHEN** 两个 repository 都包含相同 repository-relative `filePath`
+- **AND** 用户依次请求两个文件的 preview
+- **THEN** modal MUST 展示最后一次请求 repository 的 diff
+- **AND** earlier stale response MUST NOT overwrite the latest preview state
+
+#### Scenario: Single-repository preview remains unchanged
+
+- **WHEN** Git Diff panel 不处于 multi-repository mode
+- **THEN** changed-file preview MUST continue using the existing single-repository `diffEntries` path
+- **AND** system MUST NOT add a repository-scoped diff request to that existing activation path
+
+#### Scenario: Selected single-repository preview loads editable baseline
+
+- **WHEN** 左侧 Git panel 已选择 explicit `gitRoot` 并打开 changed-file preview
+- **THEN** existing `diffEntries` MUST 继续作为 patch source
+- **AND** editable compare baseline/full-context reads MUST 使用当前 `gitRoot`
+- **AND** loading MUST settle to content or an explicit unavailable/error state
+
+#### Scenario: Preview context changes while a request is in flight
+
+- **WHEN** preview 打开或 repository-scoped request pending 时 `workspaceId`、single/multi mode 或 single-mode `gitRoot` 发生变化
+- **THEN** previous request generation MUST become stale
+- **AND** previous modal MUST close before it can edit against the new workspace context
+- **AND** a late response MUST NOT reopen or overwrite preview state
+
+### Requirement: Multi-Repository Change Groups Match Single-Repository Density
+
+Multi-repository repository groups MUST preserve the shared changed-file renderer and SHALL use the single-repository file-row density baseline.
+
+#### Scenario: Repository header uses compact file-row dimensions
+
+- **WHEN** multi-repository change groups are rendered
+- **THEN** each repository header SHALL use the shared `26px` file-row minimum-height baseline and shared typography/padding tokens
+- **AND** repository metadata SHALL remain truncated and readable within a narrow Git side panel
+
+#### Scenario: Changed-file rows do not gain multi-repository scaling
+
+- **WHEN** staged or unstaged files render inside a repository group
+- **THEN** file and folder rows MUST keep the same shared renderer dimensions used by single-repository mode
+- **AND** multi-repository CSS MUST NOT introduce larger row-specific font size, icon size, or vertical padding
+
+### Requirement: Desktop Git Mode Selector SHALL Live In The Right Panel Toolbar
+
+Desktop right panel SHALL render the existing Git mode selector in the toolbar layer when the Git tab is active, without changing the selector's behavior or the responsive panel-tab contract.
+
+#### Scenario: Active Git tab places selector before panel tabs
+
+- **WHEN** the desktop right panel active tab is `git`
+- **THEN** the current Git mode selector SHALL render in the `right-panel-toolbar` leading slot
+- **AND** the responsive panel tabs SHALL remain in the same toolbar after that slot
+- **AND** the Git content area SHALL NOT reserve an empty selector row when no other floating Git action is present.
+
+#### Scenario: Non-Git tab does not retain selector
+
+- **WHEN** the desktop right panel active tab changes from `git` to another tab
+- **THEN** the toolbar SHALL NOT retain the Git mode selector or its menu
+- **AND** the selected Git mode SHALL remain owned by the existing Git panel state.
+
+#### Scenario: Existing selector capabilities remain unchanged
+
+- **WHEN** the user opens or operates the relocated selector
+- **THEN** Diff, Git log, Issues, Pull Requests, flat/tree list view, and Hub actions SHALL invoke their existing callbacks
+- **AND** outside click, Escape close with focus restore, configured list-view shortcut, and active-state accessibility semantics SHALL remain available.
+
+#### Scenario: Lazy target fallback preserves reachability
+
+- **WHEN** the Git panel renders before the toolbar mount target is available
+- **THEN** the selector SHALL remain available through its existing inline location
+- **AND** once the target becomes available the same selector behavior SHALL move to the toolbar without duplicated controls.
+
+#### Scenario: Narrow and swapped desktop layouts remain usable
+
+- **WHEN** the right panel is narrow or the desktop layout is swapped
+- **THEN** the selector and responsive panel tabs SHALL remain within the toolbar layout
+- **AND** the selector menu SHALL remain visible within the right panel bounds without horizontal overflow or toolbar clipping.
+
+#### Scenario: Worktree action remains independent
+
+- **WHEN** the Git panel exposes a worktree apply action
+- **THEN** that action SHALL remain in its existing Git content action row
+- **AND** relocating the mode selector SHALL NOT hide, move, or alter the worktree action callback.

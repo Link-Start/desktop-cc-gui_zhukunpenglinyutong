@@ -1,7 +1,7 @@
 # Project Context
 
 - Type: OpenSpec Workspace
-- Updated At: 2026-07-15T19:45:00+08:00
+- Updated At: 2026-07-17T22:14:02+08:00
 - Scope: governance snapshot for the current `mossx` repository workspace
 - Product version fact: `ccgui@0.7.3` from `package.json` and `src-tauri/tauri.conf.json`
 
@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: tracked active changes = `12`, archive changes = `596`, main specs = `395`
+- Current workspace state: tracked active changes = `15`, archive changes = `626`, main specs = `402`
 
 ## Entry Surfaces
 
@@ -54,23 +54,26 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 ## Current Inventory
 
-- Active changes: `12`
-- Archive changes: `596`
-- Main specs: `395`
+- Active changes: `15`
+- Archive changes: `626`
+- Main specs: `402`
 - Completed task sets still active: `0`
 - Ready-for-implementation task sets: `0`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
 
 ## Active Changes
 
-Active OpenSpec changes after the 2026-07-15 weekly audit and closure batch:
+Active OpenSpec changes after the 2026-07-17 verified closure batch:
 
 - `add-askuserquestion-default-mode-mcp-bridge` — 10/12; blocked on deferred `cargo test` and manual multi-select queue acceptance.
 - `add-linux-native-menu-localization` — 3/5; blocked on deferred Rust validation and Linux startup localization smoke test.
 - `optimize-conversation-streaming-render-perf` — 7/8; implementation verification passed, but archive remains blocked on rebuilt-app performance trace evidence.
 - `add-claude-runtime-mcp-servers-panel` — 5/6; blocked on manual Claude runtime-server panel QA.
-- `harden-conversation-rendering-for-large-history` — 34/37; blocked on heavy-history manual evidence, performance budget finalization, and human acceptance.
+- `harden-conversation-rendering-for-large-history` — 35/38; blocked on heavy-history manual evidence, performance budget finalization, and human acceptance.
+- `fix-workspace-drop-overlay-leave-settlement` — 6/7; blocked on rebuilt Tauri drag-leave/drop smoke acceptance.
+- `fix-sidebar-radix-presence-version-convergence` — 5/6; blocked on rebuilt production dependency graph cold-start acceptance.
 - `fix-codex-thread-start-continuity-and-recovery` — 24/26; implementation tasks are complete; commit and mandatory Trellis session record remain.
+- `fix-codex-pending-draft-history-loading` — 3/4; blocked on TypeScript and strict OpenSpec validation evidence.
 - `enable-claude-lightweight-streaming-and-frame-attribution` — 15/18; blocked on human FPS/visual fidelity acceptance and final archive.
 - `2026-06-24-retire-opencode-and-gemini-cli` — 4/48; large cross-layer implementation backlog, not an archive candidate.
 - `2026-06-24-infer-thread-rename-from-claude-codex-jsonl` — 0/31; planned implementation backlog, not an archive candidate.
@@ -85,6 +88,35 @@ Calibration rule: `openspec validate --strict` proves artifact structure only. I
 The previous v0.5.11 performance and recovery follow-up chain has been archived. Future performance work should open a new chain instead of reusing the archived change directories.
 
 ## Recent Archive / Sync Snapshot
+
+### 2026-07-17 Verified Git And Surface Closure Batch
+
+Archived 22 active changes whose artifacts were complete, task sets were 100% complete, and individual strict OpenSpec validation passed:
+
+- `fix-codex-subagent-sidebar-projection`
+- `fallback-untracked-added-file-empty-inline-diff`
+- `add-turn-file-summary-modal-diff-preview`
+- `fix-large-file-editable-diff-alignment`
+- `unify-git-file-list-and-preview-modal`
+- `align-codex-model-reasoning-capabilities`
+- `add-multi-repository-git-command-center`
+- `stabilize-git-command-center-branch-menu`
+- `fix-multi-repository-file-tree-decorations`
+- `add-multi-repository-git-commit-workspace`
+- `hide-git-history-overview-pane`
+- `add-file-view-git-blame`
+- `fix-multi-repository-file-open-and-blame-scope`
+- `fix-multi-repository-git-preview-density`
+- `restore-multi-repository-discard-action`
+- `fix-global-file-search-hydration`
+- `add-api-endpoint-global-search`
+- `add-git-history-commit-filters`
+- `compact-git-history-changed-file-tree`
+- `refine-git-history-title-layer-frame`
+- `relocate-git-diff-mode-selector-to-right-panel-toolbar`
+- `explain-git-pull-option-effects`
+
+The batch created six main capabilities and updated 17 existing capabilities. Shared capability deltas were applied in first-commit order. `fallback-untracked-added-file-empty-inline-diff` required an explicit requirement rename from `Sparse Added-File Facts MUST Preserve Canonical Diff Access` to `Added-File Facts MUST Preserve Conversation Surface Behavior` before its modified delta could sync. Final counts are active=15, archive=626, specs=402; all 402 main specs pass strict validation.
 
 ### 2026-07-15 Weekly Code-Change Coverage And Closure Batch
 
@@ -281,6 +313,7 @@ npm run check:large-files
 
 ## Update History
 
+- 2026-07-17: Archived 22 verified Git, search, file-view, conversation, and Codex changes; synced six new and 17 existing main capabilities; calibrated one stale requirement rename; and refreshed tracked counts to active=15, archive=626, specs=402. All 402 main specs pass strict validation, and no product code was modified.
 - 2026-07-15: Audited one week of code/build history, backfilled 18 proposal gaps through one capability-oriented retrospective change, synced five new and six modified capability specs, archived 13 completed active changes plus the retrospective change, and refreshed tracked counts to active=12, archive=596, specs=395. No product code was modified.
 - 2026-07-11: Completed a documentation-only calibration pass. Added missing designs for Linux native-menu localization and Claude runtime MCP servers, added seven evidence-oriented verification reports, and restored two empty sidebar loading changes with proposal/design/tasks/spec deltas. No product code, configuration, scripts, or tests were modified; both restored changes remain 0% complete pending implementation/evidence review.
 - 2026-07-11: Archived 18 completion-based changes, synced their delta specs, calibrated four stale delta anchors/sections, and refreshed the active backlog to 12 changes. Current tracked counts are active=12, archive=581, specs=383.
