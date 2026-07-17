@@ -2132,8 +2132,10 @@ describe("GitHistoryPanel interactions", () => {
     vi.mocked(clientStorage.getClientStoreSync).mockImplementation((store, key) => {
       if (store === "layout" && String(key).startsWith("gitHistoryPanel:")) {
         return {
-          selectedBranch: "all",
+          selectedBranch: "main",
           commitQuery: "aaaa",
+          commitAuthor: "example.com",
+          commitDatePreset: "7d",
           selectedCommitSha: "a".repeat(40),
           diffStyle: "split",
         } as never;
@@ -2143,12 +2145,278 @@ describe("GitHistoryPanel interactions", () => {
 
     render(<GitHistoryPanel workspace={workspace as never} />);
 
+    const queryInput = await screen.findByLabelText("git.historyFilterQueryLabel");
+    expect((queryInput as HTMLInputElement).value).toBe("aaaa");
+    expect(
+      (screen.getByLabelText("git.historyFilterAuthorLabel") as HTMLInputElement).value,
+    ).toBe("example.com");
+    expect(
+      screen.getByLabelText("git.historyFilterBranchLabel").textContent,
+    ).toContain("main");
+    expect(
+      screen.getByLabelText("git.historyFilterDateLabel").textContent,
+    ).toContain("git.historyFilterDateLast7Days");
+
     await waitFor(() => {
-      const input = screen.getByPlaceholderText("git.historySearchCommits") as HTMLInputElement;
-      expect(input.value).toBe("aaaa");
+      expect(clientStorage.writeClientStoreValue).toHaveBeenCalledWith(
+        "layout",
+        "gitHistoryPanel:w1",
+        expect.objectContaining({
+          selectedBranch: "main",
+          commitQuery: "aaaa",
+          commitAuthor: "example.com",
+          commitDatePreset: "7d",
+        }),
+      );
+    });
+    expect(await screen.findByText("<tester@example.com>")).toBeTruthy();
+  });
+
+  it("debounces text filters into one combined server-side history request", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+    await screen.findByText("feat: one");
+    vi.mocked(tauriService.getGitCommitHistory).mockClear();
+
+    fireEvent.change(screen.getByLabelText("git.historyFilterQueryLabel"), {
+      target: { value: "fix renderer" },
+    });
+    fireEvent.change(screen.getByLabelText("git.historyFilterAuthorLabel"), {
+      target: { value: "tester@example.com" },
+    });
+    await waitFor(() => {
+      expect(tauriService.getGitCommitHistory).toHaveBeenCalledTimes(1);
+      expect(tauriService.getGitCommitHistory).toHaveBeenLastCalledWith("w1", {
+        branch: "all",
+        query: "fix renderer",
+        author: "tester@example.com",
+        dateFrom: null,
+        dateTo: null,
+        snapshotId: null,
+        offset: 0,
+        limit: 100,
+      });
+    });
+  });
+
+  it("clears filters immediately and returns branch scope to the current branch", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+    await screen.findByText("feat: one");
+
+    fireEvent.change(screen.getByLabelText("git.historyFilterQueryLabel"), {
+      target: { value: "temporary" },
+    });
+    await waitFor(() => {
+      expect(tauriService.getGitCommitHistory).toHaveBeenLastCalledWith(
+        "w1",
+        expect.objectContaining({ query: "temporary" }),
+      );
     });
 
-    expect(clientStorage.writeClientStoreValue).toHaveBeenCalled();
+    vi.mocked(tauriService.getGitCommitHistory).mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "git.historyFilterClear" }));
+
+    await waitFor(() => {
+      expect(tauriService.getGitCommitHistory).toHaveBeenCalledTimes(1);
+      expect(tauriService.getGitCommitHistory).toHaveBeenLastCalledWith("w1", {
+        branch: "main",
+        query: null,
+        author: null,
+        dateFrom: null,
+        dateTo: null,
+        snapshotId: null,
+        offset: 0,
+        limit: 100,
+      });
+    });
+  });
+
+  it("reuses the exact applied filters for pagination and snapshot refresh", async () => {
+    vi.mocked(clientStorage.getClientStoreSync).mockImplementation((store, key) => {
+      if (store === "layout" && String(key).startsWith("gitHistoryPanel:")) {
+        return {
+          selectedBranch: "main",
+          commitQuery: "renderer",
+          commitAuthor: "tester",
+          commitDatePreset: "7d",
+        } as never;
+      }
+      return undefined;
+    });
+    vi.mocked(tauriService.getGitCommitHistory)
+      .mockResolvedValueOnce({
+        snapshotId: "snap-filtered",
+        total: 2,
+        offset: 0,
+        limit: 100,
+        hasMore: true,
+        commits: [
+          {
+            sha: "a".repeat(40),
+            shortSha: "aaaaaaa",
+            summary: "feat: filtered",
+            message: "filtered",
+            author: "tester",
+            authorEmail: "tester@example.com",
+            timestamp: 1739300000,
+            parents: [],
+            refs: [],
+          },
+        ],
+      })
+      .mockRejectedValueOnce(new Error("History snapshot expired. Please refresh commits."))
+      .mockResolvedValueOnce({
+        snapshotId: "snap-refreshed",
+        total: 1,
+        offset: 0,
+        limit: 100,
+        hasMore: false,
+        commits: [
+          {
+            sha: "b".repeat(40),
+            shortSha: "bbbbbbb",
+            summary: "feat: refreshed",
+            message: "refreshed",
+            author: "tester",
+            authorEmail: "tester@example.com",
+            timestamp: 1739300000,
+            parents: [],
+            refs: [],
+          },
+        ],
+      });
+
+    render(<GitHistoryPanel workspace={workspace as never} />);
+    await screen.findByText("feat: filtered");
+    await waitFor(() => {
+      expect(tauriService.getGitCommitHistory).toHaveBeenCalledTimes(3);
+    });
+    expect(screen.getByText("feat: refreshed")).toBeTruthy();
+    const historyCalls = vi.mocked(tauriService.getGitCommitHistory).mock.calls;
+    expect(historyCalls).toHaveLength(3);
+    const firstOptions = historyCalls[0]?.[1];
+    expect(firstOptions).toEqual({
+      branch: "main",
+      query: "renderer",
+      author: "tester",
+      dateFrom: expect.any(Number),
+      dateTo: expect.any(Number),
+      snapshotId: null,
+      offset: 0,
+      limit: 100,
+    });
+    expect(historyCalls[1]?.[1]).toEqual({
+      ...firstOptions,
+      snapshotId: "snap-filtered",
+      offset: 1,
+    });
+    expect(historyCalls[2]?.[1]).toEqual({
+      ...firstOptions,
+      snapshotId: null,
+      offset: 0,
+    });
+  });
+
+  it("re-anchors date filters for each new first-page snapshot", async () => {
+    vi.mocked(clientStorage.getClientStoreSync).mockImplementation((store, key) => {
+      if (store === "layout" && String(key).startsWith("gitHistoryPanel:")) {
+        return { commitDatePreset: "7d" } as never;
+      }
+      return undefined;
+    });
+    const firstNow = Date.UTC(2026, 6, 17, 1, 0, 0);
+    const secondNow = Date.UTC(2026, 6, 17, 2, 0, 0);
+    const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(firstNow);
+
+    render(<GitHistoryPanel workspace={workspace as never} />);
+    await screen.findByText("feat: one");
+    await waitFor(() => {
+      expect(tauriService.getGitCommitHistory).toHaveBeenCalledTimes(1);
+    });
+    const firstOptions = vi.mocked(tauriService.getGitCommitHistory).mock.calls[0]?.[1];
+
+    dateNowSpy.mockReturnValue(secondNow);
+    fireEvent.click(screen.getByRole("button", { name: "git.historyFilterBranchLabel" }));
+    fireEvent.click(await screen.findByRole("option", { name: /main/ }));
+
+    await waitFor(() => {
+      expect(tauriService.getGitCommitHistory).toHaveBeenCalledTimes(2);
+    });
+    const secondOptions = vi.mocked(tauriService.getGitCommitHistory).mock.calls[1]?.[1];
+    expect(firstOptions?.dateTo).toBe(Math.floor(firstNow / 1_000));
+    expect(secondOptions?.dateTo).toBe(Math.floor(secondNow / 1_000));
+    expect(secondOptions?.dateFrom).toBe(
+      Math.floor((secondNow - 7 * 24 * 60 * 60 * 1_000) / 1_000),
+    );
+
+    dateNowSpy.mockRestore();
+  });
+
+  it("ignores a stale first-page response after filters change", async () => {
+    let resolveStaleResponse: ((response: Awaited<ReturnType<typeof tauriService.getGitCommitHistory>>) => void)
+      | null = null;
+    const staleResponse = new Promise<
+      Awaited<ReturnType<typeof tauriService.getGitCommitHistory>>
+    >((resolve) => {
+      resolveStaleResponse = resolve;
+    });
+    vi.mocked(tauriService.getGitCommitHistory)
+      .mockImplementationOnce(() => staleResponse)
+      .mockResolvedValueOnce({
+        snapshotId: "snap-current",
+        total: 1,
+        offset: 0,
+        limit: 100,
+        hasMore: false,
+        commits: [
+          {
+            sha: "c".repeat(40),
+            shortSha: "ccccccc",
+            summary: "feat: current result",
+            message: "current",
+            author: "tester",
+            authorEmail: "tester@example.com",
+            timestamp: 1739300000,
+            parents: [],
+            refs: [],
+          },
+        ],
+      });
+
+    render(<GitHistoryPanel workspace={workspace as never} />);
+    await waitFor(() => {
+      expect(tauriService.getGitCommitHistory).toHaveBeenCalledTimes(1);
+    });
+    fireEvent.change(screen.getByLabelText("git.historyFilterQueryLabel"), {
+      target: { value: "current" },
+    });
+    await screen.findByText("feat: current result");
+
+    await act(async () => {
+      resolveStaleResponse?.({
+        snapshotId: "snap-stale",
+        total: 1,
+        offset: 0,
+        limit: 100,
+        hasMore: false,
+        commits: [
+          {
+            sha: "d".repeat(40),
+            shortSha: "ddddddd",
+            summary: "feat: stale result",
+            message: "stale",
+            author: "tester",
+            authorEmail: "tester@example.com",
+            timestamp: 1739300000,
+            parents: [],
+            refs: [],
+          },
+        ],
+      });
+      await staleResponse;
+    });
+
+    expect(screen.getByText("feat: current result")).toBeTruthy();
+    expect(screen.queryByText("feat: stale result")).toBeNull();
   });
 
   it("does not refetch history in a loop after snapshot update", async () => {

@@ -1091,19 +1091,7 @@ impl DaemonState {
                 revwalk
                     .set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
                     .map_err(|error| error.to_string())?;
-                if let Some(branch_name) = branch.as_ref() {
-                    let normalized = normalize_local_branch_ref(branch_name);
-                    let local_ref = format!("refs/heads/{normalized}");
-                    if revwalk.push_ref(&local_ref).is_err()
-                        && revwalk.push_ref(branch_name).is_err()
-                    {
-                        return Err(format!("Branch or ref not found: {branch_name}"));
-                    }
-                } else if let Some(head) = repo.head().ok().and_then(|value| value.target()) {
-                    revwalk.push(head).map_err(|error| error.to_string())?;
-                } else {
-                    return Err("HEAD does not point to a commit".to_string());
-                }
+                git_core::push_git_history_branch_scope(&repo, &mut revwalk, branch.as_deref())?;
                 revwalk
                     .map(|oid| oid.map_err(|error| error.to_string()))
                     .collect::<Result<Vec<_>, _>>()?

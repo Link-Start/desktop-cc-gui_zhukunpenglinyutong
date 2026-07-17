@@ -177,6 +177,44 @@ pub(crate) fn build_git_history_snapshot_id(
     .join("|")
 }
 
+pub(crate) fn push_git_history_branch_scope(
+    repo: &git2::Repository,
+    revwalk: &mut git2::Revwalk<'_>,
+    branch: Option<&str>,
+) -> Result<(), String> {
+    let Some(selected_branch) = branch.map(str::trim).filter(|value| !value.is_empty()) else {
+        return revwalk.push_head().map_err(|error| error.to_string());
+    };
+
+    if selected_branch.eq_ignore_ascii_case("all") || selected_branch == "*" {
+        let mut has_ref = false;
+        if revwalk.push_glob("refs/heads/*").is_ok() {
+            has_ref = true;
+        }
+        if revwalk.push_glob("refs/remotes/*").is_ok() {
+            has_ref = true;
+        }
+        return if has_ref {
+            Ok(())
+        } else {
+            revwalk.push_head().map_err(|error| error.to_string())
+        };
+    }
+
+    for reference in [
+        format!("refs/heads/{selected_branch}"),
+        format!("refs/remotes/{selected_branch}"),
+    ] {
+        if let Ok(oid) = repo.refname_to_id(&reference) {
+            return revwalk.push(oid).map_err(|error| error.to_string());
+        }
+    }
+    if let Ok(object) = repo.revparse_single(selected_branch) {
+        return revwalk.push(object.id()).map_err(|error| error.to_string());
+    }
+    Err(format!("Branch or ref not found: {selected_branch}"))
+}
+
 pub(crate) async fn run_git_command_bytes(
     repo_path: &PathBuf,
     args: &[&str],
@@ -369,4 +407,64 @@ pub(crate) async fn git_get_origin_url(repo_path: &PathBuf) -> Option<String> {
     run_git_command(repo_path, &["remote", "get-url", "origin"])
         .await
         .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::Path;
+
+    fn commit_tree(
+        repo: &git2::Repository,
+        update_ref: Option<&str>,
+        message: &str,
+        file_name: &str,
+        parent: Option<&git2::Commit<'_>>,
+    ) -> git2::Oid {
+        let worktree = repo.workdir().expect("test repository worktree");
+        fs::write(worktree.join(file_name), message).expect("write commit fixture");
+        let mut index = repo.index().expect("open test index");
+        index.add_path(Path::new(file_name)).expect("stage fixture");
+        index.write().expect("write test index");
+        let tree_id = index.write_tree().expect("write test tree");
+        let tree = repo.find_tree(tree_id).expect("find test tree");
+        let signature = git2::Signature::now("Test", "test@example.com").expect("create signature");
+        let parents = parent.into_iter().collect::<Vec<_>>();
+        repo.commit(update_ref, &signature, &signature, message, &tree, &parents)
+            .expect("create test commit")
+    }
+
+    #[test]
+    fn all_branch_scope_traverses_local_and_remote_refs() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-history-scope-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create test repository root");
+        let repo = git2::Repository::init(&root).expect("init test repository");
+        let local_oid = commit_tree(&repo, Some("HEAD"), "local", "local.txt", None);
+        let local_commit = repo.find_commit(local_oid).expect("find local commit");
+        let remote_oid = commit_tree(&repo, None, "remote", "remote.txt", Some(&local_commit));
+        repo.reference(
+            "refs/remotes/origin/remote-only",
+            remote_oid,
+            true,
+            "test remote",
+        )
+        .expect("create remote tracking ref");
+        drop(local_commit);
+
+        for branch in ["all", "*"] {
+            let mut revwalk = repo.revwalk().expect("create revwalk");
+            push_git_history_branch_scope(&repo, &mut revwalk, Some(branch))
+                .expect("push all branch scope");
+            let oids = revwalk
+                .map(|oid| oid.expect("walk commit"))
+                .collect::<Vec<_>>();
+            assert!(oids.contains(&local_oid));
+            assert!(oids.contains(&remote_oid));
+        }
+
+        drop(repo);
+        let _ = fs::remove_dir_all(root);
+    }
 }

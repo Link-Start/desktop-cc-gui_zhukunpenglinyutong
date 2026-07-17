@@ -10,6 +10,7 @@ import type {
 } from "../../../../../types";
 import type { CodeAnnotationBridgeProps } from "../../../../code-annotations/types";
 import type { CommitActionId } from "./GitHistoryPanelImplHelpers";
+import type { GitHistoryDatePreset } from "../utils/gitHistoryCommitFilters";
 
 export type GitHistoryPanelProps = CodeAnnotationBridgeProps & {
   workspace: WorkspaceInfo | null;
@@ -42,6 +43,8 @@ export type GitHistoryPanelPersistedState = {
   detailsSplitRatio?: number;
   selectedBranch?: string;
   commitQuery?: string;
+  commitAuthor?: string;
+  commitDatePreset?: GitHistoryDatePreset;
   selectedCommitSha?: string | null;
   diffStyle?: "split" | "unified";
 };

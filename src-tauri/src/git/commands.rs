@@ -1323,39 +1323,11 @@ pub(crate) async fn get_git_commit_history(
         .set_sorting(Sort::TOPOLOGICAL | Sort::TIME)
         .map_err(|e| e.to_string())?;
 
-    let mut has_ref = false;
-    if let Some(selected_branch) = branch_filter.as_ref() {
-        let lower = selected_branch.to_lowercase();
-        if lower == "all" || lower == "*" {
-            if revwalk.push_glob("refs/heads/*").is_ok() {
-                has_ref = true;
-            }
-            if revwalk.push_glob("refs/remotes/*").is_ok() {
-                has_ref = true;
-            }
-        } else {
-            let local_ref = format!("refs/heads/{selected_branch}");
-            if let Ok(oid) = repo.refname_to_id(&local_ref) {
-                revwalk.push(oid).map_err(|e| e.to_string())?;
-                has_ref = true;
-            } else {
-                let remote_ref = format!("refs/remotes/{selected_branch}");
-                if let Ok(oid) = repo.refname_to_id(&remote_ref) {
-                    revwalk.push(oid).map_err(|e| e.to_string())?;
-                    has_ref = true;
-                } else if let Ok(object) = repo.revparse_single(selected_branch) {
-                    revwalk.push(object.id()).map_err(|e| e.to_string())?;
-                    has_ref = true;
-                }
-            }
-            if !has_ref {
-                return Err(format!("Branch or ref not found: {selected_branch}"));
-            }
-        }
-    }
-    if !has_ref {
-        revwalk.push_head().map_err(|e| e.to_string())?;
-    }
+    crate::shared::git_core::push_git_history_branch_scope(
+        &repo,
+        &mut revwalk,
+        branch_filter.as_deref(),
+    )?;
 
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100).clamp(1, 500);

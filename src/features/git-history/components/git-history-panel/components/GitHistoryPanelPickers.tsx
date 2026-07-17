@@ -110,6 +110,7 @@ export type GitHistoryInlinePickerProps = {
   emptyText: string;
   triggerIcon?: ReactNode;
   optionIcon?: ReactNode;
+  dropdownAlign?: "start" | "end";
   onSelect: (value: string) => void;
 };
 
@@ -302,6 +303,7 @@ export function GitHistoryInlinePicker({
   emptyText,
   triggerIcon,
   optionIcon,
+  dropdownAlign = "start",
   onSelect,
 }: GitHistoryInlinePickerProps) {
   const [open, setOpen] = useState(false);
@@ -389,7 +391,7 @@ export function GitHistoryInlinePicker({
 
   return (
     <div
-      className={`git-history-create-pr-picker${open ? " is-open" : ""}${disabled ? " is-disabled" : ""}`}
+      className={`git-history-create-pr-picker${open ? " is-open" : ""}${disabled ? " is-disabled" : ""}${dropdownAlign === "end" ? " is-dropdown-end" : ""}`}
       ref={pickerRef}
     >
       <button

@@ -258,3 +258,111 @@ const selectedDiff = diffs.find((entry) => entry.path === target.path) ?? diffs[
 const selectedFilePath = selectedCommit.filePath ?? target.path;
 const selectedDiff = diffs.find((entry) => entry.path === selectedFilePath) ?? null;
 ```
+
+## 8. Scenario: Repository-wide Git History Filter Stability
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `GitHistoryCommitFilters` debounce/clear/scope restore、`useGitHistoryCommitFilters` request mapping、repository-wide history pagination、Date preset、branch `"all"` / `"*"`，或 Desktop/daemon revwalk 初始化。
+- 目标：first-page request 建立 canonical filter payload；同一 snapshot 的 append/retry 精确复用；新 snapshot 重新锚定 Date range；Desktop 与 daemon 使用同一 branch-scope resolver。
+
+### 2. Signatures
+
+```ts
+type GitHistoryRequestFilters = {
+  branch: string;
+  query: string | null;
+  author: string | null;
+  dateFrom: number | null;
+  dateTo: number | null;
+  repositoryRoot?: string;
+};
+
+createHistoryRequestFilters(): GitHistoryRequestFilters
+
+GitHistoryCommitFilters({
+  draftScopeKey,
+  values,
+  onFiltersChange,
+  onClear,
+}: GitHistoryCommitFiltersProps): JSX.Element
+```
+
+```rust
+fn push_git_history_branch_scope(
+    repo: &git2::Repository,
+    revwalk: &mut git2::Revwalk<'_>,
+    branch: Option<&str>,
+) -> Result<(), String>
+```
+
+### 3. Contracts
+
+- `loadHistory(false)` MUST 调用 `createHistoryRequestFilters()` 创建新 payload，并写入 `historyRequestFiltersRef`；Date resolver 在这里重新读取 clock。
+- `loadHistory(true)` 与 snapshot-expired retry MUST 复用该 ref/local payload，禁止重新计算 `dateFrom/dateTo`。
+- `"all"`（case-insensitive）与 `"*"` MUST 由 shared `push_git_history_branch_scope` 推入 `refs/heads/*` + `refs/remotes/*`；其他 branch 按 local ref、remote ref、revparse 顺序解析。
+- Desktop `src-tauri/src/git/commands.rs` 与 daemon `src-tauri/src/bin/cc_gui_daemon/git.rs` MUST 调用同一个 shared helper，禁止复制两套特殊值判断。
+- Clear MUST 先同步清空 child query/author draft，再通知 parent；`draftScopeKey` MUST 同时参与 external value sync 与 debounce cleanup dependency。
+- partial author filter 只在 email 命中且 display name 未命中时显示 email；长 email MUST bounded/ellipsis。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| new first page + unchanged `7d` | 使用当前 clock 重新生成 range | 复用上一个 snapshot 的旧 `dateTo` |
+| append / snapshot retry | exact reuse first-page filters | append 时再次调用 `Date.now()` |
+| branch=`all` / `*` | Desktop/daemon 遍历 local + remote refs | daemon 报 `Branch or ref not found: all` |
+| unknown branch | stable `Branch or ref not found: <name>` | fallback 到 HEAD 隐藏错误 |
+| Clear before 300ms | draft 立即清空且 timer cancelled | stale query 延迟回填 |
+| workspace switch before 300ms | old scope timer cancelled | old workspace draft 应用到新 workspace |
+| partial email match | display name 保留并显示 matching email | 只有输入含 `@` 才显示 email |
+
+### 5. Good / Base / Bad Cases
+
+- Good：first page at 10:00 creates `{ dateFrom, dateTo }`；append/retry exact reuse；manual refresh at 11:00 creates a new pair。
+- Good：shared helper 的 `"all"` revwalk 同时包含 local HEAD 与 remote-only tracking commit。
+- Base：omitted branch pushes HEAD；Date preset `all` maps to `dateFrom/dateTo = null`。
+- Bad：hook `useMemo([datePreset])` 固定 range，导致 Today 跨午夜后刷新仍查询昨天边界。
+- Bad：daemon 对 `"all"` 运行 `push_ref("refs/heads/all")`。
+- Bad：Clear 只清 parent applied values，child pending timer 随后重新发布旧 draft。
+
+### 6. Tests Required
+
+- `GitHistoryCommitFilters.test.tsx`：fake timer assert Clear-before-settle 与 `draftScopeKey` switch 都不发布 stale filters；assert Date picker end alignment 与 input browser hints。
+- `GitHistoryPanel.test.tsx`：fake clock assert unchanged Date preset 的两个 first-page request 重新锚定；append + snapshot retry exact reuse first payload；partial email visible。
+- `shared::git_core::tests::all_branch_scope_traverses_local_and_remote_refs`：在 `--lib` 与 `--bin cc_gui_daemon` target 都必须通过，assert `"all"` 与 `"*"` 包含 local + remote-only OID。
+- Gate：targeted ESLint/Vitest、`npm run typecheck`、Git History runtime/static-import contracts、Rust focused tests、strict OpenSpec validation。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const dateRange = useMemo(
+  () => resolveGitHistoryDateRange(datePreset),
+  [datePreset],
+);
+await getGitCommitHistory(workspaceId, {
+  ...filters,
+  ...resolveGitHistoryDateRange(datePreset),
+  snapshotId,
+});
+```
+
+第一种让新 snapshot 永久复用旧 clock，第二种让 append 改变 snapshot identity。
+
+#### Correct
+
+```ts
+const requestFilters = append
+  ? historyRequestFiltersRef.current ?? createHistoryRequestFilters()
+  : createHistoryRequestFilters();
+
+if (!append) {
+  historyRequestFiltersRef.current = requestFilters;
+}
+```
+
+```rust
+git_core::push_git_history_branch_scope(&repo, &mut revwalk, branch.as_deref())?;
+```
