@@ -8,6 +8,7 @@ import type { CodeAnnotationBridgeProps } from "../../code-annotations/types";
 import type { PanelTabId } from "../../layout/components/PanelTabs";
 import type { RepositoryGitStatus } from "../hooks/useMultiRepositoryGitStatus";
 import type { RepositoryCommitSelection } from "./GitMultiRepositoryChanges";
+import type { FileHistoryTarget } from "../../git-history/types";
 
 export type GitModalPreviewRequest = {
   path: string;
@@ -84,6 +85,7 @@ export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   selectedPath?: string | null;
   onSelectFile?: (path: string | null) => void;
   onOpenFile?: (path: string, repositoryRoot?: string | null) => void;
+  onOpenFileHistory?: (target: FileHistoryTarget) => void;
   modalPreviewRequest?: GitModalPreviewRequest | null;
   stagedFiles: {
     path: string;

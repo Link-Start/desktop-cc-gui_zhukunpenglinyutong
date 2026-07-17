@@ -40,13 +40,29 @@ type GitMultiRepositoryChangesProps = {
     file: DiffFile,
     section: "staged" | "unstaged",
   ) => void;
+  onShowFileMenu?: (
+    event: ReactMouseEvent<HTMLDivElement>,
+    repositoryRoot: string,
+    path: string,
+    section: RepositorySection,
+  ) => void;
   onRefresh?: () => Promise<void> | void;
 };
 
 const EMPTY_SELECTED_FILES = new Set<string>();
 
+type RepositorySection = "staged" | "unstaged";
+
 function selectionKey(repositoryRoot: string, path: string) {
   return JSON.stringify([repositoryRoot, normalizeGitPath(path)]);
+}
+
+function sectionCollapseKey(
+  workspaceId: string,
+  repositoryRoot: string,
+  section: RepositorySection,
+) {
+  return JSON.stringify([workspaceId, repositoryRoot, section]);
 }
 
 export function GitMultiRepositoryChanges({
@@ -69,10 +85,12 @@ export function GitMultiRepositoryChanges({
   onStageAll,
   onOpenFile,
   onOpenFilePreview,
+  onShowFileMenu,
   onRefresh,
 }: GitMultiRepositoryChangesProps) {
   const { t } = useTranslation();
   const [selectionOverrides, setSelectionOverrides] = useState<Record<string, boolean>>({});
+  const [collapsedSectionKeys, setCollapsedSectionKeys] = useState<Set<string>>(new Set());
 
   const topology = useMemo(() => statuses.flatMap((status) => [
     ...status.stagedFiles.map((file) => selectionKey(status.repositoryRoot, file.path)),
@@ -153,6 +171,22 @@ export function GitMultiRepositoryChanges({
     });
   };
 
+  const toggleSectionCollapsed = (
+    repositoryRoot: string,
+    section: RepositorySection,
+  ) => {
+    const key = sectionCollapseKey(workspaceId, repositoryRoot, section);
+    setCollapsedSectionKeys((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="git-multi-repository-changes" data-workspace-id={workspaceId}>
       <div className="git-multi-repository-changes__content">
@@ -204,6 +238,10 @@ export function GitMultiRepositoryChanges({
               includedPaths={includedPaths}
               excludedPaths={excludedPaths}
               partialPaths={lockedPathsList}
+              isCollapsed={collapsedSectionKeys.has(
+                sectionCollapseKey(workspaceId, status.repositoryRoot, "staged"),
+              )}
+              onToggleCollapsed={() => toggleSectionCollapsed(status.repositoryRoot, "staged")}
               selectedFiles={EMPTY_SELECTED_FILES}
               selectedPath={null}
               onSelectFile={(path) => {
@@ -221,7 +259,16 @@ export function GitMultiRepositoryChanges({
                 file,
                 section,
               )}
-              onShowFileMenu={() => {}}
+              onShowFileMenu={(event, path, section) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onShowFileMenu?.(
+                  event,
+                  status.repositoryRoot,
+                  path,
+                  section,
+                );
+              }}
             />
           ) : null}
           {status.unstagedFiles.length > 0 ? (
@@ -232,6 +279,10 @@ export function GitMultiRepositoryChanges({
               includedPaths={includedPaths}
               excludedPaths={excludedPaths}
               partialPaths={lockedPathsList}
+              isCollapsed={collapsedSectionKeys.has(
+                sectionCollapseKey(workspaceId, status.repositoryRoot, "unstaged"),
+              )}
+              onToggleCollapsed={() => toggleSectionCollapsed(status.repositoryRoot, "unstaged")}
               selectedFiles={EMPTY_SELECTED_FILES}
               selectedPath={null}
               onSelectFile={(path) => {
@@ -254,7 +305,16 @@ export function GitMultiRepositoryChanges({
                 file,
                 section,
               )}
-              onShowFileMenu={() => {}}
+              onShowFileMenu={(event, path, section) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onShowFileMenu?.(
+                  event,
+                  status.repositoryRoot,
+                  path,
+                  section,
+                );
+              }}
             />
           ) : null}
           </section>

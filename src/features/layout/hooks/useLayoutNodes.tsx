@@ -1879,6 +1879,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
               repositoryRoot,
             })
           }
+          onOpenFileHistory={options.onOpenFileHistory}
           modalPreviewRequest={gitModalPreviewRequest}
           selectedPath={sidebarSelectedDiffPath}
           logEntries={options.gitLogEntries}

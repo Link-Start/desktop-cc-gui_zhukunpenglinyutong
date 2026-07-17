@@ -4,7 +4,7 @@
 
 ## 1. Scope / Trigger
 
-- Trigger：修改 FileTree 文件历史入口、`FileHistoryTarget`、`getGitCommitHistory` 的 `path`、snapshot identity、rename-follow、remote forwarding、File History layout 或 selected diff renderer。
+- Trigger：修改 FileTree/Git Diff 文件历史入口、`FileHistoryTarget`、`getGitCommitHistory` 的 `path`、snapshot identity、rename-follow、remote forwarding、File History layout 或 selected diff renderer。
 - 目标：root/nested repository 都只查询目标文件，Desktop local 与 remote daemon 保持 payload/response parity。
 - 禁止：frontend 遍历 commits 后逐个拉 diff 做 N+1 filtering；禁止把 file mode 塞入通用 `GitHistoryPanelImpl`。
 
@@ -93,6 +93,10 @@ Daemon method 使用同字段顺序与语义，其中 pagination 的 `offset/lim
 - File History scope MUST 将 `.editable-diff-compare-columns` 和 `.file-compare-column` 的 fixed minimum 收敛为 `minmax(0, 1fr)` / `min-width: 0`，让 compare 消费剩余宽度；long lines 由 CodeMirror pane 自己滚动。
 - `loadFileHistoryStyles()` MUST 同时加载 diff、file-view compare 和 file-history styles。
 - `FileTreePanel.onOpenFileHistory` MUST optional；callback 缺失、folder target、invalid/escaping path、没有 owning repository 时不显示入口。
+- `GitDiffPanel.onOpenFileHistory` MUST optional；single/multi changed-file menu 只在 callback、workspace identity 与 valid repository-relative target 同时存在时显示 History。
+- Git Diff History MUST capture the clicked row only；single bulk mutation selection MUST NOT alter `FileHistoryTarget.path`。
+- Git Diff `mutationDisabled` / diff-only row MAY retain read-only History，但 MUST expose zero Stage/Unstage/Discard actions。
+- Git Diff single root MUST normalize absent/empty/workspace-equal `gitRoot` to `repositoryRoot=""`；nested root MUST be workspace-relative；multi mode MUST preserve row-owned explicit root including `""`。
 
 ## 4. Validation & Error Matrix
 
@@ -119,6 +123,11 @@ Daemon method 使用同字段顺序与语义，其中 pagination 的 `offset/lim
 | previous/source change | red deletion / green addition | 不得两栏都显示 generic blue modified |
 | difference navigation | read-only editor scrolls to active line | 不得把 programmatic navigation 当 mutation 禁用 |
 | long source line | editor-local horizontal scroll | 不得撑宽 File History workspace |
+| Git Diff single multi-selection | clicked row target only | selected paths 不得替换 History path |
+| Git Diff multi A/B same path | clicked `repositoryRoot + path` | 不得 path-only 串仓 |
+| Git Diff explicit root `""` | empty string preserved | 不得 fallback configured root |
+| Git Diff mutation-disabled row | History-only when target valid | 不得暴露 mutation 或隐藏 read-only capability |
+| Git Diff missing callback/workspace/valid scope | omit History item | 不得显示 dead entry |
 
 ## 5. Good / Base / Bad Cases
 
@@ -130,11 +139,15 @@ Daemon method 使用同字段顺序与语义，其中 pagination 的 `offset/lim
 - Good：File History container 变窄时，layout 自己切换上下结构，right panel 是否打开不影响 breakpoint truth。
 - Good：historical text column 使用 `{ editable: false, readOnlyReason: null }`，因此 CodeMirror/markers 保留但 user mutation 被禁用。
 - Good：rename 前 commit 暴露 `filePath="src/before.ts"`，diff request 与 exact-match 都使用该 historical path。
+- Good：multi repository `services/api + pom.xml` → `{ repositoryRoot: "services/api", path: "pom.xml", displayPath: "services/api/pom.xml" }`。
+- Good：single selected A/B，right-click B → History target B；Stage/Discard 仍可使用 A/B bulk target。
 - Good：`@@ -56,2 +60,2 @@` 后接 `@@ -90 +94 @@` 时，两栏 gutter 分别延续为 `56,57,90` 与 `60,61,94`。
 - Bad：用 `@media (max-width: ...)` 推断 center surface 宽度，导致 window 很宽但 center panel 很窄时仍保持左右挤压。
 - Bad：为复刻 Diff UI 再写一套 previous/source reconstruction 或 CodeMirror columns。
 - Bad：用 `readOnlyReason: t("files.readOnly")` 表示普通只读，意外触发 `<pre>` fallback 并丢失全部 decorations。
 - Bad：selected response 未命中 path 时渲染 `diffs[0]`，可能把同一 commit 的另一个文件冒充目标文件。
+- Bad：`mutationDisabled` early return 同时移除 History，混淆 write capability 与 read capability。
+- Bad：multi same-path History 根据 flat path 反查 repository，导致打开另一仓文件。
 
 ## 6. Tests Required
 
@@ -150,6 +163,9 @@ Daemon method 使用同字段顺序与语义，其中 pagination 的 `offset/lim
 - `file-history-layout.test.ts`：assert named container、bounded wide grid、narrow stacked rows、fluid two-pane column override。
 - `file-history-layout.test.ts`：assert deletion/addition scoped selectors 与 red/green theme colors 存在。
 - `useGitPanelController.test.tsx`：assert open/switch/close 与切换其他 center surface 后 target 清空。
+- `GitDiffPanelFileContextMenu.test.ts`：assert History ordering、History-only 与 empty action set。
+- `GitDiffPanel.test.tsx`：assert root/nested/Windows/invalid target mapping、single clicked-only bulk selection、multi same-path/empty-root、mutation-disabled History-only 与 stale callback close。
+- `useLayoutNodes.client-ui-visibility.test.tsx`：assert existing `onOpenFileHistory` capability 透传到 Git Diff。
 - Rust `git::tests`：真实 repository fixture assert root rename-follow 的 OID + commit-time path、invalid paths 与不同 path snapshot identity。
 - Rust `git_utils::tests`：assert shared image mapper 同时输出 old/new MIME 与 base64 payload；daemon target 必须 compile。
 - Gate：`npm run typecheck`、focused Vitest、`cargo test ... file_history --lib`、daemon target compile、`npm run check:runtime-contracts`、strict OpenSpec validation。

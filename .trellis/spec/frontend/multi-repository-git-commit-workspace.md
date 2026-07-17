@@ -114,6 +114,143 @@ revertGitFile(workspaceId: string, path: string, repositoryRoot?: string | null)
 />
 ```
 
+## Scenario: Unified Git Diff File Context Menu
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `GitDiffPanel`、`GitMultiRepositoryChanges`、`DiffSection` 的 changed-file context menu、file mutation action 或 flat/tree renderer。
+- 目标：single-repository flat/tree 与 multi-repository grouped rows MUST 提供一致的 `Git` file action submenu，同时由 parent 保留唯一 menu ownership 和 repository identity。
+- 本 scenario 覆盖 file-scoped Stage / Unstage / Discard 与 read-only File History；Blame 与 repository-scoped commands 不属于该菜单。
+
+### 2. Signatures
+
+```ts
+type GitDiffFileSection = "staged" | "unstaged";
+
+type RepositoryFileMenuHandler = (
+  event: ReactMouseEvent<HTMLDivElement>,
+  repositoryRoot: string,
+  path: string,
+  section: GitDiffFileSection,
+) => void;
+
+type GitMultiRepositoryChangesProps = {
+  onShowFileMenu?: RepositoryFileMenuHandler;
+};
+
+type GitDiffPanelProps = {
+  onOpenFileHistory?: (target: FileHistoryTarget) => void;
+};
+
+resolveGitDiffFileHistoryTarget({
+  workspaceId,
+  workspacePath,
+  path,
+  gitRoot?,
+  repositoryRoot?,
+}): FileHistoryTarget | null
+
+showFileMenu(
+  event: ReactMouseEvent<HTMLDivElement>,
+  path: string,
+  section: GitDiffFileSection,
+): void
+
+showRepositoryFileMenu(
+  event: ReactMouseEvent<HTMLDivElement>,
+  repositoryRoot: string,
+  path: string,
+  section: GitDiffFileSection,
+): void
+
+onStageRepositoryFile(repositoryRoot: string, path: string): Promise<void>
+onUnstageRepositoryFile(repositoryRoot: string, path: string): Promise<void>
+onRevertRepositoryFile(repositoryRoot: string, path: string): Promise<void>
+```
+
+- `GitDiffPanel` MUST own the single `RendererContextMenuState` and render the single `RendererContextMenu` portal。
+- `GitMultiRepositoryChanges` / `DiffSection` MUST only forward typed row intent；禁止 child 自建 menu state、portal、confirmation dialog 或直接调用 service。
+
+### 3. Contracts
+
+- Every file-row `contextmenu` handler MUST synchronously call `preventDefault()` and `stopPropagation()` before checking actions；即使 `mutationDisabled` 或 handler 缺失，也禁止退回 browser / WebView native menu。
+- Custom menu root MUST expose one `Git` submenu；Stage / Unstage / File History / Discard MUST 位于该 submenu，禁止在 root level 散落。
+- Action availability MUST derive from the clicked row section, not inferred global state：
+  - `section === "staged"`：只允许 Unstage。
+  - `section === "unstaged"`：允许 Stage 和 destructive Discard。
+- Discard MUST NOT appear for staged files。`显示文件历史` MAY appear when `onOpenFileHistory` 与 exact target 可用；Blame、Commit、Push、Pull、Fetch、Sync、Checkout、branch operations 与 Stage All MUST NOT appear in this file menu。
+- History MUST capture the clicked row only；single bulk selection MUST continue to affect mutation actions but MUST NOT replace the History target。
+- History target MUST use `workspaceId + workspacePath + repositoryRoot + repository-relative path`；`displayPath` MUST be workspace-relative。single root 的 null/empty/workspace-equal Git root 归一化为 explicit `repositoryRoot=""`。
+- Single repository batch behavior MAY reuse current selection，但 MUST intersect targets with the clicked section；staged menu 不得因 selection 中混有 unstaged path 而出现 Stage / Discard。
+- Multi repository menu MUST target only the clicked row and MUST forward explicit `repositoryRoot + path + section`；禁止使用 global selected repository 或 flatten all repositories 的 selected paths。
+- `repositoryRoot === ""` MUST 原样穿过 menu intent 和 mutation callback；只有 `undefined` 才表示 legacy configured-root fallback。
+- Same relative path in repository A/B MUST remain isolated by `repositoryRoot`；right-click B 的 `pom.xml` 只能 mutate B。
+- `mutationDisabled` file MUST expose no mutation item，但 exact File History target 有效时 MUST 仍允许 read-only History；所有 action 均缺失时才关闭/不显示 custom menu，同时继续 suppress native menu。
+- Open file menu MUST be invalidated when workspace/path、Git root、repository/file topology、loading state、History callback 或 scoped mutation callback identity changes；stale action MUST NOT remain activatable。
+- Discard MUST reuse parent-owned destructive confirmation flow。Cancel MUST execute zero mutations and zero refresh；confirm MUST execute the scoped revert once, then refresh status exactly once after success。
+- Stage / Unstage MUST execute the scoped mutation once and refresh status exactly once after success；menu builder/renderer 禁止叠加第二次 refresh。
+- Menu adapter MUST NOT convert mutation rejection into success；禁止执行 success refresh、伪造 success 或 silently retry another repository。本 change 不新增独立 mutation error UI。
+- Context-menu open/close MUST NOT mutate commit selection、open a file、toggle folder/section collapse or trigger repository polling。
+
+### 4. Action Matrix
+
+| Topology / renderer | Row state | `Git` submenu | Target scope |
+|---|---|---|---|
+| single + flat | staged, mutable + History | Unstage + History | mutation=clicked section selection；History=clicked row |
+| single + tree | staged, mutable + History | Unstage + History | mutation=clicked section selection；History=clicked row |
+| single + flat/tree | unstaged, mutable + History | Stage + History + Discard | mutation=clicked section selection；History=clicked row |
+| multi + flat | staged, mutable + History | Unstage + History | clicked `repositoryRoot + path` only |
+| multi + grouped list | staged, mutable + History | Unstage + History | clicked `repositoryRoot + path` only |
+| multi + grouped list | unstaged, mutable + History | Stage + History + Discard | clicked `repositoryRoot + path` only |
+| any | `mutationDisabled` + valid History | History only | clicked row only |
+| any | no eligible mutation/History handler | no custom submenu/item | no action |
+
+### 5. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| right-click mutable row | suppress native menu；打开 parent-owned `Git` submenu | browser “Reload / Inspect” menu |
+| right-click staged row | only Unstage | Stage 或 Discard |
+| right-click unstaged row | Stage + destructive Discard | Unstage |
+| single flat/tree 切换 | action set 与 target semantics 不变 | tree path 丢失 menu 或改用另一套 handler |
+| A/B 都有 `pom.xml`，right-click B | callback receives `("B", "pom.xml", section)` | mutate A / configured root |
+| explicit root `""` | callback 保留 `""` | truthy fallback 到 configured root |
+| multi A/B 同名 path History | target 使用 clicked repository 的 exact root/path | History 打开另一 repository |
+| single multi-selection History | target 只使用 clicked row | 用 selected paths 构造多文件/错误文件 target |
+| `mutationDisabled` + History | native menu suppressed，History 可用，mutation 0 次 | read-only capability 被 mutation flag 误禁 |
+| History callback/workspace/scope missing | omit History，保留独立可用 mutation | 显示 dead History item |
+| discard cancel | mutation 0 次，refresh 0 次 | 提前 revert |
+| discard confirm success | scoped revert 1 次，refresh 1 次 | double mutation / double refresh |
+| mutation rejects | callback 保持 rejected semantics，success refresh 0 次 | 伪造 success / fallback to another repository |
+| menu open/close | commit inclusion、collapse、file-open、polling count 不变；保留既有 row selection 语义 | contextmenu 冒泡触发 row click |
+| menu open 后 topology / workspace 变化 | file menu 立即关闭，旧 callback 不可激活 | 继续 mutate 旧 workspace/repository target |
+
+### 6. Good / Base / Bad Cases
+
+- Good：multi B unstaged `pom.xml` → `onShowFileMenu(event, "B", "pom.xml", "unstaged")` → `Git > Stage / History / Discard`，History target root=`B`。
+- Good：workspace-root repository → `onShowFileMenu(event, "", "README.md", "staged")` → scoped Unstage/History with `repositoryRoot=""`。
+- Good：single staged selection mixed with an unstaged row → right-click staged row still exposes only Unstage for staged targets。
+- Base：single repository continues using existing optional repository fallback；只统一 menu shape，不改变 service signature。
+- Bad：`onShowFileMenu={() => {}}`、child `new RendererContextMenuState()`、或让 empty items fall through to native WebView menu。
+- Bad：根据 path 在 aggregate status 中反查 repository；A/B 同名 path 会产生 ambiguous target。
+- Bad：History 读取 `selectedFiles` 并打开 selection 第一项，或用 truthy fallback 吞掉 root `""`。
+- Bad：把 Blame 或 Commit / Push / Pull / Fetch 等 repository command 填进当前 file submenu。
+
+### 7. Tests Required
+
+- `GitDiffPanel.test.tsx`：single flat/tree staged 只显示 Unstage；unstaged 显示 Stage + Discard；root menu 仅有 `Git` submenu。
+- `GitDiffPanel.test.tsx`：mixed selection 按 clicked section 取交集；staged path 不得进入 discard confirmation target。
+- `GitMultiRepositoryChanges.test.tsx`：staged/unstaged grouped row 均 forward exact `event + repositoryRoot + path + section`，且不再使用 noop handler。
+- `GitDiffPanel.test.tsx`：A/B 同名 path 和 explicit root `""` mutation payload 隔离。
+- `GitDiffPanel.test.tsx`：workspace/repository topology rerender 后旧 file menu 被关闭，mutation/refresh 均为 0。
+- `GitDiffPanel.test.tsx`：`mutationDisabled` 与 missing handler 均调用 `preventDefault()`，不显示 mutation，且不触发 native menu observable path。
+- `GitDiffPanel.test.tsx`：single flat/tree multi-selection History 只打开 clicked row；root/nested/Windows target mapping 与 invalid path/root rejection。
+- `GitDiffPanel.test.tsx`：multi A/B 同名 path 与 explicit root `""` History target 隔离；`mutationDisabled` row 保留 History-only menu。
+- `useLayoutNodes.client-ui-visibility.test.tsx`：existing `onOpenFileHistory` callback 原样透传到 `GitDiffPanel`。
+- `GitDiffPanel.test.tsx`：discard cancel 为 mutation/refresh `0/0`；confirm success 为 `1/1`；failure 不执行 success refresh。
+- `GitDiffPanel.test.tsx`：menu 不包含 Blame、Commit、Push、Pull、Fetch、Sync、Checkout、Stage All。
+- Existing file click、preview、commit selection、collapse 与 refresh/polling tests MUST remain green。
+
 ## Git History Independent Repository Selection
 
 - existing workspace/worktree `GitHistoryProjectPicker` MUST 始终保留为第一层，禁止以 repository list 替换。
@@ -245,7 +382,9 @@ WorkspaceEditableDiffCompare({
   onOpenFilePreview={(file, section) =>
     onOpenFilePreview?.(status.repositoryRoot, file, section)
   }
-  onShowFileMenu={() => {}}
+  onShowFileMenu={(event, path, section) =>
+    onShowFileMenu?.(event, status.repositoryRoot, path, section)
+  }
 />
 ```
 

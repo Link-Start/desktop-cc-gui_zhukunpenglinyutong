@@ -268,8 +268,15 @@ vi.mock("../../notifications/components/GlobalRuntimeNoticeDock", () => ({
   GlobalRuntimeNoticeDock: () => <div data-testid="runtime-notice-dock" />,
 }));
 
+let capturedGitDiffPanelProps: {
+  onOpenFileHistory?: (target: unknown) => void;
+} | null = null;
+
 vi.mock("../../git/components/GitDiffPanel", () => ({
-  GitDiffPanel: () => <div data-testid="git-diff-panel" />,
+  GitDiffPanel: (props: typeof capturedGitDiffPanelProps) => {
+    capturedGitDiffPanelProps = props;
+    return <div data-testid="git-diff-panel" />;
+  },
 }));
 
 vi.mock("../../git/components/GitDiffViewer", () => ({
@@ -978,6 +985,7 @@ async function renderUseLayoutNodes(
 
 describe("useLayoutNodes client UI visibility", () => {
   afterEach(() => {
+    capturedGitDiffPanelProps = null;
     capturedFileTreePanelProps = null;
     clientUiVisibilityMock.visiblePanels.clear();
     clientUiVisibilityMock.visibleControls.clear();
@@ -1004,6 +1012,23 @@ describe("useLayoutNodes client UI visibility", () => {
     expect(onStageGitAll).toHaveBeenCalledTimes(1);
     expect(onSelectGitRoot.mock.invocationCallOrder[0]).toBeLessThan(
       onStageGitAll.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    );
+  });
+
+  it("forwards the existing File History navigation capability into Git Diff", async () => {
+    const onOpenFileHistory = vi.fn();
+    const { result } = await renderUseLayoutNodes(
+      createLayoutOptions({
+        filePanelMode: "git",
+        onOpenFileHistory,
+      }),
+    );
+
+    render(<>{result.current.gitDiffPanelNode}</>);
+    await screen.findByTestId("git-diff-panel");
+
+    expect(capturedGitDiffPanelProps?.onOpenFileHistory).toBe(
+      onOpenFileHistory,
     );
   });
 

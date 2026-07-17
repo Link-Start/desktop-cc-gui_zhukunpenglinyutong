@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { RepositoryGitStatus } from "../hooks/useMultiRepositoryGitStatus";
 import { GitMultiRepositoryChanges } from "./GitMultiRepositoryChanges";
@@ -21,6 +22,13 @@ const repositoryStatus = (repositoryRoot: string): RepositoryGitStatus => ({
   totalDeletions: 0,
   error: null,
 });
+
+type FileMenuHandler = (
+  event: ReactMouseEvent<HTMLDivElement>,
+  repositoryRoot: string,
+  path: string,
+  section: "staged" | "unstaged",
+) => void;
 
 describe("GitMultiRepositoryChanges", () => {
   it("restores an aggregate status refresh action in every repository header", () => {
@@ -70,6 +78,103 @@ describe("GitMultiRepositoryChanges", () => {
       fireEvent.click(button);
     });
     expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it("collapses repository sections independently without triggering Git actions", () => {
+    const firstStatus = repositoryStatus("a");
+    firstStatus.stagedFiles = [
+      { path: "staged-a.ts", status: "M", additions: 2, deletions: 0 },
+    ];
+    const onStageFile = vi.fn(async () => undefined);
+    const onUnstageFile = vi.fn(async () => undefined);
+    const onDiscardFile = vi.fn();
+    const onOpenFile = vi.fn();
+    const onRefresh = vi.fn(async () => undefined);
+
+    render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[firstStatus, repositoryStatus("b")]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+        onStageFile={onStageFile}
+        onUnstageFile={onUnstageFile}
+        onDiscardFile={onDiscardFile}
+        onOpenFile={onOpenFile}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    const groups = document.querySelectorAll<HTMLElement>(".git-repository-change-group");
+    const firstGroup = groups[0] as HTMLElement;
+    const secondGroup = groups[1] as HTMLElement;
+    const stagedToggle = within(firstGroup).getByRole("button", {
+      name: "git.staged (1)",
+    });
+    const firstUnstagedToggle = within(firstGroup).getByRole("button", {
+      name: "git.unstaged (1)",
+    });
+    const secondUnstagedToggle = within(secondGroup).getByRole("button", {
+      name: "git.unstaged (1)",
+    });
+    const selectionStateBefore = within(firstGroup)
+      .getAllByRole("checkbox")
+      .map((toggle) => toggle.getAttribute("aria-checked"));
+
+    fireEvent.click(stagedToggle);
+
+    expect(stagedToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(firstUnstagedToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(secondUnstagedToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(firstGroup.querySelector('[data-path="staged-a.ts"]')).toBeNull();
+    expect(firstGroup.querySelector('[data-path="pom.xml"]')).not.toBeNull();
+    expect(secondGroup.querySelector('[data-path="pom.xml"]')).not.toBeNull();
+    expect(onStageFile).not.toHaveBeenCalled();
+    expect(onUnstageFile).not.toHaveBeenCalled();
+    expect(onDiscardFile).not.toHaveBeenCalled();
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(onRefresh).not.toHaveBeenCalled();
+
+    fireEvent.click(stagedToggle);
+
+    expect(stagedToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(firstGroup)
+        .getAllByRole("checkbox")
+        .map((toggle) => toggle.getAttribute("aria-checked")),
+    ).toEqual(selectionStateBefore);
+  });
+
+  it("does not carry collapsed sections into another workspace with the same repository root", () => {
+    const status = repositoryStatus("shared-root");
+    const { rerender } = render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[status]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "git.unstaged (1)" }));
+    expect(screen.queryByLabelText("pom.xml")).toBeNull();
+
+    rerender(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-2"
+        statuses={[status]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "git.unstaged (1)" }).getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(screen.getByLabelText("pom.xml")).toBeTruthy();
   });
 
   it("renders repository groups and isolates the same relative path selection", () => {
@@ -194,5 +299,138 @@ describe("GitMultiRepositoryChanges", () => {
     fireEvent.click(discardButtons[0] as HTMLButtonElement);
 
     expect(onDiscardFile).toHaveBeenCalledWith("services/api", "pom.xml");
+  });
+
+  it("forwards staged and unstaged row context menus with exact repository identity", () => {
+    const status = repositoryStatus("services/api");
+    status.stagedFiles = [
+      { path: "staged.md", status: "M", additions: 1, deletions: 0 },
+    ];
+    const observedDefaultPrevented: boolean[] = [];
+    const onShowFileMenu = vi.fn<FileMenuHandler>((event) => {
+      event.preventDefault();
+      observedDefaultPrevented.push(event.defaultPrevented);
+    });
+
+    render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[status]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+        onShowFileMenu={onShowFileMenu}
+      />,
+    );
+
+    const stagedRow = document.querySelector<HTMLElement>(
+      '.diff-row[data-section="staged"][data-path="staged.md"]',
+    );
+    const unstagedRow = document.querySelector<HTMLElement>(
+      '.diff-row[data-section="unstaged"][data-path="pom.xml"]',
+    );
+    expect(stagedRow).toBeTruthy();
+    expect(unstagedRow).toBeTruthy();
+
+    fireEvent.contextMenu(stagedRow as HTMLElement);
+    fireEvent.contextMenu(unstagedRow as HTMLElement);
+
+    expect(onShowFileMenu).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "services/api",
+      "staged.md",
+      "staged",
+    );
+    expect(onShowFileMenu).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      "services/api",
+      "pom.xml",
+      "unstaged",
+    );
+    expect(observedDefaultPrevented).toEqual([true, true]);
+  });
+
+  it("keeps same-path context menus repository-scoped without row side effects", () => {
+    const onShowFileMenu = vi.fn<FileMenuHandler>((event) => {
+      event.preventDefault();
+    });
+    const onOpenFile = vi.fn();
+    const onRefresh = vi.fn(async () => undefined);
+
+    render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[repositoryStatus("repo-a"), repositoryStatus("repo-b")]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+        onShowFileMenu={onShowFileMenu}
+        onOpenFile={onOpenFile}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    const groups = document.querySelectorAll<HTMLElement>(".git-repository-change-group");
+    const secondRow = within(groups[1] as HTMLElement).getByLabelText("pom.xml");
+    const selectionStateBefore = screen
+      .getAllByRole("checkbox")
+      .map((toggle) => toggle.getAttribute("aria-checked"));
+    const collapseStateBefore = screen
+      .getAllByRole("button", { name: "git.unstaged (1)" })
+      .map((toggle) => toggle.getAttribute("aria-expanded"));
+
+    fireEvent.contextMenu(secondRow);
+
+    expect(onShowFileMenu).toHaveBeenCalledTimes(1);
+    expect(onShowFileMenu).toHaveBeenCalledWith(
+      expect.anything(),
+      "repo-b",
+      "pom.xml",
+      "unstaged",
+    );
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(onRefresh).not.toHaveBeenCalled();
+    expect(
+      screen
+        .getAllByRole("checkbox")
+        .map((toggle) => toggle.getAttribute("aria-checked")),
+    ).toEqual(selectionStateBefore);
+    expect(
+      screen
+        .getAllByRole("button", { name: "git.unstaged (1)" })
+        .map((toggle) => toggle.getAttribute("aria-expanded")),
+    ).toEqual(collapseStateBefore);
+  });
+
+  it("preserves an explicit workspace-root repository identity in context menus", () => {
+    const status = repositoryStatus("");
+    status.displayName = "workspace-root";
+    const onShowFileMenu = vi.fn<FileMenuHandler>((event) => {
+      event.preventDefault();
+    });
+
+    render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[status]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+        onShowFileMenu={onShowFileMenu}
+      />,
+    );
+
+    const row = document.querySelector<HTMLElement>('.diff-row[data-path="pom.xml"]');
+    expect(row).toBeTruthy();
+    fireEvent.contextMenu(row as HTMLElement);
+
+    expect(onShowFileMenu).toHaveBeenCalledWith(
+      expect.anything(),
+      "",
+      "pom.xml",
+      "unstaged",
+    );
   });
 });

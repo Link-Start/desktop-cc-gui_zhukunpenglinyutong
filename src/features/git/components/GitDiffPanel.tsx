@@ -68,19 +68,22 @@ import {
 } from "./GitDiffPanelInclusion";
 import {
   clampRendererContextMenuPosition,
+  estimateRendererContextMenuHeight,
   RendererContextMenu,
   type RendererContextMenuItem,
   type RendererContextMenuState,
 } from "../../../components/ui/RendererContextMenu";
 import type { GitDiffPanelProps } from "./GitDiffPanelTypes";
-import {
-  resolveGitRootWorkspacePrefix,
-  resolveWorkspaceRelativePath,
-} from "../../../utils/workspacePaths";
+import { resolveGitRootWorkspacePrefix } from "../../../utils/workspacePaths";
 import {
   GitMultiRepositoryChanges,
   type RepositoryCommitSelection,
 } from "./GitMultiRepositoryChanges";
+import { buildGitDiffPanelFileContextMenuItems } from "./GitDiffPanelFileContextMenu";
+import {
+  resolveGitDiffFileHistoryTarget,
+  resolveRepositoryWorkspaceFilePath,
+} from "./GitDiffPanelFileScope";
 
 type ModeMenuLayout = {
   align: "left" | "right";
@@ -88,6 +91,10 @@ type ModeMenuLayout = {
 };
 
 type GitDiffSectionKey = "staged" | "unstaged";
+
+type GitPanelContextMenuState = RendererContextMenuState & {
+  source?: "git-diff-file";
+};
 
 type PreviewFileState = DiffFile & {
   section: GitDiffSectionKey;
@@ -113,25 +120,6 @@ function normalizeRootPath(value: string | null | undefined) {
     return "";
   }
   return value.replace(/\\/g, "/").replace(/\/+$/, "");
-}
-
-export function resolveRepositoryWorkspaceFilePath(
-  workspacePath: string | null | undefined,
-  gitRoot: string | null | undefined,
-  filePath: string,
-) {
-  const normalizedFilePath = normalizeDiffPath(filePath);
-  const repositoryRoot = normalizeDiffPath(
-    resolveWorkspaceRelativePath(workspacePath, gitRoot ?? ""),
-  ).replace(/\/+$/, "");
-  if (
-    !repositoryRoot ||
-    normalizedFilePath === repositoryRoot ||
-    normalizedFilePath.startsWith(`${repositoryRoot}/`)
-  ) {
-    return normalizedFilePath;
-  }
-  return `${repositoryRoot}/${normalizedFilePath}`;
 }
 
 function isMissingRepo(error: string | null | undefined) {
@@ -767,6 +755,7 @@ function GitDiffPanelImpl({
   gitRemoteUrl = null,
   onSelectFile,
   onOpenFile,
+  onOpenFileHistory,
   logEntries,
   logAhead = 0,
   logBehind = 0,
@@ -847,7 +836,7 @@ function GitDiffPanelImpl({
   const discardDialogPaths = discardDialogTarget?.paths ?? null;
   const [discardDialogSubmitting, setDiscardDialogSubmitting] = useState(false);
   const [gitContextMenu, setGitContextMenu] =
-    useState<RendererContextMenuState | null>(null);
+    useState<GitPanelContextMenuState | null>(null);
   const deferredCommitLanguageMenuTimerRef = useRef<number | null>(null);
   const gitStatusRefreshSpinTimerRef = useRef<number | null>(null);
   const gitStatusRefreshSpinRafRef = useRef<number | null>(null);
@@ -879,6 +868,46 @@ function GitDiffPanelImpl({
   const panelRef = useRef<HTMLElement | null>(null);
   const modeTriggerRef = useRef<HTMLButtonElement | null>(null);
   const modeMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (multiRepositoryMode) {
+      return;
+    }
+    setGitContextMenu((currentMenu) =>
+      currentMenu?.source === "git-diff-file" ? null : currentMenu,
+    );
+  }, [
+    gitRoot,
+    multiRepositoryMode,
+    onRevertFile,
+    onOpenFileHistory,
+    onStageFile,
+    onUnstageFile,
+    stagedFiles,
+    unstagedFiles,
+    workspaceId,
+    workspacePath,
+  ]);
+
+  useEffect(() => {
+    if (!multiRepositoryMode) {
+      return;
+    }
+    setGitContextMenu((currentMenu) =>
+      currentMenu?.source === "git-diff-file" ? null : currentMenu,
+    );
+  }, [
+    multiRepositoryMode,
+    onRefreshRepositoryStatuses,
+    onRevertRepositoryFile,
+    onOpenFileHistory,
+    onStageRepositoryFile,
+    onUnstageRepositoryFile,
+    repositoryStatuses,
+    repositoryStatusesLoading,
+    workspaceId,
+    workspacePath,
+  ]);
 
   // Combine staged and unstaged files for range selection
   const allFiles = useMemo(
@@ -1134,11 +1163,6 @@ function GitDiffPanelImpl({
     },
     [mode, onModeChange],
   );
-  const openGitRootPanelFromMenu = useCallback(() => {
-    setIsModeMenuOpen(false);
-    setIsGitRootPanelOpen(true);
-  }, []);
-
   const updateModeMenuLayout = useCallback(() => {
     const panelElement = panelRef.current;
     const triggerElement = modeTriggerRef.current;
@@ -1637,104 +1661,231 @@ function GitDiffPanelImpl({
     (
       event: ReactMouseEvent<HTMLDivElement>,
       path: string,
-      _mode: "staged" | "unstaged",
+      section: GitDiffSectionKey,
     ) => {
       event.preventDefault();
       event.stopPropagation();
 
-      // Determine which files to operate on
-      // If clicked file is in selection, use all selected files; otherwise just this file
-      const isInSelection = selectedFiles.has(path);
-      const targetPaths =
-        isInSelection && selectedFiles.size > 1
-          ? Array.from(selectedFiles)
-          : [path];
+      const sectionFiles = section === "staged" ? stagedFiles : unstagedFiles;
+      const filesByNormalizedPath = new Map(
+        sectionFiles.map((file) => [normalizeDiffPath(file.path), file]),
+      );
+      const clickedFile = filesByNormalizedPath.get(normalizeDiffPath(path));
+      if (!clickedFile) {
+        setGitContextMenu(null);
+        return;
+      }
 
-      // If clicking on unselected file, select it
-      if (!isInSelection) {
+      const mutationEnabled = !isFileMutationDisabled(clickedFile);
+      const isInSelection =
+        mutationEnabled &&
+        Array.from(selectedFiles).some(
+          (selectedPath) =>
+            normalizeDiffPath(selectedPath) === normalizeDiffPath(path),
+        );
+      const selectedTargetPaths =
+        mutationEnabled && isInSelection && selectedFiles.size > 1
+          ? Array.from(selectedFiles)
+          : mutationEnabled
+            ? [path]
+            : [];
+      const targetPaths = mutationEnabled
+        ? Array.from(
+            new Map(
+              selectedTargetPaths
+                .map((selectedPath) =>
+                  filesByNormalizedPath.get(normalizeDiffPath(selectedPath)),
+                )
+                .filter(
+                  (file): file is DiffFile =>
+                    file !== undefined && !isFileMutationDisabled(file),
+                )
+                .map((file) => [normalizeDiffPath(file.path), file.path]),
+            ).values(),
+          )
+        : [];
+
+      if (mutationEnabled && !isInSelection) {
         setSelectedFiles(new Set([path]));
         setLastClickedFile(path);
       }
 
-      // Separate files by their section for stage/unstage operations
-      const stagedPaths = targetPaths.filter((p) =>
-        stagedFiles.some((f) => f.path === p && !isFileMutationDisabled(f)),
-      );
-      const unstagedPaths = targetPaths.filter((p) =>
-        unstagedFiles.some((f) => f.path === p && !isFileMutationDisabled(f)),
-      );
-      const mutationTargetPaths = targetPaths.filter(
-        (p) =>
-          stagedFiles.some((f) => f.path === p && !isFileMutationDisabled(f)) ||
-          unstagedFiles.some((f) => f.path === p && !isFileMutationDisabled(f)),
-      );
-
-      const items: RendererContextMenuItem[] = [];
-
-      // Unstage action for staged files
-      if (stagedPaths.length > 0 && onUnstageFile) {
-        items.push({
-          type: "item",
-          id: "unstage",
-          label: `Unstage file${stagedPaths.length > 1 ? `s (${stagedPaths.length})` : ""}`,
-          onSelect: async () => {
-            for (const p of stagedPaths) {
-              await onUnstageFile(p);
-            }
-          },
-        });
-      }
-
-      // Stage action for unstaged files
-      if (unstagedPaths.length > 0 && onStageFile) {
-        items.push({
-          type: "item",
-          id: "stage",
-          label: `Stage file${unstagedPaths.length > 1 ? `s (${unstagedPaths.length})` : ""}`,
-          onSelect: async () => {
-            for (const p of unstagedPaths) {
-              await onStageFile(p);
-            }
-          },
-        });
-      }
-
-      // Revert action for all selected files
-      if (onRevertFile && mutationTargetPaths.length > 0) {
-        items.push({
-          type: "item",
-          id: "discard",
-          label: `Discard change${mutationTargetPaths.length > 1 ? "s" : ""}${
-            mutationTargetPaths.length > 1 ? ` (${mutationTargetPaths.length})` : ""
-          }`,
-          tone: "danger",
-          onSelect: async () => {
-            await discardFiles(mutationTargetPaths);
-          },
-        });
-      }
-
-      if (!items.length) {
+      const fileHistoryTarget = onOpenFileHistory
+        ? resolveGitDiffFileHistoryTarget({
+            workspaceId,
+            workspacePath,
+            gitRoot,
+            path: clickedFile.path,
+          })
+        : null;
+      const items = buildGitDiffPanelFileContextMenuItems({
+        t,
+        unstageAction:
+          mutationEnabled && section === "staged" && onUnstageFile
+            ? {
+                count: targetPaths.length,
+                onSelect: async () => {
+                  for (const targetPath of targetPaths) {
+                    await onUnstageFile(targetPath);
+                  }
+                },
+              }
+            : undefined,
+        stageAction:
+          mutationEnabled && section === "unstaged" && onStageFile
+            ? {
+                count: targetPaths.length,
+                onSelect: async () => {
+                  for (const targetPath of targetPaths) {
+                    await onStageFile(targetPath);
+                  }
+                },
+              }
+            : undefined,
+        historyAction:
+          fileHistoryTarget && onOpenFileHistory
+            ? {
+                onSelect: () => onOpenFileHistory(fileHistoryTarget),
+              }
+            : undefined,
+        discardAction:
+          mutationEnabled && section === "unstaged" && onRevertFile
+            ? {
+                count: targetPaths.length,
+                onSelect: () => discardFiles(targetPaths),
+              }
+            : undefined,
+      });
+      if (items.length === 0) {
+        setGitContextMenu(null);
         return;
       }
+
       const position = clampRendererContextMenuPosition(event.clientX, event.clientY, {
         width: 260,
-        height: 160,
+        height: estimateRendererContextMenuHeight(items),
       });
       setGitContextMenu({
         ...position,
-        label: "Git file actions",
+        label: t("git.fileActions"),
         items,
+        source: "git-diff-file",
       });
     },
     [
+      discardFiles,
+      onRevertFile,
+      onOpenFileHistory,
+      onStageFile,
+      onUnstageFile,
       selectedFiles,
       stagedFiles,
+      t,
       unstagedFiles,
-      onUnstageFile,
-      onStageFile,
-      onRevertFile,
-      discardFiles,
+      workspaceId,
+      workspacePath,
+      gitRoot,
+    ],
+  );
+
+  const showRepositoryFileMenu = useCallback(
+    (
+      event: ReactMouseEvent<HTMLDivElement>,
+      repositoryRoot: string,
+      path: string,
+      section: GitDiffSectionKey,
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const repositoryStatus = repositoryStatuses.find(
+        (status) => status.repositoryRoot === repositoryRoot,
+      );
+      const sectionFiles =
+        section === "staged"
+          ? repositoryStatus?.stagedFiles
+          : repositoryStatus?.unstagedFiles;
+      const targetFile = sectionFiles?.find(
+        (file) => normalizeDiffPath(file.path) === normalizeDiffPath(path),
+      );
+      if (repositoryStatus?.error || !targetFile) {
+        setGitContextMenu(null);
+        return;
+      }
+
+      const mutationEnabled = !isFileMutationDisabled(targetFile);
+      const fileHistoryTarget = onOpenFileHistory
+        ? resolveGitDiffFileHistoryTarget({
+            workspaceId,
+            workspacePath,
+            repositoryRoot,
+            path: targetFile.path,
+          })
+        : null;
+      const items = buildGitDiffPanelFileContextMenuItems({
+        t,
+        unstageAction:
+          mutationEnabled && section === "staged" && onUnstageRepositoryFile
+            ? {
+                count: 1,
+                onSelect: async () => {
+                  await onUnstageRepositoryFile(repositoryRoot, targetFile.path);
+                  await onRefreshRepositoryStatuses?.();
+                },
+              }
+            : undefined,
+        stageAction:
+          mutationEnabled && section === "unstaged" && onStageRepositoryFile
+            ? {
+                count: 1,
+                onSelect: async () => {
+                  await onStageRepositoryFile(repositoryRoot, targetFile.path);
+                  await onRefreshRepositoryStatuses?.();
+                },
+              }
+            : undefined,
+        historyAction:
+          fileHistoryTarget && onOpenFileHistory
+            ? {
+                onSelect: () => onOpenFileHistory(fileHistoryTarget),
+              }
+            : undefined,
+        discardAction:
+          mutationEnabled && section === "unstaged" && onRevertRepositoryFile
+            ? {
+                count: 1,
+                onSelect: () =>
+                  discardRepositoryFile(repositoryRoot, targetFile.path),
+              }
+            : undefined,
+      });
+      if (items.length === 0) {
+        setGitContextMenu(null);
+        return;
+      }
+
+      const position = clampRendererContextMenuPosition(event.clientX, event.clientY, {
+        width: 260,
+        height: estimateRendererContextMenuHeight(items),
+      });
+      setGitContextMenu({
+        ...position,
+        label: t("git.fileActions"),
+        items,
+        source: "git-diff-file",
+      });
+    },
+    [
+      discardRepositoryFile,
+      onRefreshRepositoryStatuses,
+      onRevertRepositoryFile,
+      onOpenFileHistory,
+      onStageRepositoryFile,
+      onUnstageRepositoryFile,
+      repositoryStatuses,
+      t,
+      workspaceId,
+      workspacePath,
     ],
   );
   const logCountLabel = logTotal
@@ -2071,32 +2222,6 @@ function GitDiffPanelImpl({
                     })}
                   </>
                 ) : null}
-                {mode === "diff" && onScanGitRoots ? (
-                  <>
-                    <div className="git-panel-select-menu-divider" role="separator" />
-                    <button
-                      type="button"
-                      className="git-panel-select-option"
-                      role="menuitem"
-                      aria-label={t("git.switchRepository")}
-                      onClick={openGitRootPanelFromMenu}
-                    >
-                      <span className="git-panel-select-option-text">
-                        <span className="git-panel-select-option-icon" aria-hidden>
-                          <ArrowLeftRight size={13} />
-                        </span>
-                        <span className="git-panel-select-option-copy">
-                          <span className="git-panel-select-option-label">
-                            {t("git.switchRepository")}
-                          </span>
-                          <span className="git-panel-select-option-description">
-                            {t("git.switchRepositoryDescription")}
-                          </span>
-                        </span>
-                      </span>
-                    </button>
-                  </>
-                ) : null}
                 {onOpenGitHistoryPanel ? (
                   <>
                     <div className="git-panel-select-menu-divider" role="separator" />
@@ -2315,6 +2440,7 @@ function GitDiffPanelImpl({
               onStageAll={onStageRepositoryAll}
               onOpenFile={(repositoryRoot, path) => onOpenFile?.(path, repositoryRoot)}
               onOpenFilePreview={handleOpenRepositoryFilePreview}
+              onShowFileMenu={showRepositoryFileMenu}
               onRefresh={onRefreshRepositoryStatuses}
             />
           ) : null}

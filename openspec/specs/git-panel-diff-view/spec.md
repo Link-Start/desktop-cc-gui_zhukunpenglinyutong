@@ -6,17 +6,17 @@ Defines the git-panel-diff-view behavior contract, covering Dual List View Modes
 ## Requirements
 ### Requirement: Dual List View Modes
 
-The Git panel SHALL keep Diff-specific mode actions discoverable from the `Diff`
-mode menu without requiring a separate always-visible toolbar row.
+The Git panel SHALL keep Diff-specific view actions discoverable from the `Diff`
+mode menu without requiring a separate always-visible toolbar row, and SHALL NOT
+expose repository switching from that menu.
 
-#### Scenario: repository switcher opens from the Diff menu
+#### Scenario: repository switcher is hidden from the Diff menu
 
 - **WHEN** the active Git panel mode is `diff`
 - **AND** repository scanning is available for the workspace
 - **WHEN** the user opens the `Diff` mode menu
-- **THEN** the menu SHALL include an action to switch the Git repository used by the Diff panel
-- **AND** selecting that action SHALL open the existing repository selector panel
-- **AND** the selector SHALL continue using the existing scan, clear, and select repository behavior.
+- **THEN** the menu SHALL NOT include an action to switch the Git repository used by the Diff panel
+- **AND** the existing repository scan, clear, select, and selector-panel contracts SHALL remain available to non-menu callers.
 
 #### Scenario: Git changes section header uses compact neutral controls
 
@@ -25,6 +25,29 @@ mode menu without requiring a separate always-visible toolbar row.
 - **AND** the section count SHALL render with the project shadcn Badge compact secondary treatment
 - **AND** the manual refresh action SHALL stay hidden until the section header is hovered or keyboard-focused, matching the section Stage/Unstage action reveal behavior
 - **AND** modified file status markers shown as `M` SHALL use the warning/yellow status color rather than the info/blue accent.
+
+### Requirement: Multi-Repository Change Section Collapse
+
+The multi-repository Diff surface SHALL provide functional staged and unstaged
+section collapse controls scoped by workspace identity, repository identity, and section type.
+Collapsing a section MUST remain a presentation-only operation.
+
+#### Scenario: collapse one repository section
+
+- **WHEN** the user activates a staged or unstaged section header in a repository group
+- **THEN** that section SHALL update its expanded state and hide its file rows
+- **AND** the header SHALL expose the current state through `aria-expanded`.
+
+#### Scenario: collapse state is independently scoped
+
+- **WHEN** the user collapses one staged or unstaged section
+- **THEN** sections with another type, repository identity, or workspace identity SHALL retain their existing expanded state.
+
+#### Scenario: collapse preserves Git and commit state
+
+- **WHEN** the user collapses or expands a multi-repository section
+- **THEN** the operation SHALL NOT change commit selection
+- **AND** it SHALL NOT invoke stage, unstage, discard, refresh, or file-open behavior.
 
 ### Requirement: Tree Hierarchy Interaction
 
@@ -528,3 +551,139 @@ Git diff file opening MUST 结合 workspace root 与 repository-relative path �
 
 - **WHEN** diff entry 属于 workspace 内的 nested Git repository
 - **THEN** file open action MUST 定位到 nested repository 中的真实文件，而不得打开 parent root 下的同名或不存在路径
+
+### Requirement: Git Diff Changed-File Context Menus SHALL Be Unified
+
+The Git Diff panel SHALL expose the same `Git` context submenu for mutation-enabled changed-file rows in single-repository and multi-repository modes. The menu SHALL reuse the shared renderer context-menu surface and SHALL NOT fall back to the WebView native context menu.
+
+#### Scenario: single and multi repository rows use the same Git submenu
+
+- **WHEN** the user opens the context menu for a status-backed single-repository flat/tree row or multi-repository grouped row
+- **THEN** the system SHALL prevent the WebView native context menu
+- **AND** it SHALL render a root `Git` submenu using the shared `RendererContextMenu`
+- **AND** repository topology SHALL NOT change the submenu presentation or action ordering.
+
+#### Scenario: staged row exposes only unstage
+
+- **WHEN** the user opens the Git submenu for a staged changed-file row
+- **THEN** the submenu SHALL expose `Unstage file`
+- **AND** it SHALL NOT expose Stage or Discard actions for that staged row.
+
+#### Scenario: unstaged row exposes stage and discard
+
+- **WHEN** the user opens the Git submenu for an unstaged changed-file row
+- **THEN** the submenu SHALL expose `Stage file`
+- **AND** it SHALL expose `Discard change` with destructive visual semantics
+- **AND** it SHALL NOT expose Unstage for that unstaged row.
+
+#### Scenario: disabled mutation row does not expose Git mutations
+
+- **WHEN** a changed-file row is diff-only, `mutationDisabled`, stale, or has no available mutation callback
+- **THEN** the system SHALL prevent the WebView native context menu
+- **AND** it SHALL NOT expose Stage, Unstage, or Discard actions.
+
+#### Scenario: opening a menu is presentation-only
+
+- **WHEN** the user opens, navigates, dismisses, or cancels a changed-file context menu
+- **THEN** the system SHALL NOT open the file, change commit inclusion, collapse a section, or refresh Git status
+- **AND** it SHALL NOT execute a mutation until the user activates a concrete menu item.
+
+#### Scenario: topology changes invalidate an open file menu
+
+- **WHEN** the workspace, repository status topology, file section, mutation availability, or scoped callback changes while a changed-file context menu is open
+- **THEN** the system SHALL close that file context menu
+- **AND** the stale menu action SHALL NOT remain activatable against its previous target.
+
+### Requirement: Git Diff File Context Actions MUST Preserve Repository And Section Scope
+
+Every Git Diff file context action MUST target the clicked row's workspace, explicit repository identity, section, normalized repository-relative path, and operation. Context-menu actions SHALL reuse existing mutation, confirmation, and refresh paths instead of invoking a parallel Git service flow.
+
+#### Scenario: same relative path in two repositories stays isolated
+
+- **WHEN** two repository groups contain the same repository-relative path
+- **AND** the user activates a context action on the second repository's row
+- **THEN** the mutation callback MUST receive the second row's `repositoryRoot + path`
+- **AND** it MUST NOT mutate the first repository.
+
+#### Scenario: workspace-root repository identity remains explicit
+
+- **WHEN** a multi-repository row belongs to `repositoryRoot === ""`
+- **THEN** its context action MUST preserve the empty string as explicit workspace-root identity
+- **AND** it MUST NOT fall back to a configured nested repository.
+
+#### Scenario: same path in staged and unstaged sections follows clicked section
+
+- **WHEN** the same path has staged and unstaged evidence
+- **AND** the user opens the context menu on one section's row
+- **THEN** the action matrix MUST be derived from the clicked section
+- **AND** path-only matching MUST NOT expose operations from the sibling section.
+
+#### Scenario: single repository bulk target remains section-local
+
+- **WHEN** multiple selected rows include the context-menu target
+- **THEN** a bulk context action MUST include only mutation-enabled selected paths from the clicked section
+- **AND** it MUST NOT mutate selected paths from another section or repository.
+
+#### Scenario: discard reuses confirmation and refresh
+
+- **WHEN** the user activates Discard from an unstaged file context menu
+- **THEN** the existing destructive confirmation dialog SHALL open before mutation
+- **AND** cancel SHALL perform zero mutations
+- **AND** confirm SHALL execute the existing current-repository or explicit-repository revert path
+- **AND** a successful multi-repository revert SHALL refresh aggregate repository status exactly once.
+
+#### Scenario: multi repository stage and unstage refresh once
+
+- **WHEN** a multi-repository Stage or Unstage context action succeeds
+- **THEN** the existing scoped mutation callback SHALL receive `repositoryRoot + path`
+- **AND** the aggregate repository status refresh callback SHALL run exactly once.
+
+### Requirement: Git Diff File Context Menu SHALL Expose Clicked-File History
+
+The Git Diff panel SHALL expose `Git -> 显示文件历史` for a changed-file row when the host provides File History navigation and the row can be mapped to a valid workspace/repository/file identity. The History action MUST remain read-only and MUST target the clicked row rather than the current bulk mutation selection.
+
+#### Scenario: Single root repository row opens file history
+
+- **WHEN** the user activates `显示文件历史` for a single-repository changed-file row whose Git root is the workspace root
+- **THEN** the system SHALL open File History with the active `workspaceId/workspacePath`
+- **AND** it SHALL use `repositoryRoot=""` and the normalized repository-relative clicked path.
+
+#### Scenario: Single nested repository row opens file history
+
+- **WHEN** the active single repository is nested below the workspace root
+- **AND** the user activates `显示文件历史` for one of its changed-file rows
+- **THEN** the target SHALL use the normalized workspace-relative repository root
+- **AND** `path` SHALL remain repository-relative while `displayPath` SHALL be workspace-relative.
+
+#### Scenario: Multi repository row preserves explicit identity
+
+- **WHEN** two repository groups contain the same relative path
+- **AND** the user activates History on one group
+- **THEN** the target MUST preserve that row's exact `repositoryRoot + path`
+- **AND** `repositoryRoot=""` MUST remain an explicit workspace-root identity.
+
+#### Scenario: History ignores bulk mutation selection
+
+- **WHEN** multiple single-repository changed files are selected
+- **AND** the user activates History from one clicked row
+- **THEN** the system SHALL open exactly the clicked file's history
+- **AND** it SHALL NOT derive the History target from the selected path collection.
+
+#### Scenario: Read-only history remains available without mutations
+
+- **WHEN** a valid status-backed row is diff-only or `mutationDisabled`
+- **AND** the host provides File History navigation
+- **THEN** the Git submenu SHALL expose `显示文件历史`
+- **AND** it SHALL NOT expose Stage, Unstage, or Discard.
+
+#### Scenario: Invalid history capability does not create a dead entry
+
+- **WHEN** the host callback, workspace identity, repository scope, or valid relative path is unavailable
+- **THEN** the system SHALL omit `显示文件历史`
+- **AND** it SHALL preserve any independently available mutation actions.
+
+#### Scenario: History menu target becomes stale
+
+- **WHEN** workspace path, repository topology, or File History callback identity changes while a Git Diff file menu is open
+- **THEN** the system SHALL close that file menu
+- **AND** the previous History target SHALL NOT remain activatable.
