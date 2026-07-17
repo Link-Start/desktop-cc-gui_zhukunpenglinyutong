@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-25.md`
-- **Total Sessions**: 1016
+- **Total Sessions**: 1017
 - **Last Active**: 2026-07-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-25.md` | ~1636 | Active |
+| `journal-25.md` | ~1669 | Active |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
 | `journal-22.md` | ~1969 | Archived |
@@ -53,6 +53,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1017 | 2026-07-17 | 增强 Git History 作者时间线配色 | `1e19e0fa` | `feature/v-0.7.4` |
 | 1016 | 2026-07-17 | 全局接口搜索与源码定位 | `cf76ad31`, `307424cc` | `feature/v-0.7.4` |
 | 1015 | 2026-07-17 | 修复全局文件搜索索引补齐 | `6aa59601` | `feature/v-0.7.4` |
 | 1014 | 2026-07-17 | 恢复 Git 多仓状态刷新入口 | `b2d5fc12` | `feature/v-0.7.4` |

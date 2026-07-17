@@ -1634,3 +1634,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1017: 增强 Git History 作者时间线配色
+
+**Date**: 2026-07-17
+**Task**: 增强 Git History 作者时间线配色
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+为 Git History 提交时间线增加稳定的作者配色映射，保留时间线与选中态；补充 utility/component 回归测试，同步并归档 OpenSpec 变更。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e19e0fa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
