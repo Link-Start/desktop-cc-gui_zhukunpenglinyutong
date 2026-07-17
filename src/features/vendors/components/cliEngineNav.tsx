@@ -35,6 +35,7 @@ type UnsupportedCliEngineId =
   | "iflow"
   | "kimi"
   | "ruixing"
+  | "feishu"
   | "kiro";
 
 export type CliEngineId = VendorTab | UnsupportedCliEngineId;
@@ -60,6 +61,7 @@ export const CLI_DOCS_HREF_BY_ID: Record<CliEngineId, string> = {
   qwen: "https://qwenlm.github.io/qwen-code-docs/en/users/overview/",
   codebuddy: "https://www.codebuddy.ai/docs/cli/quickstart",
   copilot: "https://docs.github.com/en/copilot/how-tos/copilot-cli",
+  feishu: "https://open.feishu.cn/document/home/index",
   kiro: "https://kiro.dev/docs/cli/",
 };
 
@@ -80,6 +82,7 @@ const CLI_ICON_BY_ID: Record<CliEngineId, string | null> = {
   qwen: qwenCliMonoIcon,
   codebuddy: codeBuddyCliMonoIcon,
   copilot: copilotCliMonoIcon,
+  feishu: null,
   kiro: null,
 };
 
@@ -100,6 +103,7 @@ const CLI_MONO_ICON_BY_ID: Record<CliEngineId, string | null> = {
   qwen: qwenCliMonoIcon,
   codebuddy: codeBuddyCliMonoIcon,
   copilot: copilotCliMonoIcon,
+  feishu: null,
   kiro: null,
 };
 
@@ -126,6 +130,7 @@ export function buildCliEngineNavItems(options: {
     { key: "qwen", label: "Qwen CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.qwen },
     { key: "codebuddy", label: "CodeBuddy CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.codebuddy },
     { key: "copilot", label: "Copilot CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.copilot },
+    { key: "feishu", label: "飞书 CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.feishu },
     { key: "kiro", label: "Kiro CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.kiro },
   ];
 }

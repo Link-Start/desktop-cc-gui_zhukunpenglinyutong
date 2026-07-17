@@ -317,6 +317,7 @@ describe("VendorSettingsPanel", () => {
       "Qwen CLI",
       "CodeBuddy CLI",
       "Copilot CLI",
+      "飞书 CLI",
       "Kiro CLI",
     ];
     for (const name of unsupportedButtons) {
