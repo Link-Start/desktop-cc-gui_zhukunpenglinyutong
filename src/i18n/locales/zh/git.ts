@@ -379,6 +379,57 @@ const git = {
     historyPullDialogIntent: "将远端提交集成到当前分支。",
     historyPullDialogWillHappen: "会按所选远端、目标分支和选项执行 pull。",
     historyPullDialogWillNotHappen: "不会主动把本地提交推送到远端。",
+    historyPullExplanationDefaultLabel: "按 Git 配置执行",
+    historyPullExplanationIntentDefault:
+      "先从 {{remote}} 拉取 {{targetBranch}}，再按当前仓库或用户的 Git 配置更新本地分支。",
+    historyPullExplanationIntentRebase:
+      "先从 {{remote}} 拉取 {{targetBranch}}，再把你本地新增的提交接到远端最新提交后面。",
+    historyPullExplanationIntentFfOnly:
+      "先从 {{remote}} 拉取 {{targetBranch}}；只有本地可以直接跟上远端时才更新。",
+    historyPullExplanationIntentNoFf:
+      "先从 {{remote}} 拉取 {{targetBranch}}；如果 Git 最终采用 merge，就保留一个明确的合并提交。已有 rebase 配置仍可能优先生效。",
+    historyPullExplanationIntentSquash:
+      "先从 {{remote}} 拉取 {{targetBranch}}；如果 Git 最终采用 merge，就把远端变化汇总为一组待提交改动。已有 rebase 配置仍可能优先生效。",
+    historyPullExplanationEffectDefault:
+      "你没有指定合并方式。Git 会读取当前分支、仓库或用户配置，因此不同仓库的结果可能不同。",
+    historyPullExplanationEffectRebase:
+      "你本地新增的提交会重新接到远端最新提交后面，记录更整齐；遇到冲突会暂停，等你处理。",
+    historyPullExplanationEffectFfOnly:
+      "本地没有独立新提交时才会拉取成功；如果本地和远端已经分叉，操作会停止，不会自动改写提交记录。",
+    historyPullExplanationEffectNoFf:
+      "仅在 merge 模式下：即使可以直接更新，也会创建一个合并提交。这个选项本身不会强制 Git 放弃已有 rebase 配置。",
+    historyPullExplanationEffectSquash:
+      "仅在 merge 模式下：远端变化会汇总为一组待提交改动，需要你之后手动提交。这个选项本身不会强制 Git 采用 merge。",
+    historyPullExplanationEffectNoCommitDefault:
+      "只有 Git 最终需要创建合并提交时才会在提交前停下；如果只是直接更新分支，这个选项没有额外作用。",
+    historyPullExplanationEffectNoCommitRebase:
+      "这个参数仍会出现在命令中，但 rebase 不创建合并提交，因此不会增加“提交前暂停”的效果。",
+    historyPullExplanationEffectNoCommitFfOnly:
+      "直接更新分支不会创建合并提交，因此没有可暂停的提交，这个选项没有额外作用。",
+    historyPullExplanationEffectNoCommitNoFf:
+      "如果 Git 最终采用 merge，会在创建合并提交前停下，供你检查并手动提交；如果已有配置选择 rebase，就没有合并提交可暂停。",
+    historyPullExplanationEffectNoCommitSquash:
+      "在 merge 模式下，--squash 本来就会留下待提交改动，所以这个参数不会再改变结果；走 rebase 时也不会增加合并前暂停。",
+    historyPullExplanationEffectNoVerifyDefault:
+      "如果 Git 最终创建合并提交，会跳过提交前自动检查（pre-merge-commit、commit-msg hooks）；拉取和之后的手动提交不受影响。",
+    historyPullExplanationEffectNoVerifyRebase:
+      "这个参数仍会出现在命令中，但 rebase 不走合并提交检查，因此本次没有额外作用。",
+    historyPullExplanationEffectNoVerifyFfOnly:
+      "直接更新分支不会创建合并提交，也不会运行对应的提交前检查，因此这个选项没有额外作用。",
+    historyPullExplanationEffectNoVerifyNoFf:
+      "如果 Git 最终创建合并提交，会跳过提交前自动检查，仓库规则可能因此被绕过；走 rebase 时不涉及这些合并检查。",
+    historyPullExplanationEffectNoVerifySquash:
+      "在 merge + squash 模式下不会自动创建合并提交，因此没有对应检查可跳过；走 rebase 时这个参数也没有额外的合并检查效果。",
+    historyPullExplanationWillNotDefault:
+      "不会把本地提交推送到远端。你没有指定合并方式时，界面不会承诺 Git 最终会 merge、rebase 还是停止。",
+    historyPullExplanationWillNotRebase:
+      "不会创建合并提交，也不会推送到远端；重新接到远端之后，本地提交的 commit hash 可能变化。",
+    historyPullExplanationWillNotFfOnly:
+      "不会创建合并提交、不会 rebase、也不会推送到远端；分支已经分叉时不会自动整合。",
+    historyPullExplanationWillNotNoFf:
+      "不会推送到远端。这个选项本身不保证关闭 rebase；当前 Git 配置仍可能让 rebase 生效。",
+    historyPullExplanationWillNotSquash:
+      "不会推送到远端。如果当前 Git 配置选择 rebase，界面不能保证最终会留下“一组待提交改动”。",
     historySyncDialogTitle: "同步分支",
     historySyncDialogTarget: "{{sourceBranch}} -> {{remote}}:{{targetBranch}}",
     historySyncDialogAheadBehind: "ahead {{ahead}} / behind {{behind}}",

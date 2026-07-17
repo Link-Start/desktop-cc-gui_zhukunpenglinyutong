@@ -1,12 +1,64 @@
 // @ts-nocheck
+import {
+  GitOperationTokens,
+  type GitOperationToken,
+} from "./GitOperationTokens";
+import { resolveGitPullExplanation } from "../utils/gitPullExplanation";
+
+const SYNC_COMMAND_TOKENS: GitOperationToken[] = [
+  { kind: "command", value: "git pull" },
+  { kind: "operator", value: "&&" },
+  { kind: "command", value: "git push" },
+];
+
+const FETCH_COMMAND_TOKENS: GitOperationToken[] = [
+  { kind: "command", value: "git fetch" },
+  { kind: "option", value: "--all" },
+];
+
 export function renderGitHistoryPanelDialogs(scope: any) {
   const {ActionSurface,CREATE_PR_PREVIEW_COMMIT_LIMIT,ChevronDown,ChevronLeft,ChevronRight,ChevronsDownUp,ChevronsUpDown,CircleAlert,CircleCheck,Cloud,CloudDownload,Copy,DEFAULT_DETAILS_SPLIT,DISABLE_HISTORY_ACTION_BUTTONS,Download,FileIcon,FileText,Folder,FolderOpen,FolderTree,GitBranch,GitCommit,GitDiffViewer,GitHistoryInlinePicker,GitHistoryProjectPicker,GitHistoryWorktreePanel,GitMerge,GitPullRequestCreate,HardDrive,LayoutGrid,LoaderCircle,MessageSquareText,Pencil,Plus,RefreshCw,Repeat,Search,ShieldAlert,Trash2,Upload,X,branchContextActions,branchContextMenu,branchContextMenuRef,branchContextMenuStyle,branchContextTrackingSummary,branchDiffState,branchQuery,branchesWidth,buildFileKey,clearOperationNotice,closeBranchContextMenu,closeBranchDiff,closeCreatePrDialog,closeForceDeleteDialog,closeRenameBranchDialog,closeWorktreePreview,codeAnnotations,commitContextMenu,commitContextMoreOpen,commitListRef,commitQuery,commitRowVirtualizer,commits,commitsWidth,comparePreviewDetailFile,comparePreviewDetailFileDiff,comparePreviewDiffEntries,comparePreviewFileKey,contextMoreDisabledReason,contextPrimaryActionGroups,contextWriteActions,createBranchCanConfirm,createBranchDialogOpen,createBranchName,createBranchNameInputRef,createBranchSource,createBranchSourceOptions,createBranchSubmitting,createPortal,createPrBaseBranchOptions,createPrBaseRepoOptions,createPrCanConfirm,createPrCanOpen,createPrCompareBranchOptions,createPrCopiedPrUrl,createPrCopiedRetryCommand,createPrDefaultsError,createPrDefaultsLoading,createPrDialogOpen,createPrForm,createPrHeadRepoOptions,createPrHeadRepositoryValue,createPrPreviewBaseOnlyCount,createPrPreviewBaseRef,createPrPreviewCommits,createPrPreviewDetails,createPrPreviewDetailsError,createPrPreviewDetailsLoading,createPrPreviewError,createPrPreviewExpanded,createPrPreviewHasMore,createPrPreviewHeadRef,createPrPreviewLoading,createPrPreviewSelectedCommit,createPrPreviewSelectedSha,createPrResult,createPrResultHeadline,createPrStages,createPrSubmitting,createPrToolbarDisabledReason,currentBranch,currentLocalBranchEntry,desktopSplitLayout,details,detailsBodyRef,detailsError,detailsLoading,detailsMessageContent,detailsSplitRatio,diffViewMode,emptyStateStatusText,expandedLocalScopes,expandedRemoteScopes,extractCommitBody,fallbackGitRoots,fallbackGitRootsError,fallbackGitRootsLoading,fallbackSelectingRoot,fetchDialogOpen,fetchSubmitting,fileTreeItems,forceDeleteCopiedPath,forceDeleteCountdown,forceDeleteDialogState,formatRelativeTime,getBranchLeafName,getBranchScope,getCommitActionIcon,getCurrentDefaultColumnWidths,getSpecialBranchBadges,getTreeLineOpacity,groupedLocalBranches,groupedRemoteBranches,handleBranchContextMenuKeyDown,handleBranchesSplitResizeStart,handleCommitsSplitResizeStart,handleConfirmCreatePr,handleConfirmFetch,handleConfirmPull,handleConfirmPush,handleConfirmRefresh,handleConfirmResetCommit,handleConfirmSync,handleCopyCreatePrRetryCommand,handleCopyCreatePrUrl,handleCopyForceDeleteWorktreePath,handleCreateBranch,handleCreateBranchConfirm,handleCreatePrHeadRepositoryChange,handleDeleteBranch,handleDetailsSplitResizeStart,handleFallbackGitRootSelect,handleFileTreeDirToggle,handleMergeBranch,handleOpenBranchContextMenu,handleOpenCommitContextMenu,handleOpenCreatePrDialog,handleOpenFetchDialog,handleOpenPullDialog,handleOpenPushDialog,handleOpenRefreshDialog,handleOpenRenameBranchDialog,handleOpenSyncDialog,handleOpenWorktreePreview,handleOverviewSplitResizeStart,handlePushPreviewDirToggle,handleRenameBranchConfirm,handleSelectBranchCompareCommit,handleSelectPullRemote,handleSelectPullTargetBranch,handleSelectPushRemote,handleSelectPushTargetBranch,handleSelectWorktreeDiffFile,handleToggleLocalScope,handleToggleRemoteScope,handleWorktreeSummaryChange,historyError,historyHasMore,historyLoading,historyLoadingMore,historyTotal,isCreatePrDialogMaximized,isHistoryDiffModalMaximized,loadCreatePrCommitPreview,loadHistory,localSectionExpanded,localizeKnownGitError,localizedOperationName,mainGridRef,mainGridStyle,onCreateCodeAnnotation,onOpenDiffPath,onRemoveCodeAnnotation,onRequestClose,onSelectWorkspace,openPullTargetBranchMenu,openPushTargetBranchMenu,operationLoading,operationNotice,overviewCommitSectionCollapsed,overviewListView,overviewWidth,previewDetailFile,previewDetailFileDiff,previewDiffEntries,previewModalFullDiffLoader,projectOptions,projectSections,pullDialogOpen,pullNoCommit,pullNoVerify,pullOptionsMenuOpen,pullOptionsMenuRef,pullRemote,pullRemoteGroups,pullRemoteMenuOpen,pullRemoteMenuPlacement,pullRemotePickerRef,pullRemoteTrimmed,pullSelectedOptions,pullStrategy,pullSubmitting,pullTargetBranch,pullTargetBranchActiveScopeTab,pullTargetBranchFieldRef,pullTargetBranchGroups,pullTargetBranchMenuOpen,pullTargetBranchMenuPlacement,pullTargetBranchMenuRef,pullTargetBranchPickerRef,pullTargetBranchTrimmed,pushCanConfirm,pushCc,pushDialogOpen,pushForceWithLease,pushHasOutgoingCommits,pushIsNewBranchTarget,pushPreviewCommits,pushPreviewDetails,pushPreviewDetailsError,pushPreviewDetailsLoading,pushPreviewError,pushPreviewFileTreeItems,pushPreviewHasMore,pushPreviewLoading,pushPreviewModalDiffEntries,pushPreviewModalFile,pushPreviewModalFileDiff,pushPreviewModalFullDiffLoader,pushPreviewSelectedCommit,pushPreviewSelectedFileKey,pushPreviewSelectedSha,pushRemoteMenuOpen,pushRemoteMenuPlacement,pushRemoteOptions,pushRemotePickerRef,pushRemoteTrimmed,pushReviewers,pushRunHooks,pushSubmitting,pushTags,pushTargetBranch,pushTargetBranchActiveScopeTab,pushTargetBranchFieldRef,pushTargetBranchGroups,pushTargetBranchMenuOpen,pushTargetBranchMenuPlacement,pushTargetBranchMenuRef,pushTargetBranchPickerRef,pushTargetBranchTrimmed,pushTargetSummaryBranch,pushToGerrit,pushTopic,refreshAll,refreshDialogOpen,refreshSubmitting,remoteSectionExpanded,renameBranchCanConfirm,renameBranchDialogOpen,renameBranchName,renameBranchNameInputRef,renameBranchSource,renameBranchSubmitting,renameBranchToolbarDisabledReason,renderChangedFilesSummary,repositoryRootName,repositoryUnavailable,resetDialogOpen,resetMode,resetTargetCommit,resetTargetSha,runCommitAction,selectedBranch,selectedCommitSha,selectedFileKey,selectedLocalBranchForRename,setBranchQuery,setBranchesWidth,setCommitContextMenu,setCommitContextMoreOpen,setCommitQuery,setCommitsWidth,setComparePreviewFileKey,setCreateBranchDialogOpen,setCreateBranchName,setCreateBranchSource,setCreatePrForm,setCreatePrPreviewExpanded,setCreatePrPreviewSelectedSha,setDetailsSplitRatio,setDiffViewMode,setFallbackSelectingRoot,setFetchDialogOpen,setIsCreatePrDialogMaximized,setIsHistoryDiffModalMaximized,setLocalSectionExpanded,setOverviewCommitSectionCollapsed,setOverviewListView,setOverviewWidth,setPreviewFileKey,setPullDialogOpen,setPullNoCommit,setPullNoVerify,setPullOptionsMenuOpen,setPullRemoteMenuOpen,setPullStrategy,setPullTargetBranch,setPullTargetBranchActiveScopeTab,setPullTargetBranchMenuOpen,setPullTargetBranchQuery,setPushCc,setPushDialogOpen,setPushForceWithLease,setPushPreviewModalFileKey,setPushPreviewSelectedFileKey,setPushPreviewSelectedSha,setPushRemoteMenuOpen,setPushReviewers,setPushRunHooks,setPushTags,setPushTargetBranch,setPushTargetBranchActiveScopeTab,setPushTargetBranchMenuOpen,setPushTargetBranchQuery,setPushToGerrit,setPushTopic,setRefreshDialogOpen,setRemoteSectionExpanded,setRenameBranchName,setResetDialogOpen,setResetMode,setSelectedBranch,setSelectedCommitSha,setSelectedFileKey,setSyncDialogOpen,setWorkspaceSelectingId,shouldShowWorkspacePickerPage,statusLabel,strokeWidth,syncDialogOpen,syncPreviewCommits,syncPreviewError,syncPreviewLoading,syncPreviewTargetBranch,syncPreviewTargetFound,syncPreviewTargetRemote,syncSubmitting,t,trimRemotePrefix,updatePullRemoteMenuPlacement,updatePushRemoteMenuPlacement,virtualCommitRows,visiblePullTargetBranchGroups,visiblePushTargetBranchGroups,workbenchGridRef,workbenchGridStyle,workingTreeChangedFiles,workingTreeSummaryLabel,workingTreeTotalAdditions,workingTreeTotalDeletions,workspace,workspaceId,workspacePickerMessage,workspaceSelectingId,worktreePreviewDiffEntries,worktreePreviewDiffText,worktreePreviewError,worktreePreviewFile,worktreePreviewFullDiffLoader,worktreePreviewLoading} = scope;
   const pullTargetSummary = pullTargetBranch.trim() || (currentBranch ?? "HEAD");
-  const pullExampleCommand = `git pull ${pullRemote.trim() || "origin"} ${pullTargetSummary}${
-    pullStrategy ? ` ${pullStrategy}` : ""
-  }${pullNoCommit ? " --no-commit" : ""}${pullNoVerify ? " --no-verify" : ""}`;
+  const pullExampleCommandTokens: GitOperationToken[] = [
+    { kind: "command", value: "git pull" },
+    { kind: "remote", value: pullRemote.trim() || "origin" },
+    { kind: "branch", value: pullTargetSummary },
+    ...pullSelectedOptions.map((option) => ({ kind: "option", value: option.label })),
+  ];
+  const pullExplanation = resolveGitPullExplanation({
+    strategy: pullStrategy,
+    noCommit: pullNoCommit,
+    noVerify: pullNoVerify,
+  });
+  const pullExplanationParams = {
+    remote: pullRemote.trim() || "origin",
+    targetBranch: pullTargetSummary,
+  };
   const syncAheadCount = currentLocalBranchEntry?.ahead ?? 0;
   const syncBehindCount = currentLocalBranchEntry?.behind ?? 0;
+  const syncSourceBranch = currentBranch || t("git.historyHeadRef");
+  const syncTargetRemote = syncPreviewTargetRemote || "origin";
+  const syncTargetBranch = syncPreviewTargetBranch || (currentBranch ?? "main");
+  const syncTargetTokens: GitOperationToken[] = [
+    { kind: "branch", value: syncSourceBranch },
+    { kind: "operator", value: "->" },
+    { kind: "remote", value: syncTargetRemote },
+    { kind: "operator", value: ":", separatorBefore: "" },
+    { kind: "branch", value: syncTargetBranch, separatorBefore: "" },
+  ];
+  const syncAheadBehindText = t("git.historySyncDialogAheadBehind", {
+    ahead: syncAheadCount,
+    behind: syncBehindCount,
+  });
+  const pushSourceBranch = currentBranch || "HEAD";
+  const pushTargetRemote = pushRemoteTrimmed || "origin";
+  const pushTargetTokens: GitOperationToken[] = [
+    { kind: "branch", value: pushSourceBranch },
+    { kind: "operator", value: "->" },
+    { kind: "remote", value: pushTargetRemote },
+    { kind: "operator", value: ":", separatorBefore: "" },
+    { kind: "branch", value: pushTargetSummaryBranch, separatorBefore: "" },
+  ];
   return (<>
         {pullDialogOpen ? (
           <div
@@ -28,7 +80,11 @@ export function renderGitHistoryPanelDialogs(scope: any) {
                   <span aria-hidden>{"->"}</span>
                   <span>{pullTargetBranch.trim() || currentBranch || "main"}</span>
                 </div>
-                <code>{pullExampleCommand}</code>
+                <GitOperationTokens
+                  as="code"
+                  className="git-history-pull-command"
+                  tokens={pullExampleCommandTokens}
+                />
               </div>
               <div className="git-history-toolbar-confirm-grid">
                 <label className="git-history-create-branch-field">
@@ -290,20 +346,40 @@ export function renderGitHistoryPanelDialogs(scope: any) {
               <dl className="git-history-toolbar-confirm-facts">
                 <div className="git-history-toolbar-confirm-fact">
                   <dt>{t("git.historyIntentTitle")}</dt>
-                  <dd>{t("git.historyPullDialogIntent")}</dd>
+                  <dd>{t(pullExplanation.intentKey, pullExplanationParams)}</dd>
                 </div>
                 <div className="git-history-toolbar-confirm-fact">
                   <dt>{t("git.historyWillHappenTitle")}</dt>
-                  <dd>{t("git.historyPullDialogWillHappen")}</dd>
+                  <dd role="status" aria-live="polite" aria-atomic="true">
+                    <ul className="git-history-pull-explanation-list">
+                      {pullExplanation.effectRows.map((effect) => (
+                        <li
+                          key={`${effect.option}-${effect.descriptionKey}`}
+                          className={`is-${effect.tone}`}
+                        >
+                          {effect.option === "default" ? (
+                            <strong>{t("git.historyPullExplanationDefaultLabel")}</strong>
+                          ) : (
+                            <code>{effect.option}</code>
+                          )}
+                          <span>{t(effect.descriptionKey)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </dd>
                 </div>
                 <div className="git-history-toolbar-confirm-fact">
                   <dt>{t("git.historyWillNotHappenTitle")}</dt>
-                  <dd>{t("git.historyPullDialogWillNotHappen")}</dd>
+                  <dd>{t(pullExplanation.willNotHappenKey)}</dd>
                 </div>
               </dl>
               <div className="git-history-toolbar-confirm-command">
                 <span>{t("git.historyExampleTitle")}</span>
-                <code>{pullExampleCommand}</code>
+                <GitOperationTokens
+                  as="code"
+                  className="git-history-pull-command"
+                  tokens={pullExampleCommandTokens}
+                />
               </div>
               <div className="git-history-create-branch-actions">
                 <button
@@ -341,21 +417,24 @@ export function renderGitHistoryPanelDialogs(scope: any) {
                 <span>{t("git.historySyncDialogTitle")}</span>
               </div>
               <div className="git-history-toolbar-confirm-hero">
-                <div className="git-history-toolbar-confirm-hero-line">
-                  <span>{currentBranch || t("git.historyHeadRef")}</span>
-                  <span aria-hidden>{"->"}</span>
-                  <span>{`${syncPreviewTargetRemote || "origin"}:${syncPreviewTargetBranch || (currentBranch ?? "main")}`}</span>
-                </div>
-                <code>git pull && git push</code>
+                <GitOperationTokens
+                  as="div"
+                  className="git-history-toolbar-confirm-hero-line"
+                  tokens={syncTargetTokens}
+                />
+                <GitOperationTokens
+                  as="code"
+                  tokens={SYNC_COMMAND_TOKENS}
+                />
               </div>
               <div className="git-history-toolbar-confirm-preflight">
-                <div>{t("git.historySyncDialogTarget", {
-                  sourceBranch: currentBranch || t("git.historyHeadRef"),
-                  remote: syncPreviewTargetRemote || "origin",
-                  targetBranch: syncPreviewTargetBranch || (currentBranch ?? "main"),
-                })}
+                <GitOperationTokens
+                  as="div"
+                  tokens={syncTargetTokens}
+                />
+                <div className="git-history-operation-summary">
+                  {syncAheadBehindText}
                 </div>
-                <div>{t("git.historySyncDialogAheadBehind", { ahead: syncAheadCount, behind: syncBehindCount })}</div>
                 {syncPreviewLoading ? <div>{t("common.loading")}</div> : null}
                 {syncPreviewError ? <div className="git-history-error">{syncPreviewError}</div> : null}
                 {!syncPreviewLoading && !syncPreviewError ? (
@@ -388,7 +467,10 @@ export function renderGitHistoryPanelDialogs(scope: any) {
               </dl>
               <div className="git-history-toolbar-confirm-command">
                 <span>{t("git.historyExampleTitle")}</span>
-                <code>git pull && git push</code>
+                <GitOperationTokens
+                  as="code"
+                  tokens={SYNC_COMMAND_TOKENS}
+                />
               </div>
               <div className="git-history-create-branch-actions">
                 <button type="button" className="git-history-create-branch-btn is-cancel" disabled={syncSubmitting} onClick={() => setSyncDialogOpen(false)}>
@@ -437,7 +519,10 @@ export function renderGitHistoryPanelDialogs(scope: any) {
               </dl>
               <div className="git-history-toolbar-confirm-command">
                 <span>{t("git.historyExampleTitle")}</span>
-                <code>git fetch --all</code>
+                <GitOperationTokens
+                  as="code"
+                  tokens={FETCH_COMMAND_TOKENS}
+                />
               </div>
               <div className="git-history-create-branch-actions">
                 <button type="button" className="git-history-create-branch-btn is-cancel" disabled={fetchSubmitting} onClick={() => setFetchDialogOpen(false)}>
@@ -521,13 +606,11 @@ export function renderGitHistoryPanelDialogs(scope: any) {
                 </div>
                 <div className="git-history-push-summary-row">
                   <div className="git-history-push-target-wrap">
-                    <div className="git-history-push-target">
-                      {t("git.historyPushDialogTarget", {
-                        sourceBranch: currentBranch || "HEAD",
-                        remote: pushRemoteTrimmed || "origin",
-                        targetBranch: pushTargetSummaryBranch,
-                      })}
-                    </div>
+                    <GitOperationTokens
+                      as="div"
+                      className="git-history-push-target"
+                      tokens={pushTargetTokens}
+                    />
                     {pushIsNewBranchTarget ? (
                       <span className="git-history-push-target-badge">
                         ({t("git.historyPushDialogTargetNewTag")})
@@ -906,6 +989,7 @@ export function renderGitHistoryPanelDialogs(scope: any) {
                       ref={pushTargetBranchPickerRef}
                     >
                       <input
+                        className="git-history-operation-branch-input"
                         value={pushTargetBranch}
                         disabled={pushSubmitting}
                         onChange={(event) => {
