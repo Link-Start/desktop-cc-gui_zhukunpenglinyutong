@@ -399,6 +399,57 @@ const git = {
       "Pull will run with the selected remote, target branch, and options.",
     historyPullDialogWillNotHappen:
       "This action will not push local commits to remote.",
+    historyPullExplanationDefaultLabel: "Git default",
+    historyPullExplanationIntentDefault:
+      "Fetch {{remote}}/{{targetBranch}}, then integrate it into the current branch using the applicable Git configuration.",
+    historyPullExplanationIntentRebase:
+      "Fetch {{remote}}/{{targetBranch}}, then replay your local commits on top of the latest remote commit.",
+    historyPullExplanationIntentFfOnly:
+      "Fetch {{remote}}/{{targetBranch}}, and update the current branch only if it can fast-forward.",
+    historyPullExplanationIntentNoFf:
+      "Fetch {{remote}}/{{targetBranch}} and disable fast-forward if pull uses merge. A configured rebase may still take precedence.",
+    historyPullExplanationIntentSquash:
+      "Fetch {{remote}}/{{targetBranch}} and leave the combined changes uncommitted if pull uses merge. A configured rebase may still take precedence.",
+    historyPullExplanationEffectDefault:
+      "No strategy is selected. Git will use branch, repository, or user configuration, so different repositories may behave differently.",
+    historyPullExplanationEffectRebase:
+      "Local-only commits are replayed one by one for a linear history. Rebase pauses if conflicts need resolution.",
+    historyPullExplanationEffectFfOnly:
+      "The branch pointer moves forward only when the histories have not diverged. Otherwise pull stops with an error.",
+    historyPullExplanationEffectNoFf:
+      "On the merge path, a merge commit is created even when fast-forward is possible. This option alone does not force pull to use merge.",
+    historyPullExplanationEffectSquash:
+      "On the merge path, the combined changes are left ready for your manual commit without moving the current branch. This option alone does not force merge.",
+    historyPullExplanationEffectNoCommitDefault:
+      "If Git ultimately performs a merge that needs a merge commit, it stops before committing. A fast-forward cannot be paused.",
+    historyPullExplanationEffectNoCommitRebase:
+      "The flag remains in the command, but the rebase path creates no merge commit, so it adds no commit-before-pause effect.",
+    historyPullExplanationEffectNoCommitFfOnly:
+      "A fast-forward creates no merge commit, so there is nothing for this option to pause and it adds no effect.",
+    historyPullExplanationEffectNoCommitNoFf:
+      "If pull uses merge, Git stops before the merge commit so you can inspect and commit manually. On a configured rebase path, there is no merge commit to pause.",
+    historyPullExplanationEffectNoCommitSquash:
+      "On the merge path, --squash already leaves changes uncommitted, so this option adds nothing. On a rebase path, it adds no merge-commit pause.",
+    historyPullExplanationEffectNoVerifyDefault:
+      "If Git ultimately creates a merge commit, it skips pre-merge-commit and commit-msg hooks. Fetch and later manual commits are unaffected.",
+    historyPullExplanationEffectNoVerifyRebase:
+      "The flag remains in the command, but git pull does not pass merge-hook verification to the rebase path, so it adds no effect here.",
+    historyPullExplanationEffectNoVerifyFfOnly:
+      "A fast-forward creates no merge commit and runs no merge-commit hooks, so this option adds no effect.",
+    historyPullExplanationEffectNoVerifyNoFf:
+      "If pull creates a merge commit, Git skips its pre-merge-commit and commit-msg hooks, so repository checks may be bypassed. A rebase path does not use those merge hooks.",
+    historyPullExplanationEffectNoVerifySquash:
+      "On the merge-and-squash path, no merge commit is created, so there are no merge-commit hooks to skip. On a rebase path, this flag adds no merge-hook effect.",
+    historyPullExplanationWillNotDefault:
+      "This action will not push local commits. Without an explicit strategy, the dialog does not promise whether Git will merge, rebase, or stop.",
+    historyPullExplanationWillNotRebase:
+      "It will not create a merge commit or push. Replayed local commits are not guaranteed to keep their original hashes.",
+    historyPullExplanationWillNotFfOnly:
+      "It will not create a merge commit, rebase, or push. Diverged histories are not integrated automatically.",
+    historyPullExplanationWillNotNoFf:
+      "It will not push. This option alone does not guarantee that rebase is disabled; applicable Git configuration can still select it.",
+    historyPullExplanationWillNotSquash:
+      "It will not push. The uncommitted squash result is not guaranteed when applicable Git configuration selects rebase.",
     historySyncDialogTitle: "Sync Branch",
     historySyncDialogTarget: "{{sourceBranch}} -> {{remote}}:{{targetBranch}}",
     historySyncDialogAheadBehind: "ahead {{ahead}} / behind {{behind}}",

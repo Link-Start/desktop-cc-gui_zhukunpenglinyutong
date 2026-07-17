@@ -429,6 +429,36 @@
   color: var(--text-primary);
 }
 
+.git-history-pull-explanation-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.git-history-pull-explanation-list li {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.git-history-pull-explanation-list code,
+.git-history-pull-explanation-list strong {
+  color: var(--text-emphasis, var(--text-primary));
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.git-history-pull-explanation-list li.is-attention span {
+  color: var(--status-warning, var(--text-primary));
+}
+
+.git-history-pull-explanation-list li.is-muted span {
+  color: var(--text-secondary);
+}
+
 .git-history-toolbar-confirm-command {
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--border-default) 72%, transparent);
@@ -438,7 +468,7 @@
   gap: 5px;
 }
 
-.git-history-toolbar-confirm-command span {
+.git-history-toolbar-confirm-command > span {
   font-size: 12px;
   color: var(--text-secondary);
   font-weight: 600;
@@ -449,6 +479,36 @@
   font-size: 12px;
   color: var(--text-primary);
   overflow-wrap: anywhere;
+}
+
+.git-history-operation-token {
+  font-weight: 650;
+}
+
+.git-history-operation-token.is-command {
+  color: color-mix(in srgb, var(--accent-primary, #2563eb) 86%, var(--text-primary));
+}
+
+.git-history-operation-token.is-operator {
+  color: color-mix(in srgb, var(--text-muted) 72%, var(--accent-primary, #2563eb));
+}
+
+.git-history-operation-token.is-remote {
+  color: color-mix(in srgb, var(--status-success, #22c55e) 78%, var(--text-primary));
+}
+
+.git-history-operation-token.is-branch {
+  color: color-mix(in srgb, var(--status-warning, #f59e0b) 82%, var(--text-primary));
+}
+
+.git-history-operation-token.is-option {
+  color: color-mix(in srgb, var(--accent-primary, #2563eb) 62%, #d946ef);
+}
+
+.git-history-operation-summary {
+  color: color-mix(in srgb, var(--accent-primary, #2563eb) 74%, var(--text-primary));
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 .git-history-toolbar-confirm-preflight {
@@ -1195,6 +1255,11 @@
   padding: 0 12px;
   font-size: 12px;
   outline: none;
+}
+
+.git-history-push-combobox input.git-history-operation-branch-input {
+  color: color-mix(in srgb, var(--status-warning, #f59e0b) 82%, var(--text-primary));
+  font-weight: 650;
 }
 
 .git-history-push-combobox input:disabled {

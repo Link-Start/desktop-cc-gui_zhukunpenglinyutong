@@ -691,7 +691,7 @@ export function useGitHistoryPanelInteractions(scope: any) {
     setPullNoVerify(false);
     setPullRemoteMenuOpen(false);
     setPullRemoteMenuPlacement("up");
-    setPullOptionsMenuOpen(false);
+    setPullOptionsMenuOpen(true);
     setPullTargetBranchMenuOpen(false);
     setPullTargetBranchMenuPlacement("down");
     setPullDialogOpen(true);

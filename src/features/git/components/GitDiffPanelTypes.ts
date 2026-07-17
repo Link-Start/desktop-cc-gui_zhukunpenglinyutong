@@ -19,6 +19,7 @@ export type GitModalPreviewRequest = {
 export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   workspaceId?: string | null;
   workspacePath?: string | null;
+  headerControlsTarget?: HTMLElement | null;
   mode: "diff" | "log" | "issues" | "prs";
   onModeChange: (mode: "diff" | "log" | "issues" | "prs") => void;
   diffEntries?: {

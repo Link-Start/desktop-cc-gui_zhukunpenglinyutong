@@ -2027,6 +2027,21 @@ body.editor-horizontal-split-resizing * {
   -webkit-app-region: no-drag;
 }
 
+.right-panel-toolbar.has-git-mode-slot {
+  overflow: visible;
+}
+
+.right-panel-git-mode-slot {
+  --diff-radius-lg: var(--radius);
+  --diff-radius-md: calc(var(--radius) - 2px);
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  z-index: 4;
+}
+
 .right-panel-toolbar-actions {
   display: inline-flex;
   align-items: center;

@@ -48,6 +48,7 @@ export type BuildRightPanelToolbarNodeInput = {
   activityLive: boolean;
   radarLive: boolean;
   visibleTabs: Partial<Record<PanelToolbarTabId, boolean>>;
+  gitModeControlsTargetRef?: (node: HTMLDivElement | null) => void;
   onSelect: (tabId: PanelToolbarTabId) => void;
 };
 
@@ -58,6 +59,7 @@ export function buildRightPanelToolbarNode({
   activityLive,
   radarLive,
   visibleTabs,
+  gitModeControlsTargetRef,
   onSelect,
 }: BuildRightPanelToolbarNodeInput): ReactNode {
   if (!showToolbar || !hasVisibleControl) {
@@ -65,7 +67,16 @@ export function buildRightPanelToolbarNode({
   }
 
   return (
-    <div className="right-panel-toolbar">
+    <div
+      className={`right-panel-toolbar${active === "git" ? " has-git-mode-slot" : ""}`}
+    >
+      {active === "git" ? (
+        <div
+          className="right-panel-git-mode-slot"
+          ref={gitModeControlsTargetRef}
+          data-tauri-drag-region="false"
+        />
+      ) : null}
       <PanelTabs
         active={active}
         onSelect={onSelect}

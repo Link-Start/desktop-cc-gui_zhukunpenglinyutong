@@ -51,6 +51,12 @@
   );
 }
 
+.diff-panel--floating-git-actions.has-external-mode-selector:not(
+    .has-floating-git-action
+  ) {
+  padding-top: 8px;
+}
+
 .diff-panel,
 .diff-panel * {
   -webkit-user-select: none;
@@ -154,6 +160,10 @@
   z-index: 5;
   border-bottom-color: transparent;
   pointer-events: auto;
+}
+
+.git-panel-header--hover-actions.is-empty {
+  display: none;
 }
 
 /* 顶栏工具组常驻显示（不再依赖 hover 面板才浮现），差异Diff 入口靠右对齐 */

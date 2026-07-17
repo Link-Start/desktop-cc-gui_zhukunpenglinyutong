@@ -48,6 +48,14 @@ const mockTranslate = (key: string, options?: Record<string, unknown>) => {
   return key;
 };
 
+const getGitOperationTokenSurfaces = (
+  container: ParentNode,
+  expectedText: string,
+): HTMLElement[] =>
+  Array.from(
+    container.querySelectorAll<HTMLElement>(".git-history-operation-tokens"),
+  ).filter((element) => element.textContent === expectedText);
+
 const mockI18n = {
   language: "en",
   changeLanguage: vi.fn(),
@@ -715,7 +723,8 @@ describe("GitHistoryPanel interactions", () => {
     const dialog = await screen.findByRole("dialog", { name: "git.historyPullDialogTitle" });
     expect(within(dialog).getAllByText("origin").length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText("main").length).toBeGreaterThan(0);
-    expect(within(dialog).getAllByText("git pull origin main").length).toBeGreaterThan(0);
+    expect(getGitOperationTokenSurfaces(dialog, "git pull origin main")).toHaveLength(2);
+    expect(within(dialog).getByRole("button", { name: "--rebase" })).toBeTruthy();
     expect(tauriService.pullGit).not.toHaveBeenCalled();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "git.pull" }));
@@ -723,11 +732,108 @@ describe("GitHistoryPanel interactions", () => {
     await waitFor(() => {
       expect(tauriService.pullGit).toHaveBeenCalledWith(
         "w1",
-        expect.objectContaining({
+        {
           remote: "origin",
           branch: "main",
-        }),
+          strategy: null,
+          noCommit: false,
+          noVerify: false,
+        },
       );
+    });
+  });
+
+  it("updates pull explanations from the selected option combination", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    const pullButton = await screen.findByRole("button", { name: "git.pull" });
+    await waitFor(() => {
+      expect(tauriService.listGitBranches).toHaveBeenCalledWith("w1");
+    });
+
+    fireEvent.click(pullButton);
+    const dialog = await screen.findByRole("dialog", { name: "git.historyPullDialogTitle" });
+
+    expect(within(dialog).getByText("git.historyPullExplanationIntentDefault")).toBeTruthy();
+    expect(within(dialog).getByText("git.historyPullExplanationEffectDefault")).toBeTruthy();
+    expect(within(dialog).getByRole("status").textContent).toContain(
+      "git.historyPullExplanationEffectDefault",
+    );
+    expect(within(dialog).getByRole("button", { name: "--rebase" })).toBeTruthy();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "git.historyPullDialogModifyOptions" }),
+    );
+    expect(within(dialog).queryByRole("button", { name: "--rebase" })).toBeNull();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "git.historyPullDialogModifyOptions" }),
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "--rebase" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "--no-commit" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "--no-verify" }));
+
+    expect(within(dialog).getByText("git.historyPullExplanationIntentRebase")).toBeTruthy();
+    expect(within(dialog).getByText("git.historyPullExplanationEffectRebase")).toBeTruthy();
+    expect(
+      within(dialog).getByText("git.historyPullExplanationEffectNoCommitRebase"),
+    ).toBeTruthy();
+    expect(
+      within(dialog).getByText("git.historyPullExplanationEffectNoVerifyRebase"),
+    ).toBeTruthy();
+    const coloredCommands = getGitOperationTokenSurfaces(
+      dialog,
+      "git pull origin main --rebase --no-commit --no-verify",
+    );
+    expect(coloredCommands).toHaveLength(2);
+    expect(coloredCommands.every((command) => command.getAttribute("translate") === "no")).toBe(
+      true,
+    );
+    expect(coloredCommands.every((command) => !command.hasAttribute("aria-label"))).toBe(true);
+    expect(
+      Array.from(
+        coloredCommands.at(-1)?.querySelectorAll(".git-history-operation-token") ?? [],
+        (token) => token.textContent?.trim(),
+      ),
+    ).toEqual(["git pull", "origin", "main", "--rebase", "--no-commit", "--no-verify"]);
+    expect(tauriService.pullGit).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "git.historyPullDialogModifyOptions" }),
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "--no-commit" }));
+
+    expect(
+      within(dialog).queryByText("git.historyPullExplanationEffectNoCommitRebase"),
+    ).toBeNull();
+    expect(
+      getGitOperationTokenSurfaces(dialog, "git pull origin main --rebase --no-verify"),
+    ).toHaveLength(2);
+    expect(tauriService.pullGit).not.toHaveBeenCalled();
+  });
+
+  it("forwards the exact selected pull option payload after confirmation", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    const pullButton = await screen.findByRole("button", { name: "git.pull" });
+    await waitFor(() => {
+      expect(tauriService.listGitBranches).toHaveBeenCalledWith("w1");
+    });
+
+    fireEvent.click(pullButton);
+    const dialog = await screen.findByRole("dialog", { name: "git.historyPullDialogTitle" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "--rebase" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "--no-commit" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "--no-verify" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "git.pull" }));
+
+    await waitFor(() => {
+      expect(tauriService.pullGit).toHaveBeenCalledWith("w1", {
+        remote: "origin",
+        branch: "main",
+        strategy: "--rebase",
+        noCommit: true,
+        noVerify: true,
+      });
     });
   });
 
@@ -800,7 +906,14 @@ describe("GitHistoryPanel interactions", () => {
     expect(screen.getByText("git.historyWillNotHappenTitle")).toBeTruthy();
     expect(screen.getByText("git.historyExampleTitle")).toBeTruthy();
     expect(screen.getByText("git.historyFetchDialogWillHappen")).toBeTruthy();
-    expect(screen.getByText("git fetch --all")).toBeTruthy();
+    const [fetchCommand] = getGitOperationTokenSurfaces(document, "git fetch --all");
+    expect(fetchCommand).toBeTruthy();
+    expect(
+      Array.from(
+        fetchCommand?.querySelectorAll(".git-history-operation-token") ?? [],
+        (token) => token.textContent?.trim(),
+      ),
+    ).toEqual(["git fetch", "--all"]);
   });
 
   it("shows sync preflight summary before execution", async () => {
@@ -815,6 +928,15 @@ describe("GitHistoryPanel interactions", () => {
       expect(screen.getByText("git.historySyncDialogAheadBehind")).toBeTruthy();
       expect(screen.getByText("feat: one")).toBeTruthy();
     });
+    const syncDialog = screen.getByRole("dialog", { name: "git.historySyncDialogTitle" });
+    expect(getGitOperationTokenSurfaces(syncDialog, "git pull && git push")).toHaveLength(2);
+    expect(
+      syncDialog.querySelector(".git-history-toolbar-confirm-hero-line")
+        ?.querySelectorAll(".git-history-operation-token").length,
+    ).toBe(5);
+    expect(
+      syncDialog.querySelector(".git-history-operation-summary")?.textContent,
+    ).toBe("git.historySyncDialogAheadBehind");
     expect(tauriService.syncGit).not.toHaveBeenCalled();
   });
 
@@ -1771,12 +1893,25 @@ describe("GitHistoryPanel interactions", () => {
       expect(screen.getByText("git.historyPushDialogPreviewCommits")).toBeTruthy();
     });
 
-    fireEvent.change(screen.getByLabelText("git.historyPushDialogTargetBranchLabel"), {
+    const pushTargetBranchInput = screen.getByLabelText(
+      "git.historyPushDialogTargetBranchLabel",
+    );
+    expect(pushTargetBranchInput.classList.contains("git-history-operation-branch-input")).toBe(true);
+    fireEvent.change(pushTargetBranchInput, {
       target: { value: "cxn/feat-003" },
     });
     fireEvent.click(screen.getByText("git.historyPushDialogPushToGerrit"));
     await waitFor(() => {
-      expect(screen.getByText("main -> origin:refs/for/cxn/feat-003")).toBeTruthy();
+      const pushTarget = screen
+        .getByRole("dialog", { name: "git.historyPushDialogTitle" })
+        .querySelector<HTMLElement>(".git-history-push-target");
+      expect(pushTarget).toBeTruthy();
+      expect(
+        Array.from(
+          pushTarget?.querySelectorAll(".git-history-operation-token") ?? [],
+          (token) => token.textContent,
+        ).join(""),
+      ).toBe("main -> origin:refs/for/cxn/feat-003");
     });
     fireEvent.change(screen.getByLabelText("git.historyPushDialogTopicLabel"), {
       target: { value: "optimize" },

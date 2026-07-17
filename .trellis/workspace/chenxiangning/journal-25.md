@@ -1838,3 +1838,69 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1022: 迁移 Git Diff 选择器并完成兼容性收口
+
+**Date**: 2026-07-17
+**Task**: 迁移 Git Diff 选择器并完成兼容性收口
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+将 Git Diff 模式选择器迁移到右侧工具栏，保留原有行为；修复旧 WebView overflow 兼容与菜单首开定位边界，补充 Portal、窄宽度、左右对齐及 CSS contract 测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b3f48d24` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1023: 优化 Git 操作说明与命令视觉
+
+**Date**: 2026-07-17
+**Task**: 优化 Git 操作说明与命令视觉
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+完成 Git Pull 选项默认展开、单项与组合效果动态说明，以及 Pull、Fetch、Sync、Push 命令和分支路径着色；保持 Git handler、payload 与运行时行为不变。补齐多语言文案、accessibility live status、精确 payload 与 resolver 回归测试；目标 88 项测试、typecheck、lint、build、runtime contract、static imports、OpenSpec strict validate 均通过。全量测试仍受既有 Sidebar.styles.test.ts 与 file-view-panel.css 不一致阻断。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e0c5f293` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -270,6 +270,7 @@ vi.mock("../../notifications/components/GlobalRuntimeNoticeDock", () => ({
 
 let capturedGitDiffPanelProps: {
   onOpenFileHistory?: (target: unknown) => void;
+  headerControlsTarget?: HTMLElement | null;
 } | null = null;
 
 vi.mock("../../git/components/GitDiffPanel", () => ({
@@ -1338,6 +1339,60 @@ describe("useLayoutNodes client UI visibility", () => {
     fireEvent.click(screen.getByRole("button", { name: "projectMap" }));
 
     expect(onOpenProjectMap).toHaveBeenCalledTimes(1);
+  });
+
+  it("connects the active Git toolbar leading slot to GitDiffPanel", async () => {
+    clientUiVisibilityMock.visiblePanels.add("rightActivityToolbar");
+    clientUiVisibilityMock.visibleControls.add("rightToolbar.git");
+    const { result } = await renderUseLayoutNodes(
+      createLayoutOptions({
+        filePanelMode: "git",
+      }),
+    );
+
+    const toolbarView = render(<>{result.current.rightPanelToolbarNode}</>);
+    const toolbar = toolbarView.container.querySelector(".right-panel-toolbar");
+    const target = toolbarView.container.querySelector<HTMLElement>(
+      ".right-panel-git-mode-slot",
+    );
+
+    expect(target).toBeTruthy();
+    expect(toolbar?.classList.contains("has-git-mode-slot")).toBe(true);
+    expect(toolbar?.firstElementChild).toBe(target);
+    expect(target?.nextElementSibling?.getAttribute("data-testid")).toBe(
+      "panel-tabs",
+    );
+
+    render(<>{result.current.gitDiffPanelNode}</>);
+    await screen.findByTestId("git-diff-panel");
+
+    expect(capturedGitDiffPanelProps?.headerControlsTarget).toBe(target);
+  });
+
+  it("does not render a Git mode slot for a non-Git right panel tab", async () => {
+    clientUiVisibilityMock.visiblePanels.add("rightActivityToolbar");
+    clientUiVisibilityMock.visibleControls.add("rightToolbar.files");
+    const { result } = await renderUseLayoutNodes(
+      createLayoutOptions({
+        filePanelMode: "files",
+      }),
+    );
+
+    const toolbarView = render(<>{result.current.rightPanelToolbarNode}</>);
+
+    expect(
+      toolbarView.container.querySelector(".right-panel-git-mode-slot"),
+    ).toBeNull();
+    expect(
+      toolbarView.container
+        .querySelector(".right-panel-toolbar")
+        ?.classList.contains("has-git-mode-slot"),
+    ).toBe(false);
+    expect(
+      toolbarView.container
+        .querySelector(".right-panel-toolbar")
+        ?.firstElementChild?.getAttribute("data-testid"),
+    ).toBe("panel-tabs");
   });
 
   it("opens note cards as a center surface and keeps the toolbar selection", async () => {

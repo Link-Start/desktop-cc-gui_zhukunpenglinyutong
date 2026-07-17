@@ -314,6 +314,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     useState<ComposerNoteCardSelectionRequest | null>(null);
   const [gitModalPreviewRequest, setGitModalPreviewRequest] =
     useState<GitModalPreviewRequest | null>(null);
+  const [gitModeControlsTarget, setGitModeControlsTarget] =
+    useState<HTMLDivElement | null>(null);
   const rewindDialogRequestSerialRef = useRef(0);
   const noteCardSelectionRequestSerialRef = useRef(0);
   const gitModalPreviewRequestSerialRef = useRef(0);
@@ -1734,6 +1736,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     activityLive: workspaceActivity.isProcessing,
     radarLive: options.sessionRadarRunningSessions.length > 0,
     visibleTabs: rightToolbarVisibleTabs,
+    gitModeControlsTargetRef: setGitModeControlsTarget,
     onSelect: handleRightPanelTabSelect,
   });
 
@@ -1843,6 +1846,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         <GitDiffPanel
           workspaceId={options.activeWorkspace?.id ?? null}
           workspacePath={options.activeWorkspace?.path ?? null}
+          headerControlsTarget={gitModeControlsTarget}
           mode={options.gitPanelMode}
           onModeChange={options.onGitPanelModeChange}
           onOpenGitHistoryPanel={options.onOpenGitHistoryPanel}

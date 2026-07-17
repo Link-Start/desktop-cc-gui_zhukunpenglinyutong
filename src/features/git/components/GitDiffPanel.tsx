@@ -90,6 +90,10 @@ type ModeMenuLayout = {
   width: number;
 };
 
+function GitModeSelectorMount({ target, children }: { target: HTMLElement | null; children: ReactNode }) {
+  return target ? createPortal(children, target) : children;
+}
+
 type GitDiffSectionKey = "staged" | "unstaged";
 
 type GitPanelContextMenuState = RendererContextMenuState & {
@@ -726,6 +730,7 @@ type DiscardDialogTarget =
 function GitDiffPanelImpl({
   workspaceId = null,
   workspacePath = null,
+  headerControlsTarget = null,
   mode,
   onModeChange,
   diffEntries = [],
@@ -1189,7 +1194,10 @@ function GitDiffPanelImpl({
     const width = Math.max(Math.min(preferredWidth, maxAvailable), Math.min(minimumWidth, maxAvailable));
     setModeMenuLayout({ align, width: Math.round(width) });
   }, []);
-
+  const handleModeMenuToggle = useCallback(() => {
+    if (!isModeMenuOpen) updateModeMenuLayout();
+    setIsModeMenuOpen((current) => !current);
+  }, [isModeMenuOpen, updateModeMenuLayout]);
   useEffect(() => {
     return () => {
       if (deferredCommitLanguageMenuTimerRef.current !== null) {
@@ -2123,133 +2131,144 @@ function GitDiffPanelImpl({
     ],
   );
   return (
-    <aside className="diff-panel diff-panel--floating-git-actions" ref={panelRef}>
-      <div className="git-panel-header git-panel-header--hover-actions">
+    <aside
+      className={`diff-panel diff-panel--floating-git-actions${
+        headerControlsTarget ? " has-external-mode-selector" : ""
+      }${showApplyWorktree ? " has-floating-git-action" : ""}`}
+      ref={panelRef}
+    >
+      <div
+        className={`git-panel-header git-panel-header--hover-actions${
+          headerControlsTarget && !showApplyWorktree ? " is-empty" : ""
+        }`}
+      >
         <div className="git-panel-actions" role="group" aria-label="Git panel">
-          <div className="git-panel-select">
-            <button
-              ref={modeTriggerRef}
-              type="button"
-              className={`git-panel-select-trigger${isModeMenuOpen ? " is-open" : ""}`}
-              aria-label={t("git.panelView")}
-              aria-haspopup="menu"
-              aria-expanded={isModeMenuOpen}
-              onClick={() => setIsModeMenuOpen((current) => !current)}
-            >
-              {renderModeIcon(currentModeOption.value, "git-panel-select-icon", 13)}
-              <span className="git-panel-select-label">{currentModeOption.label}</span>
-              <ChevronDown className="git-panel-select-caret" size={12} aria-hidden />
-            </button>
-            {isModeMenuOpen && (
-              <div
-                ref={modeMenuRef}
-                className="git-panel-select-menu"
-                role="menu"
+          <GitModeSelectorMount target={headerControlsTarget}>
+            <div className="git-panel-select">
+              <button
+                ref={modeTriggerRef}
+                type="button"
+                className={`git-panel-select-trigger${isModeMenuOpen ? " is-open" : ""}`}
                 aria-label={t("git.panelView")}
-                style={{
-                  left: modeMenuLayout.align === "left" ? 0 : "auto",
-                  right: modeMenuLayout.align === "right" ? 0 : "auto",
-                  width: `${modeMenuLayout.width}px`,
-                }}
+                aria-haspopup="menu"
+                aria-expanded={isModeMenuOpen}
+                onClick={handleModeMenuToggle}
               >
-                <div className="git-panel-select-menu-title">{currentModeOption.label}</div>
-                {modeOptions.map((option) => {
-                  const isActive = option.value === mode;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`git-panel-select-option${isActive ? " is-active" : ""}`}
-                      role="menuitemradio"
-                      aria-checked={isActive}
-                      onClick={() => handleModeSelect(option.value)}
-                    >
-                      <span className="git-panel-select-option-text">
-                        <span className="git-panel-select-option-icon" aria-hidden>
-                          {renderModeIcon(option.value, "git-panel-select-option-icon-glyph", 13)}
-                        </span>
-                        <span className="git-panel-select-option-copy">
-                          <span className="git-panel-select-option-label">{option.label}</span>
-                          <span className="git-panel-select-option-description">
-                            {option.description}
-                          </span>
-                        </span>
-                      </span>
-                      <span
-                        className={`git-panel-select-option-check${isActive ? " is-active" : ""}`}
-                        aria-hidden
+                {renderModeIcon(currentModeOption.value, "git-panel-select-icon", 13)}
+                <span className="git-panel-select-label">{currentModeOption.label}</span>
+                <ChevronDown className="git-panel-select-caret" size={12} aria-hidden />
+              </button>
+              {isModeMenuOpen && (
+                <div
+                  ref={modeMenuRef}
+                  className="git-panel-select-menu"
+                  role="menu"
+                  aria-label={t("git.panelView")}
+                  style={{
+                    left: modeMenuLayout.align === "left" ? 0 : "auto",
+                    right: modeMenuLayout.align === "right" ? 0 : "auto",
+                    width: `${modeMenuLayout.width}px`,
+                  }}
+                >
+                  <div className="git-panel-select-menu-title">{currentModeOption.label}</div>
+                  {modeOptions.map((option) => {
+                    const isActive = option.value === mode;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`git-panel-select-option${isActive ? " is-active" : ""}`}
+                        role="menuitemradio"
+                        aria-checked={isActive}
+                        onClick={() => handleModeSelect(option.value)}
                       >
-                        ✓
-                      </span>
-                    </button>
-                  );
-                })}
-                {mode === "diff" && onGitDiffListViewChange ? (
-                  <>
-                    <div className="git-panel-select-menu-divider" role="separator" />
-                    <div className="git-panel-select-menu-title">{t("git.listView")}</div>
-                    {layoutOptions.map((option) => {
-                      const isActive = gitDiffListView === option.value;
-                      const OptionIcon = option.icon;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`git-panel-select-option${isActive ? " is-active" : ""}`}
-                          role="menuitemradio"
-                          aria-checked={isActive}
-                          onClick={() => {
-                            onGitDiffListViewChange?.(option.value);
-                            setIsModeMenuOpen(false);
-                          }}
+                        <span className="git-panel-select-option-text">
+                          <span className="git-panel-select-option-icon" aria-hidden>
+                            {renderModeIcon(option.value, "git-panel-select-option-icon-glyph", 13)}
+                          </span>
+                          <span className="git-panel-select-option-copy">
+                            <span className="git-panel-select-option-label">{option.label}</span>
+                            <span className="git-panel-select-option-description">
+                              {option.description}
+                            </span>
+                          </span>
+                        </span>
+                        <span
+                          className={`git-panel-select-option-check${isActive ? " is-active" : ""}`}
+                          aria-hidden
                         >
-                          <span className="git-panel-select-option-text">
-                            <span className="git-panel-select-option-icon" aria-hidden>
-                              <OptionIcon size={13} />
-                            </span>
-                            <span className="git-panel-select-option-copy">
-                              <span className="git-panel-select-option-label">{option.label}</span>
-                            </span>
-                          </span>
-                          <span
-                            className={`git-panel-select-option-check${isActive ? " is-active" : ""}`}
-                            aria-hidden
+                          ✓
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {mode === "diff" && onGitDiffListViewChange ? (
+                    <>
+                      <div className="git-panel-select-menu-divider" role="separator" />
+                      <div className="git-panel-select-menu-title">{t("git.listView")}</div>
+                      {layoutOptions.map((option) => {
+                        const isActive = gitDiffListView === option.value;
+                        const OptionIcon = option.icon;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={`git-panel-select-option${isActive ? " is-active" : ""}`}
+                            role="menuitemradio"
+                            aria-checked={isActive}
+                            onClick={() => {
+                              onGitDiffListViewChange?.(option.value);
+                              setIsModeMenuOpen(false);
+                            }}
                           >
-                            ✓
+                            <span className="git-panel-select-option-text">
+                              <span className="git-panel-select-option-icon" aria-hidden>
+                                <OptionIcon size={13} />
+                              </span>
+                              <span className="git-panel-select-option-copy">
+                                <span className="git-panel-select-option-label">{option.label}</span>
+                              </span>
+                            </span>
+                            <span
+                              className={`git-panel-select-option-check${isActive ? " is-active" : ""}`}
+                              aria-hidden
+                            >
+                              ✓
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </>
+                  ) : null}
+                  {onOpenGitHistoryPanel ? (
+                    <>
+                      <div className="git-panel-select-menu-divider" role="separator" />
+                      <button
+                        type="button"
+                        className={`git-panel-select-option${isGitHistoryOpen ? " is-active" : ""}`}
+                        role="menuitem"
+                        onClick={() => {
+                          setIsModeMenuOpen(false);
+                          onOpenGitHistoryPanel?.();
+                        }}
+                      >
+                        <span className="git-panel-select-option-text">
+                          <span className="git-panel-select-option-icon" aria-hidden>
+                            <History size={13} />
                           </span>
-                        </button>
-                      );
-                    })}
-                  </>
-                ) : null}
-                {onOpenGitHistoryPanel ? (
-                  <>
-                    <div className="git-panel-select-menu-divider" role="separator" />
-                    <button
-                      type="button"
-                      className={`git-panel-select-option${isGitHistoryOpen ? " is-active" : ""}`}
-                      role="menuitem"
-                      onClick={() => {
-                        setIsModeMenuOpen(false);
-                        onOpenGitHistoryPanel?.();
-                      }}
-                    >
-                      <span className="git-panel-select-option-text">
-                        <span className="git-panel-select-option-icon" aria-hidden>
-                          <History size={13} />
-                        </span>
-                        <span className="git-panel-select-option-copy">
-                          <span className="git-panel-select-option-label">
-                            {t("git.historyQuickAction")}
+                          <span className="git-panel-select-option-copy">
+                            <span className="git-panel-select-option-label">
+                              {t("git.historyQuickAction")}
+                            </span>
                           </span>
                         </span>
-                      </span>
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            )}
-          </div>
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </GitModeSelectorMount>
           {showApplyWorktree && (
             <button
               type="button"
