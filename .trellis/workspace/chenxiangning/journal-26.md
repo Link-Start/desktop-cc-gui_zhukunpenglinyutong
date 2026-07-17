@@ -38,3 +38,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1027: 修复 Git 重命名与删除文件路径身份
+
+**Date**: 2026-07-18
+**Task**: 修复 Git 重命名与删除文件路径身份
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+统一 Desktop/daemon 的 rename source/destination path identity，修复单仓与多仓重命名、删除文件的激活、diff 与 mutation 行为；补充回归测试并同步归档 OpenSpec。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e3c8e569` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
