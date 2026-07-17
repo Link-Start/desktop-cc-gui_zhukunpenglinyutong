@@ -2,6 +2,104 @@
 
 ---
 
+##### **2026年7月17日（v0.7.5）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.7.5`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(files)`: 文件编辑器新增按需 Git Blame —— 默认关闭且零额外 IPC，启用后在 CodeMirror gutter 按可见行展示日期与作者，当前行可查看 commit SHA、完整时间和摘要；编辑后标记为 stale、保存后受控刷新，并支持 Desktop / Web Service 与多仓库 scope
+- `feat(git-history)`: 新增独立 File History 工作台，可从文件树或 Git Diff 文件菜单打开目标文件的提交历史；左侧按 rename chain 分页展示相关 commits，右侧复用现有 Diff viewer 查看单次文件变化，并对 repository、path、分页与异步响应做隔离
+- `feat(search)`: 全局搜索新增 API endpoint provider，复用 Project Map contract cache 与受限扫描，支持按 path、HTTP method、handler、operation、description、framework、protocol、module 或 source file 检索 HTTP / RPC / GraphQL / ABI endpoint，并可直接跳转到源码位置
+- `feat(git-history)`: 提交列表新增文本/Hash、Branch、User 与 Date preset 组合筛选，输入采用 `300ms` debounce，筛选状态可持久化；分页、snapshot retry 与 remote daemon 均复用同一 canonical payload，避免 stale request 覆盖最新结果
+- `feat(git)`: 统一单仓与多仓 changed-file 右键菜单，按 staged / unstaged 状态提供 Unstage、Stage、Discard 与 File History；所有 action 保留 `workspaceId + repositoryRoot + path` identity，并复用现有确认、刷新与 Diff/File History surface
+
+🔧 Improvements
+- `feat(git-history)`: 将 Git History 收敛为 Branch、Commit、Details 三栏主布局，移除重复的 overview 区域并按 `3:4:3` 分配默认宽度；作者 timeline 使用基于 email/name 的稳定主题色，跨刷新、分页与搜索保持一致
+- `feat(git-history)`: 变更文件树复用 shared diff-tree compact folders 规则，压缩无分叉的单子目录链，同时保留 branch boundary、canonical path、Windows separator、展开状态与键盘交互
+- `feat(git)`: 收紧多仓库 Git Diff 工作区的信息密度并补齐 repository-scoped modal preview；快速切换同名路径时丢弃 stale response，full-context loader、编辑路径和 preview source 始终绑定同一 repository
+
+🐛 Fixes
+- `fix(git)`: 修复多仓库文件打开、Git Blame、Diff preview、Discard 与 File History 链路中的 repository identity 丢失；workspace-root、nested repository、相同 relative path 与 longest-prefix owner 均使用正确 scope，避免串仓或错误禁用
+- `fix(git)`: 恢复多仓库 unstaged 文件回退入口与状态刷新，修复 repository switch chrome、分组折叠和刷新入口回归；回退继续经过确认弹窗，成功后只刷新目标 repository 的状态
+- `fix(search)`: 全局文件搜索不再把 progressive file tree 的 shallow / empty 结果当成完整索引；当前与全局 scope 会按 active-first、bounded concurrency 补齐 full snapshot，并区分 partial、complete、error 状态，失败可重试且 stale hydration 不覆盖新 workspace
+- `fix(renderer)`: 为 react-scan 初始化与运行异常增加熔断恢复，诊断工具崩溃时主动卸载并清理残留状态，避免影响应用正常渲染
+
+English:
+
+✨ Features
+- Bump the app version to `0.7.5` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(files)`: add opt-in Git Blame to the file editor with zero extra IPC while disabled; when enabled, render date and author annotations for visible CodeMirror lines and expose the commit SHA, full timestamp, and summary for the active line, with stale-on-edit, controlled refresh after save, Desktop / Web Service parity, and multi-repository scoping
+- `feat(git-history)`: add a dedicated File History workbench reachable from the file tree and Git Diff file menus; page through commits that touched the file across its rename chain on the left, reuse the existing Diff viewer for each selected revision on the right, and isolate repository, path, pagination, and asynchronous response identity
+- `feat(search)`: add an API endpoint provider to global search by reusing the Project Map contract cache and bounded scan lifecycle; search HTTP, RPC, GraphQL, and ABI endpoints by path, HTTP method, handler, operation, description, framework, protocol, module, or source file, then navigate directly to the source location
+- `feat(git-history)`: add composable text/Hash, Branch, User, and Date preset filters to the commit list with `300ms` input debouncing and persisted state; pagination, snapshot retry, and the remote daemon reuse one canonical payload so stale requests cannot replace newer results
+- `feat(git)`: unify changed-file context menus across single- and multi-repository modes, exposing Unstage, Stage, Discard, and File History according to staged state; every action preserves `workspaceId + repositoryRoot + path` identity and reuses the existing confirmation, refresh, Diff, and File History surfaces
+
+🔧 Improvements
+- `feat(git-history)`: focus Git History on a three-column Branch, Commit, and Details layout, remove the duplicate overview region, and assign default widths at `3:4:3`; author timelines now use stable theme-aware colors derived from email or name and remain consistent across refreshes, pagination, and searches
+- `feat(git-history)`: reuse the shared diff-tree compact-folders rules for changed files, collapsing unbranched single-child directory chains while preserving branch boundaries, canonical paths, Windows separators, expansion state, and keyboard behavior
+- `feat(git)`: tighten the information density of the multi-repository Git Diff workspace and complete repository-scoped modal previews; stale responses are discarded when rapidly switching identical relative paths, while the full-context loader, edit path, and preview source remain bound to the same repository
+
+🐛 Fixes
+- `fix(git)`: preserve repository identity across multi-repository file opening, Git Blame, Diff preview, Discard, and File History flows; workspace-root repositories, nested repositories, identical relative paths, and longest-prefix ownership now resolve to the correct scope instead of crossing repositories or being incorrectly disabled
+- `fix(git)`: restore the discard action and status refresh for unstaged files in multi-repository workspaces, and fix regressions in repository-switch chrome, group collapsing, and refresh entry points; discard still requires confirmation and refreshes only the target repository after success
+- `fix(search)`: stop treating shallow or empty progressive file-tree results as a complete global file index; current and global scopes now hydrate full snapshots with active-first bounded concurrency, distinguish partial, complete, and error states, allow retries, and prevent stale hydration from overwriting a new workspace
+- `fix(renderer)`: add circuit-breaker recovery around react-scan initialization and runtime failures, unloading the diagnostic tool and clearing residual state when it crashes so application rendering remains unaffected
+
+---
+
+##### **2026年7月16日（v0.7.4）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.7.4`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(git)`: 将 Composer branch badge 升级为多仓库 Git command center，自动发现 workspace root 与 bounded nested repositories，按仓库展示 branch、upstream、ahead/behind 与 working-tree 摘要；单仓保持直接操作，多仓先选择 repository，再执行 Update、Commit、Push、Create Branch 与 Checkout
+- `feat(git)`: 文件树为 root / nested repository 增加 repository-scoped Git submenu 与多仓文件状态投影，支持 Commit、Add、Ignore、Diff、Compare、History、Rollback、Push、Pull、Fetch；所有 write action 显式携带 repository root，并保持 Desktop / remote daemon 与跨平台路径一致
+- `feat(git)`: Git 提交面板新增自适应多仓库工作区，同时展示所有 dirty repositories 并按仓库隔离 changed files、stage selection 与 mutation；一次提交可按稳定顺序为多个仓库分别创建 commit / push，支持 partial success、逐仓反馈和失败项保留
+- `feat(git-history)`: 多仓库 workspace 的 Git History 保留原 workspace/worktree 层级，并新增独立 repository picker；切换历史目标不会修改主窗口 active workspace，也不会把 child repository 注册成虚构 workspace
+- `feat(settings)`: 重构 CLI 配置中心，提供可搜索的 Claude Code / Codex catalog、支持状态、文档入口、official / third-party provider 分区和共享 table 管理；支持编辑 Claude `settings.json`、Codex `config.toml` 与 `auth.json`，并保留 provider 切换、排序、自定义模型和 local provider 工作流
+
+🔧 Improvements
+- `perf(app)`: repository discovery 移至 blocking worker 并跳过常见生成目录；Git polling 保留等价 state、避免 background refresh 闪回 loading，并通过 memoized component/callback 与复用 status 结果降低大 workspace 的主线程阻塞和 root render
+- `refactor(threads)`: 将高频 streaming latency 的内部诊断 state 与 `useSyncExternalStore` 对外 snapshot 分离，只有可观察类别或 mitigation 变化时才发布新引用，避免 measurement-only delta 触发同步重渲染与 React tearing 检查
+- `style(ui)`: 统一 tooltip 延迟与滚轮 dismiss 行为，收敛 sidebar、topbar、footer、file tab 与 settings 的间距、层级和主题色；OpenAI / Codex icon 与 token 视觉改用 theme-aware `currentColor`
+- `fix(models)`: 兼容 string/object、camelCase/snake_case 的 reasoning effort metadata，并在 thread 未设置 effort 时回退到 shared Codex selection；reasoning blocks 统一分段、合并与 tool-call boundary 展示
+
+🐛 Fixes
+- `fix(codex)`: 新建 `codex-pending-*` 磁盘会话不再被误判为 history restore，首次发送前直接显示可用的空白会话；真正未加载的历史会话仍由专用 loading lifecycle 控制
+- `fix(git)`: 稳定多仓库 branch menu 的 repository 切换、折叠 section、搜索展开、submenu positioning 与 loading feedback，并修复显式 repository update 被全局 selection 提前拦截的问题
+- `fix(git)`: 修复多仓文件树只消费 active Git root 状态的问题；所有 repository 的 file / ancestor folder decoration 现在在单次 aggregate scan 中合并，partial failure 仅降级对应仓库，dirty repository folder 与普通 changed folder 保持不同视觉语义
+- `fix(settings)`: Codex `auth.json` secret 默认遮罩且遮罩态只读，仅写入实际变更的配置文件，拒绝用空 draft 覆盖 credentials，并在 partial write failure 时保留编辑器与逐文件错误，便于安全重试
+- `fix(messages)`: 修复 Codex live reasoning prefix 丢失、structured / streaming fragment 段落粘连，以及 Windows drive-letter、UNC、Unicode 与带行号 file link 被错误拼接 workspace path 的问题
+- `fix(app)`: 修复 repository status count、daemon push repository-root forwarding、单仓 change/push control 丢失及 nested dialog Escape 传播，降低大仓扫描或配置编辑导致 UI 卡顿与误操作的风险
+
+English:
+
+✨ Features
+- Bump the app version to `0.7.4` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(git)`: evolve the Composer branch badge into a multi-repository Git command center that discovers the workspace root and bounded nested repositories, showing branch, upstream, ahead/behind, and working-tree summaries per repository; single-repository workspaces remain direct, while multi-repository workspaces select a target before Update, Commit, Push, Create Branch, or Checkout
+- `feat(git)`: add repository-scoped Git submenus and multi-repository file-status projection to root and nested repository rows in the file tree, with Commit, Add, Ignore, Diff, Compare, History, Rollback, Push, Pull, and Fetch; every write action carries an explicit repository root with Desktop / remote daemon and cross-platform path parity
+- `feat(git)`: add an adaptive multi-repository Git commit workspace that displays every dirty repository while isolating changed files, stage selection, and mutations by repository; one submission can create and push independent commits in stable order, with partial success, per-repository feedback, and failed selections preserved
+- `feat(git-history)`: retain the existing workspace/worktree hierarchy in multi-repository Git History and add a separate repository picker; changing the history target no longer modifies the main window's active workspace or registers child repositories as synthetic workspaces
+- `feat(settings)`: redesign the CLI configuration center with a searchable Claude Code / Codex catalog, support status, documentation links, official / third-party provider sections, and shared table management; edit Claude `settings.json`, Codex `config.toml`, and `auth.json` while retaining provider switching, ordering, custom models, and local-provider workflows
+
+🔧 Improvements
+- `perf(app)`: move repository discovery onto blocking workers and skip common generated directories; preserve equivalent Git polling state, avoid background refreshes flashing back to loading, and reduce main-thread stalls and root renders in large workspaces through memoized components/callbacks and reused status results
+- `refactor(threads)`: separate high-frequency streaming-latency diagnostics from the `useSyncExternalStore` snapshot exposed to React, publishing a new reference only when an observable category or mitigation changes so measurement-only deltas cannot trigger synchronous rerenders or tearing checks
+- `style(ui)`: unify tooltip delays and wheel-dismiss behavior, tighten spacing, hierarchy, and theme colors across the sidebar, topbar, footer, file tabs, and settings, and render OpenAI / Codex icons and token visuals with theme-aware `currentColor`
+- `fix(models)`: accept reasoning-effort metadata in string/object and camelCase/snake_case forms, fall back to the shared Codex selection when a thread has no effort override, and align reasoning block paragraph merging and tool-call boundaries
+
+🐛 Fixes
+- `fix(codex)`: stop treating new `codex-pending-*` disk sessions as history restoration, presenting a usable empty conversation before the first send while retaining the dedicated loading lifecycle for genuinely unloaded history
+- `fix(git)`: stabilize repository switching, collapsible sections, search expansion, submenu positioning, and loading feedback in the multi-repository branch menu, and allow explicit repository updates without being blocked by missing global selection
+- `fix(git)`: fix the file tree consuming status from only the active Git root; file and ancestor-folder decorations from every repository are now merged in one aggregate scan, partial failures degrade only the affected repository, and dirty repository folders retain semantics distinct from ordinary changed folders
+- `fix(settings)`: mask Codex `auth.json` secrets by default and keep the masked editor read-only, write only configuration files that actually changed, refuse to replace credentials with an empty draft, and preserve the editor with per-file errors after partial write failures for safe retry
+- `fix(messages)`: preserve Codex live reasoning prefixes, keep structured and streaming fragments in readable paragraphs, and correctly resolve Windows drive-letter, UNC, Unicode, and line-qualified file links without incorrectly prefixing the workspace path
+- `fix(app)`: correct repository status counts, daemon push repository-root forwarding, missing single-repository change/push controls, and nested-dialog Escape propagation, reducing UI stalls and unsafe interactions during large repository scans or configuration editing
+
+---
+
 ##### **2026年7月15日（v0.7.3）**
 
 中文：
