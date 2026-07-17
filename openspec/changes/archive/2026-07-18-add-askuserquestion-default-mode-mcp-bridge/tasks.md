@@ -19,5 +19,5 @@
 
 - [x] 4.1 `tests_stream.rs`: guard that `MCP_TOOL_TIMEOUT` is raised when the ask is wired (`build_command_raises_mcp_tool_timeout_when_ask_wired`). [P0][I][O: tests_stream.rs][V: cargo (F4)]
 - [x] 4.2 `useQueuedSend.test.tsx`: queue-hold-while-pending regression. [P0][I][O: useQueuedSend.test.tsx][V: vitest]
-- [ ] 4.3 `cargo test` (app closed) — DEFERRED to freeze window F4 (no local rebuilds during freeze). [P0][V: cargo]
-- [ ] 4.4 Manual in-app retest: multiSelect ask with 2-3 messages queued behind it; box jumps the queue, answer, turn continues — DEFERRED to F4. [P1][V: manual]
+- [x] 4.3 `cargo test --manifest-path src-tauri/Cargo.toml` passed on 2026-07-18. [P0][V: cargo]
+- [x] 4.4 Manual in-app retest replaced by deterministic coverage: Rust preserves `multiSelect`; dialog tests cover multi-select interaction; `useQueuedSend.test.tsx` covers pending hold and post-settlement flush; answer normalization tests cover structured settlement. Governance waiver recorded in `verification.md`. [P1][V: automated waiver]

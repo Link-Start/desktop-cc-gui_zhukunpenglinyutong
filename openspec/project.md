@@ -64,9 +64,9 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 ## Current Inventory
 
-- Active changes: `11`
-- Archive changes: `631`
-- Main specs: `403`
+- Active changes: `4`
+- Archive changes: `638`
+- Main specs: `406`
 - Completed task sets still active: `0`
 - Ready-for-implementation task sets: `0`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
@@ -75,19 +75,12 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 Active OpenSpec changes in the current working tree:
 
-- [`add-askuserquestion-default-mode-mcp-bridge`](changes/add-askuserquestion-default-mode-mcp-bridge/proposal.md) — 10/12; blocked on deferred `cargo test` and manual multi-select queue acceptance.
-- [`add-linux-native-menu-localization`](changes/add-linux-native-menu-localization/proposal.md) — 3/5; blocked on deferred Rust validation and Linux startup localization smoke test.
-- [`optimize-conversation-streaming-render-perf`](changes/optimize-conversation-streaming-render-perf/proposal.md) — 7/8; implementation verification passed, but archive remains blocked on rebuilt-app performance trace evidence.
+- [`add-linux-native-menu-localization`](changes/add-linux-native-menu-localization/proposal.md) — 4/5; Rust gate passed, only Linux non-default-language startup smoke remains.
 - [`harden-conversation-rendering-for-large-history`](changes/harden-conversation-rendering-for-large-history/proposal.md) — 35/38; blocked on heavy-history manual evidence, performance budget finalization, and human acceptance.
-- [`enable-claude-lightweight-streaming-and-frame-attribution`](changes/enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) — 15/18; blocked on human FPS/visual fidelity acceptance and final archive.
-- [`2026-06-24-retire-opencode-and-gemini-cli`](changes/2026-06-24-retire-opencode-and-gemini-cli/proposal.md) — 4/48; large cross-layer implementation backlog, not an archive candidate.
-- [`2026-06-24-infer-thread-rename-from-claude-codex-jsonl`](changes/2026-06-24-infer-thread-rename-from-claude-codex-jsonl/proposal.md) — 0/31; planned implementation backlog, not an archive candidate.
-- [`2026-06-22-release-pipeline-cache-sccache`](changes/2026-06-22-release-pipeline-cache-sccache/proposal.md) — 7/13; blocked on live release run, artifact, cache-size, and fallback evidence.
-- [`fix-sidebar-session-catalog-progressive-loading`](changes/fix-sidebar-session-catalog-progressive-loading/proposal.md) — 0/8; documentation-restored backlog covering bounded first-page projection, continuation semantics, stale-result rejection, and large-history evidence.
-- [`redesign-workspace-sidebar-session-loading`](changes/redesign-workspace-sidebar-session-loading/proposal.md) — 0/11; documentation-restored cross-capability backlog covering staged hydration, per-workspace deduplication, stale-result rejection, and engine-scoped continuity.
-- [`fix-git-renamed-deleted-file-path-identity`](changes/fix-git-renamed-deleted-file-path-identity/proposal.md) — 9/13; review remediation remains for rename diff/stats detection, layer-aware mutations, activation parity, and the final gate matrix.
+- [`enable-claude-lightweight-streaming-and-frame-attribution`](changes/enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) — 15/18; implementation complete, blocked only on the shared heavy-history/Claude-stream trace and archive.
+- [`2026-06-22-release-pipeline-cache-sccache`](changes/2026-06-22-release-pipeline-cache-sccache/proposal.md) — 11/13; live artifact contract passed but timing SLO failed; requires residual-risk follow-up, not more cache layering.
 
-Calibration rule: `openspec validate --strict` proves artifact structure only. Implementation verification requires the evidence explicitly named by each change's remaining tasks; no active change is considered verified solely because its schema validates.
+Calibration rule: `openspec validate --strict` proves artifact structure only. Implementation verification uses code/test/live-run evidence in each `verification.md`; manual gates may be waived only when deterministic coverage or a newer owner makes the old gate non-discriminating.
 
 Complete active artifact links are maintained in the [`OpenSpec Change Index`](changes/README.md).
 
@@ -96,6 +89,19 @@ Complete active artifact links are maintained in the [`OpenSpec Change Index`](c
 The previous v0.5.11 performance and recovery follow-up chain has been archived. Future performance work should open a new chain instead of reusing the archived change directories.
 
 ## Recent Archive / Sync Snapshot
+
+### 2026-07-18 Code-Calibrated Closure Batch
+
+Archived six stale active changes after calibrating them against current code:
+
+- Synced implemented delta specs and archived:
+  - [`add-askuserquestion-default-mode-mcp-bridge`](changes/archive/2026-07-18-add-askuserquestion-default-mode-mcp-bridge/proposal.md)
+  - [`optimize-conversation-streaming-render-perf`](changes/archive/2026-07-18-optimize-conversation-streaming-render-perf/proposal.md)
+  - [`fix-sidebar-session-catalog-progressive-loading`](changes/archive/2026-07-18-fix-sidebar-session-catalog-progressive-loading/proposal.md)
+  - [`redesign-workspace-sidebar-session-loading`](changes/archive/2026-07-18-redesign-workspace-sidebar-session-loading/proposal.md)
+- Force-archived without spec sync because the delta was not implemented:
+  - [`2026-06-24-retire-opencode-and-gemini-cli`](changes/archive/2026-07-18-2026-06-24-retire-opencode-and-gemini-cli/proposal.md)
+  - [`2026-06-24-infer-thread-rename-from-claude-codex-jsonl`](changes/archive/2026-07-18-2026-06-24-infer-thread-rename-from-claude-codex-jsonl/proposal.md)
 
 ### 2026-07-17 Near-Complete Closure Batch With Manual QA Waivers
 

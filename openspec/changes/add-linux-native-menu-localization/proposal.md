@@ -6,6 +6,13 @@ runtime relabel path (`menu_update_labels`) does not reliably repaint the GTK
 menubar (a muda/GTK limitation), so a non-default-language user saw a menu that
 never localized. The fix is to build the menu in the saved language up front.
 
+## 2026-07-18 代码校准
+
+- **裁定：继续推进（仅剩 Linux platform gate）**。`MenuLabels`、zh/en constructors、saved-language selection 与 terminal/devtools labels 已存在于 `src-tauri/src/menu.rs`。
+- 2026-07-18 `cargo test --manifest-path src-tauri/Cargo.toml` 通过，Rust compile/test gate 已关闭。
+- 原缺陷边界是 Linux GTK native menubar；当前 macOS 环境无法用 unit test 证明 GTK 首次构建的可见结果。保留一次 Linux non-default-language startup smoke，不再保留模糊的 “freeze window F4” 时间语境。
+- 若近期没有 Linux release/testing channel，可按产品支持策略显式 waiver 后归档；不得声称已经完成 Linux runtime verification。
+
 ## 目标与边界
 
 - Source native menu labels from a Rust-side mirror of the `menu.*` i18n keys,

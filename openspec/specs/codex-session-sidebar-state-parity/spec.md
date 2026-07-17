@@ -20,6 +20,13 @@ TBD - synced from change fix-codex-session-sidebar-state-parity. Update Purpose 
 - **THEN** 系统 MAY 将该 session 从 sidebar projection 中移除
 - **AND** 系统 MUST NOT 无限期保留该 session 作为 ghost entry
 
+#### Scenario: background hydration cannot blank visible Codex rows
+
+- **WHEN** a background or related-workspace hydration returns incomplete Codex evidence
+- **AND** the sidebar has last-good in-scope Codex rows
+- **THEN** visible rows MUST remain until authoritative projection converges
+- **AND** the surface MUST expose loading, partial, degraded, or continuity-preserved state
+
 ### Requirement: Codex Sidebar Title Truth MUST Apply Stable Precedence
 
 `Codex` sidebar / recent conversation surfaces MUST 对标题采用稳定 truth precedence；一旦某条 session 已经获得比 ordinal fallback 更强的标题 truth，后续 refresh MUST NOT 将其回退为 `Agent x` 或新的 ordinal fallback。
@@ -127,4 +134,3 @@ Codex sidebar and recent conversation surfaces MUST treat provider-backed worksp
 - **WHEN** a Codex sidebar row is rebuilt from catalog data after refresh or restart
 - **THEN** provider label and unavailable-provider state MUST derive from `providerProfileId`, `providerProfileName`, and `providerAvailability`
 - **AND** the row MUST NOT fall back to disk label unless the catalog identifies the session as disk profile
-

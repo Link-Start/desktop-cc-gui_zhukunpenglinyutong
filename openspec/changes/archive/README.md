@@ -2,13 +2,22 @@
 
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
-- Updated At: `2026-07-17`
-- Indexed proposals: `631`
+- Updated At: `2026-07-18`
+- Indexed proposals: `638`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-07 (98)
+## 2026-07 (104)
+
+### 2026-07-18
+
+- [`2026-07-18-2026-06-24-infer-thread-rename-from-claude-codex-jsonl`](2026-07-18-2026-06-24-infer-thread-rename-from-claude-codex-jsonl/proposal.md) — unimplemented/stale，未同步 delta specs
+- [`2026-07-18-2026-06-24-retire-opencode-and-gemini-cli`](2026-07-18-2026-06-24-retire-opencode-and-gemini-cli/proposal.md) — superseded hard-delete plan，未同步 delta specs
+- [`2026-07-18-add-askuserquestion-default-mode-mcp-bridge`](2026-07-18-add-askuserquestion-default-mode-mcp-bridge/proposal.md) — verified implementation，已同步 main specs
+- [`2026-07-18-fix-sidebar-session-catalog-progressive-loading`](2026-07-18-fix-sidebar-session-catalog-progressive-loading/proposal.md) — automated evidence closure，已同步 main specs
+- [`2026-07-18-optimize-conversation-streaming-render-perf`](2026-07-18-optimize-conversation-streaming-render-perf/proposal.md) — duplicate trace waived，已同步 main specs
+- [`2026-07-18-redesign-workspace-sidebar-session-loading`](2026-07-18-redesign-workspace-sidebar-session-loading/proposal.md) — automated evidence closure，已同步 main specs
 
 ### 2026-07-17
 

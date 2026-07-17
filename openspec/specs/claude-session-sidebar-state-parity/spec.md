@@ -200,7 +200,9 @@ Claude sidebar listing SHALL use the shared workspace session catalog projection
 
 ### Requirement: Claude Sidebar Continuity SHALL Follow Source Completeness
 
-Claude sidebar continuity SHALL be applied only when the current Claude source evidence is incomplete and SHALL remain visibly degraded until authoritative evidence arrives.
+Claude sidebar continuity SHALL treat staged, capped, timeout, startup-only, and
+otherwise partial hydration as incomplete membership evidence. Continuity SHALL
+remain visibly degraded until authoritative evidence arrives.
 
 #### Scenario: uncertain empty preserves readable continuity
 - **WHEN** the current refresh reports uncertain empty for Claude
@@ -222,6 +224,14 @@ Claude sidebar continuity SHALL be applied only when the current Claude source e
 - **WHEN** the sidebar preserves last-good Claude rows because the current source status is partial, degraded, or uncertain empty
 - **THEN** the preserved rows MUST be distinguishable from fully fresh catalog rows through projection status, source badge, or equivalent state available to the UI
 - **AND** the sidebar MUST NOT present the preserved result as an authoritative complete refresh
+
+#### Scenario: staged hydration preserves last-good Claude rows
+
+- **WHEN** current hydration has not completed authoritative Claude source coverage
+- **AND** last-good in-scope Claude rows exist
+- **THEN** the sidebar SHALL preserve those rows with degraded or loading evidence
+- **AND** omission from the partial result SHALL NOT be treated as deletion
+- **AND** authoritative archive, delete, hide, or scope evidence SHALL still remove a row
 
 ### Requirement: Claude Sidebar Titles SHALL Use Shared Title Projection
 
@@ -393,4 +403,3 @@ When a Claude sidebar entry is reopened and readable history rows are already lo
 - **AND** no exact cwd or direct child project dir evidence disambiguates the owner
 - **THEN** the session MUST NOT be silently assigned to the parent workspace as authoritative truth
 - **AND** the system MUST expose attribution ambiguity through partial-source, degraded state, or equivalent diagnostics
-

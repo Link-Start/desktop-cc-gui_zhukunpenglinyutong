@@ -14,6 +14,13 @@ plan mode at all, for the CLI fetch-timeout the mechanism needs, or for holding
 the composer queue while an ask is open. This change adds those three
 requirements and the implementation behind them.
 
+## 2026-07-18 代码校准
+
+- **裁定：实现与自动化证据完整，建议归档**。in-process MCP bridge、live-turn oneshot settlement、300s `MCP_TOOL_TIMEOUT` 与 composer queue hold 均存在于当前代码。
+- 2026-07-18 Rust 全量测试通过；`ask_user_question_preserves_multi_select_flag`、`AskUserQuestionDialog` multi-select test、`useQueuedSend` pending/flush test 与 answer normalization tests 已覆盖原 manual gate 的结构化输入、队列阻塞和恢复边界。
+- 原 tasks 中 “freeze window F4” 已过期。人工执行 2–3 条排队消息不再提供自动化之外的独立 contract 证据，按 governance waiver 关闭。
+- 归档时同步 MCP reachability / timeout / queue-hold delta specs。
+
 ## 目标与边界
 
 - Expose `AskUserQuestion` as an **allowed in-process MCP tool** in non-plan

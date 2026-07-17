@@ -4,6 +4,13 @@ Issue #721 reports a different class of performance failure than the archived re
 
 The follow-up comment on #721 turns this into a concrete acceptance target: startup update checks should be split from the conversation work, while the conversation surface needs lightweight mode, viewport-bounded rendering, default-collapsed heavy cards, repeated measurement/popover/anchor loop audits, complex Markdown/diff protection, selected-conversation on-demand loading, an oversized-history warning path, and more specific local error diagnostics.
 
+## 2026-07-18 代码校准
+
+- **裁定：继续推进（P0 closure）**。当前实现已覆盖 timeline hydration budget、lightweight mode、oversized-history prompt、heavy Markdown/tool-card lazy detail、conversation-local error boundary、presentation scope separation 与 react-scan crash circuit breaker。
+- **代码事实源**：`messagesTimelineHydration.ts`、`messagesConversationLightweightMode.ts`、`ConversationRowErrorBoundary.tsx`、`messagesLiveWindow.ts` 及其 focused tests。
+- **剩余价值**：不是继续加 renderer 功能，而是用一个真实 heavy-history trace 收口 `6.2/6.3`。性能结果不能仅由 unit test 推断；该 trace 同时作为 `enable-claude-lightweight-streaming-and-frame-attribution` 的共享验收证据，禁止重复做两套人工回归。
+- **归档条件**：真实长对话完成 open / scroll / anchor jump / heavy-card expansion / Composer interaction 测量，并把阈值写入 `verification.md`。
+
 ## 目标与边界
 
 - 目标：把 long conversation restore / history browsing / heavy message rows 的 render cost 变成 viewport-bounded、lazy-hydrated、locally recoverable 的路径。

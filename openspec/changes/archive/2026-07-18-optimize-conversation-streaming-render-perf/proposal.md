@@ -8,6 +8,13 @@ paints, and full DOM recreation of Bash
 output on every new line. Individually small; together they starved input and
 pinned CPU during streaming.
 
+## 2026-07-18 代码校准
+
+- **裁定：实现完成，建议归档**。四项优化均已存在于当前代码：history derivation cache、drop-policy guarded snapshot coalescing、compositor-friendly CSS、Bash absolute-line DOM reuse。
+- `src/services/events.test.ts` 已覆盖 coalescing 的 drop-eligible / non-drop-eligible 边界；其余改动是受 guard 保护的局部 fast path，不改变 settled rendering。
+- 原任务 `6.3` 的 rebuilt-app trace 已被后续 `enable-claude-lightweight-streaming-and-frame-attribution` 与 `harden-conversation-rendering-for-large-history` 吸收。继续为本 change 单独保留一套人工 trace 没有新增判定价值，按 governance waiver 关闭。
+- 本 change 归档时同步 delta specs；后续真实性能测量只在 large-history closure change 记录。
+
 ## 目标与边界
 
 - Cut per-token main-thread work and continuous repaint **during streaming**,

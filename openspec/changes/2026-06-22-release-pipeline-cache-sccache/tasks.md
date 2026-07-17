@@ -7,7 +7,7 @@
 
 - [x] 2.1 [P0][depends:1.1][I: 4 个 platform job][O: `mozilla-actions/sccache-action@v0.0.10` step,通过 `$GITHUB_ENV` 设置 `RUSTC_WRAPPER=sccache` + `SCCACHE_GHA_ENABLED=true`][V: action tag `v0.0.10` 存在,workflow YAML parse 通过;第一次 release run 日志在 4.1 继续确认 `sccache: compile` 计数 ≥ 0 且 sccache stats 段无 error] 在 4 个 Rust cache step 之后加 sccache 兜底。
 - [x] 2.2 [P1][depends:2.1][I: sccache 默认 cache dir][O: 显式 `SCCACHE_DIR=$HOME/.cache/sccache` (macOS/Linux) / `$env:LOCALAPPDATA\sccache` (Windows)][V: `.github/workflows/release.yml` 中 macOS/Linux/Windows 均通过 `$GITHUB_ENV` 写入;第一次 release run 在 4.1 继续确认日志中不报 `cache dir not found`] 显式指定 sccache cache 目录,避免 runner 清理时丢 cache。
-- [ ] 2.3 [P1][depends:2.1][I: 4 个 platform job 的 GHA cache 配额][O: 监控第一次 release run 的 sccache 写 cache 体积,若 > 5 GB 降级为 `SCCACHE_DIR=$RUNNER_TEMP/sccache`][V: 日志中无 `cache size exceeded` 错误] 监控 sccache 写 cache 体积,超过 GHA 10 GB 上限 50% 时降级。
+- [x] 2.3 [P1][depends:2.1][I: run `29515796712` 的 4 个 platform job][O: 日志无 cache quota / `cache size exceeded` error；sccache 实际 compile/write 近零，因此未触发 >5 GB fallback][V: live run logs] 监控 sccache 写 cache 体积,超过 GHA 10 GB 上限 50% 时降级。
 
 ## 3. OpenSpec Writeback
 
@@ -17,10 +17,10 @@
 
 ## 4. Live Verification And Rollback Safety
 
-- [ ] 4.1 [P0][depends:2.1][I: 一次 `workflow_dispatch` 触发的 release run][O: 记录 x86_64 整 job wall-clock 是否达到 ≤ 18 min(冷启 SLO)/ ≤ 12 min(热缓存 SLO),aarch64 / windows / linux 不退化][V: 实际 run 的 job wall-clock 数据] 触发一次真实 release run 验证 wall-clock 指标。
-- [ ] 4.2 [P0][depends:4.1][I: 4 个 platform job 的 artifact][O: 所有 `*.app.tar.gz` / `.msi` / `.deb` / `.AppImage` 等 artifact 成功上传,体积偏差 < 5%][V: release page artifact 列表 + artifact 大小对比上一次的 run] 验证产物契约未变,artifact 全部成功上传。
+- [x] 4.1 [P0][depends:2.1][I: `workflow_dispatch` run `29515796712`][O: 已记录 x86_64 约 41m44s、aarch64 约 30m11s；SLO **未达成**，该 task 只证明已执行 live verification，不代表优化成功][V: GitHub Actions job timestamps] 触发一次真实 release run 验证 wall-clock 指标。
+- [x] 4.2 [P0][depends:4.1][I: run `29515796712` 四平台 artifacts][O: artifacts 全部上传；相对前一成功 run `29466785734` 体积偏差约 0.11%–1.18%，满足 <5%][V: artifact metadata comparison] 验证产物契约未变,artifact 全部成功上传。
 - [ ] 4.3 [P1][depends:4.1][I: 若 4.1 验收未达 18 min 上限][O: 在 PR 描述中记录 residual risk,并开 follow-up issue 评估 cargo-chef 预热 / 自托管 runner / cross-compile][V: issue 链接 / PR 描述段落] 如未达目标,记录 residual risk 并开 follow-up。
-- [ ] 4.4 [P1][depends:2.1][I: sccache 兼容性 fallback][O: PR 描述包含一段 `if sccache fails on a runner, set the step `if: false` to disable it`][V: PR 描述段落存在] PR 描述中写明 sccache 兼容性 fallback 操作步骤。
+- [x] 4.4 [P1][depends:2.1][I: sccache 兼容性 fallback][O: fallback 已写入 `verification.md`：runner 不兼容时 disable sccache action/environment and retain `rust-cache`][V: change-local verification note] 记录 sccache 兼容性 fallback 操作步骤。
 
 ## 5. Archive Gate
 

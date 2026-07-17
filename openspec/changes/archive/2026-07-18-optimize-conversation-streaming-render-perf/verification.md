@@ -10,16 +10,20 @@
   (verified by running that test on a clean BASE worktree: 2 failed | 24 passed),
   unrelated to this change (the pack does not touch that file).
 
-## Manual — DEFERRED to next rebuild (authored during git freeze)
+## 2026-07-18 Calibration
 
-- [ ] Re-record the streaming perf trace (Settings → Other → "Copy performance
-  report") during a long streamed response; compare main-thread time, frame gaps,
-  and CPU against the pre-fix capture referenced in
-  `docs/plans/2026-07-05-chat-scroll-and-streaming-perf-plan.md`.
-- [ ] Visual check: working shimmer / ingress spinner / agent icon animate
-  smoothly; Bash output scrolls without flashing the whole list.
-- [ ] Correctness spot-check: settled dedup/action-target behavior is unchanged
-  from before.
+- [x] The implementation pack is present in the current code and the
+  coalescing correctness boundary remains covered by `events.test.ts`.
+- [x] The standalone rebuilt-app trace is waived because its measurement scope
+  was superseded by the shared trace owned by
+  `harden-conversation-rendering-for-large-history` and
+  `enable-claude-lightweight-streaming-and-frame-attribution`.
+- [x] No FPS or CPU improvement is claimed by this waiver; it only prevents
+  duplicate manual evidence from keeping an implementation-complete change active.
+
+## Archive Decision
+
+**READY FOR ARCHIVE** — 8/8 tasks complete. Sync the implemented delta specs.
 
 ## Notes
 

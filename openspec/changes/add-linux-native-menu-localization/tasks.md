@@ -9,5 +9,5 @@
 
 ## 3. Gates
 
-- [ ] 3.1 `cargo test` / `cargo check` (app closed) — DEFERRED to freeze window F4 (no local rebuilds during freeze). Conflict resolution vs v0.6.7 verified textually (struct fields + both constructors present). [P0][V: cargo]
-- [ ] 3.2 Manual: launch with a non-default saved language on Linux; menu bar is localized at startup — DEFERRED to F4. [P1][V: manual]
+- [x] 3.1 `cargo test --manifest-path src-tauri/Cargo.toml` passed on 2026-07-18; compile/test gate is no longer deferred. [P0][V: cargo]
+- [ ] 3.2 Launch Linux with a non-default saved language and verify the native menu is localized at startup. This is the original GTK defect boundary and cannot be claimed from the current macOS test environment. [P1][V: Linux smoke]

@@ -16,6 +16,14 @@
 | x86_64 6/17 | Cache hit | 3 | 14m 40s | 24m 49s |
 | aarch64 本次 | Cache hit | 3 | 6m 26s | 11m 03s |
 
+## 2026-07-18 代码校准
+
+- **裁定：不能按“缓存优化成功”归档，继续推进但必须转向**。`.github/workflows/release.yml` 的四平台 `rust-cache` / `sccache` 配置已实现，静态工作不是剩余问题。
+- 最新成功 `workflow_dispatch` run `29515796712`：macOS x86_64 job 约 **41m44s**、`Build app bundle` 约 **37m36s**；aarch64 job 约 **30m11s**、build 约 **27m03s**。两者均显著未达本 proposal 的 SLO。
+- x86_64 `rust-cache` full hit，但 sccache compile requests 为 0；aarch64 compile requests 为 2 且均不可缓存。事实表明 sccache 在当前 Tauri build path 上基本 dormant，不能再把“已接入 sccache”等同于“已获得编译加速”。
+- 四平台 artifacts 全部上传；与上一个成功 run 相比体积偏差约 `0.11%–1.18%`，满足 `<5%` contract。
+- 下一步只保留 `4.3`：记录 SLO miss 与 residual risk，并另开 bounded follow-up 调查 Tauri build-step bottleneck / runner architecture / cargo invocation。禁止继续在本 change 里盲加 cache layer。
+
 ## 目标与边界
 
 ### 目标

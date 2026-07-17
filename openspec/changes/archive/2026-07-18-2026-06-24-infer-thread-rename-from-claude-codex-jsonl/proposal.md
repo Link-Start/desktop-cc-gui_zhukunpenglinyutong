@@ -1,5 +1,13 @@
 # Change: 2026-06-24-infer-thread-rename-from-claude-codex-jsonl
 
+## 2026-07-18 代码校准
+
+- **裁定：未实现、非当前主线，建议按 no-value / stale backlog 强制归档且不同步 delta specs**。
+- 当前代码中不存在 `cli_rename_alias` / `cliRenameAlias` 或对应 Claude/Codex extractor；`0/31` 是真实进度，不是漏勾任务。
+- 该能力属于标题 fallback 的便利性增强，不是 session correctness / data safety gate；同时 proposal 内关于 OpenCode/Gemini 的分支假设已被后续 soft-retirement 方向改变。
+- 保留 31 项旧任务会制造虚假“实施中”信号。若真实用户反馈重新证明价值，应基于当时的 catalog shape 新建 bounded change，仅覆盖 Claude/Codex extractor、catalog field 与 precedence tests。
+- 本 change 归档不得把未实现 delta specs 同步到 main specs。
+
 ## Why
 
 用户经常在 Claude Code / Codex CLI 内通过 `/rename` 给会话取一个有意义的标题,但回到 ccgui 侧栏时看到的还是 JSONL 第一条 user message 的截断文本(或 `<command-name>/rename</command-name>` 的残片),找会话不方便。ccgui 已经维护自己的一套 custom name / mappedTitle 持久化,但它与 CLI 的事实源(jsonl)是隔离的——CLI rename 后 ccgui 不知道。

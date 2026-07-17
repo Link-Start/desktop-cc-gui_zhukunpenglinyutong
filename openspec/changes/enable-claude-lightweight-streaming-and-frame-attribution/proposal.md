@@ -4,6 +4,13 @@
 
 同时,现有监控(react-scan + renderer diagnostics)在打包版(WKWebView)拿不到 per-render 计时,也没有 rAF 掉帧检测、掉帧上下文快照与一键导出,用户能看到掉帧却无法定位与反馈。
 
+## 2026-07-18 代码校准
+
+- **裁定：继续推进，但只保留共享性能验收**。Claude staged streaming、稳定 render callback、rAF/longtask attribution、`topRenders`、runtime diagnostics toggle 与报告导出均已实现。
+- **代码事实源**：`messagesStreamingComplexity.ts`、`MessagesRows.tsx`、`Messages.tsx`、`services/perfBaseline/*`、`rendererDiagnostics` 与 `OtherSection`。
+- 原 proposal 中 “FPS 6 → 30–50+” 是历史目标，不是当前事实。归档前必须以新构建重新测量，不得把目标数写成已达成结论。
+- `4.4/4.5` 与 `harden-conversation-rendering-for-large-history` 的 heavy-history trace 合并执行；一次 trace 同时验证 Claude streaming frame attribution、final full-fidelity convergence 与 large-history interaction budget。
+
 ## What Changes
 
 - 把"流式轻量 markdown 渲染"的启用判定与 `activeEngine === 'codex'` 解耦:新增单点 helper `shouldUseStagedStreamingMarkdown`,对 codex 与 claude 启用,opencode 及其它引擎保持不变(除非 presentationProfile 显式开启)。Claude 流式达到 medium / structured-heavy 复杂度即走 lightweight + progressiveReveal,定稿(isStreaming=false)切回 full;并连带启用 staged streaming throttle 对长内容降频。

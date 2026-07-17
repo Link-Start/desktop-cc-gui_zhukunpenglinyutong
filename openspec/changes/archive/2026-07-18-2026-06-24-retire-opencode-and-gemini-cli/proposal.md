@@ -1,5 +1,13 @@
 # Proposal: 客户端下线 OpenCode / Gemini CLI 引擎 (retire-opencode-and-gemini-cli)
 
+## 2026-07-18 代码校准（覆盖旧执行口径）
+
+- **裁定：原 v0.5.14 hard-delete 方案已过期，建议强制归档且不同步 delta specs**。当前版本为 `0.7.5`，旧文档后续 R1–R4 的逐文件删除清单不再是可执行计划。
+- 当前代码仍保留 `EngineType::Gemini` / `EngineType::OpenCode`、session catalog compatibility、Rust adapters 与 `src/features/opencode/**`；因此本 change 声称的“双引擎 hard removal”没有实现，相关 delta spec 不能同步到 main specs。
+- 已实现的是 **soft retirement / frontdoor removal**：主要 provider/settings 与部分 Git/MCP/Skills UI 不再向用户暴露 Gemini/OpenCode；legacy runtime/history compatibility 仍被有意保留。
+- 继续执行旧 48-task hard-delete 会破坏现有 compatibility contract，且没有新的 binary-size、maintenance-cost 或 support-policy 证据支撑。旧清单保留为 audit trail，但从本节起标记为 **SUPERSEDED / DO NOT EXECUTE**。
+- 若未来决定彻底删除，应新建小型、按 capability 分片的 change，并先明确 legacy session 可读性、配置迁移和 rollback policy；不得复活本 change。
+
 ## R3 当前裁定 (2026-06-25 proposal check)
 
 本段是当前执行口径,优先级高于下方 R1/R2 的旧审计段:
