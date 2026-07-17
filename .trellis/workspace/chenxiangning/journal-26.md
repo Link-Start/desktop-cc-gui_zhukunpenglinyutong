@@ -71,3 +71,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1028: 校准并归档旧 OpenSpec 提案
+
+**Date**: 2026-07-18
+**Task**: 校准并归档旧 OpenSpec 提案
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+以当前代码为事实源校准 10 个旧提案；用自动化证据关闭可替代的人工 gate；同步 4 个已实现 change 的 main specs，强制归档 2 个失效或无当前价值的 change；active change 收敛至 4 个。验证包含 OpenSpec 410/410、Rust 全量测试、frontend lint/typecheck 与 sidebar focused tests。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `01edb4bb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
