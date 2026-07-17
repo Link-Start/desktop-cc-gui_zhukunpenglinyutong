@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-26.md`
-- **Total Sessions**: 1030
+- **Total Sessions**: 1031
 - **Last Active**: 2026-07-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-26.md` | ~172 | Active |
+| `journal-26.md` | ~205 | Active |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
@@ -54,6 +54,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1031 | 2026-07-18 | 同步并归档 Git Graph 菜单规范 | `1edc4bfa` | `feature/v-0.7.4` |
 | 1030 | 2026-07-18 | 统一 Git Graph 菜单入口 | `745a472e` | `feature/v-0.7.4` |
 | 1029 | 2026-07-18 | 归档性能提案并同步主规范 | `1b3418425e3fb7d4aa40f23332c9b55c2b565924` | `feature/v-0.7.4` |
 | 1028 | 2026-07-18 | 校准并归档旧 OpenSpec 提案 | `01edb4bb` | `feature/v-0.7.4` |

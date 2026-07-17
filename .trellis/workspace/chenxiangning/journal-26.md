@@ -170,3 +170,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1031: 同步并归档 Git Graph 菜单规范
+
+**Date**: 2026-07-18
+**Task**: 同步并归档 Git Graph 菜单规范
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+将 Git Graph 菜单行为 delta spec 智能合并到 git-panel-diff-view 主规范，修正旧 Hub action 契约冲突，并归档 refine-git-graph-menu-entry；OpenSpec strict validation 408/408 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1edc4bfa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
