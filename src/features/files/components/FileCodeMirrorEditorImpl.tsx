@@ -73,6 +73,28 @@ export type FileCodeMirrorEditorProps = {
   editable?: boolean;
 };
 
+export function focusEditorViewAtLocation(
+  view: EditorView,
+  line: number,
+  column: number,
+  scrollPosition: "nearest" | "center" = "nearest",
+): boolean {
+  if (line < 1 || line > view.state.doc.lines) {
+    return false;
+  }
+  const lineInfo = view.state.doc.line(line);
+  const safeColumn = Math.max(1, Math.min(column, lineInfo.length + 1));
+  const anchor = lineInfo.from + safeColumn - 1;
+  view.dispatch({
+    selection: { anchor },
+    effects: EditorView.scrollIntoView(anchor, {
+      y: scrollPosition === "center" ? "center" : "nearest",
+    }),
+  });
+  view.focus();
+  return true;
+}
+
 export type FileCodeMirrorLineGap = {
   lineNumber: number;
   count: number;
@@ -649,6 +671,12 @@ export const FileCodeMirrorEditorImpl = forwardRef<
       }
       view.focus();
       return true;
+    },
+    focusLocation(line, column, scrollPosition = "nearest") {
+      const view = codeMirrorRef.current?.view;
+      return view
+        ? focusEditorViewAtLocation(view, line, column, scrollPosition)
+        : false;
     },
     flashNavigationLine(line) {
       const view = codeMirrorRef.current?.view;

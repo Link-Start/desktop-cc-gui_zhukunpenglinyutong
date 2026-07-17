@@ -4,6 +4,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import type {
   Dispatch,
@@ -15,11 +16,18 @@ import { useComposerInsert } from "../features/app/hooks/useComposerInsert";
 import { loadHistoryWithImportance } from "../features/composer/hooks/useInputHistoryStore";
 import type { HistoryItem } from "../features/composer/hooks/useInputHistoryStore";
 import type { KanbanTask } from "../features/kanban/types";
+import {
+  readProjectMapRelationships,
+  scanProjectMapRelationships,
+} from "../features/project-map/services/projectMapPersistence";
+import { normalizeProjectMapRelationshipDashboardData } from "../features/project-map/utils/relationshipDashboardModel";
 import { useUnifiedSearch } from "../features/search/hooks/useUnifiedSearch";
 import type {
   SearchContentFilter,
+  SearchApiHydrationStatus,
   SearchFileHydrationStatus,
   SearchScope,
+  WorkspaceSearchApiSnapshot,
   WorkspaceSearchFileSnapshot,
 } from "../features/search/types";
 import { useWorkspaceSessionActivity } from "../features/session-activity/hooks/useWorkspaceSessionActivity";
@@ -263,6 +271,14 @@ export function useAppShellSearchRadarSection({
   const globalSearchFilesByWorkspaceRef = useRef(globalSearchFilesByWorkspace);
   globalSearchFilesByWorkspaceRef.current = globalSearchFilesByWorkspace;
   const attemptedSearchFileHydrationWorkspaceIdsRef = useRef(new Set<string>());
+  const [apiSnapshotsByWorkspace, setApiSnapshotsByWorkspace] = useState<
+    Record<string, WorkspaceSearchApiSnapshot>
+  >({});
+  const apiSnapshotsByWorkspaceRef = useRef(apiSnapshotsByWorkspace);
+  apiSnapshotsByWorkspaceRef.current = apiSnapshotsByWorkspace;
+  const apiHydrationInFlightByWorkspaceRef = useRef(
+    new Map<string, Promise<import("../features/project-map/types").ProjectMapApiEndpoint[]>>(),
+  );
   const backgroundRenderGatingEnabled = isBackgroundRenderGatingEnabled();
   const deferredThreadItemsByThreadValue =
     useDeferredValue(threadItemsByThread);
@@ -535,6 +551,154 @@ export function useAppShellSearchRadarSection({
     workspaces,
   ]);
 
+  useEffect(() => {
+    if (!isSearchPaletteOpen) return;
+    const includesApis =
+      searchContentFilters.includes("all") ||
+      searchContentFilters.includes("apis");
+    if (!includesApis) return;
+    const targetWorkspaceIds =
+      searchScope === "global"
+        ? workspaces.map((workspace) => workspace.id)
+        : activeWorkspaceId
+          ? [activeWorkspaceId]
+          : [];
+    const workspaceIdsToHydrate = targetWorkspaceIds.filter(
+      (workspaceId) =>
+        apiSnapshotsByWorkspaceRef.current[workspaceId]?.status !== "complete",
+    );
+    const queue =
+      activeWorkspaceId && workspaceIdsToHydrate.includes(activeWorkspaceId)
+        ? [
+            activeWorkspaceId,
+            ...workspaceIdsToHydrate.filter(
+              (workspaceId) => workspaceId !== activeWorkspaceId,
+            ),
+          ]
+        : workspaceIdsToHydrate;
+    if (queue.length > 0) {
+      setApiSnapshotsByWorkspace((current) => {
+        const next = { ...current };
+        for (const workspaceId of queue) {
+          next[workspaceId] = {
+            endpoints: current[workspaceId]?.endpoints ?? [],
+            status: "loading",
+            error: null,
+          };
+        }
+        return next;
+      });
+    }
+    let cancelled = false;
+    const refreshEndpoints = (workspaceId: string) => {
+      const inFlight =
+        apiHydrationInFlightByWorkspaceRef.current.get(workspaceId);
+      if (inFlight) return inFlight;
+      const request = (async () => {
+        await scanProjectMapRelationships({ workspaceId });
+        const refreshed = await readProjectMapRelationships({ workspaceId });
+        return (
+          normalizeProjectMapRelationshipDashboardData(refreshed)
+            .apiContracts?.endpoints ?? []
+        );
+      })();
+      apiHydrationInFlightByWorkspaceRef.current.set(workspaceId, request);
+      const clearCompletedRequest = () => {
+        if (
+          apiHydrationInFlightByWorkspaceRef.current.get(workspaceId) ===
+          request
+        ) {
+          apiHydrationInFlightByWorkspaceRef.current.delete(workspaceId);
+        }
+      };
+      void request.then(clearCompletedRequest, clearCompletedRequest);
+      return request;
+    };
+    const hydrate = async (workspaceId: string) => {
+      try {
+        const response = await readProjectMapRelationships({ workspaceId });
+        const dashboard =
+          normalizeProjectMapRelationshipDashboardData(response);
+        const graph = dashboard.apiContracts;
+        if (graph && dashboard.staleSummary?.isFresh === false && !cancelled) {
+          setApiSnapshotsByWorkspace((current) => ({
+            ...current,
+            [workspaceId]: {
+              endpoints: graph?.endpoints ?? [],
+              status: "refreshing",
+              error: null,
+            },
+          }));
+        }
+        if (!graph || dashboard.staleSummary?.isFresh === false) {
+          const endpoints = await refreshEndpoints(workspaceId);
+          if (!cancelled) {
+            setApiSnapshotsByWorkspace((current) => ({
+              ...current,
+              [workspaceId]: {
+                endpoints,
+                status: "complete",
+                error: null,
+              },
+            }));
+          }
+          return;
+        }
+        if (!cancelled) {
+          setApiSnapshotsByWorkspace((current) => ({
+            ...current,
+            [workspaceId]: {
+              endpoints: graph?.endpoints ?? [],
+              status: "complete",
+              error: null,
+            },
+          }));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setApiSnapshotsByWorkspace((current) => ({
+            ...current,
+            [workspaceId]: {
+              endpoints: current[workspaceId]?.endpoints ?? [],
+              status: "error",
+              error: error instanceof Error ? error.message : String(error),
+            },
+          }));
+        }
+      }
+    };
+    void (async () => {
+      while (!cancelled && queue.length > 0) {
+        const workspaceId = queue.shift();
+        if (workspaceId) await hydrate(workspaceId);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeWorkspaceId,
+    isSearchPaletteOpen,
+    searchContentFilters,
+    searchScope,
+    workspaces,
+  ]);
+
+  const apiSearchSources = useMemo(
+    () =>
+      (searchScope === "global"
+        ? workspaces
+        : activeWorkspace
+          ? [activeWorkspace]
+          : []
+      ).map((workspace) => ({
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
+        endpoints: apiSnapshotsByWorkspace[workspace.id]?.endpoints ?? [],
+      })),
+    [activeWorkspace, apiSnapshotsByWorkspace, searchScope, workspaces],
+  );
+
   const workspaceSearchSources = useMemo(() => {
     if (searchScope === "global") {
       return workspaces.map((workspace) => ({
@@ -613,6 +777,40 @@ export function useAppShellSearchRadarSection({
     searchScope,
     workspaces,
   ]);
+  const searchApiHydrationStatus = useMemo<SearchApiHydrationStatus>(() => {
+    const includesApis =
+      searchContentFilters.includes("all") ||
+      searchContentFilters.includes("apis");
+    if (!isSearchPaletteOpen || !includesApis) return "idle";
+    const targetWorkspaceIds =
+      searchScope === "global"
+        ? workspaces.map((workspace) => workspace.id)
+        : activeWorkspaceId
+          ? [activeWorkspaceId]
+          : [];
+    if (targetWorkspaceIds.length === 0) return "idle";
+    const statuses = targetWorkspaceIds.map(
+      (workspaceId) => apiSnapshotsByWorkspace[workspaceId]?.status,
+    );
+    const hasSearchableEndpoints = targetWorkspaceIds.some(
+      (workspaceId) =>
+        (apiSnapshotsByWorkspace[workspaceId]?.endpoints.length ?? 0) > 0,
+    );
+    if (statuses.some((status) => !status || status === "loading")) {
+      return hasSearchableEndpoints ? "refreshing" : "loading";
+    }
+    if (statuses.some((status) => status === "refreshing")) return "refreshing";
+    if (statuses.some((status) => status === "error")) return "error";
+    return "complete";
+  }, [
+    activeWorkspaceId,
+    apiSnapshotsByWorkspace,
+    isSearchPaletteOpen,
+    searchContentFilters,
+    searchScope,
+    workspaces,
+  ]);
+
   const scopedKanbanTasks = useMemo(
     () => (searchScope === "global" ? kanbanTasks : activeWorkspaceKanbanTasks),
     [activeWorkspaceKanbanTasks, kanbanTasks, searchScope],
@@ -635,6 +833,7 @@ export function useAppShellSearchRadarSection({
     historyItems: historySearchItems,
     skills,
     commands,
+    apiSources: apiSearchSources,
     activeWorkspaceId,
     workspaceNameByPath,
   });
@@ -804,6 +1003,7 @@ export function useAppShellSearchRadarSection({
     RECENT_THREAD_LIMIT,
     recentThreads,
     scopedKanbanTasks,
+    searchApiHydrationStatus,
     searchFileHydrationStatus,
     searchResults,
     sessionRadarFeed,

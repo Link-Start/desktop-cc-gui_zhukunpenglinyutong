@@ -395,5 +395,63 @@ describe("SearchPalette", () => {
     expect(screen.getByText("App.tsx")).toBeTruthy();
   });
 
+  it("distinguishes API disk indexing from a confirmed empty result", () => {
+    render(
+      <SearchPalette
+        isOpen
+        scope="active-workspace"
+        contentFilters={["apis"]}
+        query="/users"
+        results={[]}
+        apiHydrationStatus="loading"
+        selectedIndex={0}
+        onQueryChange={() => undefined}
+        onMoveSelection={() => undefined}
+        onSelect={() => undefined}
+        onScopeChange={() => undefined}
+        onContentFilterToggle={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
 
+    expect(
+      screen.getAllByText("searchPalette.apiIndexLoading").length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("searchPalette.noResults")).toBeNull();
+  });
+
+  it("keeps cached API results visible while the index refreshes", () => {
+    render(
+      <SearchPalette
+        isOpen
+        scope="global"
+        contentFilters={["apis"]}
+        query="/api/mobile/pd-sub/v1/plan/product"
+        results={[{
+          id: "api:w-1:product-page",
+          kind: "api",
+          title: "POST /api/mobile/pd-sub/v1/plan/product/page",
+          score: 100,
+          workspaceId: "w-1",
+          sourceKind: "apis",
+          apiEndpointId: "product-page",
+          filePath: "src/ProductController.java",
+        }]}
+        apiHydrationStatus="refreshing"
+        selectedIndex={0}
+        onQueryChange={() => undefined}
+        onMoveSelection={() => undefined}
+        onSelect={() => undefined}
+        onScopeChange={() => undefined}
+        onContentFilterToggle={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("searchPalette.apiIndexRefreshing")).toBeTruthy();
+    expect(
+      screen.getByText("POST /api/mobile/pd-sub/v1/plan/product/page"),
+    ).toBeTruthy();
+    expect(screen.queryByText("searchPalette.apiIndexLoading")).toBeNull();
+  });
 });

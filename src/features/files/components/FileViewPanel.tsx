@@ -166,6 +166,7 @@ type FileViewPanelProps = {
     path: string;
     line: number;
     column: number;
+    scrollPosition?: "nearest" | "center";
     requestId: number;
   } | null;
   highlightMarkers?: GitLineMarkers | null;

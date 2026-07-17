@@ -96,6 +96,10 @@ function createBoundary(
     setSelectedPullRequest: vi.fn(),
     startThreadForWorkspace: vi.fn(async () => "thread-1"),
     workspacesByPath: new Map([[kanbanWorkspace.path, kanbanWorkspace]]),
+    workspacesById: new Map([
+      [activeWorkspace.id, activeWorkspace],
+      ["workspace-2", { ...activeWorkspace, id: "workspace-2" }],
+    ]),
     ...overrides,
   };
 }
@@ -160,7 +164,7 @@ describe("useAppShellSearchAndComposerSection", () => {
     expect(boundary.setSearchPaletteSelectedIndex).toHaveBeenCalledWith(0);
   });
 
-  it("opens file, thread, kanban, and history search results without domain input", () => {
+  it("opens API, file, thread, kanban, and history search results without domain input", () => {
     const boundary = createBoundary();
     const { result } = renderHook(() =>
       useAppShellSearchAndComposerSection(boundary),
@@ -171,6 +175,25 @@ describe("useAppShellSearchAndComposerSection", () => {
         result.current.handleSelectSearchResult(searchResult);
       });
     };
+
+    openResult({
+      id: "api-result",
+      kind: "api",
+      title: "GET /users",
+      score: 1,
+      workspaceId: "workspace-2",
+      filePath: "src/UserController.java",
+      fileLine: 105,
+      fileColumn: 1,
+    });
+    expect(boundary.selectWorkspace).toHaveBeenCalledWith("workspace-2");
+    expect(boundary.handleOpenFile).toHaveBeenCalledWith(
+      "src/UserController.java",
+      { line: 105, column: 1, scrollPosition: "center" },
+      {
+        targetWorkspace: expect.objectContaining({ id: "workspace-2" }),
+      },
+    );
 
     openResult({
       id: "file-result",

@@ -10,6 +10,8 @@ const prewarmSessionRadarForWorkspaceMock = vi.hoisted(() => vi.fn());
 const useUnifiedSearchMock = vi.hoisted(() => vi.fn(() => []));
 const isBackgroundRenderGatingEnabledMock = vi.hoisted(() => vi.fn(() => true));
 const getWorkspaceFilesMock = vi.hoisted(() => vi.fn());
+const readProjectMapRelationshipsMock = vi.hoisted(() => vi.fn());
+const scanProjectMapRelationshipsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../features/app/hooks/useComposerInsert", () => ({
   useComposerInsert: vi.fn(() => vi.fn()),
@@ -23,7 +25,20 @@ vi.mock("../features/search/hooks/useUnifiedSearch", () => ({
   useUnifiedSearch: useUnifiedSearchMock,
 }));
 
+vi.mock("../features/project-map/services/projectMapPersistence", () => ({
+  readProjectMapRelationships: readProjectMapRelationshipsMock,
+  scanProjectMapRelationships: scanProjectMapRelationshipsMock,
+}));
 
+vi.mock("../features/project-map/utils/relationshipDashboardModel", () => ({
+  normalizeProjectMapRelationshipDashboardData: (response: {
+    apiContracts?: unknown;
+    staleSummary?: unknown;
+  }) => ({
+    apiContracts: response.apiContracts ?? null,
+    staleSummary: response.staleSummary ?? null,
+  }),
+}));
 
 vi.mock("../features/threads/utils/realtimePerfFlags", () => ({
   isBackgroundRenderGatingEnabled: isBackgroundRenderGatingEnabledMock,
@@ -144,6 +159,10 @@ describe("useAppShellSearchRadarSection", () => {
       gitignored_directories: [],
       scan_state: "complete",
     });
+    readProjectMapRelationshipsMock.mockReset();
+    scanProjectMapRelationshipsMock.mockReset();
+    readProjectMapRelationshipsMock.mockResolvedValue({ apiContracts: null });
+    scanProjectMapRelationshipsMock.mockResolvedValue({});
   });
 
   it("keeps recent thread titles aligned with sidebar thread summaries", () => {
@@ -493,5 +512,283 @@ describe("useAppShellSearchRadarSection", () => {
     expect(getWorkspaceFilesMock).toHaveBeenCalledTimes(2);
   });
 
+  it("scans disk when the API cache is missing and then publishes endpoints", async () => {
+    const apiEndpoint = {
+      id: "http:get:/users",
+      protocol: "http",
+      language: "java",
+      method: "GET",
+      path: "/users",
+      sourceFile: "src/UserController.java",
+      parameters: [],
+      responses: [],
+      groupIds: [],
+      callChainIds: [],
+      confidence: "high",
+      evidence: [],
+    };
+    readProjectMapRelationshipsMock
+      .mockResolvedValueOnce({ apiContracts: null })
+      .mockResolvedValueOnce({
+        apiContracts: { endpoints: [apiEndpoint] },
+        staleSummary: { isFresh: true },
+      });
+    const options = createSearchRadarOptions({
+      searchContentFilters: ["apis"],
+      searchPaletteQuery: "/users",
+    });
 
+    const { result } = renderHook(() =>
+      useAppShellSearchRadarSection(options),
+    );
+
+    expect(result.current.searchApiHydrationStatus).toBe("loading");
+    await waitFor(() => {
+      expect(result.current.searchApiHydrationStatus).toBe("complete");
+    });
+    expect(scanProjectMapRelationshipsMock).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+    });
+    expect(useUnifiedSearchMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        apiSources: [
+          expect.objectContaining({
+            workspaceId: "ws-1",
+            endpoints: [apiEndpoint],
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("uses a fresh API cache without scanning disk", async () => {
+    const apiEndpoint = {
+      id: "cached-endpoint",
+      protocol: "graphql",
+      language: "typescript",
+      operationName: "cachedQuery",
+      sourceFile: "src/schema.ts",
+      parameters: [],
+      responses: [],
+      groupIds: [],
+      callChainIds: [],
+      confidence: "high",
+      evidence: [],
+    };
+    readProjectMapRelationshipsMock.mockResolvedValue({
+      apiContracts: { endpoints: [apiEndpoint] },
+      staleSummary: { isFresh: true },
+    });
+
+    const options = createSearchRadarOptions({
+      searchContentFilters: ["apis"],
+      searchPaletteQuery: "cachedQuery",
+    });
+    const { result } = renderHook(() =>
+      useAppShellSearchRadarSection(options),
+    );
+
+    await waitFor(() => {
+      expect(result.current.searchApiHydrationStatus).toBe("complete");
+    });
+    expect(scanProjectMapRelationshipsMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps stale API endpoints searchable while refreshing them", async () => {
+    const staleEndpoint = {
+      id: "stale-endpoint",
+      protocol: "http",
+      language: "java",
+      method: "GET",
+      path: "/stale",
+      sourceFile: "src/StaleController.java",
+      parameters: [],
+      responses: [],
+      groupIds: [],
+      callChainIds: [],
+      confidence: "medium",
+      evidence: [],
+    };
+    const freshEndpoint = { ...staleEndpoint, id: "fresh-endpoint", path: "/fresh" };
+    let resolveScan: (() => void) | undefined;
+    scanProjectMapRelationshipsMock.mockImplementation(
+      () => new Promise<void>((resolve) => {
+        resolveScan = resolve;
+      }),
+    );
+    readProjectMapRelationshipsMock
+      .mockResolvedValueOnce({
+        apiContracts: { endpoints: [staleEndpoint] },
+        staleSummary: { isFresh: false },
+      })
+      .mockResolvedValueOnce({
+        apiContracts: { endpoints: [freshEndpoint] },
+        staleSummary: { isFresh: true },
+      });
+
+    const options = createSearchRadarOptions({
+      searchContentFilters: ["apis"],
+      searchPaletteQuery: "/stale",
+    });
+    const { result } = renderHook(() =>
+      useAppShellSearchRadarSection(options),
+    );
+
+    await waitFor(() => {
+      expect(useUnifiedSearchMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          apiSources: [
+            expect.objectContaining({ endpoints: [staleEndpoint] }),
+          ],
+        }),
+      );
+    });
+    expect(result.current.searchApiHydrationStatus).toBe("refreshing");
+    resolveScan?.();
+    await waitFor(() => {
+      expect(result.current.searchApiHydrationStatus).toBe("complete");
+      expect(useUnifiedSearchMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          apiSources: [
+            expect.objectContaining({ endpoints: [freshEndpoint] }),
+          ],
+        }),
+      );
+    });
+  });
+
+  it("reuses an in-flight API scan after the palette closes and reopens", async () => {
+    const refreshedEndpoint = {
+      id: "refreshed-endpoint",
+      protocol: "http",
+      language: "java",
+      method: "DELETE",
+      path: "/api/web/bs-cs/v1/faq/{id}",
+      sourceFile: "src/FaqController.java",
+      parameters: [],
+      responses: [],
+      groupIds: [],
+      callChainIds: [],
+      confidence: "high",
+      evidence: [],
+    };
+    let resolveScan: (() => void) | undefined;
+    scanProjectMapRelationshipsMock.mockImplementation(
+      () => new Promise<void>((resolve) => {
+        resolveScan = resolve;
+      }),
+    );
+    readProjectMapRelationshipsMock
+      .mockResolvedValueOnce({ apiContracts: null })
+      .mockResolvedValueOnce({ apiContracts: null })
+      .mockResolvedValueOnce({
+        apiContracts: { endpoints: [refreshedEndpoint] },
+        staleSummary: { isFresh: true },
+      });
+    const options = createSearchRadarOptions({
+      searchContentFilters: ["apis"],
+      searchPaletteQuery: "/api/web/bs-cs/v1/faq",
+    });
+    const { result, rerender } = renderHook(
+      ({ isOpen }) =>
+        useAppShellSearchRadarSection({
+          ...options,
+          isSearchPaletteOpen: isOpen,
+        }),
+      { initialProps: { isOpen: true } },
+    );
+
+    await waitFor(() => {
+      expect(scanProjectMapRelationshipsMock).toHaveBeenCalledTimes(1);
+    });
+    rerender({ isOpen: false });
+    rerender({ isOpen: true });
+    await waitFor(() => {
+      expect(readProjectMapRelationshipsMock).toHaveBeenCalledTimes(2);
+    });
+    expect(scanProjectMapRelationshipsMock).toHaveBeenCalledTimes(1);
+
+    resolveScan?.();
+    await waitFor(() => {
+      expect(result.current.searchApiHydrationStatus).toBe("complete");
+      expect(useUnifiedSearchMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          apiSources: [
+            expect.objectContaining({ endpoints: [refreshedEndpoint] }),
+          ],
+        }),
+      );
+    });
+  });
+
+  it("does not block global API search when one workspace already has cached endpoints", async () => {
+    const cachedEndpoint = {
+      id: "cached-product-endpoint",
+      protocol: "http",
+      language: "java",
+      method: "POST",
+      path: "/api/mobile/pd-sub/v1/plan/product/page",
+      sourceFile: "src/ProductController.java",
+      parameters: [],
+      responses: [],
+      groupIds: [],
+      callChainIds: [],
+      confidence: "high",
+      evidence: [],
+    };
+    readProjectMapRelationshipsMock
+      .mockResolvedValueOnce({
+        apiContracts: { endpoints: [cachedEndpoint] },
+        staleSummary: { isFresh: false },
+      })
+      .mockResolvedValueOnce({ apiContracts: null });
+    scanProjectMapRelationshipsMock.mockImplementation(
+      () => new Promise<void>(() => undefined),
+    );
+    const options = createSearchRadarOptions({
+      workspaces: [
+        createWorkspace("ws-1", "mall-v2"),
+        createWorkspace("ws-2", "other"),
+      ],
+      searchScope: "global",
+      searchContentFilters: ["apis"],
+      searchPaletteQuery: "/api/mobile/pd-sub/v1/plan/product",
+    });
+
+    const { result } = renderHook(() =>
+      useAppShellSearchRadarSection(options),
+    );
+
+    await waitFor(() => {
+      expect(result.current.searchApiHydrationStatus).toBe("refreshing");
+      expect(useUnifiedSearchMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          apiSources: expect.arrayContaining([
+            expect.objectContaining({
+              workspaceId: "ws-1",
+              endpoints: [cachedEndpoint],
+            }),
+          ]),
+        }),
+      );
+    });
+  });
+
+  it("exposes API scan errors without starting file hydration", async () => {
+    readProjectMapRelationshipsMock.mockResolvedValue({ apiContracts: null });
+    scanProjectMapRelationshipsMock.mockRejectedValue(new Error("API scan failed"));
+
+    const options = createSearchRadarOptions({
+      searchContentFilters: ["apis"],
+      searchPaletteQuery: "/users",
+    });
+    const { result } = renderHook(() =>
+      useAppShellSearchRadarSection(options),
+    );
+
+    await waitFor(() => {
+      expect(result.current.searchApiHydrationStatus).toBe("error");
+    });
+    expect(getWorkspaceFilesMock).not.toHaveBeenCalled();
+  });
 });

@@ -102,6 +102,8 @@ export function providerIdToKind(provider: string): SearchResultKind | null {
   switch (provider) {
     case "files":
       return "file";
+    case "apis":
+      return "api";
     case "threads":
       return "thread";
     case "messages":

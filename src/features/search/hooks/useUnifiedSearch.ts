@@ -19,6 +19,10 @@ import {
   SEARCH_TOTAL_LIMIT,
 } from "../perf/limits";
 import { reportSearchMetrics } from "../perf/searchMetrics";
+import {
+  searchApiEndpoints,
+  type WorkspaceApiSearchSource,
+} from "../providers/apiProvider";
 import { searchCommands } from "../providers/commandsProvider";
 import { searchFiles } from "../providers/filesProvider";
 import { searchHistory } from "../providers/historyProvider";
@@ -51,6 +55,7 @@ type UseUnifiedSearchOptions = {
   historyItems: HistoryItem[];
   skills: SkillOption[];
   commands: CustomCommandOption[];
+  apiSources?: WorkspaceApiSearchSource[];
   activeWorkspaceId?: string | null;
   maxResults?: number;
   workspaceNameByPath?: Map<string, string>;
@@ -102,6 +107,7 @@ export function useUnifiedSearch({
   historyItems,
   skills,
   commands,
+  apiSources = [],
   activeWorkspaceId,
   maxResults = SEARCH_TOTAL_LIMIT,
   workspaceNameByPath,
@@ -144,6 +150,7 @@ export function useUnifiedSearch({
       historyItems,
       skills,
       commands,
+      apiSources,
       activeWorkspaceId,
       maxResults,
       recencyMap,
@@ -163,6 +170,7 @@ export function useUnifiedSearch({
     maxResults,
     contentFilters,
     commands,
+    apiSources,
     skills,
     activeWorkspaceId,
     threadItemsByThread,
@@ -184,6 +192,7 @@ export function computeUnifiedSearchResults({
   historyItems,
   skills,
   commands,
+  apiSources = [],
   activeWorkspaceId,
   maxResults = SEARCH_TOTAL_LIMIT,
   recencyMap,
@@ -254,6 +263,17 @@ export function computeUnifiedSearchResults({
             threads: source.threads,
             threadItemsByThread,
           }),
+      );
+    }
+  }
+
+  if (shouldIncludeSection(contentFilters, "apis")) {
+    for (const source of apiSources) {
+      collectProviderResults(
+        "apis",
+        source.endpoints.length,
+        Math.max(8, Math.floor(SEARCH_PROVIDER_LIMITS.apis / Math.max(apiSources.length, 1))),
+        () => searchApiEndpoints(normalizedQuery, source),
       );
     }
   }

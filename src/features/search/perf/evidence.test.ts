@@ -79,6 +79,7 @@ describe("sumProviderCandidates", () => {
 describe("providerIdToKind", () => {
   it("maps known provider ids to their SearchResultKind", () => {
     expect(providerIdToKind("files")).toBe("file");
+    expect(providerIdToKind("apis")).toBe("api");
     expect(providerIdToKind("threads")).toBe("thread");
     expect(providerIdToKind("messages")).toBe("message");
     expect(providerIdToKind("kanban")).toBe("kanban");

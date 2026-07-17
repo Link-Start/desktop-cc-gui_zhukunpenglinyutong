@@ -6,6 +6,7 @@ import { loadSearchPaletteStyles } from "../../../styles/featureStyleLoaders";
 import { useFeatureStylesReady } from "../../../styles/useFeatureStylesReady";
 import type {
   SearchContentFilter,
+  SearchApiHydrationStatus,
   SearchFileHydrationStatus,
   SearchResult,
   SearchScope,
@@ -16,6 +17,7 @@ const INVISIBLE_QUERY_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g;
 const SEARCH_QUERY_DEBOUNCE_MS = 150;
 const SEARCH_RESULT_KIND_ORDER: SearchResult["kind"][] = [
   "file",
+  "api",
   "kanban",
   "thread",
   "message",
@@ -49,6 +51,7 @@ type SearchPaletteProps = {
   workspaceName?: string | null;
   query: string;
   results: SearchResult[];
+  apiHydrationStatus?: SearchApiHydrationStatus;
   fileHydrationStatus?: SearchFileHydrationStatus;
   selectedIndex: number;
   onQueryChange: (value: string) => void;
@@ -66,6 +69,7 @@ export function SearchPalette({
   workspaceName,
   query,
   results,
+  apiHydrationStatus = "idle",
   fileHydrationStatus = "idle",
   selectedIndex,
   onQueryChange,
@@ -139,6 +143,7 @@ export function SearchPalette({
   }, [isOpen]);
   const badgeLabelByKind: Record<SearchResult["kind"], string> = {
     file: t("searchPalette.typeFile"),
+    api: t("searchPalette.typeApi"),
     kanban: t("searchPalette.typeKanban"),
     thread: t("searchPalette.typeThread"),
     message: t("searchPalette.typeMessage"),
@@ -149,6 +154,7 @@ export function SearchPalette({
 
   const sourceLabelByKind: Record<NonNullable<SearchResult["sourceKind"]>, string> = {
     files: t("searchPalette.sourceFiles"),
+    apis: t("searchPalette.sourceApis"),
     kanban: t("searchPalette.sourceKanban"),
     threads: t("searchPalette.sourceThreads"),
     messages: t("searchPalette.sourceMessages"),
@@ -162,6 +168,7 @@ export function SearchPalette({
   }> = [
     { value: "all", label: t("searchPalette.contentAll") },
     { value: "files", label: t("searchPalette.contentFiles") },
+    { value: "apis", label: t("searchPalette.contentApis") },
     { value: "kanban", label: t("searchPalette.contentKanban") },
     { value: "threads", label: t("searchPalette.contentThreads") },
     { value: "messages", label: t("searchPalette.contentMessages") },
@@ -190,6 +197,15 @@ export function SearchPalette({
         : fileHydrationStatus === "error"
           ? t("searchPalette.fileIndexError")
           : null;
+  const apiHydrationMessage =
+    apiHydrationStatus === "loading"
+      ? t("searchPalette.apiIndexLoading")
+      : apiHydrationStatus === "refreshing"
+        ? t("searchPalette.apiIndexRefreshing")
+      : apiHydrationStatus === "error"
+        ? t("searchPalette.apiIndexError")
+        : null;
+
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -314,10 +330,17 @@ export function SearchPalette({
               {fileHydrationMessage}
             </div>
           ) : null}
+          {shouldShowResults && apiHydrationMessage ? (
+            <div className="search-palette-file-index-status" role="status">
+              {apiHydrationMessage}
+            </div>
+          ) : null}
           {visibleResults.length === 0 ? (
             <div className="search-palette-empty">
               <div className="search-palette-empty-title">
-                {fileHydrationStatus === "loading"
+                {apiHydrationStatus === "loading"
+                  ? t("searchPalette.apiIndexLoading")
+                  : fileHydrationStatus === "loading"
                   ? t("searchPalette.fileIndexLoading")
                   : t("searchPalette.noResults")}
               </div>

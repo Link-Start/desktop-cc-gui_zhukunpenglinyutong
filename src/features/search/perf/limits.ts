@@ -2,6 +2,7 @@ export const SEARCH_DEBOUNCE_MS = 120;
 
 export const SEARCH_PROVIDER_LIMITS = {
   files: 80,
+  apis: 60,
   kanban: 40,
   threads: 40,
   messages: 80,

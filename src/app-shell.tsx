@@ -1237,6 +1237,7 @@ export function AppShell() {
     RECENT_THREAD_LIMIT,
     recentThreads,
     scopedKanbanTasks,
+    searchApiHydrationStatus,
     searchFileHydrationStatus,
     searchResults,
     sessionRadarFeed,
@@ -2100,6 +2101,7 @@ export function AppShell() {
       scanGitRoots,
       scopedKanbanTasks,
       searchContentFilters,
+      searchApiHydrationStatus,
       searchFileHydrationStatus,
       searchPaletteQuery,
       searchPaletteSelectedIndex,
@@ -2363,6 +2365,7 @@ export function AppShell() {
     setSelectedKanbanTaskId,
     setSelectedPullRequest,
     startThreadForWorkspace,
+    workspacesById,
     workspacesByPath,
   });
 

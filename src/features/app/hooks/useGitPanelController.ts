@@ -106,6 +106,7 @@ function readGitDiffListView(workspaceId: string | null | undefined): "flat" | "
 export type EditorNavigationLocation = {
   line: number;
   column: number;
+  scrollPosition?: "nearest" | "center";
 };
 
 export type EditorNavigationTarget = EditorNavigationLocation & {
@@ -136,6 +137,7 @@ export type OpenFileOptions = {
   editorSplitCompanion?: EditorSplitCompanion;
   pathDomain?: "workspace" | "git";
   repositoryRoot?: string | null;
+  targetWorkspace?: WorkspaceInfo | null;
 };
 
 function resolveEditorOpenPath(
@@ -530,14 +532,18 @@ export function useGitPanelController({
       location?: EditorNavigationLocation,
       options?: OpenFileOptions,
     ) => {
+      const targetWorkspace =
+        options?.targetWorkspace ?? activeWorkspaceRef.current;
+      const targetFileTabWorkspaceKey =
+        resolveFileTabWorkspaceKey(targetWorkspace);
       const normalizedPath = resolveEditorOpenPath(
-        activeWorkspaceRef.current,
+        targetWorkspace,
         path,
         options?.pathDomain,
         options?.repositoryRoot,
       );
       setFileTabsByWorkspace((states) =>
-        updateWorkspaceFileTabs(states, fileTabWorkspaceKey, (current) => ({
+        updateWorkspaceFileTabs(states, targetFileTabWorkspaceKey, (current) => ({
           openTabs: current.openTabs.includes(normalizedPath)
             ? current.openTabs
             : [...current.openTabs, normalizedPath],
@@ -562,6 +568,7 @@ export function useGitPanelController({
           path: normalizedPath,
           line: location.line,
           column: location.column,
+          scrollPosition: location.scrollPosition,
           requestId: navigationRequestIdRef.current,
         });
       }
@@ -575,7 +582,6 @@ export function useGitPanelController({
       }
     },
     [
-      fileTabWorkspaceKey,
       isCompact,
       onOpenEditorLayoutRequest,
       setActiveTab,

@@ -1,5 +1,6 @@
 export type SearchResultKind =
   | "file"
+  | "api"
   | "kanban"
   | "thread"
   | "message"
@@ -14,6 +15,17 @@ export type SearchFileHydrationStatus =
   | "complete"
   | "partial"
   | "error";
+export type SearchApiHydrationStatus =
+  | "idle"
+  | "loading"
+  | "refreshing"
+  | "complete"
+  | "error";
+export type WorkspaceSearchApiSnapshot = {
+  endpoints: import("../project-map/types").ProjectMapApiEndpoint[];
+  status: Exclude<SearchApiHydrationStatus, "idle">;
+  error: string | null;
+};
 export type WorkspaceSearchFileSnapshot = {
   files: string[];
   status: "shallow" | Exclude<SearchFileHydrationStatus, "idle">;
@@ -23,6 +35,7 @@ export type WorkspaceSearchFileSnapshot = {
 export type SearchContentFilter =
   | "all"
   | "files"
+  | "apis"
   | "kanban"
   | "threads"
   | "messages"
@@ -43,11 +56,15 @@ export type SearchResult = {
   panelId?: string;
   taskId?: string;
   filePath?: string;
+  fileLine?: number;
+  fileColumn?: number;
   historyText?: string;
   skillName?: string;
   commandName?: string;
+  apiEndpointId?: string;
   sourceKind?:
     | "files"
+    | "apis"
     | "kanban"
     | "threads"
     | "messages"

@@ -246,6 +246,25 @@ describe("useGitPanelController preload behavior", () => {
 });
 
 describe("useGitPanelController editor tabs", () => {
+  it("opens a search result in its explicit target workspace tab state", () => {
+    const { result, rerender } = renderHook(
+      ({ activeWorkspace }) =>
+        useGitPanelController(makeProps({ activeWorkspace })),
+      { initialProps: { activeWorkspace: workspace } },
+    );
+
+    act(() => {
+      result.current.handleOpenFile("src/ApiController.ts", undefined, {
+        targetWorkspace: secondaryWorkspace,
+      });
+    });
+
+    expect(result.current.openFileTabs).toEqual([]);
+    rerender({ activeWorkspace: secondaryWorkspace });
+    expect(result.current.openFileTabs).toEqual(["src/ApiController.ts"]);
+    expect(result.current.activeEditorFilePath).toBe("src/ApiController.ts");
+  });
+
   it("opens multiple files as tabs instead of replacing current file", () => {
     const { result } = renderHook(() => useGitPanelController(makeProps()));
 

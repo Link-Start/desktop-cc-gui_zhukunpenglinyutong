@@ -1,9 +1,10 @@
 /** @vitest-environment jsdom */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import {
   fileGitBlameGutterExtension,
+  focusEditorViewAtLocation,
   isFileGitBlameContextMenuTarget,
   resolveFileCompareLineGapHeight,
   setGitBlameGutterEffect,
@@ -25,6 +26,40 @@ describe("resolveFileCompareLineGapHeight", () => {
   it("does not produce negative widget geometry", () => {
     expect(resolveFileCompareLineGapHeight(-1, 18)).toBe(0);
     expect(resolveFileCompareLineGapHeight(4, -1)).toBe(0);
+  });
+});
+
+describe("focusEditorViewAtLocation", () => {
+  it("centers and focuses a valid endpoint source location", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    editorView = new EditorView({
+      parent,
+      state: EditorState.create({ doc: "first\nsecond\nthird" }),
+    });
+    const scrollIntoView = vi.spyOn(EditorView, "scrollIntoView");
+
+    expect(focusEditorViewAtLocation(editorView, 2, 1, "center")).toBe(true);
+
+    expect(editorView.state.selection.main.head).toBe(
+      editorView.state.doc.line(2).from,
+    );
+    expect(scrollIntoView).toHaveBeenCalledWith(
+      editorView.state.doc.line(2).from,
+      { y: "center" },
+    );
+    expect(editorView.hasFocus).toBe(true);
+  });
+
+  it("rejects an out-of-range source line", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    editorView = new EditorView({
+      parent,
+      state: EditorState.create({ doc: "only" }),
+    });
+
+    expect(focusEditorViewAtLocation(editorView, 105, 1, "center")).toBe(false);
   });
 });
 

@@ -110,7 +110,15 @@ export type SearchPaletteBoundary = {
   exitDiffView: () => void;
   getActiveDraft: () => string;
   handleDraftChange: (draft: string) => void;
-  handleOpenFile: (filePath: string) => void;
+  handleOpenFile: (
+    filePath: string,
+    location?: {
+      line: number;
+      column: number;
+      scrollPosition?: "nearest" | "center";
+    },
+    options?: { targetWorkspace?: WorkspaceInfo | null },
+  ) => void;
   interruptTurn: () => Promise<unknown> | unknown;
   isCompact: boolean;
   isSearchPaletteOpen: boolean;
@@ -133,6 +141,7 @@ export type SearchPaletteBoundary = {
   setSelectedCommitSha: (sha: string | null) => void;
   setSelectedDiffPath: (path: string | null) => void;
   setSelectedPullRequest: (pullRequest: GitHubPullRequest | null) => void;
+  workspacesById: Map<string, WorkspaceInfo>;
 };
 
 export type ComposerSendBoundary = {
@@ -242,6 +251,7 @@ export function useAppShellSearchAndComposerSection(
     setSelectedKanbanTaskId,
     setSelectedPullRequest,
     startThreadForWorkspace,
+    workspacesById,
     workspacesByPath,
   } = input;
 
@@ -319,6 +329,26 @@ export function useAppShellSearchAndComposerSection(
   const handleSelectSearchResult = useCallback(
     (result: SearchResult) => {
       switch (result.kind) {
+        case "api":
+          if (result.workspaceId) {
+            if (result.workspaceId !== activeWorkspaceId) {
+              selectWorkspace(result.workspaceId);
+            }
+          }
+          if (result.filePath) {
+            handleOpenFile(result.filePath, result.fileLine
+              ? {
+                  line: result.fileLine,
+                  column: result.fileColumn ?? 1,
+                  scrollPosition: "center",
+                }
+              : undefined, {
+              targetWorkspace: result.workspaceId
+                ? workspacesById.get(result.workspaceId) ?? null
+                : null,
+            });
+          }
+          break;
         case "file":
           if (result.filePath) {
             handleOpenFile(result.filePath);
@@ -449,6 +479,7 @@ export function useAppShellSearchAndComposerSection(
       isCompact,
       kanbanTasks,
       workspacesByPath,
+      workspacesById,
       selectWorkspace,
       setActiveTab,
       setAppMode,

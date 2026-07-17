@@ -5,6 +5,11 @@ import type { FileCodeMirrorEditorProps } from "./FileCodeMirrorEditorImpl";
 export type FileCodeMirrorEditorHandle = ReactCodeMirrorRef & {
   openFindPanel: () => boolean;
   toggleFindPanel: () => boolean;
+  focusLocation: (
+    line: number,
+    column: number,
+    scrollPosition?: "nearest" | "center",
+  ) => boolean;
   flashNavigationLine: (line: number) => boolean;
   clearNavigationFlash: () => void;
 };

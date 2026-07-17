@@ -703,7 +703,11 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
   const handleOpenWorkspaceFile = useCallback(
     (
       path: string,
-      location?: { line: number; column: number },
+      location?: {
+        line: number;
+        column: number;
+        scrollPosition?: "nearest" | "center";
+      },
       options?: { editorSplitCompanion?: "chat" | "projectMap" },
     ) => {
       markLiveEditPreviewManualNavigation();
