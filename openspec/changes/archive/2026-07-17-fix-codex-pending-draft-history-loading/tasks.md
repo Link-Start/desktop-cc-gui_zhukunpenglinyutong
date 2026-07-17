@@ -6,5 +6,5 @@
 ## 2. Verification
 
 - [x] 2.1 [P0][depends:1.1,1.2][input: touched frontend behavior][output: focused test evidence][verify: Layout、Messages history loading、thread sidebar cache suites pass] 运行 focused tests。
-- [ ] 2.2 [P1][depends:2.1][input: final diff and artifacts][output: type/spec validation evidence][verify: `npm run typecheck` and strict change validation pass] 完成 TypeScript 与 OpenSpec 验证。
-  - Evidence: strict change validation and focused ESLint passed; full typecheck is blocked by pre-existing untracked `src/features/composer/components/ComposerBranchBadge.test.tsx:260` (`toHaveTextContent` matcher typing).
+- [x] 2.2 [P1][depends:2.1][input: final diff and artifacts][output: type/spec validation evidence][verify: `npm run typecheck` and strict change validation pass] 完成 TypeScript 与 OpenSpec 验证。
+  - Evidence: `npm run typecheck` and `openspec validate fix-codex-pending-draft-history-loading --strict --no-interactive` both exited `0` on 2026-07-17.

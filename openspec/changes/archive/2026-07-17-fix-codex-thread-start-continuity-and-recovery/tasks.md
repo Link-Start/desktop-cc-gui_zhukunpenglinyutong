@@ -39,5 +39,7 @@
 - [x] 6.1 User reported the working tree code has already passed tests before this writeback/commit request.
 - [x] 6.2 Run `openspec validate fix-codex-thread-start-continuity-and-recovery --strict --no-interactive`.
 - [x] 6.3 Run `git diff --check`.
-- [ ] 6.4 Commit implementation and OpenSpec writeback.
-- [ ] 6.5 Record Trellis session after commit.
+- [x] 6.4 Commit implementation and OpenSpec writeback.
+  - Evidence: implementation and initial OpenSpec writeback were committed as `a1f2ad06`; the disk-runtime follow-up was committed as `f8a44b19`.
+- [x] 6.5 Record Trellis session after commit.
+  - Evidence: Trellis Session 942 records `a1f2ad06` in `.trellis/workspace/chenxiangning/journal-24.md`; the record commit is `75ac5ed0`.

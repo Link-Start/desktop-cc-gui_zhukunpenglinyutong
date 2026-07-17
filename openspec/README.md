@@ -4,19 +4,21 @@
 
 ## 先看哪里
 
-- 仓库级规则入口：`AGENTS.md`
-- 若正在修改规则入口、文档治理边界或 ignore policy：`.trellis/spec/guides/project-instruction-layering-guide.md`
-- 工作区总览与治理状态：`openspec/project.md`
-- 当前进行中的变更：`openspec/changes/<change-id>/`
-- 主 capability specs：`openspec/specs/`
-- 归档变更：`openspec/changes/archive/`
+- 仓库级规则入口：[`../AGENTS.md`](../AGENTS.md)
+- 若正在修改规则入口、文档治理边界或 ignore policy：[`../.trellis/spec/guides/project-instruction-layering-guide.md`](../.trellis/spec/guides/project-instruction-layering-guide.md)
+- 工作区总览与治理状态：[`project.md`](project.md)
+- 当前提案与执行状态：[`changes/README.md`](changes/README.md)
+- 主 capability specs：[`specs/`](specs/)
+- 完整归档提案索引：[`changes/archive/README.md`](changes/archive/README.md)
 
 ## 目录说明
 
 - `project.md`
   - 详细治理总览、capability metrics、active changes、update history
 - `changes/`
-  - 每个变更的 proposal / design / tasks / spec deltas
+  - 每个变更的 proposal / design / tasks / spec deltas；`README.md` 提供 active proposal 索引
+- `changes/archive/`
+  - 已归档 change artifacts；`README.md` 按月份 / 归档日期索引全部 proposal
 - `specs/`
   - 当前主线 capability 规范
 - `docs/`
@@ -44,3 +46,4 @@ python3 .claude/skills/osp-openspec-sync/scripts/validate-consistency.py --proje
 - 规则分层与“改哪里”的边界说明维护在 `.trellis/spec/guides/project-instruction-layering-guide.md`
 - `openspec/README.md` 只做导航和使用入口
 - 详细治理说明、快照统计、active backlog 与审计历史统一维护在 `openspec/project.md`
+- active / archived proposal 的逐项链接统一维护在 `openspec/changes/README.md` 与 `openspec/changes/archive/README.md`

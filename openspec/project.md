@@ -1,9 +1,9 @@
 # Project Context
 
 - Type: OpenSpec Workspace
-- Updated At: 2026-07-17T22:14:02+08:00
+- Updated At: 2026-07-17T22:57:27+08:00
 - Scope: governance snapshot for the current `mossx` repository workspace
-- Product version fact: `ccgui@0.7.3` from `package.json` and `src-tauri/tauri.conf.json`
+- Product version fact: `ccgui@0.7.5` from `package.json` and `src-tauri/tauri.conf.json`
 
 ## Domain
 
@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: tracked active changes = `15`, archive changes = `626`, main specs = `402`
+- Current workspace state: tracked active changes = `10`, archive changes = `631`, main specs = `403`
 
 ## Entry Surfaces
 
@@ -32,6 +32,10 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
   - concise OpenSpec navigation and common commands
 - `openspec/project.md`
   - detailed governance overview and current workspace snapshot
+- `openspec/changes/README.md`
+  - active proposal index, progress, current closure gates, and links to change-local artifacts
+- `openspec/changes/archive/README.md`
+  - complete proposal index for all archived changes, grouped by month and archive date
 - `openspec/changes/<change-id>/*`
   - change-local truth for proposal, design, tasks, and verification
 - `openspec/specs/*`
@@ -54,34 +58,31 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 ## Current Inventory
 
-- Active changes: `15`
-- Archive changes: `626`
-- Main specs: `402`
+- Active changes: `10`
+- Archive changes: `631`
+- Main specs: `403`
 - Completed task sets still active: `0`
 - Ready-for-implementation task sets: `0`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
 
 ## Active Changes
 
-Active OpenSpec changes after the 2026-07-17 verified closure batch:
+Active OpenSpec changes after the 2026-07-17 near-complete closure batch:
 
-- `add-askuserquestion-default-mode-mcp-bridge` — 10/12; blocked on deferred `cargo test` and manual multi-select queue acceptance.
-- `add-linux-native-menu-localization` — 3/5; blocked on deferred Rust validation and Linux startup localization smoke test.
-- `optimize-conversation-streaming-render-perf` — 7/8; implementation verification passed, but archive remains blocked on rebuilt-app performance trace evidence.
-- `add-claude-runtime-mcp-servers-panel` — 5/6; blocked on manual Claude runtime-server panel QA.
-- `harden-conversation-rendering-for-large-history` — 35/38; blocked on heavy-history manual evidence, performance budget finalization, and human acceptance.
-- `fix-workspace-drop-overlay-leave-settlement` — 6/7; blocked on rebuilt Tauri drag-leave/drop smoke acceptance.
-- `fix-sidebar-radix-presence-version-convergence` — 5/6; blocked on rebuilt production dependency graph cold-start acceptance.
-- `fix-codex-thread-start-continuity-and-recovery` — 24/26; implementation tasks are complete; commit and mandatory Trellis session record remain.
-- `fix-codex-pending-draft-history-loading` — 3/4; blocked on TypeScript and strict OpenSpec validation evidence.
-- `enable-claude-lightweight-streaming-and-frame-attribution` — 15/18; blocked on human FPS/visual fidelity acceptance and final archive.
-- `2026-06-24-retire-opencode-and-gemini-cli` — 4/48; large cross-layer implementation backlog, not an archive candidate.
-- `2026-06-24-infer-thread-rename-from-claude-codex-jsonl` — 0/31; planned implementation backlog, not an archive candidate.
-- `2026-06-22-release-pipeline-cache-sccache` — 7/13; blocked on live release run, artifact, cache-size, and fallback evidence.
-- `fix-sidebar-session-catalog-progressive-loading` — 0/8; documentation-restored backlog covering bounded first-page projection, continuation semantics, stale-result rejection, and large-history evidence.
-- `redesign-workspace-sidebar-session-loading` — 0/11; documentation-restored cross-capability backlog covering staged hydration, per-workspace deduplication, stale-result rejection, and engine-scoped continuity.
+- [`add-askuserquestion-default-mode-mcp-bridge`](changes/add-askuserquestion-default-mode-mcp-bridge/proposal.md) — 10/12; blocked on deferred `cargo test` and manual multi-select queue acceptance.
+- [`add-linux-native-menu-localization`](changes/add-linux-native-menu-localization/proposal.md) — 3/5; blocked on deferred Rust validation and Linux startup localization smoke test.
+- [`optimize-conversation-streaming-render-perf`](changes/optimize-conversation-streaming-render-perf/proposal.md) — 7/8; implementation verification passed, but archive remains blocked on rebuilt-app performance trace evidence.
+- [`harden-conversation-rendering-for-large-history`](changes/harden-conversation-rendering-for-large-history/proposal.md) — 35/38; blocked on heavy-history manual evidence, performance budget finalization, and human acceptance.
+- [`enable-claude-lightweight-streaming-and-frame-attribution`](changes/enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) — 15/18; blocked on human FPS/visual fidelity acceptance and final archive.
+- [`2026-06-24-retire-opencode-and-gemini-cli`](changes/2026-06-24-retire-opencode-and-gemini-cli/proposal.md) — 4/48; large cross-layer implementation backlog, not an archive candidate.
+- [`2026-06-24-infer-thread-rename-from-claude-codex-jsonl`](changes/2026-06-24-infer-thread-rename-from-claude-codex-jsonl/proposal.md) — 0/31; planned implementation backlog, not an archive candidate.
+- [`2026-06-22-release-pipeline-cache-sccache`](changes/2026-06-22-release-pipeline-cache-sccache/proposal.md) — 7/13; blocked on live release run, artifact, cache-size, and fallback evidence.
+- [`fix-sidebar-session-catalog-progressive-loading`](changes/fix-sidebar-session-catalog-progressive-loading/proposal.md) — 0/8; documentation-restored backlog covering bounded first-page projection, continuation semantics, stale-result rejection, and large-history evidence.
+- [`redesign-workspace-sidebar-session-loading`](changes/redesign-workspace-sidebar-session-loading/proposal.md) — 0/11; documentation-restored cross-capability backlog covering staged hydration, per-workspace deduplication, stale-result rejection, and engine-scoped continuity.
 
 Calibration rule: `openspec validate --strict` proves artifact structure only. Implementation verification requires the evidence explicitly named by each change's remaining tasks; no active change is considered verified solely because its schema validates.
+
+Complete active artifact links are maintained in the [`OpenSpec Change Index`](changes/README.md).
 
 ## P1 Performance Execution Order
 
@@ -89,32 +90,46 @@ The previous v0.5.11 performance and recovery follow-up chain has been archived.
 
 ## Recent Archive / Sync Snapshot
 
+### 2026-07-17 Near-Complete Closure Batch With Manual QA Waivers
+
+Archived five near-complete changes after rechecking implementation evidence and strict validation:
+
+- Fully closed by existing or newly rerun evidence:
+  - [`fix-codex-thread-start-continuity-and-recovery`](changes/archive/2026-07-17-fix-codex-thread-start-continuity-and-recovery/proposal.md)
+  - [`fix-codex-pending-draft-history-loading`](changes/archive/2026-07-17-fix-codex-pending-draft-history-loading/proposal.md)
+- Archived with explicit user-authorized manual QA waivers while leaving the manual tasks unchecked:
+  - [`fix-workspace-drop-overlay-leave-settlement`](changes/archive/2026-07-17-fix-workspace-drop-overlay-leave-settlement/proposal.md)
+  - [`fix-sidebar-radix-presence-version-convergence`](changes/archive/2026-07-17-fix-sidebar-radix-presence-version-convergence/proposal.md)
+  - [`add-claude-runtime-mcp-servers-panel`](changes/archive/2026-07-17-add-claude-runtime-mcp-servers-panel/proposal.md)
+
+The batch created `claude-runtime-mcp-servers-panel` and updated six existing main capabilities. The Codex continuity delta required semantic calibration: the runtime-shutdown scenarios were merged into the current `Internal Codex Runtime Shutdown MUST NOT Masquerade As Foreground Turn Loss` requirement, while create-session retry/readiness scenarios were applied to their canonical `codex-stale-thread-binding-recovery` capability. Core performance-trace, performance-budget, Rust-validation, and implementation backlogs remain active. Final counts are active=10, archive=631, specs=403.
+
 ### 2026-07-17 Verified Git And Surface Closure Batch
 
 Archived 22 active changes whose artifacts were complete, task sets were 100% complete, and individual strict OpenSpec validation passed:
 
-- `fix-codex-subagent-sidebar-projection`
-- `fallback-untracked-added-file-empty-inline-diff`
-- `add-turn-file-summary-modal-diff-preview`
-- `fix-large-file-editable-diff-alignment`
-- `unify-git-file-list-and-preview-modal`
-- `align-codex-model-reasoning-capabilities`
-- `add-multi-repository-git-command-center`
-- `stabilize-git-command-center-branch-menu`
-- `fix-multi-repository-file-tree-decorations`
-- `add-multi-repository-git-commit-workspace`
-- `hide-git-history-overview-pane`
-- `add-file-view-git-blame`
-- `fix-multi-repository-file-open-and-blame-scope`
-- `fix-multi-repository-git-preview-density`
-- `restore-multi-repository-discard-action`
-- `fix-global-file-search-hydration`
-- `add-api-endpoint-global-search`
-- `add-git-history-commit-filters`
-- `compact-git-history-changed-file-tree`
-- `refine-git-history-title-layer-frame`
-- `relocate-git-diff-mode-selector-to-right-panel-toolbar`
-- `explain-git-pull-option-effects`
+- [`fix-codex-subagent-sidebar-projection`](changes/archive/2026-07-17-fix-codex-subagent-sidebar-projection/proposal.md)
+- [`fallback-untracked-added-file-empty-inline-diff`](changes/archive/2026-07-17-fallback-untracked-added-file-empty-inline-diff/proposal.md)
+- [`add-turn-file-summary-modal-diff-preview`](changes/archive/2026-07-17-add-turn-file-summary-modal-diff-preview/proposal.md)
+- [`fix-large-file-editable-diff-alignment`](changes/archive/2026-07-17-fix-large-file-editable-diff-alignment/proposal.md)
+- [`unify-git-file-list-and-preview-modal`](changes/archive/2026-07-17-unify-git-file-list-and-preview-modal/proposal.md)
+- [`align-codex-model-reasoning-capabilities`](changes/archive/2026-07-17-align-codex-model-reasoning-capabilities/proposal.md)
+- [`add-multi-repository-git-command-center`](changes/archive/2026-07-17-add-multi-repository-git-command-center/proposal.md)
+- [`stabilize-git-command-center-branch-menu`](changes/archive/2026-07-17-stabilize-git-command-center-branch-menu/proposal.md)
+- [`fix-multi-repository-file-tree-decorations`](changes/archive/2026-07-17-fix-multi-repository-file-tree-decorations/proposal.md)
+- [`add-multi-repository-git-commit-workspace`](changes/archive/2026-07-17-add-multi-repository-git-commit-workspace/proposal.md)
+- [`hide-git-history-overview-pane`](changes/archive/2026-07-17-hide-git-history-overview-pane/proposal.md)
+- [`add-file-view-git-blame`](changes/archive/2026-07-17-add-file-view-git-blame/proposal.md)
+- [`fix-multi-repository-file-open-and-blame-scope`](changes/archive/2026-07-17-fix-multi-repository-file-open-and-blame-scope/proposal.md)
+- [`fix-multi-repository-git-preview-density`](changes/archive/2026-07-17-fix-multi-repository-git-preview-density/proposal.md)
+- [`restore-multi-repository-discard-action`](changes/archive/2026-07-17-restore-multi-repository-discard-action/proposal.md)
+- [`fix-global-file-search-hydration`](changes/archive/2026-07-17-fix-global-file-search-hydration/proposal.md)
+- [`add-api-endpoint-global-search`](changes/archive/2026-07-17-add-api-endpoint-global-search/proposal.md)
+- [`add-git-history-commit-filters`](changes/archive/2026-07-17-add-git-history-commit-filters/proposal.md)
+- [`compact-git-history-changed-file-tree`](changes/archive/2026-07-17-compact-git-history-changed-file-tree/proposal.md)
+- [`refine-git-history-title-layer-frame`](changes/archive/2026-07-17-refine-git-history-title-layer-frame/proposal.md)
+- [`relocate-git-diff-mode-selector-to-right-panel-toolbar`](changes/archive/2026-07-17-relocate-git-diff-mode-selector-to-right-panel-toolbar/proposal.md)
+- [`explain-git-pull-option-effects`](changes/archive/2026-07-17-explain-git-pull-option-effects/proposal.md)
 
 The batch created six main capabilities and updated 17 existing capabilities. Shared capability deltas were applied in first-commit order. `fallback-untracked-added-file-empty-inline-diff` required an explicit requirement rename from `Sparse Added-File Facts MUST Preserve Canonical Diff Access` to `Added-File Facts MUST Preserve Conversation Surface Behavior` before its modified delta could sync. Final counts are active=15, archive=626, specs=402; all 402 main specs pass strict validation.
 
@@ -303,6 +318,7 @@ npm run check:large-files
 
 - `openspec/README.md` stays concise and navigation-oriented.
 - `openspec/project.md` keeps durable governance context and current inventory only.
+- `openspec/changes/README.md` keeps the active proposal index; `openspec/changes/archive/README.md` keeps the complete archived proposal index.
 - High-drift implementation evidence, commit matrices, and temporary backfill snapshots should live in the relevant change artifacts or archive notes, not here.
 - Host-specific session-start logic belongs in `.claude/**` or `.codex/**`, not in OpenSpec workspace docs.
 - Product-facing overview belongs in `README.md` and `README.zh-CN.md`, not in OpenSpec change artifacts.
@@ -313,6 +329,8 @@ npm run check:large-files
 
 ## Update History
 
+- 2026-07-17: Added a two-level proposal index linking all 10 active and 631 archived changes, connected the root/OpenSpec navigation surfaces, and refreshed current planning context to product version 0.7.5 with active=10, archive=631, specs=403. Historical snapshot counts were preserved.
+- 2026-07-17: Archived five near-complete changes after evidence review: two reached full task closure, while three retained explicit manual QA gaps under a user-authorized waiver. Synced one new and six existing main capabilities, calibrated one stale cross-capability delta, and refreshed counts to active=10, archive=631, specs=403. No product code was modified.
 - 2026-07-17: Archived 22 verified Git, search, file-view, conversation, and Codex changes; synced six new and 17 existing main capabilities; calibrated one stale requirement rename; and refreshed tracked counts to active=15, archive=626, specs=402. All 402 main specs pass strict validation, and no product code was modified.
 - 2026-07-15: Audited one week of code/build history, backfilled 18 proposal gaps through one capability-oriented retrospective change, synced five new and six modified capability specs, archived 13 completed active changes plus the retrospective change, and refreshed tracked counts to active=12, archive=596, specs=395. No product code was modified.
 - 2026-07-11: Completed a documentation-only calibration pass. Added missing designs for Linux native-menu localization and Claude runtime MCP servers, added seven evidence-oriented verification reports, and restored two empty sidebar loading changes with proposal/design/tasks/spec deltas. No product code, configuration, scripts, or tests were modified; both restored changes remain 0% complete pending implementation/evidence review.

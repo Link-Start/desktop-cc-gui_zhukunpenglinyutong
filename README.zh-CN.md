@@ -260,10 +260,12 @@ docs(readme): update setup guide
 
 ### 想深入了解项目内部？
 
-- `AGENTS.md` — 仓库规则总入口（用 AI 辅助开发本项目时必读）。
-- `.trellis/spec/` — 前端、后端的详细实现规范。
-- `openspec/` — 功能变更的提案与规格记录。
-- `docs/architecture/` — 架构治理文档。
+- [AGENTS.md](AGENTS.md) — 仓库规则总入口（用 AI 辅助开发本项目时必读）。
+- [.trellis/spec/](.trellis/spec/) — 前端、后端的详细实现规范。
+- [OpenSpec 工作区](openspec/README.md) — behavior specs、工作流与治理总览。
+- [活跃提案索引](openspec/changes/README.md) — 当前变更、进度、归档门禁与 artifact 链接。
+- [归档提案索引](openspec/changes/archive/README.md) — 按月份和归档日期分组的完整历史提案。
+- [docs/architecture/](docs/architecture/) — 架构治理文档。
 
 ---
 

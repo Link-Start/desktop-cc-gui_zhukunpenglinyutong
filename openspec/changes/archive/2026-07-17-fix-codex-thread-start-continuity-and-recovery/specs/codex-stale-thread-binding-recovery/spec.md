@@ -55,3 +55,59 @@ When Codex stale binding recovery replaces an empty first-turn draft with a fres
 - **WHEN** a first-turn empty Codex draft is replaced by a fresh thread
 - **THEN** the system MUST NOT persist an alias that claims the old thread identity was verified as recovered
 - **AND** diagnostics MUST distinguish the result from durable stale-thread rebind
+
+### Requirement: Codex Create Session Shutdown Race Retry MUST Stay Bounded Across Entrypoints
+
+Codex create-session entrypoints MUST share stopping-runtime race semantics: reject a runtime that is already ending, perform at most one fresh reacquire/retry where allowed, use bounded same-runtime readiness confirmation after `thread/start`, and settle persistent races as recoverable create-session errors.
+
+#### Scenario: app create-session retries once after stopping runtime race
+
+- **WHEN** the Tauri Codex `start_thread` command starts a session
+- **AND** the first `thread/start` attempt fails because the bound runtime ended during manual shutdown or equivalent stopping lifecycle
+- **THEN** the app path MUST perform one fresh runtime acquire before retrying `thread/start`
+- **AND** it MUST NOT retry non-runtime errors such as workspace connectivity failures
+
+#### Scenario: persistent app race returns stable recoverable error
+
+- **WHEN** the app create-session retry also fails with a stopping-runtime race
+- **THEN** the app path MUST return a stable recoverable create-session error such as `[SESSION_CREATE_RUNTIME_RECOVERING]`
+- **AND** it MUST NOT enter an unbounded retry loop
+
+#### Scenario: daemon create-session keeps parity with app path
+
+- **WHEN** the daemon `start_thread` path observes the same stopping-runtime race
+- **THEN** it MUST use the same bounded retry and recoverable-error semantics as the app path
+- **AND** daemon parity MUST NOT create a second retry strategy that diverges from the app command path
+
+#### Scenario: thread-start readiness confirmation is bounded
+
+- **WHEN** `thread/start` returns a valid thread id
+- **AND** immediate readiness confirmation reports `thread not found`
+- **THEN** backend MUST retry same-runtime `thread/resume` with a finite delay schedule
+- **AND** failure after the schedule MUST return a bounded readiness error
+- **AND** backend MUST NOT route readiness confirmation to another provider or create a substitute thread
+
+#### Scenario: thread-start readiness rejects false-ready resume responses
+
+- **WHEN** `thread/start` returns a valid thread id
+- **AND** `thread/resume` returns an RPC error other than a retryable missing-thread error
+- **OR** `thread/resume` returns a different thread identity than the one being confirmed
+- **THEN** backend MUST fail create-session readiness before frontend activation
+- **AND** backend MUST NOT treat the response as ready merely because it was not classified as `thread not found`
+- **AND** frontend MUST NOT retry by calling create-session again after a post-start readiness failure
+
+#### Scenario: active workspace prewarms disk Codex runtime only
+
+- **WHEN** a workspace is active and connected
+- **THEN** the client MAY prewarm the disk/default Codex runtime by asking backend to ensure the workspace Codex app-server session exists
+- **AND** the prewarm path MUST NOT call `thread/start` or create an empty Codex conversation
+- **AND** the prewarm path MUST NOT prewarm managed provider profiles
+- **AND** repeated prewarm attempts for the same active workspace SHOULD be deduped while in flight or after success
+
+#### Scenario: thread-start readiness tolerates rollout-pending resume responses
+
+- **WHEN** `thread/start` returns a valid thread id
+- **AND** `thread/resume` returns `no rollout found for thread id` during the bounded readiness window
+- **THEN** backend MUST treat the response as retryable not-ready for the same runtime and same thread
+- **AND** backend MAY soft-confirm readiness after the bounded retry window if the last failure is rollout-pending
+- **AND** frontend MUST NOT create a replacement session for that post-start readiness state

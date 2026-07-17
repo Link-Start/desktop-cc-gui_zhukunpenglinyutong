@@ -260,10 +260,12 @@ Not sure where to start? Browse the [Issues](https://github.com/zhukunpenglinyut
 
 ### Want to dig deeper into the project's internals?
 
-- `AGENTS.md` — the entry point for repository rules (required reading if you develop this project with AI assistance).
-- `.trellis/spec/` — detailed frontend and backend implementation specs.
-- `openspec/` — proposals and specs for behavior changes.
-- `docs/architecture/` — architecture governance docs.
+- [AGENTS.md](AGENTS.md) — the entry point for repository rules (required reading if you develop this project with AI assistance).
+- [.trellis/spec/](.trellis/spec/) — detailed frontend and backend implementation specs.
+- [OpenSpec workspace](openspec/README.md) — behavior specs, workflow, and governance overview.
+- [Active proposal index](openspec/changes/README.md) — current changes, progress, closure gates, and artifact links.
+- [Archived proposal index](openspec/changes/archive/README.md) — all archived proposals grouped by month and archive date.
+- [docs/architecture/](docs/architecture/) — architecture governance docs.
 
 ---
 

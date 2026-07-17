@@ -35,4 +35,3 @@ Rows expose server name and reported status. `ccgui` receives a built-in badge; 
 2. Verify row count, statuses, built-in badge isolation, and the empty/unknown fallbacks.
 3. Verify the card has no mutation controls and no new IPC dependency.
 4. Run `openspec validate add-claude-runtime-mcp-servers-panel --strict --no-interactive`.
-
