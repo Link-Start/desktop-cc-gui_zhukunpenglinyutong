@@ -13,17 +13,28 @@
 - `feat(search)`: 全局搜索新增 API endpoint provider，复用 Project Map contract cache 与受限扫描，支持按 path、HTTP method、handler、operation、description、framework、protocol、module 或 source file 检索 HTTP / RPC / GraphQL / ABI endpoint，并可直接跳转到源码位置
 - `feat(git-history)`: 提交列表新增文本/Hash、Branch、User 与 Date preset 组合筛选，输入采用 `300ms` debounce，筛选状态可持久化；分页、snapshot retry 与 remote daemon 均复用同一 canonical payload，避免 stale request 覆盖最新结果
 - `feat(git)`: 统一单仓与多仓 changed-file 右键菜单，按 staged / unstaged 状态提供 Unstage、Stage、Discard 与 File History；所有 action 保留 `workspaceId + repositoryRoot + path` identity，并复用现有确认、刷新与 Diff/File History surface
+- `feat(git)`: 统一 Git history 导航入口，将 Git Diff mode menu 与 Sidebar 中重复或含混的入口收敛为高亮的 `Git Graph` action，同时保留既有 history panel、callback 与隐藏 `log` mode 的兼容性
+- `feat(vendors)`: Vendor Settings 导航新增 Feishu CLI 与官方文档入口，并明确保持 unsupported 状态，不启用配置能力或暗示完整集成
 
 🔧 Improvements
 - `feat(git-history)`: 将 Git History 收敛为 Branch、Commit、Details 三栏主布局，移除重复的 overview 区域并按 `3:4:3` 分配默认宽度；作者 timeline 使用基于 email/name 的稳定主题色，跨刷新、分页与搜索保持一致
 - `feat(git-history)`: 变更文件树复用 shared diff-tree compact folders 规则，压缩无分叉的单子目录链，同时保留 branch boundary、canonical path、Windows separator、展开状态与键盘交互
 - `feat(git)`: 收紧多仓库 Git Diff 工作区的信息密度并补齐 repository-scoped modal preview；快速切换同名路径时丢弃 stale response，full-context loader、编辑路径和 preview source 始终绑定同一 repository
+- `feat(git)`: 将 Git Diff mode selector 移至文件工作台顶部工具栏，通过 portal 复用原有 menu、viewport positioning 与 mode state，减少内容区重复 header 并保持窄窗口可用
+- `fix(git-history)`: Git Pull、Fetch、Sync 等确认界面新增 intent、effect、non-effect 与高亮 command preview；Pull 可组合 `--rebase`、`--no-commit`、`--no-verify`，说明与最终 payload 会随选择同步更新
+- `style(git-history)`: 压缩 Git History 顶部工具栏间距并强化 pane boundary，在不牺牲可读性的前提下提升内容密度与视觉层级
 
 🐛 Fixes
 - `fix(git)`: 修复多仓库文件打开、Git Blame、Diff preview、Discard 与 File History 链路中的 repository identity 丢失；workspace-root、nested repository、相同 relative path 与 longest-prefix owner 均使用正确 scope，避免串仓或错误禁用
 - `fix(git)`: 恢复多仓库 unstaged 文件回退入口与状态刷新，修复 repository switch chrome、分组折叠和刷新入口回归；回退继续经过确认弹窗，成功后只刷新目标 repository 的状态
 - `fix(search)`: 全局文件搜索不再把 progressive file tree 的 shallow / empty 结果当成完整索引；当前与全局 scope 会按 active-first、bounded concurrency 补齐 full snapshot，并区分 partial、complete、error 状态，失败可重试且 stale hydration 不覆盖新 workspace
 - `fix(renderer)`: 为 react-scan 初始化与运行异常增加熔断恢复，诊断工具崩溃时主动卸载并清理残留状态，避免影响应用正常渲染
+- `fix(git)`: 统一 renamed / deleted 文件在 Desktop、remote daemon、单仓与多仓链路中的 source/destination identity；文件激活、Diff stats、Stage、Unstage 与 Discard 复用同一 alias resolution，避免打开错误路径或操作失效
+- `fix(codex)`: Codex usage 不再硬编码 `5h limit` 与 `Weekly limit`，而是根据服务端 `windowDurationMins` 动态显示分钟、小时、天或周级窗口，并为缺失或非法 metadata 提供稳定 fallback
+- `fix(markdown)`: 修复 Fast Markdown Worker 因 DOM dependency 崩溃的问题，将 DOM-free compile 与 main-thread sanitization 明确分层；stale、timeout 或 unavailable request 不再触发过期 fallback，避免错误预览与主线程放大
+- `fix(messages)`: 稳定 streaming Timeline 与 history reopen：等价 parent/overlay 更新不再放大重渲染，pending thread 跳过 history loader，失败或 degraded empty 会保留 last-good transcript，并用 generation guard 阻止旧请求覆盖新会话
+- `fix(runtime)`: Codex runtime health probe 不再触发 `model/list` refresh；重复 `stderr` 会按脱敏 signature 聚合、限频并保留高价值 diagnostics，减少 catalog refresh 与日志风暴对客户端的干扰
+- `fix(gemini)`: 在 frontend、Desktop 与 remote daemon 执行边界 hard-disable Gemini，并覆盖 prompt transport、interrupt、workspace removal、shutdown 与 drop 的 owned process kill/reap；历史与 diagnostics 仍可读取，但残留入口不会启动或跨 Provider 转发新任务
 
 English:
 
@@ -34,17 +45,28 @@ English:
 - `feat(search)`: add an API endpoint provider to global search by reusing the Project Map contract cache and bounded scan lifecycle; search HTTP, RPC, GraphQL, and ABI endpoints by path, HTTP method, handler, operation, description, framework, protocol, module, or source file, then navigate directly to the source location
 - `feat(git-history)`: add composable text/Hash, Branch, User, and Date preset filters to the commit list with `300ms` input debouncing and persisted state; pagination, snapshot retry, and the remote daemon reuse one canonical payload so stale requests cannot replace newer results
 - `feat(git)`: unify changed-file context menus across single- and multi-repository modes, exposing Unstage, Stage, Discard, and File History according to staged state; every action preserves `workspaceId + repositoryRoot + path` identity and reuses the existing confirmation, refresh, Diff, and File History surfaces
+- `feat(git)`: unify Git history navigation by consolidating duplicate or ambiguous entries in the Git Diff mode menu and Sidebar into one highlighted `Git Graph` action, while retaining the existing history panel, callback, and hidden `log` mode compatibility
+- `feat(vendors)`: add Feishu CLI and its official documentation to Vendor Settings navigation while keeping it explicitly unsupported, without enabling configuration or implying full integration
 
 🔧 Improvements
 - `feat(git-history)`: focus Git History on a three-column Branch, Commit, and Details layout, remove the duplicate overview region, and assign default widths at `3:4:3`; author timelines now use stable theme-aware colors derived from email or name and remain consistent across refreshes, pagination, and searches
 - `feat(git-history)`: reuse the shared diff-tree compact-folders rules for changed files, collapsing unbranched single-child directory chains while preserving branch boundaries, canonical paths, Windows separators, expansion state, and keyboard behavior
 - `feat(git)`: tighten the information density of the multi-repository Git Diff workspace and complete repository-scoped modal previews; stale responses are discarded when rapidly switching identical relative paths, while the full-context loader, edit path, and preview source remain bound to the same repository
+- `feat(git)`: move the Git Diff mode selector into the file workbench toolbar, reusing the existing menu, viewport positioning, and mode state through a portal to remove the duplicate content header while remaining usable in narrow layouts
+- `fix(git-history)`: add intent, effect, non-effect, and highlighted command previews to Git Pull, Fetch, Sync, and related confirmation surfaces; Pull can combine `--rebase`, `--no-commit`, and `--no-verify`, with explanations and the final payload updating together
+- `style(git-history)`: reduce Git History toolbar spacing and strengthen pane boundaries, improving information density and visual hierarchy without sacrificing readability
 
 🐛 Fixes
 - `fix(git)`: preserve repository identity across multi-repository file opening, Git Blame, Diff preview, Discard, and File History flows; workspace-root repositories, nested repositories, identical relative paths, and longest-prefix ownership now resolve to the correct scope instead of crossing repositories or being incorrectly disabled
 - `fix(git)`: restore the discard action and status refresh for unstaged files in multi-repository workspaces, and fix regressions in repository-switch chrome, group collapsing, and refresh entry points; discard still requires confirmation and refreshes only the target repository after success
 - `fix(search)`: stop treating shallow or empty progressive file-tree results as a complete global file index; current and global scopes now hydrate full snapshots with active-first bounded concurrency, distinguish partial, complete, and error states, allow retries, and prevent stale hydration from overwriting a new workspace
 - `fix(renderer)`: add circuit-breaker recovery around react-scan initialization and runtime failures, unloading the diagnostic tool and clearing residual state when it crashes so application rendering remains unaffected
+- `fix(git)`: unify source/destination identity for renamed and deleted files across Desktop, the remote daemon, and single- or multi-repository flows; file activation, Diff stats, Stage, Unstage, and Discard now share the same alias resolution to avoid opening the wrong path or losing actions
+- `fix(codex)`: derive Codex usage labels from the server-provided `windowDurationMins` instead of hard-coding `5h limit` and `Weekly limit`, formatting minute-, hour-, day-, or week-scale windows with a stable fallback for missing or invalid metadata
+- `fix(markdown)`: fix Fast Markdown Worker crashes caused by DOM dependencies by separating DOM-free compilation from main-thread sanitization; stale, timed-out, or unavailable requests no longer trigger obsolete fallbacks that could show incorrect previews or amplify main-thread work
+- `fix(messages)`: stabilize streaming Timeline updates and history reopening: equivalent parent/overlay writes no longer amplify rerenders, pending threads bypass the history loader, failed or degraded empty results preserve the last-good transcript, and generation guards prevent older requests from overwriting newer sessions
+- `fix(runtime)`: stop Codex runtime health probes from triggering `model/list` refreshes, and aggregate repeated `stderr` by redacted signature with rate limits and reserved high-value diagnostics to reduce catalog-refresh and logging storms
+- `fix(gemini)`: hard-disable Gemini at frontend, Desktop, and remote-daemon execution boundaries, covering prompt transport and owned-process kill/reap on interrupt, workspace removal, shutdown, and drop; history and diagnostics remain readable, but residual entry points cannot launch or cross-route new work to another Provider
 
 ---
 
