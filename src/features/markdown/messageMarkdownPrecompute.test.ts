@@ -10,7 +10,7 @@ import {
   runMessageMarkdownPrecompute,
   type MessageMarkdownRendererOptions,
 } from "./messageMarkdownPrecompute";
-import type { FastMarkdownRenderResult } from "./fastMarkdownRenderer/types";
+import type { FastMarkdownUnsafeArtifact } from "./fastMarkdownRenderer/types";
 
 const rendererOptions: MessageMarkdownRendererOptions = {
   softBreaks: false,
@@ -20,10 +20,11 @@ const rendererOptions: MessageMarkdownRendererOptions = {
   hasMathContent: false,
 };
 
-const workerResult: FastMarkdownRenderResult = {
+const workerResult: FastMarkdownUnsafeArtifact = {
   cacheKey: "worker-cache-key",
   contentHash: "worker-content",
-  html: "<h1>ignored</h1>",
+  unsafeHtml: "<h1>ignored</h1>",
+  sanitization: "main-thread-required",
   outline: [],
   sourceLineAnchors: [],
   heavyBlocks: [],
@@ -74,11 +75,14 @@ describe("message markdown precompute", () => {
       now: () => 100,
     });
 
-    expect(compileInWorker).toHaveBeenCalledWith(expect.objectContaining({
-      documentKey: "assistant-1",
-      rawMarkdown: "x".repeat(10_000),
-      rendererProfile: "fast-html",
-    }));
+    expect(compileInWorker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentKey: "assistant-1",
+        rawMarkdown: "x".repeat(10_000),
+        rendererProfile: "fast-html",
+      }),
+      { timeoutMs: request.timeoutMs },
+    );
     expect(result.mode).toBe("worker-precompute");
     expect(result.cacheState).toBe("miss");
     expect(result.fallbackReason).toBe("none");
@@ -88,7 +92,7 @@ describe("message markdown precompute", () => {
       totalSourceLines: 8,
       unsafeHtmlBoundary: "main-thread-sanitized-rich-render",
     });
-    expect(JSON.stringify(result.precomputeResult)).not.toContain(workerResult.html);
+    expect(JSON.stringify(result.precomputeResult)).not.toContain(workerResult.unsafeHtml);
   });
 
   it("reuses cache for same profile/message/content/options/schema", async () => {
@@ -181,7 +185,7 @@ describe("message markdown precompute", () => {
       optionsHash: createMessageMarkdownOptionsHash(rendererOptions),
       timeoutMs: 1,
     });
-    const pendingWorker = new Promise<FastMarkdownRenderResult>(() => {});
+    const pendingWorker = new Promise<FastMarkdownUnsafeArtifact>(() => {});
     const result = await runMessageMarkdownPrecompute(request, {
       compileInWorker: () => pendingWorker,
       timeoutMs: 1,

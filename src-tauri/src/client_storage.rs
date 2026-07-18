@@ -401,8 +401,11 @@ mod tests {
 
         patch_store_at_path(&path, json!({ "alpha": 1 }).as_object().unwrap())
             .expect("first patch");
-        patch_store_at_path(&path, json!({ "beta": { "nested": true } }).as_object().unwrap())
-            .expect("second patch");
+        patch_store_at_path(
+            &path,
+            json!({ "beta": { "nested": true } }).as_object().unwrap(),
+        )
+        .expect("second patch");
 
         let content = std::fs::read_to_string(&path).expect("read store file");
         assert!(

@@ -239,7 +239,18 @@ describe("useThreads engine source", () => {
         thread: {
           id: "thread-1",
           preview: "Thread 1",
-          turns: [],
+          turns: [
+            {
+              id: "turn-thread-1",
+              items: [
+                {
+                  type: "userMessage",
+                  id: "user-thread-1",
+                  text: "可读历史",
+                },
+              ],
+            },
+          ],
         },
       },
     });

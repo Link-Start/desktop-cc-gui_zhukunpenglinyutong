@@ -2666,6 +2666,31 @@ describe("tauri invoke wrappers", () => {
     });
   });
 
+  it("rejects every Gemini execution RPC before invoking the backend", async () => {
+    const invokeMock = vi.mocked(invoke);
+
+    await expect(switchEngine("gemini")).rejects.toThrow(
+      "Gemini CLI is disabled in this client",
+    );
+    await expect(getEngineModels("gemini")).rejects.toThrow(
+      "Gemini CLI is disabled in this client",
+    );
+    await expect(
+      engineSendMessage("ws-gemini", {
+        text: "must not run",
+        engine: "gemini",
+      }),
+    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    await expect(
+      engineSendMessageSync("ws-gemini", {
+        text: "must not run",
+        engine: "gemini",
+      }),
+    ).rejects.toThrow("Gemini CLI is disabled in this client");
+
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
   it("maps sync engine send custom spec root payload", async () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockResolvedValueOnce({

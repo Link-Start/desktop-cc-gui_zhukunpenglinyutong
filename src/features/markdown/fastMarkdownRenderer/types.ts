@@ -86,6 +86,18 @@ export type FastMarkdownRenderResult = {
   rendererProfile: FastMarkdownRendererProfileId;
 };
 
+export type FastMarkdownUnsafeArtifact = {
+  cacheKey: string;
+  contentHash: string;
+  unsafeHtml: string;
+  sanitization: "main-thread-required";
+  outline: MarkdownOutlineEntry[];
+  sourceLineAnchors: MarkdownSourceLineAnchor[];
+  heavyBlocks: FastMarkdownHeavyBlock[];
+  diagnostics: FastMarkdownRenderDiagnostics;
+  rendererProfile: FastMarkdownRendererProfileId;
+};
+
 export type CompileFastMarkdownArgs = {
   documentKey: string;
   rawMarkdown: string;

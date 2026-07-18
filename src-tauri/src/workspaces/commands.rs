@@ -598,14 +598,17 @@ async fn collect_workspace_cleanup_ids(
     ids
 }
 
-async fn cleanup_engine_sessions_for_workspace(state: &AppState, workspace_id: &str) {
+async fn cleanup_engine_sessions_for_workspace(
+    state: &AppState,
+    workspace_id: &str,
+) -> Result<(), String> {
     crate::terminal::cleanup_terminal_sessions_for_workspace(state, workspace_id).await;
     crate::engine::commands::clear_mcp_toggle_state(workspace_id);
     state
         .engine_manager
         .remove_claude_session(workspace_id)
         .await;
-    state
+    let gemini_cleanup_result = state
         .engine_manager
         .remove_gemini_session(workspace_id)
         .await;
@@ -617,6 +620,8 @@ async fn cleanup_engine_sessions_for_workspace(state: &AppState, workspace_id: &
         .engine_manager
         .remove_opencode_session(workspace_id)
         .await;
+    gemini_cleanup_result
+        .map_err(|error| format!("Gemini cleanup failed for workspace {workspace_id}: {error}"))
 }
 
 #[tauri::command]
@@ -1291,9 +1296,7 @@ async fn add_workspace_for_cli_engine(
     codex_bin: Option<String>,
     state: &AppState,
 ) -> Result<WorkspaceInfo, String> {
-    use crate::engine::status::{
-        detect_claude_status, detect_gemini_status, detect_opencode_status,
-    };
+    use crate::engine::status::{detect_claude_status, detect_opencode_status};
     use std::path::PathBuf;
 
     if !PathBuf::from(&path).is_dir() {
@@ -1325,7 +1328,7 @@ async fn add_workspace_for_cli_engine(
             };
             detect_claude_status(claude_bin.as_deref()).await.installed
         }
-        EngineType::Gemini => detect_gemini_status(None).await.installed,
+        EngineType::Gemini => false,
         EngineType::OpenCode => detect_opencode_status(None).await.installed,
         _ => false,
     };
@@ -1660,8 +1663,17 @@ pub(crate) async fn remove_workspace(
     )
     .await?;
 
+    let mut cleanup_errors = Vec::new();
     for workspace_id in cleanup_ids {
-        cleanup_engine_sessions_for_workspace(&state, &workspace_id).await;
+        if let Err(error) = cleanup_engine_sessions_for_workspace(&state, &workspace_id).await {
+            cleanup_errors.push(error);
+        }
+    }
+    if !cleanup_errors.is_empty() {
+        return Err(format!(
+            "workspace removed but engine cleanup failed: {}",
+            cleanup_errors.join("; ")
+        ));
     }
 
     Ok(())
@@ -1696,7 +1708,9 @@ pub(crate) async fn remove_worktree(
     )
     .await?;
 
-    cleanup_engine_sessions_for_workspace(&state, &id).await;
+    cleanup_engine_sessions_for_workspace(&state, &id)
+        .await
+        .map_err(|error| format!("worktree removed but engine cleanup failed: {error}"))?;
 
     Ok(())
 }

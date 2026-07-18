@@ -91,4 +91,41 @@ describe("RunDetailSurface", () => {
     expect(screen.getByText("taskCenter.noArtifacts")).toBeTruthy();
     expect(screen.queryByText("taskCenter.action.openConversation")).toBeNull();
   });
+
+  it("keeps historical Gemini conversations viewable without execution recovery actions", () => {
+    const handleOpenConversation = vi.fn();
+    const handleRetryRun = vi.fn();
+    const handleResumeRun = vi.fn();
+    const handleForkRun = vi.fn();
+    const run = makeRun({
+      engine: "gemini",
+      status: "failed",
+      availableRecoveryActions: [
+        "open_conversation",
+        "retry",
+        "resume",
+        "fork_new_run",
+      ],
+    });
+
+    render(
+      <RunDetailSurface
+        run={run}
+        onOpenConversation={handleOpenConversation}
+        onRetryRun={handleRetryRun}
+        onResumeRun={handleResumeRun}
+        onForkRun={handleForkRun}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("taskCenter.action.openConversation"));
+
+    expect(handleOpenConversation).toHaveBeenCalledWith("thread-1");
+    expect(screen.queryByText("taskCenter.action.retry")).toBeNull();
+    expect(screen.queryByText("taskCenter.action.resume")).toBeNull();
+    expect(screen.queryByText("taskCenter.action.fork")).toBeNull();
+    expect(handleRetryRun).not.toHaveBeenCalled();
+    expect(handleResumeRun).not.toHaveBeenCalled();
+    expect(handleForkRun).not.toHaveBeenCalled();
+  });
 });

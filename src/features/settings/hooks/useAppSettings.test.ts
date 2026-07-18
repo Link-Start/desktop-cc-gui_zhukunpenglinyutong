@@ -82,7 +82,7 @@ describe("useAppSettings", () => {
     expect(result.current.settings.codexUnifiedExecPolicy).toBe("inherit");
     expect(result.current.settings.backendMode).toBe("remote");
     expect(result.current.settings.remoteBackendHost).toBe("example:1234");
-    expect(result.current.settings.geminiEnabled).toBe(true);
+    expect(result.current.settings.geminiEnabled).toBe(false);
     expect(result.current.settings.opencodeEnabled).toBe(false);
     expect(result.current.settings.claudeBin).toBeNull();
     expect(result.current.settings.codexAutoCompactionEnabled).toBe(true);
@@ -97,6 +97,18 @@ describe("useAppSettings", () => {
     expect(result.current.settings.enabledCuratedSkillIds).toEqual([
       "lazy-senior-dev",
     ]);
+  });
+
+  it("keeps legacy Gemini enablement disabled", async () => {
+    getAppSettingsMock.mockResolvedValue({
+      geminiEnabled: true,
+    } as AppSettings);
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.settings.geminiEnabled).toBe(false);
   });
 
   it("keeps an explicitly cleared curated skill list disabled", async () => {

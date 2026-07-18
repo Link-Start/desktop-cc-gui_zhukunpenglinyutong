@@ -5,11 +5,11 @@
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, Mutex, RwLock};
@@ -29,8 +29,6 @@ use self::event_parsing::{
 
 const GEMINI_REASONING_HISTORY_SYNC_INTERVAL_MS: u64 = 900;
 const GEMINI_INLINE_IMAGE_MAX_BYTES: usize = 12 * 1024 * 1024;
-// Keep enough margin under Windows CreateProcessW command-line limits.
-const GEMINI_PROMPT_ARG_MAX_CHARS: usize = 8 * 1024;
 static GEMINI_INLINE_IMAGE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Default)]
@@ -53,7 +51,7 @@ struct GeminiVendorRuntimeConfig {
 
 struct GeminiBuiltCommand {
     command: Command,
-    prompt_stdin_payload: Option<String>,
+    prompt_stdin_payload: String,
 }
 
 /// Gemini session for a workspace
@@ -65,8 +63,14 @@ pub struct GeminiSession {
     bin_path: Option<String>,
     home_dir: Option<String>,
     custom_args: Option<String>,
-    active_processes: Mutex<HashMap<String, ActiveGeminiChildProcess>>,
-    interrupted: AtomicBool,
+    process_registry: Mutex<GeminiProcessRegistry>,
+    #[cfg(test)]
+    process_launch_allowed_for_tests: bool,
+    #[cfg(test)]
+    process_launch_test_hook: Option<(
+        std::sync::Arc<tokio::sync::Notify>,
+        std::sync::Arc<tokio::sync::Notify>,
+    )>,
 }
 
 #[allow(dead_code)]
@@ -79,6 +83,14 @@ struct ActiveGeminiChildProcess {
     child: Child,
     #[allow(dead_code)]
     started_at_ms: u64,
+}
+
+#[derive(Default)]
+struct GeminiProcessRegistry {
+    active_processes: HashMap<String, ActiveGeminiChildProcess>,
+    interrupted_turns: HashSet<String>,
+    interrupt_generation: u64,
+    closed: bool,
 }
 
 impl ActiveGeminiChildProcess {
@@ -110,6 +122,19 @@ fn unix_timestamp_ms_for_process_diagnostics() -> u64 {
 }
 
 impl GeminiSession {
+    fn configure_spawn_command(cmd: &mut Command) {
+        #[cfg(unix)]
+        unsafe {
+            cmd.pre_exec(|| {
+                if libc::setpgid(0, 0) == 0 {
+                    Ok(())
+                } else {
+                    Err(std::io::Error::last_os_error())
+                }
+            });
+        }
+    }
+
     pub fn new(
         workspace_id: String,
         workspace_path: PathBuf,
@@ -125,9 +150,33 @@ impl GeminiSession {
             bin_path: config.bin_path,
             home_dir: config.home_dir,
             custom_args: config.custom_args,
-            active_processes: Mutex::new(HashMap::new()),
-            interrupted: AtomicBool::new(false),
+            process_registry: Mutex::new(GeminiProcessRegistry::default()),
+            #[cfg(test)]
+            process_launch_allowed_for_tests: false,
+            #[cfg(test)]
+            process_launch_test_hook: None,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_process_test(
+        workspace_id: String,
+        workspace_path: PathBuf,
+        config: Option<EngineConfig>,
+    ) -> Self {
+        let mut session = Self::new(workspace_id, workspace_path, config);
+        session.process_launch_allowed_for_tests = true;
+        session
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_process_launch_test_hook(
+        mut self,
+        launch_checked: std::sync::Arc<tokio::sync::Notify>,
+        continue_launch: std::sync::Arc<tokio::sync::Notify>,
+    ) -> Self {
+        self.process_launch_test_hook = Some((launch_checked, continue_launch));
+        self
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<GeminiTurnEvent> {
@@ -754,10 +803,6 @@ impl GeminiSession {
         result
     }
 
-    fn should_pipe_prompt_via_stdin(text: &str) -> bool {
-        text.chars().count() > GEMINI_PROMPT_ARG_MAX_CHARS
-    }
-
     fn build_command(&self, params: &SendMessageParams) -> GeminiBuiltCommand {
         let bin = if let Some(ref custom) = self.bin_path {
             custom.clone()
@@ -813,20 +858,10 @@ impl GeminiSession {
             &self.workspace_path,
         );
         let message_text = Self::with_output_language_hint(&message_text);
-        let safe_text = if message_text.starts_with('-') {
-            format!(" {}", message_text)
-        } else {
-            message_text
-        };
-        let prompt_via_stdin = Self::should_pipe_prompt_via_stdin(&safe_text);
+        // Gemini appends stdin content to --prompt. Keep argv content-free and
+        // close stdin after writing so the CLI can start processing immediately.
         cmd.arg("--prompt");
-        if prompt_via_stdin {
-            // Gemini CLI appends stdin content to --prompt. Keep prompt empty and stream
-            // the payload to stdin so long text does not rely on argv limits/parsing.
-            cmd.arg("");
-        } else {
-            cmd.arg(&safe_text);
-        }
+        cmd.arg("");
 
         let vendor_runtime = Self::load_vendor_runtime_config();
         apply_dead_loopback_proxy_guard(&mut cmd, &vendor_runtime.env);
@@ -843,20 +878,119 @@ impl GeminiSession {
             cmd.env("GEMINI_CLI_HOME", home);
         }
 
-        if prompt_via_stdin {
-            cmd.stdin(Stdio::piped());
-        } else {
-            cmd.stdin(Stdio::null());
-        }
+        cmd.stdin(Stdio::piped());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
+        Self::configure_spawn_command(&mut cmd);
         GeminiBuiltCommand {
             command: cmd,
-            prompt_stdin_payload: if prompt_via_stdin {
-                Some(safe_text)
-            } else {
-                None
-            },
+            prompt_stdin_payload: message_text,
+        }
+    }
+
+    fn ensure_process_launch_allowed(&self) -> Result<(), String> {
+        #[cfg(test)]
+        if self.process_launch_allowed_for_tests {
+            return Ok(());
+        }
+
+        if crate::engine_policy::GEMINI_RUNTIME_ENABLED {
+            Ok(())
+        } else {
+            Err(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC.to_string())
+        }
+    }
+
+    async fn terminate_child_process(
+        &self,
+        turn_id: &str,
+        child: &mut Child,
+    ) -> Result<(), String> {
+        match crate::runtime::terminate_workspace_session_process(child).await {
+            Ok(_) => Ok(()),
+            Err(error) => Err(format!(
+                "Failed to terminate Gemini process for turn {turn_id}: {error}"
+            )),
+        }
+    }
+
+    async fn terminate_registered_child(&self, turn_id: &str) -> Result<(), String> {
+        let mut registry = self.process_registry.lock().await;
+        let Some(process) = registry.active_processes.get_mut(turn_id) else {
+            return Ok(());
+        };
+        self.terminate_child_process(turn_id, &mut process.child)
+            .await?;
+        registry.active_processes.remove(turn_id);
+        Ok(())
+    }
+
+    async fn wait_for_registered_child(
+        &self,
+        turn_id: &str,
+    ) -> Result<Option<std::process::ExitStatus>, String> {
+        loop {
+            let poll_error = {
+                let mut registry = self.process_registry.lock().await;
+                let Some(process) = registry.active_processes.get_mut(turn_id) else {
+                    return Ok(None);
+                };
+                match process.child.try_wait() {
+                    Ok(Some(status)) => {
+                        registry.active_processes.remove(turn_id);
+                        return Ok(Some(status));
+                    }
+                    Ok(None) => None,
+                    Err(error) => Some(error),
+                }
+            };
+            if let Some(error) = poll_error {
+                log::warn!(
+                    "[gemini/send] child status poll failed workspace={} turn={}: {}",
+                    self.workspace_id,
+                    turn_id,
+                    error
+                );
+                return match self.terminate_registered_child(turn_id).await {
+                    Ok(()) => Err(format!(
+                        "Failed to poll Gemini process status for turn {turn_id}: {error}"
+                    )),
+                    Err(cleanup_error) => Err(format!(
+                        "Failed to poll Gemini process status for turn {turn_id}: {error}; cleanup also failed: {cleanup_error}"
+                    )),
+                };
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    async fn take_interrupted_turn(&self, turn_id: &str) -> bool {
+        self.process_registry
+            .lock()
+            .await
+            .interrupted_turns
+            .remove(turn_id)
+    }
+
+    pub async fn send_message_with_timeout(
+        &self,
+        params: SendMessageParams,
+        turn_id: &str,
+        timeout_duration: Duration,
+    ) -> Result<String, String> {
+        match tokio::time::timeout(timeout_duration, self.send_message(params, turn_id)).await {
+            Ok(result) => result,
+            Err(_) => {
+                if let Err(error) = self.terminate_registered_child(turn_id).await {
+                    log::warn!(
+                        "[gemini/send] timeout cleanup failed workspace={} turn={}: {}",
+                        self.workspace_id,
+                        turn_id,
+                        error
+                    );
+                }
+                Err("Gemini response timed out".to_string())
+            }
         }
     }
 
@@ -865,6 +999,31 @@ impl GeminiSession {
         params: SendMessageParams,
         turn_id: &str,
     ) -> Result<String, String> {
+        if let Err(error) = self.ensure_process_launch_allowed() {
+            self.emit_error(turn_id, error.clone());
+            return Err(error);
+        }
+
+        let launch_generation = {
+            let mut registry = self.process_registry.lock().await;
+            if registry.closed {
+                let error_msg = "Gemini session is closed".to_string();
+                self.emit_error(turn_id, error_msg.clone());
+                return Err(error_msg);
+            }
+            if registry.interrupted_turns.remove(turn_id) {
+                let error_msg = "Session stopped.".to_string();
+                self.emit_error(turn_id, error_msg.clone());
+                return Err(error_msg);
+            }
+            registry.interrupt_generation
+        };
+        #[cfg(test)]
+        if let Some((launch_checked, continue_launch)) = &self.process_launch_test_hook {
+            launch_checked.notify_one();
+            continue_launch.notified().await;
+        }
+
         let turn_started_at = std::time::Instant::now();
         let requested_model = params
             .model
@@ -892,65 +1051,98 @@ impl GeminiSession {
             mut command,
             prompt_stdin_payload,
         } = self.build_command(&params);
-        let mut child = match command.spawn() {
-            Ok(child) => child,
-            Err(error) => {
-                let error_msg = format!("Failed to spawn gemini: {}", error);
+        let (stdin, stdout, stderr) = {
+            let mut registry = self.process_registry.lock().await;
+            if registry.closed {
+                let error_msg = "Gemini session is closed".to_string();
                 self.emit_error(turn_id, error_msg.clone());
                 return Err(error_msg);
             }
-        };
-        let spawn_ms = turn_started_at.elapsed().as_millis();
-
-        if let Some(prompt_payload) = prompt_stdin_payload {
-            let prompt_chars = prompt_payload.chars().count();
-            let Some(mut stdin) = child.stdin.take() else {
-                let error_msg = "Failed to capture stdin for Gemini long prompt".to_string();
-                let _ = child.kill().await;
+            if registry.interrupted_turns.remove(turn_id) {
+                let error_msg = "Session stopped.".to_string();
+                self.emit_error(turn_id, error_msg.clone());
+                return Err(error_msg);
+            }
+            if registry.interrupt_generation != launch_generation {
+                let error_msg = "Session stopped.".to_string();
+                self.emit_error(turn_id, error_msg.clone());
+                return Err(error_msg);
+            }
+            if registry.active_processes.contains_key(turn_id) {
+                let error_msg = format!("Gemini turn is already active: {turn_id}");
+                self.emit_error(turn_id, error_msg.clone());
+                return Err(error_msg);
+            }
+            let child = match command.spawn() {
+                Ok(child) => child,
+                Err(error) => {
+                    let error_msg = format!("Failed to spawn gemini: {}", error);
+                    self.emit_error(turn_id, error_msg.clone());
+                    return Err(error_msg);
+                }
+            };
+            registry
+                .active_processes
+                .insert(turn_id.to_string(), ActiveGeminiChildProcess::new(child));
+            let Some(stdin) = registry
+                .active_processes
+                .get_mut(turn_id)
+                .and_then(|process| process.child.stdin.take())
+            else {
+                drop(registry);
+                let error_msg = "Failed to capture Gemini prompt stdin".to_string();
+                if let Err(cleanup_error) = self.terminate_registered_child(turn_id).await {
+                    log::warn!(
+                        "[gemini/send] launch cleanup failed workspace={} turn={} stage=stdin-capture: {}",
+                        self.workspace_id,
+                        turn_id,
+                        cleanup_error
+                    );
+                }
                 self.emit_error(turn_id, error_msg.clone());
                 return Err(error_msg);
             };
-            if let Err(error) = stdin.write_all(prompt_payload.as_bytes()).await {
-                let error_msg = format!("Failed to write Gemini prompt to stdin: {}", error);
-                let _ = child.kill().await;
+            let Some(stdout) = registry
+                .active_processes
+                .get_mut(turn_id)
+                .and_then(|process| process.child.stdout.take())
+            else {
+                drop(registry);
+                let error_msg = "Failed to capture Gemini stdout".to_string();
+                if let Err(cleanup_error) = self.terminate_registered_child(turn_id).await {
+                    log::warn!(
+                        "[gemini/send] launch cleanup failed workspace={} turn={} stage=stdout-capture: {}",
+                        self.workspace_id,
+                        turn_id,
+                        cleanup_error
+                    );
+                }
                 self.emit_error(turn_id, error_msg.clone());
                 return Err(error_msg);
-            }
-            if let Err(error) = stdin.flush().await {
-                let error_msg = format!("Failed to flush Gemini prompt stdin: {}", error);
-                let _ = child.kill().await;
+            };
+            let Some(stderr) = registry
+                .active_processes
+                .get_mut(turn_id)
+                .and_then(|process| process.child.stderr.take())
+            else {
+                drop(registry);
+                let error_msg = "Failed to capture Gemini stderr".to_string();
+                if let Err(cleanup_error) = self.terminate_registered_child(turn_id).await {
+                    log::warn!(
+                        "[gemini/send] launch cleanup failed workspace={} turn={} stage=stderr-capture: {}",
+                        self.workspace_id,
+                        turn_id,
+                        cleanup_error
+                    );
+                }
                 self.emit_error(turn_id, error_msg.clone());
                 return Err(error_msg);
-            }
-            log::info!(
-                "[gemini/send] turn={} prompt_transport=stdin prompt_chars={}",
-                turn_id,
-                prompt_chars
-            );
-        }
-
-        let stdout = match child.stdout.take() {
-            Some(stdout) => stdout,
-            None => {
-                let error_msg = "Failed to capture stdout".to_string();
-                self.emit_error(turn_id, error_msg.clone());
-                return Err(error_msg);
-            }
+            };
+            (stdin, stdout, stderr)
         };
-        let stderr = match child.stderr.take() {
-            Some(stderr) => stderr,
-            None => {
-                let error_msg = "Failed to capture stderr".to_string();
-                self.emit_error(turn_id, error_msg.clone());
-                return Err(error_msg);
-            }
-        };
+        let spawn_ms = turn_started_at.elapsed().as_millis();
 
-        {
-            let mut active = self.active_processes.lock().await;
-            active.insert(turn_id.to_string(), ActiveGeminiChildProcess::new(child));
-        }
-
+        let prompt_chars = prompt_stdin_payload.chars().count();
         self.emit_turn_event(
             turn_id,
             EngineEvent::SessionStarted {
@@ -1003,165 +1195,202 @@ impl GeminiSession {
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
 
-        while let Ok(Some(line)) = lines.next_line().await {
-            let line = line.trim().to_string();
-            if line.is_empty() {
-                continue;
-            }
-            stdout_line_count += 1;
-            if first_stdout_line_ms.is_none() {
-                first_stdout_line_ms = Some(turn_started_at.elapsed().as_millis());
-            }
-            match serde_json::from_str::<Value>(&line) {
-                Ok(event) => {
-                    if first_json_event_ms.is_none() {
-                        first_json_event_ms = Some(turn_started_at.elapsed().as_millis());
-                    }
-                    if let Some(event_type) = event.get("type").and_then(|value| value.as_str()) {
-                        if first_event_type.is_none() {
-                            first_event_type = Some(event_type.to_string());
+        let prompt_writer = async move {
+            let mut stdin = stdin;
+            stdin
+                .write_all(prompt_stdin_payload.as_bytes())
+                .await
+                .map_err(|error| format!("Failed to write Gemini prompt to stdin: {error}"))?;
+            stdin
+                .flush()
+                .await
+                .map_err(|error| format!("Failed to flush Gemini prompt stdin: {error}"))?;
+            drop(stdin);
+            log::info!(
+                "[gemini/send] turn={} prompt_transport=stdin prompt_chars={}",
+                turn_id,
+                prompt_chars
+            );
+            Ok::<(), String>(())
+        };
+        let stdout_reader = async {
+            while let Ok(Some(line)) = lines.next_line().await {
+                let line = line.trim().to_string();
+                if line.is_empty() {
+                    continue;
+                }
+                stdout_line_count += 1;
+                if first_stdout_line_ms.is_none() {
+                    first_stdout_line_ms = Some(turn_started_at.elapsed().as_millis());
+                }
+                match serde_json::from_str::<Value>(&line) {
+                    Ok(event) => {
+                        if first_json_event_ms.is_none() {
+                            first_json_event_ms = Some(turn_started_at.elapsed().as_millis());
                         }
-                        observed_event_types.insert(event_type.to_string());
-                    }
-                    if let Some(session_id) = extract_session_id(&event) {
-                        if !session_started_emitted {
-                            session_started_emitted = true;
-                            new_session_id = Some(session_id.clone());
-                            self.set_session_id(Some(session_id.clone())).await;
-                            self.emit_turn_event(
-                                turn_id,
-                                EngineEvent::SessionStarted {
-                                    workspace_id: self.workspace_id.clone(),
-                                    session_id,
-                                    engine: EngineType::Gemini,
-                                    turn_id: Some(turn_id.to_string()),
-                                },
-                            );
+                        if let Some(event_type) = event.get("type").and_then(|value| value.as_str())
+                        {
+                            if first_event_type.is_none() {
+                                first_event_type = Some(event_type.to_string());
+                            }
+                            observed_event_types.insert(event_type.to_string());
                         }
-                    }
-                    let snapshot_tool_events = extract_tool_events_from_snapshot(
-                        &self.workspace_id,
-                        &event,
-                        &mut snapshot_tool_states,
-                    );
-                    if !snapshot_tool_events.is_empty() {
-                        saw_tool_activity = true;
-                        for tool_event in snapshot_tool_events {
-                            self.emit_turn_event(turn_id, tool_event);
-                        }
-                    }
-                    let parsed_event = parse_gemini_event(&self.workspace_id, &event);
-                    if should_extract_thought_fallback(parsed_event.as_ref()) {
-                        if let Some(thought_text) = extract_latest_thought_text(&event) {
-                            let normalized_thought_text = thought_text.trim().to_string();
-                            if !normalized_thought_text.is_empty()
-                                && normalized_thought_text != last_reasoning_snapshot
-                                && emitted_reasoning_texts.insert(normalized_thought_text.clone())
-                            {
-                                last_reasoning_snapshot = normalized_thought_text.clone();
-                                saw_reasoning_output = true;
+                        if let Some(session_id) = extract_session_id(&event) {
+                            if !session_started_emitted {
+                                session_started_emitted = true;
+                                new_session_id = Some(session_id.clone());
+                                self.set_session_id(Some(session_id.clone())).await;
                                 self.emit_turn_event(
                                     turn_id,
-                                    EngineEvent::ReasoningDelta {
+                                    EngineEvent::SessionStarted {
                                         workspace_id: self.workspace_id.clone(),
-                                        text: normalized_thought_text,
+                                        session_id,
+                                        engine: EngineType::Gemini,
+                                        turn_id: Some(turn_id.to_string()),
                                     },
                                 );
                             }
                         }
-                    }
-                    if let Some(unified_event) = parsed_event {
-                        match &unified_event {
-                            EngineEvent::TextDelta { text, .. } => {
-                                if first_text_delta_ms.is_none() {
-                                    first_text_delta_ms =
-                                        Some(turn_started_at.elapsed().as_millis());
-                                }
-                                response_text.push_str(text);
+                        let snapshot_tool_events = extract_tool_events_from_snapshot(
+                            &self.workspace_id,
+                            &event,
+                            &mut snapshot_tool_states,
+                        );
+                        if !snapshot_tool_events.is_empty() {
+                            saw_tool_activity = true;
+                            for tool_event in snapshot_tool_events {
+                                self.emit_turn_event(turn_id, tool_event);
                             }
-                            EngineEvent::ReasoningDelta { text, .. } => {
-                                saw_reasoning_output = true;
-                                let normalized_text = text.trim().to_string();
-                                if !normalized_text.is_empty() {
-                                    last_reasoning_snapshot = normalized_text.clone();
-                                    emitted_reasoning_texts.insert(normalized_text);
-                                }
-                            }
-                            EngineEvent::ToolStarted { .. } | EngineEvent::ToolCompleted { .. } => {
-                                saw_tool_activity = true;
-                            }
-                            EngineEvent::TurnError { .. } => {
-                                saw_turn_error = true;
-                            }
-                            EngineEvent::TurnCompleted { result, .. } => {
-                                if first_turn_completed_ms.is_none() {
-                                    first_turn_completed_ms =
-                                        Some(turn_started_at.elapsed().as_millis());
-                                }
-                                saw_turn_completed = true;
-                                if response_text.trim().is_empty() {
-                                    if let Some(result_text) = result
-                                        .as_ref()
-                                        .and_then(|value| extract_text_from_value(value, 0))
-                                    {
-                                        response_text = result_text;
-                                    }
-                                }
-                            }
-                            _ => {}
                         }
-                        self.emit_turn_event(turn_id, unified_event);
-                    }
-
-                    if !saw_reasoning_output
-                        && last_reasoning_history_sync_at.elapsed()
-                            >= std::time::Duration::from_millis(
-                                GEMINI_REASONING_HISTORY_SYNC_INTERVAL_MS,
-                            )
-                    {
-                        last_reasoning_history_sync_at = std::time::Instant::now();
-                        let fallback_session_id = if new_session_id.is_some() {
-                            new_session_id.clone()
-                        } else {
-                            self.get_session_id().await
-                        };
-                        if let Some(session_id) = fallback_session_id {
-                            if let Ok(history) = load_gemini_session(
-                                &self.workspace_path,
-                                &session_id,
-                                self.home_dir.as_deref(),
-                            )
-                            .await
-                            {
-                                let synced_reasoning =
-                                    collect_latest_turn_reasoning_texts(&history.messages);
-                                for text in synced_reasoning {
-                                    let normalized_text = text.trim().to_string();
-                                    if normalized_text.is_empty()
-                                        || normalized_text == last_reasoning_snapshot
-                                        || !emitted_reasoning_texts.insert(normalized_text.clone())
-                                    {
-                                        continue;
-                                    }
-                                    last_reasoning_snapshot = normalized_text.clone();
+                        let parsed_event = parse_gemini_event(&self.workspace_id, &event);
+                        if should_extract_thought_fallback(parsed_event.as_ref()) {
+                            if let Some(thought_text) = extract_latest_thought_text(&event) {
+                                let normalized_thought_text = thought_text.trim().to_string();
+                                if !normalized_thought_text.is_empty()
+                                    && normalized_thought_text != last_reasoning_snapshot
+                                    && emitted_reasoning_texts
+                                        .insert(normalized_thought_text.clone())
+                                {
+                                    last_reasoning_snapshot = normalized_thought_text.clone();
                                     saw_reasoning_output = true;
                                     self.emit_turn_event(
                                         turn_id,
                                         EngineEvent::ReasoningDelta {
                                             workspace_id: self.workspace_id.clone(),
-                                            text: normalized_text,
+                                            text: normalized_thought_text,
                                         },
                                     );
                                 }
                             }
                         }
+                        if let Some(unified_event) = parsed_event {
+                            match &unified_event {
+                                EngineEvent::TextDelta { text, .. } => {
+                                    if first_text_delta_ms.is_none() {
+                                        first_text_delta_ms =
+                                            Some(turn_started_at.elapsed().as_millis());
+                                    }
+                                    response_text.push_str(text);
+                                }
+                                EngineEvent::ReasoningDelta { text, .. } => {
+                                    saw_reasoning_output = true;
+                                    let normalized_text = text.trim().to_string();
+                                    if !normalized_text.is_empty() {
+                                        last_reasoning_snapshot = normalized_text.clone();
+                                        emitted_reasoning_texts.insert(normalized_text);
+                                    }
+                                }
+                                EngineEvent::ToolStarted { .. }
+                                | EngineEvent::ToolCompleted { .. } => {
+                                    saw_tool_activity = true;
+                                }
+                                EngineEvent::TurnError { .. } => {
+                                    saw_turn_error = true;
+                                }
+                                EngineEvent::TurnCompleted { result, .. } => {
+                                    if first_turn_completed_ms.is_none() {
+                                        first_turn_completed_ms =
+                                            Some(turn_started_at.elapsed().as_millis());
+                                    }
+                                    saw_turn_completed = true;
+                                    if response_text.trim().is_empty() {
+                                        if let Some(result_text) = result
+                                            .as_ref()
+                                            .and_then(|value| extract_text_from_value(value, 0))
+                                        {
+                                            response_text = result_text;
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
+                            self.emit_turn_event(turn_id, unified_event);
+                        }
+
+                        if !saw_reasoning_output
+                            && last_reasoning_history_sync_at.elapsed()
+                                >= std::time::Duration::from_millis(
+                                    GEMINI_REASONING_HISTORY_SYNC_INTERVAL_MS,
+                                )
+                        {
+                            last_reasoning_history_sync_at = std::time::Instant::now();
+                            let fallback_session_id = if new_session_id.is_some() {
+                                new_session_id.clone()
+                            } else {
+                                self.get_session_id().await
+                            };
+                            if let Some(session_id) = fallback_session_id {
+                                if let Ok(history) = load_gemini_session(
+                                    &self.workspace_path,
+                                    &session_id,
+                                    self.home_dir.as_deref(),
+                                )
+                                .await
+                                {
+                                    let synced_reasoning =
+                                        collect_latest_turn_reasoning_texts(&history.messages);
+                                    for text in synced_reasoning {
+                                        let normalized_text = text.trim().to_string();
+                                        if normalized_text.is_empty()
+                                            || normalized_text == last_reasoning_snapshot
+                                            || !emitted_reasoning_texts
+                                                .insert(normalized_text.clone())
+                                        {
+                                            continue;
+                                        }
+                                        last_reasoning_snapshot = normalized_text.clone();
+                                        saw_reasoning_output = true;
+                                        self.emit_turn_event(
+                                            turn_id,
+                                            EngineEvent::ReasoningDelta {
+                                                workspace_id: self.workspace_id.clone(),
+                                                text: normalized_text,
+                                            },
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        error_output.push_str(&line);
+                        error_output.push('\n');
                     }
                 }
-                Err(_) => {
-                    error_output.push_str(&line);
-                    error_output.push('\n');
-                }
             }
+            Ok::<(), String>(())
+        };
+        if let Err(error_msg) = tokio::try_join!(prompt_writer, stdout_reader) {
+            if let Err(cleanup_error) = self.terminate_registered_child(turn_id).await {
+                log::warn!(
+                    "[gemini/send] io cleanup failed workspace={} turn={}: {}",
+                    self.workspace_id,
+                    turn_id,
+                    cleanup_error
+                );
+            }
+            self.emit_error(turn_id, error_msg.clone());
+            return Err(error_msg);
         }
         let stdout_eof_ms = turn_started_at.elapsed().as_millis();
 
@@ -1198,16 +1427,13 @@ impl GeminiSession {
             }
         }
 
-        let mut child = {
-            let mut active = self.active_processes.lock().await;
-            active
-                .remove(turn_id)
-                .map(ActiveGeminiChildProcess::into_child)
-        };
-        let status = if let Some(mut process) = child.take() {
-            process.wait().await.ok()
-        } else {
-            None
+        let status = match self.wait_for_registered_child(turn_id).await {
+            Ok(status) => status,
+            Err(error_msg) => {
+                stderr_task.abort();
+                self.emit_error(turn_id, error_msg.clone());
+                return Err(error_msg);
+            }
         };
         let stderr_text = stderr_task.await.unwrap_or_default();
         if !stderr_text.trim().is_empty() {
@@ -1247,11 +1473,14 @@ impl GeminiSession {
             had_conn_reset,
         );
 
+        if self.take_interrupted_turn(turn_id).await {
+            let error_msg = "Session stopped.".to_string();
+            self.emit_error(turn_id, error_msg.clone());
+            return Err(error_msg);
+        }
         if let Some(status) = status {
             if !status.success() {
-                let error_msg = if self.interrupted.swap(false, Ordering::SeqCst) {
-                    "Session stopped.".to_string()
-                } else if !error_output.trim().is_empty() {
+                let error_msg = if !error_output.trim().is_empty() {
                     error_output.trim().to_string()
                 } else {
                     format!("Gemini exited with status: {}", status)
@@ -1259,10 +1488,6 @@ impl GeminiSession {
                 self.emit_error(turn_id, error_msg.clone());
                 return Err(error_msg);
             }
-        } else if self.interrupted.swap(false, Ordering::SeqCst) {
-            let error_msg = "Session stopped.".to_string();
-            self.emit_error(turn_id, error_msg.clone());
-            return Err(error_msg);
         }
 
         if response_text.trim().is_empty() && !error_output.trim().is_empty() {
@@ -1316,41 +1541,78 @@ impl GeminiSession {
         Ok(response_text)
     }
 
-    pub async fn interrupt(&self) -> Result<(), String> {
-        self.interrupted.store(true, Ordering::SeqCst);
-        let mut active = self.active_processes.lock().await;
-        for process in active.values_mut() {
-            let child = &mut process.child;
-            child
-                .kill()
-                .await
-                .map_err(|e| format!("Failed to kill process: {}", e))?;
+    async fn terminate_active_processes(
+        &self,
+        registry: &mut GeminiProcessRegistry,
+        operation: &str,
+    ) -> Result<(), String> {
+        let turn_ids = registry
+            .active_processes
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut first_terminate_error: Option<String> = None;
+        for turn_id in turn_ids {
+            registry.interrupted_turns.insert(turn_id.clone());
+            let terminate_result = match registry.active_processes.get_mut(&turn_id) {
+                Some(process) => {
+                    self.terminate_child_process(&turn_id, &mut process.child)
+                        .await
+                }
+                None => Ok(()),
+            };
+            if let Err(error) = terminate_result {
+                log::warn!(
+                    "[gemini] {} cleanup failed workspace={} turn={}: {}",
+                    operation,
+                    self.workspace_id,
+                    turn_id,
+                    error
+                );
+                if first_terminate_error.is_none() {
+                    first_terminate_error = Some(error);
+                }
+            } else {
+                registry.active_processes.remove(&turn_id);
+            }
         }
-        active.clear();
+        if let Some(error) = first_terminate_error {
+            return Err(error);
+        }
         Ok(())
     }
 
+    pub async fn interrupt(&self) -> Result<(), String> {
+        let mut registry = self.process_registry.lock().await;
+        registry.interrupt_generation = registry.interrupt_generation.wrapping_add(1);
+        self.terminate_active_processes(&mut registry, "interrupt")
+            .await
+    }
+
+    pub async fn close(&self) -> Result<(), String> {
+        let mut registry = self.process_registry.lock().await;
+        registry.closed = true;
+        self.terminate_active_processes(&mut registry, "close")
+            .await
+    }
+
     pub async fn interrupt_turn(&self, turn_id: &str) -> Result<(), String> {
-        self.interrupted.store(true, Ordering::SeqCst);
-        let mut child = {
-            let mut active = self.active_processes.lock().await;
-            active
-                .remove(turn_id)
-                .map(ActiveGeminiChildProcess::into_child)
+        let mut registry = self.process_registry.lock().await;
+        registry.interrupted_turns.insert(turn_id.to_string());
+        let Some(process) = registry.active_processes.get_mut(turn_id) else {
+            return Ok(());
         };
-        if let Some(child_proc) = child.as_mut() {
-            child_proc
-                .kill()
-                .await
-                .map_err(|e| format!("Failed to kill process: {}", e))?;
-        }
+        self.terminate_child_process(turn_id, &mut process.child)
+            .await?;
+        registry.active_processes.remove(turn_id);
         Ok(())
     }
 
     #[cfg(test)]
     pub async fn active_process_ids(&self) -> Vec<u32> {
-        let active = self.active_processes.lock().await;
-        active
+        let registry = self.process_registry.lock().await;
+        registry
+            .active_processes
             .values()
             .filter_map(|process| process.child.id())
             .collect()
@@ -1361,8 +1623,9 @@ impl GeminiSession {
         &self,
         sampled_at_ms: u64,
     ) -> Vec<GeminiActiveProcessSnapshot> {
-        let active = self.active_processes.lock().await;
-        active
+        let registry = self.process_registry.lock().await;
+        registry
+            .active_processes
             .values()
             .filter_map(|process| process.snapshot(sampled_at_ms))
             .collect()
@@ -1371,17 +1634,17 @@ impl GeminiSession {
 
 impl Drop for GeminiSession {
     fn drop(&mut self) {
-        let Ok(mut active) = self.active_processes.try_lock() else {
+        let Ok(mut registry) = self.process_registry.try_lock() else {
             log::warn!(
-                "[gemini] dropping session workspace={} while active_processes is locked; child cleanup fallback skipped",
+                "[gemini] cleanup_skipped workspace={} reason=registry_lock_contention",
                 self.workspace_id
             );
             return;
         };
-        if active.is_empty() {
+        if registry.active_processes.is_empty() {
             return;
         }
-        for (turn_id, process) in active.drain() {
+        for (turn_id, process) in registry.active_processes.drain() {
             let mut child = process.into_child();
             let pid = child.id();
             match child.start_kill() {

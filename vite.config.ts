@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
@@ -15,6 +16,17 @@ import reactComponentName from "react-scan/react-component-name/vite";
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const nodeRequire = createRequire(import.meta.url);
+const workerSafeConditionalEntries = new Map([
+  [
+    "decode-named-character-reference",
+    nodeRequire.resolve("decode-named-character-reference"),
+  ],
+  [
+    "hast-util-from-html-isomorphic",
+    nodeRequire.resolve("hast-util-from-html-isomorphic"),
+  ],
+]);
 
 const packageJson = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
@@ -47,6 +59,15 @@ export default defineConfig(({ command }) => ({
   },
   worker: {
     format: "es",
+    plugins: () => [
+      {
+        name: "fast-markdown-worker-safe-conditional-exports",
+        enforce: "pre",
+        resolveId(source) {
+          return workerSafeConditionalEntries.get(source) ?? null;
+        },
+      },
+    ],
   },
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),

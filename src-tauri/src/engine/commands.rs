@@ -32,7 +32,7 @@ use super::remote_bridge::{
     call_remote_typed, remote_detect_engines_request, remote_engine_interrupt_request,
     remote_engine_send_message_sync_request,
 };
-use super::status::{detect_gemini_status, load_opencode_models};
+use super::status::load_opencode_models;
 use super::{
     engine_disabled_diagnostic, engine_enabled_in_settings, EngineConfig, EngineStatus, EngineType,
 };
@@ -304,6 +304,26 @@ fn ensure_engine_enabled(
     Err(engine_disabled_diagnostic(engine_type)
         .unwrap_or("Engine is disabled in CLI validation settings")
         .to_string())
+}
+
+fn resolve_enabled_engine_for_send(
+    settings: &crate::types::AppSettings,
+    requested_engine: Option<EngineType>,
+    active_engine: EngineType,
+) -> Result<EngineType, String> {
+    let effective_engine = requested_engine.unwrap_or(active_engine);
+    ensure_engine_enabled(settings, effective_engine)?;
+    Ok(effective_engine)
+}
+
+fn validate_remote_requested_engine(
+    settings: &crate::types::AppSettings,
+    requested_engine: Option<EngineType>,
+) -> Result<Option<EngineType>, String> {
+    if let Some(engine_type) = requested_engine {
+        ensure_engine_enabled(settings, engine_type)?;
+    }
+    Ok(requested_engine)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1098,6 +1118,9 @@ pub async fn switch_engine(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
+    let settings = read_app_settings_snapshot(&state).await;
+    ensure_engine_enabled(&settings, engine_type)?;
+
     if remote_backend::is_remote_mode(&*state).await {
         let _: Value = call_remote_typed(
             &*state,
@@ -1109,8 +1132,6 @@ pub async fn switch_engine(
         return Ok(());
     }
     let manager = &state.engine_manager;
-    let settings = read_app_settings_snapshot(&state).await;
-    ensure_engine_enabled(&settings, engine_type)?;
     manager.set_active_engine(engine_type).await
 }
 
@@ -1295,6 +1316,9 @@ pub async fn get_engine_models(
     app: AppHandle,
 ) -> Result<Vec<super::ModelInfo>, String> {
     let force_refresh = force_refresh.unwrap_or(false);
+    let settings = read_app_settings_snapshot(&state).await;
+    ensure_engine_enabled(&settings, engine_type)?;
+
     if remote_backend::is_remote_mode(&*state).await {
         return call_remote_typed(
             &*state,
@@ -1305,8 +1329,6 @@ pub async fn get_engine_models(
         .await;
     }
     let manager = &state.engine_manager;
-    let settings = read_app_settings_snapshot(&state).await;
-    ensure_engine_enabled(&settings, engine_type)?;
 
     match engine_type {
         EngineType::OpenCode => {
@@ -1329,26 +1351,7 @@ pub async fn get_engine_models(
 
             Ok(fresh_models)
         }
-        EngineType::Gemini => {
-            let config = manager.get_engine_config(EngineType::Gemini).await;
-            let custom_bin = config
-                .as_ref()
-                .and_then(|cfg| cfg.bin_path.as_ref())
-                .map(|s| s.as_str());
-            let fresh_status = detect_gemini_status(custom_bin).await;
-
-            if !fresh_status.models.is_empty() {
-                return Ok(fresh_status.models);
-            }
-
-            if let Some(cached) = manager.get_engine_status(EngineType::Gemini).await {
-                if !cached.models.is_empty() {
-                    return Ok(cached.models);
-                }
-            }
-
-            Ok(fresh_status.models)
-        }
+        EngineType::Gemini => Ok(Vec::new()),
         EngineType::Claude | EngineType::Codex => {
             if force_refresh {
                 let status = manager
@@ -1403,7 +1406,11 @@ pub async fn engine_send_message(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
+    let requested_engine = engine;
+    let settings = read_app_settings_snapshot(&state).await;
+
     if remote_backend::is_remote_mode(&*state).await {
+        let remote_engine = validate_remote_requested_engine(&settings, requested_engine)?;
         let images = images.map(|paths| {
             paths
                 .into_iter()
@@ -1417,7 +1424,7 @@ pub async fn engine_send_message(
             json!({
                 "workspaceId": workspace_id,
                 "text": text,
-                "engine": engine,
+                "engine": remote_engine,
                 "model": model,
                 "effort": effort,
                 "disableThinking": disable_thinking.unwrap_or(false),
@@ -1438,10 +1445,8 @@ pub async fn engine_send_message(
 
     let manager = &state.engine_manager;
     let active_engine = manager.get_active_engine().await;
-    let requested_engine = engine;
-    let effective_engine = requested_engine.unwrap_or(active_engine);
-    let settings = read_app_settings_snapshot(&state).await;
-    ensure_engine_enabled(&settings, effective_engine)?;
+    let effective_engine =
+        resolve_enabled_engine_for_send(&settings, requested_engine, active_engine)?;
     log::info!(
         "[engine_send_message] engine={:?} active_engine={:?} workspace_id={} model={:?} continue_session={} thread_id={:?} session_id={:?} fork_session_id={:?} agent={:?} variant={:?}",
         effective_engine,
@@ -1907,7 +1912,7 @@ pub async fn engine_send_message(
 
             let session = manager
                 .get_or_create_gemini_session(&workspace_id, &workspace_path)
-                .await;
+                .await?;
 
             let resolved_session_id = if continue_session {
                 if session_id.is_some() {
@@ -2141,11 +2146,14 @@ pub async fn engine_send_message_sync(
     if text.trim().is_empty() {
         return Err("Prompt text cannot be empty".to_string());
     }
+    let settings = read_app_settings_snapshot(&state).await;
+
     if remote_backend::is_remote_mode(&*state).await {
+        let remote_engine = validate_remote_requested_engine(&settings, engine)?;
         let (method, params) = remote_engine_send_message_sync_request(
             workspace_id,
             text,
-            engine,
+            remote_engine,
             model,
             effort,
             disable_thinking,
@@ -2164,7 +2172,7 @@ pub async fn engine_send_message_sync(
 
     let manager = &state.engine_manager;
     let active_engine = manager.get_active_engine().await;
-    let effective_engine = engine.unwrap_or(active_engine);
+    let effective_engine = resolve_enabled_engine_for_send(&settings, engine, active_engine)?;
     let normalized_custom_spec_root = normalize_custom_spec_root(custom_spec_root.as_deref());
 
     match effective_engine {
@@ -2370,7 +2378,7 @@ pub async fn engine_send_message_sync(
 
             let session = manager
                 .get_or_create_gemini_session(&workspace_id, &workspace_path)
-                .await;
+                .await?;
             let resolved_session_id = if continue_session {
                 if session_id.is_some() {
                     session_id
@@ -2411,12 +2419,9 @@ pub async fn engine_send_message_sync(
             };
 
             let turn_id = format!("gemini-sync-{}", uuid::Uuid::new_v4());
-            let response = timeout(
-                Duration::from_secs(900),
-                session.send_message(params, &turn_id),
-            )
-            .await
-            .map_err(|_| "Gemini response timed out".to_string())??;
+            let response = session
+                .send_message_with_timeout(params, &turn_id, Duration::from_secs(900))
+                .await?;
             record_auto_session_metadata_if_present(
                 &state,
                 &workspace_id,

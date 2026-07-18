@@ -9,6 +9,7 @@ import {
   readLastCommitMessageConfig,
   saveLastCommitMessageConfig,
 } from "../../../utils/commitMessage";
+import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
@@ -2027,7 +2028,7 @@ function GitDiffPanelImpl({
       engine: CommitMessageEngine,
       repositorySelections?: RepositoryCommitSelection[],
     ) => {
-      if (!onGenerateCommitMessage) {
+      if (!onGenerateCommitMessage || !isEngineExecutionEnabled(engine)) {
         return;
       }
       setCommitMessageMenuEngine(engine);

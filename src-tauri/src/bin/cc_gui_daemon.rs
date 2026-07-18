@@ -31,6 +31,8 @@ mod codex_thread_mode_state;
 mod daemon_state;
 #[path = "cc_gui_daemon/engine_bridge.rs"]
 mod engine;
+#[path = "../engine_policy.rs"]
+mod engine_policy;
 #[path = "../files/io.rs"]
 mod file_io;
 #[path = "../files/ops.rs"]
@@ -260,7 +262,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Command;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 
-use backend::app_server::{spawn_workspace_session, WorkspaceSession};
+use backend::app_server::{spawn_workspace_session, RuntimeShutdownSource, WorkspaceSession};
 use backend::events::{AppServerEvent, EventSink, TerminalOutput};
 use shared::{
     codex_core, files_core, git_core, proxy_core, settings_core, thread_titles_core,
@@ -2282,6 +2284,26 @@ async fn handle_client(
     write_task.abort();
 }
 
+#[cfg(unix)]
+async fn wait_for_shutdown_signal() -> Result<&'static str, String> {
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .map_err(|error| format!("failed to register SIGTERM handler: {error}"))?;
+    let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+        .map_err(|error| format!("failed to register SIGINT handler: {error}"))?;
+    tokio::select! {
+        _ = terminate.recv() => Ok("SIGTERM"),
+        _ = interrupt.recv() => Ok("SIGINT"),
+    }
+}
+
+#[cfg(not(unix))]
+async fn wait_for_shutdown_signal() -> Result<&'static str, String> {
+    tokio::signal::ctrl_c()
+        .await
+        .map_err(|error| format!("failed to register shutdown handler: {error}"))?;
+    Ok("Ctrl-C")
+}
+
 fn main() {
     if let Err(err) = fix_path_env::fix() {
         eprintln!("Failed to sync PATH from shell: {err}");
@@ -2320,19 +2342,67 @@ fn main() {
                 .display()
         );
 
+        let mut shutdown_signal = Box::pin(wait_for_shutdown_signal());
+        let mut client_tasks = tokio::task::JoinSet::new();
         loop {
-            match listener.accept().await {
-                Ok((socket, _addr)) => {
-                    let config = Arc::clone(&config);
-                    let state = Arc::clone(&state);
-                    let events = events_tx.clone();
-                    tokio::spawn(async move {
-                        handle_client(socket, config, state, events).await;
-                    });
+            tokio::select! {
+                shutdown_result = &mut shutdown_signal => {
+                    match shutdown_result {
+                        Ok(signal) => eprintln!("cc_gui_daemon received {signal}; shutting down"),
+                        Err(error) => eprintln!("cc_gui_daemon shutdown signal error: {error}"),
+                    }
+                    break;
                 }
-                Err(_) => continue,
+                accept_result = listener.accept() => {
+                    match accept_result {
+                        Ok((socket, _addr)) => {
+                            let config = Arc::clone(&config);
+                            let state = Arc::clone(&state);
+                            let events = events_tx.clone();
+                            client_tasks.spawn(async move {
+                                handle_client(socket, config, state, events).await;
+                            });
+                        }
+                        Err(_) => continue,
+                    }
+                }
+                Some(join_result) = client_tasks.join_next(), if !client_tasks.is_empty() => {
+                    if let Err(error) = join_result {
+                        eprintln!("cc_gui_daemon client task failed: {error}");
+                    }
+                }
             }
         }
+
+        client_tasks.abort_all();
+        while client_tasks.join_next().await.is_some() {}
+        state.runtime_manager.begin_shutdown();
+        state.engine_manager.claude_manager.interrupt_all().await;
+        if let Err(error) = state.engine_manager.shutdown_gemini_sessions().await {
+            eprintln!("cc_gui_daemon Gemini shutdown failed: {error}");
+        }
+        let codex_sessions = {
+            let mut sessions = state.sessions.lock().await;
+            sessions
+                .drain()
+                .map(|(_, session)| session)
+                .collect::<Vec<_>>()
+        };
+        for session in codex_sessions {
+            let workspace_id = session.entry.id.clone();
+            if let Err(error) = runtime::terminate_workspace_session_with_source(
+                session,
+                Some(state.runtime_manager.as_ref()),
+                RuntimeShutdownSource::AppExit,
+            )
+            .await
+            {
+                eprintln!(
+                    "cc_gui_daemon Codex shutdown failed for workspace {workspace_id}: {error}"
+                );
+            }
+        }
+        state.runtime_manager.note_shutdown().await;
     });
 }
 

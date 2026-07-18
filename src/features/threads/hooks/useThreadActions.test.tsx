@@ -95,6 +95,101 @@ describe("useThreadActions", () => {
     });
   });
 
+  it("ignores an older same-thread resume response after a newer request wins", async () => {
+    const newerItem: ConversationItem = {
+      id: "assistant-newer-history",
+      kind: "message",
+      role: "assistant",
+      text: "Newest readable history",
+    };
+    type ResumeResponse = {
+      result: {
+        thread: {
+          id: string;
+          preview: string;
+          updated_at: number;
+        };
+      };
+    };
+    const resumeResolvers: Array<(value: ResumeResponse) => void> = [];
+    vi.mocked(resumeThread).mockImplementation(
+      () =>
+        new Promise<ResumeResponse>((resolve) => {
+          resumeResolvers.push(resolve);
+        }) as never,
+    );
+    vi.mocked(buildItemsFromThread).mockImplementation((thread) =>
+      (thread as { preview?: string }).preview === "newer" ? [newerItem] : [],
+    );
+    vi.mocked(mergeThreadItems).mockReturnValue([newerItem]);
+    const onDebug = vi.fn();
+    const { result, dispatch, loadedThreadsRef } = renderActions({ onDebug });
+
+    let olderRequest: Promise<string | null> | null = null;
+    let newerRequest: Promise<string | null> | null = null;
+    act(() => {
+      olderRequest = result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "thread-overlapping-history",
+      );
+      newerRequest = result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "thread-overlapping-history",
+      );
+    });
+    expect(resumeResolvers).toHaveLength(2);
+
+    await act(async () => {
+      resumeResolvers[1]?.({
+        result: {
+          thread: {
+            id: "thread-overlapping-history",
+            preview: "newer",
+            updated_at: 200,
+          },
+        },
+      });
+      await newerRequest;
+    });
+    await act(async () => {
+      resumeResolvers[0]?.({
+        result: {
+          thread: {
+            id: "thread-overlapping-history",
+            preview: "older-empty",
+            updated_at: 100,
+          },
+        },
+      });
+      await olderRequest;
+    });
+
+    expect(loadedThreadsRef.current["thread-overlapping-history"]).toBe(true);
+    expect(
+      result.current.historyLoadingByThreadId["thread-overlapping-history"],
+    ).toBeUndefined();
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadItems",
+      threadId: "thread-overlapping-history",
+      items: [newerItem],
+    });
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setThreadItems",
+        threadId: "thread-overlapping-history",
+        items: [],
+      }),
+    );
+    expect(onDebug).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "thread/history readable surface",
+        payload: expect.objectContaining({
+          reopenOutcome: "failed",
+        }),
+      }),
+    );
+  });
+
   it("uses unified history loader path for codex threads when enabled", async () => {
     const assistantItem: ConversationItem = {
       id: "assistant-unified-1",
@@ -153,6 +248,38 @@ describe("useThreadActions", () => {
       expect.objectContaining({
         type: "setThreadHistoryRestoredAt",
         threadId: "thread-unified",
+      }),
+    );
+  });
+
+  it("keeps optimistic pending threads local without calling a history backend", async () => {
+    const onDebug = vi.fn();
+    const { result, loadedThreadsRef } = renderActions({
+      useUnifiedHistoryLoader: true,
+      onDebug,
+    });
+
+    await act(async () => {
+      await result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "codex-pending-local",
+      );
+    });
+
+    expect(resumeThread).not.toHaveBeenCalled();
+    expect(loadCodexSession).not.toHaveBeenCalled();
+    expect(loadedThreadsRef.current["codex-pending-local"]).toBe(true);
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "thread/resume skipped",
+        payload: expect.objectContaining({
+          reason: "optimistic-pending-thread",
+        }),
+      }),
+    );
+    expect(onDebug).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "thread/history readable surface",
       }),
     );
   });
@@ -232,10 +359,11 @@ describe("useThreadActions", () => {
     vi.mocked(buildItemsFromThread).mockReturnValue([collabLinkItem]);
 
     const onDebug = vi.fn();
-    const { result, dispatch, loadedThreadsRef, updateThreadParent } = renderActions({
-      useUnifiedHistoryLoader: true,
-      onDebug,
-    });
+    const { result, dispatch, loadedThreadsRef, updateThreadParent } =
+      renderActions({
+        useUnifiedHistoryLoader: true,
+        onDebug,
+      });
 
     await act(async () => {
       await result.current.resumeThreadForWorkspace("ws-1", "thread-selected");
@@ -289,12 +417,7 @@ describe("useThreadActions", () => {
       threadId: "thread-empty",
       engine: "codex",
     });
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "setThreadPlan",
-      threadId: "thread-empty",
-      plan: null,
-    });
-    expect(dispatch).toHaveBeenCalledWith(
+    expect(dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({
         type: "setThreadHistoryRestoredAt",
         threadId: "thread-empty",
@@ -305,9 +428,69 @@ describe("useThreadActions", () => {
         label: "thread/history fallback",
       }),
     );
+    expect(result.current.historyLoadingByThreadId["thread-empty"]).toBe(
+      "failed",
+    );
   });
 
-  it("reports a failed readable surface when unified history loads no items", async () => {
+  it("retries one empty unified history result and hydrates the recovered snapshot", async () => {
+    const recoveredItem: ConversationItem = {
+      id: "assistant-after-empty-retry",
+      kind: "message",
+      role: "assistant",
+      text: "Recovered on the bounded retry",
+    };
+    vi.mocked(resumeThread)
+      .mockResolvedValueOnce({
+        result: {
+          thread: {
+            id: "thread-empty-then-readable",
+            turns: [{ id: "turn-empty-first", items: [] }],
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          thread: {
+            id: "thread-empty-then-readable",
+            turns: [{ id: "turn-readable-second", items: [] }],
+          },
+        },
+      });
+    vi.mocked(buildItemsFromThread)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([recoveredItem]);
+    const onDebug = vi.fn();
+    const { result, dispatch, loadedThreadsRef } = renderActions({
+      useUnifiedHistoryLoader: true,
+      onDebug,
+    });
+
+    await act(async () => {
+      await result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "thread-empty-then-readable",
+      );
+    });
+
+    expect(resumeThread).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadItems",
+      threadId: "thread-empty-then-readable",
+      items: [recoveredItem],
+    });
+    expect(loadedThreadsRef.current["thread-empty-then-readable"]).toBe(true);
+    expect(
+      result.current.historyLoadingByThreadId["thread-empty-then-readable"],
+    ).toBeUndefined();
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "thread/history empty retry",
+      }),
+    );
+  });
+
+  it("reports a retryable failure when bounded unified history recovery stays empty", async () => {
     vi.mocked(resumeThread).mockResolvedValue({
       result: {
         thread: {
@@ -318,7 +501,7 @@ describe("useThreadActions", () => {
     });
     vi.mocked(buildItemsFromThread).mockReturnValue([]);
     const onDebug = vi.fn();
-    const { result } = renderActions({
+    const { result, dispatch, loadedThreadsRef } = renderActions({
       useUnifiedHistoryLoader: true,
       onDebug,
     });
@@ -330,6 +513,7 @@ describe("useThreadActions", () => {
       );
     });
 
+    expect(resumeThread).toHaveBeenCalledTimes(2);
     expect(onDebug).toHaveBeenCalledWith(
       expect.objectContaining({
         label: "thread/history readable surface",
@@ -342,6 +526,260 @@ describe("useThreadActions", () => {
         }),
       }),
     );
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setThreadHistoryRestoredAt",
+        threadId: "thread-empty-history",
+      }),
+    );
+    expect(loadedThreadsRef.current["thread-empty-history"]).toBe(false);
+    expect(
+      result.current.historyLoadingByThreadId["thread-empty-history"],
+    ).toBe("failed");
+  });
+
+  it("shares failed automatic recovery across aliases and re-arms only on explicit refresh", async () => {
+    const recoveredItem: ConversationItem = {
+      id: "assistant-explicit-history-retry",
+      kind: "message",
+      role: "assistant",
+      text: "Recovered by explicit refresh",
+    };
+    vi.mocked(resumeThread)
+      .mockResolvedValueOnce({
+        result: {
+          thread: {
+            id: "thread-canonical-history",
+            turns: [{ id: "turn-empty-first", items: [] }],
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          thread: {
+            id: "thread-canonical-history",
+            turns: [{ id: "turn-empty-second", items: [] }],
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          thread: {
+            id: "thread-canonical-history",
+            turns: [{ id: "turn-readable-explicit", items: [] }],
+          },
+        },
+      });
+    vi.mocked(buildItemsFromThread)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([recoveredItem]);
+    const resolveCanonicalThreadId = (threadId: string) =>
+      threadId === "thread-old-history" ? "thread-canonical-history" : threadId;
+    const { result, dispatch } = renderActions({
+      useUnifiedHistoryLoader: true,
+      resolveCanonicalThreadId,
+    });
+
+    await act(async () => {
+      await result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "thread-canonical-history",
+      );
+    });
+    await act(async () => {
+      await result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "thread-old-history",
+      );
+    });
+
+    expect(resumeThread).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await result.current.refreshThread("ws-1", "thread-canonical-history");
+    });
+
+    expect(resumeThread).toHaveBeenCalledTimes(3);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadItems",
+      threadId: "thread-canonical-history",
+      items: [recoveredItem],
+    });
+    expect(
+      result.current.historyLoadingByThreadId["thread-canonical-history"],
+    ).toBeUndefined();
+  });
+
+  it("preserves last-good local items when bounded history recovery stays empty", async () => {
+    const localItem: ConversationItem = {
+      id: "assistant-last-good-local",
+      kind: "message",
+      role: "assistant",
+      text: "Keep this readable transcript",
+    };
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          id: "thread-empty-with-local",
+          turns: [{ id: "turn-empty-with-local", items: [] }],
+        },
+      },
+    });
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    const onDebug = vi.fn();
+    const { result, dispatch, loadedThreadsRef } = renderActions({
+      useUnifiedHistoryLoader: true,
+      onDebug,
+      itemsByThread: {
+        "thread-empty-with-local": [localItem],
+      },
+    });
+
+    await act(async () => {
+      await result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "thread-empty-with-local",
+      );
+    });
+
+    expect(resumeThread).toHaveBeenCalledTimes(2);
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setThreadItems",
+        threadId: "thread-empty-with-local",
+      }),
+    );
+    expect(loadedThreadsRef.current["thread-empty-with-local"]).toBe(false);
+    expect(
+      result.current.historyLoadingByThreadId["thread-empty-with-local"],
+    ).toBe("failed");
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "thread/history readable surface",
+        payload: expect.objectContaining({
+          reopenOutcome: "degraded-readable",
+          reasonCode: "last-good-local-items-preserved",
+          localItemCount: 1,
+        }),
+      }),
+    );
+  });
+
+  it("does not mark an empty legacy fallback as restored after the unified loader fails", async () => {
+    vi.mocked(resumeThread)
+      .mockRejectedValueOnce(new Error("history transport unavailable"))
+      .mockResolvedValueOnce({
+        result: {
+          thread: {
+            id: "thread-empty-legacy-fallback",
+            turns: [],
+          },
+        },
+      });
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    const { result, dispatch, loadedThreadsRef } = renderActions({
+      useUnifiedHistoryLoader: true,
+    });
+
+    await act(async () => {
+      await result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "thread-empty-legacy-fallback",
+      );
+    });
+
+    expect(resumeThread).toHaveBeenCalledTimes(2);
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setThreadHistoryRestoredAt",
+        threadId: "thread-empty-legacy-fallback",
+      }),
+    );
+    expect(loadedThreadsRef.current["thread-empty-legacy-fallback"]).toBe(
+      false,
+    );
+    expect(
+      result.current.historyLoadingByThreadId["thread-empty-legacy-fallback"],
+    ).toBe("failed");
+  });
+
+  it("does not switch aliases when a replacement candidate also hydrates empty", async () => {
+    vi.mocked(resumeThread).mockImplementation(
+      async (_workspaceId: string, targetThreadId: string) => {
+        if (targetThreadId === "thread-stale-empty-replacement") {
+          throw new Error("thread not found: thread-stale-empty-replacement");
+        }
+        return {
+          result: {
+            thread: {
+              id: targetThreadId,
+              turns: [],
+            },
+          },
+        };
+      },
+    );
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-empty-replacement",
+            preview: "Recovered candidate",
+            updated_at: 999,
+            cwd: "/tmp/codex",
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(loadCodexSession).mockResolvedValue({ entries: [] });
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    const rememberThreadAlias = vi.fn();
+    const clearThreadAlias = vi.fn();
+    const { result, dispatch, loadedThreadsRef } = renderActions({
+      useUnifiedHistoryLoader: true,
+      rememberThreadAlias,
+      clearThreadAlias,
+      resolveWorkspacePath: () => "/tmp/codex",
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "thread-stale-empty-replacement",
+            name: "Recovered candidate",
+            updatedAt: 10,
+            engineSource: "codex",
+            threadKind: "native",
+          },
+        ],
+      },
+      activeThreadIdByWorkspace: {
+        "ws-1": "thread-stale-empty-replacement",
+      },
+    });
+
+    let resumed: string | null = null;
+    await act(async () => {
+      resumed = await result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "thread-stale-empty-replacement",
+      );
+    });
+
+    expect(resumed).toBe("thread-stale-empty-replacement");
+    expect(rememberThreadAlias).not.toHaveBeenCalled();
+    expect(clearThreadAlias).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalledWith({
+      type: "setActiveThreadId",
+      workspaceId: "ws-1",
+      threadId: "thread-empty-replacement",
+    });
+    expect(loadedThreadsRef.current["thread-stale-empty-replacement"]).toBe(
+      false,
+    );
+    expect(
+      result.current.historyLoadingByThreadId["thread-stale-empty-replacement"],
+    ).toBe("failed");
   });
 
   it("recovers stale unified codex thread ids without breaking current workspace state", async () => {

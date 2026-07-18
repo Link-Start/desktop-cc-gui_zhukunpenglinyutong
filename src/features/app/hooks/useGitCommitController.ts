@@ -16,6 +16,7 @@ import {
   sanitizeGeneratedCommitMessage,
   shouldApplyCommitMessage,
 } from "../../../utils/commitMessage";
+import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import { useGitStatus } from "../../git/hooks/useGitStatus";
 import {
   runScopedCommitOperation,
@@ -108,6 +109,10 @@ export function useGitCommitController({
     repositorySelections?: CommitMessageRepositorySelection[],
   ) => {
     if (!activeWorkspace || commitMessageLoading) {
+      return;
+    }
+    if (!isEngineExecutionEnabled(engine)) {
+      setCommitMessageError("unsupported_engine");
       return;
     }
     const workspaceId = activeWorkspace.id;

@@ -24,7 +24,6 @@ const PROMPT_ENHANCER_AUTO_SESSION = {
 export const PROMPT_ENHANCER_ENGINE_OPTIONS: EngineType[] = [
   'claude',
   'codex',
-  'gemini',
   'opencode',
 ];
 
@@ -66,7 +65,6 @@ function buildPromptEnhancerInstruction(originalPrompt: string, engine: EngineTy
 function normalizeEnhancerEngine(currentProvider: string): EngineType {
   switch (currentProvider) {
     case 'codex':
-    case 'gemini':
     case 'opencode':
       return currentProvider;
     case 'claude':
@@ -76,7 +74,7 @@ function normalizeEnhancerEngine(currentProvider: string): EngineType {
 }
 
 function isPromptEnhancerProviderId(engine: EngineType): engine is ProviderId {
-  return engine === 'claude' || engine === 'codex' || engine === 'gemini' || engine === 'opencode';
+  return engine === 'claude' || engine === 'codex' || engine === 'opencode';
 }
 
 function resolveEnhancerModelOptions(

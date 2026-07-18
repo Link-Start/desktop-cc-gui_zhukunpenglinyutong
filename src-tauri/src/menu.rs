@@ -427,9 +427,11 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         submenu
     };
 
-    let toggle_projects_sidebar_item =
-        MenuItemBuilder::with_id("view_toggle_projects_sidebar", labels.toggle_projects_sidebar)
-            .build(handle)?;
+    let toggle_projects_sidebar_item = MenuItemBuilder::with_id(
+        "view_toggle_projects_sidebar",
+        labels.toggle_projects_sidebar,
+    )
+    .build(handle)?;
     let toggle_git_sidebar_item =
         MenuItemBuilder::with_id("view_toggle_git_sidebar", labels.toggle_git_sidebar)
             .build(handle)?;

@@ -33,6 +33,10 @@ export type TimelineProjectionRow =
       state: "historyLoading" | "hiddenReasoning" | "empty";
     }
   | {
+      kind: "historyRecoveryFailure";
+      key: string;
+    }
+  | {
       kind: "approval";
       key: string;
     }
@@ -82,6 +86,7 @@ export function buildTimelineProjectionRows(input: {
   groupedEntries: readonly GroupedEntry[];
   hasVisibleUserInputRequest: boolean;
   hiddenClaudeReasoningOnly: boolean;
+  historyRecoveryFailureVisible: boolean;
   isHistoryLoading: boolean;
   isThinking: boolean;
   shouldRenderUserInputAtTail: boolean;
@@ -123,7 +128,18 @@ export function buildTimelineProjectionRows(input: {
 
   rows.push({ kind: "workingIndicator", key: "working-indicator" });
 
-  if (!input.effectiveItemsCount && !input.hasVisibleUserInputRequest) {
+  if (input.historyRecoveryFailureVisible) {
+    rows.push({
+      kind: "historyRecoveryFailure",
+      key: "history-recovery-failure",
+    });
+  }
+
+  if (
+    !input.historyRecoveryFailureVisible &&
+    !input.effectiveItemsCount &&
+    !input.hasVisibleUserInputRequest
+  ) {
     rows.push({
       kind: "emptyState",
       key: "empty-state",

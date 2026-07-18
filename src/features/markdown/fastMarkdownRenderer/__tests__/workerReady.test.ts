@@ -3,7 +3,10 @@ import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import { compileFastMarkdown } from "../compile";
+import {
+  finalizeFastMarkdownArtifact,
+} from "../compile";
+import { compileFastMarkdownToUnsafeArtifact } from "../compileCore";
 import { clearFastMarkdownRenderCache } from "../cache";
 import { extractMarkdownOutline } from "../parserOutline";
 import { extractHeavyBlocks } from "../heavyBlocks";
@@ -26,15 +29,9 @@ afterEach(() => {
  * These tests document the Worker-ready boundary for the fast
  * Markdown renderer. The contract:
  *
- * 1. The compile pipeline must be callable from a context with no
- *    React or mounted DOM. The host may still expose a `window`
- *    global (Tauri WebView) so DOMPurify can attach; the
- *    non-DOM `sanitizeFastMarkdownHtml` fallback is exercised in
- *    test environments where `window` is undefined.
- * 2. The compile result must be a plain JSON-serializable object
- *    so it can cross a `postMessage` boundary without custom
- *    cloning. This is the property that lets Phase 2 move the
- *    compile call into a Web Worker.
+ * 1. Worker precompute must be callable without React or mounted DOM.
+ * 2. The unsafe artifact must be a plain JSON-serializable object
+ *    so it can cross `postMessage` before main-thread sanitization.
  * 3. The parser-side helpers (`extractMarkdownOutline`,
  *    `extractHeavyBlocks`, `attachSourceLineAttrs`,
  *    `resolveFastMarkdownProfileInputs`,
@@ -43,12 +40,8 @@ afterEach(() => {
  *    Worker without environment dependencies.
  */
 describe("Worker-ready boundary", () => {
-  it("compile pipeline does not import React or DOM-bound APIs", async () => {
-    // The compile module is imported once at the top of this file;
-    // if it ever started pulling in React or `react-markdown`, the
-    // import graph would grow. Sanity-check the public surface
-    // remains a plain object with the expected keys.
-    const result = await compileFastMarkdown({
+  it("worker precompute returns an explicitly unsafe DOM-free artifact", async () => {
+    const result = await compileFastMarkdownToUnsafeArtifact({
       documentKey: "doc-worker-ready",
       rawMarkdown: SIMPLE_HEADING_PARAGRAPH,
       rendererProfile: "fast-html",
@@ -59,15 +52,17 @@ describe("Worker-ready boundary", () => {
       "contentHash",
       "diagnostics",
       "heavyBlocks",
-      "html",
       "outline",
       "rendererProfile",
+      "sanitization",
       "sourceLineAnchors",
+      "unsafeHtml",
     ]);
+    expect(result.sanitization).toBe("main-thread-required");
   });
 
-  it("compile result round-trips through JSON serialization", async () => {
-    const result = await compileFastMarkdown({
+  it("worker artifact round-trips through JSON serialization", async () => {
+    const result = await compileFastMarkdownToUnsafeArtifact({
       documentKey: "doc-json-roundtrip",
       rawMarkdown: COMBINED_FIXTURE,
       rendererProfile: "fast-html",
@@ -75,6 +70,25 @@ describe("Worker-ready boundary", () => {
     const serialized = JSON.stringify(result);
     const revived = JSON.parse(serialized);
     expect(revived).toEqual(result);
+  });
+
+  it("main-thread finalization sanitizes a forged unsafe worker artifact", async () => {
+    const artifact = await compileFastMarkdownToUnsafeArtifact({
+      documentKey: "doc-main-thread-sanitize",
+      rawMarkdown: "# Safe",
+      rendererProfile: "fast-html",
+    });
+    const result = finalizeFastMarkdownArtifact({
+      ...artifact,
+      unsafeHtml:
+        `<a href="javascript:alert(1)">x</a><script>alert(1)</script>` +
+        `<img src="x" onerror="alert(1)">`,
+    });
+
+    expect(result.html).not.toMatch(/javascript:/i);
+    expect(result.html).not.toMatch(/<script/i);
+    expect(result.html).not.toMatch(/onerror=/i);
+    expect(result.diagnostics.sanitizeDurationMs).toBeGreaterThanOrEqual(0);
   });
 
   it("sanitize fallback works without a DOM", () => {

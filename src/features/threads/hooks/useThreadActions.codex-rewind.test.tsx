@@ -647,6 +647,22 @@ describe("useThreadActions codex rewind", () => {
     vi.mocked(forkThread).mockResolvedValue({
       result: { thread: { id: "thread-codex-provider-child" } },
     });
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          preview: "provider child",
+          turns: [{ id: "turn-provider-child", items: [] }],
+        },
+      },
+    } as any);
+    vi.mocked(buildItemsFromThread).mockReturnValue([
+      {
+        id: "provider-child-user",
+        kind: "message",
+        role: "user",
+        text: "你好在不在",
+      },
+    ]);
 
     const { result, dispatch, loadedThreadsRef } = renderActions({
       threadsByWorkspace: {
@@ -773,7 +789,14 @@ describe("useThreadActions codex rewind", () => {
         },
       },
     } as any);
-    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    vi.mocked(buildItemsFromThread).mockReturnValue([
+      {
+        id: "managed-child-user",
+        kind: "message",
+        role: "user",
+        text: "从这里分叉",
+      },
+    ]);
 
     const { result, dispatch, loadedThreadsRef } = renderActions({
       threadsByWorkspace: {

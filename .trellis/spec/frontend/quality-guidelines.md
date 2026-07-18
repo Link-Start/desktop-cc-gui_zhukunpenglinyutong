@@ -74,6 +74,65 @@ npm run doctor:strict
 - 文件落位、命名、抽象层级是否符合规范？
 - 新增动态 Tauri window label 时，普通固定窗口 label 是否仍保持原语义？动态 label glob 是否进入 capability `windows`？相关权限是否有测试断言？
 
+## Scenario: Fast Markdown Worker Stale Settlement Boundary
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `compileFastMarkdownWithWorkerFallback`、Worker timeout/unavailable/error fallback、artifact cache 或 `shouldAcceptWorkerArtifact`。
+- 目标：request scope 已失效后，任何 Worker settlement 都必须停止；不得再在 main thread 编译、sanitize、finalize 或写 cache。
+
+### 2. Signatures
+
+- `compileFastMarkdownWithWorkerFallback(args, options): Promise<FastMarkdownRenderResult>`
+- `options.shouldAcceptWorkerArtifact?: () => boolean`
+- stale diagnostic/error：`fast-markdown-worker-result-stale`
+
+### 3. Contracts
+
+- stale guard MUST sit between Worker/cache attempt settlement and every consumer/fallback branch。
+- cache hit、Worker success、Worker unavailable、Worker reject、Worker timeout MUST all evaluate the same current-scope predicate。
+- stale request MUST fail closed before `finalizeFastMarkdownArtifact`、`compileFastMarkdown`、sanitize and cache write。
+- active request 的 unavailable/reject/timeout MUST preserve the existing main-thread fallback；stale protection 不能把正常降级一起关掉。
+- stale drop MUST increment its diagnostic counter；不得伪装成普通 Worker failure/fallback。
+
+### 4. Validation & Error Matrix
+
+| Worker/cache 结果 | request active | request stale |
+|---|---|---|
+| trusted cache hit | return cached result | throw stale；不消费 cache |
+| Worker artifact | finalize artifact | throw stale；不 finalize |
+| unavailable (`null`) | main-thread fallback | throw stale；不 fallback |
+| reject / timeout | record fallback + main-thread compile | throw stale；不 compile |
+
+### 5. Good / Base / Bad Cases
+
+- Good：统一 guard 放在“attempt 已结算、结果尚未消费”的 boundary，一处覆盖所有分支。
+- Base：没有传 predicate 的调用方按 active request 处理，保持兼容。
+- Bad：只在 Worker success 分支检查 stale；timeout/reject 仍会在已切换页面上占用主线程。
+
+### 6. Tests Required
+
+- `workerAdapterDiagnostics.test.ts` MUST cover stale cache hit、success、unavailable、reject、timeout。
+- 同一测试文件 MUST retain at least one active reject/timeout fallback assertion，证明正常降级未被破坏。
+- Assertions MUST prove `finalizeFastMarkdownArtifact` / main-thread compile side effects did not run for stale settlement。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+const artifact = await precomputeFastMarkdownInWorker(args);
+return artifact ? finalizeFastMarkdownArtifact(artifact) : compileFastMarkdown(args);
+```
+
+#### Correct
+
+```typescript
+const artifact = await precomputeFastMarkdownInWorker(args);
+throwIfWorkerRequestIsStale(options);
+return artifact ? finalizeFastMarkdownArtifact(artifact) : compileFastMarkdown(args);
+```
+
 ## Scenario: Dynamic Tauri WebviewWindow label capability contract
 
 ### 1. Scope / Trigger

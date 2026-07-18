@@ -16,6 +16,7 @@ export type ActiveCanvasSnapshot = Pick<
   | "plan"
   | "isThinking"
   | "isHistoryLoading"
+  | "historyRecoveryFailureReason"
   | "isContextCompacting"
   | "processingStartedAt"
   | "lastDurationMs"
@@ -69,6 +70,7 @@ export const EMPTY_ACTIVE_CANVAS_SNAPSHOT: ActiveCanvasSnapshot = {
   plan: null,
   isThinking: false,
   isHistoryLoading: false,
+  historyRecoveryFailureReason: null,
   isContextCompacting: false,
   processingStartedAt: null,
   lastDurationMs: null,

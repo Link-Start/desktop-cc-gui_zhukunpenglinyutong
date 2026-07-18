@@ -1,7 +1,7 @@
 # Project Context
 
 - Type: OpenSpec Workspace
-- Updated At: 2026-07-18T02:19:50+08:00
+- Updated At: 2026-07-18T21:00:00+08:00
 - Scope: governance snapshot for the current `mossx` repository workspace
 - Product version fact: `ccgui@0.7.5` from `package.json` and `src-tauri/tauri.conf.json`
 
@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: active changes = `2`, archive changes = `640`, main specs = `406`
+- Current workspace state: active changes = `4`, archive changes = `640`, main specs = `406`
 
 ## Entry Surfaces
 
@@ -64,10 +64,10 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 ## Current Inventory
 
-- Active changes: `2`
+- Active changes: `4`
 - Archive changes: `640`
 - Main specs: `406`
-- Completed task sets still active: `0`
+- Completed task sets still active: `1`
 - Ready-for-implementation task sets: `0`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
 
@@ -76,7 +76,9 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 Active OpenSpec changes in the current working tree:
 
 - [`add-linux-native-menu-localization`](changes/add-linux-native-menu-localization/proposal.md) — 4/5; Rust gate passed, only Linux non-default-language startup smoke remains.
+- [`derive-rate-limit-label-from-window-duration`](changes/derive-rate-limit-label-from-window-duration/proposal.md) — 5/5; implementation and verification complete, pending sync/archive.
 - [`enable-claude-lightweight-streaming-and-frame-attribution`](changes/enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) — 15/18; implementation complete, blocked only on its Claude-stream trace, final-fidelity acceptance, and archive.
+- [`stabilize-client-runtime-and-diagnostics`](changes/stabilize-client-runtime-and-diagnostics/proposal.md) — 21/22; automated closure and functional smoke complete, quantified frame/first-delta trace retention remains open.
 
 Calibration rule: `openspec validate --strict` proves artifact structure only. Implementation verification uses code/test/live-run evidence in each `verification.md`; manual gates may be waived only when deterministic coverage or a newer owner makes the old gate non-discriminating.
 
@@ -284,7 +286,7 @@ Validation: each change passed `openspec validate <change> --strict --no-interac
 
 Current-branch implementation substrate includes:
 
-- Runtime adapters: Claude Code, Codex CLI, Gemini CLI, and OpenCode. Gemini is enabled by default; OpenCode is optional. OpenCode/Gemini retirement remains an active migration backlog.
+- Runtime adapters: Claude Code, Codex CLI, Gemini history compatibility, and optional OpenCode. Gemini execution/detection is hard-disabled across frontend/backend boundaries; historical inspection and diagnostics remain available.
 - Project intelligence: Project Map / Project X-Ray, Project Memory, Context Ledger, SpecHub, and governance evidence panels.
 - Execution surfaces: Task Center / TaskRun, Kanban, Plan panel, Session Activity, runtime log, terminal, Git history, and engine task output inspection.
 - Runtime reliability: realtime batching, runtime evidence gates, lifecycle hardening, stalled recovery contracts, global client error log, and startup orchestration.
@@ -360,6 +362,7 @@ npm run check:large-files
 
 ## Update History
 
+- 2026-07-18: Reconciled four active change directories and added `stabilize-client-runtime-and-diagnostics` verification evidence. Current counts are active=4, archive=640, specs=406; one 21/22 performance-trace gate and two other manual acceptance backlogs remain active.
 - 2026-07-18: Archived `harden-conversation-rendering-for-large-history` under explicit product-owner acceptance and synced ten implemented requirements into five existing main specs; archived `2026-06-22-release-pipeline-cache-sccache` as a failed performance experiment without syncing its invalid success contract. Current counts are active=2, archive=640, specs=406. No product code was modified.
 - 2026-07-17: Re-audited project documentation against manifests, workflows, and current code; refreshed the working-tree inventory to active=11, archive=631, specs=403; added complete docs/OpenSpec navigation indexes; corrected runtime, locale, storage, CI, and workflow facts; and repaired project-owned documentation links. No business code was modified.
 - 2026-07-17: Added a two-level proposal index linking all 10 active and 631 archived changes, connected the root/OpenSpec navigation surfaces, and refreshed current planning context to product version 0.7.5 with active=10, archive=631, specs=403. Historical snapshot counts were preserved.

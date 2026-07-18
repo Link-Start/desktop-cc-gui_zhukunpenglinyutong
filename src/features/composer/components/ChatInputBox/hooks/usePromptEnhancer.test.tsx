@@ -3,7 +3,10 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { engineSendMessageSync } from '../../../../../services/tauri';
-import { usePromptEnhancer } from './usePromptEnhancer';
+import {
+  PROMPT_ENHANCER_ENGINE_OPTIONS,
+  usePromptEnhancer,
+} from './usePromptEnhancer';
 
 vi.mock('../../../../../services/tauri', () => ({
   engineSendMessageSync: vi.fn(),
@@ -86,14 +89,17 @@ describe('usePromptEnhancer', () => {
     expect(sendSync).not.toHaveBeenCalled();
   });
 
-  it('uses the configured engine and timeout when the user starts enhancement', async () => {
+  it('keeps Gemini unavailable even when the current provider is legacy Gemini', async () => {
     const sendSync = vi.mocked(engineSendMessageSync);
     sendSync.mockResolvedValueOnce({
-      engine: 'gemini',
+      engine: 'claude',
       text: '请说明报告管理页面标题加载逻辑。',
     });
 
-    const { result } = renderPromptEnhancer();
+    const { result } = renderPromptEnhancer({
+      currentProvider: 'gemini',
+      selectedModel: 'gemini-2.5-pro',
+    });
 
     act(() => {
       result.current.handleEnhancePrompt();
@@ -105,13 +111,12 @@ describe('usePromptEnhancer', () => {
 
     act(() => {
       result.current.handleEnhancerEngineChange('gemini');
-      result.current.handleEnhancerModelChange('gemini-2.5-pro');
       result.current.handleEnhancerTimeoutChange(12);
     });
 
     await waitFor(() => {
-    expect(result.current.selectedEnhancerEngine).toBe('gemini');
-      expect(result.current.selectedEnhancerModel).toBe('gemini-2.5-pro');
+      expect(result.current.selectedEnhancerEngine).toBe('claude');
+      expect(result.current.selectedEnhancerModel).toBe('claude-sonnet-4-5');
       expect(result.current.enhancerTimeoutSeconds).toBe(12);
     });
 
@@ -124,10 +129,11 @@ describe('usePromptEnhancer', () => {
       expect(result.current.canUseEnhancedPrompt).toBe(true);
     });
 
-    expect(result.current.enhancingEngine).toBe('gemini');
+    expect(PROMPT_ENHANCER_ENGINE_OPTIONS).not.toContain('gemini');
+    expect(result.current.enhancingEngine).toBe('claude');
     expect(sendSync).toHaveBeenCalledTimes(1);
-    expect(sendSync.mock.calls[0]?.[1].engine).toBe('gemini');
-    expect(sendSync.mock.calls[0]?.[1].model).toBe('gemini-2.5-pro');
+    expect(sendSync.mock.calls[0]?.[1].engine).toBe('claude');
+    expect(sendSync.mock.calls[0]?.[1].model).toBe('claude-sonnet-4-5');
   });
 
   it('falls back to Codex when Claude enhancement exits before returning text', async () => {

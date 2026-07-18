@@ -319,6 +319,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const rewindDialogRequestSerialRef = useRef(0);
   const noteCardSelectionRequestSerialRef = useRef(0);
   const gitModalPreviewRequestSerialRef = useRef(0);
+  const historyRetryInFlightRef = useRef<Promise<unknown> | null>(null);
   const activeThreadStatus = options.activeThreadId
     ? (options.threadStatusById[options.activeThreadId] ?? null)
     : null;
@@ -359,6 +360,34 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const activeThreadHistoryLoading = options.activeThreadId
     ? options.historyLoadingByThreadId[options.activeThreadId] === true
     : false;
+  const activeThreadHistoryRecoveryFailureReason =
+    options.activeThreadId &&
+    options.historyLoadingByThreadId[options.activeThreadId] === "failed"
+      ? "history-empty-after-retry"
+      : null;
+  const handleRetryHistory = useEventCallback(() => {
+    if (
+      !options.activeWorkspaceId ||
+      !options.activeThreadId ||
+      !options.onRecoverThreadRuntime ||
+      historyRetryInFlightRef.current
+    ) {
+      return;
+    }
+    const retry = Promise.resolve(
+      options.onRecoverThreadRuntime(
+        options.activeWorkspaceId,
+        options.activeThreadId,
+      ),
+    );
+    historyRetryInFlightRef.current = retry;
+    const clearRetry = () => {
+      if (historyRetryInFlightRef.current === retry) {
+        historyRetryInFlightRef.current = null;
+      }
+    };
+    void retry.then(clearRetry, clearRetry);
+  });
   const showMessageAnchors =
     options.showMessageAnchors &&
     clientUiVisibility.isControlVisible("cornerStatus.messageAnchors");
@@ -942,6 +971,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       plan: options.plan,
       isThinking: isThreadThinking,
       isHistoryLoading: activeThreadHistoryLoading,
+      historyRecoveryFailureReason: activeThreadHistoryRecoveryFailureReason,
       isContextCompacting: activeThreadStatus?.isContextCompacting ?? false,
       processingStartedAt: activeThreadStatus?.processingStartedAt ?? null,
       lastDurationMs: activeThreadStatus?.lastDurationMs ?? null,
@@ -968,6 +998,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.plan,
       isThreadThinking,
       activeThreadHistoryLoading,
+      activeThreadHistoryRecoveryFailureReason,
       activeThreadStatus,
       taskRunStore.runs,
       options.threadItemsByThread,
@@ -1027,6 +1058,10 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           agentTaskScrollRequest: options.agentTaskScrollRequest,
           isThinking: false,
           isHistoryLoading: false,
+          historyRecoveryFailureReason: null,
+          onRetryHistory: options.onRecoverThreadRuntime
+            ? handleRetryHistory
+            : undefined,
           isContextCompacting: false,
           proxyEnabled: options.systemProxyEnabled,
           proxyUrl: options.systemProxyUrl,
@@ -1058,6 +1093,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.handleUserInputSubmit,
       options.handleUserInputDismiss,
       options.onRecoverThreadRuntime,
+      handleRetryHistory,
       options.onRecoverThreadRuntimeAndResend,
       options.onThreadRecoveryFork,
       onForkFromMessage,

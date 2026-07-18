@@ -433,6 +433,46 @@ describe("MessagesRows stream mitigation", () => {
     expect(onAssistantVisibleTextRender).toHaveBeenCalled();
   });
 
+  it("renders the latest live text immediately when a mitigation profile is active", () => {
+    const mitigationProfile = {
+      id: "codex-markdown-stream-recovery",
+      messageStreamingThrottleMs: 120,
+      reasoningStreamingThrottleMs: 220,
+    } as const;
+    const initialItem = {
+      id: "assistant-mitigation-latest-text",
+      kind: "message" as const,
+      role: "assistant" as const,
+      text: "first visible snapshot",
+    };
+    const view = render(
+      <MessageRow
+        item={initialItem}
+        isStreaming
+        activeEngine="codex"
+        isCopied={false}
+        onCopy={vi.fn()}
+        streamMitigationProfile={mitigationProfile}
+      />,
+    );
+    markdownCalls.calls = [];
+
+    view.rerender(
+      <MessageRow
+        item={{ ...initialItem, text: "latest visible snapshot after another delta" }}
+        isStreaming
+        activeEngine="codex"
+        isCopied={false}
+        onCopy={vi.fn()}
+        streamMitigationProfile={mitigationProfile}
+      />,
+    );
+
+    expect(markdownCalls.calls[0]?.value).toBe(
+      "latest visible snapshot after another delta",
+    );
+  });
+
   it("reports lightweight Codex recovery text when Markdown rendered callback is delayed", () => {
     markdownCalls.deferRenderedValueChange = true;
     const messageItem = {

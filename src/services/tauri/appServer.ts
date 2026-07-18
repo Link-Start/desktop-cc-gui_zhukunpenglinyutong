@@ -10,6 +10,7 @@ import {
   webServiceCodexOnlyStatuses,
 } from "./runtimeMode";
 import { traceStartupCommand } from "../../features/startup-orchestration/utils/startupTrace";
+import { assertEngineExecutionEnabled } from "../../utils/engineExecutionPolicy";
 
 function traceStartupInvoke<T>(
   commandLabel: string,
@@ -129,6 +130,7 @@ export async function getActiveEngine(): Promise<EngineType> {
  * Switch to a different engine
  */
 export async function switchEngine(engineType: EngineType): Promise<void> {
+  assertEngineExecutionEnabled(engineType);
   if (isEngineRpcFallbackMode() && engineType !== "codex") {
     throw new Error(WEB_SERVICE_CLI_ENGINE_MESSAGE);
   }
@@ -233,6 +235,7 @@ export async function getEngineModels(
   engineType: EngineType,
   options: { forceRefresh?: boolean } = {},
 ): Promise<EngineModelInfo[]> {
+  assertEngineExecutionEnabled(engineType);
   if (isEngineRpcFallbackMode() && engineType !== "codex") {
     return [];
   }
@@ -283,6 +286,9 @@ export async function engineSendMessage(
     autoSession?: AutoSessionMetadata | null;
   },
 ): Promise<Record<string, unknown>> {
+  if (params.engine) {
+    assertEngineExecutionEnabled(params.engine);
+  }
   if (isEngineRpcFallbackMode() && params.engine && params.engine !== "codex") {
     return {
       error: {
@@ -347,6 +353,9 @@ export async function engineSendMessageSync(
     autoSession?: AutoSessionMetadata | null;
   },
 ): Promise<{ engine: EngineType; text: string }> {
+  if (params.engine) {
+    assertEngineExecutionEnabled(params.engine);
+  }
   if (isEngineRpcFallbackMode() && params.engine && params.engine !== "codex") {
     throw new Error(WEB_SERVICE_CLI_ENGINE_MESSAGE);
   }

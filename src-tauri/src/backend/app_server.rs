@@ -545,7 +545,7 @@ impl WorkspaceSession {
     }
 
     pub(crate) async fn probe_health(&self, timeout_duration: Duration) -> Result<(), String> {
-        self.send_request_with_timeout("model/list", json!({}), timeout_duration)
+        self.send_request_with_timeout("collaborationMode/list", json!({}), timeout_duration)
             .await
             .map(|_| ())
     }

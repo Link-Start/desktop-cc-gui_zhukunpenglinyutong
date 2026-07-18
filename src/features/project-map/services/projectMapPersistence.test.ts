@@ -275,6 +275,38 @@ describe("project map persistence mapper", () => {
     expect(dataset?.autoIngestionSettings.checkIntervalMinutes).toBe(30);
   });
 
+  it("normalizes legacy Gemini auto ingestion settings to a safe default", () => {
+    const dataset = buildDatasetFromProjectMapRead(
+      {
+        storageKey: "mossx-abcd",
+        storageDir: "/repo/.ccgui/project-map/mossx-abcd",
+        exists: true,
+        manifest: manifestForStorageKey("mossx-abcd"),
+        profile: mockProjectMapData.profile,
+        lenses: { items: mockProjectMapData.lenses },
+        lensNodes: {},
+        settings: {
+          enabled: true,
+          engine: "gemini",
+          model: "gemini-2.5-pro",
+          newSessionThreshold: 5,
+          checkIntervalMinutes: 30,
+          applyMode: "createCandidate",
+        },
+        candidates: {},
+        evidence: {},
+        runs: {},
+      },
+      { projectName: "mossx", workspacePath: "/repo", workspaceId: "ws-1" },
+    );
+
+    expect(dataset?.autoIngestionSettings).toMatchObject({
+      enabled: false,
+      engine: "codex",
+      model: "default",
+    });
+  });
+
   it("loads old snapshots without view-state and ignores malformed layout payloads", () => {
     const oldSnapshot = buildDatasetFromProjectMapRead(
       {

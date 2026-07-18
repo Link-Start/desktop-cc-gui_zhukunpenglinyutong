@@ -6,9 +6,13 @@ import {
   connectWorkspace,
   createWorkspaceDirectory,
   forkThread,
+  resumeThread,
   startThread,
 } from "../../../services/tauri";
-import { previewThreadName } from "../../../utils/threadItems";
+import {
+  buildItemsFromThread,
+  previewThreadName,
+} from "../../../utils/threadItems";
 import {
   clearGlobalRuntimeNotices,
   getGlobalRuntimeNoticesSnapshot,
@@ -121,6 +125,17 @@ describe("useThreadActions start/fork", () => {
       threadId,
     });
     expect(threadId ? loadedThreadsRef.current[threadId] : false).toBe(true);
+  });
+
+  it("rejects Gemini thread creation before any owner side effect", async () => {
+    const { result, dispatch } = renderActions();
+
+    await expect(
+      result.current.startThreadForWorkspace("ws-1", { engine: "gemini" }),
+    ).rejects.toThrow("Gemini CLI is disabled in this client");
+
+    expect(startThread).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it("finalizes an optimistic codex pending thread into the real backend thread", async () => {
@@ -590,6 +605,22 @@ describe("useThreadActions start/fork", () => {
     vi.mocked(forkThread).mockResolvedValue({
       result: { thread: { id: "thread-fork-1" } },
     });
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          preview: "forked",
+          turns: [{ id: "turn-fork-1", items: [] }],
+        },
+      },
+    } as any);
+    vi.mocked(buildItemsFromThread).mockReturnValue([
+      {
+        id: "fork-user-1",
+        kind: "message",
+        role: "user",
+        text: "分叉后的可读上下文",
+      },
+    ]);
 
     const { result, dispatch, loadedThreadsRef } = renderActions();
 

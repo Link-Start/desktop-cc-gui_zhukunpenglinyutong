@@ -1,6 +1,18 @@
 use super::*;
 use std::{cell::RefCell, rc::Rc};
 
+#[test]
+fn daemon_active_engine_normalizes_legacy_gemini_to_supported_fallback() {
+    let mut settings = AppSettings::default();
+    settings.gemini_enabled = true;
+    settings.default_engine = Some("gemini".to_string());
+
+    assert_eq!(
+        resolve_supported_daemon_active_engine(&settings, settings.default_engine.as_deref()),
+        engine::EngineType::Codex
+    );
+}
+
 fn codex_summary(session_id: &str, timestamp: i64) -> crate::types::LocalUsageSessionSummary {
     crate::types::LocalUsageSessionSummary {
         session_id: session_id.to_string(),

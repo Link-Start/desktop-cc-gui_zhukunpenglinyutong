@@ -63,6 +63,7 @@
     "perf:archive-readiness": "node scripts/perf-archive-readiness.mjs",
     "lint": "eslint . --ext .ts,.tsx",
     "test": "node scripts/test-batched.mjs",
+    "test:fast-markdown-worker-production": "npm run build && node scripts/check-fast-markdown-worker-production.mjs",
     "test:integration": "node scripts/test-batched.mjs --include-heavy",
     "test:memory-kind-contract:ts": "vitest run src/features/project-memory/utils/memoryKindClassifier.contract.test.ts",
     "test:memory-kind-contract:rust": "cargo test --manifest-path src-tauri/Cargo.toml classify_kind_matches_contract_samples",

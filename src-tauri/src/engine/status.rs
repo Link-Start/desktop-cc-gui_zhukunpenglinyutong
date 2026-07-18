@@ -8,7 +8,7 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 
-use super::{EngineFeatures, EngineStatus, EngineType, ModelInfo};
+use super::{disabled_engine_status, EngineFeatures, EngineStatus, EngineType, ModelInfo};
 use crate::app_paths;
 use crate::backend::app_server::{build_codex_path_env, find_cli_binary};
 use crate::backend::app_server_cli::resolve_safe_opencode_binary;
@@ -282,6 +282,10 @@ pub async fn load_opencode_models(custom_bin: Option<&str>) -> Result<Vec<ModelI
 
 /// Detect Gemini CLI installation status
 pub async fn detect_gemini_status(custom_bin: Option<&str>) -> EngineStatus {
+    if !crate::engine_policy::GEMINI_RUNTIME_ENABLED {
+        return disabled_engine_status(EngineType::Gemini);
+    }
+
     let bin_path = resolve_bin_path("gemini", custom_bin);
     let bin = bin_path
         .as_ref()
@@ -766,13 +770,27 @@ pub async fn detect_all_engines(
     codex_bin: Option<&str>,
     gemini_bin: Option<&str>,
     opencode_bin: Option<&str>,
+    gemini_enabled: bool,
+    opencode_enabled: bool,
 ) -> Vec<EngineStatus> {
     // Run detections in parallel
     let (claude_status, codex_status, gemini_status, opencode_status) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
-        detect_gemini_status(gemini_bin),
-        detect_opencode_status(opencode_bin),
+        async {
+            if gemini_enabled && crate::engine_policy::GEMINI_RUNTIME_ENABLED {
+                detect_gemini_status(gemini_bin).await
+            } else {
+                disabled_engine_status(EngineType::Gemini)
+            }
+        },
+        async {
+            if opencode_enabled {
+                detect_opencode_status(opencode_bin).await
+            } else {
+                disabled_engine_status(EngineType::OpenCode)
+            }
+        },
     );
 
     vec![claude_status, codex_status, gemini_status, opencode_status]
@@ -789,7 +807,13 @@ pub async fn detect_preferred_engine(
     let (claude_status, codex_status, gemini_status, opencode_status) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
-        detect_gemini_status(gemini_bin),
+        async {
+            if crate::engine_policy::GEMINI_RUNTIME_ENABLED {
+                detect_gemini_status(gemini_bin).await
+            } else {
+                disabled_engine_status(EngineType::Gemini)
+            }
+        },
         detect_opencode_status(opencode_bin),
     );
 
@@ -800,7 +824,7 @@ pub async fn detect_preferred_engine(
     if codex_status.installed {
         return EngineType::Codex;
     }
-    if gemini_status.installed {
+    if crate::engine_policy::GEMINI_RUNTIME_ENABLED && gemini_status.installed {
         return EngineType::Gemini;
     }
     if opencode_status.installed {
@@ -829,7 +853,8 @@ pub async fn resolve_engine_type(
         match engine.to_lowercase().as_str() {
             "claude" => return EngineType::Claude,
             "codex" => return EngineType::Codex,
-            "gemini" => return EngineType::Gemini,
+            "gemini" if crate::engine_policy::GEMINI_RUNTIME_ENABLED => return EngineType::Gemini,
+            "gemini" => {}
             "opencode" => return EngineType::OpenCode,
             _ => {} // Invalid value, fall through
         }
@@ -840,7 +865,8 @@ pub async fn resolve_engine_type(
         match engine.to_lowercase().as_str() {
             "claude" => return EngineType::Claude,
             "codex" => return EngineType::Codex,
-            "gemini" => return EngineType::Gemini,
+            "gemini" if crate::engine_policy::GEMINI_RUNTIME_ENABLED => return EngineType::Gemini,
+            "gemini" => {}
             "opencode" => return EngineType::OpenCode,
             _ => {} // Invalid value, fall through
         }
@@ -990,10 +1016,80 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resolve_engine_type_supports_gemini() {
+    async fn resolve_engine_type_normalizes_retired_workspace_gemini_to_allowed_default() {
         let resolved =
             resolve_engine_type(Some("gemini"), Some("claude"), None, None, None, None).await;
-        assert_eq!(resolved, EngineType::Gemini);
+        assert_eq!(resolved, EngineType::Claude);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn preferred_engine_detection_never_spawns_or_selects_disabled_gemini() {
+        let marker_path = std::env::temp_dir().join(format!(
+            "ccgui-gemini-preferred-probe-marker-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let script_path = write_unix_test_cli(&format!(
+            "#!/bin/sh\nprintf spawned > '{}'\necho '1.2.3'\n",
+            marker_path.display()
+        ));
+
+        let resolved = detect_preferred_engine(
+            None,
+            None,
+            Some(script_path.to_string_lossy().as_ref()),
+            None,
+        )
+        .await;
+
+        assert_ne!(resolved, EngineType::Gemini);
+        assert!(
+            !marker_path.exists(),
+            "preferred detection must skip Gemini"
+        );
+        let _ = fs::remove_file(&script_path);
+        let _ = fs::remove_file(&marker_path);
+        let _ = fs::remove_dir_all(script_path.parent().unwrap_or(std::path::Path::new("")));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn add_workspace_resolver_normalizes_legacy_gemini_default_without_spawn() {
+        let marker_path = std::env::temp_dir().join(format!(
+            "ccgui-gemini-workspace-resolver-marker-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let script_path = write_unix_test_cli(&format!(
+            "#!/bin/sh\nprintf spawned > '{}'\necho '1.2.3'\n",
+            marker_path.display()
+        ));
+
+        let resolved = resolve_engine_type(
+            None,
+            Some("gemini"),
+            None,
+            None,
+            Some(script_path.to_string_lossy().as_ref()),
+            None,
+        )
+        .await;
+
+        assert_ne!(resolved, EngineType::Gemini);
+        assert!(
+            !marker_path.exists(),
+            "add-workspace resolution must skip Gemini"
+        );
+        let _ = fs::remove_file(&script_path);
+        let _ = fs::remove_file(&marker_path);
+        let _ = fs::remove_dir_all(script_path.parent().unwrap_or(std::path::Path::new("")));
     }
 
     #[test]
@@ -1060,6 +1156,35 @@ opencode/gpt-5-nano
         permissions.set_mode(0o755);
         fs::set_permissions(&script_path, permissions).expect("chmod temp cli script");
         script_path
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn disabled_gemini_shared_detection_never_spawns_configured_cli() {
+        let marker_path = std::env::temp_dir().join(format!(
+            "ccgui-gemini-shared-probe-marker-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let script_path = write_unix_test_cli(&format!(
+            "#!/bin/sh\nprintf spawned > '{}'\necho '1.2.3'\n",
+            marker_path.display()
+        ));
+
+        let status = detect_gemini_status(Some(script_path.to_string_lossy().as_ref())).await;
+
+        assert!(!status.installed);
+        assert_eq!(
+            status.error.as_deref(),
+            Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC)
+        );
+        assert!(!marker_path.exists(), "shared Gemini probe must not spawn");
+        let _ = fs::remove_file(&script_path);
+        let _ = fs::remove_file(&marker_path);
+        let _ = fs::remove_dir_all(script_path.parent().unwrap_or(std::path::Path::new("")));
     }
 
     #[cfg(unix)]

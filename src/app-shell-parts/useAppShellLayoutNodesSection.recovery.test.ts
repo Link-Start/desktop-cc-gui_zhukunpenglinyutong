@@ -112,6 +112,36 @@ describe("recoverThreadBindingForManualRecovery", () => {
     });
   });
 
+  it("rejects Gemini recovery before refresh or fresh-thread creation", async () => {
+    const refreshThread = vi.fn(async () => "gemini:recovered");
+    const startThreadForWorkspace = vi.fn(async () => "gemini-pending-new");
+
+    const result = await recoverThreadBindingForManualRecovery({
+      workspaceId: "ws-1",
+      threadId: "gemini:session-stale",
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "gemini:session-stale",
+            engineSource: "gemini",
+          },
+        ],
+      },
+      refreshThread,
+      startThreadForWorkspace,
+      allowFreshThread: true,
+    });
+
+    expect(result).toEqual({
+      kind: "failed",
+      reason: "unsupported_engine",
+      retryable: true,
+      userAction: "start-fresh-thread",
+    });
+    expect(refreshThread).not.toHaveBeenCalled();
+    expect(startThreadForWorkspace).not.toHaveBeenCalled();
+  });
+
   it("falls back to a fresh thread when refresh rejects", async () => {
     const refreshThread = vi.fn(async () => {
       throw new Error("thread not found: thread-stale");
@@ -275,6 +305,45 @@ describe("recoverThreadBindingAndResendForManualRecovery", () => {
     id: "ws-1",
     connected: false,
   };
+
+  it("rejects Gemini resend recovery before any owner side effect", async () => {
+    const resolveWorkspace = vi.fn(() => connectedWorkspace);
+    const refreshThread = vi.fn(async () => "gemini:rebound");
+    const startThreadForWorkspace = vi.fn(async () => "gemini-pending-new");
+    const connectWorkspace = vi.fn(async () => undefined);
+    const sendUserMessageToThread = vi.fn(async () => undefined);
+
+    const result = await recoverThreadBindingAndResendForManualRecovery({
+      workspaceId: "ws-1",
+      threadId: "gemini:session-stale",
+      message: { text: "继续" },
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "gemini:session-stale",
+            engineSource: "gemini",
+          },
+        ],
+      },
+      resolveWorkspace,
+      refreshThread,
+      startThreadForWorkspace,
+      connectWorkspace,
+      sendUserMessageToThread,
+    });
+
+    expect(result).toEqual({
+      kind: "failed",
+      reason: "unsupported_engine",
+      retryable: true,
+      userAction: "start-fresh-thread",
+    });
+    expect(resolveWorkspace).not.toHaveBeenCalled();
+    expect(refreshThread).not.toHaveBeenCalled();
+    expect(startThreadForWorkspace).not.toHaveBeenCalled();
+    expect(connectWorkspace).not.toHaveBeenCalled();
+    expect(sendUserMessageToThread).not.toHaveBeenCalled();
+  });
 
   it("resends to a forked codex thread when historical stale recovery cannot rebind", async () => {
     const resolveWorkspace = vi.fn(() => disconnectedWorkspace);

@@ -3,13 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { EngineType } from '../../../../types';
 import { EngineIcon } from '../../../engine/components/EngineIcon';
 import type { ModelInfo } from './types';
-
-const PROMPT_ENHANCER_DIALOG_ENGINE_OPTIONS: EngineType[] = [
-  'claude',
-  'codex',
-  'gemini',
-  'opencode',
-];
+import { PROMPT_ENHANCER_ENGINE_OPTIONS } from './hooks/usePromptEnhancer';
 
 interface PromptEnhancerDialogProps {
   isOpen: boolean;
@@ -131,7 +125,7 @@ export const PromptEnhancerDialog = ({
                 onChange={(event) => onEngineChange(event.target.value as EngineType)}
                 disabled={isLoading}
               >
-                {PROMPT_ENHANCER_DIALOG_ENGINE_OPTIONS.map((engine) => (
+                {PROMPT_ENHANCER_ENGINE_OPTIONS.map((engine) => (
                   <option key={engine} value={engine}>
                     {getEngineLabel(engine)}
                   </option>

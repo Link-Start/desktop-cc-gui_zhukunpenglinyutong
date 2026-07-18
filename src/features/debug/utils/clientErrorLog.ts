@@ -5,9 +5,16 @@ const MAX_DEPTH = 4;
 const MAX_ARRAY_ITEMS = 20;
 const MAX_STRING_LENGTH = 1000;
 const TEXT_SUMMARY_KEY_PATTERN =
-  /(prompt|content|text|output|stdout|stderr|raw|delta|messageBody)/i;
+  /(prompt|content|text|output|stdout|stderr|raw|delta|messageBody|error|message|detail|diagnosticMessage)/i;
 const SECRET_KEY_PATTERN =
   /(token|password|secret|apiKey|api_key|authorization|cookie|credential)/i;
+const CODEX_MODEL_REFRESH_TIMEOUT_REASON_CODE =
+  "codex-model-refresh-child-exit-timeout";
+const UNCLASSIFIED_STDERR_REASON_CODE = "unclassified-stderr";
+const SAFE_STDERR_REASON_CODES = new Set([
+  CODEX_MODEL_REFRESH_TIMEOUT_REASON_CODE,
+  UNCLASSIFIED_STDERR_REASON_CODE,
+]);
 
 export type ClientErrorLogEntry = {
   schemaVersion: number;
@@ -17,7 +24,18 @@ export type ClientErrorLogEntry = {
   payload?: unknown;
 };
 
+export type ClientStderrClassification = {
+  reasonCode:
+    | typeof CODEX_MODEL_REFRESH_TIMEOUT_REASON_CODE
+    | typeof UNCLASSIFIED_STDERR_REASON_CODE;
+  redactedText: true;
+  rawMessageLength: number;
+};
+
 export function shouldPersistClientErrorLogEntry(entry: DebugEntry): boolean {
+  if (entry.label.trim().toLowerCase() === "stderr/raw") {
+    return false;
+  }
   if (entry.source === "error" || entry.source === "stderr") {
     return true;
   }
@@ -61,10 +79,53 @@ export function shouldPersistClientErrorLogEntry(entry: DebugEntry): boolean {
   );
 }
 
+export function classifyClientStderr(
+  rawMessage: string,
+): ClientStderrClassification {
+  const normalized = rawMessage.toLowerCase();
+  const isKnownModelRefreshTimeout =
+    normalized.includes("codex_models_manager") &&
+    normalized.includes("refresh") &&
+    normalized.includes("child") &&
+    (normalized.includes("timed out") || normalized.includes("timeout"));
+  return {
+    reasonCode: isKnownModelRefreshTimeout
+      ? CODEX_MODEL_REFRESH_TIMEOUT_REASON_CODE
+      : UNCLASSIFIED_STDERR_REASON_CODE,
+    redactedText: true,
+    rawMessageLength: rawMessage.length,
+  };
+}
+
+export function getSafeClientStderrReasonCode(entry: DebugEntry): string {
+  if (!entry.payload || typeof entry.payload !== "object") {
+    return UNCLASSIFIED_STDERR_REASON_CODE;
+  }
+  const reasonCode = (entry.payload as Record<string, unknown>).reasonCode;
+  return typeof reasonCode === "string" &&
+    SAFE_STDERR_REASON_CODES.has(reasonCode)
+    ? reasonCode
+    : UNCLASSIFIED_STDERR_REASON_CODE;
+}
+
+export function buildClientErrorLogSignature(entry: DebugEntry): string {
+  const safeLabel =
+    entry.label
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._:/-]+/g, "-")
+      .slice(0, 120) || "stderr";
+  return [entry.source, safeLabel, getSafeClientStderrReasonCode(entry)].join(
+    "|",
+  );
+}
+
 export function buildClientErrorLogEntry(entry: DebugEntry): ClientErrorLogEntry {
-  const timestamp = Number.isFinite(entry.timestamp)
-    ? new Date(entry.timestamp).toISOString()
-    : new Date().toISOString();
+  const entryDate = new Date(entry.timestamp);
+  const timestamp =
+    Number.isFinite(entry.timestamp) && Number.isFinite(entryDate.getTime())
+      ? entryDate.toISOString()
+      : new Date().toISOString();
 
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -72,7 +133,7 @@ export function buildClientErrorLogEntry(entry: DebugEntry): ClientErrorLogEntry
     source: entry.source,
     label: truncateString(entry.label, 240),
     ...(entry.payload !== undefined
-      ? { payload: sanitizePayload(entry.payload, 0, null) }
+      ? { payload: sanitizePayload(entry.payload, 0, null, true) }
       : {}),
   };
 }
@@ -81,13 +142,17 @@ function sanitizePayload(
   value: unknown,
   depth: number,
   key: string | null,
+  isRoot = false,
+  redactNestedText = false,
 ): unknown {
   if (key && SECRET_KEY_PATTERN.test(key)) {
     return "[redacted]";
   }
 
+  const shouldRedactText =
+    redactNestedText || Boolean(key && TEXT_SUMMARY_KEY_PATTERN.test(key));
   if (typeof value === "string") {
-    if (key && TEXT_SUMMARY_KEY_PATTERN.test(key)) {
+    if (isRoot || shouldRedactText) {
       return { redactedText: true, length: value.length };
     }
     return truncateString(value, MAX_STRING_LENGTH);
@@ -102,9 +167,12 @@ function sanitizePayload(
   }
 
   if (Array.isArray(value)) {
+    const redactArrayText = shouldRedactText || isRoot;
     const items = value
       .slice(0, MAX_ARRAY_ITEMS)
-      .map((item) => sanitizePayload(item, depth + 1, null));
+      .map((item) =>
+        sanitizePayload(item, depth + 1, null, false, redactArrayText),
+      );
     if (value.length <= MAX_ARRAY_ITEMS) {
       return items;
     }
@@ -119,7 +187,13 @@ function sanitizePayload(
 
   const output: Record<string, unknown> = {};
   for (const [childKey, childValue] of Object.entries(value)) {
-    output[childKey] = sanitizePayload(childValue, depth + 1, childKey);
+    output[childKey] = sanitizePayload(
+      childValue,
+      depth + 1,
+      childKey,
+      false,
+      shouldRedactText,
+    );
   }
   return output;
 }

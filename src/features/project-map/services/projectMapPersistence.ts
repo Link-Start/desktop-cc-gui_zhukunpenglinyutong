@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { normalizeEngineForExecution } from "../../../utils/engineExecutionPolicy";
 
 import type {
   ProjectMapAutoIngestionSettings,
@@ -609,10 +610,15 @@ function sanitizeSettings(value: unknown): ProjectMapAutoIngestionSettings {
   if (!isRecord(value)) {
     return DEFAULT_AUTO_INGESTION_SETTINGS;
   }
+  const engine = normalizeEngineForExecution(value.engine);
+  const didNormalizeEngine = engine !== value.engine;
   return {
-    enabled: value.enabled === true,
-    engine: typeof value.engine === "string" ? value.engine : DEFAULT_AUTO_INGESTION_SETTINGS.engine,
-    model: typeof value.model === "string" ? value.model : DEFAULT_AUTO_INGESTION_SETTINGS.model,
+    enabled: value.enabled === true && !didNormalizeEngine,
+    engine,
+    model:
+      !didNormalizeEngine && typeof value.model === "string"
+        ? value.model
+        : DEFAULT_AUTO_INGESTION_SETTINGS.model,
     newSessionThreshold: clampProjectMapInteger(
       value.newSessionThreshold,
       1,

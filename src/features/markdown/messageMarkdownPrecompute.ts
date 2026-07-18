@@ -1,8 +1,8 @@
 import { hashStableString } from "../files/utils/fileMarkdownDocument";
-import { compileFastMarkdownInWorker } from "./fastMarkdownRenderer/workerAdapter";
+import { precomputeFastMarkdownInWorker } from "./fastMarkdownRenderer/workerAdapter";
 import type {
-  FastMarkdownRenderResult,
   FastMarkdownRendererProfileId,
+  FastMarkdownUnsafeArtifact,
 } from "./fastMarkdownRenderer/types";
 import { classifyMessageMarkdownHeavyIslands } from "./messageMarkdownHeavyIslands";
 
@@ -87,7 +87,7 @@ type CacheEntry = {
 };
 
 type RunPrecomputeOptions = {
-  compileInWorker?: typeof compileFastMarkdownInWorker;
+  compileInWorker?: typeof precomputeFastMarkdownInWorker;
   now?: () => number;
   timeoutMs?: number;
 };
@@ -224,7 +224,8 @@ export async function runMessageMarkdownPrecompute(
     return cached;
   }
 
-  const compileInWorker = options.compileInWorker ?? compileFastMarkdownInWorker;
+  const compileInWorker = options.compileInWorker ?? precomputeFastMarkdownInWorker;
+  const timeoutMs = options.timeoutMs ?? request.timeoutMs;
   const workerPromise = compileInWorker({
     documentKey: request.messageId,
     rawMarkdown: request.source,
@@ -233,6 +234,8 @@ export async function runMessageMarkdownPrecompute(
       fastHtmlRendererEnabled: true,
       boundedFastHtmlRendererEnabled: false,
     },
+  }, {
+    timeoutMs,
   });
 
   if (!workerPromise) {
@@ -249,7 +252,7 @@ export async function runMessageMarkdownPrecompute(
   try {
     const workerResult = await withTimeout(
       workerPromise,
-      options.timeoutMs ?? request.timeoutMs,
+      timeoutMs,
     );
     const result = createResult(request, {
       cacheState: "miss",
@@ -290,7 +293,7 @@ function setCachedMessageMarkdownPrecompute(
 }
 
 function toPrecomputeMetadata(
-  result: FastMarkdownRenderResult,
+  result: FastMarkdownUnsafeArtifact,
 ): MessageMarkdownPrecomputeMetadata {
   return {
     totalHeadings: result.diagnostics.totalHeadings,
@@ -346,5 +349,9 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 function isTimeoutError(error: unknown) {
-  return error instanceof Error && error.message === "message-markdown-worker-timeout";
+  return (
+    error instanceof Error &&
+    (error.message === "message-markdown-worker-timeout" ||
+      error.message === "fast-markdown-worker-request-timeout")
+  );
 }

@@ -1,5 +1,38 @@
-import { describe, expect, it } from "vitest";
-import { sanitizeGeneratedCommitMessage, shouldApplyCommitMessage } from "./commitMessage";
+// @vitest-environment jsdom
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  readLastCommitMessageConfig,
+  sanitizeGeneratedCommitMessage,
+  saveLastCommitMessageConfig,
+  shouldApplyCommitMessage,
+} from "./commitMessage";
+
+describe("commit message engine config", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("normalizes a legacy Gemini quick config to Codex", () => {
+    window.localStorage.setItem(
+      "ccgui.git.lastCommitMessageConfig",
+      JSON.stringify({ engine: "gemini", language: "en" }),
+    );
+
+    expect(readLastCommitMessageConfig()).toEqual({
+      engine: "codex",
+      language: "en",
+    });
+  });
+
+  it("never persists Gemini as a new quick config", () => {
+    saveLastCommitMessageConfig({ engine: "gemini", language: "zh" });
+
+    expect(readLastCommitMessageConfig()).toEqual({
+      engine: "codex",
+      language: "zh",
+    });
+  });
+});
 
 describe("shouldApplyCommitMessage", () => {
   it("returns true when workspace ids match", () => {

@@ -97,4 +97,26 @@ describe("beginOrchestrationTaskDispatch", () => {
       activeRun: first.run,
     });
   });
+
+  it("fails closed instead of auto-dispatching a historical Gemini preference", () => {
+    const task = makeDispatchTask();
+    const result = beginOrchestrationTaskDispatch({
+      task,
+      engine: "gemini",
+      threadStrategy: "new_thread",
+      promptSummary: "Dispatch prompt summary.",
+      acceptanceSummary: task.acceptanceSummary,
+      sourceRefs: task.sourceRefs,
+      taskRunStore: { version: 1, runs: [] },
+      orchestrationTaskStore: { version: 1, tasks: [task] },
+      now: 300,
+      persist: false,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "unsupported_engine",
+      taskRunStore: { version: 1, runs: [] },
+    });
+  });
 });

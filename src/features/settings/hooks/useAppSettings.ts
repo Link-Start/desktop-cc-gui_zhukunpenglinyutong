@@ -174,7 +174,7 @@ const defaultSettings: AppSettings = {
   codexBin: null,
   codexArgs: null,
   terminalShellPath: null,
-  geminiEnabled: true,
+  geminiEnabled: false,
   opencodeEnabled: false,
   sessionAttributionMode: "related",
   backendMode: "local",
@@ -356,7 +356,7 @@ function normalizeAppSettings(
     terminalShellPath: settings.terminalShellPath?.trim()
       ? settings.terminalShellPath.trim()
       : null,
-    geminiEnabled: settings.geminiEnabled !== false,
+    geminiEnabled: false,
     opencodeEnabled: settings.opencodeEnabled === true,
     sessionAttributionMode:
       settings.sessionAttributionMode === "workspace-only"

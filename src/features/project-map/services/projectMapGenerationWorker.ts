@@ -9,7 +9,10 @@ import {
 import { parseModelStructuredJsonObject } from "../../../services/modelStructuredOutput";
 import { subscribeAppServerEvents, type Unsubscribe } from "../../../services/events";
 import type { AppServerEvent } from "../../../types";
-import type { EngineType } from "../../../types";
+import {
+  isEngineExecutionEnabled,
+  type ExecutableEngineType,
+} from "../../../utils/engineExecutionPolicy";
 import type {
   ProjectMapCandidate,
   ProjectMapDataset,
@@ -86,7 +89,6 @@ const MAX_EVIDENCE_FILE_CHARS = 5_000;
 const MAX_INVALID_OUTPUT_REPAIR_CHARS = 12_000;
 const MIN_EVIDENCE_FILE_CHARS = 900;
 const FILE_HEADER_PROMPT_OVERHEAD = 140;
-const SUPPORTED_ENGINES: EngineType[] = ["codex", "claude", "gemini", "opencode"];
 const SUPPORTED_SOURCE_TYPES = new Set<ProjectMapSource["type"]>([
   "file",
   "symbol",
@@ -155,8 +157,11 @@ function upsertOrganizerRunResult(input: {
   return matched ? runs : [{ ...input.activeRun, organizerResult: input.organizerResult }, ...runs];
 }
 
-function normalizeEngine(value: string): EngineType {
-  return SUPPORTED_ENGINES.includes(value as EngineType) ? (value as EngineType) : "codex";
+function normalizeEngine(value: string): ExecutableEngineType {
+  if (!isEngineExecutionEnabled(value)) {
+    throw new Error("unsupported_engine");
+  }
+  return value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1661,6 +1666,7 @@ export async function runProjectMapGenerationWorker({
   run,
   onRunUpdate,
 }: ProjectMapGenerationWorkerInput): Promise<ProjectMapDataset> {
+  normalizeEngine(run.engine);
   const update = async (updateValue: ProjectMapRunUpdate) => {
     await onRunUpdate(updateValue);
   };

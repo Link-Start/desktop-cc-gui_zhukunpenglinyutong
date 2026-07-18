@@ -138,7 +138,7 @@ export type LayoutNodesFlatOptions = {
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   threadParentById: Record<string, string>;
   threadStatusById: Record<string, ThreadActivityStatus>;
-  historyLoadingByThreadId: Record<string, boolean>;
+  historyLoadingByThreadId: Record<string, boolean | "failed">;
   historyRestoredAtMsByThread?: Record<string, number | null | undefined>;
   runningSessionCountByWorkspaceId: Record<string, number>;
   recentCompletedSessionCountByWorkspaceId: Record<string, number>;

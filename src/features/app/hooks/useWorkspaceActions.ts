@@ -14,6 +14,7 @@ import {
 } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import type { DebugEntry, EngineType, WorkspaceInfo } from "../../../types";
+import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import type { CodexProviderProfileSelection } from "../../threads/constants/codexProviderProfiles";
 import { CODEX_DISK_PROVIDER_PROFILE_ID } from "../../threads/constants/codexProviderProfiles";
 
@@ -200,6 +201,20 @@ export function useWorkspaceActions({
       targetEngine: EngineType,
       options?: SessionCreationOptions,
     ) => {
+      if (!isEngineExecutionEnabled(targetEngine)) {
+        onDebug({
+          id: `${Date.now()}-client-create-session-disabled-engine`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "workspace/create-session disabled engine",
+          payload: {
+            workspaceId: workspace.id,
+            engine: targetEngine,
+            error: "unsupported_engine",
+          },
+        });
+        return null;
+      }
       return await runWithLoadingProgress(
         { showLoadingProgressDialog, hideLoadingProgressDialog },
         {

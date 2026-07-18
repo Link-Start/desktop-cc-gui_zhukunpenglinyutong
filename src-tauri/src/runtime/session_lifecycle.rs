@@ -19,42 +19,100 @@ pub(crate) async fn terminate_workspace_session_process(child: &mut Child) -> Re
             let terminate_status = unsafe { libc::kill(-process_group_id, libc::SIGTERM) };
             if terminate_status == 0 {
                 sleep(Duration::from_millis(TERMINATE_GRACE_MILLIS)).await;
-                if matches!(child.try_wait(), Ok(Some(_))) {
-                    let _ = child.wait().await;
-                    return Ok(false);
-                }
             }
             let kill_status = unsafe { libc::kill(-process_group_id, libc::SIGKILL) };
             if kill_status == 0 {
-                let _ = child.wait().await;
+                child.wait().await.map_err(|error| {
+                    format!("failed to reap process group leader pid {pid}: {error}")
+                })?;
                 return Ok(true);
             }
+            let kill_error = std::io::Error::last_os_error();
+            for _ in 0..20 {
+                let group_probe = unsafe { libc::kill(-process_group_id, 0) };
+                let group_gone = group_probe != 0
+                    && std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH);
+                let root_exited = match child.try_wait() {
+                    Ok(Some(_)) => true,
+                    Ok(None) => false,
+                    Err(error) => {
+                        return Err(format!(
+                            "failed to verify process group leader pid {pid} after group cleanup: {error}"
+                        ));
+                    }
+                };
+                if group_gone && root_exited {
+                    return Ok(false);
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+            let root_fallback = match child.kill().await {
+                Ok(()) => match child.wait().await {
+                    Ok(_) => "root killed and reaped by fallback".to_string(),
+                    Err(error) => format!("root fallback reap failed: {error}"),
+                },
+                Err(error) => format!("root fallback kill failed: {error}"),
+            };
+            return Err(format!(
+                "failed to terminate process group for pid {pid} ({kill_error}; {root_fallback}); descendant cleanup is unverified"
+            ));
         }
     }
 
     #[cfg(windows)]
     {
         if let Some(pid) = child.id() {
-            let output = crate::utils::async_command("taskkill")
+            let mut taskkill = crate::utils::async_command("taskkill");
+            taskkill
                 .arg("/PID")
                 .arg(pid.to_string())
                 .arg("/T")
-                .arg("/F")
-                .output()
-                .await
-                .map_err(|error| format!("taskkill failed for pid {pid}: {error}"))?;
-            if output.status.success() || matches!(child.try_wait(), Ok(Some(_))) {
-                let _ = child.wait().await;
+                .arg("/F");
+            let output =
+                tokio::time::timeout(std::time::Duration::from_secs(10), taskkill.output())
+                    .await
+                    .map_err(|_| format!("taskkill timed out for pid {pid} after 10 seconds"))?
+                    .map_err(|error| format!("taskkill failed for pid {pid}: {error}"))?;
+            if output.status.success() {
+                child
+                    .wait()
+                    .await
+                    .map_err(|error| format!("failed to reap taskkill pid {pid}: {error}"))?;
                 return Ok(true);
             }
+            let taskkill_error = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let root_fallback = match child.try_wait() {
+                Ok(Some(_)) => "root already exited".to_string(),
+                Ok(None) => match child.kill().await {
+                    Ok(()) => match child.wait().await {
+                        Ok(_) => "root killed and reaped by fallback".to_string(),
+                        Err(error) => format!("root fallback reap failed: {error}"),
+                    },
+                    Err(error) => format!("root fallback kill failed: {error}"),
+                },
+                Err(error) => format!("root status check failed: {error}"),
+            };
+            return Err(format!(
+                "taskkill failed for pid {pid} with status {} ({root_fallback}); descendant cleanup is unverified: {}",
+                output.status,
+                if taskkill_error.is_empty() {
+                    "no taskkill stderr"
+                } else {
+                    taskkill_error.as_str()
+                }
+            ));
         }
     }
 
+    let pid = child.id();
     child
         .kill()
         .await
-        .map_err(|error| format!("Failed to kill process: {error}"))?;
-    let _ = child.wait().await;
+        .map_err(|error| format!("Failed to kill process pid {pid:?}: {error}"))?;
+    child
+        .wait()
+        .await
+        .map_err(|error| format!("Failed to reap process pid {pid:?}: {error}"))?;
     Ok(true)
 }
 

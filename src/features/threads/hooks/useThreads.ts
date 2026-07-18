@@ -133,7 +133,9 @@ function isSameMemoryTurn(
   leftTurnId: string | null | undefined,
   rightTurnId: string | null | undefined,
 ) {
-  return normalizeMemoryTurnId(leftTurnId) === normalizeMemoryTurnId(rightTurnId);
+  return (
+    normalizeMemoryTurnId(leftTurnId) === normalizeMemoryTurnId(rightTurnId)
+  );
 }
 
 type UseThreadsOptions = {
@@ -163,9 +165,7 @@ type UseThreadsOptions = {
   sessionAttributionMode?: WorkspaceSessionAttributionMode;
   resolveOpenCodeAgent?: (threadId: string | null) => string | null;
   resolveOpenCodeVariant?: (threadId: string | null) => string | null;
-  resolveCollaborationUiMode?: (
-    threadId: string,
-  ) => "plan" | "code" | null;
+  resolveCollaborationUiMode?: (threadId: string) => "plan" | "code" | null;
   resolveCollaborationRuntimeMode?: (
     threadId: string,
   ) => "plan" | "code" | null;
@@ -230,7 +230,8 @@ export function useThreads({
     [],
   );
   const domainEventGovernanceConsumer = useMemo(
-    () => createDomainEventGovernanceConsumer(domainEventRuntimeController.runtime),
+    () =>
+      createDomainEventGovernanceConsumer(domainEventRuntimeController.runtime),
     [domainEventRuntimeController],
   );
   useEffect(() => {
@@ -245,7 +246,9 @@ export function useThreads({
   const activeTurnIdByThreadRef = useRef(state.activeTurnIdByThread);
   const threadsByWorkspaceRef = useRef(state.threadsByWorkspace);
   const immediateThreadWorkspaceByIdRef = useRef<Record<string, string>>({});
-  const immediateThreadCodexCandidateByIdRef = useRef<Record<string, boolean>>({});
+  const immediateThreadCodexCandidateByIdRef = useRef<Record<string, boolean>>(
+    {},
+  );
   const immediateProcessingCodexThreadIdsByWorkspaceRef = useRef<
     Record<string, Set<string>>
   >({});
@@ -255,7 +258,15 @@ export function useThreads({
   const lazyResumeTimerByWorkspaceRef = useRef<
     Record<string, ReturnType<typeof setTimeout> | null>
   >({});
-  const historyLoadingThreadByWorkspaceRef = useRef<Record<string, string | null>>({});
+  const historyLoadingThreadByWorkspaceRef = useRef<
+    Record<string, string | null>
+  >({});
+  const historyLoadingStateByThreadRef = useRef<
+    Record<string, true | "failed">
+  >({});
+  const historySelectionGenerationByScopeRef = useRef<Record<string, number>>(
+    {},
+  );
   const activeThreadIdByWorkspaceRef = useRef(state.activeThreadIdByWorkspace);
   const replaceOnResumeRef = useRef<Record<string, boolean>>({});
   // chat-stream-render-isolation-2026-06 task 8: workspace-scope these
@@ -273,7 +284,9 @@ export function useThreads({
   const interruptedThreadsRef = useRef<WorkspaceScopedMap<true>>(
     createWorkspaceScopedMap<true>(),
   );
-  const codexCompactionInFlightByThreadRef = useRef<Record<string, boolean>>({});
+  const codexCompactionInFlightByThreadRef = useRef<Record<string, boolean>>(
+    {},
+  );
   const pendingMemoryCaptureRef = useRef<
     WorkspaceScopedMap<PendingMemoryCaptureBucket>
   >(createWorkspaceScopedMap<PendingMemoryCaptureBucket>());
@@ -460,9 +473,9 @@ export function useThreads({
           threadId,
         );
         if (
-          recent
-          && recent.message === normalized
-          && now - recent.at < THREAD_ERROR_DUPLICATE_WINDOW_MS
+          recent &&
+          recent.message === normalized &&
+          now - recent.at < THREAD_ERROR_DUPLICATE_WINDOW_MS
         ) {
           return;
         }
@@ -557,9 +570,13 @@ export function useThreads({
   useEffect(() => {
     const nextThreadWorkspaceById: Record<string, string> = {};
     const nextThreadCodexCandidateById: Record<string, boolean> = {};
-    const nextProcessingCodexThreadIdsByWorkspace: Record<string, Set<string>> =
-      {};
-    for (const [workspaceId, threads] of Object.entries(state.threadsByWorkspace)) {
+    const nextProcessingCodexThreadIdsByWorkspace: Record<
+      string,
+      Set<string>
+    > = {};
+    for (const [workspaceId, threads] of Object.entries(
+      state.threadsByWorkspace,
+    )) {
       for (const thread of threads) {
         nextThreadWorkspaceById[thread.id] = workspaceId;
         const isCodexCandidate = isCodexOwnershipFallbackCandidate(thread);
@@ -599,19 +616,25 @@ export function useThreads({
       });
       lazyResumeTimerByWorkspaceRef.current = {};
       historyLoadingThreadByWorkspaceRef.current = {};
-      Object.values(sharedSessionSyncTimerByThreadRef.current).forEach((timer) => {
-        if (timer) {
-          clearTimeout(timer);
-        }
-      });
+      historySelectionGenerationByScopeRef.current = {};
+      Object.values(sharedSessionSyncTimerByThreadRef.current).forEach(
+        (timer) => {
+          if (timer) {
+            clearTimeout(timer);
+          }
+        },
+      );
       sharedSessionSyncTimerByThreadRef.current = {};
     };
   }, []);
-  const { applyCollabThreadLinks, applyCollabThreadLinksFromThread, updateThreadParent } =
-    useThreadLinking({
-      dispatch,
-      threadParentById: state.threadParentById,
-    });
+  const {
+    applyCollabThreadLinks,
+    applyCollabThreadLinksFromThread,
+    updateThreadParent,
+  } = useThreadLinking({
+    dispatch,
+    threadParentById: state.threadParentById,
+  });
 
   const handleWorkspaceConnected = useCallback(
     (workspaceId: string) => {
@@ -638,7 +661,10 @@ export function useThreads({
   );
 
   const getThreadEngine = useCallback(
-    (workspaceId: string, threadId: string): "claude" | "codex" | "gemini" | "opencode" | undefined => {
+    (
+      workspaceId: string,
+      threadId: string,
+    ): "claude" | "codex" | "gemini" | "opencode" | undefined => {
       const threads = state.threadsByWorkspace[workspaceId] ?? [];
       const thread = threads.find((t) => t.id === threadId);
       return thread?.engineSource;
@@ -730,7 +756,9 @@ export function useThreads({
             threadId,
             hasTurn: (state.activeTurnIdByThread[threadId] ?? null) !== null,
             itemCount: state.itemsByThread[threadId]?.length ?? 0,
-            isProcessing: Boolean(state.threadStatusById[threadId]?.isProcessing),
+            isProcessing: Boolean(
+              state.threadStatusById[threadId]?.isProcessing,
+            ),
           })),
         },
       });
@@ -768,11 +796,7 @@ export function useThreads({
   );
 
   const resolveClaudeContinuationThreadId = useCallback(
-    (
-      workspaceId: string,
-      threadId: string,
-      turnId?: string | null,
-    ) =>
+    (workspaceId: string, threadId: string, turnId?: string | null) =>
       resolveClaudeContinuationThreadIdFromState({
         workspaceId,
         threadId,
@@ -782,7 +806,11 @@ export function useThreads({
         getActiveTurnIdForThread: (candidateThreadId) =>
           state.activeTurnIdByThread[candidateThreadId] ?? null,
       }),
-    [resolveCanonicalThreadId, resolvePendingThreadForSession, state.activeTurnIdByThread],
+    [
+      resolveCanonicalThreadId,
+      resolvePendingThreadForSession,
+      state.activeTurnIdByThread,
+    ],
   );
 
   const {
@@ -821,13 +849,15 @@ export function useThreads({
     (threadId: string): string[] => {
       const canonicalThreadId = resolveCanonicalThreadId(threadId);
       const related = new Set<string>([threadId, canonicalThreadId]);
-      Object.entries(threadAliasesRef.current).forEach(([sourceThreadId, targetThreadId]) => {
-        if (resolveCanonicalThreadId(sourceThreadId) !== canonicalThreadId) {
-          return;
-        }
-        related.add(sourceThreadId);
-        related.add(targetThreadId);
-      });
+      Object.entries(threadAliasesRef.current).forEach(
+        ([sourceThreadId, targetThreadId]) => {
+          if (resolveCanonicalThreadId(sourceThreadId) !== canonicalThreadId) {
+            return;
+          }
+          related.add(sourceThreadId);
+          related.add(targetThreadId);
+        },
+      );
       return Array.from(related);
     },
     [resolveCanonicalThreadId, threadAliasesRef],
@@ -839,14 +869,17 @@ export function useThreads({
       rememberThreadAlias(oldThreadId, newThreadId);
       const oldCanonicalThreadId = resolveCanonicalThreadId(oldThreadId);
       const newCanonicalThreadId = resolveCanonicalThreadId(newThreadId);
-      const pendingEntries = workspaceScopedEntries(pendingMemoryCaptureRef.current)
-        .flatMap(({ workspaceId, threadId, value }) =>
-          Object.entries(value)
-            .filter(([, entry]) =>
-              entry.threadId === oldThreadId || entry.threadId === oldCanonicalThreadId,
-            )
-            .map(([key, pending]) => ({ workspaceId, threadId, key, pending })),
-        );
+      const pendingEntries = workspaceScopedEntries(
+        pendingMemoryCaptureRef.current,
+      ).flatMap(({ workspaceId, threadId, value }) =>
+        Object.entries(value)
+          .filter(
+            ([, entry]) =>
+              entry.threadId === oldThreadId ||
+              entry.threadId === oldCanonicalThreadId,
+          )
+          .map(([key, pending]) => ({ workspaceId, threadId, key, pending })),
+      );
       if (pendingEntries.length > 0) {
         memoryDebugLog("rename pending capture key", {
           oldThreadId,
@@ -866,20 +899,28 @@ export function useThreads({
             newCanonicalThreadId,
             buildMemoryTurnKey(newCanonicalThreadId, pending.turnId),
             {
-            ...pending,
-            threadId: newCanonicalThreadId,
+              ...pending,
+              threadId: newCanonicalThreadId,
             },
           );
         });
       }
-      const completedEntries = workspaceScopedEntries(pendingAssistantCompletionRef.current)
-        .flatMap(({ workspaceId, threadId, value }) =>
-          Object.entries(value)
-            .filter(([, entry]) =>
-              entry.threadId === oldThreadId || entry.threadId === oldCanonicalThreadId,
-            )
-            .map(([key, completed]) => ({ workspaceId, threadId, key, completed })),
-        );
+      const completedEntries = workspaceScopedEntries(
+        pendingAssistantCompletionRef.current,
+      ).flatMap(({ workspaceId, threadId, value }) =>
+        Object.entries(value)
+          .filter(
+            ([, entry]) =>
+              entry.threadId === oldThreadId ||
+              entry.threadId === oldCanonicalThreadId,
+          )
+          .map(([key, completed]) => ({
+            workspaceId,
+            threadId,
+            key,
+            completed,
+          })),
+      );
       if (completedEntries.length === 0) {
         return;
       }
@@ -901,13 +942,17 @@ export function useThreads({
           newCanonicalThreadId,
           buildMemoryTurnKey(newCanonicalThreadId, completed.turnId),
           {
-          ...completed,
-          threadId: newCanonicalThreadId,
+            ...completed,
+            threadId: newCanonicalThreadId,
           },
         );
       });
     },
-    [rememberThreadAlias, renameCompletionEmailIntentThread, resolveCanonicalThreadId],
+    [
+      rememberThreadAlias,
+      renameCompletionEmailIntentThread,
+      resolveCanonicalThreadId,
+    ],
   );
 
   // Mirrors the side-state migration the Claude pending rebind performs in
@@ -920,7 +965,11 @@ export function useThreads({
       renameAutoTitlePendingKey(workspaceId, pendingThreadId, realThreadId);
       renamePendingMemoryCaptureKey(pendingThreadId, realThreadId);
     },
-    [renameAutoTitlePendingKey, renameCustomNameKey, renamePendingMemoryCaptureKey],
+    [
+      renameAutoTitlePendingKey,
+      renameCustomNameKey,
+      renamePendingMemoryCaptureKey,
+    ],
   );
 
   const {
@@ -955,6 +1004,7 @@ export function useThreads({
     replaceOnResumeRef,
     applyCollabThreadLinksFromThread,
     updateThreadParent,
+    resolveCanonicalThreadId,
     rememberThreadAlias,
     clearThreadAlias,
     resolveWorkspacePath,
@@ -976,6 +1026,9 @@ export function useThreads({
     sessionAttributionMode,
     useUnifiedHistoryLoader,
   });
+  useEffect(() => {
+    historyLoadingStateByThreadRef.current = historyLoadingByThreadId;
+  }, [historyLoadingByThreadId]);
 
   const refreshThread = useCallback(
     async (workspaceId: string, threadId: string) => {
@@ -1055,19 +1108,21 @@ export function useThreads({
       ) {
         return;
       }
-      void refreshThread(workspace.id, activeThreadIdForWorkspace).catch((error) => {
-        onDebug?.({
-          id: `${Date.now()}-web-service-reconnect-thread-refresh-error`,
-          timestamp: Date.now(),
-          source: "error",
-          label: "web-service/reconnect thread refresh error",
-          payload: {
-            workspaceId: workspace.id,
-            threadId: activeThreadIdForWorkspace,
-            error: error instanceof Error ? error.message : String(error),
-          },
-        });
-      });
+      void refreshThread(workspace.id, activeThreadIdForWorkspace).catch(
+        (error) => {
+          onDebug?.({
+            id: `${Date.now()}-web-service-reconnect-thread-refresh-error`,
+            timestamp: Date.now(),
+            source: "error",
+            label: "web-service/reconnect thread refresh error",
+            payload: {
+              workspaceId: workspace.id,
+              threadId: activeThreadIdForWorkspace,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
+        },
+      );
     });
   }, [listThreadsForWorkspace, onDebug, refreshThread]);
 
@@ -1094,7 +1149,9 @@ export function useThreads({
     }
     let threadId = canonicalActiveThreadId;
     if (!threadId) {
-      threadId = await startThreadForWorkspace(activeWorkspace.id, { engine: activeEngine });
+      threadId = await startThreadForWorkspace(activeWorkspace.id, {
+        engine: activeEngine,
+      });
       if (!threadId) {
         return null;
       }
@@ -1114,7 +1171,8 @@ export function useThreads({
 
   const ensureThreadForWorkspace = useCallback(
     async (workspaceId: string) => {
-      const currentActiveThreadId = state.activeThreadIdByWorkspace[workspaceId] ?? null;
+      const currentActiveThreadId =
+        state.activeThreadIdByWorkspace[workspaceId] ?? null;
       const shouldActivate = workspaceId === activeWorkspaceId;
       const canonicalActiveThreadId = currentActiveThreadId
         ? resolveCanonicalThreadId(currentActiveThreadId)
@@ -1131,8 +1189,15 @@ export function useThreads({
       } else if (!loadedThreadsRef.current[threadId]) {
         threadId = await resumeThreadForWorkspace(workspaceId, threadId);
       }
-      if (currentActiveThreadId && canonicalActiveThreadId !== currentActiveThreadId) {
-        dispatch({ type: "setActiveThreadId", workspaceId, threadId: canonicalActiveThreadId });
+      if (
+        currentActiveThreadId &&
+        canonicalActiveThreadId !== currentActiveThreadId
+      ) {
+        dispatch({
+          type: "setActiveThreadId",
+          workspaceId,
+          threadId: canonicalActiveThreadId,
+        });
       }
       if (shouldActivate && currentActiveThreadId !== threadId) {
         dispatch({ type: "setActiveThreadId", workspaceId, threadId });
@@ -1202,7 +1267,10 @@ export function useThreads({
         return null;
       }
 
-      const pendingStartedAt = getAutoTitlePendingStartedAt(workspaceId, threadId);
+      const pendingStartedAt = getAutoTitlePendingStartedAt(
+        workspaceId,
+        threadId,
+      );
       if (pendingStartedAt) {
         const pendingAgeMs = Date.now() - pendingStartedAt;
         if (pendingAgeMs >= AUTO_TITLE_PENDING_STALE_MS) {
@@ -1244,7 +1312,11 @@ export function useThreads({
           timestamp: Date.now(),
           source: "client",
           label: "thread/title skipped",
-          payload: { workspaceId, threadId, reason: "already-pending-after-reset" },
+          payload: {
+            workspaceId,
+            threadId,
+            reason: "already-pending-after-reset",
+          },
         });
         return null;
       }
@@ -1265,16 +1337,27 @@ export function useThreads({
       });
 
       try {
-        const applyGeneratedTitle = (title: string, source: "generated" | "recovered") => {
+        const applyGeneratedTitle = (
+          title: string,
+          source: "generated" | "recovered",
+        ) => {
           saveCustomName(workspaceId, threadId, title);
           const nextKey = makeCustomNameKey(workspaceId, threadId);
           customNamesRef.current[nextKey] = title;
-          dispatch({ type: "setThreadName", workspaceId, threadId, name: title });
+          dispatch({
+            type: "setThreadName",
+            workspaceId,
+            threadId,
+            name: title,
+          });
           onDebug?.({
             id: `${Date.now()}-thread-title-${source}-success`,
             timestamp: Date.now(),
             source: "server",
-            label: source === "generated" ? "thread/title generated" : "thread/title recovered",
+            label:
+              source === "generated"
+                ? "thread/title generated"
+                : "thread/title recovered",
             payload: { workspaceId, threadId, title, source },
           });
           return title;
@@ -1308,7 +1391,11 @@ export function useThreads({
         const language = i18n.language.toLowerCase().startsWith("zh")
           ? "zh"
           : "en";
-        for (let attempt = 1; attempt <= AUTO_TITLE_MAX_ATTEMPTS; attempt += 1) {
+        for (
+          let attempt = 1;
+          attempt <= AUTO_TITLE_MAX_ATTEMPTS;
+          attempt += 1
+        ) {
           const attemptStartedAt = Date.now();
           try {
             onDebug?.({
@@ -1333,7 +1420,8 @@ export function useThreads({
             }
             return applyGeneratedTitle(title, "generated");
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
             const isTimeout = errorMessage.includes("auto-title-timeout");
             const elapsedMs = Date.now() - attemptStartedAt;
 
@@ -1447,14 +1535,16 @@ export function useThreads({
         payload.text,
       );
       const digest = buildAssistantOutputDigest(normalizedAssistantOutput);
-      const normalizedSummary =
-        digest ? normalizeDigestSummaryForMemory(digest.summary) || digest.summary : "";
+      const normalizedSummary = digest
+        ? normalizeDigestSummaryForMemory(digest.summary) || digest.summary
+        : "";
       const mergedDetail = [
         `用户输入：\n${pending.inputText}`,
         `AI 回复：\n${normalizedAssistantOutput}`,
       ].join("\n\n");
       const classifiedKind = classifyMemoryKind(mergedDetail);
-      const mergedKind = classifiedKind === "note" ? "conversation" : classifiedKind;
+      const mergedKind =
+        classifiedKind === "note" ? "conversation" : classifiedKind;
       const mergedImportance = classifyMemoryImportance(mergedDetail);
 
       const mergeWrite = async () => {
@@ -1490,7 +1580,10 @@ export function useThreads({
           }
           memoryDebugLog("merge complete failed", {
             threadId: payload.threadId,
-            error: completeErr instanceof Error ? completeErr.message : String(completeErr),
+            error:
+              completeErr instanceof Error
+                ? completeErr.message
+                : String(completeErr),
           });
         }
       };
@@ -1559,16 +1652,16 @@ export function useThreads({
         )
       ) {
         const keepPendingCapture =
-          shouldKeepPendingCaptureForAdditionalAssistantSegments(normalizedPayload);
+          shouldKeepPendingCaptureForAdditionalAssistantSegments(
+            normalizedPayload,
+          );
         completedThreadIds.forEach((threadId) => {
           getPendingMemoryEntries(
             pendingAssistantCompletionRef.current,
             payload.workspaceId,
             [threadId],
           ).forEach(({ key, entry }) => {
-            if (
-              isSameMemoryTurn(entry.turnId, payload.turnId)
-            ) {
+            if (isSameMemoryTurn(entry.turnId, payload.turnId)) {
               if (!keepPendingCapture) {
                 deletePendingMemoryEntry(
                   pendingAssistantCompletionRef.current,
@@ -1584,9 +1677,7 @@ export function useThreads({
             payload.workspaceId,
             [threadId],
           ).forEach(({ key, entry }) => {
-            if (
-              isSameMemoryTurn(entry.turnId, payload.turnId)
-            ) {
+            if (isSameMemoryTurn(entry.turnId, payload.turnId)) {
               const isSameCanonicalEntry = key === captureKey;
               if (!keepPendingCapture || !isSameCanonicalEntry) {
                 deletePendingMemoryEntry(
@@ -1599,11 +1690,14 @@ export function useThreads({
             }
           });
         });
-        memoryDebugLog("capture resolved after assistant completion, merging now", {
-          threadId: canonicalThreadId,
-          itemId: completedEntry.completion.itemId,
-          memoryId: normalizedPayload.memoryId,
-        });
+        memoryDebugLog(
+          "capture resolved after assistant completion, merging now",
+          {
+            threadId: canonicalThreadId,
+            itemId: completedEntry.completion.itemId,
+            memoryId: normalizedPayload.memoryId,
+          },
+        );
         mergeMemoryFromPendingCapture(normalizedPayload, {
           ...completedEntry.completion,
           threadId: canonicalThreadId,
@@ -1625,7 +1719,11 @@ export function useThreads({
         memoryId: payload.memoryId,
       });
     },
-    [collectRelatedThreadIds, mergeMemoryFromPendingCapture, resolveCanonicalThreadId],
+    [
+      collectRelatedThreadIds,
+      mergeMemoryFromPendingCapture,
+      resolveCanonicalThreadId,
+    ],
   );
 
   /**
@@ -1642,9 +1740,9 @@ export function useThreads({
     }) => {
       const canonicalThreadId = resolveCanonicalThreadId(payload.threadId);
       const completionTurnId = payload.turnId?.trim() || null;
-      const sharedThread = (state.threadsByWorkspace[payload.workspaceId] ?? []).find(
-        (thread) => thread.id === canonicalThreadId,
-      );
+      const sharedThread = (
+        state.threadsByWorkspace[payload.workspaceId] ?? []
+      ).find((thread) => thread.id === canonicalThreadId);
       if (sharedThread?.threadKind === "shared" && sharedThread.engineSource) {
         dispatch({
           type: "upsertItem",
@@ -1658,7 +1756,9 @@ export function useThreads({
             engineSource: sharedThread.engineSource,
             isFinal: true,
           },
-          hasCustomName: Boolean(getCustomName(payload.workspaceId, canonicalThreadId)),
+          hasCustomName: Boolean(
+            getCustomName(payload.workspaceId, canonicalThreadId),
+          ),
         });
       }
       const relatedThreadIds = collectRelatedThreadIds(canonicalThreadId);
@@ -1675,11 +1775,18 @@ export function useThreads({
               }
               return capture.turnId === completionTurnId;
             })
-            .map(({ key, threadId, entry: capture }) => ({ key, threadId, capture })),
+            .map(({ key, threadId, entry: capture }) => ({
+              key,
+              threadId,
+              capture,
+            })),
         )
         .find((entry) => Boolean(entry.capture));
       if (!pendingEntry?.capture) {
-        const completionKey = buildMemoryTurnKey(canonicalThreadId, completionTurnId);
+        const completionKey = buildMemoryTurnKey(
+          canonicalThreadId,
+          completionTurnId,
+        );
         const existingBucket = workspaceScopedGet(
           pendingAssistantCompletionRef.current,
           payload.workspaceId,
@@ -1727,7 +1834,10 @@ export function useThreads({
         });
         return;
       }
-      const completionKey = buildMemoryTurnKey(canonicalThreadId, pendingEntry.capture.turnId);
+      const completionKey = buildMemoryTurnKey(
+        canonicalThreadId,
+        pendingEntry.capture.turnId,
+      );
       const previousCompletion = workspaceScopedGet(
         pendingAssistantCompletionRef.current,
         payload.workspaceId,
@@ -1752,26 +1862,30 @@ export function useThreads({
         completionKey,
         nextCompletion,
       );
-      const mergedAssistantText = joinPendingAssistantCompletionText(nextCompletion);
+      const mergedAssistantText =
+        joinPendingAssistantCompletionText(nextCompletion);
       if (previousAssistantText === mergedAssistantText) {
-        memoryDebugLog("assistant completed text unchanged, skip memory rewrite", {
-          threadId: canonicalThreadId,
-          turnId: pendingEntry.capture.turnId,
-          itemId: payload.itemId,
-        });
+        memoryDebugLog(
+          "assistant completed text unchanged, skip memory rewrite",
+          {
+            threadId: canonicalThreadId,
+            turnId: pendingEntry.capture.turnId,
+            itemId: payload.itemId,
+          },
+        );
         return;
       }
       const keepPendingCapture =
-        shouldKeepPendingCaptureForAdditionalAssistantSegments(pendingEntry.capture);
+        shouldKeepPendingCaptureForAdditionalAssistantSegments(
+          pendingEntry.capture,
+        );
       relatedThreadIds.forEach((threadId) => {
         getPendingMemoryEntries(
           pendingMemoryCaptureRef.current,
           payload.workspaceId,
           [threadId],
         ).forEach(({ key, entry }) => {
-          if (
-            isSameMemoryTurn(entry.turnId, pendingEntry.capture.turnId)
-          ) {
+          if (isSameMemoryTurn(entry.turnId, pendingEntry.capture.turnId)) {
             const isSameCanonicalEntry = key === pendingEntry.key;
             if (!keepPendingCapture || !isSameCanonicalEntry) {
               deletePendingMemoryEntry(
@@ -1788,9 +1902,7 @@ export function useThreads({
           payload.workspaceId,
           [threadId],
         ).forEach(({ key, entry }) => {
-          if (
-            isSameMemoryTurn(entry.turnId, pendingEntry.capture.turnId)
-          ) {
+          if (isSameMemoryTurn(entry.turnId, pendingEntry.capture.turnId)) {
             if (keepPendingCapture) {
               setPendingMemoryEntry(
                 pendingAssistantCompletionRef.current,
@@ -1919,10 +2031,12 @@ export function useThreads({
   });
 
   const interruptTurn = useCallback(
-    async (options?: { reason?: "user-stop" | "queue-fusion" | "plan-handoff" }) => {
+    async (options?: {
+      reason?: "user-stop" | "queue-fusion" | "plan-handoff";
+    }) => {
       const interruptedThreadId = activeThreadId;
       const interruptedTurnId = interruptedThreadId
-        ? activeTurnIdByThreadRef.current[interruptedThreadId] ?? null
+        ? (activeTurnIdByThreadRef.current[interruptedThreadId] ?? null)
         : null;
       try {
         await rawInterruptTurn(options);
@@ -1946,12 +2060,21 @@ export function useThreads({
           return;
         }
         setThreadHistoryLoading(targetThreadId, false);
-        if (historyLoadingThreadByWorkspaceRef.current[targetId] === targetThreadId) {
+        if (
+          historyLoadingThreadByWorkspaceRef.current[targetId] ===
+          targetThreadId
+        ) {
           historyLoadingThreadByWorkspaceRef.current[targetId] = null;
         }
       };
-      const canonicalThreadId = threadId ? resolveCanonicalThreadId(threadId) : null;
-      dispatch({ type: "setActiveThreadId", workspaceId: targetId, threadId: canonicalThreadId });
+      const canonicalThreadId = threadId
+        ? resolveCanonicalThreadId(threadId)
+        : null;
+      dispatch({
+        type: "setActiveThreadId",
+        workspaceId: targetId,
+        threadId: canonicalThreadId,
+      });
       const previousTimer = lazyResumeTimerByWorkspaceRef.current[targetId];
       if (previousTimer) {
         clearTimeout(previousTimer);
@@ -1969,18 +2092,38 @@ export function useThreads({
         return;
       }
       if (canonicalThreadId) {
+        const historySelectionScopeKey = `${targetId}\u0000${canonicalThreadId}`;
+        const historySelectionGeneration =
+          (historySelectionGenerationByScopeRef.current[
+            historySelectionScopeKey
+          ] ?? 0) + 1;
+        historySelectionGenerationByScopeRef.current[historySelectionScopeKey] =
+          historySelectionGeneration;
+        const isCurrentHistorySelection = () =>
+          historySelectionGenerationByScopeRef.current[
+            historySelectionScopeKey
+          ] === historySelectionGeneration;
         const now = Date.now();
         const isLoaded = Boolean(loadedThreadsRef.current[canonicalThreadId]);
-        const isProcessing = Boolean(threadStatusByIdRef.current[canonicalThreadId]?.isProcessing);
-        let lastRefreshAt = loadedThreadLastRefreshAtRef.current[canonicalThreadId] ?? 0;
+        const automaticRecoveryBlocked =
+          historyLoadingStateByThreadRef.current[canonicalThreadId] ===
+          "failed";
+        const isProcessing = Boolean(
+          threadStatusByIdRef.current[canonicalThreadId]?.isProcessing,
+        );
+        let lastRefreshAt =
+          loadedThreadLastRefreshAtRef.current[canonicalThreadId] ?? 0;
         if (isLoaded && lastRefreshAt <= 0) {
           lastRefreshAt = now;
           loadedThreadLastRefreshAtRef.current[canonicalThreadId] = now;
         }
         const shouldRefreshLoaded =
-          isLoaded && !isProcessing && now - lastRefreshAt >= THREAD_SWITCH_LOADED_REFRESH_MS;
+          isLoaded &&
+          !isProcessing &&
+          now - lastRefreshAt >= THREAD_SWITCH_LOADED_REFRESH_MS;
         const shouldScheduleResume =
-          (!isLoaded && !isProcessing) || shouldRefreshLoaded;
+          (!isLoaded && !isProcessing && !automaticRecoveryBlocked) ||
+          shouldRefreshLoaded;
         if (!shouldScheduleResume) {
           clearHistoryLoadingForThread(canonicalThreadId);
           return;
@@ -1990,26 +2133,42 @@ export function useThreads({
           shouldShowHistoryLoadingForSelectionThread(canonicalThreadId);
         if (shouldShowHistoryLoading) {
           setThreadHistoryLoading(canonicalThreadId, true);
-          historyLoadingThreadByWorkspaceRef.current[targetId] = canonicalThreadId;
+          historyLoadingThreadByWorkspaceRef.current[targetId] =
+            canonicalThreadId;
         } else {
           clearHistoryLoadingForThread(canonicalThreadId);
         }
         lazyResumeTimerByWorkspaceRef.current[targetId] = setTimeout(() => {
           lazyResumeTimerByWorkspaceRef.current[targetId] = null;
+          if (!isCurrentHistorySelection()) {
+            return;
+          }
           const activeThreadIdForWorkspace =
             activeThreadIdByWorkspaceRef.current[targetId] ?? null;
           if (activeThreadIdForWorkspace !== canonicalThreadId) {
             clearHistoryLoadingForThread(canonicalThreadId);
             return;
           }
-          const loadedAtCallback = Boolean(loadedThreadsRef.current[canonicalThreadId]);
+          const loadedAtCallback = Boolean(
+            loadedThreadsRef.current[canonicalThreadId],
+          );
           if (!loadedAtCallback) {
-            loadedThreadLastRefreshAtRef.current[canonicalThreadId] = Date.now();
+            loadedThreadLastRefreshAtRef.current[canonicalThreadId] =
+              Date.now();
             let resumeLoadingThreadId = canonicalThreadId;
-            void resumeThreadForWorkspace(targetId, canonicalThreadId, false, false, {
-              preferLocalCodexHistory: true,
-            })
+            void resumeThreadForWorkspace(
+              targetId,
+              canonicalThreadId,
+              false,
+              false,
+              {
+                preferLocalCodexHistory: true,
+              },
+            )
               .then((recoveredThreadId) => {
+                if (!isCurrentHistorySelection()) {
+                  return;
+                }
                 const recoveredCanonicalThreadId = recoveredThreadId
                   ? resolveCanonicalThreadId(recoveredThreadId)
                   : null;
@@ -2027,7 +2186,8 @@ export function useThreads({
                 if (
                   recoveredCanonicalThreadId &&
                   recoveredCanonicalThreadId !== canonicalThreadId &&
-                  activeThreadIdByWorkspaceRef.current[targetId] === canonicalThreadId
+                  activeThreadIdByWorkspaceRef.current[targetId] ===
+                    canonicalThreadId
                 ) {
                   onDebug?.({
                     id: `${Date.now()}-thread-selection-recovered-canonical`,
@@ -2048,6 +2208,9 @@ export function useThreads({
                 }
               })
               .finally(() => {
+                if (!isCurrentHistorySelection()) {
+                  return;
+                }
                 const currentLoadingThreadId =
                   historyLoadingThreadByWorkspaceRef.current[targetId] ?? null;
                 if (currentLoadingThreadId === resumeLoadingThreadId) {
@@ -2067,42 +2230,53 @@ export function useThreads({
           }
           const callbackLastRefreshAt =
             loadedThreadLastRefreshAtRef.current[canonicalThreadId] ?? 0;
-          if (Date.now() - callbackLastRefreshAt < THREAD_SWITCH_LOADED_REFRESH_MS) {
+          if (
+            Date.now() - callbackLastRefreshAt <
+            THREAD_SWITCH_LOADED_REFRESH_MS
+          ) {
             return;
           }
           loadedThreadLastRefreshAtRef.current[canonicalThreadId] = Date.now();
-          void resumeThreadForWorkspace(targetId, canonicalThreadId, true, false, {
-            preferLocalCodexHistory: true,
-          }).then(
-            (recoveredThreadId) => {
-              const recoveredCanonicalThreadId = recoveredThreadId
-                ? resolveCanonicalThreadId(recoveredThreadId)
-                : null;
-              if (
-                recoveredCanonicalThreadId &&
-                recoveredCanonicalThreadId !== canonicalThreadId &&
-                activeThreadIdByWorkspaceRef.current[targetId] === canonicalThreadId
-              ) {
-                onDebug?.({
-                  id: `${Date.now()}-thread-selection-recovered-canonical-refresh`,
-                  timestamp: Date.now(),
-                  source: "client",
-                  label: "thread/selection recovered canonical",
-                  payload: {
-                    workspaceId: targetId,
-                    staleThreadId: canonicalThreadId,
-                    recoveredThreadId: recoveredCanonicalThreadId,
-                    trigger: "refresh",
-                  },
-                });
-                dispatch({
-                  type: "setActiveThreadId",
-                  workspaceId: targetId,
-                  threadId: recoveredCanonicalThreadId,
-                });
-              }
+          void resumeThreadForWorkspace(
+            targetId,
+            canonicalThreadId,
+            true,
+            false,
+            {
+              preferLocalCodexHistory: true,
             },
-          );
+          ).then((recoveredThreadId) => {
+            if (!isCurrentHistorySelection()) {
+              return;
+            }
+            const recoveredCanonicalThreadId = recoveredThreadId
+              ? resolveCanonicalThreadId(recoveredThreadId)
+              : null;
+            if (
+              recoveredCanonicalThreadId &&
+              recoveredCanonicalThreadId !== canonicalThreadId &&
+              activeThreadIdByWorkspaceRef.current[targetId] ===
+                canonicalThreadId
+            ) {
+              onDebug?.({
+                id: `${Date.now()}-thread-selection-recovered-canonical-refresh`,
+                timestamp: Date.now(),
+                source: "client",
+                label: "thread/selection recovered canonical",
+                payload: {
+                  workspaceId: targetId,
+                  staleThreadId: canonicalThreadId,
+                  recoveredThreadId: recoveredCanonicalThreadId,
+                  trigger: "refresh",
+                },
+              });
+              dispatch({
+                type: "setActiveThreadId",
+                workspaceId: targetId,
+                threadId: recoveredCanonicalThreadId,
+              });
+            }
+          });
         }, THREAD_SWITCH_RESUME_DELAY_MS);
       }
     },
@@ -2132,11 +2306,13 @@ export function useThreads({
     }
 
     const threadWorkspaceMap = new Map<string, string>();
-    Object.entries(state.threadsByWorkspace).forEach(([workspaceId, threads]) => {
-      threads.forEach((thread) => {
-        threadWorkspaceMap.set(thread.id, workspaceId);
-      });
-    });
+    Object.entries(state.threadsByWorkspace).forEach(
+      ([workspaceId, threads]) => {
+        threads.forEach((thread) => {
+          threadWorkspaceMap.set(thread.id, workspaceId);
+        });
+      },
+    );
 
     const protectedThreadIds = new Set<string>();
     Object.values(state.activeThreadIdByWorkspace).forEach((threadId) => {
@@ -2244,61 +2420,73 @@ export function useThreads({
   ]);
 
   useEffect(() => {
-    Object.entries(state.threadsByWorkspace).forEach(([workspaceId, threads]) => {
-      threads.forEach((thread) => {
-        if (thread.threadKind !== "shared") {
-          return;
-        }
-        if (!loadedThreadsRef.current[thread.id]) {
-          const existingTimer = sharedSessionSyncTimerByThreadRef.current[thread.id];
+    Object.entries(state.threadsByWorkspace).forEach(
+      ([workspaceId, threads]) => {
+        threads.forEach((thread) => {
+          if (thread.threadKind !== "shared") {
+            return;
+          }
+          if (!loadedThreadsRef.current[thread.id]) {
+            const existingTimer =
+              sharedSessionSyncTimerByThreadRef.current[thread.id];
+            if (existingTimer) {
+              clearTimeout(existingTimer);
+              sharedSessionSyncTimerByThreadRef.current[thread.id] = null;
+            }
+            return;
+          }
+          const selectedEngine = normalizeSharedSessionEngine(
+            thread.selectedEngine ?? thread.engineSource ?? "claude",
+          );
+          const items = state.itemsByThread[thread.id] ?? [];
+          const lastSynced =
+            sharedSessionLastSignatureByThreadRef.current[thread.id];
+          if (
+            lastSynced &&
+            lastSynced.selectedEngine === selectedEngine &&
+            lastSynced.items === items
+          ) {
+            return;
+          }
+          sharedSessionLastSignatureByThreadRef.current[thread.id] = {
+            selectedEngine,
+            items,
+          };
+          const existingTimer =
+            sharedSessionSyncTimerByThreadRef.current[thread.id];
           if (existingTimer) {
             clearTimeout(existingTimer);
-            sharedSessionSyncTimerByThreadRef.current[thread.id] = null;
           }
-          return;
-        }
-        const selectedEngine = normalizeSharedSessionEngine(
-          thread.selectedEngine ?? thread.engineSource ?? "claude",
-        );
-        const items = state.itemsByThread[thread.id] ?? [];
-        const lastSynced = sharedSessionLastSignatureByThreadRef.current[thread.id];
-        if (
-          lastSynced &&
-          lastSynced.selectedEngine === selectedEngine &&
-          lastSynced.items === items
-        ) {
-          return;
-        }
-        sharedSessionLastSignatureByThreadRef.current[thread.id] = {
-          selectedEngine,
-          items,
-        };
-        const existingTimer = sharedSessionSyncTimerByThreadRef.current[thread.id];
-        if (existingTimer) {
-          clearTimeout(existingTimer);
-        }
-        sharedSessionSyncTimerByThreadRef.current[thread.id] = setTimeout(() => {
-          void syncSharedSessionSnapshotService(
-            workspaceId,
-            thread.id,
-            items,
-            selectedEngine,
-          ).catch((error) => {
-            onDebug?.({
-              id: `${Date.now()}-shared-session-sync-error`,
-              timestamp: Date.now(),
-              source: "error",
-              label: "shared-session/sync error",
-              payload: error instanceof Error ? error.message : String(error),
-            });
-          });
-        }, 320);
-      });
-    });
+          sharedSessionSyncTimerByThreadRef.current[thread.id] = setTimeout(
+            () => {
+              void syncSharedSessionSnapshotService(
+                workspaceId,
+                thread.id,
+                items,
+                selectedEngine,
+              ).catch((error) => {
+                onDebug?.({
+                  id: `${Date.now()}-shared-session-sync-error`,
+                  timestamp: Date.now(),
+                  source: "error",
+                  label: "shared-session/sync error",
+                  payload:
+                    error instanceof Error ? error.message : String(error),
+                });
+              });
+            },
+            320,
+          );
+        });
+      },
+    );
   }, [onDebug, state.itemsByThread, state.threadsByWorkspace]);
 
   const removeThread = useCallback(
-    async (workspaceId: string, threadId: string): Promise<ThreadDeleteResult> => {
+    async (
+      workspaceId: string,
+      threadId: string,
+    ): Promise<ThreadDeleteResult> => {
       const settleThreadDeletionLocally = (
         result: Omit<ThreadDeleteResult, "threadId">,
       ): ThreadDeleteResult => {
@@ -2344,11 +2532,20 @@ export function useThreads({
         };
       }
     },
-    [deleteThreadForWorkspace, dispatch, getThreadKind, loadedThreadsRef, unpinThread],
+    [
+      deleteThreadForWorkspace,
+      dispatch,
+      getThreadKind,
+      loadedThreadsRef,
+      unpinThread,
+    ],
   );
 
   const removeThreads = useCallback(
-    async (workspaceId: string, threadIds: string[]): Promise<ThreadDeleteResult[]> => {
+    async (
+      workspaceId: string,
+      threadIds: string[],
+    ): Promise<ThreadDeleteResult[]> => {
       if (!workspaceId || threadIds.length === 0) {
         return [];
       }
@@ -2362,17 +2559,23 @@ export function useThreads({
         if (threadId.includes("-pending-") || threadId.includes(":")) {
           return false;
         }
-        return thread?.engineSource !== "claude" &&
+        return (
+          thread?.engineSource !== "claude" &&
           thread?.engineSource !== "gemini" &&
-          thread?.engineSource !== "opencode";
+          thread?.engineSource !== "opencode"
+        );
       });
 
       const codexResultByThreadId = new Map<string, ThreadDeleteResult>();
       if (codexThreadIds.length > 1) {
         try {
-          const response = await deleteCodexSessions(workspaceId, codexThreadIds);
+          const response = await deleteCodexSessions(
+            workspaceId,
+            codexThreadIds,
+          );
           response.results.forEach((result) => {
-            const message = (result.error ?? "").trim() || "Failed to delete codex session";
+            const message =
+              (result.error ?? "").trim() || "Failed to delete codex session";
             const code = mapDeleteErrorCode(message);
             if (result.deleted || shouldSettleDeleteAsSuccess(message)) {
               loadedThreadsRef.current[result.sessionId] = false;
@@ -2403,7 +2606,8 @@ export function useThreads({
             });
           });
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
           codexThreadIds.forEach((threadId) => {
             codexResultByThreadId.set(threadId, {
               threadId,
@@ -2444,7 +2648,11 @@ export function useThreads({
   );
 
   const triggerAutoThreadTitle = useCallback(
-    async (workspaceId: string, threadId: string, options?: { force?: boolean }) => {
+    async (
+      workspaceId: string,
+      threadId: string,
+      options?: { force?: boolean },
+    ) => {
       const items = state.itemsByThread[threadId] ?? [];
       const userMessage = items.find(
         (item) => item.kind === "message" && item.role === "user",
@@ -2454,15 +2662,18 @@ export function useThreads({
 
       if (!text.trim() && !threadId.startsWith("claude:")) {
         try {
-          const response = (await resumeThread(workspaceId, threadId)) as
-            | Record<string, unknown>
-            | null;
-          const result = (response?.result ?? response) as
-            | Record<string, unknown>
-            | null;
-          const thread = (result?.thread ?? response?.thread ?? null) as
-            | Record<string, unknown>
-            | null;
+          const response = (await resumeThread(
+            workspaceId,
+            threadId,
+          )) as Record<string, unknown> | null;
+          const result = (response?.result ?? response) as Record<
+            string,
+            unknown
+          > | null;
+          const thread = (result?.thread ?? response?.thread ?? null) as Record<
+            string,
+            unknown
+          > | null;
           if (thread) {
             const loadedItems = buildItemsFromThread(thread);
             const loadedFirstUserMessage = loadedItems.find(
@@ -2535,13 +2746,16 @@ export function useThreads({
     [isAutoTitlePending],
   );
 
-  const getSingleProcessingCodexThreadId = useCallback((workspaceId: string) => {
-    const candidates = Array.from(
-      immediateProcessingCodexThreadIdsByWorkspaceRef.current[workspaceId] ??
-        [],
-    );
-    return candidates.length === 1 ? (candidates[0] ?? null) : null;
-  }, []);
+  const getSingleProcessingCodexThreadId = useCallback(
+    (workspaceId: string) => {
+      const candidates = Array.from(
+        immediateProcessingCodexThreadIdsByWorkspaceRef.current[workspaceId] ??
+          [],
+      );
+      return candidates.length === 1 ? (candidates[0] ?? null) : null;
+    },
+    [],
+  );
 
   const handlers = useThreadEventHandlers({
     activeThreadId,
@@ -2580,8 +2794,19 @@ export function useThreads({
     onTurnCompletedExternal: (payload) => {
       handleTurnCompletedForHistoryReconcile(payload);
     },
-    onTurnTerminalExternal: ({ workspaceId, threadId, turnId, rawTurnId, status }) => {
-      settleCompletionEmailIntent(workspaceId, threadId, rawTurnId ?? turnId, status);
+    onTurnTerminalExternal: ({
+      workspaceId,
+      threadId,
+      turnId,
+      rawTurnId,
+      status,
+    }) => {
+      settleCompletionEmailIntent(
+        workspaceId,
+        threadId,
+        rawTurnId ?? turnId,
+        status,
+      );
     },
     onThreadTransientCleanupReady: (cleanup) => {
       cleanupThreadTransientStateRef.current = cleanup;
@@ -2631,7 +2856,10 @@ export function useThreads({
   const appServerEventHandlers = useMemo(
     () => ({
       ...handlers,
-      onThreadStarted: (workspaceId: string, thread: Record<string, unknown>) => {
+      onThreadStarted: (
+        workspaceId: string,
+        thread: Record<string, unknown>,
+      ) => {
         const threadId = typeof thread.id === "string" ? thread.id : "";
         if (threadId) {
           rememberImmediateThreadOwner(workspaceId, threadId, {

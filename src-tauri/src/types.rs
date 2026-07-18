@@ -916,8 +916,8 @@ fn default_email_inbound_settings() -> EmailInboundSettings {
     EmailInboundSettings::default()
 }
 
-fn default_engine_enabled() -> bool {
-    true
+fn default_gemini_enabled() -> bool {
+    crate::engine_policy::GEMINI_RUNTIME_ENABLED
 }
 
 fn default_opencode_enabled() -> bool {
@@ -958,7 +958,7 @@ pub(crate) struct AppSettings {
     pub(crate) codex_args: Option<String>,
     #[serde(default, rename = "terminalShellPath")]
     pub(crate) terminal_shell_path: Option<String>,
-    #[serde(default = "default_engine_enabled", rename = "geminiEnabled")]
+    #[serde(default = "default_gemini_enabled", rename = "geminiEnabled")]
     pub(crate) gemini_enabled: bool,
     #[serde(default = "default_opencode_enabled", rename = "opencodeEnabled")]
     pub(crate) opencode_enabled: bool,
@@ -1759,7 +1759,14 @@ impl AppSettings {
     }
 
     pub(crate) fn sanitize_engine_gates(&mut self) {
-        self.gemini_enabled = self.gemini_enabled != false;
+        self.gemini_enabled = crate::engine_policy::GEMINI_RUNTIME_ENABLED;
+        if self
+            .default_engine
+            .as_deref()
+            .is_some_and(|engine| engine.trim().eq_ignore_ascii_case("gemini"))
+        {
+            self.default_engine = None;
+        }
         self.opencode_enabled = self.opencode_enabled != false;
     }
 }
@@ -1771,7 +1778,7 @@ impl Default for AppSettings {
             claude_bin: None,
             codex_args: None,
             terminal_shell_path: None,
-            gemini_enabled: default_engine_enabled(),
+            gemini_enabled: default_gemini_enabled(),
             opencode_enabled: default_opencode_enabled(),
             session_attribution_mode: WorkspaceSessionAttributionMode::Related,
             backend_mode: BackendMode::Local,
@@ -2008,6 +2015,7 @@ mod tests {
         assert!(settings.web_service_token.is_none());
         assert!(settings.custom_skill_directories.is_empty());
         assert!(!settings.system_proxy_enabled);
+        assert!(!settings.gemini_enabled);
         assert!(!settings.opencode_enabled);
         assert_eq!(
             settings.session_attribution_mode,
@@ -2225,10 +2233,24 @@ mod tests {
     }
 
     #[test]
-    fn app_settings_defaults_enable_gemini_and_disable_opencode() {
+    fn app_settings_defaults_disable_retired_optional_engines() {
         let settings = AppSettings::default();
-        assert!(settings.gemini_enabled);
+        assert!(!settings.gemini_enabled);
         assert!(!settings.opencode_enabled);
+    }
+
+    #[test]
+    fn app_settings_sanitizer_forces_legacy_gemini_true_to_false() {
+        let mut settings: AppSettings =
+            serde_json::from_str(r#"{"geminiEnabled":true,"defaultEngine":"gemini"}"#)
+                .expect("deserialize legacy settings");
+        assert!(settings.gemini_enabled);
+        assert_eq!(settings.default_engine.as_deref(), Some("gemini"));
+
+        settings.sanitize_engine_gates();
+
+        assert!(!settings.gemini_enabled);
+        assert!(settings.default_engine.is_none());
     }
 
     #[test]

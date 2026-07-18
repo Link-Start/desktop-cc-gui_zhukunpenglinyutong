@@ -1,8 +1,5 @@
 import { useCallback, useMemo, useRef } from "react";
-import type {
-  ThreadSummary,
-  WorkspaceInfo,
-} from "../../../types";
+import type { ThreadSummary, WorkspaceInfo } from "../../../types";
 import {
   connectWorkspace as connectWorkspaceService,
   listThreadTitles as listThreadTitlesService,
@@ -62,9 +59,7 @@ import {
   withTimeout,
   type GeminiSessionSummary,
 } from "./useThreadActions.helpers";
-import {
-  buildPartialHistoryDiagnostic,
-} from "../utils/stabilityDiagnostics";
+import { buildPartialHistoryDiagnostic } from "../utils/stabilityDiagnostics";
 import { buildThreadDebugCorrelation } from "../utils/threadDebugCorrelation";
 import { useThreadActionsSessionRuntime } from "./useThreadActionsSessionRuntime";
 import { useThreadActionsSessionCatalog } from "./useThreadActionsSessionCatalog";
@@ -72,9 +67,7 @@ import {
   applySessionArchiveState,
   useReconcileMissingClaudeThread,
 } from "./useThreadActions.localState";
-import {
-  useThreadActionsResumeThreadForWorkspace,
-} from "./useThreadActionsResumeThread";
+import { useThreadActionsResumeThreadForWorkspace } from "./useThreadActionsResumeThread";
 import { useLoadOlderThreadsForWorkspace } from "./useThreadActionsLoadOlder";
 import { useThreadHistoryLoadingState } from "./useThreadHistoryLoadingState";
 import {
@@ -124,14 +117,18 @@ export function useThreadActions({
   onThreadTitleMappingsLoaded,
   onRenameThreadTitleMapping,
   onCodexPendingThreadFinalized,
+  resolveCanonicalThreadId,
   rememberThreadAlias,
   clearThreadAlias,
   resolveWorkspacePath,
   useUnifiedHistoryLoader = false,
   sessionAttributionMode = "related",
 }: UseThreadActionsOptions) {
-  const { historyLoadingByThreadId, setThreadHistoryLoading } =
-    useThreadHistoryLoadingState();
+  const {
+    historyLoadingByThreadId,
+    setThreadHistoryLoading,
+    setThreadHistoryRecoveryFailed,
+  } = useThreadHistoryLoadingState();
   // Map workspaceId → filesystem path, populated in listThreadsForWorkspace
   const workspacePathsByIdRef = useRef<Record<string, string>>({});
   const geminiSessionCacheRef = useRef<
@@ -212,6 +209,7 @@ export function useThreadActions({
     tokenUsageByThread,
     loadedThreadsRef,
     onDebug,
+    resolveCanonicalThreadId,
     rememberThreadAlias,
     clearThreadAlias,
     replaceOnResumeRef,
@@ -227,6 +225,7 @@ export function useThreadActions({
     latestThreadsByWorkspaceRef,
     previousThreadsByWorkspaceRef,
     threadListCursorByWorkspace,
+    setThreadHistoryRecoveryFailed,
   });
 
   const {
@@ -309,7 +308,9 @@ export function useThreadActions({
         deletedThreadIdSet.size === 0
           ? summaries
           : summaries.filter((summary) => !deletedThreadIdSet.has(summary.id));
-      const filterRootVisibleAutomaticSummaries = (summaries: ThreadSummary[]) =>
+      const filterRootVisibleAutomaticSummaries = (
+        summaries: ThreadSummary[],
+      ) =>
         summaries.filter(
           (summary) => summary.autoSession?.visibility !== "hidden",
         );
@@ -717,7 +718,10 @@ export function useThreadActions({
               [] as Awaited<ReturnType<typeof getOpenCodeSessionListService>>,
             );
         const projectCatalogSessionsPromise = canListWorkspaceSessions
-          ? loadActiveProjectCatalogSessions(workspace.id, sessionAttributionMode)
+          ? loadActiveProjectCatalogSessions(
+              workspace.id,
+              sessionAttributionMode,
+            )
           : Promise.resolve(null);
         const [claudeResult, opencodeResult, projectCatalogResult] =
           await Promise.allSettled([

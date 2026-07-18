@@ -10,6 +10,19 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(unix)]
+use crate::engine::{EngineConfig, EngineManager};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
+use std::process::Stdio;
+#[cfg(unix)]
+use std::sync::Arc;
+#[cfg(unix)]
+use std::time::Duration;
+#[cfg(unix)]
+use tokio::process::Command;
+
 fn with_image_refs_for_test(text: &str, images: &[String]) -> String {
     let workspace_path = std::env::temp_dir();
     with_image_refs_for_test_in_workspace(text, images, workspace_path.as_path())
@@ -264,18 +277,17 @@ fn with_image_references_skips_unsupported_data_urls() {
 }
 
 #[test]
-fn build_command_keeps_short_prompt_in_argv() {
+fn build_command_routes_short_prompt_to_stdin_without_argv_exposure() {
     let workspace_path = unique_temp_path("moss-x-gemini-workspace");
     std::fs::create_dir_all(&workspace_path).expect("create workspace");
     let session = GeminiSession::new("workspace-1".to_string(), workspace_path.clone(), None);
-    let mut params = SendMessageParams::default();
-    params.text = "short prompt".to_string();
+    let params = SendMessageParams {
+        text: "Output language: Simplified Chinese.\n\n短提示".to_string(),
+        ..Default::default()
+    };
 
     let built = session.build_command(&params);
-    assert!(
-        built.prompt_stdin_payload.is_none(),
-        "short prompt should remain in argv path"
-    );
+    assert_eq!(built.prompt_stdin_payload, params.text);
     let args = command_args(&built.command);
     let prompt_idx = args
         .iter()
@@ -284,9 +296,10 @@ fn build_command_keeps_short_prompt_in_argv() {
     let prompt_value = args
         .get(prompt_idx + 1)
         .expect("missing prompt value after --prompt");
+    assert_eq!(prompt_value, "");
     assert!(
-        !prompt_value.is_empty(),
-        "short prompt argv value should not be empty placeholder"
+        args.iter().all(|arg| !arg.contains("短提示")),
+        "raw prompt must not appear in argv"
     );
 
     let _ = std::fs::remove_dir_all(&workspace_path);
@@ -297,15 +310,16 @@ fn build_command_routes_long_prompt_to_stdin() {
     let workspace_path = unique_temp_path("moss-x-gemini-workspace");
     std::fs::create_dir_all(&workspace_path).expect("create workspace");
     let session = GeminiSession::new("workspace-1".to_string(), workspace_path.clone(), None);
-    let mut params = SendMessageParams::default();
-    params.text = "a".repeat(super::GEMINI_PROMPT_ARG_MAX_CHARS + 128);
+    let params = SendMessageParams {
+        text: format!(
+            "Output language: Simplified Chinese.\n\n{}",
+            "a".repeat(16 * 1024)
+        ),
+        ..Default::default()
+    };
 
     let built = session.build_command(&params);
-    let payload = built
-        .prompt_stdin_payload
-        .as_ref()
-        .expect("long prompt should be routed via stdin");
-    assert!(payload.chars().count() > super::GEMINI_PROMPT_ARG_MAX_CHARS);
+    assert_eq!(built.prompt_stdin_payload, params.text);
 
     let args = command_args(&built.command);
     let prompt_idx = args
@@ -318,6 +332,10 @@ fn build_command_routes_long_prompt_to_stdin() {
     assert_eq!(
         prompt_value, "",
         "long prompt should use empty argv placeholder"
+    );
+    assert!(
+        args.iter().all(|arg| !arg.contains(&"a".repeat(256))),
+        "raw prompt must not appear in argv"
     );
 
     let _ = std::fs::remove_dir_all(&workspace_path);
@@ -853,4 +871,843 @@ async fn drop_fallback_does_not_panic_on_empty_active_processes() {
         None,
     );
     drop(session);
+}
+
+#[cfg(unix)]
+fn write_unix_test_script(prefix: &str, body: &str) -> (PathBuf, PathBuf) {
+    let directory = unique_temp_path(prefix);
+    std::fs::create_dir_all(&directory).expect("create fake Gemini directory");
+    let script_path = directory.join("fake-gemini");
+    std::fs::write(&script_path, format!("#!/bin/sh\nset -eu\n{body}\n"))
+        .expect("write fake Gemini script");
+    let mut permissions = std::fs::metadata(&script_path)
+        .expect("fake Gemini metadata")
+        .permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&script_path, permissions).expect("make fake Gemini executable");
+    (directory, script_path)
+}
+
+#[cfg(unix)]
+fn unix_process_exists(pid: u32) -> bool {
+    let result = unsafe { libc::kill(pid as libc::pid_t, 0) };
+    result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+#[cfg(unix)]
+async fn wait_for_process_exit(pid: u32) -> bool {
+    for _ in 0..100 {
+        if !unix_process_exists(pid) {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    false
+}
+
+#[cfg(unix)]
+async fn wait_for_pid_file(path: &Path) -> u32 {
+    for _ in 0..100 {
+        if let Ok(value) = std::fs::read_to_string(path) {
+            if let Ok(pid) = value.trim().parse::<u32>() {
+                return pid;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("timed out waiting for pid file: {}", path.display());
+}
+
+#[cfg(unix)]
+async fn register_grouped_sleep_child(session: &GeminiSession, turn_id: &str) -> u32 {
+    let mut command = Command::new("sleep");
+    command
+        .arg("60")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    GeminiSession::configure_spawn_command(&mut command);
+    let child = command.spawn().expect("spawn grouped sleep child");
+    let pid = child.id().expect("sleep child pid");
+    session
+        .process_registry
+        .lock()
+        .await
+        .active_processes
+        .insert(
+            turn_id.to_string(),
+            super::ActiveGeminiChildProcess::new(child),
+        );
+    pid
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn production_policy_rejects_gemini_before_fake_cli_spawn() {
+    let (directory, script_path) = write_unix_test_script(
+        "ccgui-gemini-disabled-policy",
+        r#"
+printf 'spawned' > "${0}.spawned"
+cat >/dev/null
+"#,
+    );
+    let spawn_marker = PathBuf::from(format!("{}.spawned", script_path.display()));
+    let session = GeminiSession::new(
+        "workspace-disabled-policy".to_string(),
+        directory.clone(),
+        Some(EngineConfig {
+            bin_path: Some(script_path.to_string_lossy().to_string()),
+            ..Default::default()
+        }),
+    );
+
+    let error = session
+        .send_message(
+            SendMessageParams {
+                text: "must not reach Gemini".to_string(),
+                ..Default::default()
+            },
+            "turn-disabled-policy",
+        )
+        .await
+        .expect_err("production Gemini launch must stay disabled");
+
+    assert_eq!(error, crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC);
+    assert!(!spawn_marker.exists());
+    assert!(session.active_process_ids().await.is_empty());
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn interrupt_before_process_registration_prevents_late_spawn() {
+    let (directory, script_path) = write_unix_test_script(
+        "ccgui-gemini-pre-registration-interrupt",
+        r#"
+printf 'spawned' > "${0}.spawned"
+cat >/dev/null
+"#,
+    );
+    let spawn_marker = PathBuf::from(format!("{}.spawned", script_path.display()));
+    let session = GeminiSession::new_process_test(
+        "workspace-pre-registration-interrupt".to_string(),
+        directory.clone(),
+        Some(EngineConfig {
+            bin_path: Some(script_path.to_string_lossy().to_string()),
+            ..Default::default()
+        }),
+    );
+
+    session
+        .interrupt_turn("turn-pre-registration-interrupt")
+        .await
+        .expect("record pre-registration interrupt");
+    let error = session
+        .send_message(
+            SendMessageParams {
+                text: "cancel before spawn".to_string(),
+                ..Default::default()
+            },
+            "turn-pre-registration-interrupt",
+        )
+        .await
+        .expect_err("interrupted turn must not spawn later");
+
+    assert_eq!(error, "Session stopped.");
+    assert!(!spawn_marker.exists());
+    assert!(session.active_process_ids().await.is_empty());
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn session_interrupt_during_pre_registration_window_prevents_spawn() {
+    let (directory, script_path) = write_unix_test_script(
+        "ccgui-gemini-session-interrupt-generation",
+        r#"
+printf 'spawned' > "${0}.spawned"
+cat >/dev/null
+"#,
+    );
+    let spawn_marker = PathBuf::from(format!("{}.spawned", script_path.display()));
+    let launch_checked = Arc::new(tokio::sync::Notify::new());
+    let continue_launch = Arc::new(tokio::sync::Notify::new());
+    let session = Arc::new(
+        GeminiSession::new_process_test(
+            "workspace-session-interrupt-generation".to_string(),
+            directory.clone(),
+            Some(EngineConfig {
+                bin_path: Some(script_path.to_string_lossy().to_string()),
+                ..Default::default()
+            }),
+        )
+        .with_process_launch_test_hook(Arc::clone(&launch_checked), Arc::clone(&continue_launch)),
+    );
+    let send_task = tokio::spawn({
+        let session = Arc::clone(&session);
+        async move {
+            session
+                .send_message(
+                    SendMessageParams {
+                        text: "must not spawn".to_string(),
+                        ..Default::default()
+                    },
+                    "turn-session-interrupt-generation",
+                )
+                .await
+        }
+    });
+
+    launch_checked.notified().await;
+    session
+        .interrupt()
+        .await
+        .expect("session interrupt should establish a launch barrier");
+    continue_launch.notify_one();
+    let error = send_task
+        .await
+        .expect("send task should join")
+        .expect_err("pre-registration send must be interrupted");
+
+    assert_eq!(error, "Session stopped.");
+    assert!(!spawn_marker.exists());
+    assert!(session.active_process_ids().await.is_empty());
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn closed_session_rejects_stale_arc_before_fake_cli_spawn() {
+    let (directory, script_path) = write_unix_test_script(
+        "ccgui-gemini-closed-session",
+        r#"
+printf 'spawned' > "${0}.spawned"
+cat >/dev/null
+"#,
+    );
+    let spawn_marker = PathBuf::from(format!("{}.spawned", script_path.display()));
+    let session = GeminiSession::new_process_test(
+        "workspace-closed-session".to_string(),
+        directory.clone(),
+        Some(EngineConfig {
+            bin_path: Some(script_path.to_string_lossy().to_string()),
+            ..Default::default()
+        }),
+    );
+
+    session.close().await.expect("close empty session");
+    let error = session
+        .send_message(
+            SendMessageParams {
+                text: "stale owner must not spawn".to_string(),
+                ..Default::default()
+            },
+            "turn-after-close",
+        )
+        .await
+        .expect_err("closed session must reject stale Arc");
+
+    assert_eq!(error, "Gemini session is closed");
+    assert!(!spawn_marker.exists());
+    assert!(session.active_process_ids().await.is_empty());
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn normal_terminal_state_reaps_child_and_preserves_stdin_payload() {
+    let (directory, script_path) = write_unix_test_script(
+        "moss-x-gemini-terminal",
+        r#"
+cat > "${0}.prompt"
+printf '%s\n' '{"type":"result","status":"success","text":"terminal ok"}'
+"#,
+    );
+    let prompt_path = PathBuf::from(format!("{}.prompt", script_path.display()));
+    let session = GeminiSession::new_process_test(
+        "workspace-terminal".to_string(),
+        directory.clone(),
+        Some(EngineConfig {
+            bin_path: Some(script_path.to_string_lossy().to_string()),
+            ..Default::default()
+        }),
+    );
+    let params = SendMessageParams {
+        text: "Output language: Simplified Chinese.\n\n终态 prompt".to_string(),
+        ..Default::default()
+    };
+
+    let response = session
+        .send_message(params.clone(), "turn-terminal")
+        .await
+        .expect("fake Gemini terminal response");
+
+    assert_eq!(response, "terminal ok");
+    assert_eq!(
+        std::fs::read_to_string(&prompt_path).expect("captured stdin prompt"),
+        params.text
+    );
+    assert!(session.active_process_ids().await.is_empty());
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn large_stdin_and_early_stdout_do_not_pipe_deadlock() {
+    let (directory, script_path) = write_unix_test_script(
+        "moss-x-gemini-concurrent-pipes",
+        r#"
+i=0
+while [ "$i" -lt 8192 ]; do
+  printf 'early-output-padding-0123456789'
+  i=$((i + 1))
+done
+printf '\n'
+cat > "${0}.prompt"
+printf '%s\n' '{"type":"result","status":"success","text":"concurrent io ok"}'
+"#,
+    );
+    let prompt_path = PathBuf::from(format!("{}.prompt", script_path.display()));
+    let session = GeminiSession::new_process_test(
+        "workspace-concurrent-pipes".to_string(),
+        directory.clone(),
+        Some(EngineConfig {
+            bin_path: Some(script_path.to_string_lossy().to_string()),
+            ..Default::default()
+        }),
+    );
+    let params = SendMessageParams {
+        text: format!(
+            "Output language: Simplified Chinese.\n\n{}",
+            "large-prompt".repeat(64 * 1024)
+        ),
+        ..Default::default()
+    };
+
+    let response = tokio::time::timeout(
+        Duration::from_secs(5),
+        session.send_message(params.clone(), "turn-concurrent-pipes"),
+    )
+    .await
+    .expect("concurrent pipe transport should not time out")
+    .expect("fake Gemini should complete");
+
+    assert_eq!(response, "concurrent io ok");
+    assert_eq!(
+        std::fs::read_to_string(&prompt_path).expect("captured large stdin prompt"),
+        params.text
+    );
+    assert!(session.active_process_ids().await.is_empty());
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn interrupt_turn_terminates_owned_process_tree_and_reaps_registry() {
+    let (directory, script_path) = write_unix_test_script(
+        "moss-x-gemini-interrupt-tree",
+        r#"
+sleep 60 &
+descendant_pid=$!
+printf '%s' "$$" > "${0}.root.pid"
+printf '%s' "$descendant_pid" > "${0}.descendant.pid"
+wait "$descendant_pid"
+"#,
+    );
+    let root_pid_path = PathBuf::from(format!("{}.root.pid", script_path.display()));
+    let descendant_pid_path = PathBuf::from(format!("{}.descendant.pid", script_path.display()));
+    let session = Arc::new(GeminiSession::new_process_test(
+        "workspace-interrupt".to_string(),
+        directory.clone(),
+        Some(EngineConfig {
+            bin_path: Some(script_path.to_string_lossy().to_string()),
+            ..Default::default()
+        }),
+    ));
+    let params = SendMessageParams {
+        text: "Output language: Simplified Chinese.\n\ninterrupt tree".to_string(),
+        ..Default::default()
+    };
+    let send_task = tokio::spawn({
+        let session = Arc::clone(&session);
+        async move { session.send_message(params, "turn-interrupt-tree").await }
+    });
+
+    let root_pid = wait_for_pid_file(&root_pid_path).await;
+    let descendant_pid = wait_for_pid_file(&descendant_pid_path).await;
+    session
+        .interrupt_turn("turn-interrupt-tree")
+        .await
+        .expect("interrupt owned Gemini tree");
+    let send_result = tokio::time::timeout(Duration::from_secs(3), send_task)
+        .await
+        .expect("send task should settle")
+        .expect("send task join");
+
+    assert!(send_result.is_err());
+    assert!(session.active_process_ids().await.is_empty());
+    assert!(wait_for_process_exit(root_pid).await);
+    assert!(wait_for_process_exit(descendant_pid).await);
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn timeout_terminates_owned_process_tree_and_reaps_registry() {
+    let (directory, script_path) = write_unix_test_script(
+        "moss-x-gemini-timeout-tree",
+        r#"
+sleep 60 &
+descendant_pid=$!
+printf '%s' "$$" > "${0}.root.pid"
+printf '%s' "$descendant_pid" > "${0}.descendant.pid"
+wait "$descendant_pid"
+"#,
+    );
+    let root_pid_path = PathBuf::from(format!("{}.root.pid", script_path.display()));
+    let descendant_pid_path = PathBuf::from(format!("{}.descendant.pid", script_path.display()));
+    let session = GeminiSession::new_process_test(
+        "workspace-timeout".to_string(),
+        directory.clone(),
+        Some(EngineConfig {
+            bin_path: Some(script_path.to_string_lossy().to_string()),
+            ..Default::default()
+        }),
+    );
+    let params = SendMessageParams {
+        text: "Output language: Simplified Chinese.\n\ntimeout tree".to_string(),
+        ..Default::default()
+    };
+
+    let result = session
+        .send_message_with_timeout(params, "turn-timeout-tree", Duration::from_secs(5))
+        .await;
+    let root_pid = wait_for_pid_file(&root_pid_path).await;
+    let descendant_pid = wait_for_pid_file(&descendant_pid_path).await;
+
+    assert_eq!(
+        result.expect_err("turn should time out"),
+        "Gemini response timed out"
+    );
+    assert!(session.active_process_ids().await.is_empty());
+    assert!(wait_for_process_exit(root_pid).await);
+    assert!(wait_for_process_exit(descendant_pid).await);
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn timeout_after_stdout_eof_terminates_and_reaps_owned_tree() {
+    let (directory, script_path) = write_unix_test_script(
+        "moss-x-gemini-timeout-after-stdout-eof",
+        r#"
+sleep 60 >/dev/null 2>&1 &
+descendant_pid=$!
+printf '%s' "$$" > "${0}.root.pid"
+printf '%s' "$descendant_pid" > "${0}.descendant.pid"
+exec 1>&-
+wait "$descendant_pid"
+"#,
+    );
+    let root_pid_path = PathBuf::from(format!("{}.root.pid", script_path.display()));
+    let descendant_pid_path = PathBuf::from(format!("{}.descendant.pid", script_path.display()));
+    let session = GeminiSession::new_process_test(
+        "workspace-timeout-after-stdout-eof".to_string(),
+        directory.clone(),
+        Some(EngineConfig {
+            bin_path: Some(script_path.to_string_lossy().to_string()),
+            ..Default::default()
+        }),
+    );
+    let params = SendMessageParams {
+        text: "Output language: Simplified Chinese.\n\ntimeout after stdout EOF".to_string(),
+        ..Default::default()
+    };
+
+    let result = session
+        .send_message_with_timeout(
+            params,
+            "turn-timeout-after-stdout-eof",
+            Duration::from_secs(5),
+        )
+        .await;
+    let root_pid = wait_for_pid_file(&root_pid_path).await;
+    let descendant_pid = wait_for_pid_file(&descendant_pid_path).await;
+
+    assert_eq!(
+        result.expect_err("turn should time out after stdout EOF"),
+        "Gemini response timed out"
+    );
+    assert!(session.active_process_ids().await.is_empty());
+    assert!(wait_for_process_exit(root_pid).await);
+    assert!(wait_for_process_exit(descendant_pid).await);
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn shared_termination_escalates_when_descendant_ignores_term() {
+    let (directory, script_path) = write_unix_test_script(
+        "moss-x-shared-termination-term-resistant-descendant",
+        r#"
+(
+  trap '' TERM
+  printf '1' > "${0}.descendant.ready"
+  while :; do sleep 1; done
+) &
+descendant_pid=$!
+printf '%s' "$$" > "${0}.root.pid"
+printf '%s' "$descendant_pid" > "${0}.descendant.pid"
+wait "$descendant_pid"
+"#,
+    );
+    let root_pid_path = PathBuf::from(format!("{}.root.pid", script_path.display()));
+    let descendant_pid_path = PathBuf::from(format!("{}.descendant.pid", script_path.display()));
+    let descendant_ready_path =
+        PathBuf::from(format!("{}.descendant.ready", script_path.display()));
+    let mut command = Command::new(&script_path);
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    GeminiSession::configure_spawn_command(&mut command);
+    let mut child = command.spawn().expect("spawn grouped process tree");
+    let root_pid = wait_for_pid_file(&root_pid_path).await;
+    let descendant_pid = wait_for_pid_file(&descendant_pid_path).await;
+    wait_for_pid_file(&descendant_ready_path).await;
+
+    let forced = crate::runtime::terminate_workspace_session_process(&mut child)
+        .await
+        .expect("terminate shared process group");
+
+    assert!(forced, "TERM-resistant descendant requires SIGKILL");
+    assert!(wait_for_process_exit(root_pid).await);
+    assert!(wait_for_process_exit(descendant_pid).await);
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn stdin_write_failure_terminates_and_reaps_registered_child() {
+    let (directory, script_path) = write_unix_test_script(
+        "moss-x-gemini-stdin-failure",
+        r#"
+printf '%s' "$$" > "${0}.root.pid"
+exec 0<&-
+sleep 60
+"#,
+    );
+    let root_pid_path = PathBuf::from(format!("{}.root.pid", script_path.display()));
+    let session = GeminiSession::new_process_test(
+        "workspace-stdin-failure".to_string(),
+        directory.clone(),
+        Some(EngineConfig {
+            bin_path: Some(script_path.to_string_lossy().to_string()),
+            ..Default::default()
+        }),
+    );
+    let params = SendMessageParams {
+        text: format!(
+            "Output language: Simplified Chinese.\n\n{}",
+            "payload".repeat(256 * 1024)
+        ),
+        ..Default::default()
+    };
+
+    let result = tokio::time::timeout(
+        Duration::from_secs(3),
+        session.send_message(params, "turn-stdin-failure"),
+    )
+    .await
+    .expect("stdin failure should settle");
+    let root_pid = wait_for_pid_file(&root_pid_path).await;
+
+    assert!(result
+        .expect_err("stdin write should fail")
+        .contains("Failed to write Gemini prompt to stdin"));
+    assert!(session.active_process_ids().await.is_empty());
+    assert!(wait_for_process_exit(root_pid).await);
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn manager_removal_interrupts_owned_child_without_waiting_for_drop() {
+    let manager = EngineManager::new();
+    let workspace_path = unique_temp_path("moss-x-gemini-manager-remove");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace");
+    let session = manager
+        .get_or_create_gemini_session("workspace-remove", &workspace_path)
+        .await
+        .expect("create managed Gemini session");
+    let pid = register_grouped_sleep_child(&session, "turn-remove").await;
+
+    manager
+        .remove_gemini_session("workspace-remove")
+        .await
+        .expect("remove managed Gemini session");
+
+    assert!(manager
+        .get_gemini_session("workspace-remove")
+        .await
+        .is_none());
+    assert!(session.process_registry.lock().await.closed);
+    assert!(session.active_process_ids().await.is_empty());
+    assert!(wait_for_process_exit(pid).await);
+    let _ = std::fs::remove_dir_all(workspace_path);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn manager_removal_propagates_cleanup_failure_and_retains_owner() {
+    let manager = EngineManager::new();
+    let workspace_path = unique_temp_path("ccgui-gemini-manager-remove-failure");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace");
+    let session = manager
+        .get_or_create_gemini_session("workspace-remove-failure", &workspace_path)
+        .await
+        .expect("create managed Gemini session");
+    let mut command = Command::new("sleep");
+    command
+        .arg("60")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let ungrouped_child = command.spawn().expect("spawn ungrouped child");
+    session
+        .process_registry
+        .lock()
+        .await
+        .active_processes
+        .insert(
+            "turn-remove-failure".to_string(),
+            super::ActiveGeminiChildProcess::new(ungrouped_child),
+        );
+
+    let error = manager
+        .remove_gemini_session("workspace-remove-failure")
+        .await
+        .expect_err("cleanup failure must propagate");
+
+    assert!(error.contains("Failed to terminate Gemini process"));
+    let retained = manager
+        .get_gemini_session("workspace-remove-failure")
+        .await
+        .expect("failed cleanup must retain manager ownership");
+    assert!(Arc::ptr_eq(&retained, &session));
+    assert!(session
+        .process_registry
+        .lock()
+        .await
+        .active_processes
+        .contains_key("turn-remove-failure"));
+
+    session
+        .process_registry
+        .lock()
+        .await
+        .active_processes
+        .clear();
+    let _ = std::fs::remove_dir_all(workspace_path);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn manager_rejects_creation_while_workspace_removal_owns_session() {
+    let manager = Arc::new(EngineManager::new());
+    let workspace_path = unique_temp_path("moss-x-gemini-manager-remove-gate");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace");
+    let session = manager
+        .get_or_create_gemini_session("workspace-remove-gate", &workspace_path)
+        .await
+        .expect("create managed Gemini session");
+    let pid = register_grouped_sleep_child(&session, "turn-remove-gate").await;
+    let remove_task = tokio::spawn({
+        let manager = Arc::clone(&manager);
+        async move {
+            manager
+                .remove_gemini_session("workspace-remove-gate")
+                .await
+                .expect("remove managed Gemini session");
+        }
+    });
+
+    let mut removal_gate_observed = false;
+    for _ in 0..100 {
+        match manager
+            .get_or_create_gemini_session("workspace-remove-gate", &workspace_path)
+            .await
+        {
+            Err(error) if error.contains("removed workspace") => {
+                removal_gate_observed = true;
+                break;
+            }
+            Ok(current) => assert!(Arc::ptr_eq(&current, &session)),
+            Err(error) => panic!("unexpected creation error: {error}"),
+        }
+        tokio::task::yield_now().await;
+    }
+    assert!(
+        removal_gate_observed,
+        "concurrent creation should observe the workspace removal gate"
+    );
+    remove_task.await.expect("remove task should join");
+
+    let delayed_create_error = match manager
+        .get_or_create_gemini_session("workspace-remove-gate", &workspace_path)
+        .await
+    {
+        Err(error) => error,
+        Ok(_) => panic!("a delayed request must not recreate a removed workspace session"),
+    };
+    assert!(delayed_create_error.contains("removed workspace"));
+    assert!(session.process_registry.lock().await.closed);
+    assert!(session.active_process_ids().await.is_empty());
+    assert!(wait_for_process_exit(pid).await);
+    let _ = std::fs::remove_dir_all(workspace_path);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn app_exit_shutdown_drains_sessions_and_reaps_owned_children() {
+    let manager = EngineManager::new();
+    let workspace_path = unique_temp_path("moss-x-gemini-manager-shutdown");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace");
+    let session = manager
+        .get_or_create_gemini_session("workspace-shutdown", &workspace_path)
+        .await
+        .expect("create managed Gemini session");
+    let pid = register_grouped_sleep_child(&session, "turn-shutdown").await;
+
+    manager
+        .shutdown_gemini_sessions()
+        .await
+        .expect("shutdown managed Gemini sessions");
+
+    assert!(manager
+        .get_gemini_session("workspace-shutdown")
+        .await
+        .is_none());
+    assert!(session.process_registry.lock().await.closed);
+    assert!(session.active_process_ids().await.is_empty());
+    assert!(wait_for_process_exit(pid).await);
+    let _ = std::fs::remove_dir_all(workspace_path);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn shutdown_aggregates_failure_while_removing_success_and_retaining_failed_owner() {
+    let manager = EngineManager::new();
+    let workspace_path = unique_temp_path("ccgui-gemini-manager-mixed-shutdown");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace");
+    let failed_session = manager
+        .get_or_create_gemini_session("workspace-shutdown-failure", &workspace_path)
+        .await
+        .expect("create failure Gemini session");
+    let successful_session = manager
+        .get_or_create_gemini_session("workspace-shutdown-success", &workspace_path)
+        .await
+        .expect("create successful Gemini session");
+    let mut ungrouped_command = Command::new("sleep");
+    ungrouped_command
+        .arg("60")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let ungrouped_child = ungrouped_command
+        .spawn()
+        .expect("spawn ungrouped failure child");
+    let failed_pid = ungrouped_child.id().expect("failure child pid");
+    failed_session
+        .process_registry
+        .lock()
+        .await
+        .active_processes
+        .insert(
+            "turn-shutdown-failure".to_string(),
+            super::ActiveGeminiChildProcess::new(ungrouped_child),
+        );
+    let successful_pid =
+        register_grouped_sleep_child(&successful_session, "turn-shutdown-success").await;
+
+    let error = manager
+        .shutdown_gemini_sessions()
+        .await
+        .expect_err("mixed shutdown must aggregate cleanup failure");
+
+    assert!(error.contains("workspace-shutdown-failure"));
+    let retained = manager
+        .get_gemini_session("workspace-shutdown-failure")
+        .await
+        .expect("failed owner must stay registered");
+    assert!(Arc::ptr_eq(&retained, &failed_session));
+    assert!(manager
+        .get_gemini_session("workspace-shutdown-success")
+        .await
+        .is_none());
+    assert!(failed_session
+        .process_registry
+        .lock()
+        .await
+        .active_processes
+        .contains_key("turn-shutdown-failure"));
+    assert!(successful_session.active_process_ids().await.is_empty());
+    assert!(wait_for_process_exit(failed_pid).await);
+    assert!(wait_for_process_exit(successful_pid).await);
+
+    failed_session
+        .process_registry
+        .lock()
+        .await
+        .active_processes
+        .clear();
+    let _ = std::fs::remove_dir_all(workspace_path);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn manager_shutdown_gate_rejects_concurrent_and_future_creation() {
+    let manager = Arc::new(EngineManager::new());
+    let workspace_path = unique_temp_path("moss-x-gemini-manager-shutdown-gate");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace");
+    let session = manager
+        .get_or_create_gemini_session("workspace-shutdown-gate", &workspace_path)
+        .await
+        .expect("create managed Gemini session");
+    let pid = register_grouped_sleep_child(&session, "turn-shutdown-gate").await;
+    let shutdown_task = tokio::spawn({
+        let manager = Arc::clone(&manager);
+        async move {
+            manager
+                .shutdown_gemini_sessions()
+                .await
+                .expect("shutdown managed Gemini sessions");
+        }
+    });
+
+    let concurrent_error = loop {
+        match manager
+            .get_or_create_gemini_session("workspace-shutdown-gate", &workspace_path)
+            .await
+        {
+            Err(error) => break error,
+            Ok(current) => assert!(Arc::ptr_eq(&current, &session)),
+        }
+        tokio::task::yield_now().await;
+    };
+    assert!(concurrent_error.contains("shutting down"));
+    shutdown_task.await.expect("shutdown task should join");
+
+    let future_error = match manager
+        .get_or_create_gemini_session("workspace-shutdown-gate", &workspace_path)
+        .await
+    {
+        Err(error) => error,
+        Ok(_) => panic!("shutdown manager must stay closed to new Gemini sessions"),
+    };
+    assert!(future_error.contains("shutting down"));
+    assert!(session.process_registry.lock().await.closed);
+    assert!(session.active_process_ids().await.is_empty());
+    assert!(wait_for_process_exit(pid).await);
+    let _ = std::fs::remove_dir_all(workspace_path);
 }

@@ -115,6 +115,7 @@ import {
   withMemoryScoutTimeout,
 } from "./messageRuntimeController";
 import { useCodexMessageRecovery } from "./useCodexMessageRecovery";
+import { assertEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 
 type SendMessageOptions = {
   skipPromptExpansion?: boolean;
@@ -368,6 +369,11 @@ export function useThreadMessaging({
       if (!messageText && images.length === 0) {
         return;
       }
+      const threadKind = resolveThreadKind(workspace.id, threadId);
+      const resolvedThreadEngine = resolveThreadEngine(workspace.id, threadId);
+      if (threadKind !== "shared") {
+        assertEngineExecutionEnabled(resolvedThreadEngine);
+      }
       if (threadId.startsWith("claude-pending-")) {
         const reconciledThreadId = await reconcileClaudePendingThreadFromCandidate(
           workspace,
@@ -423,8 +429,6 @@ export function useThreadMessaging({
           return;
         }
       }
-      const threadKind = resolveThreadKind(workspace.id, threadId);
-      const resolvedThreadEngine = resolveThreadEngine(workspace.id, threadId);
       const resolvedEngine =
         threadKind === "shared"
           ? normalizeSharedSessionEngine(activeEngine)
@@ -1860,6 +1864,9 @@ export function useThreadMessaging({
         const storedThreadEngine = getThreadEngine(activeWorkspace.id, activeThreadId);
         const threadKind = resolveThreadKind(activeWorkspace.id, activeThreadId);
         const threadEngine = resolveThreadEngine(activeWorkspace.id, activeThreadId);
+        if (threadKind !== "shared") {
+          assertEngineExecutionEnabled(threadEngine);
+        }
         const threadIdCompatible = isThreadIdCompatibleWithEngine(
           currentEngine,
           activeThreadId,
@@ -1871,6 +1878,7 @@ export function useThreadMessaging({
           });
           return;
         }
+        assertEngineExecutionEnabled(currentEngine);
         // If current thread differs from current selection, or threadId prefix is incompatible, create a new thread.
         if (threadEngine !== currentEngine || !threadIdCompatible) {
           onDebug?.({
@@ -1906,6 +1914,7 @@ export function useThreadMessaging({
       }
 
       // No engine switch, proceed normally
+      assertEngineExecutionEnabled(currentEngine);
       const threadId = activeThreadId
         ? await ensureThreadForActiveWorkspace()
         : await startThreadForMessageSend(

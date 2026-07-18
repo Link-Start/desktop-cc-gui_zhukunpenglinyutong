@@ -5,10 +5,10 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::state::AppState;
 
 use super::{
-    BROWSER_RENDERER_WINDOW_LABEL, BrowserAgentFeaturePhase, BrowserSession, BrowserSessionStatus,
     bind_browser_renderer_session, clear_browser_renderer_session, escape_js_string,
     origin_from_normalized_url, platform, spawn_browser_webview_session_patch, unix_time_ms,
-    validate_browser_url_for_workspace,
+    validate_browser_url_for_workspace, BrowserAgentFeaturePhase, BrowserSession,
+    BrowserSessionStatus, BROWSER_RENDERER_WINDOW_LABEL,
 };
 
 const BROWSER_TOOLBAR_BRIDGE_HOST: &str = "browser-agent-toolbar.invalid";

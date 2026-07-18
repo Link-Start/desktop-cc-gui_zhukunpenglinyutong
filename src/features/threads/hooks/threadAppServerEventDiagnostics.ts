@@ -1,4 +1,5 @@
 import type { AppServerEvent, DebugEntry } from "../../../types";
+import { classifyClientStderr } from "../../debug/utils/clientErrorLog";
 import { captureClaudeMcpRuntimeSnapshotFromRaw } from "../utils/claudeMcpRuntimeSnapshot";
 import { stripBackendErrorPrefix } from "../utils/networkErrors";
 import { buildThreadStreamCorrelationDimensions } from "../utils/streamLatencyDiagnostics";
@@ -67,6 +68,12 @@ export function handleThreadAppServerEventDiagnostics({
   const method = String(event.message?.method ?? "");
   const params = (event.message?.params as Record<string, unknown> | undefined) ?? {};
   const inferredSource = method === "codex/stderr" ? "stderr" : "event";
+  const rawStderrMessage =
+    method === "codex/stderr"
+      ? stripBackendErrorPrefix(String(params.message ?? "").trim())
+      : "";
+  const stderrClassification =
+    method === "codex/stderr" ? classifyClientStderr(rawStderrMessage) : null;
   const mirrorEnabled = isThreadSessionMirrorEnabled();
   if (onDebug && (mirrorEnabled || shouldEmitServerDebugEntry(method))) {
     onDebug({
@@ -74,14 +81,22 @@ export function handleThreadAppServerEventDiagnostics({
       timestamp: Date.now(),
       source: inferredSource,
       label: method || "event",
-      payload: mirrorEnabled
-        ? event
-        : {
+      payload: stderrClassification
+        ? {
             workspaceId: event.workspace_id,
             method: method || "event",
             threadId: String(params.threadId ?? params.thread_id ?? ""),
             turnId: String(params.turnId ?? params.turn_id ?? ""),
-          },
+            ...stderrClassification,
+          }
+        : mirrorEnabled
+          ? event
+          : {
+              workspaceId: event.workspace_id,
+              method: method || "event",
+              threadId: String(params.threadId ?? params.thread_id ?? ""),
+              turnId: String(params.turnId ?? params.turn_id ?? ""),
+            },
     });
   }
 
@@ -122,14 +137,13 @@ export function handleThreadAppServerEventDiagnostics({
   }
 
   if (method === "codex/stderr") {
-    const rawMessage = String(params.message ?? "").trim();
-    if (onDebug && isReasoningRawDebugEnabled() && rawMessage) {
+    if (onDebug && isReasoningRawDebugEnabled() && rawStderrMessage) {
       onDebug({
         id: `${Date.now()}-stderr-raw`,
         timestamp: Date.now(),
-        source: "stderr",
+        source: "event",
         label: "stderr/raw",
-        payload: stripBackendErrorPrefix(rawMessage),
+        payload: rawStderrMessage,
       });
     }
   }

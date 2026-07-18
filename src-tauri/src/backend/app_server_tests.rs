@@ -23,6 +23,8 @@ use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
@@ -193,6 +195,95 @@ async fn dispose_workspace_session(session: &WorkspaceSession) {
     let mut child = session.child.lock().await;
     let _ = child.kill().await;
     let _ = child.wait().await;
+}
+
+#[cfg(not(windows))]
+async fn settle_echoed_test_request(session: &WorkspaceSession, request: &Value, result: Value) {
+    let request_id = request["id"].as_u64().expect("request id");
+    let sender = session
+        .pending
+        .lock()
+        .await
+        .remove(&request_id)
+        .expect("pending request sender");
+    sender.send(Ok(result)).expect("settle request");
+}
+
+#[cfg(not(windows))]
+#[tokio::test]
+async fn workspace_health_probe_uses_non_model_static_rpc() {
+    let session = make_workspace_session("health-probe").await;
+    let stdout = session
+        .child
+        .lock()
+        .await
+        .stdout
+        .take()
+        .expect("test child stdout");
+    let probe_task = tokio::spawn({
+        let session = Arc::clone(&session);
+        async move { session.probe_health(Duration::from_secs(1)).await }
+    });
+
+    let mut lines = BufReader::new(stdout).lines();
+    let line = lines
+        .next_line()
+        .await
+        .expect("read probe request")
+        .expect("probe request line");
+    let request: Value = serde_json::from_str(&line).expect("valid probe request");
+    assert_eq!(request["method"], "collaborationMode/list");
+    assert_ne!(request["method"], "model/list");
+    settle_echoed_test_request(&session, &request, json!({ "data": [] })).await;
+
+    probe_task
+        .await
+        .expect("probe task")
+        .expect("probe succeeds");
+    dispose_workspace_session(&session).await;
+}
+
+#[cfg(not(windows))]
+#[tokio::test]
+async fn explicit_model_list_owner_still_sends_model_list() {
+    let session = make_workspace_session("explicit-model-list").await;
+    let stdout = session
+        .child
+        .lock()
+        .await
+        .stdout
+        .take()
+        .expect("test child stdout");
+    let sessions = Arc::new(Mutex::new(HashMap::from([(
+        crate::codex::provider_profile::legacy_codex_runtime_key("explicit-model-list"),
+        Arc::clone(&session),
+    )])));
+    let model_list_task = tokio::spawn({
+        let sessions = Arc::clone(&sessions);
+        async move {
+            crate::shared::codex_core::model_list_core(
+                sessions.as_ref(),
+                "explicit-model-list".to_string(),
+            )
+            .await
+        }
+    });
+
+    let mut lines = BufReader::new(stdout).lines();
+    let line = lines
+        .next_line()
+        .await
+        .expect("read model request")
+        .expect("model request line");
+    let request: Value = serde_json::from_str(&line).expect("valid model request");
+    assert_eq!(request["method"], "model/list");
+    settle_echoed_test_request(&session, &request, json!({ "data": [] })).await;
+
+    model_list_task
+        .await
+        .expect("model list task")
+        .expect("model list succeeds");
+    dispose_workspace_session(&session).await;
 }
 
 #[test]

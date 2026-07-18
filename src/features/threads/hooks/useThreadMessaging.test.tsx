@@ -121,6 +121,26 @@ describe("useThreadMessaging", () => {
     );
   });
 
+  it("rejects a historical Gemini target before creating a replacement thread", async () => {
+    const startThreadForWorkspace = vi.fn(async () => "claude-pending-new");
+    const { result } = makeThreadMessagingHook("claude", {
+      activeThreadId: "gemini:historical-session",
+      ensuredThreadId: "gemini:historical-session",
+      threadEngineById: {
+        "gemini:historical-session": "gemini",
+      },
+      startThreadForWorkspace,
+    });
+
+    await expect(result.current.sendUserMessage("do not switch providers")).rejects.toThrow(
+      "Gemini CLI is disabled in this client",
+    );
+
+    expect(startThreadForWorkspace).not.toHaveBeenCalled();
+    expect(engineSendMessage).not.toHaveBeenCalled();
+    expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
   it("disables Claude CLI thinking for shared Claude sends when visibility is off", async () => {
     const { result } = makeThreadMessagingHook("claude", {
       activeThreadId: "shared:thread-disable-thinking",
@@ -455,70 +475,29 @@ describe("useThreadMessaging", () => {
     );
   });
 
-  it("sanitizes leaked codex default model for gemini", async () => {
+  it("rejects direct and queue-fusion sends to Gemini before side effects", async () => {
     const { result } = makeThreadMessagingHook("gemini");
 
-    await act(async () => {
-      await result.current.sendUserMessageToThread(
+    await expect(
+      result.current.sendUserMessageToThread(
         workspace,
         "gemini-pending-abc",
         "hello gemini",
-        [],
-        { model: "openai/gpt-5.3-codex" },
-      );
-    });
-
-    expect(engineSendMessage).toHaveBeenCalledWith(
-      "ws-1",
-      expect.objectContaining({
-        engine: "gemini",
-        model: null,
-      }),
-    );
-  });
-
-  it("keeps custom gemini model aliases for gemini engine", async () => {
-    const { result } = makeThreadMessagingHook("gemini");
-
-    await act(async () => {
-      await result.current.sendUserMessageToThread(
-        workspace,
-        "gemini-pending-abc",
-        "hello gemini",
-        [],
-        { model: "123" },
-      );
-    });
-
-    expect(engineSendMessage).toHaveBeenCalledWith(
-      "ws-1",
-      expect.objectContaining({
-        engine: "gemini",
-        model: "123",
-      }),
-    );
-  });
-
-  it("clears gemini interrupted guard before a new send starts", async () => {
-    const { result, interruptedThreadsRef } = makeThreadMessagingHook("gemini");
-    workspaceScopedSet(interruptedThreadsRef.current, workspace.id, "gemini:session-1", true);
-
-    await act(async () => {
-      await result.current.sendUserMessageToThread(
+      ),
+    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    await expect(
+      result.current.sendUserMessageToThread(
         workspace,
         "gemini:session-1",
-        "hello again",
-      );
-    });
+        "queued follow up",
+        [],
+        { resumeSource: "queue-fusion-cutover" },
+      ),
+    ).rejects.toThrow("Gemini CLI is disabled in this client");
 
-    expect(workspaceScopedHas(interruptedThreadsRef.current, workspace.id, "gemini:session-1")).toBe(false);
-    expect(engineSendMessage).toHaveBeenCalledWith(
-      "ws-1",
-      expect.objectContaining({
-        engine: "gemini",
-        threadId: "gemini:session-1",
-      }),
-    );
+    expect(engineSendMessage).not.toHaveBeenCalled();
+    expect(sendUserMessage).not.toHaveBeenCalled();
+    expect(listGeminiSessions).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -860,114 +839,6 @@ describe("useThreadMessaging", () => {
       workspace.id,
       "claude-pending-snake",
       CLAUDE_PENDING_NATIVE_SESSION_WAIT_MESSAGE,
-    );
-  });
-
-  it("reuses discovered gemini session id for follow-up sends on pending thread", async () => {
-    vi.mocked(engineSendMessage)
-      .mockResolvedValueOnce({
-        result: { turn: { id: "turn-g1" } },
-      })
-      .mockResolvedValueOnce({
-        result: { turn: { id: "turn-g2" } },
-      });
-    vi.mocked(listGeminiSessions).mockResolvedValueOnce([
-      {
-        sessionId: "gem-session-xyz",
-        updatedAt: Date.now(),
-      },
-    ]);
-    const { result } = makeThreadMessagingHook("gemini", {
-      activeThreadId: "gemini-pending-abc",
-      ensuredThreadId: "gemini-pending-abc",
-    });
-
-    await act(async () => {
-      await result.current.sendUserMessageToThread(
-        workspace,
-        "gemini-pending-abc",
-        "hello gemini",
-      );
-    });
-
-    await act(async () => {
-      await result.current.sendUserMessageToThread(
-        workspace,
-        "gemini-pending-abc",
-        "follow up",
-      );
-    });
-
-    expect(engineSendMessage).toHaveBeenNthCalledWith(
-      1,
-      "ws-1",
-      expect.objectContaining({
-        engine: "gemini",
-        continueSession: false,
-        sessionId: null,
-        threadId: "gemini-pending-abc",
-      }),
-    );
-    expect(engineSendMessage).toHaveBeenNthCalledWith(
-      2,
-      "ws-1",
-      expect.objectContaining({
-        engine: "gemini",
-        continueSession: true,
-        sessionId: "gem-session-xyz",
-        threadId: "gemini-pending-abc",
-      }),
-    );
-  });
-
-  it("does not bind gemini pending thread when session fallback is ambiguous", async () => {
-    vi.mocked(engineSendMessage)
-      .mockResolvedValueOnce({
-        result: { turn: { id: "turn-g1" } },
-      })
-      .mockResolvedValueOnce({
-        result: { turn: { id: "turn-g2" } },
-      });
-    vi.mocked(listGeminiSessions).mockResolvedValueOnce([
-      {
-        sessionId: "gem-session-a",
-        updatedAt: Date.now(),
-      },
-      {
-        sessionId: "gem-session-b",
-        updatedAt: Date.now(),
-      },
-    ]);
-    const { result } = makeThreadMessagingHook("gemini", {
-      activeThreadId: "gemini-pending-ambiguous",
-      ensuredThreadId: "gemini-pending-ambiguous",
-    });
-
-    await act(async () => {
-      await result.current.sendUserMessageToThread(
-        workspace,
-        "gemini-pending-ambiguous",
-        "hello gemini",
-      );
-    });
-
-    await act(async () => {
-      await result.current.sendUserMessageToThread(
-        workspace,
-        "gemini-pending-ambiguous",
-        "follow up",
-      );
-    });
-
-    expect(engineSendMessage).toHaveBeenNthCalledWith(
-      2,
-      "ws-1",
-      expect.objectContaining({
-        engine: "gemini",
-        continueSession: false,
-        sessionId: null,
-        threadId: "gemini-pending-ambiguous",
-      }),
     );
   });
 

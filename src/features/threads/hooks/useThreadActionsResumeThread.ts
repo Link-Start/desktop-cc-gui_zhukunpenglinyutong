@@ -1,4 +1,4 @@
-import { useCallback, type MutableRefObject } from "react";
+import { useCallback, useRef, type MutableRefObject } from "react";
 import type { ConversationItem, ThreadSummary } from "../../../types";
 import {
   listThreads as listThreadsService,
@@ -38,6 +38,7 @@ import {
   isLocalSessionScanUnavailable,
   isTerminalToolStatus,
   isThreadResumeNotFoundError,
+  isPendingThreadId,
   listReplacementThreadCandidates,
   mapWithConcurrency,
   mergeRecoveredThreadSummaries,
@@ -68,10 +69,18 @@ export type ResumeThreadForWorkspaceOptions = {
 };
 
 type ResumeThreadForWorkspaceContext = UseThreadActionsOptions & {
-  reconcileMissingClaudeThread: (workspaceId: string, threadId: string) => boolean;
+  reconcileMissingClaudeThread: (
+    workspaceId: string,
+    threadId: string,
+  ) => boolean;
   workspacePathsByIdRef: MutableRefObject<Record<string, string>>;
-  latestThreadsByWorkspaceRef: MutableRefObject<Record<string, ThreadSummary[]>>;
-  previousThreadsByWorkspaceRef: MutableRefObject<Record<string, ThreadSummary[]>>;
+  latestThreadsByWorkspaceRef: MutableRefObject<
+    Record<string, ThreadSummary[]>
+  >;
+  previousThreadsByWorkspaceRef: MutableRefObject<
+    Record<string, ThreadSummary[]>
+  >;
+  setThreadHistoryRecoveryFailed: (threadId: string, failed: boolean) => void;
 };
 
 type ResumeThreadForWorkspaceCallback = (
@@ -88,12 +97,13 @@ export function useThreadActionsResumeThreadForWorkspace(
   const {
     activeThreadIdByWorkspace,
     applyCollabThreadLinksFromThread,
-    dispatch,
+    dispatch: rawDispatch,
     getCustomName,
     itemsByThread,
     tokenUsageByThread = {},
     loadedThreadsRef,
     onDebug,
+    resolveCanonicalThreadId,
     rememberThreadAlias,
     clearThreadAlias,
     replaceOnResumeRef,
@@ -108,7 +118,10 @@ export function useThreadActionsResumeThreadForWorkspace(
     workspacePathsByIdRef,
     latestThreadsByWorkspaceRef,
     previousThreadsByWorkspaceRef,
+    setThreadHistoryRecoveryFailed: rawSetThreadHistoryRecoveryFailed,
   } = deps;
+  const resumeRequestGenerationByScopeRef = useRef<Record<string, number>>({});
+  const automaticRecoveryFailedByScopeRef = useRef<Record<string, true>>({});
 
   const resumeThreadForWorkspace = useCallback(
     async (
@@ -121,7 +134,105 @@ export function useThreadActionsResumeThreadForWorkspace(
       if (!threadId) {
         return null;
       }
+      const canonicalThreadId =
+        resolveCanonicalThreadId?.(threadId) ?? threadId;
+      const requestScopeKey = `${workspaceId}\u0000${canonicalThreadId}`;
+      if (
+        !force &&
+        automaticRecoveryFailedByScopeRef.current[requestScopeKey]
+      ) {
+        onDebug?.({
+          id: `${Date.now()}-client-thread-resume-skipped`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "thread/resume skipped",
+          payload: {
+            workspaceId,
+            threadId: canonicalThreadId,
+            reason: "automatic-history-recovery-failed",
+          },
+        });
+        return canonicalThreadId;
+      }
+      if (force) {
+        delete automaticRecoveryFailedByScopeRef.current[requestScopeKey];
+        rawSetThreadHistoryRecoveryFailed(canonicalThreadId, false);
+      }
+      const requestGeneration =
+        (resumeRequestGenerationByScopeRef.current[requestScopeKey] ?? 0) + 1;
+      resumeRequestGenerationByScopeRef.current[requestScopeKey] =
+        requestGeneration;
+      const isCurrentResumeRequest = () =>
+        resumeRequestGenerationByScopeRef.current[requestScopeKey] ===
+        requestGeneration;
+      const dispatch: typeof rawDispatch = (action) => {
+        if (isCurrentResumeRequest()) {
+          rawDispatch(action);
+        }
+      };
+      const setThreadHistoryRecoveryFailed = (
+        targetThreadId: string,
+        failed: boolean,
+      ) => {
+        if (isCurrentResumeRequest()) {
+          const targetCanonicalThreadId =
+            resolveCanonicalThreadId?.(targetThreadId) ?? targetThreadId;
+          const targetScopeKey = `${workspaceId}\u0000${targetCanonicalThreadId}`;
+          if (failed) {
+            automaticRecoveryFailedByScopeRef.current[targetScopeKey] = true;
+          } else {
+            delete automaticRecoveryFailedByScopeRef.current[targetScopeKey];
+          }
+          rawSetThreadHistoryRecoveryFailed(targetThreadId, failed);
+        }
+      };
+      const setThreadLoaded = (targetThreadId: string, loaded: boolean) => {
+        if (isCurrentResumeRequest()) {
+          loadedThreadsRef.current[targetThreadId] = loaded;
+        }
+      };
       const localItems = itemsByThread[threadId] ?? [];
+      if (isPendingThreadId(threadId)) {
+        setThreadLoaded(threadId, true);
+        setThreadHistoryRecoveryFailed(threadId, false);
+        onDebug?.({
+          id: `${Date.now()}-client-thread-resume-skipped`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "thread/resume skipped",
+          payload: {
+            workspaceId,
+            threadId,
+            reason: "optimistic-pending-thread",
+          },
+        });
+        return threadId;
+      }
+      const markHistoryRecoveryFailure = (
+        targetThreadId: string,
+        targetLocalItems: ConversationItem[],
+        reasonCode: string,
+        fallbackWarningCount = 0,
+      ) => {
+        setThreadLoaded(targetThreadId, false);
+        setThreadHistoryRecoveryFailed(targetThreadId, true);
+        onDebug?.(
+          createThreadHistoryReadableSurfaceDebugEntry({
+            workspaceId,
+            threadId: targetThreadId,
+            sourceThreadId: threadId,
+            reopenOutcome:
+              targetLocalItems.length > 0 ? "degraded-readable" : "failed",
+            reasonCode:
+              targetLocalItems.length > 0
+                ? "last-good-local-items-preserved"
+                : reasonCode,
+            localItemCount: targetLocalItems.length,
+            snapshotItemCount: 0,
+            fallbackWarningCount,
+          }),
+        );
+      };
       const status = threadStatusById[threadId];
       if (!force && status?.isProcessing && localItems.length > 0) {
         onDebug?.({
@@ -151,7 +262,7 @@ export function useThreadActionsResumeThreadForWorkspace(
             reason: "local-claude-realtime-items",
           },
         });
-        loadedThreadsRef.current[threadId] = true;
+        setThreadLoaded(threadId, true);
         // 本地实时消息保留时不重放历史，但应用重启后 token 用量 store 是空的
         //（消息来自持久化快照、用量不持久化），单独从历史 JSONL 回填一次。
         if (!tokenUsageByThread[threadId]) {
@@ -163,12 +274,22 @@ export function useThreadActionsResumeThreadForWorkspace(
           if (usageWorkspacePath && usageSessionId) {
             void loadClaudeSessionService(usageWorkspacePath, usageSessionId)
               .then((result) => {
+                if (!isCurrentResumeRequest()) {
+                  return;
+                }
                 const tokenUsage = extractClaudeHistoryTokenUsage(result);
                 if (tokenUsage) {
-                  dispatch({ type: "setThreadTokenUsage", threadId, tokenUsage });
+                  dispatch({
+                    type: "setThreadTokenUsage",
+                    threadId,
+                    tokenUsage,
+                  });
                 }
               })
               .catch((error) => {
+                if (!isCurrentResumeRequest()) {
+                  return;
+                }
                 onDebug?.({
                   id: `${Date.now()}-claude-history-usage-backfill-error`,
                   timestamp: Date.now(),
@@ -203,21 +324,56 @@ export function useThreadActionsResumeThreadForWorkspace(
             ReturnType<ReturnType<typeof createHistoryLoader>["load"]>
           >,
         ) => {
+          if (!isCurrentResumeRequest()) {
+            return false;
+          }
           const assembledSnapshot = hydrateHistory(snapshot);
           const snapshotItems = assembledSnapshot.items;
+          const effectiveLocalItems =
+            effectiveThreadId === threadId
+              ? localItems
+              : (itemsByThread[effectiveThreadId] ?? []);
           dispatch({
             type: "ensureThread",
             workspaceId,
             threadId: effectiveThreadId,
             engine: assembledSnapshot.meta.engine,
           });
-          if (snapshotItems.length > 0) {
-            dispatch({
-              type: "setThreadItems",
-              threadId: effectiveThreadId,
-              items: snapshotItems,
+          if (snapshot.fallbackWarnings.length > 0) {
+            const partialHistoryDiagnostic = buildPartialHistoryDiagnostic(
+              snapshot.fallbackWarnings
+                .map((entry) => String(entry.code ?? "unknown"))
+                .join(", "),
+            );
+            onDebug?.({
+              id: `${Date.now()}-history-loader-fallback`,
+              timestamp: Date.now(),
+              source: "client",
+              label: "thread/history fallback",
+              payload: {
+                workspaceId,
+                threadId: effectiveThreadId,
+                warnings: snapshot.fallbackWarnings,
+                diagnosticCategory: partialHistoryDiagnostic.category,
+                diagnosticMessage: partialHistoryDiagnostic.rawMessage,
+              },
             });
           }
+          if (snapshotItems.length === 0) {
+            markHistoryRecoveryFailure(
+              effectiveThreadId,
+              effectiveLocalItems,
+              "history-hydrate-empty",
+              snapshot.fallbackWarnings.length,
+            );
+            return false;
+          }
+          setThreadHistoryRecoveryFailed(effectiveThreadId, false);
+          dispatch({
+            type: "setThreadItems",
+            threadId: effectiveThreadId,
+            items: snapshotItems,
+          });
           dispatch({
             type: "setThreadPlan",
             threadId: effectiveThreadId,
@@ -235,41 +391,17 @@ export function useThreadActionsResumeThreadForWorkspace(
               tokenUsage: snapshot.tokenUsage,
             });
           }
-          const effectiveLocalItems =
-            effectiveThreadId === threadId
-              ? localItems
-              : (itemsByThread[effectiveThreadId] ?? []);
-          if (snapshotItems.length === 0) {
-            const reopenOutcome =
-              effectiveLocalItems.length > 0 ? "degraded-readable" : "failed";
-            onDebug?.(
-              createThreadHistoryReadableSurfaceDebugEntry({
-                workspaceId,
-                threadId: effectiveThreadId,
-                sourceThreadId: threadId,
-                reopenOutcome,
-                reasonCode:
-                  effectiveLocalItems.length > 0
-                    ? "last-good-local-items-preserved"
-                    : "history-hydrate-empty",
-                localItemCount: effectiveLocalItems.length,
-                snapshotItemCount: snapshotItems.length,
-                fallbackWarningCount: snapshot.fallbackWarnings.length,
-              }),
-            );
-          } else {
-            onDebug?.(
-              createThreadHistoryReadableSurfaceDebugEntry({
-                workspaceId,
-                threadId: effectiveThreadId,
-                sourceThreadId: threadId,
-                reopenOutcome: "recovered",
-                localItemCount: effectiveLocalItems.length,
-                snapshotItemCount: snapshotItems.length,
-                fallbackWarningCount: snapshot.fallbackWarnings.length,
-              }),
-            );
-          }
+          onDebug?.(
+            createThreadHistoryReadableSurfaceDebugEntry({
+              workspaceId,
+              threadId: effectiveThreadId,
+              sourceThreadId: threadId,
+              reopenOutcome: "recovered",
+              localItemCount: effectiveLocalItems.length,
+              snapshotItemCount: snapshotItems.length,
+              fallbackWarningCount: snapshot.fallbackWarnings.length,
+            }),
+          );
           const hasLocalPendingQueue = userInputRequests.some(
             (request) =>
               request.workspace_id === workspaceId &&
@@ -326,27 +458,59 @@ export function useThreadActionsResumeThreadForWorkspace(
           assembledSnapshot.userInputQueue.forEach((request) => {
             dispatch({ type: "addUserInputRequest", request });
           });
-          if (snapshot.fallbackWarnings.length > 0) {
-            const partialHistoryDiagnostic = buildPartialHistoryDiagnostic(
-              snapshot.fallbackWarnings
-                .map((entry) => String(entry.code ?? "unknown"))
-                .join(", "),
+          setThreadLoaded(effectiveThreadId, true);
+          return true;
+        };
+        const loadHistorySnapshotWithBoundedEmptyRecovery = async (
+          targetThreadId: string,
+          initialSnapshot?: Awaited<
+            ReturnType<ReturnType<typeof createHistoryLoader>["load"]>
+          >,
+        ) => {
+          const firstSnapshot =
+            initialSnapshot ??
+            (await createHistoryLoader(targetThreadId).load(targetThreadId));
+          if (!isCurrentResumeRequest()) {
+            return firstSnapshot;
+          }
+          if (hydrateHistory(firstSnapshot).items.length > 0) {
+            return firstSnapshot;
+          }
+          onDebug?.({
+            id: `${Date.now()}-history-loader-empty-retry`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "thread/history empty retry",
+            payload: {
+              workspaceId,
+              threadId: targetThreadId,
+              reasonCode: "history-empty-first-attempt",
+            },
+          });
+          try {
+            return await createHistoryLoader(targetThreadId).load(
+              targetThreadId,
             );
+          } catch (retryError) {
+            if (!isCurrentResumeRequest()) {
+              return firstSnapshot;
+            }
             onDebug?.({
-              id: `${Date.now()}-history-loader-fallback`,
+              id: `${Date.now()}-history-loader-empty-retry-error`,
               timestamp: Date.now(),
-              source: "client",
-              label: "thread/history fallback",
+              source: "error",
+              label: "thread/history empty retry error",
               payload: {
                 workspaceId,
-                threadId: effectiveThreadId,
-                warnings: snapshot.fallbackWarnings,
-                diagnosticCategory: partialHistoryDiagnostic.category,
-                diagnosticMessage: partialHistoryDiagnostic.rawMessage,
+                threadId: targetThreadId,
+                error:
+                  retryError instanceof Error
+                    ? retryError.message
+                    : String(retryError),
               },
             });
+            return firstSnapshot;
           }
-          loadedThreadsRef.current[effectiveThreadId] = true;
         };
         const recoverReplacementThread = async (): Promise<{
           threadId: string;
@@ -408,6 +572,9 @@ export function useThreadActionsResumeThreadForWorkspace(
                   cursor,
                   THREAD_LIST_PAGE_SIZE,
                 )) as Record<string, unknown>;
+                if (!isCurrentResumeRequest()) {
+                  return null;
+                }
                 const result = (response.result ?? response) as Record<
                   string,
                   unknown
@@ -428,8 +595,7 @@ export function useThreadActionsResumeThreadForWorkspace(
                   ),
                 );
                 cursor = (result.nextCursor ?? result.next_cursor ?? null) as
-                  | string
-                  | null;
+                  string | null;
                 const replacementCandidate = selectReplacementThreadDecision({
                   staleThreadId: threadId,
                   staleSummary: effectiveStaleSummary,
@@ -512,6 +678,9 @@ export function useThreadActionsResumeThreadForWorkspace(
             const sessions = await getOpenCodeSessionListService(
               workspaceId,
             ).catch(() => []);
+            if (!isCurrentResumeRequest()) {
+              return null;
+            }
             const refreshedOpenCodeSummaries = (
               Array.isArray(sessions) ? sessions : []
             )
@@ -614,8 +783,14 @@ export function useThreadActionsResumeThreadForWorkspace(
                 const snapshot = await createHistoryLoader(summary.id).load(
                   summary.id,
                 );
+                if (!isCurrentResumeRequest()) {
+                  return null;
+                }
                 return { summary, snapshot };
               } catch (candidateError) {
+                if (!isCurrentResumeRequest()) {
+                  return null;
+                }
                 const diagnostic = buildPartialHistoryDiagnostic(
                   candidateError instanceof Error
                     ? candidateError.message
@@ -641,6 +816,9 @@ export function useThreadActionsResumeThreadForWorkspace(
               }
             },
           );
+          if (!isCurrentResumeRequest()) {
+            return null;
+          }
           const historyMatch = selectReplacementThreadByMessageHistoryDecision({
             staleThreadId: threadId,
             staleItems,
@@ -673,24 +851,52 @@ export function useThreadActionsResumeThreadForWorkspace(
           };
         };
         try {
-          const snapshot = await createHistoryLoader(threadId).load(threadId);
+          const snapshot =
+            await loadHistorySnapshotWithBoundedEmptyRecovery(threadId);
+          if (!isCurrentResumeRequest()) {
+            return threadId;
+          }
           await hydrateHistorySnapshot(threadId, snapshot);
+          if (!isCurrentResumeRequest()) {
+            return threadId;
+          }
           return threadId;
         } catch (error) {
+          if (!isCurrentResumeRequest()) {
+            return threadId;
+          }
           if (isThreadResumeNotFoundError(error)) {
             try {
               const recoveredThread = await recoverReplacementThread();
+              if (!isCurrentResumeRequest()) {
+                return threadId;
+              }
               if (recoveredThread) {
                 const replacementThreadId = recoveredThread.threadId;
                 const replacementSnapshot =
-                  recoveredThread.snapshot ??
-                  (await createHistoryLoader(replacementThreadId).load(
+                  await loadHistorySnapshotWithBoundedEmptyRecovery(
                     replacementThreadId,
-                  ));
-                await hydrateHistorySnapshot(
+                    recoveredThread.snapshot,
+                  );
+                if (!isCurrentResumeRequest()) {
+                  return threadId;
+                }
+                const replacementHydrated = await hydrateHistorySnapshot(
                   replacementThreadId,
                   replacementSnapshot,
                 );
+                if (!isCurrentResumeRequest()) {
+                  return threadId;
+                }
+                if (!replacementHydrated) {
+                  markHistoryRecoveryFailure(
+                    threadId,
+                    localItems,
+                    "replacement-history-hydrate-empty",
+                    replacementSnapshot.fallbackWarnings.length,
+                  );
+                  return threadId;
+                }
                 onDebug?.(
                   createThreadHistoryContinuationDecisionDebugEntry({
                     workspaceId,
@@ -704,7 +910,7 @@ export function useThreadActionsResumeThreadForWorkspace(
                   workspaceId,
                   threadId,
                 });
-                loadedThreadsRef.current[threadId] = false;
+                setThreadLoaded(threadId, false);
                 if (recoveredThread.decision.isPersistent) {
                   rememberThreadAlias?.(threadId, replacementThreadId);
                 } else {
@@ -736,6 +942,9 @@ export function useThreadActionsResumeThreadForWorkspace(
                 return replacementThreadId;
               }
             } catch (recoveryError) {
+              if (!isCurrentResumeRequest()) {
+                return threadId;
+              }
               const diagnostic = buildPartialHistoryDiagnostic(
                 recoveryError instanceof Error
                   ? recoveryError.message
@@ -789,7 +998,11 @@ export function useThreadActionsResumeThreadForWorkspace(
           engine: "claude",
         });
         if (!workspacePath) {
-          loadedThreadsRef.current[threadId] = false;
+          markHistoryRecoveryFailure(
+            threadId,
+            localItems,
+            "history-workspace-path-missing",
+          );
           return threadId;
         }
         if (force || !loadedThreadsRef.current[threadId]) {
@@ -799,6 +1012,9 @@ export function useThreadActionsResumeThreadForWorkspace(
               workspacePath,
               realSessionId,
             );
+            if (!isCurrentResumeRequest()) {
+              return threadId;
+            }
             // Handle both new format { messages, usage } and old format (array)
             const messagesData =
               (result as { messages?: unknown }).messages ?? result;
@@ -810,6 +1026,7 @@ export function useThreadActionsResumeThreadForWorkspace(
               threadId,
             });
             if (items.length > 0) {
+              setThreadHistoryRecoveryFailed(threadId, false);
               dispatch({ type: "setThreadItems", threadId, items });
               onDebug?.(
                 createThreadHistoryReadableSurfaceDebugEntry({
@@ -821,20 +1038,12 @@ export function useThreadActionsResumeThreadForWorkspace(
                 }),
               );
             } else {
-              onDebug?.(
-                createThreadHistoryReadableSurfaceDebugEntry({
-                  workspaceId,
-                  threadId,
-                  reopenOutcome:
-                    localItems.length > 0 ? "degraded-readable" : "failed",
-                  reasonCode:
-                    localItems.length > 0
-                      ? "last-good-local-items-preserved"
-                      : "history-hydrate-empty",
-                  snapshotItemCount: 0,
-                  localItemCount: localItems.length,
-                }),
+              markHistoryRecoveryFailure(
+                threadId,
+                localItems,
+                "history-hydrate-empty",
               );
+              return threadId;
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -852,7 +1061,9 @@ export function useThreadActionsResumeThreadForWorkspace(
               });
             }
           } catch (error) {
-            loadedThreadsRef.current[threadId] = false;
+            if (!isCurrentResumeRequest()) {
+              return threadId;
+            }
             const diagnostic =
               error instanceof Error
                 ? resolveThreadStabilityDiagnostic(error.message)
@@ -876,12 +1087,26 @@ export function useThreadActionsResumeThreadForWorkspace(
                 workspaceId,
                 threadId,
               );
+              if (preservedReadableSurface) {
+                markHistoryRecoveryFailure(
+                  threadId,
+                  localItems,
+                  "history-load-failed",
+                );
+              } else {
+                setThreadHistoryRecoveryFailed(threadId, false);
+              }
               return preservedReadableSurface ? threadId : null;
             }
+            markHistoryRecoveryFailure(
+              threadId,
+              localItems,
+              "history-load-failed",
+            );
             return threadId;
           }
         }
-        loadedThreadsRef.current[threadId] = true;
+        setThreadLoaded(threadId, true);
         return threadId;
       }
       if (threadId.startsWith("opencode:")) {
@@ -891,7 +1116,7 @@ export function useThreadActionsResumeThreadForWorkspace(
           threadId,
           engine: "opencode",
         });
-        loadedThreadsRef.current[threadId] = true;
+        setThreadLoaded(threadId, true);
         return threadId;
       }
       if (threadId.startsWith("gemini:")) {
@@ -901,18 +1126,37 @@ export function useThreadActionsResumeThreadForWorkspace(
           threadId,
           engine: "gemini",
         });
-        if (workspacePath && !loadedThreadsRef.current[threadId]) {
+        if (!workspacePath) {
+          markHistoryRecoveryFailure(
+            threadId,
+            localItems,
+            "history-workspace-path-missing",
+          );
+          return threadId;
+        }
+        if (!loadedThreadsRef.current[threadId]) {
           const realSessionId = threadId.slice("gemini:".length);
           try {
             const result = await loadGeminiSessionService(
               workspacePath,
               realSessionId,
             );
+            if (!isCurrentResumeRequest()) {
+              return threadId;
+            }
             const messagesData =
               (result as { messages?: unknown }).messages ?? result;
             const items = parseGeminiHistoryMessages(messagesData);
             if (items.length > 0) {
+              setThreadHistoryRecoveryFailed(threadId, false);
               dispatch({ type: "setThreadItems", threadId, items });
+            } else {
+              markHistoryRecoveryFailure(
+                threadId,
+                localItems,
+                "history-hydrate-empty",
+              );
+              return threadId;
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -920,10 +1164,18 @@ export function useThreadActionsResumeThreadForWorkspace(
               timestamp: Date.now(),
             });
           } catch {
-            // Failed to load Gemini session history — not fatal
+            if (!isCurrentResumeRequest()) {
+              return threadId;
+            }
+            markHistoryRecoveryFailure(
+              threadId,
+              localItems,
+              "history-load-failed",
+            );
+            return threadId;
           }
         }
-        loadedThreadsRef.current[threadId] = true;
+        setThreadLoaded(threadId, true);
         return threadId;
       }
       if (!force && loadedThreadsRef.current[threadId]) {
@@ -955,6 +1207,9 @@ export function useThreadActionsResumeThreadForWorkspace(
           workspaceId,
           threadId,
         )) as Record<string, unknown> | null;
+        if (!isCurrentResumeRequest()) {
+          return threadId;
+        }
         onDebug?.({
           id: `${Date.now()}-server-thread-resume`,
           timestamp: Date.now(),
@@ -986,12 +1241,21 @@ export function useThreadActionsResumeThreadForWorkspace(
             replaceOnResumeRef.current[threadId] = false;
           }
           if (localItems.length > 0 && !shouldReplace) {
+            if (items.length === 0) {
+              markHistoryRecoveryFailure(
+                threadId,
+                localItems,
+                "history-hydrate-empty",
+              );
+              return threadId;
+            }
+            setThreadHistoryRecoveryFailed(threadId, false);
             dispatch({
               type: "setThreadHistoryRestoredAt",
               threadId,
               timestamp: Date.now(),
             });
-            loadedThreadsRef.current[threadId] = true;
+            setThreadLoaded(threadId, true);
             return threadId;
           }
           const hasOverlap =
@@ -1009,11 +1273,19 @@ export function useThreadActionsResumeThreadForWorkspace(
                   : mergeThreadItems(items, localItems)
               : localItems;
           if (mergedItems.length > 0) {
+            setThreadHistoryRecoveryFailed(threadId, false);
             dispatch({
               type: "setThreadItems",
               threadId,
               items: mergedItems,
             });
+          } else {
+            markHistoryRecoveryFailure(
+              threadId,
+              localItems,
+              "history-hydrate-empty",
+            );
+            return threadId;
           }
           dispatch({
             type: "setThreadHistoryRestoredAt",
@@ -1052,10 +1324,20 @@ export function useThreadActionsResumeThreadForWorkspace(
               timestamp: getThreadTimestamp(thread),
             });
           }
+          setThreadLoaded(threadId, true);
+          return threadId;
         }
-        loadedThreadsRef.current[threadId] = true;
+        markHistoryRecoveryFailure(
+          threadId,
+          localItems,
+          "history-response-missing",
+        );
         return threadId;
       } catch (error) {
+        if (!isCurrentResumeRequest()) {
+          return threadId;
+        }
+        markHistoryRecoveryFailure(threadId, localItems, "history-load-failed");
         onDebug?.({
           id: `${Date.now()}-client-thread-resume-error`,
           timestamp: Date.now(),
@@ -1070,7 +1352,7 @@ export function useThreadActionsResumeThreadForWorkspace(
       activeThreadIdByWorkspace,
       applyCollabThreadLinksFromThread,
       updateThreadParent,
-      dispatch,
+      rawDispatch,
       getCustomName,
       itemsByThread,
       tokenUsageByThread,
@@ -1082,6 +1364,7 @@ export function useThreadActionsResumeThreadForWorkspace(
       rememberThreadAlias,
       replaceOnResumeRef,
       reconcileMissingClaudeThread,
+      resolveCanonicalThreadId,
       resolveWorkspacePath,
       threadActivityRef,
       threadStatusById,
@@ -1089,6 +1372,7 @@ export function useThreadActionsResumeThreadForWorkspace(
       userInputRequests,
       useUnifiedHistoryLoader,
       workspacePathsByIdRef,
+      rawSetThreadHistoryRecoveryFailed,
     ],
   );
   return resumeThreadForWorkspace;

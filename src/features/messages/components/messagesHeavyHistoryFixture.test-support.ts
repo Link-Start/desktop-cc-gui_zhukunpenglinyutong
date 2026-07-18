@@ -117,6 +117,7 @@ export function createHeavyHistoryFixture(variant: HeavyHistoryFixtureVariant = 
     groupedEntries,
     hasVisibleUserInputRequest: false,
     hiddenClaudeReasoningOnly: false,
+    historyRecoveryFailureVisible: false,
     isHistoryLoading: false,
     isThinking: false,
     shouldRenderUserInputAtTail: false,

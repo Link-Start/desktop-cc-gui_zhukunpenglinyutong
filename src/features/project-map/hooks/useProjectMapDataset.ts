@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { EngineType, WorkspaceInfo } from "../../../types";
 import { projectMemoryList } from "../../../services/tauri/projectMemory";
+import {
+  isEngineExecutionEnabled,
+  normalizeEngineForExecution,
+} from "../../../utils/engineExecutionPolicy";
 import type {
   ProjectMapCandidate,
   ProjectMapContextRiskFlag,
@@ -468,9 +472,15 @@ function resolveGenerationDefaults(
 } {
   const preferredEngine = defaults?.engine ?? null;
   const preferredModel = defaults?.model?.trim() ?? "";
+  const storedEngine = dataset.autoIngestionSettings.engine;
+  const requestedEngine = preferredEngine ?? storedEngine;
+  const engine = normalizeEngineForExecution(requestedEngine);
   return {
-    engine: preferredEngine ?? dataset.autoIngestionSettings.engine,
-    model: preferredModel || dataset.autoIngestionSettings.model,
+    engine,
+    model:
+      engine === requestedEngine
+        ? preferredModel || dataset.autoIngestionSettings.model
+        : "default",
   };
 }
 
@@ -1276,6 +1286,10 @@ export function useProjectMapDataset(
   const confirmGenerationRequest = useCallback(async (requestOverride?: ProjectMapGenerationRequest) => {
     const request = requestOverride ?? pendingRequest;
     if (!request) {
+      return;
+    }
+    if (!isEngineExecutionEnabled(request.engine)) {
+      setError("unsupported_engine");
       return;
     }
     const run = createRunMetadataFromRequest(request, "pending");

@@ -1,9 +1,16 @@
-import { compileFastMarkdown } from "./compile";
+import {
+  compileFastMarkdown,
+  finalizeFastMarkdownArtifact,
+  getCachedFastMarkdownResult,
+} from "./compile";
+import { createFastMarkdownCompileIdentity } from "./compileCore";
 import { workerDiagnostics } from "./workerAdapterDiagnostics";
 import { hashStableString } from "../../files/utils/fileMarkdownDocument";
+import { appendRendererDiagnostic } from "../../../services/rendererDiagnostics";
 import type {
   CompileFastMarkdownArgs,
   FastMarkdownRenderResult,
+  FastMarkdownUnsafeArtifact,
   FastMarkdownWorkerRequestMeta,
   FastMarkdownWorkerDiagnostics,
 } from "./types";
@@ -12,7 +19,7 @@ type FastMarkdownWorkerResponse =
   | {
       type: "fast-markdown-result";
       requestId: string;
-      result: FastMarkdownRenderResult;
+      result: FastMarkdownUnsafeArtifact;
     }
   | {
       type: "fast-markdown-error";
@@ -24,38 +31,70 @@ type FastMarkdownWorkerResponse =
     };
 
 type PendingWorkerRequest = {
-  resolve: (result: FastMarkdownRenderResult) => void;
+  expectedCacheKey: string;
+  expectedRendererProfile: CompileFastMarkdownArgs["rendererProfile"];
+  resolve: (result: FastMarkdownUnsafeArtifact) => void;
   reject: (error: Error) => void;
   requestMeta: FastMarkdownWorkerRequestMeta;
+  timeoutId: ReturnType<typeof setTimeout> | null;
+};
+
+type CompileFastMarkdownWorkerOptions = {
+  shouldAcceptWorkerArtifact?: () => boolean;
+};
+
+export type PrecomputeFastMarkdownWorkerOptions = {
+  timeoutMs?: number;
 };
 
 let sharedWorker: Worker | null = null;
 let listenersAttached = false;
 let nextRequestOrdinal = 1;
+const persistedWorkerFailureAtByReason = new Map<string, number>();
+const WORKER_FAILURE_PERSIST_INTERVAL_MS = 60_000;
+const DEFAULT_WORKER_REQUEST_TIMEOUT_MS = 15_000;
+const MAX_WORKER_REQUEST_TIMEOUT_MS = 60_000;
 
 const pendingRequests = new Map<string, PendingWorkerRequest>();
 
 export async function compileFastMarkdownWithWorkerFallback(
   args: CompileFastMarkdownArgs,
+  options: CompileFastMarkdownWorkerOptions = {},
 ): Promise<FastMarkdownRenderResult> {
-  try {
-    const workerResult = await compileFastMarkdownInWorker(args);
-    if (workerResult) {
-      return workerResult;
-    }
-    workerDiagnostics.recordFallback("worker-not-available");
-  } catch (error: unknown) {
-    reportWorkerFallback(error);
-    workerDiagnostics.recordFallback(
-      error instanceof Error ? error.message : "unknown",
-    );
+  const cached = getCachedFastMarkdownResult(args);
+  if (cached) {
+    throwIfWorkerRequestIsStale(options);
+    return cached;
   }
+  let workerArtifact: FastMarkdownUnsafeArtifact | null = null;
+  try {
+    workerArtifact = await precomputeFastMarkdownInWorker(args);
+  } catch (error: unknown) {
+    throwIfWorkerRequestIsStale(options);
+    reportWorkerFallback(error);
+    workerDiagnostics.recordFallback("worker-request-failed");
+    return compileFastMarkdown(args);
+  }
+  throwIfWorkerRequestIsStale(options);
+  if (workerArtifact) {
+    return finalizeFastMarkdownArtifact(workerArtifact);
+  }
+  workerDiagnostics.recordFallback("worker-not-available");
   return compileFastMarkdown(args);
 }
 
 export function compileFastMarkdownInWorker(
   args: CompileFastMarkdownArgs,
+  options: PrecomputeFastMarkdownWorkerOptions = {},
 ): Promise<FastMarkdownRenderResult> | null {
+  const artifactPromise = precomputeFastMarkdownInWorker(args, options);
+  return artifactPromise?.then(finalizeFastMarkdownArtifact) ?? null;
+}
+
+export function precomputeFastMarkdownInWorker(
+  args: CompileFastMarkdownArgs,
+  options: PrecomputeFastMarkdownWorkerOptions = {},
+): Promise<FastMarkdownUnsafeArtifact> | null {
   const worker = getSharedWorker();
   if (!worker) {
     workerDiagnostics.setHasWorker(false);
@@ -63,10 +102,35 @@ export function compileFastMarkdownInWorker(
   }
 
   const requestId = createRequestId(args.documentKey);
-  const requestMeta = createWorkerRequestMeta(requestId, args);
+  const compileIdentity = createFastMarkdownCompileIdentity(args);
+  const requestMeta = createWorkerRequestMeta(
+    requestId,
+    args,
+    compileIdentity.contentHash,
+  );
   workerDiagnostics.setPendingCount(pendingRequests.size + 1);
-  return new Promise<FastMarkdownRenderResult>((resolve, reject) => {
-    pendingRequests.set(requestId, { resolve, reject, requestMeta });
+  return new Promise<FastMarkdownUnsafeArtifact>((resolve, reject) => {
+    pendingRequests.set(requestId, {
+      expectedCacheKey: compileIdentity.cacheKey,
+      expectedRendererProfile: args.rendererProfile,
+      resolve,
+      reject,
+      requestMeta,
+      timeoutId: null,
+    });
+    const requestTimeoutMs = normalizeWorkerRequestTimeoutMs(options.timeoutMs);
+    const pending = pendingRequests.get(requestId);
+    if (pending) {
+      pending.timeoutId = setTimeout(() => {
+        const timedOut = takePendingWorkerRequest(requestId);
+        if (!timedOut) {
+          return;
+        }
+        workerDiagnostics.recordFallback("worker-request-timeout");
+        persistWorkerFailureDiagnostic("worker-request-timeout");
+        timedOut.reject(new Error("fast-markdown-worker-request-timeout"));
+      }, requestTimeoutMs);
+    }
     try {
       worker.postMessage({
         type: "compile-fast-markdown",
@@ -75,10 +139,11 @@ export function compileFastMarkdownInWorker(
         args,
       });
     } catch (error: unknown) {
-      pendingRequests.delete(requestId);
-      workerDiagnostics.setPendingCount(pendingRequests.size);
+      const failed = takePendingWorkerRequest(requestId);
       workerDiagnostics.recordPostMessageFailure();
-      reject(error instanceof Error ? error : new Error(String(error)));
+      workerDiagnostics.recordFallback("worker-post-message-failed");
+      persistWorkerFailureDiagnostic("worker-post-message-failed");
+      failed?.reject(error instanceof Error ? error : new Error(String(error)));
     }
   });
 }
@@ -90,6 +155,7 @@ export function getFastMarkdownWorkerDiagnostics(): FastMarkdownWorkerDiagnostic
 export function resetFastMarkdownWorkerDiagnostics(): void {
   workerDiagnostics.reset();
   workerDiagnostics.setPendingCount(pendingRequests.size);
+  persistedWorkerFailureAtByReason.clear();
 }
 
 export function disposeFastMarkdownWorker() {
@@ -109,14 +175,18 @@ function getSharedWorker(): Worker | null {
   }
   if (!sharedWorker) {
     try {
-      sharedWorker = new Worker(new URL("./fastMarkdown.worker.ts", import.meta.url), {
-        type: "module",
-      });
+      sharedWorker = new Worker(
+        new URL("./fastMarkdown.worker.ts", import.meta.url),
+        {
+          type: "module",
+        },
+      );
       workerDiagnostics.setHasWorker(true);
     } catch {
       sharedWorker = null;
       workerDiagnostics.setHasWorker(false);
       workerDiagnostics.recordFallback("worker-creation-failed");
+      persistWorkerFailureDiagnostic("worker-creation-failed");
       return null;
     }
   }
@@ -137,19 +207,39 @@ function handleWorkerMessage(event: MessageEvent<unknown>) {
   const message = event.data;
   if (!isWorkerResponse(message)) {
     workerDiagnostics.recordUnknownResponse();
+    const requestId =
+      isRecord(message) && typeof message.requestId === "string"
+        ? message.requestId
+        : null;
+    const pending = requestId ? takePendingWorkerRequest(requestId) : null;
+    if (pending) {
+      workerDiagnostics.recordFallback("worker-invalid-response");
+      persistWorkerFailureDiagnostic("worker-invalid-response");
+      pending.reject(
+        new Error("Fast Markdown worker returned an invalid response"),
+      );
+    }
     return;
   }
 
-  const pending = pendingRequests.get(message.requestId);
+  const pending = takePendingWorkerRequest(message.requestId);
   if (!pending) {
     workerDiagnostics.recordUnknownResponse();
     return;
   }
-  pendingRequests.delete(message.requestId);
-  workerDiagnostics.setPendingCount(pendingRequests.size);
 
   if (message.type === "fast-markdown-error") {
+    workerDiagnostics.recordFallback("worker-compile-error");
+    persistWorkerFailureDiagnostic("worker-compile-error");
     pending.reject(createWorkerError(message.error));
+    return;
+  }
+  if (!matchesPendingWorkerRequestIdentity(message.result, pending)) {
+    workerDiagnostics.recordFallback("worker-identity-mismatch");
+    persistWorkerFailureDiagnostic("worker-identity-mismatch");
+    pending.reject(
+      new Error("Fast Markdown worker returned mismatched request identity"),
+    );
     return;
   }
   pending.resolve(message.result);
@@ -169,14 +259,46 @@ function disposeBrokenWorker(error: Error) {
   rejectAllPendingRequests(error);
   workerDiagnostics.recordFallback("worker-disposed-after-error");
   workerDiagnostics.setHasWorker(false);
+  persistWorkerFailureDiagnostic("worker-runtime-error");
 }
 
 function rejectAllPendingRequests(error: Error) {
   for (const pending of pendingRequests.values()) {
+    clearPendingWorkerRequestTimeout(pending);
     pending.reject(error);
   }
   pendingRequests.clear();
   workerDiagnostics.setPendingCount(0);
+}
+
+function normalizeWorkerRequestTimeoutMs(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return DEFAULT_WORKER_REQUEST_TIMEOUT_MS;
+  }
+  return Math.min(
+    MAX_WORKER_REQUEST_TIMEOUT_MS,
+    Math.max(1, Math.round(value)),
+  );
+}
+
+function clearPendingWorkerRequestTimeout(pending: PendingWorkerRequest): void {
+  if (pending.timeoutId !== null) {
+    clearTimeout(pending.timeoutId);
+    pending.timeoutId = null;
+  }
+}
+
+function takePendingWorkerRequest(
+  requestId: string,
+): PendingWorkerRequest | null {
+  const pending = pendingRequests.get(requestId) ?? null;
+  if (!pending) {
+    return null;
+  }
+  pendingRequests.delete(requestId);
+  clearPendingWorkerRequestTimeout(pending);
+  workerDiagnostics.setPendingCount(pendingRequests.size);
+  return pending;
 }
 
 function createRequestId(documentKey: string) {
@@ -188,20 +310,37 @@ function createRequestId(documentKey: string) {
 function createWorkerRequestMeta(
   requestId: string,
   args: CompileFastMarkdownArgs,
+  contentHash: string,
 ): FastMarkdownWorkerRequestMeta {
   return {
     requestId,
     documentKey: args.documentKey,
-    contentHash: hashStableString(args.rawMarkdown),
-    optionsHash: hashStableString(JSON.stringify({
-      rendererProfile: args.rendererProfile,
-      featureFlags: args.featureFlags ?? null,
-      options: args.options ?? null,
-      bodyStartLine: args.bodyStartLine ?? null,
-    })),
+    contentHash,
+    optionsHash: hashStableString(
+      JSON.stringify({
+        rendererProfile: args.rendererProfile,
+        featureFlags: args.featureFlags ?? null,
+        options: args.options ?? null,
+        bodyStartLine: args.bodyStartLine ?? null,
+      }),
+    ),
     schemaVersion: "fast-markdown-worker-v1",
     createdAtMs: Date.now(),
   };
+}
+
+function matchesPendingWorkerRequestIdentity(
+  artifact: FastMarkdownUnsafeArtifact,
+  pending: PendingWorkerRequest,
+): boolean {
+  return (
+    artifact.cacheKey === pending.expectedCacheKey &&
+    artifact.contentHash === pending.requestMeta.contentHash &&
+    artifact.rendererProfile === pending.expectedRendererProfile &&
+    artifact.diagnostics.cacheKey === artifact.cacheKey &&
+    artifact.diagnostics.contentHash === artifact.contentHash &&
+    artifact.diagnostics.profile === artifact.rendererProfile
+  );
 }
 
 function isWorkerResponse(value: unknown): value is FastMarkdownWorkerResponse {
@@ -218,13 +357,34 @@ function isWorkerResponse(value: unknown): value is FastMarkdownWorkerResponse {
     return false;
   }
   if (value.type === "fast-markdown-result") {
-    return isRecord(value.result);
+    return isFastMarkdownUnsafeArtifact(value.result);
   }
   return isRecord(value.error) && typeof value.error.message === "string";
 }
 
+function isFastMarkdownUnsafeArtifact(
+  value: unknown,
+): value is FastMarkdownUnsafeArtifact {
+  if (!isRecord(value) || !isRecord(value.diagnostics)) {
+    return false;
+  }
+  return (
+    value.sanitization === "main-thread-required" &&
+    typeof value.cacheKey === "string" &&
+    typeof value.contentHash === "string" &&
+    typeof value.unsafeHtml === "string" &&
+    typeof value.rendererProfile === "string" &&
+    Array.isArray(value.outline) &&
+    Array.isArray(value.sourceLineAnchors) &&
+    Array.isArray(value.heavyBlocks) &&
+    typeof value.diagnostics.fallbackReason === "string"
+  );
+}
+
 function createWorkerError(error: { name: string; message: string }) {
-  const workerError = new Error(error.message || "Fast Markdown worker compile failed");
+  const workerError = new Error(
+    error.message || "Fast Markdown worker compile failed",
+  );
   workerError.name = error.name || "Error";
   return workerError;
 }
@@ -235,6 +395,35 @@ function reportWorkerFallback(error: unknown) {
     "[file-markdown-preview] Fast Markdown worker failed; falling back to main-thread compile.",
     normalized,
   );
+}
+
+function throwIfWorkerRequestIsStale(
+  options: CompileFastMarkdownWorkerOptions,
+): void {
+  if (options.shouldAcceptWorkerArtifact?.() !== false) {
+    return;
+  }
+  workerDiagnostics.recordStaleDrop();
+  throw new Error("fast-markdown-worker-result-stale");
+}
+
+function persistWorkerFailureDiagnostic(reasonCode: string) {
+  const now = Date.now();
+  const previousAt = persistedWorkerFailureAtByReason.get(reasonCode);
+  if (
+    typeof previousAt === "number" &&
+    now - previousAt < WORKER_FAILURE_PERSIST_INTERVAL_MS
+  ) {
+    return;
+  }
+  persistedWorkerFailureAtByReason.set(reasonCode, now);
+  const snapshot = workerDiagnostics.snapshot();
+  appendRendererDiagnostic("fast-markdown-worker/failed", {
+    reasonCode,
+    fallbackCount: snapshot.fallbackCount,
+    pendingRequestCount: snapshot.pendingRequestCount,
+    postMessageFailureCount: snapshot.postMessageFailureCount,
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

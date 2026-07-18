@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RequestUserInputRequest } from "../../../types";
 import { Messages } from "./Messages";
@@ -87,6 +87,60 @@ describe("Messages history loading", () => {
 
     expect(screen.getByText("messages.emptyThread")).toBeTruthy();
     expect(screen.queryByText("messages.restoringHistory")).toBeNull();
+  });
+
+  it("shows a bounded retry surface instead of empty-thread after history recovery fails", () => {
+    const onRetryHistory = vi.fn();
+
+    render(
+      <Messages
+        items={[]}
+        threadId="thread-history-recovery-failed"
+        workspaceId="ws-1"
+        isThinking={false}
+        historyRecoveryFailureReason="history-empty-after-retry"
+        onRetryHistory={onRetryHistory}
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByRole("alert", { name: "messages.threadRecoveryTitle" })).toBeTruthy();
+    expect(screen.getByText("messages.threadRecoveryFailed")).toBeTruthy();
+    expect(screen.queryByText("messages.emptyThread")).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "messages.threadRecoveryAction" }),
+    );
+    expect(onRetryHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps last-good history visible beside the recovery failure surface", () => {
+    render(
+      <Messages
+        items={[
+          {
+            id: "assistant-last-good",
+            kind: "message",
+            role: "assistant",
+            text: "上一次成功恢复的消息",
+            isFinal: true,
+          },
+        ]}
+        threadId="thread-history-partial-recovery"
+        workspaceId="ws-1"
+        isThinking={false}
+        historyRecoveryFailureReason="history-partial-after-retry"
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("上一次成功恢复的消息")).toBeTruthy();
+    expect(screen.getByText("messages.threadRecoveryFailed")).toBeTruthy();
+    expect(screen.queryByText("messages.emptyThread")).toBeNull();
   });
 
   it("keeps Claude transcript-heavy history readable when assistant text is sparse", () => {

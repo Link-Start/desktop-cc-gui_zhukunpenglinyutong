@@ -41,6 +41,15 @@ fn normalize_daemon_disk_provider_profile(
     ))
 }
 
+fn resolve_supported_daemon_active_engine(
+    settings: &AppSettings,
+    configured_engine: Option<&str>,
+) -> engine::EngineType {
+    parse_engine_type_string(configured_engine)
+        .filter(|engine_type| engine::engine_enabled_in_settings(settings, *engine_type))
+        .unwrap_or(engine::EngineType::Codex)
+}
+
 async fn run_daemon_disk_start_thread_with_readiness<
     FEnsure,
     FEnsureFuture,
@@ -164,8 +173,10 @@ impl DaemonState {
         let settings_path = config.data_dir.join("settings.json");
         let workspaces = read_workspaces(&storage_path).unwrap_or_default();
         let app_settings = read_settings(&settings_path).unwrap_or_default();
-        let active_engine = parse_engine_type_string(app_settings.default_engine.as_deref())
-            .unwrap_or(engine::EngineType::Codex);
+        let active_engine = resolve_supported_daemon_active_engine(
+            &app_settings,
+            app_settings.default_engine.as_deref(),
+        );
         let web_service_runtime = WebServiceRuntime::new(
             config.listen.to_string(),
             config.token.clone(),
@@ -300,6 +311,22 @@ impl DaemonState {
     }
 
     pub(super) async fn remove_workspace(&self, id: String) -> Result<(), String> {
+        let cleanup_ids = {
+            let workspaces = self.workspaces.lock().await;
+            let mut ids = vec![id.clone()];
+            if workspaces
+                .get(&id)
+                .is_some_and(|workspace| !workspace.kind.is_worktree())
+            {
+                ids.extend(
+                    workspaces
+                        .values()
+                        .filter(|workspace| workspace.parent_id.as_deref() == Some(id.as_str()))
+                        .map(|workspace| workspace.id.clone()),
+                );
+            }
+            ids
+        };
         workspaces_core::remove_workspace_core(
             id,
             &self.workspaces,
@@ -316,12 +343,29 @@ impl DaemonState {
             true,
             true,
         )
-        .await
+        .await?;
+        let mut cleanup_errors = Vec::new();
+        for workspace_id in cleanup_ids {
+            if let Err(error) = self
+                .engine_manager
+                .remove_gemini_session(&workspace_id)
+                .await
+            {
+                cleanup_errors.push(format!("{workspace_id}: {error}"));
+            }
+        }
+        if !cleanup_errors.is_empty() {
+            return Err(format!(
+                "workspace removed but Gemini cleanup failed: {}",
+                cleanup_errors.join("; ")
+            ));
+        }
+        Ok(())
     }
 
     pub(super) async fn remove_worktree(&self, id: String) -> Result<(), String> {
         workspaces_core::remove_worktree_core(
-            id,
+            id.clone(),
             &self.workspaces,
             &self.sessions,
             &self.storage_path,
@@ -334,7 +378,14 @@ impl DaemonState {
                     .map_err(|err| format!("Failed to remove worktree folder: {err}"))
             },
         )
-        .await
+        .await?;
+        self.engine_manager
+            .remove_gemini_session(&id)
+            .await
+            .map_err(|error| {
+                format!("worktree removed but Gemini cleanup failed for {id}: {error}")
+            })?;
+        Ok(())
     }
 
     pub(super) async fn rename_worktree(
@@ -665,6 +716,7 @@ impl DaemonState {
         &self,
         settings: AppSettings,
     ) -> Result<AppSettings, String> {
+        let requested_default_engine = settings.default_engine.clone();
         let previous = self.app_settings.lock().await.clone();
         let updated = settings_core::update_app_settings_core(
             settings,
@@ -712,9 +764,18 @@ impl DaemonState {
             let mut web_service_runtime = self.web_service_runtime.lock().await;
             web_service_runtime.set_default_port(updated.web_service_port);
         }
-        if let Some(engine) = parse_engine_type_string(updated.default_engine.as_deref()) {
+        {
             let mut active = self.active_engine.lock().await;
-            *active = engine;
+            if requested_default_engine.is_some()
+                || !engine::engine_enabled_in_settings(&updated, *active)
+            {
+                *active = resolve_supported_daemon_active_engine(
+                    &updated,
+                    requested_default_engine
+                        .as_deref()
+                        .or(updated.default_engine.as_deref()),
+                );
+            }
         }
         Ok(updated)
     }
@@ -948,11 +1009,7 @@ impl DaemonState {
         let active_engine = self.get_active_engine().await;
         let effective_engine = engine.unwrap_or(active_engine);
         let settings = self.app_settings.lock().await.clone();
-        if !engine::engine_enabled_in_settings(&settings, effective_engine) {
-            return Err(engine::engine_disabled_diagnostic(effective_engine)
-                .unwrap_or("Engine is disabled in CLI validation settings")
-                .to_string());
-        }
+        engine::ensure_engine_enabled(&settings, effective_engine)?;
         let normalized_custom_spec_root = normalize_custom_spec_root(custom_spec_root);
 
         match effective_engine {
@@ -1383,7 +1440,7 @@ impl DaemonState {
                 let session = self
                     .engine_manager
                     .get_or_create_gemini_session(&workspace_id, &workspace_path)
-                    .await;
+                    .await?;
                 let resolved_session_id = if continue_session {
                     if session_id.is_some() {
                         session_id
@@ -1616,6 +1673,7 @@ impl DaemonState {
         // Snapshot AppSettings so engine send paths can apply the current
         // curated-skill transport policy without reading settings mid-turn.
         let settings = self.app_settings.lock().await.clone();
+        engine::ensure_engine_enabled(&settings, effective_engine)?;
 
         match effective_engine {
             engine::EngineType::Codex => Err(
@@ -1775,7 +1833,7 @@ impl DaemonState {
                 let session = self
                     .engine_manager
                     .get_or_create_gemini_session(&workspace_id, &workspace_path)
-                    .await;
+                    .await?;
                 let resolved_session_id = if continue_session {
                     if session_id.is_some() {
                         session_id
@@ -1813,12 +1871,13 @@ impl DaemonState {
                     custom_spec_root: normalized_custom_spec_root.clone(),
                 };
                 let turn_id = format!("gemini-sync-{}", uuid::Uuid::new_v4());
-                let response = tokio::time::timeout(
-                    std::time::Duration::from_secs(900),
-                    session.send_message(params, &turn_id),
-                )
-                .await
-                .map_err(|_| "Gemini response timed out".to_string())??;
+                let response = session
+                    .send_message_with_timeout(
+                        params,
+                        &turn_id,
+                        std::time::Duration::from_secs(900),
+                    )
+                    .await?;
                 self.record_auto_session_metadata_if_present(
                     &workspace_id,
                     response_session_id.as_deref(),

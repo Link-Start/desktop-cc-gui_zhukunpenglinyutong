@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { EngineType, WorkspaceInfo } from "../../../types";
 import { getOpenCodeProviderHealth } from "../../../services/tauri";
 import { pushGlobalRuntimeNotice } from "../../../services/globalRuntimeNotices";
+import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import { formatByteSize } from "../../../utils/formatting";
 import {
   clampRendererContextMenuPosition,
@@ -589,8 +590,10 @@ export function useSidebarMenus({
 
   const isEngineSessionEntryVisible = useCallback(
     (engineType: EngineType) => {
+      if (!isEngineExecutionEnabled(engineType)) {
+        return false;
+      }
       switch (engineType) {
-        case "gemini":
         case "opencode":
           return enabledEngines?.[engineType] !== false;
         case "claude":
@@ -622,6 +625,9 @@ export function useSidebarMenus({
         engine: EngineType,
         actionOptions?: CodexProviderProfileSelection,
       ) => {
+        if (!isEngineExecutionEnabled(engine)) {
+          return null;
+        }
         const creationOptions = {
           ...(targetFolderId ? { folderId: targetFolderId } : {}),
           ...(actionOptions?.providerProfileId

@@ -8,7 +8,10 @@ import {
   loadClaudeSession,
   resumeThread,
 } from "../../../services/tauri";
-import { writeClientStoreData, writeClientStoreValue } from "../../../services/clientStorage";
+import {
+  writeClientStoreData,
+  writeClientStoreValue,
+} from "../../../services/clientStorage";
 import type { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
 import { useThreads } from "./useThreads";
 import { loadSidebarSnapshot } from "../utils/sidebarSnapshot";
@@ -205,14 +208,21 @@ describe("useThreads sidebar cache", () => {
         result.current.setActiveThreadId("thread-history");
       });
 
-      expect(result.current.historyLoadingByThreadId["thread-history"]).toBe(true);
+      expect(result.current.historyLoadingByThreadId["thread-history"]).toBe(
+        true,
+      );
 
       await act(async () => {
         vi.advanceTimersByTime(50);
       });
 
-      expect(vi.mocked(resumeThread)).toHaveBeenCalledWith("ws-1", "thread-history");
-      expect(result.current.historyLoadingByThreadId["thread-history"]).toBe(true);
+      expect(vi.mocked(resumeThread)).toHaveBeenCalledWith(
+        "ws-1",
+        "thread-history",
+      );
+      expect(result.current.historyLoadingByThreadId["thread-history"]).toBe(
+        true,
+      );
 
       await act(async () => {
         resolveResume?.({
@@ -221,14 +231,26 @@ describe("useThreads sidebar cache", () => {
               id: "thread-history",
               preview: "Loaded thread",
               updated_at: 456,
-              turns: [],
+              turns: [
+                {
+                  items: [
+                    {
+                      type: "agentMessage",
+                      id: "assistant-thread-history",
+                      text: "Loaded history",
+                    },
+                  ],
+                },
+              ],
             },
           },
         });
         await Promise.resolve();
       });
 
-      expect(result.current.historyLoadingByThreadId["thread-history"]).toBeUndefined();
+      expect(
+        result.current.historyLoadingByThreadId["thread-history"],
+      ).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
@@ -270,13 +292,19 @@ describe("useThreads sidebar cache", () => {
       await act(async () => {
         vi.advanceTimersByTime(50);
       });
-      expect(result.current.historyLoadingByThreadId["thread-history-a"]).toBe(true);
+      expect(result.current.historyLoadingByThreadId["thread-history-a"]).toBe(
+        true,
+      );
 
       act(() => {
         result.current.setActiveThreadId("thread-history-b");
       });
-      expect(result.current.historyLoadingByThreadId["thread-history-a"]).toBeUndefined();
-      expect(result.current.historyLoadingByThreadId["thread-history-b"]).toBe(true);
+      expect(
+        result.current.historyLoadingByThreadId["thread-history-a"],
+      ).toBeUndefined();
+      expect(result.current.historyLoadingByThreadId["thread-history-b"]).toBe(
+        true,
+      );
 
       await act(async () => {
         vi.advanceTimersByTime(50);
@@ -289,14 +317,26 @@ describe("useThreads sidebar cache", () => {
               id: "thread-history-a",
               preview: "Loaded older thread",
               updated_at: 456,
-              turns: [],
+              turns: [
+                {
+                  items: [
+                    {
+                      type: "agentMessage",
+                      id: "assistant-thread-history-a",
+                      text: "Loaded older history",
+                    },
+                  ],
+                },
+              ],
             },
           },
         });
         await Promise.resolve();
       });
 
-      expect(result.current.historyLoadingByThreadId["thread-history-b"]).toBe(true);
+      expect(result.current.historyLoadingByThreadId["thread-history-b"]).toBe(
+        true,
+      );
 
       await act(async () => {
         resumeResolvers.get("thread-history-b")?.({
@@ -305,14 +345,26 @@ describe("useThreads sidebar cache", () => {
               id: "thread-history-b",
               preview: "Loaded current thread",
               updated_at: 457,
-              turns: [],
+              turns: [
+                {
+                  items: [
+                    {
+                      type: "agentMessage",
+                      id: "assistant-thread-history-b",
+                      text: "Loaded current history",
+                    },
+                  ],
+                },
+              ],
             },
           },
         });
         await Promise.resolve();
       });
 
-      expect(result.current.historyLoadingByThreadId["thread-history-b"]).toBeUndefined();
+      expect(
+        result.current.historyLoadingByThreadId["thread-history-b"],
+      ).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
@@ -347,9 +399,9 @@ describe("useThreads sidebar cache", () => {
         result.current.setActiveThreadId("claude:session-history");
       });
 
-      expect(result.current.historyLoadingByThreadId["claude:session-history"]).toBe(
-        true,
-      );
+      expect(
+        result.current.historyLoadingByThreadId["claude:session-history"],
+      ).toBe(true);
 
       await act(async () => {
         vi.advanceTimersByTime(50);
@@ -359,16 +411,27 @@ describe("useThreads sidebar cache", () => {
         "/tmp/codex",
         "session-history",
       );
-      expect(result.current.historyLoadingByThreadId["claude:session-history"]).toBe(
-        true,
-      );
+      expect(
+        result.current.historyLoadingByThreadId["claude:session-history"],
+      ).toBe(true);
 
       await act(async () => {
-        resolveLoad?.({ messages: [] });
+        resolveLoad?.({
+          messages: [
+            {
+              kind: "message",
+              id: "assistant-session-history",
+              role: "assistant",
+              text: "Loaded Claude history",
+            },
+          ],
+        });
         await Promise.resolve();
       });
 
-      expect(result.current.historyLoadingByThreadId["claude:session-history"]).toBeUndefined();
+      expect(
+        result.current.historyLoadingByThreadId["claude:session-history"],
+      ).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
@@ -396,8 +459,10 @@ describe("useThreads sidebar cache", () => {
       messages: [
         {
           uuid: "msg-1",
-          type: "user",
-          message: { role: "user", content: "你好" },
+          kind: "message",
+          id: "assistant-cached-session",
+          role: "assistant",
+          text: "Cached Claude history",
         },
       ],
     });
@@ -424,7 +489,9 @@ describe("useThreads sidebar cache", () => {
         workspace.path,
         "cached-session",
       );
-      expect(result.current.historyLoadingByThreadId["claude:cached-session"]).toBeUndefined();
+      expect(
+        result.current.historyLoadingByThreadId["claude:cached-session"],
+      ).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
@@ -445,15 +512,38 @@ describe("useThreads sidebar cache", () => {
         result.current.setActiveThreadId("codex-pending-1");
       });
 
-      expect(result.current.historyLoadingByThreadId["codex-pending-1"]).toBeUndefined();
+      expect(
+        result.current.historyLoadingByThreadId["codex-pending-1"],
+      ).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("clears Codex history loading after resume failure", async () => {
+  it("stops automatic history retries after failure but allows explicit retry", async () => {
     vi.useFakeTimers();
-    vi.mocked(resumeThread).mockRejectedValue(new Error("resume failed"));
+    vi.mocked(resumeThread)
+      .mockRejectedValueOnce(new Error("resume failed"))
+      .mockResolvedValueOnce({
+        result: {
+          thread: {
+            id: "thread-history-error",
+            preview: "Recovered explicitly",
+            updated_at: 456,
+            turns: [
+              {
+                items: [
+                  {
+                    type: "agentMessage",
+                    id: "assistant-history-explicit-retry",
+                    text: "Recovered by explicit retry",
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      } as never);
 
     try {
       const { result } = renderHook(() =>
@@ -467,7 +557,9 @@ describe("useThreads sidebar cache", () => {
         result.current.setActiveThreadId("thread-history-error");
       });
 
-      expect(result.current.historyLoadingByThreadId["thread-history-error"]).toBe(true);
+      expect(
+        result.current.historyLoadingByThreadId["thread-history-error"],
+      ).toBe(true);
 
       await act(async () => {
         vi.advanceTimersByTime(50);
@@ -477,7 +569,38 @@ describe("useThreads sidebar cache", () => {
 
       expect(
         result.current.historyLoadingByThreadId["thread-history-error"],
+      ).toBe("failed");
+
+      act(() => {
+        result.current.setActiveThreadId("thread-history-other");
+      });
+      act(() => {
+        result.current.setActiveThreadId("thread-history-error");
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+        await Promise.resolve();
+      });
+
+      expect(resumeThread).toHaveBeenCalledTimes(1);
+      expect(
+        result.current.historyLoadingByThreadId["thread-history-error"],
+      ).toBe("failed");
+
+      await act(async () => {
+        await result.current.refreshThread("ws-1", "thread-history-error");
+      });
+
+      expect(resumeThread).toHaveBeenCalledTimes(2);
+      expect(
+        result.current.historyLoadingByThreadId["thread-history-error"],
       ).toBeUndefined();
+      expect(result.current.activeItems).toEqual([
+        expect.objectContaining({
+          id: "assistant-history-explicit-retry",
+          text: "Recovered by explicit retry",
+        }),
+      ]);
     } finally {
       vi.useRealTimers();
     }
@@ -532,14 +655,20 @@ describe("useThreads sidebar cache", () => {
     });
 
     await act(async () => {
-      const deleted = await result.current.removeThreads("ws-1", ["thread-1", "thread-2"]);
+      const deleted = await result.current.removeThreads("ws-1", [
+        "thread-1",
+        "thread-2",
+      ]);
       expect(deleted).toEqual([
         { threadId: "thread-1", success: true, code: null, message: null },
         { threadId: "thread-2", success: true, code: null, message: null },
       ]);
     });
 
-    expect(deleteCodexSessions).toHaveBeenCalledWith("ws-1", ["thread-1", "thread-2"]);
+    expect(deleteCodexSessions).toHaveBeenCalledWith("ws-1", [
+      "thread-1",
+      "thread-2",
+    ]);
     expect(result.current.threadsByWorkspace["ws-1"]).toEqual([]);
   });
 

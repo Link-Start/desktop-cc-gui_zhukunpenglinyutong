@@ -517,7 +517,11 @@ describe("useEngineController", () => {
       useEngineController({ activeWorkspace: null }),
     );
 
-    expect(result.current.availableEngines).toHaveLength(4);
+    expect(result.current.availableEngines.map((engine) => engine.type)).toEqual([
+      "claude",
+      "codex",
+      "opencode",
+    ]);
     expect(
       result.current.availableEngines.every(
         (engine) => engine.availabilityState === "loading",
@@ -686,7 +690,7 @@ describe("useEngineController", () => {
     expect(result.current.activeEngine).toBe("claude");
   });
 
-  it("restores persisted engine selection when the stored engine is installed", async () => {
+  it("ignores a legacy persisted Gemini execution selection", async () => {
     detectEnginesMock.mockResolvedValue([
       {
         engineType: "claude",
@@ -728,9 +732,57 @@ describe("useEngineController", () => {
     );
 
     await waitFor(() => expect(result.current.isInitialized).toBe(true));
-    await waitFor(() => expect(result.current.activeEngine).toBe("gemini"));
+    expect(result.current.activeEngine).toBe("claude");
+    expect(result.current.availableEngines.some((engine) => engine.type === "gemini")).toBe(false);
+    expect(switchEngineMock).not.toHaveBeenCalledWith("gemini");
+    expect(getEngineModelsMock).not.toHaveBeenCalledWith("gemini");
+  });
 
-    expect(switchEngineMock).toHaveBeenCalledWith("gemini");
+  it("switches a legacy active Gemini runtime back to a supported engine", async () => {
+    detectEnginesMock.mockResolvedValue([
+      createEngineStatus("claude", true),
+      createEngineStatus("gemini", true),
+    ]);
+    getActiveEngineMock.mockResolvedValue("gemini");
+    getEngineModelsMock.mockResolvedValue([]);
+
+    const { result } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+
+    await waitFor(() => expect(result.current.isInitialized).toBe(true));
+
+    expect(result.current.activeEngine).toBe("claude");
+    expect(switchEngineMock).toHaveBeenCalledWith("claude");
+    expect(switchEngineMock).not.toHaveBeenCalledWith("gemini");
+    expect(getEngineModelsMock).not.toHaveBeenCalledWith("gemini");
+  });
+
+  it("rejects direct Gemini switch and model refresh requests", async () => {
+    detectEnginesMock.mockResolvedValue([
+      createEngineStatus("claude", true),
+      createEngineStatus("gemini", true),
+    ]);
+    getActiveEngineMock.mockResolvedValue("claude");
+    getEngineModelsMock.mockResolvedValue([]);
+
+    const { result } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+    await waitFor(() => expect(result.current.isInitialized).toBe(true));
+    switchEngineMock.mockClear();
+    getEngineModelsMock.mockClear();
+
+    await act(async () => {
+      await result.current.setActiveEngine("gemini");
+      await result.current.refreshEngineModels("gemini", {
+        forceRefresh: true,
+      });
+    });
+
+    expect(result.current.activeEngine).toBe("claude");
+    expect(switchEngineMock).not.toHaveBeenCalled();
+    expect(getEngineModelsMock).not.toHaveBeenCalled();
   });
 
   it("refreshEngineModels reloads only the requested engine catalog", async () => {

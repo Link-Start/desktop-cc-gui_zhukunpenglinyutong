@@ -437,6 +437,8 @@ export function estimateTimelineProjectionRowSize(row: TimelineProjectionRow) {
       return 52;
     case "emptyState":
       return 160;
+    case "historyRecoveryFailure":
+      return 132;
     case "approval":
       return 132;
     case "bottomAnchor":

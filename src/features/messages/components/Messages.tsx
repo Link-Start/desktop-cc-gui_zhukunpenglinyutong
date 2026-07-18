@@ -236,6 +236,8 @@ export const Messages = memo(function Messages({
   workspaceId: legacyWorkspaceId = null,
   isThinking: legacyIsThinking,
   isHistoryLoading = false,
+  historyRecoveryFailureReason = null,
+  onRetryHistory,
   isContextCompacting = false,
   proxyEnabled = false,
   proxyUrl = null,
@@ -2528,29 +2530,54 @@ export const Messages = memo(function Messages({
   const visibleApprovals = useMemo(() => {
     return getVisibleApprovalsForThread(approvals, workspaceId, threadId);
   }, [approvals, threadId, workspaceId]);
-  const approvalNode = (
-    <MessagesInlineApproval
-      approvals={visibleApprovals}
-      workspaces={workspaces}
-      onApprovalDecision={onApprovalDecision}
-      onApprovalBatchAccept={onApprovalBatchAccept}
-      onApprovalRemember={onApprovalRemember}
-    />
-  );
-  const userInputNode = (
-    <MessagesInlineUserInput
-      requests={userInputRequests}
-      activeThreadId={threadId ?? null}
-      activeWorkspaceId={workspaceId ?? null}
-      onSubmit={legacyOnUserInputSubmit}
-      onDismiss={legacyOnUserInputDismiss}
-      shouldRender={shouldRenderUserInputNode}
-    />
-  );
   const hasVisibleUserInputRequest =
     shouldRenderUserInputNode &&
     Boolean(legacyOnUserInputSubmit) &&
     activeUserInputRequestId !== null;
+  const approvalNode = useMemo(
+    () =>
+      visibleApprovals.length > 0 && onApprovalDecision ? (
+        <MessagesInlineApproval
+          approvals={visibleApprovals}
+          workspaces={workspaces}
+          onApprovalDecision={onApprovalDecision}
+          onApprovalBatchAccept={onApprovalBatchAccept}
+          onApprovalRemember={onApprovalRemember}
+        />
+      ) : null,
+    [
+      onApprovalBatchAccept,
+      onApprovalDecision,
+      onApprovalRemember,
+      visibleApprovals,
+      workspaces,
+    ],
+  );
+  const userInputNode = useMemo(
+    () =>
+      hasVisibleUserInputRequest ? (
+        <MessagesInlineUserInput
+          requests={userInputRequests}
+          activeThreadId={threadId ?? null}
+          activeWorkspaceId={workspaceId ?? null}
+          onSubmit={legacyOnUserInputSubmit}
+          onDismiss={legacyOnUserInputDismiss}
+          shouldRender
+        />
+      ) : null,
+    [
+      hasVisibleUserInputRequest,
+      legacyOnUserInputDismiss,
+      legacyOnUserInputSubmit,
+      threadId,
+      userInputRequests,
+      workspaceId,
+    ],
+  );
+  const timelineHeartbeatPulse =
+    (presentationProfile?.heartbeatWaitingHint ?? activeEngine === "opencode")
+      ? heartbeatPulse
+      : 0;
   const linkedConversationRun = useMemo(() => {
     if (!threadId) {
       return null;
@@ -2701,8 +2728,9 @@ export const Messages = memo(function Messages({
           onForkFromMessage={onForkFromMessage}
           onRewindFromMessage={onRewindFromMessage}
           handleExitPlanModeExecuteForItem={handleExitPlanModeExecuteForItem}
-          heartbeatPulse={heartbeatPulse}
+          heartbeatPulse={timelineHeartbeatPulse}
           hiddenClaudeReasoningOnly={hiddenClaudeReasoningOnly}
+          historyRecoveryFailureReason={historyRecoveryFailureReason}
           isHistoryLoading={isHistoryLoading}
           isThinking={isThinking}
           isWorking={isWorking}
@@ -2721,6 +2749,7 @@ export const Messages = memo(function Messages({
           onPreviewFileDiff={onPreviewFileDiff}
           onConversationDetailHydrationRequest={handleConversationDetailHydrationRequest}
           onConversationLightweightModeEnable={handleConversationLightweightModeEnable}
+          onRetryHistory={onRetryHistory}
           onRecoverThreadRuntime={onRecoverThreadRuntime}
           onRecoverThreadRuntimeAndResend={onRecoverThreadRuntimeAndResend}
           onThreadRecoveryFork={onThreadRecoveryFork}

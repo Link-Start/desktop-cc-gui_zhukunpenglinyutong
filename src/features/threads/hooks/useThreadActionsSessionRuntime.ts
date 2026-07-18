@@ -63,6 +63,7 @@ import {
   pushHookSafeFallbackNotice,
   resolveClaudeForkThreadName,
 } from "./sessionLifecycleController";
+import { assertEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 
 type OnDebug = (entry: DebugEntry) => void;
 
@@ -337,6 +338,9 @@ export function useThreadActionsSessionRuntime({
     ) => {
       const shouldActivate = options?.activate !== false;
       const engine = options?.engine;
+      if (engine) {
+        assertEngineExecutionEnabled(engine);
+      }
       const folderId = options?.folderId?.trim() || null;
       const autoSession = options?.autoSession ?? null;
       const selectedProviderBinding = providerBindingFromSelectedProfile(
@@ -370,7 +374,7 @@ export function useThreadActionsSessionRuntime({
         selectedProviderBinding,
       });
 
-      if (engine === "claude" || engine === "gemini" || engine === "opencode") {
+      if (engine === "claude" || engine === "opencode") {
         const prefix = engine;
         const threadId = `${prefix}-pending-${Date.now()}-${Math.random()
           .toString(36)

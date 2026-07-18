@@ -9,11 +9,11 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::Deserialize;
 use tauri::{
-    AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder,
     webview::{NewWindowResponse, WebviewBuilder},
+    AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder,
 };
 
 use crate::state::AppState;
@@ -1417,8 +1417,8 @@ pub(crate) async fn get_browser_agent_settings(
 }
 
 #[tauri::command]
-pub(crate) async fn get_browser_agent_platform_capability()
--> Result<BrowserPlatformCapability, String> {
+pub(crate) async fn get_browser_agent_platform_capability(
+) -> Result<BrowserPlatformCapability, String> {
     Ok(platform::current_platform_capability())
 }
 

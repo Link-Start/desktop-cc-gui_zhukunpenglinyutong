@@ -1,9 +1,9 @@
 /// <reference lib="webworker" />
 
-import { compileFastMarkdown } from "./compile";
+import { compileFastMarkdownToUnsafeArtifact } from "./compileCore";
 import type {
   CompileFastMarkdownArgs,
-  FastMarkdownRenderResult,
+  FastMarkdownUnsafeArtifact,
   FastMarkdownWorkerRequestMeta,
 } from "./types";
 
@@ -17,7 +17,7 @@ type FastMarkdownWorkerCompileRequest = {
 type FastMarkdownWorkerCompileSuccess = {
   type: "fast-markdown-result";
   requestId: string;
-  result: FastMarkdownRenderResult;
+  result: FastMarkdownUnsafeArtifact;
 };
 
 type FastMarkdownWorkerCompileError = {
@@ -37,7 +37,7 @@ workerScope.addEventListener("message", (event: MessageEvent<unknown>) => {
     return;
   }
 
-  void compileFastMarkdown(message.args)
+  void compileFastMarkdownToUnsafeArtifact(message.args)
     .then((result) => {
       workerScope.postMessage({
         type: "fast-markdown-result",

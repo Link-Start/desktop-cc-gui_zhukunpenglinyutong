@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import Check from "lucide-react/dist/esm/icons/check";
 import X from "lucide-react/dist/esm/icons/x";
 import type { GitFileStatus } from "../../../types";
+import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import { CommitMessageEngineIcon } from "../../git/components/CommitMessageEngineIcon";
 import {
   CommitButton,
@@ -42,7 +43,6 @@ type CommitMessageLanguage = "zh" | "en";
 const COMMIT_MESSAGE_ENGINES: CommitMessageEngine[] = [
   "codex",
   "claude",
-  "gemini",
   "opencode",
 ];
 
@@ -127,7 +127,7 @@ export function CheckpointCommitDialog({
 
   const handleGenerateCommitMessage = useCallback(
     async (language: CommitMessageLanguage, engine: CommitMessageEngine) => {
-      if (!canGenerateCommitMessage) {
+      if (!canGenerateCommitMessage || !isEngineExecutionEnabled(engine)) {
         return;
       }
       setIsCommitMessageMenuOpen(false);

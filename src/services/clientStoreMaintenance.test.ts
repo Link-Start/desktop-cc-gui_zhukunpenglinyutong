@@ -28,8 +28,10 @@ describe("runClientStoreMaintenance", () => {
 
   it("removes blocked-label backlog entries from the persisted thread session log", () => {
     writeClientStoreValue("diagnostics", THREAD_SESSION_LOG_KEY, [
+      makeEntry("thread/list"),
       makeEntry("thread/list response", { huge: true }),
       makeEntry("thread/session:turn-diagnostic:codex-no-progress-watchdog-scheduled"),
+      makeEntry("thread/list older"),
       makeEntry("thread/list older response"),
       makeEntry("thread/session:turn-start", { ok: true }),
     ]);

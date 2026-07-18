@@ -105,6 +105,71 @@ useEffect(() => {
 - `unknown` error 必须 normalize 成可读 message。
 - 失败场景优先回退到缓存或 safe state，避免 UI 崩断。
 
+## Scenario: Thread History One-Shot Recovery And Scoped Generation
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `useThreads.setActiveThreadId`、`useThreadActionsResumeThread.resumeThreadForWorkspace`、history lazy resume 或显式 `refreshThread`。
+- 目标：一次自动恢复失败后，切走再切回不得形成无限 retry；同一 thread 的旧 async response 不得覆盖较新的 retry。
+
+### 2. Signatures
+
+- Selection action：`setActiveThreadId(threadId: string | null, workspaceId?: string): void`
+- Resume action：`resumeThreadForWorkspace(workspaceId, threadId, force?, replaceLocal?, options?): Promise<string | null>`
+- Explicit retry：`refreshThread(workspaceId: string, threadId: string): Promise<string | null>`
+- Request identity：`workspaceId + "\0" + canonicalThreadId + generation`
+
+### 3. Contracts
+
+- selection-driven lazy resume MUST consult the latest `historyLoadingByThreadId`; state 为 `failed` 时不得再次自动请求。
+- explicit `refreshThread` MUST remain retryable；成功后必须清除 `failed` 并发布已加载 history。
+- 每个 `workspaceId + canonicalThreadId` MUST maintain an independent monotonic generation；A thread 的请求不得使 B thread 的请求失效。
+- 每个 async boundary 返回后都必须确认 generation 仍是 current；stale request 不得 dispatch items、loaded、failed、active-thread replacement 或 recovery state。
+- canonical alias MUST be resolved before selection/retry scope is created，避免 old id/new id 各自拥有一套自动恢复预算。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| 首次自动恢复失败 | 标记 `failed`，结束 loading | 留下 loading residue |
+| A → B → A，A 已失败 | 只选择 A，不自动再次请求 | 每次重选都重放失败请求 |
+| 用户显式刷新 A | 发起新 generation；成功后清失败态 | 因自动恢复预算耗尽而拒绝人工 retry |
+| A 的旧请求晚于 A 的新请求返回 | 丢弃旧请求全部写入 | 旧 response 覆盖新 history |
+| A/B 并发恢复 | 各自按 scope 收敛 | 用一个 global request id 互相取消 |
+
+### 5. Good / Base / Bad Cases
+
+- Good：selection 自动恢复是 one-shot；按钮触发的 explicit refresh 可重试；generation 按 workspace/thread 隔离。
+- Base：已加载且超过 refresh interval 的 thread 可按既有策略后台刷新，但仍受 scoped generation 保护。
+- Bad：只用 `loadedThreadsRef` 判断失败；失败 thread 重选时会不断访问 backend。
+
+### 6. Tests Required
+
+- `useThreads.sidebar-cache.test.tsx` MUST cover 自动恢复失败后切走/切回不再请求，以及 explicit refresh 仍能成功。
+- `useThreadActions.test.tsx` MUST cover 同一 workspace/thread 两个乱序请求中旧 response 不产生任何 state write。
+- Alias behavior 变化时 MUST add old id → canonical id 的 shared-budget assertion。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+if (!loadedThreadsRef.current[threadId]) {
+  void resumeThreadForWorkspace(workspaceId, threadId);
+}
+```
+
+#### Correct
+
+```typescript
+const canonicalThreadId = resolveCanonicalThreadId(threadId);
+const recoveryFailed =
+  historyLoadingStateByThreadRef.current[canonicalThreadId] === "failed";
+if (!loadedThreadsRef.current[canonicalThreadId] && !recoveryFailed) {
+  void resumeThreadForWorkspace(workspaceId, canonicalThreadId);
+}
+```
+
 ## Scenario: Codex First-Turn Draft Recovery Hooks
 
 ### 1. Scope / Trigger

@@ -154,3 +154,70 @@ if session_id.is_empty() || is_invalid_session_path_segment(session_id) {
 }
 let path = root.join(session_id);
 ```
+
+## Scenario: Child Process Cleanup Failure Retains Ownership
+
+### 1. Scope / Trigger
+
+- Trigger：engine/session manager 的 interrupt、remove、workspace close、host shutdown 会终止 child process。
+- 目标：cleanup 失败不能被伪装成成功，更不能先丢掉唯一 `Child` owner。
+
+### 2. Signatures
+
+- Session cleanup：`close() -> Result<(), String>` / `interrupt_turn(...) -> Result<(), String>`
+- Manager cleanup：`remove_*_session(...) -> Result<(), String>` / `shutdown_*_sessions() -> Result<(), String>`
+- Host boundary：command 可直接传播；无法返回结果的 shutdown hook 必须记录聚合 error。
+
+### 3. Contracts
+
+- termination helper 返回失败且 child 未确认退出时，owner registry entry MUST remain。
+- manager MUST remove session only after `close()` succeeds；failed owner MUST remain reachable for retry/diagnostics。
+- bulk shutdown MUST aggregate workspace-scoped failures while continuing cleanup of other sessions。
+- process root 已退出不等于 descendants 已退出；process-group/job cleanup MUST verify the platform-specific ownership boundary。
+- Drop/best-effort log 只能作为 fallback evidence，不得覆盖显式 cleanup 的 `Err`。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 返回/状态 | Owner |
+|---|---|---|
+| child 正常退出 | `Ok` | remove |
+| graceful timeout，force kill 成功 | `Ok` | remove |
+| termination helper 失败，child 仍 active | contextual `Err` | retain |
+| shutdown 中一个 workspace 失败 | aggregate `Err`，继续其他 cleanup | failed retain / succeeded remove |
+| host callback 无返回通道 | structured error log | failed retain until process exit |
+
+### 5. Good / Base / Bad Cases
+
+- Good：先 close 并验证，再从 manager registry remove。
+- Base：没有 active child 的 idempotent close 返回 `Ok`。
+- Bad：`sessions.remove(id); let _ = session.close().await;`，失败后 owner 永久丢失。
+
+### 6. Tests Required
+
+- Injected cleanup failure MUST assert returned error contains workspace/turn context。
+- Failure MUST assert manager/session registry still owns the same session/child。
+- Retry success MUST assert owner is removed exactly once。
+- Bulk shutdown MUST assert successful owners are removed and failed owners remain。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```rust
+let session = sessions.remove(workspace_id);
+if let Some(session) = session {
+    let _ = session.close().await;
+}
+Ok(())
+```
+
+#### Correct
+
+```rust
+let session = sessions.get(workspace_id).cloned();
+if let Some(session) = session {
+    session.close().await?;
+    sessions.remove(workspace_id);
+}
+Ok(())
+```

@@ -11,7 +11,7 @@
 
 - 2026-06 用户报告"多 workspace 并行跑 15 分钟后,切 workspace 响应变慢、输入延迟上升、Heap 增长"。当前结论是 7 个 runtime residual 风险需要逐项复现,不能把未量测的假设写成已确认根因。
 - 已有 P1 提案(`c27bb18a` / `7cc4a284` / `25d101a0` / `a8bd4b24` / `f7ae0a99`)落地了 realtime batching / no-op guard / incremental derivation / background render gating 等保护,但**这些保护在 default 状态全开,一旦被关掉就放大对应症状**;`ccgui.perf.*` 开关在 `localStorage` 读取且非 test 模式 cache,当前无统一 UI/debug 重置入口。
-- `ClaudeSession` 没有 `impl Drop`;虽然正常完成、setup failure、disposed startup、interrupt、session removal 已有显式清理路径,但最后一个 `Arc<ClaudeSession>` drop 时仍缺 child 兜底 kill。OpenCode/Gemini 同类 `active_processes` 也必须纳入后续审计。
+- Gemini runtime 已建立 session-owned child registry、pre-spawn lifecycle gate、显式 close/interrupt 与 Drop fallback；这只证明 Gemini owner contract，Claude/OpenCode 仍必须按各自实现独立审计，不能从一个 engine 外推全部安全。
 - 7 条根因详见 `docs/perf/parallel-conversation-jank-handbook.md` §3 速查表;本 guide 沉淀"写新代码时如何避开这些坑"与"修改相关路径时如何回归验证"。
 
 ## Core Invariant
@@ -277,13 +277,86 @@ recordAssistantCompletionEvidence(payload.threadId, payload.itemId);
 
 ## When Adding New Rust Child Process / Subprocess
 
-新增任何 `tokio::process::Command::spawn` / `std::process::Command::spawn` 时:
+### 1. Scope / Trigger
 
-- **必须**在父结构上保留 `Child` 句柄(放进 `Mutex<HashMap<key, Child>>`)。
-- **必须**有显式 `terminate_*` / `kill` 路径(中断、错误、超时三种触发源)。
-- **必须**给父结构加 `impl Drop`,同步 `start_kill` 不 await。
-- **必须**配后台 reconciler 扫 stale child,超过 N 分钟无 IO 主动 kill。
-- **必须**暴露 `active_process_ids()` 诊断 API,并接入汇总 diagnostics command 让 webview 可调。
+- Trigger：新增或修改 `tokio::process::Command::spawn` / `std::process::Command::spawn`，尤其是 engine session 的 send、interrupt、remove、shutdown。
+- 目标：process owner 生命周期必须可证明；旧 `Arc`、抢跑 send 或 cleanup failure 不能产生无主 child。
+
+### 2. Signatures
+
+- Gemini runtime policy：
+  - `GEMINI_RUNTIME_ENABLED: bool`
+  - `GEMINI_DISABLED_DIAGNOSTIC: &str`
+- Session lifecycle：
+  - `GeminiSession::interrupt_turn(&self, turn_id: &str) -> Result<(), String>`
+  - `GeminiSession::close(&self) -> Result<(), String>`
+- Manager lifecycle：
+  - `EngineManager::remove_gemini_session(&self, workspace_id: &str) -> Result<(), String>`
+  - `EngineManager::shutdown_gemini_sessions(&self) -> Result<(), String>`
+
+### 3. Contracts
+
+- Gemini execution disabled 时，frontend settings、GUI sync/async command、daemon sync/async bridge 与 session pre-spawn gate MUST all reject with the same stable diagnostic。
+- frontend execution policy MUST cover Prompt Enhancer、Orchestration、Project Map、Checkpoint commit、commit-message、TaskRun Retry/Resume/Fork、manual recovery、thread messaging/session owner 与 Tauri service boundary；历史记录、filter 与 diagnostics MAY preserve Gemini identity，但不得暴露新执行动作。
+- historical Gemini thread MUST remain read-only；composer send、queued auto-flush 与 direct-thread send 必须在 engine mismatch/new-thread fallback 之前 fail closed，禁止把用户输入静默改发给其他 Provider。
+- hard-disable 时，single/bulk/preferred detection 与 vendor preflight MUST NOT run `gemini --version`；shared Gemini detector 自身必须是最后一道 zero-spawn gate，不能只依赖现有 callers 记得短路。
+- GUI remote boundary MUST reject explicit Gemini locally；`engine=None` MUST remain `None` in transit so the daemon resolves its authoritative active engine and applies the same policy。GUI 不得用不权威的 local active engine 改写 remote request。
+- daemon persisted/default active engine MUST normalize a legacy Gemini value to an enabled fallback；否则 remote `engine=None` 会在不 spawn 的同时永久失败。
+- session MUST retain every spawned `Child` in its process registry；`closed`、per-turn interrupt tombstone、spawn + registration MUST serialize through the same owner gate。
+- `interrupt_turn` MUST publish the turn tombstone before looking up a child；interrupt-before-send 不能留下 race window。
+- `close` MUST publish closed state before termination；持有旧 `Arc<GeminiSession>` 的 send 在 close/remove 后不得 spawn。
+- cleanup failure MUST return `Err` and retain the session/child owner for diagnosis or retry；manager 不得先 remove 再 best-effort kill。
+- `Drop::start_kill` is only a last-resort fallback，MUST NOT be reported as verified cleanup success。
+- 禁止用 `pgrep` / process-name scan 作为生产 owner 或自动 kill 依据；只有 owner registry 能证明归属。后台 reconciler 仅在使用该 registry 且有明确 timeout contract 时 MAY add。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| settings 残留 `geminiEnabled=true` | normalize 为 false；command 返回统一 disabled diagnostic | legacy true 绕过 gate |
+| explicit Gemini remote send | GUI 转发前拒绝 | 把 Gemini payload 发给旧 daemon |
+| GUI remote request engine omitted | 原样转发 `None`；daemon 解析并执行 policy | 用 GUI local active engine 改写 remote request |
+| daemon legacy default Gemini | normalize 到 enabled fallback | 把 Gemini 保留为 active 导致所有 implicit send 永久失败 |
+| bulk/preferred/vendor probe | synthetic disabled / skip，零 spawn | hard-disable 后仍执行 `gemini --version` |
+| historical Gemini TaskRun/thread | 允许查看；composer/queue/direct send 在 fallback 前拒绝 | Retry/Resume/Fork/manual recovery 启动新 turn，或静默改发其他 Provider |
+| direct frontend session/service call | shared owner 在 pending thread / IPC 前拒绝 | 只依赖 Rust 最后一层拒绝 |
+| interrupt arrives before send spawn | tombstone 使 send 失败且不 spawn | 找不到 child 就当作无事发生 |
+| remove/close 后 stale `Arc` send | closed gate 拒绝 | 新 child 脱离 manager ownership |
+| child termination failure | propagate error；保留 owner | remove entry 并返回成功 |
+| host shutdown 部分失败 | aggregate errors；仅移除成功关闭 owner | 吞掉失败并清空 registry |
+
+### 5. Good / Base / Bad Cases
+
+- Good：command boundary hard-disable + session pre-spawn backstop + owner-retaining cleanup。
+- Base：enabled engine 仍按同一 registry/gate 模式 spawn/register/interrupt/close。
+- Bad：在 `spawn()` 之后才检查 `closed`；或先从 manager map remove，再尝试 kill。
+
+### 6. Tests Required
+
+- GUI 与 daemon sync/async resolver MUST cover explicit Gemini、remote omitted engine passthrough 与 daemon authoritative resolution。
+- settings normalization MUST cover persisted legacy `geminiEnabled=true`。
+- single/bulk/preferred detector 与 vendor preflight MUST use a fake marker to prove hard-disable does not spawn。
+- frontend policy MUST cover legacy persisted Gemini、background automation fail-closed、direct service invocation、historical actions hidden and no cross-provider composer/queue fallback。
+- lifecycle tests MUST cover stale `Arc` after close、interrupt-before-send、cleanup failure retains owner and can be retried。
+- process-group helper tests MUST cover descendant cleanup on Unix and failed descendant verification on Windows。
+- changed Rust files MUST pass targeted tests、`cargo check --bins` and targeted `rustfmt --check`。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```rust
+let session = manager.get_gemini_session(workspace_id).await;
+manager.remove_gemini_session(workspace_id).await;
+let _ = session.interrupt_turn(turn_id).await;
+```
+
+#### Correct
+
+```rust
+// close publishes the lifecycle gate and verifies child cleanup before owner removal.
+manager.remove_gemini_session(workspace_id).await?;
+```
 
 ## Regression Test Requirements
 

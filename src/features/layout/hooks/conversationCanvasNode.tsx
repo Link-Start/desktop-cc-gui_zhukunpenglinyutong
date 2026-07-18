@@ -32,6 +32,7 @@ const selectActiveCanvasMessagesProps = (
   | "plan"
   | "isThinking"
   | "isHistoryLoading"
+  | "historyRecoveryFailureReason"
   | "isContextCompacting"
   | "processingStartedAt"
   | "lastDurationMs"
@@ -48,6 +49,7 @@ const selectActiveCanvasMessagesProps = (
   plan: snapshot.plan,
   isThinking: snapshot.isThinking,
   isHistoryLoading: snapshot.isHistoryLoading,
+  historyRecoveryFailureReason: snapshot.historyRecoveryFailureReason,
   isContextCompacting: snapshot.isContextCompacting,
   processingStartedAt: snapshot.processingStartedAt,
   lastDurationMs: snapshot.lastDurationMs,

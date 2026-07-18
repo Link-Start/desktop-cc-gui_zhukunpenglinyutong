@@ -452,7 +452,7 @@ describe("useProjectMapDataset", () => {
     );
   });
 
-  it("opens AI organizer confirmation before running and uses the confirmed engine/model", async () => {
+  it("keeps AI organizer confirmation open when a disabled Gemini request is injected", async () => {
     const spring = workspace({
       id: "ws-spring",
       name: "springboot-demo",
@@ -506,31 +506,11 @@ describe("useProjectMapDataset", () => {
       });
     });
 
-    expect(writeProjectMapDataset).toHaveBeenCalledWith(
-      expect.objectContaining({
-        dataset: expect.objectContaining({
-          runs: [
-            expect.objectContaining({
-              kind: "organizer",
-              status: "pending",
-              engine: "gemini",
-              model: "gemini-2.5-pro",
-              generationIntent: "organizeUnassigned",
-              requestScope: { kind: "organizer", unassignedCount: 1 },
-            }),
-          ],
-        }),
-      }),
-    );
-    expect(result.current.dataset.runs[0]).toMatchObject({
-      kind: "organizer",
-      status: "running",
-      engine: "gemini",
-      model: "gemini-2.5-pro",
-      generationIntent: "organizeUnassigned",
-      requestScope: { kind: "organizer", unassignedCount: 1 },
-    });
-    expect(result.current.pendingRequest).toBeNull();
+    expect(writeProjectMapDataset).not.toHaveBeenCalled();
+    expect(runProjectMapGenerationWorker).not.toHaveBeenCalled();
+    expect(result.current.dataset.runs).toEqual([]);
+    expect(result.current.error).toBe("unsupported_engine");
+    expect(result.current.pendingRequest).not.toBeNull();
   });
 
   it("confirms a pending candidate through the evidence gate and persists the patched dataset", async () => {

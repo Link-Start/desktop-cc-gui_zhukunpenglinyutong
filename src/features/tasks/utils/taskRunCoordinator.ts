@@ -12,6 +12,7 @@ import {
   upsertTaskRun,
 } from "./taskRunStorage";
 import { mapExecutionSourceToRunTrigger } from "./taskRunProjection";
+import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 
 export type BeginTaskRunResult =
   | {
@@ -90,6 +91,13 @@ export function beginTaskRunFromDefinition(params: {
   parentRun?: TaskRunRecord | null;
   upstreamRun?: TaskRunRecord | null;
 }): BeginTaskRunResult {
+  if (!isEngineExecutionEnabled(params.task.engine)) {
+    return {
+      ok: false,
+      reason: "unsupported_engine",
+      store: params.store,
+    };
+  }
   const activeRun = findActiveRunForTask(params.store.runs, params.task.taskId);
   if (activeRun) {
     return {

@@ -1,5 +1,8 @@
 import type { Dispatch, MutableRefObject } from "react";
-import type { DebugEntry, WorkspaceSessionAttributionMode } from "../../../types";
+import type {
+  DebugEntry,
+  WorkspaceSessionAttributionMode,
+} from "../../../types";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 
 export type UseThreadActionsOptions = {
@@ -35,6 +38,7 @@ export type UseThreadActionsOptions = {
     pendingThreadId: string,
     realThreadId: string,
   ) => void;
+  resolveCanonicalThreadId?: (threadId: string) => string;
   rememberThreadAlias?: (oldThreadId: string, newThreadId: string) => void;
   clearThreadAlias?: (oldThreadId: string) => void;
   resolveWorkspacePath?: (workspaceId: string) => string | null;

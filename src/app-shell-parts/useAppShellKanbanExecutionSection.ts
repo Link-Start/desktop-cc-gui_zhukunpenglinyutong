@@ -49,6 +49,7 @@ import type {
   KanbanViewState,
 } from "../features/kanban/types";
 import type { ThreadSummary, WorkspaceInfo } from "../types";
+import { isEngineExecutionEnabled } from "../utils/engineExecutionPolicy";
 import {
   resolvePendingSessionThreadCandidate,
   resolveTaskThreadId,
@@ -205,7 +206,7 @@ export function useAppShellKanbanExecutionSection(
       confirmation: any,
     ): Promise<{ ok: boolean; taskId?: string | null; reason?: string }> => {
       const taskId = confirmation?.task?.taskId ?? null;
-      const validEngines = new Set(["codex", "claude", "gemini"]);
+      const validEngines = new Set(["codex", "claude"]);
       const validThreadStrategies = new Set([
         "new_thread",
         "reuse_active_thread",
@@ -387,6 +388,14 @@ export function useAppShellKanbanExecutionSection(
       if (!task) {
         return { ok: false, reason: "task_not_found" };
       }
+      const requestedEngine = task.engineType ?? activeEngine;
+      if (!isEngineExecutionEnabled(requestedEngine)) {
+        updateTaskExecution(task.id, {
+          lastSource: params.source,
+          blockedReason: "unsupported_engine",
+        });
+        return { ok: false, reason: "unsupported_engine" };
+      }
       let taskRunId: string | null = params.existingRunId ?? null;
       let launchedSuccessfully = false;
       if (params.source !== "chained" && task.chain?.previousTaskId) {
@@ -459,7 +468,7 @@ export function useAppShellKanbanExecutionSection(
         }
 
         await connectWorkspace(workspace);
-        const engine = (task.engineType ?? activeEngine) as "claude" | "codex";
+        const engine = requestedEngine as "claude" | "codex";
         const workspaceThreads = typedThreadsByWorkspace[workspace.id] ?? [];
         const {
           outboundModel,
@@ -636,7 +645,10 @@ export function useAppShellKanbanExecutionSection(
 
       const engine = (task.engineType ?? activeEngine) as "claude" | "codex";
       const workspaceThreads = typedThreadsByWorkspace[workspace.id] ?? [];
-      await setActiveEngine(engine);
+      const canStartNewExecution = isEngineExecutionEnabled(engine);
+      if (canStartNewExecution) {
+        await setActiveEngine(engine);
+      }
 
       if (task.threadId) {
         let resolvedThreadId =
@@ -709,6 +721,9 @@ export function useAppShellKanbanExecutionSection(
         }
       }
 
+      if (!canStartNewExecution) {
+        return;
+      }
       const threadId = await startThreadForWorkspace(workspace.id, { engine });
       if (threadId) {
         kanbanUpdateTask(task.id, { threadId });
@@ -750,6 +765,9 @@ export function useAppShellKanbanExecutionSection(
 
   const handleRetryTaskRun = useCallback(
     (run: TaskRunRecord) => {
+      if (!isEngineExecutionEnabled(run.engine)) {
+        return;
+      }
       const task = resolveTaskByRun(run);
       if (!task) {
         return;
@@ -783,6 +801,9 @@ export function useAppShellKanbanExecutionSection(
 
   const handleForkTaskRun = useCallback(
     (run: TaskRunRecord) => {
+      if (!isEngineExecutionEnabled(run.engine)) {
+        return;
+      }
       const task = resolveTaskByRun(run);
       if (!task) {
         return;
@@ -816,7 +837,7 @@ export function useAppShellKanbanExecutionSection(
 
   const handleResumeTaskRun = useCallback(
     async (run: TaskRunRecord) => {
-      if (!run.linkedThreadId) {
+      if (!run.linkedThreadId || !isEngineExecutionEnabled(run.engine)) {
         return;
       }
       const task = resolveTaskByRun(run);

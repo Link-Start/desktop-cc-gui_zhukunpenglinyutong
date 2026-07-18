@@ -147,6 +147,33 @@ describe("useWorkspaceActions", () => {
     expect(options.hideLoadingProgressDialog).toHaveBeenCalledWith("loading-1");
   });
 
+  it("rejects Gemini session creation before switching or starting a thread", async () => {
+    const options = makeOptions({ activeEngine: "claude" });
+    const { result } = renderHook(() => useWorkspaceActions(options));
+
+    await act(async () => {
+      const threadId = await result.current.handleAddAgent(
+        baseWorkspace,
+        "gemini",
+      );
+      expect(threadId).toBeNull();
+    });
+
+    expect(options.setActiveEngine).not.toHaveBeenCalled();
+    expect(options.startThreadForWorkspace).not.toHaveBeenCalled();
+    expect(options.connectWorkspace).not.toHaveBeenCalled();
+    expect(options.showLoadingProgressDialog).not.toHaveBeenCalled();
+    expect(options.onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "workspace/create-session disabled engine",
+        payload: expect.objectContaining({
+          engine: "gemini",
+          error: "unsupported_engine",
+        }),
+      }),
+    );
+  });
+
   it("adds workspace to current window when open mode is current", async () => {
     vi.mocked(pickWorkspacePath).mockResolvedValue("/tmp/new-repo");
     vi.mocked(ask).mockResolvedValueOnce(true);

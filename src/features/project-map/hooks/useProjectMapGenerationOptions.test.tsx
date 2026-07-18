@@ -120,7 +120,31 @@ describe("useProjectMapGenerationOptions", () => {
     expect(getModelList).toHaveBeenCalledWith("workspace-1");
     expect(result.current.models.map((model) => model.model)).toContain("gpt-5.5");
     expect(result.current.models.map((model) => model.model)).toContain("gpt-5.4");
+    expect(result.current.engines.map((engine) => engine.id)).toEqual([
+      "codex",
+      "claude",
+      "opencode",
+    ]);
     expect(result.current.installedEngines.map((engine) => engine.id)).toEqual(["codex", "claude"]);
+  });
+
+  it("normalizes a legacy Gemini selection before loading executable models", async () => {
+    vi.mocked(getEngineModels).mockResolvedValueOnce([]);
+    vi.mocked(getModelList).mockResolvedValueOnce({ result: { data: [] } });
+    vi.mocked(getConfigModel).mockResolvedValueOnce(null);
+
+    const { result } = renderHook(() =>
+      useProjectMapGenerationOptions({
+        workspace,
+        selectedEngine: "gemini",
+      }),
+    );
+
+    await waitFor(() => expect(result.current.modelsLoading).toBe(false));
+
+    expect(getEngineModels).toHaveBeenCalledWith("codex");
+    expect(getEngineModels).not.toHaveBeenCalledWith("gemini");
+    expect(result.current.engines.some((engine) => engine.id === "gemini")).toBe(false);
   });
 
   it("keeps Codex model selection available when runtime catalogs are empty", async () => {

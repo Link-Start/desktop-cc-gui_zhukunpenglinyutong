@@ -86,8 +86,6 @@ impl EngineType {
     }
 }
 
-pub(crate) const GEMINI_DISABLED_DIAGNOSTIC: &str =
-    "Gemini CLI is disabled in CLI validation settings";
 pub(crate) const OPENCODE_DISABLED_DIAGNOSTIC: &str =
     "OpenCode CLI is disabled in CLI validation settings";
 
@@ -96,7 +94,7 @@ pub(crate) fn engine_enabled_in_settings(
     engine_type: EngineType,
 ) -> bool {
     match engine_type {
-        EngineType::Gemini => settings.gemini_enabled,
+        EngineType::Gemini => crate::engine_policy::GEMINI_RUNTIME_ENABLED,
         EngineType::OpenCode => settings.opencode_enabled,
         EngineType::Claude | EngineType::Codex => true,
     }
@@ -104,7 +102,7 @@ pub(crate) fn engine_enabled_in_settings(
 
 pub(crate) fn engine_disabled_diagnostic(engine_type: EngineType) -> Option<&'static str> {
     match engine_type {
-        EngineType::Gemini => Some(GEMINI_DISABLED_DIAGNOSTIC),
+        EngineType::Gemini => Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC),
         EngineType::OpenCode => Some(OPENCODE_DISABLED_DIAGNOSTIC),
         EngineType::Claude | EngineType::Codex => None,
     }
@@ -421,5 +419,17 @@ mod tests {
         let codex = EngineFeatures::codex();
         assert!(codex.reasoning_effort);
         assert!(codex.collaboration_mode);
+    }
+
+    #[test]
+    fn gemini_runtime_policy_ignores_legacy_enabled_setting() {
+        let mut settings = crate::types::AppSettings::default();
+        settings.gemini_enabled = true;
+
+        assert!(!engine_enabled_in_settings(&settings, EngineType::Gemini));
+        assert_eq!(
+            engine_disabled_diagnostic(EngineType::Gemini),
+            Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC)
+        );
     }
 }

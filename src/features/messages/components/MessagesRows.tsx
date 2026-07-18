@@ -858,7 +858,9 @@ export const MessageRow = memo(function MessageRow({
   // 避免每个 token 都同步阻塞主线程。非流式或历史消息文本不变，等价于直通。
   const deferredDisplayText = useDeferredValue(displayText);
   const streamingDisplayText =
-    item.role === "assistant" && isStreaming ? deferredDisplayText : displayText;
+    item.role === "assistant" && isStreaming && !streamMitigationProfile
+      ? deferredDisplayText
+      : displayText;
   useEffect(() => {
     appendMessageRowRenderBudgetDiagnostic({
       threadId,

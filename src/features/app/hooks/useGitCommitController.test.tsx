@@ -286,4 +286,18 @@ describe("useGitCommitController", () => {
       repositorySelections,
     );
   });
+
+  it("rejects a legacy Gemini commit-message request before calling the runtime", async () => {
+    const { result } = createController({
+      stagedFiles: [],
+      unstagedFiles: [{ path: "src/app.ts", status: "M", additions: 1, deletions: 0 }],
+    });
+
+    await act(async () => {
+      await result.current.onGenerateCommitMessage("zh", "gemini");
+    });
+
+    expect(mockGenerateCommitMessageWithEngine).not.toHaveBeenCalled();
+    expect(result.current.commitMessageError).toBe("unsupported_engine");
+  });
 });

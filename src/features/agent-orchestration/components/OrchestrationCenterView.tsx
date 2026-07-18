@@ -14,7 +14,7 @@ import type { OrchestrationReviewAction } from "../utils/reviewTask";
 import type { TaskRunRecord } from "../../tasks/types";
 
 const ORCHESTRATION_FILTER_ALL = "__all__";
-const ORCHESTRATION_DISPATCH_ENGINES = ["codex", "claude", "gemini"] as const;
+const ORCHESTRATION_DISPATCH_ENGINES = ["codex", "claude"] as const;
 const ORCHESTRATION_QUEUE_STATUS_ORDER = ["todo", "queued", "running", "failed", "dispatched", "review", "done", "archived"] as const;
 const QUEUED_RUN_STATUSES = new Set<TaskRunRecord["status"]>(["queued", "planning"]);
 const RUNNING_RUN_STATUSES = new Set<TaskRunRecord["status"]>(["running", "waiting_input", "blocked"]);
@@ -154,7 +154,7 @@ function canArchiveTask(task: OrchestrationTask): boolean {
 }
 
 function resolveDispatchEngine(task: OrchestrationTask): OrchestrationDispatchEngine {
-  return task.preferredEngine ?? "codex";
+  return task.preferredEngine === "claude" ? "claude" : "codex";
 }
 
 function normalizeModelId(value: string | null | undefined): string | null {

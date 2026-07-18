@@ -39,6 +39,8 @@ export type MessagesProps = {
   workspaceId?: string | null;
   isThinking: boolean;
   isHistoryLoading?: boolean;
+  historyRecoveryFailureReason?: string | null;
+  onRetryHistory?: () => void;
   isContextCompacting?: boolean;
   proxyEnabled?: boolean;
   proxyUrl?: string | null;

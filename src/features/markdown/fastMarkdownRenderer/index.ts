@@ -7,6 +7,7 @@ export type {
   FastMarkdownRenderDiagnostics,
   FastMarkdownRenderResult,
   FastMarkdownRendererProfileId,
+  FastMarkdownUnsafeArtifact,
   MarkdownHeavyBlockKind,
   MarkdownOutlineEntry,
   MarkdownSourceLineAnchor,

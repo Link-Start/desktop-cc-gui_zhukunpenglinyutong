@@ -90,6 +90,9 @@ export function useFastMarkdownRender(
       rendererProfile: resolved,
       featureFlags: args.featureFlags,
       options: { lineLimit: args.boundedLineLimit },
+    }, {
+      shouldAcceptWorkerArtifact: () =>
+        !cancelled && requestOrdinal === requestOrdinalRef.current,
     })
       .then((result) => {
         if (cancelled || requestOrdinal !== requestOrdinalRef.current) {

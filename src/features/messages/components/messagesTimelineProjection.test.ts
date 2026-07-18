@@ -20,6 +20,7 @@ describe("messagesTimelineProjection", () => {
       groupedEntries: entries,
       hasVisibleUserInputRequest: false,
       hiddenClaudeReasoningOnly: false,
+      historyRecoveryFailureVisible: false,
       isHistoryLoading: false,
       isThinking: false,
       shouldRenderUserInputAtTail: false,
@@ -43,6 +44,7 @@ describe("messagesTimelineProjection", () => {
       groupedEntries: entries,
       hasVisibleUserInputRequest: false,
       hiddenClaudeReasoningOnly: false,
+      historyRecoveryFailureVisible: false,
       isHistoryLoading: false,
       isThinking: true,
       shouldRenderUserInputAtTail: false,
@@ -71,6 +73,7 @@ describe("messagesTimelineProjection", () => {
       groupedEntries: entries,
       hasVisibleUserInputRequest: false,
       hiddenClaudeReasoningOnly: false,
+      historyRecoveryFailureVisible: false,
       isHistoryLoading: false,
       isThinking: false,
       shouldRenderUserInputAtTail: false,
@@ -85,5 +88,49 @@ describe("messagesTimelineProjection", () => {
     });
     expect(findTimelineProjectionRowIndexByItemId(rows, "reasoning-live")).toBe(-1);
     expect(findTimelineProjectionRowIndexByItemId(rows, "missing")).toBe(-1);
+  });
+
+  it("adds one recovery failure row without hiding last-good history", () => {
+    const entries = groupToolItems(buildLongListFixture(3));
+    const rows = buildTimelineProjectionRows({
+      activeUserInputAnchorItemId: null,
+      approvalVisible: false,
+      claudeDockedReasoningItemIds: [],
+      collapsedMiddleStepCount: 0,
+      collapseLiveMiddleStepsEnabled: false,
+      effectiveItemsCount: 3,
+      groupedEntries: entries,
+      hasVisibleUserInputRequest: false,
+      hiddenClaudeReasoningOnly: false,
+      historyRecoveryFailureVisible: true,
+      isHistoryLoading: false,
+      isThinking: false,
+      shouldRenderUserInputAtTail: false,
+    });
+
+    expect(rows.filter((row) => row.kind === "entry")).toHaveLength(entries.length);
+    expect(rows.filter((row) => row.kind === "historyRecoveryFailure")).toHaveLength(1);
+    expect(rows.some((row) => row.kind === "emptyState")).toBe(false);
+  });
+
+  it("shows recovery failure instead of an empty-thread row when history is empty", () => {
+    const rows = buildTimelineProjectionRows({
+      activeUserInputAnchorItemId: null,
+      approvalVisible: false,
+      claudeDockedReasoningItemIds: [],
+      collapsedMiddleStepCount: 0,
+      collapseLiveMiddleStepsEnabled: false,
+      effectiveItemsCount: 0,
+      groupedEntries: [],
+      hasVisibleUserInputRequest: false,
+      hiddenClaudeReasoningOnly: false,
+      historyRecoveryFailureVisible: true,
+      isHistoryLoading: false,
+      isThinking: false,
+      shouldRenderUserInputAtTail: false,
+    });
+
+    expect(rows.filter((row) => row.kind === "historyRecoveryFailure")).toHaveLength(1);
+    expect(rows.some((row) => row.kind === "emptyState")).toBe(false);
   });
 });

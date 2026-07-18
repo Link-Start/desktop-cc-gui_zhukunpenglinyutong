@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { EngineType } from "../../types";
+import { isEngineExecutionEnabled } from "../../utils/engineExecutionPolicy";
 import { engineSendMessageSync } from "./appServer";
 
 export type CommitMessageLanguage = "zh" | "en";
@@ -44,6 +45,9 @@ export async function generateCommitMessageWithEngine(
   selectedPaths?: string[],
   repositorySelections?: CommitMessageRepositorySelection[],
 ): Promise<string> {
+  if (!isEngineExecutionEnabled(engine)) {
+    throw new Error("unsupported_engine");
+  }
   if (engine === "codex") {
     return generateCommitMessage(
       workspaceId,

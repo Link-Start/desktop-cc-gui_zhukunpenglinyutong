@@ -176,6 +176,18 @@ describe("compileFastMarkdown", () => {
     expect(result.html.toLowerCase()).not.toContain("<script");
   });
 
+  it("decodes named and numeric entities without a DOM-backed decoder", async () => {
+    const result = await compileFastMarkdown({
+      documentKey: "doc-entities",
+      rawMarkdown: "Copyright &copy; &#x41; &not-a-real-entity;",
+      rendererProfile: "fast-html",
+    });
+
+    expect(result.html).toContain("Copyright © A");
+    expect(result.html).toContain("not-a-real-entity;");
+    expect(result.html).not.toContain("¬");
+  });
+
   it("caches the result by cache key and returns the same content on second call", async () => {
     const first = await compileFastMarkdown({
       documentKey: "doc-cache",

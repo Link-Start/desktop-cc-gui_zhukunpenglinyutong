@@ -21,6 +21,7 @@ import {
   writeClientStoreValue,
 } from "../../../services/clientStorage";
 import { pushGlobalRuntimeNotice } from "../../../services/globalRuntimeNotices";
+import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import {
   STORAGE_KEYS as PROVIDER_STORAGE_KEYS,
   validateCodexCustomModels,
@@ -127,7 +128,6 @@ function buildCodexSwitchUnavailablePayload(
   };
 }
 
-const GEMINI_VENDOR_UPDATED_EVENT = "ccgui:gemini-vendor-updated";
 const WEB_RUNTIME_DEFAULT_ENGINE: EngineType = "codex";
 const ENGINE_TYPES: EngineType[] = ["claude", "codex", "gemini", "opencode"];
 const ENGINE_SELECTION_STORE = "composer";
@@ -331,7 +331,9 @@ function readPersistedEngineSelection(): EngineType | null {
     ENGINE_SELECTION_STORE,
     ENGINE_SELECTION_KEY,
   );
-  return isSupportedEngineType(stored) ? stored : null;
+  return isSupportedEngineType(stored) && isEngineExecutionEnabled(stored)
+    ? stored
+    : null;
 }
 
 function persistEngineSelection(engineType: EngineType) {
@@ -390,20 +392,19 @@ export function useEngineController({
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
-  const geminiEnabled = enabledEngines?.gemini !== false;
   const opencodeEnabled = enabledEngines?.opencode !== false;
   const enabledEngineTypes = useMemo(
     () =>
       ENGINE_TYPES.filter((engineType) => {
-        if (engineType === "gemini") {
-          return geminiEnabled;
+        if (!isEngineExecutionEnabled(engineType)) {
+          return false;
         }
         if (engineType === "opencode") {
           return opencodeEnabled;
         }
         return true;
       }),
-    [geminiEnabled, opencodeEnabled],
+    [opencodeEnabled],
   );
 
   const loadModelsForEngine = useCallback(
@@ -412,6 +413,12 @@ export function useEngineController({
       fallbackModels: EngineModelInfo[] = [],
       options: RefreshEngineModelsOptions = {},
     ) => {
+      if (
+        !isEngineExecutionEnabled(engineType) ||
+        !enabledEngineTypes.includes(engineType)
+      ) {
+        return [];
+      }
       try {
         const phase = options.phase ?? (options.forceRefresh ? "on-demand" : "idle-prewarm");
         const models = await startupOrchestrator.run({
@@ -457,7 +464,7 @@ export function useEngineController({
         return normalizedFallback;
       }
     },
-    [onDebug],
+    [enabledEngineTypes, onDebug],
   );
 
   const refreshEngineModels = useCallback(
@@ -465,6 +472,9 @@ export function useEngineController({
       engineType: EngineType,
       options: RefreshEngineModelsOptions = {},
     ) => {
+      if (!enabledEngineTypes.includes(engineType)) {
+        return;
+      }
       const status = engineStatuses.find((entry) => entry.engineType === engineType);
       if (!status?.installed) {
         return;
@@ -484,7 +494,7 @@ export function useEngineController({
         );
       }
     },
-    [engineStatuses, loadModelsForEngine],
+    [enabledEngineTypes, engineStatuses, loadModelsForEngine],
   );
 
   /**
@@ -554,6 +564,30 @@ export function useEngineController({
             });
           }
         }
+        const nextActiveEngineInstalled = Boolean(
+          statuses.find((status) => status.engineType === nextActiveEngine)?.installed,
+        );
+        if (
+          nextActiveEngine !== detectedEngine &&
+          nextActiveEngineInstalled &&
+          persistedEngine !== nextActiveEngine
+        ) {
+          try {
+            await switchEngine(nextActiveEngine);
+          } catch (error) {
+            onDebug?.({
+              id: `${Date.now()}-engine-normalize-active-error`,
+              timestamp: Date.now(),
+              source: "error",
+              label: "engine/normalize active engine error",
+              payload: {
+                from: detectedEngine,
+                to: nextActiveEngine,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            });
+          }
+        }
 
         onDebug?.({
           id: `${Date.now()}-engine-detect-result`,
@@ -616,10 +650,6 @@ export function useEngineController({
    */
   const setActiveEngine = useCallback(
     async (engineType: EngineType) => {
-      if (engineType === activeEngine) {
-        return;
-      }
-
       const enabled = enabledEngineTypes.includes(engineType);
       if (!enabled) {
         onDebug?.({
@@ -629,6 +659,9 @@ export function useEngineController({
           label: "engine/switch error",
           payload: `Engine ${engineType} is disabled`,
         });
+        return;
+      }
+      if (engineType === activeEngine) {
         return;
       }
 
@@ -874,24 +907,7 @@ export function useEngineController({
       return;
     }
     void refreshEngines();
-  }, [refreshEngines, geminiEnabled, opencodeEnabled]);
-
-  useEffect(() => {
-    const handleGeminiVendorUpdated = () => {
-      void refreshEngines();
-    };
-
-    window.addEventListener(
-      GEMINI_VENDOR_UPDATED_EVENT,
-      handleGeminiVendorUpdated,
-    );
-    return () => {
-      window.removeEventListener(
-        GEMINI_VENDOR_UPDATED_EVENT,
-        handleGeminiVendorUpdated,
-      );
-    };
-  }, [refreshEngines]);
+  }, [refreshEngines, opencodeEnabled]);
 
   // Reset models when workspace changes
   useEffect(() => {

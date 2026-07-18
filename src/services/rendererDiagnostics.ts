@@ -19,9 +19,11 @@ const RENDERER_DIAGNOSTICS_KEY = "diagnostics.rendererLifecycleLog";
 const RENDERER_DIAGNOSTICS_STORE = "diagnostics";
 const LEGACY_RENDERER_DIAGNOSTICS_STORE = "app";
 const MAX_RENDERER_DIAGNOSTICS = 200;
+const MAX_ACTIONABLE_DIAGNOSTICS = 100;
 const MAX_PERF_ENTRIES = 1000;
 const MAX_REALTIME_TURN_SUMMARIES = 100;
-const MAX_STREAM_LATENCY_ENTRIES = 600;
+const MAX_STREAM_LATENCY_EVIDENCE_ENTRIES = 200;
+const MAX_STREAM_LATENCY_TELEMETRY_ENTRIES = 400;
 const MAX_COMPOSER_RENDER_DIAGNOSTIC_SIGNATURES = 80;
 const COMPOSER_RENDER_DIAGNOSTIC_MIN_INTERVAL_MS = 5_000;
 const COMPOSER_RENDER_DIAGNOSTIC_RENDER_COUNT_STEP = 20;
@@ -39,6 +41,14 @@ const MAX_HEARTBEAT_FAILURE_REPORTS = 3;
 // 统一进内存 pending buffer，按该间隔 leading+trailing 节流合并落盘。
 const DIAGNOSTICS_PERSIST_THROTTLE_MS = 2_000;
 const MAX_PENDING_DIAGNOSTIC_ENTRIES = 2_000;
+const MAX_DIAGNOSTIC_LABEL_LENGTH = 160;
+const MAX_DIAGNOSTIC_PAYLOAD_DEPTH = 4;
+const MAX_DIAGNOSTIC_PAYLOAD_KEYS = 40;
+const MAX_DIAGNOSTIC_ARRAY_ITEMS = 40;
+const MAX_DIAGNOSTIC_STRING_LENGTH = 512;
+const MAX_DIAGNOSTIC_KEY_LENGTH = 80;
+const REDACTED_DIAGNOSTIC_VALUE = "[redacted]";
+const TRUNCATED_DIAGNOSTIC_VALUE = "[truncated]";
 
 let installed = false;
 let bufferedEntries: RendererDiagnosticEntry[] = [];
@@ -84,16 +94,58 @@ type RendererHeartbeatOptions = {
   threadId?: string | null;
 };
 
+const ACTIONABLE_RENDERER_DIAGNOSTIC_LABELS = new Set([
+  "window/error",
+  "window/unhandledrejection",
+  "messages/row-error-boundary",
+  "renderer/blank-screen-suspected",
+  "renderer/heartbeat-send-failed",
+]);
+
+const STREAM_LATENCY_EVIDENCE_LABELS = new Set([
+  "stream-latency/mitigation-activated",
+  "stream-latency/mitigation-candidate-selected",
+  "stream-latency/long-live-row-render",
+  "stream-latency/recovery-source",
+  "stream-latency/repeat-turn-blanking",
+  "stream-latency/first-visible-render",
+  "stream-latency/first-visible-latency",
+  "stream-latency/render-amplification",
+  "stream-latency/visible-output-stall-after-first-delta",
+  "stream-latency/upstream-pending",
+]);
+
+function isActionableRendererDiagnostic(label: string): boolean {
+  const normalized = label.toLowerCase();
+  return (
+    ACTIONABLE_RENDERER_DIAGNOSTIC_LABELS.has(normalized) ||
+    normalized.startsWith("react/error-boundary") ||
+    (normalized.startsWith("bootstrap/") && normalized.endsWith("failed")) ||
+    (normalized.includes("worker") &&
+      (normalized.endsWith("/error") || normalized.endsWith("failed")))
+  );
+}
+
+function isStreamLatencyEvidence(label: string): boolean {
+  return STREAM_LATENCY_EVIDENCE_LABELS.has(label.toLowerCase());
+}
+
 function trimDiagnostics(entries: RendererDiagnosticEntry[]) {
   const regularEntries: RendererDiagnosticEntry[] = [];
+  const actionableEntries: RendererDiagnosticEntry[] = [];
   const perfEntries: RendererDiagnosticEntry[] = [];
   const realtimeTurnSummaryEntries: RendererDiagnosticEntry[] = [];
-  const streamLatencyEntries: RendererDiagnosticEntry[] = [];
+  const streamLatencyEvidenceEntries: RendererDiagnosticEntry[] = [];
+  const streamLatencyTelemetryEntries: RendererDiagnosticEntry[] = [];
   for (const entry of entries) {
-    if (entry.label === "realtime.turnTrace.summary") {
+    if (isActionableRendererDiagnostic(entry.label)) {
+      actionableEntries.push(entry);
+    } else if (entry.label === "realtime.turnTrace.summary") {
       realtimeTurnSummaryEntries.push(entry);
+    } else if (isStreamLatencyEvidence(entry.label)) {
+      streamLatencyEvidenceEntries.push(entry);
     } else if (entry.label.startsWith("stream-latency/")) {
-      streamLatencyEntries.push(entry);
+      streamLatencyTelemetryEntries.push(entry);
     } else if (entry.label.startsWith("perf.")) {
       perfEntries.push(entry);
     } else {
@@ -104,6 +156,9 @@ function trimDiagnostics(entries: RendererDiagnosticEntry[]) {
     ...regularEntries.slice(
       Math.max(0, regularEntries.length - MAX_RENDERER_DIAGNOSTICS),
     ),
+    ...actionableEntries.slice(
+      Math.max(0, actionableEntries.length - MAX_ACTIONABLE_DIAGNOSTICS),
+    ),
     ...perfEntries.slice(Math.max(0, perfEntries.length - MAX_PERF_ENTRIES)),
     ...realtimeTurnSummaryEntries.slice(
       Math.max(
@@ -111,8 +166,19 @@ function trimDiagnostics(entries: RendererDiagnosticEntry[]) {
         realtimeTurnSummaryEntries.length - MAX_REALTIME_TURN_SUMMARIES,
       ),
     ),
-    ...streamLatencyEntries.slice(
-      Math.max(0, streamLatencyEntries.length - MAX_STREAM_LATENCY_ENTRIES),
+    ...streamLatencyEvidenceEntries.slice(
+      Math.max(
+        0,
+        streamLatencyEvidenceEntries.length -
+          MAX_STREAM_LATENCY_EVIDENCE_ENTRIES,
+      ),
+    ),
+    ...streamLatencyTelemetryEntries.slice(
+      Math.max(
+        0,
+        streamLatencyTelemetryEntries.length -
+          MAX_STREAM_LATENCY_TELEMETRY_ENTRIES,
+      ),
     ),
   ].sort((left, right) => left.timestamp - right.timestamp);
 }
@@ -139,6 +205,165 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function normalizeDiagnosticFieldName(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .toLowerCase();
+}
+
+function isSafeDiagnosticToken(value: unknown): boolean {
+  return (
+    (typeof value === "string" &&
+      /^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,127}$/.test(value)) ||
+    (typeof value === "number" && Number.isFinite(value))
+  );
+}
+
+function isSafeDiagnosticHash(value: unknown): boolean {
+  return typeof value === "string" && /^[a-z0-9]{1,16}$/i.test(value);
+}
+
+function isSensitiveDiagnosticField(
+  fieldName: string,
+  value: unknown,
+): boolean {
+  const normalized = normalizeDiagnosticFieldName(fieldName);
+  if (
+    /(?:^|_)(?:token|secret|password|authorization|cookie|api_key)(?:_|$)/.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+  const containsContentToken =
+    /(?:^|_)(?:message|error|reason|stack|prompt|raw|output|html|content|text|command|argv|args|filename|href|url|path|data)(?:_|$)/.test(
+      normalized,
+    );
+  if (!containsContentToken) {
+    return false;
+  }
+  if (
+    /(?:^|_)(?:count|length)(?:_|$)/.test(normalized) &&
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
+    return false;
+  }
+  if (
+    /(?:^|_)hash(?:_|$)/.test(normalized) &&
+    isSafeDiagnosticHash(value)
+  ) {
+    return false;
+  }
+  if (
+    /(?:^|_)(?:id|code|state|kind|category|mode|source|label|profile|engine|status|type|name)(?:_|$)/.test(
+      normalized,
+    ) &&
+    isSafeDiagnosticToken(value)
+  ) {
+    return false;
+  }
+  if (
+    normalized !== "reason" &&
+    normalized.endsWith("_reason") &&
+    isSafeDiagnosticToken(value)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function clipDiagnosticString(value: string, maxLength: number): string {
+  const withoutControls = Array.from(value, (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 31 || codePoint === 127 ? " " : character;
+  }).join("");
+  if (withoutControls.length <= maxLength) {
+    return withoutControls;
+  }
+  return `${withoutControls.slice(0, maxLength)}…`;
+}
+
+function sanitizeDiagnosticValue(
+  value: unknown,
+  fieldName: string,
+  depth: number,
+  seen: WeakSet<object>,
+): unknown {
+  if (value === null) {
+    return value;
+  }
+  if (isSensitiveDiagnosticField(fieldName, value)) {
+    return REDACTED_DIAGNOSTIC_VALUE;
+  }
+  if (
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value))
+  ) {
+    return value;
+  }
+  if (typeof value === "string") {
+    return clipDiagnosticString(value, MAX_DIAGNOSTIC_STRING_LENGTH);
+  }
+  if (depth >= MAX_DIAGNOSTIC_PAYLOAD_DEPTH) {
+    return TRUNCATED_DIAGNOSTIC_VALUE;
+  }
+  if (Array.isArray(value)) {
+    if (seen.has(value)) {
+      return TRUNCATED_DIAGNOSTIC_VALUE;
+    }
+    seen.add(value);
+    const sanitized = value
+      .slice(0, MAX_DIAGNOSTIC_ARRAY_ITEMS)
+      .map((entry) =>
+        sanitizeDiagnosticValue(entry, "", depth + 1, seen),
+      );
+    seen.delete(value);
+    if (value.length > MAX_DIAGNOSTIC_ARRAY_ITEMS) {
+      sanitized.push(TRUNCATED_DIAGNOSTIC_VALUE);
+    }
+    return sanitized;
+  }
+  if (isRecord(value)) {
+    if (seen.has(value)) {
+      return TRUNCATED_DIAGNOSTIC_VALUE;
+    }
+    seen.add(value);
+    const sanitized: Record<string, unknown> = {};
+    const entries = Object.entries(value);
+    for (const [rawKey, entry] of entries.slice(
+      0,
+      MAX_DIAGNOSTIC_PAYLOAD_KEYS,
+    )) {
+      const key = clipDiagnosticString(rawKey, MAX_DIAGNOSTIC_KEY_LENGTH);
+      sanitized[key] = sanitizeDiagnosticValue(
+        entry,
+        key,
+        depth + 1,
+        seen,
+      );
+    }
+    if (entries.length > MAX_DIAGNOSTIC_PAYLOAD_KEYS) {
+      sanitized.__truncated__ = entries.length - MAX_DIAGNOSTIC_PAYLOAD_KEYS;
+    }
+    seen.delete(value);
+    return sanitized;
+  }
+  return TRUNCATED_DIAGNOSTIC_VALUE;
+}
+
+function sanitizeDiagnosticPayload(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  return sanitizeDiagnosticValue(
+    payload,
+    "",
+    0,
+    new WeakSet<object>(),
+  ) as Record<string, unknown>;
+}
+
 function normalizeDiagnosticEntry(
   value: unknown,
 ): RendererDiagnosticEntry | null {
@@ -149,14 +374,15 @@ function normalizeDiagnosticEntry(
   if (
     typeof timestamp !== "number" ||
     !Number.isFinite(timestamp) ||
-    typeof label !== "string"
+    typeof label !== "string" ||
+    label.trim().length === 0
   ) {
     return null;
   }
   return {
     timestamp,
-    label,
-    payload: isRecord(payload) ? payload : {},
+    label: clipDiagnosticString(label, MAX_DIAGNOSTIC_LABEL_LENGTH),
+    payload: isRecord(payload) ? sanitizeDiagnosticPayload(payload) : {},
   };
 }
 
@@ -278,7 +504,19 @@ function isBlankRendererSnapshot(snapshot: Record<string, unknown> | null) {
   return rootHidden || rootHasNoContent || (bodyHasArea && rootHasNoArea);
 }
 
-function persistDiagnostics(entries: RendererDiagnosticEntry[]) {
+function persistDiagnostics(
+  entries: RendererDiagnosticEntry[],
+  options: { immediate?: boolean } = {},
+) {
+  if (options.immediate) {
+    writeClientStoreValue(
+      RENDERER_DIAGNOSTICS_STORE,
+      RENDERER_DIAGNOSTICS_KEY,
+      entries,
+      { immediate: true },
+    );
+    return;
+  }
   writeClientStoreValue(
     RENDERER_DIAGNOSTICS_STORE,
     RENDERER_DIAGNOSTICS_KEY,
@@ -426,7 +664,7 @@ export function migrateLegacyRendererDiagnostics(): void {
   );
 }
 
-function persistPendingDiagnostics() {
+function persistPendingDiagnostics(options: { immediate?: boolean } = {}) {
   if (diagnosticsPersistTimer !== null) {
     clearTimeout(diagnosticsPersistTimer);
     diagnosticsPersistTimer = null;
@@ -446,7 +684,7 @@ function persistPendingDiagnostics() {
   bufferedEntries = [];
   pendingPersistEntries = [];
   persistEarlyDiagnostics([]);
-  persistDiagnostics(nextEntries);
+  persistDiagnostics(nextEntries, options);
   recordHotspotSample(
     "diagnostics-persist",
     (typeof performance !== "undefined" ? performance.now() : Date.now()) -
@@ -467,11 +705,11 @@ function installDiagnosticsFlushHooks() {
   }
   diagnosticsFlushHooksInstalled = true;
   window.addEventListener("pagehide", () => {
-    persistPendingDiagnostics();
+    persistPendingDiagnostics({ immediate: true });
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
-      persistPendingDiagnostics();
+      persistPendingDiagnostics({ immediate: true });
     }
   });
 }
@@ -480,11 +718,22 @@ export function appendRendererDiagnostic(
   label: string,
   payload: Record<string, unknown> = {},
 ) {
-  const entry: RendererDiagnosticEntry = {
+  appendRendererDiagnosticEntry(label, payload, false);
+}
+
+function appendRendererDiagnosticEntry(
+  label: string,
+  payload: Record<string, unknown>,
+  immediate: boolean,
+) {
+  const entry = normalizeDiagnosticEntry({
     timestamp: Date.now(),
     label,
     payload,
-  };
+  });
+  if (!entry) {
+    return;
+  }
 
   if (!isPreloaded()) {
     bufferedEntries = trimDiagnostics([...bufferedEntries, entry]);
@@ -499,6 +748,10 @@ export function appendRendererDiagnostic(
   }
   bumpDiagnosticsRevision();
   installDiagnosticsFlushHooks();
+  if (immediate) {
+    persistPendingDiagnostics({ immediate: true });
+    return;
+  }
   const now = Date.now();
   const elapsedSincePersist = now - lastDiagnosticsPersistAt;
   if (elapsedSincePersist >= DIAGNOSTICS_PERSIST_THROTTLE_MS) {
@@ -1228,11 +1481,12 @@ export function installRendererLifecycleDiagnostics() {
   });
 
   document.addEventListener("visibilitychange", () => {
-    appendRendererDiagnostic(
+    appendRendererDiagnosticEntry(
       "document/visibilitychange",
       collectWindowSnapshot({
         hidden: document.hidden,
       }),
+      document.visibilityState === "hidden",
     );
   });
 
@@ -1246,11 +1500,12 @@ export function installRendererLifecycleDiagnostics() {
   });
 
   window.addEventListener("pagehide", (event) => {
-    appendRendererDiagnostic(
+    appendRendererDiagnosticEntry(
       "window/pagehide",
       collectWindowSnapshot({
         persisted: event.persisted,
       }),
+      true,
     );
   });
 

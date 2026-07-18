@@ -6,7 +6,7 @@ use super::claude_forwarder::{
 use super::{
     build_engine_active_process_diagnostics, build_provider_prefill_query,
     collect_stale_child_candidates, delete_opencode_session_files,
-    delete_opencode_session_from_datastore, extract_turn_result_text,
+    delete_opencode_session_from_datastore, ensure_engine_enabled, extract_turn_result_text,
     is_likely_foreign_model_for_gemini, is_likely_legacy_claude_model_id,
     is_valid_claude_model_for_passthrough, merge_opencode_agents, next_gemini_routed_item_id,
     normalize_provider_key, opencode_data_candidate_roots, opencode_session_candidate_paths,
@@ -16,9 +16,9 @@ use super::{
     parse_opencode_updated_at, provider_keys_match,
     record_claude_auto_session_metadata_for_sync_result,
     resolve_claude_auto_session_metadata_session_id, resolve_claude_session_id_for_engine_send,
-    EngineConfig, EngineWorkspaceActiveProcessDiagnostics, GeminiRenderLane,
-    GeminiRenderRoutingState, OpenCodeAgentEntry, RegisteredEngineActiveProcessDiagnostic,
-    StaleChildCandidate,
+    resolve_enabled_engine_for_send, validate_remote_requested_engine, EngineConfig,
+    EngineWorkspaceActiveProcessDiagnostics, GeminiRenderLane, GeminiRenderRoutingState,
+    OpenCodeAgentEntry, RegisteredEngineActiveProcessDiagnostic, StaleChildCandidate,
 };
 use crate::backend::events::AppServerEvent;
 use crate::engine::events::EngineEvent;
@@ -35,6 +35,59 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::engine::SendMessageParams;
+
+#[test]
+fn gui_send_gate_rejects_legacy_gemini_setting_before_remote_forwarding() {
+    let mut settings = crate::types::AppSettings::default();
+    settings.gemini_enabled = true;
+
+    assert_eq!(
+        resolve_enabled_engine_for_send(
+            &settings,
+            Some(crate::engine::EngineType::Gemini),
+            crate::engine::EngineType::Claude,
+        ),
+        Err(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC.to_string())
+    );
+    assert_eq!(
+        resolve_enabled_engine_for_send(&settings, None, crate::engine::EngineType::Gemini,),
+        Err(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC.to_string())
+    );
+}
+
+#[test]
+fn gui_switch_gate_rejects_legacy_gemini_setting_before_remote_forwarding() {
+    let mut settings = crate::types::AppSettings::default();
+    settings.gemini_enabled = true;
+
+    assert_eq!(
+        ensure_engine_enabled(&settings, crate::engine::EngineType::Gemini),
+        Err(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC.to_string())
+    );
+}
+
+#[test]
+fn gui_models_gate_rejects_legacy_gemini_setting_before_remote_forwarding() {
+    let mut settings = crate::types::AppSettings::default();
+    settings.gemini_enabled = true;
+
+    assert_eq!(
+        ensure_engine_enabled(&settings, crate::engine::EngineType::Gemini),
+        Err(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC.to_string())
+    );
+}
+
+#[test]
+fn remote_send_validation_preserves_authoritative_none_and_rejects_explicit_gemini() {
+    let mut settings = crate::types::AppSettings::default();
+    settings.gemini_enabled = true;
+
+    assert_eq!(validate_remote_requested_engine(&settings, None), Ok(None));
+    assert_eq!(
+        validate_remote_requested_engine(&settings, Some(crate::engine::EngineType::Gemini)),
+        Err(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC.to_string())
+    );
+}
 
 #[test]
 fn engine_active_process_diagnostics_sorts_workspaces_and_counts_processes() {

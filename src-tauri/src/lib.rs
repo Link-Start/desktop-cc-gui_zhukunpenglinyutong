@@ -135,6 +135,7 @@ mod diagnostics_bundle;
 mod dictation;
 mod email;
 mod engine;
+mod engine_policy;
 mod event_sink;
 mod files;
 mod git;
@@ -428,6 +429,9 @@ pub fn run() {
             let manager = &state.engine_manager;
             tauri::async_runtime::block_on(async {
                 manager.claude_manager.interrupt_all().await;
+                if let Err(error) = manager.shutdown_gemini_sessions().await {
+                    log::error!("[app_exit] Gemini shutdown failed: {error}");
+                }
                 if state
                     .app_settings
                     .lock()

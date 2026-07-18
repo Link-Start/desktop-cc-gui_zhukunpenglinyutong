@@ -1286,7 +1286,7 @@ describe("runProjectMapGenerationWorker", () => {
     expect(result.nodes[0]).toMatchObject({ lensId: "api-domain" });
   });
 
-  it.each(["claude", "gemini", "opencode"] as const)(
+  it.each(["claude", "opencode"] as const)(
     "normalizes oversized markdown evidence before asking %s",
     async (engine: EngineType) => {
       const dataset = createEmptyProjectMapDataset({
@@ -1748,7 +1748,7 @@ describe("runProjectMapGenerationWorker", () => {
     });
   });
 
-  it.each(["claude", "gemini", "opencode"] as const)(
+  it.each(["claude", "opencode"] as const)(
     "routes %s generation through the same sync request contract",
     async (engine: EngineType) => {
       const dataset = createEmptyProjectMapDataset({
@@ -1828,4 +1828,27 @@ describe("runProjectMapGenerationWorker", () => {
       });
     },
   );
+
+  it("rejects Gemini runs before collecting evidence or sending a request", async () => {
+    const dataset = createEmptyProjectMapDataset({
+      identity: {
+        projectName: "demo",
+        workspacePath: "/repo/demo",
+        workspaceId: "ws-1",
+      },
+    });
+
+    await expect(
+      runProjectMapGenerationWorker({
+        workspaceId: "ws-1",
+        dataset,
+        run: baseRun({ engine: "gemini", model: "gemini-2.5-pro" }),
+        onRunUpdate: async () => {},
+      }),
+    ).rejects.toThrow("unsupported_engine");
+
+    expect(getWorkspaceFiles).not.toHaveBeenCalled();
+    expect(engineSendMessageSync).not.toHaveBeenCalled();
+    expect(startThread).not.toHaveBeenCalled();
+  });
 });

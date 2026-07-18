@@ -151,6 +151,17 @@ describe("taskRunCoordinator", () => {
     expect(result).toMatchObject({ ok: false, reason: "unsupported_engine" });
   });
 
+  it("rejects historical Gemini tasks when a new run is requested", () => {
+    const result = beginTaskRun({
+      store: { version: 1, runs: [] },
+      task: makeTask({ engineType: "gemini" }),
+      source: "manual",
+      now: 100,
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: "unsupported_engine" });
+  });
+
   it("creates a non-Kanban orchestration run from a provider-neutral definition", () => {
     const result = beginTaskRunFromDefinition({
       store: { version: 1, runs: [] },

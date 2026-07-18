@@ -12,6 +12,21 @@ const EARLY_RENDERER_DIAGNOSTICS_STORAGE_KEY =
   "ccgui.bootstrapRendererDiagnostics";
 const testLocalStorage = globalThis.localStorage;
 
+function installLifecycleEventTargets(visibilityState = "visible") {
+  const windowTarget = Object.assign(new EventTarget(), {
+    location: { href: "tauri://localhost" },
+  });
+  const documentTarget = Object.assign(new EventTarget(), {
+    visibilityState,
+    readyState: "complete",
+    hidden: visibilityState === "hidden",
+    hasFocus: () => true,
+  });
+  vi.stubGlobal("window", windowTarget);
+  vi.stubGlobal("document", documentTarget);
+  return { windowTarget, documentTarget };
+}
+
 describe("rendererDiagnostics", () => {
   beforeEach(() => {
     vi.useRealTimers();
@@ -164,13 +179,128 @@ describe("rendererDiagnostics", () => {
       [
         expect.objectContaining({
           label: "bootstrap/failed",
-          payload: { error: "Error: preload failed" },
+          payload: { error: "[redacted]" },
         }),
       ],
     );
     expect(
       testLocalStorage.getItem(EARLY_RENDERER_DIAGNOSTICS_STORAGE_KEY),
     ).toBeNull();
+  });
+
+  it("sanitizes and bounds legacy payloads before they are retained", async () => {
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([
+      {
+        timestamp: 1,
+        label: "window/error",
+        payload: {
+          error: "private prompt text",
+          filename: "/Users/private/project/source.ts",
+          token: 123456,
+          rawMessageLength: "private prompt disguised as a length",
+          contentLength: "private output disguised as a length",
+          filenameHash: "private path disguised as a hash",
+          reasonCode: "renderer-crash",
+          nested: {
+            generatedHtml: "<script>private output</script>",
+          },
+          samples: Array.from({ length: 50 }, (_, index) => index),
+        },
+      },
+    ]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.appendRendererDiagnostic("window/pageshow", {
+      persisted: false,
+    });
+
+    const [, , persistedEntries] =
+      clientStorageMocks.writeClientStoreValue.mock.calls[0] ?? [];
+    const retainedError = (
+      persistedEntries as Array<{
+        label: string;
+        payload: Record<string, unknown>;
+      }>
+    ).find((entry) => entry.label === "window/error");
+    expect(retainedError?.payload).toMatchObject({
+      error: "[redacted]",
+      filename: "[redacted]",
+      token: "[redacted]",
+      rawMessageLength: "[redacted]",
+      contentLength: "[redacted]",
+      filenameHash: "[redacted]",
+      reasonCode: "renderer-crash",
+      nested: {
+        generatedHtml: "[redacted]",
+      },
+    });
+    expect(retainedError?.payload.samples).toHaveLength(41);
+    expect(JSON.stringify(retainedError)).not.toContain("private");
+    expect(JSON.stringify(retainedError)).not.toContain("<script>");
+  });
+
+  it("uses an immediate client-store write for pagehide flushes", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const { windowTarget } = installLifecycleEventTargets();
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.appendRendererDiagnostic("lifecycle/persisted");
+    diagnostics.appendRendererDiagnostic("lifecycle/pending");
+    windowTarget.dispatchEvent(new Event("pagehide"));
+
+    expect(clientStorageMocks.writeClientStoreValue).toHaveBeenLastCalledWith(
+      "diagnostics",
+      "diagnostics.rendererLifecycleLog",
+      [
+        expect.objectContaining({
+          label: "lifecycle/pending",
+        }),
+      ],
+      { immediate: true },
+    );
+  });
+
+  it("includes the pagehide lifecycle entry in the immediate write", async () => {
+    const { windowTarget } = installLifecycleEventTargets();
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.installRendererLifecycleDiagnostics();
+    clientStorageMocks.writeClientStoreValue.mockClear();
+    windowTarget.dispatchEvent(new Event("pagehide"));
+
+    const immediateWrites = clientStorageMocks.writeClientStoreValue.mock.calls
+      .filter((call) => (call[3] as { immediate?: boolean } | undefined)?.immediate)
+      .map((call) => call[2] as Array<{ label: string }>);
+    expect(immediateWrites).not.toHaveLength(0);
+    expect(
+      immediateWrites.at(-1)?.some((entry) => entry.label === "window/pagehide"),
+    ).toBe(true);
+  });
+
+  it("includes the hidden visibility lifecycle entry in the immediate write", async () => {
+    const { documentTarget } = installLifecycleEventTargets("hidden");
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.installRendererLifecycleDiagnostics();
+    clientStorageMocks.writeClientStoreValue.mockClear();
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+
+    const immediateWrites = clientStorageMocks.writeClientStoreValue.mock.calls
+      .filter((call) => (call[3] as { immediate?: boolean } | undefined)?.immediate)
+      .map((call) => call[2] as Array<{ label: string }>);
+    expect(immediateWrites).not.toHaveLength(0);
+    expect(
+      immediateWrites
+        .at(-1)
+        ?.some((entry) => entry.label === "document/visibilitychange"),
+    ).toBe(true);
   });
 
   it("trims persisted diagnostics to the newest 200 entries", async () => {
@@ -260,9 +390,14 @@ describe("rendererDiagnostics", () => {
         label: "realtime.turnTrace.summary",
         payload: { index },
       })),
-      ...Array.from({ length: 600 }, (_, index) => ({
+      ...Array.from({ length: 400 }, (_, index) => ({
         timestamp: 3_000 + index,
         label: "stream-latency/app-server-event",
+        payload: { index },
+      })),
+      ...Array.from({ length: 200 }, (_, index) => ({
+        timestamp: 4_000 + index,
+        label: "stream-latency/first-visible-render",
         payload: { index },
       })),
     ]);
@@ -306,6 +441,101 @@ describe("rendererDiagnostics", () => {
     expect(
       turnSummaryEntries.some((entry) => entry.payload.index === 100),
     ).toBe(true);
+    expect(
+      streamLatencyEntries.filter(
+        (entry) => entry.label === "stream-latency/app-server-event",
+      ),
+    ).toHaveLength(400);
+    expect(
+      streamLatencyEntries.filter(
+        (entry) => entry.label === "stream-latency/first-visible-render",
+      ),
+    ).toHaveLength(200);
+  });
+
+  it("reserves an actionable bucket under regular diagnostic pressure", async () => {
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([
+      {
+        timestamp: 1,
+        label: "window/error",
+        payload: { message: "worker failed" },
+      },
+      ...Array.from({ length: 250 }, (_, index) => ({
+        timestamp: 10 + index,
+        label: `window/focus-${index}`,
+        payload: { index },
+      })),
+    ]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.appendRendererDiagnostic("window/pageshow", {
+      persisted: false,
+    });
+
+    const [, , persistedValue] =
+      clientStorageMocks.writeClientStoreValue.mock.calls[0] ?? [];
+    const persistedEntries = persistedValue as Array<{ label: string }>;
+    expect(
+      persistedEntries.some((entry) => entry.label === "window/error"),
+    ).toBe(true);
+    expect(
+      persistedEntries.filter(
+        (entry) =>
+          entry.label !== "window/error" &&
+          !entry.label.startsWith("perf.") &&
+          !entry.label.startsWith("stream-latency/"),
+      ),
+    ).toHaveLength(200);
+  });
+
+  it("keeps stream stall evidence when ingress telemetry reaches its cap", async () => {
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([
+      {
+        timestamp: 1,
+        label: "stream-latency/visible-output-stall-after-first-delta",
+        payload: { threadId: "thread-stalled" },
+      },
+      {
+        timestamp: 2,
+        label: "stream-latency/first-visible-render",
+        payload: { threadId: "thread-first-visible" },
+      },
+      ...Array.from({ length: 700 }, (_, index) => ({
+        timestamp: 10 + index,
+        label: "stream-latency/codex-text-ingress",
+        payload: { index },
+      })),
+    ]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.appendRendererDiagnostic("stream-latency/app-server-event", {
+      index: 701,
+    });
+
+    const [, , persistedValue] =
+      clientStorageMocks.writeClientStoreValue.mock.calls[0] ?? [];
+    const persistedEntries = persistedValue as Array<{ label: string }>;
+    expect(
+      persistedEntries.some(
+        (entry) =>
+          entry.label ===
+          "stream-latency/visible-output-stall-after-first-delta",
+      ),
+    ).toBe(true);
+    expect(
+      persistedEntries.some(
+        (entry) => entry.label === "stream-latency/first-visible-render",
+      ),
+    ).toBe(true);
+    expect(
+      persistedEntries.filter(
+        (entry) =>
+          entry.label === "stream-latency/codex-text-ingress" ||
+          entry.label === "stream-latency/app-server-event",
+      ),
+    ).toHaveLength(400);
   });
 
   it("records content-safe client interaction performance diagnostics", async () => {
@@ -693,7 +923,7 @@ describe("rendererDiagnostics", () => {
       mode: "worker-precompute",
       durationMs: 18,
       contentLength: 12_000,
-      contentHash: "hash-1",
+      contentHash: "abc123",
       thresholdReason: "length",
       cacheState: "miss",
       fallbackReason: "none",
@@ -720,7 +950,7 @@ describe("rendererDiagnostics", () => {
       mode: "worker-precompute",
       durationMs: 18,
       contentLength: 12_000,
-      contentHash: "hash-1",
+      contentHash: "abc123",
       thresholdReason: "length",
       cacheState: "miss",
       fallbackReason: "none",
@@ -753,7 +983,7 @@ describe("rendererDiagnostics", () => {
       partial: true,
       limitHit: true,
       sourceVersion: "source-hash",
-      requestedPathHash: "path-hash",
+      requestedPathHash: "def456",
       evidenceClass: "measured",
       fallbackReason: null,
       // @ts-expect-error raw paths are intentionally rejected.
@@ -779,7 +1009,7 @@ describe("rendererDiagnostics", () => {
       partial: true,
       limitHit: true,
       sourceVersion: "source-hash",
-      requestedPathHash: "path-hash",
+      requestedPathHash: "def456",
       evidenceClass: "measured",
     });
     expect(entry.payload).not.toHaveProperty("requestedPath");

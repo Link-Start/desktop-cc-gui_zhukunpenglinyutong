@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { TaskRunRecord } from "../types";
+import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import { hasActiveRunConflict } from "../utils/taskRunProjection";
 import { describeTaskRunSurface } from "../utils/taskRunSurface";
 
@@ -36,12 +37,21 @@ export function RunDetailSurface({
   const { t } = useTranslation();
   const surface = describeTaskRunSurface(run);
   const availableActions = new Set(run.availableRecoveryActions);
+  const canStartNewExecution = isEngineExecutionEnabled(run.engine);
   const hasDuplicateConflict = hasActiveRunConflict(comparisonRuns, run.task.taskId, run.runId);
   const canOpenConversation = Boolean(run.linkedThreadId && onOpenConversation);
-  const canRetry = Boolean(onRetryRun && availableActions.has("retry")) && !hasDuplicateConflict;
-  const canResume = Boolean(onResumeRun && availableActions.has("resume"));
+  const canRetry =
+    canStartNewExecution &&
+    Boolean(onRetryRun && availableActions.has("retry")) &&
+    !hasDuplicateConflict;
+  const canResume =
+    canStartNewExecution &&
+    Boolean(onResumeRun && availableActions.has("resume"));
   const canCancel = Boolean(onCancelRun && availableActions.has("cancel"));
-  const canFork = Boolean(onForkRun && availableActions.has("fork_new_run")) && !hasDuplicateConflict;
+  const canFork =
+    canStartNewExecution &&
+    Boolean(onForkRun && availableActions.has("fork_new_run")) &&
+    !hasDuplicateConflict;
   const orchestrationTaskId =
     run.task.source === "orchestration"
       ? run.task.orchestrationTaskId ?? run.task.taskId

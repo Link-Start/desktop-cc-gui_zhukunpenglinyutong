@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CODEX_MODEL_CATALOG } from "../../models/codexModelCatalog";
 import { detectEngines, getConfigModel, getEngineModels, getModelList } from "../../../services/tauri";
 import type { EngineModelInfo, EngineStatus, EngineType, WorkspaceInfo } from "../../../types";
+import { normalizeEngineForExecution } from "../../../utils/engineExecutionPolicy";
 
 export type ProjectMapGenerationEngineOption = {
   id: EngineType;
@@ -32,7 +33,7 @@ const ENGINE_LABELS: Record<EngineType, string> = {
   opencode: "OpenCode",
 };
 
-const KNOWN_ENGINES: EngineType[] = ["codex", "claude", "gemini", "opencode"];
+const KNOWN_ENGINES: EngineType[] = ["codex", "claude", "opencode"];
 
 const NO_WORKSPACE_MODEL: ProjectMapGenerationModelOption = {
   id: "default",
@@ -55,7 +56,7 @@ const CODEX_FALLBACK_MODELS: ProjectMapGenerationModelOption[] = CODEX_MODEL_CAT
 );
 
 function normalizeEngineType(value: string | null | undefined): EngineType {
-  return KNOWN_ENGINES.includes(value as EngineType) ? (value as EngineType) : "codex";
+  return normalizeEngineForExecution(value);
 }
 
 function normalizeEngineModel(model: EngineModelInfo): ProjectMapGenerationModelOption | null {

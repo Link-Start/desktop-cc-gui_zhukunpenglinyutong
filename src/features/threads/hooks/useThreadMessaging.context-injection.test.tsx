@@ -165,7 +165,7 @@ describe("useThreadMessaging context injection", () => {
     expect(payload.text).toBe("数据库查询优化");
   });
 
-  it("keeps Claude reasoning effort but drops it for unsupported engines", async () => {
+  it("keeps Claude reasoning effort and rejects disabled Gemini sends", async () => {
     vi.mocked(engineSendMessage).mockResolvedValue({
       result: { turn: { id: "turn-effort" } },
     } as never);
@@ -188,20 +188,17 @@ describe("useThreadMessaging context injection", () => {
 
     vi.mocked(engineSendMessage).mockClear();
     const geminiHook = buildHook("gemini");
-    await act(async () => {
-      await geminiHook.result.current.sendUserMessageToThread(
+    await expect(
+      geminiHook.result.current.sendUserMessageToThread(
         workspace,
         "gemini:session-1",
         "do not reuse effort",
         [],
         { skipPromptExpansion: true, effort: "high" },
-      );
-    });
+      ),
+    ).rejects.toThrow("Gemini CLI is disabled in this client");
 
-    expect(vi.mocked(engineSendMessage).mock.calls[0]?.[1]).toMatchObject({
-      engine: "gemini",
-      effort: null,
-    });
+    expect(engineSendMessage).not.toHaveBeenCalled();
   });
 
   it("injects selected memories with detail mode by default on codex path", async () => {
@@ -746,10 +743,9 @@ describe("useThreadMessaging context injection", () => {
     vi.useRealTimers();
   });
 
-  it.each([
-    ["claude", "claude:session-1"],
-    ["gemini", "gemini:session-1"],
-  ] as const)("uses the same memory-scout block on %s path", async (engine, threadId) => {
+  it("uses the memory-scout block on the Claude path", async () => {
+    const engine = "claude";
+    const threadId = "claude:session-1";
     vi.mocked(engineSendMessage).mockResolvedValue({
       result: { turn: { id: `turn-${engine}` } },
     } as never);
