@@ -270,3 +270,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1034: 内置可插拔 Agency Agents 智能体目录
+
+**Date**: 2026-07-18
+**Task**: 内置可插拔 Agency Agents 智能体目录
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+内置 17 个分组、248 个 Agency Agents 智能体及中文描述；支持设置页显式启用、Composer # 引用、发送前校验、来源链接与分组化 UI，并完成用户验收、前端/Rust/Catalog/OpenSpec 验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eff25255` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
