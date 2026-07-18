@@ -153,6 +153,16 @@ export type GitPrExistingPullRequest = {
   baseRefName: string;
 };
 
+export type GitPrRangeGateSeverity = "large" | "diff-incomplete";
+
+export type GitPrRangeGate = {
+  changedFiles: number;
+  threshold: number;
+  severity: GitPrRangeGateSeverity;
+  requiresConfirmation: boolean;
+  rangeFingerprint: string;
+};
+
 export type GitPrWorkflowResult = {
   ok: boolean;
   status: "success" | "failed" | "existing";
@@ -163,6 +173,7 @@ export type GitPrWorkflowResult = {
   prNumber?: number | null;
   existingPr?: GitPrExistingPullRequest | null;
   retryCommand?: string | null;
+  rangeGate?: GitPrRangeGate | null;
   stages: GitPrWorkflowStage[];
 };
 

@@ -10,6 +10,8 @@ pub(super) async fn create_git_pr_workflow_impl(
     body: Option<String>,
     comment_after_create: Option<bool>,
     comment_body: Option<String>,
+    allow_large_range: Option<bool>,
+    confirmed_range_fingerprint: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<GitPrWorkflowResult, String> {
     let workspaces = state.workspaces.lock().await;
@@ -191,7 +193,62 @@ pub(super) async fn create_git_pr_workflow_impl(
         ));
     }
 
-    let range_ref = format!("upstream/{base_branch}...HEAD");
+    let base_ref = format!("upstream/{base_branch}");
+    let revision_args = vec![
+        "rev-parse".to_string(),
+        base_ref.clone(),
+        "HEAD".to_string(),
+    ];
+    let revision_output =
+        match run_token_isolated_command(&repo_root, "git", &revision_args, &[]).await {
+            Ok(output) => output,
+            Err(error) => {
+                update_workflow_stage(
+                    &mut stages,
+                    "precheck",
+                    "failed",
+                    error.clone(),
+                    None,
+                    None,
+                    None,
+                );
+                return Ok(build_failed_pr_workflow_result(
+                    stages, "precheck", error, None,
+                ));
+            }
+        };
+    if !revision_output.success {
+        let raw = summarize_command_failure(&revision_output);
+        update_workflow_stage(
+            &mut stages,
+            "precheck",
+            "failed",
+            raw.clone(),
+            Some(revision_output.command),
+            Some(truncate_debug_text(&revision_output.stdout, 1200)),
+            Some(truncate_debug_text(&revision_output.stderr, 1200)),
+        );
+        return Ok(build_failed_pr_workflow_result(
+            stages, "precheck", raw, None,
+        ));
+    }
+    let Some(range_fingerprint) = parse_pr_range_fingerprint(&revision_output.stdout) else {
+        let raw = "Unable to resolve the current PR range fingerprint.".to_string();
+        update_workflow_stage(
+            &mut stages,
+            "precheck",
+            "failed",
+            raw.clone(),
+            Some(revision_output.command),
+            Some(truncate_debug_text(&revision_output.stdout, 1200)),
+            Some(truncate_debug_text(&revision_output.stderr, 1200)),
+        );
+        return Ok(build_failed_pr_workflow_result(
+            stages, "precheck", raw, None,
+        ));
+    };
+
+    let range_ref = format!("{base_ref}...HEAD");
     let range_args = vec![
         "diff".to_string(),
         "--name-only".to_string(),
@@ -236,7 +293,12 @@ pub(super) async fn create_git_pr_workflow_impl(
         .filter(|line| !line.is_empty())
         .map(ToOwned::to_owned)
         .collect::<Vec<_>>();
-    match evaluate_pr_range_gate(&changed_paths) {
+    match evaluate_pr_range_gate(
+        &changed_paths,
+        allow_large_range.unwrap_or(false),
+        confirmed_range_fingerprint.as_deref(),
+        &range_fingerprint,
+    ) {
         PrRangeGateDecision::Pass { changed_files } => {
             update_workflow_stage(
                 &mut stages,
@@ -247,6 +309,36 @@ pub(super) async fn create_git_pr_workflow_impl(
                 Some(truncate_debug_text(&range_output.stdout, 1600)),
                 Some(truncate_debug_text(&range_output.stderr, 1200)),
             );
+        }
+        PrRangeGateDecision::ConfirmationRequired {
+            category,
+            reason,
+            range_gate,
+        } => {
+            update_workflow_stage(
+                &mut stages,
+                "precheck",
+                "failed",
+                reason.clone(),
+                Some(range_output.command),
+                Some(truncate_debug_text(&range_output.stdout, 1600)),
+                Some(truncate_debug_text(&range_output.stderr, 1200)),
+            );
+            return Ok(GitPrWorkflowResult {
+                ok: false,
+                status: "failed".to_string(),
+                message: reason,
+                error_category: Some(category),
+                next_action_hint: Some(
+                    "Review the large PR range, then confirm once to continue.".to_string(),
+                ),
+                pr_url: None,
+                pr_number: None,
+                existing_pr: None,
+                retry_command: None,
+                range_gate: Some(range_gate),
+                stages,
+            });
         }
         PrRangeGateDecision::Blocked { category, reason } => {
             update_workflow_stage(
@@ -271,6 +363,7 @@ pub(super) async fn create_git_pr_workflow_impl(
                 pr_number: None,
                 existing_pr: None,
                 retry_command: None,
+                range_gate: None,
                 stages,
             });
         }

@@ -31,8 +31,13 @@ use crate::types::{
     GitPrWorkflowStage, GitPushPreviewResponse, GitRepositorySummary,
 };
 use crate::utils::{git_env_path, normalize_git_path, resolve_git_binary};
+use range_gate::{evaluate_pr_range_gate, parse_pr_range_fingerprint, PrRangeGateDecision};
 use validation::validate_local_branch_name;
 
+#[cfg(test)]
+use crate::types::{GitPrRangeGate, GitPrRangeGateSeverity};
+
+mod range_gate;
 mod validation;
 
 #[cfg(test)]
@@ -476,8 +481,6 @@ async fn forward_git_remote_unit(
 const INDEX_SKIP_WORKTREE_FLAG: u16 = 0x4000;
 const MAX_COMMIT_DIFF_LINES: usize = 10_000;
 const GIT_COMMAND_TIMEOUT_SECS: u64 = 120;
-const PR_RANGE_MAX_CHANGED_FILES: usize = 240;
-const PR_RANGE_SUSPICIOUS_THRESHOLD: usize = 32;
 const GIT_STATUS_DIFF_STATS_FILE_LIMIT: usize = 120;
 const GIT_STATUS_DIFF_STATS_MAX_FILE_BYTES: u64 = 256 * 1024;
 const GIT_DIFF_PREVIEW_MAX_FILES: usize = 200;
@@ -1450,12 +1453,6 @@ struct GhExistingPrEntry {
     base_ref_name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum PrRangeGateDecision {
-    Pass { changed_files: usize },
-    Blocked { category: String, reason: String },
-}
-
 fn shell_escape_for_display(value: &str) -> String {
     if value.is_empty() {
         return "''".to_string();
@@ -1751,48 +1748,6 @@ fn extract_pr_number_from_url(url: &str) -> Option<u64> {
     number_text.parse::<u64>().ok()
 }
 
-fn is_suspicious_range_path(path: &str) -> bool {
-    let normalized = normalize_git_path(path).to_lowercase();
-    normalized == "readme.md" || normalized == "readme.zh-cn.md" || normalized == "license"
-}
-
-fn evaluate_pr_range_gate(changed_paths: &[String]) -> PrRangeGateDecision {
-    if changed_paths.is_empty() {
-        return PrRangeGateDecision::Blocked {
-            category: "range-empty".to_string(),
-            reason: "Range gate blocked: `upstream/<base>...HEAD` has no changed files."
-                .to_string(),
-        };
-    }
-    if changed_paths.len() > PR_RANGE_MAX_CHANGED_FILES {
-        return PrRangeGateDecision::Blocked {
-            category: "range-too-large".to_string(),
-            reason: format!(
-                "Range gate blocked: {} changed files exceed threshold {}.",
-                changed_paths.len(),
-                PR_RANGE_MAX_CHANGED_FILES
-            ),
-        };
-    }
-    let suspicious_files = changed_paths
-        .iter()
-        .filter(|path| is_suspicious_range_path(path))
-        .cloned()
-        .collect::<Vec<_>>();
-    if !suspicious_files.is_empty() && changed_paths.len() >= PR_RANGE_SUSPICIOUS_THRESHOLD {
-        return PrRangeGateDecision::Blocked {
-            category: "range-suspicious".to_string(),
-            reason: format!(
-                "Range gate blocked: suspicious root files detected ({}). Re-check branch base before creating PR.",
-                suspicious_files.join(", ")
-            ),
-        };
-    }
-    PrRangeGateDecision::Pass {
-        changed_files: changed_paths.len(),
-    }
-}
-
 fn build_failed_pr_workflow_result(
     stages: Vec<GitPrWorkflowStage>,
     stage_key: &str,
@@ -1810,6 +1765,7 @@ fn build_failed_pr_workflow_result(
         pr_number: None,
         existing_pr: None,
         retry_command,
+        range_gate: None,
         stages,
     }
 }
@@ -1833,6 +1789,7 @@ fn build_existing_pr_workflow_result(
         pr_number: Some(existing_pr.number),
         existing_pr: Some(existing_pr),
         retry_command: None,
+        range_gate: None,
         stages,
     }
 }
@@ -1853,6 +1810,7 @@ fn build_success_pr_workflow_result(
         pr_number,
         existing_pr: None,
         retry_command: None,
+        range_gate: None,
         stages,
     }
 }
@@ -2505,27 +2463,114 @@ mod tests {
     }
 
     #[test]
-    fn range_gate_blocks_oversized_changeset() {
-        let paths = (0..(PR_RANGE_MAX_CHANGED_FILES + 1))
+    fn range_gate_passes_normal_threshold() {
+        let range_fingerprint = "base-revision...head-revision";
+        let paths = (0..range_gate::PR_RANGE_MAX_CHANGED_FILES)
             .map(|index| format!("src/file-{index}.ts"))
             .collect::<Vec<_>>();
-        let decision = evaluate_pr_range_gate(&paths);
+        let decision = evaluate_pr_range_gate(&paths, false, None, range_fingerprint);
         assert!(matches!(
             decision,
-            PrRangeGateDecision::Blocked { category, .. } if category == "range-too-large"
+            PrRangeGateDecision::Pass { changed_files }
+                if changed_files == range_gate::PR_RANGE_MAX_CHANGED_FILES
         ));
     }
 
     #[test]
-    fn range_gate_blocks_suspicious_root_files_when_scope_is_large() {
-        let mut paths = (0..PR_RANGE_SUSPICIOUS_THRESHOLD)
+    fn range_gate_requires_confirmation_above_normal_threshold() {
+        let range_fingerprint = "base-revision...head-revision";
+        for changed_files in [
+            range_gate::PR_RANGE_MAX_CHANGED_FILES + 1,
+            range_gate::PR_RANGE_COMPLETE_DIFF_MAX_FILES,
+        ] {
+            let paths = (0..changed_files)
+                .map(|index| format!("src/file-{index}.ts"))
+                .collect::<Vec<_>>();
+            let decision = evaluate_pr_range_gate(&paths, false, None, range_fingerprint);
+            assert!(matches!(
+                decision,
+                PrRangeGateDecision::ConfirmationRequired {
+                    range_gate: GitPrRangeGate {
+                        severity: GitPrRangeGateSeverity::Large,
+                        range_fingerprint: fingerprint,
+                        ..
+                    },
+                    ..
+                } if fingerprint == range_fingerprint
+            ));
+        }
+    }
+
+    #[test]
+    fn range_gate_warns_when_github_diff_will_be_incomplete() {
+        let range_fingerprint = "base-revision...head-revision";
+        let paths = (0..(range_gate::PR_RANGE_COMPLETE_DIFF_MAX_FILES + 1))
+            .map(|index| format!("src/file-{index}.ts"))
+            .collect::<Vec<_>>();
+        let decision = evaluate_pr_range_gate(&paths, false, None, range_fingerprint);
+        assert!(matches!(
+            decision,
+            PrRangeGateDecision::ConfirmationRequired {
+                range_gate: GitPrRangeGate {
+                    severity: GitPrRangeGateSeverity::DiffIncomplete,
+                    ..
+                },
+                ..
+            }
+        ));
+        assert!(matches!(
+            evaluate_pr_range_gate(
+                &paths,
+                true,
+                Some(range_fingerprint),
+                range_fingerprint
+            ),
+            PrRangeGateDecision::Pass { changed_files }
+                if changed_files == range_gate::PR_RANGE_COMPLETE_DIFF_MAX_FILES + 1
+        ));
+        assert!(matches!(
+            evaluate_pr_range_gate(
+                &paths,
+                true,
+                Some("stale-base...stale-head"),
+                range_fingerprint
+            ),
+            PrRangeGateDecision::ConfirmationRequired { .. }
+        ));
+    }
+
+    #[test]
+    fn range_gate_override_cannot_bypass_structural_anomalies() {
+        let range_fingerprint = "base-revision...head-revision";
+        assert!(matches!(
+            evaluate_pr_range_gate(
+                &[],
+                true,
+                Some(range_fingerprint),
+                range_fingerprint
+            ),
+            PrRangeGateDecision::Blocked { category, .. } if category == "range-empty"
+        ));
+
+        let mut paths = (0..range_gate::PR_RANGE_SUSPICIOUS_THRESHOLD)
             .map(|index| format!("src/file-{index}.ts"))
             .collect::<Vec<_>>();
         paths.push("README.md".to_string());
-        let decision = evaluate_pr_range_gate(&paths);
+        let decision =
+            evaluate_pr_range_gate(&paths, true, Some(range_fingerprint), range_fingerprint);
         assert!(matches!(
             decision,
             PrRangeGateDecision::Blocked { category, .. } if category == "range-suspicious"
         ));
+    }
+
+    #[test]
+    fn range_fingerprint_requires_exactly_base_and_head_revisions() {
+        assert_eq!(
+            parse_pr_range_fingerprint("base-revision\nhead-revision\n"),
+            Some("base-revision...head-revision".to_string())
+        );
+        assert_eq!(parse_pr_range_fingerprint("base-only\n"), None);
+        assert_eq!(parse_pr_range_fingerprint("base\nhead\nunexpected\n"), None);
     }
 }

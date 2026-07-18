@@ -39,6 +39,7 @@ import {
   listGitRepositorySummaries,
   checkoutGitBranch,
   createGitBranch,
+  createGitPrWorkflow,
   runWorkspaceCommand,
   runSpecCommand,
   resetGitCommit,
@@ -224,6 +225,51 @@ describe("tauri invoke wrappers", () => {
       selectedPaths: undefined,
       repositorySelections: [],
     });
+  });
+
+  it("forwards explicit large-range confirmation only on the confirmed retry", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValue({
+      ok: true,
+      status: "success",
+      message: "created",
+      stages: [],
+    });
+    const options = {
+      upstreamRepo: "example/mossx",
+      baseBranch: "main",
+      headOwner: "developer",
+      headBranch: "feature/large-pr",
+      title: "feat(git): large pull request",
+    };
+
+    await createGitPrWorkflow("ws-1", options);
+    expect(invokeMock).toHaveBeenLastCalledWith("create_git_pr_workflow", {
+      workspaceId: "ws-1",
+      upstreamRepo: "example/mossx",
+      baseBranch: "main",
+      headOwner: "developer",
+      headBranch: "feature/large-pr",
+      title: "feat(git): large pull request",
+      body: null,
+      commentAfterCreate: null,
+      commentBody: null,
+      allowLargeRange: null,
+      confirmedRangeFingerprint: null,
+    });
+
+    await createGitPrWorkflow("ws-1", {
+      ...options,
+      allowLargeRange: true,
+      confirmedRangeFingerprint: "base-revision...head-revision",
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith(
+      "create_git_pr_workflow",
+      expect.objectContaining({
+        allowLargeRange: true,
+        confirmedRangeFingerprint: "base-revision...head-revision",
+      }),
+    );
   });
 
   it("maps Web assets status and install commands without payload drift", async () => {

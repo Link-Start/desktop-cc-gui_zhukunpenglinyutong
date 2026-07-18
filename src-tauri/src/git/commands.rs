@@ -1879,11 +1879,13 @@ pub(crate) async fn create_git_pr_workflow(
     body: Option<String>,
     comment_after_create: Option<bool>,
     comment_body: Option<String>,
+    allow_large_range: Option<bool>,
+    confirmed_range_fingerprint: Option<String>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<GitPrWorkflowResult, String> {
     if should_forward_git_remote(&state).await {
-        return forward_git_remote(&state, &app, "create_git_pr_workflow", json!({ "workspaceId": workspace_id.clone(), "upstreamRepo": upstream_repo.clone(), "baseBranch": base_branch.clone(), "headOwner": head_owner.clone(), "headBranch": head_branch.clone(), "title": title.clone(), "body": body.clone(), "commentAfterCreate": comment_after_create, "commentBody": comment_body.clone() })).await;
+        return forward_git_remote(&state, &app, "create_git_pr_workflow", json!({ "workspaceId": workspace_id.clone(), "upstreamRepo": upstream_repo.clone(), "baseBranch": base_branch.clone(), "headOwner": head_owner.clone(), "headBranch": head_branch.clone(), "title": title.clone(), "body": body.clone(), "commentAfterCreate": comment_after_create, "commentBody": comment_body.clone(), "allowLargeRange": allow_large_range, "confirmedRangeFingerprint": confirmed_range_fingerprint.clone() })).await;
     }
     commands_pr_workflow::create_git_pr_workflow_impl(
         workspace_id,
@@ -1895,6 +1897,8 @@ pub(crate) async fn create_git_pr_workflow(
         body,
         comment_after_create,
         comment_body,
+        allow_large_range,
+        confirmed_range_fingerprint,
         state,
     )
     .await

@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { createPortal } from "react-dom";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { GitHistoryPanel, buildFileTreeItems, getDefaultColumnWidths } from "./GitHistoryPanel";
 import { publishGitRepositoryActionIntent } from "../../git/types/gitRepositoryActions";
 import { getGitHistoryAuthorColorSlot } from "./git-history-panel/utils/gitHistoryAuthorPalette";
@@ -38,6 +39,15 @@ const mockTranslate = (key: string, options?: Record<string, unknown>) => {
     typeof options.targetBranch === "string"
   ) {
     return `${options.sourceBranch} -> ${options.remote}:${options.targetBranch}`;
+  }
+  if (
+    key.startsWith("git.historyCreatePrRange") &&
+    typeof options.base === "string" &&
+    typeof options.head === "string" &&
+    typeof options.target === "string" &&
+    typeof options.count === "number"
+  ) {
+    return `${key}:${options.base}...${options.head}->${options.target}:${options.count}`;
   }
   if (typeof options.count === "number") {
     return `${key}:${options.count}`;
@@ -629,6 +639,133 @@ describe("GitHistoryPanel interactions", () => {
         expect(screen.getByText("git.historyCreatePrResultSuccess")).toBeTruthy();
         expect(screen.getByText("git.historyCreatePrCopyLink")).toBeTruthy();
       });
+  });
+
+  it("reconfirms create-pr when the evaluated range fingerprint changes", async () => {
+    vi.mocked(tauriService.createGitPrWorkflow)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: "failed",
+        message: "241 changed files require confirmation",
+        errorCategory: "range-confirmation-required",
+        rangeGate: {
+          changedFiles: 241,
+          threshold: 240,
+          severity: "large",
+          requiresConfirmation: true,
+          rangeFingerprint: "base-v1...head-v1",
+        },
+        stages: [{ key: "precheck", status: "failed", detail: "confirmation required" }],
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: "failed",
+        message: "325 changed files require confirmation",
+        errorCategory: "range-confirmation-required",
+        rangeGate: {
+          changedFiles: 325,
+          threshold: 240,
+          severity: "diff-incomplete",
+          requiresConfirmation: true,
+          rangeFingerprint: "base-v2...head-v1",
+        },
+        stages: [{ key: "precheck", status: "failed", detail: "confirmation required" }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: "success",
+        message: "created",
+        prUrl: "https://github.com/example/repo/pull/13",
+        prNumber: 13,
+        stages: [
+          { key: "precheck", status: "success", detail: "precheck ok" },
+          { key: "push", status: "success", detail: "push ok" },
+          { key: "create", status: "success", detail: "create ok" },
+          { key: "comment", status: "skipped", detail: "skipped" },
+        ],
+      });
+
+    render(<GitHistoryPanel workspace={workspace as never} />);
+    await clickReadyCreatePrAction();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("fix(git): stabilize")).toBeTruthy();
+    });
+    const confirmButton = screen.getByText("git.historyCreatePrAction").closest("button");
+    await waitFor(() => expect(confirmButton?.disabled).toBe(false));
+    fireEvent.click(confirmButton as HTMLElement);
+
+    await waitFor(() => {
+      expect(ask).toHaveBeenCalledWith(
+        "git.historyCreatePrRangeLargeConfirm:upstream/main...HEAD->chenxiangning:codex/feat-gitv9-v0.1.8:241",
+        {
+          title: "git.historyCreatePrRangeConfirmTitle",
+          kind: "warning",
+        },
+      );
+      expect(ask).toHaveBeenCalledWith(
+        "git.historyCreatePrRangeDiffIncompleteConfirm:upstream/main...HEAD->chenxiangning:codex/feat-gitv9-v0.1.8:325",
+        {
+          title: "git.historyCreatePrRangeConfirmTitle",
+          kind: "warning",
+        },
+      );
+      expect(tauriService.createGitPrWorkflow).toHaveBeenCalledTimes(3);
+    });
+    const firstOptions = vi.mocked(tauriService.createGitPrWorkflow).mock.calls[0]?.[1];
+    const firstConfirmedOptions =
+      vi.mocked(tauriService.createGitPrWorkflow).mock.calls[1]?.[1];
+    const secondConfirmedOptions =
+      vi.mocked(tauriService.createGitPrWorkflow).mock.calls[2]?.[1];
+    expect(firstOptions).not.toHaveProperty("allowLargeRange");
+    expect(firstConfirmedOptions).toEqual(
+      expect.objectContaining({
+        allowLargeRange: true,
+        confirmedRangeFingerprint: "base-v1...head-v1",
+      }),
+    );
+    expect(secondConfirmedOptions).toEqual(
+      expect.objectContaining({
+        allowLargeRange: true,
+        confirmedRangeFingerprint: "base-v2...head-v1",
+      }),
+    );
+    expect(await screen.findByText("git.historyCreatePrResultSuccess")).toBeTruthy();
+  });
+
+  it("cancels create-pr range confirmation without showing a generic failure", async () => {
+    vi.mocked(ask).mockResolvedValueOnce(false);
+    vi.mocked(tauriService.createGitPrWorkflow).mockResolvedValueOnce({
+      ok: false,
+      status: "failed",
+      message: "241 changed files require confirmation",
+      errorCategory: "range-confirmation-required",
+      rangeGate: {
+        changedFiles: 241,
+        threshold: 240,
+        severity: "large",
+        requiresConfirmation: true,
+        rangeFingerprint: "base-v1...head-v1",
+      },
+      stages: [{ key: "precheck", status: "failed", detail: "confirmation required" }],
+    });
+
+    render(<GitHistoryPanel workspace={workspace as never} />);
+    await clickReadyCreatePrAction();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("fix(git): stabilize")).toBeTruthy();
+    });
+    const confirmButton = screen.getByText("git.historyCreatePrAction").closest("button");
+    await waitFor(() => expect(confirmButton?.disabled).toBe(false));
+    fireEvent.click(confirmButton as HTMLElement);
+
+    await waitFor(() => {
+      expect(ask).toHaveBeenCalledWith(
+        "git.historyCreatePrRangeLargeConfirm:upstream/main...HEAD->chenxiangning:codex/feat-gitv9-v0.1.8:241",
+        expect.objectContaining({ kind: "warning" }),
+      );
+    });
+    expect(tauriService.createGitPrWorkflow).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("git.historyCreatePrResultFailed")).toBeNull();
   });
 
   it("toggles create-pr dialog maximize state", async () => {

@@ -388,6 +388,11 @@ const git = {
     historyCreatePrRetryCommand: "Retry command",
     historyCreatePrCopied: "Copied",
     historyCreatePrFormIncomplete: "Fill required fields first",
+    historyCreatePrRangeConfirmTitle: "Confirm large pull request",
+    historyCreatePrRangeLargeConfirm:
+      "{{base}}...{{head}} contains {{count}} changed files, above the normal review threshold of {{threshold}}. After confirmation it will be pushed to {{target}}. Confirm that the PR range is correct before continuing.",
+    historyCreatePrRangeDiffIncompleteConfirm:
+      "{{base}}...{{head}} contains {{count}} changed files, and GitHub may not display the complete diff. After confirmation it will be pushed to {{target}}. Continue creating the PR?",
     historyCreatePrAction: "Create PR",
     historyPullDialogTitle: "Pull Changes",
     historyPullDialogRemoteLabel: "Remote",

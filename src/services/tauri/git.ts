@@ -162,6 +162,8 @@ export type CreateGitPrWorkflowOptions = {
   body?: string | null;
   commentAfterCreate?: boolean;
   commentBody?: string | null;
+  allowLargeRange?: boolean;
+  confirmedRangeFingerprint?: string | null;
 };
 
 export async function getGitPrWorkflowDefaults(workspaceId: string): Promise<GitPrWorkflowDefaults> {
@@ -181,6 +183,8 @@ export async function createGitPrWorkflow(workspaceId: string, options: CreateGi
     body: options.body ?? null,
     commentAfterCreate: options.commentAfterCreate ?? null,
     commentBody: options.commentBody ?? null,
+    allowLargeRange: options.allowLargeRange ?? null,
+    confirmedRangeFingerprint: options.confirmedRangeFingerprint ?? null,
   });
 }
 

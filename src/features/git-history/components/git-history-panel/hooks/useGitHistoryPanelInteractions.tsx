@@ -585,7 +585,7 @@ export function useGitHistoryPanelInteractions(scope: any) {
     clearOperationNotice();
     setOperationLoading("createPr");
     try {
-      const workflowResult = await createGitPrWorkflow(workspaceId, {
+      const workflowOptions = {
         upstreamRepo: createPrForm.upstreamRepo.trim(),
         baseBranch: createPrForm.baseBranch.trim(),
         headOwner: createPrForm.headOwner.trim(),
@@ -594,7 +594,53 @@ export function useGitHistoryPanelInteractions(scope: any) {
         body: createPrForm.body.trim(),
         commentAfterCreate: createPrForm.commentAfterCreate,
         commentBody: createPrForm.commentBody.trim(),
-      });
+      };
+      let workflowResult = await createGitPrWorkflow(workspaceId, workflowOptions);
+      while (
+        workflowResult.errorCategory === "range-confirmation-required" &&
+        workflowResult.rangeGate?.requiresConfirmation &&
+        workflowResult.rangeGate.rangeFingerprint.trim().length > 0
+      ) {
+        const rangeGate = workflowResult.rangeGate;
+        if (createPrProgressTimerRef.current !== null) {
+          window.clearInterval(createPrProgressTimerRef.current);
+          createPrProgressTimerRef.current = null;
+        }
+        const confirmationMessageKey =
+          rangeGate.severity === "diff-incomplete"
+            ? "git.historyCreatePrRangeDiffIncompleteConfirm"
+            : "git.historyCreatePrRangeLargeConfirm";
+        const confirmed = await ask(
+          t(confirmationMessageKey, {
+            base: `upstream/${workflowOptions.baseBranch}`,
+            head: "HEAD",
+            target: `${workflowOptions.headOwner}:${workflowOptions.headBranch}`,
+            count: rangeGate.changedFiles,
+            threshold: rangeGate.threshold,
+          }),
+          {
+            title: t("git.historyCreatePrRangeConfirmTitle"),
+            kind: "warning",
+          },
+        );
+        if (!confirmed) {
+          setCreatePrResult(null);
+          setCreatePrStages(initialStages);
+          return;
+        }
+        setCreatePrStages(
+          initialStages.map((stage, index) =>
+            index === 0
+              ? { ...stage, status: "running", detail: t("git.historyCreatePrStageRunning") }
+              : stage,
+          ),
+        );
+        workflowResult = await createGitPrWorkflow(workspaceId, {
+          ...workflowOptions,
+          allowLargeRange: true,
+          confirmedRangeFingerprint: rangeGate.rangeFingerprint,
+        });
+      }
       setCreatePrResult(workflowResult);
       setCreatePrStages(mapCreatePrStagesFromResult(t, workflowResult.stages));
       if (workflowResult.ok) {
@@ -645,6 +691,7 @@ export function useGitHistoryPanelInteractions(scope: any) {
       setOperationLoading(null);
     }
   }, [
+    ask,
     buildCreatePrInitialStages,
     clearOperationNotice,
     createGitPrWorkflow,

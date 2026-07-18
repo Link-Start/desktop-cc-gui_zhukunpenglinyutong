@@ -239,6 +239,25 @@ pub(crate) struct GitPrExistingPullRequest {
     pub(crate) base_ref_name: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum GitPrRangeGateSeverity {
+    Large,
+    DiffIncomplete,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub(crate) struct GitPrRangeGate {
+    #[serde(rename = "changedFiles")]
+    pub(crate) changed_files: usize,
+    pub(crate) threshold: usize,
+    pub(crate) severity: GitPrRangeGateSeverity,
+    #[serde(rename = "requiresConfirmation")]
+    pub(crate) requires_confirmation: bool,
+    #[serde(rename = "rangeFingerprint")]
+    pub(crate) range_fingerprint: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct GitPrWorkflowResult {
     pub(crate) ok: bool,
@@ -256,6 +275,8 @@ pub(crate) struct GitPrWorkflowResult {
     pub(crate) existing_pr: Option<GitPrExistingPullRequest>,
     #[serde(rename = "retryCommand")]
     pub(crate) retry_command: Option<String>,
+    #[serde(rename = "rangeGate")]
+    pub(crate) range_gate: Option<GitPrRangeGate>,
     pub(crate) stages: Vec<GitPrWorkflowStage>,
 }
 

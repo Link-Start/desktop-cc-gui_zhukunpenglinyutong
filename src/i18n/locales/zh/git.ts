@@ -371,6 +371,11 @@ const git = {
     historyCreatePrRetryCommand: "重试命令",
     historyCreatePrCopied: "已复制",
     historyCreatePrFormIncomplete: "请先补全必填参数",
+    historyCreatePrRangeConfirmTitle: "确认创建大型 PR",
+    historyCreatePrRangeLargeConfirm:
+      "{{base}}...{{head}} 包含 {{count}} 个变更文件，超过常规审查阈值 {{threshold}}。确认后会推送到 {{target}}，请确认 PR 范围正确后继续。",
+    historyCreatePrRangeDiffIncompleteConfirm:
+      "{{base}}...{{head}} 包含 {{count}} 个变更文件，GitHub 页面可能无法完整展示 diff。确认后会推送到 {{target}}，确认仍继续创建吗？",
     historyCreatePrAction: "创建 PR",
     historyPullDialogTitle: "拉取变更",
     historyPullDialogRemoteLabel: "远端",

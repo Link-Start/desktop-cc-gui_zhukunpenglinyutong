@@ -39,6 +39,8 @@ mod file_io;
 mod file_ops;
 #[path = "../files/policy.rs"]
 mod file_policy;
+#[path = "../git/range_gate.rs"]
+mod git_pr_range_gate;
 #[allow(dead_code)]
 #[path = "../git_utils.rs"]
 mod git_utils;
@@ -1138,6 +1140,9 @@ async fn handle_rpc_request(
             let body = parse_optional_string(&params, "body");
             let comment_after_create = parse_optional_bool(&params, "commentAfterCreate");
             let comment_body = parse_optional_string(&params, "commentBody");
+            let allow_large_range = parse_optional_bool(&params, "allowLargeRange");
+            let confirmed_range_fingerprint =
+                parse_optional_string(&params, "confirmedRangeFingerprint");
             let response = state
                 .create_git_pr_workflow(
                     workspace_id,
@@ -1149,6 +1154,8 @@ async fn handle_rpc_request(
                     body,
                     comment_after_create,
                     comment_body,
+                    allow_large_range,
+                    confirmed_range_fingerprint,
                 )
                 .await?;
             serde_json::to_value(response).map_err(|err| err.to_string())

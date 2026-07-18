@@ -3,6 +3,29 @@ use super::*;
 const GIT_STATUS_DIFF_STATS_FILE_LIMIT: usize = 120;
 const GIT_STATUS_DIFF_STATS_MAX_FILE_BYTES: u64 = 256 * 1024;
 
+fn build_pr_precheck_failure(reason: String, command: &str) -> GitPrWorkflowResult {
+    GitPrWorkflowResult {
+        ok: false,
+        status: "failed".to_string(),
+        message: reason.clone(),
+        error_category: Some("precheck".to_string()),
+        next_action_hint: Some("Fix the PR precheck failure, then retry.".to_string()),
+        pr_url: None,
+        pr_number: None,
+        existing_pr: None,
+        retry_command: None,
+        range_gate: None,
+        stages: vec![GitPrWorkflowStage {
+            key: "precheck".to_string(),
+            status: "failed".to_string(),
+            detail: reason,
+            command: Some(command.to_string()),
+            stdout: None,
+            stderr: None,
+        }],
+    }
+}
+
 fn open_repository_at_root(repo_root: &Path) -> Result<git2::Repository, String> {
     git2::Repository::open_ext(
         repo_root,
@@ -2288,6 +2311,8 @@ impl DaemonState {
         body: Option<String>,
         comment_after_create: Option<bool>,
         comment_body: Option<String>,
+        allow_large_range: Option<bool>,
+        confirmed_range_fingerprint: Option<String>,
     ) -> Result<GitPrWorkflowResult, String> {
         let repo_root = self.git_repo_root(&workspace_id).await?;
         let upstream_repo = upstream_repo.trim().to_string();
@@ -2302,6 +2327,128 @@ impl DaemonState {
             || title.is_empty()
         {
             return Err("Missing required PR workflow fields.".to_string());
+        }
+
+        let fetch_command = format!("git fetch upstream {base_branch}");
+        if let Err(reason) = git_core::run_git_command_owned_non_interactive(
+            repo_root.clone(),
+            vec![
+                "fetch".to_string(),
+                "upstream".to_string(),
+                base_branch.clone(),
+            ],
+        )
+        .await
+        {
+            return Ok(build_pr_precheck_failure(reason, &fetch_command));
+        }
+        let base_ref = format!("upstream/{base_branch}");
+        let revision_output = match git_core::run_git_command_owned_non_interactive(
+            repo_root.clone(),
+            vec![
+                "rev-parse".to_string(),
+                base_ref.clone(),
+                "HEAD".to_string(),
+            ],
+        )
+        .await
+        {
+            Ok(output) => output,
+            Err(reason) => {
+                return Ok(build_pr_precheck_failure(
+                    reason,
+                    "git rev-parse upstream/<base> HEAD",
+                ));
+            }
+        };
+        let Some(range_fingerprint) =
+            git_pr_range_gate::parse_pr_range_fingerprint(&revision_output)
+        else {
+            return Ok(build_pr_precheck_failure(
+                "Unable to resolve the current PR range fingerprint.".to_string(),
+                "git rev-parse upstream/<base> HEAD",
+            ));
+        };
+        let range_ref = format!("{base_ref}...HEAD");
+        let range_output = match git_core::run_git_command_owned_non_interactive(
+            repo_root.clone(),
+            vec!["diff".to_string(), "--name-only".to_string(), range_ref],
+        )
+        .await
+        {
+            Ok(output) => output,
+            Err(reason) => {
+                return Ok(build_pr_precheck_failure(
+                    reason,
+                    "git diff --name-only upstream/<base>...HEAD",
+                ));
+            }
+        };
+        let changed_paths = range_output
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>();
+        match git_pr_range_gate::evaluate_pr_range_gate(
+            &changed_paths,
+            allow_large_range.unwrap_or(false),
+            confirmed_range_fingerprint.as_deref(),
+            &range_fingerprint,
+        ) {
+            git_pr_range_gate::PrRangeGateDecision::Pass { .. } => {}
+            git_pr_range_gate::PrRangeGateDecision::ConfirmationRequired {
+                category,
+                reason,
+                range_gate,
+            } => {
+                return Ok(GitPrWorkflowResult {
+                    ok: false,
+                    status: "failed".to_string(),
+                    message: reason.clone(),
+                    error_category: Some(category),
+                    next_action_hint: Some(
+                        "Review the large PR range, then confirm once to continue.".to_string(),
+                    ),
+                    pr_url: None,
+                    pr_number: None,
+                    existing_pr: None,
+                    retry_command: None,
+                    range_gate: Some(range_gate),
+                    stages: vec![GitPrWorkflowStage {
+                        key: "precheck".to_string(),
+                        status: "failed".to_string(),
+                        detail: reason,
+                        command: Some("git diff --name-only upstream/<base>...HEAD".to_string()),
+                        stdout: None,
+                        stderr: None,
+                    }],
+                });
+            }
+            git_pr_range_gate::PrRangeGateDecision::Blocked { category, reason } => {
+                return Ok(GitPrWorkflowResult {
+                    ok: false,
+                    status: "failed".to_string(),
+                    message: reason.clone(),
+                    error_category: Some(category),
+                    next_action_hint: Some(
+                        "Fix branch base/range first, then retry PR workflow.".to_string(),
+                    ),
+                    pr_url: None,
+                    pr_number: None,
+                    existing_pr: None,
+                    retry_command: None,
+                    range_gate: None,
+                    stages: vec![GitPrWorkflowStage {
+                        key: "precheck".to_string(),
+                        status: "failed".to_string(),
+                        detail: reason,
+                        command: Some("git diff --name-only upstream/<base>...HEAD".to_string()),
+                        stdout: None,
+                        stderr: None,
+                    }],
+                });
+            }
         }
 
         let body_text = trim_optional(body).unwrap_or_else(|| "".to_string());
@@ -2350,6 +2497,7 @@ impl DaemonState {
                     "gh pr create --repo {} --base {} --head {} --title {:?}",
                     upstream_repo, base_branch, head_ref, title
                 )),
+                range_gate: None,
                 stages: vec![GitPrWorkflowStage {
                     key: "create-pr".to_string(),
                     status: "failed".to_string(),
@@ -2416,6 +2564,7 @@ impl DaemonState {
             pr_number,
             existing_pr: None,
             retry_command: None,
+            range_gate: None,
             stages,
         })
     }
@@ -2907,5 +3056,24 @@ impl DaemonState {
             old_image_mime: None,
             new_image_mime: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod pr_precheck_tests {
+    use super::*;
+
+    #[test]
+    fn daemon_pr_precheck_failure_is_structured() {
+        let result =
+            build_pr_precheck_failure("fetch failed".to_string(), "git fetch upstream main");
+
+        assert!(!result.ok);
+        assert_eq!(result.status, "failed");
+        assert_eq!(result.error_category.as_deref(), Some("precheck"));
+        assert!(result.range_gate.is_none());
+        assert_eq!(result.stages.len(), 1);
+        assert_eq!(result.stages[0].key, "precheck");
+        assert_eq!(result.stages[0].status, "failed");
     }
 }

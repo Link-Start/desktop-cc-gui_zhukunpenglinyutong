@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use crate::utils::{async_command, git_env_path, resolve_git_binary};
 
+const NON_INTERACTIVE_GIT_TIMEOUT_SECS: u64 = 120;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FileHistoryEntry {
     pub(crate) oid: String,
@@ -49,6 +51,40 @@ pub(crate) async fn run_git_command_owned(
         .map(|value| value.as_str())
         .collect::<Vec<_>>();
     run_git_command(&repo_path, &arg_refs).await
+}
+
+pub(crate) async fn run_git_command_owned_non_interactive(
+    repo_path: PathBuf,
+    args_owned: Vec<String>,
+) -> Result<String, String> {
+    let git_bin = resolve_git_binary().map_err(|err| format!("Failed to run git: {err}"))?;
+    let command_display = format!("git {}", args_owned.join(" "));
+    let mut command = async_command(git_bin);
+    command
+        .args(&args_owned)
+        .current_dir(repo_path)
+        .env("PATH", git_env_path())
+        .env_remove("GH_TOKEN")
+        .env_remove("GITHUB_TOKEN")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GCM_INTERACTIVE", "never")
+        .kill_on_drop(true)
+        .stdin(std::process::Stdio::null());
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(NON_INTERACTIVE_GIT_TIMEOUT_SECS),
+        command.output(),
+    )
+    .await
+    .map_err(|_| {
+        format!(
+            "Git command timed out after {NON_INTERACTIVE_GIT_TIMEOUT_SECS}s: {command_display}"
+        )
+    })?
+    .map_err(|err| format!("Failed to run git: {err}"))?;
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+    }
+    Err(format_git_error(&output.stdout, &output.stderr))
 }
 
 pub(crate) fn normalize_file_history_path(path: &str) -> Result<String, String> {
@@ -465,6 +501,23 @@ mod tests {
         }
 
         drop(repo);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn non_interactive_git_runner_propagates_command_failure() {
+        let root = std::env::temp_dir().join(format!("ccgui-pr-precheck-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create test repository root");
+        git2::Repository::init(&root).expect("init test repository");
+
+        let error = run_git_command_owned_non_interactive(
+            root.clone(),
+            vec!["rev-parse".to_string(), "missing-range-ref".to_string()],
+        )
+        .await
+        .expect_err("missing revision should fail");
+
+        assert!(!error.trim().is_empty());
         let _ = fs::remove_dir_all(root);
     }
 }
