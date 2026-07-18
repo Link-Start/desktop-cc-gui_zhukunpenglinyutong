@@ -4,7 +4,13 @@ import { DragDropContext } from "@hello-pangea/dnd";
 import type { DropResult } from "@hello-pangea/dnd";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
 import X from "lucide-react/dist/esm/icons/x";
-import type { AppMode, EngineStatus, EngineType, WorkspaceInfo } from "../../../types";
+import type {
+  AppMode,
+  EngineStatus,
+  EngineType,
+  ModelOption,
+  WorkspaceInfo,
+} from "../../../types";
 import type {
   KanbanTaskChain,
   KanbanTaskSchedule,
@@ -288,6 +294,7 @@ type KanbanBoardProps = {
     newSortOrder: number
   ) => void;
   onAppModeChange: (mode: AppMode) => void;
+  codexModels: ModelOption[];
   engineStatuses: EngineStatus[];
   conversationNode: ReactNode | null;
   selectedTaskId: string | null;
@@ -317,6 +324,7 @@ export function KanbanBoard({
   onDeleteTask,
   onReorderTask,
   onAppModeChange,
+  codexModels,
   engineStatuses,
   conversationNode,
   selectedTaskId,
@@ -868,6 +876,7 @@ export function KanbanBoard({
         workspaceBackendId={workspace.id}
         panelId={panel.id}
         defaultStatus={createDefaultStatus}
+        codexModels={codexModels}
         engineStatuses={engineStatuses}
         onSubmit={handleCreateTask}
         onCancel={() => {

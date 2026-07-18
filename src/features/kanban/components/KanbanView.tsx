@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-import type { AppMode, EngineStatus, EngineType, WorkspaceInfo } from "../../../types";
+import type {
+  AppMode,
+  EngineStatus,
+  EngineType,
+  ModelOption,
+  WorkspaceInfo,
+} from "../../../types";
 import { loadKanbanStyles } from "../../../styles/featureStyleLoaders";
 import { useFeatureStylesReady } from "../../../styles/useFeatureStylesReady";
 import type {
@@ -49,6 +55,7 @@ type KanbanViewProps = {
   onDeletePanel: (panelId: string) => void;
   onAddWorkspace: () => void;
   onAppModeChange: (mode: AppMode) => void;
+  codexModels: ModelOption[];
   engineStatuses: EngineStatus[];
   conversationNode: ReactNode | null;
   selectedTaskId: string | null;
@@ -78,6 +85,7 @@ export function KanbanView({
   onDeletePanel,
   onAddWorkspace,
   onAppModeChange,
+  codexModels,
   engineStatuses,
   conversationNode,
   selectedTaskId,
@@ -139,6 +147,7 @@ export function KanbanView({
         onDeleteTask={onDeleteTask}
         onReorderTask={onReorderTask}
         onAppModeChange={onAppModeChange}
+        codexModels={codexModels}
         engineStatuses={engineStatuses}
         conversationNode={conversationNode}
         selectedTaskId={selectedTaskId}

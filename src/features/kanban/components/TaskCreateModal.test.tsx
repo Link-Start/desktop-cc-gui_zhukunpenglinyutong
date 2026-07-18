@@ -2,9 +2,11 @@
 
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EngineStatus } from "../../../types";
+import type { EngineStatus, ModelOption } from "../../../types";
 import { generateThreadTitle } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
+import type { KanbanTask } from "../types";
+import { clearTaskDraft, saveTaskDraft } from "../utils/kanbanStorage";
 import { TaskCreateModal } from "./TaskCreateModal";
 
 vi.mock("../../../services/tauri", async () => {
@@ -47,6 +49,70 @@ const engineStatuses: EngineStatus[] = [
   },
 ];
 
+const emptyCodexModels: ModelOption[] = [];
+
+const sharedCodexModels: ModelOption[] = [
+  {
+    id: "gpt-5.6-sol",
+    model: "gpt-5.6-sol",
+    displayName: "GPT-5.6 Sol",
+    description: "Latest Codex model",
+    source: "catalog",
+    supportedReasoningEfforts: [],
+    defaultReasoningEffort: "medium",
+    isDefault: true,
+  },
+  {
+    id: "gpt-5.4",
+    model: "gpt-5.4",
+    displayName: "GPT-5.4",
+    description: "Codex model",
+    source: "runtime",
+    supportedReasoningEfforts: [],
+    defaultReasoningEffort: "medium",
+    isDefault: false,
+  },
+];
+
+const engineStatusesWithLegacyCodexModels: EngineStatus[] = [
+  ...engineStatuses,
+  {
+    engineType: "codex",
+    installed: true,
+    version: "1.0.0",
+    binPath: "/usr/local/bin/codex",
+    features: {
+      streaming: true,
+      reasoning: true,
+      toolUse: true,
+      imageInput: true,
+      sessionContinuation: true,
+    },
+    models: [
+      {
+        id: "gpt-5.1-codex-max",
+        displayName: "GPT-5.1 Codex Max",
+        description: "Legacy fallback model",
+        isDefault: true,
+      },
+    ],
+    error: null,
+  },
+];
+
+function findSelectWithOption(
+  container: HTMLElement,
+  optionValue: string,
+): HTMLSelectElement {
+  const select = Array.from(container.querySelectorAll("select")).find((candidate) =>
+    Array.from(candidate.options).some((option) => option.value === optionValue),
+  );
+  if (!select) {
+    throw new Error(`Select containing option "${optionValue}" was not found`);
+  }
+  return select;
+}
+
 describe("TaskCreateModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -54,6 +120,7 @@ describe("TaskCreateModal", () => {
 
   afterEach(() => {
     cleanup();
+    clearTaskDraft("panel-codex-draft-test");
     vi.useRealTimers();
   });
 
@@ -63,6 +130,7 @@ describe("TaskCreateModal", () => {
       workspaceBackendId: "ws-1",
       panelId: "panel-1",
       defaultStatus: "todo" as const,
+      codexModels: emptyCodexModels,
       engineStatuses,
       availableTasks: [],
       onSubmit: vi.fn(),
@@ -90,6 +158,7 @@ describe("TaskCreateModal", () => {
       workspaceBackendId: "workspace-uuid-1",
       panelId: "panel-1",
       defaultStatus: "todo" as const,
+      codexModels: emptyCodexModels,
       engineStatuses,
       availableTasks: [],
       onSubmit: vi.fn(),
@@ -133,6 +202,7 @@ describe("TaskCreateModal", () => {
       workspaceBackendId: "workspace-uuid-1",
       panelId: "panel-1",
       defaultStatus: "todo" as const,
+      codexModels: emptyCodexModels,
       engineStatuses,
       availableTasks: [],
       onSubmit: vi.fn(),
@@ -195,6 +265,7 @@ describe("TaskCreateModal", () => {
       workspaceBackendId: "ws-1",
       panelId: "panel-1",
       defaultStatus: "todo" as const,
+      codexModels: emptyCodexModels,
       engineStatuses,
       availableTasks: [editingTask],
       onSubmit: vi.fn(),
@@ -221,6 +292,7 @@ describe("TaskCreateModal", () => {
       workspaceBackendId: "ws-1",
       panelId: "panel-1",
       defaultStatus: "todo" as const,
+      codexModels: emptyCodexModels,
       engineStatuses,
       availableTasks: [
         {
@@ -309,6 +381,7 @@ describe("TaskCreateModal", () => {
       workspaceBackendId: "ws-1",
       panelId: "panel-1",
       defaultStatus: "todo" as const,
+      codexModels: emptyCodexModels,
       engineStatuses,
       availableTasks: [],
       onSubmit: vi.fn(),
@@ -331,6 +404,7 @@ describe("TaskCreateModal", () => {
       workspaceBackendId: "ws-1",
       panelId: "panel-1",
       defaultStatus: "inprogress" as const,
+      codexModels: emptyCodexModels,
       engineStatuses,
       availableTasks: [],
       onSubmit,
@@ -356,5 +430,229 @@ describe("TaskCreateModal", () => {
 
     expect(onSubmit.mock.calls[0]?.[0]?.autoStart).toBe(false);
     expect(onSubmit.mock.calls[0]?.[0]?.schedule?.mode).toBe("recurring");
+  });
+
+  it("uses the shared Codex catalog and submits its selected model", async () => {
+    const onSubmit = vi.fn();
+    const props = {
+      workspaceId: "ws-1",
+      workspaceBackendId: "ws-1",
+      panelId: "panel-1",
+      defaultStatus: "todo" as const,
+      codexModels: sharedCodexModels,
+      engineStatuses: engineStatusesWithLegacyCodexModels,
+      availableTasks: [],
+      onSubmit,
+      onCancel: vi.fn(),
+    };
+
+    const { container, getByPlaceholderText, getByText } = render(
+      <TaskCreateModal {...props} isOpen />,
+    );
+
+    fireEvent.change(findSelectWithOption(container, "codex"), {
+      target: { value: "codex" },
+    });
+
+    await waitFor(() => {
+      const modelSelect = findSelectWithOption(container, "gpt-5.6-sol");
+      expect(Array.from(modelSelect.options).map((option) => option.value)).toEqual([
+        "gpt-5.6-sol",
+        "gpt-5.4",
+      ]);
+      expect(Array.from(modelSelect.options).map((option) => option.textContent)).toEqual([
+        "GPT-5.6 Sol",
+        "GPT-5.4",
+      ]);
+      expect(
+        Array.from(modelSelect.options).some(
+          (option) => option.value === "gpt-5.1-codex-max",
+        ),
+      ).toBe(false);
+    });
+
+    fireEvent.change(findSelectWithOption(container, "gpt-5.4"), {
+      target: { value: "gpt-5.4" },
+    });
+    fireEvent.change(getByPlaceholderText("kanban.task.titlePlaceholder"), {
+      target: { value: "Use shared catalog" },
+    });
+    fireEvent.click(getByText("kanban.task.create"));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          engineType: "codex",
+          modelId: "gpt-5.4",
+        }),
+      );
+    });
+  });
+
+  it("preserves an edited Codex model when the modal first opens", async () => {
+    const onUpdate = vi.fn();
+    const editingTask: KanbanTask = {
+      id: "task-codex-edit",
+      workspaceId: "ws-1",
+      panelId: "panel-1",
+      title: "Keep edited model",
+      description: "",
+      status: "todo",
+      engineType: "codex",
+      modelId: "gpt-5.4",
+      branchName: "main",
+      images: [],
+      autoStart: false,
+      sortOrder: 1,
+      threadId: null,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const props = {
+      workspaceId: "ws-1",
+      workspaceBackendId: "ws-1",
+      panelId: "panel-1",
+      defaultStatus: "todo" as const,
+      codexModels: sharedCodexModels,
+      engineStatuses: engineStatusesWithLegacyCodexModels,
+      availableTasks: [editingTask],
+      editingTask,
+      onSubmit: vi.fn(),
+      onUpdate,
+      onCancel: vi.fn(),
+    };
+
+    const { container, getByText, rerender } = render(
+      <TaskCreateModal {...props} isOpen={false} />,
+    );
+    rerender(<TaskCreateModal {...props} isOpen />);
+
+    await waitFor(() => {
+      expect(findSelectWithOption(container, "gpt-5.4").value).toBe("gpt-5.4");
+    });
+
+    fireEvent.click(getByText("kanban.task.update"));
+
+    await waitFor(() => {
+      expect(onUpdate).toHaveBeenCalledWith(
+        "task-codex-edit",
+        expect.objectContaining({
+          engineType: "codex",
+          modelId: "gpt-5.4",
+        }),
+      );
+    });
+  });
+
+  it("preserves a drafted Codex model when the modal first opens", async () => {
+    const panelId = "panel-codex-draft-test";
+    const onSubmit = vi.fn();
+    saveTaskDraft(panelId, {
+      title: "Keep drafted model",
+      description: "",
+      engineType: "codex",
+      modelId: "gpt-5.4",
+      images: [],
+    });
+    const props = {
+      workspaceId: "ws-1",
+      workspaceBackendId: "ws-1",
+      panelId,
+      defaultStatus: "todo" as const,
+      codexModels: sharedCodexModels,
+      engineStatuses: engineStatusesWithLegacyCodexModels,
+      availableTasks: [],
+      onSubmit,
+      onCancel: vi.fn(),
+    };
+
+    const { container, getByText, rerender } = render(
+      <TaskCreateModal {...props} isOpen={false} />,
+    );
+    rerender(<TaskCreateModal {...props} isOpen />);
+
+    await waitFor(() => {
+      expect(findSelectWithOption(container, "gpt-5.4").value).toBe("gpt-5.4");
+    });
+
+    fireEvent.click(getByText("kanban.task.create"));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          engineType: "codex",
+          modelId: "gpt-5.4",
+        }),
+      );
+    });
+  });
+
+  it("preserves valid Codex selection and falls back when the catalog removes it", async () => {
+    const [defaultCodexModel, alternateCodexModel] = sharedCodexModels;
+    if (!defaultCodexModel || !alternateCodexModel) {
+      throw new Error("Shared Codex model fixtures are incomplete");
+    }
+    const props = {
+      workspaceId: "ws-1",
+      workspaceBackendId: "ws-1",
+      panelId: "panel-1",
+      defaultStatus: "todo" as const,
+      codexModels: sharedCodexModels,
+      engineStatuses: engineStatusesWithLegacyCodexModels,
+      availableTasks: [],
+      onSubmit: vi.fn(),
+      onCancel: vi.fn(),
+    };
+
+    const { container, rerender } = render(<TaskCreateModal {...props} isOpen />);
+    fireEvent.change(findSelectWithOption(container, "codex"), {
+      target: { value: "codex" },
+    });
+    await waitFor(() => {
+      expect(findSelectWithOption(container, "gpt-5.4").value).toBe("gpt-5.6-sol");
+    });
+
+    fireEvent.change(findSelectWithOption(container, "gpt-5.4"), {
+      target: { value: "gpt-5.4" },
+    });
+    rerender(
+      <TaskCreateModal
+        {...props}
+        codexModels={[alternateCodexModel, defaultCodexModel]}
+        isOpen
+      />,
+    );
+    await waitFor(() => {
+      expect(findSelectWithOption(container, "gpt-5.4").value).toBe("gpt-5.4");
+    });
+
+    const replacementCatalog: ModelOption[] = [
+      {
+        ...defaultCodexModel,
+        id: "gpt-5.6-terra",
+        model: "gpt-5.6-terra",
+        displayName: "GPT-5.6 Terra",
+        isDefault: true,
+      },
+    ];
+    rerender(
+      <TaskCreateModal
+        {...props}
+        codexModels={replacementCatalog}
+        isOpen
+      />,
+    );
+    await waitFor(() => {
+      expect(findSelectWithOption(container, "gpt-5.6-terra").value).toBe(
+        "gpt-5.6-terra",
+      );
+    });
+    const modelSelect = findSelectWithOption(container, "gpt-5.6-terra");
+
+    rerender(<TaskCreateModal {...props} codexModels={[]} isOpen />);
+    await waitFor(() => {
+      expect(Array.from(modelSelect.options).map((option) => option.value)).toEqual([""]);
+      expect(modelSelect.value).toBe("");
+    });
   });
 });

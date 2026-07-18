@@ -212,6 +212,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     loadingProgressDialog,
     mainHeaderNode,
     messagesNode,
+    models,
     moveWorkspaceGroup,
     onGitHistoryPanelResizeStart,
     onKanbanConversationResizeStart,
@@ -530,6 +531,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
                 onDeletePanel={kanbanDeletePanel}
                 onAddWorkspace={handleAddWorkspace}
                 onAppModeChange={handleAppModeChange}
+                codexModels={models}
                 engineStatuses={engineStatuses}
                 conversationNode={kanbanConversationNode}
                 selectedTaskId={selectedKanbanTaskId}

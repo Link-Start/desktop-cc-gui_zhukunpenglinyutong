@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import X from "lucide-react/dist/esm/icons/x";
 import ImagePlus from "lucide-react/dist/esm/icons/image-plus";
@@ -11,7 +11,7 @@ import Settings2 from "lucide-react/dist/esm/icons/settings-2";
 import Hash from "lucide-react/dist/esm/icons/hash";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import Link2 from "lucide-react/dist/esm/icons/link-2";
-import type { EngineStatus, EngineType } from "../../../types";
+import type { EngineStatus, EngineType, ModelOption } from "../../../types";
 import type {
   KanbanNewThreadResultMode,
   KanbanRecurringUnit,
@@ -52,6 +52,7 @@ type TaskCreateModalProps = {
   workspaceBackendId: string;
   panelId: string;
   defaultStatus: KanbanTaskStatus;
+  codexModels: ModelOption[];
   engineStatuses: EngineStatus[];
   onSubmit: (input: CreateTaskInput) => void;
   onCancel: () => void;
@@ -82,6 +83,7 @@ export function TaskCreateModal({
   workspaceBackendId,
   panelId,
   defaultStatus,
+  codexModels,
   engineStatuses,
   onSubmit,
   onCancel,
@@ -92,6 +94,7 @@ export function TaskCreateModal({
   const { t, i18n } = useTranslation();
   const titleRef = useRef<HTMLInputElement>(null);
   const descTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const pendingModelInitializationEngineRef = useRef<EngineType | null>(null);
   const {
     applySuggestion: applyInlineCompletion,
     clear: clearInlineCompletion,
@@ -139,7 +142,13 @@ export function TaskCreateModal({
   const selectedEngine = engineStatuses.find(
     (e) => e.engineType === engineType
   );
-  const availableModels = selectedEngine?.models ?? [];
+  const availableModels = useMemo(
+    () =>
+      engineType === "codex"
+        ? codexModels
+        : (selectedEngine?.models ?? []),
+    [codexModels, engineType, selectedEngine],
+  );
   const chainCandidates = availableTasks.filter(
     (task) => task.id !== editingTask?.id && task.status === "todo",
   );
@@ -211,6 +220,7 @@ export function TaskCreateModal({
       return;
     }
     if (editingTask) {
+      pendingModelInitializationEngineRef.current = editingTask.engineType;
       setTitle(editingTask.title);
       setDescription(editingTask.description);
       setEngineType(editingTask.engineType);
@@ -228,12 +238,15 @@ export function TaskCreateModal({
     } else {
       const draft = loadTaskDraft(panelId);
       if (draft && (draft.title || draft.description)) {
+        const draftEngineType = draft.engineType as EngineType;
+        pendingModelInitializationEngineRef.current = draftEngineType;
         setTitle(draft.title);
         setDescription(draft.description);
-        setEngineType(draft.engineType as EngineType);
+        setEngineType(draftEngineType);
         setModelId(draft.modelId);
         setImages(draft.images);
       } else {
+        pendingModelInitializationEngineRef.current = null;
         setTitle("");
         setDescription("");
         setImages([]);
@@ -266,14 +279,25 @@ export function TaskCreateModal({
   }, [availableEngines, engineType, isOpen]);
 
   useEffect(() => {
-    const engine = engineStatuses.find((e) => e.engineType === engineType);
-    if (engine?.models.length) {
-      const defaultModel = engine.models.find((m) => m.isDefault);
-      setModelId(defaultModel?.id ?? engine.models[0]?.id ?? null);
-    } else {
-      setModelId(null);
+    if (!isOpen) {
+      return;
     }
-  }, [engineType, engineStatuses]);
+    const pendingEngineType = pendingModelInitializationEngineRef.current;
+    if (pendingEngineType !== null && pendingEngineType !== engineType) {
+      return;
+    }
+    pendingModelInitializationEngineRef.current = null;
+    setModelId((currentModelId) => {
+      const currentModelIsAvailable =
+        currentModelId !== null &&
+        availableModels.some((model) => model.id === currentModelId);
+      if (currentModelIsAvailable) {
+        return currentModelId;
+      }
+      const defaultModel = availableModels.find((model) => model.isDefault);
+      return defaultModel?.id ?? availableModels[0]?.id ?? null;
+    });
+  }, [availableModels, engineType, isOpen]);
 
   useEffect(() => {
     if (scheduleMode !== "manual" && previousTaskId) {

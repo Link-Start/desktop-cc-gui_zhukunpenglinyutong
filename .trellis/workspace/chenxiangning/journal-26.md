@@ -408,3 +408,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1038: 统一看板 Codex 模型目录并修复初始化竞态
+
+**Date**: 2026-07-19
+**Task**: 统一看板 Codex 模型目录并修复初始化竞态
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+看板任务弹窗复用对话框的 Codex 模型目录，保留其他引擎原有来源；修复编辑与草稿首次打开时的模型初始化竞态，并补充目录顺序、回退、空目录与提交 payload 回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `864414c0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
