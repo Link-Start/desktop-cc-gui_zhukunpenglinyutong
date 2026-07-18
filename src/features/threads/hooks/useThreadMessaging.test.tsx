@@ -19,6 +19,7 @@ import {
   interruptTurn,
   listGeminiSessions,
   loadClaudeSession,
+  resolveEnabledBuiltInAgent,
   sendUserMessage,
 } from "../../../services/tauri";
 import { getClientStoreSync } from "../../../services/clientStorage";
@@ -2403,6 +2404,75 @@ describe("useThreadMessaging", () => {
     expect(sentText).toContain("Agent Name: 后端架构师");
     expect(sentText).toContain("Agent Icon: agent-robot-03");
     expect(sentText).toContain("你是一位资深后端架构师，擅长服务治理和高并发设计。");
+  });
+
+  it("resolves and injects a built-in agent prompt only at send time", async () => {
+    vi.mocked(resolveEnabledBuiltInAgent).mockResolvedValueOnce({
+      id: "agency-agents:engineering/engineering-ai-engineer",
+      providerId: "agency-agents",
+      sourceRevision: "revision-2",
+      promptHash: "hash-2",
+      prompt: "只在发送时解析的内置提示词。",
+    });
+    const { result } = makeThreadMessagingHook("codex");
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "请继续",
+        [],
+        {
+          selectedAgent: {
+            id: "agency-agents:engineering/engineering-ai-engineer",
+            name: "AI 工程师",
+            source: "builtIn",
+            prompt: null,
+          },
+        },
+      );
+    });
+
+    expect(resolveEnabledBuiltInAgent).toHaveBeenCalledWith(
+      "agency-agents:engineering/engineering-ai-engineer",
+    );
+    const sentText = String(vi.mocked(sendUserMessage).mock.calls.at(-1)?.[2] ?? "");
+    expect(sentText).toContain("## Agent Role and Instructions");
+    expect(sentText).toContain("只在发送时解析的内置提示词。");
+  });
+
+  it("sends without stale prompt when a selected built-in agent is disabled", async () => {
+    vi.mocked(resolveEnabledBuiltInAgent).mockRejectedValueOnce(
+      new Error("built-in agent is disabled"),
+    );
+    const { result } = makeThreadMessagingHook("codex");
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "只发送这句话",
+        [],
+        {
+          selectedAgent: {
+            id: "agency-agents:design/design-ui-designer",
+            name: "UI 设计师",
+            source: "builtIn",
+            prompt: "不应注入的旧提示词",
+          },
+        },
+      );
+    });
+
+    const sentText = String(vi.mocked(sendUserMessage).mock.calls.at(-1)?.[2] ?? "");
+    expect(sentText).not.toContain("## Agent Role and Instructions");
+    expect(sentText).not.toContain("不应注入的旧提示词");
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.any(String),
+        message: expect.any(String),
+      }),
+    );
   });
 
   it("releases codex processing state when first packet timeout is recoverable", async () => {

@@ -1,9 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import Pencil from "lucide-react/dist/esm/icons/pencil";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
+import { BuiltInAgentCatalogSection } from "../../agent-catalog/components/BuiltInAgentCatalogSection";
 import { AgentIcon } from "../../../components/AgentIcon";
+import type { AppSettings } from "../../../types";
 import {
   AGENT_ICON_GROUPS,
   DEFAULT_AGENT_ICON,
@@ -13,10 +22,17 @@ import { useAgentManagement } from "../hooks/useAgentManagement";
 
 export type AgentSettingsSectionProps = {
   active: boolean;
+  onUpdateAppSettings: (next: AppSettings) => Promise<void>;
 };
 
-export function AgentSettingsSection({ active }: AgentSettingsSectionProps) {
+export function AgentSettingsSection({
+  active,
+  onUpdateAppSettings,
+}: AgentSettingsSectionProps) {
   const { t } = useTranslation();
+  const [agentLibraryView, setAgentLibraryView] = useState<"custom" | "builtIn">(
+    "custom",
+  );
   const {
     agentList,
     agentLoading,
@@ -99,10 +115,27 @@ export function AgentSettingsSection({ active }: AgentSettingsSectionProps) {
   );
 
   useEffect(() => {
-    if (active) {
+    if (active && agentLibraryView === "custom") {
       void loadAgents();
     }
-  }, [active, loadAgents]);
+  }, [active, agentLibraryView, loadAgents]);
+
+  const handleCopyBuiltInAgent = useCallback(
+    (agent: { name: string; prompt: string }) => {
+      setAgentLibraryView("custom");
+      setAgentDialog({
+        open: true,
+        mode: "create",
+        target: null,
+        name: agent.name.slice(0, 64),
+        prompt: agent.prompt,
+        icon: DEFAULT_AGENT_ICON,
+        nameError: null,
+        saving: false,
+      });
+    },
+    [setAgentDialog],
+  );
 
   return (
     <>
@@ -113,7 +146,36 @@ export function AgentSettingsSection({ active }: AgentSettingsSectionProps) {
             {t("settings.agent.description")}
           </div>
 
-          {agentNotice && (
+          <div
+            className="settings-agent-library-tabs"
+            role="tablist"
+            aria-label={t("settings.agent.libraryTabs")}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={agentLibraryView === "custom"}
+              className={`settings-agent-library-tab ${
+                agentLibraryView === "custom" ? "active" : ""
+              }`}
+              onClick={() => setAgentLibraryView("custom")}
+            >
+              {t("settings.agent.myAgents")}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={agentLibraryView === "builtIn"}
+              className={`settings-agent-library-tab ${
+                agentLibraryView === "builtIn" ? "active" : ""
+              }`}
+              onClick={() => setAgentLibraryView("builtIn")}
+            >
+              {t("settings.agent.builtInAgents")}
+            </button>
+          </div>
+
+          {agentLibraryView === "custom" && agentNotice && (
             <div
               className={`settings-agent-notice ${
                 agentNotice.kind === "error" ? "is-error" : "is-success"
@@ -123,6 +185,8 @@ export function AgentSettingsSection({ active }: AgentSettingsSectionProps) {
             </div>
           )}
 
+          {agentLibraryView === "custom" && (
+            <>
           <div className="settings-agent-toolbar">
             <Button
               variant="outline"
@@ -222,6 +286,15 @@ export function AgentSettingsSection({ active }: AgentSettingsSectionProps) {
               ))}
             </div>
           )}
+            </>
+          )}
+          {agentLibraryView === "builtIn" && (
+            <BuiltInAgentCatalogSection
+              active={active}
+              onUpdateAppSettings={onUpdateAppSettings}
+              onCopyAgent={handleCopyBuiltInAgent}
+            />
+          )}
         </section>
       )}
 
@@ -246,7 +319,7 @@ export function AgentSettingsSection({ active }: AgentSettingsSectionProps) {
                   className="vendor-input"
                   value={agentDialog.name}
                   placeholder={t("settings.agent.dialog.namePlaceholder")}
-                  maxLength={20}
+                  maxLength={64}
                   onChange={(event) =>
                     setAgentDialog((prev) => ({
                       ...prev,
@@ -255,7 +328,7 @@ export function AgentSettingsSection({ active }: AgentSettingsSectionProps) {
                     }))
                   }
                 />
-                <div className="settings-agent-counter">{agentDialog.name.length}/20</div>
+                <div className="settings-agent-counter">{agentDialog.name.length}/64</div>
               </div>
               <div className="vendor-form-group">
                 <label>{t("settings.agent.dialog.icon")}</label>

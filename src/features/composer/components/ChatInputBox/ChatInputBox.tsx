@@ -626,7 +626,17 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         }
 
         // Select agent: don't insert text, call onAgentSelect callback
-        onAgentSelect?.({ id: agent.id, name: agent.name, prompt: agent.prompt, icon: agent.icon });
+        onAgentSelect?.({
+          id: agent.id,
+          name: agent.name,
+          prompt: agent.prompt,
+          icon: agent.icon,
+          source: agent.source,
+          divisionId: agent.divisionId,
+          divisionLabel: agent.divisionLabel,
+          sourceRevision: agent.sourceRevision,
+          promptHash: agent.promptHash,
+        });
 
         // Clear # trigger text from input box
         if (editableRef.current && query) {

@@ -88,6 +88,22 @@ export {
   getCommitMessagePrompt,
 } from "./tauri/commitMessage";
 export {
+  addAgentConfig,
+  applyImportAgentConfigs,
+  deleteAgentConfig,
+  exportAgentConfigs,
+  getBuiltInAgentPrompt,
+  getSelectedAgentConfig,
+  listAgentConfigs,
+  listBuiltInAgents,
+  previewImportAgentConfigs,
+  resolveEnabledBuiltInAgent,
+  setBuiltInAgentDivisionEnabled,
+  setBuiltInAgentEnabled,
+  setSelectedAgentConfig,
+  updateAgentConfig,
+} from "./tauri/agents";
+export {
   generateThreadTitle,
   listThreadTitles,
   renameThreadTitleKey,
@@ -337,17 +353,6 @@ export type {
   GeminiVendorSettings,
   VendorModelListResult,
 } from "./tauri/vendors";
-export {
-  addAgentConfig,
-  applyImportAgentConfigs,
-  deleteAgentConfig,
-  exportAgentConfigs,
-  getSelectedAgentConfig,
-  listAgentConfigs,
-  previewImportAgentConfigs,
-  setSelectedAgentConfig,
-  updateAgentConfig,
-} from "./tauri/agents";
 export type { WorktreeSetupStatus } from "./tauri/workspaceRuntime";
 export {
   addClone,

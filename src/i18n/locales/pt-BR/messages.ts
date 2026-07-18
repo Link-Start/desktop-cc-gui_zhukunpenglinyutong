@@ -276,7 +276,9 @@ const messages = {
     "toolHeavyDetailMeta": "{{kind}} · {{count}} itens",
     "toolHeavyDetailShow": "Mostrar detalhe",
     "toolHeavyOutput": "Saída",
-    "toolHeavyDiff": "Diff"
+    "toolHeavyDiff": "Diff",
+    "builtInAgentUnavailableTitle": "Agent integrado indisponível",
+    "builtInAgentUnavailableMessage": "Este agent está desabilitado ou indisponível, então o prompt dele não será usado nesta mensagem."
   }
 };
 

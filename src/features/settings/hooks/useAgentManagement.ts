@@ -146,7 +146,7 @@ export function useAgentManagement() {
     const trimmedPrompt = agentDialog.prompt.trim();
     const icon = resolveAgentIcon(agentDialog.icon, DEFAULT_AGENT_ICON);
     const nameLength = trimmedName.length;
-    if (nameLength < 1 || nameLength > 20) {
+    if (nameLength < 1 || nameLength > 64) {
       setAgentDialog((prev) => ({
         ...prev,
         nameError: t("settings.agent.dialog.nameInvalid"),

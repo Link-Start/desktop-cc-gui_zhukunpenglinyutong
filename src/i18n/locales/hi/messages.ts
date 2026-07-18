@@ -276,7 +276,9 @@ const messages = {
     "toolHeavyDetailMeta": "{{kind}} · {{count}} आइटम",
     "toolHeavyDetailShow": "विवरण दिखाएँ",
     "toolHeavyOutput": "आउटपुट",
-    "toolHeavyDiff": "Diff"
+    "toolHeavyDiff": "Diff",
+    "builtInAgentUnavailableTitle": "अंतर्निहित Agent उपलब्ध नहीं है",
+    "builtInAgentUnavailableMessage": "यह Agent अक्षम या अनुपलब्ध है, इसलिए इस संदेश में इसका prompt उपयोग नहीं किया जाएगा।"
   }
 };
 

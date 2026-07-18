@@ -1838,6 +1838,9 @@ const settings = {
       "create": "作成",
       "export": "エクスポート",
       "import": "インポート",
+      "libraryTabs": "エージェントライブラリ表示",
+      "myAgents": "マイエージェント",
+      "builtInAgents": "組み込みエージェント",
       "customAgents": "カスタムエージェント",
       "noAgents": "カスタムエージェントがありません",
       "loading": "読み込み中...",
@@ -1856,7 +1859,7 @@ const settings = {
         "editTitle": "エージェントを編集",
         "name": "名前",
         "namePlaceholder": "エージェント名を入力",
-        "nameInvalid": "名前は 1 文字以上 20 文字以内である必要があります",
+        "nameInvalid": "名前は 1 文字以上 64 文字以内である必要があります",
         "icon": "アイコン",
         "iconGroupMasculine": "人型ロボット · 男性",
         "iconGroupFeminine": "人型ロボット · 女性",
@@ -1891,6 +1894,24 @@ const settings = {
         "title": "Agent をエクスポート",
         "selectHint": "エクスポートする Agent を選択",
         "confirmExport": "エクスポートを確定"
+      },
+      "builtIn": {
+        "title": "組み込みエージェント",
+        "summary": "# ピッカーで {{total}} 件中 {{enabled}} 件を有効化",
+        "loadFailed": "組み込みエージェントカタログを読み込めませんでした。",
+        "searchLabel": "組み込みエージェントを検索",
+        "searchPlaceholder": "名前、能力、グループで検索…",
+        "enabledOnly": "有効のみ",
+        "enableDivision": "グループを有効化",
+        "disableDivision": "グループを無効化",
+        "divisions": "組み込みエージェントのグループ",
+        "all": "すべてのエージェント",
+        "results": "{{count}} 件",
+        "empty": "一致する組み込みエージェントはありません。",
+        "viewDetails": "エージェントの詳細を表示",
+        "copy": "マイエージェントへコピー",
+        "toggle": "# ピッカーに {{name}} を表示",
+        "promptLoading": "エージェントプロンプトを読み込み中…"
       }
     },
     "provider": {

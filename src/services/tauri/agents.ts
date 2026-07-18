@@ -3,6 +3,9 @@ import type {
   AgentConfig,
   AgentImportApplyResult,
   AgentImportPreviewResult,
+  AppSettings,
+  BuiltInAgentCatalog,
+  BuiltInAgentPrompt,
 } from "../../types";
 
 export async function listAgentConfigs(): Promise<AgentConfig[]> {
@@ -65,5 +68,45 @@ export async function applyImportAgentConfigs(input: {
   return invoke<AgentImportApplyResult>("agent_import_apply", {
     agents: input.agents,
     strategy: input.strategy,
+  });
+}
+
+export async function listBuiltInAgents(
+  locale: string,
+): Promise<BuiltInAgentCatalog> {
+  return invoke<BuiltInAgentCatalog>("list_built_in_agents", { locale });
+}
+
+export async function setBuiltInAgentEnabled(
+  agentId: string,
+  enabled: boolean,
+): Promise<AppSettings> {
+  return invoke<AppSettings>("set_built_in_agent_enabled", {
+    agentId,
+    enabled,
+  });
+}
+
+export async function setBuiltInAgentDivisionEnabled(
+  divisionId: string,
+  enabled: boolean,
+): Promise<AppSettings> {
+  return invoke<AppSettings>("set_built_in_agent_division_enabled", {
+    divisionId,
+    enabled,
+  });
+}
+
+export async function getBuiltInAgentPrompt(
+  agentId: string,
+): Promise<BuiltInAgentPrompt> {
+  return invoke<BuiltInAgentPrompt>("get_built_in_agent_prompt", { agentId });
+}
+
+export async function resolveEnabledBuiltInAgent(
+  agentId: string,
+): Promise<BuiltInAgentPrompt> {
+  return invoke<BuiltInAgentPrompt>("resolve_enabled_built_in_agent", {
+    agentId,
   });
 }

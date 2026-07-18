@@ -276,7 +276,9 @@ const messages = {
     "toolHeavyDetailMeta": "{{kind}} · {{count}} 個項目",
     "toolHeavyDetailShow": "顯示詳細內容",
     "toolHeavyOutput": "輸出",
-    "toolHeavyDiff": "差異"
+    "toolHeavyDiff": "差異",
+    "builtInAgentUnavailableTitle": "內建 Agent 無法使用",
+    "builtInAgentUnavailableMessage": "此 Agent 已停用或目前無法使用，因此本次訊息不會使用其 Prompt。"
   }
 };
 

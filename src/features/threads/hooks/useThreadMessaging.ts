@@ -19,6 +19,7 @@ import type {
   WorkspaceInfo,
   BrowserContextSendAttachment,
   IntentCanvasContextSendAttachment,
+  SelectedAgentOption,
 } from "../../../types";
 import type { AutoSessionMetadata } from "../../../services/tauri";
 import {
@@ -116,6 +117,8 @@ import {
 } from "./messageRuntimeController";
 import { useCodexMessageRecovery } from "./useCodexMessageRecovery";
 import { assertEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
+import { resolveSelectedAgentForSend } from "../utils/resolveSelectedAgentForSend";
+import { BUILT_IN_AGENT_RESOLUTION_FAILED_EVENT } from "../../agent-catalog/events";
 
 type SendMessageOptions = {
   skipPromptExpansion?: boolean;
@@ -131,12 +134,7 @@ type SendMessageOptions = {
   selectedMemoryInjectionMode?: MemoryContextInjectionMode;
   memoryReferenceEnabled?: boolean;
   selectedNoteCardIds?: string[];
-  selectedAgent?: {
-    id: string;
-    name: string;
-    prompt?: string | null;
-    icon?: string | null;
-  } | null;
+  selectedAgent?: SelectedAgentOption | null;
   browserContextAttachment?: BrowserContextSendAttachment | null;
   intentCanvasContextAttachments?: IntentCanvasContextSendAttachment[];
   codexInvalidThreadRetryAttempted?: boolean;
@@ -574,8 +572,32 @@ export function useThreadMessaging({
           new Set([...finalImages, ...noteInjectionResult.imagePaths]),
         );
       }
-      const resolvedSelectedAgent =
+      let resolvedSelectedAgent =
         resolvedEngine !== "opencode" ? options?.selectedAgent ?? null : null;
+      if (resolvedSelectedAgent?.source === "builtIn") {
+        const selectedBuiltInAgentId = resolvedSelectedAgent.id;
+        const sendResolution = await resolveSelectedAgentForSend(resolvedSelectedAgent);
+        resolvedSelectedAgent = sendResolution.agent;
+        if (sendResolution.error) {
+          onDebug?.({
+            id: `${Date.now()}-built-in-agent-resolution-error`,
+            timestamp: Date.now(),
+            source: "error",
+            label: "agent/built-in resolution error",
+            payload: sendResolution.error.message,
+          });
+          pushErrorToast({
+            title: t("messages.builtInAgentUnavailableTitle"),
+            message: t("messages.builtInAgentUnavailableMessage"),
+            durationMs: 4200,
+          });
+          window.dispatchEvent(
+            new CustomEvent(BUILT_IN_AGENT_RESOLUTION_FAILED_EVENT, {
+              detail: { agentId: selectedBuiltInAgentId },
+            }),
+          );
+        }
+      }
       const selectedAgentName =
         resolvedEngine !== "opencode"
           ? resolvedSelectedAgent?.name?.trim() || null

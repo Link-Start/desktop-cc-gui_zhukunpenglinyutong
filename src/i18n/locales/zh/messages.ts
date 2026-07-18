@@ -308,6 +308,9 @@ const messages = {
     toolHeavyDetailShow: "显示详情",
     toolHeavyOutput: "输出",
     toolHeavyDiff: "Diff",
+    builtInAgentUnavailableTitle: "内置智能体不可用",
+    builtInAgentUnavailableMessage:
+      "该智能体已被关闭或当前不可用，因此本次消息不会使用它的提示词。",
   },
 };
 

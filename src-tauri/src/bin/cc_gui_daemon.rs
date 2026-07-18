@@ -115,6 +115,9 @@ mod remote_backend {
     }
 }
 #[allow(dead_code)]
+#[path = "../agent_catalog.rs"]
+mod agent_catalog;
+#[allow(dead_code)]
 #[path = "../curated_skills.rs"]
 mod curated_skills;
 #[allow(dead_code)]

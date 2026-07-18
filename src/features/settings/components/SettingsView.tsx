@@ -2377,7 +2377,10 @@ export function SettingsView({
                   {t("settings.agentPromptPromptsTab")}
                 </button>
               </div>
-              <AgentSettingsSection active={agentPromptSubTab === "agents"} />
+              <AgentSettingsSection
+                active={agentPromptSubTab === "agents"}
+                onUpdateAppSettings={onUpdateAppSettings}
+              />
               {agentPromptSubTab === "prompts" && (
                 <PromptSection
                   activeWorkspace={selectedSettingsWorkspace}

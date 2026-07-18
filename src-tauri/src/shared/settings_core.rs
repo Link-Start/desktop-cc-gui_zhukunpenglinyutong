@@ -196,6 +196,13 @@ fn sanitize_enabled_curated_skill_ids(settings: &mut AppSettings) {
         );
 }
 
+fn sanitize_enabled_builtin_agent_ids(settings: &mut AppSettings) {
+    settings.enabled_builtin_agent_ids =
+        crate::agent_catalog::normalized_enabled_builtin_agent_ids(
+            &settings.enabled_builtin_agent_ids,
+        );
+}
+
 pub(crate) fn resolve_window_theme_preference(settings: &AppSettings) -> String {
     if settings.theme == THEME_CUSTOM {
         return resolve_theme_preset_appearance(&settings.custom_theme_preset_id).to_string();
@@ -228,6 +235,7 @@ pub(crate) async fn get_app_settings_core(app_settings: &Mutex<AppSettings>) -> 
     sanitize_web_service_token(&mut settings);
     sanitize_custom_skill_directories(&mut settings);
     sanitize_enabled_curated_skill_ids(&mut settings);
+    sanitize_enabled_builtin_agent_ids(&mut settings);
     settings.experimental_collab_enabled = false;
     settings.ui_scale = sanitize_ui_scale(settings.ui_scale);
     sanitize_theme_settings(&mut settings);
@@ -248,6 +256,7 @@ pub(crate) async fn update_app_settings_core(
     sanitize_web_service_token(&mut normalized);
     sanitize_custom_skill_directories(&mut normalized);
     sanitize_enabled_curated_skill_ids(&mut normalized);
+    sanitize_enabled_builtin_agent_ids(&mut normalized);
     sanitize_theme_settings(&mut normalized);
     validate_ui_scale(normalized.ui_scale)?;
     proxy_core::validate_proxy_settings(&normalized)?;
@@ -271,6 +280,7 @@ pub(crate) async fn restore_app_settings_core(
     sanitize_web_service_token(&mut normalized);
     sanitize_custom_skill_directories(&mut normalized);
     sanitize_enabled_curated_skill_ids(&mut normalized);
+    sanitize_enabled_builtin_agent_ids(&mut normalized);
     normalized.ui_scale = sanitize_ui_scale(normalized.ui_scale);
     sanitize_theme_settings(&mut normalized);
     write_settings(settings_path, &normalized)?;

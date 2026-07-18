@@ -162,8 +162,8 @@ fn validate_agent(agent: &AgentConfig) -> Result<(), String> {
     if name_len == 0 {
         return Err("Missing required field: name".to_string());
     }
-    if name_len > 20 {
-        return Err("Agent name must be 1-20 characters".to_string());
+    if name_len > 64 {
+        return Err("Agent name must be 1-64 characters".to_string());
     }
 
     if let Some(prompt) = agent.prompt.as_ref() {
@@ -526,12 +526,12 @@ mod tests {
     }
 
     #[test]
-    fn validate_agent_name_max_20_chars() {
-        let long_name: String = "a".repeat(21);
+    fn validate_agent_name_max_64_chars() {
+        let long_name: String = "a".repeat(65);
         let agent = make_agent("a1", &long_name, None);
         assert!(validate_agent(&agent).is_err());
 
-        let ok_name: String = "a".repeat(20);
+        let ok_name: String = "a".repeat(64);
         let agent = make_agent("a1", &ok_name, None);
         assert!(validate_agent(&agent).is_ok());
     }

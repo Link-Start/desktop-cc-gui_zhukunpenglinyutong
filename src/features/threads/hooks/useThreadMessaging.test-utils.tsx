@@ -12,6 +12,7 @@ import {
   listGeminiSessions,
   listMcpServerStatus,
   loadClaudeSession,
+  resolveEnabledBuiltInAgent,
   sendUserMessage,
 } from "../../../services/tauri";
 import { getClientStoreSync } from "../../../services/clientStorage";
@@ -49,6 +50,7 @@ vi.mock("../../../services/tauri", () => ({
   engineSendMessage: vi.fn(),
   engineInterruptTurn: vi.fn(),
   engineInterrupt: vi.fn(),
+  resolveEnabledBuiltInAgent: vi.fn(),
 }));
 
 vi.mock("../../../services/clientStorage", () => ({
@@ -78,6 +80,13 @@ export function resetThreadMessagingTestMocks() {
   });
   vi.mocked(sendUserMessage).mockResolvedValue({
     result: { turn: { id: "turn-2" } },
+  });
+  vi.mocked(resolveEnabledBuiltInAgent).mockResolvedValue({
+    id: "agency-agents:engineering/engineering-ai-engineer",
+    providerId: "agency-agents",
+    sourceRevision: "revision",
+    promptHash: "hash",
+    prompt: "Resolved built-in prompt",
   });
   vi.mocked(getWorkspaceFiles).mockResolvedValue({
     files: [

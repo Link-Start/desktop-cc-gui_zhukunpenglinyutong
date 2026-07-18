@@ -276,7 +276,9 @@ const messages = {
     "toolHeavyDetailMeta": "{{kind}} · {{count}} 項目",
     "toolHeavyDetailShow": "詳細を表示",
     "toolHeavyOutput": "出力",
-    "toolHeavyDiff": "差分"
+    "toolHeavyDiff": "差分",
+    "builtInAgentUnavailableTitle": "組み込みエージェントを利用できません",
+    "builtInAgentUnavailableMessage": "このエージェントは無効または利用不能なため、このメッセージではプロンプトを使用しません。"
   }
 };
 

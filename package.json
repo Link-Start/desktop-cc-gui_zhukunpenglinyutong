@@ -33,6 +33,8 @@
     "check:governance-evidence-bridge": "node scripts/check-governance-evidence-bridge.mjs",
     "check:agent-domain-event-schema": "node scripts/check-agent-domain-event-schema.mjs",
     "check:agent-domain-event-adoption": "node scripts/check-agent-domain-event-adoption.mjs",
+    "agent-catalog:sync": "node scripts/agent-catalog/sync-agency-agents.mjs",
+    "agent-catalog:check": "node scripts/agent-catalog/sync-agency-agents.mjs --validate",
     "check:realtime-event-batching": "node scripts/check-realtime-event-batching.mjs",
     "check:file-interaction-evidence": "vitest run src/features/files/contracts/fileInteractionEvidenceGate.test.ts src/features/files/contracts/fileSurfaceRuntimeBoundaryGuard.test.ts",
     "check:bundle-chunking": "node scripts/check-bundle-chunking.mjs",

@@ -245,6 +245,11 @@ export interface SelectedAgent {
   name: string;
   prompt?: string;
   icon?: string;
+  source?: "custom" | "builtIn";
+  divisionId?: string;
+  divisionLabel?: string;
+  sourceRevision?: string;
+  promptHash?: string;
 }
 
 /**

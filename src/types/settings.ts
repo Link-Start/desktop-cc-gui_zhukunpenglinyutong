@@ -202,4 +202,5 @@ export type AppSettings = {
   commitPrompt?: string;
   sendShortcut?: "enter" | "cmdEnter";
   enabledCuratedSkillIds?: string[];
+  enabledBuiltInAgentIds?: string[];
 };

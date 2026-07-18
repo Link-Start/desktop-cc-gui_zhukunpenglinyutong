@@ -1838,6 +1838,9 @@ const settings = {
       "create": "Créer",
       "export": "Exporter",
       "import": "Importer",
+      "libraryTabs": "Vues de la bibliothèque d’agents",
+      "myAgents": "Mes agents",
+      "builtInAgents": "Agents intégrés",
       "customAgents": "Agents personnalisés",
       "noAgents": "Aucun agent personnalisé",
       "loading": "Chargement...",
@@ -1856,7 +1859,7 @@ const settings = {
         "editTitle": "Modifier l'agent",
         "name": "Nom",
         "namePlaceholder": "Entrez le nom de l'agent",
-        "nameInvalid": "La longueur du nom doit être comprise entre 1 et 20 caractères",
+        "nameInvalid": "La longueur du nom doit être comprise entre 1 et 64 caractères",
         "icon": "Icône",
         "iconGroupMasculine": "Robots humanoïdes · Masculin",
         "iconGroupFeminine": "Robots humanoïdes · Féminin",
@@ -1891,6 +1894,24 @@ const settings = {
         "title": "Exporter des agents",
         "selectHint": "Sélectionnez les agents à exporter",
         "confirmExport": "Confirmer l'export"
+      },
+      "builtIn": {
+        "title": "Agents intégrés",
+        "summary": "{{enabled}} sur {{total}} activés dans le sélecteur #",
+        "loadFailed": "Impossible de charger le catalogue d’agents intégrés.",
+        "searchLabel": "Rechercher des agents intégrés",
+        "searchPlaceholder": "Rechercher par nom, capacité ou groupe…",
+        "enabledOnly": "Activés uniquement",
+        "enableDivision": "Activer le groupe",
+        "disableDivision": "Désactiver le groupe",
+        "divisions": "Groupes d’agents intégrés",
+        "all": "Tous les agents",
+        "results": "{{count}} agents",
+        "empty": "Aucun agent intégré correspondant.",
+        "viewDetails": "Voir les détails de l’agent",
+        "copy": "Copier vers Mes agents",
+        "toggle": "Afficher {{name}} dans le sélecteur #",
+        "promptLoading": "Chargement du prompt de l’agent…"
       }
     },
     "provider": {

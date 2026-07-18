@@ -1335,6 +1335,13 @@ pub(crate) struct AppSettings {
         rename = "enabledCuratedSkillIds"
     )]
     pub(crate) enabled_curated_skill_ids: Vec<String>,
+    /// Built-in Agent Catalog ids the user explicitly enabled for discovery in
+    /// the Composer `#` picker. Enablement never injects a prompt by itself.
+    #[serde(
+        default = "default_enabled_builtin_agent_ids",
+        rename = "enabledBuiltInAgentIds"
+    )]
+    pub(crate) enabled_builtin_agent_ids: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1725,6 +1732,10 @@ pub(crate) fn default_enabled_curated_skill_ids() -> Vec<String> {
     vec!["lazy-senior-dev".to_string()]
 }
 
+pub(crate) fn default_enabled_builtin_agent_ids() -> Vec<String> {
+    Vec::new()
+}
+
 fn is_allowed_codex_auto_compaction_threshold_percent(value: u16) -> bool {
     value == 92 || ((100..=200).contains(&value) && value % 10 == 0)
 }
@@ -1883,6 +1894,7 @@ impl Default for AppSettings {
             browser_agent_allow_external_provider_fallback:
                 default_browser_agent_allow_external_provider_fallback(),
             enabled_curated_skill_ids: default_enabled_curated_skill_ids(),
+            enabled_builtin_agent_ids: default_enabled_builtin_agent_ids(),
         }
     }
 }

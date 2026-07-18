@@ -22,12 +22,30 @@ export function normalizeSelectedAgentOption(
         ? null
         : String(record.prompt);
   const icon = resolveAgentIconForAgent({ id, name, icon: record.icon });
-  return {
+  const source =
+    record.source === "builtIn" || record.source === "custom"
+      ? record.source
+      : null;
+  const optionalString = (key: string) =>
+    typeof record[key] === "string" && record[key].trim()
+      ? record[key].trim()
+      : null;
+  const normalized: SelectedAgentOption = {
     id,
     name,
     prompt: prompt && prompt.trim().length > 0 ? prompt : null,
     icon,
   };
+  if (source) {
+    normalized.source = source;
+  }
+  if (source === "builtIn") {
+    normalized.divisionId = optionalString("divisionId");
+    normalized.divisionLabel = optionalString("divisionLabel");
+    normalized.sourceRevision = optionalString("sourceRevision");
+    normalized.promptHash = optionalString("promptHash");
+  }
+  return normalized;
 }
 
 export function getThreadAgentSelectionStorageKey(

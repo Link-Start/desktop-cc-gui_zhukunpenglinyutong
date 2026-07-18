@@ -1839,6 +1839,9 @@ const settings = {
       "create": "建立",
       "export": "匯出",
       "import": "匯入",
+      "libraryTabs": "Agent 資產檢視",
+      "myAgents": "我的 Agent",
+      "builtInAgents": "內建 Agent",
       "customAgents": "自訂 Agent",
       "noAgents": "沒有自訂 Agent",
       "loading": "載入中…",
@@ -1857,7 +1860,7 @@ const settings = {
         "editTitle": "編輯 Agent",
         "name": "名稱",
         "namePlaceholder": "輸入 Agent 名稱",
-        "nameInvalid": "名稱長度必須介於 1 到 20 個字元之間",
+        "nameInvalid": "名稱長度必須介於 1 到 64 個字元之間",
         "icon": "圖示",
         "iconGroupMasculine": "人形機器人 · 男性",
         "iconGroupFeminine": "人形機器人 · 女性",
@@ -1892,6 +1895,24 @@ const settings = {
         "title": "匯出 Agent",
         "selectHint": "選擇要匯出的 Agent",
         "confirmExport": "確認匯出"
+      },
+      "builtIn": {
+        "title": "內建 Agent",
+        "summary": "已啟用 {{enabled}} / {{total}} 個，可在 # 選擇器中使用",
+        "loadFailed": "無法載入內建 Agent 目錄。",
+        "searchLabel": "搜尋內建 Agent",
+        "searchPlaceholder": "依名稱、能力或群組搜尋…",
+        "enabledOnly": "僅顯示已啟用",
+        "enableDivision": "啟用整組",
+        "disableDivision": "停用整組",
+        "divisions": "內建 Agent 群組",
+        "all": "全部 Agent",
+        "results": "{{count}} 個 Agent",
+        "empty": "沒有符合條件的內建 Agent。",
+        "viewDetails": "檢視 Agent 詳情",
+        "copy": "複製到我的 Agent",
+        "toggle": "在 # 選擇器中顯示 {{name}}",
+        "promptLoading": "正在載入 Agent Prompt…"
       }
     },
     "provider": {

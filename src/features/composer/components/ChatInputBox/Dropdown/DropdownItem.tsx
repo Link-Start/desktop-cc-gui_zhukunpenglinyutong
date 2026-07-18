@@ -18,6 +18,10 @@ export const DropdownItem = ({
     return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : '';
   })();
   const dropdownData = (item.data ?? {}) as Record<string, unknown>;
+  const sectionCount =
+    typeof dropdownData.sectionCount === 'number'
+      ? dropdownData.sectionCount
+      : null;
   const promptKind =
     typeof dropdownData.promptKind === 'string' ? dropdownData.promptKind : null;
   const promptHeatLevel =
@@ -97,7 +101,15 @@ export const DropdownItem = ({
   if (item.type === 'section-header') {
     return (
       <div className="dropdown-section-header">
-        {item.label}
+        <span
+          className={`dropdown-section-header-icon codicon ${item.icon || 'codicon-symbol-namespace'}`}
+          aria-hidden
+        />
+        <span className="dropdown-section-header-label">{item.label}</span>
+        {sectionCount !== null ? (
+          <span className="dropdown-section-header-count">{sectionCount}</span>
+        ) : null}
+        <span className="dropdown-section-header-rule" aria-hidden />
       </div>
     );
   }

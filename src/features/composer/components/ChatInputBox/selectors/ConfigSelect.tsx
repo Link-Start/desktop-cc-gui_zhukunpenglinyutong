@@ -162,7 +162,9 @@ export const ConfigSelect = ({
     try {
       const list = await agentProvider('', controller.signal);
       if (controller.signal.aborted) return;
-      setAgentItems(list);
+      setAgentItems(
+        list.filter((agent) => agent.itemKind !== "sectionHeader"),
+      );
     } catch (error) {
       if ((error as Error).name === 'AbortError') return;
       setAgentItems([{
@@ -304,6 +306,11 @@ export const ConfigSelect = ({
                   name: agent.name,
                   prompt: agent.prompt,
                   icon: agent.icon,
+                  source: agent.source,
+                  divisionId: agent.divisionId,
+                  divisionLabel: agent.divisionLabel,
+                  sourceRevision: agent.sourceRevision,
+                  promptHash: agent.promptHash,
                 });
                 setIsOpen(false);
                 setActiveSubmenu('none');
@@ -529,12 +536,17 @@ export const ConfigSelect = ({
                         onOpenAgentSettings?.();
                         return;
                       }
-                      onAgentSelect?.({
-                        id: agent.id,
-                        name: agent.name,
-                        prompt: agent.prompt,
-                        icon: agent.icon,
-                      });
+                    onAgentSelect?.({
+                      id: agent.id,
+                      name: agent.name,
+                      prompt: agent.prompt,
+                      icon: agent.icon,
+                      source: agent.source,
+                      divisionId: agent.divisionId,
+                      divisionLabel: agent.divisionLabel,
+                      sourceRevision: agent.sourceRevision,
+                      promptHash: agent.promptHash,
+                    });
                     }}
                   >
                     {isCreate ? (

@@ -60,6 +60,31 @@ describe("agent session persistence helpers", () => {
     });
   });
 
+  it("preserves built-in provenance without persisting prompt bodies", () => {
+    expect(
+      normalizeSelectedAgentOption({
+        id: " agency-agents:design/design-ui-designer ",
+        name: " UI 设计师 ",
+        prompt: null,
+        source: "builtIn",
+        divisionId: "design",
+        divisionLabel: "设计体验",
+        sourceRevision: "revision",
+        promptHash: "hash",
+      }),
+    ).toEqual({
+      id: "agency-agents:design/design-ui-designer",
+      name: "UI 设计师",
+      prompt: null,
+      icon: "agent-robot-15",
+      source: "builtIn",
+      divisionId: "design",
+      divisionLabel: "设计体验",
+      sourceRevision: "revision",
+      promptHash: "hash",
+    });
+  });
+
   it("parses missing and invalid stored entries safely", () => {
     expect(parseStoredThreadAgentSelectionEntry(undefined)).toEqual({
       exists: false,

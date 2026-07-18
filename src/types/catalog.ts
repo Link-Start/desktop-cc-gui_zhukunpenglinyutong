@@ -6,6 +6,51 @@ export type AgentConfig = {
   createdAt?: number | null;
 };
 
+export type BuiltInAgentDivision = {
+  id: string;
+  order: number;
+  count: number;
+  enabledCount: number;
+  icon?: string | null;
+  color?: string | null;
+  label: string;
+  labelEn: string;
+};
+
+export type BuiltInAgent = {
+  id: string;
+  providerId: string;
+  divisionId: string;
+  name: string;
+  nameEn: string;
+  description: string;
+  descriptionEn: string;
+  color?: string | null;
+  emoji?: string | null;
+  sourcePath: string;
+  sourceRevision: string;
+  promptHash: string;
+  enabled: boolean;
+};
+
+export type BuiltInAgentCatalog = {
+  providerId: string;
+  displayName: string;
+  sourceUrl: string;
+  sourceRevision: string;
+  license: string;
+  divisions: BuiltInAgentDivision[];
+  agents: BuiltInAgent[];
+};
+
+export type BuiltInAgentPrompt = {
+  id: string;
+  providerId: string;
+  sourceRevision: string;
+  promptHash: string;
+  prompt: string;
+};
+
 export type AgentImportPreviewItem = {
   data: AgentConfig;
   status: "new" | "update";
@@ -117,4 +162,3 @@ export type OpenCodeAgentOption = {
   description?: string;
   isPrimary: boolean;
 };
-

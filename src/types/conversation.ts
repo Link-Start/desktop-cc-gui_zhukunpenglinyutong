@@ -368,4 +368,9 @@ export type SelectedAgentOption = {
   name: string;
   prompt?: string | null;
   icon?: string | null;
+  source?: "custom" | "builtIn";
+  divisionId?: string | null;
+  divisionLabel?: string | null;
+  sourceRevision?: string | null;
+  promptHash?: string | null;
 };

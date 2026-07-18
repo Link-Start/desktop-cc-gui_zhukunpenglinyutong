@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-26.md`
-- **Total Sessions**: 1033
+- **Total Sessions**: 1034
 - **Last Active**: 2026-07-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-26.md` | ~272 | Active |
+| `journal-26.md` | ~305 | Active |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
@@ -54,6 +54,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1034 | 2026-07-18 | 内置可插拔 Agency Agents 智能体目录 | `eff25255` | `feature/v-0.7.4` |
 | 1033 | 2026-07-18 | 修复客户端运行时异常与 Gemini 执行旁路 | `2692bced` | `feature/v-0.7.4` |
 | 1032 | 2026-07-18 | 动态派生 Codex 限额标题并稳定测试契约 | `d20c2d7d`, `3f10c2b0` | `feature/v-0.7.4` |
 | 1031 | 2026-07-18 | 同步并归档 Git Graph 菜单规范 | `1edc4bfa` | `feature/v-0.7.4` |

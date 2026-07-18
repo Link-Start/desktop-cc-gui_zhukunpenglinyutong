@@ -169,6 +169,20 @@ function normalizeEnabledCuratedSkillIds(value: unknown): string[] {
   return ids;
 }
 
+function normalizeEnabledBuiltInAgentIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return Array.from(
+    new Set(
+      value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter((item) => /^agency-agents:[a-z0-9-]+\/[a-z0-9-]+$/.test(item)),
+    ),
+  ).sort();
+}
+
 const defaultSettings: AppSettings = {
   claudeBin: null,
   codexBin: null,
@@ -230,6 +244,7 @@ const defaultSettings: AppSettings = {
   customThemePresetId: "vscode-dark-modern",
   customSkillDirectories: [],
   enabledCuratedSkillIds: defaultEnabledCuratedSkillIds(),
+  enabledBuiltInAgentIds: [],
   canvasWidthMode: "narrow",
   layoutMode: "default",
   userMsgColor: "",
@@ -379,6 +394,9 @@ function normalizeAppSettings(
     ),
     enabledCuratedSkillIds: normalizeEnabledCuratedSkillIds(
       settings.enabledCuratedSkillIds,
+    ),
+    enabledBuiltInAgentIds: normalizeEnabledBuiltInAgentIds(
+      settings.enabledBuiltInAgentIds,
     ),
     canvasWidthMode: allowedCanvasWidthModes.has(settings.canvasWidthMode)
       ? settings.canvasWidthMode

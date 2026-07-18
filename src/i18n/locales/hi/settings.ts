@@ -1838,6 +1838,9 @@ const settings = {
       "create": "बनाएँ",
       "export": "निर्यात करें",
       "import": "आयात करें",
+      "libraryTabs": "Agent लाइब्रेरी दृश्य",
+      "myAgents": "मेरे Agents",
+      "builtInAgents": "अंतर्निहित Agents",
       "customAgents": "कस्टम एजेंट",
       "noAgents": "कोई कस्टम एजेंट नहीं",
       "loading": "लोड हो रहा है...",
@@ -1856,7 +1859,7 @@ const settings = {
         "editTitle": "एजेंट संपादित करें",
         "name": "नाम",
         "namePlaceholder": "एजेंट नाम दर्ज करें",
-        "nameInvalid": "नाम की लंबाई 1 और 20 वर्णों के बीच होनी चाहिए",
+        "nameInvalid": "नाम की लंबाई 1 और 64 वर्णों के बीच होनी चाहिए",
         "icon": "आइकन",
         "iconGroupMasculine": "मानवाकार रोबोट · पुरुष",
         "iconGroupFeminine": "मानवाकार रोबोट · महिला",
@@ -1891,6 +1894,24 @@ const settings = {
         "title": "Agent एक्सपोर्ट करें",
         "selectHint": "एक्सपोर्ट करने के लिए Agent चुनें",
         "confirmExport": "एक्सपोर्ट की पुष्टि करें"
+      },
+      "builtIn": {
+        "title": "अंतर्निहित Agents",
+        "summary": "# चयन सूची के लिए {{total}} में से {{enabled}} सक्षम",
+        "loadFailed": "अंतर्निहित Agent कैटलॉग लोड नहीं हो सका।",
+        "searchLabel": "अंतर्निहित Agents खोजें",
+        "searchPlaceholder": "नाम, क्षमता या समूह खोजें…",
+        "enabledOnly": "केवल सक्षम",
+        "enableDivision": "समूह सक्षम करें",
+        "disableDivision": "समूह अक्षम करें",
+        "divisions": "अंतर्निहित Agent समूह",
+        "all": "सभी Agents",
+        "results": "{{count}} Agents",
+        "empty": "कोई मेल खाता अंतर्निहित Agent नहीं मिला।",
+        "viewDetails": "Agent विवरण देखें",
+        "copy": "मेरे Agents में कॉपी करें",
+        "toggle": "# चयन सूची में {{name}} दिखाएँ",
+        "promptLoading": "Agent prompt लोड हो रहा है…"
       }
     },
     "provider": {

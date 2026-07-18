@@ -1838,6 +1838,9 @@ const settings = {
       "create": "생성",
       "export": "내보내기",
       "import": "가져오기",
+      "libraryTabs": "Agent 라이브러리 보기",
+      "myAgents": "내 Agents",
+      "builtInAgents": "내장 Agents",
       "customAgents": "커스텀 Agent",
       "noAgents": "커스텀 Agent 없음",
       "loading": "로드 중...",
@@ -1856,7 +1859,7 @@ const settings = {
         "editTitle": "Agent 편집",
         "name": "이름",
         "namePlaceholder": "Agent 이름을 입력하세요",
-        "nameInvalid": "이름 길이는 1자에서 20자 사이여야 합니다",
+        "nameInvalid": "이름 길이는 1자에서 64자 사이여야 합니다",
         "icon": "아이콘",
         "iconGroupMasculine": "휴머노이드 로봇 · 남성",
         "iconGroupFeminine": "휴머노이드 로봇 · 여성",
@@ -1891,6 +1894,24 @@ const settings = {
         "title": "Agent 내보내기",
         "selectHint": "내보낼 Agent를 선택하세요",
         "confirmExport": "내보내기 확인"
+      },
+      "builtIn": {
+        "title": "내장 Agents",
+        "summary": "# 선택기에서 {{total}}개 중 {{enabled}}개 활성화",
+        "loadFailed": "내장 Agent 카탈로그를 불러올 수 없습니다.",
+        "searchLabel": "내장 Agents 검색",
+        "searchPlaceholder": "이름, 기능 또는 그룹 검색…",
+        "enabledOnly": "활성화만",
+        "enableDivision": "그룹 활성화",
+        "disableDivision": "그룹 비활성화",
+        "divisions": "내장 Agent 그룹",
+        "all": "모든 Agents",
+        "results": "Agents {{count}}개",
+        "empty": "일치하는 내장 Agent가 없습니다.",
+        "viewDetails": "Agent 세부 정보 보기",
+        "copy": "내 Agents로 복사",
+        "toggle": "# 선택기에 {{name}} 표시",
+        "promptLoading": "Agent prompt 불러오는 중…"
       }
     },
     "provider": {

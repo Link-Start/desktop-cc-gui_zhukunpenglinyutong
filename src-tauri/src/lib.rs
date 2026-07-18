@@ -118,6 +118,7 @@ mod drag_drop_bridge_tests {
 }
 
 mod agents;
+mod agent_catalog;
 mod app_paths;
 mod backend;
 mod backend_budget;

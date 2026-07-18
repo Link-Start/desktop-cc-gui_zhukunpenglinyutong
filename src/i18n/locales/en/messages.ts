@@ -324,6 +324,9 @@ const messages = {
     toolHeavyDetailShow: "Show detail",
     toolHeavyOutput: "Output",
     toolHeavyDiff: "Diff",
+    builtInAgentUnavailableTitle: "Built-in agent unavailable",
+    builtInAgentUnavailableMessage:
+      "This agent is disabled or unavailable, so its prompt will not be used for this message.",
   },
 };
 

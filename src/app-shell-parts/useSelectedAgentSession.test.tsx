@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSelectedAgentSession } from "./useSelectedAgentSession";
 
 type Store = Record<string, unknown>;
 
-const { appStore, getClientStoreSync, writeClientStoreValue } = vi.hoisted(() => {
+const {
+  appStore,
+  getClientStoreSync,
+  listAgentConfigs,
+  listBuiltInAgents,
+  writeClientStoreValue,
+} = vi.hoisted(() => {
   const appStore: Store = {};
   return {
     appStore,
@@ -20,6 +26,8 @@ const { appStore, getClientStoreSync, writeClientStoreValue } = vi.hoisted(() =>
         appStore[key] = value;
       }
     }),
+    listAgentConfigs: vi.fn(async () => []),
+    listBuiltInAgents: vi.fn(),
   };
 });
 
@@ -29,14 +37,57 @@ vi.mock("../services/clientStorage", () => ({
 }));
 
 vi.mock("../services/tauri", () => ({
-  listAgentConfigs: vi.fn(async () => []),
+  listAgentConfigs,
+  listBuiltInAgents,
 }));
+
+function builtInCatalog(enabled: boolean) {
+  return {
+    providerId: "agency-agents",
+    displayName: "Agency Agents",
+    sourceUrl: "https://github.com/msitarzewski/agency-agents",
+    sourceRevision: "revision",
+    license: "MIT",
+    divisions: [
+      {
+        id: "design",
+        order: 1,
+        count: 1,
+        enabledCount: enabled ? 1 : 0,
+        icon: "palette",
+        color: "#2563eb",
+        label: "设计",
+        labelEn: "Design",
+      },
+    ],
+    agents: [
+      {
+        id: "agency-agents:design/design-ui-designer",
+        providerId: "agency-agents",
+        divisionId: "design",
+        name: "UI 设计师",
+        nameEn: "UI Designer",
+        description: "界面设计专家",
+        descriptionEn: "Interface design expert",
+        color: "#2563eb",
+        emoji: "🎨",
+        sourcePath: "design/design-ui-designer.md",
+        sourceRevision: "revision",
+        promptHash: "hash",
+        enabled,
+      },
+    ],
+  };
+}
 
 describe("useSelectedAgentSession", () => {
   beforeEach(() => {
     Object.keys(appStore).forEach((key) => delete appStore[key]);
     getClientStoreSync.mockClear();
     writeClientStoreValue.mockClear();
+    listAgentConfigs.mockClear();
+    listBuiltInAgents.mockReset();
+    listBuiltInAgents.mockResolvedValue(builtInCatalog(false));
   });
 
   it("does not repeat the same pending-to-finalized selected agent migration", async () => {
@@ -83,5 +134,77 @@ describe("useSelectedAgentSession", () => {
       expect(result.current.selectedAgent?.id).toBe("backend");
     });
     expect(writeClientStoreValue).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a stored built-in selection until the catalog has loaded", async () => {
+    const storageKey =
+      "composer.selectedAgentByThread.ws-a:claude:session-1";
+    appStore[storageKey] = {
+      id: "agency-agents:design/design-ui-designer",
+      name: "UI 设计师",
+      prompt: null,
+      source: "builtIn",
+      divisionId: "design",
+      divisionLabel: "设计",
+      sourceRevision: "revision",
+      promptHash: "hash",
+    };
+
+    const { result } = renderHook(() =>
+      useSelectedAgentSession({
+        activeWorkspaceId: "ws-a",
+        activeThreadId: "claude:session-1",
+        resolveCanonicalThreadId: (threadId) => threadId,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedAgent?.id).toBe(
+        "agency-agents:design/design-ui-designer",
+      );
+    });
+    expect(appStore[storageKey]).toEqual(
+      expect.objectContaining({
+        id: "agency-agents:design/design-ui-designer",
+      }),
+    );
+  });
+
+  it("clears a stored built-in selection after the catalog confirms it is disabled", async () => {
+    const storageKey =
+      "composer.selectedAgentByThread.ws-a:claude:session-1";
+    appStore[storageKey] = {
+      id: "agency-agents:design/design-ui-designer",
+      name: "UI 设计师",
+      prompt: null,
+      source: "builtIn",
+      divisionId: "design",
+      divisionLabel: "设计",
+      sourceRevision: "revision",
+      promptHash: "hash",
+    };
+
+    const { result } = renderHook(() =>
+      useSelectedAgentSession({
+        activeWorkspaceId: "ws-a",
+        activeThreadId: "claude:session-1",
+        resolveCanonicalThreadId: (threadId) => threadId,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedAgent?.id).toBe(
+        "agency-agents:design/design-ui-designer",
+      );
+    });
+
+    await act(async () => {
+      await result.current.reloadAgentCatalog();
+    });
+
+    await waitFor(() => {
+      expect(result.current.selectedAgent).toBeNull();
+    });
+    expect(appStore[storageKey]).toBeNull();
   });
 });

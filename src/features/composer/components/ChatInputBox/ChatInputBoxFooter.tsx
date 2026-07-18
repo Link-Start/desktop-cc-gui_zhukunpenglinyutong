@@ -979,6 +979,7 @@ export function ChatInputBoxFooter({
         isVisible={agentCompletion.isOpen}
         position={agentCompletion.position}
         width={350}
+        className="completion-dropdown--agent"
         items={agentCompletion.items}
         selectedIndex={agentCompletion.activeIndex}
         loading={agentCompletion.loading}

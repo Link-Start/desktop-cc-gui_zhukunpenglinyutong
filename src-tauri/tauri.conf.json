@@ -35,6 +35,7 @@
     ],
     "resources": {
       "infoplist/**/*": "./",
+      "resources/agent-catalogs": "agent-catalogs",
       "resources/curated-skills": "curated-skills",
       "../skills-lock.json": "."
     },

@@ -1838,6 +1838,9 @@ const settings = {
       "create": "Создать",
       "export": "Экспорт",
       "import": "Импорт",
+      "libraryTabs": "Представления библиотеки агентов",
+      "myAgents": "Мои агенты",
+      "builtInAgents": "Встроенные агенты",
       "customAgents": "Пользовательские Agents",
       "noAgents": "Нет пользовательских Agents",
       "loading": "Загрузка...",
@@ -1856,7 +1859,7 @@ const settings = {
         "editTitle": "Редактировать Agent",
         "name": "Имя",
         "namePlaceholder": "Введите имя Agent",
-        "nameInvalid": "Длина имени должна быть от 1 до 20 символов",
+        "nameInvalid": "Длина имени должна быть от 1 до 64 символов",
         "icon": "Значок",
         "iconGroupMasculine": "Человекоподобные роботы · Мужские",
         "iconGroupFeminine": "Человекоподобные роботы · Женские",
@@ -1891,6 +1894,24 @@ const settings = {
         "title": "Экспорт агентов",
         "selectHint": "Выберите агентов для экспорта",
         "confirmExport": "Подтвердить экспорт"
+      },
+      "builtIn": {
+        "title": "Встроенные агенты",
+        "summary": "В селекторе # включено {{enabled}} из {{total}}",
+        "loadFailed": "Не удалось загрузить каталог встроенных агентов.",
+        "searchLabel": "Поиск встроенных агентов",
+        "searchPlaceholder": "Поиск по имени, возможностям или группе…",
+        "enabledOnly": "Только включённые",
+        "enableDivision": "Включить группу",
+        "disableDivision": "Отключить группу",
+        "divisions": "Группы встроенных агентов",
+        "all": "Все агенты",
+        "results": "{{count}} агентов",
+        "empty": "Подходящие встроенные агенты не найдены.",
+        "viewDetails": "Открыть сведения об агенте",
+        "copy": "Копировать в Мои агенты",
+        "toggle": "Показывать {{name}} в селекторе #",
+        "promptLoading": "Загрузка промпта агента…"
       }
     },
     "provider": {

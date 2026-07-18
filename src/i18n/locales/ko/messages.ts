@@ -276,7 +276,9 @@ const messages = {
     "toolHeavyDetailMeta": "{{kind}} · 항목 {{count}}개",
     "toolHeavyDetailShow": "세부 정보 표시",
     "toolHeavyOutput": "출력",
-    "toolHeavyDiff": "Diff"
+    "toolHeavyDiff": "Diff",
+    "builtInAgentUnavailableTitle": "내장 Agent를 사용할 수 없음",
+    "builtInAgentUnavailableMessage": "이 Agent가 비활성화되었거나 사용할 수 없어 이번 메시지에는 prompt를 사용하지 않습니다."
   }
 };
 
