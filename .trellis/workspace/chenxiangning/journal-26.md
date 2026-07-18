@@ -303,3 +303,42 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1035: 优化 PR 大范围变更确认门禁
+
+**Date**: 2026-07-19
+**Task**: 优化 PR 大范围变更确认门禁
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+将 PR 大范围 changed-files 检查从硬阻断改为带 revision 指纹的分级确认，并加固 daemon 预检错误边界。
+
+### Main Changes
+
+- PR changed-files Range Gate：240 以内直接通过，241–300 与 300 以上分级确认。
+- 用 rangeFingerprint 将确认授权绑定到精确 base/head revision，避免 stale confirmation。
+- daemon precheck 增加 120s timeout、non-interactive Git 与 structured failure settlement。
+- 同步 Tauri/daemon/TypeScript/UI contract、双语文案与 OpenSpec artifacts。
+
+验证：191 项 frontend tests、typecheck、target ESLint、Rust targeted tests、daemon cargo check、runtime contracts、OpenSpec strict validation、diff check 全部通过。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5db2623a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
