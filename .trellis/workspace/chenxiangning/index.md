@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-26.md`
-- **Total Sessions**: 1035
+- **Total Sessions**: 1036
 - **Last Active**: 2026-07-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-26.md` | ~344 | Active |
+| `journal-26.md` | ~377 | Active |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
@@ -54,6 +54,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1036 | 2026-07-19 | 修复 Mermaid 大图全屏预览异常 | `f0e06a03` | `feature/v-0.7.4` |
 | 1035 | 2026-07-19 | 优化 PR 大范围变更确认门禁 | `5db2623a` | `feature/v-0.7.4` |
 | 1034 | 2026-07-18 | 内置可插拔 Agency Agents 智能体目录 | `eff25255` | `feature/v-0.7.4` |
 | 1033 | 2026-07-18 | 修复客户端运行时异常与 Gemini 执行旁路 | `2692bced` | `feature/v-0.7.4` |

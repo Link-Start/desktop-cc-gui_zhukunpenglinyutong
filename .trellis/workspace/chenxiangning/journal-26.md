@@ -342,3 +342,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1036: 修复 Mermaid 大图全屏预览异常
+
+**Date**: 2026-07-19
+**Task**: 修复 Mermaid 大图全屏预览异常
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+修复 Mermaid SVG 中 HTML br 序列化导致的全屏预览失败；将 SVG normalization 移出 React render 并加入单条缓存，补充脱敏 fallback diagnostic、回归测试及 OpenSpec 验证归档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f0e06a03` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
