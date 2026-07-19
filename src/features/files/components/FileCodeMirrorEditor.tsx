@@ -9,6 +9,7 @@ export type FileCodeMirrorEditorHandle = ReactCodeMirrorRef & {
     line: number,
     column: number,
     scrollPosition?: "nearest" | "center",
+    endLine?: number,
   ) => boolean;
   flashNavigationLine: (line: number) => boolean;
   clearNavigationFlash: () => void;

@@ -81,6 +81,10 @@ import {
   saveTaskRunStore,
 } from "../../tasks/utils/taskRunStorage";
 import { WorkspaceNoteCardPanel } from "../../note-cards/components/WorkspaceNoteCardPanel";
+import type {
+  NoteCaptureDraft,
+  WorkspaceNoteCaptureRequest,
+} from "../../note-cards/types";
 import { WorkspaceSessionActivityPanel } from "../../session-activity/components/WorkspaceSessionActivityPanel";
 import { WorkspaceSessionRadarPanel } from "../../session-activity/components/WorkspaceSessionRadarPanel";
 import { TabBar } from "../../app/components/TabBar";
@@ -102,7 +106,11 @@ import type {
 } from "../../../types";
 import { __profile as threadsRuntimeProfile } from "../../threads/hooks/useThreadsReducer";
 import { getClientStoreSync } from "../../../services/clientStorage";
-import { getCodexProviders, type WorkspaceNoteCard } from "../../../services/tauri";
+import {
+  getCodexProviders,
+  type WorkspaceNoteCard,
+  type WorkspaceNoteCardSource,
+} from "../../../services/tauri";
 import { normalizeSpecRootInput } from "../../spec/pathUtils";
 import type {
   CodeAnnotationBridgeProps,
@@ -823,6 +831,36 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const [selectedCodeAnnotations, setSelectedCodeAnnotations] = useState<
     CodeAnnotationSelection[]
   >([]);
+  const [workspaceNoteCaptureRequest, setWorkspaceNoteCaptureRequest] =
+    useState<WorkspaceNoteCaptureRequest | null>(null);
+  const workspaceNoteCaptureRequestSerialRef = useRef(0);
+  const noteCaptureWorkspaceId = options.activeWorkspace?.id ?? null;
+  const setNoteCaptureCenterMode = options.setCenterMode;
+  const handleCaptureWorkspaceNote = useCallback(
+    (draft: NoteCaptureDraft) => {
+      if (!noteCaptureWorkspaceId) {
+        return;
+      }
+      const requestId = workspaceNoteCaptureRequestSerialRef.current + 1;
+      workspaceNoteCaptureRequestSerialRef.current = requestId;
+      setWorkspaceNoteCaptureRequest({ requestId, draft });
+      onFilePanelModeChange("notes");
+      setNoteCaptureCenterMode("notes");
+    },
+    [
+      noteCaptureWorkspaceId,
+      onFilePanelModeChange,
+      setNoteCaptureCenterMode,
+    ],
+  );
+  const handleWorkspaceNoteCaptureRequestHandled = useCallback(
+    (requestId: number) => {
+      setWorkspaceNoteCaptureRequest((current) =>
+        current?.requestId === requestId ? null : current,
+      );
+    },
+    [],
+  );
   const handleCreateCodeAnnotation = useCallback(
     (annotation: CodeAnnotationDraftInput) => {
       const selection = createCodeAnnotationSelection(annotation);
@@ -871,6 +909,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       current.length === 0 ? current : [],
     );
   }, [options.activeThreadId, options.activeWorkspace?.id]);
+  useEffect(() => {
+    setWorkspaceNoteCaptureRequest(null);
+  }, [options.activeWorkspace?.id]);
   const claudeThinkingVisible =
     typeof options.claudeThinkingVisible === "boolean"
       ? options.claudeThinkingVisible
@@ -1061,6 +1102,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onOpenPlanPanel: options.onOpenPlanPanel,
           onExitPlanModeExecute: options.handleExitPlanModeExecute,
           onOpenWorkspaceFile: options.onOpenFile,
+          onCaptureNote: handleCaptureWorkspaceNote,
           agentTaskScrollRequest: options.agentTaskScrollRequest,
           isThinking: false,
           isHistoryLoading: false,
@@ -1124,6 +1166,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.onOpenPlanPanel,
       options.handleExitPlanModeExecute,
       options.onOpenFile,
+      handleCaptureWorkspaceNote,
       options.agentTaskScrollRequest,
       // heartbeatPulse removed from deps — uses ref to avoid
       // recreating messagesNode on every heartbeat tick
@@ -1344,6 +1387,21 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       },
     });
   }, []);
+  const handleOpenWorkspaceNoteCodeSource = useCallback(
+    (
+      source: Extract<WorkspaceNoteCardSource, { kind: "codeSelection" }>,
+    ) => {
+      onOpenFile(source.path, {
+        line: source.startLine,
+        endLine: source.endLine,
+        column: 1,
+        scrollPosition: "center",
+      }, {
+        editorSplitCompanion: "notes",
+      });
+    },
+    [onOpenFile],
+  );
 
   const renderComposerNode = (
     showStatusPanelToggleOverride?: boolean,
@@ -2076,6 +2134,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onClose={options.onExitEditor}
           onInsertText={options.onInsertComposerText}
           onCreateCodeAnnotation={handleCreateCodeAnnotation}
+          onCaptureNote={handleCaptureWorkspaceNote}
           onRemoveCodeAnnotation={handleRemoveCodeAnnotation}
           codeAnnotations={selectedCodeAnnotations}
           externalChangeMonitoringEnabled={
@@ -2096,14 +2155,21 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       </Suspense>
     ) : null;
 
-  const noteCardsPanelNode = options.centerMode === "notes" ? (
+  const isWorkspaceNoteCardsMounted =
+    options.centerMode === "notes" ||
+    (options.centerMode === "editor" &&
+      options.editorSplitCompanion === "notes");
+  const noteCardsPanelNode = isWorkspaceNoteCardsMounted ? (
     <WorkspaceNoteCardPanel
       workspaceId={options.activeWorkspace?.id ?? null}
       workspaceName={options.activeWorkspace?.name ?? null}
       workspacePath={options.activeWorkspace?.path ?? null}
       focusNoteId={options.focusedWorkspaceNoteId ?? null}
       focusRequestKey={options.focusedWorkspaceNoteRequestKey ?? 0}
+      captureRequest={workspaceNoteCaptureRequest}
+      onCaptureRequestHandled={handleWorkspaceNoteCaptureRequestHandled}
       onReferenceNote={handleReferenceWorkspaceNote}
+      onOpenCodeSource={handleOpenWorkspaceNoteCodeSource}
     />
   ) : null;
 

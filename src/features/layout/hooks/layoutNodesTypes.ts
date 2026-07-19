@@ -13,6 +13,7 @@ import type {
   EditorNavigationLocation,
   EditorNavigationTarget,
   CenterMode,
+  EditorSplitCompanion,
   OpenFileOptions,
 } from "../../app/hooks/useGitPanelController";
 import type { FileCompareSession } from "../../files/types/fileCompare";
@@ -358,8 +359,8 @@ export type LayoutNodesFlatOptions = {
   fileHistoryTarget?: FileHistoryTarget | null;
   onOpenFileHistory?: (target: FileHistoryTarget) => void;
   onCloseFileHistory?: () => void;
-  editorSplitCompanion: "chat" | "projectMap";
-  setEditorSplitCompanion: (companion: "chat" | "projectMap") => void;
+  editorSplitCompanion: EditorSplitCompanion;
+  setEditorSplitCompanion: (companion: EditorSplitCompanion) => void;
   editorSplitLayout: "vertical" | "horizontal";
   onToggleEditorSplitLayout: () => void;
   isEditorFileMaximized: boolean;

@@ -34,7 +34,9 @@ import {
   writeLocalBooleanFlag,
 } from "../constants/liveCanvasControls";
 import { useFileLinkOpener } from "../hooks/useFileLinkOpener";
-import { RendererContextMenu } from "../../../components/ui/RendererContextMenu";
+import {
+  RendererContextMenu,
+} from "../../../components/ui/RendererContextMenu";
 import { appendRendererDiagnostic } from "../../../services/rendererDiagnostics";
 import {
   groupToolItems,
@@ -130,6 +132,7 @@ import {
   type RenderLoopGuardBudget,
 } from "./messagesRenderLoopGuards";
 import { addBoundedConversationRenderModeKey } from "./messagesConversationLightweightMode";
+import { useConversationNoteCaptureMenu } from "../hooks/useConversationNoteCaptureMenu";
 import {
   TRANSIENT_RUNTIME_RECONNECT_AUTO_DISMISS_MS,
   resolveAssistantRuntimeReconnectHint,
@@ -269,6 +272,7 @@ export const Messages = memo(function Messages({
   conversationState = null,
   presentationProfile = null,
   onOpenWorkspaceFile,
+  onCaptureNote,
   onExitPlanModeExecute,
   agentTaskScrollRequest = null,
   onRecoverThreadRuntime,
@@ -2694,6 +2698,17 @@ export const Messages = memo(function Messages({
     };
   }, [requestScrollToAnchor]);
 
+  const {
+    menu: noteCaptureMenu,
+    closeMenu: closeNoteCaptureMenu,
+    handleContextMenu: handleConversationContextMenu,
+  } = useConversationNoteCaptureMenu({
+    canvasRootRef: containerRef,
+    items,
+    threadId,
+    onCaptureNote,
+  });
+
   return (
     <div
       className={`messages-shell${hasAnchorRail ? " has-anchor-rail" : ""}${enableClaudeRenderSafeMode ? " claude-render-safe" : ""}`}
@@ -2709,6 +2724,7 @@ export const Messages = memo(function Messages({
         className="messages scrollable"
         ref={containerRef}
         onScroll={updateAutoScroll}
+        onContextMenu={handleConversationContextMenu}
       >
         {linkedConversationRun && linkedConversationRunSurface ? (
           <div className={`messages-linked-run messages-linked-run--${linkedConversationRunSurface.severity}`}>
@@ -2830,6 +2846,13 @@ export const Messages = memo(function Messages({
           menu={fileLinkMenu}
           onClose={closeFileLinkMenu}
           className="renderer-context-menu messages-file-link-context-menu"
+        />
+      ) : null}
+      {noteCaptureMenu ? (
+        <RendererContextMenu
+          menu={noteCaptureMenu}
+          onClose={closeNoteCaptureMenu}
+          className="renderer-context-menu messages-note-capture-context-menu"
         />
       ) : null}
     </div>

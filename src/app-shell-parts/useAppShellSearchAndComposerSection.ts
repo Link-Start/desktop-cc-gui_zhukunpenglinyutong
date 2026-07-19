@@ -114,6 +114,7 @@ export type SearchPaletteBoundary = {
     filePath: string,
     location?: {
       line: number;
+      endLine?: number;
       column: number;
       scrollPosition?: "nearest" | "center";
     },

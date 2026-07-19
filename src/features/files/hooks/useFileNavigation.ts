@@ -42,6 +42,7 @@ type UseFileNavigationArgs = {
   navigationTarget: {
     path: string;
     line: number;
+    endLine?: number;
     column: number;
     scrollPosition?: "nearest" | "center";
     requestId: number;
@@ -124,8 +125,9 @@ export function useFileNavigation({
     line: number,
     column: number,
     scrollPosition: "nearest" | "center" = "nearest",
+    endLine?: number,
   ) => {
-    return cmRef.current?.focusLocation(line, column, scrollPosition) ?? false;
+    return cmRef.current?.focusLocation(line, column, scrollPosition, endLine) ?? false;
   }, [cmRef]);
 
   const focusEditorAtLocationWithRetry = useCallback(
@@ -133,10 +135,11 @@ export function useFileNavigation({
       line: number,
       column: number,
       scrollPosition: "nearest" | "center" = "nearest",
+      endLine?: number,
       attempt = 0,
       onFocused?: () => void,
     ) => {
-      const focused = focusEditorAtLocation(line, column, scrollPosition);
+      const focused = focusEditorAtLocation(line, column, scrollPosition, endLine);
       if (focused && attempt >= 4) {
         clearNavigationFocusTimer();
         flashEditorNavigationLine(line);
@@ -153,6 +156,7 @@ export function useFileNavigation({
           line,
           column,
           scrollPosition,
+          endLine,
           attempt + 1,
           onFocused,
         );
@@ -421,6 +425,7 @@ export function useFileNavigation({
       navigationTarget.line,
       navigationTarget.column,
       navigationTarget.scrollPosition,
+      navigationTarget.endLine,
       0,
       () => {
         appliedNavigationRequestRef.current = navigationTarget.requestId;

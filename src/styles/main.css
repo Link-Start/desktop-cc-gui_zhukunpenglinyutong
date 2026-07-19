@@ -1343,6 +1343,11 @@ body[data-panel-resizing="true"] .main {
   background: var(--surface-panel);
 }
 
+.content.is-note-cards-split.is-note-cards-maximized .content-layer--note-cards {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
 .content.is-note-cards-split .content-layer--note-cards-companion {
   order: 1;
   flex: 1 1 auto;
@@ -1350,6 +1355,10 @@ body[data-panel-resizing="true"] .main {
   display: flex;
   flex-direction: column;
   background: var(--surface-messages);
+}
+
+.content.is-note-cards-split.is-note-cards-maximized .content-layer--note-cards-companion {
+  display: none;
 }
 
 .content-note-cards-split-divider {

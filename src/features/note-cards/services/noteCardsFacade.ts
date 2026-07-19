@@ -8,6 +8,7 @@ import {
   noteCardUpdate,
   type WorkspaceNoteCard,
   type WorkspaceNoteCardListResult,
+  type WorkspaceNoteCardSource,
 } from "../../../services/tauri";
 
 export type ListWorkspaceNoteCardsParams = {
@@ -27,6 +28,7 @@ export type CreateWorkspaceNoteCardParams = {
   title?: string | null;
   bodyMarkdown: string;
   attachmentInputs?: string[] | null;
+  source?: WorkspaceNoteCardSource | null;
 };
 
 export type UpdateWorkspaceNoteCardParams = {

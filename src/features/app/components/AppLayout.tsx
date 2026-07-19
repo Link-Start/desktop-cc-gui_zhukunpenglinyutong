@@ -3,7 +3,10 @@ import type { MouseEvent, PointerEvent, ReactNode } from "react";
 import { DesktopLayout } from "../../layout/components/DesktopLayout";
 import { TabletLayout } from "../../layout/components/TabletLayout";
 import { PhoneLayout } from "../../layout/components/PhoneLayout";
-import type { CenterMode } from "../hooks/useGitPanelController";
+import type {
+  CenterMode,
+  EditorSplitCompanion,
+} from "../hooks/useGitPanelController";
 type AppLayoutProps = {
   isPhone: boolean;
   isTablet: boolean;
@@ -19,7 +22,7 @@ type AppLayoutProps = {
   tabletTab: "codex" | "spec" | "git" | "log";
   centerMode: CenterMode;
   editorSplitLayout: "vertical" | "horizontal";
-  editorSplitCompanion: "chat" | "projectMap";
+  editorSplitCompanion: EditorSplitCompanion;
   isEditorFileMaximized: boolean;
   hasActivePlan: boolean;
   activeWorkspace: boolean;

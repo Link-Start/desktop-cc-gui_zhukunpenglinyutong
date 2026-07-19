@@ -5,6 +5,7 @@ import { pushErrorToast } from "../services/toasts";
 import { useSoloMode } from "../features/layout/hooks/useSoloMode";
 import { useLiveEditPreview } from "../features/live-edit-preview/hooks/useLiveEditPreview";
 import { useArchiveShortcut } from "../features/app/hooks/useArchiveShortcut";
+import type { OpenFileOptions } from "../features/app/hooks/useGitPanelController";
 import { useAppSurfaceShortcuts } from "../features/app/hooks/useAppSurfaceShortcuts";
 import { usePrimaryModeShortcuts } from "../features/app/hooks/usePrimaryModeShortcuts";
 import { useWorkspaceCycling } from "../features/app/hooks/useWorkspaceCycling";
@@ -705,10 +706,11 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
       path: string,
       location?: {
         line: number;
+        endLine?: number;
         column: number;
         scrollPosition?: "nearest" | "center";
       },
-      options?: { editorSplitCompanion?: "chat" | "projectMap" },
+      options?: OpenFileOptions,
     ) => {
       markLiveEditPreviewManualNavigation();
       handleOpenFile(path, location, options);

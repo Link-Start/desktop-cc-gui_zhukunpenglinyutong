@@ -2,10 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import Archive from "lucide-react/dist/esm/icons/archive";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import ImagePlus from "lucide-react/dist/esm/icons/image-plus";
+import Maximize2 from "lucide-react/dist/esm/icons/maximize-2";
 import MessageSquarePlus from "lucide-react/dist/esm/icons/message-square-plus";
+import Minimize2 from "lucide-react/dist/esm/icons/minimize-2";
 import MoreHorizontal from "lucide-react/dist/esm/icons/more-horizontal";
 import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen";
+import Pencil from "lucide-react/dist/esm/icons/pencil";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Save from "lucide-react/dist/esm/icons/save";
@@ -25,9 +29,21 @@ import {
 } from "../../../components/ui/dropdown-menu";
 import { isWindowsPlatform } from "../../../utils/platform";
 import { Markdown } from "../../messages/components/Markdown";
-import { pickImageFiles, type WorkspaceNoteCard, type WorkspaceNoteCardSummary } from "../../../services/tauri";
+import {
+  pickImageFiles,
+  type WorkspaceNoteCard,
+  type WorkspaceNoteCardSource,
+  type WorkspaceNoteCardSummary,
+} from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import { noteCardsFacade } from "../services/noteCardsFacade";
+import type { WorkspaceNoteCaptureRequest } from "../types";
+import { useWorkspaceNoteCardsLayout } from "./WorkspaceNoteCardsLayoutContext";
+
+type CodeSelectionNoteSource = Extract<
+  WorkspaceNoteCardSource,
+  { kind: "codeSelection" }
+>;
 
 type WorkspaceNoteCardPanelProps = {
   workspaceId: string | null;
@@ -35,10 +51,19 @@ type WorkspaceNoteCardPanelProps = {
   workspacePath?: string | null;
   focusNoteId?: string | null;
   focusRequestKey?: number;
+  captureRequest?: WorkspaceNoteCaptureRequest | null;
+  onCaptureRequestHandled?: (requestId: number) => void;
   onReferenceNote?: (note: WorkspaceNoteCard) => void;
+  onOpenCodeSource?: (source: CodeSelectionNoteSource) => void;
 };
 
 type NoteCardCollection = "active" | "archive";
+type NoteWorkbenchMode =
+  | "idle"
+  | "viewing"
+  | "creating"
+  | "editing"
+  | "archived-preview";
 type NoteCardImagePreview = {
   src: string;
   localPath: string;
@@ -134,9 +159,13 @@ export function WorkspaceNoteCardPanel({
   workspacePath = null,
   focusNoteId = null,
   focusRequestKey = 0,
+  captureRequest = null,
+  onCaptureRequestHandled,
   onReferenceNote,
+  onOpenCodeSource,
 }: WorkspaceNoteCardPanelProps) {
   const { t, i18n } = useTranslation();
+  const noteCardsLayout = useWorkspaceNoteCardsLayout();
   const [collection, setCollection] = useState<NoteCardCollection>("active");
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<WorkspaceNoteCardSummary[]>([]);
@@ -145,15 +174,19 @@ export function WorkspaceNoteCardPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedWorkspaceScope, setSelectedWorkspaceScope] = useState<string | null>(null);
   const [selectedNote, setSelectedNote] = useState<WorkspaceNoteCard | null>(null);
+  const [workbenchMode, setWorkbenchMode] = useState<NoteWorkbenchMode>("idle");
+  const [draftReturnNoteId, setDraftReturnNoteId] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [bodyDraft, setBodyDraft] = useState("");
   const [attachmentDrafts, setAttachmentDrafts] = useState<string[]>([]);
+  const [sourceDraft, setSourceDraft] = useState<WorkspaceNoteCardSource | null>(null);
   const [imagePreview, setImagePreview] = useState<NoteCardImagePreview | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const lastHandledFocusRequestRef = useRef<number | null>(null);
+  const lastHandledCaptureRequestRef = useRef<number | null>(null);
 
   const archived = collection === "archive";
   const projectName = useMemo(
@@ -169,25 +202,37 @@ export function WorkspaceNoteCardPanel({
     [selectedNote],
   );
   const isDraftDirty = useMemo(() => {
-    if (archived) {
+    if (workbenchMode !== "creating" && workbenchMode !== "editing") {
       return false;
     }
-    const baselineTitle = selectedNote?.title ?? "";
-    const baselineBody = selectedNote?.bodyMarkdown ?? "";
+    const baselineTitle = workbenchMode === "editing" ? (selectedNote?.title ?? "") : "";
+    const baselineBody = workbenchMode === "editing" ? (selectedNote?.bodyMarkdown ?? "") : "";
+    const baselineAttachments =
+      workbenchMode === "editing" ? persistedAttachmentPaths : [];
     return (
       titleDraft !== baselineTitle ||
       bodyDraft !== baselineBody ||
-      !areStringArraysEqual(attachmentDrafts, persistedAttachmentPaths)
+      !areStringArraysEqual(attachmentDrafts, baselineAttachments)
     );
-  }, [archived, attachmentDrafts, bodyDraft, persistedAttachmentPaths, selectedNote, titleDraft]);
+  }, [
+    attachmentDrafts,
+    bodyDraft,
+    persistedAttachmentPaths,
+    selectedNote,
+    titleDraft,
+    workbenchMode,
+  ]);
 
   const resetDraft = useCallback(() => {
     setSelectedId(null);
     setSelectedWorkspaceScope(null);
     setSelectedNote(null);
+    setWorkbenchMode("idle");
+    setDraftReturnNoteId(null);
     setTitleDraft("");
     setBodyDraft("");
     setAttachmentDrafts([]);
+    setSourceDraft(null);
     setError(null);
     setSaveError(null);
   }, []);
@@ -203,6 +248,7 @@ export function WorkspaceNoteCardPanel({
     setQuery("");
     setImagePreview(null);
     lastHandledFocusRequestRef.current = null;
+    lastHandledCaptureRequestRef.current = null;
     resetDraft();
   }, [resetDraft, workspaceScopeKey]);
 
@@ -285,12 +331,6 @@ export function WorkspaceNoteCardPanel({
           return;
         }
         setSelectedNote(note);
-        if (!note || archived) {
-          return;
-        }
-        setTitleDraft(note.title);
-        setBodyDraft(note.bodyMarkdown);
-        setAttachmentDrafts(note.attachments.map((attachment) => attachment.absolutePath));
       })
       .catch((detailError) => {
         if (!cancelled) {
@@ -386,21 +426,61 @@ export function WorkspaceNoteCardPanel({
   }, [isDraftDirty, t]);
 
   const openNote = useCallback(
-    (noteId: string) => {
+    (noteId: string, mode: Extract<NoteWorkbenchMode, "viewing" | "archived-preview">) => {
       setSelectedNote(null);
       setSelectedId(noteId);
       setSelectedWorkspaceScope(workspaceScopeKey);
+      setWorkbenchMode(mode);
+      setDraftReturnNoteId(null);
       setTitleDraft("");
       setBodyDraft("");
       setAttachmentDrafts([]);
+      setSourceDraft(null);
       setError(null);
       setSaveError(null);
     },
     [workspaceScopeKey],
   );
 
+  const startCreating = useCallback(
+    (
+      draft?: WorkspaceNoteCaptureRequest["draft"],
+      returnNoteId: string | null = selectedId,
+    ) => {
+      setDraftReturnNoteId(returnNoteId);
+      setSelectedId(null);
+      setSelectedWorkspaceScope(null);
+      setSelectedNote(null);
+      setWorkbenchMode("creating");
+      setTitleDraft(draft?.title ?? "");
+      setBodyDraft(draft?.bodyMarkdown ?? "");
+      setAttachmentDrafts([]);
+      setSourceDraft(draft?.source ?? null);
+      setError(null);
+      setSaveError(null);
+    },
+    [selectedId],
+  );
+
+  const startEditing = useCallback(() => {
+    if (!selectedNote || archived) {
+      return;
+    }
+    setWorkbenchMode("editing");
+    setTitleDraft(selectedNote.title);
+    setBodyDraft(selectedNote.bodyMarkdown);
+    setAttachmentDrafts(
+      selectedNote.attachments.map((attachment) => attachment.absolutePath),
+    );
+    setSourceDraft(null);
+    setSaveError(null);
+  }, [archived, selectedNote]);
+
   const handleSave = useCallback(async () => {
-    if (!workspaceId) {
+    if (
+      !workspaceId ||
+      (workbenchMode !== "creating" && workbenchMode !== "editing")
+    ) {
       return false;
     }
     if (!titleDraft.trim() && !bodyDraft.trim() && attachmentDrafts.length === 0) {
@@ -411,8 +491,8 @@ export function WorkspaceNoteCardPanel({
     setSaveError(null);
     try {
       const currentSelectedId = selectedId;
-      const isUpdate = Boolean(currentSelectedId && !archived);
-      const payload = {
+      const isUpdate = workbenchMode === "editing" && Boolean(currentSelectedId);
+      const commonPayload = {
         workspaceId,
         workspaceName,
         workspacePath,
@@ -422,14 +502,20 @@ export function WorkspaceNoteCardPanel({
       };
       const note =
         isUpdate && currentSelectedId
-          ? await noteCardsFacade.update(currentSelectedId, workspaceId, payload)
-          : await noteCardsFacade.create(payload);
+          ? await noteCardsFacade.update(currentSelectedId, workspaceId, commonPayload)
+          : await noteCardsFacade.create({
+              ...commonPayload,
+              source: sourceDraft,
+            });
       setSelectedId(note.id);
       setSelectedWorkspaceScope(workspaceScopeKey);
       setSelectedNote(note);
-      setTitleDraft(note.title);
-      setBodyDraft(note.bodyMarkdown);
-      setAttachmentDrafts(note.attachments.map((attachment) => attachment.absolutePath));
+      setWorkbenchMode("viewing");
+      setDraftReturnNoteId(null);
+      setTitleDraft("");
+      setBodyDraft("");
+      setAttachmentDrafts([]);
+      setSourceDraft(null);
       if (archived) {
         setCollection("active");
       }
@@ -456,12 +542,14 @@ export function WorkspaceNoteCardPanel({
     bodyDraft,
     refreshList,
     selectedId,
+    sourceDraft,
     t,
     titleDraft,
     workspaceId,
     workspaceName,
     workspacePath,
     workspaceScopeKey,
+    workbenchMode,
   ]);
 
   const restoreNote = useCallback(
@@ -492,7 +580,7 @@ export function WorkspaceNoteCardPanel({
       }
       resetDraft();
       setCollection("active");
-      openNote(restored.id);
+      openNote(restored.id, "viewing");
       refreshList();
     },
     [openNote, refreshList, resetDraft, restoreNote],
@@ -593,9 +681,9 @@ export function WorkspaceNoteCardPanel({
       if (noteId === selectedId || !(await confirmDiscardDraft())) {
         return;
       }
-      openNote(noteId);
+      openNote(noteId, archived ? "archived-preview" : "viewing");
     },
-    [confirmDiscardDraft, openNote, selectedId],
+    [archived, confirmDiscardDraft, openNote, selectedId],
   );
 
   const handleCreateNote = useCallback(async () => {
@@ -605,8 +693,8 @@ export function WorkspaceNoteCardPanel({
     if (archived) {
       setCollection("active");
     }
-    resetDraft();
-  }, [archived, confirmDiscardDraft, resetDraft]);
+    startCreating(undefined, archived ? null : selectedId);
+  }, [archived, confirmDiscardDraft, selectedId, startCreating]);
 
   const handleCollectionChange = useCallback(
     async (nextCollection: NoteCardCollection) => {
@@ -619,11 +707,32 @@ export function WorkspaceNoteCardPanel({
     [collection, confirmDiscardDraft, resetDraft],
   );
 
-  const handleClearEditor = useCallback(async () => {
-    if (await confirmDiscardDraft()) {
-      resetDraft();
+  const handleCancelEditor = useCallback(async () => {
+    if (!(await confirmDiscardDraft())) {
+      return;
     }
-  }, [confirmDiscardDraft, resetDraft]);
+    const returnNoteId = draftReturnNoteId;
+    if (workbenchMode === "editing" && selectedId) {
+      setWorkbenchMode("viewing");
+      setTitleDraft("");
+      setBodyDraft("");
+      setAttachmentDrafts([]);
+      setSourceDraft(null);
+      setSaveError(null);
+      return;
+    }
+    resetDraft();
+    if (returnNoteId) {
+      openNote(returnNoteId, "viewing");
+    }
+  }, [
+    confirmDiscardDraft,
+    draftReturnNoteId,
+    openNote,
+    resetDraft,
+    selectedId,
+    workbenchMode,
+  ]);
 
   const handleReferenceNote = useCallback(() => {
     if (selectedNote && !archived) {
@@ -649,12 +758,16 @@ export function WorkspaceNoteCardPanel({
 
   const handleWorkbenchKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      if (!archived && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+      if (
+        (workbenchMode === "creating" || workbenchMode === "editing") &&
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "s"
+      ) {
         event.preventDefault();
         void handleSave();
       }
     },
-    [archived, handleSave],
+    [handleSave, workbenchMode],
   );
 
   useEffect(() => {
@@ -673,12 +786,46 @@ export function WorkspaceNoteCardPanel({
       if (archived) {
         setCollection("active");
       }
-      openNote(focusNoteId);
+      openNote(focusNoteId, "viewing");
     })();
   }, [archived, confirmDiscardDraft, focusNoteId, focusRequestKey, openNote, workspaceId]);
 
+  useEffect(() => {
+    if (
+      !captureRequest ||
+      lastHandledCaptureRequestRef.current === captureRequest.requestId
+    ) {
+      return;
+    }
+    lastHandledCaptureRequestRef.current = captureRequest.requestId;
+    void (async () => {
+      if (
+        workspaceId &&
+        (await confirmDiscardDraft())
+      ) {
+        if (archived) {
+          setCollection("active");
+        }
+        startCreating(captureRequest.draft, archived ? null : selectedId);
+      }
+      onCaptureRequestHandled?.(captureRequest.requestId);
+    })();
+  }, [
+    archived,
+    captureRequest,
+    confirmDiscardDraft,
+    onCaptureRequestHandled,
+    selectedId,
+    startCreating,
+    workspaceId,
+  ]);
+
   const previewNote = selectedNote;
-  const saveLabel = selectedId && !archived ? t("noteCards.saveUpdate") : t("noteCards.saveCreate");
+  const isEditorVisible = workbenchMode === "creating" || workbenchMode === "editing";
+  const saveLabel =
+    workbenchMode === "editing"
+      ? t("noteCards.saveUpdate")
+      : t("noteCards.saveCreate");
   const attachImageLabel = t("noteCards.attachImage");
   const editorHintLabel = t("noteCards.editorHint");
   const storageHint = t("noteCards.storageHint", {
@@ -692,9 +839,60 @@ export function WorkspaceNoteCardPanel({
       ? t("noteCards.saveStatusError")
       : isDraftDirty
         ? t("noteCards.saveStatusDirty")
-        : selectedNote
+        : workbenchMode === "editing"
           ? t("noteCards.saveStatusSaved")
           : t("noteCards.saveStatusIdle");
+  const displayedSource = isEditorVisible ? sourceDraft : previewNote?.source ?? null;
+  const sourceSummary = useMemo(() => {
+    if (!displayedSource) {
+      return null;
+    }
+    switch (displayedSource.kind) {
+      case "codeSelection":
+        return [
+          t("noteCards.sourceCode", {
+            path: displayedSource.path,
+            startLine: displayedSource.startLine,
+            endLine: displayedSource.endLine,
+          }),
+          displayedSource.language,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+      case "conversationSelection":
+        return t("noteCards.sourceConversationSelection", {
+          count: displayedSource.itemIds.length,
+        });
+      case "conversationThread":
+        return t("noteCards.sourceConversationThread", {
+          count: displayedSource.itemCount,
+          time: formatDate(displayedSource.capturedAt),
+        });
+    }
+  }, [displayedSource, formatDate, t]);
+  const navigableCodeSource =
+    !isEditorVisible && displayedSource?.kind === "codeSelection"
+      ? displayedSource
+      : null;
+  const sourceSummaryContent = sourceSummary ? (
+    <>
+      <span>{t("noteCards.sourceLabel")}</span>
+      {navigableCodeSource && onOpenCodeSource ? (
+        <button
+          type="button"
+          className="workspace-note-cards-source-link"
+          aria-label={`${t("noteCards.openCodeSource")}: ${sourceSummary}`}
+          title={t("noteCards.openCodeSource")}
+          onClick={() => onOpenCodeSource(navigableCodeSource)}
+        >
+          <strong>{sourceSummary}</strong>
+          <ExternalLink size={12} aria-hidden />
+        </button>
+      ) : (
+        <strong>{sourceSummary}</strong>
+      )}
+    </>
+  ) : null;
 
   return (
     <div className="workspace-note-cards-panel" onKeyDown={handleWorkbenchKeyDown}>
@@ -709,6 +907,30 @@ export function WorkspaceNoteCardPanel({
             <p className="workspace-note-cards-storage-meta">{storageHint}</p>
           </div>
           <div className="workspace-note-cards-header-actions">
+            {noteCardsLayout?.canMaximize ? (
+              <button
+                type="button"
+                className="ghost icon-button"
+                onClick={noteCardsLayout.onToggleMaximized}
+                aria-label={
+                  noteCardsLayout.isMaximized
+                    ? t("common.restore")
+                    : t("menu.maximize")
+                }
+                aria-pressed={noteCardsLayout.isMaximized}
+                title={
+                  noteCardsLayout.isMaximized
+                    ? t("common.restore")
+                    : t("menu.maximize")
+                }
+              >
+                {noteCardsLayout.isMaximized ? (
+                  <Minimize2 size={14} aria-hidden />
+                ) : (
+                  <Maximize2 size={14} aria-hidden />
+                )}
+              </button>
+            ) : null}
             <button
               type="button"
               className="ghost icon-button"
@@ -851,48 +1073,39 @@ export function WorkspaceNoteCardPanel({
         )}
       </section>
 
-      {!archived ? (
+      {isEditorVisible ? (
         <section className="workspace-note-cards-editor">
           <div className="workspace-note-cards-editor-head">
             <div className="workspace-note-cards-editor-copy" title={editorHintLabel}>
-              <h3>{selectedId ? t("noteCards.editorEdit") : t("noteCards.editorCreate")}</h3>
-              <span>{selectedId ? t("noteCards.selectedHint") : t("noteCards.editorHintShort")}</span>
+              <h3>
+                {workbenchMode === "editing"
+                  ? t("noteCards.editorEdit")
+                  : t("noteCards.editorCreate")}
+              </h3>
+              <span>
+                {workbenchMode === "editing"
+                  ? t("noteCards.selectedHint")
+                  : t("noteCards.editorHintShort")}
+              </span>
             </div>
             <div className="workspace-note-cards-head-actions">
-              {selectedNote && onReferenceNote ? (
-                <button
-                  type="button"
-                  className="workspace-note-cards-reference-action"
-                  onClick={handleReferenceNote}
-                  disabled={isDraftDirty}
-                  title={isDraftDirty ? t("noteCards.referenceSaveFirst") : t("noteCards.referenceInChat")}
-                >
-                  <MessageSquarePlus size={14} aria-hidden />
-                  <span>{t("noteCards.referenceInChat")}</span>
-                </button>
-              ) : null}
-              {selectedId ? (
-                <NoteCardDeleteMenu
-                  triggerLabel={t("noteCards.moreActions")}
-                  deleteLabel={t("noteCards.deleteAction")}
-                  iconSize={14}
-                  onDelete={() => void handleDelete(selectedId, selectedNote?.title ?? titleDraft)}
-                />
-              ) : null}
-              {selectedId ? (
-                <button
-                  type="button"
-                  className="ghost workspace-note-cards-icon-action"
-                  onClick={() => void handleClearEditor()}
-                  aria-label={t("noteCards.clear")}
-                  title={t("noteCards.clear")}
-                >
-                  <X size={14} aria-hidden />
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="ghost workspace-note-cards-icon-action"
+                onClick={() => void handleCancelEditor()}
+                aria-label={t("common.cancel")}
+                title={t("common.cancel")}
+              >
+                <X size={14} aria-hidden />
+              </button>
             </div>
           </div>
           <div className="workspace-note-cards-editor-body">
+            {sourceSummaryContent ? (
+              <div className="workspace-note-cards-source-summary">
+                {sourceSummaryContent}
+              </div>
+            ) : null}
             <input
               className="workspace-note-cards-title-input"
               value={titleDraft}
@@ -951,12 +1164,20 @@ export function WorkspaceNoteCardPanel({
             />
           </div>
         </section>
-      ) : (
+      ) : workbenchMode === "viewing" || workbenchMode === "archived-preview" ? (
         <section className="workspace-note-cards-preview-panel">
           <div className="workspace-note-cards-editor-head">
             <div>
-              <h3>{t("noteCards.previewTitle")}</h3>
-              <p>{t("noteCards.previewHint")}</p>
+              <h3>
+                {archived
+                  ? t("noteCards.previewTitle")
+                  : t("noteCards.detailsTitle")}
+              </h3>
+              <p>
+                {archived
+                  ? t("noteCards.previewHint")
+                  : t("noteCards.detailsHint")}
+              </p>
             </div>
           </div>
           {detailLoading ? (
@@ -969,15 +1190,50 @@ export function WorkspaceNoteCardPanel({
                   <span>{t("noteCards.updatedAt", { time: formatDate(previewNote.updatedAt) })}</span>
                 </div>
                 <div className="workspace-note-cards-head-actions">
-                  <button
-                    type="button"
-                    className="workspace-note-cards-inline-action workspace-note-cards-icon-action"
-                    onClick={() => void handleRestore(previewNote.id)}
-                    aria-label={t("noteCards.restore")}
-                    title={t("noteCards.restore")}
-                  >
-                    <Undo2 size={14} aria-hidden />
-                  </button>
+                  {!archived && onReferenceNote ? (
+                    <button
+                      type="button"
+                      className="workspace-note-cards-reference-action"
+                      onClick={handleReferenceNote}
+                      title={t("noteCards.referenceInChat")}
+                    >
+                      <MessageSquarePlus size={14} aria-hidden />
+                      <span>{t("noteCards.referenceInChat")}</span>
+                    </button>
+                  ) : null}
+                  {!archived ? (
+                    <button
+                      type="button"
+                      className="workspace-note-cards-reference-action"
+                      onClick={startEditing}
+                      aria-label={t("noteCards.edit")}
+                      title={t("noteCards.edit")}
+                    >
+                      <Pencil size={14} aria-hidden />
+                      <span>{t("noteCards.edit")}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="workspace-note-cards-inline-action workspace-note-cards-icon-action"
+                      onClick={() => void handleRestore(previewNote.id)}
+                      aria-label={t("noteCards.restore")}
+                      title={t("noteCards.restore")}
+                    >
+                      <Undo2 size={14} aria-hidden />
+                    </button>
+                  )}
+                  {!archived ? (
+                    <button
+                      type="button"
+                      className="ghost workspace-note-cards-icon-action"
+                      onClick={() => void handleArchive(previewNote.id)}
+                      aria-label={t("noteCards.archiveAction")}
+                      title={t("noteCards.archiveAction")}
+                    >
+                      <Archive size={14} aria-hidden />
+                    </button>
+                  ) : null}
                   <NoteCardDeleteMenu
                     triggerLabel={t("noteCards.moreActions")}
                     deleteLabel={t("noteCards.deleteAction")}
@@ -987,10 +1243,19 @@ export function WorkspaceNoteCardPanel({
                   />
                 </div>
               </div>
-              <Markdown
-                className="markdown workspace-note-cards-preview-markdown"
-                value={previewNote.bodyMarkdown || previewNote.plainTextExcerpt}
-              />
+              {sourceSummaryContent ? (
+                <div className="workspace-note-cards-source-summary">
+                  {sourceSummaryContent}
+                </div>
+              ) : null}
+              <div className="message workspace-note-cards-preview-markdown">
+                <Markdown
+                  className="markdown"
+                  value={previewNote.bodyMarkdown || previewNote.plainTextExcerpt}
+                  workspaceId={workspaceId}
+                  codeBlockStyle="message"
+                />
+              </div>
               {previewNote.attachments.length > 0 ? (
                 <div className="workspace-note-cards-preview-images">
                   {previewNote.attachments.map((attachment) => {
@@ -1028,6 +1293,14 @@ export function WorkspaceNoteCardPanel({
           ) : (
             <div className="workspace-note-cards-empty">{t("noteCards.previewEmpty")}</div>
           )}
+        </section>
+      ) : (
+        <section className="workspace-note-cards-idle">
+          <span className="workspace-note-cards-idle-icon" aria-hidden>
+            <NotebookPen size={24} />
+          </span>
+          <h3>{t("noteCards.idleTitle")}</h3>
+          <p>{archived ? t("noteCards.previewHint") : t("noteCards.idleHint")}</p>
         </section>
       )}
       </div>
