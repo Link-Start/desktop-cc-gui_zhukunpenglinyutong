@@ -14,6 +14,7 @@ const messages = {
     "thinking": "Размышление…",
     "thinkingLabel": "Размышление",
     "thinkingProcess": "Процесс размышления",
+    "thinkingDone": "Размышление завершено",
     "finalMessageBoundary": "Итоговое сообщение",
     "turnFilesChanged": {
       "title_one": "Изменён {{count}} файл",

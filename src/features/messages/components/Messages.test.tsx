@@ -91,7 +91,7 @@ describe("Messages", () => {
       />,
     );
 
-    expect(screen.getByText("messages.thinkingLabel")).toBeTruthy();
+    expect(screen.getByText("messages.thinking")).toBeTruthy();
     expect(screen.queryByText("messages.thinkingProcess")).toBeNull();
   });
 

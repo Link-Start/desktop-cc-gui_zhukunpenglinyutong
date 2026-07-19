@@ -11,6 +11,7 @@ const messages = {
     thinking: "Thinking…",
     thinkingLabel: "Thinking",
     thinkingProcess: "Thinking Process",
+    thinkingDone: "Thinking complete",
     finalMessageBoundary: "Final Message",
     turnFilesChanged: {
       title_one: "Edited {{count}} file",

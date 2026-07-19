@@ -14,6 +14,7 @@ const messages = {
     "thinking": "思考中…",
     "thinkingLabel": "思考",
     "thinkingProcess": "思考過程",
+    "thinkingDone": "思考完成",
     "finalMessageBoundary": "最終訊息",
     "turnFilesChanged": {
       "title_one": "已編輯 {{count}} 個檔案",

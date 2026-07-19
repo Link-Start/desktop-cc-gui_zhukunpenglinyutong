@@ -149,7 +149,7 @@
   --color-error: #f44336;
 
   --color-thinking-border: #333;
-  --color-thinking-text: #999;
+  --color-thinking-text: rgb(115, 115, 115);
 
   --color-tool-bg: #161616;
   --color-tool-icon: #64b5f6;

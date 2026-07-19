@@ -75,7 +75,7 @@
     --select-caret: rgba(24, 24, 27, 0.45);
 
     --color-thinking-border: #d0d0d0;
-    --color-thinking-text: #666666;
+    --color-thinking-text: rgb(115, 115, 115);
 
     /* shadcn default theme tokens (zinc) — light (system).
        Full bridge set so system-light no longer inherits the dark

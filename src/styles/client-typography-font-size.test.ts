@@ -140,6 +140,27 @@ describe("client typography font-size coverage", () => {
     expect(getCssRuleBlock(messagesCss, ".thinking-content")).toContain(
       "font-size: var(--message-caption-font-size);",
     );
+    expect(getCssRuleBlock(messagesCss, ".thinking-content")).toContain(
+      "color: var(--color-thinking-text, rgb(115, 115, 115));",
+    );
+    expect(getCssRuleBlock(messagesCss, ".thinking-title")).toContain(
+      "color: var(--color-thinking-text, rgb(115, 115, 115));",
+    );
+    expect(getCssRuleBlock(messagesCss, ".thinking-block .reasoning-markdown")).toContain(
+      "color: var(--color-thinking-text, rgb(115, 115, 115));",
+    );
+  });
+
+  it("keeps reasoning markdown code blocks styled outside message bubbles", () => {
+    expect(
+      getCssRuleBlock(messagesCss, ":is(.message, .thinking-block) .markdown-codeblock"),
+    ).toContain("border: 1px solid var(--border-strong);");
+    expect(
+      getCssRuleBlock(messagesCss, ":is(.message, .thinking-block) .markdown-codeblock-header"),
+    ).toContain("display: flex;");
+    expect(
+      getCssRuleBlock(messagesCss, ":is(.message, .thinking-block) .markdown-codeblock pre"),
+    ).toContain("overflow-x: auto;");
   });
 
   it("keeps ordinary message blockquotes visually plain", () => {

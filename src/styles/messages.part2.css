@@ -39,15 +39,20 @@
   min-width: 0;
 }
 
+.thinking-brain-icon {
+  flex: 0 0 auto;
+  color: var(--color-thinking-text, rgb(115, 115, 115));
+}
+
 .thinking-title {
   flex: 0 0 auto;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--color-thinking-text, rgb(115, 115, 115));
 }
 
 .thinking-block.is-expanded .thinking-title,
 .thinking-block.is-live .thinking-title {
-  color: var(--text-stronger);
+  color: var(--color-thinking-text, rgb(115, 115, 115));
 }
 
 .thinking-header:hover {
@@ -57,13 +62,13 @@
 .thinking-icon {
   flex: 0 0 auto;
   font-size: 10px;
-  color: color-mix(in srgb, var(--text-muted) 90%, transparent);
+  color: var(--color-thinking-text, rgb(115, 115, 115));
   opacity: 0.9;
 }
 
 .thinking-content {
   margin-top: 8px;
-  color: var(--text-faint);
+  color: var(--color-thinking-text, rgb(115, 115, 115));
   font-family: inherit;
   font-size: var(--message-caption-font-size);
   line-height: 1.5;
@@ -94,7 +99,7 @@
 .reasoning-markdown {
   font-size: var(--message-thinking-font-size, 11px);
   line-height: 1.5;
-  color: var(--text-faint);
+  color: var(--color-thinking-text, rgb(115, 115, 115));
 }
 
 .reasoning-markdown > * {
@@ -126,7 +131,7 @@
 /* shadcn typography 特征：semibold + tracking-tight（thinking 次要尺度，配色比正文轻一档） */
 .reasoning-markdown :where(h1, h2, h3, h4) {
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-faint);
   letter-spacing: -0.02em;
 }
 
@@ -323,6 +328,14 @@
   color: var(--text-strong);
 }
 
+.thinking-block .reasoning-markdown {
+  color: var(--color-thinking-text, rgb(115, 115, 115));
+}
+
+.thinking-block .reasoning-markdown :where(p, ul, ol, li, blockquote) {
+  color: inherit;
+}
+
 .markdown > * {
   margin: 0;
 }
@@ -344,7 +357,7 @@
 }
 
 /* shadcn typography inline code: rounded bg-muted px-[0.3rem] py-[0.2rem] text-sm font-semibold */
-.message .markdown :not(pre) > code {
+:is(.message, .thinking-block) .markdown :not(pre) > code {
   color: var(--text-stronger);
   background: var(--muted);
   border: none;
@@ -354,19 +367,19 @@
   font-weight: 600;
 }
 
-.message .markdown .katex {
+:is(.message, .thinking-block) .markdown .katex {
   color: inherit;
   font-size: 1.02em;
 }
 
-.message .markdown .katex-display {
+:is(.message, .thinking-block) .markdown .katex-display {
   margin: 8px 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 2px 0;
 }
 
-.message .markdown .katex-display > .katex {
+:is(.message, .thinking-block) .markdown .katex-display > .katex {
   display: inline-block;
   text-align: left;
   max-width: 100%;
@@ -411,7 +424,7 @@
 /* shadcn 化代码块：扁平边框卡（border + var(--radius)，去重阴影）。
    边框用 --border-strong 而非 --border：亮色下 --border 与 --muted 底色几近同色、
    四边几乎隐形，--border-strong 让淡边框清晰可见又不喧宾夺主。 */
-.message .markdown-codeblock {
+:is(.message, .thinking-block) .markdown-codeblock {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--message-codeblock-bg);
@@ -420,7 +433,7 @@
   margin: 1.25em 0;
 }
 
-.message .markdown-codeblock-header {
+:is(.message, .thinking-block) .markdown-codeblock-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -434,26 +447,26 @@
   color: var(--text-muted);
 }
 
-.message .markdown-codeblock-language {
+:is(.message, .thinking-block) .markdown-codeblock-language {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-weight: 500;
 }
 
-.message .markdown-codeblock-language-icon {
+:is(.message, .thinking-block) .markdown-codeblock-language-icon {
   width: 16px;
   height: 16px;
   opacity: 0.6;
   flex: none;
 }
 
-.message .markdown-codeblock-language-text {
+:is(.message, .thinking-block) .markdown-codeblock-language-text {
   line-height: 1;
   font-family: var(--code-font-family);
 }
 
-.message .markdown-codeblock-actions {
+:is(.message, .thinking-block) .markdown-codeblock-actions {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -463,7 +476,7 @@
  * shadcn icon-button copy control: no border / no background at rest,
  * a soft hover surface, square 28px hit area with a 16px glyph.
  */
-.message .markdown-codeblock-copy {
+:is(.message, .thinking-block) .markdown-codeblock-copy {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -478,25 +491,25 @@
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.message .markdown-codeblock-copy:hover {
+:is(.message, .thinking-block) .markdown-codeblock-copy:hover {
   background: var(--surface-control-hover);
   color: var(--text-strong);
 }
 
-.message .markdown-codeblock-copy.is-copied {
+:is(.message, .thinking-block) .markdown-codeblock-copy.is-copied {
   color: var(--text-strong);
 }
 
-.message .markdown-codeblock-copy-icon {
+:is(.message, .thinking-block) .markdown-codeblock-copy-icon {
   width: 14px;
   height: 14px;
 }
 
-.message .markdown-heavy-island-placeholder {
+:is(.message, .thinking-block) .markdown-heavy-island-placeholder {
   border-style: dashed;
 }
 
-.message .markdown-heavy-island-placeholder-body {
+:is(.message, .thinking-block) .markdown-heavy-island-placeholder-body {
   display: grid;
   gap: 6px;
   padding: 12px;
@@ -504,12 +517,12 @@
   font-size: var(--message-meta-font-size);
 }
 
-.message .markdown-heavy-island-placeholder-body strong {
+:is(.message, .thinking-block) .markdown-heavy-island-placeholder-body strong {
   color: var(--text-strong);
   font-size: var(--message-content-font-size);
 }
 
-.message .markdown-heavy-island-placeholder-body button {
+:is(.message, .thinking-block) .markdown-heavy-island-placeholder-body button {
   justify-self: start;
   min-height: 28px;
   padding: 0 10px;
@@ -522,8 +535,8 @@
   font-size: var(--message-meta-font-size);
 }
 
-.message .markdown-heavy-island-placeholder-body button:hover,
-.message .markdown-heavy-island-placeholder-body button:focus-visible {
+:is(.message, .thinking-block) .markdown-heavy-island-placeholder-body button:hover,
+:is(.message, .thinking-block) .markdown-heavy-island-placeholder-body button:focus-visible {
   background: var(--surface-control-hover);
   color: var(--text-strong);
 }
@@ -564,7 +577,7 @@
   color: var(--text-strong);
 }
 
-.message .markdown-codeblock pre {
+:is(.message, .thinking-block) .markdown-codeblock pre {
   margin: 0;
   padding: 12px 0 16px;
   white-space: pre;
@@ -575,17 +588,17 @@
   line-height: var(--message-codeblock-line-height, 1.6);
 }
 
-.message .markdown-codeblock code,
-.message .markdown-codeblock-single code {
+:is(.message, .thinking-block) .markdown-codeblock code,
+:is(.message, .thinking-block) .markdown-codeblock-single code {
   color: var(--text-primary);
 }
 
-.message .markdown-codeblock code {
+:is(.message, .thinking-block) .markdown-codeblock code {
   display: block;
   min-width: max-content;
 }
 
-.message .markdown-codeblock-line {
+:is(.message, .thinking-block) .markdown-codeblock-line {
   display: block;
   min-height: calc(var(--message-codeblock-font-size, 13px) * var(--message-codeblock-line-height, 1.6));
   padding: 0 16px;
@@ -594,24 +607,24 @@
 /* Line numbers: CSS counter on each pre-highlighted line. The gutter
    prefix scrolls with the code (min-width: max-content on <code>), which
    keeps numbers aligned to their line without a separate fixed column. */
-.message .markdown-codeblock pre[data-line-numbers] {
+:is(.message, .thinking-block) .markdown-codeblock pre[data-line-numbers] {
   counter-reset: markdown-codeblock-line;
 }
 
 /* Line numbers live in an absolutely-positioned gutter so text selection
    never includes them — only the code (the "black region") is selectable
    and copyable. The line still reserves left padding for the gutter. */
-.message .markdown-codeblock pre[data-line-numbers] {
+:is(.message, .thinking-block) .markdown-codeblock pre[data-line-numbers] {
   position: relative;
 }
 
-.message .markdown-codeblock pre[data-line-numbers] .markdown-codeblock-line {
+:is(.message, .thinking-block) .markdown-codeblock pre[data-line-numbers] .markdown-codeblock-line {
   position: relative;
   padding-left: 3.6em;
   padding-right: 16px;
 }
 
-.message .markdown-codeblock pre[data-line-numbers] .markdown-codeblock-line::before {
+:is(.message, .thinking-block) .markdown-codeblock pre[data-line-numbers] .markdown-codeblock-line::before {
   counter-increment: markdown-codeblock-line;
   content: counter(markdown-codeblock-line);
   position: absolute;
@@ -628,11 +641,11 @@
 /* A single continuous gutter divider that spans the full code height and
    scrolls horizontally with the code (drawn on <code>, which is
    min-width: max-content), so it stays aligned with the line numbers. */
-.message .markdown-codeblock pre[data-line-numbers] code {
+:is(.message, .thinking-block) .markdown-codeblock pre[data-line-numbers] code {
   position: relative;
 }
 
-.message .markdown-codeblock pre[data-line-numbers] code::before {
+:is(.message, .thinking-block) .markdown-codeblock pre[data-line-numbers] code::before {
   content: "";
   position: absolute;
   top: 0;
@@ -643,47 +656,47 @@
   pointer-events: none;
 }
 
-.message .markdown-codeblock :is(.token.comment, .token.prolog, .token.doctype, .token.cdata),
-.message .markdown-codeblock-single :is(.token.comment, .token.prolog, .token.doctype, .token.cdata) {
+:is(.message, .thinking-block) .markdown-codeblock :is(.token.comment, .token.prolog, .token.doctype, .token.cdata),
+:is(.message, .thinking-block) .markdown-codeblock-single :is(.token.comment, .token.prolog, .token.doctype, .token.cdata) {
   color: var(--message-code-token-comment);
 }
 
-.message .markdown-codeblock .token.punctuation,
-.message .markdown-codeblock-single .token.punctuation {
+:is(.message, .thinking-block) .markdown-codeblock .token.punctuation,
+:is(.message, .thinking-block) .markdown-codeblock-single .token.punctuation {
   color: var(--message-code-token-punctuation);
 }
 
-.message .markdown-codeblock :is(.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted),
-.message .markdown-codeblock-single :is(.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted) {
+:is(.message, .thinking-block) .markdown-codeblock :is(.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted),
+:is(.message, .thinking-block) .markdown-codeblock-single :is(.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted) {
   color: var(--message-code-token-constant);
 }
 
-.message .markdown-codeblock :is(.token.boolean, .token.number),
-.message .markdown-codeblock-single :is(.token.boolean, .token.number) {
+:is(.message, .thinking-block) .markdown-codeblock :is(.token.boolean, .token.number),
+:is(.message, .thinking-block) .markdown-codeblock-single :is(.token.boolean, .token.number) {
   color: var(--message-code-token-number);
 }
 
-.message .markdown-codeblock :is(.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted),
-.message .markdown-codeblock-single :is(.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted) {
+:is(.message, .thinking-block) .markdown-codeblock :is(.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted),
+:is(.message, .thinking-block) .markdown-codeblock-single :is(.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted) {
   color: var(--message-code-token-string);
 }
 
-.message .markdown-codeblock :is(.token.operator, .token.entity, .token.url, .token.variable),
-.message .markdown-codeblock-single :is(.token.operator, .token.entity, .token.url, .token.variable) {
+:is(.message, .thinking-block) .markdown-codeblock :is(.token.operator, .token.entity, .token.url, .token.variable),
+:is(.message, .thinking-block) .markdown-codeblock-single :is(.token.operator, .token.entity, .token.url, .token.variable) {
   color: var(--message-code-token-operator);
 }
 
-.message .markdown-codeblock :is(.token.atrule, .token.attr-value, .token.keyword),
-.message .markdown-codeblock-single :is(.token.atrule, .token.attr-value, .token.keyword) {
+:is(.message, .thinking-block) .markdown-codeblock :is(.token.atrule, .token.attr-value, .token.keyword),
+:is(.message, .thinking-block) .markdown-codeblock-single :is(.token.atrule, .token.attr-value, .token.keyword) {
   color: var(--message-code-token-keyword);
 }
 
-.message .markdown-codeblock :is(.token.function, .token.class-name),
-.message .markdown-codeblock-single :is(.token.function, .token.class-name) {
+:is(.message, .thinking-block) .markdown-codeblock :is(.token.function, .token.class-name),
+:is(.message, .thinking-block) .markdown-codeblock-single :is(.token.function, .token.class-name) {
   color: var(--message-code-token-function);
 }
 
-.message .markdown-codeblock-single {
+:is(.message, .thinking-block) .markdown-codeblock-single {
   margin: 1.25em 0;
   padding: 14px 16px 16px;
   border: 1px solid var(--border-strong);
@@ -698,29 +711,29 @@
   box-shadow: none;
 }
 
-.message .markdown-codeblock-markdown {
+:is(.message, .thinking-block) .markdown-codeblock-markdown {
   --message-codeblock-bg: color-mix(in srgb, var(--surface-card-strong) 88%, var(--surface-command) 12%);
   --message-codeblock-header-bg: var(--message-codeblock-bg);
 }
 
-:root[data-theme="light"] .message .markdown-codeblock-markdown {
+:root[data-theme="light"] :is(.message, .thinking-block) .markdown-codeblock-markdown {
   --message-codeblock-bg: color-mix(in srgb, var(--surface-card-strong) 92%, #f3f8ff 8%);
   --message-codeblock-header-bg: var(--message-codeblock-bg);
 }
 
-.message .markdown-codeblock-markdown-content {
+:is(.message, .thinking-block) .markdown-codeblock-markdown-content {
   padding: 12px 14px 14px;
 }
 
-.message .markdown-codeblock-markdown-content .markdown > :first-child {
+:is(.message, .thinking-block) .markdown-codeblock-markdown-content .markdown > :first-child {
   margin-top: 0;
 }
 
-.message .markdown-codeblock-markdown-content .markdown > :last-child {
+:is(.message, .thinking-block) .markdown-codeblock-markdown-content .markdown > :last-child {
   margin-bottom: 0;
 }
 
-.message .markdown-codeblock-single code {
+:is(.message, .thinking-block) .markdown-codeblock-single code {
   display: block;
   font-family: var(--code-font-family);
   font-weight: var(--code-font-weight, 400);
@@ -729,7 +742,7 @@
 
 /* ---- Mermaid Block ---- */
 
-.message .markdown-mermaidblock-actions {
+:is(.message, .thinking-block) .markdown-mermaidblock-actions {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -738,13 +751,13 @@
   white-space: nowrap;
 }
 
-.message .markdown-mermaidblock-action {
+:is(.message, .thinking-block) .markdown-mermaidblock-action {
   flex: 0 0 24px;
   min-width: 24px;
   white-space: nowrap;
 }
 
-.message .markdown-mermaidblock-diagram {
+:is(.message, .thinking-block) .markdown-mermaidblock-diagram {
   padding: 16px;
   display: flex;
   justify-content: center;
@@ -753,26 +766,26 @@
   background: var(--surface-command);
 }
 
-.message .markdown-mermaidblock-diagram svg {
+:is(.message, .thinking-block) .markdown-mermaidblock-diagram svg {
   max-width: 100%;
   height: auto;
 }
 
-.message .markdown-mermaidblock-loading {
+:is(.message, .thinking-block) .markdown-mermaidblock-loading {
   padding: 24px;
   text-align: center;
   color: var(--text-faint);
   font-size: var(--message-meta-font-size);
 }
 
-.message .markdown-latexblock .markdown-latexblock-content {
+:is(.message, .thinking-block) .markdown-latexblock .markdown-latexblock-content {
   padding: 10px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.message .markdown-latexblock .markdown-latexblock-label {
+:is(.message, .thinking-block) .markdown-latexblock .markdown-latexblock-label {
   margin: 0;
   font-size: var(--message-meta-font-size);
   font-weight: 600;
@@ -780,22 +793,22 @@
   color: var(--text-muted);
 }
 
-.message .markdown-latexblock .markdown-latexblock-formula {
+:is(.message, .thinking-block) .markdown-latexblock .markdown-latexblock-formula {
   padding: 4px 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
 
-.message .markdown-latexblock .markdown-latexblock-formula .katex-display {
+:is(.message, .thinking-block) .markdown-latexblock .markdown-latexblock-formula .katex-display {
   margin: 0;
 }
 
-.message .markdown-mermaidblock-error {
+:is(.message, .thinking-block) .markdown-mermaidblock-error {
   display: flex;
   flex-direction: column;
 }
 
-.message .markdown-mermaidblock-error-hint {
+:is(.message, .thinking-block) .markdown-mermaidblock-error-hint {
   padding: 8px 12px;
   font-size: var(--message-meta-font-size);
   color: var(--status-error, #ef4444);
@@ -803,14 +816,14 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.message .markdown-linkblock {
+:is(.message, .thinking-block) .markdown-linkblock {
   display: flex;
   flex-direction: column;
   gap: 4px;
   word-break: break-all;
 }
 
-.message .markdown-linkblock a {
+:is(.message, .thinking-block) .markdown-linkblock a {
   color: var(--md-link-color);
   text-decoration-line: underline;
   text-decoration-style: dotted;
@@ -819,7 +832,7 @@
   text-underline-offset: 2px;
 }
 
-.message .markdown-linkblock a:hover {
+:is(.message, .thinking-block) .markdown-linkblock a:hover {
   text-decoration-thickness: 2px;
   opacity: 0.95;
 }
@@ -1080,12 +1093,12 @@
   opacity: 0.95;
 }
 
-.message .markdown a,
-.message .markdown a:visited {
+:is(.message, .thinking-block) .markdown a,
+:is(.message, .thinking-block) .markdown a:visited {
   color: var(--md-link-color);
 }
 
-.message .markdown a code {
+:is(.message, .thinking-block) .markdown a code {
   color: var(--md-link-color);
 }
 

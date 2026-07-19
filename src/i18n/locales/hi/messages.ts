@@ -14,6 +14,7 @@ const messages = {
     "thinking": "सोच रहा है…",
     "thinkingLabel": "सोच रहा है",
     "thinkingProcess": "सोच प्रक्रिया",
+    "thinkingDone": "सोच पूर्ण",
     "finalMessageBoundary": "अंतिम संदेश",
     "turnFilesChanged": {
       "title_one": "{{count}} फ़ाइल संपादित की",

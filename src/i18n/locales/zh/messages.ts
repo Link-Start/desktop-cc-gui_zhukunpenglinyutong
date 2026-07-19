@@ -8,9 +8,10 @@ const messages = {
     outlineEmpty: "此消息没有可导航的标题",
     userMessage: "你",
     assistantMessage: "助手",
-    thinking: "思考中…",
+    thinking: "思考中",
     thinkingLabel: "思考",
     thinkingProcess: "思考过程",
+    thinkingDone: "思考完成",
     finalMessageBoundary: "最终消息",
     turnFilesChanged: {
       title_other: "已编辑 {{count}} 个文件",

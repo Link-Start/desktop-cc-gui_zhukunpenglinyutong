@@ -6,6 +6,7 @@ import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import Search from "lucide-react/dist/esm/icons/search";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import LoaderCircle from "lucide-react/dist/esm/icons/loader-circle";
+import Brain from "lucide-react/dist/esm/icons/brain";
 import { AgentIcon } from "../../../components/AgentIcon";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1762,11 +1763,7 @@ export const ReasoningRow = memo(function ReasoningRow({
   if (isEncryptedCodexReasoning) {
     return null;
   }
-  const title = activeEngine === "claude"
-    ? t("messages.thinkingLabel")
-    : isLive
-      ? t("messages.thinkingProcess")
-      : t("messages.thinkingLabel");
+  const title = isLive ? t("messages.thinking") : t("messages.thinkingProcess");
   return (
     <div className={`thinking-block${isExpanded ? " is-expanded" : ""}${isLive ? " is-live" : ""}`}>
       <button
@@ -1775,6 +1772,7 @@ export const ReasoningRow = memo(function ReasoningRow({
         onClick={() => onToggle(item.id)}
       >
         <span className="thinking-header-copy">
+          <Brain className="thinking-brain-icon" size={15} aria-hidden />
           <span className="thinking-title">{title}</span>
         </span>
         <span

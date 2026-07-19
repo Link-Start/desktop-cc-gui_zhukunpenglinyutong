@@ -14,6 +14,7 @@ const messages = {
     "thinking": "思考中…",
     "thinkingLabel": "思考",
     "thinkingProcess": "思考プロセス",
+    "thinkingDone": "思考完了",
     "finalMessageBoundary": "最終メッセージ",
     "turnFilesChanged": {
       "title_one": "{{count}} 個のファイルを編集",

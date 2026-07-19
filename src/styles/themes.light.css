@@ -131,7 +131,7 @@
   --color-error: #e81123;
 
   --color-thinking-border: #d0d0d0;
-  --color-thinking-text: #666666;
+  --color-thinking-text: rgb(115, 115, 115);
 
   --color-tool-bg: rgba(0, 0, 0, 0.04);
   --color-tool-icon: #0078d4;

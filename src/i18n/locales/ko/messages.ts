@@ -14,6 +14,7 @@ const messages = {
     "thinking": "사고 중…",
     "thinkingLabel": "사고",
     "thinkingProcess": "사고 과정",
+    "thinkingDone": "사고 완료",
     "finalMessageBoundary": "최종 메시지",
     "turnFilesChanged": {
       "title_one": "파일 {{count}}개 편집됨",
