@@ -2702,6 +2702,7 @@ export const Messages = memo(function Messages({
     menu: noteCaptureMenu,
     closeMenu: closeNoteCaptureMenu,
     handleContextMenu: handleConversationContextMenu,
+    openMenuFromTrigger: openNoteCaptureMenuFromTrigger,
   } = useConversationNoteCaptureMenu({
     canvasRootRef: containerRef,
     items,
@@ -2778,6 +2779,9 @@ export const Messages = memo(function Messages({
           onPendingJumpTargetReady={handlePendingJumpTargetReady}
           onForkFromMessage={onForkFromMessage}
           onRewindFromMessage={onRewindFromMessage}
+          onOpenNoteCaptureMenu={
+            onCaptureNote ? openNoteCaptureMenuFromTrigger : undefined
+          }
           handleExitPlanModeExecuteForItem={handleExitPlanModeExecuteForItem}
           heartbeatPulse={timelineHeartbeatPulse}
           hiddenClaudeReasoningOnly={hiddenClaudeReasoningOnly}

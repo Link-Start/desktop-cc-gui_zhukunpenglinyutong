@@ -48,3 +48,8 @@
 - [x] 9.1 [P0, depends: 2.1] code capture 仅用 trim 判空，fenced body 保留 canonical selection 的 leading indentation 与 trailing newline；验证 whitespace-only rejection、缩进、多行末尾换行与 embedded backtick regression。
 - [x] 9.2 [P0, depends: 6.1, 8.1] 扩展 additive `EditorNavigationLocation.endLine`，在目标文件加载完成后由 CodeMirror 同一 transaction 恢复 line range；移除 source action 的 premature range publish，验证普通 cursor navigation、range navigation、document-shortening clamp 与 notes companion routing。
 - [x] 9.3 [P0, depends: 9.1, 9.2] 修复本 change 自有 Rust formatting，更新 Trellis executable contract 与 verification evidence，并执行 focused Vitest、lint、typecheck、build、Rust、runtime/large-file、strict OpenSpec gate 后整体提交。
+
+## 10. Conversation Bottom Action Trigger Follow-up
+
+- [x] 10.1 [P0, depends: 4.2] 在最新 final assistant boundary 的现有 action group 最左侧增加 9px、`strokeWidth={1.75}` 的 note capture icon，将 History 视觉尺寸单独调整为 13px，并保持 Copy/Fork 既有视觉尺寸与样式；输入为现有 `useConversationNoteCaptureMenu` action，输出为与右键菜单相同的低频 trigger；按钮热区、旧 final boundary 与右键 ownership 保持不变。
+- [x] 10.2 [P0, depends: 10.1] 增加 focused regression，覆盖最新 action group 的 Note/Copy/Fork/Rewind 顺序与尺寸 contract、shared menu、semantic thread capture 原 draft，以及旧 final boundary 不新增按钮；执行 focused Vitest、lint、typecheck、large-file gate 与 strict OpenSpec validation。

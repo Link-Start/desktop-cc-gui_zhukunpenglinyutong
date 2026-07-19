@@ -56,20 +56,11 @@ export function useConversationNoteCaptureMenu({
     setMenu(null);
   }, [threadId]);
 
-  const handleContextMenu = useCallback(
-    (event: MouseEvent<HTMLDivElement>) => {
-      if (!onCaptureNote || !threadId || event.defaultPrevented) {
-        return;
+  const openMenu = useCallback(
+    (x: number, y: number) => {
+      if (!onCaptureNote || !threadId) {
+        return false;
       }
-      const target = event.target instanceof Element ? event.target : null;
-      if (
-        target?.closest(
-          "a, button, input, textarea, select, [role='button'], [contenteditable='true']",
-        )
-      ) {
-        return;
-      }
-
       const selectionSnapshot = snapshotConversationSelection(
         typeof window === "undefined" ? null : window.getSelection(),
         canvasRootRef.current,
@@ -144,12 +135,11 @@ export function useConversationNoteCaptureMenu({
       }
 
       if (menuItems.length === 0) {
-        return;
+        return false;
       }
-      event.preventDefault();
       const position = clampRendererContextMenuPosition(
-        event.clientX,
-        event.clientY,
+        x,
+        y,
         { height: estimateRendererContextMenuHeight(menuItems) },
       );
       setMenu({
@@ -157,9 +147,38 @@ export function useConversationNoteCaptureMenu({
         label: t("noteCards.captureMenu"),
         items: menuItems,
       });
+      return true;
     },
     [canvasRootRef, items, onCaptureNote, t, threadId],
   );
 
-  return { menu, closeMenu, handleContextMenu };
+  const handleContextMenu = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        target?.closest(
+          "a, button, input, textarea, select, [role='button'], [contenteditable='true']",
+        )
+      ) {
+        return;
+      }
+      if (openMenu(event.clientX, event.clientY)) {
+        event.preventDefault();
+      }
+    },
+    [openMenu],
+  );
+
+  const openMenuFromTrigger = useCallback(
+    (trigger: HTMLElement) => {
+      const triggerRect = trigger.getBoundingClientRect();
+      openMenu(triggerRect.right, triggerRect.bottom + 4);
+    },
+    [openMenu],
+  );
+
+  return { menu, closeMenu, handleContextMenu, openMenuFromTrigger };
 }

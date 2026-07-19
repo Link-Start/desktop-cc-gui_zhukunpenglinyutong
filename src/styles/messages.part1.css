@@ -153,6 +153,10 @@
   line-height: 1;
 }
 
+.message-action-bar-row .message-history-icon {
+  font-size: 13px;
+}
+
 .message-fork-confirm-dialog {
   max-width: 440px;
 }

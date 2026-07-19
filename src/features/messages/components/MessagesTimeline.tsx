@@ -16,6 +16,7 @@ import { useRenderHotspot } from "../../../services/perfBaseline/useRenderHotspo
 import { useTranslation } from "react-i18next";
 import Check from "lucide-react/dist/esm/icons/check";
 import Copy from "lucide-react/dist/esm/icons/copy";
+import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
 import type {
   AccessMode,
@@ -202,6 +203,7 @@ type MessagesTimelineProps = {
   onPendingJumpTargetReady: (messageId: string) => void;
   onForkFromMessage?: (messageId: string) => void;
   onRewindFromMessage?: (messageId: string) => void;
+  onOpenNoteCaptureMenu?: (trigger: HTMLButtonElement) => void;
   handleExitPlanModeExecuteForItem: (
     itemId: string,
     mode: Extract<AccessMode, "default" | "full-access">,
@@ -362,6 +364,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onPendingJumpTargetReady,
   onForkFromMessage,
   onRewindFromMessage,
+  onOpenNoteCaptureMenu,
   handleExitPlanModeExecuteForItem,
   heartbeatPulse,
   hiddenClaudeReasoningOnly,
@@ -1515,6 +1518,17 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             className="message-action-bar message-action-bar-row"
             aria-label={t("messages.messageActions")}
           >
+            {isLatestFinalAssistant && onOpenNoteCaptureMenu ? (
+              <button
+                type="button"
+                className="ghost message-action-button"
+                onClick={(event) => onOpenNoteCaptureMenu(event.currentTarget)}
+                aria-label={t("noteCards.captureMenu")}
+                title={t("noteCards.captureMenu")}
+              >
+                <NotebookPen size={9} strokeWidth={1.75} aria-hidden />
+              </button>
+            ) : null}
             <button
               type="button"
               className={`ghost message-action-button message-copy-button${isCopied ? " is-copied" : ""}`}
@@ -1546,7 +1560,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                 aria-label={t("messages.rewindMessage")}
                 title={t("messages.rewindMessage")}
               >
-                <span className="codicon codicon-history" aria-hidden />
+                <span
+                  className="codicon codicon-history message-history-icon"
+                  aria-hidden
+                />
               </button>
             ) : null}
           </div>

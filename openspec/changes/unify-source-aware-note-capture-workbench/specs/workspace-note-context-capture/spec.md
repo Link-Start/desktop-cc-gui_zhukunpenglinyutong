@@ -123,6 +123,28 @@
 - **WHEN** context menu 打开后 browser selection 因 focus change 收缩或消失
 - **THEN** capture action MUST 使用 menu 打开时冻结的 text 与 item identities
 
+### Requirement: Conversation Capture Menu MUST Expose A Bottom Action Trigger
+
+系统 MUST 在最新 final assistant message 的底部 action group 最左侧提供 note capture icon，作为现有 conversation capture menu 的额外入口；note capture icon MUST 使用 9px visual size 与 1.75 stroke width，History MUST 使用 13px visual size，Copy 与 Fork 的既有视觉尺寸与样式 MUST 保持不变。
+
+#### Scenario: bottom icon opens the shared capture menu
+
+- **WHEN** 用户激活幕布最底部最新 final assistant message 的 note capture icon
+- **THEN** 系统 MUST 打开与幕布右键相同的 conversation capture menu
+- **AND** menu item MUST 继续使用现有 semantic transcript 与 `NoteCaptureDraft` 路由
+- **AND** note capture icon MUST 位于 Copy、Fork 与 Rewind 之前
+
+#### Scenario: existing context-menu trigger remains unchanged
+
+- **WHEN** bottom action trigger 可用
+- **THEN** 幕布原有 context-menu trigger、selection snapshot 与 interactive-control ownership MUST 保持不变
+
+#### Scenario: historical final boundaries stay compact
+
+- **WHEN** 幕布包含多个 final assistant boundaries
+- **THEN** note capture icon MUST 只出现在最新 final assistant boundary
+- **AND** 既有 Copy、Fork 与 Rewind action availability MUST 保持不变
+
 ### Requirement: Code Source Navigation MUST Preserve The Note Workbench Companion
 
 系统 MUST 在从已保存 code note 的 source summary 打开文件时维持 note workbench 可见，并限定该布局语义只属于 source-origin navigation。

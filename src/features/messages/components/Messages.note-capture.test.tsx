@@ -94,6 +94,97 @@ describe("Messages note capture", () => {
     expect(draft.bodyMarkdown).not.toContain("不应保存的流式半成品");
   });
 
+  it("opens the shared capture menu from the latest final action group", () => {
+    const onCaptureNote = vi.fn();
+    const { container } = render(
+      <Messages
+        items={[
+          {
+            id: "user-first",
+            kind: "message",
+            role: "user",
+            text: "第一轮问题",
+          },
+          {
+            id: "assistant-first",
+            kind: "message",
+            role: "assistant",
+            text: "第一轮答复",
+            isFinal: true,
+          },
+          {
+            id: "user-latest",
+            kind: "message",
+            role: "user",
+            text: "最新问题",
+          },
+          {
+            id: "assistant-latest",
+            kind: "message",
+            role: "assistant",
+            text: "最新答复",
+            isFinal: true,
+          },
+        ]}
+        threadId="thread-action-trigger"
+        workspaceId="workspace-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+        onCaptureNote={onCaptureNote}
+        onForkFromMessage={vi.fn()}
+        onRewindFromMessage={vi.fn()}
+      />,
+    );
+
+    const boundaryActionRows = container.querySelectorAll(
+      ".messages-final-boundary .message-action-bar-row",
+    );
+    expect(boundaryActionRows).toHaveLength(2);
+    expect(boundaryActionRows[0].querySelectorAll("button")).toHaveLength(1);
+    const latestActionButtons = Array.from(
+      boundaryActionRows[1].querySelectorAll("button"),
+    );
+    expect(
+      latestActionButtons.map((button) => button.getAttribute("aria-label")),
+    ).toEqual([
+      "noteCards.captureMenu",
+      "messages.copyMessage",
+      "messages.forkMessage",
+      "messages.rewindMessage",
+    ]);
+    const noteCaptureIcon = latestActionButtons[0]?.querySelector("svg");
+    expect(noteCaptureIcon?.getAttribute("width")).toBe("9");
+    expect(noteCaptureIcon?.getAttribute("height")).toBe("9");
+    expect(noteCaptureIcon?.getAttribute("stroke-width")).toBe("1.75");
+    expect(
+      latestActionButtons[3]
+        ?.querySelector(".codicon-history")
+        ?.classList.contains("message-history-icon"),
+    ).toBe(true);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "noteCards.captureMenu" }),
+    );
+    fireEvent.click(
+      screen.getByRole("menuitem", {
+        name: "noteCards.captureConversationThread",
+      }),
+    );
+
+    expect(onCaptureNote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "noteCards.captureConversationThreadTitle",
+        source: {
+          kind: "conversationThread",
+          threadId: "thread-action-trigger",
+          itemCount: 4,
+          capturedAt: expect.any(Number),
+        },
+      }),
+    );
+  });
+
   it("freezes the local text selection for both copy and note capture", async () => {
     const onCaptureNote = vi.fn();
     const clipboardWriteText = vi.fn().mockResolvedValue(undefined);

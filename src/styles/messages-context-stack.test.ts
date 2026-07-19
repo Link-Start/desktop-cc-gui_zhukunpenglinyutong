@@ -16,6 +16,15 @@ function getCssRuleBlock(css: string, selector: string): string {
 }
 
 describe("messages context stack layout", () => {
+  it("slightly enlarges the history action without changing sibling icons", () => {
+    const historyIconRule = getCssRuleBlock(
+      messagesPart1Css,
+      ".message-action-bar-row .message-history-icon",
+    );
+
+    expect(historyIconRule).toContain("font-size: 13px;");
+  });
+
   it("keeps user context cards and the user bubble on the same right-aligned column", () => {
     const userBubbleRule = getCssRuleBlock(messagesPart1Css, ".message.user .bubble");
     const userStackRule = getCssRuleBlock(messagesPart1Css, ".message-context-stack.is-user");
