@@ -507,3 +507,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1041: 修复 Git 多仓长列表显示断层
+
+**Date**: 2026-07-19
+**Task**: 修复 Git 多仓长列表显示断层
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+修复多仓 Git 变更列表中 repository card 被 Flex 收缩并由 overflow hidden 裁剪的问题；为 card 增加 flex: 0 0 auto，并补充 CSS contract 防回归断言。目标测试、lint、typecheck 与人工验收通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9b925d8f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

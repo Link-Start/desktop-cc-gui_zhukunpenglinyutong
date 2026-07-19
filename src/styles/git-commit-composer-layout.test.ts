@@ -18,6 +18,9 @@ describe("Git commit composer layout", () => {
     expect(diffCss).toMatch(
       /\.git-multi-repository-changes\s*\{[^}]*min-height:\s*0[^}]*overflow:\s*hidden/s,
     );
+    expect(diffCss).toMatch(
+      /\.git-repository-change-group\s*\{[^}]*flex:\s*0 0 auto/s,
+    );
   });
 
   it("uses single-repository file-row tokens for multi-repository group density", () => {

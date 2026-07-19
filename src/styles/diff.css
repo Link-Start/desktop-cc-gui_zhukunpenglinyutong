@@ -922,6 +922,7 @@ button.diff-section-indicator:focus-visible {
 }
 
 .git-repository-change-group {
+  flex: 0 0 auto;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
   border-radius: var(--git-filetree-row-radius);
