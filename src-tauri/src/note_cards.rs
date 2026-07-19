@@ -23,6 +23,7 @@ static MARKDOWN_PREFIX_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 static MULTISPACE_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\s+").expect("valid multispace regex"));
 const MAX_NOTE_ATTACHMENT_BYTES: usize = 20 * 1024 * 1024;
+const MAX_NOTE_SOURCE_ITEM_IDS: usize = 128;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +45,33 @@ pub(crate) struct NoteCardPreviewAttachment {
     pub absolute_path: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub(crate) enum WorkspaceNoteCardSource {
+    CodeSelection {
+        path: String,
+        #[serde(rename = "startLine")]
+        start_line: u32,
+        #[serde(rename = "endLine")]
+        end_line: u32,
+        language: Option<String>,
+    },
+    ConversationSelection {
+        #[serde(rename = "threadId")]
+        thread_id: String,
+        #[serde(rename = "itemIds")]
+        item_ids: Vec<String>,
+    },
+    ConversationThread {
+        #[serde(rename = "threadId")]
+        thread_id: String,
+        #[serde(rename = "itemCount")]
+        item_count: usize,
+        #[serde(rename = "capturedAt")]
+        captured_at: i64,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WorkspaceNoteCard {
@@ -56,6 +84,8 @@ pub(crate) struct WorkspaceNoteCard {
     pub body_markdown: String,
     pub plain_text_excerpt: String,
     pub attachments: Vec<NoteCardAttachment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<WorkspaceNoteCardSource>,
     pub created_at: i64,
     pub updated_at: i64,
     pub archived_at: Option<i64>,
@@ -92,6 +122,7 @@ pub(crate) struct CreateWorkspaceNoteCardInput {
     pub title: Option<String>,
     pub body_markdown: String,
     pub attachment_inputs: Option<Vec<String>>,
+    pub source: Option<WorkspaceNoteCardSource>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +148,82 @@ fn storage_dir() -> Result<PathBuf, String> {
 
 fn now_ms() -> i64 {
     Utc::now().timestamp_millis()
+}
+
+fn normalize_note_source(
+    source: Option<WorkspaceNoteCardSource>,
+) -> Result<Option<WorkspaceNoteCardSource>, String> {
+    let Some(source) = source else {
+        return Ok(None);
+    };
+    let normalized = match source {
+        WorkspaceNoteCardSource::CodeSelection {
+            path,
+            start_line,
+            end_line,
+            language,
+        } => {
+            let path = path.trim().to_string();
+            if path.is_empty() {
+                return Err("note source path is required".to_string());
+            }
+            if start_line == 0 || end_line < start_line {
+                return Err("note source line range is invalid".to_string());
+            }
+            WorkspaceNoteCardSource::CodeSelection {
+                path,
+                start_line,
+                end_line,
+                language: language.and_then(|value| {
+                    let trimmed = value.trim().to_string();
+                    (!trimmed.is_empty()).then_some(trimmed)
+                }),
+            }
+        }
+        WorkspaceNoteCardSource::ConversationSelection {
+            thread_id,
+            item_ids,
+        } => {
+            let thread_id = thread_id.trim().to_string();
+            if thread_id.is_empty() {
+                return Err("note source thread id is required".to_string());
+            }
+            let mut seen = HashSet::new();
+            let item_ids = item_ids
+                .into_iter()
+                .map(|item_id| item_id.trim().to_string())
+                .filter(|item_id| !item_id.is_empty())
+                .filter(|item_id| seen.insert(item_id.clone()))
+                .take(MAX_NOTE_SOURCE_ITEM_IDS)
+                .collect::<Vec<_>>();
+            if item_ids.is_empty() {
+                return Err("note source item ids are required".to_string());
+            }
+            WorkspaceNoteCardSource::ConversationSelection {
+                thread_id,
+                item_ids,
+            }
+        }
+        WorkspaceNoteCardSource::ConversationThread {
+            thread_id,
+            item_count,
+            captured_at,
+        } => {
+            let thread_id = thread_id.trim().to_string();
+            if thread_id.is_empty() {
+                return Err("note source thread id is required".to_string());
+            }
+            if item_count == 0 || captured_at <= 0 {
+                return Err("note source conversation metadata is invalid".to_string());
+            }
+            WorkspaceNoteCardSource::ConversationThread {
+                thread_id,
+                item_count,
+                captured_at,
+            }
+        }
+    };
+    Ok(Some(normalized))
 }
 
 fn derive_project_name(
@@ -1118,6 +1225,7 @@ pub(crate) fn note_card_create(
     input: CreateWorkspaceNoteCardInput,
 ) -> Result<WorkspaceNoteCard, String> {
     with_file_lock(|| {
+        let source = normalize_note_source(input.source.clone())?;
         let base = storage_dir()?;
         let project_name = derive_project_name(
             Some(input.workspace_id.as_str()),
@@ -1146,6 +1254,7 @@ pub(crate) fn note_card_create(
             body_markdown: body_markdown.clone(),
             plain_text_excerpt: build_plain_text_excerpt(&body_markdown),
             attachments,
+            source,
             created_at: current_ms,
             updated_at: current_ms,
             archived_at: None,
@@ -1360,6 +1469,85 @@ mod tests {
     }
 
     #[test]
+    fn reads_legacy_note_without_source() {
+        let raw = r#"{
+          "id": "legacy-note",
+          "workspaceId": "workspace-1",
+          "workspaceName": null,
+          "workspacePath": null,
+          "projectName": "workspace-1",
+          "title": "Legacy",
+          "bodyMarkdown": "body",
+          "plainTextExcerpt": "body",
+          "attachments": [],
+          "createdAt": 1,
+          "updatedAt": 1,
+          "archivedAt": null
+        }"#;
+
+        let note: WorkspaceNoteCard = serde_json::from_str(raw).expect("deserialize legacy note");
+
+        assert_eq!(note.id, "legacy-note");
+        assert_eq!(note.source, None);
+    }
+
+    #[test]
+    fn normalizes_conversation_source_item_ids() {
+        let normalized =
+            normalize_note_source(Some(WorkspaceNoteCardSource::ConversationSelection {
+                thread_id: " thread-1 ".to_string(),
+                item_ids: vec![
+                    "item-1".to_string(),
+                    " item-1 ".to_string(),
+                    String::new(),
+                    "item-2".to_string(),
+                ],
+            }))
+            .expect("normalize source");
+
+        assert_eq!(
+            normalized,
+            Some(WorkspaceNoteCardSource::ConversationSelection {
+                thread_id: "thread-1".to_string(),
+                item_ids: vec!["item-1".to_string(), "item-2".to_string()],
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_code_source_ranges() {
+        let invalid_sources = [
+            WorkspaceNoteCardSource::CodeSelection {
+                path: " ".to_string(),
+                start_line: 1,
+                end_line: 1,
+                language: None,
+            },
+            WorkspaceNoteCardSource::CodeSelection {
+                path: "src/main.rs".to_string(),
+                start_line: 0,
+                end_line: 1,
+                language: None,
+            },
+            WorkspaceNoteCardSource::CodeSelection {
+                path: "src/main.rs".to_string(),
+                start_line: 4,
+                end_line: 3,
+                language: None,
+            },
+        ];
+
+        for source in invalid_sources {
+            assert!(normalize_note_source(Some(source)).is_err());
+        }
+    }
+
+    #[test]
+    fn keeps_ordinary_note_source_absent() {
+        assert_eq!(normalize_note_source(None).expect("normalize source"), None);
+    }
+
+    #[test]
     fn create_archive_and_restore_note_card_roundtrip() {
         let base = std::env::temp_dir().join(format!("note-card-tests-{}", uuid::Uuid::new_v4()));
         let project_dir =
@@ -1383,6 +1571,12 @@ mod tests {
                 body_markdown: body_markdown.clone(),
                 plain_text_excerpt: build_plain_text_excerpt(&body_markdown),
                 attachments: Vec::new(),
+                source: Some(WorkspaceNoteCardSource::CodeSelection {
+                    path: "src/main.rs".to_string(),
+                    start_line: 4,
+                    end_line: 8,
+                    language: Some("rust".to_string()),
+                }),
                 created_at: now_ms(),
                 updated_at: now_ms(),
                 archived_at: None,
@@ -1415,6 +1609,7 @@ mod tests {
         let restored =
             read_note_card(&archive_path, &project_dir, true).expect("read archived note");
         assert_eq!(restored.id, created.id);
+        assert_eq!(restored.source, created.source);
 
         std::fs::remove_dir_all(&base).ok();
     }
@@ -1464,6 +1659,7 @@ mod tests {
                     size_bytes: 4,
                 },
             ],
+            source: None,
             created_at: now_ms(),
             updated_at: now_ms(),
             archived_at: None,
@@ -1505,6 +1701,7 @@ mod tests {
                     .to_string(),
                 size_bytes: 4,
             }],
+            source: None,
             created_at: now_ms(),
             updated_at: now_ms(),
             archived_at: None,
@@ -1581,6 +1778,7 @@ mod tests {
             body_markdown: "body".to_string(),
             plain_text_excerpt: "body".to_string(),
             attachments: Vec::new(),
+            source: None,
             created_at: now_ms(),
             updated_at: now_ms(),
             archived_at: None,
@@ -1723,6 +1921,7 @@ mod tests {
             body_markdown: body.clone(),
             plain_text_excerpt: build_plain_text_excerpt(&body),
             attachments: Vec::new(),
+            source: None,
             created_at: now_ms(),
             updated_at: now_ms(),
             archived_at: None,
@@ -1779,6 +1978,7 @@ mod tests {
             body_markdown: "body".to_string(),
             plain_text_excerpt: "body".to_string(),
             attachments: Vec::new(),
+            source: None,
             created_at: now_ms(),
             updated_at: now_ms(),
             archived_at: None,

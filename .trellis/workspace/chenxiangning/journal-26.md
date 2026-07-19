@@ -441,3 +441,69 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1039: 来源感知便签采集与工作台闭环
+
+**Date**: 2026-07-19
+**Task**: 来源感知便签采集与工作台闭环
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+完成代码与对话幕布的局部/整体语义采集、来源文件链接及精确行区间恢复、Markdown 代码渲染、按需新增编辑器、工作台最大化与左侧替换布局；补齐前后端映射、国际化、回归测试、OpenSpec 验证和提交前收口。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dc86a0f2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1040: 同步上游 v0.7.5 并完成语义合并验证
+
+**Date**: 2026-07-19
+**Task**: 同步上游 v0.7.5 并完成语义合并验证
+**Branch**: `feature/v-0.7.4`
+
+### Summary
+
+将 upstream/chore/bump-version-0.7.5 合并到 feature/v-0.7.4；保留本地来源感知便签与上游 Kimi session identity、Git composer、Markdown file-link 能力；语义审阅唯一重叠的 main.css，并通过相关 Vitest、typecheck、lint、build、doctor、Cargo check 与 Rust 定向回归。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e706b2df` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

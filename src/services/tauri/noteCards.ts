@@ -14,6 +14,26 @@ export type NoteCardPreviewAttachment = Pick<
   "id" | "fileName" | "contentType" | "absolutePath"
 >;
 
+export type WorkspaceNoteCardSource =
+  | {
+      kind: "codeSelection";
+      path: string;
+      startLine: number;
+      endLine: number;
+      language?: string | null;
+    }
+  | {
+      kind: "conversationSelection";
+      threadId: string;
+      itemIds: string[];
+    }
+  | {
+      kind: "conversationThread";
+      threadId: string;
+      itemCount: number;
+      capturedAt: number;
+    };
+
 export type WorkspaceNoteCard = {
   id: string;
   workspaceId: string;
@@ -24,6 +44,7 @@ export type WorkspaceNoteCard = {
   bodyMarkdown: string;
   plainTextExcerpt: string;
   attachments: NoteCardAttachment[];
+  source?: WorkspaceNoteCardSource | null;
   createdAt: number;
   updatedAt: number;
   archivedAt?: number | null;
@@ -88,6 +109,7 @@ export async function noteCardCreate(input: {
   title?: string | null;
   bodyMarkdown: string;
   attachmentInputs?: string[] | null;
+  source?: WorkspaceNoteCardSource | null;
 }): Promise<WorkspaceNoteCard> {
   return invoke<WorkspaceNoteCard>("note_card_create", {
     input: {
@@ -97,6 +119,7 @@ export async function noteCardCreate(input: {
       title: input.title ?? null,
       bodyMarkdown: input.bodyMarkdown,
       attachmentInputs: input.attachmentInputs ?? null,
+      source: input.source ?? null,
     },
   });
 }

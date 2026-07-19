@@ -16,6 +16,7 @@ import type { PresentationProfile } from "../presentation/presentationProfile";
 import type { RuntimeReconnectRecoveryCallbackResult } from "./runtimeReconnect";
 import type { AgentTaskScrollRequest } from "../types";
 import type { TaskRunRecord } from "../../tasks/types";
+import type { NoteCaptureDraft } from "../../note-cards/types";
 
 export type LastVisibleTextReport = {
   itemId: string | null;
@@ -86,6 +87,7 @@ export type MessagesProps = {
   conversationState?: ConversationState | null;
   presentationProfile?: PresentationProfile | null;
   onOpenWorkspaceFile?: (path: string) => void;
+  onCaptureNote?: (draft: NoteCaptureDraft) => void;
   agentTaskScrollRequest?: AgentTaskScrollRequest | null;
   onRecoverThreadRuntime?: (
     workspaceId: string,

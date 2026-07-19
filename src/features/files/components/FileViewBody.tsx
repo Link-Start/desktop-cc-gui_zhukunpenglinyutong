@@ -37,6 +37,14 @@ import type {
 import type { GitLineMarkers } from "../utils/gitLineMarkers";
 import type { GitFileBlameResponse } from "../../../types";
 import type { FileGitBlameStatus } from "../hooks/useFileGitBlame";
+import {
+  RendererContextMenu,
+  clampRendererContextMenuPosition,
+  estimateRendererContextMenuHeight,
+  type RendererContextMenuState,
+} from "../../../components/ui/RendererContextMenu";
+import type { NoteCaptureDraft } from "../../note-cards/types";
+import { buildCodeSelectionNoteDraft } from "../../note-cards/utils/noteCapture";
 
 const EDITOR_CONTENT_PUBLISH_DELAY_MS = 120;
 
@@ -83,6 +91,7 @@ type FileViewBodyProps = {
   gitBlameStatus: FileGitBlameStatus;
   gitBlameResponse: GitFileBlameResponse | null;
   onGitBlameContextMenu?: (position: { x: number; y: number }) => void;
+  onCaptureNote?: (draft: NoteCaptureDraft) => void;
   editorCodeAnnotations: CodeAnnotationSelection[];
   editorAnnotationDraft: FileAnnotationDraftState | null;
   annotationWidgetLabels: {
@@ -586,6 +595,7 @@ export function FileViewBody({
   gitBlameStatus,
   gitBlameResponse,
   onGitBlameContextMenu,
+  onCaptureNote,
   editorCodeAnnotations,
   editorAnnotationDraft,
   annotationWidgetLabels,
@@ -614,6 +624,8 @@ export function FileViewBody({
 }: FileViewBodyProps) {
   const [previewLineSelection, setPreviewLineSelection] =
     useState<PreviewLineSelection | null>(null);
+  const [noteCaptureMenu, setNoteCaptureMenu] =
+    useState<RendererContextMenuState | null>(null);
   const [isPreviewDragSelecting, setIsPreviewDragSelecting] = useState(false);
   const previewDragAnchorRef = useRef<number | null>(null);
   const previewDragMovedRef = useRef(false);
@@ -633,6 +645,92 @@ export function FileViewBody({
       documentKey,
       content,
     }));
+
+  const openNoteCaptureMenu = useCallback(
+    (event: MouseEvent<HTMLElement>, draft: NoteCaptureDraft | null) => {
+      if (!draft || !onCaptureNote || event.defaultPrevented) {
+        return;
+      }
+      event.preventDefault();
+      const items: RendererContextMenuState["items"] = [
+        {
+          type: "item",
+          id: "capture-code-selection-note",
+          label: t("noteCards.captureSelection"),
+          onSelect: () => onCaptureNote(draft),
+        },
+      ];
+      const position = clampRendererContextMenuPosition(
+        event.clientX,
+        event.clientY,
+        { height: estimateRendererContextMenuHeight(items) },
+      );
+      setNoteCaptureMenu({
+        ...position,
+        label: t("noteCards.captureMenu"),
+        items,
+      });
+    },
+    [onCaptureNote, t],
+  );
+
+  const handleEditorNoteCaptureContextMenu = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const view = cmRef.current?.view;
+      if (!view || !onCaptureNote || event.defaultPrevented) {
+        return;
+      }
+      const selection = view.state.selection.main;
+      if (selection.empty) {
+        return;
+      }
+      const startLine = view.state.doc.lineAt(selection.from).number;
+      const rawEndLine = view.state.doc.lineAt(selection.to);
+      const endLine =
+        selection.to > selection.from && rawEndLine.from === selection.to
+          ? Math.max(startLine, rawEndLine.number - 1)
+          : rawEndLine.number;
+      openNoteCaptureMenu(
+        event,
+        buildCodeSelectionNoteDraft({
+          path: filePath,
+          content: view.state.doc.sliceString(selection.from, selection.to),
+          startLine,
+          endLine,
+          language: previewLanguage,
+        }),
+      );
+    },
+    [cmRef, filePath, onCaptureNote, openNoteCaptureMenu, previewLanguage],
+  );
+
+  const handlePreviewNoteCaptureContextMenu = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (!previewLineSelection || !onCaptureNote || event.defaultPrevented) {
+        return;
+      }
+      openNoteCaptureMenu(
+        event,
+        buildCodeSelectionNoteDraft({
+          path: filePath,
+          content: documentSnapshot
+            .getLines(previewLineSelection.start - 1, previewLineSelection.end)
+            .join("\n"),
+          startLine: previewLineSelection.start,
+          endLine: previewLineSelection.end,
+          language: previewLanguage,
+        }),
+      );
+    },
+    [
+      documentSnapshot,
+      filePath,
+      onCaptureNote,
+      openNoteCaptureMenu,
+      previewLanguage,
+      previewLineSelection,
+    ],
+  );
 
   const clearEditorContentPublishTimer = useCallback(() => {
     if (editorContentPublishTimerRef.current === null) {
@@ -826,6 +924,7 @@ export function FileViewBody({
 
   useEffect(() => {
     setPreviewLineSelection(null);
+    setNoteCaptureMenu(null);
     setIsPreviewDragSelecting(false);
     previewDragAnchorRef.current = null;
     previewDragMovedRef.current = false;
@@ -913,32 +1012,43 @@ export function FileViewBody({
 
   if (viewSurface.kind === "editor") {
     return (
-      <FileCodeMirrorEditor
-        cmRef={cmRef}
-        filePath={filePath}
-        value={editorContent}
-        onChange={handleEditorContentChange}
-        onActiveFileLineRangeChange={onActiveFileLineRangeChange}
-        theme={editorTheme}
-        languageExtensions={languageExtensions}
-        gitLineMarkers={gitLineMarkers}
-        gitBlameEnabled={gitBlameEnabled}
-        gitBlameStatus={gitBlameStatus}
-        gitBlameResponse={gitBlameResponse}
-        onGitBlameContextMenu={onGitBlameContextMenu}
-        codeAnnotations={editorCodeAnnotations}
-        annotationDraft={editorAnnotationDraft}
-        annotationWidgetLabels={annotationWidgetLabels}
-        annotationWidgetCallbacks={annotationWidgetCallbacks}
-        runDefinitionFromCursor={runDefinitionFromCursor}
-        runReferencesFromCursor={runReferencesFromCursor}
-        resolveDefinitionAtOffset={resolveDefinitionAtOffset}
-        className="fvp-cm"
-        lastReportedLineRangeRef={lastReportedLineRangeRef}
-        saveFileShortcut={saveFileShortcut}
-        handleSave={handleSave}
-        fallback={<div className="fvp-status">{t("files.loadingFile")}</div>}
-      />
+      <div
+        className="fvp-editor-capture-surface"
+        onContextMenu={handleEditorNoteCaptureContextMenu}
+      >
+        <FileCodeMirrorEditor
+          cmRef={cmRef}
+          filePath={filePath}
+          value={editorContent}
+          onChange={handleEditorContentChange}
+          onActiveFileLineRangeChange={onActiveFileLineRangeChange}
+          theme={editorTheme}
+          languageExtensions={languageExtensions}
+          gitLineMarkers={gitLineMarkers}
+          gitBlameEnabled={gitBlameEnabled}
+          gitBlameStatus={gitBlameStatus}
+          gitBlameResponse={gitBlameResponse}
+          onGitBlameContextMenu={onGitBlameContextMenu}
+          codeAnnotations={editorCodeAnnotations}
+          annotationDraft={editorAnnotationDraft}
+          annotationWidgetLabels={annotationWidgetLabels}
+          annotationWidgetCallbacks={annotationWidgetCallbacks}
+          runDefinitionFromCursor={runDefinitionFromCursor}
+          runReferencesFromCursor={runReferencesFromCursor}
+          resolveDefinitionAtOffset={resolveDefinitionAtOffset}
+          className="fvp-cm"
+          lastReportedLineRangeRef={lastReportedLineRangeRef}
+          saveFileShortcut={saveFileShortcut}
+          handleSave={handleSave}
+          fallback={<div className="fvp-status">{t("files.loadingFile")}</div>}
+        />
+        {noteCaptureMenu ? (
+          <RendererContextMenu
+            menu={noteCaptureMenu}
+            onClose={() => setNoteCaptureMenu(null)}
+          />
+        ) : null}
+      </div>
     );
   }
 
@@ -1041,7 +1151,10 @@ export function FileViewBody({
   );
 
   return (
-    <>
+    <div
+      className="fvp-code-preview-capture-surface"
+      onContextMenu={handlePreviewNoteCaptureContextMenu}
+    >
       {previewLineSelection && onPreviewAnnotationStart ? (
         <div className="fvp-preview-selection-toolbar" role="group" aria-label={t("files.annotationSelectionToolbar")}>
           <span>{previewSelectionLabel}</span>
@@ -1150,6 +1263,12 @@ export function FileViewBody({
           })}
         </div>
       )}
-    </>
+      {noteCaptureMenu ? (
+        <RendererContextMenu
+          menu={noteCaptureMenu}
+          onClose={() => setNoteCaptureMenu(null)}
+        />
+      ) : null}
+    </div>
   );
 }

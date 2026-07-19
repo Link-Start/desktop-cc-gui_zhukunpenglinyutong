@@ -105,6 +105,7 @@ function readGitDiffListView(workspaceId: string | null | undefined): "flat" | "
 
 export type EditorNavigationLocation = {
   line: number;
+  endLine?: number;
   column: number;
   scrollPosition?: "nearest" | "center";
 };
@@ -119,7 +120,7 @@ export type EditorHighlightTarget = {
   markers: GitLineMarkers;
 };
 
-export type EditorSplitCompanion = "chat" | "projectMap";
+export type EditorSplitCompanion = "chat" | "notes" | "projectMap";
 
 export type CenterMode =
   | "chat"
@@ -317,8 +318,13 @@ export function useGitPanelController({
     setEditorHighlightTarget(null);
     setFileCompareSession(null);
     setFileHistoryTarget(null);
+    const settledEditorSplitCompanion =
+      editorSplitCompanion === "notes" ? "chat" : editorSplitCompanion;
     const nextActiveFilePath = fileTabsByWorkspace[fileTabWorkspaceKey]?.activeFilePath ?? null;
     if (nextActiveFilePath) {
+      if (settledEditorSplitCompanion !== editorSplitCompanion) {
+        setEditorSplitCompanion(settledEditorSplitCompanion);
+      }
       setCenterMode("editor");
       return;
     }
@@ -328,7 +334,7 @@ export function useGitPanelController({
       return;
     }
     if (centerMode === "editor") {
-      setCenterMode(editorSplitCompanion === "projectMap" ? "projectMap" : "chat");
+      setCenterMode(settledEditorSplitCompanion);
       setEditorSplitCompanion("chat");
     }
   }, [
@@ -567,6 +573,7 @@ export function useGitPanelController({
         setEditorNavigationTarget({
           path: normalizedPath,
           line: location.line,
+          endLine: location.endLine,
           column: location.column,
           scrollPosition: location.scrollPosition,
           requestId: navigationRequestIdRef.current,
@@ -686,7 +693,7 @@ export function useGitPanelController({
                 : nextTabs[0] ?? null
               : nextTabs[closingIndex] ?? nextTabs[closingIndex - 1] ?? null;
           if (!fallback && centerMode === "editor") {
-            setCenterMode(editorSplitCompanion === "projectMap" ? "projectMap" : "chat");
+            setCenterMode(editorSplitCompanion);
             setEditorSplitCompanion("chat");
           }
           setEditorNavigationTarget((current) =>
@@ -712,7 +719,7 @@ export function useGitPanelController({
     setEditorNavigationTarget(null);
     setEditorHighlightTarget(null);
     setEditorSplitCompanion("chat");
-    setCenterMode(editorSplitCompanion === "projectMap" ? "projectMap" : "chat");
+    setCenterMode(editorSplitCompanion);
   }, [editorSplitCompanion, fileTabWorkspaceKey]);
   const handleReorderFileTabs = useCallback(
     (nextOrder: string[]) => {
@@ -726,7 +733,7 @@ export function useGitPanelController({
   );
 
   const handleExitEditor = useCallback(() => {
-    setCenterMode(editorSplitCompanion === "projectMap" ? "projectMap" : "chat");
+    setCenterMode(editorSplitCompanion);
     setFileTabsByWorkspace((states) =>
       updateWorkspaceFileTabs(states, fileTabWorkspaceKey, () => ({
         openTabs: EMPTY_FILE_TABS,

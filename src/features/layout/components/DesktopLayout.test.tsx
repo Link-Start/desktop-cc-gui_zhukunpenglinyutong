@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DesktopLayout } from "./DesktopLayout";
+import { useWorkspaceNoteCardsLayout } from "../../note-cards/components/WorkspaceNoteCardsLayoutContext";
 
 const clientStorageMock = vi.hoisted(() => ({
   getClientStoreSync: vi.fn(),
@@ -11,8 +12,39 @@ const clientStorageMock = vi.hoisted(() => ({
 
 vi.mock("../../../services/clientStorage", () => clientStorageMock);
 
-function renderDesktopLayout(overrides: Partial<ComponentProps<typeof DesktopLayout>> = {}) {
-  return render(
+function NoteCardsLayoutProbe() {
+  const layout = useWorkspaceNoteCardsLayout();
+
+  return (
+    <div>
+      <span>note-cards</span>
+      {layout?.canMaximize ? (
+        <button type="button" onClick={layout.onToggleMaximized}>
+          {layout.isMaximized ? "restore-notes" : "maximize-notes"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function StatefulNoteCardsLayoutProbe() {
+  const [draft, setDraft] = useState("");
+  const layout = useWorkspaceNoteCardsLayout();
+
+  return (
+    <div>
+      <input
+        aria-label="note-draft"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+      />
+      {layout?.canMaximize ? <span>notes-can-maximize</span> : null}
+    </div>
+  );
+}
+
+function createDesktopLayout(overrides: Partial<ComponentProps<typeof DesktopLayout>> = {}) {
+  return (
     <DesktopLayout
       sidebarNode={<aside>sidebar</aside>}
       updateToastNode={<div>update-toast</div>}
@@ -52,8 +84,12 @@ function renderDesktopLayout(overrides: Partial<ComponentProps<typeof DesktopLay
       onPlanPanelResizeStart={vi.fn()}
       onGitHistoryPanelResizeStart={vi.fn()}
       {...overrides}
-    />,
+    />
   );
+}
+
+function renderDesktopLayout(overrides: Partial<ComponentProps<typeof DesktopLayout>> = {}) {
+  return render(createDesktopLayout(overrides));
 }
 
 describe("DesktopLayout", () => {
@@ -155,6 +191,91 @@ describe("DesktopLayout", () => {
     expect(container.querySelector(".composer")).toBeNull();
   });
 
+  it("uses the mounted note workbench as the left editor companion", () => {
+    cleanup();
+    const noteCardsPanelNode = <StatefulNoteCardsLayoutProbe />;
+    const { container, getByRole, getByText, queryByText, rerender } =
+      renderDesktopLayout({
+        centerMode: "notes",
+        editorSplitLayout: "vertical",
+        noteCardsPanelNode,
+      });
+
+    fireEvent.change(getByRole("textbox", { name: "note-draft" }), {
+      target: { value: "保留便签现场" },
+    });
+    expect(getByText("notes-can-maximize")).toBeTruthy();
+
+    rerender(
+      createDesktopLayout({
+        centerMode: "editor",
+        editorSplitLayout: "vertical",
+        editorSplitCompanion: "notes",
+        noteCardsPanelNode,
+      }),
+    );
+
+    const content = container.querySelector(
+      ".content.is-editor-split-horizontal",
+    );
+    const noteCardsLayer = container.querySelector(
+      ".content-layer--note-cards",
+    );
+    const editorLayer = container.querySelector(".content-layer--editor");
+    const chatLayer = container.querySelector(".content-layer--chat");
+
+    expect(content).toBeTruthy();
+    expect(noteCardsLayer?.className).toContain("is-active");
+    expect(noteCardsLayer?.className).toContain(
+      "content-layer--editor-companion",
+    );
+    expect(noteCardsLayer?.getAttribute("aria-hidden")).toBe("false");
+    expect(editorLayer?.contains(getByText("file-viewer"))).toBe(true);
+    expect(chatLayer?.className).toContain("is-hidden");
+    expect(chatLayer?.hasAttribute("inert")).toBe(true);
+    const draftInput = noteCardsLayer?.querySelector(
+      'input[aria-label="note-draft"]',
+    ) as HTMLInputElement | null;
+    expect(draftInput?.value).toBe("保留便签现场");
+    expect(queryByText("notes-can-maximize")).toBeNull();
+    expect(getByText("right-toolbar")).toBeTruthy();
+    expect(container.querySelector(".composer")).toBeNull();
+    expect(container.querySelector(".content-editor-split-divider")).toBeTruthy();
+
+    rerender(
+      createDesktopLayout({
+        centerMode: "editor",
+        editorSplitLayout: "vertical",
+        editorSplitCompanion: "notes",
+        isEditorFileMaximized: true,
+        noteCardsPanelNode,
+      }),
+    );
+
+    expect(noteCardsLayer?.className).toContain("is-hidden");
+    expect(noteCardsLayer?.getAttribute("aria-hidden")).toBe("true");
+    expect(noteCardsLayer?.hasAttribute("inert")).toBe(true);
+    const hiddenDraftInput = noteCardsLayer?.querySelector(
+      'input[aria-label="note-draft"]',
+    ) as HTMLInputElement | null;
+    expect(hiddenDraftInput?.value).toBe("保留便签现场");
+
+    rerender(
+      createDesktopLayout({
+        centerMode: "editor",
+        editorSplitLayout: "vertical",
+        editorSplitCompanion: "notes",
+        noteCardsPanelNode,
+      }),
+    );
+
+    expect(noteCardsLayer?.className).toContain("is-active");
+    expect(noteCardsLayer?.getAttribute("aria-hidden")).toBe("false");
+    expect(
+      (getByRole("textbox", { name: "note-draft" }) as HTMLInputElement).value,
+    ).toBe("保留便签现场");
+  });
+
   it("keeps composer outside the chat layer in normal chat mode", () => {
     cleanup();
     const { container, getByText } = renderDesktopLayout();
@@ -186,6 +307,81 @@ describe("DesktopLayout", () => {
     expect(divider?.getAttribute("aria-label")).toBe("layout.resizeNoteCardsSplit");
     expect(divider?.getAttribute("tabindex")).toBe("0");
     expect(divider?.getAttribute("aria-valuenow")).toBe("66.67");
+  });
+
+  it("maximizes note cards across the conversation column while preserving the right panel", () => {
+    cleanup();
+    const { container, getByRole, getByText } = renderDesktopLayout({
+      centerMode: "notes",
+      noteCardsPanelNode: <NoteCardsLayoutProbe />,
+      messagesNode: <button type="button">conversation-action</button>,
+    });
+
+    const conversationAction = getByRole("button", {
+      name: "conversation-action",
+    });
+    conversationAction.focus();
+    expect(document.activeElement).toBe(conversationAction);
+
+    fireEvent.click(getByRole("button", { name: "maximize-notes" }));
+
+    const content = container.querySelector(".content");
+    const chatLayer = container.querySelector(".content-layer--chat");
+    expect(content?.classList.contains("is-note-cards-maximized")).toBe(true);
+    expect(chatLayer?.classList.contains("is-hidden")).toBe(true);
+    expect(chatLayer?.getAttribute("aria-hidden")).toBe("true");
+    expect(chatLayer?.hasAttribute("inert")).toBe(true);
+    expect(chatLayer?.contains(conversationAction)).toBe(true);
+    expect(document.activeElement).not.toBe(conversationAction);
+    expect(container.querySelector(".content-note-cards-split-divider")).toBeNull();
+    expect(getByText("right-toolbar")).toBeTruthy();
+    expect(clientStorageMock.writeClientStoreValue).not.toHaveBeenCalled();
+
+    fireEvent.click(getByRole("button", { name: "restore-notes" }));
+
+    expect(content?.classList.contains("is-note-cards-maximized")).toBe(false);
+    expect(chatLayer?.classList.contains("is-active")).toBe(true);
+    expect(chatLayer?.getAttribute("aria-hidden")).toBe("false");
+    expect(chatLayer?.hasAttribute("inert")).toBe(false);
+    expect(container.querySelector(".content-note-cards-split-divider")).toBeTruthy();
+    expect(getByText("right-toolbar")).toBeTruthy();
+    expect(clientStorageMock.writeClientStoreValue).not.toHaveBeenCalled();
+  });
+
+  it("clears note-card maximize state after leaving the notes center", () => {
+    cleanup();
+    const noteCardsPanelNode = <NoteCardsLayoutProbe />;
+    const { container, getByRole, rerender } = renderDesktopLayout({
+      centerMode: "notes",
+      noteCardsPanelNode,
+    });
+
+    fireEvent.click(getByRole("button", { name: "maximize-notes" }));
+    expect(
+      container.querySelector(".content")?.classList.contains(
+        "is-note-cards-maximized",
+      ),
+    ).toBe(true);
+
+    rerender(
+      createDesktopLayout({
+        centerMode: "chat",
+        noteCardsPanelNode,
+      }),
+    );
+    rerender(
+      createDesktopLayout({
+        centerMode: "notes",
+        noteCardsPanelNode,
+      }),
+    );
+
+    expect(
+      container.querySelector(".content")?.classList.contains(
+        "is-note-cards-maximized",
+      ),
+    ).toBe(false);
+    expect(getByRole("button", { name: "maximize-notes" })).toBeTruthy();
   });
 
   it("resizes the right note-card column while preserving minimum widths", () => {

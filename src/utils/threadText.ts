@@ -99,3 +99,67 @@ export function buildThreadTranscript(items: ConversationItem[]) {
     .filter((value) => value.trim().length > 0)
     .join("\n\n");
 }
+
+export type SemanticThreadNote = {
+  markdown: string;
+  includedItemIds: string[];
+  itemCount: number;
+};
+
+export type SemanticThreadNoteOptions = {
+  resolveUserMessageText?: (
+    item: Extract<ConversationItem, { kind: "message" }> & { role: "user" },
+  ) => string;
+};
+
+export function buildSemanticThreadNote(
+  items: ConversationItem[],
+  options: SemanticThreadNoteOptions = {},
+): SemanticThreadNote {
+  const sections: string[] = [];
+  const includedItemIds: string[] = [];
+
+  items.forEach((item) => {
+    let section = "";
+    if (item.kind === "message") {
+      if (item.role === "assistant" && item.isFinal === false) {
+        return;
+      }
+      const text =
+        item.role === "user"
+          ? (options.resolveUserMessageText?.(
+              item as Extract<ConversationItem, { kind: "message" }> & { role: "user" },
+            ) ?? item.text)
+          : item.text;
+      const trimmed = text.trim();
+      if (trimmed) {
+        section = `## ${item.role === "user" ? "User" : "Assistant"}\n\n${trimmed}`;
+      }
+    } else if (
+      item.kind === "diff" &&
+      (!item.status || item.status === "completed") &&
+      item.diff.trim()
+    ) {
+      section = [
+        `### Diff · ${item.title.trim() || "Changes"}`,
+        "",
+        "```diff",
+        item.diff.trim(),
+        "```",
+      ].join("\n");
+    } else if (item.kind === "review" && item.state === "completed" && item.text.trim()) {
+      section = `### Review\n\n${item.text.trim()}`;
+    }
+
+    if (section) {
+      sections.push(section);
+      includedItemIds.push(item.id);
+    }
+  });
+
+  return {
+    markdown: sections.join("\n\n"),
+    includedItemIds,
+    itemCount: includedItemIds.length,
+  };
+}

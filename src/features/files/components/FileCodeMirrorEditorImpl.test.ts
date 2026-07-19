@@ -61,6 +61,36 @@ describe("focusEditorViewAtLocation", () => {
 
     expect(focusEditorViewAtLocation(editorView, 105, 1, "center")).toBe(false);
   });
+
+  it("restores a captured line range after the editor document is available", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    editorView = new EditorView({
+      parent,
+      state: EditorState.create({ doc: "first\nsecond\nthird\nfourth" }),
+    });
+
+    expect(focusEditorViewAtLocation(editorView, 2, 1, "center", 3)).toBe(true);
+
+    expect(editorView.state.selection.main.from).toBe(
+      editorView.state.doc.line(2).from,
+    );
+    expect(editorView.state.selection.main.to).toBe(
+      editorView.state.doc.line(3).to,
+    );
+  });
+
+  it("clamps a stale captured end line to the current document", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    editorView = new EditorView({
+      parent,
+      state: EditorState.create({ doc: "first\nsecond\nthird" }),
+    });
+
+    expect(focusEditorViewAtLocation(editorView, 2, 1, "center", 37)).toBe(true);
+    expect(editorView.state.selection.main.to).toBe(editorView.state.doc.length);
+  });
 });
 
 describe("file Git Blame gutter", () => {

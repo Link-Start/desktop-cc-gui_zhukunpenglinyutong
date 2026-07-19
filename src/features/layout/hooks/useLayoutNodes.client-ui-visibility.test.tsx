@@ -25,6 +25,35 @@ const clientUiVisibilityMock = vi.hoisted(() => ({
 const composerMockState = vi.hoisted(() => ({
   thinkingCallbacks: [] as Array<((enabled: boolean) => void) | undefined>,
 }));
+let capturedMessagesNoteCapture:
+  | ((draft: {
+      title: string;
+      bodyMarkdown: string;
+      source: {
+        kind: "conversationThread";
+        threadId: string;
+        itemCount: number;
+        capturedAt: number;
+      };
+    }) => void)
+  | undefined;
+let capturedWorkspaceNotePanelProps: {
+  captureRequest?: {
+    requestId: number;
+    draft: {
+      title: string;
+      bodyMarkdown: string;
+    };
+  } | null;
+  onCaptureRequestHandled?: (requestId: number) => void;
+  onOpenCodeSource?: (source: {
+    kind: "codeSelection";
+    path: string;
+    startLine: number;
+    endLine: number;
+    language?: string | null;
+  }) => void;
+} | null = null;
 
 vi.mock("react-i18next", () => ({
   initReactI18next: {
@@ -141,19 +170,23 @@ vi.mock("../../messages/components/Messages", () => ({
     activeEngine,
     isHistoryLoading,
     onForkFromMessage,
+    onCaptureNote,
   }: {
     showMessageAnchors: boolean;
     activeEngine?: string;
     isHistoryLoading?: boolean;
     onForkFromMessage?: (messageId: string) => void;
+    onCaptureNote?: typeof capturedMessagesNoteCapture;
     conversationState?: {
       meta?: {
         engine?: string;
         historyRestoredAtMs?: number | null;
       };
     } | null;
-  }) => (
-    <section
+  }) => {
+    capturedMessagesNoteCapture = onCaptureNote;
+    return (
+      <section
       data-testid="messages"
       data-message-anchors={String(showMessageAnchors)}
       data-active-engine={String(activeEngine ?? "")}
@@ -171,8 +204,9 @@ vi.mock("../../messages/components/Messages", () => ({
           open fork confirm
         </button>
       ) : null}
-    </section>
-  ),
+      </section>
+    );
+  },
 }));
 
 vi.mock("../../composer/components/Composer", async () => {
@@ -304,6 +338,15 @@ vi.mock("../../search/components/WorkspaceSearchPanel", () => ({
 
 vi.mock("../../files/components/FileViewPanel", () => ({
   FileViewPanel: () => <div data-testid="file-view-panel" />,
+}));
+
+vi.mock("../../note-cards/components/WorkspaceNoteCardPanel", () => ({
+  WorkspaceNoteCardPanel: (
+    props: typeof capturedWorkspaceNotePanelProps,
+  ) => {
+    capturedWorkspaceNotePanelProps = props;
+    return <div data-testid="workspace-note-card-panel" />;
+  },
 }));
 
 vi.mock("../../prompts/components/PromptPanel", () => ({
@@ -991,6 +1034,8 @@ describe("useLayoutNodes client UI visibility", () => {
     clientUiVisibilityMock.visiblePanels.clear();
     clientUiVisibilityMock.visibleControls.clear();
     composerMockState.thinkingCallbacks.length = 0;
+    capturedMessagesNoteCapture = undefined;
+    capturedWorkspaceNotePanelProps = null;
     vi.clearAllMocks();
   });
 
@@ -1413,6 +1458,135 @@ describe("useLayoutNodes client UI visibility", () => {
 
     expect(onFilePanelModeChange).toHaveBeenCalledWith("notes");
     expect(setCenterMode).toHaveBeenCalledWith("notes");
+  });
+
+  it("routes a captured draft into the note workbench with a monotonic request", async () => {
+    const setCenterMode = vi.fn();
+    const onFilePanelModeChange = vi.fn();
+    const initialOptions = createLayoutOptions({
+      centerMode: "chat",
+      setCenterMode,
+      onFilePanelModeChange,
+    });
+    const rendered = renderHook(
+      ({ options }: { options: Parameters<typeof useLayoutNodes>[0] }) =>
+        useLayoutNodes(options),
+      { initialProps: { options: initialOptions } },
+    );
+    render(<>{rendered.result.current.messagesNode}</>);
+
+    await act(async () => {
+      capturedMessagesNoteCapture?.({
+        title: "Captured conversation",
+        bodyMarkdown: "Semantic body",
+        source: {
+          kind: "conversationThread",
+          threadId: "thread-1",
+          itemCount: 2,
+          capturedAt: 123,
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(onFilePanelModeChange).toHaveBeenCalledWith("notes");
+    expect(setCenterMode).toHaveBeenCalledWith("notes");
+
+    await act(async () => {
+      rendered.rerender({
+        options: createLayoutOptions({
+          centerMode: "notes",
+          setCenterMode,
+          onFilePanelModeChange,
+        }),
+      });
+      await Promise.resolve();
+    });
+    render(<>{rendered.result.current.noteCardsPanelNode}</>);
+
+    expect(capturedWorkspaceNotePanelProps?.captureRequest).toMatchObject({
+      requestId: 1,
+      draft: {
+        title: "Captured conversation",
+        bodyMarkdown: "Semantic body",
+      },
+    });
+    await act(async () => {
+      capturedWorkspaceNotePanelProps?.onCaptureRequestHandled?.(1);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      rendered.rerender({
+        options: createLayoutOptions({
+          centerMode: "notes",
+          setCenterMode,
+          onFilePanelModeChange,
+        }),
+      });
+      await Promise.resolve();
+    });
+    render(<>{rendered.result.current.noteCardsPanelNode}</>);
+    expect(capturedWorkspaceNotePanelProps?.captureRequest).toBeNull();
+  });
+
+  it("routes a note code source to the editor and restores its captured line range", async () => {
+    const onOpenFile = vi.fn();
+    const onActiveEditorLineRangeChange = vi.fn();
+    const { result } = await renderUseLayoutNodes(
+      createLayoutOptions({
+        centerMode: "notes",
+        onOpenFile,
+        onActiveEditorLineRangeChange,
+      }),
+    );
+    render(<>{result.current.noteCardsPanelNode}</>);
+
+    act(() => {
+      capturedWorkspaceNotePanelProps?.onOpenCodeSource?.({
+        kind: "codeSelection",
+        path: "src/main/java/AppUserController.java",
+        startLine: 21,
+        endLine: 37,
+        language: "java",
+      });
+    });
+
+    expect(onActiveEditorLineRangeChange).not.toHaveBeenCalled();
+    expect(onOpenFile).toHaveBeenCalledWith(
+      "src/main/java/AppUserController.java",
+      {
+        line: 21,
+        endLine: 37,
+        column: 1,
+        scrollPosition: "center",
+      },
+      {
+        editorSplitCompanion: "notes",
+      },
+    );
+  });
+
+  it("keeps the note workbench mounted only for the notes editor companion", async () => {
+    const notesCompanion = await renderUseLayoutNodes(
+      createLayoutOptions({
+        centerMode: "editor",
+        editorSplitCompanion: "notes",
+      }),
+    );
+    render(<>{notesCompanion.result.current.noteCardsPanelNode}</>);
+
+    expect(capturedWorkspaceNotePanelProps).not.toBeNull();
+
+    capturedWorkspaceNotePanelProps = null;
+    const chatCompanion = await renderUseLayoutNodes(
+      createLayoutOptions({
+        centerMode: "editor",
+        editorSplitCompanion: "chat",
+      }),
+    );
+
+    expect(chatCompanion.result.current.noteCardsPanelNode).toBeNull();
+    expect(capturedWorkspaceNotePanelProps).toBeNull();
   });
 
   it("toggles the Project Map toolbar icon off from editor companion mode", async () => {

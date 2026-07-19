@@ -78,15 +78,26 @@ export function focusEditorViewAtLocation(
   line: number,
   column: number,
   scrollPosition: "nearest" | "center" = "nearest",
+  endLine?: number,
 ): boolean {
   if (line < 1 || line > view.state.doc.lines) {
+    return false;
+  }
+  if (
+    endLine !== undefined &&
+    (!Number.isInteger(endLine) || endLine < line)
+  ) {
     return false;
   }
   const lineInfo = view.state.doc.line(line);
   const safeColumn = Math.max(1, Math.min(column, lineInfo.length + 1));
   const anchor = lineInfo.from + safeColumn - 1;
+  const head =
+    endLine === undefined
+      ? anchor
+      : view.state.doc.line(Math.min(endLine, view.state.doc.lines)).to;
   view.dispatch({
-    selection: { anchor },
+    selection: { anchor, head },
     effects: EditorView.scrollIntoView(anchor, {
       y: scrollPosition === "center" ? "center" : "nearest",
     }),
@@ -672,10 +683,10 @@ export const FileCodeMirrorEditorImpl = forwardRef<
       view.focus();
       return true;
     },
-    focusLocation(line, column, scrollPosition = "nearest") {
+    focusLocation(line, column, scrollPosition = "nearest", endLine) {
       const view = codeMirrorRef.current?.view;
       return view
-        ? focusEditorViewAtLocation(view, line, column, scrollPosition)
+        ? focusEditorViewAtLocation(view, line, column, scrollPosition, endLine)
         : false;
     },
     flashNavigationLine(line) {

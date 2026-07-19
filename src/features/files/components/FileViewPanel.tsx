@@ -80,6 +80,7 @@ import {
 } from "../utils/fileViewSurface";
 import { FileViewBody } from "./FileViewBody";
 import type { FileCodeMirrorEditorHandle } from "./FileCodeMirrorEditor";
+import type { NoteCaptureDraft } from "../../note-cards/types";
 import { FileViewNavigationPanel } from "./FileViewNavigationPanel";
 import { useFileDocumentState } from "../hooks/useFileDocumentState";
 import { useFileExternalSync } from "../hooks/useFileExternalSync";
@@ -165,6 +166,7 @@ type FileViewPanelProps = {
   navigationTarget?: {
     path: string;
     line: number;
+    endLine?: number;
     column: number;
     scrollPosition?: "nearest" | "center";
     requestId: number;
@@ -177,6 +179,7 @@ type FileViewPanelProps = {
   onClose: () => void;
   onInsertText?: (text: string) => void;
   onCreateCodeAnnotation?: (annotation: CodeAnnotationDraftInput) => void;
+  onCaptureNote?: (draft: NoteCaptureDraft) => void;
   onRemoveCodeAnnotation?: (annotationId: string) => void;
   codeAnnotations?: CodeAnnotationSelection[];
   headerLayout?: "stacked" | "single-row";
@@ -230,6 +233,7 @@ export function FileViewPanel({
   onClose,
   onInsertText,
   onCreateCodeAnnotation,
+  onCaptureNote,
   onRemoveCodeAnnotation,
   codeAnnotations = [],
   headerLayout = "stacked",
@@ -2074,6 +2078,7 @@ export function FileViewPanel({
       onGitBlameContextMenu={
         gitBlameEligible || gitBlame.enabled ? handleGitBlameContextMenu : undefined
       }
+      onCaptureNote={onCaptureNote}
       editorCodeAnnotations={editorCodeAnnotations}
       editorAnnotationDraft={editorAnnotationDraft}
       annotationWidgetLabels={annotationWidgetLabels}

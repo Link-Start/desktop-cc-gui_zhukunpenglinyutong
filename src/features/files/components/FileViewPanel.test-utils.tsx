@@ -39,6 +39,7 @@ function createDoc(text: string) {
     lines: lines.length,
     line: lineFor,
     lineAt,
+    sliceString: (from: number, to: number) => text.slice(from, to),
   };
 }
 
@@ -61,7 +62,7 @@ vi.mock("@uiw/react-codemirror", async () => {
     const viewRef = React.useRef<any>({
       state: {
         doc: createDoc(props.value ?? ""),
-        selection: { main: { head: 0 } },
+        selection: { main: { from: 0, to: 0, head: 0, empty: true } },
         field: () => null,
       },
       dispatch: mockCodeMirrorDispatch.mockImplementation((transaction: any) => {
@@ -108,6 +109,7 @@ vi.mock("@uiw/react-codemirror", async () => {
             from: target.selectionStart,
             to: target.selectionEnd,
             head: target.selectionEnd,
+            empty: target.selectionStart === target.selectionEnd,
           };
           props.onUpdate?.({
             selectionSet: true,

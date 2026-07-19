@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-26.md`
-- **Total Sessions**: 1038
+- **Total Sessions**: 1040
 - **Last Active**: 2026-07-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-26.md` | ~443 | Active |
+| `journal-26.md` | ~509 | Active |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
@@ -54,6 +54,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1040 | 2026-07-19 | 同步上游 v0.7.5 并完成语义合并验证 | `e706b2df` | `feature/v-0.7.4` |
+| 1039 | 2026-07-19 | 来源感知便签采集与工作台闭环 | `dc86a0f2` | `feature/v-0.7.4` |
 | 1038 | 2026-07-19 | 统一看板 Codex 模型目录并修复初始化竞态 | `864414c0` | `feature/v-0.7.4` |
 | 1037 | 2026-07-19 | 对齐 agent catalog Rust 代码格式 | `13d05cda` | `feature/v-0.7.4` |
 | 1036 | 2026-07-19 | 修复 Mermaid 大图全屏预览异常 | `f0e06a03` | `feature/v-0.7.4` |
