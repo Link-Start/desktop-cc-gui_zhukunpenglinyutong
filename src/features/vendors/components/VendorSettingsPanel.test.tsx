@@ -303,12 +303,12 @@ describe("VendorSettingsPanel", () => {
     expect(navLabels.slice(0, 9)).toEqual([
       "Claude Code CLI",
       "Codex CLI",
+      "Kimi CLI",
       "Gemini CLI",
       "OpenCode CLI",
       "GLM CLI",
       "Trae CLI",
       "Cursor CLI",
-      "Kimi CLI",
       "瑞幸 CLI",
     ]);
     expect(navLabels).toEqual(

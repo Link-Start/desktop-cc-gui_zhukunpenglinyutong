@@ -899,9 +899,10 @@ body[data-panel-resizing="true"] .main {
 }
 
 /* Engine-branded underline: Claude keeps the default clay accent.
-   Codex tracks --text-stronger (near-black in light, light gray in dark)
-   so the black brand stays visible on dark backgrounds. */
-.topbar-session-tab[data-engine="codex"] {
+   Codex and Kimi track --text-stronger (near-black in light, light gray in dark)
+   so the black brands stay visible on dark backgrounds. */
+.topbar-session-tab[data-engine="codex"],
+.topbar-session-tab[data-engine="kimi"] {
   --topbar-tab-active-accent: var(--text-stronger);
 }
 

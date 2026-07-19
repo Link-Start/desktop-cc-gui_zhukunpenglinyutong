@@ -43,3 +43,19 @@
 - [x] 6.2 [P0] `cargo test`（src-tauri 全量 1427+890 绿）、`npm run typecheck`、`npm run lint`、受影响 vitest suites（2779/2781；2 个失败均为 HEAD 存量：BasicAppearanceSection 硬编码隐藏、moonshot.svg title 漂移，均不在本次 diff）。
 - [x] 6.3 [P0] contract scripts：`check-branding.mjs`、`check-engine-capability-matrix.mjs`、`scan-engine-name-branches.mjs`、`check-app-shell-runtime-contract.mjs` 全绿。
 - [x] 6.4 [P1] 冒烟：真实 CLI 验证（`kimi doctor` OK；`-p` stream-json 的 assistant/tool_calls/tool/meta 四类行与 parser 逐字吻合；`--session`/`--model` flag 与 `--help` 一致；`-p` 模式 auto 权限无需审批）；`tauri dev` 启动冒烟（vite :1420 + cc-gui 进程稳定运行无崩溃）。GUI 内点击级验证（引擎切换发消息、vendor switch 后查 config.toml）需人工过一遍。
+
+## 7. Kimi 会话身份收敛修复（P7）
+
+- [x] 7.1 [P0] 添加 frontend regression：history canonical row 先到时，`kimi-pending-*` promotion 必须合并为单 row，并迁移 active turn / processing / selection。
+- [x] 7.2 [P0] 添加 Rust regression：新 Kimi turn 在真实 `session.resume_hint` 到达前不得返回 fabricated canonical `sessionId`。
+- [x] 7.3 [P0] 修复 backend Kimi send contract，以 CLI 真实 `session_*` 作为唯一 canonical identity。
+- [x] 7.4 [P0] 修复 frontend reconciliation：canonical row 已记录 pending alias 后，stale history snapshot 不得重新插入 matching pending row。
+- [x] 7.5 [P0] 运行 focused Vitest、Rust test、`npm run typecheck`、`npm run lint`、runtime contracts 与 strict OpenSpec validation。
+
+## 8. Kimi queued delta 二次收敛（P8）
+
+- [x] 8.1 [P0] 基于 `diagnostics.threadSessionLog` 还原真实顺序：pending TextDelta 先入队，`thread/started` 先 promotion，旧 delta 后 flush 并重建 pending row。
+- [x] 8.2 [P0] 添加 realtime regression：queued Kimi pending delta 在 flush 时必须动态解析 canonical alias。
+- [x] 8.3 [P0] 添加 reducer regressions：`ensureThread` 不得重建 replaced pending id；history refresh 不得保留带 processing/item anchor 的 promoted residual。
+- [x] 8.4 [P0] 在 `useThreadItemEvents` shared apply boundary canonicalize thread id，并以 `nativeThreadIds` 作为 reducer tombstone。
+- [x] 8.5 [P0] 运行受影响 Vitest、`npm run typecheck`、`npm run lint`、runtime contracts 与 strict OpenSpec validation。

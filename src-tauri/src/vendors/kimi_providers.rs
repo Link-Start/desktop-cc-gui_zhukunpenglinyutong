@@ -599,6 +599,7 @@ pub(crate) async fn vendor_fetch_kimi_models(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn sample_provider() -> KimiProviderConfig {
         KimiProviderConfig {

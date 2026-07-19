@@ -1,4 +1,5 @@
 use super::*;
+use engine::kimi::resolve_kimi_session_id_for_engine_send;
 use tokio::time::Duration;
 mod file_access;
 mod git;
@@ -1655,15 +1656,11 @@ impl DaemonState {
                     .engine_manager
                     .get_or_create_kimi_session(&workspace_id, &workspace_path)
                     .await;
-                let resolved_session_id = if continue_session {
-                    if session_id.is_some() {
-                        session_id
-                    } else {
-                        session.get_session_id().await
-                    }
-                } else {
-                    Some(session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()))
-                };
+                let resolved_session_id = resolve_kimi_session_id_for_engine_send(
+                    continue_session,
+                    session_id,
+                    session.get_session_id().await,
+                );
                 let response_session_id = resolved_session_id.clone();
                 let sanitized_model = model
                     .as_ref()
@@ -2085,16 +2082,11 @@ impl DaemonState {
                     .engine_manager
                     .get_or_create_kimi_session(&workspace_id, &workspace_path)
                     .await;
-                let resolved_session_id = if continue_session {
-                    if session_id.is_some() {
-                        session_id
-                    } else {
-                        session.get_session_id().await
-                    }
-                } else {
-                    Some(session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()))
-                };
-                let response_session_id = resolved_session_id.clone();
+                let resolved_session_id = resolve_kimi_session_id_for_engine_send(
+                    continue_session,
+                    session_id,
+                    session.get_session_id().await,
+                );
                 let sanitized_model = model
                     .as_ref()
                     .map(|value| value.trim())
@@ -2122,6 +2114,7 @@ impl DaemonState {
                 )
                 .await
                 .map_err(|_| "Kimi response timed out".to_string())??;
+                let response_session_id = session.get_session_id().await;
                 self.record_auto_session_metadata_if_present(
                     &workspace_id,
                     response_session_id.as_deref(),

@@ -27,6 +27,7 @@ type ItemPayload = Record<string, unknown>;
 
 type SetupOverrides = {
   activeThreadId?: string | null;
+  resolveCanonicalThreadId?: (threadId: string) => string;
   getCustomName?: (workspaceId: string, threadId: string) => string | undefined;
   resolveCollaborationUiMode?: (
     threadId: string,
@@ -69,6 +70,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     useThreadItemEvents({
       activeThreadId: overrides.activeThreadId ?? null,
       dispatch,
+      resolveCanonicalThreadId: overrides.resolveCanonicalThreadId,
       getCustomName,
       resolveCollaborationUiMode,
       markProcessing,
@@ -1321,6 +1323,44 @@ describe("useThreadItemEvents", () => {
     expect(safeMessageActivity).toHaveBeenCalledTimes(1);
 
     expect(dispatch).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("routes a buffered Kimi pending delta through the canonical alias after rename", () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem("ccgui.perf.realtimeBatching", "1");
+    let canonicalThreadId = "kimi-pending-1";
+    const { result, dispatch, markProcessing } = makeOptions({
+      resolveCanonicalThreadId: () => canonicalThreadId,
+    });
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: "ws-1",
+        threadId: "kimi-pending-1",
+        itemId: "assistant-1",
+        delta: "你好",
+      });
+      canonicalThreadId = "kimi:session-real-1";
+      vi.advanceTimersByTime(40);
+    });
+
+    expect(dispatch).toHaveBeenNthCalledWith(1, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "kimi:session-real-1",
+      engine: "kimi",
+    });
+    expect(markProcessing).toHaveBeenCalledWith("kimi:session-real-1", true);
+    expect(dispatch).toHaveBeenNthCalledWith(2, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "kimi:session-real-1",
+      itemId: "assistant-1",
+      delta: "你好",
+      hasCustomName: false,
+    });
+
     vi.useRealTimers();
   });
 

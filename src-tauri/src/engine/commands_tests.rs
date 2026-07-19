@@ -34,7 +34,28 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
+use crate::engine::kimi::resolve_kimi_session_id_for_engine_send;
 use crate::engine::SendMessageParams;
+
+#[test]
+fn kimi_new_turn_waits_for_cli_canonical_session_id() {
+    assert_eq!(
+        resolve_kimi_session_id_for_engine_send(false, None, None),
+        None
+    );
+    assert_eq!(
+        resolve_kimi_session_id_for_engine_send(
+            true,
+            Some("session-explicit".to_string()),
+            Some("session-current".to_string()),
+        ),
+        Some("session-explicit".to_string())
+    );
+    assert_eq!(
+        resolve_kimi_session_id_for_engine_send(true, None, Some("session-current".to_string())),
+        Some("session-current".to_string())
+    );
+}
 
 #[test]
 fn gui_send_gate_rejects_legacy_gemini_setting_before_remote_forwarding() {

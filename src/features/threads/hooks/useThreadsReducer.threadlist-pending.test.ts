@@ -787,6 +787,165 @@ describe("threadReducer", () => {
     expect(next.threadStatusById["opencode:ses-1"]?.hasUnread).toBe(true);
   });
 
+  it("does not revive a promoted Kimi pending alias from a stale history refresh", () => {
+    const pendingThreadId = "kimi-pending-1";
+    const canonicalThreadId = "kimi:session-real-1";
+    const base: ThreadState = {
+      ...initialState,
+      activeThreadIdByWorkspace: { "ws-1": pendingThreadId },
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: pendingThreadId,
+            name: "你好",
+            updatedAt: 100,
+            engineSource: "kimi",
+          },
+          {
+            id: canonicalThreadId,
+            name: "你好",
+            updatedAt: 110,
+            engineSource: "kimi",
+          },
+        ],
+      },
+      itemsByThread: {
+        [pendingThreadId]: [
+          { id: "u1", kind: "message", role: "user", text: "你好" },
+        ],
+      },
+      threadStatusById: {
+        [pendingThreadId]: {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          processingStartedAt: 100,
+          lastDurationMs: null,
+        },
+      },
+      activeTurnIdByThread: { [pendingThreadId]: "kimi-turn-1" },
+    };
+
+    const promoted = threadReducer(base, {
+      type: "renameThreadId",
+      workspaceId: "ws-1",
+      oldThreadId: pendingThreadId,
+      newThreadId: canonicalThreadId,
+    });
+    const refreshed = threadReducer(promoted, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      threads: [
+        {
+          id: pendingThreadId,
+          name: "你好",
+          updatedAt: 100,
+          engineSource: "kimi",
+        },
+        {
+          id: canonicalThreadId,
+          name: "你好",
+          updatedAt: 120,
+          engineSource: "kimi",
+        },
+      ],
+    });
+
+    expect(refreshed.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+      canonicalThreadId,
+    ]);
+    expect(refreshed.activeThreadIdByWorkspace["ws-1"]).toBe(canonicalThreadId);
+    expect(refreshed.activeTurnIdByThread[canonicalThreadId]).toBe("kimi-turn-1");
+    expect(refreshed.threadStatusById[canonicalThreadId]?.isProcessing).toBe(true);
+  });
+
+  it("does not recreate a promoted Kimi pending alias from a late ensure event", () => {
+    const pendingThreadId = "kimi-pending-late";
+    const canonicalThreadId = "kimi:session-late";
+    const base: ThreadState = {
+      ...initialState,
+      activeThreadIdByWorkspace: { "ws-1": pendingThreadId },
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: pendingThreadId,
+            name: "你好",
+            updatedAt: 100,
+            engineSource: "kimi",
+          },
+        ],
+      },
+    };
+    const promoted = threadReducer(base, {
+      type: "renameThreadId",
+      workspaceId: "ws-1",
+      oldThreadId: pendingThreadId,
+      newThreadId: canonicalThreadId,
+    });
+
+    const ensured = threadReducer(promoted, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: pendingThreadId,
+      engine: "kimi",
+    });
+
+    expect(ensured).toBe(promoted);
+    expect(ensured.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+      canonicalThreadId,
+    ]);
+  });
+
+  it("removes an anchored Kimi pending residual already replaced by a canonical row", () => {
+    const pendingThreadId = "kimi-pending-residual";
+    const canonicalThreadId = "kimi:session-residual";
+    const base: ThreadState = {
+      ...initialState,
+      activeThreadIdByWorkspace: { "ws-1": canonicalThreadId },
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: canonicalThreadId,
+            name: "你好",
+            updatedAt: 120,
+            engineSource: "kimi",
+            nativeThreadIds: [pendingThreadId],
+          },
+          {
+            id: pendingThreadId,
+            name: "你好！有什么可以帮你的？",
+            updatedAt: 110,
+            engineSource: "kimi",
+          },
+        ],
+      },
+      itemsByThread: {
+        [pendingThreadId]: [
+          { id: "a1", kind: "message", role: "assistant", text: "你好" },
+        ],
+      },
+      threadStatusById: {
+        [pendingThreadId]: {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          processingStartedAt: 100,
+          lastDurationMs: null,
+        },
+      },
+    };
+
+    const refreshed = threadReducer(base, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      threads: [base.threadsByWorkspace["ws-1"]![0]!],
+    });
+
+    expect(refreshed.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+      canonicalThreadId,
+    ]);
+  });
+
   it("renames anchored Claude fork thread when real session is ensured", () => {
     const forkThreadId = "claude-fork:parent-session:local-1";
     const base: ThreadState = {

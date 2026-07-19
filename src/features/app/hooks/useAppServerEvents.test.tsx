@@ -1065,6 +1065,87 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("does not synthesize a Kimi completion after a pending delta is promoted to its canonical session", async () => {
+    const handlers: Handlers = {
+      onAgentMessageDelta: vi.fn(),
+      onAgentMessageCompleted: vi.fn(),
+      onThreadSessionIdUpdated: vi.fn(),
+      onTurnCompleted: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-kimi",
+        message: {
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "kimi-pending-1",
+            itemId: "kimi-item-1",
+            delta: "你好！有什么可以帮你的吗？",
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-kimi",
+        message: {
+          method: "thread/started",
+          params: {
+            threadId: "kimi-pending-1",
+            sessionId: "session-real-1",
+            turnId: "kimi-turn-1",
+            engine: "kimi",
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-kimi",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "kimi:session-real-1",
+            turnId: "kimi-turn-1",
+            result: { text: "你好！有什么可以帮你的吗？" },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onThreadSessionIdUpdated).toHaveBeenCalledWith(
+      "ws-kimi",
+      "kimi-pending-1",
+      "session-real-1",
+      "kimi",
+      "kimi-turn-1",
+    );
+    expect(handlers.onAgentMessageDelta).toHaveBeenCalledTimes(1);
+    expect(handlers.onAgentMessageDelta).toHaveBeenCalledWith({
+      workspaceId: "ws-kimi",
+      threadId: "kimi-pending-1",
+      itemId: "kimi-item-1",
+      delta: "你好！有什么可以帮你的吗？",
+    });
+    expect(handlers.onAgentMessageCompleted).not.toHaveBeenCalled();
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-kimi",
+      "kimi:session-real-1",
+      "kimi-turn-1",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("does not emit duplicated completion when item/completed already delivered agent text", async () => {
     const handlers: Handlers = {
       onAgentMessageCompleted: vi.fn(),

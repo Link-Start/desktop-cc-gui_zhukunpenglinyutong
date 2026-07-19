@@ -11,6 +11,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 
 interface ModelSelectProps {
@@ -128,6 +131,7 @@ export const ModelSelect = memo(({
   };
   const currentModelLabel = currentModel ? getModelLabel(currentModel) : t('models.selectModel');
   const hasGroupedModels = Boolean(modelGroups && modelGroups.length > 0);
+  const hasConfigActions = Boolean(onAddModel || onRefreshConfig);
 
   /**
    * Select model
@@ -201,28 +205,92 @@ export const ModelSelect = memo(({
           modelGroups!.map((group, groupIndex) => (
             <Fragment key={group.providerId}>
               {groupIndex > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuLabel className="text-muted-foreground">
-                {group.providerLabel}
-              </DropdownMenuLabel>
-              {group.models.map((model) => {
-                const isSelected = group.providerId === currentProvider && model.id === value;
-                return (
-                  <DropdownMenuItem
-                    key={`${group.providerId}:${model.id}`}
-                    data-model-id={model.id}
-                    data-selected={isSelected ? 'true' : undefined}
-                    onSelect={(event) => {
-                      event.preventDefault();
-                      handleGroupedSelect(group.providerId, model.id);
-                    }}
-                    className="gap-2"
-                  >
-                    <ModelIcon provider={group.providerId} size={18} />
-                    <span className="min-w-0 flex-1 truncate">{getModelLabel(model)}</span>
-                    {isSelected && <CheckIcon className="size-4 shrink-0" aria-hidden />}
-                  </DropdownMenuItem>
-                );
-              })}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger
+                  data-provider-id={group.providerId}
+                  data-selected={group.providerId === currentProvider ? 'true' : undefined}
+                  className="gap-2"
+                >
+                  <ModelIcon provider={group.providerId} size={18} />
+                  <span className="min-w-0 flex-1 truncate">{group.providerLabel}</span>
+                  {group.providerId === currentProvider && (
+                    <CheckIcon className="size-4 shrink-0" aria-hidden />
+                  )}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent
+                  sideOffset={8}
+                  alignOffset={-4}
+                  className="max-h-[380px] w-64 overflow-y-auto"
+                >
+                  <DropdownMenuLabel className="flex items-center justify-between gap-2 text-muted-foreground">
+                    <span className="min-w-0 truncate">{group.providerLabel}</span>
+                    {onRefreshConfig && group.providerId === currentProvider && (
+                      <button
+                        type="button"
+                        disabled={isRefreshingConfig}
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleRefreshConfig();
+                        }}
+                        aria-label={t(isRefreshingConfig ? 'models.refreshingConfig' : 'models.refreshConfig')}
+                        title={t(isRefreshingConfig ? 'models.refreshingConfig' : 'models.refreshConfig')}
+                        className="inline-flex size-8 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                      >
+                        <span
+                          className={`codicon codicon-refresh${isRefreshingConfig ? ' selector-refresh-icon-spinning' : ''}`}
+                          aria-hidden
+                        />
+                      </button>
+                    )}
+                  </DropdownMenuLabel>
+                  {group.models.map((model) => {
+                    const isSelected = group.providerId === currentProvider && model.id === value;
+                    return (
+                      <DropdownMenuItem
+                        key={`${group.providerId}:${model.id}`}
+                        data-model-id={model.id}
+                        data-selected={isSelected ? 'true' : undefined}
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          handleGroupedSelect(group.providerId, model.id);
+                        }}
+                        className="gap-2"
+                      >
+                        <ModelIcon provider={group.providerId} size={18} />
+                        <span className="min-w-0 flex-1 truncate">{getModelLabel(model)}</span>
+                        {isSelected && <CheckIcon className="size-4 shrink-0" aria-hidden />}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                  {onAddModel && group.providerId === currentProvider && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          handleAddModel();
+                        }}
+                      >
+                        {t('models.addModel')}
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {refreshConfigError && group.providerId === currentProvider && (
+                    <div className="px-2 py-1 text-xs text-destructive" role="status">
+                      {t('models.refreshConfigFailed', { message: refreshConfigError })}
+                    </div>
+                  )}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </Fragment>
           ))
         ) : (
@@ -255,7 +323,7 @@ export const ModelSelect = memo(({
             ))}
           </>
         )}
-        {(onAddModel || onRefreshConfig) && (
+        {hasConfigActions && !hasGroupedModels && (
           <>
             <DropdownMenuSeparator />
             {onAddModel && (

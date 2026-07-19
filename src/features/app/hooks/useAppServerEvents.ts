@@ -40,6 +40,7 @@ import {
   classifyCodexEventRisk,
   resolveCodexEventOwnership,
 } from "./codexEventOwnership";
+import { migrateThreadAgentEventTracking } from "./appServerEventAgentTracking";
 import { useAppServerEventBatchDispatch } from "./useAppServerEventBatchDispatch";
 
 export {
@@ -1804,6 +1805,24 @@ export function dispatchAppServerEvent(
         }
       }
       return;
+    }
+
+    if (
+      threadId &&
+      sessionId &&
+      sessionId !== "pending" &&
+      eventEngine &&
+      threadId.startsWith(`${eventEngine}-pending-`)
+    ) {
+      migrateThreadAgentEventTracking({
+        sourceThreadId: threadId,
+        targetThreadId: `${eventEngine}:${sessionId}`,
+        threadAgentDeltaSeenRef,
+        nestedTrackerRefs: [
+          threadAgentCompletedSeenRef,
+          threadAgentSnapshotSeenRef,
+        ],
+      });
     }
 
     // If we have a real sessionId (not "pending"), notify for thread ID update

@@ -28,6 +28,7 @@ use crate::types::WorkspaceEntry;
 
 use super::codex_prompt_service::{normalize_custom_spec_root, run_codex_prompt_sync};
 use super::events::{engine_event_to_app_server_event_with_turn_context, EngineEvent};
+use super::kimi::resolve_kimi_session_id_for_engine_send;
 use super::remote_bridge::{
     call_remote_typed, remote_detect_engines_request, remote_engine_interrupt_request,
     remote_engine_send_message_sync_request,
@@ -2176,15 +2177,11 @@ pub async fn engine_send_message(
                 .get_or_create_kimi_session(&workspace_id, &workspace_path)
                 .await;
 
-            let resolved_session_id = if continue_session {
-                if session_id.is_some() {
-                    session_id
-                } else {
-                    session.get_session_id().await
-                }
-            } else {
-                Some(session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()))
-            };
+            let resolved_session_id = resolve_kimi_session_id_for_engine_send(
+                continue_session,
+                session_id,
+                session.get_session_id().await,
+            );
             let response_session_id = resolved_session_id.clone();
 
             let params = super::SendMessageParams {
@@ -2682,16 +2679,11 @@ pub async fn engine_send_message_sync(
             let session = manager
                 .get_or_create_kimi_session(&workspace_id, &workspace_path)
                 .await;
-            let resolved_session_id = if continue_session {
-                if session_id.is_some() {
-                    session_id
-                } else {
-                    session.get_session_id().await
-                }
-            } else {
-                Some(session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()))
-            };
-            let response_session_id = resolved_session_id.clone();
+            let resolved_session_id = resolve_kimi_session_id_for_engine_send(
+                continue_session,
+                session_id,
+                session.get_session_id().await,
+            );
 
             let params = super::SendMessageParams {
                 text,
@@ -2720,6 +2712,7 @@ pub async fn engine_send_message_sync(
             )
             .await
             .map_err(|_| "Kimi response timed out".to_string())??;
+            let response_session_id = session.get_session_id().await;
             record_auto_session_metadata_if_present(
                 &state,
                 &workspace_id,

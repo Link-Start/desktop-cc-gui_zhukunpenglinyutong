@@ -116,12 +116,12 @@ export function buildCliEngineNavItems(options: {
   return [
     { key: "claude", label: "Claude Code CLI", hasConfig: options.claudeHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.claude },
     { key: "codex", label: "Codex CLI", hasConfig: options.codexHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.codex },
+    { key: "kimi", label: "Kimi CLI", hasConfig: options.kimiHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.kimi },
     { key: "gemini", label: "Gemini CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.gemini },
     { key: "opencode", label: "OpenCode CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.opencode },
     { key: "glm", label: "GLM CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.glm },
     { key: "trae", label: "Trae CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.trae },
     { key: "cursor", label: "Cursor CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.cursor },
-    { key: "kimi", label: "Kimi CLI", hasConfig: options.kimiHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.kimi },
     { key: "ruixing", label: "瑞幸 CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.ruixing },
     { key: "deveco", label: "DevEco CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.deveco },
     { key: "pi", label: "PI CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.pi },

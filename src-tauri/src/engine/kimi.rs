@@ -25,6 +25,16 @@ use tokio::sync::{Mutex, RwLock, broadcast};
 use super::events::EngineEvent;
 use super::{EngineConfig, EngineType, SendMessageParams};
 
+pub fn resolve_kimi_session_id_for_engine_send(
+    continue_session: bool,
+    explicit_session_id: Option<String>,
+    tracked_session_id: Option<String>,
+) -> Option<String> {
+    continue_session
+        .then(|| explicit_session_id.or(tracked_session_id))
+        .flatten()
+}
+
 #[derive(Debug, Clone)]
 pub struct KimiTurnEvent {
     pub turn_id: String,

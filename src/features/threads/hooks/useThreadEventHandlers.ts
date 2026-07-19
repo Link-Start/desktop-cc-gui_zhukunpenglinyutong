@@ -1238,6 +1238,7 @@ export function useThreadEventHandlers({
   } = useThreadItemEvents({
     activeThreadId,
     dispatch,
+    resolveCanonicalThreadId,
     getCustomName,
     resolveCollaborationUiMode,
     markProcessing: markProcessingTracked,

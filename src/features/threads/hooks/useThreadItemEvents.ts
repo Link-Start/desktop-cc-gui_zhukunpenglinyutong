@@ -161,6 +161,7 @@ function createDebugPreview(value: string, maxLength = 160) {
 type UseThreadItemEventsOptions = {
   activeThreadId: string | null;
   dispatch: Dispatch<ThreadAction>;
+  resolveCanonicalThreadId?: (threadId: string) => string;
   getCustomName: (workspaceId: string, threadId: string) => string | undefined;
   resolveCollaborationUiMode?: (
     threadId: string,
@@ -329,6 +330,7 @@ function extractTurnIdFromNormalizedRealtimeEvent(event: NormalizedThreadEvent) 
 export function useThreadItemEvents({
   activeThreadId,
   dispatch,
+  resolveCanonicalThreadId,
   getCustomName,
   resolveCollaborationUiMode,
   markProcessing,
@@ -540,39 +542,40 @@ export function useThreadItemEvents({
         markedProcessingThreads?: Set<string>;
       },
     ) => {
-      if (isInterruptedThread(interruptedThreadsRef, operation.workspaceId, operation.threadId)) {
+      const threadId = resolveCanonicalThreadId?.(operation.threadId) ?? operation.threadId;
+      if (isInterruptedThread(interruptedThreadsRef, operation.workspaceId, threadId)) {
         return;
       }
-      if (isRealtimeTurnTerminal(operation.threadId, operation.turnId)) {
+      if (isRealtimeTurnTerminal(threadId, operation.turnId)) {
         droppedLateRealtimeEventCountRef.current += 1;
         return;
       }
       const ensuredThreads = context?.ensuredThreads;
       const markedProcessingThreads = context?.markedProcessingThreads;
-      if (!ensuredThreads || !ensuredThreads.has(operation.threadId)) {
+      if (!ensuredThreads || !ensuredThreads.has(threadId)) {
         dispatch({
           type: "ensureThread",
           workspaceId: operation.workspaceId,
-          threadId: operation.threadId,
-          engine: inferEngineFromThreadId(operation.threadId),
+          threadId,
+          engine: inferEngineFromThreadId(threadId),
         });
-        ensuredThreads?.add(operation.threadId);
+        ensuredThreads?.add(threadId);
       }
       const reasoningEngineHint =
         "engineHint" in operation ? operation.engineHint : undefined;
       const isGeminiReasoningDelta =
-        (isGeminiEventThread(operation.threadId, reasoningEngineHint) ||
-          isKimiEventThread(operation.threadId, reasoningEngineHint)) &&
+        (isGeminiEventThread(threadId, reasoningEngineHint) ||
+          isKimiEventThread(threadId, reasoningEngineHint)) &&
         (operation.kind === "reasoningSummaryDelta" ||
           operation.kind === "reasoningSummaryBoundary" ||
           operation.kind === "reasoningContentDelta");
       if (
         !isGeminiReasoningDelta &&
-        canProgressEventStartProcessing(inferEngineFromThreadId(operation.threadId)) &&
-        (!markedProcessingThreads || !markedProcessingThreads.has(operation.threadId))
+        canProgressEventStartProcessing(inferEngineFromThreadId(threadId)) &&
+        (!markedProcessingThreads || !markedProcessingThreads.has(threadId))
       ) {
-        markProcessing(operation.threadId, true);
-        markedProcessingThreads?.add(operation.threadId);
+        markProcessing(threadId, true);
+        markedProcessingThreads?.add(threadId);
       }
 
       if (operation.kind === "agentDelta") {
@@ -580,13 +583,13 @@ export function useThreadItemEvents({
         dispatch({
           type: "appendAgentDelta",
           workspaceId: operation.workspaceId,
-          threadId: operation.threadId,
+          threadId,
           itemId: operation.itemId,
           delta: operation.delta,
-          hasCustomName: Boolean(getCustomName(operation.workspaceId, operation.threadId)),
+          hasCustomName: Boolean(getCustomName(operation.workspaceId, threadId)),
         });
         const dispatchCostMs = readHighResolutionNowMs() - dispatchStartedAt;
-        noteThreadReducerWorkMeasured(operation.threadId, {
+        noteThreadReducerWorkMeasured(threadId, {
           itemId: operation.itemId,
           textLength: operation.delta.length,
           mergeCostMs: dispatchCostMs,
@@ -597,7 +600,7 @@ export function useThreadItemEvents({
       if (operation.kind === "reasoningSummaryDelta") {
         dispatch({
           type: "appendReasoningSummary",
-          threadId: operation.threadId,
+          threadId,
           itemId: operation.itemId,
           delta: operation.delta,
         });
@@ -606,7 +609,7 @@ export function useThreadItemEvents({
       if (operation.kind === "reasoningSummaryBoundary") {
         dispatch({
           type: "appendReasoningSummaryBoundary",
-          threadId: operation.threadId,
+          threadId,
           itemId: operation.itemId,
         });
         return;
@@ -614,7 +617,7 @@ export function useThreadItemEvents({
       if (operation.kind === "reasoningContentDelta") {
         dispatch({
           type: "appendReasoningContent",
-          threadId: operation.threadId,
+          threadId,
           itemId: operation.itemId,
           delta: operation.delta,
         });
@@ -623,7 +626,7 @@ export function useThreadItemEvents({
 
       dispatch({
         type: "appendToolOutput",
-        threadId: operation.threadId,
+        threadId,
         itemId: operation.itemId,
         delta: operation.delta,
       });
@@ -634,6 +637,7 @@ export function useThreadItemEvents({
       interruptedThreadsRef,
       isRealtimeTurnTerminal,
       markProcessing,
+      resolveCanonicalThreadId,
     ],
   );
 

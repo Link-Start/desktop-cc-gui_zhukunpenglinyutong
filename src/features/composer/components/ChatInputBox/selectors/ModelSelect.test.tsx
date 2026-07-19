@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -53,7 +53,7 @@ describe("ModelSelect", () => {
     expect(onChange).toHaveBeenCalledWith("demo");
   });
 
-  it("renders compact grouped provider models and selects provider plus model", async () => {
+  it("renders grouped providers first and opens provider models on hover", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onChange = vi.fn();
     const onProviderModelChange = vi.fn();
@@ -88,12 +88,20 @@ describe("ModelSelect", () => {
       screen.getByRole("button", { name: "chat.currentModel:models.codex.gpt54.label" }),
     );
 
-    // Group headings render, and grouped items stay compact (no description).
-    expect(await screen.findByText("Claude Code")).toBeTruthy();
-    expect(screen.getByText("Codex")).toBeTruthy();
+    // The first level is provider/CLI only; models stay in the hover submenu.
+    const claudeProviderItem = await screen.findByRole("menuitem", { name: /Claude Code/ });
+    expect(screen.getByRole("menuitem", { name: /Codex/ })).toBeTruthy();
+    expect(screen.queryByText("Sonnet 4.6")).toBeNull();
+    expect(screen.queryByText("GPT-5.4")).toBeNull();
     expect(screen.queryByText("hidden")).toBeNull();
 
-    await user.click(screen.getByText("Sonnet 4.6"));
+    await user.hover(claudeProviderItem);
+    const sonnetItem = await screen.findByRole("menuitem", { name: /Sonnet 4.6/ });
+    expect(sonnetItem).toBeTruthy();
+    // Grouped items stay compact (no description).
+    expect(screen.queryByText("hidden")).toBeNull();
+
+    fireEvent.click(sonnetItem);
 
     expect(onProviderModelChange).toHaveBeenCalledWith("claude", "claude-sonnet-4-6");
     expect(onChange).not.toHaveBeenCalled();
@@ -147,6 +155,74 @@ describe("ModelSelect", () => {
 
     expect(onAddModel).toHaveBeenCalledTimes(1);
     expect(onRefreshConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves config actions into the current provider submenu when providers are grouped", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onAddModel = vi.fn();
+    const onRefreshConfig = vi.fn();
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onAddModel={onAddModel}
+        onRefreshConfig={onRefreshConfig}
+        models={[
+          { id: "claude-opus-4-8", label: "Opus 4.8" },
+          { id: "claude-sonnet-5", label: "Sonnet 5" },
+        ]}
+        modelGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            models: [
+              { id: "claude-opus-4-8", label: "Opus 4.8" },
+              { id: "claude-sonnet-5", label: "Sonnet 5" },
+            ],
+          },
+          {
+            providerId: "codex",
+            providerLabel: "Codex",
+            enabled: true,
+            models: [{ id: "gpt-5.4", label: "GPT-5.4" }],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }));
+    await user.hover(await screen.findByRole("menuitem", { name: /Claude Code/ }));
+
+    expect(screen.queryByRole("menuitem", { name: "models.refreshConfig" })).toBeNull();
+
+    const refreshButton = await screen.findByRole("button", { name: "models.refreshConfig" });
+    expect(refreshButton.textContent).toBe("");
+
+    const opusItem = await screen.findByRole("menuitem", { name: /Opus 4.8/ });
+    const sonnetItem = screen.getByRole("menuitem", { name: /Sonnet 5/ });
+    const addItem = screen.getByRole("menuitem", { name: "models.addModel" });
+    const submenuContent = opusItem.closest("[data-slot='dropdown-menu-sub-content']");
+
+    expect(submenuContent).toBeTruthy();
+    const items = Array.from(
+      submenuContent!.querySelectorAll("[role='menuitem']"),
+    );
+    expect(items.indexOf(addItem)).toBeGreaterThan(items.indexOf(opusItem));
+    expect(items.indexOf(addItem)).toBeGreaterThan(items.indexOf(sonnetItem));
+
+    fireEvent.click(addItem);
+    expect(onAddModel).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }));
+    await user.hover(await screen.findByRole("menuitem", { name: /Claude Code/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "models.refreshConfig" }));
+
+    expect(onRefreshConfig).toHaveBeenCalledTimes(1);
+    expect(onAddModel).toHaveBeenCalledTimes(1);
   });
 
   it("uses refreshed model labels passed by the parent instead of stale localStorage mapping", () => {

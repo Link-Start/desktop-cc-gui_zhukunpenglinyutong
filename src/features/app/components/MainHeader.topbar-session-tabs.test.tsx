@@ -65,6 +65,15 @@ function renderHeaderWithWidth(width: number) {
               engineLabel: "Claude",
               isActive: true,
             },
+            {
+              workspaceId: "w1",
+              threadId: "t3",
+              label: "Session C",
+              displayLabel: "Sess...",
+              engineType: "kimi",
+              engineLabel: "Kimi",
+              isActive: false,
+            },
           ]}
         />
       }
@@ -106,6 +115,9 @@ describe("MainHeader topbar session tabs integration", () => {
     expect(
       screen.getByRole("tab", { name: "Claude · Session B" }).getAttribute("data-engine"),
     ).toBe("claude");
+    expect(
+      screen.getByRole("tab", { name: "Kimi · Session C" }).getAttribute("data-engine"),
+    ).toBe("kimi");
   });
 
   it("keeps draggable blank lanes around the topbar session tabs", () => {

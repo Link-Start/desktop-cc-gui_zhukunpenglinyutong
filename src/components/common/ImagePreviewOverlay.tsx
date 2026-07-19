@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { LocalImage } from "./LocalImage";
 
@@ -32,7 +33,7 @@ export function ImagePreviewOverlay({
     };
   }, [onClose]);
 
-  return (
+  const overlayNode = (
     <div
       className="image-preview-overlay"
       role="dialog"
@@ -59,4 +60,10 @@ export function ImagePreviewOverlay({
       </button>
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return overlayNode;
+  }
+
+  return createPortal(overlayNode, document.body);
 }
