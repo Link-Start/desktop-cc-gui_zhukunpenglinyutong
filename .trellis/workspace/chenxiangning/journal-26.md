@@ -727,3 +727,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1047: 内置 Caveman 精选技能
+
+**Date**: 2026-07-21
+**Task**: 内置 Caveman 精选技能
+**Branch**: `feature/v-076`
+
+### Summary
+
+内置 Caveman curated skill，默认启用并补齐中文描述与 one-shot migration；修复 Codex resumed thread 关闭及重新开启后的跨平台 authoritative turn snapshot，保留用户 instruction override；完成测试、主 spec 同步与 OpenSpec archive。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f3c8f8f9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
