@@ -2,7 +2,7 @@
 
 ---
 
-##### **2026年7月17日（v0.7.5）**
+##### **2026年7月20日（v0.7.5）**
 
 中文：
 
@@ -15,6 +15,11 @@
 - `feat(git)`: 统一单仓与多仓 changed-file 右键菜单，按 staged / unstaged 状态提供 Unstage、Stage、Discard 与 File History；所有 action 保留 `workspaceId + repositoryRoot + path` identity，并复用现有确认、刷新与 Diff/File History surface
 - `feat(git)`: 统一 Git history 导航入口，将 Git Diff mode menu 与 Sidebar 中重复或含混的入口收敛为高亮的 `Git Graph` action，同时保留既有 history panel、callback 与隐藏 `log` mode 的兼容性
 - `feat(vendors)`: Vendor Settings 导航新增 Feishu CLI 与官方文档入口，并明确保持 unsupported 状态，不启用配置能力或暗示完整集成
+- `feat(agents)`: 新增内置可插拔智能体目录，将 agent catalog、provider 支持状态、入口文案与 Rust 侧配置对齐，为后续扩展保留统一 registry
+- `feat(engine)`: 打通 Kimi CLI 端到端集成，覆盖 engine catalog、会话创建、prompt transport、interrupt、history / diagnostics 与 UI 入口，并与既有 provider lifecycle 保持一致
+- `feat(notes)`: 增加来源感知便签采集链路与对话幕布底部捕获入口，可从对话上下文捕获内容并带着 source metadata 进入 Notes 工作台，保留来源跳转、collection 归属与后续引用能力
+- `feat(git)`: Git 提交工作流新增 PR 标题与正文 AI 生成，基于当前 diff / branch context 生成可编辑草稿，并沿用既有确认与错误反馈路径
+- `feat(cli)`: Vendor Settings header 新增 Claude、Codex、Kimi 的 CLI lifecycle 控制，支持本地版本探测、npm registry allowlist 查询、installed / outdated / unavailable 状态展示，以及 install、update、refresh 操作；Claude 安装和更新改走官方 native installer 与 `claude update`
 
 🔧 Improvements
 - `feat(git-history)`: 将 Git History 收敛为 Branch、Commit、Details 三栏主布局，移除重复的 overview 区域并按 `3:4:3` 分配默认宽度；作者 timeline 使用基于 email/name 的稳定主题色，跨刷新、分页与搜索保持一致
@@ -22,6 +27,9 @@
 - `feat(git)`: 收紧多仓库 Git Diff 工作区的信息密度并补齐 repository-scoped modal preview；快速切换同名路径时丢弃 stale response，full-context loader、编辑路径和 preview source 始终绑定同一 repository
 - `feat(git)`: 将 Git Diff mode selector 移至文件工作台顶部工具栏，通过 portal 复用原有 menu、viewport positioning 与 mode state，减少内容区重复 header 并保持窄窗口可用
 - `fix(git-history)`: Git Pull、Fetch、Sync 等确认界面新增 intent、effect、non-effect 与高亮 command preview；Pull 可组合 `--rebase`、`--no-commit`、`--no-verify`，说明与最终 payload 会随选择同步更新
+- `feat(ui)`: Git commit composer 支持置顶或置底偏好，并在 Behavior preferences 与 commit-message engine menu 中暴露；同轮改进 Markdown 文件链接解析、native file opener 路由，以及大量 child-session pill 的溢出展示
+- `feat(messages)`: 推理状态展示统一 live / completed thinking 文案，Reasoning header 增加 Brain icon，并将 message markdown 样式覆盖到 reasoning blocks，保证 inline code、code block、syntax highlight、Mermaid、LaTeX 和链接控件一致
+- `feat(models)`: 移除已退役的 Codex 内置模型选项与多语言文案，保留 `gpt-5.6-luna`、`gpt-5.5`、`gpt-5.4` 等当前可用目录，并保持 custom model workflow 不变
 - `style(git-history)`: 压缩 Git History 顶部工具栏间距并强化 pane boundary，在不牺牲可读性的前提下提升内容密度与视觉层级
 
 🐛 Fixes
@@ -35,6 +43,13 @@
 - `fix(messages)`: 稳定 streaming Timeline 与 history reopen：等价 parent/overlay 更新不再放大重渲染，pending thread 跳过 history loader，失败或 degraded empty 会保留 last-good transcript，并用 generation guard 阻止旧请求覆盖新会话
 - `fix(runtime)`: Codex runtime health probe 不再触发 `model/list` refresh；重复 `stderr` 会按脱敏 signature 聚合、限频并保留高价值 diagnostics，减少 catalog refresh 与日志风暴对客户端的干扰
 - `fix(gemini)`: 在 frontend、Desktop 与 remote daemon 执行边界 hard-disable Gemini，并覆盖 prompt transport、interrupt、workspace removal、shutdown 与 drop 的 owned process kill/reap；历史与 diagnostics 仍可读取，但残留入口不会启动或跨 Provider 转发新任务
+- `fix(kimi)`: 收敛 Kimi 会话 identity、sidebar projection、history restore 与 provider UI 状态，避免会话跨 provider 混淆或重复投影
+- `fix(kanban)`: Kanban 初始化与 Codex 模型目录使用同一 supported catalog，修复模型列表竞态和 stale model assertion
+- `fix(git)`: 大范围 PR 变更操作增加确认门禁，并修复多仓长列表虚拟滚动断层，避免批量操作误触和列表滚动空洞
+- `fix(markdown)`: 修复 Mermaid 大图全屏预览的布局与交互异常，保持图表预览在弹层中的可读尺寸和关闭路径
+- `fix(ui)`: 改善 macOS shell controls 与图片预览层级，避免 shell 控件被遮挡或图片预览浮层压错上下文
+- `fix(composer)`: 统一 Codex context usage 指示器外观，并收紧发送按钮尺寸，减少 composer footer 的视觉跳动
+- `fix(app)`: 修复冷启动更新循环与过期模型断言，启动阶段不再因 stale catalog / settings 状态触发重复渲染或错误 fallback
 
 English:
 
@@ -47,6 +62,11 @@ English:
 - `feat(git)`: unify changed-file context menus across single- and multi-repository modes, exposing Unstage, Stage, Discard, and File History according to staged state; every action preserves `workspaceId + repositoryRoot + path` identity and reuses the existing confirmation, refresh, Diff, and File History surfaces
 - `feat(git)`: unify Git history navigation by consolidating duplicate or ambiguous entries in the Git Diff mode menu and Sidebar into one highlighted `Git Graph` action, while retaining the existing history panel, callback, and hidden `log` mode compatibility
 - `feat(vendors)`: add Feishu CLI and its official documentation to Vendor Settings navigation while keeping it explicitly unsupported, without enabling configuration or implying full integration
+- `feat(agents)`: add a builtin pluggable agent catalog that aligns provider support status, entry copy, and Rust-side configuration behind one registry for future extension
+- `feat(engine)`: complete end-to-end Kimi CLI integration across the engine catalog, session creation, prompt transport, interrupt handling, history / diagnostics, and UI entry points while matching the existing provider lifecycle
+- `feat(notes)`: add source-aware note capture and a bottom-of-canvas capture entry from conversation context into the Notes workbench, preserving source metadata, source navigation, collection ownership, and later Composer references
+- `feat(git)`: add AI generation for PR titles and bodies from the current diff and branch context, producing editable drafts through the existing confirmation and error-feedback paths
+- `feat(cli)`: add CLI lifecycle controls to Vendor Settings headers for Claude, Codex, and Kimi, including local version probing, allowlisted npm registry checks, installed / outdated / unavailable state, and install, update, and refresh actions; Claude install and update now use the official native installer and `claude update`
 
 🔧 Improvements
 - `feat(git-history)`: focus Git History on a three-column Branch, Commit, and Details layout, remove the duplicate overview region, and assign default widths at `3:4:3`; author timelines now use stable theme-aware colors derived from email or name and remain consistent across refreshes, pagination, and searches
@@ -54,6 +74,9 @@ English:
 - `feat(git)`: tighten the information density of the multi-repository Git Diff workspace and complete repository-scoped modal previews; stale responses are discarded when rapidly switching identical relative paths, while the full-context loader, edit path, and preview source remain bound to the same repository
 - `feat(git)`: move the Git Diff mode selector into the file workbench toolbar, reusing the existing menu, viewport positioning, and mode state through a portal to remove the duplicate content header while remaining usable in narrow layouts
 - `fix(git-history)`: add intent, effect, non-effect, and highlighted command previews to Git Pull, Fetch, Sync, and related confirmation surfaces; Pull can combine `--rebase`, `--no-commit`, and `--no-verify`, with explanations and the final payload updating together
+- `feat(ui)`: persist whether the Git commit composer appears above or below changed files, expose the control through Behavior preferences and the commit-message engine menu, and improve Markdown file-link parsing, native file opening, and overflow handling for large child-session pill sets
+- `feat(messages)`: standardize live and completed reasoning labels, add a Brain icon to the reasoning header, and extend message markdown styling to reasoning blocks so inline code, code blocks, syntax highlighting, Mermaid, LaTeX, links, and related controls stay consistent
+- `feat(models)`: remove retired builtin Codex model options and translations, keep the available catalog focused on `gpt-5.6-luna`, `gpt-5.5`, and `gpt-5.4`, and leave custom model handling unchanged
 - `style(git-history)`: reduce Git History toolbar spacing and strengthen pane boundaries, improving information density and visual hierarchy without sacrificing readability
 
 🐛 Fixes
@@ -67,6 +90,13 @@ English:
 - `fix(messages)`: stabilize streaming Timeline updates and history reopening: equivalent parent/overlay writes no longer amplify rerenders, pending threads bypass the history loader, failed or degraded empty results preserve the last-good transcript, and generation guards prevent older requests from overwriting newer sessions
 - `fix(runtime)`: stop Codex runtime health probes from triggering `model/list` refreshes, and aggregate repeated `stderr` by redacted signature with rate limits and reserved high-value diagnostics to reduce catalog-refresh and logging storms
 - `fix(gemini)`: hard-disable Gemini at frontend, Desktop, and remote-daemon execution boundaries, covering prompt transport and owned-process kill/reap on interrupt, workspace removal, shutdown, and drop; history and diagnostics remain readable, but residual entry points cannot launch or cross-route new work to another Provider
+- `fix(kimi)`: converge Kimi session identity, sidebar projection, history restoration, and provider UI state so sessions do not cross provider boundaries or appear twice
+- `fix(kanban)`: align Kanban initialization with the shared Codex model catalog, fixing model-list races and stale model assertions
+- `fix(git)`: add confirmation guardrails for large PR mutations and fix virtualized gaps in long multi-repository changed-file lists, reducing accidental bulk operations and blank scrolling regions
+- `fix(markdown)`: fix large Mermaid diagram fullscreen preview layout and interactions so diagrams keep a readable modal size and reliable close path
+- `fix(ui)`: improve macOS shell controls and image preview layering so shell controls are not hidden and image modals stay in the correct stacking context
+- `fix(composer)`: align the Codex context-usage indicator styling and tighten send-button sizing to reduce composer footer visual jumps
+- `fix(app)`: fix cold-start update loops and stale model assertions so startup no longer repeatedly rerenders or falls back because of stale catalog/settings state
 
 ---
 
