@@ -26,6 +26,11 @@ export const CATEGORY_LABELS_I18N: Record<CuratedCategory, string> = {
   debug: "common.curatedCategoryDebug",
 };
 
+const CURATED_SKILL_DESCRIPTION_I18N: Record<string, string> = {
+  caveman: "common.curatedSkillDescriptionCaveman",
+  "lazy-senior-dev": "common.curatedSkillDescriptionLazySeniorDev",
+};
+
 /**
  * English defaults for the curated UI. Used as a last-resort fallback
  * when the i18n bundle is missing the corresponding key.
@@ -122,4 +127,13 @@ export function resolveCategoryLabel(
     CATEGORY_DEFAULTS.category[category as CuratedCategory] ?? category;
   if (!key) return fallback;
   return translateOrFallback(t, key, fallback);
+}
+
+export function resolveCuratedSkillDescription(
+  t: TFunction,
+  skillId: string,
+  fallback: string,
+): string {
+  const key = CURATED_SKILL_DESCRIPTION_I18N[skillId];
+  return key ? translateOrFallback(t, key, fallback) : fallback;
 }

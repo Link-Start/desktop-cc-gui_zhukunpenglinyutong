@@ -1370,6 +1370,10 @@ pub(crate) struct AppSettings {
         rename = "enabledCuratedSkillIds"
     )]
     pub(crate) enabled_curated_skill_ids: Vec<String>,
+    /// One-shot version marker for newly introduced default curated skills.
+    /// Legacy settings omit this field and deserialize as 0.
+    #[serde(default, rename = "curatedSkillDefaultsVersion")]
+    pub(crate) curated_skill_defaults_version: u8,
     /// Built-in Agent Catalog ids the user explicitly enabled for discovery in
     /// the Composer `#` picker. Enablement never injects a prompt by itself.
     #[serde(
@@ -1764,7 +1768,13 @@ fn default_browser_agent_allow_external_provider_fallback() -> bool {
 }
 
 pub(crate) fn default_enabled_curated_skill_ids() -> Vec<String> {
-    vec!["lazy-senior-dev".to_string()]
+    vec!["lazy-senior-dev".to_string(), "caveman".to_string()]
+}
+
+const CURRENT_CURATED_SKILL_DEFAULTS_VERSION: u8 = 1;
+
+fn default_curated_skill_defaults_version() -> u8 {
+    CURRENT_CURATED_SKILL_DEFAULTS_VERSION
 }
 
 pub(crate) fn default_enabled_builtin_agent_ids() -> Vec<String> {
@@ -1802,6 +1812,21 @@ impl AppSettings {
         self.codex_warm_ttl_seconds = self
             .codex_warm_ttl_seconds
             .max(default_codex_warm_ttl_seconds());
+    }
+
+    pub(crate) fn upgrade_curated_skill_defaults_for_startup(&mut self) {
+        if self.curated_skill_defaults_version >= CURRENT_CURATED_SKILL_DEFAULTS_VERSION {
+            return;
+        }
+        if !self.enabled_curated_skill_ids.is_empty()
+            && !self
+                .enabled_curated_skill_ids
+                .iter()
+                .any(|id| id == "caveman")
+        {
+            self.enabled_curated_skill_ids.push("caveman".to_string());
+        }
+        self.curated_skill_defaults_version = CURRENT_CURATED_SKILL_DEFAULTS_VERSION;
     }
 
     pub(crate) fn sanitize_engine_gates(&mut self) {
@@ -1930,6 +1955,7 @@ impl Default for AppSettings {
             browser_agent_allow_external_provider_fallback:
                 default_browser_agent_allow_external_provider_fallback(),
             enabled_curated_skill_ids: default_enabled_curated_skill_ids(),
+            curated_skill_defaults_version: default_curated_skill_defaults_version(),
             enabled_builtin_agent_ids: default_enabled_builtin_agent_ids(),
         }
     }
@@ -2333,17 +2359,17 @@ mod tests {
     }
 
     #[test]
-    fn app_settings_defaults_enable_lazy_senior_curated_skill() {
+    fn app_settings_defaults_enable_core_curated_skills() {
         let settings = AppSettings::default();
         assert_eq!(
             settings.enabled_curated_skill_ids,
-            vec!["lazy-senior-dev".to_string()]
+            vec!["lazy-senior-dev".to_string(), "caveman".to_string()]
         );
 
         let decoded: AppSettings = serde_json::from_str("{}").expect("deserialize settings");
         assert_eq!(
             decoded.enabled_curated_skill_ids,
-            vec!["lazy-senior-dev".to_string()]
+            vec!["lazy-senior-dev".to_string(), "caveman".to_string()]
         );
     }
 

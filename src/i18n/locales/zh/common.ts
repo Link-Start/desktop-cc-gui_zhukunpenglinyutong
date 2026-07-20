@@ -61,6 +61,10 @@ const common = {
     curatedToggleAria: "开关 {{name}}",
     curatedViewOnGithub: "在 GitHub 查看",
     curatedViewOnGithubAria: "在浏览器打开 {{name}} 的上游源码",
+    curatedSkillDescriptionCaveman:
+      "精简沟通内容，同时保留技术要点、原始代码与命令，并提供安全的代码审查和提交信息指引。",
+    curatedSkillDescriptionLazySeniorDev:
+      "遵循 Ponytail 七级阶梯：优先 YAGNI、复用现有代码，依次采用标准库、平台能力或已安装依赖，并提交最小且可靠的改动。",
   },
 };
 

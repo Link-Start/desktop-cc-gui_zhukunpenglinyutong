@@ -903,12 +903,16 @@ pub(crate) async fn send_user_message_core(
     params.insert("input".to_string(), json!(input));
     if can_send_collaboration_mode {
         let enriched_collaboration_mode =
-            if let Some(extra_directive) = extra_developer_instructions.as_ref() {
-                apply_policy_to_collaboration_mode_with_extra_directives(
-                    collaboration_mode,
-                    &policy,
-                    std::slice::from_ref(extra_directive),
-                )
+            if session.generated_developer_instructions_enabled {
+                if let Some(extra_directive) = extra_developer_instructions.as_ref() {
+                    apply_policy_to_collaboration_mode_with_extra_directives(
+                        collaboration_mode,
+                        &policy,
+                        std::slice::from_ref(extra_directive),
+                    )
+                } else {
+                    apply_policy_to_collaboration_mode(collaboration_mode, &policy)
+                }
             } else {
                 apply_policy_to_collaboration_mode(collaboration_mode, &policy)
             };

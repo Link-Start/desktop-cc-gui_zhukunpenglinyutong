@@ -10,6 +10,7 @@ import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import {
   CATEGORY_DEFAULTS,
   resolveCategoryLabel,
+  resolveCuratedSkillDescription,
   translateOrFallback,
 } from "../i18n/categoryLabels";
 import { resolveLucideIcon } from "../utils/resolveLucideIcon";
@@ -208,6 +209,10 @@ function CuratedRow({ entry, isPending, onToggle }: CuratedRowProps) {
     () => resolveCategoryLabel(t, entry.category),
     [t, entry.category],
   );
+  const description = useMemo(
+    () => resolveCuratedSkillDescription(t, entry.name, entry.description),
+    [t, entry.name, entry.description],
+  );
   const tokenLabel = useMemo(() => {
     // Round to 0.1K granularity for display (1100 -> 1.1K).
     const thousands = entry.tokenEstimate / 1000;
@@ -295,7 +300,7 @@ function CuratedRow({ entry, isPending, onToggle }: CuratedRowProps) {
             </a>
           ) : null}
         </div>
-        <div className="curated-section-row-description">{entry.description}</div>
+        <div className="curated-section-row-description">{description}</div>
         <div className="curated-section-row-meta">
           <span
             className="curated-section-row-token"

@@ -496,6 +496,7 @@ pub(crate) struct WorkspaceSession {
     pub(crate) thread_mode_state: ThreadModeState,
     pub(crate) mode_enforcement_enabled: AtomicBool,
     pub(crate) collaboration_mode_supported: AtomicBool,
+    pub(crate) generated_developer_instructions_enabled: bool,
     auto_compaction_threshold_percent: f64,
     auto_compaction_enabled: bool,
     auto_compaction_thread_state: Mutex<HashMap<String, AutoCompactionThreadState>>,
@@ -1136,6 +1137,8 @@ async fn spawn_workspace_session_once<E: EventSink>(
     launch_options: CodexAppServerLaunchOptions,
     app_settings: crate::types::AppSettings,
 ) -> Result<Arc<WorkspaceSession>, String> {
+    let generated_developer_instructions_enabled =
+        !codex_args_override_instructions(codex_args.as_deref());
     let mut command =
         build_codex_command_from_launch_context(launch_context, launch_options.hide_console);
     apply_codex_tui_compatible_terminal_env(&mut command);
@@ -1183,6 +1186,7 @@ async fn spawn_workspace_session_once<E: EventSink>(
         thread_mode_state: ThreadModeState::default(),
         mode_enforcement_enabled: AtomicBool::new(true),
         collaboration_mode_supported: AtomicBool::new(true),
+        generated_developer_instructions_enabled,
         auto_compaction_threshold_percent,
         auto_compaction_enabled,
         auto_compaction_thread_state: Mutex::new(HashMap::new()),
@@ -1322,6 +1326,7 @@ pub(crate) async fn make_test_workspace_session(id: &str) -> Arc<WorkspaceSessio
         thread_mode_state: crate::codex::thread_mode_state::ThreadModeState::default(),
         mode_enforcement_enabled: AtomicBool::new(false),
         collaboration_mode_supported: AtomicBool::new(false),
+        generated_developer_instructions_enabled: true,
         auto_compaction_threshold_percent: AUTO_COMPACTION_THRESHOLD_PERCENT,
         auto_compaction_enabled: true,
         auto_compaction_thread_state: Mutex::new(HashMap::new()),

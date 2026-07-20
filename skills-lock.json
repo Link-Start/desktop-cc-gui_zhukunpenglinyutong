@@ -24,6 +24,16 @@
       "tokenEstimate": 1100,
       "minClientVersion": "0.5.14"
     },
+    "caveman": {
+      "kind": "curated",
+      "displayName": "Caveman",
+      "version": "1.0.0",
+      "assetPath": "resources/curated-skills/caveman/SKILL.md",
+      "metadataPath": "resources/curated-skills/caveman/metadata.json",
+      "computedHash": "12d16c4e8ad70d5c14a3f090581dc725b24658bf0caaf2b9e3aab17b47aa50bc",
+      "tokenEstimate": 1400,
+      "minClientVersion": "0.5.14"
+    },
     "vercel-cli-with-tokens": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",

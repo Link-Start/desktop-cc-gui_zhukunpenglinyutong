@@ -126,6 +126,80 @@ if is_thread_not_found_error_message(&error) {
 }
 ```
 
+## Scenario: Codex curated-skill deactivation across resumed threads
+
+### 1. Scope / Trigger
+
+- Trigger: 修改 `AppSettings.enabled_curated_skill_ids`、`set_curated_skill_enabled`、`codex_curated_skills_developer_instructions_block()`、Codex app-server spawn arguments、全平台 `turn/start` collaboration-mode instructions 或 settings-triggered runtime restart。
+- 目标：启停 ccgui bundled curated skill 后，即使继续 resume 同一 Codex `threadId`，next turn 也必须收到最新 enabled snapshot；旧轮次中未列出的 bundled skill instructions 必须被明确撤销。
+
+### 2. Signatures
+
+- `codex_curated_skills_developer_instructions_block(app_settings: &AppSettings) -> Option<String>`
+- `codex_generated_developer_instructions_for_turn(app_settings: &AppSettings) -> Option<String>`
+- `build_codex_app_server_args_with_settings(codex_args, options, app_settings) -> Result<Vec<String>, String>`
+- `restart_all_connected_sessions_core(...) -> Result<(), String>`
+- Codex resume payload: `thread/resume { threadId }`
+- Authoritative marker: `## Curated Skills` + `Enabled: <ids|none>.`
+
+### 3. Contracts
+
+- app-server restart MUST NOT be treated as clearing Codex thread history；runtime replacement 后仍可能 resume 原 `threadId`。
+- 每个 generated curated block MUST 是 ccgui bundled curated skills 的 authoritative snapshot。只有当前 section 中列出的 `<skill>` blocks 生效；旧轮次中未列出的 bundled skill MUST 被声明 inactive。
+- Empty enabled set MUST emit `Enabled: none.` and MUST NOT omit the curated section。
+- Partial enabled set MUST list only current ids and bodies；关闭一个 skill 时不得继续携带其旧 body。
+- macOS / Linux MUST 保留既有 spawn-time instructions；macOS / Linux / Windows 的 turn-start instructions MUST 复用同一 snapshot builder，并在 desktop、shared session、daemon send path 读取最新 settings。
+- Snapshot authority MUST be scoped to ccgui bundled curated skills。它 MUST NOT 撤销 user-supplied `developer_instructions`、system instructions 或其他机制提供的 skill。
+- 用户通过 `codex_args` 显式提供 instruction override 时，existing override precedence MUST 保持不变；generated curated transport 不得重复注入或覆盖该 override。
+- `WorkspaceSession.generated_developer_instructions_enabled` MUST 在 launch 时由 effective `codex_args` 计算；`false` 时 turn-level merge MUST omit ccgui-generated curated snapshot，同时保留 request 自带的 developer instructions 与 collaboration policy。
+
+### 4. Validation & Error Matrix
+
+| State / path | Required behavior | Forbidden behavior |
+|---|---|---|
+| two enabled | 列出两个 ids 与两个 `<skill>` bodies | 丢失其中一个 body |
+| one disabled, one enabled | snapshot 只列仍启用 id；声明未列出的旧 bundled skill inactive | 继续携带 disabled body |
+| all disabled | `Enabled: none.`；无 `<skill>` body | 返回 `None` / 省略整个 curated state |
+| macOS / Linux settings restart | 新 app-server 保留 launch snapshot；next turn 再带最新 authoritative snapshot | 假设 process restart 已更新 resumed thread 的 developer state |
+| Windows next turn | `collaborationMode.settings.developer_instructions` 带同一 snapshot，process argv 仍 omit body | Windows 使用不同文案或恢复大型 argv 注入 |
+| explicit user instruction override | 保留 user override precedence | generated block 覆盖 user text |
+
+### 5. Good / Base / Bad Cases
+
+- Good：关闭 Caveman、保留 Ponytail 后，snapshot 为 `Enabled: \`lazy-senior-dev\`.`，只含 Ponytail body，并声明未列出的旧 bundled skill inactive。
+- Base：fresh thread 使用当前 enabled snapshot，没有旧状态需要撤销。
+- Bad：empty list 让 builder 返回 `None`；runtime 虽重启，但 resumed thread 继续遵循旧 Caveman block。
+- Bad：为停用 skill 强制创建新 native thread，造成 thread identity 与可见历史无必要漂移。
+
+### 6. Tests Required
+
+- Rust unit test MUST assert empty settings emit `Enabled: none.` and no `<skill id=` body。
+- Rust unit test MUST assert partial settings list only enabled ids/bodies and include inactive-unlisted wording。
+- Spawn-transport test MUST assert macOS / Linux style argv contains the empty deactivation snapshot。
+- Turn-transport test MUST assert cross-platform generated instructions contain enabled / empty snapshots；desktop、shared session、daemon 调用点 MUST 不再被 `cfg(windows)` 限制。
+- Existing user override and wrapper-recovery tests MUST remain green。
+- Run `cargo test --manifest-path src-tauri/Cargo.toml --lib curated_skill_injection_tests` and `npm run check:runtime-contracts`。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```rust
+if enabled.is_empty() {
+    return None; // runtime restart does not erase resumed thread history
+}
+```
+
+#### Correct
+
+```rust
+let enabled_label = if enabled.is_empty() { "none" } else { "<current ids>" };
+Some(format!(
+    "## Curated Skills\n\nOnly blocks listed here are active. \
+     Earlier unlisted bundled skills are inactive.\n\nEnabled: {enabled_label}."
+))
+```
+
 ## Scenario: Codex stale recovery cookbook
 
 ### 1. Scope / Trigger

@@ -23,18 +23,8 @@ const SHARED_STORE_LOCK_STALE_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_DELTA_SYNC_TURNS: usize = 8;
 const MAX_DELTA_SYNC_CHARS: usize = 4_000;
 
-#[cfg(windows)]
-fn codex_windows_turn_developer_instructions(
-    settings: &crate::types::AppSettings,
-) -> Option<String> {
+fn codex_turn_developer_instructions(settings: &crate::types::AppSettings) -> Option<String> {
     crate::backend::app_server_cli::codex_generated_developer_instructions_for_turn(settings)
-}
-
-#[cfg(not(windows))]
-fn codex_windows_turn_developer_instructions(
-    _settings: &crate::types::AppSettings,
-) -> Option<String> {
-    None
 }
 
 fn is_supported_shared_session_engine(engine: EngineType) -> bool {
@@ -930,7 +920,7 @@ pub async fn send_shared_session_message(
                 let settings = state.app_settings.lock().await;
                 (
                     settings.codex_mode_enforcement_enabled,
-                    codex_windows_turn_developer_instructions(&settings),
+                    codex_turn_developer_instructions(&settings),
                 )
             };
             let response = codex_core::send_user_message_core(

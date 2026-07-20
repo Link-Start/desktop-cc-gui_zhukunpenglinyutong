@@ -172,6 +172,7 @@ async fn make_workspace_session(id: &str) -> Arc<WorkspaceSession> {
         thread_mode_state: crate::codex::thread_mode_state::ThreadModeState::default(),
         mode_enforcement_enabled: AtomicBool::new(false),
         collaboration_mode_supported: AtomicBool::new(false),
+        generated_developer_instructions_enabled: true,
         auto_compaction_threshold_percent: AUTO_COMPACTION_THRESHOLD_PERCENT,
         auto_compaction_enabled: true,
         auto_compaction_thread_state: Mutex::new(HashMap::new()),

@@ -37,6 +37,10 @@ const common = {
     curatedViewOnGithub: "View on GitHub",
     curatedViewOnGithubAria:
       "Open the upstream source for {{name}} in your browser",
+    curatedSkillDescriptionCaveman:
+      "Concise communication with safe review and commit guidance while preserving technical substance and exact code or commands.",
+    curatedSkillDescriptionLazySeniorDev:
+      "Ponytail's 7-level ladder: prefer YAGNI, reuse existing code, use the standard library, platform, or installed dependencies, and write the smallest reliable diff.",
     later: "Later",
     yes: "Yes",
     no: "No",

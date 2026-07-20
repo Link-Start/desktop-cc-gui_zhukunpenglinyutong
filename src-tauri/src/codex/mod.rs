@@ -110,14 +110,8 @@ async fn collect_commit_message_diff(
     Ok(combine_repository_diff_sections(sections))
 }
 
-#[cfg(windows)]
-fn codex_windows_turn_developer_instructions(settings: &AppSettings) -> Option<String> {
+fn codex_turn_developer_instructions(settings: &AppSettings) -> Option<String> {
     crate::backend::app_server_cli::codex_generated_developer_instructions_for_turn(settings)
-}
-
-#[cfg(not(windows))]
-fn codex_windows_turn_developer_instructions(_settings: &AppSettings) -> Option<String> {
-    None
 }
 
 fn hidden_auto_session_metadata(
@@ -1236,7 +1230,7 @@ pub(crate) async fn send_user_message(
         let settings = state.app_settings.lock().await;
         (
             settings.codex_mode_enforcement_enabled,
-            codex_windows_turn_developer_instructions(&settings),
+            codex_turn_developer_instructions(&settings),
         )
     };
 

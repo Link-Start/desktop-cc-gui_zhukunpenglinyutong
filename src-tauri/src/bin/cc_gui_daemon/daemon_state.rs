@@ -11,18 +11,8 @@ const DELETE_ARCHIVE_TIMEOUT_MS: u64 = 2_000;
 const LIST_THREADS_LIVE_TIMEOUT_MS: u64 = 1_500;
 const CLAUDE_POST_COMPLETION_USAGE_GRACE_MS: u64 = 35_000;
 
-#[cfg(windows)]
-fn codex_windows_turn_developer_instructions(
-    settings: &crate::types::AppSettings,
-) -> Option<String> {
+fn codex_turn_developer_instructions(settings: &crate::types::AppSettings) -> Option<String> {
     crate::backend::app_server_cli::codex_generated_developer_instructions_for_turn(settings)
-}
-
-#[cfg(not(windows))]
-fn codex_windows_turn_developer_instructions(
-    _settings: &crate::types::AppSettings,
-) -> Option<String> {
-    None
 }
 
 fn normalize_daemon_disk_provider_profile(
@@ -2927,7 +2917,7 @@ impl DaemonState {
             let settings = self.app_settings.lock().await;
             (
                 settings.codex_mode_enforcement_enabled,
-                codex_windows_turn_developer_instructions(&settings),
+                codex_turn_developer_instructions(&settings),
             )
         };
         codex_core::send_user_message_core(

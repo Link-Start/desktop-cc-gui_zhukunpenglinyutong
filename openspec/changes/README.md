@@ -2,9 +2,9 @@
 
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
-- Updated At: `2026-07-18`
+- Updated At: `2026-07-20`
 - Active proposals: `4`
-- Archived proposals: `640`
+- Archived proposals: `641`
 - Main capability specs: `406`
 
 ## Active Proposals
@@ -18,7 +18,8 @@
 
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 640 个 proposal，按月份 / 归档日期分组。
+- [完整归档提案索引](archive/README.md) — 641 个 proposal，按月份 / 归档日期分组。
+- [2026-07-20 归档批次](archive/README.md#2026-07-20) — Caveman bundled curated skill 已验证并同步 main spec。
 - [2026-07-18 归档批次](archive/README.md#2026-07-18) — 5 个 implemented sync/archive + 3 个 stale/superseded/failed-experiment no-sync archive。
 
 ## Lifecycle Rules

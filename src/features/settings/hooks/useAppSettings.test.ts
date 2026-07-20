@@ -99,7 +99,9 @@ describe("useAppSettings", () => {
     expect(result.current.settings.sessionAttributionMode).toBe("related");
     expect(result.current.settings.enabledCuratedSkillIds).toEqual([
       "lazy-senior-dev",
+      "caveman",
     ]);
+    expect(result.current.settings.curatedSkillDefaultsVersion).toBe(1);
   });
 
   it("keeps legacy Gemini enablement disabled", async () => {

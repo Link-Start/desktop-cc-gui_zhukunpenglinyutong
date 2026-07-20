@@ -29,6 +29,7 @@ React Component
 5. 禁用 capability 时按“行为入口”盘点 UI、legacy config replay、后台任务、sync/async、local/remote；history/filter/diagnostics compatibility 与 execution 必须分开判断。
 6. retry/stale guard 必须落在 shared owner boundary；检查是否还有 selection、ensure、cache、fallback 或 timeout sibling caller 能绕过。
 7. legacy provider config 归一时，user-confirmed action MAY 选择可见 fallback；无人确认的 background automation MUST fail closed 或自动禁用，禁止静默把数据改发另一个 provider。
+8. prompt / policy enablement 发生变化时，必须区分 runtime state 与 persisted thread history：restart process 不代表 resume 的 thread 已忘记旧 instructions；deactivation 需要 authoritative replacement / tombstone 或明确的新 thread contract。
 
 ## 常见失败模式
 

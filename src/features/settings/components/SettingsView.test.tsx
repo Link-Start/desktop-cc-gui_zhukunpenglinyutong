@@ -344,6 +344,7 @@ const baseSettings: AppSettings = {
   composerListContinuation: false,
   composerCodeBlockCopyUseModifier: false,
   workspaceGroups: [],
+  curatedSkillDefaultsVersion: 1,
   openAppTargets: [
     {
       id: "vscode",

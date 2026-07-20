@@ -253,6 +253,7 @@ pub(crate) fn read_settings(path: &PathBuf) -> Result<AppSettings, String> {
     let mut settings: AppSettings = serde_json::from_str(&data).map_err(|e| e.to_string())?;
     settings.normalize_unified_exec_policy();
     settings.upgrade_runtime_pool_settings_for_startup();
+    settings.upgrade_curated_skill_defaults_for_startup();
     settings.sanitize_engine_gates();
     Ok(settings)
 }
@@ -287,7 +288,8 @@ pub(crate) fn write_json_file<T: Serialize>(path: &Path, value: &T) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::{
-        read_settings, read_workspaces, write_workspaces, write_workspaces_preserving_existing,
+        read_settings, read_workspaces, write_settings, write_workspaces,
+        write_workspaces_preserving_existing,
     };
     use crate::types::{AppSettings, WorkspaceEntry, WorkspaceKind, WorkspaceSettings};
     use std::sync::{Arc, Barrier};
@@ -636,5 +638,55 @@ mod tests {
 
         let read = read_settings(&path).expect("read settings");
         assert_eq!(read.codex_warm_ttl_seconds, 7200);
+    }
+
+    #[test]
+    fn read_settings_migrates_caveman_default_once_and_preserves_opt_out() {
+        let temp_dir = std::env::temp_dir().join(format!("moss-x-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).expect("create temp dir");
+        let path = temp_dir.join("settings.json");
+
+        let mut legacy = serde_json::to_value(AppSettings::default()).expect("serialize settings");
+        legacy
+            .as_object_mut()
+            .expect("settings object")
+            .remove("curatedSkillDefaultsVersion");
+        legacy.as_object_mut().expect("settings object").insert(
+            "enabledCuratedSkillIds".to_string(),
+            serde_json::json!(["lazy-senior-dev"]),
+        );
+        std::fs::write(
+            &path,
+            serde_json::to_string(&legacy).expect("encode legacy settings"),
+        )
+        .expect("write legacy settings");
+
+        let mut migrated = read_settings(&path).expect("read legacy settings");
+        assert_eq!(
+            migrated.enabled_curated_skill_ids,
+            vec!["lazy-senior-dev".to_string(), "caveman".to_string()]
+        );
+        assert_eq!(migrated.curated_skill_defaults_version, 1);
+
+        migrated.enabled_curated_skill_ids = vec!["lazy-senior-dev".to_string()];
+        write_settings(&path, &migrated).expect("persist Caveman opt-out");
+        let opted_out = read_settings(&path).expect("read opted-out settings");
+        assert_eq!(
+            opted_out.enabled_curated_skill_ids,
+            vec!["lazy-senior-dev".to_string()]
+        );
+
+        legacy
+            .as_object_mut()
+            .expect("settings object")
+            .insert("enabledCuratedSkillIds".to_string(), serde_json::json!([]));
+        std::fs::write(
+            &path,
+            serde_json::to_string(&legacy).expect("encode empty legacy settings"),
+        )
+        .expect("write empty legacy settings");
+        let empty = read_settings(&path).expect("read empty legacy settings");
+        assert!(empty.enabled_curated_skill_ids.is_empty());
+        assert_eq!(empty.curated_skill_defaults_version, 1);
     }
 }

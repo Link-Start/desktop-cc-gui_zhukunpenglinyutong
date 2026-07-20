@@ -968,15 +968,28 @@ fn codex_curated_skills_developer_instructions_block(
 ) -> Option<String> {
     use crate::curated_skills;
     let enabled = curated_skills::list_enabled_curated_skill_bodies(app_settings);
-    if enabled.is_empty() {
-        return None;
+    let enabled_label = if enabled.is_empty() {
+        "none".to_string()
+    } else {
+        enabled
+            .iter()
+            .map(|(id, _)| format!("`{id}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut snapshot = format!(
+        "## Curated Skills\n\nThis section is the authoritative state for ccgui bundled curated skills in the current runtime or turn. Only `<skill>` blocks listed in this section are active. Any ccgui bundled curated-skill instructions from earlier turns whose id is not listed here are inactive and MUST NOT be followed. This state does not change user-supplied developer instructions, system instructions, or skills provided through other mechanisms.\n\nEnabled: {enabled_label}."
+    );
+    if !enabled.is_empty() {
+        let bodies = enabled
+            .into_iter()
+            .map(|(id, body)| format!("<skill id=\"{}\">\n{}\n</skill>", id, body))
+            .collect::<Vec<_>>()
+            .join("\n");
+        snapshot.push_str("\n\n");
+        snapshot.push_str(&bodies);
     }
-    let body = enabled
-        .into_iter()
-        .map(|(id, body)| format!("<skill id=\"{}\">\n{}\n</skill>", id, body))
-        .collect::<Vec<_>>()
-        .join("\n");
-    Some(format!("## Curated Skills\n\n{body}"))
+    Some(snapshot)
 }
 
 fn build_generated_developer_instructions(
@@ -995,7 +1008,6 @@ fn build_generated_developer_instructions(
     crate::codex::collaboration_policy::merge_developer_instructions(None, &directives)
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn codex_generated_developer_instructions_for_turn(
     app_settings: &crate::types::AppSettings,
 ) -> Option<String> {
@@ -1018,7 +1030,9 @@ pub(crate) fn build_codex_app_server_args(
 ///   * `app_settings` is `Some`
 ///   * the user-supplied `codex_args` does NOT already contain a
 ///     `developer_instructions=` / `instructions=` override
-///   * at least one curated skill is enabled
+///
+/// The generated block is also present when no curated skill is enabled so a
+/// resumed Codex thread receives an authoritative deactivation snapshot.
 /// Existing developer instructions are preserved and the curated block is
 /// appended under a `## Curated Skills` heading via the same merge policy
 /// used by `merge_developer_instructions`.
@@ -1871,30 +1885,36 @@ mod curated_skill_injection_tests {
     }
 
     #[test]
-    fn codex_curated_skills_config_arg_returns_none_when_empty() {
+    fn codex_curated_skills_config_arg_emits_authoritative_snapshot_when_empty() {
         let s = settings_with(vec![]);
-        let out = codex_curated_skills_config_arg(&s, None);
-        assert!(out.is_none());
+        let out = codex_curated_skills_config_arg(&s, None).expect("disabled snapshot");
+        assert!(out.contains("authoritative state"));
+        assert!(out.contains("Enabled: none."));
+        assert!(!out.contains("<skill id="));
     }
 
     #[test]
-    fn codex_curated_skills_config_arg_includes_curated_section_header_when_no_existing() {
-        // Empty enabled set -> None
-        let s = settings_with(vec![]);
-        assert!(codex_curated_skills_config_arg(&s, None).is_none());
+    fn codex_curated_skills_config_arg_marks_unlisted_skills_inactive() {
+        let s = settings_with(vec!["lazy-senior-dev"]);
+        let out = codex_curated_skills_config_arg(&s, None).expect("enabled snapshot");
+        assert!(out.contains("Enabled: `lazy-senior-dev`."));
+        assert!(out.contains("whose id is not listed here are inactive"));
+        assert!(out.contains("<skill id=\"lazy-senior-dev\">"));
+        assert!(!out.contains("<skill id=\"caveman\">"));
     }
 
     #[test]
-    fn build_codex_app_server_args_with_settings_does_not_inject_when_disabled() {
+    fn build_codex_app_server_args_with_settings_injects_deactivation_when_disabled() {
         let s = settings_with(vec![]);
         let args =
             build_codex_app_server_args_with_settings(None, primary_no_hint(), Some(&s)).unwrap();
-        // Should not contain any developer_instructions arg.
-        let any_dev = args.iter().any(|a| a.contains("developer_instructions="));
-        assert!(
-            !any_dev,
-            "no developer_instructions should be injected when no curated is enabled"
-        );
+        let developer_instructions = args
+            .iter()
+            .find_map(|arg| arg.strip_prefix("developer_instructions="))
+            .map(decode_toml_string)
+            .expect("deactivation developer instructions");
+        assert!(developer_instructions.contains("Enabled: none."));
+        assert!(!developer_instructions.contains("<skill id="));
         // Final arg is "app-server".
         assert_eq!(args.last().map(String::as_str), Some("app-server"));
     }
@@ -1994,6 +2014,43 @@ mod curated_skill_injection_tests {
             instructions.contains("lazy-senior-dev"),
             "got: {instructions}"
         );
+    }
+
+    #[test]
+    fn codex_generated_developer_instructions_for_turn_includes_all_reenabled_skills() {
+        let s = settings_with(vec!["lazy-senior-dev", "caveman"]);
+        let instructions =
+            codex_generated_developer_instructions_for_turn(&s).expect("turn instructions");
+
+        assert!(
+            instructions.contains("Enabled: `lazy-senior-dev`, `caveman`."),
+            "got: {instructions}"
+        );
+        assert!(
+            instructions.contains("<skill id=\"lazy-senior-dev\">"),
+            "got: {instructions}"
+        );
+        assert!(
+            instructions.contains("<skill id=\"caveman\">"),
+            "got: {instructions}"
+        );
+    }
+
+    #[test]
+    fn codex_generated_developer_instructions_for_turn_deactivates_empty_snapshot() {
+        let s = settings_with(vec![]);
+        let instructions =
+            codex_generated_developer_instructions_for_turn(&s).expect("turn instructions");
+
+        assert!(
+            instructions.contains("writableRoots"),
+            "got: {instructions}"
+        );
+        assert!(
+            instructions.contains("Enabled: none."),
+            "got: {instructions}"
+        );
+        assert!(!instructions.contains("<skill id="), "got: {instructions}");
     }
 
     #[test]
