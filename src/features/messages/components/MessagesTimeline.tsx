@@ -1,62 +1,15 @@
 import {
-  Fragment,
   memo,
   useCallback,
   useEffect,
   useMemo,
   useRef,
-  useState,
-  type ReactNode,
 } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { trackHotspot } from "../../../services/perfBaseline/hotspotTracker";
-import { useRenderHotspot } from "../../../services/perfBaseline/useRenderHotspot";
 import { useTranslation } from "react-i18next";
-import Check from "lucide-react/dist/esm/icons/check";
-import Copy from "lucide-react/dist/esm/icons/copy";
-import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen";
-import Terminal from "lucide-react/dist/esm/icons/terminal";
-import type { ConversationItem } from "../../../types";
-import { parseAgentTaskNotification } from "../../engine-task-output/contracts/agentTaskNotification";
-import type { GroupedEntry } from "../utils/groupToolItems";
-import { Marker } from "../../../components/ui/marker";
-import { Button } from "../../../components/ui/button";
-import {
-  ToolBlockRenderer,
-  ReadToolGroupBlock,
-  EditToolGroupBlock,
-  BashToolGroupBlock,
-  SearchToolGroupBlock,
-} from "./toolBlocks";
-import {
-  DiffRow,
-  ExploreRow,
-  GeneratedImageRow,
-  MessageRow,
-  ReasoningRow,
-  ReviewRow,
-  WorkingIndicator,
-} from "./MessagesRows";
-import { ConversationRowErrorBoundary } from "./conversation/ConversationRowErrorBoundary";
 import { TurnFilesChangedCard } from "./conversation/TurnFilesChangedCard";
 import { MessagesOutlineFloater } from "./conversation/MessagesOutlineFloater";
-import type { MarkdownOutlineEntry } from "../../markdown/fastMarkdownRenderer";
-import { useMessageOutlineActive } from "../hooks/useMessageOutlineActive";
-import {
-  resolveNextMessageOutlineSnapshot,
-  type MessageOutlineSnapshot,
-} from "../presentation/messagesOutlineState";
+import { parseAgentTaskNotification } from "../../engine-task-output/contracts/agentTaskNotification";
 import { appendRendererDiagnostic } from "../../../services/rendererDiagnostics";
-import {
-  appendReasoningRunText,
-  compactComparableReasoningText,
-  parseReasoning,
-} from "../presentation/messagesReasoning";
-import {
-  formatCompletedTimeMs,
-  shouldHideCodexCanvasCommandCard,
-} from "../utils/messagesRenderUtils";
-import { resolveUserMessagePresentation } from "../presentation/messagesUserPresentation";
 import {
   buildTimelineProjectionRows,
   findTimelineProjectionRowIndexByItemId,
@@ -64,39 +17,26 @@ import {
   type TimelineProjectionRow,
 } from "../timeline/projection/messagesTimelineProjection";
 import {
-  countHydratedHeavyTimelineRows,
-  deriveTimelineRowHydrationStates,
-  type TimelineRowHydrationState,
-} from "../timeline/virtualization/messagesTimelineHydration";
-import {
   resolveConversationLightweightModeState,
   resolveConversationLightweightPolicy,
 } from "../presentation/messagesConversationLightweightMode";
 import {
   buildTimelineRenderWeightDiagnosticPayload,
-  classifyTimelineVirtualizerStability,
-  DEFAULT_TIMELINE_VIRTUALIZER_STABILITY_RECOVERY_BUDGET,
-  estimateTimelineProjectionRowSize,
   getActiveLiveTimelineRowKeys,
   getTimelineVirtualizationThresholdReason,
-  isEmptyVirtualProjectionRow,
-  observeTimelineElementOffset,
-  remeasureTimelineVirtualizerRows,
-  resolveTimelineCanvasOverscan,
-  resolveTimelineVirtualizerStabilityRecovery,
-  TIMELINE_LIGHTWEIGHT_ROW_PLACEHOLDER_HEIGHT,
-  resolveVirtualizedTimelineScopeReset,
   shouldVirtualizeTimelineRows,
   summarizeTimelineProjectionRenderWeight,
 } from "../timeline/virtualization/messagesTimelineVirtualization";
-import {
-  DEFAULT_HYDRATION_REMEASURE_BUDGET,
-  resolveHydrationRemeasureGuard,
-  type HydrationRemeasureBudget,
-} from "../timeline/virtualization/messagesRenderLoopGuards";
 import type { MessagesTimelineProps } from "../orchestration/models/messagesTimelineModels";
 import { ConversationLightweightPrompt } from "../timeline/components/ConversationLightweightPrompt";
 import { TimelineProjectionViewport } from "../timeline/components/TimelineProjectionViewport";
+import { TimelineRowRenderer } from "../timeline/components/TimelineRowRenderer";
+import { useMessagesTimelineOutline } from "../timeline/hooks/useMessagesTimelineOutline";
+import { useMessagesTimelineHydration } from "../timeline/hooks/useMessagesTimelineHydration";
+import {
+  useMessagesTimelineVirtualizer,
+  useMessagesTimelineVirtualizerLifecycle,
+} from "../timeline/hooks/useMessagesTimelineVirtualizer";
 
 // ponytail: bottom-right outline floater hidden by product decision (2026-07-03).
 // Flip to true to restore. Gating the outline at both consumers below also
@@ -104,12 +44,8 @@ import { TimelineProjectionViewport } from "../timeline/components/TimelineProje
 // per-scroll setState fires while the floater is hidden.
 const SHOW_OUTLINE_FLOATER = false;
 
-const TIMELINE_VIRTUALIZER_STABILITY_REMEASURE_COOLDOWN_MS = 750;
-const TIMELINE_VIRTUALIZER_STABILITY_DIAGNOSTIC_COOLDOWN_MS = 5_000;
 const TIMELINE_RENDER_WEIGHT_DIAGNOSTIC_COOLDOWN_MS = 5_000;
-const TIMELINE_HYDRATION_REMEASURE_DIAGNOSTIC_COOLDOWN_MS = 5_000;
 const CONVERSATION_LIGHTWEIGHT_DIAGNOSTIC_COOLDOWN_MS = 5_000;
-const TIMELINE_LIVE_ROW_BOTTOM_PROXIMITY_PX = 720;
 const TIMELINE_SCROLL_DIAGNOSTIC_MIN_INTERVAL_MS = 250;
 const TIMELINE_SCROLL_DIAGNOSTIC_MIN_DELTA_PX = 24;
 
@@ -144,64 +80,6 @@ function collectTimelineScrollDiagnosticSnapshot(
   };
 }
 
-type NormalizedRenderKind = ConversationItem["kind"];
-
-function resolveNormalizedRenderKind(item: ConversationItem): NormalizedRenderKind {
-  return item.kind;
-}
-
-// 合并结果按 (timeline item, live item) 引用缓存：两者引用都没变时（同一 flush 内的多次
-// render、以及 urgent/deferred 双通道渲染），直接复用上次结果，避免在 render 路径上
-// 反复对全文做 compact/includes/append（长 thinking 文本时这是数百毫秒的同步成本）。
-type LiveReasoningItem = Extract<ConversationItem, { kind: "reasoning" }>;
-const liveReasoningMergeCache = new WeakMap<
-  ConversationItem,
-  { live: LiveReasoningItem; result: ConversationItem }
->();
-
-function resolveLiveReasoningRenderItem(
-  item: LiveReasoningItem,
-  liveReasoningItem: LiveReasoningItem,
-) {
-  const cached = liveReasoningMergeCache.get(item);
-  if (cached && cached.live === liveReasoningItem) {
-    return cached.result;
-  }
-  // timeline 条目可能是同段相邻思考的合并块；直播原始条目只有最后一段，
-  // 直接替换会把前段文本顶掉。检测到前缀缺失时保留合并前缀、只刷新直播尾段。
-  const compactTimeline = compactComparableReasoningText(
-    item.content || item.summary || "",
-  );
-  const compactLive = compactComparableReasoningText(
-    liveReasoningItem.content || liveReasoningItem.summary || "",
-  );
-  const result: ConversationItem =
-    compactTimeline && !compactLive.includes(compactTimeline)
-      ? {
-          ...liveReasoningItem,
-          summary: appendReasoningRunText(item.summary, liveReasoningItem.summary),
-          content: appendReasoningRunText(item.content, liveReasoningItem.content),
-        }
-      : liveReasoningItem;
-  liveReasoningMergeCache.set(item, { live: liveReasoningItem, result });
-  return result;
-}
-
-function resolveLiveRenderItem(
-  item: ConversationItem,
-  liveAssistantItem: Extract<ConversationItem, { kind: "message" }> | null,
-  liveReasoningItem: Extract<ConversationItem, { kind: "reasoning" }> | null,
-) {
-  if (item.kind === "message" && liveAssistantItem?.id === item.id) {
-    return liveAssistantItem;
-  }
-  if (item.kind === "reasoning" && liveReasoningItem?.id === item.id) {
-    // 所有引擎都会产生相邻思考合并块，直接替换会把合并前缀顶掉。
-    return resolveLiveReasoningRenderItem(item, liveReasoningItem);
-  }
-  return item;
-}
-
 export const MessagesTimeline = memo(function MessagesTimeline({
   snapshot,
   live,
@@ -212,152 +90,72 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   slots,
 }: MessagesTimelineProps) {
   const {
-    assistantFinalBoundarySet,
-    assistantLiveTurnFinalBoundarySuppressedSet,
     claudeDockedReasoningItems,
     collapsedMiddleStepCount,
     effectiveItemsCount,
     groupedEntries,
     hasPendingUserTurn,
-    latestFinalAssistantMessageId,
-    messageActionTargetByAssistantId,
-    messageCopyTextByAssistantId,
-    reasoningMetaById,
     sessionFileChangesSummary,
-    suppressedUserMemoryContextMessageIds,
-    suppressedUserNoteCardContextMessageIds,
-    turnFileChangesByBoundaryId,
     visibleCollapsedHistoryItemCount,
   } = snapshot;
   const {
-    heartbeatPulse,
     hiddenClaudeReasoningOnly,
     isThinking,
     isWorking,
     lastDurationMs,
     latestReasoningId,
-    latestReasoningLabel,
-    latestWorkingActivityLabel,
     liveAssistantItem,
     liveAssistantMessageId,
     liveReasoningItem,
-    primaryWorkingLabel,
-    processingStartedAt,
-    streamActivityPhase,
-    waitingForFirstChunk,
   } = live;
   const {
-    activeCollaborationModeId,
     activeEngine,
     activeUserInputAnchorItemId,
-    activeUserInputRequestId,
     claudeHistoryTranscriptFallbackActive,
     hasVisibleUserInputRequest,
     historyRecoveryFailureReason,
     isHistoryLoading,
-    latestRetryMessage,
-    latestRuntimeReconnectItemId,
-    proxyEnabled,
-    proxyUrl,
     threadId,
     workspaceId,
   } = runtime;
   const {
-    agentTaskNodeByTaskIdRef,
-    agentTaskNodeByToolUseIdRef,
     bottomRef,
     messageNodeByIdRef,
     onPendingJumpTargetReady,
     pendingJumpMessageId,
-    requestAutoScroll,
     requestBottomConvergence,
     scrollElementRef,
   } = navigation;
   const {
-    handleCopyMessage,
-    handleExitPlanModeExecuteForItem,
-    onAssistantVisibleTextRender,
     onConversationDetailHydrationRequest,
     onConversationLightweightModeEnable,
-    onForkFromMessage,
-    onOpenDiffPath,
-    onOpenNoteCaptureMenu,
     onPreviewFileDiff,
-    onRecoverThreadRuntime,
-    onRecoverThreadRuntimeAndResend,
-    onRetryHistory,
-    onRewindFromMessage,
     onShowAllHistoryItems,
-    onThreadRecoveryFork,
-    openFileLink,
-    showFileLinkMenu,
-    toggleExpanded,
   } = interactions;
   const {
     codeBlockCopyUseModifier,
     collapseLiveMiddleStepsEnabled,
     conversationDetailHydrationRequested,
     conversationLightweightModeEnabled,
-    copiedMessageId,
-    expandedItems,
     historyExpansionActive,
-    liveAutoExpandedExploreId,
     presentationMode,
     presentationProfile,
     presentationScopeKey,
-    selectedExitPlanExecutionByItemKey,
-    streamMitigationProfile,
   } = presentation;
   const { approvalNode, userInputNode } = slots;
   const { t } = useTranslation();
-  const [currentOutline, setCurrentOutline] = useState<MessageOutlineSnapshot | null>(null);
-  const handleLiveOutlineReady = useCallback(
-    (snapshot: MessageOutlineSnapshot) => {
-      setCurrentOutline((previous) =>
-        resolveNextMessageOutlineSnapshot(previous, snapshot),
-      );
-    },
-    [],
-  );
-  const liveAssistantOutlineReady = useMemo(() => {
-    if (!liveAssistantMessageId) {
-      return undefined;
-    }
-    return (outline: MarkdownOutlineEntry[]) => {
-      handleLiveOutlineReady({
-        messageId: liveAssistantMessageId,
-        outline,
-      });
-    };
-  }, [handleLiveOutlineReady, liveAssistantMessageId]);
-  const floaterContainerRef = useRef<HTMLDivElement | null>(null);
-  const { activeHeadingId } = useMessageOutlineActive(
-    SHOW_OUTLINE_FLOATER ? (currentOutline?.outline ?? null) : null,
+  const {
+    activeHeadingId,
+    currentOutline,
     floaterContainerRef,
-  );
-  useEffect(() => {
-    setCurrentOutline(null);
-  }, [threadId, workspaceId]);
-  const timelineStabilityRecoveryBudgetRef = useRef(
-    DEFAULT_TIMELINE_VIRTUALIZER_STABILITY_RECOVERY_BUDGET,
-  );
-  const hydrationRemeasureBudgetRef = useRef<HydrationRemeasureBudget>(
-    DEFAULT_HYDRATION_REMEASURE_BUDGET,
-  );
-  // lightweight / live 两套重测同样复用 budget guard：签名不变时封顶重测次数 +
-  // cooldown，避免 measure→重排→ResizeObserver→再 measure 的回路造成持续闪动。
-  const lightweightRemeasureBudgetRef = useRef<HydrationRemeasureBudget>(
-    DEFAULT_HYDRATION_REMEASURE_BUDGET,
-  );
-  const liveRowRemeasureBudgetRef = useRef<HydrationRemeasureBudget>(
-    DEFAULT_HYDRATION_REMEASURE_BUDGET,
-  );
-  const hydrationRemeasureRafRef = useRef<number | null>(null);
-  const lightweightRemeasureRafRef = useRef<number | null>(null);
-  const liveRowRemeasureRafRef = useRef<number | null>(null);
-  // scope reset / 虚拟化翻开重测的 rAF 句柄：不走 effect per-run cleanup（发送瞬间
-  // 依赖连续变化会把重测在执行前吊销），只在切会话与卸载时取消。
-  const scopeResetRemeasureRafRef = useRef<number | null>(null);
+    handleJumpToHeading,
+    liveAssistantOutlineReady,
+  } = useMessagesTimelineOutline({
+    enabled: SHOW_OUTLINE_FLOATER,
+    liveAssistantMessageId,
+    threadId,
+    workspaceId: workspaceId ?? null,
+  });
   const lastTimelineRenderWeightDiagnosticRef = useRef<{
     at: number;
     signature: string;
@@ -371,34 +169,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     eventKind: string;
     snapshot: TimelineScrollDiagnosticSnapshot | null;
   }>({ at: 0, eventKind: "", snapshot: null });
-  const retainedHydratedTimelineRowKeysRef = useRef<{
-    scopeKey: string;
-    rowKeys: Set<string>;
-  }>({ scopeKey: "", rowKeys: new Set() });
-  const lastVirtualizedTimelineScopeResetRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    hydrationRemeasureBudgetRef.current = DEFAULT_HYDRATION_REMEASURE_BUDGET;
-    lightweightRemeasureBudgetRef.current = DEFAULT_HYDRATION_REMEASURE_BUDGET;
-    liveRowRemeasureBudgetRef.current = DEFAULT_HYDRATION_REMEASURE_BUDGET;
-    if (typeof window !== "undefined" && hydrationRemeasureRafRef.current !== null) {
-      window.cancelAnimationFrame(hydrationRemeasureRafRef.current);
-      hydrationRemeasureRafRef.current = null;
-    }
-    if (typeof window !== "undefined" && liveRowRemeasureRafRef.current !== null) {
-      window.cancelAnimationFrame(liveRowRemeasureRafRef.current);
-      liveRowRemeasureRafRef.current = null;
-    }
-    if (typeof window !== "undefined" && lightweightRemeasureRafRef.current !== null) {
-      window.cancelAnimationFrame(lightweightRemeasureRafRef.current);
-      lightweightRemeasureRafRef.current = null;
-    }
-    if (typeof window !== "undefined" && scopeResetRemeasureRafRef.current !== null) {
-      window.cancelAnimationFrame(scopeResetRemeasureRafRef.current);
-      scopeResetRemeasureRafRef.current = null;
-    }
-  }, [threadId, workspaceId]);
-
   const shouldRenderUserInputAtTail = Boolean(
     userInputNode &&
       (!activeUserInputAnchorItemId ||
@@ -445,14 +215,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isThinking,
       shouldRenderUserInputAtTail,
     ],
-  );
-  const timelineRowByKey = useMemo(
-    () => new Map(timelineProjectionRows.map((row) => [row.key, row])),
-    [timelineProjectionRows],
-  );
-  const dockedReasoningById = useMemo(
-    () => new Map(claudeDockedReasoningItems.map((entry) => [entry.item.id, entry])),
-    [claudeDockedReasoningItems],
   );
   const timelineRenderWeightSummary = useMemo(
     () => {
@@ -534,85 +296,25 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const pendingJumpRowKey = pendingJumpRowIndex >= 0
     ? timelineProjectionRows[pendingJumpRowIndex]?.key ?? null
     : null;
-  const timelineVirtualizer = useVirtualizer({
-    count: shouldVirtualizeTimeline ? timelineProjectionRows.length : 0,
-    enabled: shouldVirtualizeTimeline,
-    estimateSize: (index) => {
-      const projectionRow = timelineProjectionRows[index];
-      if (!projectionRow) {
-        return estimateTimelineProjectionRowSize({
-          kind: "bottomAnchor",
-          key: "bottom-anchor",
-        });
-      }
-      // 渲染为空的投影行（被跳过的工具卡、非工作态 working 指示等）视觉高度为 0；
-      // 估高也必须归零。否则 measure() 重置后虚拟器会按 row.kind 估高（如 tool=58px）
-      // 给这些空行预留布局偏移，在相邻两行之间撑出 phantom 间隙——这正是对话过程中
-      // 时不时空一大段的根因（resizeItem(index,0) 会被后续 measure() 重置覆盖）。
-      if (
-        isEmptyVirtualProjectionRow(projectionRow, {
-          activeEngine,
-          claudeHistoryTranscriptFallbackActive,
-          hasTailUserInputNode: Boolean(userInputNode),
-          isWorking,
-          lastDurationMs,
-          effectiveItemsCount,
-        })
-      ) {
-        return 0;
-      }
-      return estimateTimelineProjectionRowSize(projectionRow);
-    },
-    getItemKey: (index) => timelineProjectionRows[index]?.key ?? `missing:${index}`,
-    getScrollElement: () => scrollElementRef.current,
-    observeElementOffset: observeTimelineElementOffset,
-    overscan: resolveTimelineCanvasOverscan({
-      isThinking,
-      isWorking,
-      rowCount: timelineProjectionRows.length,
-      renderWeight: timelineRenderWeightSummary.renderWeight,
-    }),
+  const {
+    measureTimelineVirtualRowElement,
+    timelineVirtualizer,
+    virtualTimelineRowKeys,
+    virtualTimelineRows,
+  } = useMessagesTimelineVirtualizer({
+    activeEngine,
+    activeLiveRowCount: activeLiveTimelineRowKeys.length,
+    claudeHistoryTranscriptFallbackActive,
+    effectiveItemsCount,
+    hasTailUserInputNode: Boolean(userInputNode),
+    isThinking,
+    isWorking,
+    lastDurationMs,
+    renderWeight: timelineRenderWeightSummary.renderWeight,
+    scrollElementRef,
+    shouldVirtualizeTimeline,
+    timelineProjectionRows,
   });
-  const virtualTimelineRows = timelineVirtualizer.getVirtualItems();
-  const timelineVirtualizerRef = useRef(timelineVirtualizer);
-  timelineVirtualizerRef.current = timelineVirtualizer;
-  const timelineMeasureContextRef = useRef({
-    rowCount: timelineProjectionRows.length,
-  });
-  timelineMeasureContextRef.current = {
-    rowCount: timelineProjectionRows.length,
-  };
-  const measureTimelineVirtualRowElement = useCallback((node: HTMLDivElement | null) => {
-    if (!node) {
-      return;
-    }
-    const detail = [
-      node.dataset.timelineRowKind ?? "unknown",
-      node.dataset.activeLiveRow === "true" ? "active" : "static",
-      `index=${node.dataset.index ?? "?"}`,
-      `size=${node.dataset.virtualRowSize ?? "?"}`,
-      `rows=${timelineMeasureContextRef.current.rowCount}`,
-    ].join(":");
-    trackHotspot("timeline-row-measure", detail, () => {
-      timelineVirtualizerRef.current.measureElement(node);
-    });
-  }, []);
-  useRenderHotspot(
-    "timeline-list-render",
-    [
-      shouldVirtualizeTimeline ? "virtual" : "static",
-      `${timelineProjectionRows.length}rows`,
-      `visible=${shouldVirtualizeTimeline ? virtualTimelineRows.length : timelineProjectionRows.length}`,
-      `active=${activeLiveTimelineRowKeys.length}`,
-      isThinking ? "thinking" : isWorking ? "working" : "idle",
-      `weight=${timelineRenderWeightSummary.renderWeight}`,
-    ].join(":"),
-    isThinking || isWorking,
-  );
-  const virtualTimelineRowKeys = useMemo(
-    () => virtualTimelineRows.map((row) => row.key),
-    [virtualTimelineRows],
-  );
   const timelineScrollDiagnosticContextRef = useRef<TimelineScrollDiagnosticContext>({
     activeLiveRowCount: activeLiveTimelineRowKeys.length,
     isThinking,
@@ -743,339 +445,30 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       presentationProfile?.preferCommandSummary,
     ],
   );
-  const retainedHydratedTimelineRowScopeKey = `${virtualizedTimelineScopeKey}\u0000${timelineRendererOptionsKey}`;
-  const retainedHydratedTimelineRowKeys = useMemo(() => {
-    const retained = retainedHydratedTimelineRowKeysRef.current;
-    if (retained.scopeKey !== retainedHydratedTimelineRowScopeKey) {
-      retained.scopeKey = retainedHydratedTimelineRowScopeKey;
-      retained.rowKeys = new Set();
-    }
-    return retained.rowKeys;
-  }, [retainedHydratedTimelineRowScopeKey]);
-  const timelineRowHydrationStates = useMemo(
-    () => {
-      if (isThinking || isWorking) {
-        return timelineProjectionRows.map((row) => ({
-          rowKey: row.key,
-          contentHash: `${timelineRendererOptionsKey}:${row.key}`,
-          rendererOptionsKey: timelineRendererOptionsKey,
-          renderWeight: 1,
-          heavy: false,
-          mode: "static" as const,
-          hydrationReason: "not-heavy" as const,
-        }));
-      }
-      const nextStates = deriveTimelineRowHydrationStates({
-        rows: timelineProjectionRows,
-        shouldVirtualize: shouldDeferHeavyTimelineRows,
-        visibleRowKeys: shouldVirtualizeTimeline ? visibleTimelineRowKeySet : new Set<string>(),
-        activeRowKeys: activeLiveTimelineRowKeySet,
-        retainedHydratedRowKeys: retainedHydratedTimelineRowKeys,
-        anchorTargetRowKey: pendingJumpRowKey,
-        detailHydrationRequested: conversationDetailHydrationRequested,
-        rendererOptionsKey: timelineRendererOptionsKey,
-      });
-      for (const state of nextStates) {
-        if (state.heavy && state.mode === "hydrated") {
-          retainedHydratedTimelineRowKeys.add(state.rowKey);
-        }
-      }
-      return nextStates;
-    },
-    [
-      activeLiveTimelineRowKeySet,
-      conversationDetailHydrationRequested,
-      isThinking,
-      isWorking,
-      pendingJumpRowKey,
-      retainedHydratedTimelineRowKeys,
-      shouldDeferHeavyTimelineRows,
-      shouldVirtualizeTimeline,
-      timelineRendererOptionsKey,
-      timelineProjectionRows,
-      visibleTimelineRowKeySet,
-    ],
-  );
-  const hydratedHeavyTimelineRowCount = useMemo(
-    () => countHydratedHeavyTimelineRows(timelineRowHydrationStates),
-    [timelineRowHydrationStates],
-  );
-  const timelineRowHydrationStateByKey = useMemo(
-    () => new Map(timelineRowHydrationStates.map((state) => [state.rowKey, state])),
-    [timelineRowHydrationStates],
-  );
-  const shouldRenderLightweightProjectionRow = useCallback(
-    (
-      row: TimelineProjectionRow,
-      hydrationState: TimelineRowHydrationState | undefined,
-    ) => {
-      if (row.kind !== "entry" || !hydrationState?.heavy) {
-        return false;
-      }
-      if (
-        hydrationState.hydrationReason === "active" ||
-        hydrationState.hydrationReason === "anchor"
-      ) {
-        return false;
-      }
-      if (isThinking || isWorking) {
-        return false;
-      }
-      if (effectiveConversationLightweightMode && !conversationDetailHydrationRequested) {
-        return true;
-      }
-      if (hydrationState.mode === "hydrated") {
-        return false;
-      }
-      return effectiveConversationLightweightMode || hydrationState.mode === "summary";
-    },
-    [
-      conversationDetailHydrationRequested,
-      effectiveConversationLightweightMode,
-      isThinking,
-      isWorking,
-    ],
-  );
-  const lightweightTimelineRowSignature = useMemo(
-    () =>
-      timelineProjectionRows
-        .filter((row) =>
-          shouldRenderLightweightProjectionRow(
-            row,
-            timelineRowHydrationStateByKey.get(row.key),
-          ),
-        )
-        .map((row) => row.key)
-        .join("|"),
-    [
-      shouldRenderLightweightProjectionRow,
-      timelineProjectionRows,
-      timelineRowHydrationStateByKey,
-    ],
-  );
-  const hydratedHeavyTimelineRowSignature = useMemo(
-    () =>
-      timelineRowHydrationStates
-        .filter((state) => state.heavy && state.mode === "hydrated")
-        .map((state) => `${state.rowKey}:${state.contentHash}:${state.hydrationReason}`)
-        .join("|"),
-    [timelineRowHydrationStates],
-  );
-  const liveRowRemeasureSignature = useMemo(() => {
-    const assistantTextLength = liveAssistantItem?.text.length ?? 0;
-    const reasoningTextLength =
-      (liveReasoningItem?.summary.length ?? 0) + (liveReasoningItem?.content.length ?? 0);
-    return [
-      liveAssistantItem?.id ?? "",
-      Math.floor(assistantTextLength / 600),
-      liveReasoningItem?.id ?? "",
-      Math.floor(reasoningTextLength / 600),
-      activeLiveTimelineRowKeys.join(","),
-    ].join(":");
-  }, [
-    activeLiveTimelineRowKeys,
-    liveAssistantItem?.id,
-    liveAssistantItem?.text.length,
-    liveReasoningItem?.content.length,
-    liveReasoningItem?.id,
-    liveReasoningItem?.summary.length,
-  ]);
-
-  // 判定为空的虚拟行：除了 CSS 压成 0，还要主动把虚拟化器内部记录的尺寸归零，
-  // 否则 measure() 重算时会沿用上一次的非 0 测量值，导致后续行 translateY 偏移。
-  const emptyTimelineRowIndexSignature = useMemo(() => {
-    if (!shouldVirtualizeTimeline) {
-      return "";
-    }
-    const indices: number[] = [];
-    timelineProjectionRows.forEach((row, index) => {
-      const isEmpty = isEmptyVirtualProjectionRow(row, {
-        activeEngine,
-        claudeHistoryTranscriptFallbackActive,
-        hasTailUserInputNode: Boolean(userInputNode),
-        isWorking,
-        lastDurationMs,
-        effectiveItemsCount,
-      });
-      if (isEmpty) {
-        indices.push(index);
-      }
-    });
-    return indices.join(",");
-  }, [
-    activeEngine,
-    claudeHistoryTranscriptFallbackActive,
-    effectiveItemsCount,
-    isWorking,
-    lastDurationMs,
-    shouldVirtualizeTimeline,
-    timelineProjectionRows,
-    userInputNode,
-  ]);
-
-  useEffect(() => {
-    if (!shouldVirtualizeTimeline || emptyTimelineRowIndexSignature.length === 0) {
-      return;
-    }
-    emptyTimelineRowIndexSignature.split(",").forEach((rawIndex) => {
-      const index = Number(rawIndex);
-      if (Number.isInteger(index) && index >= 0) {
-        timelineVirtualizer.resizeItem(index, 0);
-      }
-    });
-  }, [emptyTimelineRowIndexSignature, shouldVirtualizeTimeline, timelineVirtualizer]);
-
-  useEffect(() => {
-    return () => {
-      if (typeof window !== "undefined" && hydrationRemeasureRafRef.current !== null) {
-        window.cancelAnimationFrame(hydrationRemeasureRafRef.current);
-        hydrationRemeasureRafRef.current = null;
-      }
-      if (typeof window !== "undefined" && liveRowRemeasureRafRef.current !== null) {
-        window.cancelAnimationFrame(liveRowRemeasureRafRef.current);
-        liveRowRemeasureRafRef.current = null;
-      }
-      if (typeof window !== "undefined" && lightweightRemeasureRafRef.current !== null) {
-        window.cancelAnimationFrame(lightweightRemeasureRafRef.current);
-        lightweightRemeasureRafRef.current = null;
-      }
-      if (typeof window !== "undefined" && scopeResetRemeasureRafRef.current !== null) {
-        window.cancelAnimationFrame(scopeResetRemeasureRafRef.current);
-        scopeResetRemeasureRafRef.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (
-      !shouldVirtualizeTimeline ||
-      lightweightTimelineRowSignature.length === 0 ||
-      typeof window === "undefined"
-    ) {
-      if (typeof window !== "undefined" && lightweightRemeasureRafRef.current !== null) {
-        window.cancelAnimationFrame(lightweightRemeasureRafRef.current);
-        lightweightRemeasureRafRef.current = null;
-      }
-      return;
-    }
-    const recovery = resolveHydrationRemeasureGuard({
-      previous: lightweightRemeasureBudgetRef.current,
-      signature: lightweightTimelineRowSignature,
-      hydratedHeavyRowCount: 1,
-      now: Date.now(),
-    });
-    lightweightRemeasureBudgetRef.current = recovery.nextBudget;
-    if (!recovery.shouldRemeasure) {
-      return;
-    }
-    if (lightweightRemeasureRafRef.current !== null) {
-      window.cancelAnimationFrame(lightweightRemeasureRafRef.current);
-    }
-    lightweightRemeasureRafRef.current = window.requestAnimationFrame(() => {
-      lightweightRemeasureRafRef.current = null;
-      timelineProjectionRows.forEach((row, index) => {
-        if (
-          shouldRenderLightweightProjectionRow(
-            row,
-            timelineRowHydrationStateByKey.get(row.key),
-          )
-        ) {
-          timelineVirtualizer.resizeItem(index, TIMELINE_LIGHTWEIGHT_ROW_PLACEHOLDER_HEIGHT);
-        }
-      });
-      remeasureTimelineVirtualizerRows(timelineVirtualizer);
-    });
-  }, [
-    lightweightTimelineRowSignature,
-    shouldRenderLightweightProjectionRow,
-    shouldVirtualizeTimeline,
-    timelineProjectionRows,
-    timelineRowHydrationStateByKey,
-    timelineVirtualizer,
-  ]);
-
-  useEffect(() => {
-    if (
-      !shouldVirtualizeTimeline ||
-      activeLiveTimelineRowKeys.length === 0 ||
-      typeof window === "undefined"
-    ) {
-      return;
-    }
-    // 流式打字时 liveRowRemeasureSignature 随文本量化变化（每 ~600 字符）→ budget
-    // 重置 → 正常重测；只有签名不变还反复触发时才封顶，掐断测量回路闪动。
-    const recovery = resolveHydrationRemeasureGuard({
-      previous: liveRowRemeasureBudgetRef.current,
-      signature: liveRowRemeasureSignature,
-      hydratedHeavyRowCount: 1,
-      now: Date.now(),
-    });
-    liveRowRemeasureBudgetRef.current = recovery.nextBudget;
-    if (!recovery.shouldRemeasure) {
-      return;
-    }
-    if (liveRowRemeasureRafRef.current !== null) {
-      window.cancelAnimationFrame(liveRowRemeasureRafRef.current);
-    }
-    liveRowRemeasureRafRef.current = window.requestAnimationFrame(() => {
-      liveRowRemeasureRafRef.current = null;
-      remeasureTimelineVirtualizerRows(timelineVirtualizer);
-    });
-  }, [
-    activeLiveTimelineRowKeys.length,
-    liveRowRemeasureSignature,
-    shouldVirtualizeTimeline,
-    timelineVirtualizer,
-  ]);
-
-  useEffect(() => {
-    if (!shouldVirtualizeTimeline || hydratedHeavyTimelineRowCount <= 0) {
-      hydrationRemeasureBudgetRef.current = DEFAULT_HYDRATION_REMEASURE_BUDGET;
-      if (typeof window !== "undefined" && hydrationRemeasureRafRef.current !== null) {
-        window.cancelAnimationFrame(hydrationRemeasureRafRef.current);
-        hydrationRemeasureRafRef.current = null;
-      }
-      return;
-    }
-    const recovery = resolveHydrationRemeasureGuard({
-      previous: hydrationRemeasureBudgetRef.current,
-      signature: hydratedHeavyTimelineRowSignature,
-      hydratedHeavyRowCount: hydratedHeavyTimelineRowCount,
-      now: Date.now(),
-      diagnosticCooldownMs: TIMELINE_HYDRATION_REMEASURE_DIAGNOSTIC_COOLDOWN_MS,
-    });
-    hydrationRemeasureBudgetRef.current = recovery.nextBudget;
-    if (recovery.shouldRemeasure && typeof window !== "undefined") {
-      if (hydrationRemeasureRafRef.current !== null) {
-        window.cancelAnimationFrame(hydrationRemeasureRafRef.current);
-      }
-      hydrationRemeasureRafRef.current = window.requestAnimationFrame(() => {
-        hydrationRemeasureRafRef.current = null;
-        remeasureTimelineVirtualizerRows(timelineVirtualizer);
-      });
-    }
-    if (!recovery.shouldDiagnose) {
-      return;
-    }
-    appendRendererDiagnostic("messages/timeline-hydration-remeasure", {
-      surface: "timeline-virtualizer",
-      component: "MessagesTimeline",
-      threadId,
-      workspaceId: workspaceId ?? null,
-      hydratedHeavyRowCount: hydratedHeavyTimelineRowCount,
-      remeasureCount: recovery.nextBudget.remeasureCount,
-      remeasureSuppressed: recovery.remeasureSuppressed,
-      threshold: "bounded-hydration-remeasure",
-    });
-  }, [
+  const {
     hydratedHeavyTimelineRowCount,
-    hydratedHeavyTimelineRowSignature,
+    shouldRenderLightweightProjectionRow,
+    timelineRowHydrationStateByKey,
+  } = useMessagesTimelineHydration({
+    activeLiveTimelineRowKeys,
+    activeLiveTimelineRowKeySet,
+    conversationDetailHydrationRequested,
+    effectiveConversationLightweightMode,
+    isThinking,
+    isWorking,
+    liveAssistantItem,
+    liveReasoningItem,
+    pendingJumpRowKey,
+    rendererOptionsKey: timelineRendererOptionsKey,
+    retainedScopeKey: `${virtualizedTimelineScopeKey}\u0000${timelineRendererOptionsKey}`,
+    shouldDeferHeavyTimelineRows,
     shouldVirtualizeTimeline,
     threadId,
+    timelineProjectionRows,
     timelineVirtualizer,
-    workspaceId,
-  ]);
-
+    visibleTimelineRowKeySet,
+    workspaceId: workspaceId ?? null,
+  });
   useEffect(() => {
     const thresholdReason = getTimelineVirtualizationThresholdReason({
       rowCount: timelineRenderWeightSummary.rowCount,
@@ -1171,836 +564,62 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     workspaceId,
   ]);
 
-  useEffect(() => {
-    if (!pendingJumpMessageId) {
-      return;
-    }
-    if (messageNodeByIdRef.current.get(pendingJumpMessageId)) {
-      onPendingJumpTargetReady(pendingJumpMessageId);
-      return;
-    }
-    if (!shouldVirtualizeTimeline || pendingJumpRowIndex < 0) {
-      return;
-    }
-    timelineVirtualizer.scrollToIndex(pendingJumpRowIndex, { align: "center" });
-  }, [
+  useMessagesTimelineVirtualizerLifecycle({
+    activeLiveTimelineRowKeys,
+    hydratedHeavyTimelineRowCount,
+    isThinking,
+    isWorking,
     messageNodeByIdRef,
     onPendingJumpTargetReady,
     pendingJumpMessageId,
     pendingJumpRowIndex,
-    shouldVirtualizeTimeline,
-    timelineVirtualizer,
-    virtualTimelineRowKeys,
-  ]);
-
-  useEffect(() => {
-    const scrollElement = scrollElementRef.current;
-    const reset = resolveVirtualizedTimelineScopeReset({
-      previousScopeKey: lastVirtualizedTimelineScopeResetRef.current,
-      nextScopeKey: virtualizedTimelineScopeKey,
-      shouldVirtualize: shouldVirtualizeTimeline,
-      stableHistoryView: !isThinking && !isWorking,
-      hasPendingJump: Boolean(pendingJumpMessageId),
-      hasScrollElement: Boolean(scrollElement),
-    });
-    lastVirtualizedTimelineScopeResetRef.current = reset.nextScopeKey;
-    if (!reset.shouldPinBottomWhenArmed && !reset.shouldMeasure) {
-      return;
-    }
-    // 历史会话应默认落在底部（最新消息处），而不是顶部；虚拟化 OFF↔ON 翻转的
-    // 整体重排同样需要落位（回调内部判定用户是否仍 parked 在底部）。
-    const pinScrollToBottom = scrollElement && reset.shouldPinBottomWhenArmed
-      ? requestBottomConvergence
-      : null;
-    pinScrollToBottom?.();
-    if (!reset.shouldMeasure) {
-      return;
-    }
-    if (typeof window === "undefined") {
-      remeasureTimelineVirtualizerRows(timelineVirtualizer);
-      return;
-    }
-    // rAF 句柄放 ref、只在卸载时取消：本 effect 的依赖（isThinking/isWorking/scope key）
-    // 在发送消息瞬间会于同一帧内连续变化，若在 per-run cleanup 里取消，翻开重测会在
-    // 执行前被吊销；而 resolver 的首翻信号已被消费、工作态分支又拒绝重排，重测就此
-    // 丢失——所有行保持估高摆放，新气泡/working 指示叠进上一条长回复的真实高度区间，
-    // 直到首个 delta 的 liveRowRemeasure 才自愈（实测重叠可持续数秒）。
-    if (scopeResetRemeasureRafRef.current !== null) {
-      window.cancelAnimationFrame(scopeResetRemeasureRafRef.current);
-    }
-    scopeResetRemeasureRafRef.current = window.requestAnimationFrame(() => {
-      scopeResetRemeasureRafRef.current = null;
-      remeasureTimelineVirtualizerRows(timelineVirtualizer);
-      // 重测把估高替换为真实行高、总高度随之变化，需再钉一次底部。
-      pinScrollToBottom?.();
-    });
-  }, [
-    isThinking,
-    isWorking,
-    pendingJumpMessageId,
     requestBottomConvergence,
     scrollElementRef,
     shouldVirtualizeTimeline,
+    threadId,
+    timelineProjectionRowCount: timelineProjectionRows.length,
     timelineVirtualizer,
     virtualizedTimelineScopeKey,
-  ]);
-
-  useEffect(() => {
-    const scrollElement = scrollElementRef.current;
-    const distanceFromBottom = scrollElement
-      ? scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight
-      : Number.POSITIVE_INFINITY;
-    const isNearLiveTail =
-      Number.isFinite(distanceFromBottom) &&
-      distanceFromBottom <= TIMELINE_LIVE_ROW_BOTTOM_PROXIMITY_PX;
-    const stabilityState = classifyTimelineVirtualizerStability({
-      shouldVirtualize: shouldVirtualizeTimeline,
-      rowCount: timelineProjectionRows.length,
-      hasScrollElement: Boolean(scrollElement),
-      virtualItemKeys: virtualTimelineRowKeys,
-      activeLiveRowKeys: activeLiveTimelineRowKeys,
-      streamingActive: Boolean((isThinking || isWorking) && isNearLiveTail),
-    });
-    if (stabilityState === "stable") {
-      return;
-    }
-
-    const stabilitySignature = [
-      stabilityState,
-      timelineProjectionRows.length,
-      virtualTimelineRowKeys.length,
-      activeLiveTimelineRowKeys.length,
-      isThinking ? "thinking" : "idle",
-      isWorking ? "working" : "idle",
-    ].join(":");
-    const recovery = resolveTimelineVirtualizerStabilityRecovery({
-      previous: timelineStabilityRecoveryBudgetRef.current,
-      signature: stabilitySignature,
-      now: Date.now(),
-      remeasureCooldownMs: TIMELINE_VIRTUALIZER_STABILITY_REMEASURE_COOLDOWN_MS,
-      diagnosticCooldownMs: TIMELINE_VIRTUALIZER_STABILITY_DIAGNOSTIC_COOLDOWN_MS,
-    });
-    timelineStabilityRecoveryBudgetRef.current = recovery.nextBudget;
-    if (recovery.shouldRemeasure) {
-      remeasureTimelineVirtualizerRows(timelineVirtualizer);
-    }
-    if (!recovery.shouldDiagnose) {
-      return;
-    }
-    appendRendererDiagnostic("messages/timeline-virtualizer-stability", {
-      state: stabilityState,
-      threadId,
-      workspaceId: workspaceId ?? null,
-      rowCount: timelineProjectionRows.length,
-      virtualItemCount: virtualTimelineRowKeys.length,
-      activeLiveRowCount: activeLiveTimelineRowKeys.length,
-      hydratedHeavyRowCount: hydratedHeavyTimelineRowCount,
-      isThinking,
-      isWorking,
-      isNearLiveTail,
-      recoveryRemeasureCount: recovery.nextBudget.remeasureCount,
-      recoveryRemeasureSuppressed: recovery.remeasureSuppressed,
-      distanceFromBottom: Number.isFinite(distanceFromBottom)
-        ? Math.max(0, Math.round(distanceFromBottom))
-        : null,
-    });
-  }, [
-    activeLiveTimelineRowKeys,
-    isThinking,
-    isWorking,
-    scrollElementRef,
-    shouldVirtualizeTimeline,
-    threadId,
-    hydratedHeavyTimelineRowCount,
-    timelineProjectionRows.length,
-    timelineVirtualizer,
     virtualTimelineRowKeys,
-    workspaceId,
-  ]);
+    workspaceId: workspaceId ?? null,
+  });
 
-  // MessageRow 的 memo 比较器按引用比对 userActionNode；若每次时间线渲染都新建
-  // 元素，所有用户行都会被打穿并真实重渲染（流式期间每个 token 一次）。按行缓存
-  // 元素，仅在影响输出的输入（item 引用 / 复制文案 / 已复制态 / 语言）变化时重建。
-  const userActionNodeCacheRef = useRef(
-    new Map<
-      string,
-      {
-        item: ConversationItem;
-        copyText: string;
-        isCopied: boolean;
-        translate: typeof t;
-        node: ReactNode;
+  const renderProjectionRowWithBoundary = useCallback(
+    (row: TimelineProjectionRow | undefined) => {
+      if (!row) {
+        return null;
       }
-    >(),
+      const hydrationState = timelineRowHydrationStateByKey.get(row.key);
+      return (
+        <TimelineRowRenderer
+          row={row}
+          hydrationState={hydrationState}
+          renderLightweight={shouldRenderLightweightProjectionRow(row, hydrationState)}
+          liveAssistantOutlineReady={liveAssistantOutlineReady}
+          parseAgentTaskNotification={parseAgentTaskNotification}
+          snapshot={snapshot}
+          live={live}
+          runtime={runtime}
+          navigation={navigation}
+          interactions={interactions}
+          presentation={presentation}
+          slots={slots}
+        />
+      );
+    },
+    [
+      interactions,
+      live,
+      liveAssistantOutlineReady,
+      navigation,
+      presentation,
+      shouldRenderLightweightProjectionRow,
+      slots,
+      snapshot,
+      timelineRowHydrationStateByKey,
+      runtime,
+    ],
   );
-  const USER_ACTION_NODE_CACHE_LIMIT = 500;
-
-  const renderSingleItem = (item: ConversationItem) => {
-    const renderItem = resolveLiveRenderItem(
-      item,
-      liveAssistantItem,
-      liveReasoningItem,
-    );
-    const renderKind = resolveNormalizedRenderKind(renderItem);
-    if (renderKind === "message" && renderItem.kind === "message") {
-      const itemRenderKey = `message:${renderItem.id}`;
-      const isCopied = copiedMessageId === renderItem.id;
-      const agentTaskNotification = parseAgentTaskNotification(renderItem.text);
-      const shouldRenderFinalBoundary =
-        renderItem.role === "assistant" &&
-        renderItem.isFinal === true &&
-        assistantFinalBoundarySet.has(renderItem.id) &&
-        !assistantLiveTurnFinalBoundarySuppressedSet.has(renderItem.id);
-      // 空闲时最后一轮的汇总由时间线末尾的会话累计卡承载，内联卡只回溯更早轮次；
-      // 一旦有新回合进行中（hasPendingUserTurn），末尾累计卡会落到新问题之后，
-      // 此时改由这一轮的内联卡把汇总钉在它自己的回合边界上。
-      const turnFilesChangedSummary =
-        shouldRenderFinalBoundary &&
-        (renderItem.id !== latestFinalAssistantMessageId || hasPendingUserTurn)
-          ? turnFileChangesByBoundaryId.get(renderItem.id) ?? null
-          : null;
-      const finalMetaParts: string[] = [];
-      if (typeof renderItem.finalCompletedAt === "number" && renderItem.finalCompletedAt > 0) {
-        finalMetaParts.push(formatCompletedTimeMs(renderItem.finalCompletedAt));
-      }
-      const finalMetaText = finalMetaParts.join(" · ");
-      const actionTargetUserMessageId =
-        renderItem.role === "assistant"
-          ? messageActionTargetByAssistantId.get(renderItem.id) ?? null
-          : null;
-      const isLatestFinalAssistant =
-        renderItem.id === latestFinalAssistantMessageId;
-      const shouldRenderAssistantActions =
-        renderItem.role === "assistant" && renderItem.isFinal === true;
-      const assistantCopyText =
-        renderItem.role === "assistant"
-          ? messageCopyTextByAssistantId.get(renderItem.id) ?? renderItem.text
-          : renderItem.text;
-      const userCopyText =
-        renderItem.role === "user"
-          ? resolveUserMessagePresentation({
-              text: renderItem.text,
-              selectedAgentName: renderItem.selectedAgentName,
-              selectedAgentIcon: renderItem.selectedAgentIcon,
-              enableCollaborationBadge: activeEngine === "codex",
-            }).displayText
-          : "";
-      const shouldRenderUserActions =
-        renderItem.role === "user" && userCopyText.trim().length > 0;
-      const shouldRenderForkAction =
-        isLatestFinalAssistant &&
-        Boolean(actionTargetUserMessageId) &&
-        typeof onForkFromMessage === "function";
-      const shouldRenderRewindAction =
-        isLatestFinalAssistant &&
-        Boolean(actionTargetUserMessageId) &&
-        typeof onRewindFromMessage === "function";
-      const renderAssistantActions = () => {
-        if (!shouldRenderAssistantActions) {
-          return null;
-        }
-        return (
-          <div
-            className="message-action-bar message-action-bar-row"
-            aria-label={t("messages.messageActions")}
-          >
-            {isLatestFinalAssistant && onOpenNoteCaptureMenu ? (
-              <button
-                type="button"
-                className="ghost message-action-button"
-                onClick={(event) => onOpenNoteCaptureMenu(event.currentTarget)}
-                aria-label={t("noteCards.captureMenu")}
-                title={t("noteCards.captureMenu")}
-              >
-                <NotebookPen size={9} strokeWidth={1.75} aria-hidden />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className={`ghost message-action-button message-copy-button${isCopied ? " is-copied" : ""}`}
-              onClick={() => handleCopyMessage(renderItem, assistantCopyText)}
-              aria-label={t("messages.copyMessage")}
-              title={t("messages.copyMessage")}
-            >
-              <span className="message-copy-icon" aria-hidden>
-                <Copy className="message-copy-icon-copy" size={12} />
-                <Check className="message-copy-icon-check" size={12} />
-              </span>
-            </button>
-            {shouldRenderForkAction && actionTargetUserMessageId ? (
-              <button
-                type="button"
-                className="ghost message-action-button"
-                onClick={() => onForkFromMessage(actionTargetUserMessageId)}
-                aria-label={t("messages.forkMessage")}
-                title={t("messages.forkMessage")}
-              >
-                <span className="codicon codicon-git-branch-create" aria-hidden />
-              </button>
-            ) : null}
-            {shouldRenderRewindAction && actionTargetUserMessageId ? (
-              <button
-                type="button"
-                className="ghost message-action-button"
-                onClick={() => onRewindFromMessage(actionTargetUserMessageId)}
-                aria-label={t("messages.rewindMessage")}
-                title={t("messages.rewindMessage")}
-              >
-                <span
-                  className="codicon codicon-history message-history-icon"
-                  aria-hidden
-                />
-              </button>
-            ) : null}
-          </div>
-        );
-      };
-      const renderUserActions = () => {
-        if (!shouldRenderUserActions) {
-          return null;
-        }
-        const cache = userActionNodeCacheRef.current;
-        const cached = cache.get(renderItem.id);
-        if (
-          cached &&
-          cached.item === renderItem &&
-          cached.copyText === userCopyText &&
-          cached.isCopied === isCopied &&
-          cached.translate === t
-        ) {
-          return cached.node;
-        }
-        const node = (
-          <div
-            className="message-action-bar message-user-bubble-actions"
-            aria-label={t("messages.messageActions")}
-          >
-            <button
-              type="button"
-              className={`ghost message-action-button message-copy-button${isCopied ? " is-copied" : ""}`}
-              onClick={() => handleCopyMessage(renderItem, userCopyText)}
-              aria-label={t("messages.copyUserMessage")}
-              title={t("messages.copyUserMessage")}
-            >
-              <span className="message-copy-icon" aria-hidden>
-                <Copy className="message-copy-icon-copy" size={12} />
-                <Check className="message-copy-icon-check" size={12} />
-              </span>
-            </button>
-          </div>
-        );
-        if (cache.size >= USER_ACTION_NODE_CACHE_LIMIT) {
-          cache.clear();
-        }
-        cache.set(renderItem.id, {
-          item: renderItem,
-          copyText: userCopyText,
-          isCopied,
-          translate: t,
-          node,
-        });
-        return node;
-      };
-      const bindMessageNode = (node: HTMLDivElement | null) => {
-        if (renderItem.role === "user" && node) {
-          messageNodeByIdRef.current.set(renderItem.id, node);
-        } else {
-          messageNodeByIdRef.current.delete(renderItem.id);
-        }
-        if (agentTaskNotification?.taskId && node) {
-          agentTaskNodeByTaskIdRef.current.set(agentTaskNotification.taskId, node);
-        } else if (agentTaskNotification?.taskId) {
-          agentTaskNodeByTaskIdRef.current.delete(agentTaskNotification.taskId);
-        }
-        if (agentTaskNotification?.toolUseId && node) {
-          agentTaskNodeByToolUseIdRef.current.set(agentTaskNotification.toolUseId, node);
-        } else if (agentTaskNotification?.toolUseId) {
-          agentTaskNodeByToolUseIdRef.current.delete(agentTaskNotification.toolUseId);
-        }
-      };
-      return (
-        <Fragment key={itemRenderKey}>
-          <div
-            ref={bindMessageNode}
-            data-message-anchor-id={renderItem.id}
-            data-agent-task-id={agentTaskNotification?.taskId ?? undefined}
-            data-agent-tool-use-id={agentTaskNotification?.toolUseId ?? undefined}
-          >
-            <MessageRow
-              item={renderItem}
-              workspaceId={workspaceId}
-              threadId={threadId}
-              isStreaming={
-                (activeEngine === "claude" ||
-                  activeEngine === "codex" ||
-                  activeEngine === "gemini" ||
-                  activeEngine === "kimi") &&
-                renderItem.role === "assistant" &&
-                renderItem.recoveredFromLiveShadow !== true &&
-                renderItem.id === liveAssistantMessageId
-              }
-              activeEngine={activeEngine}
-              activeCollaborationModeId={activeCollaborationModeId}
-              enableCollaborationBadge={activeEngine === "codex"}
-              presentationProfile={presentationProfile}
-              showRuntimeReconnectCard={renderItem.id === latestRuntimeReconnectItemId}
-              onRecoverThreadRuntime={onRecoverThreadRuntime}
-              onRecoverThreadRuntimeAndResend={onRecoverThreadRuntimeAndResend}
-              onThreadRecoveryFork={onThreadRecoveryFork}
-              retryMessage={
-                renderItem.id === latestRuntimeReconnectItemId
-                  ? latestRetryMessage
-                  : null
-              }
-              userActionNode={renderUserActions()}
-              codeBlockCopyUseModifier={codeBlockCopyUseModifier}
-              onOpenFileLink={openFileLink}
-              onOpenFileLinkMenu={showFileLinkMenu}
-              streamMitigationProfile={streamMitigationProfile}
-              onAssistantVisibleTextRender={onAssistantVisibleTextRender}
-              suppressMemorySummaryCard={suppressedUserMemoryContextMessageIds.has(renderItem.id)}
-              suppressNoteCardSummaryCard={suppressedUserNoteCardContextMessageIds.has(renderItem.id)}
-              onOutlineReady={
-                renderItem.role === "assistant" && renderItem.id === liveAssistantMessageId
-                  ? liveAssistantOutlineReady
-                  : undefined
-              }
-            />
-          </div>
-          {turnFilesChangedSummary && (
-            <TurnFilesChangedCard
-              summary={turnFilesChangedSummary}
-              onPreviewFileDiff={onPreviewFileDiff}
-            />
-          )}
-          {shouldRenderFinalBoundary && (
-            <Marker
-              variant="separator"
-              role="separator"
-              className="messages-turn-boundary messages-final-boundary"
-            >
-              <span className="messages-turn-boundary-label">
-                <span className="messages-turn-boundary-label-content">
-                  {t("messages.finalMessageBoundary")}
-                </span>
-              </span>
-              {finalMetaText && (
-                <span className="messages-turn-boundary-meta">{finalMetaText}</span>
-              )}
-              {renderAssistantActions()}
-            </Marker>
-          )}
-        </Fragment>
-      );
-    }
-    if (renderKind === "reasoning" && renderItem.kind === "reasoning") {
-      const itemRenderKey = `reasoning:${renderItem.id}`;
-      const isExpanded = expandedItems.has(renderItem.id);
-      const parsed = reasoningMetaById.get(renderItem.id) ?? parseReasoning(renderItem);
-      const isLiveReasoning =
-        isThinking && latestReasoningId === renderItem.id;
-      return (
-        <ReasoningRow
-          key={itemRenderKey}
-          item={renderItem}
-          workspaceId={workspaceId}
-          parsed={parsed}
-          isExpanded={isExpanded}
-          isLive={isLiveReasoning}
-          activeEngine={activeEngine}
-          onToggle={toggleExpanded}
-          onOpenFileLink={openFileLink}
-          onOpenFileLinkMenu={showFileLinkMenu}
-          presentationProfile={presentationProfile}
-          streamMitigationProfile={streamMitigationProfile}
-        />
-      );
-    }
-    if (renderKind === "review" && renderItem.kind === "review") {
-      return (
-        <ReviewRow
-          key={`review:${renderItem.id}`}
-          item={renderItem}
-          workspaceId={workspaceId}
-          onOpenFileLink={openFileLink}
-          onOpenFileLinkMenu={showFileLinkMenu}
-        />
-      );
-    }
-    if (renderKind === "generatedImage" && renderItem.kind === "generatedImage") {
-      return (
-        <GeneratedImageRow
-          key={`generated-image:${renderItem.id}`}
-          item={renderItem}
-          workspaceId={workspaceId}
-        />
-      );
-    }
-    if (renderKind === "diff" && renderItem.kind === "diff") {
-      return <DiffRow key={`diff:${renderItem.id}`} item={renderItem} />;
-    }
-    if (renderKind === "tool" && renderItem.kind === "tool") {
-      if (shouldHideCodexCanvasCommandCard(renderItem, activeEngine)) {
-        return null;
-      }
-      const isExpanded = expandedItems.has(renderItem.id);
-      const selectedExitPlanExecutionMode =
-        selectedExitPlanExecutionByItemKey[`${threadId ?? "no-thread"}:${renderItem.id}`] ?? null;
-      return (
-        <div key={`tool:${renderItem.id}`} className="message-tool-block-shell">
-          <ToolBlockRenderer
-            item={renderItem}
-            workspaceId={workspaceId}
-            isExpanded={isExpanded}
-            onToggle={toggleExpanded}
-            onRequestAutoScroll={requestAutoScroll}
-            activeCollaborationModeId={activeCollaborationModeId}
-            activeEngine={activeEngine}
-            hasPendingUserInputRequest={activeUserInputRequestId !== null}
-            onOpenDiffPath={onOpenDiffPath}
-            selectedExitPlanExecutionMode={selectedExitPlanExecutionMode}
-            onExitPlanModeExecute={handleExitPlanModeExecuteForItem}
-          />
-        </div>
-      );
-    }
-    if (renderKind === "explore" && renderItem.kind === "explore") {
-      const isExpanded =
-        liveAutoExpandedExploreId === renderItem.id || expandedItems.has(renderItem.id);
-      return (
-        <ExploreRow
-          key={`explore:${renderItem.id}`}
-          item={renderItem}
-          isExpanded={isExpanded}
-          onToggle={toggleExpanded}
-        />
-      );
-    }
-    return null;
-  };
-
-  const renderEntry = (entry: GroupedEntry) => {
-    const shouldRenderUserInputAfterEntry = Boolean(
-      userInputNode &&
-        activeUserInputAnchorItemId &&
-        groupedEntryContainsItemId(entry, activeUserInputAnchorItemId),
-    );
-    const renderWithAnchoredUserInput = (node: ReactNode) => {
-      if (!shouldRenderUserInputAfterEntry) {
-        return node;
-      }
-      return (
-        <Fragment key={`user-input-anchor:${activeUserInputAnchorItemId}`}>
-          {node}
-          {userInputNode}
-        </Fragment>
-      );
-    };
-    if (entry.kind === "readGroup") {
-      const firstItem = entry.items[0];
-      return renderWithAnchoredUserInput(
-        <ReadToolGroupBlock key={`rg-${firstItem?.id ?? "read-group"}`} items={entry.items} />,
-      );
-    }
-    if (entry.kind === "editGroup") {
-      const firstItem = entry.items[0];
-      return renderWithAnchoredUserInput(
-        <EditToolGroupBlock
-          key={`eg-${firstItem?.id ?? "edit-group"}`}
-          items={entry.items}
-          onOpenDiffPath={onOpenDiffPath}
-        />,
-      );
-    }
-    if (entry.kind === "bashGroup") {
-      if (
-        activeEngine === "codex" ||
-        (activeEngine === "claude" && !claudeHistoryTranscriptFallbackActive)
-      ) {
-        return null;
-      }
-      const firstItem = entry.items[0];
-      return renderWithAnchoredUserInput(
-        <BashToolGroupBlock
-          key={`bg-${firstItem?.id ?? "bash-group"}`}
-          items={entry.items}
-          onRequestAutoScroll={requestAutoScroll}
-        />,
-      );
-    }
-    if (entry.kind === "searchGroup") {
-      const firstItem = entry.items[0];
-      return renderWithAnchoredUserInput(
-        <SearchToolGroupBlock key={`sg-${firstItem?.id ?? "search-group"}`} items={entry.items} />,
-      );
-    }
-    return renderWithAnchoredUserInput(renderSingleItem(entry.item));
-  };
-  const getLightweightRowKindLabel = (row: TimelineProjectionRow) => {
-    if (row.kind !== "entry") {
-      return row.kind;
-    }
-    if (row.entry.kind !== "item") {
-      return row.entry.kind;
-    }
-    const item = row.entry.item;
-    if (item.kind === "message") {
-      return item.role === "assistant"
-        ? t("messages.conversationLightweightAssistantMessage")
-        : t("messages.conversationLightweightUserMessage");
-    }
-    return item.kind;
-  };
-  const renderLightweightProjectionRow = (
-    row: TimelineProjectionRow,
-    hydrationState: TimelineRowHydrationState,
-  ) => {
-    const rowKindLabel = getLightweightRowKindLabel(row);
-    const itemCount = row.kind === "entry" ? row.itemIds.length : 1;
-    const singleMessage =
-      row.kind === "entry" && row.entry.kind === "item" && row.entry.item.kind === "message"
-        ? row.entry.item
-        : null;
-    const actionTargetUserMessageId =
-      singleMessage?.role === "assistant"
-        ? messageActionTargetByAssistantId.get(singleMessage.id) ?? null
-        : null;
-    const shouldRenderForkAction =
-      singleMessage?.id === latestFinalAssistantMessageId &&
-      Boolean(actionTargetUserMessageId) &&
-      typeof onForkFromMessage === "function";
-    const shouldRenderRewindAction =
-      singleMessage?.id === latestFinalAssistantMessageId &&
-      Boolean(actionTargetUserMessageId) &&
-      typeof onRewindFromMessage === "function";
-    const bindLightweightMessageNode = (node: HTMLDivElement | null) => {
-      if (!singleMessage || singleMessage.role !== "user") {
-        return;
-      }
-      if (node) {
-        messageNodeByIdRef.current.set(singleMessage.id, node);
-      } else {
-        messageNodeByIdRef.current.delete(singleMessage.id);
-      }
-    };
-
-    return (
-      <div
-        ref={bindLightweightMessageNode}
-        className="messages-lightweight-row-summary"
-        data-conversation-lightweight-row="true"
-        data-message-anchor-id={singleMessage?.id}
-      >
-        <div className="messages-lightweight-row-summary-main">
-          <span className="messages-lightweight-row-summary-eyebrow">
-            {t("messages.conversationLightweightRowEyebrow")}
-          </span>
-          <strong>
-            {t("messages.conversationLightweightRowTitle", {
-              kind: rowKindLabel,
-              count: itemCount,
-            })}
-          </strong>
-          <span>
-            {t("messages.conversationLightweightRowMeta", {
-              weight: hydrationState.renderWeight,
-            })}
-          </span>
-        </div>
-        <div className="messages-lightweight-row-summary-actions">
-          {shouldRenderForkAction && actionTargetUserMessageId ? (
-            <button
-              type="button"
-              className="ghost message-action-button"
-              onClick={() => onForkFromMessage(actionTargetUserMessageId)}
-              aria-label={t("messages.forkMessage")}
-              title={t("messages.forkMessage")}
-            >
-              <span className="codicon codicon-git-branch-create" aria-hidden />
-            </button>
-          ) : null}
-          {shouldRenderRewindAction && actionTargetUserMessageId ? (
-            <button
-              type="button"
-              className="ghost message-action-button"
-              onClick={() => onRewindFromMessage(actionTargetUserMessageId)}
-              aria-label={t("messages.rewindMessage")}
-              title={t("messages.rewindMessage")}
-            >
-              <span className="codicon codicon-history" aria-hidden />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="messages-lightweight-row-detail-button"
-            onClick={onConversationDetailHydrationRequest}
-          >
-            {t("messages.conversationLightweightHydrateVisible")}
-          </button>
-        </div>
-      </div>
-    );
-  };
-  const renderProjectionRow = (row: ReturnType<typeof timelineRowByKey.get>) => {
-    if (!row) {
-      return null;
-    }
-    if (row.kind === "entry") {
-      return renderEntry(row.entry);
-    }
-    if (row.kind === "dockedReasoning") {
-      const dockedReasoning = dockedReasoningById.get(row.itemId);
-      if (!dockedReasoning) {
-        return null;
-      }
-      const { item, parsed } = dockedReasoning;
-      return (
-        <ReasoningRow
-          key={`claude-live-${item.id}`}
-          item={item}
-          workspaceId={workspaceId}
-          parsed={parsed}
-          isExpanded={isThinking && latestReasoningId === item.id ? true : expandedItems.has(item.id)}
-          isLive={isThinking && latestReasoningId === item.id}
-          onToggle={toggleExpanded}
-          onOpenFileLink={openFileLink}
-          onOpenFileLinkMenu={showFileLinkMenu}
-          presentationProfile={presentationProfile}
-          streamMitigationProfile={streamMitigationProfile}
-        />
-      );
-    }
-    if (row.kind === "tailUserInput") {
-      return userInputNode;
-    }
-    if (row.kind === "liveMiddleCollapsed") {
-      return (
-        <div className="messages-live-middle-collapsed-indicator" role="status">
-          {t("messages.middleStepsCollapsedHint", { count: row.count })}
-        </div>
-      );
-    }
-    if (row.kind === "workingIndicator") {
-      return (
-        <WorkingIndicator
-          isThinking={isWorking}
-          proxyEnabled={proxyEnabled}
-          proxyUrl={proxyUrl}
-          processingStartedAt={processingStartedAt}
-          lastDurationMs={lastDurationMs}
-          heartbeatPulse={heartbeatPulse}
-          hasItems={effectiveItemsCount > 0}
-          reasoningLabel={latestReasoningLabel}
-          activityLabel={latestWorkingActivityLabel}
-          primaryLabel={primaryWorkingLabel}
-          activeEngine={activeEngine}
-          waitingForFirstChunk={waitingForFirstChunk}
-          presentationProfile={presentationProfile}
-          streamActivityPhase={streamActivityPhase}
-        />
-      );
-    }
-    if (row.kind === "historyRecoveryFailure") {
-      return (
-        <div
-          className="message-runtime-recovery-card"
-          role="alert"
-          aria-label={t("messages.threadRecoveryTitle")}
-        >
-          <div className="message-runtime-recovery-header">
-            <Terminal className="message-runtime-recovery-icon" size={15} aria-hidden />
-            <div className="message-runtime-recovery-copy">
-              <div className="message-runtime-recovery-title">
-                {t("messages.threadRecoveryTitle")}
-              </div>
-              <div className="message-runtime-recovery-description">
-                {t("messages.threadRecoveryFailed")}
-              </div>
-            </div>
-            {onRetryHistory ? (
-              <div className="message-runtime-recovery-actions">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="message-runtime-recovery-button"
-                  onClick={onRetryHistory}
-                >
-                  {t("messages.threadRecoveryAction")}
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      );
-    }
-    if (row.kind === "emptyState") {
-      if (row.state === "historyLoading") {
-        return (
-          <div
-            className="empty messages-empty messages-history-loading"
-            role="status"
-            aria-live="polite"
-          >
-            <span className="working-spinner" aria-hidden="true" />
-            <div className="messages-history-loading-copy">
-              <strong>{t("messages.restoringHistory")}</strong>
-              <span>{t("messages.restoringHistoryHint")}</span>
-            </div>
-          </div>
-        );
-      }
-      if (row.state === "hiddenReasoning") {
-        return (
-          <div className="empty messages-empty messages-hidden-reasoning">
-            {t("messages.hiddenThinkingContent")}
-          </div>
-        );
-      }
-      return <div className="empty messages-empty">{t("messages.emptyThread")}</div>;
-    }
-    if (row.kind === "approval") {
-      return approvalNode;
-    }
-    if (row.kind === "bottomAnchor") {
-      return null;
-    }
-    return null;
-  };
-  const renderProjectionRowWithBoundary = (
-    row: ReturnType<typeof timelineRowByKey.get>,
-  ) => {
-    if (!row) {
-      return null;
-    }
-    const hydrationState = timelineRowHydrationStateByKey.get(row.key);
-    return (
-      <ConversationRowErrorBoundary
-        key={`row-boundary:${row.key}:${hydrationState?.contentHash ?? "unknown"}`}
-        rowKey={row.key}
-        rowKind={row.kind}
-        contentHash={hydrationState?.contentHash ?? null}
-        renderWeight={hydrationState?.renderWeight ?? null}
-        engine={activeEngine}
-        threadId={threadId}
-        workspaceId={workspaceId ?? null}
-        fallbackTitle={t("messages.rowRenderFailedTitle")}
-        fallbackDescription={t("messages.rowRenderFailedDescription")}
-        retryLabel={t("messages.rowRenderRetry")}
-        retryBlockedLabel={t("messages.rowRenderRetryBlocked")}
-      >
-        {shouldRenderLightweightProjectionRow(row, hydrationState) && hydrationState
-          ? renderLightweightProjectionRow(row, hydrationState)
-          : renderProjectionRow(row)}
-      </ConversationRowErrorBoundary>
-    );
-  };
-  const handleJumpToHeading = (headingId: string) => {
-    const target = document.getElementById(headingId);
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  };
   const shouldShowConversationLightweightPrompt =
     !isThinking &&
     !isWorking &&
