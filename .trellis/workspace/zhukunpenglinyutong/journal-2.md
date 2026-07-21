@@ -242,3 +242,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 53: 区分 Kimi 提交信息引擎
+
+**Date**: 2026-07-22
+**Task**: 区分 Kimi 提交信息引擎
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+修复 checkpoint 提交信息引擎菜单将 Kimi 误标为 Claude 的问题，补齐 10 个 locale 文案与回归断言。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0ff12ea3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
