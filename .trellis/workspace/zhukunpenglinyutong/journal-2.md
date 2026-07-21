@@ -30,9 +30,7 @@
 
 ### Testing
 
-- `openspec validate messages-final-boundary-enforcement --strict --no-interactive` passed.
-- Archive path and versioned metadata contain no future `2026-07-22` date.
-- `git diff --check` passed.
+- [OK] (Add test results)
 
 ### Status
 
@@ -556,7 +554,9 @@
 
 ### Testing
 
-- [OK] (Add test results)
+- `openspec validate messages-final-boundary-enforcement --strict --no-interactive` passed.
+- Archive path and versioned metadata use `2026-07-21`.
+- `git diff --check` passed.
 
 ### Status
 
