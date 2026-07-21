@@ -1764,3 +1764,36 @@ Rebased chore/bump-version-0.7.5 onto origin, semantically resolved Kimi integra
 ### Next Steps
 
 - None - task complete
+
+
+## Session 39: 归档 Messages 模块边界 change
+
+**Date**: 2026-07-21
+**Task**: 归档 Messages 模块边界 change
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+同步 messages-module-boundaries main spec 并归档 harden-messages-module-boundaries change，完成 Phase 0 lifecycle closure。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `05baf51a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
