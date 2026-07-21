@@ -72,7 +72,7 @@ import type { ErrorToast } from "../../../services/toasts";
 import type { LoadingProgressDialogConfig } from "../../app/hooks/useLoadingProgressDialogState";
 import type { WorkspaceDirectoryEntry } from "../../../services/tauri";
 import type { CodeAnnotationBridgeProps } from "../../code-annotations/types";
-import type { RuntimeReconnectRecoveryCallbackResult } from "../../messages/components/runtimeReconnect";
+import type { RuntimeReconnectRecoveryCallbackResult } from "../../messages/utils/recovery/runtimeReconnect";
 import type { QueuedHandoffBubble } from "../../threads/utils/queuedHandoffBubble";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
 import type { CodexProviderProfileSelection } from "../../threads/constants/codexProviderProfiles";

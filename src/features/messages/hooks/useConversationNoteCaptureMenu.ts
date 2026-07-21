@@ -15,7 +15,7 @@ import {
 import type { ConversationItem } from "../../../types";
 import { buildSemanticThreadNote } from "../../../utils/threadText";
 import type { NoteCaptureDraft } from "../../note-cards/types";
-import { resolveUserMessagePresentation } from "../components/messagesUserPresentation";
+import { resolveUserMessagePresentation } from "../presentation/messagesUserPresentation";
 import { snapshotConversationSelection } from "../utils/conversationSelection";
 
 const NOTE_CAPTURE_TITLE_MAX_LENGTH = 60;

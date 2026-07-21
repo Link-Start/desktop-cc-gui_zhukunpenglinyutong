@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MessageRow, ReasoningRow } from "./MessagesRows";
-import { parseReasoning } from "./messagesReasoning";
+import { parseReasoning } from "../presentation/messagesReasoning";
 
 const markdownCalls = vi.hoisted(() => ({
   calls: [] as Array<{

@@ -46,7 +46,7 @@ import { Messages } from "./Messages";
 import {
   TIMELINE_LIGHTWEIGHT_ROW_PLACEHOLDER_HEIGHT,
   TIMELINE_VIRTUAL_ROW_PLACEHOLDER_MAX_HEIGHT,
-} from "./messagesTimelineVirtualization";
+} from "../timeline/virtualization/messagesTimelineVirtualization";
 
 describe("Messages virtualized jump behavior", () => {
   beforeAll(() => {

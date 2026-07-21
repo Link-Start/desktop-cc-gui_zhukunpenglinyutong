@@ -15,9 +15,9 @@ vi.mock("./Markdown", () => ({
 // History collapsing ships effectively disabled in production (window = 10000).
 // These behavior tests exercise the collapse/expand logic at its original
 // threshold; only the three >30-item cases below are affected.
-vi.mock("./messagesRenderUtils", async (importOriginal) => {
+vi.mock("../utils/messagesRenderUtils", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("./messagesRenderUtils")>();
+    await importOriginal<typeof import("../utils/messagesRenderUtils")>();
   return {
     ...actual,
     VISIBLE_MESSAGE_WINDOW: 30,

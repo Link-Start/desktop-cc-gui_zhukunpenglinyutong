@@ -8,7 +8,7 @@ import { Messages } from "./Messages";
 import {
   TRANSIENT_RUNTIME_RECONNECT_AUTO_DISMISS_MS,
   type RuntimeReconnectRecoveryCallbackResult,
-} from "./runtimeReconnect";
+} from "../utils/recovery/runtimeReconnect";
 
 vi.mock("../../../services/tauri", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../services/tauri")>();

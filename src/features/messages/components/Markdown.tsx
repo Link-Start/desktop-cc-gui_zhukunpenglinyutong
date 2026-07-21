@@ -2,14 +2,14 @@ import { Fragment, lazy, memo, startTransition, Suspense, useCallback, useEffect
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { LocalImage } from "./LocalImage";
+import { LocalImage } from "./media/LocalImage";
 import { ImageFullscreenViewer } from "../../markdown/imageFullscreen";
 import type { MarkdownOutlineEntry } from "../../markdown/fastMarkdownRenderer";
 import { extractOutlineFromMarkdown } from "../utils/messageOutlineExtractor";
 import type {
   FullMarkdownComponents,
   FullMarkdownUrlTransform,
-} from "./FullMarkdownRuntime";
+} from "../rendering/markdown/FullMarkdownRuntime";
 import {
   LightweightMarkdown,
   resolveAdaptiveProgressiveRevealStepMs,
@@ -19,8 +19,8 @@ import {
   normalizeProgressiveRevealStepMs,
   resolveProgressiveRevealValue,
   type LightweightMarkdownLinkRenderer,
-} from "./LiveMarkdown";
-import { ToolCallBlock } from "./ToolCallBlock";
+} from "../rendering/markdown/LiveMarkdown";
+import { ToolCallBlock } from "../rendering/markdown/ToolCallBlock";
 import {
   areKatexAssetsReady,
   buildLatexRenderEntries,
@@ -32,9 +32,9 @@ import {
 } from "../../markdown/markdownMath";
 export { prewarmKatexAssets } from "../../markdown/markdownMath";
 
-const MermaidBlock = lazy(() => import("./MermaidBlock"));
+const MermaidBlock = lazy(() => import("../rendering/markdown/MermaidBlock"));
 const FullMarkdownRuntime = lazy(() =>
-  import("./FullMarkdownRuntime").then((module) => ({
+  import("../rendering/markdown/FullMarkdownRuntime").then((module) => ({
     default: module.FullMarkdownRuntime,
   })),
 );
@@ -50,7 +50,10 @@ import {
   normalizeOutsideMarkdownCode,
 } from "../../../utils/markdownCodeRegions";
 import { highlightLine } from "../../../utils/syntax";
-import { CodeBlockCopyButton, CodeBlockLanguageBadge } from "./codeBlockLanguageIcon";
+import {
+  CodeBlockCopyButton,
+  CodeBlockLanguageBadge,
+} from "../rendering/markdown/codeBlockLanguageIcon";
 import { parseToolCallBlocks, type Block } from "../utils/toolCallBlocks";
 import {
   createMessageMarkdownOptionsHash,
@@ -73,14 +76,14 @@ import {
   extractUrlLines,
   shouldRenderMarkdownFenceAsCard,
   type MarkdownPreNode,
-} from "./markdownCodeBlockHelpers";
+} from "../rendering/markdown/markdownCodeBlockHelpers";
 import {
   normalizeFragmentedLineBreaks,
   normalizeFragmentedParagraphBreaks,
   normalizeGithubBlockquoteAlerts,
   normalizeInlineOrderedListBreaks,
   normalizeListIndentation,
-} from "./markdownTextNormalizers";
+} from "../rendering/markdown/markdownTextNormalizers";
 
 type MarkdownProps = {
   value: string;

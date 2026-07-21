@@ -42,15 +42,15 @@ import {
   groupToolItems,
 } from "../utils/groupToolItems";
 import { MessagesTimeline } from "./MessagesTimeline";
-import { MessagesAnchorRail } from "./MessagesAnchorRail";
-import { ScrollControl } from "./ScrollControl";
+import { MessagesAnchorRail } from "./conversation/MessagesAnchorRail";
+import { ScrollControl } from "./conversation/ScrollControl";
 import {
   MessagesInlineApproval,
   MessagesInlineUserInput,
-} from "./MessagesInlinePrompts";
+} from "./conversation/MessagesInlinePrompts";
 import {
   parseReasoning,
-} from "./messagesReasoning";
+} from "../presentation/messagesReasoning";
 import {
   buildAssistantFinalBoundarySet,
   buildLiveTailWorkingSet,
@@ -62,7 +62,7 @@ import {
   resolveLiveAutoExpandedExploreId,
   suppressCompletedExploreItemsBetweenLatestUserTurns,
   type MessagesHistoryExpansionMode,
-} from "./messagesLiveWindow";
+} from "../orchestration/presentation/messagesLiveWindow";
 import {
   buildTurnFileChangesByBoundaryId,
   mergeTurnFileChangesSummaries,
@@ -71,16 +71,11 @@ import {
   isAssistantMessageConversationItem,
   isReasoningConversationItem,
   isUserMessageConversationItem,
-} from "./messageItemPredicates";
+} from "../utils/messageItemPredicates";
 import { parseAgentTaskNotification } from "../utils/agentTaskNotification";
-import { dedupeExitPlanItemsKeepFirst } from "./messagesExitPlan";
-import { buildSuppressedUserMemoryContextMessageIdSet } from "./messagesMemoryContext";
-import { buildSuppressedUserNoteCardContextMessageIdSet } from "./messagesNoteCardContext";
-import { dispatchOpenTaskRunEvent } from "../../agent-orchestration/utils/navigationEvents";
-import {
-  compareTaskRunSurfacePriority,
-  describeTaskRunSurface,
-} from "../../tasks/utils/taskRunSurface";
+import { dedupeExitPlanItemsKeepFirst } from "../utils/messagesExitPlan";
+import { buildSuppressedUserMemoryContextMessageIdSet } from "../utils/context/messagesMemoryContext";
+import { buildSuppressedUserNoteCardContextMessageIdSet } from "../utils/context/messagesNoteCardContext";
 import {
   countRenderableCollapsedEntries,
   findLastAssistantMessageIndex,
@@ -101,7 +96,7 @@ import {
   toConversationEngine,
   VISIBLE_MESSAGE_WINDOW,
   STREAMING_VISIBLE_WINDOW,
-} from "./messagesRenderUtils";
+} from "../utils/messagesRenderUtils";
 import {
   buildMessageActionTargets,
   buildMessagesScrollKey,
@@ -115,40 +110,42 @@ import {
   resolveVisibleMessageItems,
   type MessageActionTargets,
   type PreservedReadableWindow,
-} from "./messagesViewModel";
+} from "../orchestration/presentation/messagesViewModel";
 import {
   ASSISTANT_FINALIZING_LIVE_WINDOW_MS,
   CODEX_FINALIZING_LIVE_WINDOW_MS,
   INITIAL_BOTTOM_PIN_BUDGET_MS,
-  MESSAGE_JUMP_EVENT_NAME,
   SETTLE_REPIN_WINDOW_MS,
   VISIBLE_TEXT_REPORT_EAGER_PREFIX_CHARS,
   VISIBLE_TEXT_REPORT_MIN_GROWTH_CHARS,
   VISIBLE_TEXT_REPORT_MIN_INTERVAL_MS,
-} from "./messagesConstants";
+} from "../constants/messagesConstants";
 import {
   DEFAULT_RENDER_LOOP_GUARD_BUDGET,
   resolveIdempotentRenderLoopGuard,
   type RenderLoopGuardBudget,
-} from "./messagesRenderLoopGuards";
-import { addBoundedConversationRenderModeKey } from "./messagesConversationLightweightMode";
+} from "../timeline/virtualization/messagesRenderLoopGuards";
+import { addBoundedConversationRenderModeKey } from "../presentation/messagesConversationLightweightMode";
 import { useConversationNoteCaptureMenu } from "../hooks/useConversationNoteCaptureMenu";
 import {
   TRANSIENT_RUNTIME_RECONNECT_AUTO_DISMISS_MS,
   resolveAssistantRuntimeReconnectHint,
   resolveRetryMessageForReconnectItem,
-} from "./runtimeReconnect";
+} from "../utils/recovery/runtimeReconnect";
 import type {
   LastRenderSnapshot,
   LastVisibleTextReport,
   MessagesProps,
-} from "./messagesTypes";
+} from "../types/messagesTypes";
 import {
   resolveConversationScrollEdgeTarget,
   startConversationScrollConvergence,
   type ConversationScrollEdge,
   type ConversationScrollMotion,
-} from "./messagesScrollConvergence";
+} from "../orchestration/scrolling/messagesScrollConvergence";
+import { useMessagesTimelineModels } from "../orchestration/hooks/useMessagesTimelineModels";
+import { useMessagesAnchorNavigation } from "../orchestration/hooks/useMessagesAnchorNavigation";
+import { MessagesLinkedRunBanner } from "../orchestration/components/MessagesLinkedRunBanner";
 
 const EMPTY_TASK_RUNS: NonNullable<MessagesProps["taskRuns"]> = [];
 
@@ -2617,86 +2614,18 @@ export const Messages = memo(function Messages({
     (presentationProfile?.heartbeatWaitingHint ?? activeEngine === "opencode")
       ? heartbeatPulse
       : 0;
-  const linkedConversationRun = useMemo(() => {
-    if (!threadId) {
-      return null;
-    }
-    return taskRuns
-      .filter((run) =>
-        run.linkedThreadId === threadId &&
-        (!workspaceId || run.task.workspaceId === workspaceId),
-      )
-      .sort(compareTaskRunSurfacePriority)[0] ?? null;
-  }, [taskRuns, threadId, workspaceId]);
-  const linkedConversationRunSurface = linkedConversationRun
-    ? describeTaskRunSurface(linkedConversationRun)
-    : null;
-
-  const scrollToAnchor = useCallback((messageId: string) => {
-    const node = messageNodeByIdRef.current.get(messageId);
-    const container = containerRef.current;
-    if (!node || !container) {
-      return false;
-    }
-    const containerRect = container.getBoundingClientRect();
-    const nodeRect = node.getBoundingClientRect();
-    const targetTop =
-      container.scrollTop + (nodeRect.top - containerRect.top) - container.clientHeight * 0.28;
-    autoScrollRef.current = false;
-    container.scrollTo({
-      top: Math.max(0, targetTop),
-      behavior: "smooth",
+  const { handlePendingJumpTargetReady, requestScrollToAnchor } =
+    useMessagesAnchorNavigation({
+      autoScrollRef,
+      commitActiveAnchorId,
+      containerRef,
+      messageNodeByIdRef,
+      pendingJumpMessageId,
+      revealAllHistoryItems,
+      setPendingJumpMessageId,
+      showAllHistoryItems,
+      timelinePresentationSignal: timelinePresentationItems,
     });
-    commitActiveAnchorId(messageId, "sync");
-    return true;
-  }, [commitActiveAnchorId]);
-
-  const requestScrollToAnchor = useCallback((messageId: string) => {
-    if (scrollToAnchor(messageId)) {
-      setPendingJumpMessageId(null);
-      return;
-    }
-    setPendingJumpMessageId((previous) => (previous === messageId ? previous : messageId));
-    if (!showAllHistoryItems) {
-      revealAllHistoryItems("jump");
-    }
-  }, [revealAllHistoryItems, scrollToAnchor, showAllHistoryItems]);
-
-  const handlePendingJumpTargetReady = useCallback((messageId: string) => {
-    if (pendingJumpMessageId !== messageId) {
-      return;
-    }
-    if (scrollToAnchor(messageId)) {
-      setPendingJumpMessageId(null);
-    }
-  }, [pendingJumpMessageId, scrollToAnchor]);
-
-  useEffect(() => {
-    if (!pendingJumpMessageId) {
-      return;
-    }
-    if (scrollToAnchor(pendingJumpMessageId)) {
-      setPendingJumpMessageId(null);
-    }
-  }, [pendingJumpMessageId, timelinePresentationItems, scrollToAnchor]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") {
-      return undefined;
-    }
-    const handleJumpToMessage = (event: Event) => {
-      const messageId =
-        event instanceof CustomEvent && typeof event.detail === "string" ? event.detail : "";
-      if (!messageId) {
-        return;
-      }
-      requestScrollToAnchor(messageId);
-    };
-    document.addEventListener(MESSAGE_JUMP_EVENT_NAME, handleJumpToMessage);
-    return () => {
-      document.removeEventListener(MESSAGE_JUMP_EVENT_NAME, handleJumpToMessage);
-    };
-  }, [requestScrollToAnchor]);
 
   const {
     menu: noteCaptureMenu,
@@ -2710,6 +2639,109 @@ export const Messages = memo(function Messages({
     onCaptureNote,
   });
 
+  const timelineOpenNoteCaptureMenu = onCaptureNote
+    ? openNoteCaptureMenuFromTrigger
+    : undefined;
+  const timelineModels = useMessagesTimelineModels({
+    snapshot: {
+      assistantFinalBoundarySet,
+      assistantLiveTurnFinalBoundarySuppressedSet,
+      claudeDockedReasoningItems,
+      collapsedMiddleStepCount,
+      effectiveItemsCount: timelinePresentationItems.length,
+      groupedEntries,
+      hasPendingUserTurn: messageActionTargets.hasPendingUserTurn,
+      latestFinalAssistantMessageId: messageActionTargets.latestFinalAssistantMessageId,
+      messageActionTargetByAssistantId: messageActionTargets.targetByAssistantId,
+      messageCopyTextByAssistantId: messageActionTargets.copyTextByAssistantId,
+      reasoningMetaById,
+      sessionFileChangesSummary,
+      suppressedUserMemoryContextMessageIds,
+      suppressedUserNoteCardContextMessageIds,
+      turnFileChangesByBoundaryId,
+      visibleCollapsedHistoryItemCount: presentationCollapsedHistoryItemCount,
+    },
+    live: {
+      heartbeatPulse: timelineHeartbeatPulse,
+      hiddenClaudeReasoningOnly,
+      isThinking,
+      isWorking,
+      lastDurationMs,
+      latestReasoningId,
+      latestReasoningLabel: workingIndicatorReasoningLabel,
+      latestWorkingActivityLabel,
+      liveAssistantItem,
+      liveAssistantMessageId,
+      liveReasoningItem,
+      primaryWorkingLabel,
+      processingStartedAt,
+      streamActivityPhase,
+      waitingForFirstChunk,
+    },
+    runtime: {
+      activeCollaborationModeId,
+      activeEngine,
+      activeUserInputAnchorItemId,
+      activeUserInputRequestId,
+      claudeHistoryTranscriptFallbackActive,
+      hasVisibleUserInputRequest,
+      historyRecoveryFailureReason,
+      isHistoryLoading,
+      latestRetryMessage,
+      latestRuntimeReconnectItemId,
+      proxyEnabled,
+      proxyUrl,
+      threadId,
+      workspaceId,
+    },
+    navigation: {
+      agentTaskNodeByTaskIdRef,
+      agentTaskNodeByToolUseIdRef,
+      bottomRef,
+      messageNodeByIdRef,
+      onPendingJumpTargetReady: handlePendingJumpTargetReady,
+      pendingJumpMessageId,
+      requestAutoScroll,
+      requestBottomConvergence: requestTimelineLayoutBottomConvergence,
+      scrollElementRef: containerRef,
+    },
+    interactions: {
+      handleCopyMessage,
+      handleExitPlanModeExecuteForItem,
+      onAssistantVisibleTextRender: handleAssistantVisibleTextRender,
+      onConversationDetailHydrationRequest: handleConversationDetailHydrationRequest,
+      onConversationLightweightModeEnable: handleConversationLightweightModeEnable,
+      onForkFromMessage,
+      onOpenDiffPath,
+      onOpenNoteCaptureMenu: timelineOpenNoteCaptureMenu,
+      onPreviewFileDiff,
+      onRecoverThreadRuntime,
+      onRecoverThreadRuntimeAndResend,
+      onRetryHistory,
+      onRewindFromMessage,
+      onShowAllHistoryItems: handleShowAllHistoryItems,
+      onThreadRecoveryFork,
+      openFileLink,
+      showFileLinkMenu,
+      toggleExpanded,
+    },
+    presentation: {
+      codeBlockCopyUseModifier,
+      collapseLiveMiddleStepsEnabled,
+      conversationDetailHydrationRequested,
+      conversationLightweightModeEnabled,
+      copiedMessageId,
+      expandedItems,
+      historyExpansionActive: showAllHistoryItems,
+      liveAutoExpandedExploreId,
+      presentationMode: messagesPresentationMode,
+      presentationProfile,
+      presentationScopeKey,
+      selectedExitPlanExecutionByItemKey,
+      streamMitigationProfile: activeStreamMitigation,
+    },
+    slots: { approvalNode, userInputNode },
+  });
   return (
     <div
       className={`messages-shell${hasAnchorRail ? " has-anchor-rail" : ""}${enableClaudeRenderSafeMode ? " claude-render-safe" : ""}`}
@@ -2727,119 +2759,12 @@ export const Messages = memo(function Messages({
         onScroll={updateAutoScroll}
         onContextMenu={handleConversationContextMenu}
       >
-        {linkedConversationRun && linkedConversationRunSurface ? (
-          <div className={`messages-linked-run messages-linked-run--${linkedConversationRunSurface.severity}`}>
-            <div>
-              <span className="messages-linked-run-eyebrow">
-                {t("messages.linkedRunEyebrow", "Linked run")}
-              </span>
-              <strong>{linkedConversationRun.task.title || linkedConversationRun.task.taskId}</strong>
-              <span>
-                {t(`taskCenter.status.${linkedConversationRun.status}`, linkedConversationRun.status)}
-                {" · "}
-                {linkedConversationRunSurface.summary ||
-                  t("taskCenter.unavailable", "Unavailable")}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => dispatchOpenTaskRunEvent(linkedConversationRun.runId)}
-            >
-              {t("messages.openLinkedRun", "Open run detail")}
-            </button>
-          </div>
-        ) : null}
-        <MessagesTimeline
-          activeCollaborationModeId={activeCollaborationModeId}
-          activeEngine={activeEngine}
-          activeUserInputAnchorItemId={activeUserInputAnchorItemId}
-          activeUserInputRequestId={activeUserInputRequestId}
-          agentTaskNodeByTaskIdRef={agentTaskNodeByTaskIdRef}
-          agentTaskNodeByToolUseIdRef={agentTaskNodeByToolUseIdRef}
-          approvalNode={approvalNode}
-          assistantFinalBoundarySet={assistantFinalBoundarySet}
-          assistantLiveTurnFinalBoundarySuppressedSet={assistantLiveTurnFinalBoundarySuppressedSet}
-          bottomRef={bottomRef}
-          claudeDockedReasoningItems={claudeDockedReasoningItems}
-          collapseLiveMiddleStepsEnabled={collapseLiveMiddleStepsEnabled}
-          collapsedMiddleStepCount={collapsedMiddleStepCount}
-          codeBlockCopyUseModifier={codeBlockCopyUseModifier}
-          copiedMessageId={copiedMessageId}
-          effectiveItemsCount={timelinePresentationItems.length}
-          expandedItems={expandedItems}
-          groupedEntries={groupedEntries}
-          liveAssistantItem={liveAssistantItem}
-          liveReasoningItem={liveReasoningItem}
-          handleCopyMessage={handleCopyMessage}
-          messageActionTargetByAssistantId={messageActionTargets.targetByAssistantId}
-          messageCopyTextByAssistantId={messageActionTargets.copyTextByAssistantId}
-          latestFinalAssistantMessageId={messageActionTargets.latestFinalAssistantMessageId}
-          hasPendingUserTurn={messageActionTargets.hasPendingUserTurn}
-          pendingJumpMessageId={pendingJumpMessageId}
-          onPendingJumpTargetReady={handlePendingJumpTargetReady}
-          onForkFromMessage={onForkFromMessage}
-          onRewindFromMessage={onRewindFromMessage}
-          onOpenNoteCaptureMenu={
-            onCaptureNote ? openNoteCaptureMenuFromTrigger : undefined
-          }
-          handleExitPlanModeExecuteForItem={handleExitPlanModeExecuteForItem}
-          heartbeatPulse={timelineHeartbeatPulse}
-          hiddenClaudeReasoningOnly={hiddenClaudeReasoningOnly}
-          historyRecoveryFailureReason={historyRecoveryFailureReason}
-          isHistoryLoading={isHistoryLoading}
-          isThinking={isThinking}
-          isWorking={isWorking}
-          lastDurationMs={lastDurationMs}
-          liveAssistantMessageId={liveAssistantMessageId}
-          latestReasoningLabel={workingIndicatorReasoningLabel}
-          latestReasoningId={latestReasoningId}
-          latestRetryMessage={latestRetryMessage}
-          latestRuntimeReconnectItemId={latestRuntimeReconnectItemId}
-          latestWorkingActivityLabel={latestWorkingActivityLabel}
-          liveAutoExpandedExploreId={liveAutoExpandedExploreId}
-          conversationDetailHydrationRequested={conversationDetailHydrationRequested}
-          conversationLightweightModeEnabled={conversationLightweightModeEnabled}
-          messageNodeByIdRef={messageNodeByIdRef}
-          onOpenDiffPath={onOpenDiffPath}
-          onPreviewFileDiff={onPreviewFileDiff}
-          onConversationDetailHydrationRequest={handleConversationDetailHydrationRequest}
-          onConversationLightweightModeEnable={handleConversationLightweightModeEnable}
-          onRetryHistory={onRetryHistory}
-          onRecoverThreadRuntime={onRecoverThreadRuntime}
-          onRecoverThreadRuntimeAndResend={onRecoverThreadRuntimeAndResend}
-          onThreadRecoveryFork={onThreadRecoveryFork}
-          onAssistantVisibleTextRender={handleAssistantVisibleTextRender}
-          onShowAllHistoryItems={handleShowAllHistoryItems}
-          openFileLink={openFileLink}
-          presentationProfile={presentationProfile}
-          primaryWorkingLabel={primaryWorkingLabel}
-          processingStartedAt={processingStartedAt}
-          proxyEnabled={proxyEnabled}
-          proxyUrl={proxyUrl}
-          reasoningMetaById={reasoningMetaById}
-          requestAutoScroll={requestAutoScroll}
-          requestBottomConvergence={requestTimelineLayoutBottomConvergence}
-          selectedExitPlanExecutionByItemKey={selectedExitPlanExecutionByItemKey}
-          scrollElementRef={containerRef}
-          showFileLinkMenu={showFileLinkMenu}
-          streamMitigationProfile={activeStreamMitigation}
-          streamActivityPhase={streamActivityPhase}
-          suppressedUserMemoryContextMessageIds={suppressedUserMemoryContextMessageIds}
+        <MessagesLinkedRunBanner
+          taskRuns={taskRuns}
           threadId={threadId}
-          toggleExpanded={toggleExpanded}
-          turnFileChangesByBoundaryId={turnFileChangesByBoundaryId}
-          sessionFileChangesSummary={sessionFileChangesSummary}
-          suppressedUserNoteCardContextMessageIds={suppressedUserNoteCardContextMessageIds}
-          claudeHistoryTranscriptFallbackActive={claudeHistoryTranscriptFallbackActive}
-          hasVisibleUserInputRequest={hasVisibleUserInputRequest}
-          historyExpansionActive={showAllHistoryItems}
-          presentationMode={messagesPresentationMode}
-          presentationScopeKey={presentationScopeKey}
-          userInputNode={userInputNode}
-          visibleCollapsedHistoryItemCount={presentationCollapsedHistoryItemCount}
-          waitingForFirstChunk={waitingForFirstChunk}
           workspaceId={workspaceId}
         />
+        <MessagesTimeline {...timelineModels} />
       </div>
       <ScrollControl
         containerRef={containerRef}

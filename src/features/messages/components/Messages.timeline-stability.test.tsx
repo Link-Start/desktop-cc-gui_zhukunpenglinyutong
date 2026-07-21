@@ -7,10 +7,12 @@ import type {
   RequestUserInputRequest,
   WorkspaceInfo,
 } from "../../../types";
+import type { MessagesTimelineProps } from "../orchestration/models/messagesTimelineModels";
 
 const timelineProbe = vi.hoisted(() => ({
   renderCount: 0,
   stableProjectionDerivationCount: 0,
+  modelChanges: [] as string[][],
   snapshots: [] as Array<{
     approvalNode: unknown;
     heartbeatPulse: number;
@@ -23,27 +25,31 @@ const timelineProbe = vi.hoisted(() => ({
 vi.mock("./MessagesTimeline", async () => {
   const React = await import("react");
   return {
-    MessagesTimeline: React.memo((props: {
-      approvalNode: unknown;
-      groupedEntries: unknown[];
-      heartbeatPulse: number;
-      liveAssistantItem: { text: string } | null;
-      userInputNode: unknown;
-    }) => {
+    MessagesTimeline: React.memo((props: MessagesTimelineProps) => {
       timelineProbe.renderCount += 1;
       const stableProjectionVersion = React.useMemo(() => {
-        void props.groupedEntries;
+        void props.snapshot.groupedEntries;
         timelineProbe.stableProjectionDerivationCount += 1;
         return timelineProbe.stableProjectionDerivationCount;
-      }, [props.groupedEntries]);
+      }, [props.snapshot.groupedEntries]);
       timelineProbe.snapshots.push({
-        approvalNode: props.approvalNode,
-        heartbeatPulse: props.heartbeatPulse,
-        liveAssistantText: props.liveAssistantItem?.text ?? null,
+        approvalNode: props.slots.approvalNode,
+        heartbeatPulse: props.live.heartbeatPulse,
+        liveAssistantText: props.live.liveAssistantItem?.text ?? null,
         stableProjectionVersion,
-        userInputNode: props.userInputNode,
+        userInputNode: props.slots.userInputNode,
       });
       return React.createElement("div", { "data-testid": "messages-timeline-probe" });
+    }, (previous, next) => {
+      const changedKeys = (Object.keys(previous) as Array<keyof MessagesTimelineProps>)
+        .filter((key) => !Object.is(previous[key], next[key]));
+      const interactionChanges = changedKeys.includes("interactions")
+        ? (Object.keys(previous.interactions) as Array<keyof MessagesTimelineProps["interactions"]>)
+            .filter((key) => !Object.is(previous.interactions[key], next.interactions[key]))
+            .map((key) => `interactions.${key}`)
+        : [];
+      timelineProbe.modelChanges.push([...changedKeys, ...interactionChanges]);
+      return changedKeys.length === 0;
     }),
   };
 });
@@ -74,6 +80,7 @@ describe("Messages timeline prop stability", () => {
   beforeEach(() => {
     timelineProbe.renderCount = 0;
     timelineProbe.stableProjectionDerivationCount = 0;
+    timelineProbe.modelChanges = [];
     timelineProbe.snapshots = [];
     window.localStorage.setItem("ccgui.claude.hideReasoningModule", "0");
     window.localStorage.removeItem("ccgui.messages.live.autoFollow");
@@ -136,6 +143,7 @@ describe("Messages timeline prop stability", () => {
       />,
     );
 
+    expect(timelineProbe.modelChanges.at(-1)).toEqual([]);
     expect(timelineProbe.renderCount).toBe(renderCountBeforeHeartbeat);
     expect(timelineProbe.snapshots.at(-1)?.heartbeatPulse).toBe(0);
   });

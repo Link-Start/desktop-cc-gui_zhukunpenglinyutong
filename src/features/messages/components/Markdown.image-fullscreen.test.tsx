@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { Markdown } from "./Markdown";
 
-vi.mock("./FullMarkdownRuntime", () => ({
+vi.mock("../rendering/markdown/FullMarkdownRuntime", () => ({
   FullMarkdownRuntime: ({
     value,
     components,

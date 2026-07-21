@@ -1,6 +1,6 @@
 import type { ConversationItem } from "../../../types";
 import { groupToolItems } from "../utils/groupToolItems";
-import { buildTimelineProjectionRows } from "./messagesTimelineProjection";
+import { buildTimelineProjectionRows } from "../timeline/projection/messagesTimelineProjection";
 
 export type HeavyHistoryFixtureVariant = "small" | "medium" | "heavy";
 

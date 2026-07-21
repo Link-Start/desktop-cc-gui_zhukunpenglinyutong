@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 
 import type { RateLimitSnapshot, ThreadTokenUsage } from "../../../types";
-import type { MessagesProps } from "../../messages/components/messagesTypes";
+import type { MessagesProps } from "../../messages/types/messagesTypes";
 import type { ThreadActivityStatus } from "./layoutNodesTypes";
 
 export type ActiveCanvasSnapshot = Pick<

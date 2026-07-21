@@ -38,7 +38,7 @@ import {
   hashStableString,
 } from "../utils/fileMarkdownDocument";
 import { highlightLine } from "../../../utils/syntax";
-import { CodeBlockLanguageBadge } from "../../messages/components/codeBlockLanguageIcon";
+import { CodeBlockLanguageBadge } from "../../messages/rendering/markdown/codeBlockLanguageIcon";
 import {
   isThemeMutationAttribute,
   mapAppearanceToMermaidTheme,

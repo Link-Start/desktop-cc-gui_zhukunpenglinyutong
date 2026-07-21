@@ -6,9 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type MutableRefObject,
   type ReactNode,
-  type RefObject,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { trackHotspot } from "../../../services/perfBaseline/hotspotTracker";
@@ -18,15 +16,9 @@ import Check from "lucide-react/dist/esm/icons/check";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
-import type {
-  AccessMode,
-  ConversationItem,
-  QueuedMessage,
-} from "../../../types";
-import type { StreamMitigationProfile } from "../../threads/utils/streamLatencyDiagnostics";
+import type { ConversationItem } from "../../../types";
 import type { GroupedEntry } from "../utils/groupToolItems";
 import { parseAgentTaskNotification } from "../utils/agentTaskNotification";
-import type { PresentationProfile } from "../presentation/presentationProfile";
 import { Marker } from "../../../components/ui/marker";
 import { Button } from "../../../components/ui/button";
 import {
@@ -45,45 +37,41 @@ import {
   ReviewRow,
   WorkingIndicator,
 } from "./MessagesRows";
-import { ConversationRowErrorBoundary } from "./ConversationRowErrorBoundary";
-import { TurnFilesChangedCard } from "./TurnFilesChangedCard";
-import type { TurnFileChangesSummary } from "../utils/turnFileChanges";
-import { MessagesOutlineFloater } from "./MessagesOutlineFloater";
+import { ConversationRowErrorBoundary } from "./conversation/ConversationRowErrorBoundary";
+import { TurnFilesChangedCard } from "./conversation/TurnFilesChangedCard";
+import { MessagesOutlineFloater } from "./conversation/MessagesOutlineFloater";
 import type { MarkdownOutlineEntry } from "../../markdown/fastMarkdownRenderer";
 import { useMessageOutlineActive } from "../hooks/useMessageOutlineActive";
 import {
   resolveNextMessageOutlineSnapshot,
   type MessageOutlineSnapshot,
-} from "./messagesOutlineState";
+} from "../presentation/messagesOutlineState";
 import { appendRendererDiagnostic } from "../../../services/rendererDiagnostics";
 import {
   appendReasoningRunText,
   compactComparableReasoningText,
   parseReasoning,
-} from "./messagesReasoning";
-import type { RuntimeReconnectRecoveryCallbackResult } from "./runtimeReconnect";
-import type { MessagesPresentationMode } from "./messagesLiveWindow";
+} from "../presentation/messagesReasoning";
 import {
   formatCompletedTimeMs,
-  type MessagesEngine,
   shouldHideCodexCanvasCommandCard,
-} from "./messagesRenderUtils";
-import { resolveUserMessagePresentation } from "./messagesUserPresentation";
+} from "../utils/messagesRenderUtils";
+import { resolveUserMessagePresentation } from "../presentation/messagesUserPresentation";
 import {
   buildTimelineProjectionRows,
   findTimelineProjectionRowIndexByItemId,
   groupedEntryContainsItemId,
   type TimelineProjectionRow,
-} from "./messagesTimelineProjection";
+} from "../timeline/projection/messagesTimelineProjection";
 import {
   countHydratedHeavyTimelineRows,
   deriveTimelineRowHydrationStates,
   type TimelineRowHydrationState,
-} from "./messagesTimelineHydration";
+} from "../timeline/virtualization/messagesTimelineHydration";
 import {
   resolveConversationLightweightModeState,
   resolveConversationLightweightPolicy,
-} from "./messagesConversationLightweightMode";
+} from "../presentation/messagesConversationLightweightMode";
 import {
   buildTimelineRenderWeightDiagnosticPayload,
   classifyTimelineVirtualizerStability,
@@ -97,16 +85,18 @@ import {
   resolveTimelineCanvasOverscan,
   resolveTimelineVirtualizerStabilityRecovery,
   TIMELINE_LIGHTWEIGHT_ROW_PLACEHOLDER_HEIGHT,
-  resolveVirtualizedTimelineRowVisualHeight,
   resolveVirtualizedTimelineScopeReset,
   shouldVirtualizeTimelineRows,
   summarizeTimelineProjectionRenderWeight,
-} from "./messagesTimelineVirtualization";
+} from "../timeline/virtualization/messagesTimelineVirtualization";
 import {
   DEFAULT_HYDRATION_REMEASURE_BUDGET,
   resolveHydrationRemeasureGuard,
   type HydrationRemeasureBudget,
-} from "./messagesRenderLoopGuards";
+} from "../timeline/virtualization/messagesRenderLoopGuards";
+import type { MessagesTimelineProps } from "../orchestration/models/messagesTimelineModels";
+import { ConversationLightweightPrompt } from "../timeline/components/ConversationLightweightPrompt";
+import { TimelineProjectionViewport } from "../timeline/components/TimelineProjectionViewport";
 
 // ponytail: bottom-right outline floater hidden by product decision (2026-07-03).
 // Flip to true to restore. Gating the outline at both consumers below also
@@ -122,19 +112,6 @@ const CONVERSATION_LIGHTWEIGHT_DIAGNOSTIC_COOLDOWN_MS = 5_000;
 const TIMELINE_LIVE_ROW_BOTTOM_PROXIMITY_PX = 720;
 const TIMELINE_SCROLL_DIAGNOSTIC_MIN_INTERVAL_MS = 250;
 const TIMELINE_SCROLL_DIAGNOSTIC_MIN_DELTA_PX = 24;
-
-function TimelineActiveRowRenderProbe({
-  children,
-  detail,
-  enabled,
-}: {
-  children: ReactNode;
-  detail: string;
-  enabled: boolean;
-}) {
-  useRenderHotspot("timeline-active-row-render", detail, enabled);
-  return <>{children}</>;
-}
 
 type TimelineScrollDiagnosticSnapshot = {
   clientHeight: number;
@@ -166,115 +143,6 @@ function collectTimelineScrollDiagnosticSnapshot(
     scrollTop: Math.round(element.scrollTop),
   };
 }
-
-type MessagesTimelineProps = {
-  activeCollaborationModeId: string | null;
-  activeEngine: MessagesEngine;
-  activeUserInputAnchorItemId: string | null;
-  activeUserInputRequestId: string | number | null;
-  agentTaskNodeByTaskIdRef: MutableRefObject<Map<string, HTMLDivElement>>;
-  agentTaskNodeByToolUseIdRef: MutableRefObject<Map<string, HTMLDivElement>>;
-  approvalNode: ReactNode | null;
-  assistantFinalBoundarySet: Set<string>;
-  assistantLiveTurnFinalBoundarySuppressedSet: Set<string>;
-  bottomRef: RefObject<HTMLDivElement | null>;
-  claudeDockedReasoningItems: Array<{
-    item: Extract<ConversationItem, { kind: "reasoning" }>;
-    parsed: ReturnType<typeof parseReasoning>;
-  }>;
-  collapseLiveMiddleStepsEnabled: boolean;
-  collapsedMiddleStepCount: number;
-  codeBlockCopyUseModifier: boolean;
-  copiedMessageId: string | null;
-  effectiveItemsCount: number;
-  expandedItems: Set<string>;
-  groupedEntries: GroupedEntry[];
-  liveAssistantItem: Extract<ConversationItem, { kind: "message" }> | null;
-  liveReasoningItem: Extract<ConversationItem, { kind: "reasoning" }> | null;
-  handleCopyMessage: (
-    item: Extract<ConversationItem, { kind: "message" }>,
-    copyText?: string,
-  ) => void;
-  messageActionTargetByAssistantId: Map<string, string>;
-  messageCopyTextByAssistantId: Map<string, string>;
-  latestFinalAssistantMessageId: string | null;
-  hasPendingUserTurn: boolean;
-  pendingJumpMessageId: string | null;
-  onPendingJumpTargetReady: (messageId: string) => void;
-  onForkFromMessage?: (messageId: string) => void;
-  onRewindFromMessage?: (messageId: string) => void;
-  onOpenNoteCaptureMenu?: (trigger: HTMLButtonElement) => void;
-  handleExitPlanModeExecuteForItem: (
-    itemId: string,
-    mode: Extract<AccessMode, "default" | "full-access">,
-  ) => Promise<void>;
-  heartbeatPulse: number;
-  hiddenClaudeReasoningOnly: boolean;
-  historyRecoveryFailureReason: string | null;
-  isHistoryLoading: boolean;
-  isThinking: boolean;
-  isWorking: boolean;
-  lastDurationMs: number | null;
-  liveAssistantMessageId: string | null;
-  latestReasoningLabel: string | null;
-  latestReasoningId: string | null;
-  latestRetryMessage: Pick<QueuedMessage, "text" | "images"> | null;
-  latestRuntimeReconnectItemId: string | null;
-  latestWorkingActivityLabel: string | null;
-  liveAutoExpandedExploreId: string | null;
-  conversationDetailHydrationRequested: boolean;
-  conversationLightweightModeEnabled: boolean;
-  messageNodeByIdRef: MutableRefObject<Map<string, HTMLDivElement>>;
-  onOpenDiffPath?: (path: string) => void;
-  onPreviewFileDiff?: (path: string) => void;
-  onConversationDetailHydrationRequest: () => void;
-  onConversationLightweightModeEnable: () => void;
-  onRetryHistory?: () => void;
-  onRecoverThreadRuntime?: (
-    workspaceId: string,
-    threadId: string,
-  ) => Promise<RuntimeReconnectRecoveryCallbackResult> | RuntimeReconnectRecoveryCallbackResult;
-  onRecoverThreadRuntimeAndResend?: (
-    workspaceId: string,
-    threadId: string,
-    message: Pick<QueuedMessage, "text" | "images">,
-  ) => Promise<RuntimeReconnectRecoveryCallbackResult> | RuntimeReconnectRecoveryCallbackResult;
-  onThreadRecoveryFork?: () => Promise<void> | void;
-  onAssistantVisibleTextRender?: (payload: {
-    itemId: string;
-    visibleText: string;
-  }) => void;
-  onShowAllHistoryItems: () => void;
-  openFileLink?: (path: string) => void;
-  presentationProfile: PresentationProfile | null;
-  primaryWorkingLabel: string | null;
-  processingStartedAt: number | null;
-  proxyEnabled: boolean;
-  proxyUrl: string | null;
-  reasoningMetaById: Map<string, ReturnType<typeof parseReasoning>>;
-  requestAutoScroll: () => void;
-  requestBottomConvergence: () => void;
-  selectedExitPlanExecutionByItemKey: Record<string, Extract<AccessMode, "default" | "full-access">>;
-  scrollElementRef: RefObject<HTMLDivElement | null>;
-  showFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
-  streamMitigationProfile: StreamMitigationProfile | null;
-  streamActivityPhase: "idle" | "waiting" | "ingress";
-  suppressedUserMemoryContextMessageIds: Set<string>;
-  suppressedUserNoteCardContextMessageIds: Set<string>;
-  threadId: string | null;
-  toggleExpanded: (id: string) => void;
-  turnFileChangesByBoundaryId: Map<string, TurnFileChangesSummary>;
-  sessionFileChangesSummary: TurnFileChangesSummary | null;
-  claudeHistoryTranscriptFallbackActive: boolean;
-  hasVisibleUserInputRequest: boolean;
-  historyExpansionActive: boolean;
-  presentationMode: MessagesPresentationMode;
-  presentationScopeKey: string;
-  userInputNode: ReactNode | null;
-  visibleCollapsedHistoryItemCount: number;
-  waitingForFirstChunk: boolean;
-  workspaceId: string | null | undefined;
-};
 
 type NormalizedRenderKind = ConversationItem["kind"];
 
@@ -335,94 +203,112 @@ function resolveLiveRenderItem(
 }
 
 export const MessagesTimeline = memo(function MessagesTimeline({
-  activeCollaborationModeId,
-  activeEngine,
-  activeUserInputAnchorItemId,
-  activeUserInputRequestId,
-  agentTaskNodeByTaskIdRef,
-  agentTaskNodeByToolUseIdRef,
-  approvalNode,
-  assistantFinalBoundarySet,
-  assistantLiveTurnFinalBoundarySuppressedSet,
-  bottomRef,
-  claudeDockedReasoningItems,
-  collapseLiveMiddleStepsEnabled,
-  collapsedMiddleStepCount,
-  codeBlockCopyUseModifier,
-  copiedMessageId,
-  effectiveItemsCount,
-  expandedItems,
-  groupedEntries,
-  liveAssistantItem,
-  liveReasoningItem,
-  handleCopyMessage,
-  messageActionTargetByAssistantId,
-  messageCopyTextByAssistantId,
-  latestFinalAssistantMessageId,
-  hasPendingUserTurn,
-  pendingJumpMessageId,
-  onPendingJumpTargetReady,
-  onForkFromMessage,
-  onRewindFromMessage,
-  onOpenNoteCaptureMenu,
-  handleExitPlanModeExecuteForItem,
-  heartbeatPulse,
-  hiddenClaudeReasoningOnly,
-  historyRecoveryFailureReason,
-  isHistoryLoading,
-  isThinking,
-  isWorking,
-  lastDurationMs,
-  liveAssistantMessageId,
-  latestReasoningLabel,
-  latestReasoningId,
-  latestRetryMessage,
-  latestRuntimeReconnectItemId,
-  latestWorkingActivityLabel,
-  liveAutoExpandedExploreId,
-  conversationDetailHydrationRequested,
-  conversationLightweightModeEnabled,
-  messageNodeByIdRef,
-  onOpenDiffPath,
-  onPreviewFileDiff,
-  onConversationDetailHydrationRequest,
-  onConversationLightweightModeEnable,
-  onRetryHistory,
-  onRecoverThreadRuntime,
-  onRecoverThreadRuntimeAndResend,
-  onThreadRecoveryFork,
-  onAssistantVisibleTextRender,
-  onShowAllHistoryItems,
-  openFileLink,
-  presentationProfile,
-  primaryWorkingLabel,
-  processingStartedAt,
-  proxyEnabled,
-  proxyUrl,
-  reasoningMetaById,
-  requestAutoScroll,
-  requestBottomConvergence,
-  selectedExitPlanExecutionByItemKey,
-  scrollElementRef,
-  showFileLinkMenu,
-  streamMitigationProfile,
-  streamActivityPhase,
-  suppressedUserMemoryContextMessageIds,
-  suppressedUserNoteCardContextMessageIds,
-  threadId,
-  toggleExpanded,
-  turnFileChangesByBoundaryId,
-  sessionFileChangesSummary,
-  claudeHistoryTranscriptFallbackActive,
-  hasVisibleUserInputRequest,
-  historyExpansionActive,
-  presentationMode,
-  presentationScopeKey,
-  userInputNode,
-  visibleCollapsedHistoryItemCount,
-  waitingForFirstChunk,
-  workspaceId,
+  snapshot,
+  live,
+  runtime,
+  navigation,
+  interactions,
+  presentation,
+  slots,
 }: MessagesTimelineProps) {
+  const {
+    assistantFinalBoundarySet,
+    assistantLiveTurnFinalBoundarySuppressedSet,
+    claudeDockedReasoningItems,
+    collapsedMiddleStepCount,
+    effectiveItemsCount,
+    groupedEntries,
+    hasPendingUserTurn,
+    latestFinalAssistantMessageId,
+    messageActionTargetByAssistantId,
+    messageCopyTextByAssistantId,
+    reasoningMetaById,
+    sessionFileChangesSummary,
+    suppressedUserMemoryContextMessageIds,
+    suppressedUserNoteCardContextMessageIds,
+    turnFileChangesByBoundaryId,
+    visibleCollapsedHistoryItemCount,
+  } = snapshot;
+  const {
+    heartbeatPulse,
+    hiddenClaudeReasoningOnly,
+    isThinking,
+    isWorking,
+    lastDurationMs,
+    latestReasoningId,
+    latestReasoningLabel,
+    latestWorkingActivityLabel,
+    liveAssistantItem,
+    liveAssistantMessageId,
+    liveReasoningItem,
+    primaryWorkingLabel,
+    processingStartedAt,
+    streamActivityPhase,
+    waitingForFirstChunk,
+  } = live;
+  const {
+    activeCollaborationModeId,
+    activeEngine,
+    activeUserInputAnchorItemId,
+    activeUserInputRequestId,
+    claudeHistoryTranscriptFallbackActive,
+    hasVisibleUserInputRequest,
+    historyRecoveryFailureReason,
+    isHistoryLoading,
+    latestRetryMessage,
+    latestRuntimeReconnectItemId,
+    proxyEnabled,
+    proxyUrl,
+    threadId,
+    workspaceId,
+  } = runtime;
+  const {
+    agentTaskNodeByTaskIdRef,
+    agentTaskNodeByToolUseIdRef,
+    bottomRef,
+    messageNodeByIdRef,
+    onPendingJumpTargetReady,
+    pendingJumpMessageId,
+    requestAutoScroll,
+    requestBottomConvergence,
+    scrollElementRef,
+  } = navigation;
+  const {
+    handleCopyMessage,
+    handleExitPlanModeExecuteForItem,
+    onAssistantVisibleTextRender,
+    onConversationDetailHydrationRequest,
+    onConversationLightweightModeEnable,
+    onForkFromMessage,
+    onOpenDiffPath,
+    onOpenNoteCaptureMenu,
+    onPreviewFileDiff,
+    onRecoverThreadRuntime,
+    onRecoverThreadRuntimeAndResend,
+    onRetryHistory,
+    onRewindFromMessage,
+    onShowAllHistoryItems,
+    onThreadRecoveryFork,
+    openFileLink,
+    showFileLinkMenu,
+    toggleExpanded,
+  } = interactions;
+  const {
+    codeBlockCopyUseModifier,
+    collapseLiveMiddleStepsEnabled,
+    conversationDetailHydrationRequested,
+    conversationLightweightModeEnabled,
+    copiedMessageId,
+    expandedItems,
+    historyExpansionActive,
+    liveAutoExpandedExploreId,
+    presentationMode,
+    presentationProfile,
+    presentationScopeKey,
+    selectedExitPlanExecutionByItemKey,
+    streamMitigationProfile,
+  } = presentation;
+  const { approvalNode, userInputNode } = slots;
   const { t } = useTranslation();
   const [currentOutline, setCurrentOutline] = useState<MessageOutlineSnapshot | null>(null);
   const handleLiveOutlineReady = useCallback(
@@ -2109,101 +1995,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       </ConversationRowErrorBoundary>
     );
   };
-  const renderVirtualProjectionRows = () => (
-    <div
-      className="messages-virtualized-canvas"
-      style={{
-        height: `${timelineVirtualizer.getTotalSize()}px`,
-        position: "relative",
-      }}
-    >
-      {virtualTimelineRows.map((virtualRow) => {
-        const row = timelineProjectionRows[virtualRow.index];
-        const isActiveLiveTimelineRow = activeLiveTimelineRowKeySet.has(String(virtualRow.key));
-        const hydrationState = row ? timelineRowHydrationStateByKey.get(row.key) : undefined;
-        const isLightweightTimelineRow = row
-          ? shouldRenderLightweightProjectionRow(row, hydrationState)
-          : false;
-        const estimatedRowSize = estimateTimelineProjectionRowSize(row ?? {
-          kind: "bottomAnchor",
-          key: "bottom-anchor",
-        });
-        const isEmptyTimelineRow = row
-          ? isEmptyVirtualProjectionRow(row, {
-              activeEngine,
-              claudeHistoryTranscriptFallbackActive,
-              hasTailUserInputNode: Boolean(userInputNode),
-              isWorking,
-              lastDurationMs,
-              effectiveItemsCount,
-            })
-          : false;
-        // 渲染为空/null 的行不应占据估高占位，否则虚拟行的 minHeight 会撑出大段空白。
-        const placeholderHeight = isEmptyTimelineRow
-          ? 0
-          : resolveVirtualizedTimelineRowVisualHeight({
-              measuredSize: virtualRow.size,
-              estimatedSize: estimatedRowSize,
-              lightweight: isLightweightTimelineRow,
-            });
-        const activeRowProbeDetail = [
-          row?.kind ?? "missing",
-          isLightweightTimelineRow ? "lightweight" : "hydrated",
-          `index=${virtualRow.index}`,
-          `rows=${timelineProjectionRows.length}`,
-          `key=${String(virtualRow.key).slice(0, 80)}`,
-        ].join(":");
-        return (
-          <div
-            key={virtualRow.key}
-            data-index={virtualRow.index}
-            data-active-live-row={isActiveLiveTimelineRow ? "true" : undefined}
-            data-conversation-lightweight-virtual-row={isLightweightTimelineRow ? "true" : undefined}
-            data-timeline-row-kind={row?.kind}
-            data-empty-virtual-row={isEmptyTimelineRow ? "true" : undefined}
-            data-virtual-row-size={placeholderHeight}
-            className={
-              isEmptyTimelineRow
-                ? "messages-virtualized-row is-empty-virtual-row"
-                : isActiveLiveTimelineRow
-                  ? "messages-virtualized-row is-active-live-row"
-                  : "messages-virtualized-row"
-            }
-            // 空行不挂 measureElement：避免内层残留内容/margin 穿透被测成非 0
-            // 高度，扰乱后续行的 translateY 累加（重叠 + 测量回路闪动的根因）。
-            ref={isEmptyTimelineRow ? undefined : measureTimelineVirtualRowElement}
-            style={{
-              left: 0,
-              height: isEmptyTimelineRow ? 0 : undefined,
-              // 只有轻量摘要行（固定高度卡片）用估高占位；普通行的高度交给
-              // measureElement 量真实内容。给普通行设 minHeight=估高会与
-              // measureElement 形成正反馈棘轮：元素被撑到估高 → 量得估高 →
-              // 永远塌不回真实内容高度，短内容行下方因此残留大段空白。
-              minHeight: isLightweightTimelineRow ? `${placeholderHeight}px` : undefined,
-              position: "absolute",
-              top: 0,
-              transform: `translateY(${virtualRow.start}px)`,
-              width: "100%",
-            }}
-          >
-            {isEmptyTimelineRow ? null : (
-              <TimelineActiveRowRenderProbe
-                detail={activeRowProbeDetail}
-                enabled={(isThinking || isWorking) && isActiveLiveTimelineRow}
-              >
-                {renderProjectionRowWithBoundary(row)}
-              </TimelineActiveRowRenderProbe>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-  const renderStaticProjectionRows = () =>
-    timelineProjectionRows.map((row) => (
-      <Fragment key={row.key}>{renderProjectionRowWithBoundary(row)}</Fragment>
-    ));
-
   const handleJumpToHeading = (headingId: string) => {
     const target = document.getElementById(headingId);
     if (target) {
@@ -2215,53 +2006,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     !isWorking &&
     !conversationDetailHydrationRequested &&
     (conversationLightweightPolicy.suggested || effectiveConversationLightweightMode);
-  const renderConversationLightweightPrompt = () => {
-    if (!shouldShowConversationLightweightPrompt) {
-      return null;
-    }
-    const titleKey = conversationLightweightPolicy.oversized
-      ? "messages.conversationOversizedHistoryTitle"
-      : effectiveConversationLightweightMode
-        ? "messages.conversationLightweightModeTitle"
-        : "messages.conversationLightweightSuggestionTitle";
-    const descriptionKey = conversationLightweightPolicy.oversized
-      ? "messages.conversationOversizedHistoryDescription"
-      : effectiveConversationLightweightMode
-        ? "messages.conversationLightweightModeDescription"
-        : "messages.conversationLightweightSuggestionDescription";
-    return (
-      <div
-        className="messages-lightweight-mode-banner"
-        data-conversation-lightweight-mode={effectiveConversationLightweightMode ? "active" : "suggested"}
-        role="status"
-      >
-        <div className="messages-lightweight-mode-banner-copy">
-          <span className="messages-lightweight-mode-banner-eyebrow">
-            {t("messages.conversationLightweightModeEyebrow")}
-          </span>
-          <strong>{t(titleKey)}</strong>
-          <span>
-            {t(descriptionKey, {
-              heavyRows: timelineRenderWeightSummary.heavyRowCount,
-              renderWeight: timelineRenderWeightSummary.renderWeight,
-              rows: timelineRenderWeightSummary.rowCount,
-            })}
-          </span>
-        </div>
-        <div className="messages-lightweight-mode-banner-actions">
-          {!effectiveConversationLightweightMode ? (
-            <button type="button" onClick={onConversationLightweightModeEnable}>
-              {t("messages.conversationLightweightUse")}
-            </button>
-          ) : null}
-          <button type="button" onClick={onConversationDetailHydrationRequest}>
-            {t("messages.conversationLightweightHydrateVisible")}
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div
       ref={floaterContainerRef}
@@ -2285,7 +2029,16 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         data-timeline-projection-row-count={timelineProjectionRows.length}
         data-timeline-virtualized={shouldVirtualizeTimeline ? "true" : "false"}
       >
-        {renderConversationLightweightPrompt()}
+        <ConversationLightweightPrompt
+          active={effectiveConversationLightweightMode}
+          heavyRowCount={timelineRenderWeightSummary.heavyRowCount}
+          onEnable={onConversationLightweightModeEnable}
+          onHydrateVisible={onConversationDetailHydrationRequest}
+          oversized={conversationLightweightPolicy.oversized}
+          renderWeight={timelineRenderWeightSummary.renderWeight}
+          rowCount={timelineRenderWeightSummary.rowCount}
+          visible={shouldShowConversationLightweightPrompt}
+        />
         {visibleCollapsedHistoryItemCount > 0 && (
           <div
             className="messages-collapsed-indicator"
@@ -2295,7 +2048,24 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             {t("messages.showEarlierMessages", { count: visibleCollapsedHistoryItemCount })}
           </div>
         )}
-        {shouldVirtualizeTimeline ? renderVirtualProjectionRows() : renderStaticProjectionRows()}
+        <TimelineProjectionViewport
+          activeEngine={activeEngine}
+          activeLiveTimelineRowKeySet={activeLiveTimelineRowKeySet}
+          claudeHistoryTranscriptFallbackActive={claudeHistoryTranscriptFallbackActive}
+          effectiveItemsCount={effectiveItemsCount}
+          isThinking={isThinking}
+          isWorking={isWorking}
+          lastDurationMs={lastDurationMs}
+          measureTimelineVirtualRowElement={measureTimelineVirtualRowElement}
+          renderProjectionRow={renderProjectionRowWithBoundary}
+          shouldRenderLightweightProjectionRow={shouldRenderLightweightProjectionRow}
+          shouldVirtualizeTimeline={shouldVirtualizeTimeline}
+          timelineProjectionRows={timelineProjectionRows}
+          timelineRowHydrationStateByKey={timelineRowHydrationStateByKey}
+          totalSize={timelineVirtualizer.getTotalSize()}
+          userInputNodePresent={Boolean(userInputNode)}
+          virtualTimelineRows={virtualTimelineRows}
+        />
         {sessionFileChangesSummary && !isWorking && !hasPendingUserTurn && (
           <div className="messages-session-files-changed">
             <TurnFilesChangedCard

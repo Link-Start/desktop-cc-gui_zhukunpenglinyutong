@@ -16,7 +16,9 @@ describe("Markdown lazy runtime boundary", () => {
     expect(shellSource).not.toMatch(/^import .*["']react-markdown["'];?$/m);
     expect(shellSource).not.toMatch(/^import .*["']remark-[^"']+["'];?$/m);
     expect(shellSource).not.toMatch(/^import .*["']rehype-[^"']+["'];?$/m);
-    expect(shellSource).toContain('import("./FullMarkdownRuntime")');
+    expect(shellSource).toContain(
+      'import("../rendering/markdown/FullMarkdownRuntime")',
+    );
   });
 
   it("keeps file-preview fast HTML body renderer out of live message Markdown", () => {
@@ -28,7 +30,9 @@ describe("Markdown lazy runtime boundary", () => {
   });
 
   it("keeps the full parser stack isolated in FullMarkdownRuntime", () => {
-    const runtimeSource = readComponentSource("FullMarkdownRuntime.tsx");
+    const runtimeSource = readComponentSource(
+      "../rendering/markdown/FullMarkdownRuntime.tsx",
+    );
 
     expect(runtimeSource).toContain('from "react-markdown"');
     expect(runtimeSource).toContain('from "remark-gfm"');
