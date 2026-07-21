@@ -66,6 +66,7 @@ pub(crate) fn invoke_handler(
         crate::web_service::get_web_assets_status,
         crate::web_service::install_web_assets,
         crate::web_service::install_web_assets_from_file,
+        crate::mermaid_export::save_mermaid_png,
         // Agents
         crate::agents::agent_list,
         crate::agents::agent_add,
