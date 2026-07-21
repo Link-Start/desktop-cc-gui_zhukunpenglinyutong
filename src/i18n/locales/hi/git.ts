@@ -188,6 +188,7 @@ const git = {
     "generateCommitMessageEnglish": "अंग्रेज़ी कमिट संदेश बनाएँ",
     "generateCommitMessageEngineCodex": "Codex इंजन का उपयोग करें",
     "generateCommitMessageEngineClaude": "Claude इंजन का उपयोग करें",
+    "generateCommitMessageEngineKimi": "Kimi इंजन का उपयोग करें",
     "generateCommitMessageEngineGemini": "Gemini इंजन का उपयोग करें",
     "generateCommitMessageEngineOpenCode": "OpenCode इंजन का उपयोग करें",
     "generateCommitMessageLastConfig": "अंतिम कॉन्फ़िगरेशन का उपयोग करें",

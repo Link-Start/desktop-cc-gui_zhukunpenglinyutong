@@ -383,6 +383,8 @@ function getCommitMessageEngineLabel(
       return t("git.generateCommitMessageEngineGemini");
     case "opencode":
       return t("git.generateCommitMessageEngineOpenCode");
+    case "kimi":
+      return t("git.generateCommitMessageEngineKimi");
     case "claude":
     default:
       return t("git.generateCommitMessageEngineClaude");

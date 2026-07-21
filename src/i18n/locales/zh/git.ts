@@ -195,6 +195,7 @@ const git = {
     generateCommitMessageEnglish: "生成英文提交信息",
     generateCommitMessageEngineCodex: "使用 Codex 引擎",
     generateCommitMessageEngineClaude: "使用 Claude 引擎",
+    generateCommitMessageEngineKimi: "使用 Kimi 引擎",
     generateCommitMessageEngineGemini: "使用 Gemini 引擎",
     generateCommitMessageEngineOpenCode: "使用 OpenCode 引擎",
     generateCommitMessageLastConfig: "使用上次的配置",

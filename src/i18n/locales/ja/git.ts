@@ -188,6 +188,7 @@ const git = {
     "generateCommitMessageEnglish": "英語のコミットメッセージを生成",
     "generateCommitMessageEngineCodex": "Codex エンジンを使用",
     "generateCommitMessageEngineClaude": "Claude エンジンを使用",
+    "generateCommitMessageEngineKimi": "Kimi エンジンを使用",
     "generateCommitMessageEngineGemini": "Gemini エンジンを使用",
     "generateCommitMessageEngineOpenCode": "OpenCode エンジンを使用",
     "generateCommitMessageLastConfig": "前回の設定を使用",

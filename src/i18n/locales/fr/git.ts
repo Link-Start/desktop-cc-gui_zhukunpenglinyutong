@@ -188,6 +188,7 @@ const git = {
     "generateCommitMessageEnglish": "Générer un message de commit en anglais",
     "generateCommitMessageEngineCodex": "Utiliser le moteur Codex",
     "generateCommitMessageEngineClaude": "Utiliser le moteur Claude",
+    "generateCommitMessageEngineKimi": "Utiliser le moteur Kimi",
     "generateCommitMessageEngineGemini": "Utiliser le moteur Gemini",
     "generateCommitMessageEngineOpenCode": "Utiliser le moteur OpenCode",
     "generateCommitMessageLastConfig": "Utiliser la dernière configuration",
