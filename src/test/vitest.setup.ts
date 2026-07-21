@@ -797,6 +797,8 @@ vi.mock("react-i18next", () => ({
         // Shortcuts section
         "settings.shortcutsTitle": "Shortcuts",
         "settings.shortcutsDescription": "Customize keyboard shortcuts for file actions, composer, panels, and navigation.",
+        "settings.commonModulesSubtitle": "Common modules",
+        "settings.commonModulesSubDescription": "Quick access to frequently used views and tools.",
         "settings.fileSubtitle": "File",
         "settings.fileSubDescription": "Create agents and worktrees from the keyboard.",
         "settings.newAgent": "New Agent",

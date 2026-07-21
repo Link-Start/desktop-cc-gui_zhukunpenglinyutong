@@ -1037,6 +1037,91 @@ pub(crate) struct AppSettings {
         rename = "composerCollaborationShortcut"
     )]
     pub(crate) composer_collaboration_shortcut: Option<String>,
+    #[serde(
+        default = "default_open_settings_shortcut",
+        rename = "openSettingsShortcut"
+    )]
+    pub(crate) open_settings_shortcut: Option<String>,
+    #[serde(default = "default_new_window_shortcut", rename = "newWindowShortcut")]
+    pub(crate) new_window_shortcut: Option<String>,
+    #[serde(default = "default_open_chat_shortcut", rename = "openChatShortcut")]
+    pub(crate) open_chat_shortcut: Option<String>,
+    #[serde(
+        default = "default_open_kanban_shortcut",
+        rename = "openKanbanShortcut"
+    )]
+    pub(crate) open_kanban_shortcut: Option<String>,
+    #[serde(
+        default = "default_cycle_open_session_prev_shortcut",
+        rename = "cycleOpenSessionPrevShortcut"
+    )]
+    pub(crate) cycle_open_session_prev_shortcut: Option<String>,
+    #[serde(
+        default = "default_cycle_open_session_next_shortcut",
+        rename = "cycleOpenSessionNextShortcut"
+    )]
+    pub(crate) cycle_open_session_next_shortcut: Option<String>,
+    #[serde(
+        default = "default_toggle_left_conversation_sidebar_shortcut",
+        rename = "toggleLeftConversationSidebarShortcut"
+    )]
+    pub(crate) toggle_left_conversation_sidebar_shortcut: Option<String>,
+    #[serde(
+        default = "default_toggle_right_conversation_sidebar_shortcut",
+        rename = "toggleRightConversationSidebarShortcut"
+    )]
+    pub(crate) toggle_right_conversation_sidebar_shortcut: Option<String>,
+    #[serde(
+        default = "default_toggle_runtime_console_shortcut",
+        rename = "toggleRuntimeConsoleShortcut"
+    )]
+    pub(crate) toggle_runtime_console_shortcut: Option<String>,
+    #[serde(
+        default = "default_toggle_files_surface_shortcut",
+        rename = "toggleFilesSurfaceShortcut"
+    )]
+    pub(crate) toggle_files_surface_shortcut: Option<String>,
+    #[serde(default = "default_save_file_shortcut", rename = "saveFileShortcut")]
+    pub(crate) save_file_shortcut: Option<String>,
+    #[serde(
+        default = "default_find_in_file_shortcut",
+        rename = "findInFileShortcut"
+    )]
+    pub(crate) find_in_file_shortcut: Option<String>,
+    #[serde(
+        default = "default_toggle_git_diff_list_view_shortcut",
+        rename = "toggleGitDiffListViewShortcut"
+    )]
+    pub(crate) toggle_git_diff_list_view_shortcut: Option<String>,
+    #[serde(default, rename = "toggleGitGraphShortcut")]
+    pub(crate) toggle_git_graph_shortcut: Option<String>,
+    #[serde(default, rename = "openNotesShortcut")]
+    pub(crate) open_notes_shortcut: Option<String>,
+    #[serde(default, rename = "openIntentCanvasShortcut")]
+    pub(crate) open_intent_canvas_shortcut: Option<String>,
+    #[serde(default, rename = "openRadarShortcut")]
+    pub(crate) open_radar_shortcut: Option<String>,
+    #[serde(default, rename = "openProjectMapShortcut")]
+    pub(crate) open_project_map_shortcut: Option<String>,
+    #[serde(default, rename = "openBrowserDockShortcut")]
+    pub(crate) open_browser_dock_shortcut: Option<String>,
+    #[serde(default, rename = "openFileCompareShortcut")]
+    pub(crate) open_file_compare_shortcut: Option<String>,
+    #[serde(
+        default = "default_increase_ui_scale_shortcut",
+        rename = "increaseUiScaleShortcut"
+    )]
+    pub(crate) increase_ui_scale_shortcut: Option<String>,
+    #[serde(
+        default = "default_decrease_ui_scale_shortcut",
+        rename = "decreaseUiScaleShortcut"
+    )]
+    pub(crate) decrease_ui_scale_shortcut: Option<String>,
+    #[serde(
+        default = "default_reset_ui_scale_shortcut",
+        rename = "resetUiScaleShortcut"
+    )]
+    pub(crate) reset_ui_scale_shortcut: Option<String>,
     #[serde(default = "default_new_agent_shortcut", rename = "newAgentShortcut")]
     pub(crate) new_agent_shortcut: Option<String>,
     #[serde(
@@ -1498,6 +1583,70 @@ fn default_composer_collaboration_shortcut() -> Option<String> {
     Some("shift+tab".to_string())
 }
 
+fn default_open_settings_shortcut() -> Option<String> {
+    Some("cmd+,".to_string())
+}
+
+fn default_new_window_shortcut() -> Option<String> {
+    Some("cmd+shift+n".to_string())
+}
+
+fn default_open_chat_shortcut() -> Option<String> {
+    Some("cmd+j".to_string())
+}
+
+fn default_open_kanban_shortcut() -> Option<String> {
+    Some("cmd+k".to_string())
+}
+
+fn default_cycle_open_session_prev_shortcut() -> Option<String> {
+    Some("cmd+shift+[".to_string())
+}
+
+fn default_cycle_open_session_next_shortcut() -> Option<String> {
+    Some("cmd+shift+]".to_string())
+}
+
+fn default_toggle_left_conversation_sidebar_shortcut() -> Option<String> {
+    Some("cmd+alt+[".to_string())
+}
+
+fn default_toggle_right_conversation_sidebar_shortcut() -> Option<String> {
+    Some("cmd+alt+]".to_string())
+}
+
+fn default_toggle_runtime_console_shortcut() -> Option<String> {
+    Some("cmd+shift+`".to_string())
+}
+
+fn default_toggle_files_surface_shortcut() -> Option<String> {
+    Some("cmd+shift+e".to_string())
+}
+
+fn default_save_file_shortcut() -> Option<String> {
+    Some("cmd+s".to_string())
+}
+
+fn default_find_in_file_shortcut() -> Option<String> {
+    Some("cmd+f".to_string())
+}
+
+fn default_toggle_git_diff_list_view_shortcut() -> Option<String> {
+    Some("alt+shift+v".to_string())
+}
+
+fn default_increase_ui_scale_shortcut() -> Option<String> {
+    Some("cmd+=".to_string())
+}
+
+fn default_decrease_ui_scale_shortcut() -> Option<String> {
+    Some("cmd+-".to_string())
+}
+
+fn default_reset_ui_scale_shortcut() -> Option<String> {
+    Some("cmd+0".to_string())
+}
+
 fn default_new_agent_shortcut() -> Option<String> {
     Some("cmd+n".to_string())
 }
@@ -1867,6 +2016,31 @@ impl Default for AppSettings {
             composer_reasoning_shortcut: default_composer_reasoning_shortcut(),
             interrupt_shortcut: default_interrupt_shortcut(),
             composer_collaboration_shortcut: default_composer_collaboration_shortcut(),
+            open_settings_shortcut: default_open_settings_shortcut(),
+            new_window_shortcut: default_new_window_shortcut(),
+            open_chat_shortcut: default_open_chat_shortcut(),
+            open_kanban_shortcut: default_open_kanban_shortcut(),
+            cycle_open_session_prev_shortcut: default_cycle_open_session_prev_shortcut(),
+            cycle_open_session_next_shortcut: default_cycle_open_session_next_shortcut(),
+            toggle_left_conversation_sidebar_shortcut:
+                default_toggle_left_conversation_sidebar_shortcut(),
+            toggle_right_conversation_sidebar_shortcut:
+                default_toggle_right_conversation_sidebar_shortcut(),
+            toggle_runtime_console_shortcut: default_toggle_runtime_console_shortcut(),
+            toggle_files_surface_shortcut: default_toggle_files_surface_shortcut(),
+            save_file_shortcut: default_save_file_shortcut(),
+            find_in_file_shortcut: default_find_in_file_shortcut(),
+            toggle_git_diff_list_view_shortcut: default_toggle_git_diff_list_view_shortcut(),
+            toggle_git_graph_shortcut: None,
+            open_notes_shortcut: None,
+            open_intent_canvas_shortcut: None,
+            open_radar_shortcut: None,
+            open_project_map_shortcut: None,
+            open_browser_dock_shortcut: None,
+            open_file_compare_shortcut: None,
+            increase_ui_scale_shortcut: default_increase_ui_scale_shortcut(),
+            decrease_ui_scale_shortcut: default_decrease_ui_scale_shortcut(),
+            reset_ui_scale_shortcut: default_reset_ui_scale_shortcut(),
             new_agent_shortcut: default_new_agent_shortcut(),
             new_worktree_agent_shortcut: default_new_worktree_agent_shortcut(),
             new_clone_agent_shortcut: default_new_clone_agent_shortcut(),
@@ -2107,6 +2281,45 @@ mod tests {
             reparsed.last_composer_prefs_by_engine,
             settings.last_composer_prefs_by_engine
         );
+    }
+
+    #[test]
+    fn app_settings_round_trips_all_frontend_shortcut_fields() {
+        let shortcut_payload = serde_json::json!({
+            "openSettingsShortcut": "cmd+alt+,",
+            "newWindowShortcut": "cmd+alt+w",
+            "openChatShortcut": "cmd+alt+j",
+            "openKanbanShortcut": "cmd+alt+k",
+            "cycleOpenSessionPrevShortcut": "cmd+alt+left",
+            "cycleOpenSessionNextShortcut": "cmd+alt+right",
+            "toggleLeftConversationSidebarShortcut": "cmd+ctrl+[",
+            "toggleRightConversationSidebarShortcut": "cmd+ctrl+]",
+            "toggleRuntimeConsoleShortcut": "cmd+alt+`",
+            "toggleFilesSurfaceShortcut": "cmd+alt+e",
+            "saveFileShortcut": "cmd+alt+s",
+            "findInFileShortcut": "cmd+alt+f",
+            "toggleGitDiffListViewShortcut": "cmd+alt+v",
+            "toggleGitGraphShortcut": "cmd+alt+g",
+            "openNotesShortcut": null,
+            "openIntentCanvasShortcut": "cmd+alt+i",
+            "openRadarShortcut": "cmd+alt+r",
+            "openProjectMapShortcut": "cmd+alt+m",
+            "openBrowserDockShortcut": "cmd+alt+b",
+            "openFileCompareShortcut": "cmd+alt+c",
+            "increaseUiScaleShortcut": "cmd+alt+=",
+            "decreaseUiScaleShortcut": "cmd+alt+-",
+            "resetUiScaleShortcut": "cmd+alt+0"
+        });
+        let settings: AppSettings =
+            serde_json::from_value(shortcut_payload.clone()).expect("settings deserialize");
+        let echoed = serde_json::to_value(settings).expect("settings serialize");
+
+        for (key, expected) in shortcut_payload
+            .as_object()
+            .expect("shortcut payload object")
+        {
+            assert_eq!(echoed.get(key), Some(expected), "shortcut field {key}");
+        }
     }
 
     #[test]

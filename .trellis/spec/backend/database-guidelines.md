@@ -153,6 +153,80 @@ if settings.defaults_version < CURRENT_DEFAULTS_VERSION {
 }
 ```
 
+## Scenario: AppSettings shortcut 字段镜像与 round-trip
+
+### 1. Scope / Trigger
+
+- Trigger：新增、删除或重命名 `src/types/settings.ts` 中任何 persisted shortcut 字段，或修改 `save_app_settings` 的 request/response。
+- 目标：防止 TypeScript-only 字段在 Rust `serde` deserialize 时被丢弃，随后由 backend echo 覆盖 UI draft，表现为“设置后自动还原”。
+
+### 2. Signatures
+
+- frontend type：`src/types/settings.ts::AppSettings`
+- frontend defaults：`src/features/settings/hooks/useAppSettings.ts::defaultSettings`
+- backend type/default：`src-tauri/src/types.rs::AppSettings` / `impl Default for AppSettings`
+- persistence command：`save_app_settings(settings: AppSettings) -> Result<AppSettings, String>`
+- regression test：`types::tests::app_settings_round_trips_all_frontend_shortcut_fields`
+
+### 3. Contracts
+
+- 每个 persisted shortcut key MUST 同时存在于 TypeScript `AppSettings`、frontend `defaultSettings`、Rust `AppSettings` 和 Rust `Default`。
+- JSON wire key MUST 为 camelCase；Rust snake_case field 使用 `#[serde(rename = "<camelCase>")]`。
+- custom shortcut string MUST 在 `JSON -> Rust -> JSON` 后原值返回。
+- 显式 `null` MUST 保持 `null`；missing field MUST 使用 Rust/frontend 对齐的 default，不能把两者混为同一语义。
+- 新增无默认键位的 action 使用 `string | null` / `Option<String>`，两端 default 均为 `null` / `None`。
+
+### 4. Validation & Error Matrix
+
+| 输入状态 | Rust deserialize | backend echo | UI 行为 |
+|---|---|---|---|
+| custom string | `Some(value)` | 相同 string | 保留用户设置 |
+| explicit `null` | `None` | `null` | 保持未绑定 |
+| missing + 有默认值 | `default_*()` | 默认 shortcut | 展示默认值 |
+| missing + 无默认值 | `None` | `null` | 展示空绑定 |
+| frontend-only field | 禁止进入交付 | 字段会丢失 | 必须由 round-trip test 阻断 |
+| malformed JSON/type | 返回 deserialize error | 不写盘 | 禁止用 defaults 静默覆盖用户文件 |
+
+### 5. Good / Base / Bad Cases
+
+- Good：`toggleGitGraphShortcut: "CmdOrCtrl+Shift+G"` 保存后 backend echo 同值，重启后仍保持。
+- Base：`openBrowserDockShortcut: null` round-trip 后仍为 `null`。
+- Bad：只在 `src/types/settings.ts` 和 UI metadata 增加字段；Rust 未声明该字段，`serde` 默认忽略 unknown field，保存响应把 draft 还原。
+
+### 6. Tests Required
+
+- Rust round-trip test MUST 构造包含全部 frontend shortcut keys 的 JSON；断言 serialize 后 key 集合完整、custom string 不变、explicit `null` 不变。
+- 新 shortcut action MUST 有 frontend dispatch test，覆盖 happy path、`null` no-op、editable target protection。
+- settings UI MUST 断言 setting key 只映射到一个 draft key；featured group 可复用 action metadata，但不得创建第二份 persisted state。
+- 交付前 MUST 通过：
+
+```bash
+cargo test app_settings_round_trips_all_frontend_shortcut_fields --manifest-path src-tauri/Cargo.toml
+npm run typecheck
+npm run check:runtime-contracts
+```
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+// 只改 frontend；Rust deserialize/save/serialize 会丢弃字段。
+type AppSettings = {
+  toggleGitGraphShortcut: string | null;
+};
+```
+
+#### Correct
+
+```rust
+#[serde(default, rename = "toggleGitGraphShortcut")]
+pub toggle_git_graph_shortcut: Option<String>,
+
+// AppSettings::default()
+toggle_git_graph_shortcut: None,
+```
+
 ## 性能规则
 
 - CPU/IO 重任务使用 `tokio::task::spawn_blocking`。

@@ -277,6 +277,36 @@ describe("useAppShellLayoutNodesSection adapter contract", () => {
     );
   });
 
+  it("wires every configurable module shortcut to an existing view handler", () => {
+    const source = readFileSync(
+      join(currentDir, "useAppShellLayoutNodesSection.tsx"),
+      "utf8",
+    );
+    const shortcutHook = source.slice(
+      source.indexOf("useModuleViewShortcuts({"),
+      source.indexOf("  const {", source.indexOf("useModuleViewShortcuts({")),
+    );
+
+    expect(shortcutHook).toContain(
+      "toggleGitGraphShortcut: appSettings.toggleGitGraphShortcut",
+    );
+    expect(shortcutHook).toContain(
+      "onToggleGitGraph: handleOpenGitHistoryPanel",
+    );
+    expect(shortcutHook).toContain("onOpenNotes: handleOpenNotes");
+    expect(shortcutHook).toContain(
+      "onOpenIntentCanvas: handleOpenIntentCanvas",
+    );
+    expect(shortcutHook).toContain("onOpenRadar: handleOpenRadar");
+    expect(shortcutHook).toContain("onOpenProjectMap: handleOpenProjectMap");
+    expect(shortcutHook).toContain(
+      "onOpenBrowserDock: handleToggleBrowserDock",
+    );
+    expect(shortcutHook).toContain(
+      "onOpenFileCompare: handleOpenScratchFileCompare",
+    );
+  });
+
   it("routes message-tail fork through message anchored fork with provider options", () => {
     const source = readFileSync(
       join(currentDir, "useAppShellLayoutNodesSection.tsx"),

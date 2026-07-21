@@ -1095,6 +1095,8 @@ const settings = {
     "microphoneDenied": "마이크 접근이 거부되었습니다. 시스템 설정 > 개인정보 보호 및 보안 > 마이크에서 마이크 권한을 허용하세요.",
     "shortcutsTitle": "단축키",
     "shortcutsDescription": "파일 작업, 작성기, 패널, 탐색에 대한 키보드 단축키를 사용자화합니다.",
+    "commonModulesSubtitle": "자주 사용하는 모듈",
+    "commonModulesSubDescription": "자주 사용하는 보기와 도구에 빠르게 접근합니다.",
     "appSubtitle": "앱",
     "appSubDescription": "앱 수준 대상을 열고 주요 모드를 전환합니다.",
     "openSettings": "설정 열기",

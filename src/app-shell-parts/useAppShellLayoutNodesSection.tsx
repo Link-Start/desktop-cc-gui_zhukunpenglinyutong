@@ -4,6 +4,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { useLayoutNodes } from "../features/layout/hooks/useLayoutNodes";
 import { useMainHeaderActionItems } from "../features/app/components/MainHeaderActions";
 import { useExitedSessionVisibility } from "../features/app/hooks/useExitedSessionVisibility";
+import { useModuleViewShortcuts } from "../features/app/hooks/useModuleViewShortcuts";
 import { WorkspaceAliasPrompt } from "../features/workspaces/components/WorkspaceAliasPrompt";
 import { useClientUiVisibility } from "../features/client-ui-visibility/hooks/useClientUiVisibility";
 import { useProjectMapDataset } from "../features/project-map/hooks/useProjectMapDataset";
@@ -1527,6 +1528,28 @@ export function useAppShellLayoutNodesSection(
       setActiveTab("git");
     }
   });
+  const handleOpenNotes = useEventCallback(() => {
+    setFocusedProjectMemoryId(null);
+    setFocusedWorkspaceNoteId(null);
+    closeSettings();
+    setAppMode("chat");
+    setCenterMode("notes");
+    setFilePanelMode("notes");
+    expandRightPanel();
+    if (isCompact) {
+      setActiveTab("git");
+    }
+  });
+  const handleOpenRadar = useEventCallback(() => {
+    closeSettings();
+    setAppMode("chat");
+    setCenterMode("chat");
+    setFilePanelMode("radar");
+    expandRightPanel();
+    if (isCompact) {
+      setActiveTab("git");
+    }
+  });
   const handleOpenContextLedgerMemory = useEventCallback(
     (memoryId: string) => {
       setFocusedWorkspaceNoteId(null);
@@ -1557,6 +1580,23 @@ export function useAppShellLayoutNodesSection(
   });
   const handleOpenReleaseNotes = useEventCallback(() => {
     void openReleaseNotes();
+  });
+
+  useModuleViewShortcuts({
+    toggleGitGraphShortcut: appSettings.toggleGitGraphShortcut,
+    openNotesShortcut: appSettings.openNotesShortcut,
+    openIntentCanvasShortcut: appSettings.openIntentCanvasShortcut,
+    openRadarShortcut: appSettings.openRadarShortcut,
+    openProjectMapShortcut: appSettings.openProjectMapShortcut,
+    openBrowserDockShortcut: appSettings.openBrowserDockShortcut,
+    openFileCompareShortcut: appSettings.openFileCompareShortcut,
+    onToggleGitGraph: handleOpenGitHistoryPanel,
+    onOpenNotes: handleOpenNotes,
+    onOpenIntentCanvas: handleOpenIntentCanvas,
+    onOpenRadar: handleOpenRadar,
+    onOpenProjectMap: handleOpenProjectMap,
+    onOpenBrowserDock: handleToggleBrowserDock,
+    onOpenFileCompare: handleOpenScratchFileCompare,
   });
 
   const {

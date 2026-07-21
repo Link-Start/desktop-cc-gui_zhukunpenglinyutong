@@ -69,9 +69,7 @@ export type OpenAppTarget = {
 };
 
 export type CodexUnifiedExecPolicy =
-  | "inherit"
-  | "forceEnabled"
-  | "forceDisabled";
+  "inherit" | "forceEnabled" | "forceDisabled";
 
 export type CodexUnifiedExecExternalStatus = {
   configPath: string | null;
@@ -125,6 +123,13 @@ export type AppSettings = {
   saveFileShortcut: string | null;
   findInFileShortcut: string | null;
   toggleGitDiffListViewShortcut: string | null;
+  toggleGitGraphShortcut: string | null;
+  openNotesShortcut: string | null;
+  openIntentCanvasShortcut: string | null;
+  openRadarShortcut: string | null;
+  openProjectMapShortcut: string | null;
+  openBrowserDockShortcut: string | null;
+  openFileCompareShortcut: string | null;
   increaseUiScaleShortcut: string | null;
   decreaseUiScaleShortcut: string | null;
   resetUiScaleShortcut: string | null;

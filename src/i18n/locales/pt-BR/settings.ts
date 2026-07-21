@@ -1095,6 +1095,8 @@ const settings = {
     "microphoneDenied": "O acesso ao microfone foi negado. Conceda permissão de microfone em Ajustes do Sistema > Privacidade e Segurança > Microfone.",
     "shortcutsTitle": "Atalhos",
     "shortcutsDescription": "Personalize os atalhos de teclado para ações de arquivo, compositor, painéis e navegação.",
+    "commonModulesSubtitle": "Módulos comuns",
+    "commonModulesSubDescription": "Acesse rapidamente visualizações e ferramentas usadas com frequência.",
     "appSubtitle": "App",
     "appSubDescription": "Abra destinos no nível do app e alterne entre os modos principais.",
     "openSettings": "Abrir configurações",

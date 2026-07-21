@@ -1095,6 +1095,8 @@ const settings = {
     "microphoneDenied": "माइक्रोफ़ोन एक्सेस अस्वीकृत हो गया। कृपया System Settings > Privacy & Security > Microphone में माइक्रोफ़ोन अनुमति दें।",
     "shortcutsTitle": "शॉर्टकट",
     "shortcutsDescription": "फ़ाइल क्रियाओं, कंपोज़र, पैनल और नेविगेशन के लिए कीबोर्ड शॉर्टकट कस्टमाइज़ करें।",
+    "commonModulesSubtitle": "सामान्य मॉड्यूल",
+    "commonModulesSubDescription": "अक्सर उपयोग किए जाने वाले दृश्य और टूल जल्दी खोलें।",
     "appSubtitle": "ऐप",
     "appSubDescription": "ऐप-स्तरीय गंतव्य खोलें और प्राथमिक मोड स्विच करें।",
     "openSettings": "सेटिंग्स खोलें",

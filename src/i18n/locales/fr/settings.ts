@@ -1095,6 +1095,8 @@ const settings = {
     "microphoneDenied": "L'accès au microphone a été refusé. Veuillez accorder l'autorisation du microphone dans Réglages Système > Confidentialité et sécurité > Microphone.",
     "shortcutsTitle": "Raccourcis",
     "shortcutsDescription": "Personnalisez les raccourcis clavier pour les actions sur les fichiers, le compositeur, les panneaux et la navigation.",
+    "commonModulesSubtitle": "Modules courants",
+    "commonModulesSubDescription": "Accédez rapidement aux vues et outils fréquemment utilisés.",
     "appSubtitle": "Application",
     "appSubDescription": "Ouvrez des destinations au niveau de l'application et changez de mode principal.",
     "openSettings": "Ouvrir les paramètres",
