@@ -1962,3 +1962,36 @@ Rebased chore/bump-version-0.7.5 onto origin, semantically resolved Kimi integra
 ### Next Steps
 
 - None - task complete
+
+
+## Session 45: 归档通用工具展示契约
+
+**Date**: 2026-07-21
+**Task**: 归档通用工具展示契约
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+归档 decompose-generic-tool-presentation OpenSpec change，将 pure projection、specialized variants 与 common shell ownership 同步到 generic-tool-presentation 主 spec。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `527bb410` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
