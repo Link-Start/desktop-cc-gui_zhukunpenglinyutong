@@ -993,3 +993,36 @@ Review 并修复 Git History repository color collision、branch group 与 branc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1055: 文件编辑器行列跳转与标签页视觉统一
+
+**Date**: 2026-07-22
+**Task**: 文件编辑器行列跳转与标签页视觉统一
+**Branch**: `feature/v-076`
+
+### Summary
+
+新增 Cmd+G/Ctrl+G 行列跳转弹窗，完善输入边界、i18n 与 accessibility；压缩弹窗布局，隐藏 tab scrollbar，并统一 tab 与文件树图标 resolver。增量测试 92/92、targeted ESLint、typecheck、OpenSpec strict validation 均通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `636e4f4a2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
