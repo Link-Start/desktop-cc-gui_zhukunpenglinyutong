@@ -486,3 +486,44 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 60: 锁定 messages 最终模块边界
+
+**Date**: 2026-07-21
+**Task**: 锁定 messages 最终模块边界
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+完成 roadmap Phase 8.4-8.6：清零 messages inbound private imports，冻结 exact outbound debt graph，接入 CI，并完成全量验证、独立复审与 Trellis task 归档。
+
+### Main Changes
+
+- 将 live canvas、runtime reconnect、presentation profile 迁移到 neutral owners，messages 外部私有入口清零。
+- 提取可测试的 AST boundary checker，结构性违规直接失败，并冻结 exact outbound debt graph。
+- 将 messages boundary gate 接入 CI，补齐 public index、threads、rows 与 pure timeline fixture tests。
+
+### Testing
+
+- Boundary: inbound 0/0, outbound 50/50, new 0.
+- Focused: 70 files passed, 605 tests passed, 7 skipped.
+- Full suite: 878 test files completed; lint, typecheck, build, runtime contracts, bundle guard, realtime boundary guard passed.
+- Independent follow-up review found no discrete correctness, security, or maintainability issues.
+- Known unrelated baselines: large-file gate 51 findings; heavy-test-noise existing warnings/stdout; one unrelated OpenSpec change invalid on parent commit.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ecf1e80f` | (see git log) |
+| `bcd2970c` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
