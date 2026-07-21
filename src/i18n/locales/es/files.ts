@@ -220,6 +220,14 @@ const files = {
     "continueEditing": "Continuar editando",
     "discardChangesAction": "Descartar cambios",
     "saveShortcut": "⌘S para guardar",
+    "gotoLine": {
+      "title": "Ir a línea y columna",
+      "inputLabel": "Línea:Columna",
+      "placeholder": "Por ejemplo, 2744:56",
+      "cancel": "Cancelar",
+      "confirm": "Ir",
+      "invalid": "Introduce una línea o posición línea:columna válida."
+    },
     "externalChangeAutoSynced": "El archivo cambió en el disco y se ha sincronizado.",
     "externalChangePendingTitle": "El archivo cambió en el disco",
     "externalChangePendingBody": "{{count}} actualización externa disponible. La vista previa actual se mantiene estable hasta que actualices.",

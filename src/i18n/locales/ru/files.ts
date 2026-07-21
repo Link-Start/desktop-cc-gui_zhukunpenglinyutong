@@ -220,6 +220,14 @@ const files = {
     "continueEditing": "Продолжить редактирование",
     "discardChangesAction": "Отменить изменения",
     "saveShortcut": "⌘S для сохранения",
+    "gotoLine": {
+      "title": "Перейти к строке и столбцу",
+      "inputLabel": "Строка:Столбец",
+      "placeholder": "Например, 2744:56",
+      "cancel": "Отмена",
+      "confirm": "Перейти",
+      "invalid": "Введите допустимую строку или позицию строка:столбец."
+    },
     "externalChangeAutoSynced": "Файл изменён на диске и был синхронизирован.",
     "externalChangePendingTitle": "Файл изменён на диске",
     "externalChangePendingBody": "Доступно внешних обновлений: {{count}}. Текущий просмотр остаётся неизменным, пока вы не обновите его.",

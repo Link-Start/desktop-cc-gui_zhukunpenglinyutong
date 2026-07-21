@@ -220,6 +220,14 @@ const files = {
     "continueEditing": "編集を続ける",
     "discardChangesAction": "変更を破棄",
     "saveShortcut": "⌘S で保存",
+    "gotoLine": {
+      "title": "行と列へ移動",
+      "inputLabel": "行:列",
+      "placeholder": "例: 2744:56",
+      "cancel": "キャンセル",
+      "confirm": "移動",
+      "invalid": "有効な行番号または行:列を入力してください。"
+    },
     "externalChangeAutoSynced": "ファイルがディスク上で変更され、同期されました。",
     "externalChangePendingTitle": "ファイルがディスク上で変更されました",
     "externalChangePendingBody": "{{count}} 件の外部更新があります。更新するまで現在のプレビューは維持されます。",

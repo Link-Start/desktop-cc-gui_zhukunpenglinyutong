@@ -243,6 +243,14 @@ const files = {
     continueEditing: "Continue editing",
     discardChangesAction: "Discard changes",
     saveShortcut: "⌘S to save",
+    gotoLine: {
+      title: "Go to Line and Column",
+      inputLabel: "Line:Column",
+      placeholder: "For example, 2744:56",
+      cancel: "Cancel",
+      confirm: "Go",
+      invalid: "Enter a valid line number or line:column.",
+    },
     externalChangeAutoSynced: "File changed on disk and has been synced.",
     externalChangePendingTitle: "File changed on disk",
     externalChangePendingBody:

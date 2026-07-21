@@ -220,6 +220,14 @@ const files = {
     "continueEditing": "संपादन जारी रखें",
     "discardChangesAction": "परिवर्तन त्यागें",
     "saveShortcut": "सहेजने के लिए ⌘S",
+    "gotoLine": {
+      "title": "पंक्ति और स्तंभ पर जाएँ",
+      "inputLabel": "पंक्ति:स्तंभ",
+      "placeholder": "उदाहरण: 2744:56",
+      "cancel": "रद्द करें",
+      "confirm": "जाएँ",
+      "invalid": "मान्य पंक्ति या पंक्ति:स्तंभ दर्ज करें।"
+    },
     "externalChangeAutoSynced": "फ़ाइल डिस्क पर बदली और सिंक कर दी गई है।",
     "externalChangePendingTitle": "फ़ाइल डिस्क पर बदली",
     "externalChangePendingBody": "{{count}} बाहरी अपडेट उपलब्ध है। आपके रिफ़्रेश करने तक वर्तमान पूर्वावलोकन स्थिर रखा जाता है।",

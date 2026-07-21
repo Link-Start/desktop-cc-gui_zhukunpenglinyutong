@@ -40,7 +40,6 @@ import {
 } from "../../../utils/shortcuts";
 import { highlightLine } from "../../../utils/syntax";
 import { OpenAppMenu } from "../../app/components/OpenAppMenu";
-import FileIcon from "../../../components/FileIcon";
 import { RendererContextMenu } from "../../../components/ui/RendererContextMenu";
 import type { GitFileStatus, GitRepositorySummary, OpenAppTarget } from "../../../types";
 import type {
@@ -64,6 +63,7 @@ import {
   resolveWorkspacePathCandidates,
 } from "../../../utils/workspacePaths";
 import { reorderTabPathsAtTarget } from "../utils/fileTabOrder";
+import { getFileTreeIconSvg } from "../utils/fileTreeIcons";
 import { reduceExternalChangeSyncState } from "../externalChangeStateMachine";
 import {
   resolveFileRenderProfile,
@@ -1977,7 +1977,13 @@ export function FileViewPanel({
                 data-tauri-drag-region="false"
               >
                 <span className="fvp-tab-main-content">
-                  <FileIcon filePath={tabPath} className="fvp-tab-icon" />
+                  <span
+                    className="fvp-tab-icon"
+                    aria-hidden="true"
+                    dangerouslySetInnerHTML={{
+                      __html: getFileTreeIconSvg(tabName, false),
+                    }}
+                  />
                   <span className="fvp-tab-main-label">{tabName}</span>
                 </span>
               </button>

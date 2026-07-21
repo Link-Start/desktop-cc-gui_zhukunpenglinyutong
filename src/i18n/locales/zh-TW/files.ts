@@ -220,6 +220,14 @@ const files = {
     "continueEditing": "繼續編輯",
     "discardChangesAction": "捨棄變更",
     "saveShortcut": "⌘S 儲存",
+    "gotoLine": {
+      "title": "前往行列",
+      "inputLabel": "行號:列號",
+      "placeholder": "例如 2744:56",
+      "cancel": "取消",
+      "confirm": "確定",
+      "invalid": "請輸入有效的行號或行號:列號。"
+    },
     "externalChangeAutoSynced": "檔案已在磁碟上變更，且已同步。",
     "externalChangePendingTitle": "檔案已在磁碟上變更",
     "externalChangePendingBody": "有 {{count}} 項外部更新可用。在你重新整理前，目前預覽會維持穩定。",
