@@ -1040,6 +1040,14 @@ export function FileViewBody({
           lastReportedLineRangeRef={lastReportedLineRangeRef}
           saveFileShortcut={saveFileShortcut}
           handleSave={handleSave}
+          gotoLineLabels={{
+            title: t("files.gotoLine.title"),
+            inputLabel: t("files.gotoLine.inputLabel"),
+            placeholder: t("files.gotoLine.placeholder"),
+            cancel: t("files.gotoLine.cancel"),
+            confirm: t("files.gotoLine.confirm"),
+            invalid: t("files.gotoLine.invalid"),
+          }}
           fallback={<div className="fvp-status">{t("files.loadingFile")}</div>}
         />
         {noteCaptureMenu ? (

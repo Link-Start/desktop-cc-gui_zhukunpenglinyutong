@@ -679,6 +679,7 @@ When a workspace contains multiple Git repositories, Git History SHALL replace t
 - **THEN** the left navigator SHALL render local and remote sections
 - **AND** each section SHALL expose every discovered repository as an independently expandable row
 - **AND** repository rows SHALL use deterministic visually distinct color slots without replacing repository name semantics
+- **AND** color collision resolution SHALL produce the same repository-to-slot mapping on Windows, macOS, and Linux regardless of host locale or input array order
 - **AND** the redundant top-toolbar repository picker SHALL NOT render
 
 #### Scenario: Multiple repositories expand independently
@@ -695,6 +696,7 @@ When a workspace contains multiple Git repositories, Git History SHALL replace t
 - **AND** the current local branch group SHALL be expanded by default
 - **WHEN** an expanded repository contains remote branches
 - **THEN** remote branches SHALL be grouped by remote name
+- **AND** group and branch ordering SHALL be locale-independent and identical on Windows, macOS, and Linux
 - **AND** each group SHALL preserve independent expanded state scoped by repository and local/remote section
 - **AND** branch leaves SHALL display the scoped leaf label while selection and context actions retain the complete branch name
 - **AND** search SHALL temporarily expand matching groups without replacing stored expansion state

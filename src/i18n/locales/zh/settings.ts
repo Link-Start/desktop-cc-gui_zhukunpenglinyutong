@@ -1220,6 +1220,8 @@ const settings = {
       "麦克风访问被拒绝。请在系统设置 > 隐私与安全性 > 麦克风中授予麦克风权限。",
     shortcutsTitle: "快捷键",
     shortcutsDescription: "自定义文件操作、编辑器、面板和导航的键盘快捷键。",
+    commonModulesSubtitle: "常用模块",
+    commonModulesSubDescription: "快速配置高频使用的视图与工具。",
     appSubtitle: "应用",
     appSubDescription: "打开应用级入口并切换主要模式。",
     openSettings: "打开设置",

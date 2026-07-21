@@ -32,7 +32,17 @@ import ZoomIn from "lucide-react/dist/esm/icons/zoom-in";
 import ZoomOut from "lucide-react/dist/esm/icons/zoom-out";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
 import MonitorCog from "lucide-react/dist/esm/icons/monitor-cog";
-import { formatShortcutForPlatform, getDefaultInterruptShortcut } from "@/utils/shortcuts";
+import Columns3 from "lucide-react/dist/esm/icons/columns-3";
+import GitFork from "lucide-react/dist/esm/icons/git-fork";
+import Globe from "lucide-react/dist/esm/icons/globe";
+import Map from "lucide-react/dist/esm/icons/map";
+import Radar from "lucide-react/dist/esm/icons/radar";
+import StickyNote from "lucide-react/dist/esm/icons/sticky-note";
+import Waypoints from "lucide-react/dist/esm/icons/waypoints";
+import {
+  formatShortcutForPlatform,
+  getDefaultInterruptShortcut,
+} from "@/utils/shortcuts";
 import type {
   ShortcutActionMetadata,
   ShortcutDrafts,
@@ -64,6 +74,13 @@ const shortcutIconByActionId: Record<string, LucideIcon> = {
   "toggle-terminal": TerminalSquare,
   "toggle-runtime-console": MonitorCog,
   "toggle-files-surface": FolderOpen,
+  "toggle-git-graph": GitFork,
+  "open-notes": StickyNote,
+  "open-intent-canvas": Waypoints,
+  "open-radar": Radar,
+  "open-project-map": Map,
+  "open-browser-dock": Globe,
+  "open-file-compare": Columns3,
   "composer-cycle-model": Cpu,
   "composer-cycle-access": ShieldCheck,
   "composer-cycle-reasoning": BrainCircuit,
@@ -96,7 +113,10 @@ type ShortcutsSectionProps = {
     event: KeyboardEvent<HTMLInputElement>,
     setting: ShortcutSettingKey,
   ) => void;
-  updateShortcut: (setting: ShortcutSettingKey, value: string | null) => Promise<void>;
+  updateShortcut: (
+    setting: ShortcutSettingKey,
+    value: string | null,
+  ) => Promise<void>;
 };
 
 export function ShortcutsSection({
@@ -118,13 +138,25 @@ export function ShortcutsSection({
       id: category.id,
       title: t(category.titleKey),
       description: t(category.descriptionKey),
-      items: shortcutActions.filter((action) => action.category === category.id),
+      items: shortcutActions
+        .filter((action) =>
+          category.id === "common"
+            ? action.featured
+            : action.category === category.id,
+        )
+        .sort((left, right) =>
+          category.id === "common"
+            ? (left.featuredOrder ?? 0) - (right.featuredOrder ?? 0)
+            : 0,
+        ),
     }))
     .filter((group) => group.items.length > 0);
 
   return (
     <section className="settings-section settings-shortcuts-section">
-      <div className="settings-section-title">{t("settings.shortcutsTitle")}</div>
+      <div className="settings-section-title">
+        {t("settings.shortcutsTitle")}
+      </div>
       <div className="settings-section-subtitle">
         {t("settings.shortcutsDescription")}
       </div>
@@ -141,7 +173,11 @@ export function ShortcutsSection({
               {group.items.map((item) => {
                 const Icon = shortcutIconByActionId[item.id] ?? Settings;
                 const defaultShortcut = resolveDefaultShortcut(item);
-                const label = t(item.labelKey);
+                const label = t(
+                  group.id === "common"
+                    ? (item.featuredLabelKey ?? item.labelKey)
+                    : item.labelKey,
+                );
                 const isFocused = focusedSetting === item.setting;
                 const currentValue = formatShortcutForPlatform(
                   shortcutDrafts[item.draftKey],

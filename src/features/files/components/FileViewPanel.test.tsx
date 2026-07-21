@@ -24,6 +24,7 @@ import {
 } from "../../../services/tauri";
 import { loadKatexAssets } from "../../markdown/markdownMath";
 import { useFilePreviewPayload } from "../hooks/useFilePreviewPayload";
+import { getFileTreeIconSvg } from "../utils/fileTreeIcons";
 
 describe("editor annotation widget ordering", () => {
   it("keeps draft and existing markers sorted for CodeMirror ranges", () => {
@@ -287,6 +288,11 @@ describe("FileViewPanel navigation", () => {
 
     await screen.findByTestId("mock-codemirror");
     const fileTab = screen.getByRole("tab", { name: "Main.java" });
+    const expectedIcon = document.createElement("span");
+    expectedIcon.innerHTML = getFileTreeIconSvg("Main.java", false);
+    expect(fileTab.querySelector(".fvp-tab-icon")?.innerHTML).toBe(
+      expectedIcon.innerHTML,
+    );
     fireEvent.doubleClick(fileTab);
     expect(onToggleEditorFileMaximized).toHaveBeenCalledTimes(1);
   });

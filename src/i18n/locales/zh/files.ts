@@ -236,6 +236,14 @@ const files = {
     continueEditing: "继续编辑",
     discardChangesAction: "放弃修改",
     saveShortcut: "⌘S 保存",
+    gotoLine: {
+      title: "转到行列",
+      inputLabel: "行号:列号",
+      placeholder: "例如 2744:56",
+      cancel: "取消",
+      confirm: "确定",
+      invalid: "请输入有效的行号或行号:列号。",
+    },
     externalChangeAutoSynced: "文件已被外部更新，已自动同步到最新版本。",
     externalChangePendingTitle: "文件已在磁盘更新",
     externalChangePendingBody:

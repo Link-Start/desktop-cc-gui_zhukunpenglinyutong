@@ -20,10 +20,15 @@ import LoaderCircle from "lucide-react/dist/esm/icons/loader-circle";
 import type { GitBranchListItem, GitRepositorySummary } from "../../../../../types";
 import {
   buildGitRepositoryIconColorSlots,
+  compareGitIdentity,
   GIT_REPOSITORY_SWATCH_COLOR_CLASSES,
 } from "../../../../git/utils/gitRepositoryIconColors";
 import type { GitHistoryRepositoryBranchCatalog } from "../hooks/useGitHistoryRepositoryBranchCatalogs";
-import { getBranchLeafName, getBranchScope } from "../utils/gitHistoryPanelSharedUtils";
+import {
+  getBranchLeafName,
+  getBranchScope,
+  getSpecialBranchBadges,
+} from "../utils/gitHistoryPanelSharedUtils";
 import { ActionSurface } from "./GitHistoryPanelPickers";
 
 type BranchScope = "local" | "remote";
@@ -83,7 +88,7 @@ function buildBranchGroups(
     .sort(([left], [right]) => {
       if (left === "__root__") return -1;
       if (right === "__root__") return 1;
-      return left.localeCompare(right);
+      return compareGitIdentity(left, right);
     })
     .map(([key, groupedBranches]) => ({
       key,
@@ -92,7 +97,9 @@ function buildBranchGroups(
         : key === "__remote__"
           ? t("git.historyRemote")
           : key,
-      branches: groupedBranches.slice().sort((left, right) => left.name.localeCompare(right.name)),
+      branches: groupedBranches.slice().sort((left, right) => (
+        compareGitIdentity(left.name, right.name)
+      )),
     }));
 }
 
@@ -144,6 +151,17 @@ export const GitHistoryMultiRepositoryBranchTree = memo(function GitHistoryMulti
       let next = previous;
       for (const repository of repositories) {
         const catalog = catalogs.get(repository.repositoryRoot);
+        if (catalog?.localBranches.some((branch) => getBranchScope(branch.name) === "__root__")) {
+          const rootIdentity = getBranchGroupIdentity(
+            "local",
+            repository.repositoryRoot,
+            "__root__",
+          );
+          if (!next.has(rootIdentity)) {
+            if (next === previous) next = new Set(previous);
+            next.add(rootIdentity);
+          }
+        }
         const currentLocalBranch = catalog?.localBranches.find((branch) => branch.isCurrent)
           ?? catalog?.localBranches.find((branch) => branch.name === catalog.currentBranch);
         if (!currentLocalBranch) continue;
@@ -276,7 +294,11 @@ export const GitHistoryMultiRepositoryBranchTree = memo(function GitHistoryMulti
                         {group.branches.map((branch) => (
                           <ActionSurface
                             key={`${scope}-${repository.repositoryRoot}-${branch.name}`}
-                            className="git-history-branch-item git-history-multi-repository-branch"
+                            className={`git-history-branch-item git-history-multi-repository-branch ${
+                              scope === "local"
+                                ? "git-history-branch-item-tree"
+                                : "git-history-branch-item-remote-tree"
+                            } ${scope === "local" && branch.isCurrent ? "is-head-branch" : ""}`}
                             active={activeRepositoryRoot === repository.repositoryRoot && selectedBranch === branch.name}
                             onActivate={() => onSelectBranch(repository.repositoryRoot, branch.name)}
                             onContextMenu={(event) => onOpenBranchContextMenu?.(
@@ -286,13 +308,30 @@ export const GitHistoryMultiRepositoryBranchTree = memo(function GitHistoryMulti
                               scope,
                             )}
                           >
-                            <GitBranch size={11} />
-                            <span className="git-history-branch-name">
-                              {scope === "remote"
-                                ? getRemoteBranchLabel(branch)
-                                : getBranchLeafName(branch.name)}
+                            <span className="git-history-tree-branch-main">
+                              <GitBranch size={11} />
+                              <span className="git-history-branch-name">
+                                {scope === "remote"
+                                  ? getRemoteBranchLabel(branch)
+                                  : getBranchLeafName(branch.name)}
+                              </span>
                             </span>
-                            {branch.isCurrent ? <em className="is-head">HEAD</em> : null}
+                            <span className="git-history-branch-badges">
+                              {scope === "local" && branch.isCurrent
+                                ? <em className="is-head">HEAD</em>
+                                : null}
+                              {getSpecialBranchBadges(branch.name, t).map((badge) => (
+                                <i key={`${branch.name}-${badge}`} className="is-special">
+                                  {badge}
+                                </i>
+                              ))}
+                              {scope === "local" && branch.ahead > 0
+                                ? <i className="is-ahead">+{branch.ahead}</i>
+                                : null}
+                              {scope === "local" && branch.behind > 0
+                                ? <i className="is-behind">-{branch.behind}</i>
+                                : null}
+                            </span>
                           </ActionSurface>
                         ))}
                       </div>
@@ -345,6 +384,18 @@ export const GitHistoryMultiRepositoryBranchTree = memo(function GitHistoryMulti
         <span>HEAD</span>
         <span className="git-history-multi-head-label">({t("git.historyCurrentBranch")})</span>
         {currentBranch ? <code>{currentBranch}</code> : null}
+      </ActionSurface>
+      <ActionSurface
+        className="git-history-branch-item git-history-branch-all-item"
+        active={selectedBranch === "all"}
+        disabled={activeRepositoryRoot === null}
+        onActivate={() => {
+          if (activeRepositoryRoot !== null) {
+            onSelectBranch(activeRepositoryRoot, "all");
+          }
+        }}
+      >
+        <span>{t("git.historyAllBranches")}</span>
       </ActionSurface>
       {renderRepositorySection("local", <HardDrive size={13} />, t("git.historyLocal"))}
       {renderRepositorySection("remote", <Cloud size={13} />, t("git.historyRemote"))}

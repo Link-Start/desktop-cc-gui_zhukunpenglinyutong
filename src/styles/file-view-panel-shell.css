@@ -57,12 +57,17 @@
   min-height: 30px;
   overflow-x: auto;
   overflow-y: hidden;
+  scrollbar-width: none;
   padding: 0;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-messages);
   flex-shrink: 0;
   position: relative;
   z-index: 1;
+}
+
+.fvp-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .fvp-tabs-inline {

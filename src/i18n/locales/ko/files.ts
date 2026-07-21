@@ -220,6 +220,14 @@ const files = {
     "continueEditing": "편집 계속하기",
     "discardChangesAction": "변경 사항 취소",
     "saveShortcut": "저장하려면 ⌘S",
+    "gotoLine": {
+      "title": "줄 및 열로 이동",
+      "inputLabel": "줄:열",
+      "placeholder": "예: 2744:56",
+      "cancel": "취소",
+      "confirm": "이동",
+      "invalid": "올바른 줄 번호 또는 줄:열을 입력하세요."
+    },
     "externalChangeAutoSynced": "디스크의 파일이 변경되어 동기화되었습니다.",
     "externalChangePendingTitle": "디스크의 파일이 변경됨",
     "externalChangePendingBody": "외부 업데이트 {{count}}건이 있습니다. 새로 고칠 때까지 현재 미리 보기는 그대로 유지됩니다.",

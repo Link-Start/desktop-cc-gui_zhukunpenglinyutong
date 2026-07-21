@@ -245,4 +245,92 @@ describe("GitHistoryMultiRepositoryBranchTree", () => {
     );
     expect(screen.queryByRole("button", { name: /service-a:git.historyLocal/ })).toBeNull();
   });
+
+  it("preserves legacy navigation and branch status affordances", () => {
+    const onSelectBranch = vi.fn();
+    const branchCatalog: GitHistoryRepositoryBranchCatalog = {
+      ...catalog("services/a", "feature/v-076", "origin/main"),
+      localBranches: [
+        { name: "main", isCurrent: false, isRemote: false, lastCommit: 1, ahead: 0, behind: 131 },
+        { name: "feature/v-076", isCurrent: true, isRemote: false, lastCommit: 1, ahead: 8, behind: 0 },
+      ],
+      currentBranch: "feature/v-076",
+    };
+    render(
+      <GitHistoryMultiRepositoryBranchTree
+        repositories={[repository("services/a", "service-a")]}
+        catalogs={new Map([["services/a", branchCatalog]])}
+        selectedRepositoryRoot="services/a"
+        selectedBranch="feature/v-076"
+        query=""
+        t={t}
+        onSelectBranch={onSelectBranch}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "git.historyAllBranches" }));
+    expect(onSelectBranch).toHaveBeenCalledWith("services/a", "all");
+
+    const mainBranch = screen.getByRole("button", {
+      name: "maingit.historyBranchBadgeMain-131",
+    });
+    expect(mainBranch.querySelector(".is-special")?.textContent)
+      .toBe("git.historyBranchBadgeMain");
+    expect(mainBranch.querySelector(".is-ahead")).toBeNull();
+    expect(mainBranch.querySelector(".is-behind")?.textContent).toBe("-131");
+
+    const currentBranch = screen.getByRole("button", { name: "v-076HEAD+8" });
+    expect(currentBranch.classList.contains("is-head-branch")).toBe(true);
+    expect(currentBranch.querySelector(".is-head")?.textContent).toBe("HEAD");
+    expect(currentBranch.querySelector(".is-ahead")?.textContent).toBe("+8");
+    expect(currentBranch.querySelector(".is-behind")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /git.historyToggleRemoteGroup:origin/ }));
+    const remoteMain = screen.getByRole("button", {
+      name: "maingit.historyBranchBadgeMain",
+    });
+    expect(remoteMain.querySelector(".is-special")?.textContent)
+      .toBe("git.historyBranchBadgeMain");
+  });
+
+  it("uses locale-independent group ordering for cross-platform parity", () => {
+    const groupedCatalog: GitHistoryRepositoryBranchCatalog = {
+      ...catalog("services\\api", "main"),
+      localBranches: [
+        { name: "éclair/one", isCurrent: false, isRemote: false, lastCommit: 1, ahead: 0, behind: 0 },
+        { name: "zeta/one", isCurrent: false, isRemote: false, lastCommit: 1, ahead: 0, behind: 0 },
+        { name: "Alpha/two", isCurrent: false, isRemote: false, lastCommit: 1, ahead: 0, behind: 0 },
+        { name: "Alpha/one", isCurrent: false, isRemote: false, lastCommit: 1, ahead: 0, behind: 0 },
+        { name: "main", isCurrent: true, isRemote: false, lastCommit: 1, ahead: 0, behind: 0 },
+      ],
+    };
+    render(
+      <GitHistoryMultiRepositoryBranchTree
+        repositories={[repository("services\\api", "api")]}
+        catalogs={new Map([["services\\api", groupedCatalog]])}
+        selectedRepositoryRoot="services\\api"
+        selectedBranch="main"
+        query="api"
+        t={t}
+        onSelectBranch={vi.fn()}
+      />,
+    );
+
+    const localSection = document.querySelectorAll(".git-history-multi-repository-section")[0];
+    expect(Array.from(localSection?.querySelectorAll(".git-history-tree-scope-label") ?? [])
+      .map((element) => element.textContent)).toEqual([
+      "git.historyRootGroup",
+      "Alpha",
+      "zeta",
+      "éclair",
+    ]);
+    expect(Array.from(localSection?.querySelectorAll(".git-history-branch-name") ?? [])
+      .map((element) => element.textContent)).toEqual([
+      "main",
+      "one",
+      "two",
+      "one",
+      "one",
+    ]);
+  });
 });

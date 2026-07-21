@@ -1095,6 +1095,8 @@ const settings = {
     "microphoneDenied": "マイクへのアクセスが拒否されました。システム設定 > プライバシーとセキュリティ > マイク でマイクの権限を許可してください。",
     "shortcutsTitle": "ショートカット",
     "shortcutsDescription": "ファイル操作、入力欄、パネル、ナビゲーションのキーボードショートカットをカスタマイズします。",
+    "commonModulesSubtitle": "よく使うモジュール",
+    "commonModulesSubDescription": "頻繁に使うビューとツールへすばやくアクセスします。",
     "appSubtitle": "アプリ",
     "appSubDescription": "アプリレベルの画面を開き、主要モードを切り替えます。",
     "openSettings": "設定を開く",

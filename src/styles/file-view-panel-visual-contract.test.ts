@@ -46,6 +46,27 @@ describe("file view visual contracts", () => {
     expect(getCssRuleBlock(fileViewPanelShellCss, ".fvp-tab.is-active::after")).toBe("");
   });
 
+  it("hides file tab scrollbar chrome without disabling horizontal overflow", () => {
+    const tabsRule = getCssRuleBlock(fileViewPanelShellCss, ".fvp-tabs");
+    const webkitScrollbarRule = getCssRuleBlock(
+      fileViewPanelShellCss,
+      ".fvp-tabs::-webkit-scrollbar",
+    );
+
+    expect(tabsRule).toContain("overflow-x: auto;");
+    expect(tabsRule).toContain("scrollbar-width: none;");
+    expect(webkitScrollbarRule).toContain("display: none;");
+  });
+
+  it("keeps the goto-line dialog compact", () => {
+    const dialogRule = getCssRuleBlock(fileViewPanelCss, ".fvp-goto-line-dialog");
+    const inputRule = getCssRuleBlock(fileViewPanelCss, ".fvp-goto-line-dialog input");
+
+    expect(dialogRule).toContain("width: min(348px, calc(100% - 16px));");
+    expect(dialogRule).toContain("padding: 12px;");
+    expect(inputRule).toContain("height: 32px;");
+  });
+
   it("keeps annotation cards compact with unified small action buttons", () => {
     expect(getCssRuleBlock(fileViewPanelCss, ".fvp-annotation-draft")).toContain(
       "border-radius: 8px;",

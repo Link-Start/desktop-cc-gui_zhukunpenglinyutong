@@ -1,4 +1,10 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from "react";
 import CodeMirror, {
   type ReactCodeMirrorProps,
   type ReactCodeMirrorRef,
@@ -16,7 +22,7 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { closeSearchPanel, openSearchPanel, search, searchPanelOpen } from "@codemirror/search";
-import { Compartment, StateEffect, StateField, type Extension } from "@codemirror/state";
+import { Compartment, Prec, StateEffect, StateField, type Extension } from "@codemirror/state";
 import type { CodeAnnotationSelection } from "../../code-annotations/types";
 import type { GitFileBlameResponse } from "../../../types";
 import type { GitLineMarkers } from "../utils/gitLineMarkers";
@@ -37,6 +43,12 @@ import type {
 } from "./fileViewPanelShared";
 import { toCodeMirrorShortcut } from "./fileViewPanelShared";
 import type { FileCodeMirrorEditorHandle } from "./FileCodeMirrorEditor";
+import {
+  FileEditorGotoLineDialog,
+  type FileEditorGotoLineDialogHandle,
+  type FileEditorGotoLineLabels,
+} from "./FileEditorGotoLineDialog";
+import { focusEditorViewAtLocation } from "../utils/fileEditorLocation";
 
 export type FileCodeMirrorEditorProps = {
   filePath: string;
@@ -70,41 +82,9 @@ export type FileCodeMirrorEditorProps = {
   lastReportedLineRangeRef: { current: string };
   saveFileShortcut: string | null | undefined;
   handleSave: () => void;
+  gotoLineLabels?: FileEditorGotoLineLabels;
   editable?: boolean;
 };
-
-export function focusEditorViewAtLocation(
-  view: EditorView,
-  line: number,
-  column: number,
-  scrollPosition: "nearest" | "center" = "nearest",
-  endLine?: number,
-): boolean {
-  if (line < 1 || line > view.state.doc.lines) {
-    return false;
-  }
-  if (
-    endLine !== undefined &&
-    (!Number.isInteger(endLine) || endLine < line)
-  ) {
-    return false;
-  }
-  const lineInfo = view.state.doc.line(line);
-  const safeColumn = Math.max(1, Math.min(column, lineInfo.length + 1));
-  const anchor = lineInfo.from + safeColumn - 1;
-  const head =
-    endLine === undefined
-      ? anchor
-      : view.state.doc.line(Math.min(endLine, view.state.doc.lines)).to;
-  view.dispatch({
-    selection: { anchor, head },
-    effects: EditorView.scrollIntoView(anchor, {
-      y: scrollPosition === "center" ? "center" : "nearest",
-    }),
-  });
-  view.focus();
-  return true;
-}
 
 export type FileCodeMirrorLineGap = {
   lineNumber: number;
@@ -479,9 +459,11 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     lastReportedLineRangeRef,
     saveFileShortcut,
     handleSave,
+    gotoLineLabels,
     editable = true,
   } = props;
   const codeMirrorRef = useRef<ReactCodeMirrorRef | null>(null);
+  const gotoLineDialogRef = useRef<FileEditorGotoLineDialogHandle | null>(null);
   const gitBlameCompartment = useMemo(() => new Compartment(), []);
   const gitBlameExtension = useMemo(() => fileGitBlameGutterExtension(), []);
   const gitBlameInstalledRef = useRef(false);
@@ -512,7 +494,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
   const editorNavigationKeymapExt = useMemo<Extension[]>(
     () => [
       navigationLineFlashField,
-      keymap.of([
+      Prec.highest(keymap.of([
         {
           key: "Mod-f",
           run: (view) => {
@@ -524,6 +506,10 @@ export const FileCodeMirrorEditorImpl = forwardRef<
             view.focus();
             return true;
           },
+        },
+        {
+          key: "Mod-g",
+          run: (view) => gotoLineDialogRef.current?.open(view) ?? false,
         },
         {
           key: "Mod-b",
@@ -539,7 +525,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
             return true;
           },
         },
-      ]),
+      ])),
     ],
     [runDefinitionFromCursor, runReferencesFromCursor],
   );
@@ -819,6 +805,9 @@ export const FileCodeMirrorEditorImpl = forwardRef<
           tabSize: 2,
         }}
       />
+      {gotoLineLabels ? (
+        <FileEditorGotoLineDialog ref={gotoLineDialogRef} labels={gotoLineLabels} />
+      ) : null}
     </div>
   );
 });

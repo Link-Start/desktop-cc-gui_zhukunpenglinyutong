@@ -603,6 +603,7 @@ describe("GitHistoryPanel interactions", () => {
   });
 
   it("renders one repository with the shared repository branch tree", async () => {
+    const onSelectRepository = vi.fn();
     render(
       <GitHistoryPanel
         workspace={workspace as never}
@@ -612,7 +613,7 @@ describe("GitHistoryPanel interactions", () => {
           { repositoryRoot: "", displayName: workspace.name },
         ] as never}
         onSelectWorkspace={vi.fn()}
-        onSelectRepository={vi.fn()}
+        onSelectRepository={onSelectRepository}
       />,
     );
 
@@ -620,7 +621,10 @@ describe("GitHistoryPanel interactions", () => {
     expect(screen.queryByRole("button", { name: "git.chooseRepo" })).toBeNull();
     expect(await screen.findByText("feat: one")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /git.historyToggleRepositoryBranches/ })).toHaveLength(2);
-    expect(document.querySelector(".git-history-branch-all-item")).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "git.historyAllBranches" }));
+    });
+    expect(onSelectRepository).toHaveBeenCalledWith("");
     expect(screen.getAllByText("main").length).toBeGreaterThan(0);
   });
 

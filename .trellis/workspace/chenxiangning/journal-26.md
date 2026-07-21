@@ -926,3 +926,136 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1053: 稳定 Git History 跨平台排序
+
+**Date**: 2026-07-22
+**Task**: 稳定 Git History 跨平台排序
+**Branch**: `feature/v-076`
+
+### Summary
+
+Review 并修复 Git History repository color collision、branch group 与 branch leaf 使用 localeCompare 导致的 Windows/macOS/Linux 排序漂移；补充跨平台 focused tests，同步并归档 OpenSpec change。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `effde1683` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1054: 修复快捷键持久化并增加常用模块
+
+**Date**: 2026-07-22
+**Task**: 修复快捷键持久化并增加常用模块
+**Branch**: `feature/v-076`
+
+### Summary
+
+补齐 frontend 与 Rust AppSettings shortcut round-trip，新增置顶常用模块分组和七个可配置模块快捷键，复用 AppShell 现有 view handlers；完成 focused tests、Rust test、typecheck、lint、runtime contracts，并归档 OpenSpec 与 Trellis task。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d498bf187` | (see git log) |
+| `365b1e2af` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1055: 文件编辑器行列跳转与标签页视觉统一
+
+**Date**: 2026-07-22
+**Task**: 文件编辑器行列跳转与标签页视觉统一
+**Branch**: `feature/v-076`
+
+### Summary
+
+新增 Cmd+G/Ctrl+G 行列跳转弹窗，完善输入边界、i18n 与 accessibility；压缩弹窗布局，隐藏 tab scrollbar，并统一 tab 与文件树图标 resolver。增量测试 92/92、targeted ESLint、typecheck、OpenSpec strict validation 均通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `636e4f4a2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1056: 恢复 Git History 分支树细节功能
+
+**Date**: 2026-07-22
+**Task**: 恢复 Git History 分支树细节功能
+**Branch**: `feature/v-076`
+
+### Summary
+
+恢复全部分支入口、根分组默认展开、HEAD/主干/ahead/behind 状态标签，并补充单仓与多仓回归测试及 OpenSpec 变更记录。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2965cf065` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

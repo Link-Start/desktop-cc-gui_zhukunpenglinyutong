@@ -21,6 +21,11 @@ export const GIT_REPOSITORY_SWATCH_COLOR_CLASSES = [
 const REPOSITORY_COLOR_HASH_OFFSET = 0x811c9dc5;
 const REPOSITORY_COLOR_HASH_PRIME = 0x01000193;
 
+export function compareGitIdentity(left: string, right: string): number {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
 function getRepositoryColorHash(repositoryRoot: string): number {
   let repositoryHash = REPOSITORY_COLOR_HASH_OFFSET;
   for (let index = 0; index < repositoryRoot.length; index += 1) {
@@ -37,7 +42,7 @@ export function buildGitRepositoryIconColorSlots(
   const usedColorSlots = new Set<number>();
   const sortedRepositoryRoots = repositories
     .map(({ repositoryRoot }) => repositoryRoot)
-    .sort((left, right) => left.localeCompare(right));
+    .sort(compareGitIdentity);
 
   sortedRepositoryRoots.forEach((repositoryRoot) => {
     let colorSlot = getRepositoryColorHash(repositoryRoot)

@@ -27,6 +27,13 @@ export type ShortcutSettingKey =
   | "saveFileShortcut"
   | "findInFileShortcut"
   | "toggleGitDiffListViewShortcut"
+  | "toggleGitGraphShortcut"
+  | "openNotesShortcut"
+  | "openIntentCanvasShortcut"
+  | "openRadarShortcut"
+  | "openProjectMapShortcut"
+  | "openBrowserDockShortcut"
+  | "openFileCompareShortcut"
   | "increaseUiScaleShortcut"
   | "decreaseUiScaleShortcut"
   | "resetUiScaleShortcut"
@@ -64,6 +71,13 @@ export type ShortcutDraftKey =
   | "saveFile"
   | "findInFile"
   | "gitDiffListView"
+  | "gitGraph"
+  | "notes"
+  | "intentCanvas"
+  | "radar"
+  | "projectMap"
+  | "browserDock"
+  | "fileCompare"
   | "increaseUiScale"
   | "decreaseUiScale"
   | "resetUiScale"
@@ -75,6 +89,7 @@ export type ShortcutDraftKey =
 export type ShortcutDrafts = Record<ShortcutDraftKey, string | null>;
 
 export type ShortcutCategory =
+  | "common"
   | "app"
   | "file"
   | "composer"
@@ -87,10 +102,7 @@ export type ShortcutCategory =
 export type ShortcutScope = "global" | "surface" | "editor" | "native-menu";
 
 export type ShortcutTriggerSurface =
-  | "dom"
-  | "native-menu"
-  | "editor"
-  | "settings";
+  "dom" | "native-menu" | "editor" | "settings";
 
 export type ShortcutActionMetadata = {
   id: string;
@@ -98,10 +110,13 @@ export type ShortcutActionMetadata = {
   draftKey: ShortcutDraftKey;
   category: ShortcutCategory;
   labelKey: string;
+  featuredLabelKey?: string;
   defaultShortcut: string | null;
   defaultLabelKey?: string;
   scope: ShortcutScope;
   triggerSurface: ShortcutTriggerSurface;
+  featured?: boolean;
+  featuredOrder?: number;
 };
 
 export const shortcutCategoryDefinitions: Array<{
@@ -109,6 +124,11 @@ export const shortcutCategoryDefinitions: Array<{
   titleKey: string;
   descriptionKey: string;
 }> = [
+  {
+    id: "common",
+    titleKey: "settings.commonModulesSubtitle",
+    descriptionKey: "settings.commonModulesSubDescription",
+  },
   {
     id: "app",
     titleKey: "settings.appSubtitle",
@@ -271,6 +291,8 @@ export const shortcutActions: ShortcutActionMetadata[] = [
     defaultShortcut: "cmd+alt+[",
     scope: "global",
     triggerSurface: "dom",
+    featured: true,
+    featuredOrder: 1,
   },
   {
     id: "toggle-right-conversation-sidebar",
@@ -281,6 +303,8 @@ export const shortcutActions: ShortcutActionMetadata[] = [
     defaultShortcut: "cmd+alt+]",
     scope: "global",
     triggerSurface: "dom",
+    featured: true,
+    featuredOrder: 2,
   },
   {
     id: "toggle-projects-sidebar",
@@ -298,9 +322,12 @@ export const shortcutActions: ShortcutActionMetadata[] = [
     draftKey: "gitSidebar",
     category: "panels",
     labelKey: "settings.toggleGitSidebar",
+    featuredLabelKey: "panels.git",
     defaultShortcut: "cmd+shift+g",
     scope: "native-menu",
     triggerSurface: "native-menu",
+    featured: true,
+    featuredOrder: 5,
   },
   {
     id: "toggle-global-search",
@@ -331,6 +358,8 @@ export const shortcutActions: ShortcutActionMetadata[] = [
     defaultShortcut: "cmd+shift+t",
     scope: "native-menu",
     triggerSurface: "native-menu",
+    featured: true,
+    featuredOrder: 12,
   },
   {
     id: "toggle-runtime-console",
@@ -348,9 +377,98 @@ export const shortcutActions: ShortcutActionMetadata[] = [
     draftKey: "filesSurface",
     category: "panels",
     labelKey: "settings.openFilesSurface",
+    featuredLabelKey: "panels.files",
     defaultShortcut: "cmd+shift+e",
     scope: "global",
     triggerSurface: "dom",
+    featured: true,
+    featuredOrder: 4,
+  },
+  {
+    id: "toggle-git-graph",
+    setting: "toggleGitGraphShortcut",
+    draftKey: "gitGraph",
+    category: "panels",
+    labelKey: "git.historyQuickAction",
+    defaultShortcut: null,
+    scope: "global",
+    triggerSurface: "dom",
+    featured: true,
+    featuredOrder: 3,
+  },
+  {
+    id: "open-notes",
+    setting: "openNotesShortcut",
+    draftKey: "notes",
+    category: "panels",
+    labelKey: "panels.notes",
+    defaultShortcut: null,
+    scope: "global",
+    triggerSurface: "dom",
+    featured: true,
+    featuredOrder: 6,
+  },
+  {
+    id: "open-intent-canvas",
+    setting: "openIntentCanvasShortcut",
+    draftKey: "intentCanvas",
+    category: "panels",
+    labelKey: "intentCanvas.manager.title",
+    featuredLabelKey: "panels.intentCanvas",
+    defaultShortcut: null,
+    scope: "global",
+    triggerSurface: "dom",
+    featured: true,
+    featuredOrder: 7,
+  },
+  {
+    id: "open-radar",
+    setting: "openRadarShortcut",
+    draftKey: "radar",
+    category: "panels",
+    labelKey: "panels.radar",
+    defaultShortcut: null,
+    scope: "global",
+    triggerSurface: "dom",
+    featured: true,
+    featuredOrder: 8,
+  },
+  {
+    id: "open-project-map",
+    setting: "openProjectMapShortcut",
+    draftKey: "projectMap",
+    category: "panels",
+    labelKey: "intentCanvas.manager.projectMap",
+    featuredLabelKey: "panels.projectMap",
+    defaultShortcut: null,
+    scope: "global",
+    triggerSurface: "dom",
+    featured: true,
+    featuredOrder: 9,
+  },
+  {
+    id: "open-browser-dock",
+    setting: "openBrowserDockShortcut",
+    draftKey: "browserDock",
+    category: "panels",
+    labelKey: "browserAgent.dock.panelTitle",
+    defaultShortcut: null,
+    scope: "global",
+    triggerSurface: "dom",
+    featured: true,
+    featuredOrder: 10,
+  },
+  {
+    id: "open-file-compare",
+    setting: "openFileCompareShortcut",
+    draftKey: "fileCompare",
+    category: "panels",
+    labelKey: "files.fileCompare.title",
+    defaultShortcut: null,
+    scope: "global",
+    triggerSurface: "dom",
+    featured: true,
+    featuredOrder: 11,
   },
   {
     id: "composer-cycle-model",
@@ -537,6 +655,13 @@ export const shortcutDraftKeyBySetting: Record<
   saveFileShortcut: "saveFile",
   findInFileShortcut: "findInFile",
   toggleGitDiffListViewShortcut: "gitDiffListView",
+  toggleGitGraphShortcut: "gitGraph",
+  openNotesShortcut: "notes",
+  openIntentCanvasShortcut: "intentCanvas",
+  openRadarShortcut: "radar",
+  openProjectMapShortcut: "projectMap",
+  openBrowserDockShortcut: "browserDock",
+  openFileCompareShortcut: "fileCompare",
   increaseUiScaleShortcut: "increaseUiScale",
   decreaseUiScaleShortcut: "decreaseUiScale",
   resetUiScaleShortcut: "resetUiScale",

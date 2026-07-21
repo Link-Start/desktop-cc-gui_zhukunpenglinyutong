@@ -1095,6 +1095,8 @@ const settings = {
     "microphoneDenied": "麥克風存取遭拒。請在「系統設定」>「隱私權與安全性」>「麥克風」中授予麥克風權限。",
     "shortcutsTitle": "快速鍵",
     "shortcutsDescription": "自訂檔案操作、撰寫區、面板與導覽的鍵盤快速鍵。",
+    "commonModulesSubtitle": "常用模組",
+    "commonModulesSubDescription": "快速設定常用的檢視與工具。",
     "appSubtitle": "應用程式",
     "appSubDescription": "開啟應用程式層級的目的地並切換主要模式。",
     "openSettings": "開啟設定",
