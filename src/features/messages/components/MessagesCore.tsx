@@ -7,22 +7,17 @@ import {
   useMemo,
   useRef,
   useState,
-  useTransition,
 } from "react";
 import { useTranslation } from "react-i18next";
-import type {
-  AccessMode,
-  ConversationItem,
-} from "../../../types";
+import type { ConversationItem } from "../../../types";
 import { isMacPlatform, isWindowsPlatform } from "../../../utils/platform";
-import { useStreamActivityPhase } from "../../threads/hooks/useStreamActivityPhase";
-import { setPerfStreamingState } from "../../../services/perfBaseline/perfContextBridge";
 import {
   noteThreadVisibleTextRendered,
   noteThreadVisibleRender,
   resolveActiveThreadStreamMitigation,
   useThreadStreamLatencySnapshot,
 } from "../../threads/utils/streamLatencyDiagnostics";
+import { useStreamActivityPhase } from "../../threads/hooks/useStreamActivityPhase";
 import type { AgentTaskScrollRequest } from "../types";
 import { getVisibleApprovalsForThread } from "../../../utils/approvalBatching";
 import {
@@ -32,14 +27,10 @@ import {
   readLocalBooleanFlag,
   writeLocalBooleanFlag,
 } from "../constants/liveCanvasControls";
-import { useFileLinkOpener } from "../hooks/useFileLinkOpener";
 import {
   RendererContextMenu,
 } from "../../../components/ui/RendererContextMenu";
 import { appendRendererDiagnostic } from "../../../services/rendererDiagnostics";
-import {
-  groupToolItems,
-} from "../utils/groupToolItems";
 import { MessagesTimeline } from "./MessagesTimeline";
 import { MessagesAnchorRail } from "./conversation/MessagesAnchorRail";
 import { ScrollControl } from "./conversation/ScrollControl";
@@ -51,21 +42,9 @@ import {
   parseReasoning,
 } from "../presentation/messagesReasoning";
 import {
-  buildAssistantFinalBoundarySet,
   buildLiveTailWorkingSet,
-  buildMessagesPresentationScopeKey,
-  buildRenderedItemsWindow,
-  collapseExpandedExploreItems,
-  resolveMessagesPresentationMode,
-  resolveStreamingPresentationItems,
-  resolveLiveAutoExpandedExploreId,
   suppressCompletedExploreItemsBetweenLatestUserTurns,
-  type MessagesHistoryExpansionMode,
 } from "../orchestration/presentation/messagesLiveWindow";
-import {
-  buildTurnFileChangesByBoundaryId,
-  mergeTurnFileChangesSummaries,
-} from "../utils/turnFileChanges";
 import {
   isAssistantMessageConversationItem,
   isReasoningConversationItem,
@@ -73,12 +52,8 @@ import {
 } from "../utils/messageItemPredicates";
 import { parseAgentTaskNotification } from "../../engine-task-output/contracts/agentTaskNotification";
 import { dedupeExitPlanItemsKeepFirst } from "../utils/messagesExitPlan";
-import { buildSuppressedUserMemoryContextMessageIdSet } from "../utils/context/messagesMemoryContext";
-import { buildSuppressedUserNoteCardContextMessageIdSet } from "../utils/context/messagesNoteCardContext";
 import {
-  countRenderableCollapsedEntries,
   findLastAssistantMessageIndex,
-  findLatestAssistantMessageIdAfterIndex,
   findLastUserMessageIndex,
   isMessagesPerfDebugEnabled,
   isSelectionInsideNode,
@@ -87,35 +62,22 @@ import {
   MESSAGES_SLOW_ANCHOR_WARN_MS,
   MESSAGES_SLOW_RENDER_WARN_MS,
   resolveWorkingActivityLabel,
-  SCROLL_THRESHOLD_PX,
   shouldDisplayWorkingActivityLabel,
   shouldHideClaudeReasoningModule,
-  isClaudeHistoryTranscriptHeavy,
-  VISIBLE_MESSAGE_WINDOW,
   STREAMING_VISIBLE_WINDOW,
 } from "../utils/messagesRenderUtils";
 import {
   buildMessageActionTargets,
   buildMessagesScrollKey,
-  findItemById,
-  findLatestAssistantTextLength,
-  isMessagesScrollNearBottom,
-  mergeReadableRecoveryItems,
   resolveActiveUserInputRequest,
   resolveActiveMessageAnchor,
   resolveCollapsedTimelineItems,
   resolveVisibleMessageItems,
   type MessageActionTargets,
-  type PreservedReadableWindow,
 } from "../orchestration/presentation/messagesViewModel";
 import {
-  ASSISTANT_FINALIZING_LIVE_WINDOW_MS,
-  CODEX_FINALIZING_LIVE_WINDOW_MS,
   INITIAL_BOTTOM_PIN_BUDGET_MS,
   SETTLE_REPIN_WINDOW_MS,
-  VISIBLE_TEXT_REPORT_EAGER_PREFIX_CHARS,
-  VISIBLE_TEXT_REPORT_MIN_GROWTH_CHARS,
-  VISIBLE_TEXT_REPORT_MIN_INTERVAL_MS,
 } from "../constants/messagesConstants";
 import {
   DEFAULT_RENDER_LOOP_GUARD_BUDGET,
@@ -123,44 +85,27 @@ import {
   type RenderLoopGuardBudget,
 } from "../timeline/virtualization/messagesRenderLoopGuards";
 import { addBoundedConversationRenderModeKey } from "../presentation/messagesConversationLightweightMode";
-import { useConversationNoteCaptureMenu } from "../hooks/useConversationNoteCaptureMenu";
-import {
-  TRANSIENT_RUNTIME_RECONNECT_AUTO_DISMISS_MS,
-  resolveAssistantRuntimeReconnectHint,
-  resolveRetryMessageForReconnectItem,
-} from "../utils/recovery/runtimeReconnect";
-import type {
-  LastRenderSnapshot,
-  LastVisibleTextReport,
-} from "../types/messagesTypes";
+import type { LastRenderSnapshot } from "../types/messagesTypes";
 import type { MessagesCoreProps } from "../contracts/messagesInput";
-import {
-  resolveConversationScrollEdgeTarget,
-  startConversationScrollConvergence,
-  type ConversationScrollEdge,
-  type ConversationScrollMotion,
-} from "../orchestration/scrolling/messagesScrollConvergence";
 import { useMessagesTimelineModels } from "../orchestration/hooks/useMessagesTimelineModels";
 import { useMessagesAnchorNavigation } from "../orchestration/hooks/useMessagesAnchorNavigation";
+import { useMessagesRuntimeState } from "../orchestration/hooks/useMessagesRuntimeState";
+import {
+  useMessagesHistoryPresentationWindow,
+  useMessagesHistoryWindow,
+} from "../orchestration/hooks/useMessagesHistoryWindow";
+import { useMessagesPresentationState } from "../orchestration/hooks/useMessagesPresentationState";
+import { useMessagesScrollController } from "../orchestration/hooks/useMessagesScrollController";
+import { useMessagesInteractions } from "../orchestration/hooks/useMessagesInteractions";
 import { MessagesLinkedRunBanner } from "../orchestration/components/MessagesLinkedRunBanner";
 
 const EMPTY_TASK_RUNS: NonNullable<MessagesCoreProps["runtime"]["taskRuns"]> = [];
 
 const ANCHOR_TITLE_MAX_LENGTH = 60;
-const AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS = [100, 300, 1_000, 2_000] as const;
-// 回声指纹环上限与容差：环覆盖最近若干帧的读/写位置即可，指纹匹配按 ±2px 容忍
-// 亚像素舍入；真实用户拖动/翻页的落点几乎不可能恰好命中程序化写入位置。
-const PROGRAMMATIC_SCROLL_ECHO_LIMIT = 16;
 const PROGRAMMATIC_SCROLL_ECHO_TOLERANCE_PX = 2;
 
-type ConversationScrollIntent =
-  | "history-open"
-  | "live-follow"
-  | "turn-settle"
-  | "explicit-control";
-
-function isFocusFollowScrollIntent(intent: ConversationScrollIntent | null) {
-  return intent === "live-follow" || intent === "turn-settle";
+function isAgentTaskNotificationText(text: string) {
+  return Boolean(parseAgentTaskNotification(text));
 }
 
 /**
@@ -179,18 +124,6 @@ function deriveAnchorTitle(text: string): string {
   return normalized.length > ANCHOR_TITLE_MAX_LENGTH
     ? `${normalized.slice(0, ANCHOR_TITLE_MAX_LENGTH)}…`
     : normalized;
-}
-
-function areStringSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>) {
-  if (left.size !== right.size) {
-    return false;
-  }
-  for (const value of left) {
-    if (!right.has(value)) {
-      return false;
-    }
-  }
-  return true;
 }
 
 // 流式期间每个 token 都会替换 items 数组引用,但通常只有最后一条正在流式输出的
@@ -292,154 +225,25 @@ export const MessagesCore = memo(function MessagesCore({
   const isThinking = conversationState.meta.isThinking;
   const isWorking = isThinking || isContextCompacting;
   const heartbeatPulse = conversationState.meta.heartbeatPulse ?? 0;
-  const threadStreamLatencySnapshot = useThreadStreamLatencySnapshot(threadId);
-  const activeStreamMitigation = useMemo(
-    () => resolveActiveThreadStreamMitigation(threadStreamLatencySnapshot),
-    [threadStreamLatencySnapshot],
-  );
-  const blankingRecoveryActive =
-    activeEngine === "claude" &&
-    isThinking &&
-    threadStreamLatencySnapshot?.latencyCategory === "repeat-turn-blanking";
-  const supportsStreamingReadableWindowRecovery =
-    activeEngine === "claude" ||
-    activeEngine === "codex" ||
-    activeEngine === "gemini" ||
-    activeEngine === "kimi";
-  const visibleStallRecoveryActive =
-    supportsStreamingReadableWindowRecovery &&
-    isThinking &&
-    threadStreamLatencySnapshot?.latencyCategory === "visible-output-stall-after-first-delta";
-  const readableWindowRecoveryActive =
-    blankingRecoveryActive || visibleStallRecoveryActive;
-  const transientRuntimeReconnectSeenAtByItemIdRef = useRef<Map<string, number>>(new Map());
-  const [transientRuntimeReconnectClock, setTransientRuntimeReconnectClock] = useState(() =>
-    Date.now(),
-  );
-  useEffect(() => {
-    const currentMessageIds = new Set(
-      items
-        .filter((item) => item.kind === "message")
-        .map((item) => item.id),
-    );
-    const seenAtByItemId = transientRuntimeReconnectSeenAtByItemIdRef.current;
-    for (const itemId of seenAtByItemId.keys()) {
-      if (!currentMessageIds.has(itemId)) {
-        seenAtByItemId.delete(itemId);
-      }
-    }
-  }, [items]);
-  const latestRuntimeReconnectItemId = useMemo(() => {
-    let sawUserMessageAfterDiagnostic = false;
-    for (let index = items.length - 1; index >= 0; index -= 1) {
-      const item = items[index];
-      if (!item || item.kind !== "message") {
-        continue;
-      }
-      if (item.role === "user") {
-        sawUserMessageAfterDiagnostic = true;
-        continue;
-      }
-      if (item.role !== "assistant") {
-        continue;
-      }
-      const runtimeReconnectHint = resolveAssistantRuntimeReconnectHint(
-        item,
-        Boolean(parseAgentTaskNotification(item.text)),
-      );
-      if (!runtimeReconnectHint) {
-        return null;
-      }
-      if (runtimeReconnectHint.tone === "transient" && sawUserMessageAfterDiagnostic) {
-        continue;
-      }
-      if (runtimeReconnectHint.tone === "transient") {
-        const seenAtByItemId = transientRuntimeReconnectSeenAtByItemIdRef.current;
-        const seenAt =
-          seenAtByItemId.get(item.id) ?? transientRuntimeReconnectClock;
-        if (!seenAtByItemId.has(item.id)) {
-          seenAtByItemId.set(item.id, seenAt);
-        }
-        const autoDismissMs =
-          runtimeReconnectHint.autoDismissMs ??
-          TRANSIENT_RUNTIME_RECONNECT_AUTO_DISMISS_MS;
-        if (transientRuntimeReconnectClock - seenAt >= autoDismissMs) {
-          continue;
-        }
-      }
-      return item.id;
-    }
-    return null;
-  }, [items, transientRuntimeReconnectClock]);
-  useEffect(() => {
-    if (!latestRuntimeReconnectItemId) {
-      return;
-    }
-    const item = items.find((candidate) => candidate.id === latestRuntimeReconnectItemId);
-    if (!item || item.kind !== "message" || item.role !== "assistant") {
-      return;
-    }
-    const runtimeReconnectHint = resolveAssistantRuntimeReconnectHint(
-      item,
-      Boolean(parseAgentTaskNotification(item.text)),
-    );
-    if (runtimeReconnectHint?.tone !== "transient") {
-      return;
-    }
-    const seenAt =
-      transientRuntimeReconnectSeenAtByItemIdRef.current.get(item.id) ??
-      transientRuntimeReconnectClock;
-    const autoDismissMs =
-      runtimeReconnectHint.autoDismissMs ??
-      TRANSIENT_RUNTIME_RECONNECT_AUTO_DISMISS_MS;
-    const remainingMs = Math.max(0, seenAt + autoDismissMs - Date.now());
-    const timeoutId = window.setTimeout(() => {
-      setTransientRuntimeReconnectClock(Date.now());
-    }, remainingMs);
-    return () => window.clearTimeout(timeoutId);
-  }, [items, latestRuntimeReconnectItemId, transientRuntimeReconnectClock]);
-  const latestRetryMessage = useMemo(
-    () => resolveRetryMessageForReconnectItem(items, latestRuntimeReconnectItemId),
-    [items, latestRuntimeReconnectItemId],
-  );
+  const {
+    clearPendingJumpMessage,
+    consumePendingHistoryExpansionMode,
+    discardPendingHistoryExpansion,
+    historyExpansionMode,
+    pendingJumpMessageId,
+    requestPendingJumpMessage,
+    resetHistoryScope,
+    revealAllHistoryItems,
+    showAllHistoryItems,
+  } = useMessagesHistoryWindow({ firstItemId: items[0]?.id ?? null });
   const renderStartedAt =
     typeof performance === "undefined" ? 0 : performance.now();
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  // 非流式期的「跟随窗口」deadline：打开会话钉底、对话结束回刷幕布落地，都在窗口内
-  // 允许内容长高时把视口按回底部。isThinking 下降沿用于开启收尾窗口。
-  const stickToBottomDeadlineRef = useRef(0);
-  const stickToBottomIntentRef = useRef<"history-open" | "turn-settle" | null>(null);
   const settleRepinPrevThinkingRef = useRef(isThinking);
-  const pendingHistoryExpansionModeRef = useRef<MessagesHistoryExpansionMode>(null);
   const messageNodeByIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const agentTaskNodeByTaskIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const agentTaskNodeByToolUseIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
-  const autoScrollRef = useRef(true);
-  const activeScrollConvergenceCancelRef = useRef<(() => void) | null>(null);
-  const activeProgrammaticScrollEdgeRef = useRef<ConversationScrollEdge | null>(null);
-  const activeProgrammaticScrollMotionRef = useRef<ConversationScrollMotion | null>(null);
-  const activeScrollIntentRef = useRef<ConversationScrollIntent | null>(null);
-  // 程序化滚动观察指纹环：收敛帧、请求合流、内容高度回调等「我们自己的代码」读到或
-  // 写下的 scrollTop 都进环（跨 run 滚动保留）。WebKit scroll 事件异步派发，钳位或收敛
-  // 写入产生的事件可能在几何继续变化后才送达；活跃收敛期间事件位置命中指纹 = 程序化
-  // 回声，不能按 near-bottom 误判成用户上滚（发消息后跳顶滞留的根因）；未命中的位置
-  // 才是真实用户滚动（拖滚动条/触摸/翻页键），照常释放跟随。
-  const programmaticScrollTopEchoRef = useRef<number[]>([]);
-  const initialBottomPinScopeRef = useRef<string | null>(null);
   const anchorUpdateRafRef = useRef<number | null>(null);
   const lastRenderSnapshotRef = useRef<LastRenderSnapshot | null>(null);
-  const preservedReadableWindowRef = useRef<PreservedReadableWindow>({
-    threadId: null,
-    turnId: null,
-    renderedItems: [],
-    visibleCollapsedHistoryItemCount: 0,
-  });
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(() => new Set());
-  const [selectedExitPlanExecutionByItemKey, setSelectedExitPlanExecutionByItemKey] = useState<
-    Record<string, Extract<AccessMode, "default" | "full-access">>
-  >({});
-  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [lightweightConversationKeys, setLightweightConversationKeys] = useState<Set<string>>(
     () => new Set(),
   );
@@ -489,10 +293,6 @@ export const MessagesCore = memo(function MessagesCore({
   const anchorLoopGuardRef = useRef<RenderLoopGuardBudget>(
     DEFAULT_RENDER_LOOP_GUARD_BUDGET,
   );
-  const [showAllHistoryItems, setShowAllHistoryItems] = useState(false);
-  const [historyExpansionMode, setHistoryExpansionMode] =
-    useState<MessagesHistoryExpansionMode>(null);
-  const [pendingJumpMessageId, setPendingJumpMessageId] = useState<string | null>(null);
   const [liveAutoFollowEnabled, setLiveAutoFollowEnabled] = useState(() =>
     readLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, true),
   );
@@ -514,25 +314,14 @@ export const MessagesCore = memo(function MessagesCore({
       : legacyClaudeReasoningDockEnabled);
   const [isSelectionFrozen, setIsSelectionFrozen] = useState(false);
   const enableCollaborationBadge = activeEngine === "codex";
-  const copyTimeoutRef = useRef<number | null>(null);
   const planPanelFocusRafRef = useRef<number | null>(null);
   const planPanelFocusTimeoutRef = useRef<number | null>(null);
   const planPanelFocusNodeRef = useRef<HTMLElement | null>(null);
-  const assistantFinalizingTimerRef = useRef<number | null>(null);
-  const assistantFinalizingCompleteRenderedIdRef = useRef<string | null>(null);
-  const lastVisibleTextReportRef = useRef<LastVisibleTextReport>({
-    itemId: null,
-    visibleTextLength: 0,
-    reportedAt: 0,
-  });
   const lastStreamSurfaceDiagnosticKeyRef = useRef<string | null>(null);
-  const previousAssistantThinkingRef = useRef(isThinking);
-  const previousAssistantThreadIdRef = useRef(threadId);
   const resourceCleanupThreadIdRef = useRef(threadId);
   const frozenItemsRef = useRef<ConversationItem[] | null>(null);
   const latestItemsRef = useRef(items);
   latestItemsRef.current = items;
-  const [finalizingAssistantMessageId, setFinalizingAssistantMessageId] = useState<string | null>(null);
   const exitPlanDedupeCacheRef = useRef<{
     baseItems: ConversationItem[];
     result: ConversationItem[];
@@ -587,12 +376,6 @@ export const MessagesCore = memo(function MessagesCore({
     [effectiveItems, enableCollaborationBadge, isThinking, showAllHistoryItems],
   );
   const renderSourceItems = liveTailWorkingSet.items;
-  // 跨 token 稳定引用:供 handleAssistantVisibleTextRender 在回调体内读取最新条目,
-  // 而不必把每 token 换新引用的 renderSourceItems 放进 useCallback 依赖。render 期
-  // 同步赋值,读取不滞后一帧。不复用 latestItemsRef(=未 windowing 的原始 items),
-  // 以免 codex finalizing 分支的 targetTextLength 语义漂移。
-  const renderSourceItemsRef = useRef(renderSourceItems);
-  renderSourceItemsRef.current = renderSourceItems;
   const renderSourceSnapshot = useMemo(
     () => ({
       scopeKey: renderScopeKey,
@@ -605,7 +388,62 @@ export const MessagesCore = memo(function MessagesCore({
     deferredRenderSourceSnapshot.scopeKey === renderScopeKey
       ? deferredRenderSourceSnapshot.items
       : renderSourceItems;
-  const firstItemIdRef = useRef<string | null>(items[0]?.id ?? null);
+  const threadStreamLatencySnapshot = useThreadStreamLatencySnapshot(threadId);
+  const activeStreamMitigation = useMemo(
+    () => resolveActiveThreadStreamMitigation(threadStreamLatencySnapshot),
+    [threadStreamLatencySnapshot],
+  );
+  const streamActivityPhase = useStreamActivityPhase({
+    isProcessing:
+      isThinking &&
+      (activeEngine === "codex" ||
+        activeEngine === "claude" ||
+        activeEngine === "gemini" ||
+        activeEngine === "kimi"),
+    items: deferredRenderSourceItems,
+  });
+  const {
+    blankingRecoveryActive,
+    enableClaudeRenderSafeMode,
+    getPendingRuntimeResourceCount,
+    handleAssistantVisibleTextRender,
+    isAssistantFinalizing,
+    isAssistantFinalizingRef,
+    isWorkingRef,
+    latestAssistantMessageId,
+    latestRetryMessage,
+    latestRuntimeReconnectItemId,
+    liveAssistantMessageId,
+    primaryWorkingLabel,
+    readableWindowRecoveryActive,
+    supportsStreamingReadableWindowRecovery,
+    visibleStallRecoveryActive,
+    waitingForFirstChunk,
+  } = useMessagesRuntimeState({
+    activeEngine,
+    activeTurnId,
+    codexSilentSuspectedAt,
+    deferredRenderSourceItems,
+    isContextCompacting,
+    isMacDesktop,
+    isAgentTaskNotificationText,
+    isThinking,
+    isWindowsDesktop,
+    items,
+    labels: {
+      approvalResumingAfterApproval: t("approval.resumingAfterApproval"),
+      codexSilentSuspected: t("messages.codexSilentSuspected"),
+      codexWaitingForFirstText: t("messages.codexWaitingForFirstText"),
+      contextCompacting: t("chat.contextDualViewCompacting"),
+    },
+    renderScopeKey,
+    reportVisibleTextRendered: noteThreadVisibleTextRendered,
+    renderSourceItems,
+    streamActivityPhase,
+    threadId,
+    threadStreamLatencyCategory:
+      threadStreamLatencySnapshot?.latencyCategory ?? null,
+  });
   const activeUserInputRequest = resolveActiveUserInputRequest({
     requests: userInputRequests,
     threadId,
@@ -615,220 +453,74 @@ export const MessagesCore = memo(function MessagesCore({
   const activeUserInputAnchorItemId =
     activeUserInputRequest?.params.item_id?.trim() || null;
   const rawScrollKey = buildMessagesScrollKey(effectiveItems, activeUserInputRequestId);
-  // Throttle scrollKey during streaming to avoid flooding the main thread
-  // with smooth-scroll animations that block keyboard input.
-  const [scrollKey, setScrollKey] = useState(rawScrollKey);
-  const [, startScrollKeyTransition] = useTransition();
-  const scrollThrottleRef = useRef<number>(0);
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    if (scrollThrottleRef.current) {
-      window.clearTimeout(scrollThrottleRef.current);
-    }
-    scrollThrottleRef.current = window.setTimeout(() => {
-      if (!mountedRef.current || typeof window === "undefined") {
-        return;
-      }
-      startScrollKeyTransition(() => {
-        setScrollKey((current) => (current === rawScrollKey ? current : rawScrollKey));
-      });
-    }, isThinking ? 120 : 0);
-    return () => {
-      if (scrollThrottleRef.current) {
-        window.clearTimeout(scrollThrottleRef.current);
-      }
-    };
-  }, [rawScrollKey, isThinking, startScrollKeyTransition]);
-  const { openFileLink, showFileLinkMenu, fileLinkMenu, closeFileLinkMenu } = useFileLinkOpener(
-    workspacePath,
-    openTargets,
-    selectedOpenAppId,
+  const {
+    activeProgrammaticScrollEdgeRef,
+    activeProgrammaticScrollMotionRef,
+    autoScrollRef,
+    bottomRef,
+    cancelFocusFollowConvergence,
+    cancelScrollConvergence,
+    containerRef,
+    getPendingScrollResourceCount,
+    handleScrollControlRequest,
+    initialBottomPinScopeRef,
+    isNearBottom,
+    programmaticScrollTopEchoRef,
+    rearmAutoFollowToBottom,
+    recordProgrammaticScrollObservation,
+    requestAutoScroll,
+    requestHistoryBottomConvergence,
+    requestSettleBottomConvergence,
+    requestTimelineLayoutBottomConvergence,
+    scrollKey,
+    stickToBottomDeadlineRef,
+    stickToBottomIntentRef,
+  } = useMessagesScrollController({
+    clearPendingJumpMessage,
+    isAssistantFinalizingRef,
+    isThinking,
+    isWorkingRef,
+    liveAutoFollowEnabledRef,
+    rawScrollKey,
+    renderScopeKey,
+  });
+  const {
+    closeFileLinkMenu,
+    closeNoteCaptureMenu,
+    collapseExpandedIds,
+    collapseExploreItems,
+    copiedMessageId,
+    expandedItems,
+    fileLinkMenu,
+    getPendingInteractionResourceCount,
+    handleConversationContextMenu,
+    handleCopyMessage,
+    handleExitPlanModeExecuteForItem,
+    noteCaptureMenu,
+    openFileLink,
+    resetInteractionScope,
+    selectedExitPlanExecutionByItemKey,
+    showFileLinkMenu,
+    timelineOpenNoteCaptureMenu,
+    toggleExpanded,
+  } = useMessagesInteractions({
+    canvasRootRef: containerRef,
+    effectiveItems,
+    isThinking,
+    items,
+    onCaptureNote,
+    onExitPlanModeExecute,
     onOpenWorkspaceFile,
-  );
-
-  const isNearBottom = useCallback(
-    (node: HTMLDivElement) => isMessagesScrollNearBottom(node, SCROLL_THRESHOLD_PX),
-    [],
-  );
+    openTargets,
+    renderSourceItems,
+    selectedOpenAppId,
+    threadId,
+    workspacePath,
+  });
 
   const computeActiveAnchor = useCallback(() => {
     return resolveActiveMessageAnchor(containerRef.current, messageNodeByIdRef.current);
-  }, []);
-
-  const recordProgrammaticScrollObservation = useCallback((value: number) => {
-    const echoes = programmaticScrollTopEchoRef.current;
-    if (echoes[echoes.length - 1] === value) {
-      return;
-    }
-    echoes.push(value);
-    if (echoes.length > PROGRAMMATIC_SCROLL_ECHO_LIMIT) {
-      echoes.splice(0, echoes.length - PROGRAMMATIC_SCROLL_ECHO_LIMIT);
-    }
-  }, []);
-
-  const cancelScrollConvergence = useCallback(() => {
-    activeScrollConvergenceCancelRef.current?.();
-    activeScrollConvergenceCancelRef.current = null;
-    activeProgrammaticScrollEdgeRef.current = null;
-    activeProgrammaticScrollMotionRef.current = null;
-    activeScrollIntentRef.current = null;
-  }, []);
-
-  const cancelFocusFollowConvergence = useCallback(() => {
-    if (isFocusFollowScrollIntent(activeScrollIntentRef.current)) {
-      cancelScrollConvergence();
-    }
-  }, [cancelScrollConvergence]);
-
-  const requestScrollConvergence = useCallback(
-    (
-      edge: ConversationScrollEdge,
-      motion: ConversationScrollMotion,
-      intent: ConversationScrollIntent,
-      options?: {
-        recheckDelaysMs?: readonly number[];
-        shouldContinue?: () => boolean;
-      },
-    ) => {
-      const container = containerRef.current;
-      if (!container) {
-        return;
-      }
-      // 显式 icon navigation 使用 smooth motion，优先于期间到来的自动 instant intent；
-      // smooth 自己会逐帧追踪可变 target，自动路径无需抢占成为第二个 writer。
-      if (
-        intent !== "explicit-control" &&
-        activeScrollIntentRef.current === "explicit-control" &&
-        activeProgrammaticScrollMotionRef.current === "smooth"
-      ) {
-        return;
-      }
-      // 合流/新建 run 前先吸收当前位置：settle 停帧窗口内发生的钳位也要进指纹环，
-      // 否则迟到的回声事件会拿旧环误判成用户上滚。
-      recordProgrammaticScrollObservation(container.scrollTop);
-      if (
-        activeScrollIntentRef.current === intent &&
-        activeProgrammaticScrollEdgeRef.current === edge &&
-        activeProgrammaticScrollMotionRef.current === motion &&
-        Math.abs(resolveConversationScrollEdgeTarget(container, edge) - container.scrollTop) <= 1
-      ) {
-        return;
-      }
-      cancelScrollConvergence();
-      activeProgrammaticScrollEdgeRef.current = edge;
-      activeProgrammaticScrollMotionRef.current = motion;
-      activeScrollIntentRef.current = intent;
-      let cancelCurrentRun: (() => void) | null = null;
-      cancelCurrentRun = startConversationScrollConvergence(container, {
-        edge,
-        motion,
-        recheckDelaysMs: options?.recheckDelaysMs,
-        shouldContinue: options?.shouldContinue,
-        onFrameObservation: (observedScrollTop, appliedScrollTop) => {
-          recordProgrammaticScrollObservation(observedScrollTop);
-          recordProgrammaticScrollObservation(appliedScrollTop);
-        },
-        onComplete: () => {
-          if (activeScrollConvergenceCancelRef.current !== cancelCurrentRun) {
-            return;
-          }
-          activeScrollConvergenceCancelRef.current = null;
-          activeProgrammaticScrollEdgeRef.current = null;
-          activeProgrammaticScrollMotionRef.current = null;
-          activeScrollIntentRef.current = null;
-        },
-      });
-      activeScrollConvergenceCancelRef.current = cancelCurrentRun;
-    },
-    [cancelScrollConvergence, recordProgrammaticScrollObservation],
-  );
-
-  // scope 切换必须在新的 history initial-pin layout effect 之前清掉旧 run；若放在
-  // passive cleanup，新会话刚启动的 convergence 会被随后到达的旧 cleanup 误杀。
-  useLayoutEffect(() => {
-    cancelScrollConvergence();
-    initialBottomPinScopeRef.current = null;
-    autoScrollRef.current = true;
-    stickToBottomDeadlineRef.current = 0;
-    stickToBottomIntentRef.current = null;
-  }, [cancelScrollConvergence, renderScopeKey]);
-
-  const requestAutoScroll = useCallback(() => {
-    // Respect a manual scroll-up: never yank the user back to the bottom.
-    if (
-      !liveAutoFollowEnabledRef.current ||
-      !autoScrollRef.current ||
-      !containerRef.current ||
-      (!isWorkingRef.current && !isAssistantFinalizingRef.current)
-    ) {
-      return;
-    }
-    requestScrollConvergence("bottom", "instant", "live-follow", {
-      recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
-      shouldContinue: () =>
-        liveAutoFollowEnabledRef.current &&
-        autoScrollRef.current &&
-        (isWorkingRef.current || isAssistantFinalizingRef.current),
-    });
-  }, [requestScrollConvergence]);
-
-  const rearmAutoFollowToBottom = useCallback(() => {
-    autoScrollRef.current = true;
-    requestScrollConvergence("bottom", "instant", "live-follow", {
-      recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
-      shouldContinue: () =>
-        liveAutoFollowEnabledRef.current &&
-        autoScrollRef.current &&
-        (isWorkingRef.current || isAssistantFinalizingRef.current),
-    });
-  }, [requestScrollConvergence]);
-
-  const requestHistoryBottomConvergence = useCallback(() => {
-    requestScrollConvergence("bottom", "instant", "history-open", {
-      recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
-      shouldContinue: () =>
-        autoScrollRef.current && Date.now() <= stickToBottomDeadlineRef.current,
-    });
-  }, [requestScrollConvergence]);
-
-  // Timeline 布局形态切换（虚拟化 OFF↔ON、thread scope reset）会整体重排行高：
-  // 总高度先塌缩到估高之和、scrollTop 被浏览器钳位，再由重测回填真实高度，parked
-  // 在底部的视口会被甩到半空。这属于「落位」而非「跟随」——与 history-open 同契约，
-  // 不受焦点跟随开关约束；但只在用户仍停在底部（autoScrollRef）时执行，避免夺回
-  // 主动上滚后的阅读位置。
-  const requestTimelineLayoutBottomConvergence = useCallback(() => {
-    if (!autoScrollRef.current) {
-      return;
-    }
-    stickToBottomIntentRef.current = "history-open";
-    stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
-    requestHistoryBottomConvergence();
-  }, [requestHistoryBottomConvergence]);
-
-  const requestSettleBottomConvergence = useCallback(() => {
-    requestScrollConvergence("bottom", "instant", "turn-settle", {
-      recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
-      shouldContinue: () =>
-        liveAutoFollowEnabledRef.current &&
-        autoScrollRef.current &&
-        Date.now() <= stickToBottomDeadlineRef.current,
-    });
-  }, [requestScrollConvergence]);
-
-  const handleScrollControlRequest = useCallback(
-    (edge: ConversationScrollEdge) => {
-      autoScrollRef.current = edge === "bottom";
-      setPendingJumpMessageId(null);
-      requestScrollConvergence(edge, "smooth", "explicit-control");
-    },
-    [requestScrollConvergence],
-  );
+  }, [containerRef]);
 
   const scrollToAgentTaskCard = useCallback((request: AgentTaskScrollRequest | null) => {
     if (!request) {
@@ -854,7 +546,7 @@ export const MessagesCore = memo(function MessagesCore({
       top: Math.max(0, targetTop),
       behavior: "smooth",
     });
-  }, []);
+  }, [autoScrollRef, containerRef]);
 
   useEffect(() => {
     const previousThreadId = resourceCleanupThreadIdRef.current;
@@ -863,19 +555,17 @@ export const MessagesCore = memo(function MessagesCore({
       anchorRaf: anchorUpdateRafRef.current !== null ? 1 : 0,
       planFocusRaf: planPanelFocusRafRef.current !== null ? 1 : 0,
       planFocusTimer: planPanelFocusTimeoutRef.current !== null ? 1 : 0,
-      assistantFinalizingTimer: assistantFinalizingTimerRef.current !== null ? 1 : 0,
-      copyTimer: copyTimeoutRef.current !== null ? 1 : 0,
-      scrollThrottleTimer: scrollThrottleRef.current ? 1 : 0,
+      assistantFinalizingTimer: getPendingRuntimeResourceCount(),
+      copyTimer: getPendingInteractionResourceCount(),
+      scrollThrottleTimer: getPendingScrollResourceCount(),
       messageNodeCount: messageNodeByIdRef.current.size,
       agentTaskNodeCount:
         agentTaskNodeByTaskIdRef.current.size + agentTaskNodeByToolUseIdRef.current.size,
     };
-    autoScrollRef.current = true;
-    setExpandedItems((previous) => (previous.size === 0 ? previous : new Set()));
+    resetInteractionScope();
     setIsSelectionFrozen(false);
     frozenItemsRef.current = null;
-    pendingHistoryExpansionModeRef.current = null;
-    setHistoryExpansionMode(null);
+    resetHistoryScope();
     activeAnchorIdRef.current = null;
     anchorLoopGuardRef.current = DEFAULT_RENDER_LOOP_GUARD_BUDGET;
     if (typeof window !== "undefined") {
@@ -891,18 +581,6 @@ export const MessagesCore = memo(function MessagesCore({
         window.clearTimeout(planPanelFocusTimeoutRef.current);
         planPanelFocusTimeoutRef.current = null;
       }
-      if (assistantFinalizingTimerRef.current !== null) {
-        window.clearTimeout(assistantFinalizingTimerRef.current);
-        assistantFinalizingTimerRef.current = null;
-      }
-      if (copyTimeoutRef.current !== null) {
-        window.clearTimeout(copyTimeoutRef.current);
-        copyTimeoutRef.current = null;
-      }
-      if (scrollThrottleRef.current) {
-        window.clearTimeout(scrollThrottleRef.current);
-        scrollThrottleRef.current = 0;
-      }
     }
     if (threadChanged) {
       appendRendererDiagnostic("messages/render-resource-cleanup", {
@@ -915,12 +593,16 @@ export const MessagesCore = memo(function MessagesCore({
       });
     }
     resourceCleanupThreadIdRef.current = threadId;
-    setFinalizingAssistantMessageId(null);
     setActiveAnchorId(null);
-    previousAssistantThinkingRef.current = false;
-    previousAssistantThreadIdRef.current = threadId;
-  }, [cancelScrollConvergence, threadId, workspaceId]);
-  useEffect(() => cancelScrollConvergence, [cancelScrollConvergence]);
+  }, [
+    getPendingInteractionResourceCount,
+    getPendingScrollResourceCount,
+    getPendingRuntimeResourceCount,
+    resetHistoryScope,
+    resetInteractionScope,
+    threadId,
+    workspaceId,
+  ]);
   useEffect(() => {
     scrollToAgentTaskCard(agentTaskScrollRequest);
   }, [agentTaskScrollRequest, scrollToAgentTaskCard]);
@@ -938,7 +620,7 @@ export const MessagesCore = memo(function MessagesCore({
     return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
     };
-  }, []);
+  }, [containerRef]);
   useEffect(() => {
     if (!isSelectionFrozen) {
       frozenItemsRef.current = null;
@@ -1042,92 +724,7 @@ export const MessagesCore = memo(function MessagesCore({
     }
     autoScrollRef.current = true;
     requestAutoScroll();
-  }, [isWorking, liveAutoFollowEnabled, requestAutoScroll]);
-  useEffect(() => {
-    const currentFirstId = effectiveItems[0]?.id ?? null;
-    if (currentFirstId !== firstItemIdRef.current) {
-      setShowAllHistoryItems(false);
-      setHistoryExpansionMode(null);
-      setPendingJumpMessageId(null);
-      pendingHistoryExpansionModeRef.current = null;
-    }
-    firstItemIdRef.current = currentFirstId;
-  }, [effectiveItems]);
-  const toggleExpanded = useCallback((id: string) => {
-    setExpandedItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-  const handleExitPlanModeExecuteForItem = useCallback(
-    async (
-      itemId: string,
-      mode: Extract<AccessMode, "default" | "full-access">,
-    ) => {
-      const selectionKey = `${threadId ?? "no-thread"}:${itemId}`;
-      setSelectedExitPlanExecutionByItemKey((prev) => {
-        if (prev[selectionKey] === mode) {
-          return prev;
-        }
-        return {
-          ...prev,
-          [selectionKey]: mode,
-        };
-      });
-      await onExitPlanModeExecute?.(mode);
-    },
-    [onExitPlanModeExecute, threadId],
-  );
-  useEffect(() => {
-    if (isThinking) {
-      return;
-    }
-    setExpandedItems((prev) => collapseExpandedExploreItems(prev, effectiveItems));
-  }, [effectiveItems, isThinking]);
-
-  // Auto-expand the latest reasoning block during streaming (synced with idea-claude-code-gui)
-  const lastAutoExpandedIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!isThinking) {
-      lastAutoExpandedIdRef.current = null;
-      return;
-    }
-
-    const reasoningIds: string[] = [];
-    for (const item of renderSourceItems) {
-      if (item.kind === "reasoning") {
-        reasoningIds.push(item.id);
-      }
-    }
-
-    if (reasoningIds.length === 0) return;
-
-    const lastReasoningId = reasoningIds[reasoningIds.length - 1] ?? null;
-
-    if (lastReasoningId !== lastAutoExpandedIdRef.current) {
-      setExpandedItems((prev) => {
-        const next = new Set<string>();
-        // Only expand the latest reasoning block, collapse all others
-        if (lastReasoningId) {
-          next.add(lastReasoningId);
-        }
-        // Preserve non-reasoning expanded items
-        for (const id of prev) {
-          const isReasoning = reasoningIds.includes(id);
-          if (!isReasoning) {
-            next.add(id);
-          }
-        }
-        return areStringSetsEqual(prev, next) ? prev : next;
-      });
-      lastAutoExpandedIdRef.current = lastReasoningId;
-    }
-  }, [isThinking, renderSourceItems]);
+  }, [autoScrollRef, isWorking, liveAutoFollowEnabled, requestAutoScroll]);
   const reasoningMetaById = useMemo(() => {
     const meta = new Map<string, ReturnType<typeof parseReasoning>>();
     deferredRenderSourceItems.forEach((item) => {
@@ -1265,23 +862,12 @@ export const MessagesCore = memo(function MessagesCore({
   const previousIsThinkingRef = useRef(isThinking);
   useEffect(() => {
     if (previousIsThinkingRef.current && !isThinking && claudeDockedReasoningItems.length > 0) {
-      setExpandedItems((prev) => {
-        const reasoningIds = new Set(claudeDockedReasoningItems.map((entry) => entry.item.id));
-        let changed = false;
-        const next = new Set(prev);
-        for (const id of reasoningIds) {
-          if (next.delete(id)) {
-            changed = true;
-          }
-        }
-        if (!changed) {
-          return prev;
-        }
-        return next;
-      });
+      collapseExpandedIds(
+        new Set(claudeDockedReasoningItems.map((entry) => entry.item.id)),
+      );
     }
     previousIsThinkingRef.current = isThinking;
-  }, [claudeDockedReasoningItems, isThinking]);
+  }, [claudeDockedReasoningItems, collapseExpandedIds, isThinking]);
 
   const latestTitleOnlyReasoningId = useMemo(() => {
     for (let index = deferredRenderSourceItems.length - 1; index >= 0; index -= 1) {
@@ -1328,202 +914,6 @@ export const MessagesCore = memo(function MessagesCore({
     }
     return null;
   }, [activeEngine, deferredRenderSourceItems, presentationProfile]);
-  const approvalResumeWorkingLabel = useMemo(() => {
-    if (!isThinking || lastUserMessageIndex < 0) {
-      return null;
-    }
-    const resumeText = t("approval.resumingAfterApproval");
-    for (
-      let index = deferredRenderSourceItems.length - 1;
-      index > lastUserMessageIndex;
-      index -= 1
-    ) {
-      const item = deferredRenderSourceItems[index];
-      if (!item) {
-        continue;
-      }
-      if (isAssistantMessageConversationItem(item)) {
-        break;
-      }
-      if (
-        item.kind === "tool" &&
-        item.toolType === "fileChange" &&
-        item.status === "running"
-      ) {
-        return item.output?.trim() || resumeText;
-      }
-    }
-    return null;
-  }, [deferredRenderSourceItems, isThinking, lastUserMessageIndex, t]);
-
-  const latestAssistantMessageId = useMemo(
-    () => findLatestAssistantMessageIdAfterIndex(
-      deferredRenderSourceItems,
-      lastUserMessageIndex,
-    ),
-    [deferredRenderSourceItems, lastUserMessageIndex],
-  );
-  const latestLiveSourceAssistantMessageId = useMemo(
-    () => findLatestAssistantMessageIdAfterIndex(
-      renderSourceItems,
-      liveSourceLastUserMessageIndex,
-    ),
-    [liveSourceLastUserMessageIndex, renderSourceItems],
-  );
-  const assistantFinalizingCandidateId =
-    latestLiveSourceAssistantMessageId ?? latestAssistantMessageId;
-  const supportsAssistantFinalizingWindow =
-    activeEngine === "claude" || activeEngine === "codex";
-  const isAssistantCompletionFrame =
-    supportsAssistantFinalizingWindow &&
-    previousAssistantThreadIdRef.current === threadId &&
-    previousAssistantThinkingRef.current &&
-    !isThinking &&
-    assistantFinalizingCandidateId !== null;
-  const liveAssistantMessageId = isThinking
-    ? assistantFinalizingCandidateId
-    : finalizingAssistantMessageId ?? (
-        isAssistantCompletionFrame ? assistantFinalizingCandidateId : null
-      );
-  const isAssistantFinalizing =
-    !isThinking &&
-    liveAssistantMessageId !== null;
-  // 供内容高度观察器（见下方 ResizeObserver）读取，避免它随每次流式状态变化重挂。
-  const isWorkingRef = useRef(isWorking);
-  isWorkingRef.current = isWorking;
-  const isAssistantFinalizingRef = useRef(isAssistantFinalizing);
-  isAssistantFinalizingRef.current = isAssistantFinalizing;
-  useEffect(() => {
-    const previouslyThinking = previousAssistantThinkingRef.current;
-    previousAssistantThreadIdRef.current = threadId;
-    previousAssistantThinkingRef.current = isThinking;
-    if (!supportsAssistantFinalizingWindow) {
-      if (assistantFinalizingTimerRef.current !== null) {
-        window.clearTimeout(assistantFinalizingTimerRef.current);
-        assistantFinalizingTimerRef.current = null;
-      }
-      assistantFinalizingCompleteRenderedIdRef.current = null;
-      if (finalizingAssistantMessageId !== null) {
-        setFinalizingAssistantMessageId(null);
-      }
-      return;
-    }
-    if (isThinking) {
-      if (assistantFinalizingTimerRef.current !== null) {
-        window.clearTimeout(assistantFinalizingTimerRef.current);
-        assistantFinalizingTimerRef.current = null;
-      }
-      assistantFinalizingCompleteRenderedIdRef.current = null;
-      if (finalizingAssistantMessageId !== null) {
-        setFinalizingAssistantMessageId(null);
-      }
-      return;
-    }
-    if (!previouslyThinking || !assistantFinalizingCandidateId) {
-      return;
-    }
-    setFinalizingAssistantMessageId((current) =>
-      current === assistantFinalizingCandidateId
-        ? current
-        : assistantFinalizingCandidateId,
-    );
-    if (assistantFinalizingTimerRef.current !== null) {
-      window.clearTimeout(assistantFinalizingTimerRef.current);
-    }
-    assistantFinalizingCompleteRenderedIdRef.current = null;
-    const finalizingWindowMs =
-      activeEngine === "codex"
-        ? CODEX_FINALIZING_LIVE_WINDOW_MS
-        : ASSISTANT_FINALIZING_LIVE_WINDOW_MS;
-    assistantFinalizingTimerRef.current = window.setTimeout(() => {
-      assistantFinalizingTimerRef.current = null;
-      assistantFinalizingCompleteRenderedIdRef.current = null;
-      setFinalizingAssistantMessageId((current) =>
-        current === assistantFinalizingCandidateId ? null : current,
-      );
-    }, finalizingWindowMs);
-  }, [
-    activeEngine,
-    assistantFinalizingCandidateId,
-    finalizingAssistantMessageId,
-    isThinking,
-    supportsAssistantFinalizingWindow,
-    threadId,
-  ]);
-  useEffect(() => () => {
-    if (assistantFinalizingTimerRef.current !== null) {
-      window.clearTimeout(assistantFinalizingTimerRef.current);
-      assistantFinalizingTimerRef.current = null;
-    }
-    assistantFinalizingCompleteRenderedIdRef.current = null;
-  }, []);
-  useEffect(() => {
-    lastVisibleTextReportRef.current = {
-      itemId: null,
-      visibleTextLength: 0,
-      reportedAt: 0,
-    };
-  }, [activeTurnId, threadId]);
-
-  const waitingForFirstChunk = useMemo(() => {
-    if (!isThinking || deferredRenderSourceItems.length === 0) {
-      return false;
-    }
-    let lastUserIndex = -1;
-    for (let index = deferredRenderSourceItems.length - 1; index >= 0; index -= 1) {
-      const item = deferredRenderSourceItems[index];
-      if (isUserMessageConversationItem(item)) {
-        lastUserIndex = index;
-        break;
-      }
-    }
-    if (lastUserIndex < 0) {
-      return false;
-    }
-    for (
-      let index = lastUserIndex + 1;
-      index < deferredRenderSourceItems.length;
-      index += 1
-    ) {
-      const item = deferredRenderSourceItems[index];
-      if (isAssistantMessageConversationItem(item)) {
-        return false;
-      }
-    }
-    return true;
-  }, [deferredRenderSourceItems, isThinking]);
-  const streamActivityPhase = useStreamActivityPhase({
-    isProcessing:
-      isThinking &&
-      (activeEngine === "codex" || activeEngine === "claude" || activeEngine === "gemini" || activeEngine === "kimi"),
-    items: deferredRenderSourceItems,
-  });
-  // 把对话页当前的流式状态 / 可见行数写入性能上下文桥,供掉帧 / 长任务采集器在
-  // 掉帧瞬间附带"当时在干什么"。廉价 effect,仅在派生值变化时触发。
-  useEffect(() => {
-    setPerfStreamingState({
-      isStreaming: isThinking,
-      streamActivityPhase: streamActivityPhase ? String(streamActivityPhase) : null,
-      visibleRowCount: renderSourceItems.length,
-    });
-  }, [isThinking, streamActivityPhase, renderSourceItems.length]);
-  const codexSilentSuspectedLabel =
-    activeEngine === "codex" && codexSilentSuspectedAt !== null
-      ? t("messages.codexSilentSuspected")
-      : null;
-  const codexWaitingForFirstTextLabel =
-    activeEngine === "codex" && isThinking && waitingForFirstChunk
-      ? t("messages.codexWaitingForFirstText")
-      : null;
-  const primaryWorkingLabel = isContextCompacting
-    ? t("chat.contextDualViewCompacting")
-    : codexSilentSuspectedLabel ??
-      codexWaitingForFirstTextLabel ??
-      approvalResumeWorkingLabel;
-  const enableClaudeRenderSafeMode =
-    (isWindowsDesktop || isMacDesktop) &&
-    activeEngine === "claude" &&
-    isThinking;
 
   const visibleItems = useMemo(
     () =>
@@ -1618,243 +1008,65 @@ export const MessagesCore = memo(function MessagesCore({
     threadId,
     visibleItems,
   ]);
-  const timelineCollapsedHistoryItemCount =
-    !showAllHistoryItems && timelineItems.length > VISIBLE_MESSAGE_WINDOW
-      ? timelineItems.length - VISIBLE_MESSAGE_WINDOW
-      : 0;
-  const collapsedHistoryItemCount =
-    liveTailWorkingSet.omittedBeforeWorkingSetCount + timelineCollapsedHistoryItemCount;
-  const renderedItemsWindow = useMemo(
-    () =>
-      buildRenderedItemsWindow(
-        timelineItems,
-        timelineCollapsedHistoryItemCount,
-        liveTailWorkingSet.preservedUserMessageId,
-      ),
-    [
-      liveTailWorkingSet.preservedUserMessageId,
-      timelineCollapsedHistoryItemCount,
-      timelineItems,
-    ],
-  );
-  const renderedItems = renderedItemsWindow.renderedItems;
-  const visibleCollapsedHistoryItemCount = collapsedHistoryItemCount > 0
-    ? renderedItemsWindow.visibleCollapsedHistoryItemCount
-      + liveTailWorkingSet.omittedBeforeWorkingSetCount
-    : 0;
-  const messagesPresentationMode = resolveMessagesPresentationMode({
-    historyExpansionMode,
-    isWorking,
-    showAllHistoryItems,
-    visibleCollapsedHistoryItemCount,
-  });
-  const currentLatestAssistantTextLength = useMemo(
-    () => findLatestAssistantTextLength(renderedItems),
-    [renderedItems],
-  );
-  useEffect(() => {
-    const currentThreadId = threadId ?? null;
-    const currentTurnId = activeTurnId;
-    if (
-      preservedReadableWindowRef.current.threadId !== currentThreadId ||
-      preservedReadableWindowRef.current.turnId !== currentTurnId
-    ) {
-      preservedReadableWindowRef.current = {
-        threadId: currentThreadId,
-        turnId: currentTurnId,
-        renderedItems: renderedItems.length > 0 ? renderedItems : [],
-        visibleCollapsedHistoryItemCount:
-          renderedItems.length > 0 ? visibleCollapsedHistoryItemCount : 0,
-      };
-      return;
-    }
-    if (renderedItems.length > 0) {
-      if (readableWindowRecoveryActive) {
-        return;
-      }
-      preservedReadableWindowRef.current = {
-        threadId: currentThreadId,
-        turnId: currentTurnId,
-        renderedItems,
-        visibleCollapsedHistoryItemCount,
-      };
-      return;
-    }
-    if (!isThinking) {
-      preservedReadableWindowRef.current = {
-        threadId: currentThreadId,
-        turnId: null,
-        renderedItems: [],
-        visibleCollapsedHistoryItemCount: 0,
-      };
-    }
-  }, [
-    activeTurnId,
-    isThinking,
-    readableWindowRecoveryActive,
+  const {
+    messagesPresentationMode,
+    presentationCollapsedHistoryItemCount,
+    presentationRenderedItems,
+    preservedLatestAssistantTextLength,
+    preservedReadableWindowItemCount,
+    renderChainBlankingRegressionActive,
     renderedItems,
+    shouldUseReadableWindowRecovery,
+  } = useMessagesHistoryPresentationWindow({
+    activeTurnId,
+    blankingRecoveryActive,
+    effectiveItemsLength: effectiveItems.length,
+    historyExpansionMode,
+    isThinking,
+    isWorking,
+    liveTailWorkingSet,
+    readableWindowRecoveryActive,
+    showAllHistoryItems,
+    supportsStreamingReadableWindowRecovery,
     threadId,
-    visibleCollapsedHistoryItemCount,
-  ]);
-  const preservedReadableWindowSnapshot = preservedReadableWindowRef.current;
-  const preservedLatestAssistantTextLength = findLatestAssistantTextLength(
-    preservedReadableWindowSnapshot.renderedItems,
-  );
-  const hasPreservedReadableWindow =
-    (readableWindowRecoveryActive || supportsStreamingReadableWindowRecovery) &&
-    preservedReadableWindowSnapshot.threadId === (threadId ?? null) &&
-    preservedReadableWindowSnapshot.turnId === activeTurnId &&
-    preservedReadableWindowSnapshot.renderedItems.length > 0;
-  const renderChainBlankingRegressionActive =
-    supportsStreamingReadableWindowRecovery &&
-    isThinking &&
-    effectiveItems.length > 0 &&
-    renderedItems.length === 0;
-  const shouldUseReadableWindowRecovery =
-    hasPreservedReadableWindow &&
-    (
-      renderChainBlankingRegressionActive ||
-      (blankingRecoveryActive && renderedItems.length === 0) ||
-      (
-        visibleStallRecoveryActive &&
-        currentLatestAssistantTextLength > 0 &&
-        currentLatestAssistantTextLength < preservedLatestAssistantTextLength
-      )
-    );
-  const recoveredReadableWindow = useMemo(() => {
-    if (!shouldUseReadableWindowRecovery) {
-      return null;
-    }
-    return {
-      renderedItems: mergeReadableRecoveryItems(
-        preservedReadableWindowSnapshot.renderedItems,
-        renderedItems,
-      ),
-      visibleCollapsedHistoryItemCount:
-        preservedReadableWindowSnapshot.visibleCollapsedHistoryItemCount,
-    };
-  }, [preservedReadableWindowSnapshot, renderedItems, shouldUseReadableWindowRecovery]);
-  const presentationRenderedItems = shouldUseReadableWindowRecovery
-    ? recoveredReadableWindow?.renderedItems ?? renderedItems
-    : renderedItems;
-  const presentationCollapsedHistoryItemCount = shouldUseReadableWindowRecovery
-    ? recoveredReadableWindow?.visibleCollapsedHistoryItemCount ?? visibleCollapsedHistoryItemCount
-    : visibleCollapsedHistoryItemCount;
-  const presentationScopeKey = buildMessagesPresentationScopeKey({
-    scopeKey: renderScopeKey,
-    mode: messagesPresentationMode,
-    collapsedHistoryItemCount: presentationCollapsedHistoryItemCount,
-    itemCount: presentationRenderedItems.length,
-    firstItemId: presentationRenderedItems[0]?.id ?? null,
-    lastItemId: presentationRenderedItems.at(-1)?.id ?? null,
+    timelineItems,
+    visibleStallRecoveryActive,
+    workspaceId,
   });
-  const claudeRenderableEntryCount = useMemo(
-    () => countRenderableCollapsedEntries(timelineItems, activeEngine),
-    [activeEngine, timelineItems],
-  );
-  const claudeHistoryTranscriptFallbackActive = useMemo(() => {
-    if (activeEngine !== "claude" || isThinking || isHistoryLoading) {
-      return false;
-    }
-    if (conversationState?.meta.historyRestoredAtMs == null) {
-      return false;
-    }
-    if (claudeRenderableEntryCount > 0) {
-      return false;
-    }
-    return isClaudeHistoryTranscriptHeavy(timelineItems);
-  }, [
+  const {
+    assistantFinalBoundarySet,
+    assistantLiveTurnFinalBoundarySuppressedSet,
+    claudeHistoryTranscriptFallbackActive,
+    groupedEntries,
+    hiddenClaudeReasoningOnly,
+    liveAssistantItem,
+    liveAutoExpandedExploreId,
+    liveReasoningItem,
+    presentationScopeKey,
+    sessionFileChangesSummary,
+    suppressedUserMemoryContextMessageIds,
+    suppressedUserNoteCardContextMessageIds,
+    timelinePresentationItems,
+    turnFileChangesByBoundaryId,
+  } = useMessagesPresentationState({
     activeEngine,
-    claudeRenderableEntryCount,
-    conversationState?.meta.historyRestoredAtMs,
+    claudeDockedReasoningItemCount: claudeDockedReasoningItems.length,
+    collapsedHistoryItemCount: presentationCollapsedHistoryItemCount,
+    deferredRenderSourceItems,
+    hideClaudeReasoning,
+    historyRestoredAtMs: conversationState.meta.historyRestoredAtMs,
+    isAssistantFinalizing,
     isHistoryLoading,
     isThinking,
-    timelineItems,
-  ]);
-  const presentationRenderSnapshot = useMemo(
-    () => ({
-      scopeKey: presentationScopeKey,
-      items: presentationRenderedItems,
-    }),
-    [presentationRenderedItems, presentationScopeKey],
-  );
-  const deferredPresentationRenderSnapshot = useDeferredValue(
-    presentationRenderSnapshot,
-  );
-  const deferredPresentationRenderedItems =
-    deferredPresentationRenderSnapshot.scopeKey === presentationScopeKey
-      ? deferredPresentationRenderSnapshot.items
-      : presentationRenderedItems;
-  const shouldStabilizePresentationItems =
-    supportsStreamingReadableWindowRecovery &&
-    (isThinking || isAssistantFinalizing);
-  const livePresentationOverrideItemIds = useMemo(() => {
-    if (!liveAssistantMessageId && !latestReasoningId) {
-      return undefined;
-    }
-    return new Set(
-      [liveAssistantMessageId, latestReasoningId].filter(
-        (id): id is string => Boolean(id),
-      ),
-    );
-  }, [latestReasoningId, liveAssistantMessageId]);
-  const timelinePresentationItems = useMemo(() => {
-    if (claudeHistoryTranscriptFallbackActive) {
-      return timelineItems;
-    }
-    // Keep timeline-heavy derivations on a stable snapshot so long Codex/Claude
-    // streams do not re-run grouping/anchors/boundaries on every text delta.
-    // The live assistant/reasoning rows still override from renderSourceItems.
-    return resolveStreamingPresentationItems(
-      deferredPresentationRenderedItems,
-      presentationRenderedItems,
-      shouldStabilizePresentationItems,
-      livePresentationOverrideItemIds,
-      {
-        deferredScopeKey: deferredPresentationRenderSnapshot.scopeKey,
-        currentScopeKey: presentationScopeKey,
-      },
-    );
-  }, [
-    claudeHistoryTranscriptFallbackActive,
-    deferredPresentationRenderSnapshot.scopeKey,
-    deferredPresentationRenderedItems,
-    livePresentationOverrideItemIds,
+    latestReasoningId,
+    liveAssistantMessageId,
+    messagesPresentationMode,
     presentationRenderedItems,
-    presentationScopeKey,
-    shouldStabilizePresentationItems,
+    renderScopeKey,
+    renderSourceItems,
+    supportsStreamingReadableWindowRecovery,
     timelineItems,
-  ]);
-  const hiddenClaudeReasoningOnly =
-    activeEngine === "claude" &&
-    hideClaudeReasoning &&
-    deferredRenderSourceItems.length > 0 &&
-    deferredRenderSourceItems.every(isReasoningConversationItem) &&
-    timelinePresentationItems.length === 0 &&
-    claudeDockedReasoningItems.length === 0;
-  const liveAssistantItem = useMemo(
-    () => {
-      const item = findItemById(renderSourceItems, liveAssistantMessageId);
-      if (!item || !isAssistantMessageConversationItem(item)) {
-        return null;
-      }
-      return item;
-    },
-    [liveAssistantMessageId, renderSourceItems],
-  );
-  const liveReasoningItem = useMemo(
-    () => {
-      if (!isThinking) {
-        return null;
-      }
-      const item = findItemById(renderSourceItems, latestReasoningId);
-      if (!item || !isReasoningConversationItem(item)) {
-        return null;
-      }
-      return item;
-    },
-    [isThinking, latestReasoningId, renderSourceItems],
-  );
+  });
   useEffect(() => {
     if (!threadId || !isThinking) {
       lastStreamSurfaceDiagnosticKeyRef.current = null;
@@ -1900,8 +1112,7 @@ export const MessagesCore = memo(function MessagesCore({
       liveAssistantItemId: liveAssistantItem?.id ?? null,
       liveAssistantTextLength,
       liveReasoningItemId: liveReasoningItem?.id ?? null,
-      preservedReadableWindowItemsCount:
-        preservedReadableWindowSnapshot.renderedItems.length,
+      preservedReadableWindowItemsCount: preservedReadableWindowItemCount,
       preservedLatestAssistantTextLength,
     });
   }, [
@@ -1911,7 +1122,7 @@ export const MessagesCore = memo(function MessagesCore({
     liveAssistantItem,
     liveReasoningItem,
     preservedLatestAssistantTextLength,
-    preservedReadableWindowSnapshot.renderedItems.length,
+    preservedReadableWindowItemCount,
     presentationRenderedItems.length,
     readableWindowRecoveryActive,
     renderChainBlankingRegressionActive,
@@ -1937,14 +1148,6 @@ export const MessagesCore = memo(function MessagesCore({
       title: deriveAnchorTitle(item.text),
     }));
   }, [timelinePresentationItems]);
-  const suppressedUserNoteCardContextMessageIds = useMemo(
-    () => buildSuppressedUserNoteCardContextMessageIdSet(timelinePresentationItems),
-    [timelinePresentationItems],
-  );
-  const suppressedUserMemoryContextMessageIds = useMemo(
-    () => buildSuppressedUserMemoryContextMessageIdSet(timelinePresentationItems),
-    [timelinePresentationItems],
-  );
   const hasAnchorRail = showMessageAnchors && messageAnchors.length > 0;
   const commitActiveAnchorId = useCallback(
     (nextActiveAnchor: string | null, reason: "scroll" | "sync") => {
@@ -2018,37 +1221,36 @@ export const MessagesCore = memo(function MessagesCore({
     [
       commitActiveAnchorId,
       computeActiveAnchor,
+      containerRef,
       hasAnchorRail,
       isNearBottom,
       messageAnchors,
       threadId,
     ],
   );
-  const revealAllHistoryItems = useCallback((mode: "manual" | "jump") => {
-    pendingHistoryExpansionModeRef.current = mode;
-    setHistoryExpansionMode(mode);
-    setShowAllHistoryItems(true);
-  }, []);
   const handleShowAllHistoryItems = useCallback(() => {
     revealAllHistoryItems("manual");
   }, [revealAllHistoryItems]);
   useLayoutEffect(() => {
     if (!showAllHistoryItems) {
-      pendingHistoryExpansionModeRef.current = null;
+      discardPendingHistoryExpansion();
       return;
     }
-    const pendingExpansionMode = pendingHistoryExpansionModeRef.current;
+    const pendingExpansionMode = consumePendingHistoryExpansionMode();
     const container = containerRef.current;
     if (!pendingExpansionMode || !container) {
       return;
     }
-    pendingHistoryExpansionModeRef.current = null;
     if (pendingExpansionMode === "manual") {
       autoScrollRef.current = false;
       container.scrollTop = 0;
     }
     scheduleAnchorUpdate("sync");
   }, [
+    consumePendingHistoryExpansionMode,
+    discardPendingHistoryExpansion,
+    autoScrollRef,
+    containerRef,
     timelinePresentationItems,
     scheduleAnchorUpdate,
     showAllHistoryItems,
@@ -2092,15 +1294,16 @@ export const MessagesCore = memo(function MessagesCore({
     }
     scheduleAnchorUpdate("scroll");
   }, [
+    activeProgrammaticScrollEdgeRef,
+    activeProgrammaticScrollMotionRef,
+    autoScrollRef,
     cancelScrollConvergence,
+    containerRef,
     isNearBottom,
+    programmaticScrollTopEchoRef,
     scheduleAnchorUpdate,
   ]);
   const clearTransientUiState = useCallback(() => {
-    if (copyTimeoutRef.current) {
-      window.clearTimeout(copyTimeoutRef.current);
-      copyTimeoutRef.current = null;
-    }
     if (anchorUpdateRafRef.current !== null) {
       window.cancelAnimationFrame(anchorUpdateRafRef.current);
       anchorUpdateRafRef.current = null;
@@ -2193,89 +1396,6 @@ export const MessagesCore = memo(function MessagesCore({
     });
   }, [activeEngine, isAssistantFinalizing, isThinking, renderedItems.length, threadId]);
 
-  const handleAssistantVisibleTextRender = useCallback(
-    (payload: { itemId: string; visibleText: string }) => {
-      if (
-        (activeEngine !== "claude" && activeEngine !== "codex" && activeEngine !== "gemini") ||
-        (!isThinking && !isAssistantFinalizing) ||
-        !threadId
-      ) {
-        return;
-      }
-      const visibleTextLength = payload.visibleText.length;
-      let targetTextLength = 0;
-      if (
-        activeEngine === "codex" &&
-        isAssistantFinalizing &&
-        payload.itemId === finalizingAssistantMessageId
-      ) {
-        const targetItem = renderSourceItemsRef.current.find(
-          (item) =>
-            isAssistantMessageConversationItem(item) &&
-            item.id === payload.itemId,
-        );
-        targetTextLength =
-          targetItem && isAssistantMessageConversationItem(targetItem)
-            ? targetItem.text.length
-            : 0;
-      }
-      const previousReport = lastVisibleTextReportRef.current;
-      const isNewAssistantItem = previousReport.itemId !== payload.itemId;
-      const visibleTextGrew =
-        isNewAssistantItem || visibleTextLength > previousReport.visibleTextLength;
-      if (visibleTextGrew) {
-        const now = Date.now();
-        const shouldReport =
-          isNewAssistantItem ||
-          visibleTextLength <= VISIBLE_TEXT_REPORT_EAGER_PREFIX_CHARS ||
-          visibleTextLength - previousReport.visibleTextLength >=
-            VISIBLE_TEXT_REPORT_MIN_GROWTH_CHARS ||
-          now - previousReport.reportedAt >= VISIBLE_TEXT_REPORT_MIN_INTERVAL_MS ||
-          (targetTextLength > 0 && visibleTextLength >= targetTextLength);
-        if (shouldReport) {
-          noteThreadVisibleTextRendered(threadId, {
-            itemId: payload.itemId,
-            visibleTextLength,
-            renderAt: now,
-          });
-          lastVisibleTextReportRef.current = {
-            itemId: payload.itemId,
-            visibleTextLength,
-            reportedAt: now,
-          };
-        }
-      }
-      if (
-        activeEngine === "codex" &&
-        isAssistantFinalizing &&
-        payload.itemId === finalizingAssistantMessageId &&
-        targetTextLength > 0 &&
-        visibleTextLength >= targetTextLength &&
-        assistantFinalizingCompleteRenderedIdRef.current !== payload.itemId
-      ) {
-        assistantFinalizingCompleteRenderedIdRef.current = payload.itemId;
-        if (assistantFinalizingTimerRef.current !== null) {
-          window.clearTimeout(assistantFinalizingTimerRef.current);
-        }
-        const completedAssistantMessageId = payload.itemId;
-        assistantFinalizingTimerRef.current = window.setTimeout(() => {
-          assistantFinalizingTimerRef.current = null;
-          assistantFinalizingCompleteRenderedIdRef.current = null;
-          setFinalizingAssistantMessageId((current) =>
-            current === completedAssistantMessageId ? null : current,
-          );
-        }, ASSISTANT_FINALIZING_LIVE_WINDOW_MS);
-      }
-    },
-    [
-      activeEngine,
-      finalizingAssistantMessageId,
-      isAssistantFinalizing,
-      isThinking,
-      threadId,
-    ],
-  );
-
   useEffect(() => clearTransientUiState, [clearTransientUiState]);
 
   useEffect(() => {
@@ -2291,27 +1411,6 @@ export const MessagesCore = memo(function MessagesCore({
     }
     scheduleAnchorUpdate("sync");
   }, [hasAnchorRail, messageAnchors, scheduleAnchorUpdate, scrollKey, threadId]);
-
-  const handleCopyMessage = useCallback(
-    async (
-      item: Extract<ConversationItem, { kind: "message" }>,
-      copyText?: string,
-    ) => {
-      try {
-        await navigator.clipboard.writeText(copyText ?? item.text);
-        setCopiedMessageId(item.id);
-        if (copyTimeoutRef.current) {
-          window.clearTimeout(copyTimeoutRef.current);
-        }
-        copyTimeoutRef.current = window.setTimeout(() => {
-          setCopiedMessageId(null);
-        }, 1200);
-      } catch {
-        // No-op: clipboard errors can occur in restricted contexts.
-      }
-    },
-    [],
-  );
 
   useEffect(() => {
     if (!liveAutoFollowEnabled || (!isWorking && !isAssistantFinalizing)) {
@@ -2329,6 +1428,8 @@ export const MessagesCore = memo(function MessagesCore({
     requestAutoScroll();
     return undefined;
   }, [
+    autoScrollRef,
+    containerRef,
     isAssistantFinalizing,
     isNearBottom,
     isWorking,
@@ -2366,9 +1467,14 @@ export const MessagesCore = memo(function MessagesCore({
     // 要进视口才真实布局，底部长消息被系统性低估（估高封顶 260px，真实常上千）。
     // 开一个跟随窗口，让下方的内容高度观察器把迟到的测量一路追到底。
   }, [
+    autoScrollRef,
+    containerRef,
+    initialBottomPinScopeRef,
     isHistoryLoading,
     pendingJumpMessageId,
     requestHistoryBottomConvergence,
+    stickToBottomDeadlineRef,
+    stickToBottomIntentRef,
     threadId,
     timelinePresentationItems,
     workspaceId,
@@ -2388,7 +1494,13 @@ export const MessagesCore = memo(function MessagesCore({
       stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
       requestSettleBottomConvergence();
     }
-  }, [isThinking, requestSettleBottomConvergence]);
+  }, [
+    autoScrollRef,
+    isThinking,
+    requestSettleBottomConvergence,
+    stickToBottomDeadlineRef,
+    stickToBottomIntentRef,
+  ]);
 
   // ── 底部跟随的真正驱动：内容高度变化 ───────────────────────────────────
   // 曾经唯一的驱动是依赖 scrollKey 的 auto-follow effect，而 scrollKey 由 items 末条的
@@ -2451,72 +1563,26 @@ export const MessagesCore = memo(function MessagesCore({
     };
     // threadId：切会话时重新绑定，避免时间线根节点被换掉后观察到已脱离文档的旧节点。
   }, [
+    autoScrollRef,
     cancelScrollConvergence,
+    containerRef,
+    isAssistantFinalizingRef,
+    isWorkingRef,
     recordProgrammaticScrollObservation,
     requestAutoScroll,
     requestHistoryBottomConvergence,
     requestSettleBottomConvergence,
+    stickToBottomDeadlineRef,
+    stickToBottomIntentRef,
     threadId,
   ]);
 
-  const groupedEntries = useMemo(
-    () => groupToolItems(timelinePresentationItems),
-    [timelinePresentationItems],
-  );
-  const liveAutoExpandedExploreId = useMemo(
-    () => resolveLiveAutoExpandedExploreId(groupedEntries, isThinking),
-    [groupedEntries, isThinking],
-  );
   useEffect(() => {
     if (!isThinking || liveAutoExpandedExploreId !== null) {
       return;
     }
-    setExpandedItems((prev) => collapseExpandedExploreItems(prev, effectiveItems));
-  }, [effectiveItems, isThinking, liveAutoExpandedExploreId]);
-  const assistantFinalBoundarySet = useMemo(() => {
-    return buildAssistantFinalBoundarySet(timelinePresentationItems);
-  }, [timelinePresentationItems]);
-  const turnFileChangesByBoundaryId = useMemo(() => {
-    return buildTurnFileChangesByBoundaryId(timelinePresentationItems);
-  }, [timelinePresentationItems]);
-  const sessionFileChangesSummary = useMemo(() => {
-    return mergeTurnFileChangesSummaries(turnFileChangesByBoundaryId.values());
-  }, [turnFileChangesByBoundaryId]);
-  const assistantLiveTurnFinalBoundarySuppressedSet = useMemo(() => {
-    const ids = new Set<string>();
-    if (!liveAssistantMessageId) {
-      return ids;
-    }
-    let lastUserIndex = -1;
-    for (let index = timelinePresentationItems.length - 1; index >= 0; index -= 1) {
-      const entry = timelinePresentationItems[index];
-      if (entry?.kind === "message" && entry.role === "user") {
-        lastUserIndex = index;
-        break;
-      }
-    }
-    if (lastUserIndex < 0) {
-      return ids;
-    }
-    for (
-      let index = lastUserIndex + 1;
-      index < timelinePresentationItems.length;
-      index += 1
-    ) {
-      const entry = timelinePresentationItems[index];
-      if (
-        entry?.kind === "message" &&
-        entry.role === "assistant" &&
-        entry.isFinal === true &&
-        assistantFinalBoundarySet.has(entry.id) &&
-        (isThinking || entry.id === liveAssistantMessageId)
-      ) {
-        ids.add(entry.id);
-      }
-    }
-    return ids;
-  }, [assistantFinalBoundarySet, isThinking, liveAssistantMessageId, timelinePresentationItems]);
-
+    collapseExploreItems(effectiveItems);
+  }, [collapseExploreItems, effectiveItems, isThinking, liveAutoExpandedExploreId]);
   const shouldRenderUserInputNode =
     (activeEngine === "codex" || activeEngine === "claude") &&
     Boolean(legacyOnUserInputSubmit);
@@ -2574,31 +1640,17 @@ export const MessagesCore = memo(function MessagesCore({
   const { handlePendingJumpTargetReady, requestScrollToAnchor } =
     useMessagesAnchorNavigation({
       autoScrollRef,
+      clearPendingJumpMessage,
       commitActiveAnchorId,
       containerRef,
       messageNodeByIdRef,
       pendingJumpMessageId,
+      requestPendingJumpMessage,
       revealAllHistoryItems,
-      setPendingJumpMessageId,
       showAllHistoryItems,
       timelinePresentationSignal: timelinePresentationItems,
     });
 
-  const {
-    menu: noteCaptureMenu,
-    closeMenu: closeNoteCaptureMenu,
-    handleContextMenu: handleConversationContextMenu,
-    openMenuFromTrigger: openNoteCaptureMenuFromTrigger,
-  } = useConversationNoteCaptureMenu({
-    canvasRootRef: containerRef,
-    items,
-    threadId,
-    onCaptureNote,
-  });
-
-  const timelineOpenNoteCaptureMenu = onCaptureNote
-    ? openNoteCaptureMenuFromTrigger
-    : undefined;
   const timelineModels = useMessagesTimelineModels({
     snapshot: {
       assistantFinalBoundarySet,

@@ -32,6 +32,7 @@ export type HistoryExpansionScrollSnapshot = {
 };
 
 export type PreservedReadableWindow = {
+  workspaceId: string | null;
   threadId: string | null;
   turnId: string | null;
   renderedItems: ConversationItem[];

@@ -1,33 +1,33 @@
 import {
   useCallback,
   useEffect,
-  type Dispatch,
   type MutableRefObject,
   type RefObject,
-  type SetStateAction,
 } from "react";
 import { MESSAGE_JUMP_EVENT_NAME } from "../../constants/messagesConstants";
 
 type UseMessagesAnchorNavigationInput = {
   autoScrollRef: MutableRefObject<boolean>;
+  clearPendingJumpMessage: () => void;
   commitActiveAnchorId: (messageId: string, mode: "sync") => void;
   containerRef: RefObject<HTMLDivElement | null>;
   messageNodeByIdRef: MutableRefObject<Map<string, HTMLDivElement>>;
   pendingJumpMessageId: string | null;
+  requestPendingJumpMessage: (messageId: string) => void;
   revealAllHistoryItems: (reason: "jump") => void;
-  setPendingJumpMessageId: Dispatch<SetStateAction<string | null>>;
   showAllHistoryItems: boolean;
   timelinePresentationSignal: unknown;
 };
 
 export function useMessagesAnchorNavigation({
   autoScrollRef,
+  clearPendingJumpMessage,
   commitActiveAnchorId,
   containerRef,
   messageNodeByIdRef,
   pendingJumpMessageId,
+  requestPendingJumpMessage,
   revealAllHistoryItems,
-  setPendingJumpMessageId,
   showAllHistoryItems,
   timelinePresentationSignal,
 }: UseMessagesAnchorNavigationInput) {
@@ -52,26 +52,32 @@ export function useMessagesAnchorNavigation({
 
   const requestScrollToAnchor = useCallback((messageId: string) => {
     if (scrollToAnchor(messageId)) {
-      setPendingJumpMessageId(null);
+      clearPendingJumpMessage();
       return;
     }
-    setPendingJumpMessageId((previous) => (previous === messageId ? previous : messageId));
+    requestPendingJumpMessage(messageId);
     if (!showAllHistoryItems) {
       revealAllHistoryItems("jump");
     }
-  }, [revealAllHistoryItems, scrollToAnchor, setPendingJumpMessageId, showAllHistoryItems]);
+  }, [
+    clearPendingJumpMessage,
+    requestPendingJumpMessage,
+    revealAllHistoryItems,
+    scrollToAnchor,
+    showAllHistoryItems,
+  ]);
 
   const handlePendingJumpTargetReady = useCallback((messageId: string) => {
     if (pendingJumpMessageId === messageId && scrollToAnchor(messageId)) {
-      setPendingJumpMessageId(null);
+      clearPendingJumpMessage();
     }
-  }, [pendingJumpMessageId, scrollToAnchor, setPendingJumpMessageId]);
+  }, [clearPendingJumpMessage, pendingJumpMessageId, scrollToAnchor]);
 
   useEffect(() => {
     if (pendingJumpMessageId && scrollToAnchor(pendingJumpMessageId)) {
-      setPendingJumpMessageId(null);
+      clearPendingJumpMessage();
     }
-  }, [pendingJumpMessageId, scrollToAnchor, setPendingJumpMessageId, timelinePresentationSignal]);
+  }, [clearPendingJumpMessage, pendingJumpMessageId, scrollToAnchor, timelinePresentationSignal]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
