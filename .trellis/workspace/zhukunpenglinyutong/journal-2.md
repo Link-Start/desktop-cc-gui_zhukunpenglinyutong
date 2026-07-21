@@ -450,3 +450,39 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 59: 归档 conversation presentation context OpenSpec
+
+**Date**: 2026-07-21
+**Task**: 归档 conversation presentation context OpenSpec
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+归档 normalize-conversation-presentation-context change，并发布 conversation-presentation-context-normalization 主 spec；严格主 spec 校验与 diff check 通过。
+
+### Main Changes
+
+- Archived change path: `openspec/changes/archive/2026-07-21-normalize-conversation-presentation-context/`.
+- Main spec: `openspec/specs/conversation-presentation-context-normalization/spec.md`.
+- The archive date is explicitly 2026-07-21.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `87fc179b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

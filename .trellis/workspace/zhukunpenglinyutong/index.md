@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 58
+- **Total Sessions**: 59
 - **Last Active**: 2026-07-21
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~458 | Active |
+| `journal-2.md` | ~488 | Active |
 | `journal-1.md` | ~1997 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 59 | 2026-07-21 | 归档 conversation presentation context OpenSpec | `87fc179b` | `bump-version-0.7.6` |
 | 58 | 2026-07-21 | 统一 messages 对话展示上下文 | `21bf0975`, `6daca4aa` | `bump-version-0.7.6` |
 | 57 | 2026-07-21 | 归档 messages 编排控制器 OpenSpec | `00c762ab` | `bump-version-0.7.6` |
 | 56 | 2026-07-21 | 隔离 messages 编排控制器职责 | `90991c6a` | `bump-version-0.7.6` |
