@@ -1158,3 +1158,36 @@ Review 并修复 Git History repository color collision、branch group 与 branc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1060: 归档文件内容右键菜单任务
+
+**Date**: 2026-07-22
+**Task**: 归档文件内容右键菜单任务
+**Branch**: `feature/v-076`
+
+### Summary
+
+归档 move-file-toolbar-actions-to-context-menu 的 Trellis task metadata；脚本同时纳入了并行 Git Graph task 的未跟踪 metadata。业务代码与并行实现均保持未提交。增量验证：FileViewPanel 相关 95 tests、targeted ESLint、typecheck、OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `82494f630` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
