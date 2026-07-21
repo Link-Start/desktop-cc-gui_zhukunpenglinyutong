@@ -106,3 +106,37 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 49: 归档 Messages 公共输入契约
+
+**Date**: 2026-07-21
+**Task**: 归档 Messages 公共输入契约
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+将 Phase 2 行为契约同步到 OpenSpec 主规格
+
+### Main Changes
+
+归档 OpenSpec change stabilize-messages-public-input，并创建主规格 openspec/specs/messages-public-input/spec.md。主规格锁定 legacy façade、scope-safe canonical precedence 与 minimal public Messages surface；strict validation 通过。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `87bca291` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

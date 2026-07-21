@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 48
+- **Total Sessions**: 49
 - **Last Active**: 2026-07-21
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~108 | Active |
+| `journal-2.md` | ~142 | Active |
 | `journal-1.md` | ~1997 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 49 | 2026-07-21 | 归档 Messages 公共输入契约 | `87bca291` | `bump-version-0.7.6` |
 | 48 | 2026-07-21 | 稳定 Messages 公共输入边界 | `1af4995e` | `bump-version-0.7.6` |
 | 47 | 2026-07-21 | 归档共享 Markdown renderer 规范 | `94a4b5eb` | `bump-version-0.7.6` |
 | 46 | 2026-07-21 | 提升共享 Markdown renderer 所有权 | `980db5f9`, `d1737fd7` | `bump-version-0.7.6` |
