@@ -1896,3 +1896,36 @@ Rebased chore/bump-version-0.7.5 onto origin, semantically resolved Kimi integra
 ### Next Steps
 
 - None - task complete
+
+
+## Session 43: 归档 messages 共享领域能力规范
+
+**Date**: 2026-07-21
+**Task**: 归档 messages 共享领域能力规范
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+归档 relocate-shared-message-domain-helpers OpenSpec change，将 ownership 与依赖方向契约同步到 shared-message-domain-helpers 主 spec；主 spec strict validation 通过，全量校验仅保留无关 change 的既有失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b24ff0f9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
