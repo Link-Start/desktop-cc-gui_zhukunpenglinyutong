@@ -82,6 +82,7 @@ function WorkspaceHarness() {
       onOpenFile={(path) => setActiveFilePath(path)}
       onActivateTab={() => undefined}
       onCloseTab={() => undefined}
+      onCloseOtherTabs={() => undefined}
       onCloseAllTabs={() => setActiveFilePath(null)}
       onRefreshFiles={() => undefined}
       fileViewHeaderLayout="single-row"
@@ -114,6 +115,7 @@ function CollapsedWorkspaceHarness() {
       onOpenFile={(path) => setActiveFilePath(path)}
       onActivateTab={() => undefined}
       onCloseTab={() => undefined}
+      onCloseOtherTabs={() => undefined}
       onCloseAllTabs={() => setActiveFilePath(null)}
       fileViewHeaderLayout="single-row"
       defaultSidebarCollapsed
@@ -151,6 +153,7 @@ function AsyncCollapsedWorkspaceHarness() {
         onOpenFile={(path) => setActiveFilePath(path)}
         onActivateTab={() => undefined}
         onCloseTab={() => undefined}
+        onCloseOtherTabs={() => undefined}
         onCloseAllTabs={() => setActiveFilePath(null)}
         fileViewHeaderLayout="single-row"
         defaultSidebarCollapsed={defaultSidebarCollapsed}
@@ -244,6 +247,7 @@ describe("FileExplorerWorkspace", () => {
       onOpenFile: () => undefined,
       onActivateTab: () => undefined,
       onCloseTab: () => undefined,
+      onCloseOtherTabs: () => undefined,
       onCloseAllTabs: () => undefined,
       navigationTarget: null,
     };
