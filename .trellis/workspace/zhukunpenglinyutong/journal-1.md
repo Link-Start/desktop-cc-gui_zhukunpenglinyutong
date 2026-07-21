@@ -1929,3 +1929,36 @@ Rebased chore/bump-version-0.7.5 onto origin, semantically resolved Kimi integra
 ### Next Steps
 
 - None - task complete
+
+
+## Session 44: 分离 GenericToolBlock 展示职责
+
+**Date**: 2026-07-21
+**Task**: 分离 GenericToolBlock 展示职责
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+完成 roadmap Phase 8.1-8.3：新增 pure genericToolPresentation model，拆分 ExitPlan、file-change、image-view focused components，将 GenericToolBlock 从 1553 行降至 473 行，并通过 focused/toolBlocks/messages、typecheck、lint、build 与架构 gates。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d9c8f125` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

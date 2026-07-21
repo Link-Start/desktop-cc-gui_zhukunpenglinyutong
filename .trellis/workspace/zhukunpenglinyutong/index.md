@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 43
+- **Total Sessions**: 44
 - **Last Active**: 2026-07-21
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1931 | Active |
+| `journal-1.md` | ~1964 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 44 | 2026-07-21 | 分离 GenericToolBlock 展示职责 | `d9c8f125` | `bump-version-0.7.6` |
 | 43 | 2026-07-21 | 归档 messages 共享领域能力规范 | `b24ff0f9` | `bump-version-0.7.6` |
 | 42 | 2026-07-21 | 归还 messages 共享领域能力所有权 | `3715b87e` | `bump-version-0.7.6` |
 | 41 | 2026-07-21 | 归档 MessageRow correctness change | `824b4c58` | `bump-version-0.7.6` |
