@@ -140,3 +140,38 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 50: 隔离 messages row ownership
+
+**Date**: 2026-07-21
+**Task**: 隔离 messages row ownership
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+完成 Phase 5 消息行职责拆分、流式 hot path 修复与验证
+
+### Main Changes
+
+完成 roadmap Phase 5。MessagesRows 仅保留 compatibility exports；MessageRow、ReasoningRow、WorkingIndicator、deferred image lifecycle、equality 与 pure presentation 各自拥有独立职责。修复 review 发现的 live delta 重算静态 presentation 问题，并将 user text parser 从 React component 抽离。验证：messages 64 files / 602 passed / 7 skipped，typecheck、full lint、build、boundary new=0、独立 review 通过；large-file finding 保持仓库既有 51 项。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2666d664` | (see git log) |
+| `8d4581e1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
