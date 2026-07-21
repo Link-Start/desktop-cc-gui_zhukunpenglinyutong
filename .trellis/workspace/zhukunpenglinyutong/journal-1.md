@@ -1863,3 +1863,36 @@ Rebased chore/bump-version-0.7.5 onto origin, semantically resolved Kimi integra
 ### Next Steps
 
 - None - task complete
+
+
+## Session 42: 归还 messages 共享领域能力所有权
+
+**Date**: 2026-07-21
+**Task**: 归还 messages 共享领域能力所有权
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+完成 Phase 6B：迁移 diff、command tags、agent-task contract、neutral tool semantics 与 shared FileIcon；清理 messages private imports，更新 boundary baseline，并通过 focused/messages 测试、typecheck、lint、build、runtime/bundle/OpenSpec 验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3715b87e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
