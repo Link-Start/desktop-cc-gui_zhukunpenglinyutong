@@ -1059,3 +1059,36 @@ Review 并修复 Git History repository color collision、branch group 与 branc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1057: Git Blame 按需加载 Git 行标记
+
+**Date**: 2026-07-22
+**Task**: Git Blame 按需加载 Git 行标记
+**Branch**: `feature/v-076`
+
+### Summary
+
+默认打开文件不再请求 Git full diff；点击 Git Blame 后独立加载 Blame 与 changed-line markers，并补齐关闭、dirty、失败隔离和 stale result 的增量测试。增量 77 tests、typecheck、lint、OpenSpec strict validation 均通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `591abfe17` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

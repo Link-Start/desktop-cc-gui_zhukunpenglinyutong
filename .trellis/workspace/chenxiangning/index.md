@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-26.md`
-- **Total Sessions**: 1056
+- **Total Sessions**: 1057
 - **Last Active**: 2026-07-22
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-26.md` | ~1061 | Active |
+| `journal-26.md` | ~1094 | Active |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
@@ -54,6 +54,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1057 | 2026-07-22 | Git Blame 按需加载 Git 行标记 | `591abfe17` | `feature/v-076` |
 | 1056 | 2026-07-22 | 恢复 Git History 分支树细节功能 | `2965cf065` | `feature/v-076` |
 | 1055 | 2026-07-22 | 文件编辑器行列跳转与标签页视觉统一 | `636e4f4a2` | `feature/v-076` |
 | 1054 | 2026-07-22 | 修复快捷键持久化并增加常用模块 | `d498bf187`, `365b1e2af` | `feature/v-076` |
