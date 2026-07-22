@@ -515,6 +515,38 @@ describe("FileViewPanel navigation", () => {
     expect(within(menu).getByRole("menuitem", { name: "files.edit" })).toBeTruthy();
   });
 
+  it("reveals the active file from the file content context menu", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "class Main {}",
+      truncated: false,
+    });
+    const onRevealInFileTree = vi.fn();
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-reveal-file"
+        workspacePath="/repo"
+        filePath="src/features/Main.java"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onRevealInFileTree={onRevealInFileTree}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("mock-codemirror");
+    fireEvent.click(
+      within(openFileContentContextMenu()).getByRole("menuitem", {
+        name: "files.revealInFileTree",
+      }),
+    );
+
+    expect(onRevealInFileTree).toHaveBeenCalledOnce();
+    expect(onRevealInFileTree).toHaveBeenCalledWith("src/features/Main.java");
+  });
+
   it("opens a specific file tab in the detached explorer without activating or closing it", async () => {
     vi.mocked(readWorkspaceFile).mockResolvedValue({
       content: "class Main {}",

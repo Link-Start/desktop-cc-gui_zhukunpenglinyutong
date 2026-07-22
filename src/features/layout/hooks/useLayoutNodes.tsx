@@ -38,7 +38,10 @@ import {
   type GitRepositoryActionRequest,
 } from "../../git/types/gitRepositoryActions";
 import type { GitModalPreviewRequest } from "../../git/components/GitDiffPanelTypes";
-import { FileTreePanel } from "../../files/components/FileTreePanel";
+import {
+  FileTreePanel,
+  type FileTreeRevealRequest,
+} from "../../files/components/FileTreePanel";
 import { WorkspaceFileComparePanel } from "../../files/components/WorkspaceFileComparePanel";
 import { WorkspaceSearchPanel } from "../../search/components/WorkspaceSearchPanel";
 import { PromptPanel } from "../../prompts/components/PromptPanel";
@@ -325,9 +328,28 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     useState<GitModalPreviewRequest | null>(null);
   const [gitModeControlsTarget, setGitModeControlsTarget] =
     useState<HTMLDivElement | null>(null);
+  const [fileTreeRevealRequest, setFileTreeRevealRequest] =
+    useState<FileTreeRevealRequest | null>(null);
   const rewindDialogRequestSerialRef = useRef(0);
   const noteCardSelectionRequestSerialRef = useRef(0);
   const gitModalPreviewRequestSerialRef = useRef(0);
+  const fileTreeRevealRequestSerialRef = useRef(0);
+  const handleRevealInFileTree = useCallback(
+    (path: string) => {
+      const workspaceId = options.activeWorkspace?.id;
+      if (!workspaceId) {
+        return;
+      }
+      onFilePanelModeChange("files");
+      fileTreeRevealRequestSerialRef.current += 1;
+      setFileTreeRevealRequest({
+        workspaceId,
+        path,
+        requestId: fileTreeRevealRequestSerialRef.current,
+      });
+    },
+    [onFilePanelModeChange, options.activeWorkspace?.id],
+  );
   const historyRetryInFlightRef = useRef<Promise<unknown> | null>(null);
   const activeThreadStatus = options.activeThreadId
     ? (options.threadStatusById[options.activeThreadId] ?? null)
@@ -1879,6 +1901,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         gitignoredFiles={options.gitignoredFiles}
         gitignoredDirectories={options.gitignoredDirectories}
         onRefreshFiles={options.onRefreshFiles}
+        revealRequest={fileTreeRevealRequest}
       />
     );
   } else if (options.filePanelMode === "search") {
@@ -2127,6 +2150,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onToggleEditorFileMaximized={options.onToggleEditorFileMaximized}
           onNavigateToLocation={options.onOpenFile}
           onOpenFileHistory={options.onOpenFileHistory}
+          onRevealInFileTree={handleRevealInFileTree}
           onClose={options.onExitEditor}
           onInsertText={options.onInsertComposerText}
           onCreateCodeAnnotation={handleCreateCodeAnnotation}

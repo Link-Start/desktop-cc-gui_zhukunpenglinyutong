@@ -24,6 +24,7 @@ import {
   getFileHistoryTabId,
   type FileHistoryTarget,
 } from "../../git-history/types";
+import { recordQuickSwitcherFileOpened } from "../../quick-switcher/recentFiles";
 
 const GIT_DIFF_LIST_VIEW_BY_WORKSPACE_KEY = "gitDiffListViewByWorkspace";
 const GIT_DIFF_PRELOAD_MAX_CHANGED_FILES = 80;
@@ -562,6 +563,10 @@ export function useGitPanelController({
         options?.pathDomain,
         options?.repositoryRoot,
       );
+      recordQuickSwitcherFileOpened({
+        workspaceId: targetWorkspace?.id,
+        path: normalizedPath,
+      });
       setFileTabsByWorkspace((states) =>
         updateWorkspaceFileTabs(states, targetFileTabWorkspaceKey, (current) => ({
           openTabs: current.openTabs.includes(normalizedPath)
@@ -735,6 +740,10 @@ export function useGitPanelController({
   }, []);
 
   const handleActivateFileTab = useCallback((path: string) => {
+    recordQuickSwitcherFileOpened({
+      workspaceId: activeWorkspaceRef.current?.id,
+      path,
+    });
     setFileTabsByWorkspace((states) =>
       updateWorkspaceFileTabs(states, fileTabWorkspaceKey, (current) => ({
         openTabs: current.openTabs.includes(path)

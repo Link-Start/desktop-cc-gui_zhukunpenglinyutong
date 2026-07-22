@@ -9,6 +9,7 @@ const files = {
     "openFile": "फ़ाइल खोलें",
     "copyPath": "पथ कॉपी करें",
     "revealInFinder": "Finder में दिखाएँ",
+    "revealInFileTree": "फ़ाइल ट्री में दिखाएँ",
     "deleteItem": "ट्रैश में ले जाएँ",
     "deleteFileConfirm": "क्या आप वाकई \"{{name}}\" को ट्रैश में ले जाना चाहते हैं?",
     "deleteFolderConfirm": "क्या आप वाकई फ़ोल्डर \"{{name}}\" और उसकी सभी सामग्री को ट्रैश में ले जाना चाहते हैं?",

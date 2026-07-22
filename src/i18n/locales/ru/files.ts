@@ -9,6 +9,7 @@ const files = {
     "openFile": "Открыть файл",
     "copyPath": "Скопировать путь",
     "revealInFinder": "Показать в Finder",
+    "revealInFileTree": "Показать в дереве файлов",
     "deleteItem": "Переместить в корзину",
     "deleteFileConfirm": "Вы уверены, что хотите переместить «{{name}}» в корзину?",
     "deleteFolderConfirm": "Вы уверены, что хотите переместить папку «{{name}}» и всё её содержимое в корзину?",

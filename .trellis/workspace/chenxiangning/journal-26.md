@@ -1257,3 +1257,82 @@ Review 并修复 Git History repository color collision、branch group 与 branc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1063: 打开文件定位到文件树
+
+**Date**: 2026-07-22
+**Task**: 打开文件定位到文件树
+**Branch**: `feature/v-076`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 内容 |
+|---|---|
+| 功能 | 在打开文件内容右键菜单增加“定位到文件”，主窗口与 detached explorer 共用 owner-scoped reveal request。 |
+| 通用修复 | 单次 reveal request 随 progressive lazy directory snapshot 逐层收敛，不依赖文件扩展名、语言或固定目录深度。 |
+| 幂等性 | reveal 完成后旧 requestId 停止消费，避免后续加载无关目录时抢回 selection；新 requestId 仍可重复定位。 |
+| 验证 | 受影响 4 个 Vitest 文件共 156 tests 通过；最终 FileTreePanel 52 tests 通过；lint、typecheck、large-file gate、OpenSpec strict validation 通过。 |
+
+**关键文件**:
+- `src/features/files/components/FileViewPanel.tsx`
+- `src/features/files/components/FileTreePanel.tsx`
+- `src/features/files/components/FileExplorerWorkspace.tsx`
+- `src/features/layout/hooks/useLayoutNodes.tsx`
+- `openspec/changes/archive/2026-07-22-add-open-file-reveal-in-tree/`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `24bdf7388` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1064: 完成 Quick Switcher 最近活动面板
+
+**Date**: 2026-07-22
+**Task**: 完成 Quick Switcher 最近活动面板
+**Branch**: `feature/v-076`
+
+### Summary
+
+实现三栏 Quick Switcher：快速导航、按 workspace 分组的最近会话/文件、全局 top 30、用户打开与 AI 修改 MRU、Spec Hub 独立窗口及完整键盘交互；用户视觉验收通过，93 个增量测试、targeted ESLint、typecheck、AppShell runtime contract、large-file sentry、OpenSpec strict validation 通过，未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b9624384e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

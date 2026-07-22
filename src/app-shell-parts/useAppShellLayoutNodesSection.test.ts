@@ -277,6 +277,28 @@ describe("useAppShellLayoutNodesSection adapter contract", () => {
     );
   });
 
+  it("routes quick switcher visual tools through canonical open actions", () => {
+    const source = readFileSync(
+      join(currentDir, "useAppShellLayoutNodesSection.tsx"),
+      "utf8",
+    );
+    const handler = source.slice(
+      source.indexOf("const handleQuickSwitcherNavigate = useEventCallback("),
+      source.indexOf(
+        "const handleGitSelectPullRequest",
+        source.indexOf("const handleQuickSwitcherNavigate = useEventCallback("),
+      ),
+    );
+
+    expect(handler).toContain('target === "spec"');
+    expect(handler).toContain("handleOpenSpecHub();");
+    expect(handler).toContain('target === "intentCanvas"');
+    expect(handler).toContain("handleOpenIntentCanvas();");
+    expect(handler).toContain('target === "projectMap"');
+    expect(handler).toContain("handleOpenProjectMap();");
+    expect(handler).not.toContain('setActiveTab("spec")');
+  });
+
   it("wires every configurable module shortcut to an existing view handler", () => {
     const source = readFileSync(
       join(currentDir, "useAppShellLayoutNodesSection.tsx"),

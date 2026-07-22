@@ -6,6 +6,7 @@ const files = {
     openFile: "Open File",
     copyPath: "Copy Path",
     revealInFinder: "Reveal in Finder",
+    revealInFileTree: "Reveal in File Tree",
     deleteItem: "Move to Trash",
     deleteFileConfirm: 'Are you sure you want to move "{{name}}" to the trash?',
     deleteFolderConfirm:

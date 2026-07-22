@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
 } from "react";
 import type { MouseEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -101,6 +102,10 @@ import {
 const EMPTY_GIT_REPOSITORIES: GitRepositorySummary[] = [];
 const GIT_STATUS_PRIORITY: Record<string, number> = { U: 5, D: 4, A: 3, M: 2, R: 1, T: 0 };
 
+function normalizeFileTreePath(path: string) {
+  return path.trim().replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+}
+
 function assignGitStatusIfHigherPriority(
   target: Map<string, string>,
   path: string,
@@ -151,6 +156,13 @@ type FileTreePanelProps = {
     request: GitRepositoryActionRequest,
   ) => void | Promise<void>;
   onOpenFileHistory?: (target: FileHistoryTarget) => void;
+  revealRequest?: FileTreeRevealRequest | null;
+};
+
+export type FileTreeRevealRequest = {
+  workspaceId: string;
+  path: string;
+  requestId: number;
 };
 
 type FileOpenLocation = {
@@ -201,6 +213,7 @@ export function FileTreePanel({
   onRefreshFiles,
   onGitRepositoryAction,
   onOpenFileHistory,
+  revealRequest = null,
 }: FileTreePanelProps) {
   useEffect(() => {
     void loadFileTreeStyles();
@@ -538,6 +551,88 @@ export function FileTreePanel({
         : `${row.path}:lazy-${row.state}`;
     },
   });
+  const lastScrolledRevealRequestIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (
+      !revealRequest ||
+      revealRequest.workspaceId !== workspaceId ||
+      lastScrolledRevealRequestIdRef.current === revealRequest.requestId
+    ) {
+      return;
+    }
+    const normalizedPath = normalizeFileTreePath(revealRequest.path);
+    if (!normalizedPath) {
+      return;
+    }
+    const pathSegments = normalizedPath.split("/").filter(Boolean);
+    const ancestorPaths = pathSegments
+      .slice(0, -1)
+      .map((_, index) => pathSegments.slice(0, index + 1).join("/"));
+    const availableAncestorPaths = ancestorPaths.filter((path) => folderPaths.has(path));
+    setExpandedFolders((current) => {
+      const missingAncestors = availableAncestorPaths.filter((path) => !current.has(path));
+      if (missingAncestors.length === 0) {
+        return current;
+      }
+      const next = new Set(current);
+      missingAncestors.forEach((path) => next.add(path));
+      return next;
+    });
+    if (!mergedFiles.includes(normalizedPath)) {
+      return;
+    }
+    setSelectedNodePath(normalizedPath);
+    setSelectedNodeType("file");
+    setSelectedNodePaths(new Set([normalizedPath]));
+    selectionAnchorPathRef.current = normalizedPath;
+  }, [
+    folderPaths,
+    mergedFiles,
+    revealRequest,
+    selectionAnchorPathRef,
+    setExpandedFolders,
+    setSelectedNodePath,
+    setSelectedNodePaths,
+    setSelectedNodeType,
+    workspaceId,
+  ]);
+  useEffect(() => {
+    if (
+      !revealRequest ||
+      revealRequest.workspaceId !== workspaceId ||
+      lastScrolledRevealRequestIdRef.current === revealRequest.requestId
+    ) {
+      return;
+    }
+    const normalizedPath = normalizeFileTreePath(revealRequest.path);
+    const targetIndex = visibleFileTreeRows.findIndex(
+      (row) => row.kind === "node" && row.entry.path === normalizedPath,
+    );
+    if (targetIndex < 0) {
+      return;
+    }
+    if (shouldVirtualizeFileTree) {
+      fileTreeRowVirtualizer.scrollToIndex(targetIndex, { align: "auto" });
+    }
+    const animationFrame = requestAnimationFrame(() => {
+      const targetRow = Array.from(
+        fileTreeListRef.current?.querySelectorAll<HTMLElement>("[data-file-tree-path]") ?? [],
+      ).find((row) => row.dataset.fileTreePath === normalizedPath);
+      if (!targetRow) {
+        return;
+      }
+      targetRow.scrollIntoView({ block: "nearest" });
+      lastScrolledRevealRequestIdRef.current = revealRequest.requestId;
+    });
+    return () => cancelAnimationFrame(animationFrame);
+  }, [
+    fileTreeListRef,
+    fileTreeRowVirtualizer,
+    revealRequest,
+    shouldVirtualizeFileTree,
+    visibleFileTreeRows,
+    workspaceId,
+  ]);
   const visibleTreePathOrder = useMemo(
     () => visibleTreeNodeEntries.map((entry) => entry.path),
     [visibleTreeNodeEntries],
@@ -705,14 +800,14 @@ export function FileTreePanel({
   ]);
 
   const resolveFileTreeParentPath = useCallback((relativePath: string) => {
-    const normalized = relativePath.trim().replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+    const normalized = normalizeFileTreePath(relativePath);
     const separatorIndex = normalized.lastIndexOf("/");
     return separatorIndex > 0 ? normalized.slice(0, separatorIndex) : "";
   }, []);
 
   const revealOptimisticFileTreePath = useCallback(
     (relativePath: string, kind: "file" | "folder") => {
-      const normalized = relativePath.trim().replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+      const normalized = normalizeFileTreePath(relativePath);
       if (!normalized) {
         return;
       }

@@ -230,6 +230,7 @@ function FileTreeNodeRow({
     <div className="file-tree-row-wrap">
       <button
         type="button"
+        data-file-tree-path={node.path}
         className={`file-tree-row${row.isFolder ? " is-folder" : " is-file"}${row.repositorySummary ? " is-git-repository" : ""}${row.isGitignored ? " is-gitignored" : ""}${row.isSelected ? " is-selected" : ""}${row.isPrimarySelection ? " is-primary" : ""}`}
         style={{ paddingLeft: `${8 + depth * 12}px` }}
         onClick={(event) => {

@@ -75,6 +75,10 @@ export function loadSearchPaletteStyles() {
   ]);
 }
 
+export function loadQuickSwitcherStyles() {
+  return loadStyles([() => import("./quick-switcher.css")]);
+}
+
 export function loadSpecHubStyles() {
   return loadStyles([
     () => import("./spec-hub-header.css"),

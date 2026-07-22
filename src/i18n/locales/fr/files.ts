@@ -9,6 +9,7 @@ const files = {
     "openFile": "Ouvrir le fichier",
     "copyPath": "Copier le chemin",
     "revealInFinder": "Afficher dans le Finder",
+    "revealInFileTree": "Afficher dans l’arborescence des fichiers",
     "deleteItem": "Mettre à la corbeille",
     "deleteFileConfirm": "Voulez-vous vraiment mettre « {{name}} » à la corbeille ?",
     "deleteFolderConfirm": "Voulez-vous vraiment mettre le dossier « {{name}} » et tout son contenu à la corbeille ?",

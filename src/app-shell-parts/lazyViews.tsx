@@ -42,6 +42,12 @@ export const SearchPalette = lazy(() =>
   })),
 );
 
+export const QuickSwitcher = lazy(() =>
+  import("../features/quick-switcher/components/QuickSwitcher").then((module) => ({
+    default: module.QuickSwitcher,
+  })),
+);
+
 export const ReleaseNotesModal = lazy(() =>
   import("../features/update/components/ReleaseNotesModal").then((module) => ({
     default: module.ReleaseNotesModal,

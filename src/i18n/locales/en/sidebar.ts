@@ -1,5 +1,31 @@
 // sidebar — English UI strings
 const sidebar = {
+  quickSwitcher: {
+    open: "Recent activity",
+    title: "Recent activity",
+    navigation: "Navigate",
+    recentSessions: "Recent sessions",
+    recentFiles: "Recent files",
+    emptySessions: "No recent sessions",
+    emptyFiles: "No recently opened or edited files",
+    aiModified: "AI edited",
+    keyboardHint: "Navigate",
+    switchPaneHint: "Switch pane",
+    openHint: "Open",
+    closeHint: "Close",
+    nav: {
+      chat: "Chat",
+      files: "Files",
+      git: "Changes",
+      history: "Git history",
+      kanban: "Kanban",
+      spec: "Spec Hub",
+      intentCanvas: "Intent canvas",
+      projectMap: "Project map",
+      terminal: "Terminal",
+      settings: "Settings",
+    },
+  },
   sidebar: {
     projects: "Projects",
     mcpSkillsMarket: "MCP & Skills Market",

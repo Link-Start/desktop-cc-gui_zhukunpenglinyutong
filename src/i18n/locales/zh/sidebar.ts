@@ -1,5 +1,31 @@
 // sidebar — Simplified Chinese UI strings
 const sidebar = {
+  quickSwitcher: {
+    open: "最近活动",
+    title: "最近活动",
+    navigation: "快速导航",
+    recentSessions: "最近会话",
+    recentFiles: "最近文件",
+    emptySessions: "暂无最近会话",
+    emptyFiles: "暂无最近打开或修改的文件",
+    aiModified: "AI 已修改",
+    keyboardHint: "移动",
+    switchPaneHint: "切换栏",
+    openHint: "打开",
+    closeHint: "关闭",
+    nav: {
+      chat: "对话",
+      files: "文件",
+      git: "代码变更",
+      history: "Git 历史",
+      kanban: "看板",
+      spec: "Spec Hub",
+      intentCanvas: "意图画布",
+      projectMap: "项目地图",
+      terminal: "终端",
+      settings: "设置",
+    },
+  },
   sidebar: {
     projects: "工作区",
     mcpSkillsMarket: "MCP & Skills 市场",

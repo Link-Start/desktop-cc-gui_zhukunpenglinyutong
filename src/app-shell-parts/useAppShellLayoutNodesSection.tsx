@@ -31,6 +31,7 @@ import type {
   GitHubPullRequest,
   GitLogEntry,
 } from "../types";
+import type { QuickSwitcherNavigationId } from "../features/quick-switcher/types";
 import {
   archiveWorkspaceSessions,
   clearDetachedExternalChangeMonitor,
@@ -233,6 +234,7 @@ export function useAppShellLayoutNodesSection(
     clearDictationError,
     clearDictationHint,
     clearDictationTranscript,
+    closeQuickSwitcher,
     closePlanPanel,
     closeReviewPrompt,
     closeSettings,
@@ -385,6 +387,7 @@ export function useAppShellLayoutNodesSection(
     handleRefreshModelConfig,
     handleOpenSearchPalette,
     handleOpenSpecHub,
+    handleQuickSwitcherNavigate: handleBaseQuickSwitcherNavigate,
     handleOpenClientDocumentation,
     handleResolvedClaudeThinkingVisibleChange,
     handleOpenWorkspaceFile,
@@ -1433,6 +1436,26 @@ export function useAppShellLayoutNodesSection(
     setCenterMode("projectMap");
     expandRightPanel();
   });
+  const handleQuickSwitcherNavigate = useEventCallback(
+    (target: QuickSwitcherNavigationId) => {
+      if (target === "spec") {
+        closeQuickSwitcher();
+        handleOpenSpecHub();
+        return;
+      }
+      if (target === "intentCanvas") {
+        closeQuickSwitcher();
+        handleOpenIntentCanvas();
+        return;
+      }
+      if (target === "projectMap") {
+        closeQuickSwitcher();
+        handleOpenProjectMap();
+        return;
+      }
+      handleBaseQuickSwitcherNavigate(target);
+    },
+  );
   const handleGitSelectPullRequest = useEventCallback(
     (pullRequest: GitHubPullRequest) => {
       setSelectedCommitSha(null);
@@ -2171,5 +2194,6 @@ export function useAppShellLayoutNodesSection(
     compactGitBackNode,
     codeAnnotationBridgeProps,
     workspaceAliasPromptNode,
+    handleQuickSwitcherNavigate,
   };
 }

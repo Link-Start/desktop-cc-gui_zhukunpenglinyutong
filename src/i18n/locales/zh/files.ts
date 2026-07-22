@@ -6,6 +6,7 @@ const files = {
     openFile: "打开文件",
     copyPath: "复制路径",
     revealInFinder: "在访达中显示",
+    revealInFileTree: "定位到文件",
     deleteItem: "移到废纸篓",
     deleteFileConfirm: '确定要将 "{{name}}" 移到废纸篓吗？',
     deleteFolderConfirm: '确定要将文件夹 "{{name}}" 及其所有内容移到废纸篓吗？',

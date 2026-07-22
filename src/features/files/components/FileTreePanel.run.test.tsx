@@ -121,6 +121,152 @@ afterEach(() => {
 });
 
 describe("FileTreePanel run action isolation", () => {
+  it("expands, selects, and repeatedly scrolls a revealed nested file", async () => {
+    const scrollIntoView = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => undefined);
+    const baseProps = {
+      workspaceId: "workspace-reveal",
+      workspacePath: "/tmp/workspace",
+      files: ["src/features/a[1].ts"],
+      directories: ["src", "src/features"],
+      isLoading: false,
+      filePanelMode: "files" as const,
+      onFilePanelModeChange: () => undefined,
+      onOpenFile: () => undefined,
+      openTargets: [] as OpenAppTarget[],
+      openAppIconById: {},
+      selectedOpenAppId: "",
+      onSelectOpenAppId: () => undefined,
+    };
+    const rendered = render(
+      <FileTreePanel
+        {...baseProps}
+        revealRequest={{
+          workspaceId: "workspace-reveal",
+          path: "src/features/a[1].ts",
+          requestId: 1,
+        }}
+      />,
+    );
+
+    const targetRow = await screen.findByRole("button", { name: "a[1].ts" });
+    expect(targetRow.classList.contains("is-selected")).toBe(true);
+    expect(targetRow.classList.contains("is-primary")).toBe(true);
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+
+    rendered.rerender(
+      <FileTreePanel
+        {...baseProps}
+        revealRequest={{
+          workspaceId: "workspace-reveal",
+          path: "src/features/a[1].ts",
+          requestId: 2,
+        }}
+      />,
+    );
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(2));
+    scrollIntoView.mockRestore();
+  });
+
+  it("reveals an extensionless file through a progressive lazy directory chain with one request", async () => {
+    const previousInvokeImplementation = invokeMock.getMockImplementation();
+    const scrollIntoView = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => undefined);
+    const targetPath = "assets/releases/stable/build-artifact";
+    const lazyChildrenByPath = new Map([
+      ["assets", { directories: ["assets/releases"], files: [] }],
+      ["assets/releases", { directories: ["assets/releases/stable"], files: [] }],
+      ["assets/releases/stable", { directories: [], files: [targetPath] }],
+      ["docs", { directories: ["docs/new"], files: ["docs/readme.txt"] }],
+    ]);
+
+    invokeMock.mockImplementation(async (...args: any[]): Promise<any> => {
+      if (args[0] !== "list_workspace_directory_children") {
+        return previousInvokeImplementation ? previousInvokeImplementation(...args) : null;
+      }
+      const path = args[1]?.path as string;
+      const children = lazyChildrenByPath.get(path);
+      if (!children) {
+        return {
+          files: [],
+          directories: [],
+          gitignored_files: [],
+          gitignored_directories: [],
+        };
+      }
+      return {
+        ...children,
+        gitignored_files: [],
+        gitignored_directories: [],
+        directory_entries: children.directories.map((directoryPath) => ({
+          path: directoryPath,
+          child_state: "unknown",
+        })),
+      };
+    });
+
+    try {
+      render(
+        <FileTreePanel
+          workspaceId="workspace-progressive-reveal"
+          workspacePath="/tmp/workspace"
+          files={[]}
+          directories={["assets", "docs"]}
+          directoryMetadata={[
+            { path: "assets", child_state: "unknown" },
+            { path: "docs", child_state: "unknown" },
+          ]}
+          isLoading={false}
+          filePanelMode="files"
+          onFilePanelModeChange={() => undefined}
+          onOpenFile={() => undefined}
+          openTargets={[]}
+          openAppIconById={{}}
+          selectedOpenAppId=""
+          onSelectOpenAppId={() => undefined}
+          revealRequest={{
+            workspaceId: "workspace-progressive-reveal",
+            path: targetPath,
+            requestId: 1,
+          }}
+        />,
+      );
+
+      const targetRow = await screen.findByRole("button", { name: "build-artifact" });
+      await waitFor(() => {
+        expect(targetRow.classList.contains("is-selected")).toBe(true);
+        expect(targetRow.classList.contains("is-primary")).toBe(true);
+      });
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+      expect(invokeMock).toHaveBeenCalledWith("list_workspace_directory_children", {
+        workspaceId: "workspace-progressive-reveal",
+        path: "assets",
+      });
+      expect(invokeMock).toHaveBeenCalledWith("list_workspace_directory_children", {
+        workspaceId: "workspace-progressive-reveal",
+        path: "assets/releases",
+      });
+      expect(invokeMock).toHaveBeenCalledWith("list_workspace_directory_children", {
+        workspaceId: "workspace-progressive-reveal",
+        path: "assets/releases/stable",
+      });
+
+      const docsRow = screen.getByRole("button", { name: /docs/ });
+      fireEvent.click(docsRow);
+      fireEvent.doubleClick(docsRow);
+      await screen.findByRole("button", { name: "readme.txt" });
+      expect(docsRow.classList.contains("is-primary")).toBe(true);
+    } finally {
+      scrollIntoView.mockRestore();
+      if (previousInvokeImplementation) {
+        invokeMock.mockImplementation(previousInvokeImplementation);
+      }
+    }
+  });
+
   it("opens root repository file history from the file Git submenu", async () => {
     const onOpenFileHistory = vi.fn();
     const repository: GitRepositorySummary = {

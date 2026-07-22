@@ -9,6 +9,7 @@ const files = {
     "openFile": "Abrir archivo",
     "copyPath": "Copiar ruta",
     "revealInFinder": "Mostrar en Finder",
+    "revealInFileTree": "Mostrar en el árbol de archivos",
     "deleteItem": "Mover a la papelera",
     "deleteFileConfirm": "¿Seguro que quieres mover \"{{name}}\" a la papelera?",
     "deleteFolderConfirm": "¿Seguro que quieres mover la carpeta \"{{name}}\" y todo su contenido a la papelera?",

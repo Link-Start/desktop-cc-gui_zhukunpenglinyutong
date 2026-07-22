@@ -91,6 +91,7 @@ import { useAppShellDesktopChrome } from "./app-shell-parts/useAppShellDesktopCh
 import { useAppShellModelSettingsAction } from "./app-shell-parts/useAppShellModelSettingsAction";
 import { useAppShellEditorLayoutSection } from "./app-shell-parts/useAppShellEditorLayoutSection";
 import { useAppShellSearchPaletteSection } from "./app-shell-parts/useAppShellSearchPaletteSection";
+import { useAppShellQuickSwitcherSection } from "./app-shell-parts/useAppShellQuickSwitcherSection";
 import { useAppShellClaudeThinkingSection } from "./app-shell-parts/useAppShellClaudeThinkingSection";
 import {
   buildLatestAgentRuns,
@@ -2338,6 +2339,27 @@ export function AppShell() {
     appShellDomainContextsRef.current = appShellDomainContexts;
   }, [appShellDomainContexts]);
 
+  const quickSwitcherSection = useAppShellQuickSwitcherSection({
+    activeWorkspaceId,
+    activityTimeline: workspaceActivity.timeline,
+    expandRightPanel,
+    handleOpenFile,
+    handleToggleTerminalPanel,
+    isCompact,
+    isSearchPaletteOpen,
+    openSettings,
+    selectWorkspace,
+    setActiveTab,
+    setActiveThreadId,
+    setAppMode,
+    setCenterMode,
+    setFilePanelMode,
+    setGitPanelMode,
+    setIsSearchPaletteOpen,
+    threadsByWorkspace,
+    workspaces,
+  });
+
   const searchAndComposerSection = useAppShellSearchAndComposerSection({
     activeEditorFilePath,
     activeWorkspace,
@@ -2346,6 +2368,7 @@ export function AppShell() {
     canInterrupt,
     centerMode,
     clearActiveImages,
+    closeQuickSwitcher: quickSwitcherSection.closeQuickSwitcher,
     connectWorkspace,
     exitDiffView,
     filePanelMode,
@@ -2354,12 +2377,20 @@ export function AppShell() {
     gitPullRequestDiffs,
     handleDraftChange,
     handleOpenFile,
+    handleOpenQuickSwitcher: quickSwitcherSection.handleOpenQuickSwitcher,
+    handleQuickSwitcherNavigate: quickSwitcherSection.handleQuickSwitcherNavigate,
+    handleQuickSwitcherSelectFile:
+      quickSwitcherSection.handleQuickSwitcherSelectFile,
+    handleQuickSwitcherSelectSession:
+      quickSwitcherSection.handleQuickSwitcherSelectSession,
     handleSend,
     interruptTurn,
     isCompact,
     isSearchPaletteOpen,
+    isQuickSwitcherOpen: quickSwitcherSection.isQuickSwitcherOpen,
     kanbanTasks,
     queueMessage,
+    quickSwitcherSessionGroups: quickSwitcherSection.quickSwitcherSessionGroups,
     searchPaletteQuery,
     searchResults,
     searchScope,

@@ -19,6 +19,10 @@ import type {
   MessageSendOptions,
   WorkspaceInfo,
 } from "../types";
+import type {
+  QuickSwitcherNavigationId,
+  QuickSwitcherSessionGroup,
+} from "../features/quick-switcher/types";
 import {
   getThreadSelectDiffCleanupAction,
   shouldPreserveEditorOnThreadSelect,
@@ -201,7 +205,18 @@ export type KanbanComposerBridgeBoundary = {
 export type ComposerSearchShellBoundary = SearchPaletteBoundary &
   ComposerSendBoundary &
   GitSearchOpenBoundary &
-  KanbanComposerBridgeBoundary;
+  KanbanComposerBridgeBoundary & {
+    closeQuickSwitcher: () => void;
+    handleOpenQuickSwitcher: () => void;
+    handleQuickSwitcherNavigate: (target: QuickSwitcherNavigationId) => void;
+    handleQuickSwitcherSelectFile: (workspaceId: string, path: string) => void;
+    handleQuickSwitcherSelectSession: (
+      workspaceId: string,
+      threadId: string,
+    ) => void;
+    isQuickSwitcherOpen: boolean;
+    quickSwitcherSessionGroups: QuickSwitcherSessionGroup[];
+  };
 
 export function useAppShellSearchAndComposerSection(
   input: ComposerSearchShellBoundary,
@@ -214,6 +229,7 @@ export function useAppShellSearchAndComposerSection(
     canInterrupt,
     centerMode,
     clearActiveImages,
+    closeQuickSwitcher,
     connectWorkspace,
     exitDiffView,
     filePanelMode,
@@ -222,12 +238,18 @@ export function useAppShellSearchAndComposerSection(
     gitPullRequestDiffs,
     handleDraftChange,
     handleOpenFile,
+    handleOpenQuickSwitcher,
+    handleQuickSwitcherNavigate,
+    handleQuickSwitcherSelectFile,
+    handleQuickSwitcherSelectSession,
     handleSend,
     interruptTurn,
     isCompact,
     isSearchPaletteOpen,
+    isQuickSwitcherOpen,
     kanbanTasks,
     queueMessage,
+    quickSwitcherSessionGroups,
     searchPaletteQuery,
     searchResults,
     searchScope,
@@ -533,8 +555,13 @@ export function useAppShellSearchAndComposerSection(
   });
 
   return {
+    closeQuickSwitcher,
     closeSearchPalette,
     handleOpenSearchPalette,
+    handleOpenQuickSwitcher,
+    handleQuickSwitcherNavigate,
+    handleQuickSwitcherSelectFile,
+    handleQuickSwitcherSelectSession,
     handleToggleSearchPalette,
     handleSearchPaletteMoveSelection,
     handleToggleSearchContentFilter,
@@ -542,6 +569,8 @@ export function useAppShellSearchAndComposerSection(
     handleSelectPullRequest,
     resetPullRequestSelection,
     isPullRequestComposer,
+    isQuickSwitcherOpen,
+    quickSwitcherSessionGroups,
     composerSendLabel,
     handleComposerSend,
     handleComposerQueue,
