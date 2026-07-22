@@ -1535,3 +1535,36 @@ Review 并修复 Git History repository color collision、branch group 与 branc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1071: 稳定语义导航生命周期
+
+**Date**: 2026-07-23
+**Task**: 稳定语义导航生命周期
+**Branch**: `feature/v-0.7.7`
+
+### Summary
+
+Java、TypeScript/JavaScript 与 Rust 语义导航统一 15 秒 soft timeout、健康 session 保留、provider lifecycle、750ms idle prewarm、JDT data owner lock 与 dev/release cache isolation；完成增量测试、cross-layer review 和 OpenSpec verify。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `706ca2e78` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
