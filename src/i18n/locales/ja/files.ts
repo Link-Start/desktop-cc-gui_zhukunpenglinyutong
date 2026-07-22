@@ -9,6 +9,7 @@ const files = {
     "openFile": "ファイルを開く",
     "copyPath": "パスをコピー",
     "revealInFinder": "Finder で表示",
+    "revealInFileTree": "ファイルツリーで表示",
     "deleteItem": "ゴミ箱に移動",
     "deleteFileConfirm": "「{{name}}」をゴミ箱に移動してもよろしいですか？",
     "deleteFolderConfirm": "フォルダ「{{name}}」とそのすべての内容をゴミ箱に移動してもよろしいですか？",

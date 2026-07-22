@@ -9,6 +9,7 @@ const files = {
     "openFile": "開啟檔案",
     "copyPath": "複製路徑",
     "revealInFinder": "在 Finder 中顯示",
+    "revealInFileTree": "在檔案樹中顯示",
     "deleteItem": "移到垃圾桶",
     "deleteFileConfirm": "確定要將「{{name}}」移到垃圾桶嗎？",
     "deleteFolderConfirm": "確定要將資料夾「{{name}}」及其所有內容移到垃圾桶嗎？",

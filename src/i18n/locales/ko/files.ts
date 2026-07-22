@@ -9,6 +9,7 @@ const files = {
     "openFile": "파일 열기",
     "copyPath": "경로 복사",
     "revealInFinder": "Finder에서 보기",
+    "revealInFileTree": "파일 트리에서 보기",
     "deleteItem": "휴지통으로 이동",
     "deleteFileConfirm": "\"{{name}}\"을(를) 휴지통으로 이동하시겠습니까?",
     "deleteFolderConfirm": "\"{{name}}\" 폴더와 그 안의 모든 내용을 휴지통으로 이동하시겠습니까?",

@@ -327,6 +327,15 @@ let capturedFileTreePanelProps: {
     action: "stage-all";
     repositoryRoot: string;
   }) => Promise<void>;
+  revealRequest?: {
+    workspaceId: string;
+    path: string;
+    requestId: number;
+  } | null;
+} | null = null;
+let capturedFileViewPanelProps: {
+  filePath?: string;
+  onRevealInFileTree?: (path: string) => void;
 } | null = null;
 
 vi.mock("../../files/components/FileTreePanel", () => ({
@@ -341,7 +350,10 @@ vi.mock("../../search/components/WorkspaceSearchPanel", () => ({
 }));
 
 vi.mock("../../files/components/FileViewPanel", () => ({
-  FileViewPanel: () => <div data-testid="file-view-panel" />,
+  FileViewPanel: (props: typeof capturedFileViewPanelProps) => {
+    capturedFileViewPanelProps = props;
+    return <div data-testid="file-view-panel" />;
+  },
 }));
 
 vi.mock("../../note-cards/components/WorkspaceNoteCardPanel", () => ({
@@ -1709,5 +1721,52 @@ describe("useLayoutNodes client UI visibility", () => {
     expect(
       screen.getByTestId("composer").dataset.showStatusPanelToggleOverride,
     ).toBe("false");
+  });
+
+  it("routes file reveal intents to the main Files tree with a monotonic request", async () => {
+    const onFilePanelModeChange = vi.fn();
+    const rendered = await renderUseLayoutNodes(
+      createLayoutOptions({
+        editorFilePath: "src/features/Main.tsx",
+        openEditorTabs: ["src/features/Main.tsx"],
+        filePanelMode: "files",
+        onFilePanelModeChange,
+      }),
+    );
+    const surfaces = render(
+      <>
+        {rendered.result.current.gitDiffPanelNode}
+        {rendered.result.current.fileViewPanelNode}
+      </>,
+    );
+    await screen.findByTestId("file-view-panel");
+
+    act(() => {
+      capturedFileViewPanelProps?.onRevealInFileTree?.("src/features/Main.tsx");
+    });
+    surfaces.rerender(
+      <>
+        {rendered.result.current.gitDiffPanelNode}
+        {rendered.result.current.fileViewPanelNode}
+      </>,
+    );
+
+    expect(onFilePanelModeChange).toHaveBeenCalledWith("files");
+    expect(capturedFileTreePanelProps?.revealRequest).toEqual({
+      workspaceId: "workspace-1",
+      path: "src/features/Main.tsx",
+      requestId: 1,
+    });
+
+    act(() => {
+      capturedFileViewPanelProps?.onRevealInFileTree?.("src/features/Main.tsx");
+    });
+    surfaces.rerender(
+      <>
+        {rendered.result.current.gitDiffPanelNode}
+        {rendered.result.current.fileViewPanelNode}
+      </>,
+    );
+    expect(capturedFileTreePanelProps?.revealRequest?.requestId).toBe(2);
   });
 });

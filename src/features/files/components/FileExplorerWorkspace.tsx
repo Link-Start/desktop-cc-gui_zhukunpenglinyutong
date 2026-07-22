@@ -9,7 +9,10 @@ import {
   buildDetachedSpecHubSession,
   openOrFocusDetachedSpecHub,
 } from "../../spec/detachedSpecHub";
-import { FileTreePanel } from "./FileTreePanel";
+import {
+  FileTreePanel,
+  type FileTreeRevealRequest,
+} from "./FileTreePanel";
 import { FileViewPanel } from "./FileViewPanel";
 import type { EditorNavigationTarget } from "../../app/hooks/useGitPanelController";
 
@@ -102,6 +105,9 @@ export function FileExplorerWorkspace({
         DEFAULT_DETACHED_EXPLORER_SIDEBAR_WIDTH,
     ),
   );
+  const [fileTreeRevealRequest, setFileTreeRevealRequest] =
+    useState<FileTreeRevealRequest | null>(null);
+  const fileTreeRevealRequestSerialRef = useRef(0);
 
   useEffect(() => {
     writeClientStoreValue("layout", DETACHED_EXPLORER_SIDEBAR_WIDTH_KEY, sidebarWidth);
@@ -190,6 +196,18 @@ export function FileExplorerWorkspace({
   const handleToggleSidebar = useCallback(() => {
     setSidebarCollapsed((current) => !current);
   }, []);
+  const handleRevealInFileTree = useCallback(
+    (path: string) => {
+      setSidebarCollapsed(false);
+      fileTreeRevealRequestSerialRef.current += 1;
+      setFileTreeRevealRequest({
+        workspaceId,
+        path,
+        requestId: fileTreeRevealRequestSerialRef.current,
+      });
+    },
+    [workspaceId],
+  );
   const showViewerExpandButton = sidebarCollapsed && !activeFilePath;
 
   return (
@@ -228,6 +246,7 @@ export function FileExplorerWorkspace({
           showSpecHubAction
           showDetachedExplorerAction={false}
           crossWindowDragTargetLabel="main"
+          revealRequest={fileTreeRevealRequest}
         />
       </div>
       <div
@@ -273,6 +292,7 @@ export function FileExplorerWorkspace({
             selectedOpenAppId={selectedOpenAppId}
             onSelectOpenAppId={onSelectOpenAppId}
             onNavigateToLocation={handleOpenWorkspaceFile}
+            onRevealInFileTree={handleRevealInFileTree}
             onClose={onCloseAllTabs}
             externalChangeMonitoringEnabled={externalChangeMonitoringEnabled}
             externalChangeTransportMode={externalChangeTransportMode}

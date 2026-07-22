@@ -32,6 +32,7 @@ import Rows2 from "lucide-react/dist/esm/icons/rows-2";
 import Save from "lucide-react/dist/esm/icons/save";
 import Search from "lucide-react/dist/esm/icons/search";
 import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen";
+import LocateFixed from "lucide-react/dist/esm/icons/locate-fixed";
 import X from "lucide-react/dist/esm/icons/x";
 import type { ReactCodeMirrorProps } from "@uiw/react-codemirror";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -201,6 +202,7 @@ type FileViewPanelProps = {
     location: { line: number; column: number },
   ) => void;
   onOpenFileHistory?: (target: FileHistoryTarget) => void;
+  onRevealInFileTree?: (path: string) => void;
   onClose: () => void;
   onInsertText?: (text: string) => void;
   onCreateCodeAnnotation?: (annotation: CodeAnnotationDraftInput) => void;
@@ -257,6 +259,7 @@ export function FileViewPanel({
   highlightMarkers = null,
   onNavigateToLocation,
   onOpenFileHistory,
+  onRevealInFileTree,
   onClose,
   onInsertText,
   onCreateCodeAnnotation,
@@ -1464,6 +1467,19 @@ export function FileViewPanel({
               ],
             ]
           : []),
+        ...(onRevealInFileTree
+          ? [
+              [
+                {
+                  type: "item" as const,
+                  id: "reveal-in-file-tree",
+                  label: t("files.revealInFileTree"),
+                  icon: <LocateFixed size={15} />,
+                  onSelect: () => onRevealInFileTree(filePath),
+                },
+              ],
+            ]
+          : []),
         ...(commandItems.length > 0 ? [commandItems] : []),
       ];
       const items = itemGroups.flatMap((group, groupIndex) =>
@@ -1512,6 +1528,7 @@ export function FileViewPanel({
       onAssociateIntentCanvasCodeAnchor,
       onCaptureNote,
       onOpenFileHistory,
+      onRevealInFileTree,
       renderProfile.previewLanguage,
       runDefinitionFromCursor,
       runReferencesFromCursor,
