@@ -66,7 +66,7 @@ ADDED by change: file-view-code-intelligence-navigation-2026-03-01
 
 ### Requirement: LSP Failure and Unsupported Fallback
 
-系统 MUST 对 provider 不可用、查询失败、当前 cursor 非 symbol、结果为空等场景提供 action-specific、localized、可解释回退。
+系统 MUST 对 provider 不可用、indexing、查询失败、当前 cursor 非 symbol、结果为空等场景提供 action-specific、localized、可解释状态，并 MUST NOT 将仍健康的 indexing provider 伪装成 fatal failure。
 
 #### Scenario: backend lsp command unavailable
 
@@ -84,10 +84,18 @@ ADDED by change: file-view-code-intelligence-navigation-2026-03-01
 
 #### Scenario: query failure is surfaced without breaking editor
 
-- **GIVEN** provider 查询因 timeout、file access 或 runtime failure 执行失败
-- **WHEN** 前端收到错误响应
-- **THEN** 系统 MUST 显示可区分的 localized failure 提示并允许用户重试
+- **GIVEN** provider 查询因 file access、fatal runtime failure 或 invalid response 执行失败
+- **WHEN** 前端收到错误或 fallback response
+- **THEN** 系统 MUST 显示可区分的 localized failure/fallback 提示并允许用户重试
 - **AND** MUST NOT 导致编辑器崩溃或内容丢失
+
+#### Scenario: provider is still indexing at request deadline
+
+- **GIVEN** Java、TypeScript/JavaScript 或 Rust provider process 仍存活
+- **WHEN** semantic navigation request 达到 15 秒 soft deadline
+- **THEN** UI MUST 显示 provider 仍在 indexing 或 temporarily degraded
+- **AND** backend MUST NOT 自动执行 workspace-wide heuristic fallback
+- **AND** 用户 MUST 能在稍后显式 retry
 
 ### Requirement: Modifier Hover MUST Reveal Navigable Symbol Affordance
 
