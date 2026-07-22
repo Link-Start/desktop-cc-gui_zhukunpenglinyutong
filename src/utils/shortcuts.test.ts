@@ -9,12 +9,15 @@ describe("formatShortcutForPlatform", () => {
   it("formats shortcuts with symbols on mac", () => {
     expect(formatShortcutForPlatform("cmd+o", true)).toBe("⌘O");
     expect(formatShortcutForPlatform("cmd+shift+arrowdown", true)).toBe("⌘⇧↓");
+    expect(formatShortcutForPlatform("alt+f1", true)).toBe("⌥F1");
+    expect(formatShortcutForPlatform("alt+f7", true)).toBe("⌥F7");
   });
 
   it("formats shortcuts with text labels on non-mac platforms", () => {
     expect(formatShortcutForPlatform("cmd+o", false)).toBe("Ctrl+O");
     expect(formatShortcutForPlatform("cmd+shift+arrowdown", false)).toBe("Ctrl+Shift+Down");
     expect(formatShortcutForPlatform("cmd+ctrl+a", false)).toBe("Meta+Ctrl+A");
+    expect(formatShortcutForPlatform("alt+f7", false)).toBe("Alt+F7");
   });
 
   it("normalizes legacy arrow aliases in configured shortcut labels", () => {

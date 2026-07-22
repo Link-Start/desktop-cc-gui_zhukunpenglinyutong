@@ -12,6 +12,7 @@ import {
   getCodeIntelDefinition,
   getCodeIntelImplementations,
   getCodeIntelReferences,
+  prepareCodeIntel,
 } from "../../../services/tauri";
 import type { CodeNavigationResponse } from "../../../services/tauri/openCode";
 import {
@@ -20,6 +21,7 @@ import {
   resolveWorkspaceRelativePath,
 } from "../../../utils/workspacePaths";
 import { lspPositionToEditorLocation, offsetToLspPosition } from "../utils/lspPosition";
+import { useFileNavigationHistory } from "./useFileNavigationHistory";
 import {
   areFileUrisEquivalent,
   CODE_INTEL_CACHE_TTL_MS,
@@ -48,6 +50,7 @@ function snapshotFromResponse(
     provider: response.provider,
     language: response.language,
     fallbackReasonCode: response.fallbackReasonCode,
+    lifecycle: response.lifecycle,
   };
 }
 
@@ -65,6 +68,12 @@ function navigationLanguageFromPath(filePath: string) {
   if (extension === "rs") {
     return "Rust";
   }
+  if (extension === "py" || extension === "pyi") {
+    return "Python";
+  }
+  if (extension === "go") {
+    return "Go";
+  }
   return null;
 }
 
@@ -80,6 +89,7 @@ function loadingStatus(
     provider: "heuristic",
     language: navigationLanguageFromPath(filePath),
     fallbackReasonCode: null,
+    lifecycle: "starting",
   };
 }
 
@@ -89,9 +99,25 @@ function settledStatus(
 ): CodeNavigationQueryStatus {
   return {
     action,
-    phase: snapshot.mode === "semantic" ? "success" : "fallback",
+    phase: isProviderStillPreparing(snapshot)
+      ? "indexing"
+      : snapshot.mode === "semantic"
+        ? "success"
+        : "fallback",
     ...snapshot,
   };
+}
+
+function isProviderStillPreparing(snapshot: CodeNavigationResultSnapshot) {
+  return snapshot.locations.length === 0
+    && (
+      snapshot.lifecycle === "starting"
+      || snapshot.lifecycle === "indexing"
+      || (
+        snapshot.lifecycle === "degraded"
+        && snapshot.fallbackReasonCode === "request-timeout"
+      )
+    );
 }
 
 function shouldPresentProviderRecovery(snapshot: CodeNavigationResultSnapshot) {
@@ -156,7 +182,46 @@ export function useFileNavigation({
   const appliedNavigationRequestRef = useRef(0);
   const navigationFocusTimerRef = useRef<number | null>(null);
   const navigationFlashTimerRef = useRef<number | null>(null);
+  const prewarmScopeRef = useRef<string | null>(null);
   const currentFileUri = useMemo(() => toFileUri(absolutePath), [absolutePath]);
+  const {
+    recordCrossFileNavigation,
+    canNavigateBack,
+    canNavigateForward,
+    navigateBack,
+    navigateForward,
+    restoreHistoryViewport,
+  } = useFileNavigationHistory({
+    workspaceId,
+    filePath,
+    isSameWorkspacePath,
+    onNavigateToLocation,
+    cmRef,
+  });
+
+  useEffect(() => {
+    const language = navigationLanguageFromPath(filePath);
+    if (!workspaceId || !language) {
+      return;
+    }
+    const scope = `${workspaceId}\0${language}`;
+    if (prewarmScopeRef.current === scope) {
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      prewarmScopeRef.current = scope;
+      void prepareCodeIntel(workspaceId, filePath).catch((error) => {
+        if (!cancelled) {
+          console.debug("[file-navigation] semantic prewarm unavailable:", error);
+        }
+      });
+    }, 750);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [filePath, workspaceId]);
 
   const clearNavigationFocusTimer = useCallback(() => {
     if (navigationFocusTimerRef.current !== null) {
@@ -257,6 +322,13 @@ export function useFileNavigation({
       });
 
       if (relativePath && onNavigateToLocation) {
+        if (!isSameWorkspacePath(relativePath, filePath)) {
+          recordCrossFileNavigation({
+            path: relativePath,
+            line,
+            column,
+          });
+        }
         onNavigateToLocation(relativePath, { line, column });
         return;
       }
@@ -283,6 +355,7 @@ export function useFileNavigation({
       focusEditorAtLocationWithRetry,
       isSameWorkspacePath,
       onNavigateToLocation,
+      recordCrossFileNavigation,
       setMode,
       workspacePath,
     ],
@@ -319,6 +392,9 @@ export function useFileNavigation({
         setNavigationStatus(settledStatus("definition", cachedLocations));
         setIsDefinitionLoading(false);
         if (cachedLocations.locations.length === 0) {
+          if (isProviderStillPreparing(cachedLocations)) {
+            return;
+          }
           setNavigationError(t("files.navigationNoDefinition"));
           return;
         }
@@ -359,6 +435,9 @@ export function useFileNavigation({
         });
         setNavigationStatus(settledStatus("definition", snapshot));
         if (locations.length === 0) {
+          if (isProviderStillPreparing(snapshot)) {
+            return;
+          }
           setNavigationError(t("files.navigationNoDefinition"));
           return;
         }
@@ -417,7 +496,9 @@ export function useFileNavigation({
       if (cachedLocations) {
         setNavigationStatus(settledStatus("references", cachedLocations));
         setIsReferencesLoading(false);
-        setReferenceResults(cachedLocations.locations);
+        if (!isProviderStillPreparing(cachedLocations)) {
+          setReferenceResults(cachedLocations.locations);
+        }
         return;
       }
       setNavigationStatus(loadingStatus("references", filePath));
@@ -443,7 +524,9 @@ export function useFileNavigation({
           value: snapshot,
         });
         setNavigationStatus(settledStatus("references", snapshot));
-        setReferenceResults(locations);
+        if (!isProviderStillPreparing(snapshot)) {
+          setReferenceResults(locations);
+        }
       } catch (error) {
         if (requestId !== lspRequestIdRef.current) {
           return;
@@ -506,6 +589,9 @@ export function useFileNavigation({
         setNavigationStatus(settledStatus("implementation", cachedLocations));
         setIsImplementationsLoading(false);
         if (cachedLocations.locations.length === 0) {
+          if (isProviderStillPreparing(cachedLocations)) {
+            return;
+          }
           setNavigationError(t("files.navigationNoImplementation"));
           return;
         }
@@ -543,6 +629,9 @@ export function useFileNavigation({
         });
         setNavigationStatus(settledStatus("implementation", snapshot));
         if (locations.length === 0) {
+          if (isProviderStillPreparing(snapshot)) {
+            return;
+          }
           setNavigationError(t("files.navigationNoImplementation"));
           return;
         }
@@ -621,6 +710,11 @@ export function useFileNavigation({
       0,
       () => {
         appliedNavigationRequestRef.current = navigationTarget.requestId;
+        restoreHistoryViewport(
+          navigationTarget.path,
+          navigationTarget.line,
+          navigationTarget.column,
+        );
       },
     );
   }, [
@@ -629,6 +723,7 @@ export function useFileNavigation({
     isLoading,
     isSameWorkspacePath,
     navigationTarget,
+    restoreHistoryViewport,
     setMode,
   ]);
 
@@ -685,5 +780,9 @@ export function useFileNavigation({
     resolveDefinitionAtOffset,
     openFindPanelInEditor,
     toggleFindPanelInEditor,
+    canNavigateBack,
+    canNavigateForward,
+    navigateBack,
+    navigateForward,
   };
 }

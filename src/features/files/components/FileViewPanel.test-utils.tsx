@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 
 export const mockCodeMirrorDispatch = vi.fn();
+export const mockCodeMirrorScrollDOM = { scrollTop: 0 };
 export const mockCodeMirrorExtensionsSnapshots: unknown[] = [];
 export const mockCodeMirrorExtensionTokenSnapshots: string[][] = [];
 export const mockOpenNewDetachedFileExplorerWindow = vi.fn(async () => "created" as const);
@@ -87,6 +88,7 @@ vi.mock("@uiw/react-codemirror", async () => {
           viewRef.current.state.selection.main.head = anchor;
         }
       }),
+      scrollDOM: mockCodeMirrorScrollDOM,
       focus: vi.fn(),
       posAtCoords: vi.fn(() => 0),
     });
@@ -276,6 +278,12 @@ vi.mock("../../../services/tauri", () => ({
   getCodeIntelDefinition: vi.fn(),
   getCodeIntelImplementations: vi.fn(),
   getCodeIntelReferences: vi.fn(),
+  prepareCodeIntel: vi.fn(async () => ({
+    language: "TypeScript",
+    provider: "typescript-language-server",
+    lifecycle: "ready",
+    fallbackReasonCode: null,
+  })),
 }));
 
 vi.mock("../detachedFileExplorer", () => {

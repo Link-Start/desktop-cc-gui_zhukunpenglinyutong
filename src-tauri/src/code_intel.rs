@@ -8,7 +8,10 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::State;
 
-use crate::code_intel_lsp::{SemanticLocation, SemanticProvider, SemanticQueryKind};
+use crate::code_intel_lsp::{
+    SemanticLocation, SemanticProvider, SemanticQueryFailure, SemanticQueryKind,
+    SemanticQueryResult,
+};
 use crate::state::AppState;
 
 #[derive(Debug, Clone, Serialize)]
@@ -105,7 +108,9 @@ fn semantic_provider_for_language(language: LanguageKind) -> Option<SemanticProv
         LanguageKind::Rust => Some(SemanticProvider::RustAnalyzer),
         LanguageKind::Java => Some(SemanticProvider::EclipseJdtLs),
         LanguageKind::TsJs => Some(SemanticProvider::TypeScriptLanguageServer),
-        LanguageKind::Python | LanguageKind::Go | LanguageKind::Yaml => None,
+        LanguageKind::Python => Some(SemanticProvider::Pyright),
+        LanguageKind::Go => Some(SemanticProvider::Gopls),
+        LanguageKind::Yaml => None,
     }
 }
 
@@ -1119,7 +1124,7 @@ async fn query_semantic(
     line: u32,
     character: u32,
     kind: SemanticQueryKind,
-) -> Result<Vec<CodeIntelLocation>, String> {
+) -> Result<(Vec<CodeIntelLocation>, &'static str), SemanticQueryFailure> {
     let text = document_text.unwrap_or(&source.content);
     state
         .semantic_navigation_runtime
@@ -1133,7 +1138,68 @@ async fn query_semantic(
             kind,
         )
         .await
-        .map(|locations| semantic_locations_to_code_intel(workspace_root, locations))
+        .map(|result: SemanticQueryResult| {
+            (
+                semantic_locations_to_code_intel(workspace_root, result.locations),
+                result.lifecycle.as_str(),
+            )
+        })
+}
+
+fn semantic_timeout_response(
+    file_path: &str,
+    line: u32,
+    character: u32,
+    language: LanguageKind,
+    provider: SemanticProvider,
+    error: &SemanticQueryFailure,
+) -> Option<Value> {
+    (!error.fatal && semantic_fallback_reason_code(&error.message) == "request-timeout").then(
+        || {
+            json!({
+                "filePath": file_path,
+                "line": line,
+                "character": character,
+                "language": language.name(),
+                "mode": "semantic",
+                "provider": provider.id(),
+                "lifecycle": error.lifecycle.as_str(),
+                "fallbackReasonCode": "request-timeout",
+                "result": [],
+            })
+        },
+    )
+}
+
+#[tauri::command]
+pub async fn code_intel_prepare(
+    workspace_id: String,
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let language = LanguageKind::from_path(&file_path)
+        .ok_or_else(|| "Current file language does not use a semantic provider".to_string())?;
+    let provider = semantic_provider_for_language(language)
+        .ok_or_else(|| "Current file language does not use a semantic provider".to_string())?;
+    let workspace_root = resolve_workspace_root(&workspace_id, &state).await?;
+    match state
+        .semantic_navigation_runtime
+        .prepare(provider, &workspace_root)
+        .await
+    {
+        Ok(lifecycle) => Ok(json!({
+            "language": language.name(),
+            "provider": provider.id(),
+            "lifecycle": lifecycle.as_str(),
+            "fallbackReasonCode": Value::Null,
+        })),
+        Err(error) => Ok(json!({
+            "language": language.name(),
+            "provider": provider.id(),
+            "lifecycle": "degraded",
+            "fallbackReasonCode": semantic_fallback_reason_code(&error),
+        })),
+    }
 }
 
 #[tauri::command]
@@ -1167,7 +1233,7 @@ pub async fn code_intel_definition(
         )
         .await
         {
-            Ok(locations) => {
+            Ok((locations, lifecycle)) => {
                 return Ok(json!({
                     "filePath": file_path,
                     "line": line,
@@ -1175,18 +1241,24 @@ pub async fn code_intel_definition(
                     "language": language.name(),
                     "mode": "semantic",
                     "provider": provider.id(),
+                    "lifecycle": lifecycle,
                     "fallbackReasonCode": Value::Null,
                     "result": locations,
                 }));
             }
             Err(error) => {
+                if let Some(response) = semantic_timeout_response(
+                    &file_path, line, character, language, provider, &error,
+                ) {
+                    return Ok(response);
+                }
                 log::warn!(
                     "[code-intel] definition provider={} workspace={} fallback={}",
                     provider.id(),
                     workspace_id,
-                    semantic_fallback_reason_code(&error),
+                    semantic_fallback_reason_code(&error.message),
                 );
-                fallback_reason_code = Some(semantic_fallback_reason_code(&error));
+                fallback_reason_code = Some(semantic_fallback_reason_code(&error.message));
             }
         }
     }
@@ -1249,6 +1321,7 @@ pub async fn code_intel_definition(
         "language": language.name(),
         "mode": "fast-search",
         "provider": "heuristic",
+        "lifecycle": "degraded",
         "fallbackReasonCode": fallback_reason_code,
         "result": locations,
     }))
@@ -1288,7 +1361,7 @@ pub async fn code_intel_references(
         )
         .await
         {
-            Ok(locations) => {
+            Ok((locations, lifecycle)) => {
                 return Ok(json!({
                     "filePath": file_path,
                     "line": line,
@@ -1297,18 +1370,24 @@ pub async fn code_intel_references(
                     "language": language.name(),
                     "mode": "semantic",
                     "provider": provider.id(),
+                    "lifecycle": lifecycle,
                     "fallbackReasonCode": Value::Null,
                     "result": locations,
                 }));
             }
             Err(error) => {
+                if let Some(response) = semantic_timeout_response(
+                    &file_path, line, character, language, provider, &error,
+                ) {
+                    return Ok(response);
+                }
                 log::warn!(
                     "[code-intel] references provider={} workspace={} fallback={}",
                     provider.id(),
                     workspace_id,
-                    semantic_fallback_reason_code(&error),
+                    semantic_fallback_reason_code(&error.message),
                 );
-                fallback_reason_code = Some(semantic_fallback_reason_code(&error));
+                fallback_reason_code = Some(semantic_fallback_reason_code(&error.message));
             }
         }
     }
@@ -1427,6 +1506,7 @@ pub async fn code_intel_references(
         "language": language.name(),
         "mode": "fast-search",
         "provider": "heuristic",
+        "lifecycle": "degraded",
         "fallbackReasonCode": fallback_reason_code,
         "result": references,
     }))
@@ -1442,14 +1522,20 @@ pub async fn code_intel_implementations(
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     let language = LanguageKind::from_path(&file_path).ok_or_else(|| {
-        "Implementation navigation currently supports Java, TS/JS, and Rust files".to_string()
+        "Implementation navigation currently supports Python, TS/JS, Go, Rust, and Java files"
+            .to_string()
     })?;
     if !matches!(
         language,
-        LanguageKind::Java | LanguageKind::TsJs | LanguageKind::Rust
+        LanguageKind::Java
+            | LanguageKind::Python
+            | LanguageKind::TsJs
+            | LanguageKind::Go
+            | LanguageKind::Rust
     ) {
         return Err(
-            "Implementation navigation currently supports Java, TS/JS, and Rust files".to_string(),
+            "Implementation navigation currently supports Python, TS/JS, Go, Rust, and Java files"
+                .to_string(),
         );
     }
 
@@ -1469,7 +1555,7 @@ pub async fn code_intel_implementations(
         )
         .await
         {
-            Ok(locations) => {
+            Ok((locations, lifecycle)) => {
                 return Ok(json!({
                     "filePath": file_path,
                     "line": line,
@@ -1477,18 +1563,24 @@ pub async fn code_intel_implementations(
                     "language": language.name(),
                     "mode": "semantic",
                     "provider": provider.id(),
+                    "lifecycle": lifecycle,
                     "fallbackReasonCode": Value::Null,
                     "result": locations,
                 }));
             }
             Err(error) => {
+                if let Some(response) = semantic_timeout_response(
+                    &file_path, line, character, language, provider, &error,
+                ) {
+                    return Ok(response);
+                }
                 log::warn!(
                     "[code-intel] implementations provider={} workspace={} fallback={}",
                     provider.id(),
                     workspace_id,
-                    semantic_fallback_reason_code(&error),
+                    semantic_fallback_reason_code(&error.message),
                 );
-                fallback_reason_code = Some(semantic_fallback_reason_code(&error));
+                fallback_reason_code = Some(semantic_fallback_reason_code(&error.message));
             }
         }
     }
@@ -1523,6 +1615,7 @@ pub async fn code_intel_implementations(
         "language": language.name(),
         "mode": "fast-search",
         "provider": "heuristic",
+        "lifecycle": "degraded",
         "fallbackReasonCode": fallback_reason_code,
         "result": implementations,
     }))
@@ -1542,7 +1635,15 @@ mod tests {
             semantic_provider_for_language(LanguageKind::TsJs),
             Some(SemanticProvider::TypeScriptLanguageServer)
         );
-        assert_eq!(semantic_provider_for_language(LanguageKind::Python), None);
+        assert_eq!(
+            semantic_provider_for_language(LanguageKind::Python),
+            Some(SemanticProvider::Pyright)
+        );
+        assert_eq!(
+            semantic_provider_for_language(LanguageKind::Go),
+            Some(SemanticProvider::Gopls)
+        );
+        assert_eq!(semantic_provider_for_language(LanguageKind::Yaml), None);
         assert_eq!(
             semantic_fallback_reason_code("Language server initialize timed out"),
             "initialize-timeout"
@@ -1566,7 +1667,7 @@ mod tests {
 
     fn fixture_root(label: &str) -> PathBuf {
         let root =
-            std::env::temp_dir().join(format!("mossx-code-intel-{label}-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("ccgui-code-intel-{label}-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).unwrap();
         root.canonicalize().unwrap()
     }

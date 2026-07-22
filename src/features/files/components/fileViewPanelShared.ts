@@ -60,7 +60,9 @@ export function toCodeMirrorShortcut(value: string | null | undefined): string |
   }
   const keyLabel =
     CODE_MIRROR_KEY_LABELS[parsed.key] ??
-    (parsed.key.length === 1 ? parsed.key : parsed.key);
+    (/^f(?:[1-9]|1[0-2])$/.test(parsed.key)
+      ? parsed.key.toUpperCase()
+      : parsed.key);
   return [...modifiers, keyLabel].join("-");
 }
 

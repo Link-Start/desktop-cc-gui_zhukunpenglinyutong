@@ -248,6 +248,10 @@ runtime_manager.record_stopping("codex", &workspace_id).await;
 - `build_cli_path_env(custom_bin: Option<&str>) -> Option<String>`
 - `SemanticNavigationRuntime::initializer_for((SemanticProvider, PathBuf)) -> Arc<Mutex<()>>`
 - `SemanticNavigationRuntime::session_for(provider, workspace_root) -> Result<Arc<LspSession>, String>`
+- `SemanticNavigationRuntime::prepare(provider, workspace_root) -> Result<SemanticLifecycle, String>`
+- `SemanticNavigationRuntime::query(...) -> Result<SemanticQueryResult, SemanticQueryFailure>`
+- `SemanticLifecycle::{Starting, Indexing, Ready, Degraded}`
+- `code_intel_prepare(workspace_id, file_path) -> Result<Value, String>`
 - `spawn_language_server(provider, workspace_root, cache_root) -> Result<Arc<LspSession>, String>`
 - `stop_session(session: &Arc<LspSession>)`
 
@@ -258,6 +262,12 @@ runtime_manager.record_stopping("codex", &workspace_id).await;
 - different provider 或 workspace MUST NOT 共用 initialization mutex。
 - global sessions mutex 只允许保护 map read/remove/insert；MUST NOT 跨 `spawn_language_server(...).await`、`stop_session(...).await` 或 LSP initialize await。
 - eviction MUST remove ownership under lock，then stop child outside lock；parallel insert 后 MUST 再执行 capacity eviction。
+- semantic request timeout MUST be 15s；timeout 后发送 `$/cancelRequest`，但 live process/session MUST remain reusable。
+- 只有 process exit、EOF、stdin write failure 等 transport/process fatal error 才允许 eviction；server-side cancellation、request timeout、单次 invalid location MUST NOT kill healthy provider。
+- Java lifecycle 在 initialize 后保持 `indexing`，只允许 `language/status: ServiceReady` 转为 `ready`；普通 query success MUST NOT 伪造 Java ready。
+- Java/TypeScript/JavaScript/Rust file open 后 750ms idle prewarm MUST 走 `code_intel_prepare`；JavaScript 与 TypeScript MUST 复用 `typescript-language-server` runtime。
+- request timeout 时 command MUST 返回 `mode=semantic`、`fallbackReasonCode=request-timeout` 与 lifecycle，MUST NOT 自动触发 full-workspace heuristic scan。
+- development/release MUST 使用不同 cache root；JDT workspace data dir MUST 持有 `.ccgui-owner.lock`，防止同 channel duplicate owner。
 
 ### 4. Validation & Error Matrix
 
@@ -268,19 +278,30 @@ runtime_manager.record_stopping("codex", &workspace_id).await;
 | Java + TypeScript concurrent cold start | independently progress | Java 30s initialize 持有 global lock |
 | idle/dead eviction | remove under lock，kill outside lock | lock map while awaiting child kill |
 | parallel insert reaches cap | insertion phase re-evaluates eviction | session map permanently exceed cap |
+| Java 首次打开大型 Maven workspace | lifecycle=`indexing`，保留 JDT 继续建索引 | 15s timeout 后 kill/restart JDT |
+| TypeScript/JavaScript request timeout | cancel request，session=`degraded` 且可重试 | 自动扫描整个 workspace 或销毁 tsserver |
+| JDT `ServiceReady` | lifecycle=`ready` | 仅因一次 query success 提前 ready |
+| dev 与 release 同时打开同一 workspace | channel cache 隔离 | 共用同一 JDT data dir |
+| 同 channel duplicate JDT owner | deterministic owner-lock error | 两个 JDT 并发写同一 data dir |
 
 ### 5. Good / Base / Bad Cases
 
 - Good：`Weak<Mutex<()>>` registry 提供 per-key coordination，dead weak entry 在后续访问时清理。
 - Base：live same-key session 直接复用并刷新 `last_used`。
+- Good：frontend 先显示 `indexing/degraded` + retry；provider 后台继续工作，下次 query 复用 warm session。
+- Base：Rust/TypeScript initialize 成功即可 `ready`；Java 必须等待 `ServiceReady`。
 - Bad：持有 `sessions.lock().await` 后调用 provider spawn/initialize/kill。
 - Bad：无条件 push `Path::new(bare_name).parent()`。
+- Bad：任何 `Err(String)` 都调用 `evict_session()`；这会把可恢复 timeout/cancellation 变成永久 cold-start loop。
 
 ### 6. Tests Required
 
 - Rust test MUST assert bare executable 生成的 seed paths 不含 empty component。
 - Rust test MUST assert same key initializer identity 相同，而 provider/workspace 任一不同则 identity 不同。
+- Rust test MUST assert 15s timeout/cancellation is non-fatal、Java `ServiceReady` transition、channel cache isolation、JDT owner lock。
+- Vitest MUST cover `code_intel_prepare` bridge、JavaScript 750ms prewarm、indexing timeout UI/no install hint。
 - `cargo test --manifest-path src-tauri/Cargo.toml code_intel_lsp::tests`
+- `npx vitest run src/services/tauri.test.ts src/features/files/utils/fileViewNavigationUtils.test.ts src/features/files/components/FileViewNavigationPanel.test.tsx src/features/files/components/FileViewPanel.test.tsx`
 - `rustfmt --edition 2021 --check src-tauri/src/backend/app_server_cli.rs src-tauri/src/code_intel_lsp.rs`
 
 ### 7. Wrong vs Correct
@@ -291,6 +312,12 @@ runtime_manager.record_stopping("codex", &workspace_id).await;
 let mut sessions = self.sessions.lock().await;
 let session = spawn_language_server(provider, workspace_root, cache_root).await?;
 sessions.insert(key, session);
+```
+
+```rust
+if query.await.is_err() {
+    self.evict_session(provider, workspace_root, &session).await;
+}
 ```
 
 #### Correct
@@ -320,6 +347,13 @@ let session = spawn_language_server(provider, workspace_root, cache_root).await?
     );
 }
 Ok(session)
+```
+
+```rust
+let fatal = query_error_is_fatal(session.alive.load(Ordering::SeqCst), &error);
+if fatal {
+    self.evict_session(provider, workspace_root, &session).await;
+}
 ```
 
 #### Correct

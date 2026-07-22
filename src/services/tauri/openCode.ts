@@ -189,6 +189,7 @@ export async function getOpenCodeLspDocumentSymbols(workspaceId: string, fileUri
 }
 
 export type CodeNavigationMode = "semantic" | "fast-search";
+export type CodeNavigationLifecycle = "starting" | "indexing" | "ready" | "degraded";
 
 export type CodeNavigationFallbackReason =
   | "provider-unavailable"
@@ -205,6 +206,7 @@ export type CodeNavigationResponse = {
   language: string | null;
   mode: CodeNavigationMode;
   provider: string;
+  lifecycle: CodeNavigationLifecycle;
   fallbackReasonCode: CodeNavigationFallbackReason | null;
   result: unknown;
 };
@@ -232,6 +234,18 @@ function normalizeCodeNavigationResponse(value: unknown): CodeNavigationResponse
     && knownFallbackReasons.has(payload.fallbackReasonCode as CodeNavigationFallbackReason)
       ? payload.fallbackReasonCode as CodeNavigationFallbackReason
       : null;
+  const knownLifecycles = new Set<CodeNavigationLifecycle>([
+    "starting",
+    "indexing",
+    "ready",
+    "degraded",
+  ]);
+  const lifecycle = typeof payload.lifecycle === "string"
+    && knownLifecycles.has(payload.lifecycle as CodeNavigationLifecycle)
+    ? payload.lifecycle as CodeNavigationLifecycle
+    : mode === "semantic"
+      ? "ready"
+      : "degraded";
 
   return {
     filePath: typeof payload.filePath === "string" ? payload.filePath : "",
@@ -245,9 +259,29 @@ function normalizeCodeNavigationResponse(value: unknown): CodeNavigationResponse
     language: typeof payload.language === "string" ? payload.language : null,
     mode,
     provider,
+    lifecycle,
     fallbackReasonCode,
     result: payload.result,
   };
+}
+
+export type CodeNavigationPrepareResponse = Pick<
+  CodeNavigationResponse,
+  "language" | "provider" | "lifecycle" | "fallbackReasonCode"
+>;
+
+export async function prepareCodeIntel(workspaceId: string, filePath: string) {
+  const response = await invoke<unknown>("code_intel_prepare", {
+    workspaceId,
+    filePath,
+  });
+  const normalized = normalizeCodeNavigationResponse(response);
+  return {
+    language: normalized.language,
+    provider: normalized.provider,
+    lifecycle: normalized.lifecycle,
+    fallbackReasonCode: normalized.fallbackReasonCode,
+  } satisfies CodeNavigationPrepareResponse;
 }
 
 export async function getCodeIntelDefinition(

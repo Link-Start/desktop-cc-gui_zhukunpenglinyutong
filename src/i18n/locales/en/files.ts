@@ -224,6 +224,8 @@ const files = {
     annotationUnavailableForSelection:
       "Selection cannot map to current file lines",
     backToChat: "Back to chat",
+    navigationBack: "Navigate back",
+    navigationForward: "Navigate forward",
     preview: "Preview",
     edit: "Edit",
     source: "Source",
@@ -295,6 +297,8 @@ const files = {
     navigationImplementationError: "Could not find implementations. Please retry.",
     navigationTimeout: "Navigation request timed out. Please retry.",
     navigationPreparing: "Preparing code navigation…",
+    navigationIndexing: "The language server is still indexing. Retry shortly.",
+    navigationTemporarilyDegraded: "The language server is responding slowly. Retry shortly.",
     navigationModeSemantic: "Semantic navigation",
     navigationModeFastSearch: "Fast search",
     navigationModeFastSearchFallback: "Fast search (fallback)",

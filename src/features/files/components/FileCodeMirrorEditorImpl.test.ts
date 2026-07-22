@@ -99,6 +99,11 @@ function openGotoLineDialog(editorContent: HTMLElement) {
 function renderExpandSelectionEditor(
   expandSelectionShortcut: string | null,
   resolveDefinitionAtOffset = vi.fn(),
+  runImplementationsFromCursor = vi.fn(),
+  runDefinitionFromCursor = vi.fn(),
+  runReferencesFromCursor = vi.fn(),
+  saveFileShortcut: string | null = null,
+  handleSave = vi.fn(),
 ) {
   const editorRef = createRef<FileCodeMirrorEditorHandle>();
   const { container } = render(
@@ -123,13 +128,14 @@ function renderExpandSelectionEditor(
         onDraftCancel: vi.fn(),
         onDraftConfirm: vi.fn(),
       },
-      runDefinitionFromCursor: vi.fn(),
-      runReferencesFromCursor: vi.fn(),
+      runDefinitionFromCursor,
+      runImplementationsFromCursor,
+      runReferencesFromCursor,
       resolveDefinitionAtOffset,
       lastReportedLineRangeRef: { current: "" },
-      saveFileShortcut: null,
+      saveFileShortcut,
       expandSelectionShortcut,
-      handleSave: vi.fn(),
+      handleSave,
       gotoLineLabels,
     }),
   );
@@ -177,6 +183,11 @@ describe("file editor expand selection shortcut", () => {
   it("maps the persisted cmd shortcut to CodeMirror's platform-primary modifier", () => {
     expect(toCodeMirrorShortcut("cmd+w")).toBe("Mod-w");
     expect(toCodeMirrorShortcut("ctrl+w")).toBe("Ctrl-w");
+    for (let functionKey = 1; functionKey <= 12; functionKey += 1) {
+      expect(toCodeMirrorShortcut(`alt+f${functionKey}`)).toBe(
+        `Alt-F${functionKey}`,
+      );
+    }
   });
 
   it("keeps the previous Ctrl+W default usable during transition", () => {
@@ -185,6 +196,71 @@ describe("file editor expand selection shortcut", () => {
     fireEvent.keyDown(editorContent, { key: "w", code: "KeyW", ctrlKey: true });
 
     expect(view.state.selection.main.empty).toBe(false);
+  });
+
+  it("runs Definition, Implementations, and References from real keydown events", () => {
+    const runDefinitionFromCursor = vi.fn();
+    const runImplementationsFromCursor = vi.fn();
+    const runReferencesFromCursor = vi.fn();
+    const { editorContent } = renderExpandSelectionEditor(
+      "cmd+w",
+      vi.fn(),
+      runImplementationsFromCursor,
+      runDefinitionFromCursor,
+      runReferencesFromCursor,
+    );
+
+    fireEvent.keyDown(editorContent, {
+      key: "b",
+      code: "KeyB",
+      ctrlKey: true,
+    });
+    fireEvent.keyDown(editorContent, {
+      key: "b",
+      code: "KeyB",
+      ctrlKey: true,
+      altKey: true,
+    });
+    fireEvent.keyDown(editorContent, {
+      key: "F7",
+      code: "F7",
+      altKey: true,
+    });
+
+    expect(runDefinitionFromCursor).toHaveBeenCalledOnce();
+    expect(runImplementationsFromCursor).toHaveBeenCalledOnce();
+    expect(runReferencesFromCursor).toHaveBeenCalledOnce();
+  });
+
+  it("runs configured Save while leaving Cut, Copy, and Paste to CodeMirror/native behavior", () => {
+    const handleSave = vi.fn();
+    const { editorContent } = renderExpandSelectionEditor(
+      "cmd+w",
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      "cmd+s",
+      handleSave,
+    );
+
+    fireEvent.keyDown(editorContent, {
+      key: "s",
+      code: "KeyS",
+      ctrlKey: true,
+    });
+
+    expect(handleSave).toHaveBeenCalledOnce();
+    for (const key of ["x", "c", "v"] as const) {
+      expect(
+        fireEvent.keyDown(editorContent, {
+          key,
+          code: `Key${key.toUpperCase()}`,
+          ctrlKey: true,
+        }),
+      ).toBe(true);
+    }
+    expect(handleSave).toHaveBeenCalledOnce();
   });
 });
 

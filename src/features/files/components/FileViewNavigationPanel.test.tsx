@@ -26,6 +26,7 @@ describe("FileViewNavigationPanel installation recovery", () => {
           locations: [],
           mode: "fast-search",
           provider: "heuristic",
+          lifecycle: "degraded",
           language: "Java",
           fallbackReasonCode: "provider-unavailable",
         }}
@@ -49,5 +50,41 @@ describe("FileViewNavigationPanel installation recovery", () => {
       name: "files.navigationRetryAfterInstall",
     }));
     expect(onRetryNavigation).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["Python", "npm install -g pyright"],
+    ["Go", "go install golang.org/x/tools/gopls@latest"],
+  ])("shows the external %s provider install command", (language, command) => {
+    render(
+      <FileViewNavigationPanel
+        workspacePath="/repo"
+        navigationError={null}
+        navigationStatus={{
+          action: "references",
+          phase: "fallback",
+          locations: [],
+          mode: "fast-search",
+          provider: "heuristic",
+          lifecycle: "degraded",
+          language,
+          fallbackReasonCode: "provider-unavailable",
+        }}
+        onRetryNavigation={vi.fn()}
+        definitionCandidates={[]}
+        onCloseDefinitionCandidates={vi.fn()}
+        implementationCandidates={[]}
+        onCloseImplementationCandidates={vi.fn()}
+        referenceResults={[]}
+        onCloseReferenceResults={vi.fn()}
+        onNavigateToLocation={vi.fn()}
+        t={(key) => key}
+      />,
+    );
+
+    expect(screen.getByText(command)).toBeTruthy();
+    expect(
+      screen.getByText(new RegExp(`files\\.navigationLanguageServerMissing · ${language}`)),
+    ).toBeTruthy();
   });
 });

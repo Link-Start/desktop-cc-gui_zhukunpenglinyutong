@@ -143,7 +143,7 @@ impl AppState {
                 crate::renderer_stability::RendererHeartbeatStore::default(),
             ),
             semantic_navigation_runtime: crate::code_intel_lsp::SemanticNavigationRuntime::new(
-                data_dir.join("language-servers"),
+                crate::code_intel_lsp::cache_root_for_channel(&data_dir, cfg!(debug_assertions)),
             ),
             engine_manager,
         }

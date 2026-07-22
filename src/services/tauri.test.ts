@@ -69,6 +69,7 @@ import {
   getCodeIntelDefinition,
   getCodeIntelImplementations,
   getCodeIntelReferences,
+  prepareCodeIntel,
   getOpenCodeLspDefinition,
   getOpenCodeLspReferences,
   getOpenCodeStatusSnapshot,
@@ -2620,6 +2621,27 @@ describe("tauri invoke wrappers", () => {
       provider: "heuristic",
       fallbackReasonCode: null,
       result: [],
+    });
+  });
+
+  it("maps code intel prepare params and lifecycle", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      language: "JavaScript",
+      provider: "typescript-language-server",
+      lifecycle: "starting",
+      fallbackReasonCode: null,
+    });
+
+    await expect(prepareCodeIntel("ws-ci-prepare", "src/main.js")).resolves.toEqual({
+      language: "JavaScript",
+      provider: "typescript-language-server",
+      lifecycle: "starting",
+      fallbackReasonCode: null,
+    });
+    expect(invokeMock).toHaveBeenCalledWith("code_intel_prepare", {
+      workspaceId: "ws-ci-prepare",
+      filePath: "src/main.js",
     });
   });
 

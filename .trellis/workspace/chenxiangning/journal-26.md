@@ -1502,3 +1502,234 @@ Review 并修复 Git History repository color collision、branch group 与 branc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1070: 修复深色侧栏折叠配色
+
+**Date**: 2026-07-23
+**Task**: 修复深色侧栏折叠配色
+**Branch**: `feature/v-0.7.7`
+
+### Summary
+
+补齐 dark/system-dark desktop shell theme tokens，将 collapsed sidebar 的白色硬编码 fallback 改为 theme-aware surface，新增 CSS contract test，并同步归档 OpenSpec fix-dark-collapsed-sidebar-theme。用户视觉验收通过；focused Vitest 3/3、lint、typecheck、large-file、当前 OpenSpec strict validation 通过。full suite 的既存 AppShell startup 8 项因 collectAiFileMutations 收到 undefined timeline 失败，与本次 CSS/spec 变更无调用链。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `88a501df0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1071: 稳定语义导航生命周期
+
+**Date**: 2026-07-23
+**Task**: 稳定语义导航生命周期
+**Branch**: `feature/v-0.7.7`
+
+### Summary
+
+Java、TypeScript/JavaScript 与 Rust 语义导航统一 15 秒 soft timeout、健康 session 保留、provider lifecycle、750ms idle prewarm、JDT data owner lock 与 dev/release cache isolation；完成增量测试、cross-layer review 和 OpenSpec verify。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `706ca2e78` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1072: 归档语义导航 OpenSpec
+
+**Date**: 2026-07-23
+**Task**: 归档语义导航 OpenSpec
+**Branch**: `feature/v-0.7.7`
+
+### Summary
+
+将 stabilize-semantic-navigation-lifecycle delta specs 同步到 semantic-code-navigation-provider 与 file-view-code-intelligence-navigation 主规范，并归档已完成变更。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b9121bd54` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1073: 文件语义导航历史与视口恢复
+
+**Date**: 2026-07-23
+**Task**: 文件语义导航历史与视口恢复
+**Branch**: `feature/v-0.7.7`
+
+### Summary
+
+Main File Editor 增加仅限跨文件语义跳转的 Back/Forward 历史；返回与前进时恢复光标位置和滚动位置；补齐快捷键、国际化、增量回归测试，并完成 OpenSpec 与 Trellis 归档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `da6fa9786` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1074: 修复文件编辑器快捷键映射
+
+**Date**: 2026-07-23
+**Task**: 修复文件编辑器快捷键映射
+**Branch**: `feature/v-0.7.7`
+
+### Summary
+
+补齐 IDEA 风格文件右键菜单快捷键与真实 keyboard bindings；修复 CodeMirror function key converter 将 Alt-F7 错写为 Alt-f7 的 regression，统一 F1-F12 canonical uppercase；增加真实 keydown 回归。验证 focused Vitest 5 files / 139 tests、typecheck、lint、OpenSpec strict 均通过；按用户要求未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3dbbf083c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1075: 接入 Python 与 Go LSP 语义导航
+
+**Date**: 2026-07-23
+**Task**: 接入 Python 与 Go LSP 语义导航
+**Branch**: `feature/v-0.7.7`
+
+### Summary
+
+接入 external Pyright 与 gopls provider，补齐 macOS/Windows 多 npm runtime 与 symlink discovery 兼容；同步前端安装提示、回归测试、OpenSpec 与 Trellis 归档。验证通过：lint、typecheck、runtime contracts、102 项前端测试、52 项 Rust 测试、420 项 OpenSpec strict specs。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f249f31e9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1076: 修复 Quick Switcher 等价状态渲染闭环
+
+**Date**: 2026-07-23
+**Task**: 修复 Quick Switcher 等价状态渲染闭环
+**Branch**: `feature/v-0.7.7`
+
+### Summary
+
+定位 React #185 的真实根因是 Quick Switcher recent-files effect 对等价 projection 重复写入 state；通过复用旧 reference 切断 AppShell 反馈环，补齐 startup contract、focused regression、OpenSpec artifacts，并完成 typecheck、lint、production build 与 strict validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `64482fb39` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

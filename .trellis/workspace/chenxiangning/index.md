@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-26.md`
-- **Total Sessions**: 1069
+- **Total Sessions**: 1076
 - **Last Active**: 2026-07-23
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-26.md` | ~1504 | Active |
+| `journal-26.md` | ~1735 | Active |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
@@ -54,6 +54,13 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1076 | 2026-07-23 | 修复 Quick Switcher 等价状态渲染闭环 | `64482fb39` | `feature/v-0.7.7` |
+| 1075 | 2026-07-23 | 接入 Python 与 Go LSP 语义导航 | `f249f31e9` | `feature/v-0.7.7` |
+| 1074 | 2026-07-23 | 修复文件编辑器快捷键映射 | `3dbbf083c` | `feature/v-0.7.7` |
+| 1073 | 2026-07-23 | 文件语义导航历史与视口恢复 | `da6fa9786` | `feature/v-0.7.7` |
+| 1072 | 2026-07-23 | 归档语义导航 OpenSpec | `b9121bd54` | `feature/v-0.7.7` |
+| 1071 | 2026-07-23 | 稳定语义导航生命周期 | `706ca2e78` | `feature/v-0.7.7` |
+| 1070 | 2026-07-23 | 修复深色侧栏折叠配色 | `88a501df0` | `feature/v-0.7.7` |
 | 1069 | 2026-07-23 | 完善 Composer 提示词增强入口 | `1618ee32e` | `feature/v-0.7.7` |
 | 1068 | 2026-07-22 | 修复智能体 completion 选择错位 | `853090af7` | `feature/v-076` |
 | 1067 | 2026-07-22 | 完善语言服务安装引导与语义导航 | `c75fee5b6`, `ce695e500` | `feature/v-076` |

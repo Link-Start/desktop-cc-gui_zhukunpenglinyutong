@@ -1008,7 +1008,7 @@ vi.mock("./app-shell-parts/useAppShellSearchRadarSection", () => ({
       runningCountByWorkspaceId: {},
       recentCountByWorkspaceId: {},
     },
-    workspaceActivity: {},
+    workspaceActivity: { timeline: [] },
     workspaceNameByPath: {},
     workspaceSearchSources: [],
   }),

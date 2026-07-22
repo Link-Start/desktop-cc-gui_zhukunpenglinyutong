@@ -124,10 +124,14 @@ describe("FileViewPanel Git Blame", () => {
       />,
     );
 
-    await screen.findByTestId("mock-codemirror");
+    const editor = await screen.findByTestId("mock-codemirror");
     expect(getGitFileBlame).not.toHaveBeenCalled();
     expect(getGitFileFullDiff).not.toHaveBeenCalled();
-    toggleFileGitBlame();
+    fireEvent.keyDown(editor, {
+      key: "b",
+      altKey: true,
+      shiftKey: true,
+    });
 
     await waitFor(() => {
       expect(getGitFileBlame).toHaveBeenCalledWith(
@@ -547,7 +551,21 @@ describe("FileViewPanel Git Blame", () => {
       />,
     );
 
-    await screen.findByTestId("mock-codemirror");
+    const editor = await screen.findByTestId("mock-codemirror");
+    fireEvent.keyDown(editor, {
+      key: "h",
+      altKey: true,
+      shiftKey: true,
+    });
+    expect(onOpenFileHistory).toHaveBeenCalledWith({
+      workspaceId: "ws-content-history",
+      workspacePath: "/repo",
+      repositoryRoot: "packages/app",
+      path: "src/value.ts",
+      displayPath: "packages/app/src/value.ts",
+    });
+    onOpenFileHistory.mockClear();
+
     const menu = openFileContentContextMenu();
     fireEvent.mouseEnter(
       menu.getByRole("menuitem", { name: "files.tabGitActions" }),
@@ -555,9 +573,14 @@ describe("FileViewPanel Git Blame", () => {
     const gitMenu = within(
       screen.getByRole("menu", { name: "files.tabGitActions" }),
     );
-    fireEvent.click(
-      gitMenu.getByRole("menuitem", { name: "files.tabShowFileHistory" }),
-    );
+    const historyItem = gitMenu.getByRole("menuitem", {
+      name: "files.tabShowFileHistory",
+    });
+    expect(
+      historyItem.querySelector(".renderer-context-menu-item-shortcut")
+        ?.textContent,
+    ).toMatch(/^(⌥⇧H|Alt\+Shift\+H)$/);
+    fireEvent.click(historyItem);
 
     expect(onOpenFileHistory).toHaveBeenCalledWith({
       workspaceId: "ws-content-history",

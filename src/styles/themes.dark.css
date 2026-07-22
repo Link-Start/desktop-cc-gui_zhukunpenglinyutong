@@ -51,6 +51,9 @@
   --color-message-user-text: #ffffff;
   --surface-context-core: oklch(0.145 0.005 286);
   --surface-popover: oklch(0.18 0.005 286);
+  --desktop-shell-background: var(--surface-messages);
+  --desktop-sidebar-background: var(--surface-sidebar);
+  --desktop-main-background: var(--surface-messages);
   --surface-review: #281c26;
   --border-review: #6b3a56;
   --surface-review-active: #3a2636;

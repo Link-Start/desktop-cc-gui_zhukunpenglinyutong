@@ -66,7 +66,7 @@ ADDED by change: file-view-code-intelligence-navigation-2026-03-01
 
 ### Requirement: LSP Failure and Unsupported Fallback
 
-系统 MUST 对 provider 不可用、查询失败、当前 cursor 非 symbol、结果为空等场景提供 action-specific、localized、可解释回退。
+系统 MUST 对 provider 不可用、indexing、查询失败、当前 cursor 非 symbol、结果为空等场景提供 action-specific、localized、可解释状态，并 MUST NOT 将仍健康的 indexing provider 伪装成 fatal failure。
 
 #### Scenario: backend lsp command unavailable
 
@@ -84,10 +84,18 @@ ADDED by change: file-view-code-intelligence-navigation-2026-03-01
 
 #### Scenario: query failure is surfaced without breaking editor
 
-- **GIVEN** provider 查询因 timeout、file access 或 runtime failure 执行失败
-- **WHEN** 前端收到错误响应
-- **THEN** 系统 MUST 显示可区分的 localized failure 提示并允许用户重试
+- **GIVEN** provider 查询因 file access、fatal runtime failure 或 invalid response 执行失败
+- **WHEN** 前端收到错误或 fallback response
+- **THEN** 系统 MUST 显示可区分的 localized failure/fallback 提示并允许用户重试
 - **AND** MUST NOT 导致编辑器崩溃或内容丢失
+
+#### Scenario: provider is still indexing at request deadline
+
+- **GIVEN** Java、TypeScript/JavaScript 或 Rust provider process 仍存活
+- **WHEN** semantic navigation request 达到 15 秒 soft deadline
+- **THEN** UI MUST 显示 provider 仍在 indexing 或 temporarily degraded
+- **AND** backend MUST NOT 自动执行 workspace-wide heuristic fallback
+- **AND** 用户 MUST 能在稍后显式 retry
 
 ### Requirement: Modifier Hover MUST Reveal Navigable Symbol Affordance
 
@@ -276,3 +284,172 @@ File editor SHALL 在 semantic provider executable unavailable 时，以 install
 - **WHEN** install hint 已显示但 clipboard API 不可用
 - **THEN** command MUST remain selectable and readable
 - **AND** navigation panel MUST NOT throw、hide retry 或 hide fallback results
+
+### Requirement: File Editor MUST Retain Scoped Cross-File Semantic Navigation History
+
+File Editor MUST retain an ordered, in-memory history for cross-file locations reached through definition、implementation 或 references navigation，并 MUST preserve the cursor and vertical viewport snapshot associated with each history location。
+
+#### Scenario: Traverse a semantic navigation chain backward and forward
+
+- **GIVEN** 用户依次从 `A` semantic navigate 到 `B`，再从 `B` navigate 到 `C`
+- **WHEN** 用户连续触发 Back
+- **THEN** File Editor MUST 依次恢复离开 `B` 与 `A` 时的 file、line、column 与 vertical scroll offset
+- **AND** subsequent Forward MUST 依次恢复离开 `B` 与 `C` 时的最新 snapshot
+
+#### Scenario: History traversal snapshots the location being left
+
+- **GIVEN** 用户通过 semantic navigation 到达 target file 后移动 cursor 并滚动 viewport
+- **WHEN** 用户触发 Back 或 Forward 离开该 file
+- **THEN** File Editor MUST 在 traversal 前刷新当前 history entry
+- **AND** later traversal 回到该 entry 时 MUST restore the refreshed cursor and vertical scroll offset
+
+#### Scenario: New semantic jump truncates the forward branch
+
+- **GIVEN** history 为 `A -> B -> C` 且用户已 Back 到 `B`
+- **WHEN** 用户从 `B` semantic navigate 到 `D`
+- **THEN** history MUST 收敛为 `A -> B -> D`
+- **AND** `C` MUST NOT remain reachable through Forward
+- **AND** `B` MUST retain the cursor and vertical scroll offset captured immediately before the jump to `D`
+
+#### Scenario: Same-file semantic positioning does not create history
+
+- **WHEN** definition、implementation 或 references navigation target 与 source 属于同一 file
+- **THEN** File Editor MUST perform the existing positioning behavior
+- **AND** MUST NOT append a cross-file history entry
+
+#### Scenario: Restored viewport belongs only to semantic history traversal
+
+- **WHEN** file tree、global search、manual tab activation 或 ordinary file open changes the active file
+- **THEN** File Editor MUST NOT apply a pending semantic-history viewport snapshot to that file
+- **AND** existing manual navigation isolation MUST remain intact
+
+### Requirement: Semantic Navigation History MUST Remain Isolated From General File Activity
+
+Semantic navigation history MUST NOT ingest or control file tree open、global search open、manual tab activation、ordinary cursor movement 或 detached explorer sidebar behavior.
+
+#### Scenario: Manual file activation ends the active semantic chain
+
+- **GIVEN** 当前存在 semantic navigation history
+- **WHEN** 用户通过 tab、file tree 或其他 non-semantic surface 激活另一个 file
+- **THEN** File Editor MUST clear the active semantic history chain
+- **AND** the manual activation MUST NOT become a Back / Forward destination
+
+#### Scenario: Editor lifecycle reset clears history
+
+- **WHEN** 用户关闭 File Editor 或切换 workspace
+- **THEN** navigation history MUST be discarded
+- **AND** a later Editor lifecycle MUST start with Back and Forward unavailable
+
+#### Scenario: Detached explorer keeps its leading sidebar action
+
+- **WHEN** FileViewPanel is rendered in Detached File Explorer with a supplied leading action
+- **THEN** its collapse / expand control MUST retain the existing behavior
+- **AND** the main Editor navigation controls MUST NOT replace that detached action
+
+### Requirement: Main File Editor MUST Expose Back And Forward Controls And Shortcuts
+
+Main File Editor MUST replace the former header-level “Back to chat” action with adjacent Back and Forward semantic navigation controls and MUST expose platform-correct fixed shortcuts.
+
+#### Scenario: Header controls reflect available history directions
+
+- **WHEN** a Back or Forward destination exists
+- **THEN** the corresponding control MUST be enabled and invoke that destination
+- **AND** a direction without a destination MUST be disabled
+
+#### Scenario: macOS shortcuts traverse semantic history
+
+- **WHEN** Main File Editor is active and the user presses `Cmd+Option+Left` or `Cmd+Option+Right` on macOS
+- **THEN** File Editor MUST invoke Back or Forward respectively when that direction is available
+
+#### Scenario: Windows and Linux shortcuts traverse semantic history
+
+- **WHEN** Main File Editor is active and the user presses `Ctrl+Alt+Left` or `Ctrl+Alt+Right` on Windows or Linux
+- **THEN** File Editor MUST invoke Back or Forward respectively when that direction is available
+
+#### Scenario: Disabled shortcut direction is a no-op
+
+- **WHEN** the user invokes a navigation shortcut with no destination in that direction
+- **THEN** File Editor MUST leave the active file and cursor unchanged
+
+### Requirement: Python Files MUST Use External Pyright Semantic Navigation
+
+File editor SHALL 对 `.py` 与 `.pyi` 文件优先使用用户环境中的 external `pyright-langserver` 执行 definition、references 与 implementation semantic navigation，并 MUST 保持现有 response、fallback 与 editor safety contract。
+
+#### Scenario: Pyright returns semantic locations
+
+- **WHEN** 用户在 Python symbol 上触发 definition、references 或 implementation 且 Pyright 可用
+- **THEN** backend MUST 返回 `mode=semantic`、`provider=pyright` 与 workspace-contained locations
+- **AND** semantic empty result MUST remain authoritative and MUST NOT trigger same-name fast-search
+
+#### Scenario: Pyright is unavailable
+
+- **WHEN** `pyright-langserver` executable 不可用
+- **THEN** definition/references MUST 保持 bounded fast-search fallback 与 `provider-unavailable` metadata
+- **AND** UI MUST 显示 `npm install -g pyright` 但 MUST NOT 自动执行该命令
+- **AND** editor content、selection 与 save behavior MUST remain available
+
+#### Scenario: Python environment is externally owned
+
+- **WHEN** workspace 使用 virtualenv、Conda、Poetry、uv 或 system Python
+- **THEN** mossx MUST defer interpreter/environment resolution to Pyright workspace configuration
+- **AND** mossx MUST NOT silently activate、modify or install a Python environment
+
+### Requirement: Go Files MUST Use External gopls Semantic Navigation
+
+File editor SHALL 对 `.go` 文件优先使用用户环境中的 external `gopls` 执行 definition、references 与 implementation semantic navigation，并 MUST 保持 module/workspace 与 process lifecycle 边界。
+
+#### Scenario: gopls returns semantic locations
+
+- **WHEN** 用户在 Go symbol 上触发 definition、references 或 implementation 且 gopls 可用
+- **THEN** backend MUST 返回 `mode=semantic`、`provider=gopls` 与 workspace-contained locations
+- **AND** interface implementation targets MUST preserve multi-target navigation behavior
+
+#### Scenario: gopls is unavailable
+
+- **WHEN** `gopls` executable 不可用
+- **THEN** definition/references MUST 保持 bounded fast-search fallback 与 `provider-unavailable` metadata
+- **AND** UI MUST 显示 `go install golang.org/x/tools/gopls@latest` 但 MUST NOT 自动执行该命令
+- **AND** editor MUST NOT crash or modify the opened file
+
+#### Scenario: Go toolchain failure remains external
+
+- **WHEN** gopls 因 Go toolchain、module download、GOPROXY 或 unsupported build system 失败
+- **THEN** mossx MUST surface a localized retryable degraded state
+- **AND** mossx MUST NOT mutate Go environment、module files or proxy configuration
+
+### Requirement: Python And Go Providers MUST Reuse Bounded LSP Lifecycle
+
+Pyright 与 gopls SHALL 复用现有 workspace-scoped semantic runtime、request deadline、cancellation、fatal-only eviction、session cap 与 idle eviction contract，且 MUST NOT 增加 editor hot-path work。
+
+#### Scenario: Python or Go request reaches soft deadline
+
+- **WHEN** live Pyright 或 gopls request 达到 semantic request soft deadline
+- **THEN** backend MUST cancel that request and retain the live session for explicit retry
+- **AND** MUST NOT automatically start workspace-wide heuristic fallback
+
+#### Scenario: Python or Go file becomes idle after open
+
+- **WHEN** `.py`、`.pyi` 或 `.go` file 打开后达到 existing idle prewarm delay
+- **THEN** frontend MAY call the existing `code_intel_prepare` command once per scoped file identity
+- **AND** typing、modifier hover、cursor movement MUST NOT trigger semantic queries
+
+#### Scenario: Provider process exits fatally
+
+- **WHEN** Pyright 或 gopls process exits、EOF 或 stdin transport fails
+- **THEN** runtime MUST evict only that provider/workspace session and expose retryable degraded metadata
+- **AND** unrelated providers and workspaces MUST remain usable
+
+### Requirement: Python And Go Provider Distribution MUST Remain External
+
+mossx SHALL treat Pyright and gopls as user-installed external executables and MUST preserve their independent license and distribution boundary。
+
+#### Scenario: Desktop application is packaged
+
+- **WHEN** mossx desktop artifacts are built or distributed
+- **THEN** Pyright and gopls binaries MUST NOT be bundled by this change
+- **AND** provider absence MUST degrade to installation guidance rather than an automatic download
+
+#### Scenario: Future bundled distribution is proposed
+
+- **WHEN** a future change proposes bundling Pyright or gopls
+- **THEN** that change MUST separately define license notices、artifact integrity、update、rollback 与 platform packaging contracts

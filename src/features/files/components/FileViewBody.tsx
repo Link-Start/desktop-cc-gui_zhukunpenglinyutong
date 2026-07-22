@@ -114,6 +114,7 @@ type FileViewBodyProps = {
   };
   annotationWidgetCallbacks: AnnotationWidgetCallbacks;
   runDefinitionFromCursor: () => void;
+  runImplementationsFromCursor: () => void;
   runReferencesFromCursor: () => void;
   resolveDefinitionAtOffset: (
     offset: number,
@@ -632,6 +633,7 @@ export function FileViewBody({
   annotationWidgetLabels,
   annotationWidgetCallbacks,
   runDefinitionFromCursor,
+  runImplementationsFromCursor,
   runReferencesFromCursor,
   resolveDefinitionAtOffset,
   onPreviewAnnotationStart,
@@ -1054,6 +1056,7 @@ export function FileViewBody({
           annotationWidgetLabels={annotationWidgetLabels}
           annotationWidgetCallbacks={annotationWidgetCallbacks}
           runDefinitionFromCursor={runDefinitionFromCursor}
+          runImplementationsFromCursor={runImplementationsFromCursor}
           runReferencesFromCursor={runReferencesFromCursor}
           resolveDefinitionAtOffset={resolveDefinitionAtOffset}
           className="fvp-cm"

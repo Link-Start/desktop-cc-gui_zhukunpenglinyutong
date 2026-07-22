@@ -81,6 +81,14 @@ const KEY_ALIASES: Record<string, string> = {
   up: "arrowup",
 };
 
+function formatShortcutKeyLabel(
+  key: string,
+  labels: Record<string, string>,
+): string {
+  return labels[key] ??
+    (key.length === 1 || /^f\d{1,2}$/.test(key) ? key.toUpperCase() : key);
+}
+
 function normalizeKey(key: string) {
   const normalized = key.toLowerCase();
   if (MODIFIER_KEYS.has(normalized)) {
@@ -154,9 +162,7 @@ export function formatShortcut(value: string | null | undefined): string {
     }
     return [];
   });
-  const keyLabel =
-    KEY_LABELS[parsed.key] ??
-    (parsed.key.length === 1 ? parsed.key.toUpperCase() : parsed.key);
+  const keyLabel = formatShortcutKeyLabel(parsed.key, KEY_LABELS);
   return [...modifiers, keyLabel].join("");
 }
 
@@ -189,9 +195,7 @@ export function formatShortcutForPlatform(
   if (parsed.shift) {
     modifiers.push(MODIFIER_TEXT_LABELS.shift);
   }
-  const keyLabel =
-    ACCELERATOR_KEYS[parsed.key] ??
-    (parsed.key.length === 1 ? parsed.key.toUpperCase() : parsed.key);
+  const keyLabel = formatShortcutKeyLabel(parsed.key, ACCELERATOR_KEYS);
   return [...modifiers, keyLabel].join("+");
 }
 

@@ -2,6 +2,7 @@ import { normalizeComparablePath, normalizeFsPath } from "../../../utils/workspa
 import { isMacPlatform, isWindowsPlatform } from "../../../utils/platform";
 import type {
   CodeNavigationFallbackReason,
+  CodeNavigationLifecycle,
   CodeNavigationMode,
 } from "../../../services/tauri/openCode";
 
@@ -27,11 +28,12 @@ export type CodeNavigationResultSnapshot = {
   provider: string;
   language: string | null;
   fallbackReasonCode: CodeNavigationFallbackReason | null;
+  lifecycle: CodeNavigationLifecycle;
 };
 
 export type CodeNavigationQueryStatus = CodeNavigationResultSnapshot & {
   action: CodeNavigationAction;
-  phase: "loading" | "success" | "fallback" | "error";
+  phase: "loading" | "indexing" | "success" | "fallback" | "error";
 };
 
 export type RecentTrigger = {
@@ -95,6 +97,20 @@ export function getLanguageServerInstallHint(
   if (normalizedLanguage === "rust") {
     return {
       command: "rustup component add rust-analyzer",
+      kind: "install",
+      platform,
+    };
+  }
+  if (normalizedLanguage === "python") {
+    return {
+      command: "npm install -g pyright",
+      kind: "install",
+      platform,
+    };
+  }
+  if (normalizedLanguage === "go") {
+    return {
+      command: "go install golang.org/x/tools/gopls@latest",
       kind: "install",
       platform,
     };

@@ -38,6 +38,7 @@ export {
   getCodeIntelDefinition,
   getCodeIntelImplementations,
   getCodeIntelReferences,
+  prepareCodeIntel,
   getOpenCodeLspDefinition,
   getOpenCodeLspDiagnostics,
   getOpenCodeLspDocumentSymbols,

@@ -12,7 +12,6 @@ import type {
 } from "../../code-annotations/types";
 import type { GitLineMarkers } from "../utils/gitLineMarkers";
 import { readDocumentThemeAppearance } from "../../theme/utils/themeAppearance";
-import { parseShortcut } from "../../../utils/shortcuts";
 import { normalizeFsPath } from "../../../utils/workspacePaths";
 
 export const EDITOR_LINE_RANGE_SYNC_DELAY_MS = 90;
@@ -32,45 +31,6 @@ export function isSameEditorLineRange(
 
 export const EXTERNAL_CHANGE_POLL_INTERVAL_MS = 2_000;
 export type EditorTheme = "light" | "dark";
-
-const CODE_MIRROR_KEY_LABELS: Record<string, string> = {
-  arrowdown: "ArrowDown",
-  arrowleft: "ArrowLeft",
-  arrowright: "ArrowRight",
-  arrowup: "ArrowUp",
-  enter: "Enter",
-  escape: "Escape",
-  space: "Space",
-  tab: "Tab",
-};
-
-export function toCodeMirrorShortcut(value: string | null | undefined): string | null {
-  const parsed = parseShortcut(value);
-  if (!parsed) {
-    return null;
-  }
-  const modifiers: string[] = [];
-  if (parsed.meta && !parsed.ctrl) {
-    modifiers.push("Mod");
-  } else {
-    if (parsed.meta) {
-      modifiers.push("Meta");
-    }
-    if (parsed.ctrl) {
-      modifiers.push("Ctrl");
-    }
-  }
-  if (parsed.alt) {
-    modifiers.push("Alt");
-  }
-  if (parsed.shift) {
-    modifiers.push("Shift");
-  }
-  const keyLabel =
-    CODE_MIRROR_KEY_LABELS[parsed.key] ??
-    (parsed.key.length === 1 ? parsed.key : parsed.key);
-  return [...modifiers, keyLabel].join("-");
-}
 
 export function resolveEditorTheme(): EditorTheme {
   return readDocumentThemeAppearance();

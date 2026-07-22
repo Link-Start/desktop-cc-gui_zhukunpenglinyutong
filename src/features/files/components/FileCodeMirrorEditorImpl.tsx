@@ -58,6 +58,25 @@ import {
   type FileEditorGotoLineLabels,
 } from "./FileEditorGotoLineDialog";
 import { focusEditorViewAtLocation } from "../utils/fileEditorLocation";
+import { FILE_CONTEXT_MENU_SHORTCUTS } from "../utils/fileContextMenuShortcuts";
+
+function resolveCodeMirrorShortcut(value: string): string {
+  const shortcut = toCodeMirrorShortcut(value);
+  if (!shortcut) {
+    throw new Error(`[file-editor] Invalid shortcut definition: ${value}`);
+  }
+  return shortcut;
+}
+
+const GOTO_DEFINITION_SHORTCUT = resolveCodeMirrorShortcut(
+  FILE_CONTEXT_MENU_SHORTCUTS.gotoDefinition,
+);
+const GOTO_IMPLEMENTATIONS_SHORTCUT = resolveCodeMirrorShortcut(
+  FILE_CONTEXT_MENU_SHORTCUTS.gotoImplementations,
+);
+const FIND_REFERENCES_SHORTCUT = resolveCodeMirrorShortcut(
+  FILE_CONTEXT_MENU_SHORTCUTS.findReferences,
+);
 
 export type FileCodeMirrorEditorProps = {
   filePath: string;
@@ -85,6 +104,7 @@ export type FileCodeMirrorEditorProps = {
   };
   annotationWidgetCallbacks: AnnotationWidgetCallbacks;
   runDefinitionFromCursor: () => void;
+  runImplementationsFromCursor?: () => void;
   runReferencesFromCursor: () => void;
   resolveDefinitionAtOffset: (offset: number, view?: EditorView) => void | Promise<void>;
   className?: string;
@@ -605,6 +625,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     annotationWidgetLabels,
     annotationWidgetCallbacks,
     runDefinitionFromCursor,
+    runImplementationsFromCursor,
     runReferencesFromCursor,
     resolveDefinitionAtOffset,
     className,
@@ -683,14 +704,23 @@ export const FileCodeMirrorEditorImpl = forwardRef<
           run: (view) => gotoLineDialogRef.current?.open(view) ?? false,
         },
         {
-          key: "Mod-b",
+          key: GOTO_DEFINITION_SHORTCUT,
           run: () => {
             runDefinitionFromCursor();
             return true;
           },
         },
+        ...(runImplementationsFromCursor
+          ? [{
+              key: GOTO_IMPLEMENTATIONS_SHORTCUT,
+              run: () => {
+                runImplementationsFromCursor();
+                return true;
+              },
+            }]
+          : []),
         {
-          key: "Alt-F7",
+          key: FIND_REFERENCES_SHORTCUT,
           run: () => {
             runReferencesFromCursor();
             return true;
@@ -698,7 +728,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
         },
       ])),
     ],
-    [runDefinitionFromCursor, runReferencesFromCursor],
+    [runDefinitionFromCursor, runImplementationsFromCursor, runReferencesFromCursor],
   );
 
   const ctrlClickDefinitionExt = useMemo(

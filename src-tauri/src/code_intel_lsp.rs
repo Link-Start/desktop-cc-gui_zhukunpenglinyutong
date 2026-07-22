@@ -1,8 +1,9 @@
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::ffi::OsString;
+use std::fs::{File, OpenOptions};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
@@ -15,17 +16,69 @@ use tokio::time::timeout;
 use crate::backend::app_server::{build_cli_path_env, find_cli_binary};
 use crate::utils::async_command;
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(6);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const DEFAULT_INITIALIZE_TIMEOUT: Duration = Duration::from_secs(10);
 const JAVA_INITIALIZE_TIMEOUT: Duration = Duration::from_secs(30);
 const SESSION_IDLE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const MAX_SESSIONS: usize = 6;
+
+pub(crate) fn cache_root_for_channel(data_dir: &Path, development: bool) -> PathBuf {
+    data_dir.join("language-servers").join(if development {
+        "development"
+    } else {
+        "release"
+    })
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum SemanticProvider {
     RustAnalyzer,
     EclipseJdtLs,
     TypeScriptLanguageServer,
+    Pyright,
+    Gopls,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub(crate) enum SemanticLifecycle {
+    Starting = 0,
+    Indexing = 1,
+    Ready = 2,
+    Degraded = 3,
+}
+
+impl SemanticLifecycle {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Starting => "starting",
+            Self::Indexing => "indexing",
+            Self::Ready => "ready",
+            Self::Degraded => "degraded",
+        }
+    }
+
+    fn from_atomic(value: u8) -> Self {
+        match value {
+            1 => Self::Indexing,
+            2 => Self::Ready,
+            3 => Self::Degraded,
+            _ => Self::Starting,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct SemanticQueryResult {
+    pub(crate) locations: Vec<SemanticLocation>,
+    pub(crate) lifecycle: SemanticLifecycle,
+}
+
+#[derive(Debug)]
+pub(crate) struct SemanticQueryFailure {
+    pub(crate) message: String,
+    pub(crate) lifecycle: SemanticLifecycle,
+    pub(crate) fatal: bool,
 }
 
 impl SemanticProvider {
@@ -34,6 +87,8 @@ impl SemanticProvider {
             Self::RustAnalyzer => "rust-analyzer",
             Self::EclipseJdtLs => "eclipse-jdt-ls",
             Self::TypeScriptLanguageServer => "typescript-language-server",
+            Self::Pyright => "pyright",
+            Self::Gopls => "gopls",
         }
     }
 
@@ -41,6 +96,8 @@ impl SemanticProvider {
         match self {
             Self::RustAnalyzer => "rust",
             Self::EclipseJdtLs => "java",
+            Self::Pyright => "python",
+            Self::Gopls => "go",
             Self::TypeScriptLanguageServer => match file
                 .extension()
                 .and_then(|value| value.to_str())
@@ -61,6 +118,8 @@ impl SemanticProvider {
             Self::RustAnalyzer => "MOSSX_RUST_ANALYZER_BIN",
             Self::EclipseJdtLs => "MOSSX_JAVA_LANGUAGE_SERVER_BIN",
             Self::TypeScriptLanguageServer => "MOSSX_TYPESCRIPT_LANGUAGE_SERVER_BIN",
+            Self::Pyright => "MOSSX_PYRIGHT_LANGUAGE_SERVER_BIN",
+            Self::Gopls => "MOSSX_GOPLS_BIN",
         }
     }
 
@@ -69,6 +128,8 @@ impl SemanticProvider {
             Self::RustAnalyzer => "rust-analyzer",
             Self::EclipseJdtLs => "jdtls",
             Self::TypeScriptLanguageServer => "typescript-language-server",
+            Self::Pyright => "pyright-langserver",
+            Self::Gopls => "gopls",
         }
     }
 
@@ -79,20 +140,51 @@ impl SemanticProvider {
         }
     }
 
+    fn lifecycle_after_initialize(self) -> SemanticLifecycle {
+        match self {
+            Self::EclipseJdtLs => SemanticLifecycle::Indexing,
+            Self::RustAnalyzer | Self::TypeScriptLanguageServer | Self::Pyright | Self::Gopls => {
+                SemanticLifecycle::Ready
+            }
+        }
+    }
+
+    fn initialization_options(self) -> Value {
+        match self {
+            Self::EclipseJdtLs => json!({
+                "settings": { "java": { "progressReports": { "enabled": true } } }
+            }),
+            Self::RustAnalyzer | Self::TypeScriptLanguageServer | Self::Pyright | Self::Gopls => {
+                Value::Null
+            }
+        }
+    }
+
+    fn data_dir(self, workspace_root: &Path, cache_root: &Path) -> Option<PathBuf> {
+        if self != Self::EclipseJdtLs {
+            return None;
+        }
+        let mut hasher = DefaultHasher::new();
+        workspace_root.hash(&mut hasher);
+        Some(
+            cache_root
+                .join("eclipse-jdt-ls")
+                .join(format!("{:016x}", hasher.finish())),
+        )
+    }
+
     fn launch_args(
         self,
         workspace_root: &Path,
         cache_root: &Path,
     ) -> Result<Vec<OsString>, String> {
         match self {
-            Self::RustAnalyzer => Ok(Vec::new()),
-            Self::TypeScriptLanguageServer => Ok(vec![OsString::from("--stdio")]),
+            Self::RustAnalyzer | Self::Gopls => Ok(Vec::new()),
+            Self::TypeScriptLanguageServer | Self::Pyright => Ok(vec![OsString::from("--stdio")]),
             Self::EclipseJdtLs => {
-                let mut hasher = DefaultHasher::new();
-                workspace_root.hash(&mut hasher);
-                let data_dir = cache_root
-                    .join("eclipse-jdt-ls")
-                    .join(format!("{:016x}", hasher.finish()));
+                let data_dir = self
+                    .data_dir(workspace_root, cache_root)
+                    .ok_or_else(|| "eclipse-jdt-ls data directory is unavailable".to_string())?;
                 std::fs::create_dir_all(&data_dir).map_err(|error| {
                     format!("failed to prepare eclipse-jdt-ls data directory: {error}")
                 })?;
@@ -148,10 +240,28 @@ struct LspSession {
     next_id: AtomicU64,
     opened_documents: Mutex<HashMap<String, OpenDocument>>,
     alive: Arc<AtomicBool>,
+    lifecycle: Arc<AtomicU8>,
     provider_id: &'static str,
+    _data_owner_lock: Option<DataOwnerLock>,
+}
+
+struct DataOwnerLock(File);
+
+impl Drop for DataOwnerLock {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
 }
 
 impl LspSession {
+    fn lifecycle(&self) -> SemanticLifecycle {
+        SemanticLifecycle::from_atomic(self.lifecycle.load(Ordering::SeqCst))
+    }
+
+    fn set_lifecycle(&self, lifecycle: SemanticLifecycle) {
+        self.lifecycle.store(lifecycle as u8, Ordering::SeqCst);
+    }
+
     async fn write_message(&self, value: &Value) -> Result<(), String> {
         write_lsp_value(&self.stdin, value).await
     }
@@ -206,6 +316,16 @@ impl LspSession {
             }
             Err(_) => {
                 self.pending.lock().await.remove(&id);
+                self.set_lifecycle(lifecycle_after_request_timeout(self.lifecycle()));
+                if let Err(error) = self
+                    .send_notification("$/cancelRequest", json!({ "id": id }))
+                    .await
+                {
+                    log::debug!(
+                        "[{}] failed to cancel timed out request method={method}: {error}",
+                        self.provider_id
+                    );
+                }
                 Err(format!("Language server request timed out: {method}"))
             }
         }
@@ -286,6 +406,14 @@ impl LspSession {
     }
 }
 
+fn lifecycle_after_request_timeout(current: SemanticLifecycle) -> SemanticLifecycle {
+    if current == SemanticLifecycle::Ready {
+        SemanticLifecycle::Degraded
+    } else {
+        current
+    }
+}
+
 struct SessionEntry {
     session: Arc<LspSession>,
     last_used: Instant,
@@ -328,9 +456,17 @@ pub(crate) struct SemanticNavigationRuntime {
     cache_root: PathBuf,
 }
 
+fn query_error_is_fatal(session_alive: bool, error: &str) -> bool {
+    let normalized_error = error.to_ascii_lowercase();
+    !session_alive
+        || normalized_error.contains("failed to write")
+        || normalized_error.contains("not running")
+        || normalized_error.contains("exited")
+}
+
 impl Default for SemanticNavigationRuntime {
     fn default() -> Self {
-        Self::new(std::env::temp_dir().join("mossx-language-servers"))
+        Self::new(std::env::temp_dir().join("ccgui-language-servers"))
     }
 }
 
@@ -363,9 +499,17 @@ impl SemanticNavigationRuntime {
         line: u32,
         character: u32,
         kind: SemanticQueryKind,
-    ) -> Result<Vec<SemanticLocation>, String> {
-        let session = self.session_for(provider, workspace_root).await?;
+    ) -> Result<SemanticQueryResult, SemanticQueryFailure> {
+        let session = self
+            .session_for(provider, workspace_root)
+            .await
+            .map_err(|message| SemanticQueryFailure {
+                message,
+                lifecycle: SemanticLifecycle::Degraded,
+                fatal: true,
+            })?;
         let uri = path_to_file_uri(file);
+        let query_started = Instant::now();
         let response = session
             .query(
                 &uri,
@@ -377,13 +521,62 @@ impl SemanticNavigationRuntime {
             )
             .await;
         let value = match response {
-            Ok(value) => value,
+            Ok(value) => {
+                if provider != SemanticProvider::EclipseJdtLs {
+                    session.set_lifecycle(SemanticLifecycle::Ready);
+                }
+                log::debug!(
+                    "[code-intel-lsp] query provider={} method={} duration_ms={} lifecycle={}",
+                    provider.id(),
+                    kind.method(),
+                    query_started.elapsed().as_millis(),
+                    session.lifecycle().as_str(),
+                );
+                value
+            }
             Err(error) => {
-                self.evict_session(provider, workspace_root, &session).await;
-                return Err(error);
+                let fatal = query_error_is_fatal(session.alive.load(Ordering::SeqCst), &error);
+                let lifecycle = session.lifecycle();
+                if fatal {
+                    self.evict_session(provider, workspace_root, &session).await;
+                }
+                log::warn!(
+                    "[code-intel-lsp] query provider={} method={} duration_ms={} lifecycle={} fatal={} error={}",
+                    provider.id(),
+                    kind.method(),
+                    query_started.elapsed().as_millis(),
+                    lifecycle.as_str(),
+                    fatal,
+                    error,
+                );
+                return Err(SemanticQueryFailure {
+                    message: error,
+                    lifecycle,
+                    fatal,
+                });
             }
         };
-        normalize_locations(workspace_root, &value)
+        match normalize_locations(workspace_root, &value) {
+            Ok(locations) => Ok(SemanticQueryResult {
+                locations,
+                lifecycle: session.lifecycle(),
+            }),
+            Err(error) => Err(SemanticQueryFailure {
+                message: error,
+                lifecycle: session.lifecycle(),
+                fatal: false,
+            }),
+        }
+    }
+
+    pub(crate) async fn prepare(
+        &self,
+        provider: SemanticProvider,
+        workspace_root: &Path,
+    ) -> Result<SemanticLifecycle, String> {
+        self.session_for(provider, workspace_root)
+            .await
+            .map(|session| session.lifecycle())
     }
 
     async fn session_for(
@@ -537,11 +730,38 @@ fn build_provider_command(executable: &OsString) -> tokio::process::Command {
     async_command(executable)
 }
 
+fn acquire_data_owner_lock(
+    provider: SemanticProvider,
+    workspace_root: &Path,
+    cache_root: &Path,
+) -> Result<Option<DataOwnerLock>, String> {
+    let Some(data_dir) = provider.data_dir(workspace_root, cache_root) else {
+        return Ok(None);
+    };
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|error| format!("failed to prepare provider data directory: {error}"))?;
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(data_dir.join(".ccgui-owner.lock"))
+        .map_err(|error| format!("failed to open provider data owner lock: {error}"))?;
+    lock_file.try_lock().map_err(|error| {
+        format!(
+            "{} data directory is already owned by another client: {error}",
+            provider.id()
+        )
+    })?;
+    Ok(Some(DataOwnerLock(lock_file)))
+}
+
 async fn spawn_language_server(
     provider: SemanticProvider,
     workspace_root: &Path,
     cache_root: &Path,
 ) -> Result<Arc<LspSession>, String> {
+    let spawn_started = Instant::now();
+    let data_owner_lock = acquire_data_owner_lock(provider, workspace_root, cache_root)?;
     let executable = resolve_provider_executable(provider);
     let mut command = build_provider_command(&executable);
     if let Some(path_env) = build_cli_path_env(executable.to_str()) {
@@ -568,6 +788,7 @@ async fn spawn_language_server(
     let stderr = child.stderr.take();
     let pending: PendingRequests = Arc::new(Mutex::new(HashMap::new()));
     let alive = Arc::new(AtomicBool::new(true));
+    let lifecycle = Arc::new(AtomicU8::new(SemanticLifecycle::Starting as u8));
     let stdin = Arc::new(Mutex::new(stdin));
     let session = Arc::new(LspSession {
         child: Mutex::new(child),
@@ -576,10 +797,14 @@ async fn spawn_language_server(
         next_id: AtomicU64::new(1),
         opened_documents: Mutex::new(HashMap::new()),
         alive: Arc::clone(&alive),
+        lifecycle: Arc::clone(&lifecycle),
         provider_id: provider.id(),
+        _data_owner_lock: data_owner_lock,
     });
 
-    tauri::async_runtime::spawn(read_server_messages(stdout, stdin, pending, alive));
+    tauri::async_runtime::spawn(read_server_messages(
+        provider, stdout, stdin, pending, alive, lifecycle,
+    ));
     if let Some(stderr) = stderr {
         tauri::async_runtime::spawn(async move {
             let mut lines = BufReader::new(stderr).lines();
@@ -595,9 +820,10 @@ async fn spawn_language_server(
             "initialize",
             json!({
                 "processId": Value::Null,
-                "clientInfo": { "name": "mossx", "version": env!("CARGO_PKG_VERSION") },
+                "clientInfo": { "name": "ccgui", "version": env!("CARGO_PKG_VERSION") },
                 "rootUri": root_uri,
                 "workspaceFolders": [{ "uri": root_uri, "name": "workspace" }],
+                "initializationOptions": provider.initialization_options(),
                 "capabilities": {
                     "textDocument": {
                         "definition": { "linkSupport": true },
@@ -614,20 +840,31 @@ async fn spawn_language_server(
         let _ = session.child.lock().await.kill().await;
         return Err(format!("Failed to initialize {}: {error}", provider.id()));
     }
+    session.set_lifecycle(provider.lifecycle_after_initialize());
     session.send_notification("initialized", json!({})).await?;
+    log::info!(
+        "[code-intel-lsp] initialized provider={} duration_ms={} lifecycle={}",
+        provider.id(),
+        spawn_started.elapsed().as_millis(),
+        session.lifecycle().as_str(),
+    );
     Ok(session)
 }
 
 async fn read_server_messages(
+    provider: SemanticProvider,
     stdout: tokio::process::ChildStdout,
     stdin: Arc<Mutex<ChildStdin>>,
     pending: PendingRequests,
     alive: Arc<AtomicBool>,
+    lifecycle: Arc<AtomicU8>,
 ) {
     let mut reader = BufReader::new(stdout);
     loop {
         match read_lsp_message(&mut reader).await {
-            Ok(Some(message)) => dispatch_server_message(message, &stdin, &pending).await,
+            Ok(Some(message)) => {
+                dispatch_server_message(provider, message, &stdin, &pending, &lifecycle).await
+            }
             Ok(None) => break,
             Err(error) => {
                 fail_pending(&pending, error).await;
@@ -640,12 +877,18 @@ async fn read_server_messages(
 }
 
 async fn dispatch_server_message(
+    provider: SemanticProvider,
     message: Value,
     stdin: &Arc<Mutex<ChildStdin>>,
     pending: &PendingRequests,
+    lifecycle: &Arc<AtomicU8>,
 ) {
-    if message.get("method").and_then(Value::as_str).is_some() {
-        respond_to_server_request(&message, stdin).await;
+    if let Some(method) = message.get("method").and_then(Value::as_str) {
+        if message.get("id").is_some() {
+            respond_to_server_request(&message, stdin).await;
+        } else {
+            update_lifecycle_from_notification(provider, method, &message, lifecycle);
+        }
         return;
     }
     let Some(id) = message.get("id").and_then(Value::as_u64) else {
@@ -664,6 +907,40 @@ async fn dispatch_server_message(
         Ok(message.get("result").cloned().unwrap_or(Value::Null))
     };
     let _ = sender.send(result);
+}
+
+fn update_lifecycle_from_notification(
+    provider: SemanticProvider,
+    method: &str,
+    message: &Value,
+    lifecycle: &AtomicU8,
+) {
+    let current = SemanticLifecycle::from_atomic(lifecycle.load(Ordering::SeqCst));
+    if method == "language/status" {
+        let status_type = message
+            .pointer("/params/type")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let status_message = message
+            .pointer("/params/message")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if status_type.eq_ignore_ascii_case("ServiceReady")
+            || status_message.eq_ignore_ascii_case("ServiceReady")
+        {
+            lifecycle.store(SemanticLifecycle::Ready as u8, Ordering::SeqCst);
+            log::info!(
+                "[code-intel-lsp] ready provider={} signal=language/status",
+                provider.id()
+            );
+            return;
+        }
+    }
+    if current == SemanticLifecycle::Starting
+        && matches!(method, "language/progressReport" | "$/progress")
+    {
+        lifecycle.store(SemanticLifecycle::Indexing as u8, Ordering::SeqCst);
+    }
 }
 
 async fn respond_to_server_request(message: &Value, stdin: &Arc<Mutex<ChildStdin>>) {
@@ -871,6 +1148,80 @@ fn parse_position(value: Option<&Value>) -> Option<SemanticPosition> {
 mod tests {
     use super::*;
     use tokio::io::{duplex, AsyncWriteExt};
+    use uuid::Uuid;
+
+    #[test]
+    fn separates_channel_cache_roots() {
+        let data_dir = Path::new("/tmp/ccgui-app-data");
+        assert_eq!(
+            cache_root_for_channel(data_dir, true),
+            data_dir.join("language-servers/development")
+        );
+        assert_eq!(
+            cache_root_for_channel(data_dir, false),
+            data_dir.join("language-servers/release")
+        );
+    }
+
+    #[test]
+    fn request_timeout_does_not_mark_a_live_session_fatal() {
+        assert!(!query_error_is_fatal(
+            true,
+            "Language server request timed out: textDocument/definition"
+        ));
+        assert!(query_error_is_fatal(true, "Language server exited"));
+        assert!(!query_error_is_fatal(true, "Request canceled by server"));
+        assert!(query_error_is_fatal(false, "request failed"));
+        assert_eq!(
+            lifecycle_after_request_timeout(SemanticLifecycle::Starting),
+            SemanticLifecycle::Starting
+        );
+        assert_eq!(
+            lifecycle_after_request_timeout(SemanticLifecycle::Indexing),
+            SemanticLifecycle::Indexing
+        );
+        assert_eq!(
+            lifecycle_after_request_timeout(SemanticLifecycle::Ready),
+            SemanticLifecycle::Degraded
+        );
+    }
+
+    #[test]
+    fn java_service_ready_notification_marks_lifecycle_ready() {
+        let lifecycle = AtomicU8::new(SemanticLifecycle::Indexing as u8);
+        update_lifecycle_from_notification(
+            SemanticProvider::EclipseJdtLs,
+            "language/status",
+            &json!({ "params": { "type": "ServiceReady", "message": "ServiceReady" } }),
+            &lifecycle,
+        );
+        assert_eq!(
+            SemanticLifecycle::from_atomic(lifecycle.load(Ordering::SeqCst)),
+            SemanticLifecycle::Ready
+        );
+    }
+
+    #[test]
+    fn java_data_directory_rejects_a_second_owner() {
+        let cache_root = std::env::temp_dir().join(format!(
+            "ccgui-language-server-owner-test-{}",
+            Uuid::new_v4()
+        ));
+        let workspace = cache_root.join("workspace");
+        let first =
+            acquire_data_owner_lock(SemanticProvider::EclipseJdtLs, &workspace, &cache_root)
+                .unwrap();
+        assert!(
+            acquire_data_owner_lock(SemanticProvider::EclipseJdtLs, &workspace, &cache_root,)
+                .is_err()
+        );
+        drop(first);
+        assert!(
+            acquire_data_owner_lock(SemanticProvider::EclipseJdtLs, &workspace, &cache_root,)
+                .is_ok()
+        );
+        let _ = std::fs::remove_dir_all(cache_root);
+    }
 
     #[tokio::test]
     async fn reads_partial_lsp_frame() {
@@ -904,7 +1255,7 @@ mod tests {
 
     #[test]
     fn file_uri_round_trip_preserves_spaces_and_unicode() {
-        let path = PathBuf::from("/tmp/mossx workspace/中文.rs");
+        let path = PathBuf::from("/tmp/ccgui workspace/中文.rs");
         let uri = path_to_file_uri(&path);
         assert_eq!(file_uri_to_path(&uri), Some(path));
     }
@@ -963,9 +1314,26 @@ mod tests {
     }
 
     #[test]
+    fn installed_python_provider_is_discovered_from_extended_cli_paths_when_available() {
+        if std::env::var_os(SemanticProvider::Pyright.override_env()).is_some() {
+            return;
+        }
+        let Some(discovered) =
+            find_cli_binary(SemanticProvider::Pyright.default_executable(), None)
+        else {
+            return;
+        };
+
+        assert_eq!(
+            resolve_provider_executable(SemanticProvider::Pyright),
+            discovered.into_os_string(),
+        );
+    }
+
+    #[test]
     fn provider_launch_arguments_are_language_specific() {
         let root = PathBuf::from("/workspace");
-        let cache = std::env::temp_dir().join("mossx-lsp-args");
+        let cache = std::env::temp_dir().join("ccgui-lsp-args");
         assert!(SemanticProvider::RustAnalyzer
             .launch_args(&root, &cache)
             .unwrap()
@@ -976,12 +1344,46 @@ mod tests {
                 .unwrap(),
             vec![OsString::from("--stdio")]
         );
+        assert_eq!(
+            SemanticProvider::Pyright
+                .launch_args(&root, &cache)
+                .unwrap(),
+            vec![OsString::from("--stdio")]
+        );
+        assert!(SemanticProvider::Gopls
+            .launch_args(&root, &cache)
+            .unwrap()
+            .is_empty());
         let java_args = SemanticProvider::EclipseJdtLs
             .launch_args(&root, &cache)
             .unwrap();
         assert_eq!(java_args.first(), Some(&OsString::from("-data")));
         assert_eq!(java_args.len(), 2);
         let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[test]
+    fn python_and_go_provider_descriptors_are_stable() {
+        assert_eq!(SemanticProvider::Pyright.id(), "pyright");
+        assert_eq!(
+            SemanticProvider::Pyright.language_id(Path::new("src/main.py")),
+            "python"
+        );
+        assert_eq!(
+            SemanticProvider::Pyright.default_executable(),
+            "pyright-langserver"
+        );
+        assert_eq!(
+            SemanticProvider::Pyright.override_env(),
+            "MOSSX_PYRIGHT_LANGUAGE_SERVER_BIN"
+        );
+        assert_eq!(SemanticProvider::Gopls.id(), "gopls");
+        assert_eq!(
+            SemanticProvider::Gopls.language_id(Path::new("cmd/main.go")),
+            "go"
+        );
+        assert_eq!(SemanticProvider::Gopls.default_executable(), "gopls");
+        assert_eq!(SemanticProvider::Gopls.override_env(), "MOSSX_GOPLS_BIN");
     }
 
     #[test]
@@ -1050,9 +1452,9 @@ mod tests {
     #[test]
     fn normalizes_location_links_and_rejects_external_targets() {
         let root =
-            std::env::temp_dir().join(format!("mossx-lsp-location-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("ccgui-lsp-location-{}", uuid::Uuid::new_v4()));
         let outside =
-            std::env::temp_dir().join(format!("mossx-lsp-outside-{}.rs", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("ccgui-lsp-outside-{}.rs", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(root.join("src")).unwrap();
         let inside = root.join("src/lib.rs");
         std::fs::write(&inside, "trait Renderer {}\n").unwrap();
@@ -1102,7 +1504,7 @@ mod tests {
         }
 
         let root =
-            std::env::temp_dir().join(format!("mossx-rust-analyzer-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("ccgui-rust-analyzer-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(root.join("src")).unwrap();
         std::fs::write(
             root.join("Cargo.toml"),
@@ -1132,7 +1534,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(!definitions.is_empty());
+        assert!(!definitions.locations.is_empty());
 
         let implementations = runtime
             .query(
@@ -1146,7 +1548,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(!implementations.is_empty());
+        assert!(!implementations.locations.is_empty());
         assert_eq!(runtime.sessions.lock().await.len(), 1);
 
         runtime.sessions.lock().await.clear();

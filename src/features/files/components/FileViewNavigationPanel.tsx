@@ -41,6 +41,7 @@ export function FileViewNavigationPanel({
   const hasImplementationCandidates = implementationCandidates.length > 0;
   const hasReferenceResults = referenceResults !== null;
   const shouldShowTransientStatus = navigationStatus?.phase === "loading"
+    || navigationStatus?.phase === "indexing"
     || navigationStatus?.phase === "error";
   if (
     !navigationError
@@ -98,6 +99,10 @@ export function FileViewNavigationPanel({
       : t("files.gotoDefinition");
   const modeLabel = navigationStatus?.phase === "loading"
     ? t("files.navigationPreparing")
+    : navigationStatus?.phase === "indexing"
+      ? navigationStatus.lifecycle === "indexing"
+        ? t("files.navigationIndexing")
+        : t("files.navigationTemporarilyDegraded")
     : navigationStatus?.mode === "semantic"
       ? t("files.navigationModeSemantic")
       : navigationStatus?.fallbackReasonCode
@@ -147,7 +152,7 @@ export function FileViewNavigationPanel({
               ? ` · ${navigationStatus.locations.length} ${t("files.navigationResults")}`
               : ""}
           </span>
-          {navigationStatus.phase === "error" ? (
+          {navigationStatus.phase === "error" || navigationStatus.phase === "indexing" ? (
             <button
               type="button"
               className="ghost fvp-navigation-retry"

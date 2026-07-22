@@ -2,9 +2,9 @@
 
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
-- Updated At: `2026-07-22`
+- Updated At: `2026-07-23`
 - Active proposals: `5`
-- Archived proposals: `643`
+- Archived proposals: `646`
 - Main capability specs: `406`
 
 ## Active Proposals
@@ -19,8 +19,9 @@
 
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 643 个 proposal，按月份 / 归档日期分组。
-- [2026-07-22 归档批次](archive/README.md#2026-07-22) — 打开文件可从内容菜单定位到 main / detached file tree；智能体 completion selection index 已对齐。
+- [完整归档提案索引](archive/README.md) — 646 个 proposal，按月份 / 归档日期分组。
+- [2026-07-23 归档批次](archive/README.md#2026-07-23) — Python/Pyright 与 Go/gopls semantic navigation 已接入 external provider runtime。
+- [2026-07-22 归档批次](archive/README.md#2026-07-22) — 已修复 multi-runtime/symlinked npm CLI discovery，并完成文件树定位与 completion selection index 对齐。
 - [2026-07-20 归档批次](archive/README.md#2026-07-20) — Caveman bundled curated skill 已验证并同步 main spec。
 - [2026-07-18 归档批次](archive/README.md#2026-07-18) — 5 个 implemented sync/archive + 3 个 stale/superseded/failed-experiment no-sync archive。
 

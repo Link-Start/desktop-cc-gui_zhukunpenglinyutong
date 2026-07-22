@@ -40,9 +40,18 @@
  */
 .app.layout-desktop.sidebar-collapsed {
   --desktop-main-radius: 0;
-  --desktop-shell-background: var(--desktop-main-background, #ffffff);
-  --desktop-sidebar-background: var(--desktop-main-background, #ffffff);
-  background: var(--desktop-main-background, #ffffff);
+  --desktop-shell-background: var(
+    --desktop-main-background,
+    var(--surface-messages, #0d0f14)
+  );
+  --desktop-sidebar-background: var(
+    --desktop-main-background,
+    var(--surface-messages, #0d0f14)
+  );
+  background: var(
+    --desktop-main-background,
+    var(--surface-messages, #0d0f14)
+  );
 }
 
 .app.layout-desktop.sidebar-collapsed .sidebar {

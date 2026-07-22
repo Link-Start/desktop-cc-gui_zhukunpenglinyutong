@@ -2,18 +2,24 @@
 
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
-- Updated At: `2026-07-22`
-- Indexed proposals: `643`
+- Updated At: `2026-07-23`
+- Indexed proposals: `646`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-07 (109)
+## 2026-07 (112)
+
+### 2026-07-23
+
+- [`2026-07-23-add-python-go-semantic-navigation`](2026-07-23-add-python-go-semantic-navigation/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation`
 
 ### 2026-07-22
 
 - [`2026-07-22-add-open-file-reveal-in-tree`](2026-07-22-add-open-file-reveal-in-tree/proposal.md) — verified implementation，已同步 `filetree-multitab-open` 与 `independent-file-explorer-workspace`
 - [`2026-07-22-fix-agent-completion-selection-index-alignment`](2026-07-22-fix-agent-completion-selection-index-alignment/proposal.md) — verified implementation，已同步 `composer-file-reference-completion-stability`
+- [`2026-07-22-fix-multi-runtime-npm-cli-discovery`](2026-07-22-fix-multi-runtime-npm-cli-discovery/proposal.md) — verified implementation，已同步 `semantic-code-navigation-provider`
+- [`2026-07-22-fix-symlinked-npm-cli-discovery`](2026-07-22-fix-symlinked-npm-cli-discovery/proposal.md) — verified implementation，已同步 `semantic-code-navigation-provider`
 
 ### 2026-07-20
 

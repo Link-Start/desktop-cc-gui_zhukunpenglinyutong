@@ -12,7 +12,11 @@ export function useQuickSwitcherRecentFiles(
   );
 
   useEffect(() => {
-    const refresh = () => setGroups(getQuickSwitcherRecentFileGroups(workspaces));
+    const refresh = () =>
+      setGroups((current) => {
+        const next = getQuickSwitcherRecentFileGroups(workspaces);
+        return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+      });
     refresh();
     window.addEventListener(QUICK_SWITCHER_RECENT_FILES_CHANGED, refresh);
     return () =>

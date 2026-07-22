@@ -116,6 +116,33 @@ describe("FileViewPanel note capture", () => {
     );
   });
 
+  it("captures the current editor selection with the IDEA-style note shortcut", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "const first = 1;\nconst second = 2;",
+      truncated: false,
+    });
+    const onCaptureNote = vi.fn();
+    renderFileView(onCaptureNote);
+    const editor = (await screen.findByTestId(
+      "mock-codemirror",
+    )) as HTMLTextAreaElement;
+    editor.setSelectionRange(0, "const first = 1;".length);
+    fireEvent.select(editor);
+
+    fireEvent.keyDown(editor, {
+      key: "n",
+      altKey: true,
+      shiftKey: true,
+    });
+
+    expect(onCaptureNote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bodyMarkdown: expect.stringContaining("const first = 1;"),
+        source: expect.objectContaining({ startLine: 1, endLine: 1 }),
+      }),
+    );
+  });
+
   it("captures the frozen logical line selection from code preview", async () => {
     vi.mocked(readWorkspaceFile).mockResolvedValue({
       content: "const first = 1;\nconst second = 2;\nconst third = 3;",

@@ -8,17 +8,29 @@
 
 ✨ Features
 - 升级应用版本号到 `0.7.7`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(composer)`: 完善提示词增强入口，将增强操作收敛到 Composer 主操作区，并统一按钮状态、提示文案与主题样式
+- `feat(files)`: 文件编辑器新增 workspace-scoped 语义导航历史，支持 Back / Forward 快捷返回跳转前后的文件、光标与滚动视口
+- `feat(lsp)`: 为 Python / Pyright 与 Go / gopls 接入 definition、references、implementation 语义导航；语言服务保持用户独立安装，缺失时显示安装指引并安全降级
 
 🐛 Fixes
 - `fix(composer)`: 修复 `#` 智能体补全菜单包含 section header 或 separator 时的选择索引错位；鼠标点击以及 Enter / Tab 键确认现在都会选中界面高亮的真实智能体，不再误选相邻项
+- `fix(code-intel)`: 稳定 LSP request timeout、cancellation、session eviction 与 provider failure 生命周期，避免软超时误杀可复用会话或影响其他 workspace / language server
+- `fix(files)`: 修复文件编辑器快捷键映射与 context menu shortcut 展示，保持 macOS / Windows / Linux 的平台语义一致
+- `fix(theme)`: 修复深色主题下侧栏折叠按钮的背景与边界色，避免控件融入背景或出现错误亮色
 
 English:
 
 ✨ Features
 - Bump the app version to `0.7.7` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(composer)`: complete the prompt-enhancer entry point by consolidating the action in the Composer primary controls and aligning button state, guidance, and theme styling
+- `feat(files)`: add workspace-scoped semantic navigation history to the file editor, with Back / Forward restoring the target file, cursor, and scroll viewport
+- `feat(lsp)`: add definition, references, and implementation navigation for Python / Pyright and Go / gopls; language servers remain user-installed, with installation guidance and safe fallback when unavailable
 
 🐛 Fixes
 - `fix(composer)`: fix selection index drift in the `#` agent completion menu when section headers or separators are present; mouse selection and Enter / Tab confirmation now choose the actual highlighted agent instead of an adjacent item
+- `fix(code-intel)`: stabilize LSP request timeout, cancellation, session eviction, and provider-failure lifecycles so soft timeouts do not kill reusable sessions or affect unrelated workspaces and language servers
+- `fix(files)`: correct file-editor shortcut mappings and context-menu shortcut labels while preserving native semantics across macOS, Windows, and Linux
+- `fix(theme)`: correct the collapsed-sidebar control background and border colors in dark themes so the control remains visible without an incorrect light accent
 
 ---
 

@@ -33,8 +33,14 @@ describe("fileViewNavigationUtils", () => {
       expect(getLanguageServerInstallHint("Rust", platform)?.command).toBe(
         "rustup component add rust-analyzer",
       );
+      expect(getLanguageServerInstallHint("Python", platform)?.command).toBe(
+        "npm install -g pyright",
+      );
+      expect(getLanguageServerInstallHint("Go", platform)?.command).toBe(
+        "go install golang.org/x/tools/gopls@latest",
+      );
     }
-    expect(getLanguageServerInstallHint("Python", "linux")).toBeNull();
+    expect(getLanguageServerInstallHint("YAML", "linux")).toBeNull();
   });
   it("builds Windows file URIs that round-trip to workspace-relative paths", () => {
     const fileUri = toFileUri("C:\\Repo\\src\\Main.ts");
@@ -112,6 +118,7 @@ describe("fileViewNavigationUtils", () => {
           }],
           mode: "fast-search" as const,
           provider: "heuristic",
+          lifecycle: "degraded" as const,
           language: "java",
           fallbackReasonCode: "provider-unavailable" as const,
         },

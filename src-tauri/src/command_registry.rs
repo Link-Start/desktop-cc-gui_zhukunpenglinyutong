@@ -81,6 +81,7 @@ pub(crate) fn invoke_handler(
         crate::files::file_read,
         crate::files::file_write,
         crate::code_intel::code_intel_definition,
+        crate::code_intel::code_intel_prepare,
         crate::code_intel::code_intel_references,
         crate::code_intel::code_intel_implementations,
         // Menu

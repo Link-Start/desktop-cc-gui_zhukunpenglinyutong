@@ -86,6 +86,7 @@ import {
 } from "../../../utils/workspacePaths";
 import { reorderTabPathsAtTarget } from "../utils/fileTabOrder";
 import { getFileTreeIconSvg } from "../utils/fileTreeIcons";
+import { FILE_CONTEXT_MENU_SHORTCUTS } from "../utils/fileContextMenuShortcuts";
 import { reduceExternalChangeSyncState } from "../externalChangeStateMachine";
 import { resolveFileRenderProfile } from "../utils/fileRenderProfile";
 import { getFileDocumentSnapshotMetrics } from "../utils/fileDocumentSnapshot";
@@ -145,6 +146,9 @@ import {
 import { resolveFileGitScope } from "../utils/fileGitScope";
 
 export { resolveEditorAnnotationWidgetOrder } from "./fileViewPanelShared";
+
+const NAVIGATE_BACK_SHORTCUT = "cmd+alt+arrowleft";
+const NAVIGATE_FORWARD_SHORTCUT = "cmd+alt+arrowright";
 
 function resetGitLineMarkersIfNeeded(markers: GitLineMarkers): GitLineMarkers {
   if (markers.added.length === 0 && markers.modified.length === 0) {
@@ -263,7 +267,6 @@ export function FileViewPanel({
   onNavigateToLocation,
   onOpenFileHistory,
   onRevealInFileTree,
-  onClose,
   onInsertText,
   onCreateCodeAnnotation,
   onCaptureNote,
@@ -862,6 +865,10 @@ export function FileViewPanel({
     resolveDefinitionAtOffset,
     openFindPanelInEditor,
     toggleFindPanelInEditor,
+    canNavigateBack,
+    canNavigateForward,
+    navigateBack,
+    navigateForward,
   } = useFileNavigation({
     workspaceId,
     workspacePath,
@@ -1180,14 +1187,37 @@ export function FileViewPanel({
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [handleSave, saveFileShortcut]);
 
-  // Handle close with unsaved changes
-  const handleClose = useCallback(() => {
-    if (effectiveIsDirty) {
-      const confirmed = window.confirm(t("files.discardChangesMessage"));
-      if (!confirmed) return;
+  useEffect(() => {
+    if (onSingleRowLeadingAction) {
+      return;
     }
-    onClose();
-  }, [effectiveIsDirty, onClose, t]);
+    const handleNavigationShortcut = (event: KeyboardEvent) => {
+      if (
+        canNavigateBack &&
+        matchesShortcutForPlatform(event, NAVIGATE_BACK_SHORTCUT)
+      ) {
+        event.preventDefault();
+        navigateBack();
+        return;
+      }
+      if (
+        canNavigateForward &&
+        matchesShortcutForPlatform(event, NAVIGATE_FORWARD_SHORTCUT)
+      ) {
+        event.preventDefault();
+        navigateForward();
+      }
+    };
+    window.addEventListener("keydown", handleNavigationShortcut, true);
+    return () =>
+      window.removeEventListener("keydown", handleNavigationShortcut, true);
+  }, [
+    canNavigateBack,
+    canNavigateForward,
+    navigateBack,
+    navigateForward,
+    onSingleRowLeadingAction,
+  ]);
 
   // Switch to edit mode
   const handleEnterEdit = useCallback(() => {
@@ -1213,6 +1243,166 @@ export function FileViewPanel({
     clearPendingEditorLineRangeSync,
     flushEditorDraftToDocument,
     onActiveFileLineRangeChange,
+  ]);
+
+  const buildCurrentNoteCaptureDraft = useCallback(() => {
+    if (!onCaptureNote || skipTextRead || truncated) {
+      return null;
+    }
+    const editorView = mode === "edit" ? (cmRef.current?.view ?? null) : null;
+    if (editorView) {
+      const selection = editorView.state.selection.main;
+      if (!selection.empty) {
+        const endOffset = Math.max(selection.from, selection.to - 1);
+        return buildCodeSelectionNoteDraft({
+          path: filePath,
+          content: editorView.state.sliceDoc(selection.from, selection.to),
+          startLine: editorView.state.doc.lineAt(selection.from).number,
+          endLine: editorView.state.doc.lineAt(endOffset).number,
+          language: renderProfile.previewLanguage,
+        });
+      }
+      return buildCodeSelectionNoteDraft({
+        path: filePath,
+        content: editorView.state.doc.sliceString(
+          0,
+          editorView.state.doc.length,
+        ),
+        startLine: 1,
+        endLine: editorView.state.doc.lines,
+        language: renderProfile.previewLanguage,
+      });
+    }
+    return buildCodeSelectionNoteDraft({
+      path: filePath,
+      content,
+      startLine: 1,
+      endLine: documentSnapshot.lineCount,
+      language: renderProfile.previewLanguage,
+    });
+  }, [
+    content,
+    documentSnapshot.lineCount,
+    filePath,
+    mode,
+    onCaptureNote,
+    renderProfile.previewLanguage,
+    skipTextRead,
+    truncated,
+  ]);
+
+  useEffect(() => {
+    const handleFileCommandShortcut = (event: KeyboardEvent) => {
+      const panelRoot = panelRootRef.current;
+      const target = event.target;
+      if (
+        !panelRoot ||
+        !(target instanceof Node) ||
+        !panelRoot.contains(target)
+      ) {
+        return;
+      }
+      const isCodeMirrorTarget =
+        target instanceof Element && Boolean(target.closest(".cm-editor"));
+      if (isEditableShortcutTarget(target) && !isCodeMirrorTarget) {
+        return;
+      }
+
+      let action: (() => void) | null = null;
+      if (
+        matchesShortcutForPlatform(
+          event,
+          FILE_CONTEXT_MENU_SHORTCUTS.togglePreview,
+        )
+      ) {
+        action =
+          mode === "edit"
+            ? handleEnterPreview
+            : truncated || !canEditDocument
+              ? null
+              : handleEnterEdit;
+      } else if (
+        onRevealInFileTree &&
+        matchesShortcutForPlatform(
+          event,
+          FILE_CONTEXT_MENU_SHORTCUTS.revealInFileTree,
+        )
+      ) {
+        action = () => onRevealInFileTree(filePath);
+      } else if (
+        mode === "edit" &&
+        onAssociateIntentCanvasCodeAnchor &&
+        matchesShortcutForPlatform(
+          event,
+          FILE_CONTEXT_MENU_SHORTCUTS.associateIntentCanvas,
+        )
+      ) {
+        action = handleAssociateIntentCanvasCodeAnchor;
+      } else if (
+        mode === "edit" &&
+        onCaptureNote &&
+        matchesShortcutForPlatform(
+          event,
+          FILE_CONTEXT_MENU_SHORTCUTS.captureNote,
+        )
+      ) {
+        const noteDraft = buildCurrentNoteCaptureDraft();
+        action = noteDraft ? () => onCaptureNote(noteDraft) : null;
+      } else if (
+        activeFileGitScope &&
+        onOpenFileHistory &&
+        matchesShortcutForPlatform(
+          event,
+          FILE_CONTEXT_MENU_SHORTCUTS.showFileHistory,
+        )
+      ) {
+        action = () =>
+          onOpenFileHistory({
+            workspaceId,
+            workspacePath,
+            repositoryRoot: activeFileGitScope.repositoryRoot,
+            path: activeFileGitScope.path,
+            displayPath: filePath,
+          });
+      } else if (
+        mode === "edit" &&
+        (gitBlameEligible || gitBlame.enabled) &&
+        matchesShortcutForPlatform(
+          event,
+          FILE_CONTEXT_MENU_SHORTCUTS.toggleGitBlame,
+        )
+      ) {
+        action = gitBlame.toggle;
+      }
+
+      if (!action) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      action();
+    };
+    window.addEventListener("keydown", handleFileCommandShortcut, true);
+    return () =>
+      window.removeEventListener("keydown", handleFileCommandShortcut, true);
+  }, [
+    activeFileGitScope,
+    buildCurrentNoteCaptureDraft,
+    canEditDocument,
+    filePath,
+    gitBlame,
+    gitBlameEligible,
+    handleAssociateIntentCanvasCodeAnchor,
+    handleEnterEdit,
+    handleEnterPreview,
+    mode,
+    onAssociateIntentCanvasCodeAnchor,
+    onCaptureNote,
+    onOpenFileHistory,
+    onRevealInFileTree,
+    truncated,
+    workspaceId,
+    workspacePath,
   ]);
 
   const showClipboardError = useCallback(
@@ -1296,6 +1486,7 @@ export function FileViewPanel({
           id: "cut-selection",
           label: t("files.cutItem"),
           icon: <Scissors size={15} />,
+          shortcut: formatShortcutForPlatform(FILE_CONTEXT_MENU_SHORTCUTS.cut),
           disabled: !canMutateEditor || !selectedText,
           onSelect: async () => {
             if (
@@ -1313,6 +1504,7 @@ export function FileViewPanel({
           id: "copy-selection",
           label: t("files.copyItem"),
           icon: <Copy size={15} />,
+          shortcut: formatShortcutForPlatform(FILE_CONTEXT_MENU_SHORTCUTS.copy),
           disabled: !selectedText,
           onSelect: async () => {
             await writeClipboardText(t("files.copyItem"), selectedText);
@@ -1323,6 +1515,9 @@ export function FileViewPanel({
           id: "paste-selection",
           label: t("files.pasteItem"),
           icon: <ClipboardPaste size={15} />,
+          shortcut: formatShortcutForPlatform(
+            FILE_CONTEXT_MENU_SHORTCUTS.paste,
+          ),
           disabled: !canMutateEditor,
           onSelect: async () => {
             try {
@@ -1349,6 +1544,9 @@ export function FileViewPanel({
                 id: "show-file-history",
                 label: t("files.tabShowFileHistory"),
                 icon: <History size={15} />,
+                shortcut: formatShortcutForPlatform(
+                  FILE_CONTEXT_MENU_SHORTCUTS.showFileHistory,
+                ),
                 onSelect: () =>
                   onOpenFileHistory({
                     workspaceId,
@@ -1376,6 +1574,9 @@ export function FileViewPanel({
                           ? t("files.gitBlameDisable")
                           : t("files.gitBlameEnable"),
                 icon: <GitCommitHorizontal size={15} />,
+                shortcut: formatShortcutForPlatform(
+                  FILE_CONTEXT_MENU_SHORTCUTS.toggleGitBlame,
+                ),
                 disabled: !gitBlameEligible && !gitBlame.enabled,
                 onSelect: gitBlame.toggle,
               },
@@ -1392,6 +1593,9 @@ export function FileViewPanel({
                 id: "enter-edit-mode",
                 label: t("files.edit"),
                 icon: <Pencil size={15} />,
+                shortcut: formatShortcutForPlatform(
+                  FILE_CONTEXT_MENU_SHORTCUTS.togglePreview,
+                ),
                 disabled: truncated,
                 onSelect: handleEnterEdit,
               },
@@ -1404,6 +1608,9 @@ export function FileViewPanel({
                       id: "associate-intent-canvas",
                       label: t("files.associateIntentCanvas"),
                       icon: <ExternalLink size={15} />,
+                      shortcut: formatShortcutForPlatform(
+                        FILE_CONTEXT_MENU_SHORTCUTS.associateIntentCanvas,
+                      ),
                       onSelect: handleAssociateIntentCanvasCodeAnchor,
                     },
                   ]
@@ -1431,6 +1638,9 @@ export function FileViewPanel({
                   ? t("files.navigating")
                   : t("files.gotoDefinition"),
                 icon: <Code size={15} />,
+                shortcut: formatShortcutForPlatform(
+                  FILE_CONTEXT_MENU_SHORTCUTS.gotoDefinition,
+                ),
                 onSelect: runDefinitionFromCursor,
               },
               {
@@ -1440,6 +1650,9 @@ export function FileViewPanel({
                   ? t("files.navigating")
                   : t("files.gotoImplementations"),
                 icon: <Code size={15} />,
+                shortcut: formatShortcutForPlatform(
+                  FILE_CONTEXT_MENU_SHORTCUTS.gotoImplementations,
+                ),
                 onSelect: runImplementationsFromCursor,
               },
               {
@@ -1449,6 +1662,9 @@ export function FileViewPanel({
                   ? t("files.searchingReferences")
                   : t("files.findReferences"),
                 icon: <Search size={15} />,
+                shortcut: formatShortcutForPlatform(
+                  FILE_CONTEXT_MENU_SHORTCUTS.findReferences,
+                ),
                 onSelect: runReferencesFromCursor,
               },
               {
@@ -1456,6 +1672,9 @@ export function FileViewPanel({
                 id: "enter-preview-mode",
                 label: t("files.preview"),
                 icon: <Eye size={15} />,
+                shortcut: formatShortcutForPlatform(
+                  FILE_CONTEXT_MENU_SHORTCUTS.togglePreview,
+                ),
                 onSelect: handleEnterPreview,
               },
               {
@@ -1467,6 +1686,9 @@ export function FileViewPanel({
                     ? t("files.save")
                     : t("files.saved"),
                 icon: <Save size={15} />,
+                shortcut: saveFileShortcut
+                  ? formatShortcutForPlatform(saveFileShortcut)
+                  : undefined,
                 disabled: !effectiveIsDirty || isSaving,
                 onSelect: handleSave,
               },
@@ -1483,6 +1705,12 @@ export function FileViewPanel({
                     ? t("noteCards.captureSelection")
                     : t("noteCards.captureWholeFile"),
                   icon: <NotebookPen size={15} />,
+                  shortcut:
+                    mode === "edit"
+                      ? formatShortcutForPlatform(
+                          FILE_CONTEXT_MENU_SHORTCUTS.captureNote,
+                        )
+                      : undefined,
                   onSelect: () => onCaptureNote(noteCaptureDraft),
                 },
               ],
@@ -1510,6 +1738,9 @@ export function FileViewPanel({
                   id: "reveal-in-file-tree",
                   label: t("files.revealInFileTree"),
                   icon: <LocateFixed size={15} />,
+                  shortcut: formatShortcutForPlatform(
+                    FILE_CONTEXT_MENU_SHORTCUTS.revealInFileTree,
+                  ),
                   onSelect: () => onRevealInFileTree(filePath),
                 },
               ],
@@ -1570,6 +1801,7 @@ export function FileViewPanel({
       runDefinitionFromCursor,
       runImplementationsFromCursor,
       runReferencesFromCursor,
+      saveFileShortcut,
       showClipboardError,
       skipTextRead,
       t,
@@ -2497,20 +2729,47 @@ export function FileViewPanel({
 
   const renderHeader = () => (
     <div className="fvp-header-row">
-      <button
-        type="button"
-        className="icon-button fvp-back"
-        onClick={onSingleRowLeadingAction ?? handleClose}
-        aria-label={singleRowLeadingLabel ?? t("files.backToChat")}
-        title={singleRowLeadingLabel ?? t("files.backToChat")}
-        data-tauri-drag-region="false"
-      >
-        {singleRowLeadingDirection === "right" && onSingleRowLeadingAction ? (
-          <ArrowRight size={16} aria-hidden />
-        ) : (
-          <ArrowLeft size={16} aria-hidden />
-        )}
-      </button>
+      {onSingleRowLeadingAction ? (
+        <button
+          type="button"
+          className="icon-button fvp-back"
+          onClick={onSingleRowLeadingAction}
+          aria-label={singleRowLeadingLabel ?? t("files.backToChat")}
+          title={singleRowLeadingLabel ?? t("files.backToChat")}
+          data-tauri-drag-region="false"
+        >
+          {singleRowLeadingDirection === "right" ? (
+            <ArrowRight size={16} aria-hidden />
+          ) : (
+            <ArrowLeft size={16} aria-hidden />
+          )}
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="icon-button fvp-back"
+            onClick={navigateBack}
+            disabled={!canNavigateBack}
+            aria-label={t("files.navigationBack")}
+            title={`${t("files.navigationBack")} (${formatShortcutForPlatform(NAVIGATE_BACK_SHORTCUT)})`}
+            data-tauri-drag-region="false"
+          >
+            <ArrowLeft size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="icon-button fvp-back"
+            onClick={navigateForward}
+            disabled={!canNavigateForward}
+            aria-label={t("files.navigationForward")}
+            title={`${t("files.navigationForward")} (${formatShortcutForPlatform(NAVIGATE_FORWARD_SHORTCUT)})`}
+            data-tauri-drag-region="false"
+          >
+            <ArrowRight size={16} aria-hidden />
+          </button>
+        </>
+      )}
       <div className="fvp-header-row-tabs">{renderTabs("fvp-tabs-inline")}</div>
       <div className="fvp-header-row-right">
         {effectiveIsDirty ? (
@@ -2569,6 +2828,7 @@ export function FileViewPanel({
       annotationWidgetLabels={annotationWidgetLabels}
       annotationWidgetCallbacks={annotationWidgetCallbacks}
       runDefinitionFromCursor={runDefinitionFromCursor}
+      runImplementationsFromCursor={runImplementationsFromCursor}
       runReferencesFromCursor={runReferencesFromCursor}
       resolveDefinitionAtOffset={resolveDefinitionAtOffset}
       onPreviewAnnotationStart={(lineRange) =>
@@ -2601,15 +2861,20 @@ export function FileViewPanel({
   );
 
   // ── Footer ──
-  const navigationModeLabel = navigationStatus?.phase === "loading"
-    ? t("files.navigationPreparing")
-    : navigationStatus?.mode === "semantic"
-      ? t("files.navigationModeSemantic")
-      : navigationStatus
-        ? navigationStatus.fallbackReasonCode
-          ? t("files.navigationModeFastSearchFallback")
-          : t("files.navigationModeFastSearch")
-        : null;
+  const navigationModeLabel =
+    navigationStatus?.phase === "loading"
+      ? t("files.navigationPreparing")
+      : navigationStatus?.phase === "indexing"
+        ? navigationStatus.lifecycle === "indexing"
+          ? t("files.navigationIndexing")
+          : t("files.navigationTemporarilyDegraded")
+        : navigationStatus?.mode === "semantic"
+          ? t("files.navigationModeSemantic")
+          : navigationStatus
+            ? navigationStatus.fallbackReasonCode
+              ? t("files.navigationModeFastSearchFallback")
+              : t("files.navigationModeFastSearch")
+            : null;
   const renderFooter = () => (
     <div
       className="fvp-footer"
