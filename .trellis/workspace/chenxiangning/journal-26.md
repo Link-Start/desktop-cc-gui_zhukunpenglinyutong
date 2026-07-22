@@ -1369,3 +1369,36 @@ Review 并修复 Git History repository color collision、branch group 与 branc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1066: 完善搜索与代码导航体验
+
+**Date**: 2026-07-22
+**Task**: 完善搜索与代码导航体验
+**Branch**: `feature/v-076`
+
+### Summary
+
+扩展全局搜索操作发现、模糊匹配与最近结果；新增平台化扩大选择及右键菜单入口；升级 LSP 语义定义、引用和实现跳转并支持 Rust；完善本地化错误、修饰键点击提示、菜单密度与 OpenSpec 归档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7497f1c70` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
