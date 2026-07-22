@@ -122,6 +122,7 @@ export type AppSettings = {
   toggleFilesSurfaceShortcut: string | null;
   saveFileShortcut: string | null;
   findInFileShortcut: string | null;
+  expandSelectionShortcut: string | null;
   toggleGitDiffListViewShortcut: string | null;
   toggleGitGraphShortcut: string | null;
   openNotesShortcut: string | null;

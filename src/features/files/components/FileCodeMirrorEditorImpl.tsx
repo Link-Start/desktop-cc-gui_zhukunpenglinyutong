@@ -22,7 +22,16 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { closeSearchPanel, openSearchPanel, search, searchPanelOpen } from "@codemirror/search";
-import { Compartment, Prec, StateEffect, StateField, type Extension } from "@codemirror/state";
+import { selectParentSyntax } from "@codemirror/commands";
+import { syntaxTree } from "@codemirror/language";
+import {
+  Compartment,
+  Prec,
+  StateEffect,
+  StateField,
+  type EditorState,
+  type Extension,
+} from "@codemirror/state";
 import type { CodeAnnotationSelection } from "../../code-annotations/types";
 import type { GitFileBlameResponse } from "../../../types";
 import type { GitLineMarkers } from "../utils/gitLineMarkers";
@@ -81,6 +90,7 @@ export type FileCodeMirrorEditorProps = {
   className?: string;
   lastReportedLineRangeRef: { current: string };
   saveFileShortcut: string | null | undefined;
+  expandSelectionShortcut?: string | null;
   handleSave: () => void;
   gotoLineLabels?: FileEditorGotoLineLabels;
   editable?: boolean;
@@ -315,6 +325,148 @@ class FileCompareCollapsedRangeWidget extends WidgetType {
   }
 }
 
+type ModifierNavigationRange = { from: number; to: number };
+
+const modifierNavigationRangeEffect = StateEffect.define<ModifierNavigationRange | null>();
+
+const modifierNavigationDecorationField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(decorations, transaction) {
+    let nextDecorations = decorations.map(transaction.changes);
+    for (const effect of transaction.effects) {
+      if (!effect.is(modifierNavigationRangeEffect)) {
+        continue;
+      }
+      nextDecorations = effect.value
+        ? Decoration.set([
+            Decoration.mark({ class: "cm-code-navigation-link" }).range(
+              effect.value.from,
+              effect.value.to,
+            ),
+          ])
+        : Decoration.none;
+    }
+    return nextDecorations;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+const NAVIGABLE_SYNTAX_NODE_PATTERN = /(?:Definition|Identifier|Name)$/;
+
+export function resolveModifierNavigationSymbolRange(
+  state: EditorState,
+  position: number,
+): ModifierNavigationRange | null {
+  if (position < 0 || position > state.doc.length) {
+    return null;
+  }
+  const word = state.wordAt(position);
+  if (!word) {
+    return null;
+  }
+  const syntaxNode = syntaxTree(state).resolveInner(position, -1);
+  if (!NAVIGABLE_SYNTAX_NODE_PATTERN.test(syntaxNode.name)) {
+    return null;
+  }
+  return { from: word.from, to: word.to };
+}
+
+class ModifierNavigationAffordance {
+  private lastPointer: { x: number; y: number } | null = null;
+  private modifierPressed = false;
+  private activeRangeKey = "";
+
+  constructor(private readonly view: EditorView) {
+    view.dom.addEventListener("mousemove", this.handleMouseMove);
+    view.dom.addEventListener("mouseleave", this.handleMouseLeave);
+    window.addEventListener("keydown", this.handleKeyDown, true);
+    window.addEventListener("keyup", this.handleKeyUp, true);
+    window.addEventListener("blur", this.clear, true);
+    document.addEventListener("visibilitychange", this.handleVisibilityChange);
+  }
+
+  private applyRange = (range: ModifierNavigationRange | null) => {
+    const rangeKey = range ? `${range.from}:${range.to}` : "";
+    if (rangeKey === this.activeRangeKey) {
+      return;
+    }
+    this.activeRangeKey = rangeKey;
+    this.view.dispatch({ effects: modifierNavigationRangeEffect.of(range) });
+  };
+
+  private refresh = () => {
+    if (!this.modifierPressed || !this.lastPointer) {
+      this.applyRange(null);
+      return;
+    }
+    const position = this.view.posAtCoords(this.lastPointer);
+    this.applyRange(
+      position == null
+        ? null
+        : resolveModifierNavigationSymbolRange(this.view.state, position),
+    );
+  };
+
+  private handleMouseMove = (event: MouseEvent) => {
+    this.lastPointer = { x: event.clientX, y: event.clientY };
+    this.modifierPressed = event.metaKey || event.ctrlKey;
+    this.refresh();
+  };
+
+  private handleMouseLeave = () => {
+    this.lastPointer = null;
+    this.applyRange(null);
+  };
+
+  private handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Meta" && event.key !== "Control") {
+      return;
+    }
+    this.modifierPressed = true;
+    this.refresh();
+  };
+
+  private handleKeyUp = (event: KeyboardEvent) => {
+    if (event.key !== "Meta" && event.key !== "Control") {
+      return;
+    }
+    this.modifierPressed = false;
+    this.applyRange(null);
+  };
+
+  private handleVisibilityChange = () => {
+    if (document.hidden) {
+      this.clear();
+    }
+  };
+
+  private clear = () => {
+    this.modifierPressed = false;
+    this.applyRange(null);
+  };
+
+  destroy() {
+    this.view.dom.removeEventListener("mousemove", this.handleMouseMove);
+    this.view.dom.removeEventListener("mouseleave", this.handleMouseLeave);
+    window.removeEventListener("keydown", this.handleKeyDown, true);
+    window.removeEventListener("keyup", this.handleKeyUp, true);
+    window.removeEventListener("blur", this.clear, true);
+    document.removeEventListener("visibilitychange", this.handleVisibilityChange);
+  }
+}
+
+const modifierNavigationAffordanceExtension = [
+  modifierNavigationDecorationField,
+  ViewPlugin.fromClass(ModifierNavigationAffordance),
+  EditorView.baseTheme({
+    ".cm-code-navigation-link": {
+      cursor: "pointer",
+      textDecoration: "underline",
+      textUnderlineOffset: "2px",
+    },
+  }),
+];
+
 function buildFileCompareLineGapDecorations(
   doc: { lines: number; length: number; line: (lineNumber: number) => { from: number } },
   gaps: FileCodeMirrorLineGap[],
@@ -458,6 +610,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     className,
     lastReportedLineRangeRef,
     saveFileShortcut,
+    expandSelectionShortcut = "cmd+w",
     handleSave,
     gotoLineLabels,
     editable = true,
@@ -490,6 +643,24 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     ]);
     return [ext];
   }, [saveFileShortcut]);
+
+  const expandSelectionKeymapExt = useMemo<Extension[]>(() => {
+    const codeMirrorShortcut = toCodeMirrorShortcut(expandSelectionShortcut);
+    if (!codeMirrorShortcut) {
+      return [];
+    }
+    const shortcuts = new Set([codeMirrorShortcut]);
+    // ponytail: `ctrl+w` 是上一版未发布的默认值，仅为该值补 Mod-W 兼容；
+    // 用户改成其他 shortcut 或清空后，不注册隐藏 binding。
+    if (codeMirrorShortcut === "Ctrl-w") {
+      shortcuts.add("Mod-w");
+    }
+    return [Prec.highest(keymap.of(Array.from(shortcuts, (key) => ({
+      key,
+      run: selectParentSyntax,
+      preventDefault: true,
+    }))))];
+  }, [expandSelectionShortcut]);
 
   const editorNavigationKeymapExt = useMemo<Extension[]>(
     () => [
@@ -600,8 +771,10 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     () => [
       EditorView.editable.of(editable),
       saveKeymapExt,
+      expandSelectionKeymapExt,
       editorNavigationKeymapExt,
       ctrlClickDefinitionExt,
+      modifierNavigationAffordanceExtension,
       gitBlameContextMenuExt,
       persistentSearchExtension,
       annotationWidgetsExt,
@@ -626,6 +799,7 @@ export const FileCodeMirrorEditorImpl = forwardRef<
       languageExtensions,
       persistentSearchExtension,
       saveKeymapExt,
+      expandSelectionKeymapExt,
       editable,
     ],
   );
@@ -646,6 +820,15 @@ export const FileCodeMirrorEditorImpl = forwardRef<
     },
     get state() {
       return codeMirrorRef.current?.state;
+    },
+    expandSelection() {
+      const view = codeMirrorRef.current?.view;
+      if (!view) {
+        return false;
+      }
+      const expanded = selectParentSyntax(view);
+      view.focus();
+      return expanded;
     },
     openFindPanel() {
       const view = codeMirrorRef.current?.view;

@@ -14,6 +14,7 @@ import { FileViewPanel, resolveEditorAnnotationWidgetOrder } from "./FileViewPan
 import { clearFileDocumentSessionCacheForTests } from "../hooks/useFileDocumentState";
 import {
   getCodeIntelDefinition,
+  getCodeIntelImplementations,
   getCodeIntelReferences,
   getGitFileFullDiff,
   readLocalImageDataUrl,
@@ -182,6 +183,89 @@ describe("FileViewPanel navigation", () => {
       line: 13,
       column: 7,
     });
+  });
+
+  it("navigates to an implementation and forwards current document text", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "interface Renderer {}",
+      truncated: false,
+    });
+    vi.mocked(getCodeIntelImplementations).mockResolvedValue({
+      result: [buildLocation("src/Html.ts", 7, 0)],
+    } as any);
+    const onNavigateToLocation = vi.fn();
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-rust"
+        workspacePath="/repo"
+        filePath="src/types.ts"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onNavigateToLocation={onNavigateToLocation}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("mock-codemirror");
+    fireEvent.click(
+      within(openFileContentContextMenu()).getByRole("menuitem", {
+        name: "files.gotoImplementations",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(getCodeIntelImplementations).toHaveBeenCalledWith("ws-rust", {
+        filePath: "src/types.ts",
+        line: 0,
+        character: 0,
+        documentText: "interface Renderer {}",
+      });
+      expect(onNavigateToLocation).toHaveBeenCalledWith("src/Html.ts", {
+        line: 8,
+        column: 1,
+      });
+    }, { timeout: 500 });
+  });
+
+  it("shows localized action guidance instead of raw no-symbol backend errors", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "class Main {}",
+      truncated: false,
+    });
+    vi.mocked(getCodeIntelDefinition).mockRejectedValue(new Error("No symbol under cursor"));
+    vi.mocked(getCodeIntelImplementations).mockRejectedValue(
+      new Error("No symbol under cursor"),
+    );
+    vi.mocked(getCodeIntelReferences).mockRejectedValue(new Error("No symbol under cursor"));
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-guidance"
+        workspacePath="/repo"
+        filePath="src/Main.java"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("mock-codemirror");
+    clickFileContextMenuItem("files.gotoDefinition");
+    await screen.findByText("files.navigationDefinitionSymbolRequired");
+
+    clickFileContextMenuItem("files.gotoImplementations");
+    await screen.findByText("files.navigationImplementationSymbolRequired");
+
+    clickFileContextMenuItem("files.findReferences");
+    await screen.findByText("files.navigationReferencesSymbolRequired");
+    expect(screen.queryByText("No symbol under cursor")).toBeNull();
+    consoleErrorSpy.mockRestore();
   });
 
   it("normalizes Windows absolute code-intel paths back to workspace-relative navigation targets", async () => {
@@ -426,6 +510,63 @@ describe("FileViewPanel navigation", () => {
     });
   });
 
+  it("exposes expand selection with a platform shortcut hint in the editor menu", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "class Main {}",
+      truncated: false,
+    });
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-expand-selection-menu"
+        workspacePath="/repo"
+        filePath="src/Main.java"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("mock-codemirror");
+    const menu = within(openFileContentContextMenu());
+    const item = menu.getByRole("menuitem", { name: "files.expandSelection" });
+
+    expect(item.querySelector(".renderer-context-menu-item-shortcut")?.textContent).toMatch(
+      /^(⌘W|Ctrl\+W)$/,
+    );
+    expect(item.closest(".fvp-file-context-menu")).not.toBeNull();
+  });
+
+  it("keeps the expand-selection menu action when its shortcut is cleared", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "class Main {}",
+      truncated: false,
+    });
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-expand-selection-menu-no-shortcut"
+        workspacePath="/repo"
+        filePath="src/Main.java"
+        expandSelectionShortcut={null}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("mock-codemirror");
+    const item = within(openFileContentContextMenu()).getByRole("menuitem", {
+      name: "files.expandSelection",
+    });
+
+    expect(item.querySelector(".renderer-context-menu-item-shortcut")).toBeNull();
+  });
+
   it("preserves selected content when clipboard write fails during Cut", async () => {
     vi.mocked(readWorkspaceFile).mockResolvedValue({
       content: "class Main {}",
@@ -513,6 +654,9 @@ describe("FileViewPanel navigation", () => {
       ).disabled,
     ).toBe(true);
     expect(within(menu).getByRole("menuitem", { name: "files.edit" })).toBeTruthy();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "files.expandSelection" }),
+    ).toBeNull();
   });
 
   it("reveals the active file from the file content context menu", async () => {
@@ -2041,6 +2185,7 @@ describe("FileViewPanel markdown modes", () => {
     });
 
     expect(getCodeIntelDefinition).not.toHaveBeenCalled();
+    expect(getCodeIntelImplementations).not.toHaveBeenCalled();
     expect(getCodeIntelReferences).not.toHaveBeenCalled();
   });
 

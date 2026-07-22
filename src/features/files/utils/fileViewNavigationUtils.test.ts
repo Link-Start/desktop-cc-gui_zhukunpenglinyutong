@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   areFileUrisEquivalent,
   relativePathFromFileUri,
+  resolveCodeNavigationErrorMessage,
   toFileUri,
 } from "./fileViewNavigationUtils";
 
@@ -28,5 +29,45 @@ describe("fileViewNavigationUtils", () => {
         true,
       ),
     ).toBe(true);
+  });
+
+  it("maps missing symbols to action-specific localized guidance", () => {
+    const translate = (key: string) => `translated:${key}`;
+
+    expect(
+      resolveCodeNavigationErrorMessage(
+        new Error("No symbol under cursor"),
+        "implementation",
+        translate,
+      ),
+    ).toBe("translated:files.navigationImplementationSymbolRequired");
+  });
+
+  it("maps unsupported and operational failures without exposing raw backend copy", () => {
+    const translate = (key: string) => `translated:${key}`;
+
+    expect(
+      resolveCodeNavigationErrorMessage(
+        "Implementation navigation currently supports Java, TS/JS, and Rust files",
+        "implementation",
+        translate,
+      ),
+    ).toBe("translated:files.navigationUnsupportedLanguage");
+    expect(
+      resolveCodeNavigationErrorMessage(
+        new Error("Failed to read file: private backend detail"),
+        "references",
+        translate,
+      ),
+    ).toBe("translated:files.navigationReferencesError");
+  });
+
+  it("preserves the already-localized timeout message", () => {
+    const translate = (key: string) => `translated:${key}`;
+    const timeout = translate("files.navigationTimeout");
+
+    expect(
+      resolveCodeNavigationErrorMessage(new Error(timeout), "definition", translate),
+    ).toBe(timeout);
   });
 });

@@ -45,6 +45,7 @@ function createDoc(text: string) {
     line: lineFor,
     lineAt,
     sliceString: (from: number, to: number) => text.slice(from, to),
+    toString: () => text,
   };
 }
 
@@ -273,6 +274,7 @@ vi.mock("../../../services/tauri", () => ({
     hunks: [],
   })),
   getCodeIntelDefinition: vi.fn(),
+  getCodeIntelImplementations: vi.fn(),
   getCodeIntelReferences: vi.fn(),
 }));
 

@@ -30,6 +30,29 @@ function normalizeRecentPath(path: string): string {
   return path.trim().replaceAll("\\", "/").replace(/^\.\//, "");
 }
 
+function isPlausibleAiRecentFilePath(path: string): boolean {
+  const normalized = normalizeRecentPath(path);
+  if (!normalized || normalized.length > 4096) {
+    return false;
+  }
+  if (
+    /[\n\r]|\|\||&&|[|;<>`]|\$\(/.test(normalized) ||
+    /(?:^|\s)\/(?:dev|proc|sys)(?:\/|$)/i.test(normalized) ||
+    /(?:^|\s)(?:null|true|false)(?:\s|$)/i.test(normalized) ||
+    /(?:^|\s)(?:cat|grep|rg|find|head|tail|sed|awk|xargs|tee|wc|less|more|printf|echo)\s+(?:-|\/)/i.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+  const fileName = normalized.slice(normalized.lastIndexOf("/") + 1);
+  return (
+    normalized.includes("/") ||
+    fileName.includes(".") ||
+    /^(?:README|LICENSE|Makefile|Dockerfile|Procfile)$/i.test(fileName)
+  );
+}
+
 function isRecentFile(value: unknown): value is QuickSwitcherRecentFile {
   if (!value || typeof value !== "object") {
     return false;
@@ -58,7 +81,13 @@ export function normalizeStoredRecentFiles(
       const normalized = entries
         .filter(isRecentFile)
         .map((entry) => ({ ...entry, path: normalizeRecentPath(entry.path) }))
-        .filter((entry) => entry.workspaceId === workspaceId && entry.path)
+        .filter(
+          (entry) =>
+            entry.workspaceId === workspaceId &&
+            entry.path &&
+            (entry.source === "opened" ||
+              isPlausibleAiRecentFilePath(entry.path)),
+        )
         .sort((left, right) => right.touchedAt - left.touchedAt)
         .filter(
           (entry, index, files) =>
@@ -130,7 +159,13 @@ export function applyRecentFileMutations(
   let next = current;
   for (const mutation of mutations) {
     const path = normalizeRecentPath(mutation.path);
-    if (!mutation.workspaceId || !path) {
+    if (
+      !mutation.workspaceId ||
+      !path ||
+      (mutation.kind === "upsert" &&
+        mutation.source === "ai-modified" &&
+        !isPlausibleAiRecentFilePath(path))
+    ) {
       continue;
     }
     const existing = next[mutation.workspaceId] ?? [];
@@ -220,22 +255,28 @@ export function collectAiFileMutations(
               },
             ]
           : [];
-      return changes.map((change): RecentFileMutation =>
-        change.statusLetter === "D"
-          ? {
-              kind: "remove",
-              workspaceId,
-              path: change.filePath,
-              touchedAt: event.occurredAt,
-            }
-          : {
-              kind: "upsert",
-              workspaceId,
-              path: change.filePath,
-              touchedAt: event.occurredAt,
-              source: "ai-modified",
-            },
-      );
+      return changes.flatMap((change): RecentFileMutation[] => {
+        const path = normalizeRecentPath(change.filePath);
+        if (!isPlausibleAiRecentFilePath(path)) {
+          return [];
+        }
+        return [
+          change.statusLetter === "D"
+            ? {
+                kind: "remove",
+                workspaceId,
+                path,
+                touchedAt: event.occurredAt,
+              }
+            : {
+                kind: "upsert",
+                workspaceId,
+                path,
+                touchedAt: event.occurredAt,
+                source: "ai-modified",
+              },
+        ];
+      });
     });
 }
 

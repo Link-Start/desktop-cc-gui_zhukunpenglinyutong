@@ -1336,3 +1336,69 @@ Review 并修复 Git History repository color collision、branch group 与 branc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1065: 过滤 Quick Switcher 非文件活动
+
+**Date**: 2026-07-22
+**Task**: 过滤 Quick Switcher 非文件活动
+**Branch**: `feature/v-076`
+
+### Summary
+
+在 Recent Files storage restore 与 AI mutation ingest trust boundary 过滤 shell command、pseudo-device 和明显非文件 payload；保留 user-open 文件语义，并将文件行改为 filename-first、parent path 优先 ellipsis。用户 UI 验收通过，focused Vitest 11/11、targeted ESLint、OpenSpec strict validation 和 diff check 通过；全项目 typecheck 已执行，但被未纳入本提交的 WorkspaceFileComparePanel prop contract 并行变更阻断。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e7d8629cd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1066: 完善搜索与代码导航体验
+
+**Date**: 2026-07-22
+**Task**: 完善搜索与代码导航体验
+**Branch**: `feature/v-076`
+
+### Summary
+
+扩展全局搜索操作发现、模糊匹配与最近结果；新增平台化扩大选择及右键菜单入口；升级 LSP 语义定义、引用和实现跳转并支持 Rust；完善本地化错误、修饰键点击提示、菜单密度与 OpenSpec 归档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7497f1c70` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

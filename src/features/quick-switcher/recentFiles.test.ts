@@ -184,6 +184,112 @@ describe("quick switcher recent files", () => {
     });
   });
 
+  it("filters non-file AI tool payloads while preserving real file paths", () => {
+    const normalized = normalizeStoredRecentFiles({
+      "workspace-a": [
+        {
+          workspaceId: "workspace-a",
+          path: "null | head -n 80 /dev",
+          touchedAt: 50,
+          source: "ai-modified",
+        },
+        {
+          workspaceId: "workspace-a",
+          path: "spec.md; printf SEARCH_SPEC",
+          touchedAt: 40,
+          source: "ai-modified",
+        },
+        {
+          workspaceId: "workspace-a",
+          path: "/dev/null",
+          touchedAt: 30,
+          source: "ai-modified",
+        },
+        {
+          workspaceId: "workspace-a",
+          path: "docs/My Notes.md",
+          touchedAt: 20,
+          source: "ai-modified",
+        },
+        {
+          workspaceId: "workspace-a",
+          path: "README",
+          touchedAt: 10,
+          source: "ai-modified",
+        },
+        {
+          workspaceId: "workspace-a",
+          path: ".gitignore",
+          touchedAt: 8,
+          source: "ai-modified",
+        },
+        {
+          workspaceId: "workspace-a",
+          path: "notes;draft.md",
+          touchedAt: 5,
+          source: "opened",
+        },
+      ],
+    });
+
+    expect(normalized["workspace-a"]?.map((entry) => entry.path)).toEqual([
+      "docs/My Notes.md",
+      "README",
+      ".gitignore",
+      "notes;draft.md",
+    ]);
+
+    expect(
+      applyRecentFileMutations({}, [
+        {
+          kind: "upsert",
+          workspaceId: "workspace-a",
+          path: "null | head -n 20 /dev",
+          touchedAt: 60,
+          source: "ai-modified",
+        },
+      ]),
+    ).toEqual({});
+
+    const baseEvent: SessionActivityEvent = {
+      eventId: "event-shell-pollution",
+      threadId: "thread-1",
+      threadName: "Session",
+      sessionRole: "root",
+      relationshipSource: "directParent",
+      kind: "fileChange",
+      occurredAt: 60,
+      summary: "Changed files",
+      status: "completed",
+      fileChanges: [
+        {
+          filePath: "null | head -n 20 /dev",
+          fileName: "dev",
+          statusLetter: "M",
+          additions: 1,
+          deletions: 0,
+        },
+        {
+          filePath: "src/real-file.ts",
+          fileName: "real-file.ts",
+          statusLetter: "M",
+          additions: 1,
+          deletions: 0,
+        },
+      ],
+    };
+
+    expect(collectAiFileMutations("workspace-a", [baseEvent])).toEqual([
+      {
+        kind: "upsert",
+        workspaceId: "workspace-a",
+        path: "src/real-file.ts",
+        touchedAt: 60,
+        source: "ai-modified",
+      },
+    ]);
+  });
+
   it("takes the global newest 30 files before grouping by workspace", () => {
     const alphaFiles = Array.from({ length: 30 }, (_, index) => ({
       workspaceId: "workspace-a",

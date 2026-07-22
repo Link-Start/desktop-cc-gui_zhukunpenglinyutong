@@ -1,7 +1,7 @@
 // searchPalette — English UI strings
 const searchPalette = {
   searchPalette: {
-    placeholder: "Search files, APIs, kanban, threads, messages, skills, commands...",
+    placeholder: "Search actions, files, APIs, kanban, threads, messages, skills, commands...",
     placeholderFiltered: "Search {{content}}...",
     inputAria: "Search input",
     scope: "Scope",
@@ -26,6 +26,7 @@ const searchPalette = {
     typeTag: "Type",
     sourceTag: "Source",
     locationTag: "Location",
+    typeAction: "Action",
     typeFile: "File",
     typeApi: "API",
     typeKanban: "Kanban",
@@ -34,6 +35,7 @@ const searchPalette = {
     typeHistory: "History",
     typeSkill: "Skill",
     typeCommand: "Command",
+    sourceActions: "App actions",
     sourceFiles: "File index",
     sourceApis: "API endpoints",
     sourceKanban: "Kanban data",
@@ -43,6 +45,7 @@ const searchPalette = {
     sourceSkills: "Skills list",
     sourceCommands: "Commands list",
     contentAll: "All",
+    contentActions: "Actions",
     contentFiles: "Files",
     contentApis: "APIs",
     contentKanban: "Kanban",

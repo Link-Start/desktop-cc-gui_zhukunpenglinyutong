@@ -1136,6 +1136,7 @@ const settings = {
     "editorSubDescription": "キーボードからファイル編集操作を制御します。",
     "saveFile": "ファイルを保存",
     "findInFile": "ファイル内を検索",
+    "expandSelection": "選択範囲を拡大",
     "gitSubtitle": "Git",
     "gitSubDescription": "Git 差分のナビゲーションと表示を制御します。",
     "toggleGitDiffListView": "Git 差分のリスト表示を切り替え",

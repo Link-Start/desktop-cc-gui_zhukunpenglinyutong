@@ -82,6 +82,7 @@ pub(crate) fn invoke_handler(
         crate::files::file_write,
         crate::code_intel::code_intel_definition,
         crate::code_intel::code_intel_references,
+        crate::code_intel::code_intel_implementations,
         // Menu
         crate::menu::menu_set_accelerators,
         crate::menu::menu_update_labels,

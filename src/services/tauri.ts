@@ -36,6 +36,7 @@ export {
   connectOpenCodeProvider,
   exportOpenCodeSession,
   getCodeIntelDefinition,
+  getCodeIntelImplementations,
   getCodeIntelReferences,
   getOpenCodeLspDefinition,
   getOpenCodeLspDiagnostics,

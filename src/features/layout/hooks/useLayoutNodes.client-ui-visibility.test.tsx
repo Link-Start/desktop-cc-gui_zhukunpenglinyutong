@@ -613,6 +613,7 @@ function createLayoutOptions(
     cycleOpenSessionNextShortcut: null,
     saveFileShortcut: null,
     findInFileShortcut: null,
+    expandSelectionShortcut: null,
     toggleGitDiffListViewShortcut: null,
     onOpenSpecHub: noop,
     onOpenWorkspaceHome: noop,

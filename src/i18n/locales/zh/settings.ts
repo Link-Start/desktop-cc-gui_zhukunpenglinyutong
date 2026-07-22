@@ -1261,6 +1261,7 @@ const settings = {
     editorSubDescription: "通过键盘控制文件编辑操作。",
     saveFile: "保存文件",
     findInFile: "在文件中查找",
+    expandSelection: "扩大选择范围",
     gitSubtitle: "Git",
     gitSubDescription: "控制 Git diff 的导航和展示。",
     toggleGitDiffListView: "切换 Git diff 列表视图",

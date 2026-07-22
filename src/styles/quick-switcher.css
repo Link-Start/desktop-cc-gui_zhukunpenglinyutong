@@ -229,6 +229,15 @@
   text-overflow: ellipsis;
 }
 
+.quick-switcher-file-label {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+}
+
+.quick-switcher-file-label > span:first-child {
+  min-width: 0;
+}
+
 .quick-switcher-row.is-selected .quick-switcher-primary small,
 .quick-switcher-row.is-selected time {
   color: rgba(255, 255, 255, 0.68);

@@ -34,6 +34,11 @@ Quick Switcher SHALL 使用三栏、有限高度的 modal presentation。面板 
 - **AND** recent pane MUST 可滚动
 - **AND** section heading MUST 保持清晰的视觉归属
 
+#### Scenario: File name competes with parent path
+- **WHEN** recent-file row 的水平空间不足以完整展示 file name 与 parent path
+- **THEN** row MUST 优先展示完整 file name
+- **AND** parent path MUST 先收缩并使用 ellipsis
+
 ### Requirement: Recent context SHALL be separated into session and file sections
 
 右侧区域 MUST 将 `最近会话` 与 `最近文件` 显示为两个并行 pane，MUST NOT 上下堆叠或混排为一个扁平列表。每个 pane MUST 展示语义 icon、localized heading 和可见数量，并 MUST 在 pane 内按 workspace 分组。
@@ -79,6 +84,12 @@ Quick Switcher SHALL 使用三栏、有限高度的 modal presentation。面板 
 #### Scenario: Read-only AI activity is observed
 - **WHEN** AI 仅执行 read、search、list 或只在文本中提及 file path
 - **THEN** 系统 MUST NOT 新增或刷新 recent-file entry
+
+#### Scenario: Tool payload masquerades as a file path
+- **WHEN** completed activity 的 path 实际包含 shell pipeline、command separator、pseudo-device 或其他明显非文件 payload
+- **THEN** recent-file trust boundary MUST 拒绝该 entry
+- **AND** persisted legacy pollution MUST NOT 恢复到最近文件列表
+- **AND** 真实 user-open path MUST 保持既有可信语义
 
 #### Scenario: AI deletes a known recent file
 - **WHEN** completed file-change fact 将 path 标记为 `D`

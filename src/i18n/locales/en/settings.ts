@@ -1347,6 +1347,7 @@ const settings = {
     editorSubDescription: "Control file editing actions from the keyboard.",
     saveFile: "Save file",
     findInFile: "Find in file",
+    expandSelection: "Expand selection",
     gitSubtitle: "Git",
     gitSubDescription: "Control Git diff navigation and presentation.",
     toggleGitDiffListView: "Toggle Git diff list view",

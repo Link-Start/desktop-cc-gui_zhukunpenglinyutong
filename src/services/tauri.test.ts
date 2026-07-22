@@ -67,6 +67,7 @@ import {
   connectOpenCodeProvider,
   getOpenCodeProviderHealth,
   getCodeIntelDefinition,
+  getCodeIntelImplementations,
   getCodeIntelReferences,
   getOpenCodeLspDefinition,
   getOpenCodeLspReferences,
@@ -2627,6 +2628,26 @@ describe("tauri invoke wrappers", () => {
         character: 1,
       }),
     ).rejects.toThrow("code intel unavailable");
+  });
+
+  it("maps code intel implementation params with current document text", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ result: [] });
+
+    await getCodeIntelImplementations("ws-ci-rust", {
+      filePath: "src/lib.rs",
+      line: 4,
+      character: 9,
+      documentText: "trait Renderer {}",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("code_intel_implementations", {
+      workspaceId: "ws-ci-rust",
+      filePath: "src/lib.rs",
+      line: 4,
+      character: 9,
+      documentText: "trait Renderer {}",
+    });
   });
 
   it("maps code intel references params", async () => {

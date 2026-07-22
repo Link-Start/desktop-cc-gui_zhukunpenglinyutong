@@ -69,6 +69,44 @@ describe("file view visual contracts", () => {
     expect(itemRule).toContain("border-radius: 8px;");
   });
 
+  it("hides file context menu scrollbar chrome without disabling scrolling", () => {
+    const menuRule = getCssRuleBlock(fileViewPanelCss, ".fvp-file-context-menu");
+    const itemRule = getCssRuleBlock(
+      fileViewPanelCss,
+      ".fvp-file-context-menu .renderer-context-menu-item",
+    );
+    const separatorRule = getCssRuleBlock(
+      fileViewPanelCss,
+      ".fvp-file-context-menu .renderer-context-menu-separator",
+    );
+    const iconRule = getCssRuleBlock(
+      fileViewPanelCss,
+      ".fvp-file-context-menu .renderer-context-menu-item-icon",
+    );
+    const iconSvgRule = getCssRuleBlock(
+      fileViewPanelCss,
+      ".fvp-file-context-menu .renderer-context-menu-item-icon svg",
+    );
+    const webkitScrollbarRule = getCssRuleBlock(
+      fileViewPanelCss,
+      ".fvp-file-context-menu::-webkit-scrollbar",
+    );
+
+    expect(menuRule).toContain("overflow-y: auto;");
+    expect(menuRule).toContain("padding: 5px;");
+    expect(menuRule).toContain("scrollbar-width: none;");
+    expect(menuRule).toContain("-ms-overflow-style: none;");
+    expect(itemRule).toContain("min-height: 30px;");
+    expect(itemRule).toContain("padding: 5px 8px;");
+    expect(separatorRule).toContain("margin: 4px 5px;");
+    expect(iconRule).toContain("width: 14px;");
+    expect(iconRule).toContain("height: 14px;");
+    expect(iconRule).toContain("flex-basis: 14px;");
+    expect(iconSvgRule).toContain("width: 14px;");
+    expect(iconSvgRule).toContain("height: 14px;");
+    expect(webkitScrollbarRule).toContain("display: none;");
+  });
+
   it("keeps file navigation and tabs in one header row without legacy toolbar CSS", () => {
     const headerRule = getCssRuleBlock(fileViewPanelCss, ".fvp-header-row");
 

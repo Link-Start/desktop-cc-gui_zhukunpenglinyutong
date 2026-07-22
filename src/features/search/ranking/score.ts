@@ -4,6 +4,18 @@ const RECENT_OPEN_BOOST_MS = 1000 * 60 * 60 * 24 * 7;
 
 type RecencyMap = Record<string, number>;
 
+const SEARCH_RESULT_KIND_PRIORITY: Record<SearchResult["kind"], number> = {
+  action: 0,
+  file: 1,
+  thread: 2,
+  api: 3,
+  kanban: 4,
+  skill: 5,
+  command: 6,
+  message: 7,
+  history: 8,
+};
+
 function computeRecencyBonus(resultId: string, recencyMap: RecencyMap): number {
   const openedAt = recencyMap[resultId];
   if (!openedAt) {
@@ -25,6 +37,10 @@ export function compareSearchResults(
   b: SearchResult,
   recencyMap: RecencyMap,
 ): number {
+  const kindPriority = SEARCH_RESULT_KIND_PRIORITY[a.kind] - SEARCH_RESULT_KIND_PRIORITY[b.kind];
+  if (kindPriority !== 0) {
+    return kindPriority;
+  }
   const scoreA = a.score - computeRecencyBonus(a.id, recencyMap);
   const scoreB = b.score - computeRecencyBonus(b.id, recencyMap);
 

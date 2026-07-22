@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGlobalSearchShortcut } from "../features/app/hooks/useGlobalSearchShortcut";
 import type { CenterMode } from "../features/app/hooks/useGitPanelController";
 import { useRecordRecentFilesFromActivity } from "../features/quick-switcher/hooks/useRecordRecentFilesFromActivity";
+import { useQuickSwitcherRecentFiles } from "../features/quick-switcher/hooks/useQuickSwitcherRecentFiles";
 import type { QuickSwitcherNavigationId } from "../features/quick-switcher/types";
 import { projectQuickSwitcherSessionGroups } from "../features/quick-switcher/sessionProjection";
 import type { SessionActivityEvent } from "../features/session-activity/types";
@@ -63,6 +64,7 @@ export function useAppShellQuickSwitcherSection(
     () => projectQuickSwitcherSessionGroups(workspaces, threadsByWorkspace),
     [threadsByWorkspace, workspaces],
   );
+  const quickSwitcherRecentFileGroups = useQuickSwitcherRecentFiles(workspaces);
 
   const closeQuickSwitcher = useCallback(() => {
     setIsQuickSwitcherOpen(false);
@@ -195,5 +197,6 @@ export function useAppShellQuickSwitcherSection(
     handleQuickSwitcherSelectSession,
     isQuickSwitcherOpen,
     quickSwitcherSessionGroups,
+    quickSwitcherRecentFileGroups,
   };
 }

@@ -336,12 +336,13 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     registry.register("file_new_window", &new_window_item);
     registry.register("file_add_workspace", &add_workspace_item);
 
+    let file_close_window_item =
+        MenuItemBuilder::with_id("file_close_window", labels.close_window).build(handle)?;
+    registry.register("file_close_window", &file_close_window_item);
+
     #[cfg(target_os = "linux")]
     let file_menu = {
-        let close_window_item =
-            MenuItemBuilder::with_id("file_close_window", labels.close_window).build(handle)?;
         let quit_item = MenuItemBuilder::with_id("file_quit", labels.quit).build(handle)?;
-        registry.register("file_close_window", &close_window_item);
         registry.register("file_quit", &quit_item);
         let submenu = SubmenuBuilder::with_id(handle, "file_menu", labels.file)
             .items(&[
@@ -352,7 +353,7 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
                 &PredefinedMenuItem::separator(handle)?,
                 &add_workspace_item,
                 &PredefinedMenuItem::separator(handle)?,
-                &close_window_item,
+                &file_close_window_item,
                 &quit_item,
             ])
             .build()?;
@@ -370,7 +371,7 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
                 &PredefinedMenuItem::separator(handle)?,
                 &add_workspace_item,
                 &PredefinedMenuItem::separator(handle)?,
-                &PredefinedMenuItem::close_window(handle, None)?,
+                &file_close_window_item,
                 #[cfg(not(target_os = "macos"))]
                 &PredefinedMenuItem::quit(handle, None)?,
             ])
@@ -523,6 +524,10 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         submenu
     };
 
+    let window_close_item =
+        MenuItemBuilder::with_id("window_close", labels.close_window).build(handle)?;
+    registry.register("window_close", &window_close_item);
+
     #[cfg(target_os = "linux")]
     let window_menu = {
         let minimize_item =
@@ -530,19 +535,16 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         let maximize_item =
             MenuItemBuilder::with_id("window_maximize", labels.maximize).build(handle)?;
         let reload_item = build_reload_window_item(handle, labels)?;
-        let close_item =
-            MenuItemBuilder::with_id("window_close", labels.close_window).build(handle)?;
         registry.register("window_minimize", &minimize_item);
         registry.register("window_maximize", &maximize_item);
         registry.register("window_reload", &reload_item);
-        registry.register("window_close", &close_item);
         let submenu = SubmenuBuilder::with_id(handle, "window_menu", labels.window)
             .items(&[
                 &minimize_item,
                 &maximize_item,
                 &reload_item,
                 &PredefinedMenuItem::separator(handle)?,
-                &close_item,
+                &window_close_item,
             ])
             .build()?;
         registry.register_submenu("window_menu", &submenu);
@@ -558,7 +560,7 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
                 &PredefinedMenuItem::maximize(handle, None)?,
                 &reload_item,
                 &PredefinedMenuItem::separator(handle)?,
-                &PredefinedMenuItem::close_window(handle, None)?,
+                &window_close_item,
             ])
             .build()?;
         registry.register_submenu("window_menu", &submenu);

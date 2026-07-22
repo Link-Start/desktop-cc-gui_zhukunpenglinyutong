@@ -31,6 +31,7 @@ import Minimize2 from "lucide-react/dist/esm/icons/minimize-2";
 import Rows2 from "lucide-react/dist/esm/icons/rows-2";
 import Save from "lucide-react/dist/esm/icons/save";
 import Search from "lucide-react/dist/esm/icons/search";
+import TextSelect from "lucide-react/dist/esm/icons/text-select";
 import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen";
 import LocateFixed from "lucide-react/dist/esm/icons/locate-fixed";
 import X from "lucide-react/dist/esm/icons/x";
@@ -44,6 +45,7 @@ import {
 import { pushErrorToast } from "../../../services/toasts";
 import type { IntentCanvasCodeSelectionAnchor } from "../../intent-canvas/types";
 import {
+  formatShortcutForPlatform,
   isEditableShortcutTarget,
   matchesShortcutForPlatform,
 } from "../../../utils/shortcuts";
@@ -222,6 +224,7 @@ type FileViewPanelProps = {
   fileRenderPressure?: FileRenderPressure;
   saveFileShortcut?: string | null;
   findInFileShortcut?: string | null;
+  expandSelectionShortcut?: string | null;
   onSaveSuccess?: () => void;
   onDirtyChange?: (isDirty: boolean) => void;
 };
@@ -279,6 +282,7 @@ export function FileViewPanel({
   fileRenderPressure = DEFAULT_FILE_RENDER_PRESSURE,
   saveFileShortcut = "cmd+s",
   findInFileShortcut = "cmd+f",
+  expandSelectionShortcut = "cmd+w",
   onSaveSuccess,
   onDirtyChange,
 }: FileViewPanelProps) {
@@ -841,14 +845,18 @@ export function FileViewPanel({
   const {
     isDefinitionLoading,
     isReferencesLoading,
+    isImplementationsLoading,
     navigationError,
     definitionCandidates,
     setDefinitionCandidates,
     referenceResults,
     setReferenceResults,
+    implementationCandidates,
+    setImplementationCandidates,
     navigateToLocation,
     runDefinitionFromCursor,
     runReferencesFromCursor,
+    runImplementationsFromCursor,
     resolveDefinitionAtOffset,
     openFindPanelInEditor,
     toggleFindPanelInEditor,
@@ -1398,6 +1406,22 @@ export function FileViewPanel({
                     },
                   ]
                 : []),
+              ...(editorView && canMutateEditor
+                ? [
+                    {
+                      type: "item" as const,
+                      id: "expand-selection",
+                      label: t("files.expandSelection"),
+                      icon: <TextSelect size={15} />,
+                      shortcut: expandSelectionShortcut
+                        ? formatShortcutForPlatform(expandSelectionShortcut)
+                        : undefined,
+                      onSelect: () => {
+                        cmRef.current?.expandSelection();
+                      },
+                    },
+                  ]
+                : []),
               {
                 type: "item",
                 id: "goto-definition",
@@ -1406,6 +1430,15 @@ export function FileViewPanel({
                   : t("files.gotoDefinition"),
                 icon: <Code size={15} />,
                 onSelect: runDefinitionFromCursor,
+              },
+              {
+                type: "item",
+                id: "goto-implementations",
+                label: isImplementationsLoading
+                  ? t("files.navigating")
+                  : t("files.gotoImplementations"),
+                icon: <Code size={15} />,
+                onSelect: runImplementationsFromCursor,
               },
               {
                 type: "item",
@@ -1514,6 +1547,7 @@ export function FileViewPanel({
       content,
       documentSnapshot.lineCount,
       effectiveIsDirty,
+      expandSelectionShortcut,
       filePath,
       gitBlame,
       gitBlameEligible,
@@ -1522,6 +1556,7 @@ export function FileViewPanel({
       handleEnterPreview,
       handleSave,
       isDefinitionLoading,
+      isImplementationsLoading,
       isReferencesLoading,
       isSaving,
       mode,
@@ -1531,6 +1566,7 @@ export function FileViewPanel({
       onRevealInFileTree,
       renderProfile.previewLanguage,
       runDefinitionFromCursor,
+      runImplementationsFromCursor,
       runReferencesFromCursor,
       showClipboardError,
       skipTextRead,
@@ -2549,6 +2585,7 @@ export function FileViewPanel({
       onAnnotationDraftConfirm={handleConfirmAnnotationDraft}
       lastReportedLineRangeRef={lastReportedLineRangeRef}
       saveFileShortcut={saveFileShortcut}
+      expandSelectionShortcut={expandSelectionShortcut}
       handleSave={handleSave}
       editorTheme={editorTheme}
       previewLanguage={previewLanguage}
@@ -2703,6 +2740,8 @@ export function FileViewPanel({
       navigationError={navigationError}
       definitionCandidates={definitionCandidates}
       onCloseDefinitionCandidates={() => setDefinitionCandidates([])}
+      implementationCandidates={implementationCandidates}
+      onCloseImplementationCandidates={() => setImplementationCandidates([])}
       referenceResults={referenceResults}
       onCloseReferenceResults={() => setReferenceResults(null)}
       onNavigateToLocation={navigateToLocation}
@@ -2727,7 +2766,7 @@ export function FileViewPanel({
         <RendererContextMenu
           menu={fileContextMenu}
           onClose={() => setFileContextMenu(null)}
-          className="renderer-context-menu fvp-tab-context-menu"
+          className="renderer-context-menu fvp-tab-context-menu fvp-file-context-menu"
         />
       ) : null}
       {renderExternalChangeNotice()}

@@ -297,6 +297,7 @@ export type LayoutNodesFlatOptions = {
   closeCurrentSessionShortcut: string | null;
   saveFileShortcut: string | null;
   findInFileShortcut: string | null;
+  expandSelectionShortcut: string | null;
   toggleGitDiffListViewShortcut: string | null;
   onOpenSpecHub: () => void;
   onOpenWorkspaceHome: (workspaceId?: string) => void;
@@ -1264,6 +1265,7 @@ export type PanelsLayoutNodesOptions = Pick<
   | "closeCurrentSessionShortcut"
   | "saveFileShortcut"
   | "findInFileShortcut"
+  | "expandSelectionShortcut"
   | "toggleGitDiffListViewShortcut"
   | "onOpenWorkspaceHome"
 >;

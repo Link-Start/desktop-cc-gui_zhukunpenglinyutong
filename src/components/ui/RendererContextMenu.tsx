@@ -14,6 +14,7 @@ export type RendererContextMenuLeafItem =
       id: string;
       label: string;
       icon?: ReactNode;
+      shortcut?: string;
       disabled?: boolean;
       tone?: "default" | "danger";
       onSelect: () => void | Promise<void>;
@@ -256,6 +257,11 @@ export function RendererContextMenu({
         <span className="renderer-context-menu-item-label">
           {item.label}
         </span>
+        {item.shortcut ? (
+          <span className="renderer-context-menu-item-shortcut" aria-hidden>
+            {item.shortcut}
+          </span>
+        ) : null}
       </button>
     );
   };

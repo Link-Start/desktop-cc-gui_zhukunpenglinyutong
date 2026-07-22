@@ -125,6 +125,31 @@ describe("RendererContextMenu", () => {
       .toBe("true");
   });
 
+  it("renders an optional shortcut hint without changing the accessible label", () => {
+    const onSelect = vi.fn();
+    render(
+      <RendererContextMenu
+        menu={createMenu({
+          items: [
+            {
+              type: "item",
+              id: "expand-selection",
+              label: "Expand selection",
+              shortcut: "⌘W",
+              onSelect,
+            },
+          ],
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const item = screen.getByRole("menuitem", { name: "Expand selection" });
+    expect(item.querySelector(".renderer-context-menu-item-shortcut")?.textContent).toBe("⌘W");
+    fireEvent.click(item);
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
   it("opens submenu items in a flyout and activates leaf actions", () => {
     const events: string[] = [];
     render(

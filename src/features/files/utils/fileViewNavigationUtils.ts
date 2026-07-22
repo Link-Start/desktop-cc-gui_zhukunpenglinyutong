@@ -21,6 +21,20 @@ export type RecentTrigger = {
   at: number;
 };
 
+export type CodeNavigationAction = "definition" | "references" | "implementation";
+
+const NAVIGATION_SYMBOL_GUIDANCE_KEYS: Record<CodeNavigationAction, string> = {
+  definition: "files.navigationDefinitionSymbolRequired",
+  references: "files.navigationReferencesSymbolRequired",
+  implementation: "files.navigationImplementationSymbolRequired",
+};
+
+const NAVIGATION_FAILURE_KEYS: Record<CodeNavigationAction, string> = {
+  definition: "files.navigationDefinitionError",
+  references: "files.navigationReferencesError",
+  implementation: "files.navigationImplementationError",
+};
+
 export function makeLocationQueryKey(
   filePath: string,
   line: number,
@@ -125,6 +139,31 @@ export function errorMessageFromUnknown(error: unknown, fallback: string) {
     }
   }
   return fallback;
+}
+
+export function resolveCodeNavigationErrorMessage(
+  error: unknown,
+  action: CodeNavigationAction,
+  translate: (key: string) => string,
+) {
+  const timeoutMessage = translate("files.navigationTimeout");
+  const rawMessage = errorMessageFromUnknown(error, "").trim();
+  if (rawMessage === timeoutMessage) {
+    return timeoutMessage;
+  }
+
+  const normalizedMessage = rawMessage.toLowerCase();
+  if (normalizedMessage.includes("no symbol under cursor")) {
+    return translate(NAVIGATION_SYMBOL_GUIDANCE_KEYS[action]);
+  }
+  if (
+    normalizedMessage.includes("unsupported")
+    || normalizedMessage.includes("currently supports")
+    || normalizedMessage.includes("not supported")
+  ) {
+    return translate("files.navigationUnsupportedLanguage");
+  }
+  return translate(NAVIGATION_FAILURE_KEYS[action]);
 }
 
 export function withTimeout<T>(

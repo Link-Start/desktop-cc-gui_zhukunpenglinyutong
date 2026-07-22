@@ -8,6 +8,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::State;
 
+use crate::code_intel_lsp::{SemanticLocation, SemanticQueryKind};
 use crate::state::AppState;
 
 #[derive(Debug, Clone, Serialize)]
@@ -55,6 +56,7 @@ enum LanguageKind {
     Python,
     TsJs,
     Go,
+    Rust,
     Yaml,
 }
 
@@ -69,6 +71,7 @@ impl LanguageKind {
             "py" | "pyi" => Some(Self::Python),
             "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" => Some(Self::TsJs),
             "go" => Some(Self::Go),
+            "rs" => Some(Self::Rust),
             "yml" | "yaml" => Some(Self::Yaml),
             _ => None,
         }
@@ -80,6 +83,7 @@ impl LanguageKind {
             Self::Python => &["py", "pyi"],
             Self::TsJs => &["ts", "tsx", "js", "jsx", "mjs", "cjs"],
             Self::Go => &["go"],
+            Self::Rust => &["rs"],
             Self::Yaml => &["yml", "yaml"],
         }
     }
@@ -90,6 +94,7 @@ impl LanguageKind {
             Self::Python => "Python",
             Self::TsJs => "TS/JS",
             Self::Go => "Go",
+            Self::Rust => "Rust",
             Self::Yaml => "YAML",
         }
     }
@@ -474,7 +479,7 @@ fn collect_definition_matches<F>(
     workspace_root: &Path,
     files: &[PathBuf],
     re: &Regex,
-    symbol_len: usize,
+    _symbol_len: usize,
     keep_line: F,
 ) -> Vec<CodeIntelLocation>
 where
@@ -505,7 +510,7 @@ where
                 &snapshot.absolute,
                 &snapshot.content,
                 matched_symbol.start(),
-                symbol_len,
+                matched_symbol.as_str().chars().count(),
             ) {
                 locations.push(location);
             }
@@ -531,6 +536,9 @@ fn find_class_like_definitions(
             r"(?m)^[ \t]*(?:export[ \t]+(?:default[ \t]+)?)?(?:abstract[ \t]+)?(?:class|interface|type|enum)[ \t]+({escaped})\b"
         )],
         LanguageKind::Go => vec![format!(r"(?m)^[ \t]*type[ \t]+({escaped})\b")],
+        LanguageKind::Rust => vec![format!(
+            r"(?m)^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?(?:struct|enum|trait|type|mod|const|static)[ \t]+({escaped})\b"
+        )],
         LanguageKind::Yaml => Vec::new(),
     };
 
@@ -626,9 +634,69 @@ fn find_callable_definitions(
                 always_keep_line,
             ));
         }
+        LanguageKind::Rust => {
+            let Ok(re) = Regex::new(&format!(
+                r"(?m)^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?(?:async[ \t]+)?(?:unsafe[ \t]+)?fn[ \t]+({escaped})\b"
+            )) else {
+                return locations;
+            };
+            locations.extend(collect_definition_matches(
+                workspace_root,
+                files,
+                &re,
+                symbol_len,
+                always_keep_line,
+            ));
+        }
         LanguageKind::Yaml => {}
     }
 
+    locations
+}
+
+fn find_implementation_definitions(
+    workspace_root: &Path,
+    language: LanguageKind,
+    symbol: &str,
+    method_like: bool,
+    files: &[PathBuf],
+) -> Vec<CodeIntelLocation> {
+    if method_like {
+        return find_callable_definitions(workspace_root, language, symbol, files);
+    }
+
+    let escaped = regex::escape(symbol);
+    let patterns: Vec<String> = match language {
+        LanguageKind::Java => vec![format!(
+            r"(?m)^[ \t]*(?:public[ \t]+|protected[ \t]+|private[ \t]+|abstract[ \t]+|final[ \t]+|static[ \t]+)*(?:class|record|enum)[ \t]+([A-Za-z_$][A-Za-z0-9_$]*)[^{{\n]*(?:implements|extends)[^{{\n]*\b{escaped}\b"
+        )],
+        LanguageKind::TsJs => vec![format!(
+            r"(?m)^[ \t]*(?:export[ \t]+(?:default[ \t]+)?)?(?:abstract[ \t]+)?class[ \t]+([A-Za-z_$][A-Za-z0-9_$]*)[^{{\n]*(?:implements|extends)[^{{\n]*\b{escaped}\b"
+        )],
+        LanguageKind::Rust => vec![
+            format!(
+                r"(?m)^[ \t]*(?:unsafe[ \t]+)?impl(?:<[^\n{{>]+>)?[ \t]+(?:[A-Za-z_][A-Za-z0-9_:<>,' \t]*::)?({escaped})\b[^\n{{]*[ \t]+for[ \t]+[A-Za-z_]"
+            ),
+            format!(
+                r"(?m)^[ \t]*(?:unsafe[ \t]+)?impl(?:<[^\n{{>]+>)?[ \t]+(?:[A-Za-z_][A-Za-z0-9_:<>,' \t]*::)?({escaped})\b[ \t]*(?:where[^{{\n]*)?\{{"
+            ),
+        ],
+        LanguageKind::Python | LanguageKind::Go | LanguageKind::Yaml => Vec::new(),
+    };
+
+    let mut locations = Vec::new();
+    for pattern in patterns {
+        let Ok(re) = Regex::new(&pattern) else {
+            continue;
+        };
+        locations.extend(collect_definition_matches(
+            workspace_root,
+            files,
+            &re,
+            symbol.chars().count(),
+            always_keep_line,
+        ));
+    }
     locations
 }
 
@@ -642,7 +710,7 @@ fn find_references(
     let escaped = regex::escape(symbol);
     let symbol_len = symbol.chars().count();
     let pattern = match (language, method_like) {
-        (LanguageKind::Python, _) => format!(r"\b({escaped})\b"),
+        (LanguageKind::Python | LanguageKind::Rust, _) => format!(r"\b({escaped})\b"),
         (_, true) => format!(r"\b({escaped})\s*\("),
         (_, false) => format!(r"\b({escaped})\b"),
     };
@@ -971,31 +1039,115 @@ fn sort_locations_by_relevance(
     });
 }
 
+fn semantic_locations_to_code_intel(
+    workspace_root: &Path,
+    locations: Vec<SemanticLocation>,
+) -> Vec<CodeIntelLocation> {
+    locations
+        .into_iter()
+        .filter_map(|location| {
+            let relative = location.path.strip_prefix(workspace_root).ok()?;
+            Some(CodeIntelLocation {
+                uri: location.uri,
+                path: relative.to_string_lossy().replace('\\', "/"),
+                range: CodeIntelRange {
+                    start: CodeIntelPosition {
+                        line: location.start.line,
+                        character: location.start.character,
+                    },
+                    end: CodeIntelPosition {
+                        line: location.end.line,
+                        character: location.end.character,
+                    },
+                },
+            })
+        })
+        .collect()
+}
+
+async fn resolve_workspace_root(
+    workspace_id: &str,
+    state: &State<'_, AppState>,
+) -> Result<PathBuf, String> {
+    let workspaces = state.workspaces.lock().await;
+    let workspace_path = workspaces
+        .get(workspace_id)
+        .map(|entry| PathBuf::from(&entry.path))
+        .ok_or_else(|| "Workspace not found".to_string())?;
+    workspace_path
+        .canonicalize()
+        .map_err(|err| format!("Failed to resolve workspace root: {err}"))
+}
+
+async fn query_rust_semantic(
+    state: &State<'_, AppState>,
+    workspace_root: &Path,
+    source: &FileSnapshot,
+    document_text: Option<&str>,
+    line: u32,
+    character: u32,
+    kind: SemanticQueryKind,
+) -> Result<Vec<CodeIntelLocation>, String> {
+    let text = document_text.unwrap_or(&source.content);
+    state
+        .rust_analyzer_runtime
+        .query(
+            workspace_root,
+            &source.absolute,
+            text,
+            line,
+            character,
+            kind,
+        )
+        .await
+        .map(|locations| semantic_locations_to_code_intel(workspace_root, locations))
+}
+
 #[tauri::command]
 pub async fn code_intel_definition(
     workspace_id: String,
     file_path: String,
     line: u32,
     character: u32,
+    document_text: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     let language = LanguageKind::from_path(&file_path).ok_or_else(|| {
-        "Code intelligence currently supports YAML, Python, TS/JS, Go, and Java files".to_string()
+        "Code intelligence currently supports YAML, Python, TS/JS, Go, Rust, and Java files"
+            .to_string()
     })?;
 
-    let workspace_root = {
-        let workspaces = state.workspaces.lock().await;
-        let workspace_path = workspaces
-            .get(&workspace_id)
-            .map(|entry| PathBuf::from(&entry.path))
-            .ok_or_else(|| "Workspace not found".to_string())?;
-        workspace_path
-            .canonicalize()
-            .map_err(|err| format!("Failed to resolve workspace root: {err}"))?
-    };
+    let workspace_root = resolve_workspace_root(&workspace_id, &state).await?;
 
     let source = read_file_snapshot(&workspace_root, &file_path)?;
-    let symbol = symbol_at_cursor_for_language(&source.content, line, character, language)
+    let mut fallback_reason = None;
+    if language == LanguageKind::Rust {
+        match query_rust_semantic(
+            &state,
+            &workspace_root,
+            &source,
+            document_text.as_deref(),
+            line,
+            character,
+            SemanticQueryKind::Definition,
+        )
+        .await
+        {
+            Ok(locations) => {
+                return Ok(json!({
+                    "filePath": file_path,
+                    "line": line,
+                    "character": character,
+                    "language": language.name(),
+                    "provider": "rust-analyzer",
+                    "result": locations,
+                }));
+            }
+            Err(error) => fallback_reason = Some(error),
+        }
+    }
+    let query_content = document_text.as_deref().unwrap_or(&source.content);
+    let symbol = symbol_at_cursor_for_language(query_content, line, character, language)
         .ok_or_else(|| "No symbol under cursor".to_string())?;
 
     let mut locations = if language == LanguageKind::Yaml {
@@ -1051,6 +1203,8 @@ pub async fn code_intel_definition(
         "line": line,
         "character": character,
         "language": language.name(),
+        "provider": "heuristic",
+        "fallbackReason": fallback_reason,
         "result": locations,
     }))
 }
@@ -1062,25 +1216,48 @@ pub async fn code_intel_references(
     line: u32,
     character: u32,
     include_declaration: Option<bool>,
+    document_text: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     let language = LanguageKind::from_path(&file_path).ok_or_else(|| {
-        "Code intelligence currently supports YAML, Python, TS/JS, Go, and Java files".to_string()
+        "Code intelligence currently supports YAML, Python, TS/JS, Go, Rust, and Java files"
+            .to_string()
     })?;
 
-    let workspace_root = {
-        let workspaces = state.workspaces.lock().await;
-        let workspace_path = workspaces
-            .get(&workspace_id)
-            .map(|entry| PathBuf::from(&entry.path))
-            .ok_or_else(|| "Workspace not found".to_string())?;
-        workspace_path
-            .canonicalize()
-            .map_err(|err| format!("Failed to resolve workspace root: {err}"))?
-    };
+    let workspace_root = resolve_workspace_root(&workspace_id, &state).await?;
 
     let source = read_file_snapshot(&workspace_root, &file_path)?;
-    let symbol = symbol_at_cursor_for_language(&source.content, line, character, language)
+    let mut fallback_reason = None;
+    if language == LanguageKind::Rust {
+        match query_rust_semantic(
+            &state,
+            &workspace_root,
+            &source,
+            document_text.as_deref(),
+            line,
+            character,
+            SemanticQueryKind::References {
+                include_declaration: include_declaration.unwrap_or(false),
+            },
+        )
+        .await
+        {
+            Ok(locations) => {
+                return Ok(json!({
+                    "filePath": file_path,
+                    "line": line,
+                    "character": character,
+                    "includeDeclaration": include_declaration.unwrap_or(false),
+                    "language": language.name(),
+                    "provider": "rust-analyzer",
+                    "result": locations,
+                }));
+            }
+            Err(error) => fallback_reason = Some(error),
+        }
+    }
+    let query_content = document_text.as_deref().unwrap_or(&source.content);
+    let symbol = symbol_at_cursor_for_language(query_content, line, character, language)
         .ok_or_else(|| "No symbol under cursor".to_string())?;
 
     let mut references = if language == LanguageKind::Yaml {
@@ -1192,6 +1369,186 @@ pub async fn code_intel_references(
         "character": character,
         "includeDeclaration": include_declaration.unwrap_or(false),
         "language": language.name(),
+        "provider": "heuristic",
+        "fallbackReason": fallback_reason,
         "result": references,
     }))
+}
+
+#[tauri::command]
+pub async fn code_intel_implementations(
+    workspace_id: String,
+    file_path: String,
+    line: u32,
+    character: u32,
+    document_text: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let language = LanguageKind::from_path(&file_path).ok_or_else(|| {
+        "Implementation navigation currently supports Java, TS/JS, and Rust files".to_string()
+    })?;
+    if !matches!(
+        language,
+        LanguageKind::Java | LanguageKind::TsJs | LanguageKind::Rust
+    ) {
+        return Err(
+            "Implementation navigation currently supports Java, TS/JS, and Rust files".to_string(),
+        );
+    }
+
+    let workspace_root = resolve_workspace_root(&workspace_id, &state).await?;
+    let source = read_file_snapshot(&workspace_root, &file_path)?;
+    let mut fallback_reason = None;
+    if language == LanguageKind::Rust {
+        match query_rust_semantic(
+            &state,
+            &workspace_root,
+            &source,
+            document_text.as_deref(),
+            line,
+            character,
+            SemanticQueryKind::Implementation,
+        )
+        .await
+        {
+            Ok(locations) => {
+                return Ok(json!({
+                    "filePath": file_path,
+                    "line": line,
+                    "character": character,
+                    "language": language.name(),
+                    "provider": "rust-analyzer",
+                    "result": locations,
+                }));
+            }
+            Err(error) => fallback_reason = Some(error),
+        }
+    }
+
+    let query_content = document_text.as_deref().unwrap_or(&source.content);
+    let symbol = symbol_at_cursor_for_language(query_content, line, character, language)
+        .ok_or_else(|| "No symbol under cursor".to_string())?;
+    let language_files = collect_language_files(&workspace_root, language);
+    let mut implementations = find_implementation_definitions(
+        &workspace_root,
+        language,
+        &symbol.symbol,
+        symbol.method_like,
+        &language_files,
+    );
+    implementations = dedupe_locations(implementations);
+    sort_locations_by_relevance(
+        &mut implementations,
+        &file_path,
+        language,
+        &symbol.symbol,
+        symbol.method_like,
+    );
+    if implementations.len() > MAX_CODE_INTEL_RESULTS {
+        implementations.truncate(MAX_CODE_INTEL_RESULTS);
+    }
+
+    Ok(json!({
+        "filePath": file_path,
+        "line": line,
+        "character": character,
+        "language": language.name(),
+        "provider": "heuristic",
+        "fallbackReason": fallback_reason,
+        "result": implementations,
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_fixture(root: &Path, relative: &str, content: &str) -> PathBuf {
+        let path = root.join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, content).unwrap();
+        path
+    }
+
+    fn fixture_root(label: &str) -> PathBuf {
+        let root =
+            std::env::temp_dir().join(format!("mossx-code-intel-{label}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+        root.canonicalize().unwrap()
+    }
+
+    #[test]
+    fn recognizes_rust_files_and_declarations() {
+        assert_eq!(
+            LanguageKind::from_path("src/lib.rs"),
+            Some(LanguageKind::Rust)
+        );
+        let root = fixture_root("rust-definitions");
+        let file = write_fixture(
+            &root,
+            "src/lib.rs",
+            "pub trait Renderer {}\npub struct HtmlRenderer;\npub fn render() {}\n",
+        );
+        let definitions = find_class_like_definitions(
+            &root,
+            LanguageKind::Rust,
+            "Renderer",
+            std::slice::from_ref(&file),
+        );
+        let functions = find_callable_definitions(
+            &root,
+            LanguageKind::Rust,
+            "render",
+            std::slice::from_ref(&file),
+        );
+        assert_eq!(definitions.len(), 1);
+        assert_eq!(functions.len(), 1);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn finds_explicit_rust_java_and_typescript_implementations() {
+        let root = fixture_root("implementations");
+        let rust_file = write_fixture(
+            &root,
+            "src/lib.rs",
+            "trait Renderer {}\nstruct Html;\nimpl Renderer for Html {}\n",
+        );
+        let java_file = write_fixture(
+            &root,
+            "src/Html.java",
+            "interface Renderer {}\nfinal class Html implements Renderer {}\n",
+        );
+        let ts_file = write_fixture(
+            &root,
+            "src/html.ts",
+            "interface Renderer {}\nexport class Html implements Renderer {}\n",
+        );
+        let rust = find_implementation_definitions(
+            &root,
+            LanguageKind::Rust,
+            "Renderer",
+            false,
+            &[rust_file],
+        );
+        let java = find_implementation_definitions(
+            &root,
+            LanguageKind::Java,
+            "Renderer",
+            false,
+            &[java_file],
+        );
+        let ts = find_implementation_definitions(
+            &root,
+            LanguageKind::TsJs,
+            "Renderer",
+            false,
+            &[ts_file],
+        );
+        assert_eq!(rust.len(), 1);
+        assert_eq!(java.len(), 1);
+        assert_eq!(ts.len(), 1);
+        assert_eq!(java[0].range.start.character, 12);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

@@ -21,6 +21,9 @@ type UseUiScaleShortcutsResult = {
   scaleShortcutTitle: string;
   scaleShortcutText: string;
   queueSaveSettings: (next: AppSettings) => Promise<AppSettings>;
+  increaseUiScale: () => void;
+  decreaseUiScale: () => void;
+  resetUiScale: () => void;
 };
 
 export function useUiScaleShortcuts({
@@ -105,6 +108,15 @@ export function useUiScaleShortcuts({
     });
   }, [queueSaveSettings, setSettings]);
 
+  const increaseUiScale = useCallback(
+    () => handleScaleDelta(UI_SCALE_STEP),
+    [handleScaleDelta],
+  );
+  const decreaseUiScale = useCallback(
+    () => handleScaleDelta(-UI_SCALE_STEP),
+    [handleScaleDelta],
+  );
+
   useEffect(() => {
     const handleScaleShortcut = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) {
@@ -136,15 +148,20 @@ export function useUiScaleShortcuts({
         handleScaleReset();
         return;
       }
-      handleScaleDelta(isDecrease ? -UI_SCALE_STEP : UI_SCALE_STEP);
+      if (isDecrease) {
+        decreaseUiScale();
+      } else {
+        increaseUiScale();
+      }
     };
     window.addEventListener("keydown", handleScaleShortcut);
     return () => {
       window.removeEventListener("keydown", handleScaleShortcut);
     };
   }, [
-    handleScaleDelta,
+    decreaseUiScale,
     handleScaleReset,
+    increaseUiScale,
     settings.decreaseUiScaleShortcut,
     settings.increaseUiScaleShortcut,
     settings.resetUiScaleShortcut,
@@ -155,5 +172,8 @@ export function useUiScaleShortcuts({
     scaleShortcutTitle,
     scaleShortcutText,
     queueSaveSettings,
+    increaseUiScale,
+    decreaseUiScale,
+    resetUiScale: handleScaleReset,
   };
 }

@@ -82,6 +82,9 @@ describe("QuickSwitcher", () => {
     expect(screen.getByText("quickSwitcher.recentFiles")).toBeTruthy();
     expect(screen.getAllByText("MossX")).toHaveLength(2);
     expect(screen.getByText("App.tsx")).toBeTruthy();
+    expect(
+      screen.getByText("App.tsx").closest(".quick-switcher-file-label"),
+    ).toBeTruthy();
     expect(screen.getByText("quickSwitcher.nav.intentCanvas")).toBeTruthy();
     expect(screen.getByText("quickSwitcher.nav.projectMap")).toBeTruthy();
     expect(document.querySelector("input")).toBeNull();

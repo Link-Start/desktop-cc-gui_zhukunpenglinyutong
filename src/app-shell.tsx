@@ -125,6 +125,9 @@ export function AppShell() {
     scaleShortcutTitle,
     scaleShortcutText,
     queueSaveSettings,
+    increaseUiScale,
+    decreaseUiScale,
+    resetUiScale,
   } = useAppSettingsController();
   useCodeCssVars(appSettings);
   const {
@@ -2376,6 +2379,7 @@ export function AppShell() {
     gitPanelMode,
     gitPullRequestDiffs,
     handleDraftChange,
+    handleAddAgent,
     handleOpenFile,
     handleOpenQuickSwitcher: quickSwitcherSection.handleOpenQuickSwitcher,
     handleQuickSwitcherNavigate: quickSwitcherSection.handleQuickSwitcherNavigate,
@@ -2391,6 +2395,11 @@ export function AppShell() {
     kanbanTasks,
     queueMessage,
     quickSwitcherSessionGroups: quickSwitcherSection.quickSwitcherSessionGroups,
+    quickSwitcherRecentFileGroups: quickSwitcherSection.quickSwitcherRecentFileGroups,
+    increaseUiScale,
+    decreaseUiScale,
+    resetUiScale,
+    searchContentFilters,
     searchPaletteQuery,
     searchResults,
     searchScope,

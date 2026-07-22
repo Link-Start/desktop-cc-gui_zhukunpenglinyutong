@@ -26,6 +26,7 @@ export type ShortcutSettingKey =
   | "toggleFilesSurfaceShortcut"
   | "saveFileShortcut"
   | "findInFileShortcut"
+  | "expandSelectionShortcut"
   | "toggleGitDiffListViewShortcut"
   | "toggleGitGraphShortcut"
   | "openNotesShortcut"
@@ -70,6 +71,7 @@ export type ShortcutDraftKey =
   | "filesSurface"
   | "saveFile"
   | "findInFile"
+  | "expandSelection"
   | "gitDiffListView"
   | "gitGraph"
   | "notes"
@@ -542,6 +544,16 @@ export const shortcutActions: ShortcutActionMetadata[] = [
     triggerSurface: "editor",
   },
   {
+    id: "expand-selection",
+    setting: "expandSelectionShortcut",
+    draftKey: "expandSelection",
+    category: "editor",
+    labelKey: "settings.expandSelection",
+    defaultShortcut: "cmd+w",
+    scope: "editor",
+    triggerSurface: "editor",
+  },
+  {
     id: "toggle-git-diff-list-view",
     setting: "toggleGitDiffListViewShortcut",
     draftKey: "gitDiffListView",
@@ -654,6 +666,7 @@ export const shortcutDraftKeyBySetting: Record<
   toggleFilesSurfaceShortcut: "filesSurface",
   saveFileShortcut: "saveFile",
   findInFileShortcut: "findInFile",
+  expandSelectionShortcut: "expandSelection",
   toggleGitDiffListViewShortcut: "gitDiffListView",
   toggleGitGraphShortcut: "gitGraph",
   openNotesShortcut: "notes",

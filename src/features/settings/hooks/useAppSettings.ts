@@ -228,6 +228,7 @@ const defaultSettings: AppSettings = {
   toggleFilesSurfaceShortcut: "cmd+shift+e",
   saveFileShortcut: "cmd+s",
   findInFileShortcut: "cmd+f",
+  expandSelectionShortcut: "cmd+w",
   toggleGitDiffListViewShortcut: "alt+shift+v",
   toggleGitGraphShortcut: null,
   openNotesShortcut: null,

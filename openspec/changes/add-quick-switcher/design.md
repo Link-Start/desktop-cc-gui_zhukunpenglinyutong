@@ -97,6 +97,10 @@ navigation row / session / file activation
   → existing App Shell callback → close popup
 ```
 
+### 7. Recent-file trust boundary 拒绝非文件 tool payload
+
+AI activity 的 `filePath` 不是天然可信文件事实。Quick Switcher 在 storage restore 与 mutation ingest 两个入口复用 feature-local validator，拒绝 shell control syntax、pseudo-device 与明显 command fragment。该严格规则只作用于 `ai-modified`；user-open path 已经过真实 file navigation，继续保留既有语义。File row 使用 filename-first grid：file name 先取得所需空间，parent path 消费剩余空间并优先 ellipsis。
+
 ## Risks / Trade-offs
 
 - [Risk] 会话 `updatedAt` 表达最近内容更新，而非纯查看时间。→ 复用 canonical fact，避免新增 session MRU；后续若有明确需求再扩展 activation timestamp。

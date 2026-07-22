@@ -1,4 +1,5 @@
 export type SearchResultKind =
+  | "action"
   | "file"
   | "api"
   | "kanban"
@@ -34,6 +35,7 @@ export type WorkspaceSearchFileSnapshot = {
 };
 export type SearchContentFilter =
   | "all"
+  | "actions"
   | "files"
   | "apis"
   | "kanban"
@@ -59,10 +61,12 @@ export type SearchResult = {
   fileLine?: number;
   fileColumn?: number;
   historyText?: string;
+  actionId?: string;
   skillName?: string;
   commandName?: string;
   apiEndpointId?: string;
   sourceKind?:
+    | "actions"
     | "files"
     | "apis"
     | "kanban"

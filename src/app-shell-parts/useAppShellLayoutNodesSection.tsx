@@ -2157,6 +2157,7 @@ export function useAppShellLayoutNodesSection(
       closeCurrentSessionShortcut: appSettings.closeCurrentSessionShortcut,
       saveFileShortcut: appSettings.saveFileShortcut,
       findInFileShortcut: appSettings.findInFileShortcut,
+      expandSelectionShortcut: appSettings.expandSelectionShortcut,
       toggleGitDiffListViewShortcut: appSettings.toggleGitDiffListViewShortcut,
       onOpenWorkspaceHome: handleOpenWorkspaceHome,
     },

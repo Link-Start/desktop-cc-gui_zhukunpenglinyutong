@@ -128,6 +128,7 @@ mod claude_home;
 mod client_error_log;
 mod client_storage;
 mod code_intel;
+mod code_intel_lsp;
 mod codex;
 mod command_registry;
 mod computer_use;

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-26.md`
-- **Total Sessions**: 1064
+- **Total Sessions**: 1066
 - **Last Active**: 2026-07-22
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-26.md` | ~1338 | Active |
+| `journal-26.md` | ~1404 | Active |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
@@ -54,6 +54,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1066 | 2026-07-22 | 完善搜索与代码导航体验 | `7497f1c70` | `feature/v-076` |
+| 1065 | 2026-07-22 | 过滤 Quick Switcher 非文件活动 | `e7d8629cd` | `feature/v-076` |
 | 1064 | 2026-07-22 | 完成 Quick Switcher 最近活动面板 | `b9624384e` | `feature/v-076` |
 | 1063 | 2026-07-22 | 打开文件定位到文件树 | `24bdf7388` | `feature/v-076` |
 | 1062 | 2026-07-22 | Git Graph 文件历史多页签 | `d368fc9c5` | `feature/v-076` |

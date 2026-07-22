@@ -1089,6 +1089,11 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) find_in_file_shortcut: Option<String>,
     #[serde(
+        default = "default_expand_selection_shortcut",
+        rename = "expandSelectionShortcut"
+    )]
+    pub(crate) expand_selection_shortcut: Option<String>,
+    #[serde(
         default = "default_toggle_git_diff_list_view_shortcut",
         rename = "toggleGitDiffListViewShortcut"
     )]
@@ -1631,6 +1636,10 @@ fn default_find_in_file_shortcut() -> Option<String> {
     Some("cmd+f".to_string())
 }
 
+fn default_expand_selection_shortcut() -> Option<String> {
+    Some("cmd+w".to_string())
+}
+
 fn default_toggle_git_diff_list_view_shortcut() -> Option<String> {
     Some("alt+shift+v".to_string())
 }
@@ -2030,6 +2039,7 @@ impl Default for AppSettings {
             toggle_files_surface_shortcut: default_toggle_files_surface_shortcut(),
             save_file_shortcut: default_save_file_shortcut(),
             find_in_file_shortcut: default_find_in_file_shortcut(),
+            expand_selection_shortcut: default_expand_selection_shortcut(),
             toggle_git_diff_list_view_shortcut: default_toggle_git_diff_list_view_shortcut(),
             toggle_git_graph_shortcut: None,
             open_notes_shortcut: None,
@@ -2298,6 +2308,7 @@ mod tests {
             "toggleFilesSurfaceShortcut": "cmd+alt+e",
             "saveFileShortcut": "cmd+alt+s",
             "findInFileShortcut": "cmd+alt+f",
+            "expandSelectionShortcut": "ctrl+alt+w",
             "toggleGitDiffListViewShortcut": "cmd+alt+v",
             "toggleGitGraphShortcut": "cmd+alt+g",
             "openNotesShortcut": null,
@@ -2374,6 +2385,7 @@ mod tests {
             settings.close_current_session_shortcut.as_deref(),
             Some("cmd+w")
         );
+        assert_eq!(settings.expand_selection_shortcut.as_deref(), Some("cmd+w"));
         assert_eq!(
             settings.toggle_debug_panel_shortcut.as_deref(),
             Some("cmd+shift+d")

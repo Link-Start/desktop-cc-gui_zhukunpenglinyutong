@@ -194,6 +194,7 @@ export async function getCodeIntelDefinition(
     filePath: string;
     line: number;
     character: number;
+    documentText?: string;
   },
 ) {
   return invoke<{
@@ -206,6 +207,7 @@ export async function getCodeIntelDefinition(
     filePath: input.filePath,
     line: input.line,
     character: input.character,
+    ...(input.documentText === undefined ? {} : { documentText: input.documentText }),
   });
 }
 
@@ -216,6 +218,7 @@ export async function getCodeIntelReferences(
     line: number;
     character: number;
     includeDeclaration?: boolean;
+    documentText?: string;
   },
 ) {
   return invoke<{
@@ -230,6 +233,30 @@ export async function getCodeIntelReferences(
     line: input.line,
     character: input.character,
     includeDeclaration: input.includeDeclaration ?? false,
+    ...(input.documentText === undefined ? {} : { documentText: input.documentText }),
+  });
+}
+
+export async function getCodeIntelImplementations(
+  workspaceId: string,
+  input: {
+    filePath: string;
+    line: number;
+    character: number;
+    documentText?: string;
+  },
+) {
+  return invoke<{
+    filePath: string;
+    line: number;
+    character: number;
+    result: unknown;
+  }>("code_intel_implementations", {
+    workspaceId,
+    filePath: input.filePath,
+    line: input.line,
+    character: input.character,
+    ...(input.documentText === undefined ? {} : { documentText: input.documentText }),
   });
 }
 

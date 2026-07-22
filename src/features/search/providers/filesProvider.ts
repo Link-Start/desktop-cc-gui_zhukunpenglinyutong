@@ -1,5 +1,6 @@
 import type { SearchResult } from "../types";
 import { readSharedWorkspaceFileIndex } from "../../workspaces/utils/sharedWorkspaceFileIndex";
+import { bestFuzzyMatchScore } from "../ranking/fuzzy";
 
 function fileNameFromPath(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
@@ -21,17 +22,17 @@ export function searchFiles(
     ? sharedIndex.files.map((entry) => entry.path)
     : files;
   for (const path of candidateFiles) {
-    const lower = path.toLowerCase();
-    const index = lower.indexOf(normalizedQuery);
-    if (index < 0) {
+    const title = fileNameFromPath(path);
+    const matchScore = bestFuzzyMatchScore(normalizedQuery, [title, path]);
+    if (matchScore === null) {
       continue;
     }
     results.push({
       id: `file:${workspaceId}:${path}`,
       kind: "file",
-      title: fileNameFromPath(path),
+      title,
       subtitle: "File",
-      score: index === 0 ? 20 : 200 + index,
+      score: matchScore,
       workspaceId,
       filePath: path,
       sourceKind: "files",

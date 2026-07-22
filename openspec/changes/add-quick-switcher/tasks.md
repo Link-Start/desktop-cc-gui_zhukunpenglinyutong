@@ -27,3 +27,9 @@
 - [x] 5.2 [P0, depends: 5.1] 将 modal 改为 navigation / sessions / files 三栏并行布局，两个 recent pane 独立滚动并显示 workspace heading；重构三栏 keyboard selection tests。
 - [x] 5.3 [P0, depends: 5.2] 为快速导航增加意图画布、项目地图，并让 Spec Hub/视觉工具复用 `useAppShellLayoutNodesSection` 中的 canonical actions；补 focused action wiring tests。
 - [x] 5.4 [P0, depends: 5.1-5.3] 运行相关增量 Vitest、targeted ESLint、typecheck、AppShell contract 与 OpenSpec strict validation；不运行全量测试。
+
+## 6. Recent-file Trust Boundary Follow-up
+
+- [x] 6.1 [P0, depends: 1.1, 1.2] 在 persisted restore 与 AI mutation ingest 过滤 shell command、pseudo-device 和明显非文件 payload；保留 user-open path，并补 focused model regression tests。
+- [x] 6.2 [P1, depends: 2.1] 将 recent-file row 改为 filename-first layout，parent path 优先收缩，并补 component structure assertion。
+- [x] 6.3 [P0, depends: 6.1, 6.2] 运行 recent-file/component 增量 Vitest、targeted ESLint、typecheck 与 OpenSpec strict validation；不运行全量测试。Focused gates 与 strict validation 通过；全项目 typecheck 已执行，但被无关并行 `WorkspaceFileComparePanel` prop contract 变更阻断，用户完成 UI 验收并授权独立提交。

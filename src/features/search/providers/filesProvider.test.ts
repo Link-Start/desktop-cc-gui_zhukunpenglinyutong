@@ -14,4 +14,15 @@ describe("searchFiles", () => {
       locationLabel: path,
     });
   });
+
+  it("matches a filename abbreviation while preserving the original path", () => {
+    const path = "src/features/files/components/FileViewPanel.tsx";
+    const [result] = searchFiles("fvp", [path], "workspace-without-shared-index");
+
+    expect(result).toMatchObject({
+      title: "FileViewPanel.tsx",
+      filePath: path,
+      locationLabel: path,
+    });
+  });
 });

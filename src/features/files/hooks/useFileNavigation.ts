@@ -8,7 +8,11 @@ import {
 } from "react";
 import type { EditorView } from "@codemirror/view";
 import type { FileCodeMirrorEditorHandle } from "../components/FileCodeMirrorEditor";
-import { getCodeIntelDefinition, getCodeIntelReferences } from "../../../services/tauri";
+import {
+  getCodeIntelDefinition,
+  getCodeIntelImplementations,
+  getCodeIntelReferences,
+} from "../../../services/tauri";
 import {
   isAbsoluteFsPath,
   normalizeFsPath,
@@ -19,12 +23,12 @@ import {
   areFileUrisEquivalent,
   CODE_INTEL_CACHE_TTL_MS,
   CODE_INTEL_REPEAT_DEBOUNCE_MS,
-  errorMessageFromUnknown,
   extractLocations,
   makeLocationQueryKey,
   NAVIGATION_REQUEST_TIMEOUT_MS,
   readFreshCache,
   relativePathFromFileUri,
+  resolveCodeNavigationErrorMessage,
   toFileUri,
   type LocationCacheEntry,
   type LspLocationLike,
@@ -73,14 +77,18 @@ export function useFileNavigation({
 }: UseFileNavigationArgs) {
   const [isDefinitionLoading, setIsDefinitionLoading] = useState(false);
   const [isReferencesLoading, setIsReferencesLoading] = useState(false);
+  const [isImplementationsLoading, setIsImplementationsLoading] = useState(false);
   const [navigationError, setNavigationError] = useState<string | null>(null);
   const [definitionCandidates, setDefinitionCandidates] = useState<LspLocationLike[]>([]);
   const [referenceResults, setReferenceResults] = useState<LspLocationLike[] | null>(null);
+  const [implementationCandidates, setImplementationCandidates] = useState<LspLocationLike[]>([]);
   const lspRequestIdRef = useRef(0);
   const definitionCacheRef = useRef<Map<string, LocationCacheEntry>>(new Map());
   const referencesCacheRef = useRef<Map<string, LocationCacheEntry>>(new Map());
+  const implementationsCacheRef = useRef<Map<string, LocationCacheEntry>>(new Map());
   const recentDefinitionTriggerRef = useRef<RecentTrigger | null>(null);
   const recentReferencesTriggerRef = useRef<RecentTrigger | null>(null);
+  const recentImplementationsTriggerRef = useRef<RecentTrigger | null>(null);
   const appliedNavigationRequestRef = useRef(0);
   const navigationFocusTimerRef = useRef<number | null>(null);
   const navigationFlashTimerRef = useRef<number | null>(null);
@@ -266,6 +274,7 @@ export function useFileNavigation({
             filePath,
             line: position.line,
             character: position.character,
+            documentText: editorView.state.doc.toString(),
           }),
           NAVIGATION_REQUEST_TIMEOUT_MS,
           t("files.navigationTimeout"),
@@ -294,7 +303,8 @@ export function useFileNavigation({
         if (requestId !== lspRequestIdRef.current) {
           return;
         }
-        setNavigationError(errorMessageFromUnknown(error, t("files.navigationError")));
+        console.error("[file-navigation] definition query failed:", error);
+        setNavigationError(resolveCodeNavigationErrorMessage(error, "definition", t));
       } finally {
         if (requestId === lspRequestIdRef.current) {
           setIsDefinitionLoading(false);
@@ -344,6 +354,7 @@ export function useFileNavigation({
             filePath,
             line: position.line,
             character: position.character,
+            documentText: editorView.state.doc.toString(),
           }),
           NAVIGATION_REQUEST_TIMEOUT_MS,
           t("files.navigationTimeout"),
@@ -361,7 +372,8 @@ export function useFileNavigation({
         if (requestId !== lspRequestIdRef.current) {
           return;
         }
-        setNavigationError(errorMessageFromUnknown(error, t("files.navigationError")));
+        console.error("[file-navigation] references query failed:", error);
+        setNavigationError(resolveCodeNavigationErrorMessage(error, "references", t));
       } finally {
         if (requestId === lspRequestIdRef.current) {
           setIsReferencesLoading(false);
@@ -387,15 +399,109 @@ export function useFileNavigation({
     void findReferencesAtOffset(view.state.selection.main.head);
   }, [cmRef, findReferencesAtOffset]);
 
+  const findImplementationsAtOffset = useCallback(
+    async (offset: number) => {
+      const editorView = cmRef.current?.view;
+      if (!editorView) {
+        return;
+      }
+      const position = offsetToLspPosition(editorView.state.doc, offset);
+      const queryKey = makeLocationQueryKey(filePath, position.line, position.character);
+      const now = Date.now();
+      const recentTrigger = recentImplementationsTriggerRef.current;
+      if (
+        recentTrigger
+        && recentTrigger.key === queryKey
+        && now - recentTrigger.at < CODE_INTEL_REPEAT_DEBOUNCE_MS
+      ) {
+        return;
+      }
+      recentImplementationsTriggerRef.current = { key: queryKey, at: now };
+      const requestId = lspRequestIdRef.current + 1;
+      lspRequestIdRef.current = requestId;
+      setNavigationError(null);
+      setImplementationCandidates([]);
+      const cachedLocations = readFreshCache(
+        implementationsCacheRef.current,
+        queryKey,
+      );
+      if (cachedLocations) {
+        setIsImplementationsLoading(false);
+        if (cachedLocations.length === 0) {
+          setNavigationError(t("files.navigationNoImplementation"));
+          return;
+        }
+        if (cachedLocations.length === 1) {
+          navigateToLocation(cachedLocations[0]!);
+          return;
+        }
+        setImplementationCandidates(cachedLocations);
+        return;
+      }
+      setIsImplementationsLoading(true);
+      try {
+        const response = await withTimeout(
+          getCodeIntelImplementations(workspaceId, {
+            filePath,
+            line: position.line,
+            character: position.character,
+            documentText: editorView.state.doc.toString(),
+          }),
+          NAVIGATION_REQUEST_TIMEOUT_MS,
+          t("files.navigationTimeout"),
+        );
+        if (requestId !== lspRequestIdRef.current) {
+          return;
+        }
+        const locations = extractLocations(response.result);
+        implementationsCacheRef.current.set(queryKey, {
+          expiresAt: Date.now() + CODE_INTEL_CACHE_TTL_MS,
+          value: locations,
+        });
+        if (locations.length === 0) {
+          setNavigationError(t("files.navigationNoImplementation"));
+          return;
+        }
+        if (locations.length === 1) {
+          navigateToLocation(locations[0]!);
+          return;
+        }
+        setImplementationCandidates(locations);
+      } catch (error) {
+        if (requestId !== lspRequestIdRef.current) {
+          return;
+        }
+        console.error("[file-navigation] implementation query failed:", error);
+        setNavigationError(resolveCodeNavigationErrorMessage(error, "implementation", t));
+      } finally {
+        if (requestId === lspRequestIdRef.current) {
+          setIsImplementationsLoading(false);
+        }
+      }
+    },
+    [cmRef, filePath, navigateToLocation, t, workspaceId],
+  );
+
+  const runImplementationsFromCursor = useCallback(() => {
+    const view = cmRef.current?.view;
+    if (!view) {
+      return;
+    }
+    void findImplementationsAtOffset(view.state.selection.main.head);
+  }, [cmRef, findImplementationsAtOffset]);
+
   useEffect(() => {
     lspRequestIdRef.current += 1;
     recentDefinitionTriggerRef.current = null;
     recentReferencesTriggerRef.current = null;
+    recentImplementationsTriggerRef.current = null;
     setIsDefinitionLoading(false);
     setIsReferencesLoading(false);
+    setIsImplementationsLoading(false);
     setNavigationError(null);
     setDefinitionCandidates([]);
     setReferenceResults(null);
+    setImplementationCandidates([]);
   }, [filePath]);
 
   useEffect(() => {
@@ -451,14 +557,18 @@ export function useFileNavigation({
   return {
     isDefinitionLoading,
     isReferencesLoading,
+    isImplementationsLoading,
     navigationError,
     definitionCandidates,
     setDefinitionCandidates,
     referenceResults,
     setReferenceResults,
+    implementationCandidates,
+    setImplementationCandidates,
     navigateToLocation,
     runDefinitionFromCursor,
     runReferencesFromCursor,
+    runImplementationsFromCursor,
     resolveDefinitionAtOffset,
     openFindPanelInEditor,
     toggleFindPanelInEditor,

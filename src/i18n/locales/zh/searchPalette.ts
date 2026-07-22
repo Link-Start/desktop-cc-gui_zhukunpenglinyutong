@@ -1,7 +1,7 @@
 // searchPalette — Simplified Chinese UI strings
 const searchPalette = {
   searchPalette: {
-    placeholder: "搜索文件、接口、看板、会话、消息、Skills、Commands…",
+    placeholder: "搜索操作、文件、接口、看板、会话、消息、Skills、Commands…",
     placeholderFiltered: "搜索 {{content}}…",
     inputAria: "搜索输入",
     scope: "范围",
@@ -26,6 +26,7 @@ const searchPalette = {
     typeTag: "类型",
     sourceTag: "来源",
     locationTag: "位置",
+    typeAction: "操作",
     typeFile: "文件",
     typeApi: "接口",
     typeKanban: "看板",
@@ -34,6 +35,7 @@ const searchPalette = {
     typeHistory: "历史",
     typeSkill: "Skill",
     typeCommand: "Command",
+    sourceActions: "应用操作",
     sourceFiles: "文件索引",
     sourceApis: "接口索引",
     sourceKanban: "看板数据",
@@ -43,6 +45,7 @@ const searchPalette = {
     sourceSkills: "Skills 列表",
     sourceCommands: "Commands 列表",
     contentAll: "全部",
+    contentActions: "操作",
     contentFiles: "文件",
     contentApis: "接口",
     contentKanban: "看板",

@@ -385,6 +385,7 @@ mod tests {
             renderer_heartbeats: tokio::sync::Mutex::new(
                 crate::renderer_stability::RendererHeartbeatStore::default(),
             ),
+            rust_analyzer_runtime: crate::code_intel_lsp::RustAnalyzerRuntime::default(),
             engine_manager: crate::engine::EngineManager::new(),
         }
     }

@@ -52,4 +52,16 @@ describe("ShortcutsSection", () => {
       "settings.toggleTerminalPanel",
     ]);
   });
+
+  it("exposes expand selection as a configurable editor shortcut", () => {
+    const action = shortcutActions.find((entry) => entry.id === "expand-selection");
+
+    expect(action).toMatchObject({
+      setting: "expandSelectionShortcut",
+      defaultShortcut: "cmd+w",
+      category: "editor",
+      scope: "editor",
+      triggerSurface: "editor",
+    });
+  });
 });

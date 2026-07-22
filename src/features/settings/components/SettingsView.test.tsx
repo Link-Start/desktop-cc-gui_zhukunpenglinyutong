@@ -272,6 +272,7 @@ const baseSettings: AppSettings = {
   toggleFilesSurfaceShortcut: null,
   saveFileShortcut: null,
   findInFileShortcut: null,
+  expandSelectionShortcut: null,
   toggleGitDiffListViewShortcut: null,
   toggleGitGraphShortcut: null,
   openNotesShortcut: null,

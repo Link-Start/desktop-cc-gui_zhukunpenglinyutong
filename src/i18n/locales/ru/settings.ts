@@ -1136,6 +1136,7 @@ const settings = {
     "editorSubDescription": "Управляйте действиями редактирования файлов с клавиатуры.",
     "saveFile": "Сохранить файл",
     "findInFile": "Найти в файле",
+    "expandSelection": "Расширить выделение",
     "gitSubtitle": "Git",
     "gitSubDescription": "Управление навигацией и отображением Git diff.",
     "toggleGitDiffListView": "Переключить список Git diff",

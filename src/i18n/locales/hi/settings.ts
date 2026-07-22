@@ -1136,6 +1136,7 @@ const settings = {
     "editorSubDescription": "कीबोर्ड से फ़ाइल संपादन क्रियाएँ नियंत्रित करें।",
     "saveFile": "फ़ाइल सहेजें",
     "findInFile": "फ़ाइल में खोजें",
+    "expandSelection": "चयन बढ़ाएँ",
     "gitSubtitle": "Git",
     "gitSubDescription": "Git diff नेविगेशन और प्रस्तुति नियंत्रित करें।",
     "toggleGitDiffListView": "Git diff सूची दृश्य टॉगल करें",

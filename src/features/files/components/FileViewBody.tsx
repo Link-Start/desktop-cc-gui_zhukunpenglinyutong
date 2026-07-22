@@ -132,6 +132,7 @@ type FileViewBodyProps = {
   onAnnotationDraftConfirm?: (bodyOverride?: string) => void;
   lastReportedLineRangeRef: MutableRefObject<string>;
   saveFileShortcut: string | null | undefined;
+  expandSelectionShortcut: string | null | undefined;
   handleSave: () => void;
   editorTheme: "light" | "dark";
   previewLanguage: string | null;
@@ -642,6 +643,7 @@ export function FileViewBody({
   onAnnotationDraftConfirm,
   lastReportedLineRangeRef,
   saveFileShortcut,
+  expandSelectionShortcut,
   handleSave,
   editorTheme,
   previewLanguage,
@@ -1057,6 +1059,7 @@ export function FileViewBody({
           className="fvp-cm"
           lastReportedLineRangeRef={lastReportedLineRangeRef}
           saveFileShortcut={saveFileShortcut}
+          expandSelectionShortcut={expandSelectionShortcut}
           handleSave={handleSave}
           gotoLineLabels={{
             title: t("files.gotoLine.title"),

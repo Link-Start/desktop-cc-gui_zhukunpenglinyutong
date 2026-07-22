@@ -35,6 +35,7 @@ pub(crate) struct AppState {
     pub(crate) detached_external_change_runtime: Mutex<DetachedExternalChangeRuntime>,
     pub(crate) runtime_manager: Arc<crate::runtime::RuntimeManager>,
     pub(crate) renderer_heartbeats: Mutex<crate::renderer_stability::RendererHeartbeatStore>,
+    pub(crate) rust_analyzer_runtime: crate::code_intel_lsp::RustAnalyzerRuntime,
     pub(crate) engine_manager: EngineManager,
 }
 
@@ -141,6 +142,7 @@ impl AppState {
             renderer_heartbeats: Mutex::new(
                 crate::renderer_stability::RendererHeartbeatStore::default(),
             ),
+            rust_analyzer_runtime: crate::code_intel_lsp::RustAnalyzerRuntime::default(),
             engine_manager,
         }
     }

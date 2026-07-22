@@ -2171,6 +2171,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           fileRenderPressure={fileRenderPressure}
           saveFileShortcut={options.saveFileShortcut}
           findInFileShortcut={options.findInFileShortcut}
+          expandSelectionShortcut={options.expandSelectionShortcut}
         />
       </Suspense>
     ) : null;
