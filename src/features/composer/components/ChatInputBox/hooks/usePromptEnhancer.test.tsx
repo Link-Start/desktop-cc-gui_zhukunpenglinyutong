@@ -136,6 +136,27 @@ describe('usePromptEnhancer', () => {
     expect(sendSync.mock.calls[0]?.[1].model).toBe('claude-sonnet-4-5');
   });
 
+  it('keeps OpenCode unavailable and defaults legacy OpenCode context to Claude', () => {
+    const { result } = renderPromptEnhancer({
+      currentProvider: 'opencode',
+      selectedModel: '',
+    });
+
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+
+    expect(PROMPT_ENHANCER_ENGINE_OPTIONS).toEqual(['claude', 'codex']);
+    expect(result.current.selectedEnhancerEngine).toBe('claude');
+    expect(result.current.selectedEnhancerModel).toBe('claude-sonnet-4-5');
+
+    act(() => {
+      result.current.handleEnhancerEngineChange('opencode');
+    });
+
+    expect(result.current.selectedEnhancerEngine).toBe('claude');
+  });
+
   it('falls back to Codex when Claude enhancement exits before returning text', async () => {
     const sendSync = vi.mocked(engineSendMessageSync);
     sendSync

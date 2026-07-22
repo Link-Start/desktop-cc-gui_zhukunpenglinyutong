@@ -16,7 +16,7 @@ const chat = {
     shortcutActionSkill: "选择技能",
     shortcutActionAgent: "唤起智能体",
     shortcutActionPrompt: "插入提示词",
-    shortcutActionEnhance: "提示词增强",
+    shortcutActionEnhance: "输入框提示词增强",
     skillScopeProject: "项目技能",
     skillScopeGlobal: "全局技能",
     sendMessageEnter: "发送消息 (Enter)",

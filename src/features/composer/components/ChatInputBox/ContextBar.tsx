@@ -695,7 +695,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             {showCollapseMiddleStepsControl && (
               <button
                 type="button"
-                className={`context-tool-btn context-tool-btn--labeled context-live-canvas-btn has-tooltip${collapseLiveMiddleStepsEnabled ? ' is-active' : ''}`}
+                className={`context-tool-btn context-live-canvas-btn has-tooltip${collapseLiveMiddleStepsEnabled ? ' is-active' : ''}`}
                 onClick={handleToggleCollapseLiveMiddleSteps}
                 data-tooltip={
                   collapseLiveMiddleStepsEnabled
@@ -713,7 +713,6 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
                   <ListCollapse size={13} />
                   <span className="context-live-canvas-dot" />
                 </span>
-                <span className="context-tool-label">{t('messages.collapseMiddleStepsToggle')}</span>
               </button>
             )}
           </div>
@@ -737,14 +736,13 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           (currentProvider === 'claude' || currentProvider === 'codex') &&
           onRewind && (
           <button
-            className="context-tool-btn context-tool-btn--labeled context-rewind-btn has-tooltip"
+            className="context-tool-btn context-rewind-btn has-tooltip"
             onClick={onRewind}
             disabled={rewindDisabled}
             data-tooltip={t('rewind.tooltip')}
             aria-label={t('rewind.tooltip')}
           >
             <span className="codicon codicon-history" />
-            <span className="context-tool-label">{t('rewind.label')}</span>
           </button>
         )}
       </div>

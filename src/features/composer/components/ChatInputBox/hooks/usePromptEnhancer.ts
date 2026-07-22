@@ -24,7 +24,6 @@ const PROMPT_ENHANCER_AUTO_SESSION = {
 export const PROMPT_ENHANCER_ENGINE_OPTIONS: EngineType[] = [
   'claude',
   'codex',
-  'opencode',
 ];
 
 export const PROMPT_ENHANCER_TIMEOUT_LIMITS = {
@@ -65,7 +64,6 @@ function buildPromptEnhancerInstruction(originalPrompt: string, engine: EngineTy
 function normalizeEnhancerEngine(currentProvider: string): EngineType {
   switch (currentProvider) {
     case 'codex':
-    case 'opencode':
       return currentProvider;
     case 'claude':
     default:
@@ -74,7 +72,7 @@ function normalizeEnhancerEngine(currentProvider: string): EngineType {
 }
 
 function isPromptEnhancerProviderId(engine: EngineType): engine is ProviderId {
-  return engine === 'claude' || engine === 'codex' || engine === 'opencode';
+  return engine === 'claude' || engine === 'codex';
 }
 
 function resolveEnhancerModelOptions(

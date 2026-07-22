@@ -10,6 +10,7 @@ import DatabaseZap from 'lucide-react/dist/esm/icons/database-zap';
 import ArrowUp from 'lucide-react/dist/esm/icons/arrow-up';
 import Square from 'lucide-react/dist/esm/icons/square';
 import Plus from 'lucide-react/dist/esm/icons/plus';
+import WandSparkles from 'lucide-react/dist/esm/icons/wand-sparkles';
 import type { ButtonAreaProps, MemoryReferenceMode, PermissionMode, ReasoningEffort } from './types';
 import { ConfigSelect, ModeSelect, ReasoningSelect } from './selectors';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,7 @@ export const ButtonArea = ({
   disabled = false,
   hasInputContent = false,
   isLoading = false,
+  isEnhancing = false,
   streamActivityPhase = 'idle',
   permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
@@ -74,6 +76,7 @@ export const ButtonArea = ({
   onModeSelect,
   onProviderSelect,
   onReasoningChange,
+  onEnhancePrompt,
   alwaysThinkingEnabled = false,
   onToggleThinking,
   streamingEnabled = true,
@@ -178,6 +181,13 @@ export const ButtonArea = ({
     onStop?.();
   }, [onStop]);
 
+  const handleEnhancePromptClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsToolDockOpen(false);
+    onEnhancePrompt?.();
+  }, [onEnhancePrompt]);
+
   /**
    * Handle provider selection
    */
@@ -221,13 +231,25 @@ export const ButtonArea = ({
               aria-label={toolDockToggleLabel}
               style={menuMetrics ? { width: menuMetrics.width } : undefined}
             >
-              {(toolSurface || panelToggleSurface || curatedSkillSurface) ? (
+              {(toolSurface || onEnhancePrompt || panelToggleSurface || curatedSkillSurface) ? (
                 <>
                   <div className="composer-tool-menu-surface-row">
                     {toolSurface ? (
                       <div className="button-area-tool-surface">
                         {toolSurface}
                       </div>
+                    ) : null}
+                    {onEnhancePrompt ? (
+                      <button
+                        type="button"
+                        className="context-tool-btn context-prompt-enhancer-btn has-tooltip"
+                        onClick={handleEnhancePromptClick}
+                        disabled={isEnhancing}
+                        data-tooltip={t('chat.shortcutActionEnhance')}
+                        aria-label={t('chat.shortcutActionEnhance')}
+                      >
+                        <WandSparkles size={14} aria-hidden="true" />
+                      </button>
                     ) : null}
                     {curatedSkillSurface ? (
                       <div className="button-area-curated-surface">

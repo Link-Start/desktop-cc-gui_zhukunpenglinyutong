@@ -211,6 +211,48 @@ describe("ButtonArea custom model storage refresh", () => {
     expect(onToggleStatusPanel).toHaveBeenCalledTimes(1);
   });
 
+  it("opens prompt enhancement from the tool menu and closes the menu", () => {
+    const onEnhancePrompt = vi.fn();
+
+    render(
+      <ButtonArea
+        currentProvider="claude"
+        hasInputContent
+        onSubmit={vi.fn()}
+        onEnhancePrompt={onEnhancePrompt}
+      />,
+    );
+
+    const toggle = openToolDock();
+    fireEvent.click(screen.getByRole("button", { name: "chat.shortcutActionEnhance" }));
+
+    expect(onEnhancePrompt).toHaveBeenCalledTimes(1);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("disables the prompt enhancement entry while enhancement is running", () => {
+    const onEnhancePrompt = vi.fn();
+
+    render(
+      <ButtonArea
+        currentProvider="claude"
+        hasInputContent
+        isEnhancing
+        onSubmit={vi.fn()}
+        onEnhancePrompt={onEnhancePrompt}
+      />,
+    );
+
+    openToolDock();
+    const enhanceButton = screen.getByRole("button", {
+      name: "chat.shortcutActionEnhance",
+    }) as HTMLButtonElement;
+
+    expect(enhanceButton.disabled).toBe(true);
+    fireEvent.click(enhanceButton);
+    expect(onEnhancePrompt).not.toHaveBeenCalled();
+  });
+
   it("collapses the bottom tool buttons from the main toggle and Escape", () => {
     render(
       <ButtonArea

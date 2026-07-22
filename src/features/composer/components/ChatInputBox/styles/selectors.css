@@ -1131,7 +1131,7 @@
   /* Width is set inline to match the input box; keep a floor for safety. */
   min-width: 232px;
   max-width: calc(100vw - 24px);
-  padding: 6px;
+  padding: 4px;
   border-radius: 14px;
   /* The menu renders through a shadcn Portal under <body>, outside the
      .chat-input-box scope where --input-border is defined, so the token
@@ -1144,9 +1144,19 @@
   overflow: visible;
 }
 
+.composer-tool-menu > [role="separator"] {
+  margin: 1px -4px;
+}
+
+.composer-tool-menu > [data-slot="dropdown-menu-item"] {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
 .composer-tool-menu-sub-trigger {
   gap: 8px;
-  padding: 10px 8px;
+  min-height: 32px;
+  padding: 4px 8px;
   border-radius: 8px;
 }
 
@@ -1294,7 +1304,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
-  padding: 2px 4px 6px;
+  padding: 0 2px 2px;
 }
 
 .composer-tool-menu-surface-row .button-area-tool-surface {
@@ -1311,8 +1321,7 @@
   margin-left: auto;
 }
 
-/* Reveal the text labels (hidden in the inline toolbar) so each tool reads
-   clearly inside the menu. */
+/* Keep explicit labeled actions readable while quick actions stay icon-only. */
 .composer-tool-menu-surface-row .context-bar--tool-popover,
 .composer-tool-menu-surface-row .context-tools,
 .composer-tool-menu-surface-row .context-tools-right,
@@ -1331,16 +1340,22 @@
 }
 
 .composer-tool-menu-surface-row .context-tool-btn {
-  width: auto;
+  width: 34px;
   min-width: 34px;
   height: 34px;
-  padding: 0 9px;
-  gap: 5px;
+  padding: 0;
+  gap: 0;
   border-radius: 9px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
   transition: background 0.15s ease, color 0.15s ease;
+}
+
+.composer-tool-menu-surface-row .context-tool-btn--labeled {
+  width: auto;
+  padding: 0 9px;
+  gap: 5px;
 }
 
 .composer-tool-menu-surface-row .context-tool-btn:hover:not(:disabled) {

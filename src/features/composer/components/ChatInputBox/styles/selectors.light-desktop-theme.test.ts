@@ -39,4 +39,29 @@ describe("selector light desktop theme guards", () => {
       "color: var(--dropdown-selected-text, var(--dropdown-text-color, #0D0D0D));",
     );
   });
+
+  it("keeps tool-popover icon actions square while labeled actions may expand", () => {
+    expect(selectorsCss).toMatch(
+      /\.composer-tool-menu-surface-row \.context-tool-btn \{[\s\S]*?width: 34px;[\s\S]*?height: 34px;[\s\S]*?padding: 0;/,
+    );
+    expect(selectorsCss).toMatch(
+      /\.composer-tool-menu-surface-row \.context-tool-btn--labeled \{[\s\S]*?width: auto;[\s\S]*?padding: 0 9px;/,
+    );
+  });
+
+  it("keeps the tool popover vertical rhythm compact", () => {
+    expect(selectorsCss).toMatch(
+      /\.composer-tool-menu \{[\s\S]*?padding: 4px;/,
+    );
+    expect(selectorsCss).toContain('.composer-tool-menu > [role="separator"] {\n  margin: 1px -4px;');
+    expect(selectorsCss).toContain(
+      '.composer-tool-menu > [data-slot="dropdown-menu-item"] {\n  padding-top: 4px;\n  padding-bottom: 4px;',
+    );
+    expect(selectorsCss).toMatch(
+      /\.composer-tool-menu-sub-trigger \{[\s\S]*?min-height: 32px;[\s\S]*?padding: 4px 8px;/,
+    );
+    expect(selectorsCss).toMatch(
+      /\.composer-tool-menu-surface-row \{[\s\S]*?padding: 0 2px 2px;/,
+    );
+  });
 });

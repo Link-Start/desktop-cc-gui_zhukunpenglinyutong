@@ -333,3 +333,20 @@
 [data-theme="light"] .enhanced-prompt {
   background: rgba(0, 120, 212, 0.08);
 }
+
+:root[data-theme="light"] .prompt-enhancer-btn.primary {
+  background: #2563eb;
+  color: #ffffff;
+  opacity: 1;
+}
+
+:root[data-theme="light"] .prompt-enhancer-btn.primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  opacity: 1;
+}
+
+:root[data-theme="light"] .prompt-enhancer-btn.primary:disabled {
+  background: #dbeafe;
+  color: #5b7db1;
+  opacity: 1;
+}
