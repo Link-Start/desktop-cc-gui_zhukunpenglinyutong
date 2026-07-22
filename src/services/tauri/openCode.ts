@@ -188,6 +188,68 @@ export async function getOpenCodeLspDocumentSymbols(workspaceId: string, fileUri
   });
 }
 
+export type CodeNavigationMode = "semantic" | "fast-search";
+
+export type CodeNavigationFallbackReason =
+  | "provider-unavailable"
+  | "initialize-timeout"
+  | "request-timeout"
+  | "provider-exited"
+  | "invalid-response"
+  | "provider-failed";
+
+export type CodeNavigationResponse = {
+  filePath: string;
+  line: number;
+  character: number;
+  language: string | null;
+  mode: CodeNavigationMode;
+  provider: string;
+  fallbackReasonCode: CodeNavigationFallbackReason | null;
+  result: unknown;
+};
+
+function normalizeCodeNavigationResponse(value: unknown): CodeNavigationResponse {
+  const payload = value && typeof value === "object"
+    ? value as Record<string, unknown>
+    : {};
+  const provider = typeof payload.provider === "string" && payload.provider.trim()
+    ? payload.provider.trim()
+    : "heuristic";
+  const mode: CodeNavigationMode = payload.mode === "semantic"
+    ? "semantic"
+    : "fast-search";
+  const knownFallbackReasons = new Set<CodeNavigationFallbackReason>([
+    "provider-unavailable",
+    "initialize-timeout",
+    "request-timeout",
+    "provider-exited",
+    "invalid-response",
+    "provider-failed",
+  ]);
+  const fallbackReasonCode =
+    typeof payload.fallbackReasonCode === "string"
+    && knownFallbackReasons.has(payload.fallbackReasonCode as CodeNavigationFallbackReason)
+      ? payload.fallbackReasonCode as CodeNavigationFallbackReason
+      : null;
+
+  return {
+    filePath: typeof payload.filePath === "string" ? payload.filePath : "",
+    line: typeof payload.line === "number" && Number.isFinite(payload.line)
+      ? payload.line
+      : 0,
+    character:
+      typeof payload.character === "number" && Number.isFinite(payload.character)
+        ? payload.character
+        : 0,
+    language: typeof payload.language === "string" ? payload.language : null,
+    mode,
+    provider,
+    fallbackReasonCode,
+    result: payload.result,
+  };
+}
+
 export async function getCodeIntelDefinition(
   workspaceId: string,
   input: {
@@ -197,18 +259,14 @@ export async function getCodeIntelDefinition(
     documentText?: string;
   },
 ) {
-  return invoke<{
-    filePath: string;
-    line: number;
-    character: number;
-    result: unknown;
-  }>("code_intel_definition", {
+  const response = await invoke<unknown>("code_intel_definition", {
     workspaceId,
     filePath: input.filePath,
     line: input.line,
     character: input.character,
     ...(input.documentText === undefined ? {} : { documentText: input.documentText }),
   });
+  return normalizeCodeNavigationResponse(response);
 }
 
 export async function getCodeIntelReferences(
@@ -221,13 +279,7 @@ export async function getCodeIntelReferences(
     documentText?: string;
   },
 ) {
-  return invoke<{
-    filePath: string;
-    line: number;
-    character: number;
-    includeDeclaration: boolean;
-    result: unknown;
-  }>("code_intel_references", {
+  const response = await invoke<unknown>("code_intel_references", {
     workspaceId,
     filePath: input.filePath,
     line: input.line,
@@ -235,6 +287,7 @@ export async function getCodeIntelReferences(
     includeDeclaration: input.includeDeclaration ?? false,
     ...(input.documentText === undefined ? {} : { documentText: input.documentText }),
   });
+  return normalizeCodeNavigationResponse(response);
 }
 
 export async function getCodeIntelImplementations(
@@ -246,18 +299,14 @@ export async function getCodeIntelImplementations(
     documentText?: string;
   },
 ) {
-  return invoke<{
-    filePath: string;
-    line: number;
-    character: number;
-    result: unknown;
-  }>("code_intel_implementations", {
+  const response = await invoke<unknown>("code_intel_implementations", {
     workspaceId,
     filePath: input.filePath,
     line: input.line,
     character: input.character,
     ...(input.documentText === undefined ? {} : { documentText: input.documentText }),
   });
+  return normalizeCodeNavigationResponse(response);
 }
 
 export type LspPosition = {

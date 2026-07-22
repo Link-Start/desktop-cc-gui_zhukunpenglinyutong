@@ -12,6 +12,9 @@ import { mockCodeMirrorDispatch } from "./FileViewPanel.test-utils";
 import { FileViewPanel } from "./FileViewPanel";
 import { clearFileDocumentSessionCacheForTests } from "../hooks/useFileDocumentState";
 import {
+  getCodeIntelDefinition,
+  getCodeIntelImplementations,
+  getCodeIntelReferences,
   readWorkspaceFile,
   writeExternalSpecFile,
   writeWorkspaceFile,
@@ -60,6 +63,9 @@ describe("FileViewPanel typing latency contract", () => {
     vi.mocked(writeExternalSpecFile).mockClear();
     vi.mocked(writeClientStoreData).mockClear();
     vi.mocked(writeClientStoreValue).mockClear();
+    vi.mocked(getCodeIntelDefinition).mockClear();
+    vi.mocked(getCodeIntelImplementations).mockClear();
+    vi.mocked(getCodeIntelReferences).mockClear();
 
     fireEvent.change(editor, { target: { value: "const value = 2;" } });
     fireEvent.change(editor, { target: { value: "const value = 3;" } });
@@ -70,6 +76,9 @@ describe("FileViewPanel typing latency contract", () => {
     expect(writeExternalSpecFile).not.toHaveBeenCalled();
     expect(writeClientStoreData).not.toHaveBeenCalled();
     expect(writeClientStoreValue).not.toHaveBeenCalled();
+    expect(getCodeIntelDefinition).not.toHaveBeenCalled();
+    expect(getCodeIntelImplementations).not.toHaveBeenCalled();
+    expect(getCodeIntelReferences).not.toHaveBeenCalled();
 
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 160));
@@ -79,6 +88,9 @@ describe("FileViewPanel typing latency contract", () => {
     expect(writeExternalSpecFile).not.toHaveBeenCalled();
     expect(writeClientStoreData).not.toHaveBeenCalled();
     expect(writeClientStoreValue).not.toHaveBeenCalled();
+    expect(getCodeIntelDefinition).not.toHaveBeenCalled();
+    expect(getCodeIntelImplementations).not.toHaveBeenCalled();
+    expect(getCodeIntelReferences).not.toHaveBeenCalled();
   });
 
   it("keeps large edit-mode typing local-first in proxy smoke coverage", async () => {

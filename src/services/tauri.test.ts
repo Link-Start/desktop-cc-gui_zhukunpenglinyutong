@@ -2603,7 +2603,7 @@ describe("tauri invoke wrappers", () => {
       result: [],
     });
 
-    await getCodeIntelDefinition("ws-ci-1", {
+    const response = await getCodeIntelDefinition("ws-ci-1", {
       filePath: "src/Main.java",
       line: 10,
       character: 4,
@@ -2614,6 +2614,37 @@ describe("tauri invoke wrappers", () => {
       filePath: "src/Main.java",
       line: 10,
       character: 4,
+    });
+    expect(response).toMatchObject({
+      mode: "fast-search",
+      provider: "heuristic",
+      fallbackReasonCode: null,
+      result: [],
+    });
+  });
+
+  it("preserves semantic navigation metadata and rejects unknown reason codes", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      filePath: "src/Main.ts",
+      line: 2,
+      character: 3,
+      language: "typescript",
+      mode: "semantic",
+      provider: "typescript-language-server",
+      fallbackReasonCode: "not-a-public-reason",
+      result: [{ uri: "file:///repo/src/Main.ts", line: 2, character: 3 }],
+    });
+
+    await expect(getCodeIntelDefinition("ws-ci-semantic", {
+      filePath: "src/Main.ts",
+      line: 2,
+      character: 3,
+    })).resolves.toMatchObject({
+      language: "typescript",
+      mode: "semantic",
+      provider: "typescript-language-server",
+      fallbackReasonCode: null,
     });
   });
 

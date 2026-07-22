@@ -352,6 +352,312 @@ describe("FileViewPanel navigation", () => {
     });
   });
 
+  it("shows semantic mode and fast-search fallback without blocking navigation", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "class Main {}",
+      truncated: false,
+    });
+    vi.mocked(getCodeIntelReferences).mockResolvedValue({
+      filePath: "src/Main.java",
+      line: 0,
+      character: 0,
+      language: "java",
+      mode: "fast-search",
+      provider: "heuristic",
+      fallbackReasonCode: "provider-unavailable",
+      result: [buildLocation("src/Foo.java", 5, 4)],
+    });
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-navigation-mode"
+        workspacePath="/repo"
+        filePath="src/Main.java"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("mock-codemirror");
+    clickFileContextMenuItem("files.findReferences");
+
+    await screen.findByText(/files\.navigationLanguageServerMissing · Java/);
+    expect(screen.queryByText("files.navigationFallbackNotice")).toBeNull();
+    expect(screen.getAllByText(/files\.navigationModeFastSearchFallback/).length).toBeGreaterThan(0);
+    expect(screen.getByText("src/Foo.java")).toBeTruthy();
+    expect(screen.getByText(
+      "xdg-open \"https://download.eclipse.org/jdtls/milestones/\"",
+    )).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", {
+      name: "files.navigationCopyInstallCommand",
+    }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        "xdg-open \"https://download.eclipse.org/jdtls/milestones/\"",
+      );
+      expect(screen.getByText("files.navigationInstallCommandCopied")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", {
+      name: "files.navigationRetryAfterInstall",
+    }));
+    await waitFor(() => {
+      expect(getCodeIntelReferences).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it.each([
+    [
+      "definition",
+      "files.gotoDefinition",
+      () => vi.mocked(getCodeIntelDefinition).mockResolvedValue({
+        filePath: "src/Main.java",
+        line: 0,
+        character: 0,
+        language: "java",
+        mode: "fast-search",
+        provider: "heuristic",
+        fallbackReasonCode: "provider-unavailable",
+        result: [buildLocation("src/Foo.java", 9, 2)],
+      }),
+    ],
+    [
+      "implementation",
+      "files.gotoImplementations",
+      () => vi.mocked(getCodeIntelImplementations).mockResolvedValue({
+        filePath: "src/Main.java",
+        line: 0,
+        character: 0,
+        language: "java",
+        mode: "fast-search",
+        provider: "heuristic",
+        fallbackReasonCode: "provider-unavailable",
+        result: [buildLocation("src/Foo.java", 9, 2)],
+      }),
+    ],
+  ] as const)(
+    "keeps single-target %s fallback visible until the user chooses the result",
+    async (_action, menuItem, arrangeResponse) => {
+      vi.mocked(readWorkspaceFile).mockResolvedValue({
+        content: "class Main {}",
+        truncated: false,
+      });
+      arrangeResponse();
+      const onNavigateToLocation = vi.fn();
+
+      render(
+        <FileViewPanel
+          workspaceId="ws-single-provider-fallback"
+          workspacePath="/repo"
+          filePath="src/Main.java"
+          openTargets={[]}
+          openAppIconById={{}}
+          selectedOpenAppId=""
+          onSelectOpenAppId={vi.fn()}
+          onNavigateToLocation={onNavigateToLocation}
+          onClose={vi.fn()}
+        />,
+      );
+
+      await screen.findByTestId("mock-codemirror");
+      clickFileContextMenuItem(menuItem);
+
+      await screen.findByText(/files\.navigationLanguageServerMissing · Java/);
+      expect(onNavigateToLocation).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByText("src/Foo.java"));
+      expect(onNavigateToLocation).toHaveBeenCalledWith("src/Foo.java", {
+        line: 10,
+        column: 3,
+      });
+    },
+  );
+
+  it("keeps an unavailable-provider command selectable without clipboard access", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "const value = 1;",
+      truncated: false,
+    });
+    vi.mocked(getCodeIntelReferences).mockResolvedValue({
+      filePath: "src/value.ts",
+      line: 0,
+      character: 0,
+      language: "TS/JS",
+      mode: "fast-search",
+      provider: "heuristic",
+      fallbackReasonCode: "provider-unavailable",
+      result: [],
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: undefined,
+    });
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-navigation-no-clipboard"
+        workspacePath="/repo"
+        filePath="src/value.ts"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("mock-codemirror");
+    clickFileContextMenuItem("files.findReferences");
+    expect(await screen.findByText(
+      "npm install -g typescript-language-server typescript",
+    )).toBeTruthy();
+    expect(screen.queryByRole("button", {
+      name: "files.navigationCopyInstallCommand",
+    })).toBeNull();
+    expect(screen.getByRole("button", {
+      name: "files.navigationRetryAfterInstall",
+    })).toBeTruthy();
+  });
+
+  it("does not suggest installation for provider timeouts", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "class Main {}",
+      truncated: false,
+    });
+    vi.mocked(getCodeIntelReferences).mockResolvedValue({
+      filePath: "src/Main.java",
+      line: 0,
+      character: 0,
+      language: "Java",
+      mode: "fast-search",
+      provider: "heuristic",
+      fallbackReasonCode: "request-timeout",
+      result: [],
+    });
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-navigation-timeout-fallback"
+        workspacePath="/repo"
+        filePath="src/Main.java"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("mock-codemirror");
+    clickFileContextMenuItem("files.findReferences");
+    await screen.findByText("files.navigationFallbackNotice");
+    expect(screen.queryByText(/download\.eclipse\.org\/jdtls/)).toBeNull();
+    expect(screen.queryByRole("button", {
+      name: "files.navigationCopyInstallCommand",
+    })).toBeNull();
+  });
+
+  it("shows the target language while a semantic provider is preparing", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "class Main {}",
+      truncated: false,
+    });
+    let resolveDefinition!: (
+      value: Awaited<ReturnType<typeof getCodeIntelDefinition>>,
+    ) => void;
+    vi.mocked(getCodeIntelDefinition).mockImplementationOnce(() => new Promise((resolve) => {
+      resolveDefinition = resolve;
+    }));
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-navigation-loading"
+        workspacePath="/repo"
+        filePath="src/Main.java"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("mock-codemirror");
+    clickFileContextMenuItem("files.gotoDefinition");
+    await waitFor(() => {
+      const mode = document.querySelector(".fvp-navigation-mode");
+      expect(mode?.textContent).toContain("files.navigationPreparing");
+      expect(mode?.textContent).toContain("Java");
+    });
+
+    resolveDefinition({
+      filePath: "src/Main.java",
+      line: 0,
+      character: 0,
+      language: "java",
+      mode: "semantic",
+      provider: "eclipse-jdt-ls",
+      fallbackReasonCode: null,
+      result: [],
+    });
+    await screen.findByText("files.navigationNoDefinition");
+  });
+
+  it("retries a failed navigation request immediately", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "class Main {}",
+      truncated: false,
+    });
+    vi.mocked(getCodeIntelDefinition)
+      .mockRejectedValueOnce(new Error("No symbol under cursor"))
+      .mockResolvedValueOnce({
+        filePath: "src/Main.java",
+        line: 0,
+        character: 0,
+        language: "java",
+        mode: "semantic",
+        provider: "eclipse-jdt-ls",
+        fallbackReasonCode: null,
+        result: [buildLocation("src/Foo.java", 9, 2)],
+      });
+    const onNavigateToLocation = vi.fn();
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-navigation-retry"
+        workspacePath="/repo"
+        filePath="src/Main.java"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onNavigateToLocation={onNavigateToLocation}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("mock-codemirror");
+    clickFileContextMenuItem("files.gotoDefinition");
+    await screen.findByText("files.navigationDefinitionSymbolRequired");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => {
+      expect(getCodeIntelDefinition).toHaveBeenCalledTimes(2);
+      expect(onNavigateToLocation).toHaveBeenCalledWith("src/Foo.java", {
+        line: 10,
+        column: 3,
+      });
+    });
+    consoleErrorSpy.mockRestore();
+  });
+
   it("renders maximize toggle and triggers callback", async () => {
     vi.mocked(readWorkspaceFile).mockResolvedValue({
       content: "class Main {}",

@@ -152,7 +152,7 @@ impl<E: EventSink> EventSink for DeferredStartupEventSink<E> {
 
 #[allow(unused_imports)]
 pub(crate) use crate::backend::app_server_cli::{
-    apply_codex_app_server_args, apply_codex_app_server_args_with_settings,
+    apply_codex_app_server_args, apply_codex_app_server_args_with_settings, build_cli_path_env,
     build_codex_app_server_args, build_codex_command_from_launch_context,
     build_codex_command_with_bin, build_codex_path_env, build_engine_environment_diagnosis,
     can_retry_wrapper_compatibility_launch, can_retry_wrapper_launch, check_cli_binary,

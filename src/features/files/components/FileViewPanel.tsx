@@ -857,6 +857,8 @@ export function FileViewPanel({
     runDefinitionFromCursor,
     runReferencesFromCursor,
     runImplementationsFromCursor,
+    navigationStatus,
+    retryNavigation,
     resolveDefinitionAtOffset,
     openFindPanelInEditor,
     toggleFindPanelInEditor,
@@ -2599,6 +2601,15 @@ export function FileViewPanel({
   );
 
   // ── Footer ──
+  const navigationModeLabel = navigationStatus?.phase === "loading"
+    ? t("files.navigationPreparing")
+    : navigationStatus?.mode === "semantic"
+      ? t("files.navigationModeSemantic")
+      : navigationStatus
+        ? navigationStatus.fallbackReasonCode
+          ? t("files.navigationModeFastSearchFallback")
+          : t("files.navigationModeFastSearch")
+        : null;
   const renderFooter = () => (
     <div
       className="fvp-footer"
@@ -2623,6 +2634,15 @@ export function FileViewPanel({
         {mode === "preview" && (truncated || !canEditDocument) && (
           <span className="fvp-footer-hint">{t("files.readOnly")}</span>
         )}
+        {navigationStatus && navigationModeLabel ? (
+          <span
+            className={`fvp-navigation-mode is-${navigationStatus.phase}`}
+            title={navigationStatus.provider}
+          >
+            {navigationModeLabel}
+            {navigationStatus.language ? ` · ${navigationStatus.language}` : ""}
+          </span>
+        ) : null}
       </div>
       <div className="fvp-footer-right">
         {fileReferenceShouldRender ? (
@@ -2738,6 +2758,8 @@ export function FileViewPanel({
     <FileViewNavigationPanel
       workspacePath={workspacePath}
       navigationError={navigationError}
+      navigationStatus={navigationStatus}
+      onRetryNavigation={retryNavigation}
       definitionCandidates={definitionCandidates}
       onCloseDefinitionCandidates={() => setDefinitionCandidates([])}
       implementationCandidates={implementationCandidates}

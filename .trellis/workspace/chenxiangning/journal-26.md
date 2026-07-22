@@ -1402,3 +1402,37 @@ Review 并修复 Git History repository color collision、branch group 与 branc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1067: 完善语言服务安装引导与语义导航
+
+**Date**: 2026-07-22
+**Task**: 完善语言服务安装引导与语义导航
+**Branch**: `feature/v-076`
+
+### Summary
+
+完成缺失 Language Server 安装指引、single-result recovery、PATH 安全过滤与按 provider/workspace 隔离的 session 初始化；同步并归档 OpenSpec，focused tests、lint、typecheck、runtime contracts 与 420 个主 specs 严格校验通过，按要求未构建 App、未跑全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c75fee5b6` | (see git log) |
+| `ce695e500` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

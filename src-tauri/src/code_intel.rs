@@ -8,7 +8,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::State;
 
-use crate::code_intel_lsp::{SemanticLocation, SemanticQueryKind};
+use crate::code_intel_lsp::{SemanticLocation, SemanticProvider, SemanticQueryKind};
 use crate::state::AppState;
 
 #[derive(Debug, Clone, Serialize)]
@@ -97,6 +97,37 @@ impl LanguageKind {
             Self::Rust => "Rust",
             Self::Yaml => "YAML",
         }
+    }
+}
+
+fn semantic_provider_for_language(language: LanguageKind) -> Option<SemanticProvider> {
+    match language {
+        LanguageKind::Rust => Some(SemanticProvider::RustAnalyzer),
+        LanguageKind::Java => Some(SemanticProvider::EclipseJdtLs),
+        LanguageKind::TsJs => Some(SemanticProvider::TypeScriptLanguageServer),
+        LanguageKind::Python | LanguageKind::Go | LanguageKind::Yaml => None,
+    }
+}
+
+fn semantic_fallback_reason_code(error: &str) -> &'static str {
+    let normalized = error.to_ascii_lowercase();
+    if normalized.contains("timed out") {
+        if normalized.contains("initialize") {
+            "initialize-timeout"
+        } else {
+            "request-timeout"
+        }
+    } else if normalized.contains("exited") || normalized.contains("canceled") {
+        "provider-exited"
+    } else if normalized.contains("invalid") || normalized.contains("malformed") {
+        "invalid-response"
+    } else if normalized.contains("unavailable")
+        || normalized.contains("not found")
+        || normalized.contains("no such file")
+    {
+        "provider-unavailable"
+    } else {
+        "provider-failed"
     }
 }
 
@@ -1079,8 +1110,9 @@ async fn resolve_workspace_root(
         .map_err(|err| format!("Failed to resolve workspace root: {err}"))
 }
 
-async fn query_rust_semantic(
+async fn query_semantic(
     state: &State<'_, AppState>,
+    provider: SemanticProvider,
     workspace_root: &Path,
     source: &FileSnapshot,
     document_text: Option<&str>,
@@ -1090,8 +1122,9 @@ async fn query_rust_semantic(
 ) -> Result<Vec<CodeIntelLocation>, String> {
     let text = document_text.unwrap_or(&source.content);
     state
-        .rust_analyzer_runtime
+        .semantic_navigation_runtime
         .query(
+            provider,
             workspace_root,
             &source.absolute,
             text,
@@ -1120,10 +1153,11 @@ pub async fn code_intel_definition(
     let workspace_root = resolve_workspace_root(&workspace_id, &state).await?;
 
     let source = read_file_snapshot(&workspace_root, &file_path)?;
-    let mut fallback_reason = None;
-    if language == LanguageKind::Rust {
-        match query_rust_semantic(
+    let mut fallback_reason_code = None;
+    if let Some(provider) = semantic_provider_for_language(language) {
+        match query_semantic(
             &state,
+            provider,
             &workspace_root,
             &source,
             document_text.as_deref(),
@@ -1139,11 +1173,21 @@ pub async fn code_intel_definition(
                     "line": line,
                     "character": character,
                     "language": language.name(),
-                    "provider": "rust-analyzer",
+                    "mode": "semantic",
+                    "provider": provider.id(),
+                    "fallbackReasonCode": Value::Null,
                     "result": locations,
                 }));
             }
-            Err(error) => fallback_reason = Some(error),
+            Err(error) => {
+                log::warn!(
+                    "[code-intel] definition provider={} workspace={} fallback={}",
+                    provider.id(),
+                    workspace_id,
+                    semantic_fallback_reason_code(&error),
+                );
+                fallback_reason_code = Some(semantic_fallback_reason_code(&error));
+            }
         }
     }
     let query_content = document_text.as_deref().unwrap_or(&source.content);
@@ -1203,8 +1247,9 @@ pub async fn code_intel_definition(
         "line": line,
         "character": character,
         "language": language.name(),
+        "mode": "fast-search",
         "provider": "heuristic",
-        "fallbackReason": fallback_reason,
+        "fallbackReasonCode": fallback_reason_code,
         "result": locations,
     }))
 }
@@ -1227,10 +1272,11 @@ pub async fn code_intel_references(
     let workspace_root = resolve_workspace_root(&workspace_id, &state).await?;
 
     let source = read_file_snapshot(&workspace_root, &file_path)?;
-    let mut fallback_reason = None;
-    if language == LanguageKind::Rust {
-        match query_rust_semantic(
+    let mut fallback_reason_code = None;
+    if let Some(provider) = semantic_provider_for_language(language) {
+        match query_semantic(
             &state,
+            provider,
             &workspace_root,
             &source,
             document_text.as_deref(),
@@ -1249,11 +1295,21 @@ pub async fn code_intel_references(
                     "character": character,
                     "includeDeclaration": include_declaration.unwrap_or(false),
                     "language": language.name(),
-                    "provider": "rust-analyzer",
+                    "mode": "semantic",
+                    "provider": provider.id(),
+                    "fallbackReasonCode": Value::Null,
                     "result": locations,
                 }));
             }
-            Err(error) => fallback_reason = Some(error),
+            Err(error) => {
+                log::warn!(
+                    "[code-intel] references provider={} workspace={} fallback={}",
+                    provider.id(),
+                    workspace_id,
+                    semantic_fallback_reason_code(&error),
+                );
+                fallback_reason_code = Some(semantic_fallback_reason_code(&error));
+            }
         }
     }
     let query_content = document_text.as_deref().unwrap_or(&source.content);
@@ -1369,8 +1425,9 @@ pub async fn code_intel_references(
         "character": character,
         "includeDeclaration": include_declaration.unwrap_or(false),
         "language": language.name(),
+        "mode": "fast-search",
         "provider": "heuristic",
-        "fallbackReason": fallback_reason,
+        "fallbackReasonCode": fallback_reason_code,
         "result": references,
     }))
 }
@@ -1398,10 +1455,11 @@ pub async fn code_intel_implementations(
 
     let workspace_root = resolve_workspace_root(&workspace_id, &state).await?;
     let source = read_file_snapshot(&workspace_root, &file_path)?;
-    let mut fallback_reason = None;
-    if language == LanguageKind::Rust {
-        match query_rust_semantic(
+    let mut fallback_reason_code = None;
+    if let Some(provider) = semantic_provider_for_language(language) {
+        match query_semantic(
             &state,
+            provider,
             &workspace_root,
             &source,
             document_text.as_deref(),
@@ -1417,11 +1475,21 @@ pub async fn code_intel_implementations(
                     "line": line,
                     "character": character,
                     "language": language.name(),
-                    "provider": "rust-analyzer",
+                    "mode": "semantic",
+                    "provider": provider.id(),
+                    "fallbackReasonCode": Value::Null,
                     "result": locations,
                 }));
             }
-            Err(error) => fallback_reason = Some(error),
+            Err(error) => {
+                log::warn!(
+                    "[code-intel] implementations provider={} workspace={} fallback={}",
+                    provider.id(),
+                    workspace_id,
+                    semantic_fallback_reason_code(&error),
+                );
+                fallback_reason_code = Some(semantic_fallback_reason_code(&error));
+            }
         }
     }
 
@@ -1453,8 +1521,9 @@ pub async fn code_intel_implementations(
         "line": line,
         "character": character,
         "language": language.name(),
+        "mode": "fast-search",
         "provider": "heuristic",
-        "fallbackReason": fallback_reason,
+        "fallbackReasonCode": fallback_reason_code,
         "result": implementations,
     }))
 }
@@ -1462,6 +1531,31 @@ pub async fn code_intel_implementations(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maps_semantic_providers_and_public_fallback_reasons() {
+        assert_eq!(
+            semantic_provider_for_language(LanguageKind::Java),
+            Some(SemanticProvider::EclipseJdtLs)
+        );
+        assert_eq!(
+            semantic_provider_for_language(LanguageKind::TsJs),
+            Some(SemanticProvider::TypeScriptLanguageServer)
+        );
+        assert_eq!(semantic_provider_for_language(LanguageKind::Python), None);
+        assert_eq!(
+            semantic_fallback_reason_code("Language server initialize timed out"),
+            "initialize-timeout"
+        );
+        assert_eq!(
+            semantic_fallback_reason_code("Language server executable was not found"),
+            "provider-unavailable"
+        );
+        assert_eq!(
+            semantic_fallback_reason_code("private process detail"),
+            "provider-failed"
+        );
+    }
 
     fn write_fixture(root: &Path, relative: &str, content: &str) -> PathBuf {
         let path = root.join(relative);

@@ -1,9 +1,17 @@
+import { useState } from "react";
 import type { LspLocationLike } from "../utils/fileViewNavigationUtils";
-import { relativePathFromFileUri } from "../utils/fileViewNavigationUtils";
+import type { CodeNavigationQueryStatus } from "../utils/fileViewNavigationUtils";
+import {
+  detectLanguageServerInstallPlatform,
+  getLanguageServerInstallHint,
+  relativePathFromFileUri,
+} from "../utils/fileViewNavigationUtils";
 
 type FileViewNavigationPanelProps = {
   workspacePath: string;
   navigationError: string | null;
+  navigationStatus: CodeNavigationQueryStatus | null;
+  onRetryNavigation: () => void;
   definitionCandidates: LspLocationLike[];
   onCloseDefinitionCandidates: () => void;
   implementationCandidates: LspLocationLike[];
@@ -17,6 +25,8 @@ type FileViewNavigationPanelProps = {
 export function FileViewNavigationPanel({
   workspacePath,
   navigationError,
+  navigationStatus,
+  onRetryNavigation,
   definitionCandidates,
   onCloseDefinitionCandidates,
   implementationCandidates,
@@ -26,14 +36,18 @@ export function FileViewNavigationPanel({
   onNavigateToLocation,
   t,
 }: FileViewNavigationPanelProps) {
+  const [copiedInstallCommand, setCopiedInstallCommand] = useState<string | null>(null);
   const hasDefinitionCandidates = definitionCandidates.length > 0;
   const hasImplementationCandidates = implementationCandidates.length > 0;
   const hasReferenceResults = referenceResults !== null;
+  const shouldShowTransientStatus = navigationStatus?.phase === "loading"
+    || navigationStatus?.phase === "error";
   if (
     !navigationError
     && !hasDefinitionCandidates
     && !hasImplementationCandidates
     && !hasReferenceResults
+    && !shouldShowTransientStatus
   ) {
     return null;
   }
@@ -77,10 +91,126 @@ export function FileViewNavigationPanel({
     </div>
   ) : null;
 
+  const actionLabel = navigationStatus?.action === "references"
+    ? t("files.findReferences")
+    : navigationStatus?.action === "implementation"
+      ? t("files.gotoImplementations")
+      : t("files.gotoDefinition");
+  const modeLabel = navigationStatus?.phase === "loading"
+    ? t("files.navigationPreparing")
+    : navigationStatus?.mode === "semantic"
+      ? t("files.navigationModeSemantic")
+      : navigationStatus?.fallbackReasonCode
+        ? t("files.navigationModeFastSearchFallback")
+        : t("files.navigationModeFastSearch");
+  const navigationLanguageLabel = navigationStatus?.language?.toLowerCase() === "java"
+    ? "Java"
+    : navigationStatus?.language;
+  const installHint = navigationStatus?.fallbackReasonCode === "provider-unavailable"
+    ? getLanguageServerInstallHint(
+      navigationStatus.language,
+      detectLanguageServerInstallPlatform(),
+    )
+    : null;
+  const canCopyInstallCommand = typeof navigator !== "undefined"
+    && typeof navigator.clipboard?.writeText === "function";
+  const installPlatformLabel = installHint?.platform === "macos"
+    ? "macOS"
+    : installHint?.platform === "windows"
+      ? "Windows"
+      : "Linux";
+
+  const copyInstallCommand = async () => {
+    if (!installHint || !canCopyInstallCommand) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(installHint.command);
+      setCopiedInstallCommand(installHint.command);
+    } catch {
+      setCopiedInstallCommand(null);
+    }
+  };
+
   return (
     <div className="fvp-navigation-panel">
+      {navigationStatus ? (
+        <div className={`fvp-navigation-status is-${navigationStatus.phase}`}>
+          <span className="fvp-navigation-status-action">{actionLabel}</span>
+          <span className="fvp-navigation-status-detail">
+            {modeLabel}
+            {navigationLanguageLabel ? ` · ${navigationLanguageLabel}` : ""}
+            {navigationStatus.phase !== "loading" && navigationStatus.provider !== "heuristic"
+              ? ` · ${navigationStatus.provider}`
+              : ""}
+            {navigationStatus.phase !== "loading"
+              ? ` · ${navigationStatus.locations.length} ${t("files.navigationResults")}`
+              : ""}
+          </span>
+          {navigationStatus.phase === "error" ? (
+            <button
+              type="button"
+              className="ghost fvp-navigation-retry"
+              onClick={onRetryNavigation}
+            >
+              {t("common.retry")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {navigationStatus?.phase === "fallback" && navigationStatus.fallbackReasonCode ? (
+        <div className="fvp-navigation-fallback-note">
+          {installHint ? (
+            <div className="fvp-navigation-install-hint">
+              <div className="fvp-navigation-install-provider">
+                {t("files.navigationLanguageServerMissing")}
+                {navigationLanguageLabel ? ` · ${navigationLanguageLabel}` : ""}
+              </div>
+              <span className="fvp-navigation-install-label">
+                {installHint.kind === "install"
+                  ? t("files.navigationInstallCommand")
+                  : t("files.navigationOpenInstallGuide")}
+                {` · ${installPlatformLabel}`}
+              </span>
+              <div className="fvp-navigation-install-command-row">
+                <code className="fvp-navigation-install-command">
+                  {installHint.command}
+                </code>
+                {canCopyInstallCommand ? (
+                  <button
+                    type="button"
+                    className="ghost fvp-navigation-install-copy"
+                    onClick={() => void copyInstallCommand()}
+                  >
+                    {copiedInstallCommand === installHint.command
+                      ? t("files.navigationInstallCommandCopied")
+                      : t("files.navigationCopyInstallCommand")}
+                  </button>
+                ) : null}
+              </div>
+              <div className="fvp-navigation-install-actions">
+                <button
+                  type="button"
+                  className="ghost fvp-navigation-install-retry"
+                  onClick={onRetryNavigation}
+                >
+                  {t("files.navigationRetryAfterInstall")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>{t("files.navigationFallbackNotice")}</div>
+          )}
+        </div>
+      ) : null}
       {navigationError ? (
-        <div className="fvp-navigation-error">{navigationError}</div>
+        <div
+          className={navigationStatus?.phase === "error"
+            ? "fvp-navigation-error"
+            : "fvp-navigation-empty"}
+        >
+          {navigationError}
+        </div>
       ) : null}
       {renderCandidates(
         t("files.definitionCandidates"),

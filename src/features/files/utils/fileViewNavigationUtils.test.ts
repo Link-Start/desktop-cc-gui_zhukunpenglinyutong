@@ -1,12 +1,41 @@
 import { describe, expect, it } from "vitest";
 import {
   areFileUrisEquivalent,
+  getLanguageServerInstallHint,
+  readFreshCache,
   relativePathFromFileUri,
   resolveCodeNavigationErrorMessage,
   toFileUri,
 } from "./fileViewNavigationUtils";
 
 describe("fileViewNavigationUtils", () => {
+  it("builds platform-specific language server installation hints", () => {
+    expect(getLanguageServerInstallHint("Java", "macos")).toEqual({
+      command: "brew install jdtls",
+      kind: "install",
+      platform: "macos",
+    });
+    expect(getLanguageServerInstallHint("Java", "windows")).toEqual({
+      command: "Start-Process \"https://download.eclipse.org/jdtls/milestones/\"",
+      kind: "download-guide",
+      platform: "windows",
+    });
+    expect(getLanguageServerInstallHint("Java", "linux")).toEqual({
+      command: "xdg-open \"https://download.eclipse.org/jdtls/milestones/\"",
+      kind: "download-guide",
+      platform: "linux",
+    });
+
+    for (const platform of ["macos", "windows", "linux"] as const) {
+      expect(getLanguageServerInstallHint("TS/JS", platform)?.command).toBe(
+        "npm install -g typescript-language-server typescript",
+      );
+      expect(getLanguageServerInstallHint("Rust", platform)?.command).toBe(
+        "rustup component add rust-analyzer",
+      );
+    }
+    expect(getLanguageServerInstallHint("Python", "linux")).toBeNull();
+  });
   it("builds Windows file URIs that round-trip to workspace-relative paths", () => {
     const fileUri = toFileUri("C:\\Repo\\src\\Main.ts");
 
@@ -69,5 +98,31 @@ describe("fileViewNavigationUtils", () => {
     expect(
       resolveCodeNavigationErrorMessage(new Error(timeout), "definition", translate),
     ).toBe(timeout);
+  });
+
+  it("keeps fallback metadata together with cached locations", () => {
+    const cache = new Map([
+      ["query", {
+        expiresAt: Date.now() + 1_000,
+        value: {
+          locations: [{
+            uri: "file:///repo/src/Main.java",
+            line: 1,
+            character: 2,
+          }],
+          mode: "fast-search" as const,
+          provider: "heuristic",
+          language: "java",
+          fallbackReasonCode: "provider-unavailable" as const,
+        },
+      }],
+    ]);
+
+    expect(readFreshCache(cache, "query")).toMatchObject({
+      mode: "fast-search",
+      language: "java",
+      fallbackReasonCode: "provider-unavailable",
+      locations: [{ line: 1, character: 2 }],
+    });
   });
 });

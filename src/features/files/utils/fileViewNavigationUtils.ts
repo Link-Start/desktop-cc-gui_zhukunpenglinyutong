@@ -1,6 +1,11 @@
 import { normalizeComparablePath, normalizeFsPath } from "../../../utils/workspacePaths";
+import { isMacPlatform, isWindowsPlatform } from "../../../utils/platform";
+import type {
+  CodeNavigationFallbackReason,
+  CodeNavigationMode,
+} from "../../../services/tauri/openCode";
 
-export const NAVIGATION_REQUEST_TIMEOUT_MS = 8_000;
+export const NAVIGATION_REQUEST_TIMEOUT_MS = 35_000;
 export const CODE_INTEL_CACHE_TTL_MS = 3_000;
 export const CODE_INTEL_REPEAT_DEBOUNCE_MS = 120;
 
@@ -13,7 +18,20 @@ export type LspLocationLike = {
 
 export type LocationCacheEntry = {
   expiresAt: number;
-  value: LspLocationLike[];
+  value: CodeNavigationResultSnapshot;
+};
+
+export type CodeNavigationResultSnapshot = {
+  locations: LspLocationLike[];
+  mode: CodeNavigationMode;
+  provider: string;
+  language: string | null;
+  fallbackReasonCode: CodeNavigationFallbackReason | null;
+};
+
+export type CodeNavigationQueryStatus = CodeNavigationResultSnapshot & {
+  action: CodeNavigationAction;
+  phase: "loading" | "success" | "fallback" | "error";
 };
 
 export type RecentTrigger = {
@@ -22,6 +40,67 @@ export type RecentTrigger = {
 };
 
 export type CodeNavigationAction = "definition" | "references" | "implementation";
+
+export type LanguageServerInstallPlatform = "macos" | "windows" | "linux";
+
+export type LanguageServerInstallHint = {
+  command: string;
+  kind: "install" | "download-guide";
+  platform: LanguageServerInstallPlatform;
+};
+
+export function detectLanguageServerInstallPlatform(): LanguageServerInstallPlatform {
+  if (isMacPlatform()) {
+    return "macos";
+  }
+  if (isWindowsPlatform()) {
+    return "windows";
+  }
+  return "linux";
+}
+
+export function getLanguageServerInstallHint(
+  language: string | null,
+  platform: LanguageServerInstallPlatform,
+): LanguageServerInstallHint | null {
+  const normalizedLanguage = language?.trim().toLowerCase() ?? "";
+  if (normalizedLanguage === "java") {
+    if (platform === "macos") {
+      return { command: "brew install jdtls", kind: "install", platform };
+    }
+    if (platform === "windows") {
+      return {
+        command: "Start-Process \"https://download.eclipse.org/jdtls/milestones/\"",
+        kind: "download-guide",
+        platform,
+      };
+    }
+    return {
+      command: "xdg-open \"https://download.eclipse.org/jdtls/milestones/\"",
+      kind: "download-guide",
+      platform,
+    };
+  }
+  if (
+    normalizedLanguage === "ts/js"
+    || normalizedLanguage.startsWith("typescript")
+    || normalizedLanguage.startsWith("javascript")
+  ) {
+    return {
+      command: "npm install -g typescript-language-server typescript",
+      kind: "install",
+      platform,
+    };
+  }
+  if (normalizedLanguage === "rust") {
+    return {
+      command: "rustup component add rust-analyzer",
+      kind: "install",
+      platform,
+    };
+  }
+  return null;
+}
 
 const NAVIGATION_SYMBOL_GUIDANCE_KEYS: Record<CodeNavigationAction, string> = {
   definition: "files.navigationDefinitionSymbolRequired",

@@ -1,8 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{hash_map::DefaultHasher, HashMap};
+use std::ffi::OsString;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -10,10 +12,95 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::{oneshot, Mutex};
 use tokio::time::timeout;
 
+use crate::backend::app_server::{build_cli_path_env, find_cli_binary};
 use crate::utils::async_command;
 
-const INITIALIZE_TIMEOUT: Duration = Duration::from_secs(6);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(6);
+const DEFAULT_INITIALIZE_TIMEOUT: Duration = Duration::from_secs(10);
+const JAVA_INITIALIZE_TIMEOUT: Duration = Duration::from_secs(30);
+const SESSION_IDLE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+const MAX_SESSIONS: usize = 6;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum SemanticProvider {
+    RustAnalyzer,
+    EclipseJdtLs,
+    TypeScriptLanguageServer,
+}
+
+impl SemanticProvider {
+    pub(crate) fn id(self) -> &'static str {
+        match self {
+            Self::RustAnalyzer => "rust-analyzer",
+            Self::EclipseJdtLs => "eclipse-jdt-ls",
+            Self::TypeScriptLanguageServer => "typescript-language-server",
+        }
+    }
+
+    fn language_id(self, file: &Path) -> &'static str {
+        match self {
+            Self::RustAnalyzer => "rust",
+            Self::EclipseJdtLs => "java",
+            Self::TypeScriptLanguageServer => match file
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase()
+                .as_str()
+            {
+                "tsx" => "typescriptreact",
+                "js" | "mjs" | "cjs" => "javascript",
+                "jsx" => "javascriptreact",
+                _ => "typescript",
+            },
+        }
+    }
+
+    fn override_env(self) -> &'static str {
+        match self {
+            Self::RustAnalyzer => "MOSSX_RUST_ANALYZER_BIN",
+            Self::EclipseJdtLs => "MOSSX_JAVA_LANGUAGE_SERVER_BIN",
+            Self::TypeScriptLanguageServer => "MOSSX_TYPESCRIPT_LANGUAGE_SERVER_BIN",
+        }
+    }
+
+    fn default_executable(self) -> &'static str {
+        match self {
+            Self::RustAnalyzer => "rust-analyzer",
+            Self::EclipseJdtLs => "jdtls",
+            Self::TypeScriptLanguageServer => "typescript-language-server",
+        }
+    }
+
+    fn initialize_timeout(self) -> Duration {
+        match self {
+            Self::EclipseJdtLs => JAVA_INITIALIZE_TIMEOUT,
+            _ => DEFAULT_INITIALIZE_TIMEOUT,
+        }
+    }
+
+    fn launch_args(
+        self,
+        workspace_root: &Path,
+        cache_root: &Path,
+    ) -> Result<Vec<OsString>, String> {
+        match self {
+            Self::RustAnalyzer => Ok(Vec::new()),
+            Self::TypeScriptLanguageServer => Ok(vec![OsString::from("--stdio")]),
+            Self::EclipseJdtLs => {
+                let mut hasher = DefaultHasher::new();
+                workspace_root.hash(&mut hasher);
+                let data_dir = cache_root
+                    .join("eclipse-jdt-ls")
+                    .join(format!("{:016x}", hasher.finish()));
+                std::fs::create_dir_all(&data_dir).map_err(|error| {
+                    format!("failed to prepare eclipse-jdt-ls data directory: {error}")
+                })?;
+                Ok(vec![OsString::from("-data"), data_dir.into_os_string()])
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum SemanticQueryKind {
@@ -61,6 +148,7 @@ struct LspSession {
     next_id: AtomicU64,
     opened_documents: Mutex<HashMap<String, OpenDocument>>,
     alive: Arc<AtomicBool>,
+    provider_id: &'static str,
 }
 
 impl LspSession {
@@ -132,7 +220,7 @@ impl LspSession {
         .await
     }
 
-    async fn sync_document(&self, uri: &str, text: &str) -> Result<(), String> {
+    async fn sync_document(&self, uri: &str, language_id: &str, text: &str) -> Result<(), String> {
         let mut opened_documents = self.opened_documents.lock().await;
         match opened_documents.get_mut(uri) {
             Some(document) if document.text == text => return Ok(()),
@@ -162,7 +250,7 @@ impl LspSession {
                     json!({
                         "textDocument": {
                             "uri": uri,
-                            "languageId": "rust",
+                            "languageId": language_id,
                             "version": 1,
                             "text": text,
                         }
@@ -176,12 +264,13 @@ impl LspSession {
     async fn query(
         &self,
         uri: &str,
+        language_id: &str,
         text: &str,
         line: u32,
         character: u32,
         kind: SemanticQueryKind,
     ) -> Result<Value, String> {
-        self.sync_document(uri, text).await?;
+        self.sync_document(uri, language_id, text).await?;
         let mut params = json!({
             "textDocument": { "uri": uri },
             "position": { "line": line, "character": character },
@@ -197,14 +286,77 @@ impl LspSession {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct RustAnalyzerRuntime {
-    sessions: Mutex<HashMap<PathBuf, Arc<LspSession>>>,
+struct SessionEntry {
+    session: Arc<LspSession>,
+    last_used: Instant,
 }
 
-impl RustAnalyzerRuntime {
+fn select_session_evictions<K>(
+    entries: &[(K, bool, Instant)],
+    requested_key: &K,
+    now: Instant,
+) -> Vec<K>
+where
+    K: Clone + Eq,
+{
+    let mut evictions = entries
+        .iter()
+        .filter_map(|(key, alive, last_used)| {
+            (!alive || now.duration_since(*last_used) >= SESSION_IDLE_TIMEOUT).then(|| key.clone())
+        })
+        .collect::<Vec<_>>();
+    let requested_survives = entries
+        .iter()
+        .any(|(key, _, _)| key == requested_key && !evictions.contains(key));
+    let survivor_count = entries.len().saturating_sub(evictions.len());
+    if !requested_survives && survivor_count >= MAX_SESSIONS {
+        let oldest_survivor = entries
+            .iter()
+            .filter(|(key, _, _)| !evictions.contains(key))
+            .min_by_key(|(_, _, last_used)| *last_used)
+            .map(|(key, _, _)| key.clone());
+        if let Some(oldest_survivor) = oldest_survivor {
+            evictions.push(oldest_survivor);
+        }
+    }
+    evictions
+}
+
+pub(crate) struct SemanticNavigationRuntime {
+    sessions: Mutex<HashMap<(SemanticProvider, PathBuf), SessionEntry>>,
+    session_initializers: Mutex<HashMap<(SemanticProvider, PathBuf), Weak<Mutex<()>>>>,
+    cache_root: PathBuf,
+}
+
+impl Default for SemanticNavigationRuntime {
+    fn default() -> Self {
+        Self::new(std::env::temp_dir().join("mossx-language-servers"))
+    }
+}
+
+impl SemanticNavigationRuntime {
+    pub(crate) fn new(cache_root: PathBuf) -> Self {
+        Self {
+            sessions: Mutex::new(HashMap::new()),
+            session_initializers: Mutex::new(HashMap::new()),
+            cache_root,
+        }
+    }
+
+    async fn initializer_for(&self, key: &(SemanticProvider, PathBuf)) -> Arc<Mutex<()>> {
+        let mut initializers = self.session_initializers.lock().await;
+        initializers.retain(|_, initializer| initializer.strong_count() > 0);
+        if let Some(initializer) = initializers.get(key).and_then(Weak::upgrade) {
+            return initializer;
+        }
+        let initializer = Arc::new(Mutex::new(()));
+        initializers.insert(key.clone(), Arc::downgrade(&initializer));
+        initializer
+    }
+
     pub(crate) async fn query(
         &self,
+        provider: SemanticProvider,
         workspace_root: &Path,
         file: &Path,
         text: &str,
@@ -212,50 +364,191 @@ impl RustAnalyzerRuntime {
         character: u32,
         kind: SemanticQueryKind,
     ) -> Result<Vec<SemanticLocation>, String> {
-        let session = self.session_for(workspace_root).await?;
+        let session = self.session_for(provider, workspace_root).await?;
         let uri = path_to_file_uri(file);
-        let response = session.query(&uri, text, line, character, kind).await;
+        let response = session
+            .query(
+                &uri,
+                provider.language_id(file),
+                text,
+                line,
+                character,
+                kind,
+            )
+            .await;
         let value = match response {
             Ok(value) => value,
             Err(error) => {
-                self.evict_session(workspace_root, &session).await;
+                self.evict_session(provider, workspace_root, &session).await;
                 return Err(error);
             }
         };
         normalize_locations(workspace_root, &value)
     }
 
-    async fn session_for(&self, workspace_root: &Path) -> Result<Arc<LspSession>, String> {
-        let key = workspace_root.to_path_buf();
-        let mut sessions = self.sessions.lock().await;
-        if let Some(session) = sessions.get(&key) {
-            if session.alive.load(Ordering::SeqCst) {
-                return Ok(Arc::clone(session));
-            }
-            sessions.remove(&key);
+    async fn session_for(
+        &self,
+        provider: SemanticProvider,
+        workspace_root: &Path,
+    ) -> Result<Arc<LspSession>, String> {
+        let key = (provider, workspace_root.to_path_buf());
+        let initializer = self.initializer_for(&key).await;
+        let _initialization_guard = initializer.lock().await;
+        let now = Instant::now();
+        let (cached_session, expired_sessions) = {
+            let mut sessions = self.sessions.lock().await;
+            let session_facts = sessions
+                .iter()
+                .map(|(entry_key, entry)| {
+                    (
+                        entry_key.clone(),
+                        entry.session.alive.load(Ordering::SeqCst),
+                        entry.last_used,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let expired_sessions = select_session_evictions(&session_facts, &key, now)
+                .into_iter()
+                .filter_map(|expired_key| sessions.remove(&expired_key))
+                .map(|entry| entry.session)
+                .collect::<Vec<_>>();
+            let cached_session = sessions.get_mut(&key).map(|entry| {
+                entry.last_used = now;
+                Arc::clone(&entry.session)
+            });
+            (cached_session, expired_sessions)
+        };
+        for expired_session in expired_sessions {
+            stop_session(&expired_session).await;
         }
-        let session = spawn_rust_analyzer(workspace_root).await?;
-        sessions.insert(key, Arc::clone(&session));
+        if let Some(cached_session) = cached_session {
+            return Ok(cached_session);
+        }
+
+        let session = spawn_language_server(provider, workspace_root, &self.cache_root).await?;
+        let evicted_sessions = {
+            let mut sessions = self.sessions.lock().await;
+            let inserted_at = Instant::now();
+            let session_facts = sessions
+                .iter()
+                .map(|(entry_key, entry)| {
+                    (
+                        entry_key.clone(),
+                        entry.session.alive.load(Ordering::SeqCst),
+                        entry.last_used,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let evicted_sessions = select_session_evictions(&session_facts, &key, inserted_at)
+                .into_iter()
+                .filter_map(|expired_key| sessions.remove(&expired_key))
+                .map(|entry| entry.session)
+                .collect::<Vec<_>>();
+            sessions.insert(
+                key,
+                SessionEntry {
+                    session: Arc::clone(&session),
+                    last_used: inserted_at,
+                },
+            );
+            evicted_sessions
+        };
+        for evicted_session in evicted_sessions {
+            stop_session(&evicted_session).await;
+        }
         Ok(session)
     }
 
-    async fn evict_session(&self, workspace_root: &Path, failed: &Arc<LspSession>) {
-        let mut sessions = self.sessions.lock().await;
-        let should_remove = sessions
-            .get(workspace_root)
-            .is_some_and(|current| Arc::ptr_eq(current, failed));
-        if should_remove {
-            if let Some(session) = sessions.remove(workspace_root) {
-                session.alive.store(false, Ordering::SeqCst);
-                let _ = session.child.lock().await.kill().await;
-            }
+    async fn evict_session(
+        &self,
+        provider: SemanticProvider,
+        workspace_root: &Path,
+        failed: &Arc<LspSession>,
+    ) {
+        let key = (provider, workspace_root.to_path_buf());
+        let removed_session = {
+            let mut sessions = self.sessions.lock().await;
+            let should_remove = sessions
+                .get(&key)
+                .is_some_and(|current| Arc::ptr_eq(&current.session, failed));
+            should_remove
+                .then(|| sessions.remove(&key))
+                .flatten()
+                .map(|entry| entry.session)
+        };
+        if let Some(removed_session) = removed_session {
+            stop_session(&removed_session).await;
         }
     }
 }
 
-async fn spawn_rust_analyzer(workspace_root: &Path) -> Result<Arc<LspSession>, String> {
-    let mut command = async_command("rust-analyzer");
+async fn stop_session(session: &Arc<LspSession>) {
+    session.alive.store(false, Ordering::SeqCst);
+    if let Err(error) = session.child.lock().await.kill().await {
+        log::debug!(
+            "[{}] failed to stop language server: {error}",
+            session.provider_id
+        );
+    }
+}
+
+fn resolve_provider_executable(provider: SemanticProvider) -> OsString {
+    let override_executable =
+        std::env::var_os(provider.override_env()).filter(|value| !value.is_empty());
+    if override_executable.is_some() {
+        return select_provider_executable(
+            provider.default_executable(),
+            override_executable,
+            None,
+        );
+    }
+    select_provider_executable(
+        provider.default_executable(),
+        None,
+        find_cli_binary(provider.default_executable(), None),
+    )
+}
+
+fn select_provider_executable(
+    default_executable: &str,
+    override_executable: Option<OsString>,
+    discovered_executable: Option<PathBuf>,
+) -> OsString {
+    override_executable
+        .or_else(|| discovered_executable.map(PathBuf::into_os_string))
+        .unwrap_or_else(|| OsString::from(default_executable))
+}
+
+#[cfg(any(windows, test))]
+fn is_windows_command_wrapper(executable: &OsString) -> bool {
+    let executable_lower = executable.to_string_lossy().to_ascii_lowercase();
+    executable_lower.ends_with(".cmd") || executable_lower.ends_with(".bat")
+}
+
+fn build_provider_command(executable: &OsString) -> tokio::process::Command {
+    #[cfg(windows)]
+    {
+        if is_windows_command_wrapper(executable) {
+            let mut command = async_command("cmd");
+            command.arg("/d").arg("/s").arg("/c").arg(executable);
+            return command;
+        }
+    }
+    async_command(executable)
+}
+
+async fn spawn_language_server(
+    provider: SemanticProvider,
+    workspace_root: &Path,
+    cache_root: &Path,
+) -> Result<Arc<LspSession>, String> {
+    let executable = resolve_provider_executable(provider);
+    let mut command = build_provider_command(&executable);
+    if let Some(path_env) = build_cli_path_env(executable.to_str()) {
+        command.env("PATH", path_env);
+    }
     command
+        .args(provider.launch_args(workspace_root, cache_root)?)
         .current_dir(workspace_root)
         .kill_on_drop(true)
         .stdin(std::process::Stdio::piped())
@@ -263,15 +556,15 @@ async fn spawn_rust_analyzer(workspace_root: &Path) -> Result<Arc<LspSession>, S
         .stderr(std::process::Stdio::piped());
     let mut child = command
         .spawn()
-        .map_err(|error| format!("rust-analyzer is unavailable: {error}"))?;
+        .map_err(|error| format!("{} is unavailable: {error}", provider.id()))?;
     let stdin = child
         .stdin
         .take()
-        .ok_or_else(|| "rust-analyzer stdin is unavailable".to_string())?;
+        .ok_or_else(|| format!("{} stdin is unavailable", provider.id()))?;
     let stdout = child
         .stdout
         .take()
-        .ok_or_else(|| "rust-analyzer stdout is unavailable".to_string())?;
+        .ok_or_else(|| format!("{} stdout is unavailable", provider.id()))?;
     let stderr = child.stderr.take();
     let pending: PendingRequests = Arc::new(Mutex::new(HashMap::new()));
     let alive = Arc::new(AtomicBool::new(true));
@@ -283,6 +576,7 @@ async fn spawn_rust_analyzer(workspace_root: &Path) -> Result<Arc<LspSession>, S
         next_id: AtomicU64::new(1),
         opened_documents: Mutex::new(HashMap::new()),
         alive: Arc::clone(&alive),
+        provider_id: provider.id(),
     });
 
     tauri::async_runtime::spawn(read_server_messages(stdout, stdin, pending, alive));
@@ -290,7 +584,7 @@ async fn spawn_rust_analyzer(workspace_root: &Path) -> Result<Arc<LspSession>, S
         tauri::async_runtime::spawn(async move {
             let mut lines = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                log::debug!("[rust-analyzer] {line}");
+                log::debug!("[{}] {line}", provider.id());
             }
         });
     }
@@ -303,6 +597,7 @@ async fn spawn_rust_analyzer(workspace_root: &Path) -> Result<Arc<LspSession>, S
                 "processId": Value::Null,
                 "clientInfo": { "name": "mossx", "version": env!("CARGO_PKG_VERSION") },
                 "rootUri": root_uri,
+                "workspaceFolders": [{ "uri": root_uri, "name": "workspace" }],
                 "capabilities": {
                     "textDocument": {
                         "definition": { "linkSupport": true },
@@ -311,13 +606,13 @@ async fn spawn_rust_analyzer(workspace_root: &Path) -> Result<Arc<LspSession>, S
                     }
                 }
             }),
-            INITIALIZE_TIMEOUT,
+            provider.initialize_timeout(),
         )
         .await
     {
         session.alive.store(false, Ordering::SeqCst);
         let _ = session.child.lock().await.kill().await;
-        return Err(format!("Failed to initialize rust-analyzer: {error}"));
+        return Err(format!("Failed to initialize {}: {error}", provider.id()));
     }
     session.send_notification("initialized", json!({})).await?;
     Ok(session)
@@ -399,7 +694,7 @@ async fn respond_to_server_request(message: &Value, stdin: &Arc<Mutex<ChildStdin
         }),
     };
     if let Err(error) = write_lsp_value(stdin, &response).await {
-        log::debug!("[rust-analyzer] failed to answer server request: {error}");
+        log::debug!("[language-server] failed to answer server request: {error}");
     }
 }
 
@@ -620,6 +915,139 @@ mod tests {
     }
 
     #[test]
+    fn detects_windows_command_wrappers_case_insensitively() {
+        assert!(is_windows_command_wrapper(&OsString::from(
+            "C:\\tools\\server.CMD"
+        )));
+        assert!(is_windows_command_wrapper(&OsString::from("server.bat")));
+        assert!(!is_windows_command_wrapper(&OsString::from("server.exe")));
+    }
+
+    #[test]
+    fn provider_executable_prefers_override_then_extended_discovery() {
+        let override_path = OsString::from("/configured/jdtls");
+        let discovered_path = PathBuf::from("/opt/homebrew/bin/jdtls");
+        assert_eq!(
+            select_provider_executable(
+                "jdtls",
+                Some(override_path.clone()),
+                Some(discovered_path.clone()),
+            ),
+            override_path,
+        );
+        assert_eq!(
+            select_provider_executable("jdtls", None, Some(discovered_path.clone())),
+            discovered_path.into_os_string(),
+        );
+        assert_eq!(
+            select_provider_executable("jdtls", None, None),
+            OsString::from("jdtls"),
+        );
+    }
+
+    #[test]
+    fn installed_java_provider_is_discovered_from_extended_cli_paths_when_available() {
+        if std::env::var_os(SemanticProvider::EclipseJdtLs.override_env()).is_some() {
+            return;
+        }
+        let Some(discovered) =
+            find_cli_binary(SemanticProvider::EclipseJdtLs.default_executable(), None)
+        else {
+            return;
+        };
+
+        assert_eq!(
+            resolve_provider_executable(SemanticProvider::EclipseJdtLs),
+            discovered.into_os_string(),
+        );
+    }
+
+    #[test]
+    fn provider_launch_arguments_are_language_specific() {
+        let root = PathBuf::from("/workspace");
+        let cache = std::env::temp_dir().join("mossx-lsp-args");
+        assert!(SemanticProvider::RustAnalyzer
+            .launch_args(&root, &cache)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            SemanticProvider::TypeScriptLanguageServer
+                .launch_args(&root, &cache)
+                .unwrap(),
+            vec![OsString::from("--stdio")]
+        );
+        let java_args = SemanticProvider::EclipseJdtLs
+            .launch_args(&root, &cache)
+            .unwrap();
+        assert_eq!(java_args.first(), Some(&OsString::from("-data")));
+        assert_eq!(java_args.len(), 2);
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[test]
+    fn session_eviction_is_idle_and_capacity_bounded_without_polling() {
+        let now = Instant::now();
+        let recent = now - Duration::from_secs(5);
+        let expired = now - SESSION_IDLE_TIMEOUT;
+        let entries = vec![
+            ("expired", true, expired),
+            ("dead", false, recent),
+            ("live", true, recent),
+        ];
+        assert_eq!(
+            select_session_evictions(&entries, &"live", now),
+            vec!["expired", "dead"]
+        );
+
+        let capped_entries = (0..MAX_SESSIONS)
+            .map(|index| {
+                (
+                    index,
+                    true,
+                    now - Duration::from_secs((MAX_SESSIONS - index) as u64),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(select_session_evictions(&capped_entries, &99, now), vec![0]);
+    }
+
+    #[tokio::test]
+    async fn session_initialization_is_scoped_by_provider_and_workspace() {
+        let runtime = SemanticNavigationRuntime::default();
+        let java_key = (
+            SemanticProvider::EclipseJdtLs,
+            PathBuf::from("/workspace/one"),
+        );
+        let same_java_initializer = runtime.initializer_for(&java_key).await;
+        let repeated_java_initializer = runtime.initializer_for(&java_key).await;
+        let typescript_initializer = runtime
+            .initializer_for(&(
+                SemanticProvider::TypeScriptLanguageServer,
+                PathBuf::from("/workspace/one"),
+            ))
+            .await;
+        let other_workspace_initializer = runtime
+            .initializer_for(&(
+                SemanticProvider::EclipseJdtLs,
+                PathBuf::from("/workspace/two"),
+            ))
+            .await;
+
+        assert!(Arc::ptr_eq(
+            &same_java_initializer,
+            &repeated_java_initializer
+        ));
+        assert!(!Arc::ptr_eq(
+            &same_java_initializer,
+            &typescript_initializer
+        ));
+        assert!(!Arc::ptr_eq(
+            &same_java_initializer,
+            &other_workspace_initializer
+        ));
+    }
+
+    #[test]
     fn normalizes_location_links_and_rejects_external_targets() {
         let root =
             std::env::temp_dir().join(format!("mossx-lsp-location-{}", uuid::Uuid::new_v4()));
@@ -690,16 +1118,25 @@ mod tests {
         let file = root.join("src/lib.rs");
         std::fs::write(&file, source).unwrap();
         let root = root.canonicalize().unwrap();
-        let runtime = RustAnalyzerRuntime::default();
+        let runtime = SemanticNavigationRuntime::default();
 
         let definitions = runtime
-            .query(&root, &file, source, 3, 35, SemanticQueryKind::Definition)
+            .query(
+                SemanticProvider::RustAnalyzer,
+                &root,
+                &file,
+                source,
+                3,
+                35,
+                SemanticQueryKind::Definition,
+            )
             .await
             .unwrap();
         assert!(!definitions.is_empty());
 
         let implementations = runtime
             .query(
+                SemanticProvider::RustAnalyzer,
                 &root,
                 &file,
                 source,

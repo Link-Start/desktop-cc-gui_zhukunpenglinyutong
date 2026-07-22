@@ -45,7 +45,10 @@ fn build_seed_search_paths(custom_bin: Option<&str>, extra_paths: &[PathBuf]) ->
     let mut all_paths: Vec<PathBuf> = Vec::new();
 
     if let Some(bin_path) = custom_bin.filter(|v| !v.trim().is_empty()) {
-        if let Some(parent) = Path::new(bin_path).parent() {
+        if let Some(parent) = Path::new(bin_path)
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
             push_unique_path(&mut all_paths, parent.to_path_buf());
         }
     }
@@ -387,7 +390,10 @@ fn push_unique_claude_candidate(candidates: &mut Vec<PathBuf>, path: PathBuf) {
     if !path.exists() {
         return;
     }
-    if candidates.iter().any(|existing| paths_equal(existing, &path)) {
+    if candidates
+        .iter()
+        .any(|existing| paths_equal(existing, &path))
+    {
         return;
     }
     candidates.push(path);
@@ -448,11 +454,7 @@ fn collect_claude_code_candidates(custom_bin: Option<&str>) -> Vec<PathBuf> {
         }
     }
 
-    for dir in [
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/usr/bin",
-    ] {
+    for dir in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"] {
         push_unique_claude_candidate(&mut candidates, PathBuf::from(dir).join("claude"));
     }
 
@@ -664,7 +666,11 @@ fn prefer_windows_executable_variant(path: PathBuf) -> PathBuf {
 }
 
 pub(crate) fn build_codex_path_env(codex_bin: Option<&str>) -> Option<String> {
-    let paths = build_search_paths(codex_bin);
+    build_cli_path_env(codex_bin)
+}
+
+pub(crate) fn build_cli_path_env(custom_bin: Option<&str>) -> Option<String> {
+    let paths = build_search_paths(custom_bin);
     let path_str = paths.to_string_lossy().to_string();
     if path_str.is_empty() {
         None
@@ -2396,6 +2402,25 @@ mod tests {
             wrapper_kind_for_binary(r"C:\Users\demo\AppData\Roaming\npm\codex.ps1"),
             "ps1-wrapper"
         );
+    }
+
+    #[test]
+    fn generic_cli_path_env_keeps_custom_parent_and_codex_compatibility() {
+        let custom_bin = "/Users/demo/.npm-global/bin/jdtls";
+        let generic_path = build_cli_path_env(Some(custom_bin)).expect("generic PATH");
+        let paths = env::split_paths(&OsString::from(&generic_path)).collect::<Vec<_>>();
+
+        assert!(paths
+            .iter()
+            .any(|path| path == Path::new("/Users/demo/.npm-global/bin")));
+        assert_eq!(build_codex_path_env(Some(custom_bin)), Some(generic_path));
+    }
+
+    #[test]
+    fn bare_cli_name_does_not_add_an_empty_path_entry() {
+        let paths = build_seed_search_paths(Some("jdtls"), &[]);
+
+        assert!(paths.iter().all(|path| !path.as_os_str().is_empty()));
     }
 
     #[test]

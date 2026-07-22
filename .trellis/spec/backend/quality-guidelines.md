@@ -236,6 +236,92 @@ session.mark_manual_shutdown();
 runtime_manager.record_stopping("codex", &workspace_id).await;
 ```
 
+## Scenario: Language server launch path and session lock isolation
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `backend/app_server_cli.rs` 的 CLI `PATH` construction，或 `code_intel_lsp.rs` 的 provider spawn、reuse、eviction、shutdown。
+- 目标：禁止 empty `PATH` component 让 workspace executable 获得隐式执行优先级；禁止 language server cold start 持有 global session lock 阻塞无关请求。
+
+### 2. Signatures
+
+- `build_cli_path_env(custom_bin: Option<&str>) -> Option<String>`
+- `SemanticNavigationRuntime::initializer_for((SemanticProvider, PathBuf)) -> Arc<Mutex<()>>`
+- `SemanticNavigationRuntime::session_for(provider, workspace_root) -> Result<Arc<LspSession>, String>`
+- `spawn_language_server(provider, workspace_root, cache_root) -> Result<Arc<LspSession>, String>`
+- `stop_session(session: &Arc<LspSession>)`
+
+### 3. Contracts
+
+- bare executable name（如 `jdtls`）的 `Path::parent()` empty value MUST NOT 进入 child `PATH`。
+- same `(provider, workspace)` initialization MUST serialize，防止 double spawn。
+- different provider 或 workspace MUST NOT 共用 initialization mutex。
+- global sessions mutex 只允许保护 map read/remove/insert；MUST NOT 跨 `spawn_language_server(...).await`、`stop_session(...).await` 或 LSP initialize await。
+- eviction MUST remove ownership under lock，then stop child outside lock；parallel insert 后 MUST 再执行 capacity eviction。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| custom bin=`jdtls` | reuse supported PATH entries，no empty component | 把 workspace current directory 注入 executable lookup |
+| same key concurrent cold start | one initializer mutex / one reusable session | double spawn |
+| Java + TypeScript concurrent cold start | independently progress | Java 30s initialize 持有 global lock |
+| idle/dead eviction | remove under lock，kill outside lock | lock map while awaiting child kill |
+| parallel insert reaches cap | insertion phase re-evaluates eviction | session map permanently exceed cap |
+
+### 5. Good / Base / Bad Cases
+
+- Good：`Weak<Mutex<()>>` registry 提供 per-key coordination，dead weak entry 在后续访问时清理。
+- Base：live same-key session 直接复用并刷新 `last_used`。
+- Bad：持有 `sessions.lock().await` 后调用 provider spawn/initialize/kill。
+- Bad：无条件 push `Path::new(bare_name).parent()`。
+
+### 6. Tests Required
+
+- Rust test MUST assert bare executable 生成的 seed paths 不含 empty component。
+- Rust test MUST assert same key initializer identity 相同，而 provider/workspace 任一不同则 identity 不同。
+- `cargo test --manifest-path src-tauri/Cargo.toml code_intel_lsp::tests`
+- `rustfmt --edition 2021 --check src-tauri/src/backend/app_server_cli.rs src-tauri/src/code_intel_lsp.rs`
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```rust
+let mut sessions = self.sessions.lock().await;
+let session = spawn_language_server(provider, workspace_root, cache_root).await?;
+sessions.insert(key, session);
+```
+
+#### Correct
+
+```rust
+let initializer = self.initializer_for(&key).await;
+let _initialization_guard = initializer.lock().await;
+let cached = {
+    let mut sessions = self.sessions.lock().await;
+    sessions.get_mut(&key).map(|entry| {
+        entry.last_used = Instant::now();
+        Arc::clone(&entry.session)
+    })
+};
+if let Some(session) = cached {
+    return Ok(session);
+}
+let session = spawn_language_server(provider, workspace_root, cache_root).await?;
+{
+    let mut sessions = self.sessions.lock().await;
+    sessions.insert(
+        key,
+        SessionEntry {
+            session: Arc::clone(&session),
+            last_used: Instant::now(),
+        },
+    );
+}
+Ok(session)
+```
+
 #### Correct
 
 ```rust
