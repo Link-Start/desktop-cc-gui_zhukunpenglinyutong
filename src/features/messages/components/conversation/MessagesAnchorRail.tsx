@@ -14,6 +14,31 @@ type MessagesAnchorRailProps = {
   onScrollToAnchor: (messageId: string) => void;
 };
 
+const MAX_COLLAPSED_ANCHOR_DASHES = 10;
+
+function getCollapsedAnchorDashes(
+  anchors: MessageAnchor[],
+  activeAnchorId: string | null,
+): MessageAnchor[] {
+  if (anchors.length <= MAX_COLLAPSED_ANCHOR_DASHES) {
+    return anchors;
+  }
+
+  const activeIndex = activeAnchorId
+    ? anchors.findIndex((anchor) => anchor.id === activeAnchorId)
+    : -1;
+
+  return Array.from({ length: MAX_COLLAPSED_ANCHOR_DASHES }, (_, index) => {
+    const start = Math.floor((index * anchors.length) / MAX_COLLAPSED_ANCHOR_DASHES);
+    const end = Math.floor(((index + 1) * anchors.length) / MAX_COLLAPSED_ANCHOR_DASHES);
+    const bucketEnd = Math.max(start + 1, end);
+    if (activeIndex >= start && activeIndex < bucketEnd) {
+      return anchors[activeIndex]!;
+    }
+    return anchors[Math.floor((start + bucketEnd - 1) / 2)]!;
+  });
+}
+
 export function MessagesAnchorRail({
   activeAnchorId,
   anchors,
@@ -28,6 +53,7 @@ export function MessagesAnchorRail({
   }
 
   const isExpanded = state !== "collapsed";
+  const collapsedDashes = getCollapsedAnchorDashes(anchors, activeAnchorId);
 
   const handleJump = (messageId: string) => {
     onScrollToAnchor(messageId);
@@ -43,11 +69,9 @@ export function MessagesAnchorRail({
       onMouseEnter={expand}
       onMouseLeave={scheduleCollapse}
     >
-      {/* Collapsed: compact dash ruler — evenly stacked from the top,
-          so its height tracks the message count instead of filling the
-          whole viewport. */}
+      {/* Collapsed: compact dash ruler capped for long conversations. */}
       <div className="messages-anchor-ruler" aria-hidden={isExpanded}>
-        {anchors.map((anchor) => {
+        {collapsedDashes.map((anchor) => {
           const isActive = activeAnchorId === anchor.id;
           return (
             <span

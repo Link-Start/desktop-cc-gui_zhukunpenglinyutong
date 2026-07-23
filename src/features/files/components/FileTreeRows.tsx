@@ -226,6 +226,21 @@ function FileTreeNodeRow({
     clearFileTreeDragBridge();
   };
 
+  const openOrToggleNode = (target: HTMLElement) => {
+    if (row.isFolder) {
+      if (!row.canExpand) {
+        return;
+      }
+      handlers.toggleFolderExpandedState(node.path, row.isLazyFolder);
+      return;
+    }
+    if (handlers.onOpenFile) {
+      handlers.onOpenFile(node.path);
+      return;
+    }
+    handlers.openPreview(node.path, target);
+  };
+
   return (
     <div className="file-tree-row-wrap">
       <button
@@ -244,21 +259,10 @@ function FileTreeNodeRow({
             return;
           }
           handlers.setSingleSelection(node.path, node.type);
-        }}
-        onDoubleClick={(event) => {
-          event.preventDefault();
-          if (row.isFolder) {
-            if (!row.canExpand) {
-              return;
-            }
-            handlers.toggleFolderExpandedState(node.path, row.isLazyFolder);
+          if (event.detail > 1) {
             return;
           }
-          if (handlers.onOpenFile) {
-            handlers.onOpenFile(node.path);
-            return;
-          }
-          handlers.openPreview(node.path, event.currentTarget);
+          openOrToggleNode(event.currentTarget);
         }}
         onContextMenu={(event) => {
           if (!state.selectedNodePaths.has(node.path)) {

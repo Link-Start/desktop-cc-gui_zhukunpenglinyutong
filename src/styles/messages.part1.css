@@ -17,6 +17,11 @@
   contain-intrinsic-block-size: auto;
 }
 
+.message:has(.message-image-grid, .message-deferred-image-list, .message-generated-image-card) {
+  content-visibility: visible;
+  contain-intrinsic-block-size: auto;
+}
+
 /* claude-render-safe：仅让「正在流式的那一行」保持 content-visibility:visible（与上方
    .is-live-streaming 规则一致），已完成的屏外历史行恢复基础规则的 content-visibility:auto，
    跳过屏外渲染/绘制。原 blanket 规则（对全部 .message 强制 visible）会让 Claude 流式期整条

@@ -92,6 +92,8 @@ describe("MainHeader workspace switch regression", () => {
     expect(screen.queryByText("blank-file-panel")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Workspace 1" }));
+    expect(screen.getByRole("menu").classList.contains("workspace-project-dropdown")).toBe(true);
+    expect(screen.getByRole("menu").classList.contains("popover-surface")).toBe(false);
     fireEvent.click(screen.getByRole("menuitem", { name: "Workspace 2" }));
 
     expect(screen.getByText("src/feature.ts")).toBeTruthy();

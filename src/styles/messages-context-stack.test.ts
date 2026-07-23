@@ -61,4 +61,14 @@ describe("messages context stack layout", () => {
     expect(contextCardRule).toContain("min-width: 0;");
     expect(contextCardRule).toContain("box-sizing: border-box;");
   });
+
+  it("keeps image-bearing rows out of content-visibility clipping", () => {
+    const imageMessageRule = getCssRuleBlock(
+      messagesPart1Css,
+      ".message:has(.message-image-grid, .message-deferred-image-list, .message-generated-image-card)",
+    );
+
+    expect(imageMessageRule).toContain("content-visibility: visible;");
+    expect(imageMessageRule).toContain("contain-intrinsic-block-size: auto;");
+  });
 });

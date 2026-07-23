@@ -2287,6 +2287,51 @@
   max-height: min(560px, 70vh);
 }
 
+.composer-git-command-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  padding-right: 8px;
+}
+
+.composer-git-command-header [data-slot="command-input-wrapper"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.composer-git-header-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.composer-git-header-action {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.composer-git-header-action:hover,
+.composer-git-header-action:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.composer-git-header-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .composer-git-section-toggle {
   display: flex;
   width: 100%;

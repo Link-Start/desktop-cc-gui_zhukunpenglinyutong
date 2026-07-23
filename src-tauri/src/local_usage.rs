@@ -1013,7 +1013,9 @@ fn parse_codex_session_summary(
                         saw_session_signal = true;
                         if response_item_user_summary.is_none() {
                             if let Some(message) = extract_codex_message_text(payload) {
-                                response_item_user_summary = truncate_summary(&message);
+                                if is_codex_session_title_candidate(&message) {
+                                    response_item_user_summary = truncate_summary(&message);
+                                }
                             }
                         }
                     }
@@ -1122,7 +1124,9 @@ fn parse_codex_session_summary(
                 if matches!(payload_type, "user_message" | "userMessage") {
                     saw_session_signal = true;
                     if let Some(message) = payload.get("message").and_then(|value| value.as_str()) {
-                        summary = truncate_summary(message);
+                        if is_codex_session_title_candidate(message) {
+                            summary = truncate_summary(message);
+                        }
                     }
                 }
             }
@@ -1738,6 +1742,24 @@ fn truncate_summary(text: &str) -> Option<String> {
         cleaned
     };
     Some(truncated)
+}
+
+fn is_codex_session_title_candidate(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let lowered = trimmed.to_ascii_lowercase();
+    if lowered.starts_with("# agents.md instructions for ") && trimmed.contains("<INSTRUCTIONS>") {
+        return false;
+    }
+    if lowered.starts_with("<session-context>")
+        || lowered.starts_with("<environment_context>")
+        || lowered.starts_with("omx native sessionstart detected.")
+    {
+        return false;
+    }
+    true
 }
 
 fn extract_codex_message_text(payload: &serde_json::Map<String, Value>) -> Option<String> {

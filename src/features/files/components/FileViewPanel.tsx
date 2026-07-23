@@ -2938,6 +2938,30 @@ export function FileViewPanel({
             ) : null}
           </div>
         ) : null}
+        {canEditDocument ? (
+          mode === "preview" ? (
+            <button
+              type="button"
+              className="ghost fvp-action-btn fvp-mode-toggle"
+              aria-label={t("files.edit")}
+              title={t("files.edit")}
+              onClick={handleEnterEdit}
+              disabled={truncated}
+            >
+              <Pencil size={12} aria-hidden />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="ghost fvp-action-btn fvp-mode-toggle"
+              aria-label={t("files.preview")}
+              title={t("files.preview")}
+              onClick={handleEnterPreview}
+            >
+              <Eye size={12} aria-hidden />
+            </button>
+          )
+        ) : null}
         {mode === "preview" && onInsertText && content.trim().length > 0 && (
           <button
             type="button"

@@ -9,6 +9,12 @@ function readStyleSheet(fileName: string) {
   );
 }
 
+function getCssRuleBlock(css: string, selector: string): string {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  const match = css.match(new RegExp(`(?:^|\\n)${escapedSelector}\\s*\\{([^}]*)\\}`));
+  return match?.[1] ?? "";
+}
+
 const mainCss = readStyleSheet("main.css");
 const darkThemeCss = readStyleSheet("themes.dark.css");
 const lightThemeCss = readStyleSheet("themes.light.css");
@@ -44,5 +50,24 @@ describe("desktop shell theme contract", () => {
     expect(systemThemeCss).toMatch(
       /:root:not\(\[data-theme\]\) \.app\.layout-desktop\.sidebar-collapsed\s*\{[^}]*--desktop-shell-background:\s*#ffffff[^}]*--desktop-sidebar-background:\s*#ffffff/s,
     );
+  });
+
+  it("keeps the workspace project dropdown aligned with shadcn menu tokens", () => {
+    const dropdownRule = getCssRuleBlock(mainCss, ".workspace-project-dropdown");
+    const searchRule = getCssRuleBlock(mainCss, ".workspace-project-search");
+    const itemRule = getCssRuleBlock(mainCss, ".workspace-project-item");
+    const activeItemRule = getCssRuleBlock(mainCss, ".workspace-project-item.is-active");
+
+    expect(dropdownRule).toContain("border-radius: var(--radius-md, 8px);");
+    expect(dropdownRule).toContain("background: var(--popover);");
+    expect(dropdownRule).toContain("color: var(--popover-foreground);");
+    expect(dropdownRule).not.toContain("border-radius: 18px;");
+    expect(searchRule).toContain("border-bottom: 1px solid var(--border);");
+    expect(searchRule).toContain("background: transparent;");
+    expect(itemRule).toContain("min-height: 32px;");
+    expect(itemRule).toContain("border-radius: var(--radius-sm, 6px);");
+    expect(activeItemRule).toContain("background: var(--accent);");
+    expect(activeItemRule).toContain("color: var(--accent-foreground);");
+    expect(activeItemRule).not.toContain("#ffffff");
   });
 });

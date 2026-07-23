@@ -2053,6 +2053,33 @@ describe("FileViewPanel markdown modes", () => {
     });
   });
 
+  it("exposes a visible edit toggle for markdown preview", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "# Hello",
+      truncated: false,
+    });
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-md-edit-toggle"
+        workspacePath="/repo"
+        filePath="CHANGELOG.md"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("file-markdown-preview");
+    fireEvent.click(screen.getByRole("button", { name: "files.edit" }));
+
+    await screen.findByTestId("mock-codemirror");
+    expect(screen.getByRole("button", { name: "files.preview" })).toBeTruthy();
+    expect(vi.mocked(readWorkspaceFile)).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to low-cost code preview for truncated markdown files", async () => {
     vi.mocked(readWorkspaceFile).mockResolvedValue({
       content: "# Hello\n" + "body\n".repeat(32),

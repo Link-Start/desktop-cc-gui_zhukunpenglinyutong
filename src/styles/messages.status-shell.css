@@ -1,9 +1,9 @@
 /*
  * Notion-style anchor rail.
  *
- * Collapsed: a compact column of short horizontal dashes, each
- * positioned by its message's real scroll offset; the currently
- * visible message lights up (`.is-active`).
+ * Collapsed: a compact column of short horizontal dashes, capped for
+ * long conversations; the currently visible message lights up
+ * (`.is-active`) when its bucket is visible.
  *
  * Hovering anywhere on the rail expands a full outline panel that
  * flies out to the right, listing every user message so the reader can

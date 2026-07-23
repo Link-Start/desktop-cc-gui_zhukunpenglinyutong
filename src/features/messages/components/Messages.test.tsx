@@ -1364,6 +1364,34 @@ describe("Messages", () => {
     expect(rail.querySelectorAll(".messages-anchor-dash").length).toBe(1);
   });
 
+  it("caps collapsed anchor rail dashes while keeping the full outline", () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+
+    const items: ConversationItem[] = Array.from({ length: 14 }, (_, index) => ({
+      id: `anchor-many-${index + 1}`,
+      kind: "message",
+      role: "user",
+      text: `message ${index + 1}`,
+    }));
+
+    render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const rail = screen.getByRole("navigation", { name: "messages.anchorNavigation" });
+    expect(rail.querySelectorAll(".messages-anchor-dash").length).toBe(10);
+
+    fireEvent.mouseEnter(rail);
+    expect(screen.getAllByTestId("messages-anchor-row").length).toBe(14);
+  });
+
   // A2:VISIBLE_MESSAGE_WINDOW=10000(95bc726a)有意禁用数量折叠(旧阈值 30,故 32 条折叠 2 条);折叠当前不启用,恢复策略后去 skip。
   it.skip("collapses earlier items and reveals them on demand", () => {
     const items: ConversationItem[] = Array.from({ length: 32 }, (_, index) => ({

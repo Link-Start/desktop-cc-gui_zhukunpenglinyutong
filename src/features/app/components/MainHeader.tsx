@@ -333,7 +333,7 @@ function MainHeaderImpl({
               </button>
               {projectMenuOpen && (
                 <div
-                  className="workspace-project-dropdown popover-surface"
+                  className="workspace-project-dropdown"
                   role="menu"
                   data-tauri-drag-region="false"
                 >

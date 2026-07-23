@@ -1810,6 +1810,64 @@ fn parse_codex_session_summary_prefers_event_msg_user_summary_over_response_item
 }
 
 #[test]
+fn parse_codex_session_summary_skips_agents_md_bootstrap_title() {
+    let root = make_temp_sessions_root();
+    let day_key = "2026-01-19";
+    let workspace_path = Path::new("/tmp/project-alpha");
+    let session_path = write_named_session_file(
+        &root,
+        day_key,
+        "rollout-2026-01-19T12-04-00-agents-bootstrap",
+        &[
+            r#"{"timestamp":"2026-01-19T12:04:00.000Z","type":"session_meta","payload":{"id":"session-agents-bootstrap","cwd":"/tmp/project-alpha","source":"cli","provider":"openai"}}"#
+                .to_string(),
+            r###"{"timestamp":"2026-01-19T12:04:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"# AGENTS.md instructions for /Users/zhukunpeng/Desktop/CC GUI 项目/desktop-cc-gui\n\n<INSTRUCTIONS>\nproject rules\n</INSTRUCTIONS>"}}"###
+                .to_string(),
+            r#"{"timestamp":"2026-01-19T12:04:02.000Z","type":"event_msg","payload":{"type":"user_message","message":"为什么我一点，展示的是标注页面？编辑功能呢？"}}"#
+                .to_string(),
+        ],
+    );
+
+    let summary = parse_codex_session_summary(session_path.as_path(), Some(workspace_path))
+        .expect("parse summary")
+        .expect("summary exists");
+
+    assert_eq!(summary.session_id, "session-agents-bootstrap");
+    assert_eq!(
+        summary.summary.as_deref(),
+        Some("为什么我一点，展示的是标注页面？编辑功能呢？")
+    );
+}
+
+#[test]
+fn parse_codex_session_summary_keeps_normal_agents_md_question() {
+    let root = make_temp_sessions_root();
+    let day_key = "2026-01-19";
+    let workspace_path = Path::new("/tmp/project-alpha");
+    let session_path = write_named_session_file(
+        &root,
+        day_key,
+        "rollout-2026-01-19T12-04-30-agents-question",
+        &[
+            r#"{"timestamp":"2026-01-19T12:04:30.000Z","type":"session_meta","payload":{"id":"session-agents-question","cwd":"/tmp/project-alpha","source":"cli","provider":"openai"}}"#
+                .to_string(),
+            r#"{"timestamp":"2026-01-19T12:04:31.000Z","type":"event_msg","payload":{"type":"user_message","message":"为什么侧边栏显示 #AGENTS.md xxx？"}}"#
+                .to_string(),
+        ],
+    );
+
+    let summary = parse_codex_session_summary(session_path.as_path(), Some(workspace_path))
+        .expect("parse summary")
+        .expect("summary exists");
+
+    assert_eq!(summary.session_id, "session-agents-question");
+    assert_eq!(
+        summary.summary.as_deref(),
+        Some("为什么侧边栏显示 #AGENTS.md xxx？")
+    );
+}
+
+#[test]
 fn parse_codex_session_summary_extracts_string_content_user_summary() {
     let root = make_temp_sessions_root();
     let day_key = "2026-01-19";
