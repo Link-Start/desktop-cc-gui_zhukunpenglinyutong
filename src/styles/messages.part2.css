@@ -658,42 +658,47 @@
 
 :is(.message, .thinking-block) .markdown-codeblock :is(.token.comment, .token.prolog, .token.doctype, .token.cdata),
 :is(.message, .thinking-block) .markdown-codeblock-single :is(.token.comment, .token.prolog, .token.doctype, .token.cdata) {
-  color: var(--message-code-token-comment);
+  color: var(--theme-syntax-comment, var(--message-code-token-comment));
 }
 
 :is(.message, .thinking-block) .markdown-codeblock .token.punctuation,
 :is(.message, .thinking-block) .markdown-codeblock-single .token.punctuation {
-  color: var(--message-code-token-punctuation);
+  color: var(--theme-syntax-punctuation, var(--message-code-token-punctuation));
 }
 
-:is(.message, .thinking-block) .markdown-codeblock :is(.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted),
-:is(.message, .thinking-block) .markdown-codeblock-single :is(.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted) {
-  color: var(--message-code-token-constant);
+:is(.message, .thinking-block) .markdown-codeblock :is(.token.property, .token.constant, .token.symbol, .token.deleted),
+:is(.message, .thinking-block) .markdown-codeblock-single :is(.token.property, .token.constant, .token.symbol, .token.deleted) {
+  color: var(--theme-syntax-property, var(--message-code-token-constant));
+}
+
+:is(.message, .thinking-block) .markdown-codeblock .token.tag,
+:is(.message, .thinking-block) .markdown-codeblock-single .token.tag {
+  color: var(--theme-syntax-tag, var(--message-code-token-constant));
 }
 
 :is(.message, .thinking-block) .markdown-codeblock :is(.token.boolean, .token.number),
 :is(.message, .thinking-block) .markdown-codeblock-single :is(.token.boolean, .token.number) {
-  color: var(--message-code-token-number);
+  color: var(--theme-syntax-number, var(--message-code-token-number));
 }
 
 :is(.message, .thinking-block) .markdown-codeblock :is(.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted),
 :is(.message, .thinking-block) .markdown-codeblock-single :is(.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted) {
-  color: var(--message-code-token-string);
+  color: var(--theme-syntax-string, var(--message-code-token-string));
 }
 
 :is(.message, .thinking-block) .markdown-codeblock :is(.token.operator, .token.entity, .token.url, .token.variable),
 :is(.message, .thinking-block) .markdown-codeblock-single :is(.token.operator, .token.entity, .token.url, .token.variable) {
-  color: var(--message-code-token-operator);
+  color: var(--theme-syntax-operator, var(--message-code-token-operator));
 }
 
 :is(.message, .thinking-block) .markdown-codeblock :is(.token.atrule, .token.attr-value, .token.keyword),
 :is(.message, .thinking-block) .markdown-codeblock-single :is(.token.atrule, .token.attr-value, .token.keyword) {
-  color: var(--message-code-token-keyword);
+  color: var(--theme-syntax-keyword, var(--message-code-token-keyword));
 }
 
 :is(.message, .thinking-block) .markdown-codeblock :is(.token.function, .token.class-name),
 :is(.message, .thinking-block) .markdown-codeblock-single :is(.token.function, .token.class-name) {
-  color: var(--message-code-token-function);
+  color: var(--theme-syntax-function, var(--message-code-token-function));
 }
 
 :is(.message, .thinking-block) .markdown-codeblock-single {

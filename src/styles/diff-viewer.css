@@ -952,21 +952,21 @@
 }
 
 .diff-line-add {
-  background: var(--diff-line-add-bg);
-  color: var(--diff-line-add-text);
+  background: var(--theme-diff-inserted-bg, var(--diff-line-add-bg));
+  color: var(--theme-diff-inserted-text, var(--diff-line-add-text));
 }
 
 .diff-line-del {
-  background: var(--diff-line-del-bg);
-  color: var(--diff-line-del-text);
+  background: var(--theme-diff-removed-bg, var(--diff-line-del-bg));
+  color: var(--theme-diff-removed-text, var(--diff-line-del-text));
 }
 
 .diff-line-add .diff-gutter {
-  color: var(--diff-line-add-gutter);
+  color: var(--theme-diff-inserted-gutter, var(--diff-line-add-gutter));
 }
 
 .diff-line-del .diff-gutter {
-  color: var(--diff-line-del-gutter);
+  color: var(--theme-diff-removed-gutter, var(--diff-line-del-gutter));
 }
 
 .diff-line-meta {
@@ -982,24 +982,27 @@
 .diff-line-content .token.prolog,
 .diff-line-content .token.doctype,
 .diff-line-content .token.cdata {
-  color: var(--diff-token-comment);
+  color: var(--theme-syntax-comment, var(--diff-token-comment));
 }
 
 .diff-line-content .token.punctuation {
-  color: var(--diff-token-punctuation);
+  color: var(--theme-syntax-punctuation, var(--diff-token-punctuation));
 }
 
 .diff-line-content .token.property,
-.diff-line-content .token.tag,
 .diff-line-content .token.constant,
 .diff-line-content .token.symbol,
 .diff-line-content .token.deleted {
-  color: var(--diff-token-property);
+  color: var(--theme-syntax-property, var(--diff-token-property));
+}
+
+.diff-line-content .token.tag {
+  color: var(--theme-syntax-tag, var(--diff-token-property));
 }
 
 .diff-line-content .token.boolean,
 .diff-line-content .token.number {
-  color: var(--diff-token-number);
+  color: var(--theme-syntax-number, var(--diff-token-number));
 }
 
 .diff-line-content .token.selector,
@@ -1008,31 +1011,25 @@
 .diff-line-content .token.char,
 .diff-line-content .token.builtin,
 .diff-line-content .token.inserted {
-  color: var(--diff-token-string);
+  color: var(--theme-syntax-string, var(--diff-token-string));
 }
 
 .diff-line-content .token.operator,
 .diff-line-content .token.entity,
 .diff-line-content .token.url,
 .diff-line-content .token.variable {
-  color: var(--diff-token-variable);
+  color: var(--theme-syntax-operator, var(--diff-token-variable));
 }
 
 .diff-line-content .token.atrule,
 .diff-line-content .token.attr-value,
 .diff-line-content .token.keyword {
-  color: var(--diff-token-keyword);
+  color: var(--theme-syntax-keyword, var(--diff-token-keyword));
 }
 
 .diff-line-content .token.function,
 .diff-line-content .token.class-name {
-  color: var(--diff-token-function);
-}
-
-/* 优先保证 add/del 行可读性，避免语法色在浅色背景下失真 */
-.diff-line-add .diff-line-content .token,
-.diff-line-del .diff-line-content .token {
-  color: inherit !important;
+  color: var(--theme-syntax-function, var(--diff-token-function));
 }
 
 .diff-viewer-placeholder,

@@ -1,5 +1,9 @@
 import { getContrastingTextColor, normalizeHexColor } from "../../../utils/colorUtils";
-import type { VsCodeThemePresetDefinition } from "../constants/vscodeThemePresets";
+import type {
+  DiffTokens,
+  SyntaxTokens,
+  VsCodeThemePresetDefinition,
+} from "../constants/vscodeThemePresets";
 import { mixHexColors, withAlpha } from "./themeColorUtils";
 
 export type ThemeCssVariableMap = Record<`--${string}`, string>;
@@ -13,11 +17,67 @@ function getColor(
   return normalized || fallback;
 }
 
+
+// preset 数据缺失时沿用 themes.light/dark.css 的语义 fallback。
+const FALLBACK_SYNTAX: Record<"light" | "dark", SyntaxTokens> = {
+  light: {
+    keyword: "#2f6fdd",
+    string: "#116329",
+    comment: "#57606e",
+    number: "#b06b00",
+    function: "#6a46c7",
+    operator: "#343d4c",
+    type: "#cf222e",
+    tag: "#cf222e",
+  },
+  dark: {
+    keyword: "#8bd5ff",
+    string: "#7ee787",
+    comment: "#96aac8",
+    number: "#f2cc60",
+    function: "#d2a8ff",
+    operator: "#c8d2dc",
+    type: "#ff7b72",
+    tag: "#ff7b72",
+  },
+};
+
+const FALLBACK_DIFF: Record<"light" | "dark", DiffTokens> = {
+  light: { inserted: "#1a7f37", removed: "#cf222e" },
+  dark: { inserted: "#2ea043", removed: "#f85149" },
+};
+
+function syntaxFor(preset: VsCodeThemePresetDefinition) {
+  const raw = preset.syntax;
+  const fallback = FALLBACK_SYNTAX[preset.appearance];
+  return {
+    keyword: normalizeHexColor(raw?.keyword) || fallback.keyword,
+    string: normalizeHexColor(raw?.string) || fallback.string,
+    comment: normalizeHexColor(raw?.comment) || fallback.comment,
+    number: normalizeHexColor(raw?.number) || fallback.number,
+    function: normalizeHexColor(raw?.function) || fallback.function,
+    operator: normalizeHexColor(raw?.operator) || fallback.operator,
+    type: normalizeHexColor(raw?.type) || fallback.type,
+    tag: normalizeHexColor(raw?.tag) || fallback.tag,
+  };
+}
+
+function diffFor(preset: VsCodeThemePresetDefinition) {
+  const raw = preset.diff;
+  const fallback = FALLBACK_DIFF[preset.appearance];
+  return {
+    inserted: normalizeHexColor(raw?.inserted) || fallback.inserted,
+    removed: normalizeHexColor(raw?.removed) || fallback.removed,
+  };
+}
+
 export function mapVsCodeColorsToTokens(
   preset: VsCodeThemePresetDefinition,
 ): ThemeCssVariableMap {
   const { appearance, colors } = preset;
   const isDark = appearance === "dark";
+  const syntax = syntaxFor(preset);
+  const diffTokens = diffFor(preset);
   const editorBackground = getColor(
     colors,
     "editor.background",
@@ -319,6 +379,76 @@ export function mapVsCodeColorsToTokens(
     "--diff-deleted-bg": withAlpha(diffDeleted, isDark ? 0.16 : 0.11),
     "--diff-deleted-gutter": withAlpha(diffDeleted, isDark ? 0.44 : 0.34),
     "--diff-deleted-text": diffDeleted,
+
+    // ---- 5 套代码 token 命名空间 (Markdown / file-view / diff-viewer / session-activity / file-tree) ----
+    "--message-code-token-comment": syntax.comment,
+    "--message-code-token-punctuation": syntax.operator,
+    "--message-code-token-constant": syntax.type,
+    "--message-code-token-number": syntax.number,
+    "--message-code-token-string": syntax.string,
+    "--message-code-token-operator": syntax.operator,
+    "--message-code-token-keyword": syntax.keyword,
+    "--message-code-token-function": syntax.function,
+    "--theme-syntax-comment": syntax.comment,
+    "--theme-syntax-punctuation": syntax.operator,
+    "--theme-syntax-property": syntax.type,
+    "--theme-syntax-tag": syntax.tag,
+    "--theme-syntax-number": syntax.number,
+    "--theme-syntax-string": syntax.string,
+    "--theme-syntax-operator": syntax.operator,
+    "--theme-syntax-keyword": syntax.keyword,
+    "--theme-syntax-function": syntax.function,
+
+    "--fvp-token-comment": syntax.comment,
+    "--fvp-token-punctuation": syntax.operator,
+    "--fvp-token-property": syntax.type,
+    "--fvp-token-number": syntax.number,
+    "--fvp-token-string": syntax.string,
+    "--fvp-token-operator": syntax.operator,
+    "--fvp-token-keyword": syntax.keyword,
+    "--fvp-token-function": syntax.function,
+
+    "--diff-token-comment": syntax.comment,
+    "--diff-token-punctuation": syntax.operator,
+    "--diff-token-property": syntax.type,
+    "--diff-token-number": syntax.number,
+    "--diff-token-string": syntax.string,
+    "--diff-token-variable": syntax.operator,
+    "--diff-token-keyword": syntax.keyword,
+    "--diff-token-function": syntax.function,
+
+    "--session-activity-command-output-comment": syntax.comment,
+    "--session-activity-command-output-punctuation": syntax.operator,
+    "--session-activity-command-output-constant": syntax.type,
+    "--session-activity-command-output-number": syntax.number,
+    "--session-activity-command-output-string": syntax.string,
+    "--session-activity-command-output-operator": syntax.operator,
+    "--session-activity-command-output-keyword": syntax.keyword,
+    "--session-activity-command-output-function": syntax.function,
+
+    "--file-preview-token-comment": syntax.comment,
+    "--file-preview-token-punctuation": syntax.operator,
+    "--file-preview-token-property": syntax.type,
+    "--file-preview-token-number": syntax.number,
+    "--file-preview-token-string": syntax.string,
+    "--file-preview-token-operator": syntax.operator,
+    "--file-preview-token-keyword": syntax.keyword,
+    "--file-preview-token-function": syntax.function,
+
+    // ---- diff 行级 (新命名;沿用 preset.diff 而非 editorGutter.*) ----
+    "--diff-inserted-text": diffTokens.inserted,
+    "--diff-inserted-gutter": withAlpha(diffTokens.inserted, isDark ? 0.44 : 0.34),
+    "--diff-inserted-bg": withAlpha(diffTokens.inserted, isDark ? 0.16 : 0.11),
+    "--diff-removed-text": diffTokens.removed,
+    "--diff-removed-gutter": withAlpha(diffTokens.removed, isDark ? 0.44 : 0.34),
+    "--diff-removed-bg": withAlpha(diffTokens.removed, isDark ? 0.16 : 0.11),
+    "--theme-diff-inserted-text": diffTokens.inserted,
+    "--theme-diff-inserted-gutter": withAlpha(diffTokens.inserted, isDark ? 0.44 : 0.34),
+    "--theme-diff-inserted-bg": withAlpha(diffTokens.inserted, isDark ? 0.16 : 0.11),
+    "--theme-diff-removed-text": diffTokens.removed,
+    "--theme-diff-removed-gutter": withAlpha(diffTokens.removed, isDark ? 0.44 : 0.34),
+    "--theme-diff-removed-bg": withAlpha(diffTokens.removed, isDark ? 0.16 : 0.11),
+
     "--theme-terminal-background": terminalBackground,
     "--theme-terminal-foreground": terminalForeground,
     "--theme-terminal-cursor": terminalCursor,

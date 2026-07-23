@@ -2358,7 +2358,9 @@ export function AppShell() {
     setCenterMode,
     setFilePanelMode,
     setGitPanelMode,
+    setHomeOpen,
     setIsSearchPaletteOpen,
+    setWorkspaceHomeWorkspaceId,
     threadsByWorkspace,
     workspaces,
   });

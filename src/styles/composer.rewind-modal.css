@@ -656,7 +656,7 @@
   .token.doctype,
 .claude-rewind-modal-diff-theme .diff-line-add .diff-line-content .token.cdata,
 .claude-rewind-modal-diff-theme .diff-line-del .diff-line-content .token.cdata {
-  color: var(--diff-token-comment) !important;
+  color: var(--theme-syntax-comment, var(--diff-token-comment)) !important;
 }
 
 .claude-rewind-modal-diff-theme
@@ -667,7 +667,7 @@
   .diff-line-del
   .diff-line-content
   .token.punctuation {
-  color: var(--diff-token-punctuation) !important;
+  color: var(--theme-syntax-punctuation, var(--diff-token-punctuation)) !important;
 }
 
 .claude-rewind-modal-diff-theme
@@ -678,8 +678,6 @@
   .diff-line-del
   .diff-line-content
   .token.property,
-.claude-rewind-modal-diff-theme .diff-line-add .diff-line-content .token.tag,
-.claude-rewind-modal-diff-theme .diff-line-del .diff-line-content .token.tag,
 .claude-rewind-modal-diff-theme
   .diff-line-add
   .diff-line-content
@@ -698,7 +696,12 @@
   .diff-line-del
   .diff-line-content
   .token.deleted {
-  color: var(--diff-token-property) !important;
+  color: var(--theme-syntax-property, var(--diff-token-property)) !important;
+}
+
+.claude-rewind-modal-diff-theme .diff-line-add .diff-line-content .token.tag,
+.claude-rewind-modal-diff-theme .diff-line-del .diff-line-content .token.tag {
+  color: var(--theme-syntax-tag, var(--diff-token-property)) !important;
 }
 
 .claude-rewind-modal-diff-theme
@@ -714,7 +717,7 @@
   .diff-line-del
   .diff-line-content
   .token.number {
-  color: var(--diff-token-number) !important;
+  color: var(--theme-syntax-number, var(--diff-token-number)) !important;
 }
 
 .claude-rewind-modal-diff-theme
@@ -753,7 +756,7 @@
   .diff-line-del
   .diff-line-content
   .token.inserted {
-  color: var(--diff-token-string) !important;
+  color: var(--theme-syntax-string, var(--diff-token-string)) !important;
 }
 
 .claude-rewind-modal-diff-theme
@@ -776,7 +779,7 @@
   .diff-line-del
   .diff-line-content
   .token.variable {
-  color: var(--diff-token-variable) !important;
+  color: var(--theme-syntax-operator, var(--diff-token-variable)) !important;
 }
 
 .claude-rewind-modal-diff-theme .diff-line-add .diff-line-content .token.atrule,
@@ -797,7 +800,7 @@
   .diff-line-del
   .diff-line-content
   .token.keyword {
-  color: var(--diff-token-keyword) !important;
+  color: var(--theme-syntax-keyword, var(--diff-token-keyword)) !important;
 }
 
 .claude-rewind-modal-diff-theme
@@ -816,7 +819,7 @@
   .diff-line-del
   .diff-line-content
   .token.class-name {
-  color: var(--diff-token-function) !important;
+  color: var(--theme-syntax-function, var(--diff-token-function)) !important;
 }
 
 .claude-rewind-modal-diff-content .diff-line {
@@ -835,12 +838,12 @@
 }
 
 .claude-rewind-modal-diff-content .diff-line-add {
-  background: color-mix(in srgb, var(--diff-line-add-bg) 34%, transparent);
+  background: color-mix(in srgb, var(--theme-diff-inserted-bg, var(--diff-line-add-bg)) 34%, transparent);
   color: var(--text-strong);
 }
 
 .claude-rewind-modal-diff-content .diff-line-del {
-  background: color-mix(in srgb, var(--diff-line-del-bg) 34%, transparent);
+  background: color-mix(in srgb, var(--theme-diff-removed-bg, var(--diff-line-del-bg)) 34%, transparent);
   color: var(--text-strong);
 }
 
@@ -925,11 +928,11 @@
 }
 
 .claude-rewind-modal-full-diff-content .diff-line-add {
-  background: color-mix(in srgb, var(--diff-line-add-bg) 38%, transparent);
+  background: color-mix(in srgb, var(--theme-diff-inserted-bg, var(--diff-line-add-bg)) 38%, transparent);
 }
 
 .claude-rewind-modal-full-diff-content .diff-line-del {
-  background: color-mix(in srgb, var(--diff-line-del-bg) 38%, transparent);
+  background: color-mix(in srgb, var(--theme-diff-removed-bg, var(--diff-line-del-bg)) 38%, transparent);
 }
 
 .claude-rewind-modal-full-diff-raw {

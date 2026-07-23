@@ -22,6 +22,18 @@ function getCssRuleBlock(css: string, selector: string): string {
 }
 
 describe("file view visual contracts", () => {
+  it("lets preset syntax tokens override file-view scoped fallbacks", () => {
+    expect(fileViewPanelCss).toContain(
+      "color: var(--theme-syntax-keyword, var(--fvp-token-keyword));",
+    );
+    expect(fileViewPanelCss).toContain(
+      "color: var(--theme-syntax-tag, var(--fvp-token-property));",
+    );
+    expect(fileViewPanelCss).toContain(
+      "color: var(--theme-syntax-function, var(--fvp-token-function));",
+    );
+  });
+
   it("keeps Git Blame gutter stable and current-line details inline", () => {
     expect(getCssRuleBlock(fileViewPanelCss, ".fvp-cm .cm-file-git-blame-gutter")).toContain(
       "var(--border-subtle)",

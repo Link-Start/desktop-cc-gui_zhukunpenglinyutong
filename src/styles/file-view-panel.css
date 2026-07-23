@@ -811,24 +811,27 @@
 .fvp-line-text .token.prolog,
 .fvp-line-text .token.doctype,
 .fvp-line-text .token.cdata {
-  color: var(--fvp-token-comment);
+  color: var(--theme-syntax-comment, var(--fvp-token-comment));
 }
 
 .fvp-line-text .token.punctuation {
-  color: var(--fvp-token-punctuation);
+  color: var(--theme-syntax-punctuation, var(--fvp-token-punctuation));
 }
 
 .fvp-line-text .token.property,
-.fvp-line-text .token.tag,
 .fvp-line-text .token.constant,
 .fvp-line-text .token.symbol,
 .fvp-line-text .token.deleted {
-  color: var(--fvp-token-property);
+  color: var(--theme-syntax-property, var(--fvp-token-property));
+}
+
+.fvp-line-text .token.tag {
+  color: var(--theme-syntax-tag, var(--fvp-token-property));
 }
 
 .fvp-line-text .token.boolean,
 .fvp-line-text .token.number {
-  color: var(--fvp-token-number);
+  color: var(--theme-syntax-number, var(--fvp-token-number));
 }
 
 .fvp-line-text .token.selector,
@@ -837,25 +840,25 @@
 .fvp-line-text .token.char,
 .fvp-line-text .token.builtin,
 .fvp-line-text .token.inserted {
-  color: var(--fvp-token-string);
+  color: var(--theme-syntax-string, var(--fvp-token-string));
 }
 
 .fvp-line-text .token.operator,
 .fvp-line-text .token.entity,
 .fvp-line-text .token.url,
 .fvp-line-text .token.variable {
-  color: var(--fvp-token-operator);
+  color: var(--theme-syntax-operator, var(--fvp-token-operator));
 }
 
 .fvp-line-text .token.atrule,
 .fvp-line-text .token.attr-value,
 .fvp-line-text .token.keyword {
-  color: var(--fvp-token-keyword);
+  color: var(--theme-syntax-keyword, var(--fvp-token-keyword));
 }
 
 .fvp-line-text .token.function,
 .fvp-line-text .token.class-name {
-  color: var(--fvp-token-function);
+  color: var(--theme-syntax-function, var(--fvp-token-function));
 }
 
 /* ── Structured preview ── */
@@ -2092,35 +2095,39 @@
 }
 
 .fvp-file-markdown-codeblock :is(.token.comment, .token.prolog, .token.doctype, .token.cdata) {
-  color: var(--fvp-token-comment);
+  color: var(--theme-syntax-comment, var(--fvp-token-comment));
 }
 
 .fvp-file-markdown-codeblock .token.punctuation {
-  color: var(--fvp-token-punctuation);
+  color: var(--theme-syntax-punctuation, var(--fvp-token-punctuation));
 }
 
-.fvp-file-markdown-codeblock :is(.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted) {
-  color: var(--fvp-token-property);
+.fvp-file-markdown-codeblock :is(.token.property, .token.constant, .token.symbol, .token.deleted) {
+  color: var(--theme-syntax-property, var(--fvp-token-property));
+}
+
+.fvp-file-markdown-codeblock .token.tag {
+  color: var(--theme-syntax-tag, var(--fvp-token-property));
 }
 
 .fvp-file-markdown-codeblock :is(.token.boolean, .token.number) {
-  color: var(--fvp-token-number);
+  color: var(--theme-syntax-number, var(--fvp-token-number));
 }
 
 .fvp-file-markdown-codeblock :is(.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted) {
-  color: var(--fvp-token-string);
+  color: var(--theme-syntax-string, var(--fvp-token-string));
 }
 
 .fvp-file-markdown-codeblock :is(.token.operator, .token.entity, .token.url, .token.variable) {
-  color: var(--fvp-token-operator);
+  color: var(--theme-syntax-operator, var(--fvp-token-operator));
 }
 
 .fvp-file-markdown-codeblock :is(.token.atrule, .token.attr-value, .token.keyword) {
-  color: var(--fvp-token-keyword);
+  color: var(--theme-syntax-keyword, var(--fvp-token-keyword));
 }
 
 .fvp-file-markdown-codeblock :is(.token.function, .token.class-name) {
-  color: var(--fvp-token-function);
+  color: var(--theme-syntax-function, var(--fvp-token-function));
 }
 
 .fvp-file-markdown-mermaid {
