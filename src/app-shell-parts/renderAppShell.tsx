@@ -28,7 +28,6 @@ import {
   ReleaseNotesModal,
   SearchPalette,
   SpecHub,
-  WorkspaceHome,
 } from "./lazyViews";
 import type {
   RenderAppShellContext,
@@ -154,7 +153,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     gitHistoryRepositoryRoot,
     gitHistoryWorkspace,
     gitPanelMode,
-    gitStatus,
     groupedWorkspaces,
     handleAddWorkspace,
     handleAppModeChange,
@@ -164,8 +162,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     handleCloseOtherFileHistories,
     handleCloseAllFileHistories,
     handleCloseTaskConversation,
-    handleContinueLatestConversation,
-    handleDeleteWorkspaceConversations,
     handleDeleteWorkspaceConversationsInSettings,
     handleDragToInProgress,
     handleEnsureWorkspaceThreadsForSettings,
@@ -176,16 +172,10 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     handleKanbanCreateTask,
     handleMoveWorkspace,
     handleOpenMailSession,
-    handleOpenSpecHub,
     handleOpenTaskConversation,
-    handleRetryTaskRun,
-    handleResumeTaskRun,
-    handleCancelTaskRun,
-    handleForkTaskRun,
     handleRenamePromptCancel,
     handleRenamePromptChange,
     handleRenamePromptConfirm,
-    handleRevealActiveWorkspace,
     handleOpenSearchPalette,
     handleOpenQuickSwitcher,
     handleQuickSwitcherNavigate,
@@ -194,12 +184,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     handleSearchPaletteMoveSelection,
     handleSelectDiffForPanel,
     handleSelectSearchResult,
-    handleSelectWorkspaceInstance,
     handleSelectWorkspacePathForGitHistory,
     handleSelectRepositoryForGitHistory,
-    handleStartGuidedConversation,
-    handleStartSharedConversation,
-    handleStartWorkspaceConversation,
     handleTestNotificationSound,
     handleToggleSearchContentFilter,
     handleToggleTerminalPanel,
@@ -207,7 +193,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     hasActivePlan,
     homeNode,
     globalRuntimeNoticeDockNode,
-    installedEngines,
     isCompact,
     isEditorFileMaximized,
     isMacDesktop,
@@ -242,7 +227,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     planPanelHeight,
     planPanelNode,
     queueSaveSettings,
-    recentThreads,
     quickSwitcherSessionGroups,
     reduceTransparency,
     windowTransparencyEnabled,
@@ -338,29 +322,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     </Suspense>
   ) : null;
 
-  const workspaceHomeNode =
-    showWorkspaceHome && activeWorkspace ? (
-      <Suspense fallback={null}>
-        <WorkspaceHome
-          workspace={activeWorkspace}
-          engines={installedEngines}
-          currentBranch={gitStatus.branchName || null}
-          recentThreads={recentThreads}
-          onSelectConversation={handleSelectWorkspaceInstance}
-          onStartConversation={handleStartWorkspaceConversation}
-          onStartSharedConversation={handleStartSharedConversation}
-          onContinueLatestConversation={handleContinueLatestConversation}
-          onStartGuidedConversation={handleStartGuidedConversation}
-          onOpenSpecHub={handleOpenSpecHub}
-          onRevealWorkspace={handleRevealActiveWorkspace}
-          onDeleteConversations={handleDeleteWorkspaceConversations}
-          onRetryTaskRun={handleRetryTaskRun}
-          onResumeTaskRun={handleResumeTaskRun}
-          onCancelTaskRun={handleCancelTaskRun}
-          onForkTaskRun={handleForkTaskRun}
-        />
-      </Suspense>
-    ) : null;
+  const workspaceHomeNode = showWorkspaceHome ? homeNode : null;
 
   const workspacePrimaryNode = showWorkspaceHome
     ? workspaceHomeNode
@@ -603,7 +565,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         activeWorkspace={Boolean(activeWorkspace)}
         sidebarNode={sidebarNodeWithTopbar}
         messagesNode={mainMessagesNode}
-        composerNode={composerNode}
+        composerNode={showWorkspaceHome ? null : composerNode}
         approvalToastsNode={approvalToastsNode}
         updateToastNode={updateToastNode}
         errorToastsNode={errorToastsNode}

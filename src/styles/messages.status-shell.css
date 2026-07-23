@@ -132,6 +132,16 @@
   }
 }
 
+@container (max-width: 960px) {
+  .messages-anchor-rail {
+    display: none;
+  }
+
+  .messages-shell.has-anchor-rail .messages-full {
+    padding-left: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .messages-anchor-dash,
   .messages-anchor-panel {

@@ -122,7 +122,7 @@ const sidebar = {
     showGitSidebar: "显示右侧边栏",
     enterSoloMode: "进入 SOLO 模式",
     exitSoloMode: "退出 SOLO 模式",
-    quickNewThread: "新对话",
+    quickNewThread: "首页",
     quickAutomation: "面板模式",
     quickSearch: "搜索",
     quickSkills: "技能",

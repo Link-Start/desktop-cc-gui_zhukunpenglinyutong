@@ -755,6 +755,7 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
 
   const showComposer =
     Boolean(selectedKanbanTaskId) ||
+    showWorkspaceHome ||
     (!isCompact
       ? (centerMode === "chat" ||
           centerMode === "diff" ||
@@ -927,19 +928,31 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
 
   const handleOpenWorkspaceHome = useCallback((workspaceId?: string) => {
     const targetWorkspaceId = workspaceId ?? activeWorkspaceId;
-    handleOpenHomeChat();
     if (!targetWorkspaceId) {
+      handleOpenHomeChat();
       return;
     }
+    exitDiffView();
+    resetPullRequestSelection();
+    setWorkspaceHomeWorkspaceId(targetWorkspaceId);
+    setAppMode("chat");
+    setCenterMode("chat");
+    setHomeOpen(false);
     setActiveTab("codex");
     setActiveWorkspaceId(targetWorkspaceId);
     setActiveThreadId(null, targetWorkspaceId);
   }, [
     activeWorkspaceId,
+    exitDiffView,
     handleOpenHomeChat,
+    resetPullRequestSelection,
+    setAppMode,
     setActiveTab,
     setActiveThreadId,
     setActiveWorkspaceId,
+    setCenterMode,
+    setHomeOpen,
+    setWorkspaceHomeWorkspaceId,
   ]);
 
   const handleSelectHomeWorkspace = useCallback(

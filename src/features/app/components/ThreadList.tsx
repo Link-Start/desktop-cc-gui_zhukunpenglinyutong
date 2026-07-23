@@ -392,6 +392,7 @@ export type ThreadListProps = {
   onCancelDeleteConfirm?: () => void;
   onConfirmDeleteConfirm?: () => void;
   onThreadRowRender?: (threadId: string) => void;
+  listClassName?: string;
 };
 
 export function ThreadList({
@@ -428,6 +429,7 @@ export function ThreadList({
   onCancelDeleteConfirm,
   onConfirmDeleteConfirm,
   onThreadRowRender,
+  listClassName,
 }: ThreadListProps) {
   const { t } = useTranslation();
   const indentUnit = nested ? 10 : 14;
@@ -678,7 +680,9 @@ export function ThreadList({
     <ThreadRowStatusProvider threadStatusById={threadStatusById}>
       <div
         ref={threadListRef}
-        className={`thread-list scrollable${nested ? " thread-list-nested" : ""}`}
+        className={`thread-list scrollable${nested ? " thread-list-nested" : ""}${
+          listClassName ? ` ${listClassName}` : ""
+        }`}
         data-virtualized={shouldVirtualizeThreads ? "true" : undefined}
       >
         {shouldVirtualizeThreads ? (

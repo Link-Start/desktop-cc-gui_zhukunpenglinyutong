@@ -4,6 +4,6 @@ import sidebar from "./sidebar";
 
 describe("zh sidebar locale", () => {
   it("labels the primary new conversation nav item", () => {
-    expect(sidebar.sidebar.quickNewThread).toBe("新对话");
+    expect(sidebar.sidebar.quickNewThread).toBe("首页");
   });
 });

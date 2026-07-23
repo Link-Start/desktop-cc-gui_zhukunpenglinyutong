@@ -6,6 +6,7 @@
   /* 思考正文比 meta(12px) 再小一档、比 caption(10px) 大，介于两者之间以示轻盈 */
   --message-thinking-font-size: 11px;
   position: relative;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   flex: 1;

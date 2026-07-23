@@ -1,27 +1,28 @@
-import { FloatingTooltipButton } from "@/components/ui/floating-tooltip-button";
-import { memo, useEffect, useRef } from "react";
-import type { CSSProperties, MouseEvent } from "react";
-import { useTranslation } from "react-i18next";
+import { useMemo } from "react";
+import type { MouseEvent } from "react";
 
 import type { ThreadSummary } from "../../../types";
 import type { ThreadMoveFolderTarget } from "../hooks/useSidebarMenus";
-import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
-import { EngineIcon } from "../../engine/components/EngineIcon";
-import { SharedSessionIcon } from "../../shared-session/components/SharedSessionIcon";
-import { resolveCodexProviderLabel } from "../utils/codexProviderLabel";
-import { THREAD_ROW_TOOLTIP_DELAY_MS } from "../constants";
-import {
-  ThreadRowStatusProvider,
-  useThreadRowStatus,
-  type ThreadStatusMap,
-} from "./threadRowStatusStore";
-import { ThreadDeleteConfirmPopover } from "./ThreadDeleteConfirmPopover";
+import type { ThreadStatusMap } from "./threadRowStatusStore";
+import { ThreadList } from "./ThreadList";
 
 type PinnedThreadRow = {
   thread: ThreadSummary;
   depth: number;
+  hasChildren?: boolean;
   workspaceId: string;
   workspacePath: string;
+};
+
+type PinnedThreadRowGroup = {
+  key: string;
+  workspaceId: string;
+  workspacePath: string;
+  rows: Array<{
+    thread: ThreadSummary;
+    depth: number;
+    hasChildren?: boolean;
+  }>;
 };
 
 type PinnedThreadListProps = {
@@ -57,229 +58,29 @@ type PinnedThreadListProps = {
   onPinnedThreadRowRender?: (threadId: string) => void;
 };
 
-type PinnedThreadRowItemProps = {
-  activeThreadId: string | null;
-  activeWorkspaceId: string | null;
-  deleteConfirmBusy: boolean;
-  deleteConfirmThreadId: string | null;
-  deleteConfirmWorkspaceId: string | null;
-  getThreadTime: (thread: ThreadSummary) => string | null;
-  isThreadAutoNaming: (workspaceId: string, threadId: string) => boolean;
-  isThreadPinned: (workspaceId: string, threadId: string) => boolean;
-  moveFolderTargets?: ThreadMoveFolderTarget[];
-  onCancelDeleteConfirm?: () => void;
-  onConfirmDeleteConfirm?: () => void;
-  onPinnedThreadRowRender?: (threadId: string) => void;
-  onSelectThread: (workspaceId: string, threadId: string) => void;
-  onShowThreadMenu: PinnedThreadListProps["onShowThreadMenu"];
-  onToggleThreadPin?: (workspaceId: string, threadId: string) => void;
-  row: PinnedThreadRow;
-  showProviderLabels: boolean;
-  systemProxyEnabled: boolean;
-  systemProxyUrl: string | null;
-};
+function groupPinnedThreadRows(rows: PinnedThreadRow[]): PinnedThreadRowGroup[] {
+  const groups: PinnedThreadRowGroup[] = [];
+  let current: PinnedThreadRowGroup | null = null;
 
-const PinnedThreadRowItem = memo(function PinnedThreadRowItem({
-  activeThreadId,
-  activeWorkspaceId,
-  deleteConfirmBusy,
-  deleteConfirmThreadId,
-  deleteConfirmWorkspaceId,
-  getThreadTime,
-  isThreadAutoNaming,
-  isThreadPinned,
-  moveFolderTargets,
-  onCancelDeleteConfirm,
-  onConfirmDeleteConfirm,
-  onPinnedThreadRowRender,
-  onSelectThread,
-  onShowThreadMenu,
-  onToggleThreadPin,
-  row,
-  showProviderLabels,
-  systemProxyEnabled,
-  systemProxyUrl,
-}: PinnedThreadRowItemProps) {
-  const { t } = useTranslation();
-  const { thread, depth, workspaceId, workspacePath } = row;
-  useEffect(() => {
-    onPinnedThreadRowRender?.(thread.id);
+  rows.forEach((row) => {
+    if (row.depth === 0 || !current || current.workspaceId !== row.workspaceId) {
+      current = {
+        key: `${row.workspaceId}:${row.thread.id}`,
+        workspaceId: row.workspaceId,
+        workspacePath: row.workspacePath,
+        rows: [],
+      };
+      groups.push(current);
+    }
+    current.rows.push({
+      thread: row.thread,
+      depth: row.depth,
+      hasChildren: row.hasChildren,
+    });
   });
 
-  const relativeTime = getThreadTime(thread);
-  const indentStyle =
-    depth > 0
-      ? ({ "--thread-indent": `${depth * 14}px` } as CSSProperties)
-      : undefined;
-  const status = useThreadRowStatus(thread.id);
-  const statusClass = status?.isReviewing
-    ? "reviewing"
-    : status?.isProcessing
-      ? "processing"
-      : status?.hasUnread
-        ? "unread"
-        : "ready";
-  const runtimeBadge = status?.isReviewing
-    ? { label: t("threads.runtimeReviewing"), severity: "reviewing" as const }
-    : status?.isProcessing
-      ? {
-          label: t("threads.runtimeProcessing"),
-          severity: "processing" as const,
-        }
-      : null;
-  const isProcessing = Boolean(status?.isProcessing);
-  const canPin = depth === 0;
-  const isPinned = canPin && isThreadPinned(workspaceId, thread.id);
-  const isAutoNaming = isThreadAutoNaming(workspaceId, thread.id);
-  const showProxyBadge = systemProxyEnabled && isProcessing;
-  const isSharedThread = thread.threadKind === "shared";
-  const canArchive = !isSharedThread && !thread.id.startsWith("shared:");
-  const contextMenuMoveFolderTargets =
-    moveFolderTargets && moveFolderTargets.length > 0
-      ? moveFolderTargets
-      : undefined;
-  const engineSource = thread.engineSource ?? "codex";
-  const baseEngineTitle =
-    engineSource === "claude"
-      ? "Claude Code"
-      : engineSource === "gemini"
-        ? "Gemini"
-        : engineSource === "kimi"
-          ? "Kimi"
-        : engineSource === "opencode"
-          ? "OpenCode"
-          : "Codex";
-  const engineTitle = isSharedThread
-    ? `Shared Session · ${baseEngineTitle}`
-    : baseEngineTitle;
-  const providerLabel = resolveCodexProviderLabel(thread);
-  const isProviderUnavailable = thread.providerAvailability === "unavailable";
-  const isDeleteConfirmOpen =
-    deleteConfirmWorkspaceId === workspaceId &&
-    deleteConfirmThreadId === thread.id;
-  const rowButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  const rowButton = (
-    <FloatingTooltipButton
-      ref={rowButtonRef}
-      tooltipLabel={thread.name}
-      tooltipSide="top"
-      tooltipAlign="start"
-      tooltipSideOffset={4}
-      tooltipClassName="max-w-[400px] break-words"
-      tooltipDelay={THREAD_ROW_TOOLTIP_DELAY_MS}
-      tooltipDisabled={isDeleteConfirmOpen}
-      className={`thread-row ${
-        workspaceId === activeWorkspaceId && thread.id === activeThreadId
-          ? "active"
-          : ""
-      }${isDeleteConfirmOpen ? " has-delete-confirm" : ""}${
-        canPin ? " has-pin-toggle" : ""
-      }`}
-      style={indentStyle}
-      onClick={() => onSelectThread(workspaceId, thread.id)}
-      onContextMenu={(event) =>
-        onShowThreadMenu(
-          event,
-          workspaceId,
-          thread.id,
-          canPin,
-          thread.sizeBytes,
-          contextMenuMoveFolderTargets,
-          thread.folderId ?? null,
-          canArchive,
-          workspacePath,
-        )
-      }
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onSelectThread(workspaceId, thread.id);
-        }
-      }}
-    >
-      <span className={`thread-status ${statusClass}`} aria-hidden />
-      {canPin && onToggleThreadPin && (
-        <span
-          className={`thread-pin-toggle${isPinned ? " is-pinned" : ""}`}
-          role="button"
-          aria-label={isPinned ? t("threads.unpin") : t("threads.pin")}
-          title={isPinned ? t("threads.unpin") : t("threads.pin")}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onToggleThreadPin(workspaceId, thread.id);
-          }}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-        >
-          <span className="thread-pin-toggle-icon" aria-hidden />
-        </span>
-      )}
-      <span
-        className={`thread-engine-badge ${
-          isSharedThread
-            ? "thread-engine-shared"
-            : `thread-engine-${engineSource}`
-        }${isProcessing ? " is-processing" : ""}`}
-        title={engineTitle}
-      >
-        {isSharedThread ? (
-          <SharedSessionIcon size={12} />
-        ) : (
-          <EngineIcon engine={engineSource} size={12} />
-        )}
-      </span>
-      {showProxyBadge && (
-        <ProxyStatusBadge
-          proxyUrl={systemProxyUrl}
-          label={t("threads.proxyBadge")}
-          variant="compact"
-          className="thread-proxy-badge"
-        />
-      )}
-      <span className="thread-name">{thread.name}</span>
-      <div className="thread-meta">
-        {isAutoNaming && (
-          <span className="thread-auto-naming">{t("threads.autoNaming")}</span>
-        )}
-        {showProviderLabels && providerLabel ? (
-          <span
-            className={`thread-provider-label${
-              isProviderUnavailable ? " is-unavailable" : ""
-            }`}
-            title={providerLabel}
-          >
-            {providerLabel}
-          </span>
-        ) : null}
-        {runtimeBadge ? (
-          <span
-            className={`thread-runtime-badge thread-runtime-badge--${runtimeBadge.severity}`}
-          >
-            {runtimeBadge.label}
-          </span>
-        ) : null}
-        {relativeTime && !runtimeBadge ? (
-          <span className="thread-time">{relativeTime}</span>
-        ) : null}
-      </div>
-    </FloatingTooltipButton>
-  );
-  return (
-    <ThreadDeleteConfirmPopover
-      open={isDeleteConfirmOpen}
-      anchorRef={rowButtonRef}
-      trigger={rowButton}
-      threadName={thread.name}
-      isDeleting={deleteConfirmBusy}
-      onCancel={onCancelDeleteConfirm}
-      onConfirm={onConfirmDeleteConfirm}
-    />
-  );
-});
+  return groups;
+}
 
 export function PinnedThreadList({
   rows,
@@ -303,34 +104,47 @@ export function PinnedThreadList({
   onConfirmDeleteConfirm,
   onPinnedThreadRowRender,
 }: PinnedThreadListProps) {
+  const groups = useMemo(() => groupPinnedThreadRows(rows), [rows]);
+
   return (
-    <ThreadRowStatusProvider threadStatusById={threadStatusById}>
-      <div className="thread-list pinned-thread-list">
-        {rows.map((row) => (
-          <PinnedThreadRowItem
-            key={`${row.workspaceId}:${row.thread.id}`}
-            activeThreadId={activeThreadId}
-            activeWorkspaceId={activeWorkspaceId}
-            deleteConfirmBusy={deleteConfirmBusy}
-            deleteConfirmThreadId={deleteConfirmThreadId}
-            deleteConfirmWorkspaceId={deleteConfirmWorkspaceId}
-            getThreadTime={getThreadTime}
-            isThreadAutoNaming={isThreadAutoNaming}
-            isThreadPinned={isThreadPinned}
-            moveFolderTargets={moveFolderTargetsByWorkspaceId[row.workspaceId]}
-            onCancelDeleteConfirm={onCancelDeleteConfirm}
-            onConfirmDeleteConfirm={onConfirmDeleteConfirm}
-            onPinnedThreadRowRender={onPinnedThreadRowRender}
-            onSelectThread={onSelectThread}
-            onShowThreadMenu={onShowThreadMenu}
-            onToggleThreadPin={onToggleThreadPin}
-            row={row}
-            showProviderLabels={showProviderLabels}
-            systemProxyEnabled={systemProxyEnabled}
-            systemProxyUrl={systemProxyUrl}
-          />
-        ))}
-      </div>
-    </ThreadRowStatusProvider>
+    <>
+      {groups.map((group) => (
+        <ThreadList
+          key={group.key}
+          workspaceId={group.workspaceId}
+          workspacePath={group.workspacePath}
+          pinnedRows={group.rows}
+          unpinnedRows={[]}
+          totalThreadRoots={1}
+          visibleThreadRootCount={1}
+          isExpanded
+          nextCursor={null}
+          isPaging={false}
+          showLoadOlder={false}
+          listClassName="pinned-thread-list"
+          moveFolderTargets={moveFolderTargetsByWorkspaceId[group.workspaceId]}
+          activeWorkspaceId={activeWorkspaceId}
+          activeThreadId={activeThreadId}
+          systemProxyEnabled={systemProxyEnabled}
+          systemProxyUrl={systemProxyUrl}
+          showProviderLabels={showProviderLabels}
+          threadStatusById={threadStatusById}
+          getThreadTime={getThreadTime}
+          isThreadPinned={isThreadPinned}
+          isThreadAutoNaming={isThreadAutoNaming}
+          onToggleThreadPin={onToggleThreadPin}
+          onToggleExpanded={() => undefined}
+          onLoadOlderThreads={() => undefined}
+          onSelectThread={onSelectThread}
+          onShowThreadMenu={onShowThreadMenu}
+          deleteConfirmThreadId={deleteConfirmThreadId}
+          deleteConfirmWorkspaceId={deleteConfirmWorkspaceId}
+          deleteConfirmBusy={deleteConfirmBusy}
+          onCancelDeleteConfirm={onCancelDeleteConfirm}
+          onConfirmDeleteConfirm={onConfirmDeleteConfirm}
+          onThreadRowRender={onPinnedThreadRowRender}
+        />
+      ))}
+    </>
   );
 }

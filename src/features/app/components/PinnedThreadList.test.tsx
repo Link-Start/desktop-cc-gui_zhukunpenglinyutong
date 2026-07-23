@@ -13,6 +13,11 @@ vi.mock("react-i18next", () => ({
         "threads.autoNaming": "Auto naming...",
         "threads.pin": "Pin",
         "threads.unpin": "Unpin",
+        "threads.subagentTag": "Subagent",
+        "threads.subagentTreeExpand": "Expand subagent tree",
+        "threads.subagentTreeCollapse": "Collapse subagent tree",
+        "threads.runtimeProcessing": "Processing",
+        "threads.runtimeReviewing": "Reviewing",
       };
       return translations[key] ?? key;
     },
@@ -290,6 +295,66 @@ describe("PinnedThreadList", () => {
     expect(badge?.classList.contains("proxy-status-badge--animated")).toBe(
       false,
     );
+  });
+
+  it("reuses workspace subagent row rendering for pinned children", () => {
+    const onSelectThread = vi.fn();
+    const parentThread: ThreadSummary = {
+      ...thread,
+      id: "claude:parent",
+      name: "Pinned parent",
+      engineSource: "claude",
+    };
+    const pendingChildThread: ThreadSummary = {
+      id: "claude-pending-subagent:claude:parent:toolu_agent_1",
+      name: "Pasteur",
+      updatedAt: 900,
+      parentThreadId: "claude:parent",
+      engineSource: "claude",
+    };
+
+    render(
+      <PinnedThreadList
+        {...baseProps}
+        activeThreadId="claude:parent"
+        rows={[
+          {
+            thread: parentThread,
+            depth: 0,
+            hasChildren: true,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+          {
+            thread: pendingChildThread,
+            depth: 1,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+        ]}
+        onSelectThread={onSelectThread}
+      />,
+    );
+
+    const parentRow = screen.getByText("Pinned parent").closest(".thread-row");
+    expect(parentRow?.classList.contains("is-subagent-parent")).toBe(true);
+    fireEvent.click(
+      parentRow?.querySelector(".thread-tree-expander") as HTMLElement,
+    );
+
+    const childRow = screen.getByText("Pasteur").closest(".thread-row");
+    expect(childRow?.classList.contains("is-subagent")).toBe(true);
+    expect(childRow?.classList.contains("is-pending-subagent")).toBe(true);
+    expect(childRow?.querySelector(".thread-engine-badge")).toBeNull();
+    expect(childRow?.querySelector(".thread-subagent-tag")?.textContent).toBe(
+      "Subagent",
+    );
+    if (!childRow) {
+      throw new Error("Missing pinned subagent row");
+    }
+
+    fireEvent.click(childRow);
+    expect(onSelectThread).toHaveBeenCalledWith("ws-1", "claude:parent");
   });
 
   it("keeps an unchanged pinned row stable across unrelated status updates", () => {

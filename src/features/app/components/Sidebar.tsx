@@ -1045,7 +1045,7 @@ function SidebarImpl({
   );
 
   const pinnedThreadRows = useMemo(() => {
-    type ThreadRow = { thread: ThreadSummary; depth: number };
+    type ThreadRow = { thread: ThreadSummary; depth: number; hasChildren?: boolean };
     const groups: Array<{
       pinTime: number;
       workspaceId: string;
