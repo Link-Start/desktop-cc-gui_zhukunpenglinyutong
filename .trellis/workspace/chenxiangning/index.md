@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-26.md`
-- **Total Sessions**: 1079
+- **Total Sessions**: 1080
 - **Last Active**: 2026-07-23
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-26.md` | ~1838 | Active |
+| `journal-26.md` | ~1871 | Active |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
@@ -54,6 +54,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1080 | 2026-07-23 | 完善 Git Diff 统计与历史预览 | `18e0fbb18` | `feature/v-0.7.7` |
 | 1079 | 2026-07-23 | 合并 0.7.7 上游更新 | `9fd0ad211` | `feature/v-0.7.7` |
 | 1078 | 2026-07-23 | 修复多仓 Git 差异作用域 | `ec2f29e7e` | `feature/v-0.7.7` |
 | 1077 | 2026-07-23 | 修复 Quick Switcher 冷启动状态反馈循环 | `99dff6a97` | `feature/v-0.7.7` |
