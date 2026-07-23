@@ -142,7 +142,7 @@ Recent-file identity MUST 使用 `workspaceId + normalized path`。同 identity 
 
 ### Requirement: Quick navigation SHALL reuse canonical module open actions
 
-快速导航 MUST 包含 Spec Hub、意图画布和项目地图，并 MUST 调用各模块已有 canonical open action。
+快速导航 MUST 包含 Spec Hub、意图画布和项目地图，并 MUST 调用各模块已有 canonical open action。渲染在导航栏中的每个条目 MUST 有可达的激活行为；无法接通 canonical action 的条目 MUST 被移除，MUST NOT 以无响应的死项形式保留。
 
 #### Scenario: Open detached Spec Hub
 - **WHEN** 用户激活 Spec Hub navigation row
@@ -153,6 +153,11 @@ Recent-file identity MUST 使用 `workspaceId + normalized path`。同 identity 
 - **WHEN** 用户激活意图画布或项目地图 navigation row
 - **THEN** 系统 MUST 分别调用 `handleOpenIntentCanvas` 或 `handleOpenProjectMap`
 - **AND** Quick Switcher MUST 关闭
+
+#### Scenario: no dead navigation rows
+- **WHEN** 用户激活任意渲染在快速导航栏中的条目
+- **THEN** 系统 MUST 执行与对应模块入口一致的 canonical action
+- **AND** MUST NOT 出现点击无任何响应的导航项
 
 ### Requirement: Recent-file activation MUST route the main panel to chat codex area
 
@@ -194,3 +199,95 @@ When the user activates a Quick Switcher file row, the Quick Switcher caller MUS
 - **WHEN** the Quick Switcher caller activates a recent-file row
 - **THEN** the `setHomeOpen(false)` and `setWorkspaceHomeWorkspaceId(null)` calls MUST be issued strictly before `handleOpenFile`
 - **AND** those setters MUST use the existing canonical `setHomeOpen` / `setWorkspaceHomeWorkspaceId` contract used by `handleSelectThread`
+
+### Requirement: Quick navigation SHALL include discovery entries
+
+快速导航 MUST 在既有模块入口之外提供 `全局搜索`、`便签`、`项目记忆` 入口。`全局搜索` MUST 为导航栏第一项；每个入口 MUST 调用对应 canonical action，激活后 Quick Switcher MUST 按既有语义关闭。
+
+#### Scenario: Open global search from quick navigation
+- **WHEN** 用户激活 `全局搜索` navigation row
+- **THEN** 系统 MUST 调用 `handleOpenSearchPalette` 打开全局搜索
+- **AND** Quick Switcher MUST 关闭（两面板互斥）
+
+#### Scenario: Open notes and project memory from quick navigation
+- **WHEN** 用户分别激活 `便签` / `项目记忆` navigation row
+- **THEN** 系统 MUST 调用 `handleOpenNotes` / `handleOpenProjectMemory`
+- **AND** Quick Switcher MUST 关闭
+
+### Requirement: Quick Switcher SHALL surface running sessions as a live activity section
+
+当存在进行中 AI 会话时，最近会话栏顶部 MUST 展示「进行中」区：每行 MUST 包含可识别的 live 指示、会话标题、workspace 名与相对开始时间。数据 MUST 复用根链既有 `sessionRadarFeed.runningSessions`，MUST NOT 新增 store 订阅、定时器或轮询。已在「进行中」区展示的会话 MUST NOT 重复出现在下方「最近会话」分组。
+
+#### Scenario: running sessions appear above recent sessions
+- **GIVEN** 存在至少一个进行中会话
+- **WHEN** Quick Switcher 打开
+- **THEN** 最近会话栏顶部 MUST 展示「进行中」区并列出全部进行中会话（上限沿用 radar feed 既有 runningLimit）
+- **AND** 这些会话 MUST NOT 重复出现在下方最近会话分组
+
+#### Scenario: jump to a running session across workspaces
+- **WHEN** 用户激活某进行中会话行
+- **THEN** 系统 MUST 切换到该会话所属 workspace 并选中该会话
+- **AND** Quick Switcher MUST 关闭
+
+#### Scenario: no running sessions collapses the section
+- **WHEN** 不存在进行中会话
+- **THEN** 「进行中」区 MUST NOT 渲染、MUST NOT 占用布局空间
+
+#### Scenario: live section is keyboard accessible
+- **WHEN** 用户使用方向键在最近会话栏内移动
+- **THEN** 「进行中」区各行 MUST 与最近会话行一样参与行内循环导航
+- **AND** Enter MUST 激活当前行、Esc MUST 关闭面板
+
+### Requirement: Quick navigation SHALL toggle in-shell modules on repeated activation
+
+快速导航对 in-shell 模块 MUST 提供回切语义：目标模块当前已打开时，再次激活相同入口 MUST 关闭该模块；未打开时 MUST 执行既有 open action。支持回切的入口：`文件` / `代码变更` / `Git 历史` / `看板` / `意图画布` / `项目地图` / `便签` / `项目记忆` / `设置`。`全局搜索` MUST 保持 open-only（两面板互斥，见下方专属 scenario）；`对话` MUST NOT 回切（默认落点）；`Spec Hub` MUST 保持 open-or-focus；`终端` 维持既有 toggle 行为不变。
+
+#### Scenario: toggle off a right-panel module
+- **GIVEN** 右侧面板已以 `文件` / `代码变更` / `便签` / `项目记忆` 模式展开
+- **WHEN** 用户通过快速导航再次激活相同入口
+- **THEN** 系统 MUST 收起右侧面板
+- **AND** `便签` 回切时 MUST 连带将 center mode 复位到 chat
+
+#### Scenario: toggle off a center-mode or app-mode module
+- **GIVEN** `意图画布` / `项目地图` 正处于 center mode，或 `看板` / `Git 历史` 正处于对应 app mode
+- **WHEN** 用户再次激活相同入口
+- **THEN** 系统 MUST 回到 chat 落点（`setCenterMode("chat")` 或 `setAppMode("chat")`）
+
+#### Scenario: toggle off settings
+- **WHEN** 设置弹窗已打开且用户再次激活 `设置` 入口
+- **THEN** 系统 MUST 调用 `closeSettings` 将其关闭
+
+#### Scenario: global search stays open-only because the two palettes are mutually exclusive
+- **GIVEN** 打开 Quick Switcher 时系统 MUST 先关闭 Search Palette（两面板互斥）
+- **WHEN** 用户通过快速导航激活 `全局搜索`
+- **THEN** 系统 MUST 仅执行 open action（打开 Search Palette），MUST NOT 提供回切语义
+- **AND** 因互斥约束，Search Palette 的已打开状态在 Quick Switcher 打开期间运行时不可达，`全局搜索` 导航行 MUST NOT 依赖该状态呈现 is-active 高亮（代码中的判定/回切分支为契约性守护，design.md D1 已说明）
+
+#### Scenario: module state survives quick switcher reopen
+- **GIVEN** 用户已通过快速导航打开某模块（Quick Switcher 随之关闭）
+- **WHEN** 用户再次打开 Quick Switcher 并点击相同入口
+- **THEN** 系统 MUST 依据 app-shell 中的持久模块状态执行回切而非重复打开
+
+### Requirement: Quick navigation SHALL indicate the currently active module
+
+当前已打开的模块对应导航行 MUST 呈现可区分的高亮态（is-active），模块关闭后高亮 MUST 消失。高亮为纯展示，MUST NOT 改变键盘导航行为。
+
+#### Scenario: active module row is highlighted
+- **WHEN** 某支持回切的模块处于打开状态且用户打开 Quick Switcher
+- **THEN** 对应导航行 MUST 渲染 is-active 视觉态
+- **AND** 模块关闭后再次打开 Quick Switcher 时该高亮 MUST 消失
+
+### Requirement: Quick navigation SHALL hint instead of opening to an empty default page
+
+当激活条件不满足时，快速导航 MUST 展示可感知的提示并 MUST NOT 打开模块或落入空默认页。适用入口与条件：`意图画布` / `项目地图` / `便签` / `项目记忆` / `终端` 在无 active workspace 时。
+
+#### Scenario: no workspace shows info toast
+- **WHEN** 无 active workspace 且用户激活上述任一入口
+- **THEN** 系统 MUST 展示 info 级 toast 提示先选择工作区
+- **AND** MUST NOT 执行该模块的 open action
+- **AND** Quick Switcher MUST 关闭
+
+#### Scenario: intent canvas uses toast instead of blocking alert
+- **WHEN** 无 active workspace 且用户激活 `意图画布`
+- **THEN** 系统 MUST 使用 toast 提示，MUST NOT 触发 `window.alert` 阻塞弹窗
+

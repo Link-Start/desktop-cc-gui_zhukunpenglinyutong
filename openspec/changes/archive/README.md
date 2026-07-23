@@ -3,15 +3,18 @@
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
 - Updated At: `2026-07-24`
-- Indexed proposals: `648`
+- Indexed proposals: `651`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-07 (114)
+## 2026-07 (117)
 
 ### 2026-07-23
 
+- [`2026-07-23-enhance-session-activity-panels`](2026-07-23-enhance-session-activity-panels/proposal.md) — verified implementation，已同步 `codex-chat-canvas-workspace-session-activity-panel`
+- [`2026-07-23-enhance-quick-switcher-hub`](2026-07-23-enhance-quick-switcher-hub/proposal.md) — verified implementation，已同步 `quick-context-switcher`
+- [`2026-07-23-enhance-quick-switcher-nav-toggle`](2026-07-23-enhance-quick-switcher-nav-toggle/proposal.md) — verified implementation，已同步 `quick-context-switcher`
 - [`2026-07-23-add-theme-aware-syntax-and-diff-tokens`](2026-07-23-add-theme-aware-syntax-and-diff-tokens/proposal.md) — verified implementation，已同步 `settings-custom-theme-presets`
 - [`2026-07-23-fix-multi-repository-git-inline-diff-scope`](2026-07-23-fix-multi-repository-git-inline-diff-scope/proposal.md) — verified implementation，已同步 `multi-repository-git-commit-workspace` 与 `multi-repository-git-command-center`
 - [`2026-07-23-add-python-go-semantic-navigation`](2026-07-23-add-python-go-semantic-navigation/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation`

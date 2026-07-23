@@ -13,6 +13,8 @@ const activityPanel = {
     "eventsCount": "{{count}} 個事件",
     "sessionsCount": "{{count}} 個工作階段",
     "liveNow": "即時",
+    "collapsedLiveBadge": "{{count}} 個工作階段進行中",
+    "collapsedLiveBadge_other": "{{count}} 個工作階段進行中",
     "command": "指令",
     "commandPendingSummary": "執行指令中",
     "commandCategories": {
@@ -97,7 +99,13 @@ const activityPanel = {
       "unreadMark": "未讀",
       "readMark": "已讀",
       "deleteHistoryEntry": "刪除 {{name}}",
-      "deleteDateGroupEntries": "刪除 {{date}} 的全部 {{count}} 筆項目"
+      "deleteDateGroupEntries": "刪除 {{date}} 的全部 {{count}} 筆項目",
+      "confirmDeleteDateGroup": "確定刪除 {{date}} 的全部 {{count}} 筆記錄？",
+      "confirmDeleteDateGroup_other": "確定刪除 {{date}} 的全部 {{count}} 筆記錄？",
+      "deleteFailedTitle": "刪除失敗",
+      "deleteFailedBody": "{{count}} 筆記錄刪除失敗，請再試一次。",
+      "deleteFailedBody_other": "{{count}} 筆記錄刪除失敗，請再試一次。",
+      "deleteFailedDismiss": "關閉"
     },
     "status": {
       "running": "執行中",

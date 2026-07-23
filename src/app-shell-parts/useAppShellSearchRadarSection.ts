@@ -35,10 +35,12 @@ import { useSessionRadarFeed } from "../features/session-activity/hooks/useSessi
 import { isBackgroundRenderGatingEnabled } from "../features/threads/utils/realtimePerfFlags";
 import {
   RADAR_STORE_NAME,
+  SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
   SESSION_RADAR_RECENT_STORAGE_KEY,
   buildRadarCompletionId,
   dispatchSessionRadarHistoryUpdatedEvent,
   mergePersistedRadarRecentEntries,
+  parsePersistedRadarRecentEntry,
   type PersistedRadarRecentEntry,
   resolveLatestUserMessage,
 } from "../features/session-activity/utils/sessionRadarPersistence";
@@ -953,9 +955,22 @@ export function useAppShellSearchRadarSection({
       return;
     }
 
-    const nextPersistedRecent = mergePersistedRadarRecentEntries(
-      getClientStoreSync(RADAR_STORE_NAME, SESSION_RADAR_RECENT_STORAGE_KEY),
-      completed,
+    const rawPersistedRecent = getClientStoreSync(
+      RADAR_STORE_NAME,
+      SESSION_RADAR_RECENT_STORAGE_KEY,
+    );
+    // dismissed 联动清理只覆盖「曾物理存在于 persisted 快照」的 id：新合成的完成
+    // 条目若被 bounds 淘汰，不得连带销毁用户删除留下的 cutoff（防复活循环）。
+    const physicallyPersistedEntryIds = new Set(
+      (Array.isArray(rawPersistedRecent) ? rawPersistedRecent : [])
+        .map(parsePersistedRadarRecentEntry)
+        .filter((entry): entry is PersistedRadarRecentEntry => Boolean(entry))
+        .map((entry) => entry.id),
+    );
+    const { entries: nextPersistedRecent, prunedEntryIds } =
+      mergePersistedRadarRecentEntries(rawPersistedRecent, completed);
+    const physicallyPrunedEntryIds = prunedEntryIds.filter((entryId) =>
+      physicallyPersistedEntryIds.has(entryId),
     );
     writeClientStoreValue(
       RADAR_STORE_NAME,
@@ -963,6 +978,31 @@ export function useAppShellSearchRadarSection({
       nextPersistedRecent,
       { immediate: true },
     );
+    // merge 惰性修剪物理移除的条目，其 dismissed 记录一并清除；用户主动删除的
+    // 条目不经 bounds 修剪，cutoff 保留以防完成记录复活。
+    if (physicallyPrunedEntryIds.length > 0) {
+      const prunedIdSet = new Set(physicallyPrunedEntryIds);
+      const existingDismissed =
+        getClientStoreSync<Record<string, number>>(
+          RADAR_STORE_NAME,
+          SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
+        ) ?? {};
+      const nextDismissed = Object.fromEntries(
+        Object.entries(existingDismissed).filter(
+          ([entryId]) => !prunedIdSet.has(entryId),
+        ),
+      );
+      if (
+        Object.keys(nextDismissed).length !== Object.keys(existingDismissed).length
+      ) {
+        writeClientStoreValue(
+          RADAR_STORE_NAME,
+          SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
+          nextDismissed,
+          { immediate: true },
+        );
+      }
+    }
     dispatchSessionRadarHistoryUpdatedEvent();
 
     if (appSettings.systemNotificationEnabled) {

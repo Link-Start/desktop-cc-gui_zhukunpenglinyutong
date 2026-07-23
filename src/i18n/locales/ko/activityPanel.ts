@@ -13,6 +13,8 @@ const activityPanel = {
     "eventsCount": "이벤트 {{count}}개",
     "sessionsCount": "세션 {{count}}개",
     "liveNow": "실시간",
+    "collapsedLiveBadge": "세션 {{count}}개 실행 중",
+    "collapsedLiveBadge_other": "세션 {{count}}개 실행 중",
     "command": "명령",
     "commandPendingSummary": "명령 실행 중",
     "commandCategories": {
@@ -97,7 +99,13 @@ const activityPanel = {
       "unreadMark": "읽지 않음",
       "readMark": "읽음",
       "deleteHistoryEntry": "{{name}} 삭제",
-      "deleteDateGroupEntries": "{{date}}의 항목 {{count}}개 모두 삭제"
+      "deleteDateGroupEntries": "{{date}}의 항목 {{count}}개 모두 삭제",
+      "confirmDeleteDateGroup": "{{date}}의 기록 {{count}}개를 모두 삭제하시겠습니까?",
+      "confirmDeleteDateGroup_other": "{{date}}의 기록 {{count}}개를 모두 삭제하시겠습니까?",
+      "deleteFailedTitle": "삭제 실패",
+      "deleteFailedBody": "기록 {{count}}개를 삭제하지 못했습니다. 다시 시도해 주세요.",
+      "deleteFailedBody_other": "기록 {{count}}개를 삭제하지 못했습니다. 다시 시도해 주세요.",
+      "deleteFailedDismiss": "닫기"
     },
     "status": {
       "running": "실행 중",

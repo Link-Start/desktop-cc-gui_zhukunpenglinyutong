@@ -4,7 +4,7 @@
 
 - Updated At: `2026-07-24`
 - Active proposals: `6`
-- Archived proposals: `648`
+- Archived proposals: `651`
 - Main capability specs: `406`
 
 ## Active Proposals
@@ -17,12 +17,12 @@
 | [`enable-claude-lightweight-streaming-and-frame-attribution`](enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) | 15/18 | Claude-stream trace、final fidelity 与 archive gate | [design](enable-claude-lightweight-streaming-and-frame-attribution/design.md) · [tasks](enable-claude-lightweight-streaming-and-frame-attribution/tasks.md) · [specs](enable-claude-lightweight-streaming-and-frame-attribution/specs/) · [verification](enable-claude-lightweight-streaming-and-frame-attribution/verification.md) |
 | [`stabilize-client-runtime-and-diagnostics`](stabilize-client-runtime-and-diagnostics/proposal.md) | 21/22 | Quantified frame / first-delta trace retention | [design](stabilize-client-runtime-and-diagnostics/design.md) · [tasks](stabilize-client-runtime-and-diagnostics/tasks.md) · [specs](stabilize-client-runtime-and-diagnostics/specs/) · [verification](stabilize-client-runtime-and-diagnostics/verification.md) |
 | [`fix-codex-subagent-live-sidebar-convergence`](fix-codex-subagent-live-sidebar-convergence/proposal.md) | 6/6 | Completed; pending sync/archive | [design](fix-codex-subagent-live-sidebar-convergence/design.md) · [tasks](fix-codex-subagent-live-sidebar-convergence/tasks.md) · [specs](fix-codex-subagent-live-sidebar-convergence/specs/) · [verification](fix-codex-subagent-live-sidebar-convergence/verification.md) |
-
 ## Archived Proposals
 
 - [完整归档提案索引](archive/README.md) — 648 个 proposal，按月份 / 归档日期分组。
 - [2026-07-23 `add-theme-aware-syntax-and-diff-tokens`](archive/2026-07-23-add-theme-aware-syntax-and-diff-tokens/proposal.md) — 已同步 theme preset syntax/diff tokens、稳定 root override 与外观设置实时预览。
 - [2026-07-23 `fix-multi-repository-git-inline-diff-scope`](archive/2026-07-23-fix-multi-repository-git-inline-diff-scope/proposal.md) — 已同步 multi-repository scoped inline diff、discard-all、diff layout 与 command-header actions。
+- [2026-07-23 最近活动批次](archive/README.md#2026-07-23) — `enhance-session-activity-panels`、`enhance-quick-switcher-hub`、`enhance-quick-switcher-nav-toggle` 已同步 `codex-chat-canvas-workspace-session-activity-panel` 与 `quick-context-switcher`。
 - [2026-07-23 归档批次](archive/README.md#2026-07-23) — Python/Pyright 与 Go/gopls semantic navigation 已接入 external provider runtime。
 - [2026-07-22 归档批次](archive/README.md#2026-07-22) — 已修复 multi-runtime/symlinked npm CLI discovery，并完成文件树定位与 completion selection index 对齐。
 - [2026-07-20 归档批次](archive/README.md#2026-07-20) — Caveman bundled curated skill 已验证并同步 main spec。
