@@ -1935,3 +1935,36 @@ Main File Editor 增加仅限跨文件语义跳转的 Back/Forward 历史；返�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1083: 归档并提交主题感知代码与 Diff 配色
+
+**Date**: 2026-07-24
+**Task**: 归档并提交主题感知代码与 Diff 配色
+**Branch**: `feature/v-078`
+
+### Summary
+
+审查并修复主题 preset syntax/diff token 链路：补齐 file-view root override、appearance-aware fallback 与 tag token；同步 5 个 requirements，归档 OpenSpec change，并通过增量测试、lint、typecheck、CSS parse 与 large-file gate。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e14684cee` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
