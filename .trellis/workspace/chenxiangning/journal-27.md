@@ -1,0 +1,65 @@
+# Journal - chenxiangning (Part 27)
+
+> Continuation from `journal-26.md` (archived at ~2000 lines)
+> Started: 2026-07-24
+
+---
+
+
+
+## Session 1084: 增强最近活动面板与快速切换器交互
+
+**Date**: 2026-07-24
+**Task**: 增强最近活动面板与快速切换器交互
+**Branch**: `feature/v-078`
+
+### Summary
+
+三个 OpenSpec change（session-activity-panels / quick-switcher-hub / nav-toggle）实现、双轮 review 修复、用户验收后归档并同步 main specs：Radar 持久化边界与完成补偿、收起态顶栏徽章、⌘E 进行中 live 区与新入口、导航回切与无效提示、首页遮挡修复。
+
+### Main Changes
+
+### Main Changes
+
+三个 OpenSpec change 全部实现、验收并归档，spec delta 已同步 main specs：
+
+| Change | 内容 |
+|---|---|
+| `enhance-session-activity-panels` | Radar 持久化边界（30 天 TTL / 每 workspace 50 / 全局 200 惰性修剪）、完成记录 reconcile（启动前完成补记 + 删除防复活闭环）、收起态顶栏 running 计数徽章、Radar 交互一致性（最新日期组默认展开/未读可删/删除失败反馈/ConfirmDialog 二次确认/外部事件同步）、Activity 时间线无障碍（diff modal Escape+焦点、tablist 方向键、follow 气泡 8s 且自动消失不永久 suppress、reasoning 上滚暂停跟随、折叠 turn 摘要徽章） |
+| `enhance-quick-switcher-hub` | ⌘E 面板会话栏顶部「进行中」live 区（绿色脉冲、跨 workspace 跳转、与最近会话去重）、新增全局搜索/便签/项目记忆导航入口（初版新建会话与帮助文档经用户验收后移除） |
+| `enhance-quick-switcher-nav-toggle` | 快速导航回切语义（开→点→关，10 个 in-shell 入口）、当前模块 is-active 高亮、无工作区 info toast 提示（替代静默空默认页与 intentCanvas 的 window.alert）、Quick Switcher 全部激活路径统一关闭首页表面（修复 home 遮罩后无反馈 bug） |
+
+Review 治理：6 路并行 code review 发现的 2 个 BLOCKER（reconcile 删除复活、macOS WKWebView window.confirm 静默失效）与 9 项 SHOULD_FIX 全部修复；用户自审发现的 4 个 artifact 问题（globalSearch 不可达回切 spec 排除、changes/README 索引、死项错误归因、dismissed TTL 表述）同步修正。
+
+**关键文件**：
+- `src/features/session-activity/**`、`src/features/quick-switcher/**`、`src/app-shell-parts/quickSwitcherNavigationState.ts`（新增纯函数路由判定）
+- `src/components/ui/ConfirmDialog.tsx`（新增通用组件）
+- `src/features/app/components/MainHeader.tsx`、`src/app-shell-parts/useAppShell{QuickSwitcher,LayoutNodes,SearchRadar,SearchAndComposer}Section.*`
+- `openspec/changes/archive/2026-07-23-enhance-*`（三个归档 change）
+
+### Testing
+
+- [OK] focused Vitest：65 files / 539 tests 全部通过（最终集成批），后续修复批 quick-switcher + shell 70/70
+- [OK] targeted ESLint 0 告警；`tsc --noEmit` 干净
+- [OK] 三个 change `openspec validate --strict` 通过；归档后全量 442/443（1 项失败为既有无关 change `fix-claude-cli-native-installer` 的 spec 格式问题，本次未触碰）
+- [OK] i18n 十语言 parity 脚本验证通过；diff 审计无域外文件
+- [OK] 用户桌面视觉验收通过；按约定未运行全量测试
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c18a3a694` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
