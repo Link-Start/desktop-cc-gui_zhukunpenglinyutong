@@ -22,6 +22,8 @@ type QuickSwitcherShellBoundary = {
   setCenterMode: (mode: CenterMode) => void;
   setFilePanelMode: (mode: "git" | "files") => void;
   setGitPanelMode: (mode: "diff" | "log" | "issues" | "prs") => void;
+  setHomeOpen: (open: boolean) => void;
+  setWorkspaceHomeWorkspaceId: (id: string | null) => void;
   expandRightPanel: () => void;
   handleOpenFile: (
     path: string,
@@ -52,7 +54,9 @@ export function useAppShellQuickSwitcherSection(
     setCenterMode,
     setFilePanelMode,
     setGitPanelMode,
+    setHomeOpen,
     setIsSearchPaletteOpen,
+    setWorkspaceHomeWorkspaceId,
     threadsByWorkspace,
     workspaces,
   } = input;
@@ -122,6 +126,10 @@ export function useAppShellQuickSwitcherSection(
       if (!targetWorkspace) {
         return;
       }
+      setHomeOpen(false);
+      setWorkspaceHomeWorkspaceId(null);
+      setAppMode("chat");
+      setActiveTab("codex");
       if (workspaceId !== activeWorkspaceId) {
         selectWorkspace(workspaceId);
       }
@@ -133,6 +141,10 @@ export function useAppShellQuickSwitcherSection(
       closeQuickSwitcher,
       handleOpenFile,
       selectWorkspace,
+      setActiveTab,
+      setAppMode,
+      setHomeOpen,
+      setWorkspaceHomeWorkspaceId,
       workspaces,
     ],
   );

@@ -42,6 +42,8 @@ function createInput() {
     setCenterMode: vi.fn(),
     setFilePanelMode: vi.fn(),
     setGitPanelMode: vi.fn(),
+    setHomeOpen: vi.fn(),
+    setWorkspaceHomeWorkspaceId: vi.fn(),
     selectWorkspace: vi.fn(),
     expandRightPanel: vi.fn(),
     handleOpenFile: vi.fn(),
@@ -87,7 +89,7 @@ describe("useAppShellQuickSwitcherSection", () => {
     expect(input.setAppMode).toHaveBeenCalledWith("chat");
   });
 
-  it("opens a file against its owning workspace", () => {
+  it("opens a file against its owning workspace and routes to the main codex area", () => {
     const input = createInput();
     const { result } = renderHook(() => useAppShellQuickSwitcherSection(input));
 
@@ -98,9 +100,48 @@ describe("useAppShellQuickSwitcherSection", () => {
       ),
     );
 
+    expect(input.setHomeOpen).toHaveBeenCalledWith(false);
+    expect(input.setWorkspaceHomeWorkspaceId).toHaveBeenCalledWith(null);
+    expect(input.setAppMode).toHaveBeenCalledWith("chat");
+    expect(input.setActiveTab).toHaveBeenCalledWith("codex");
     expect(input.selectWorkspace).toHaveBeenCalledWith("workspace-b");
     expect(input.handleOpenFile).toHaveBeenCalledWith("src/Beta.ts", undefined, {
       targetWorkspace: input.workspaces[1],
+    });
+  });
+
+  it("closes the home surface before opening the file from the bootstrap shell state", () => {
+    const input = { ...createInput(), activeWorkspaceId: null };
+    const { result } = renderHook(() => useAppShellQuickSwitcherSection(input));
+
+    act(() =>
+      result.current.handleQuickSwitcherSelectFile(
+        "workspace-a",
+        "src/Alpha.ts",
+      ),
+    );
+
+    // All visibility prerequisites must settle before delegating to handleOpenFile,
+    // otherwise the freshly-written file tab can remain behind the previous surface.
+    const handleOpenOrder =
+      input.handleOpenFile.mock.invocationCallOrder[0];
+    expect(input.setHomeOpen).toHaveBeenCalledWith(false);
+    expect(input.setWorkspaceHomeWorkspaceId).toHaveBeenCalledWith(null);
+    expect(input.setHomeOpen.mock.invocationCallOrder[0]).toBeLessThan(
+      handleOpenOrder,
+    );
+    expect(
+      input.setWorkspaceHomeWorkspaceId.mock.invocationCallOrder[0],
+    ).toBeLessThan(handleOpenOrder);
+    expect(input.setAppMode.mock.invocationCallOrder[0]).toBeLessThan(
+      handleOpenOrder,
+    );
+    expect(input.setActiveTab.mock.invocationCallOrder[0]).toBeLessThan(
+      handleOpenOrder,
+    );
+    expect(input.selectWorkspace).toHaveBeenCalledWith("workspace-a");
+    expect(input.handleOpenFile).toHaveBeenCalledWith("src/Alpha.ts", undefined, {
+      targetWorkspace: input.workspaces[0],
     });
   });
 
