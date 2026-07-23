@@ -305,14 +305,14 @@ describe("VendorSettingsPanel", () => {
       "Codex CLI",
       "Kimi CLI",
       "Gemini CLI",
+      "Grok CLI",
       "OpenCode CLI",
       "GLM CLI",
       "Trae CLI",
       "Cursor CLI",
-      "瑞幸 CLI",
     ]);
     expect(navLabels).toEqual(
-      expect.arrayContaining(["DevEco CLI", "PI CLI", "iFlow CLI"]),
+      expect.arrayContaining(["瑞幸 CLI", "DevEco CLI", "PI CLI", "iFlow CLI"]),
     );
     expect(screen.queryByRole("button", { name: /Droid CLI/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Goose CLI/ })).toBeNull();
@@ -342,6 +342,7 @@ describe("VendorSettingsPanel", () => {
 
     const unsupportedButtons = [
       "Gemini CLI",
+      "Grok CLI",
       "OpenCode CLI",
       "GLM CLI",
       "Trae CLI",
@@ -417,6 +418,22 @@ describe("VendorSettingsPanel", () => {
     );
     expect(screen.queryByTestId("provider-list-stub")).toBeNull();
     expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
+  });
+
+  it("opens the Grok CLI placeholder below Gemini", async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+      expect(readGlobalCodexAuthJsonMock).toHaveBeenCalled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Grok CLI/ }));
+
+    expect(screen.getByRole("heading", { name: "Grok CLI" })).toBeTruthy();
+    expect(screen.getByText("正在适配此CLI，即将开放")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open docs" }).getAttribute("href")).toBe(
+      "https://x.ai/cli",
+    );
   });
 
   it("keeps the CLI engine list in its own scroll container", async () => {

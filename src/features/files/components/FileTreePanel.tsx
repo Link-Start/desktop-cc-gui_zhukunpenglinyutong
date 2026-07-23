@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import type { MouseEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -450,18 +451,25 @@ export function FileTreePanel({
     () => getGitignoredFolderAncestorPaths(folderPaths, mergedGitignoredDirectories),
     [folderPaths, mergedGitignoredDirectories],
   );
+  const [manuallyCollapsedAutoExpandedFolders, setManuallyCollapsedAutoExpandedFolders] =
+    useState<Set<string>>(EMPTY_SET);
   const effectiveExpandedFolders = useMemo(() => {
     if (gitignoredFolderAncestorPaths.size === 0) {
       return expandedFolders;
     }
     const next = new Set(expandedFolders);
     gitignoredFolderAncestorPaths.forEach((path) => {
-      if (folderPaths.has(path)) {
+      if (folderPaths.has(path) && !manuallyCollapsedAutoExpandedFolders.has(path)) {
         next.add(path);
       }
     });
     return next;
-  }, [expandedFolders, folderPaths, gitignoredFolderAncestorPaths]);
+  }, [
+    expandedFolders,
+    folderPaths,
+    gitignoredFolderAncestorPaths,
+    manuallyCollapsedAutoExpandedFolders,
+  ]);
   const folderGitStatusMap = useMemo(() => {
     if (workspaceGitStatusEntries.length === 0) {
       return new Map<string, string>();
@@ -578,6 +586,19 @@ export function FileTreePanel({
       missingAncestors.forEach((path) => next.add(path));
       return next;
     });
+    setManuallyCollapsedAutoExpandedFolders((current) => {
+      if (current.size === 0) {
+        return current;
+      }
+      let changed = false;
+      const next = new Set(current);
+      availableAncestorPaths.forEach((path) => {
+        if (next.delete(path)) {
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
     if (!mergedFiles.includes(normalizedPath)) {
       return;
     }
@@ -594,6 +615,7 @@ export function FileTreePanel({
     setSelectedNodePath,
     setSelectedNodePaths,
     setSelectedNodeType,
+    setManuallyCollapsedAutoExpandedFolders,
     workspaceId,
   ]);
   useEffect(() => {
@@ -723,6 +745,21 @@ export function FileTreePanel({
   ]);
 
   useEffect(() => {
+    setManuallyCollapsedAutoExpandedFolders((prev) => {
+      if (prev.size === 0) {
+        return prev;
+      }
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((path) => {
+        if (folderPaths.has(path)) {
+          next.add(path);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
     setExpandedFolders((prev) => {
       // Keep only folders that still exist; default is all collapsed.
       const next = new Set<string>();
@@ -746,7 +783,11 @@ export function FileTreePanel({
       let changed = false;
       const next = new Set(prev);
       gitignoredFolderAncestorPaths.forEach((path) => {
-        if (!folderPaths.has(path) || next.has(path)) {
+        if (
+          !folderPaths.has(path) ||
+          manuallyCollapsedAutoExpandedFolders.has(path) ||
+          next.has(path)
+        ) {
           return;
         }
         next.add(path);
@@ -754,7 +795,12 @@ export function FileTreePanel({
       });
       return changed ? next : prev;
     });
-  }, [folderPaths, gitignoredFolderAncestorPaths, setExpandedFolders]);
+  }, [
+    folderPaths,
+    gitignoredFolderAncestorPaths,
+    manuallyCollapsedAutoExpandedFolders,
+    setExpandedFolders,
+  ]);
 
   useEffect(() => {
     setSelectedNodePaths((prev) => {
@@ -813,6 +859,14 @@ export function FileTreePanel({
       }
       const parentPath = resolveFileTreeParentPath(normalized);
       if (parentPath) {
+        setManuallyCollapsedAutoExpandedFolders((prev) => {
+          if (!prev.has(parentPath)) {
+            return prev;
+          }
+          const next = new Set(prev);
+          next.delete(parentPath);
+          return next;
+        });
         setExpandedFolders((prev) => {
           if (prev.has(parentPath)) {
             return prev;
@@ -864,6 +918,7 @@ export function FileTreePanel({
       resolveFileTreeParentPath,
       selectionAnchorPathRef,
       setExpandedFolders,
+      setManuallyCollapsedAutoExpandedFolders,
       setLazyDirectories,
       setLazyDirectoryMetadata,
       setLazyFiles,
@@ -1065,27 +1120,48 @@ export function FileTreePanel({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [previewPath, closePreview]);
 
-  const toggleFolder = useCallback((path: string) => {
-    setExpandedFolders((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
-      }
-      return next;
-    });
-  }, [setExpandedFolders]);
-
   const toggleFolderExpandedState = useCallback(
     (path: string, isLazyFolder: boolean) => {
-      const shouldExpand = !expandedFolders.has(path);
-      toggleFolder(path);
+      const shouldExpand = !effectiveExpandedFolders.has(path);
+      setManuallyCollapsedAutoExpandedFolders((prev) => {
+        if (shouldExpand) {
+          if (!prev.has(path)) {
+            return prev;
+          }
+          const next = new Set(prev);
+          next.delete(path);
+          return next;
+        }
+        if (prev.has(path)) {
+          return prev;
+        }
+        return new Set(prev).add(path);
+      });
+      setExpandedFolders((prev) => {
+        if (shouldExpand && prev.has(path)) {
+          return prev;
+        }
+        if (!shouldExpand && !prev.has(path)) {
+          return prev;
+        }
+        const next = new Set(prev);
+        if (shouldExpand) {
+          next.add(path);
+        } else {
+          next.delete(path);
+        }
+        return next;
+      });
       if (shouldExpand && isLazyFolder) {
         void loadLazyDirectoryChildren(path);
       }
     },
-    [expandedFolders, loadLazyDirectoryChildren, toggleFolder],
+    [
+      effectiveExpandedFolders,
+      loadLazyDirectoryChildren,
+      setExpandedFolders,
+      setManuallyCollapsedAutoExpandedFolders,
+    ],
   );
 
   const resolvePath = useCallback(
@@ -2179,7 +2255,7 @@ export function FileTreePanel({
   }, [copyPath, panelRef, selectedNodePath, selectedNodeType, trashItem]);
 
   const fileTreeRowState: FileTreeRowState = {
-    expandedFolders,
+    expandedFolders: effectiveExpandedFolders,
     loadingLazyDirectories,
     lazyDirectoryLoadErrors,
     folderGitStatusMap,

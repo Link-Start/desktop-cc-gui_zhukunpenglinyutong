@@ -2074,6 +2074,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onStageRepositoryAll={options.onStageRepositoryAll}
           onCommitRepositories={options.onCommitRepositories}
           repositoryCommitSummary={options.repositoryCommitSummary}
+          onRefreshGitStatus={options.queueGitStatusRefresh}
+          onRefreshGitLog={options.refreshGitLog}
           onRefreshGitDiffs={options.refreshGitDiffs}
           onCreateCodeAnnotation={handleCreateCodeAnnotation}
           onRemoveCodeAnnotation={handleRemoveCodeAnnotation}

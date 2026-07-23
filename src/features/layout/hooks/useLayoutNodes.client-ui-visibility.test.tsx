@@ -973,6 +973,7 @@ function createLayoutOptions(
     focusedWorkspaceNoteRequestKey: 0,
     onRefreshFiles: noop,
     onOpenDetachedFileExplorer: noop,
+    refreshGitLog: noop,
     refreshGitDiffs: asyncNoop,
     queueGitStatusRefresh: noop,
     onDiffActivePathChange: noop,

@@ -2083,6 +2083,7 @@ body.editor-horizontal-split-resizing * {
   --diff-radius-md: calc(var(--radius) - 2px);
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   position: relative;
   flex: 0 0 auto;
   min-width: 0;

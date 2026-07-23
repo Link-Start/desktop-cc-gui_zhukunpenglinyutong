@@ -7,6 +7,7 @@ import copilotCliMonoIcon from "@lobehub/icons-static-svg/icons/copilot.svg";
 import cursorCliIcon from "@lobehub/icons-static-svg/icons/cursor.svg";
 import geminiCliMonoIcon from "@lobehub/icons-static-svg/icons/geminicli.svg";
 import glmCliMonoIcon from "@lobehub/icons-static-svg/icons/chatglm.svg";
+import grokCliMonoIcon from "@lobehub/icons-static-svg/icons/grok.svg";
 import huaweiMonoIcon from "@lobehub/icons-static-svg/icons/huawei.svg";
 import kimiCliIcon from "@lobehub/icons-static-svg/icons/kimi.svg";
 import kimiCliMonoIcon from "@lobehub/icons-static-svg/icons/kimi.svg";
@@ -29,6 +30,7 @@ type UnsupportedCliEngineId =
   | "cursor"
   | "gemini"
   | "glm"
+  | "grok"
   | "trae"
   | "deveco"
   | "pi"
@@ -47,6 +49,7 @@ export const CLI_DOCS_HREF_BY_ID: Record<CliEngineId, string> = {
   claude: "https://code.claude.com/docs/en/cli-reference",
   codex: "https://learn.chatgpt.com/docs/codex/cli",
   gemini: "https://developers.google.com/gemini-code-assist/docs/gemini-cli",
+  grok: "https://x.ai/cli",
   opencode: "https://opencode.ai/docs/",
   glm: "https://docs.z.ai/devpack/quick-start",
   trae: "https://docs.trae.ai/",
@@ -68,6 +71,7 @@ const CLI_ICON_BY_ID: Record<CliEngineId, string | null> = {
   claude: claudeCodeCliIcon,
   codex: codexCliIcon,
   gemini: geminiCliMonoIcon,
+  grok: grokCliMonoIcon,
   opencode: openCodeCliIcon,
   glm: glmCliMonoIcon,
   trae: traeCliMonoIcon,
@@ -89,6 +93,7 @@ const CLI_MONO_ICON_BY_ID: Record<CliEngineId, string | null> = {
   claude: claudeCodeCliMonoIcon,
   codex: codexCliMonoIcon,
   gemini: geminiCliMonoIcon,
+  grok: grokCliMonoIcon,
   opencode: openCodeCliMonoIcon,
   glm: glmCliMonoIcon,
   trae: traeCliMonoIcon,
@@ -118,6 +123,7 @@ export function buildCliEngineNavItems(options: {
     { key: "codex", label: "Codex CLI", hasConfig: options.codexHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.codex },
     { key: "kimi", label: "Kimi CLI", hasConfig: options.kimiHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.kimi },
     { key: "gemini", label: "Gemini CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.gemini },
+    { key: "grok", label: "Grok CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.grok },
     { key: "opencode", label: "OpenCode CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.opencode },
     { key: "glm", label: "GLM CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.glm },
     { key: "trae", label: "Trae CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.trae },

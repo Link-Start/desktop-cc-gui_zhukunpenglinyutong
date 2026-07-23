@@ -450,12 +450,14 @@ describe("GitDiffPanel", () => {
   it("invokes manual git status and diff refresh from the repository summary action", () => {
     const onRefreshGitStatus = vi.fn();
     const onRefreshGitDiffs = vi.fn();
+    const onRefreshGitLog = vi.fn();
     render(
       <GitDiffPanel
         {...baseProps}
         workspacePath="/tmp/ccgui"
         onRefreshGitStatus={onRefreshGitStatus}
         onRefreshGitDiffs={onRefreshGitDiffs}
+        onRefreshGitLog={onRefreshGitLog}
         unstagedFiles={[
           { path: "src/App.tsx", status: "M", additions: 2, deletions: 1 },
         ]}
@@ -463,17 +465,40 @@ describe("GitDiffPanel", () => {
     );
 
     const refreshButton = screen.getByRole("button", { name: "Refresh Git status" });
-    const refreshAction = refreshButton.closest(".diff-tree-summary-root-action");
-    const sectionHeader = refreshButton.closest(".git-filetree-section-header");
+    const panelActions = screen.getByRole("group", { name: "Git panel" });
+    const sectionHeader = document.querySelector(".git-filetree-section-header");
 
     expect(sectionHeader?.textContent).not.toContain("ccgui");
     expect(sectionHeader?.lastElementChild?.classList.contains("diff-section-count-badge")).toBe(true);
-    expect(refreshAction?.parentElement).toBe(sectionHeader);
+    expect(panelActions.contains(refreshButton)).toBe(true);
 
     fireEvent.click(refreshButton);
 
     expect(onRefreshGitStatus).toHaveBeenCalledTimes(1);
     expect(onRefreshGitDiffs).toHaveBeenCalledTimes(1);
+    expect(onRefreshGitLog).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps manual git refresh available when only outgoing commit status is stale", () => {
+    const onRefreshGitStatus = vi.fn();
+    const onRefreshGitDiffs = vi.fn();
+    const onRefreshGitLog = vi.fn();
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        fileStatus="No changes"
+        commitsAhead={1}
+        onRefreshGitStatus={onRefreshGitStatus}
+        onRefreshGitDiffs={onRefreshGitDiffs}
+        onRefreshGitLog={onRefreshGitLog}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Git status" }));
+
+    expect(onRefreshGitStatus).toHaveBeenCalledTimes(1);
+    expect(onRefreshGitDiffs).toHaveBeenCalledTimes(1);
+    expect(onRefreshGitLog).toHaveBeenCalledTimes(1);
   });
 
   it("spins the manual git status refresh icon when clicked", () => {

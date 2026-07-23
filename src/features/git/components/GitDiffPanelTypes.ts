@@ -126,6 +126,7 @@ export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   commitsAhead?: number;
   onRefreshGitStatus?: () => void;
   onRefreshGitDiffs?: () => void;
+  onRefreshGitLog?: () => void;
   multiRepositoryMode?: boolean;
   repositoryStatuses?: RepositoryGitStatus[];
   repositoryStatusesLoading?: boolean;

@@ -849,6 +849,61 @@ describe("FileTreePanel run action isolation", () => {
     expect(ignoredFolderLabels).not.toContain("src");
   });
 
+  it("lets users collapse folders auto-expanded to show gitignored children", () => {
+    const previousInvokeImplementation = invokeMock.getMockImplementation();
+    invokeMock.mockImplementation(async (...args: any[]) =>
+      previousInvokeImplementation ? previousInvokeImplementation(...args) : null,
+    );
+
+    try {
+      render(
+        <FileTreePanel
+          workspaceId="workspace-1"
+          workspacePath="/tmp/workspace"
+          files={[
+            "src-tauri/target/debug/app",
+            "src-tauri/src/main.rs",
+            "src-tauri/Cargo.toml",
+          ]}
+          directories={[
+            "src-tauri",
+            "src-tauri/target",
+            "src-tauri/target/debug",
+            "src-tauri/src",
+          ]}
+          isLoading={false}
+          filePanelMode="files"
+          onFilePanelModeChange={() => undefined}
+          onOpenFile={() => undefined}
+          onInsertText={() => undefined}
+          openTargets={[]}
+          openAppIconById={{}}
+          selectedOpenAppId=""
+          onSelectOpenAppId={() => undefined}
+          gitStatusFiles={[]}
+          gitignoredFiles={new Set<string>()}
+          gitignoredDirectories={new Set<string>(["target"])}
+        />,
+      );
+
+      const srcTauriRow = screen.getByRole("button", { name: /src-tauri/ });
+      expect(screen.getByRole("button", { name: /target/ })).toBeTruthy();
+      expect(srcTauriRow.querySelector(".file-tree-chevron")?.className).toContain("is-open");
+
+      invokeMock.mockClear();
+      fireEvent.click(srcTauriRow);
+
+      expect(screen.queryByRole("button", { name: /target/ })).toBeNull();
+      expect(srcTauriRow.querySelector(".file-tree-chevron")?.className).not.toContain("is-open");
+      expect(invokeMock).not.toHaveBeenCalledWith(
+        "list_workspace_directory_children",
+        expect.any(Object),
+      );
+    } finally {
+      invokeMock.mockImplementation(previousInvokeImplementation ?? (async () => null));
+    }
+  });
+
   it("applies git color class for repo-relative status when git root is a workspace subdirectory", () => {
     render(
       <FileTreePanel

@@ -481,6 +481,7 @@ export type LayoutNodesFlatOptions = {
   onSelectCommit: (entry: GitLogEntry) => void;
   gitLogError: string | null;
   gitLogLoading: boolean;
+  refreshGitLog: () => void;
   refreshGitDiffs: () => void;
   queueGitStatusRefresh: () => void;
   gitIssues: GitHubIssue[];
@@ -1038,6 +1039,7 @@ export type GitLayoutNodesOptions = Pick<
   | "gitDiffs"
   | "gitDiffLoading"
   | "gitDiffError"
+  | "refreshGitLog"
   | "refreshGitDiffs"
   | "queueGitStatusRefresh"
   | "onDiffActivePathChange"
