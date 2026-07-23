@@ -767,13 +767,13 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
   const showGitDetail = Boolean(selectedDiffPath) && isPhone;
   const isThreadOpen = Boolean(activeThreadId && showComposer);
   const handleSelectDiffForPanel = useCallback(
-    (path: string | null) => {
+    (path: string | null, repositoryRoot?: string | null) => {
       markLiveEditPreviewManualNavigation();
       if (!path) {
         setSelectedDiffPath(null);
         return;
       }
-      handleSelectDiff(path);
+      handleSelectDiff(path, repositoryRoot);
     },
     [
       handleSelectDiff,

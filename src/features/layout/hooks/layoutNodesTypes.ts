@@ -469,7 +469,7 @@ export type LayoutNodesFlatOptions = {
   fileStatus: string;
   selectedDiffPath: string | null;
   diffScrollRequestId: number;
-  onSelectDiff: (path: string | null) => void;
+  onSelectDiff: (path: string | null, repositoryRoot?: string | null) => void;
   gitLogEntries: GitLogEntry[];
   gitLogTotal: number;
   gitLogAhead: number;

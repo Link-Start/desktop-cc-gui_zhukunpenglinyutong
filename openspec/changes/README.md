@@ -4,7 +4,7 @@
 
 - Updated At: `2026-07-23`
 - Active proposals: `5`
-- Archived proposals: `646`
+- Archived proposals: `647`
 - Main capability specs: `406`
 
 ## Active Proposals
@@ -19,7 +19,8 @@
 
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 646 个 proposal，按月份 / 归档日期分组。
+- [完整归档提案索引](archive/README.md) — 647 个 proposal，按月份 / 归档日期分组。
+- [2026-07-23 `fix-multi-repository-git-inline-diff-scope`](archive/2026-07-23-fix-multi-repository-git-inline-diff-scope/proposal.md) — 已同步 multi-repository scoped inline diff、discard-all、diff layout 与 command-header actions。
 - [2026-07-23 归档批次](archive/README.md#2026-07-23) — Python/Pyright 与 Go/gopls semantic navigation 已接入 external provider runtime。
 - [2026-07-22 归档批次](archive/README.md#2026-07-22) — 已修复 multi-runtime/symlinked npm CLI discovery，并完成文件树定位与 completion selection index 对齐。
 - [2026-07-20 归档批次](archive/README.md#2026-07-20) — Caveman bundled curated skill 已验证并同步 main spec。

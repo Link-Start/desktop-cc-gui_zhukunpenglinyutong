@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  GitFileDiff,
   GitFileStatus,
   GitHubPullRequest,
   GitHubPullRequestDiff,
   WorkspaceInfo,
 } from "../../../types";
+import { getGitDiffs } from "../../../services/tauri";
+import { buildCanonicalGitChanges } from "../../git/utils/gitChangeModel";
 import { useGitStatus } from "../../git/hooks/useGitStatus";
 import { useGitDiffs } from "../../git/hooks/useGitDiffs";
 import { useGitLog } from "../../git/hooks/useGitLog";
@@ -269,6 +272,9 @@ export function useGitPanelController({
     useState<EditorHighlightTarget | null>(null);
   const navigationRequestIdRef = useRef(0);
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
+  const [selectedDiffRepositoryRoot, setSelectedDiffRepositoryRoot] = useState<
+    string | null
+  >(null);
   const [diffScrollRequestId, setDiffScrollRequestId] = useState(0);
   const pendingDiffScrollRef = useRef(false);
   const [gitPanelMode, setGitPanelMode] = useState<
@@ -320,6 +326,16 @@ export function useGitPanelController({
   useEffect(() => {
     setGitDiffListViewState(readGitDiffListView(activeWorkspace?.id));
   }, [activeWorkspace?.id]);
+
+  useEffect(() => {
+    setSelectedDiffRepositoryRoot(null);
+  }, [activeWorkspace?.id]);
+
+  useEffect(() => {
+    if (!selectedDiffPath) {
+      setSelectedDiffRepositoryRoot(null);
+    }
+  }, [selectedDiffPath]);
 
   useEffect(() => {
     activeWorkspaceRef.current = activeWorkspace;
@@ -455,28 +471,84 @@ export function useGitPanelController({
     shouldLoadDiffs && diffSource === "commit",
   );
 
+  const useRepositoryScopedDiffs =
+    diffSource === "local" && Boolean(selectedDiffRepositoryRoot);
+  const [repositoryScopedDiffsState, setRepositoryScopedDiffsState] = useState<{
+    diffs: GitFileDiff[];
+    isLoading: boolean;
+    error: string | null;
+  }>({ diffs: [], isLoading: false, error: null });
+
+  useEffect(() => {
+    const workspaceId = activeWorkspace?.id;
+    if (!workspaceId || !useRepositoryScopedDiffs || !selectedDiffRepositoryRoot) {
+      setRepositoryScopedDiffsState((previous) =>
+        previous.diffs.length === 0 && !previous.isLoading && !previous.error
+          ? previous
+          : { diffs: [], isLoading: false, error: null },
+      );
+      return;
+    }
+    let cancelled = false;
+    setRepositoryScopedDiffsState({ diffs: [], isLoading: true, error: null });
+    getGitDiffs(workspaceId, selectedDiffRepositoryRoot)
+      .then((diffs) => {
+        if (!cancelled) {
+          setRepositoryScopedDiffsState({ diffs, isLoading: false, error: null });
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setRepositoryScopedDiffsState({
+            diffs: [],
+            isLoading: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspace?.id, selectedDiffRepositoryRoot, useRepositoryScopedDiffs]);
+
+  const repositoryScopedViewerDiffs = useMemo(
+    () =>
+      buildCanonicalGitChanges({
+        files: [],
+        diffs: repositoryScopedDiffsState.diffs,
+      }).viewerDiffs,
+    [repositoryScopedDiffsState.diffs],
+  );
+
   const activeDiffs =
     diffSource === "commit"
       ? gitCommitDiffs
       : diffSource === "pr"
         ? prDiffs
-        : gitDiffs;
+        : useRepositoryScopedDiffs
+          ? repositoryScopedViewerDiffs
+          : gitDiffs;
   const activeDiffLoading =
     diffSource === "commit"
       ? gitCommitDiffsLoading
       : diffSource === "pr"
         ? prDiffsLoading
-        : isDiffLoading;
+        : useRepositoryScopedDiffs
+          ? repositoryScopedDiffsState.isLoading
+          : isDiffLoading;
   const activeDiffError =
     diffSource === "commit"
       ? gitCommitDiffsError
       : diffSource === "pr"
         ? prDiffsError
-        : diffError;
+        : useRepositoryScopedDiffs
+          ? repositoryScopedDiffsState.error
+          : diffError;
 
   const handleSelectDiff = useCallback(
-    (path: string) => {
+    (path: string, repositoryRoot?: string | null) => {
       setSelectedDiffPath(path);
+      setSelectedDiffRepositoryRoot(repositoryRoot ?? null);
       pendingDiffScrollRef.current = true;
       setCenterMode("diff");
       setGitPanelMode("diff");

@@ -1021,6 +1021,13 @@ function GitDiffPanelImpl({
     [onSelectFile],
   );
 
+  const handleOpenRepositoryInlinePreview = useCallback(
+    (repositoryRoot: string, path: string) => {
+      onSelectFile?.(path, repositoryRoot);
+    },
+    [onSelectFile],
+  );
+
   const handleOpenFilePreview = useCallback((
     file: DiffFile,
     section: "staged" | "unstaged",
@@ -1663,6 +1670,20 @@ function GitDiffPanelImpl({
         scope: "explicit-repository",
         repositoryRoot,
         paths: [path],
+      });
+    },
+    [discardDialogSubmitting, onRevertRepositoryFile],
+  );
+
+  const discardRepositoryFiles = useCallback(
+    async (repositoryRoot: string, paths: string[]) => {
+      if (!onRevertRepositoryFile || paths.length === 0 || discardDialogSubmitting) {
+        return;
+      }
+      setDiscardDialogTarget({
+        scope: "explicit-repository",
+        repositoryRoot,
+        paths,
       });
     },
     [discardDialogSubmitting, onRevertRepositoryFile],
@@ -2610,9 +2631,11 @@ function GitDiffPanelImpl({
               onStageFile={onStageRepositoryFile}
               onUnstageFile={onUnstageRepositoryFile}
               onDiscardFile={onRevertRepositoryFile ? discardRepositoryFile : undefined}
+              onDiscardFiles={onRevertRepositoryFile ? discardRepositoryFiles : undefined}
               onStageAll={onStageRepositoryAll}
               onOpenFile={(repositoryRoot, path) => onOpenFile?.(path, repositoryRoot)}
               onOpenFilePreview={handleOpenRepositoryFilePreview}
+              onOpenInlinePreview={onSelectFile ? handleOpenRepositoryInlinePreview : undefined}
               onShowFileMenu={showRepositoryFileMenu}
               onRefresh={onRefreshRepositoryStatuses}
             />

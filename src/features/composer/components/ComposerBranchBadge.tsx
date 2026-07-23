@@ -24,7 +24,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from "@/components/ui/command";
 import type {
   BranchInfo,
@@ -585,7 +584,34 @@ function ComposerBranchBadgeComponent({
           <Command>
             <div className="composer-git-command-header">
               <CommandInput value={query} onValueChange={(value) => { setQuery(value); setError(null); setGlobalActionFeedback(null); }} placeholder={showGlobalCheckout ? t("workspace.searchBranches") : showRepositoryList ? t("git.switchRepository") : t("workspace.searchOrCreateBranch")} autoFocus aria-label={showGlobalCheckout ? t("workspace.searchBranches") : showRepositoryList ? t("git.switchRepository") : t("workspace.searchBranches")} />
-              {!showGlobalCheckout && !showRepositoryList ? (
+              {showRepositoryList ? (
+                <div className="composer-git-header-actions" role="group" aria-label={t("git.sectionActions", { title: t("git.switchRepository") })}>
+                  {onUpdateAllRepositories ? (
+                    <TooltipIconButton
+                      label={t("git.repositoryBatchUpdateAll")}
+                      className="composer-git-header-action"
+                      disabled={globalActionPending !== null}
+                      onClick={() => void handleUpdateAll()}
+                    >
+                      {globalActionPending === "update" ? (
+                        <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                      ) : (
+                        <RefreshCw className="size-4" aria-hidden />
+                      )}
+                    </TooltipIconButton>
+                  ) : null}
+                  {onCheckoutAllRepositories && onLoadCommonRepositoryBranches ? (
+                    <TooltipIconButton
+                      label={t("git.repositoryBatchCheckoutAll")}
+                      className="composer-git-header-action"
+                      disabled={globalActionPending !== null}
+                      onClick={() => void handleOpenGlobalCheckout()}
+                    >
+                      <GitBranch className="size-4" aria-hidden />
+                    </TooltipIconButton>
+                  ) : null}
+                </div>
+              ) : !showGlobalCheckout ? (
                 <div className="composer-git-header-actions" role="group" aria-label={t("git.sectionActions", { title: triggerBranchName })}>
                   {onUpdate && effectiveCurrentBranch ? (
                     <TooltipIconButton
@@ -671,23 +697,6 @@ function ComposerBranchBadgeComponent({
                 </>
               ) : showRepositoryList ? (
                 <>
-                  <CommandGroup className="p-0.5">
-                    <div className="grid grid-cols-2 gap-1">
-                      <CommandItem className="h-7 justify-center py-0" value="__global_update_all" disabled={!onUpdateAllRepositories || globalActionPending !== null} onSelect={() => void handleUpdateAll()}>
-                        {globalActionPending === "update" ? (
-                          <LoaderCircle className="size-4 animate-spin" aria-hidden />
-                        ) : (
-                          <RefreshCw className="size-4" aria-hidden />
-                        )}
-                        <span>{t("git.repositoryBatchUpdateAll")}</span>
-                      </CommandItem>
-                      <CommandItem className="h-7 justify-center py-0" value="__global_checkout_all" disabled={!onCheckoutAllRepositories || !onLoadCommonRepositoryBranches || globalActionPending !== null} onSelect={() => void handleOpenGlobalCheckout()}>
-                        <GitBranch className="size-4" aria-hidden />
-                        <span>{t("git.repositoryBatchCheckoutAll")}</span>
-                      </CommandItem>
-                    </div>
-                  </CommandGroup>
-                  <CommandSeparator />
                   <CommandGroup>
                     {repositories.map((repository) => (
                     <CommandItem

@@ -300,10 +300,16 @@ describe("ComposerBranchBadge", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /main/i }));
-    const updateAll = screen.getByText("git.repositoryBatchUpdateAll").closest("[cmdk-item]") as HTMLElement;
-    const checkoutAll = screen.getByText("git.repositoryBatchCheckoutAll").closest("[cmdk-item]") as HTMLElement;
+    const updateAll = screen.getByRole("button", { name: "git.repositoryBatchUpdateAll" });
+    const checkoutAll = screen.getByRole("button", { name: "git.repositoryBatchCheckoutAll" });
     expect(updateAll.parentElement).toBe(checkoutAll.parentElement);
-    expect(updateAll.classList.contains("h-7")).toBe(true);
+    expect(updateAll.classList.contains("composer-git-header-action")).toBe(true);
+    expect(checkoutAll.classList.contains("composer-git-header-action")).toBe(true);
+    expect(updateAll.closest(".composer-git-command-header")).toBeTruthy();
+    expect(updateAll.textContent).toBe("");
+    expect(checkoutAll.textContent).toBe("");
+    expect(updateAll.querySelector("svg")).toBeTruthy();
+    expect(checkoutAll.querySelector("svg")).toBeTruthy();
     expect(document.querySelector("[cmdk-group-heading]")).toBeNull();
 
     fireEvent.click(updateAll);
@@ -348,7 +354,7 @@ describe("ComposerBranchBadge", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /main/i }));
-    await act(async () => fireEvent.click(screen.getByText("git.repositoryBatchCheckoutAll")));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "git.repositoryBatchCheckoutAll" })));
     expect((await screen.findByRole("alert")).textContent).toContain("service-c");
     expect(screen.getAllByText("main").length).toBeGreaterThan(1);
     expect(screen.getByText("2/3")).toBeTruthy();
@@ -387,7 +393,7 @@ describe("ComposerBranchBadge", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /main/i }));
-    fireEvent.click(screen.getByText("git.repositoryBatchCheckoutAll"));
+    fireEvent.click(screen.getByRole("button", { name: "git.repositoryBatchCheckoutAll" }));
     expect(screen.getByText("git.repositoryBatchLoadingBranches")).toBeTruthy();
     await act(async () => resolveBranches?.({
       localBranches: [],
@@ -418,7 +424,7 @@ describe("ComposerBranchBadge", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /main/i }));
-    await act(async () => fireEvent.click(screen.getByText("git.repositoryBatchCheckoutAll")));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "git.repositoryBatchCheckoutAll" })));
     expect(screen.getByText("git.repositoryBatchNoCommonBranches")).toBeTruthy();
   });
 

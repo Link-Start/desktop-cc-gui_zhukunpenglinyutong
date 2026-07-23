@@ -168,6 +168,7 @@ export function DesktopLayout({
     centerMode !== "projectMap" &&
     centerMode !== "intentCanvas" &&
     centerMode !== "fileCompare" &&
+    centerMode !== "diff" &&
     !shouldPlaceComposerInChatColumn &&
     !isEditorSplitProjectMapVisible &&
     !isEditorSplitNotesVisible &&

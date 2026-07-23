@@ -249,6 +249,28 @@ describe("GitMultiRepositoryChanges", () => {
     );
   });
 
+  it("forwards inline center-area preview clicks with repository identity", () => {
+    const onOpenInlinePreview = vi.fn();
+    render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[repositoryStatus("services/api")]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+        onOpenInlinePreview={onOpenInlinePreview}
+      />,
+    );
+
+    const previewButton = document.querySelector<HTMLButtonElement>(
+      '.diff-row[data-path="pom.xml"] .diff-row-action--preview-inline',
+    );
+    expect(previewButton).toBeTruthy();
+    fireEvent.click(previewButton as HTMLButtonElement);
+
+    expect(onOpenInlinePreview).toHaveBeenCalledWith("services/api", "pom.xml");
+  });
+
   it("forwards direct file-row opens with repository identity", () => {
     const onOpenFile = vi.fn();
     render(
@@ -389,6 +411,37 @@ describe("GitMultiRepositoryChanges", () => {
     fireEvent.click(discardButtons[0] as HTMLButtonElement);
 
     expect(onDiscardFile).toHaveBeenCalledWith("services/api", "pom.xml");
+  });
+
+  it("shows section discard-all in unstaged section header and forwards repository identity", () => {
+    const onDiscardFiles = vi.fn();
+    const status = repositoryStatus("services/api");
+    status.unstagedFiles = [
+      { path: "a.ts", status: "M", additions: 1, deletions: 0 },
+      { path: "b.ts", status: "M", additions: 2, deletions: 1 },
+    ];
+    status.stagedFiles = [
+      { path: "staged.md", status: "M", additions: 1, deletions: 0 },
+    ];
+    render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[status]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+        onDiscardFiles={onDiscardFiles}
+      />,
+    );
+
+    const sectionDiscardButtons = document.querySelectorAll<HTMLButtonElement>(
+      ".diff-section-actions .diff-row-action--discard",
+    );
+    expect(sectionDiscardButtons).toHaveLength(1);
+
+    fireEvent.click(sectionDiscardButtons[0] as HTMLButtonElement);
+
+    expect(onDiscardFiles).toHaveBeenCalledWith("services/api", ["a.ts", "b.ts"]);
   });
 
   it("forwards staged and unstaged row context menus with exact repository identity", () => {

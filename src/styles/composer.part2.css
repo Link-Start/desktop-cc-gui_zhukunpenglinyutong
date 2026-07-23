@@ -2308,26 +2308,36 @@
   gap: 4px;
 }
 
-.composer-git-header-action {
+.composer-git-command-header button.composer-git-header-action {
   display: inline-flex;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 6px;
+  border-radius: 4px;
+  box-shadow: none;
   background: transparent;
   color: var(--text-muted);
+  appearance: none;
 }
 
-.composer-git-header-action:hover,
-.composer-git-header-action:focus-visible {
-  background: var(--surface-hover);
+.composer-git-command-header button.composer-git-header-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.composer-git-command-header button.composer-git-header-action:hover,
+.composer-git-command-header button.composer-git-header-action:focus-visible {
+  background: transparent;
   color: var(--text-primary);
   outline: none;
 }
 
-.composer-git-header-action:disabled {
+.composer-git-command-header button.composer-git-header-action:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
