@@ -2,9 +2,9 @@
 
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
-- Updated At: `2026-07-23`
+- Updated At: `2026-07-24`
 - Active proposals: `6`
-- Archived proposals: `647`
+- Archived proposals: `648`
 - Main capability specs: `406`
 
 ## Active Proposals
@@ -20,7 +20,8 @@
 
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 647 个 proposal，按月份 / 归档日期分组。
+- [完整归档提案索引](archive/README.md) — 648 个 proposal，按月份 / 归档日期分组。
+- [2026-07-23 `add-theme-aware-syntax-and-diff-tokens`](archive/2026-07-23-add-theme-aware-syntax-and-diff-tokens/proposal.md) — 已同步 theme preset syntax/diff tokens、稳定 root override 与外观设置实时预览。
 - [2026-07-23 `fix-multi-repository-git-inline-diff-scope`](archive/2026-07-23-fix-multi-repository-git-inline-diff-scope/proposal.md) — 已同步 multi-repository scoped inline diff、discard-all、diff layout 与 command-header actions。
 - [2026-07-23 归档批次](archive/README.md#2026-07-23) — Python/Pyright 与 Go/gopls semantic navigation 已接入 external provider runtime。
 - [2026-07-22 归档批次](archive/README.md#2026-07-22) — 已修复 multi-runtime/symlinked npm CLI discovery，并完成文件树定位与 completion selection index 对齐。

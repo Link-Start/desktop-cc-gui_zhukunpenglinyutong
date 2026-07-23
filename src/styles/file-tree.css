@@ -1127,24 +1127,27 @@
 .file-preview-line-text .token.prolog,
 .file-preview-line-text .token.doctype,
 .file-preview-line-text .token.cdata {
-  color: rgba(150, 170, 200, 0.75);
+  color: var(--theme-syntax-comment, var(--file-preview-token-comment));
 }
 
 .file-preview-line-text .token.punctuation {
-  color: rgba(200, 210, 220, 0.85);
+  color: var(--theme-syntax-punctuation, var(--file-preview-token-punctuation));
 }
 
 .file-preview-line-text .token.property,
-.file-preview-line-text .token.tag,
 .file-preview-line-text .token.constant,
 .file-preview-line-text .token.symbol,
 .file-preview-line-text .token.deleted {
-  color: #ff7b72;
+  color: var(--theme-syntax-property, var(--file-preview-token-property));
+}
+
+.file-preview-line-text .token.tag {
+  color: var(--theme-syntax-tag, var(--file-preview-token-property));
 }
 
 .file-preview-line-text .token.boolean,
 .file-preview-line-text .token.number {
-  color: #f2cc60;
+  color: var(--theme-syntax-number, var(--file-preview-token-number));
 }
 
 .file-preview-line-text .token.selector,
@@ -1153,25 +1156,25 @@
 .file-preview-line-text .token.char,
 .file-preview-line-text .token.builtin,
 .file-preview-line-text .token.inserted {
-  color: #7ee787;
+  color: var(--theme-syntax-string, var(--file-preview-token-string));
 }
 
 .file-preview-line-text .token.operator,
 .file-preview-line-text .token.entity,
 .file-preview-line-text .token.url,
 .file-preview-line-text .token.variable {
-  color: rgba(200, 210, 220, 0.9);
+  color: var(--theme-syntax-operator, var(--file-preview-token-operator));
 }
 
 .file-preview-line-text .token.atrule,
 .file-preview-line-text .token.attr-value,
 .file-preview-line-text .token.keyword {
-  color: #8bd5ff;
+  color: var(--theme-syntax-keyword, var(--file-preview-token-keyword));
 }
 
 .file-preview-line-text .token.function,
 .file-preview-line-text .token.class-name {
-  color: #d2a8ff;
+  color: var(--theme-syntax-function, var(--file-preview-token-function));
 }
 
 /* Git status colors in file tree */

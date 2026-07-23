@@ -1984,37 +1984,41 @@
 }
 
 .session-activity-preview-text.is-command-output :is(.token.comment, .token.prolog, .token.doctype, .token.cdata) {
-  color: var(--session-activity-command-output-comment);
+  color: var(--theme-syntax-comment, var(--session-activity-command-output-comment));
 }
 
 .session-activity-preview-text.is-command-output .token.punctuation {
-  color: var(--session-activity-command-output-punctuation);
+  color: var(--theme-syntax-punctuation, var(--session-activity-command-output-punctuation));
 }
 
 .session-activity-preview-text.is-command-output
-  :is(.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted) {
-  color: var(--session-activity-command-output-constant);
+  :is(.token.property, .token.constant, .token.symbol, .token.deleted) {
+  color: var(--theme-syntax-property, var(--session-activity-command-output-constant));
+}
+
+.session-activity-preview-text.is-command-output .token.tag {
+  color: var(--theme-syntax-tag, var(--session-activity-command-output-constant));
 }
 
 .session-activity-preview-text.is-command-output :is(.token.boolean, .token.number) {
-  color: var(--session-activity-command-output-number);
+  color: var(--theme-syntax-number, var(--session-activity-command-output-number));
 }
 
 .session-activity-preview-text.is-command-output
   :is(.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted) {
-  color: var(--session-activity-command-output-string);
+  color: var(--theme-syntax-string, var(--session-activity-command-output-string));
 }
 
 .session-activity-preview-text.is-command-output :is(.token.operator, .token.entity, .token.url, .token.variable) {
-  color: var(--session-activity-command-output-operator);
+  color: var(--theme-syntax-operator, var(--session-activity-command-output-operator));
 }
 
 .session-activity-preview-text.is-command-output :is(.token.atrule, .token.attr-value, .token.keyword) {
-  color: var(--session-activity-command-output-keyword);
+  color: var(--theme-syntax-keyword, var(--session-activity-command-output-keyword));
 }
 
 .session-activity-preview-text.is-command-output :is(.token.function, .token.class-name) {
-  color: var(--session-activity-command-output-function);
+  color: var(--theme-syntax-function, var(--session-activity-command-output-function));
 }
 
 .session-activity-command-line-error {

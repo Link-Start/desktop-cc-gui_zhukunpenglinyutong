@@ -25,6 +25,14 @@ const settings = {
       "Custom mode applies the selected palette, but runtime surfaces still resolve to the {{appearance}} appearance.",
     themePresetDescription:
       "Choose any VS Code-inspired palette for the Custom theme. The current preset resolves to the {{appearance}} appearance.",
+    themePreviewTitle: "Code & Diff Preview",
+    themePreviewHelp:
+      "Live preview that updates with the current preset. The panels below show the token and diff colors used by code blocks, Markdown, file previews, and the diff viewer.",
+    themePreviewCodePanel: "Code block (Markdown)",
+    themePreviewFilePanel: "File preview (file-view)",
+    themePreviewDiffPanel: "Diff line-level",
+    themePreviewLegendAdd: "Added",
+    themePreviewLegendDel: "Removed",
     themePresetDarkModern: "Dark Modern",
     themePresetDarkPlus: "Dark+",
     themePresetLightModern: "Light Modern",
