@@ -673,10 +673,10 @@
 .git-status-refresh-button svg,
 .git-status-refresh-icon {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   stroke: currentColor !important;
-  stroke-width: 2.4;
+  stroke-width: 1.9;
   opacity: 1 !important;
 }
 

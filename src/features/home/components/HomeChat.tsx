@@ -128,7 +128,7 @@ export function HomeChat({
           >
             <EngineIcon
               engine={selectedEngine}
-              size={50}
+              size={32}
               className="home-chat-engine-icon"
             />
           </div>

@@ -31,7 +31,7 @@ const sidebar = {
     mcpSkillsMarket: "MCP & Skills Market",
     longTermMemory: "Long-term Memory",
     pluginMarket: "Plugin Market",
-    plugins: "Plugins",
+    plugins: "Market",
     specHub: "Spec Hub",
     comingSoon: "Coming Soon",
     comingSoonMessage: "This feature is under development, stay tuned",

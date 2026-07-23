@@ -80,7 +80,7 @@ import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import House from "lucide-react/dist/esm/icons/house";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Pencil from "lucide-react/dist/esm/icons/pencil";
-import Puzzle from "lucide-react/dist/esm/icons/puzzle";
+import Store from "lucide-react/dist/esm/icons/store";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import {
   getWorkspaceSidebarAlias,
@@ -2055,7 +2055,7 @@ function SidebarImpl({
               aria-label={t("sidebar.plugins")}
               data-tauri-drag-region="false"
             >
-              <Puzzle className="sidebar-primary-nav-icon" aria-hidden size={20} strokeWidth={1.8} />
+              <Store className="sidebar-primary-nav-icon" aria-hidden size={20} strokeWidth={1.8} />
               <span className="sidebar-primary-nav-text">{t("sidebar.plugins")}</span>
             </button>
             {showPrimaryNavGlobalSearch ? (
