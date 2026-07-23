@@ -13,6 +13,8 @@ const activityPanel = {
     "eventsCount": "{{count}} событий",
     "sessionsCount": "{{count}} сессий",
     "liveNow": "в эфире",
+    "collapsedLiveBadge": "{{count}} сессия выполняется",
+    "collapsedLiveBadge_other": "{{count}} сессий выполняется",
     "command": "Команда",
     "commandPendingSummary": "Выполнение команды",
     "commandCategories": {
@@ -97,7 +99,13 @@ const activityPanel = {
       "unreadMark": "Не прочитано",
       "readMark": "Прочитано",
       "deleteHistoryEntry": "Удалить {{name}}",
-      "deleteDateGroupEntries": "Удалить все записи ({{count}}) за {{date}}"
+      "deleteDateGroupEntries": "Удалить все записи ({{count}}) за {{date}}",
+      "confirmDeleteDateGroup": "Удалить {{count}} запись за {{date}}?",
+      "confirmDeleteDateGroup_other": "Удалить все записи ({{count}}) за {{date}}?",
+      "deleteFailedTitle": "Не удалось удалить",
+      "deleteFailedBody": "Не удалось удалить {{count}} запись. Повторите попытку.",
+      "deleteFailedBody_other": "Не удалось удалить записи ({{count}}). Повторите попытку.",
+      "deleteFailedDismiss": "Закрыть"
     },
     "status": {
       "running": "выполняется",

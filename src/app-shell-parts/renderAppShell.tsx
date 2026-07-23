@@ -228,6 +228,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     planPanelNode,
     queueSaveSettings,
     quickSwitcherSessionGroups,
+    quickSwitcherRunningSessions,
+    quickSwitcherActiveNavigationIds,
     reduceTransparency,
     windowTransparencyEnabled,
     windowOpacity,
@@ -711,6 +713,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
             activeFilePath={activeEditorFilePath}
             workspaces={workspaces}
             sessionGroups={quickSwitcherSessionGroups}
+            runningSessions={quickSwitcherRunningSessions}
+            activeNavigationIds={quickSwitcherActiveNavigationIds}
             onNavigate={handleQuickSwitcherNavigate}
             onSelectSession={handleQuickSwitcherSelectSession}
             onSelectFile={handleQuickSwitcherSelectFile}

@@ -5,6 +5,7 @@ const sidebar = {
     title: "Recent activity",
     navigation: "Navigate",
     recentSessions: "Recent sessions",
+    runningSessions: "Running",
     recentFiles: "Recent files",
     emptySessions: "No recent sessions",
     emptyFiles: "No recently opened or edited files",
@@ -13,7 +14,11 @@ const sidebar = {
     switchPaneHint: "Switch pane",
     openHint: "Open",
     closeHint: "Close",
+    hints: {
+      selectWorkspaceFirst: "Select a workspace first to open this",
+    },
     nav: {
+      globalSearch: "Global search",
       chat: "Chat",
       files: "Files",
       git: "Changes",
@@ -23,6 +28,8 @@ const sidebar = {
       intentCanvas: "Intent canvas",
       projectMap: "Project map",
       terminal: "Terminal",
+      notes: "Notes",
+      memory: "Project memory",
       settings: "Settings",
     },
   },

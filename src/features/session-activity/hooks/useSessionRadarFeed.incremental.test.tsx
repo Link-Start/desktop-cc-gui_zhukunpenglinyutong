@@ -230,6 +230,7 @@ describe("useSessionRadarFeed incremental refresh", () => {
     expect(result.current.recentCompletedSessions).toHaveLength(0);
 
     act(() => {
+      const now = Date.now();
       clientStoreCache.set(`leida:${SESSION_RADAR_RECENT_STORAGE_KEY}`, [
         {
           id: "ws-main:thread-archived",
@@ -238,9 +239,9 @@ describe("useSessionRadarFeed incremental refresh", () => {
           threadId: "thread-archived",
           threadName: "Archived Thread",
           preview: "persisted preview",
-          completedAt: 50_000,
-          updatedAt: 50_000,
-          startedAt: 48_000,
+          completedAt: now - 10_000,
+          updatedAt: now - 10_000,
+          startedAt: now - 12_000,
           durationMs: 2_000,
         },
       ]);

@@ -10,6 +10,8 @@ const activityPanel = {
     eventsCount: "{{count}} events",
     sessionsCount: "{{count}} sessions",
     liveNow: "live",
+    collapsedLiveBadge: "{{count}} session running",
+    collapsedLiveBadge_other: "{{count}} sessions running",
     command: "Command",
     commandPendingSummary: "Running command",
     commandCategories: {
@@ -96,6 +98,12 @@ const activityPanel = {
       readMark: "Read",
       deleteHistoryEntry: "Delete {{name}}",
       deleteDateGroupEntries: "Delete all {{count}} entries on {{date}}",
+      confirmDeleteDateGroup: "Delete {{count}} entry on {{date}}?",
+      confirmDeleteDateGroup_other: "Delete all {{count}} entries on {{date}}?",
+      deleteFailedTitle: "Delete failed",
+      deleteFailedBody: "Failed to delete {{count}} entry. Please try again.",
+      deleteFailedBody_other: "Failed to delete {{count}} entries. Please try again.",
+      deleteFailedDismiss: "Dismiss",
     },
     status: {
       running: "running",

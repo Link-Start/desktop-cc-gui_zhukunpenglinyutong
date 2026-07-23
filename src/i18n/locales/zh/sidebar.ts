@@ -5,6 +5,7 @@ const sidebar = {
     title: "最近活动",
     navigation: "快速导航",
     recentSessions: "最近会话",
+    runningSessions: "进行中",
     recentFiles: "最近文件",
     emptySessions: "暂无最近会话",
     emptyFiles: "暂无最近打开或修改的文件",
@@ -13,7 +14,11 @@ const sidebar = {
     switchPaneHint: "切换栏",
     openHint: "打开",
     closeHint: "关闭",
+    hints: {
+      selectWorkspaceFirst: "请先选择工作区再打开该功能",
+    },
     nav: {
+      globalSearch: "全局搜索",
       chat: "对话",
       files: "文件",
       git: "代码变更",
@@ -23,6 +28,8 @@ const sidebar = {
       intentCanvas: "意图画布",
       projectMap: "项目地图",
       terminal: "终端",
+      notes: "便签",
+      memory: "项目记忆",
       settings: "设置",
     },
   },

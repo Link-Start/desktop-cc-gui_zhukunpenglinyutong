@@ -490,6 +490,41 @@ describe("WorkspaceSessionActivityPanel", () => {
     expect(screen.getByRole("dialog", { name: "src/Removed.tsx" })).toBeTruthy();
   });
 
+  it("skips focus restore when the diff preview trigger element has been unmounted", () => {
+    const view = render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={createViewModel()}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getAllByRole("button", { name: "git.previewModalAction" })[0]!;
+    trigger.focus();
+    const triggerFocusSpy = vi.spyOn(trigger, "focus");
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog", { name: "src/App.tsx" })).toBeTruthy();
+
+    // 时间线清空后触发按钮随产物列表卸载,关闭模态框 MUST NOT 对已卸载节点归还焦点
+    const emptyViewModel = createViewModel();
+    emptyViewModel.timeline = [];
+    view.rerender(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={emptyViewModel}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+    expect(trigger.isConnected).toBe(false);
+
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "src/App.tsx" }), { key: "Escape" });
+
+    expect(screen.queryByRole("dialog", { name: "src/App.tsx" })).toBeNull();
+    expect(triggerFocusSpy).not.toHaveBeenCalled();
+  });
+
   it("passes the workspace-backed preview target into the editable review surface", async () => {
     const onCreateCodeAnnotation = vi.fn();
     const codeAnnotations = [
@@ -1417,6 +1452,81 @@ describe("WorkspaceSessionActivityPanel", () => {
     expect(scrollToSpy).toHaveBeenCalledWith({ top: 720, behavior: "auto" });
   });
 
+  it("resumes reasoning auto-follow after user scrolls back to the bottom", () => {
+    const view = render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={createViewModel()}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /activityPanel\.tabs\.reasoning1/i }));
+
+    const preview = view.container.querySelector(
+      ".session-activity-event-reasoning .session-activity-preview-text.is-markdown",
+    ) as HTMLDivElement | null;
+    expect(preview).toBeTruthy();
+    if (!preview) {
+      return;
+    }
+
+    const mockedScrollHeight = 720;
+    let mockedScrollTop = 0;
+    Object.defineProperty(preview, "scrollHeight", {
+      configurable: true,
+      get: () => mockedScrollHeight,
+    });
+    Object.defineProperty(preview, "clientHeight", {
+      configurable: true,
+      get: () => 100,
+    });
+    Object.defineProperty(preview, "scrollTop", {
+      configurable: true,
+      get: () => mockedScrollTop,
+      set: (value: number) => {
+        mockedScrollTop = value;
+      },
+    });
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(preview, "scrollTo", {
+      configurable: true,
+      value: scrollToSpy,
+    });
+
+    // 用户上滚超过阈值(48px) → 暂停自动跟随并展示「回到底部」入口
+    fireEvent.scroll(preview);
+    expect(screen.getByRole("button", { name: "messages.backToBottom" })).toBeTruthy();
+
+    // 暂停期间流式更新不再触发滚底
+    scrollToSpy.mockClear();
+    const updatedViewModel = createViewModel();
+    updatedViewModel.timeline = updatedViewModel.timeline.map((event) =>
+      event.kind === "reasoning"
+        ? {
+            ...event,
+            reasoningPreview: "第一段\n第二段\n第三段\n第四段",
+          }
+        : event,
+    );
+    view.rerender(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={updatedViewModel}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+    expect(scrollToSpy).not.toHaveBeenCalled();
+
+    // 用户滚回底部 → 暂停标记清除,自动跟随恢复并立即滚底
+    mockedScrollTop = mockedScrollHeight - 100;
+    fireEvent.scroll(preview);
+    expect(screen.queryByRole("button", { name: "messages.backToBottom" })).toBeNull();
+    expect(scrollToSpy).toHaveBeenCalledWith({ top: 720, behavior: "auto" });
+  });
+
   it("only auto-expands the latest running reasoning item", () => {
     const viewModel = createViewModel();
     viewModel.timeline.push({
@@ -2213,7 +2323,7 @@ describe("WorkspaceSessionActivityPanel", () => {
     expect(screen.queryByText("activityPanel.followCoachBody")).toBeNull();
   });
 
-  it("auto-dismisses follow coach after 3 seconds", () => {
+  it("auto-dismisses follow coach after 8 seconds without permanent suppression", () => {
     vi.useFakeTimers();
     try {
       const onToggleLiveEditPreview = vi.fn();
@@ -2232,12 +2342,24 @@ describe("WorkspaceSessionActivityPanel", () => {
       expect(screen.getByText("activityPanel.followCoachBody")).toBeTruthy();
 
       act(() => {
-        vi.advanceTimersByTime(3000);
+        vi.advanceTimersByTime(7999);
       });
+      expect(screen.getByText("activityPanel.followCoachBody")).toBeTruthy();
 
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
       expect(screen.queryByText("activityPanel.followCoachBody")).toBeNull();
 
-      view.rerender(
+      // 自动消失不写入永久 dismiss，仅显式 dismiss 才记录
+      expect(
+        window.localStorage.getItem(SOLO_FOLLOW_COACH_DISMISSED_BY_WORKSPACE_STORAGE_KEY),
+      ).toBeNull();
+      expect(onToggleLiveEditPreview).not.toHaveBeenCalled();
+
+      // 同 workspace 重新挂载后 coach 可再次展示
+      view.unmount();
+      render(
         <WorkspaceSessionActivityPanel
           workspaceId="workspace-1"
           viewModel={viewModel}
@@ -2247,9 +2369,7 @@ describe("WorkspaceSessionActivityPanel", () => {
           onToggleLiveEditPreview={onToggleLiveEditPreview}
         />,
       );
-
-      expect(screen.queryByText("activityPanel.followCoachBody")).toBeNull();
-      expect(onToggleLiveEditPreview).not.toHaveBeenCalled();
+      expect(screen.getByText("activityPanel.followCoachBody")).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }
@@ -2324,7 +2444,7 @@ describe("WorkspaceSessionActivityPanel", () => {
     expect(screen.getByText("activityPanel.followNudgeBody")).toBeTruthy();
   });
 
-  it("auto-dismisses follow nudge after 3 seconds", () => {
+  it("auto-dismisses follow nudge after 8 seconds", () => {
     vi.useFakeTimers();
     try {
       const onToggleLiveEditPreview = vi.fn();
@@ -2344,7 +2464,7 @@ describe("WorkspaceSessionActivityPanel", () => {
       expect(screen.getByText("activityPanel.followNudgeBody")).toBeTruthy();
 
       act(() => {
-        vi.advanceTimersByTime(3000);
+        vi.advanceTimersByTime(8000);
       });
 
       expect(screen.queryByText("activityPanel.followNudgeBody")).toBeNull();
@@ -2397,5 +2517,305 @@ describe("WorkspaceSessionActivityPanel", () => {
 
     expect(screen.queryByRole("tab", { name: "activityPanel.radar.modeWorkspaceRadar" })).toBeNull();
     expect(screen.queryByText("activityPanel.radar.modeWorkspaceRadar")).toBeNull();
+  });
+
+  it("closes the diff preview modal with Escape and restores focus to the trigger card", () => {
+    render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={createViewModel()}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getAllByRole("button", { name: "git.previewModalAction" })[0]!;
+    // jsdom 不会在 click 时自动聚焦，先显式聚焦以匹配真实浏览器行为
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    const dialog = screen.getByRole("dialog", { name: "src/App.tsx" });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
+
+    expect(screen.queryByRole("dialog", { name: "src/App.tsx" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("keeps the diff preview open on Escape while dirty and surfaces the unsaved changes dialog", () => {
+    render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={createViewModel()}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "git.previewModalAction" })[0]!);
+
+    act(() => {
+      const surfaceProps = mockEditableDiffReviewSurface.mock.lastCall?.[0] as {
+        onDirtyChange?: (dirty: boolean) => void;
+      };
+      surfaceProps.onDirtyChange?.(true);
+    });
+
+    const dialog = screen.getByRole("dialog", { name: "src/App.tsx" });
+    fireEvent.keyDown(dialog, { key: "Escape" });
+
+    // 脏状态保留既有 UnsavedChangesDialog 拦截链，diff 预览不直接关闭
+    // （alertdialog 弹出时 radix 会对背景应用 aria-hidden，故用 class 查询 diff 模态框）
+    expect(screen.getByRole("alertdialog", { name: "files.unsavedChanges" })).toBeTruthy();
+    expect(document.querySelector(".git-history-diff-modal")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "files.discardChangesAction" }));
+    expect(screen.queryByRole("alertdialog", { name: "files.unsavedChanges" })).toBeNull();
+    expect(document.querySelector(".git-history-diff-modal")).toBeNull();
+  });
+
+  it("supports arrow-key navigation with roving tabindex on category tabs", () => {
+    const view = render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={createViewModel()}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+
+    const allTab = screen.getByRole("tab", { name: /activityPanel\.tabs\.all/i });
+    expect(allTab.getAttribute("tabindex")).toBe("0");
+
+    fireEvent.keyDown(allTab, { key: "ArrowRight" });
+
+    const commandTab = screen.getByRole("tab", { name: /activityPanel\.tabs\.command/i });
+    expect(commandTab.getAttribute("aria-selected")).toBe("true");
+    expect(commandTab.getAttribute("tabindex")).toBe("0");
+    expect(allTab.getAttribute("aria-selected")).toBe("false");
+    expect(allTab.getAttribute("tabindex")).toBe("-1");
+    expect(document.activeElement).toBe(commandTab);
+    expect(view.container.querySelectorAll(".session-activity-event-command")).toHaveLength(1);
+
+    fireEvent.keyDown(commandTab, { key: "ArrowLeft" });
+
+    expect(allTab.getAttribute("aria-selected")).toBe("true");
+    expect(allTab.getAttribute("tabindex")).toBe("0");
+    expect(document.activeElement).toBe(allTab);
+  });
+
+  it("pairs category tabs with the timeline tabpanel via aria-controls and aria-labelledby", () => {
+    render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={createViewModel()}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+
+    const allTab = screen.getByRole("tab", { name: /activityPanel\.tabs\.all/i });
+    const tabpanel = document.getElementById("session-activity-tabpanel-workspace-1");
+    expect(tabpanel).toBeTruthy();
+    expect(allTab.getAttribute("aria-controls")).toBe(tabpanel?.id);
+    expect(tabpanel?.getAttribute("aria-labelledby")).toBe(allTab.id);
+
+    const reasoningTab = screen.getByRole("tab", { name: /activityPanel\.tabs\.reasoning/i });
+    fireEvent.click(reasoningTab);
+    expect(tabpanel?.getAttribute("aria-labelledby")).toBe(reasoningTab.id);
+  });
+
+  it("supports arrow-key navigation on turn artifact tabs with aria pairing", () => {
+    render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={createViewModel()}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+
+    const artifactsTab = screen.getByRole("tab", {
+      name: "activityPanel.artifacts.tabs.artifacts",
+    });
+    const semanticTab = screen.getByRole("tab", {
+      name: "activityPanel.artifacts.tabs.semantic",
+    });
+    expect(artifactsTab.getAttribute("tabindex")).toBe("0");
+    expect(semanticTab.getAttribute("tabindex")).toBe("-1");
+
+    const artifactsPanel = document.getElementById(
+      "session-activity-artifact-panel-turn-2-artifacts",
+    );
+    expect(artifactsPanel).toBeTruthy();
+    expect(artifactsTab.getAttribute("aria-controls")).toBe(artifactsPanel?.id);
+    expect(artifactsPanel?.getAttribute("aria-labelledby")).toBe(artifactsTab.id);
+
+    fireEvent.keyDown(artifactsTab, { key: "ArrowRight" });
+
+    expect(semanticTab.getAttribute("aria-selected")).toBe("true");
+    expect(semanticTab.getAttribute("tabindex")).toBe("0");
+    expect(document.activeElement).toBe(semanticTab);
+
+    const semanticPanel = document.getElementById(
+      "session-activity-artifact-panel-turn-2-semantic",
+    );
+    expect(semanticPanel).toBeTruthy();
+    expect(semanticTab.getAttribute("aria-controls")).toBe(semanticPanel?.id);
+    expect(semanticPanel?.getAttribute("aria-labelledby")).toBe(semanticTab.id);
+  });
+
+  it("pauses reasoning auto-follow when the user scrolls up and resumes via the back-to-bottom button", () => {
+    const initialViewModel = createViewModel();
+    const view = render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={initialViewModel}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /activityPanel\.tabs\.reasoning1/i }));
+
+    const preview = view.container.querySelector(
+      ".session-activity-event-reasoning .session-activity-preview-text.is-markdown",
+    ) as HTMLDivElement | null;
+    expect(preview).toBeTruthy();
+    if (!preview) {
+      return;
+    }
+
+    let mockedScrollHeight = 720;
+    Object.defineProperty(preview, "scrollHeight", {
+      configurable: true,
+      get: () => mockedScrollHeight,
+    });
+    Object.defineProperty(preview, "clientHeight", {
+      configurable: true,
+      get: () => 360,
+    });
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(preview, "scrollTo", {
+      configurable: true,
+      value: scrollToSpy,
+    });
+
+    // 用户上滚超过 48px 阈值 → 暂停自动跟随并显示「回到底部」
+    fireEvent.scroll(preview, { target: { scrollTop: 0 } });
+    expect(screen.getByRole("button", { name: "messages.backToBottom" })).toBeTruthy();
+
+    // 暂停期间流式更新不再自动滚底
+    scrollToSpy.mockClear();
+    mockedScrollHeight = 900;
+    const pausedViewModel = createViewModel();
+    pausedViewModel.timeline = pausedViewModel.timeline.map((event) =>
+      event.kind === "reasoning"
+        ? { ...event, reasoningPreview: `${event.reasoningPreview}\n第三段` }
+        : event,
+    );
+    view.rerender(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={pausedViewModel}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+    expect(scrollToSpy).not.toHaveBeenCalled();
+
+    // 点击「回到底部」恢复跟随
+    fireEvent.click(screen.getByRole("button", { name: "messages.backToBottom" }));
+    expect(scrollToSpy).toHaveBeenCalledWith({ top: 900, behavior: "auto" });
+    expect(screen.queryByRole("button", { name: "messages.backToBottom" })).toBeNull();
+
+    // 后续流式更新恢复自动滚底
+    scrollToSpy.mockClear();
+    mockedScrollHeight = 1080;
+    const resumedViewModel = createViewModel();
+    resumedViewModel.timeline = resumedViewModel.timeline.map((event) =>
+      event.kind === "reasoning"
+        ? { ...event, reasoningPreview: `${event.reasoningPreview}\n第三段\n第四段` }
+        : event,
+    );
+    view.rerender(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={resumedViewModel}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+    expect(scrollToSpy).toHaveBeenCalledWith({ top: 1080, behavior: "auto" });
+  });
+
+  it("shows event count and file change summary badges on collapsed turn group headers", () => {
+    const viewModel = createViewModel();
+    viewModel.timeline = [
+      ...viewModel.timeline,
+      {
+        eventId: "file:file-older",
+        turnId: "turn-1",
+        turnIndex: 1,
+        threadId: "root-thread",
+        threadName: "Root session",
+        sessionRole: "root",
+        relationshipSource: "directParent",
+        kind: "fileChange",
+        occurredAt: 2,
+        summary: "File change · src/Old.tsx",
+        status: "completed",
+        fileChangeStatusLetter: "M",
+        filePath: "src/Old.tsx",
+        additions: 4,
+        deletions: 2,
+      },
+      {
+        eventId: "command:cmd-older",
+        turnId: "turn-1",
+        turnIndex: 1,
+        threadId: "root-thread",
+        threadName: "Root session",
+        sessionRole: "root",
+        relationshipSource: "directParent",
+        kind: "command",
+        occurredAt: 1,
+        summary: "Older command",
+        status: "completed",
+        commandDescription: "Older command",
+        commandPreview: "older output",
+      },
+    ];
+
+    const { container } = render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={viewModel}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+
+    const olderGroup = getTurnGroup(container, 1);
+    const olderHeader = olderGroup?.querySelector(
+      ".session-activity-turn-group-header",
+    ) as HTMLButtonElement | null;
+    expect(olderHeader?.getAttribute("aria-expanded")).toBe("false");
+
+    const badges = olderHeader?.querySelector(".session-activity-turn-group-summary-badges");
+    expect(badges).toBeTruthy();
+    expect(badges?.textContent).toContain("activityPanel.eventsCount");
+    expect(badges?.querySelector(".is-add")?.textContent).toBe("+4");
+    expect(badges?.querySelector(".is-del")?.textContent).toBe("-2");
+
+    // 展开后摘要徽章隐藏
+    if (!olderHeader) {
+      return;
+    }
+    fireEvent.click(olderHeader);
+    expect(
+      getTurnGroup(container, 1)?.querySelector(".session-activity-turn-group-summary-badges"),
+    ).toBeNull();
   });
 });

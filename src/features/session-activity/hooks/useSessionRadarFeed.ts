@@ -4,15 +4,23 @@ import { resolveLockLivePreview } from "../../../app-shell-parts/utils";
 import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
 import { isIncrementalDerivationEnabled } from "../../threads/utils/realtimePerfFlags";
 import {
+  RADAR_RECENT_GLOBAL_LIMIT,
+  RADAR_RECENT_TTL_MS,
+  RADAR_STORE_NAME,
   SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
   SESSION_RADAR_HISTORY_UPDATED_EVENT,
   SESSION_RADAR_READ_STATE_KEY,
   SESSION_RADAR_RECENT_STORAGE_KEY,
+  applyRadarRecentBounds,
+  buildRadarCompletionId,
+  parsePersistedRadarRecentEntry,
+  readDismissedCompletedAtById,
+  resolveLatestUserMessage as resolveLatestUserMessageFromItems,
+  type PersistedRadarRecentEntry,
 } from "../utils/sessionRadarPersistence";
 
 const DEFAULT_RUNNING_LIMIT = 12;
-const DEFAULT_RECENT_LIMIT = Number.POSITIVE_INFINITY;
-const RADAR_STORE_NAME = "leida";
+const DEFAULT_RECENT_LIMIT = RADAR_RECENT_GLOBAL_LIMIT;
 
 type ThreadStatusSnapshot = {
   isProcessing?: boolean;
@@ -58,19 +66,7 @@ type SessionRadarFeed = {
   recentCountByWorkspaceId: Record<string, number>;
 };
 
-type PersistedRecentSessionRef = {
-  id: string;
-  workspaceId: string;
-  workspaceName?: string;
-  threadId: string;
-  threadName?: string;
-  engine?: string;
-  preview?: string;
-  updatedAt?: number;
-  startedAt: number | null;
-  completedAt: number;
-  durationMs: number | null;
-};
+type PersistedRecentSessionRef = PersistedRadarRecentEntry;
 
 type CachedLiveThreadEntry = {
   signature: string;
@@ -83,10 +79,6 @@ type RecentHistorySnapshot = {
 };
 
 const latestUserMessageByItemsRef = new WeakMap<ConversationItem[], string>();
-
-function buildRecentCompletionId(workspaceId: string, threadId: string) {
-  return `${workspaceId}:${threadId}`;
-}
 
 function compareRadarEntriesByFreshness(
   left: SessionRadarEntry,
@@ -103,6 +95,8 @@ function compareRadarEntriesByFreshness(
   return left.id.localeCompare(right.id);
 }
 
+// 扫描逻辑与 sessionRadarPersistence.resolveLatestUserMessage 统一；此处仅保留
+// WeakMap 缓存，避免流式期间对同一 items 数组重复 O(n) 扫描。
 function resolveLatestUserMessage(items: ConversationItem[] | undefined) {
   if (!Array.isArray(items) || items.length === 0) {
     return "";
@@ -110,18 +104,9 @@ function resolveLatestUserMessage(items: ConversationItem[] | undefined) {
   if (latestUserMessageByItemsRef.has(items)) {
     return latestUserMessageByItemsRef.get(items) ?? "";
   }
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const candidate = items[index];
-    if (candidate?.kind === "message" && candidate.role === "user") {
-      const text = candidate.text?.trim();
-      if (text) {
-        latestUserMessageByItemsRef.set(items, text);
-        return text;
-      }
-    }
-  }
-  latestUserMessageByItemsRef.set(items, "");
-  return "";
+  const text = resolveLatestUserMessageFromItems(items);
+  latestUserMessageByItemsRef.set(items, text);
+  return text;
 }
 
 function resolveEntryTimestamp(
@@ -247,52 +232,6 @@ function buildRecentCountByWorkspace(entries: SessionRadarEntry[]) {
   return countByWorkspaceId;
 }
 
-function parsePersistedRecentSessionRef(raw: unknown): PersistedRecentSessionRef | null {
-  if (!raw || typeof raw !== "object") {
-    return null;
-  }
-  const entry = raw as Partial<PersistedRecentSessionRef>;
-  if (
-    typeof entry.id !== "string" ||
-    typeof entry.workspaceId !== "string" ||
-    typeof entry.threadId !== "string" ||
-    typeof entry.completedAt !== "number"
-  ) {
-    return null;
-  }
-  return {
-    id: buildRecentCompletionId(entry.workspaceId, entry.threadId),
-    workspaceId: entry.workspaceId,
-    workspaceName: typeof entry.workspaceName === "string" ? entry.workspaceName : undefined,
-    threadId: entry.threadId,
-    threadName: typeof entry.threadName === "string" ? entry.threadName : undefined,
-    engine: typeof entry.engine === "string" ? entry.engine : undefined,
-    preview: typeof entry.preview === "string" ? entry.preview : undefined,
-    updatedAt: typeof entry.updatedAt === "number" ? entry.updatedAt : undefined,
-    startedAt: typeof entry.startedAt === "number" ? entry.startedAt : null,
-    completedAt: entry.completedAt,
-    durationMs: clampDurationMs(entry.durationMs),
-  };
-}
-
-function readDismissedCompletedAtById() {
-  const raw = getClientStoreSync<unknown>(
-    RADAR_STORE_NAME,
-    SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
-  );
-  if (!raw || typeof raw !== "object") {
-    return {} as Record<string, number>;
-  }
-  const entries = Object.entries(raw as Record<string, unknown>).filter(
-    ([entryId, value]) =>
-      typeof entryId === "string" &&
-      typeof value === "number" &&
-      Number.isFinite(value) &&
-      value > 0,
-  );
-  return Object.fromEntries(entries) as Record<string, number>;
-}
-
 function isRecentEntryDismissed(
   entryId: string,
   completedAt: number | null | undefined,
@@ -313,7 +252,7 @@ function readPersistedRecentSessions(): PersistedRecentSessionRef[] {
     return [];
   }
   const dedupedById = new Map<string, PersistedRecentSessionRef>();
-  for (const item of raw.map(parsePersistedRecentSessionRef)) {
+  for (const item of raw.map(parsePersistedRadarRecentEntry)) {
     if (!item) {
       continue;
     }
@@ -364,12 +303,18 @@ function mergeRecentSessions(
   }
 
   for (const persistedEntry of persistedRecent) {
-    const normalizedId = buildRecentCompletionId(persistedEntry.workspaceId, persistedEntry.threadId);
+    const normalizedId = buildRadarCompletionId(persistedEntry.workspaceId, persistedEntry.threadId);
     const workspace = workspaceById.get(persistedEntry.workspaceId);
     const thread = threadByWorkspaceAndId.get(
       `${persistedEntry.workspaceId}:${persistedEntry.threadId}`,
     );
     const lastAgent = thread ? lastAgentMessageByThread[thread.id] : undefined;
+    // updatedAt 用 live thread / lastAgent 刷新：条目删除时 cutoff 必须覆盖用户看到的
+    // 这个值（见 sessionRadarHistoryManagement 的 liveUpdatedAt），否则 reconcile 会以
+    // 领先的 thread.updatedAt 把已删除条目补写回来。completedAt 保持 persisted 原值。
+    const liveUpdatedAt = thread
+      ? Math.max(thread.updatedAt ?? 0, lastAgent?.timestamp ?? 0)
+      : 0;
     const mergedEntry: SessionRadarEntry = {
       id: normalizedId,
       workspaceId: persistedEntry.workspaceId,
@@ -384,7 +329,7 @@ function mergeRecentSessions(
         resolveLatestUserMessage(thread ? threadItemsByThread[thread.id] : undefined) ||
         (thread ? resolveLockLivePreview(threadItemsByThread[thread.id], lastAgent?.text) : "") ||
         (persistedEntry.preview ?? ""),
-      updatedAt: persistedEntry.updatedAt ?? persistedEntry.completedAt,
+      updatedAt: Math.max(persistedEntry.updatedAt ?? persistedEntry.completedAt, liveUpdatedAt),
       isProcessing: false,
       startedAt: persistedEntry.startedAt,
       completedAt: persistedEntry.completedAt,
@@ -398,6 +343,82 @@ function mergeRecentSessions(
   return Array.from(mergedById.values())
     .sort(compareRadarEntriesByFreshness)
     .slice(0, recentLimit);
+}
+
+// 完成记录补偿：启动前已完成或跳变检测遗漏的 thread，用 thread.updatedAt 补写完成
+// entry。受 dismissed cutoff 保护（updatedAt <= cutoff 跳过，已删除历史不复活）；
+// 超出 TTL 的 thread 跳过——即便补写也会在 merge 惰性修剪时被淘汰；无活动证据
+// （无 items 且无 lastAgent 快照）的 thread 跳过——空会话不补记。
+function buildReconciledCompletionRefs(input: {
+  workspaces: WorkspaceInfo[];
+  threadsByWorkspace: Record<string, ThreadSummary[]>;
+  threadStatusById: Record<string, ThreadStatusSnapshot | undefined>;
+  threadItemsByThread: Record<string, ConversationItem[]>;
+  lastAgentMessageByThread: Record<string, LastAgentSnapshot | undefined>;
+  persistedRecent: PersistedRecentSessionRef[];
+  dismissedCompletedAtById: Record<string, number>;
+  now: number;
+}): PersistedRecentSessionRef[] {
+  const {
+    workspaces,
+    threadsByWorkspace,
+    threadStatusById,
+    threadItemsByThread,
+    lastAgentMessageByThread,
+    persistedRecent,
+    dismissedCompletedAtById,
+    now,
+  } = input;
+  const persistedById = new Map(persistedRecent.map((entry) => [entry.id, entry]));
+  const reconciled: PersistedRecentSessionRef[] = [];
+  for (const workspace of workspaces) {
+    const threads = threadsByWorkspace[workspace.id] ?? [];
+    for (const thread of threads) {
+      const status = threadStatusById[thread.id];
+      if (status?.isProcessing) {
+        continue;
+      }
+      const updatedAt = thread.updatedAt ?? 0;
+      if (updatedAt <= 0 || now - updatedAt > RADAR_RECENT_TTL_MS) {
+        continue;
+      }
+      const id = buildRadarCompletionId(workspace.id, thread.id);
+      const persisted = persistedById.get(id);
+      if (persisted && persisted.completedAt >= updatedAt) {
+        continue;
+      }
+      const dismissedCutoff = dismissedCompletedAtById[id] ?? 0;
+      if (updatedAt <= dismissedCutoff) {
+        continue;
+      }
+      const items = threadItemsByThread[thread.id];
+      const lastAgent = lastAgentMessageByThread[thread.id];
+      // 活动证据门槛：无任何 items 且没有 lastAgent 快照的 thread 从未在本端运行过
+      // （例如仅被创建/重命名的空会话），不得仅凭 updatedAt 补记进「最近完成」。
+      const hasActivityEvidence = (items?.length ?? 0) > 0 || lastAgent != null;
+      if (!hasActivityEvidence) {
+        continue;
+      }
+      const durationMs = clampDurationMs(status?.lastDurationMs);
+      reconciled.push({
+        id,
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
+        threadId: thread.id,
+        threadName: thread.name?.trim() || undefined,
+        engine: (thread.engineSource || "codex").toUpperCase(),
+        preview:
+          resolveLatestUserMessage(items) ||
+          resolveLockLivePreview(items, lastAgent?.text) ||
+          undefined,
+        updatedAt,
+        startedAt: durationMs != null ? Math.max(0, updatedAt - durationMs) : null,
+        completedAt: updatedAt,
+        durationMs,
+      });
+    }
+  }
+  return reconciled;
 }
 
 export function buildSessionRadarFeed(input: BuildSessionRadarFeedInput): SessionRadarFeed {
@@ -596,16 +617,52 @@ export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRad
     };
   }, []);
 
+  // reconcile 只需在 threads/status/history 快照变化时重算；items 与 lastAgent 只
+  // 用于候选 entry 的 preview，经 ref 读取最新快照，避免流式期间高频引用变化触发
+  // W×T 全量扫描（与 completion tracker 的 completionPreviewItemsRef 同一考虑）。
+  const reconcileItemsRef = useRef(threadItemsByThread);
+  reconcileItemsRef.current = threadItemsByThread;
+  const reconcileLastAgentRef = useRef(lastAgentMessageByThread);
+  reconcileLastAgentRef.current = lastAgentMessageByThread;
+
+  const reconciledRecentCompletions = useMemo(
+    () =>
+      buildReconciledCompletionRefs({
+        workspaces,
+        threadsByWorkspace,
+        threadStatusById,
+        threadItemsByThread: reconcileItemsRef.current,
+        lastAgentMessageByThread: reconcileLastAgentRef.current,
+        persistedRecent: recentHistorySnapshot.persistedRecent,
+        dismissedCompletedAtById: recentHistorySnapshot.dismissedCompletedAtById,
+        now: Date.now(),
+      }),
+    [recentHistorySnapshot, threadStatusById, threadsByWorkspace, workspaces],
+  );
+
   const mergedRecentFeed = useMemo(() => {
     const mergedRecent = mergeRecentSessions(
       liveFeed.recentCompletedSessions,
-      recentHistorySnapshot.persistedRecent,
+      [...recentHistorySnapshot.persistedRecent, ...reconciledRecentCompletions],
       workspaces,
       threadsByWorkspace,
       threadItemsByThread,
       lastAgentMessageByThread,
       resolvedRecentLimit,
-    ).filter(
+    );
+    // merge 时惰性修剪（TTL + 每 workspace / 全局上限）；prunedEntryIds 交给持久化
+    // effect 同步清理 dismissedCompletedAtById 中的死数据。
+    const { entries: boundedRecent, prunedEntryIds } = applyRadarRecentBounds(mergedRecent);
+    // dismissed 联动清理只覆盖「曾物理存在于 persisted 快照」的 id：reconcile 合成
+    // 条目被 bounds 淘汰时不许连带销毁用户删除留下的 cutoff，否则下一轮 reconcile
+    // 会把该条目补写回来（复活循环）。
+    const persistedEntryIds = new Set(
+      recentHistorySnapshot.persistedRecent.map((entry) => entry.id),
+    );
+    const physicallyPrunedEntryIds = prunedEntryIds.filter((entryId) =>
+      persistedEntryIds.has(entryId),
+    );
+    const visibleRecent = boundedRecent.filter(
       (entry) =>
         !isRecentEntryDismissed(
           entry.id,
@@ -615,12 +672,14 @@ export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRad
     );
     return {
       ...liveFeed,
-      recentCompletedSessions: mergedRecent,
-      recentCountByWorkspaceId: buildRecentCountByWorkspace(mergedRecent),
+      recentCompletedSessions: visibleRecent,
+      recentCountByWorkspaceId: buildRecentCountByWorkspace(visibleRecent),
+      prunedEntryIds: physicallyPrunedEntryIds,
     };
   }, [
     lastAgentMessageByThread,
     liveFeed,
+    reconciledRecentCompletions,
     resolvedRecentLimit,
     recentHistorySnapshot,
     threadItemsByThread,
@@ -667,7 +726,29 @@ export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRad
     writeClientStoreValue(RADAR_STORE_NAME, SESSION_RADAR_READ_STATE_KEY, prunedReadState, {
       immediate: true,
     });
-  }, [mergedRecentFeed.recentCompletedSessions]);
+
+    // 惰性修剪物理移除的条目，其 dismissed 记录一并清除；用户主动删除的条目不走
+    // bounds 修剪（不在 prunedEntryIds 内），cutoff 保留以防止 reconcile 复活。
+    if (mergedRecentFeed.prunedEntryIds.length > 0) {
+      const prunedIdSet = new Set(mergedRecentFeed.prunedEntryIds);
+      const existingDismissed =
+        getClientStoreSync<Record<string, number>>(
+          RADAR_STORE_NAME,
+          SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
+        ) ?? {};
+      const nextDismissed = Object.fromEntries(
+        Object.entries(existingDismissed).filter(([entryId]) => !prunedIdSet.has(entryId)),
+      );
+      if (Object.keys(nextDismissed).length !== Object.keys(existingDismissed).length) {
+        writeClientStoreValue(
+          RADAR_STORE_NAME,
+          SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
+          nextDismissed,
+          { immediate: true },
+        );
+      }
+    }
+  }, [mergedRecentFeed]);
 
   // 计数记录每次重建都是新对象；Sidebar 把它们当 props，引用一变就整树重渲染。
   // 内容未变时复用上一次的引用，让流式期间的 flush 不再击穿 Sidebar 的 memo。
@@ -683,7 +764,8 @@ export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRad
   );
   return useMemo(
     () => ({
-      ...mergedRecentFeed,
+      runningSessions: mergedRecentFeed.runningSessions,
+      recentCompletedSessions: mergedRecentFeed.recentCompletedSessions,
       runningCountByWorkspaceId,
       recentCountByWorkspaceId,
     }),

@@ -3,6 +3,12 @@ import { useState } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceSearchFileSnapshot } from "../features/search/types";
+import {
+  RADAR_STORE_NAME,
+  SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
+  SESSION_RADAR_RECENT_STORAGE_KEY,
+} from "../features/session-activity/utils/sessionRadarPersistence";
+import { getClientStoreSync, writeClientStoreValue } from "../services/clientStorage";
 import type { AppSettings, WorkspaceInfo } from "../types";
 import { useAppShellSearchRadarSection } from "./useAppShellSearchRadarSection";
 
@@ -790,5 +796,145 @@ describe("useAppShellSearchRadarSection", () => {
       expect(result.current.searchApiHydrationStatus).toBe("error");
     });
     expect(getWorkspaceFilesMock).not.toHaveBeenCalled();
+  });
+
+  it("persists a bounded completion entry when a session finishes", () => {
+    const baseOptions = createSearchRadarOptions({
+      threadsByWorkspace: {
+        "ws-1": [
+          { id: "thread-1", name: "Finished Thread", updatedAt: 1000, engineSource: "codex" },
+        ],
+      },
+    });
+
+    const { rerender } = renderHook(
+      ({ isProcessingNow }: { isProcessingNow: boolean }) =>
+        useAppShellSearchRadarSection({
+          ...baseOptions,
+          threadStatusById: {
+            "thread-1": isProcessingNow
+              ? { isProcessing: true }
+              : { isProcessing: false, lastDurationMs: 1200 },
+          },
+        }),
+      { initialProps: { isProcessingNow: true } },
+    );
+
+    rerender({ isProcessingNow: false });
+
+    const recentWrites = vi
+      .mocked(writeClientStoreValue)
+      .mock.calls.filter(
+        ([store, key]) => store === RADAR_STORE_NAME && key === SESSION_RADAR_RECENT_STORAGE_KEY,
+      );
+    expect(recentWrites).toHaveLength(1);
+    expect(recentWrites[0]?.[2]).toEqual([
+      expect.objectContaining({
+        id: "ws-1:thread-1",
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        durationMs: 1200,
+      }),
+    ]);
+  });
+
+  it("clamps the persisted startedAt to zero when duration exceeds completedAt", () => {
+    const baseOptions = createSearchRadarOptions({
+      threadsByWorkspace: {
+        "ws-1": [
+          { id: "thread-1", name: "Finished Thread", updatedAt: 1000, engineSource: "codex" },
+        ],
+      },
+    });
+
+    const { rerender } = renderHook(
+      ({ isProcessingNow }: { isProcessingNow: boolean }) =>
+        useAppShellSearchRadarSection({
+          ...baseOptions,
+          threadStatusById: {
+            "thread-1": isProcessingNow
+              ? { isProcessing: true }
+              : // durationMs 远超 completedAt：startedAt = max(0, completedAt - durationMs) 钳到 0。
+                { isProcessing: false, lastDurationMs: Number.MAX_SAFE_INTEGER },
+          },
+        }),
+      { initialProps: { isProcessingNow: true } },
+    );
+
+    rerender({ isProcessingNow: false });
+
+    const recentWrites = vi
+      .mocked(writeClientStoreValue)
+      .mock.calls.filter(
+        ([store, key]) => store === RADAR_STORE_NAME && key === SESSION_RADAR_RECENT_STORAGE_KEY,
+      );
+    expect(recentWrites).toHaveLength(1);
+    expect(recentWrites[0]?.[2]).toEqual([
+      expect.objectContaining({
+        id: "ws-1:thread-1",
+        startedAt: 0,
+        durationMs: Number.MAX_SAFE_INTEGER,
+      }),
+    ]);
+  });
+
+  it("cleans dismissed records for entries pruned by persistence bounds on completion merge", () => {
+    const now = Date.now();
+    const oversizedRecent = Array.from({ length: 201 }, (_, index) => ({
+      id: `ws-old-${index}:t-1`,
+      workspaceId: `ws-old-${index}`,
+      threadId: "t-1",
+      completedAt: now - (index + 1) * 1000,
+      updatedAt: now - (index + 1) * 1000,
+      startedAt: null,
+      durationMs: null,
+    }));
+    vi.mocked(getClientStoreSync).mockImplementation(((_store: string, key: string) => {
+      if (key === SESSION_RADAR_RECENT_STORAGE_KEY) {
+        return oversizedRecent;
+      }
+      if (key === SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY) {
+        return { "ws-old-200:t-1": now - 201_000 };
+      }
+      return null;
+    }) as typeof getClientStoreSync);
+
+    const baseOptions = createSearchRadarOptions({
+      threadsByWorkspace: {
+        "ws-1": [
+          { id: "thread-1", name: "Finished Thread", updatedAt: now, engineSource: "codex" },
+        ],
+      },
+    });
+
+    const { rerender } = renderHook(
+      ({ isProcessingNow }: { isProcessingNow: boolean }) =>
+        useAppShellSearchRadarSection({
+          ...baseOptions,
+          threadStatusById: {
+            "thread-1": isProcessingNow
+              ? { isProcessing: true }
+              : { isProcessing: false, lastDurationMs: 1200 },
+          },
+        }),
+      { initialProps: { isProcessingNow: true } },
+    );
+
+    rerender({ isProcessingNow: false });
+
+    const recentWrite = vi
+      .mocked(writeClientStoreValue)
+      .mock.calls.find(
+        ([store, key]) => store === RADAR_STORE_NAME && key === SESSION_RADAR_RECENT_STORAGE_KEY,
+      );
+    expect(recentWrite?.[2]).toHaveLength(200);
+
+    const dismissedWrite = vi
+      .mocked(writeClientStoreValue)
+      .mock.calls.find(
+        ([store, key]) =>
+          store === RADAR_STORE_NAME && key === SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
+      );
+    expect(dismissedWrite?.[2]).toEqual({});
   });
 });

@@ -33,6 +33,7 @@ import type {
 import type {
   QuickSwitcherNavigationId,
   QuickSwitcherRecentFileGroup,
+  QuickSwitcherRunningSession,
   QuickSwitcherSessionGroup,
 } from "../features/quick-switcher/types";
 import {
@@ -231,6 +232,7 @@ export type ComposerSearchShellBoundary = SearchPaletteBoundary &
     ) => void;
     isQuickSwitcherOpen: boolean;
     quickSwitcherRecentFileGroups: QuickSwitcherRecentFileGroup[];
+    quickSwitcherRunningSessions: QuickSwitcherRunningSession[];
     quickSwitcherSessionGroups: QuickSwitcherSessionGroup[];
     increaseUiScale: () => void;
     decreaseUiScale: () => void;
@@ -273,6 +275,7 @@ export function useAppShellSearchAndComposerSection(
     kanbanTasks,
     queueMessage,
     quickSwitcherRecentFileGroups,
+    quickSwitcherRunningSessions,
     quickSwitcherSessionGroups,
     resetUiScale,
     searchContentFilters,
@@ -705,6 +708,7 @@ export function useAppShellSearchAndComposerSection(
     resetPullRequestSelection,
     isPullRequestComposer,
     isQuickSwitcherOpen,
+    quickSwitcherRunningSessions,
     quickSwitcherSessionGroups,
     searchResults: visibleSearchResults,
     composerSendLabel,

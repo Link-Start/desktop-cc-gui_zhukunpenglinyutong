@@ -722,6 +722,9 @@ export function SettingsView({
       const targets = entries.map((entry) => ({
         id: entry.id,
         completedAt: entry.completedAt ?? entry.updatedAt,
+        // entry.updatedAt 已是 live 刷新值；消除 thread 刚更新但 feed
+        // 尚未回写时立即删除导致的复活窗口
+        liveUpdatedAt: entry.updatedAt,
       }));
       return Promise.resolve(deleteSessionRadarHistoryEntries(targets));
     },
