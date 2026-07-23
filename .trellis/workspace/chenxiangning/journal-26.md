@@ -1902,3 +1902,36 @@ Main File Editor 增加仅限跨文件语义跳转的 Back/Forward 历史；返�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1082: 修复 Quick Switcher 文件激活主区路由
+
+**Date**: 2026-07-23
+**Task**: 修复 Quick Switcher 文件激活主区路由
+**Branch**: `feature/v-078`
+
+### Summary
+
+补齐 Quick Switcher recent-file 激活前的 home、appMode 与 activeTab 上下文切换，增加四个 setter 严格早于 handleOpenFile 的回归断言；用户人工验收通过；归档 add-quick-switcher 与 fix-quick-switcher-file-activation-main-area，并同步 quick-context-switcher 主规范。验证：focused Vitest 48/48、app-shell-parts 277/277、lint、typecheck、diff check 与目标 OpenSpec strict validation 通过；按用户要求未跑全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bde99f767` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
