@@ -2,6 +2,8 @@
 
 ### Requirement: Installer Backend MUST Enforce Command Whitelist
 
+backend MUST 只允许枚举化安装策略，不得执行 frontend 传入的 raw command；Claude Code 的 install/update/uninstall MUST 走官方 native installer 路径，Codex / Kimi MUST 走 npm global 官方 package。
+
 #### Scenario: phase one command matrix is bounded
 
 - **WHEN** backend 构造 installer command
@@ -15,6 +17,8 @@
 - **AND** backend MUST 忽略 frontend 对 Claude 传入的过时 `npmGlobal` strategy，并改写为上述有效 strategy
 
 ### Requirement: CLI Validation MUST Offer Bounded Installer Actions For Codex And Claude
+
+系统 MUST 在 `CLI 验证` 面板中为 Codex 与 Claude Code 提供受控安装 / 更新入口，并且该入口不得扩展到任意 shell 执行；Claude Code 的安装入口 MUST 基于官方 native installer preflight，而不是 Node/npm 检测。
 
 #### Scenario: Claude install action is offered after missing doctor
 

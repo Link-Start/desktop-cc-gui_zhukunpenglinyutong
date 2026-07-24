@@ -6,7 +6,7 @@ Defines the subagent-session-tree-navigation behavior contract, covering Subagen
 ## Requirements
 ### Requirement: Subagent Sessions MUST Be Represented As First-Class Child Sessions
 
-系统 MUST 将 Claude Code 与 Codex collaboration 启动的子 agent 表达为一等 child session，并通过稳定 relationship 字段关联到 parent session，而不是仅依赖父会话 transcript 或继承的标题文本猜测关系。
+系统 MUST 将 Claude Code 与 Codex collaboration 启动的子 agent 表达为一等 child session，并通过稳定 relationship 字段关联到 parent session，而不是仅依赖父会话 transcript 或继承的标题文本猜测关系。对于提供 authoritative relationship metadata 的 live notification，relationship-safe projection MUST 在 child row 第一次可见前完成。
 
 #### Scenario: Codex rollout metadata preserves child relationship
 
@@ -44,6 +44,27 @@ Defines the subagent-session-tree-navigation behavior contract, covering Subagen
 - **THEN** visible rows MUST 保留 canonical `canonicalSessionId`
 - **AND** child `parentSessionId` MUST 解析为当前 visible parent row id
 - **AND** Sidebar MUST NOT 因 canonical/visible id 不相等把 child 提升为 root
+
+#### Scenario: live Codex child does not flash as a top-level session
+
+- **GIVEN** parent session 已在当前 Sidebar projection 中可见
+- **WHEN** Codex child 的 live `thread/started` 携带 authoritative `parentThreadId` 并早于完整 catalog hydration 到达
+- **THEN** 系统 MUST 在 child row 第一次可见前写入 parent relationship
+- **AND** Sidebar MUST NOT 使用 inherited parent `preview` 将 child 暂时显示为同名 top-level session
+- **AND** running status MAY 独立更新，但 MUST NOT 绕过 relationship-safe projection
+
+#### Scenario: live metadata upgrades the child in place
+
+- **GIVEN** live runtime 已观察到一个 stable child identity
+- **WHEN** notification 提供 `parentThreadId` 与 `agentNickname`
+- **THEN** projection MUST 在同一次 state transition 更新同一个 child row 的 relationship 与 display name
+- **AND** MUST NOT 创建 duplicate row、改变 child identity 或产生 root-to-child reparent flash
+
+#### Scenario: ordinary top-level Codex starts remain immediate
+
+- **WHEN** live `thread/started` 没有 authoritative subagent relationship
+- **THEN** 系统 MUST 保持普通 top-level Codex session 的即时可见行为
+- **AND** MUST NOT 因等待 subagent metadata 全局阻塞 Sidebar
 
 ### Requirement: Session Sidebar MUST Render Parent-Child Session Tree
 
