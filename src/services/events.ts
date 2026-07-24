@@ -3,6 +3,7 @@ import type {
   AppServerEvent,
   DictationEvent,
   DictationModelStatus,
+  RuntimePoolSnapshot,
 } from "../types";
 import type { CliInstallProgressEvent } from "../types";
 import type { RuntimeLogSessionSnapshot } from "./tauri";
@@ -339,6 +340,13 @@ const detachedExternalFileChangeBatchHub =
   createEventHub<readonly DetachedExternalFileChangeEvent[]>(
     "detached-external-file-change-batch",
   );
+/**
+ * Rust `publish_runtime_pool_snapshot_if_changed` 差量发布的 runtime 池快照。
+ * 仅语义内容变化时 emit，订阅方替代常驻轮询。
+ */
+const runtimePoolChangedHub = createEventHub<RuntimePoolSnapshot>(
+  "runtime-pool-changed",
+);
 const updaterCheckHub = createEventHub<void>("updater-check");
 const menuNewAgentHub = createEventHub<void>("menu-new-agent");
 const menuNewWorktreeAgentHub = createEventHub<void>("menu-new-worktree-agent");
@@ -543,6 +551,18 @@ export function subscribeDetachedExternalFileChangeBatch(
   options?: SubscriptionOptions,
 ): Unsubscribe {
   return detachedExternalFileChangeBatchHub.subscribe(onBatch, options);
+}
+
+/**
+ * Subscribe to Rust-side diff-published runtime pool snapshots.
+ * Emitted after reconcile cycles and manual pool mutations, only when the
+ * snapshot signature actually changed.
+ */
+export function subscribeRuntimePoolChanged(
+  onEvent: (snapshot: RuntimePoolSnapshot) => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return runtimePoolChangedHub.subscribe(onEvent, options);
 }
 
 export function subscribeUpdaterCheck(

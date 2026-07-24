@@ -123,9 +123,36 @@
 
 .fvp-tab.is-active {
   border-color: color-mix(in srgb, var(--border-subtle) 90%, transparent);
-  background: color-mix(in srgb, var(--surface-card) 90%, transparent);
+  background: var(--fvp-reader-surface);
   color: var(--text-stronger);
   z-index: 1;
+}
+
+/* 当前文件高亮：顶部 accent 条 + 底部与内容区融合（VSCode 风格） */
+.fvp-tab.is-active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--border-accent);
+  pointer-events: none;
+}
+
+.fvp-tab.is-active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--fvp-reader-surface);
+  pointer-events: none;
+}
+
+.fvp-tab.is-active .fvp-tab-main-label {
+  font-weight: 600;
 }
 
 
