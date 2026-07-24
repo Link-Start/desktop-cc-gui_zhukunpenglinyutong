@@ -18,8 +18,6 @@
 
 应用基于 **Tauri 2 + React 19 + TypeScript + Rust** 开发，支持 macOS / Windows / Linux。应用设置、工作区索引和客户端状态默认在本机持久化；发送给 AI provider、Browser Agent、邮件服务或可选 remote/web service 的内容，遵循对应配置与第三方服务边界。
 
-> 本项目最初源自 [CodexMonitor](https://github.com/Dimillian/CodexMonitor)，现在已经成长为一个功能完整的多引擎 AI 编程客户端。
-
 <img src="./docs/banner.png" alt="ccgui 界面截图" width="800" />
 
 ---
@@ -290,6 +288,14 @@ docs(readme): 校准项目文档索引
 <a href="https://github.com/zhukunpenglinyutong/desktop-cc-gui/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=zhukunpenglinyutong/desktop-cc-gui" alt="Contributors" />
 </a>
+
+---
+
+## 参考项目说明
+
+1.本项目最初源自 [CodexMonitor](https://github.com/Dimillian/CodexMonitor)
+2.拓展-使用统计 模块 主要采用 [TokenTracker](https://github.com/mm7894215/TokenTracker) 源码
+
 
 ---
 

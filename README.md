@@ -18,8 +18,6 @@ No more staring at a black terminal. Open ccgui, pick a project, and chat with A
 
 The app is built with **Tauri 2 + React 19 + TypeScript + Rust** and runs on macOS, Windows, and Linux. App settings, workspace indexes, and client state are persisted locally by default. Content sent to an AI provider, Browser Agent, email service, or an optional remote/web service follows the boundary of that configured service.
 
-> This project originated from [CodexMonitor](https://github.com/Dimillian/CodexMonitor) and has grown into a full-featured multi-engine AI coding client.
-
 <img src="./docs/banner.png" alt="ccgui screenshot" width="800" />
 
 ---
@@ -290,6 +288,13 @@ Thanks to all the contributors who help make ccgui better.
 <a href="https://github.com/zhukunpenglinyutong/desktop-cc-gui/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=zhukunpenglinyutong/desktop-cc-gui" alt="Contributors" />
 </a>
+
+---
+
+## Acknowledgements
+
+1. This project originally started from [CodexMonitor](https://github.com/Dimillian/CodexMonitor).
+2. The Usage Statistics extension module is mainly based on the source code of [TokenTracker](https://github.com/mm7894215/TokenTracker).
 
 ---
 
