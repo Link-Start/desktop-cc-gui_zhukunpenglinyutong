@@ -12,16 +12,23 @@ describe("extensions layout", () => {
   it("keeps the extensions tab row pinned to the scroll container top", () => {
     const viewRule = getCssRuleBlock(".extensions-view");
     const filterRowRule = getCssRuleBlock(".extensions-filter-row");
-    const filterRowMaskRule = getCssRuleBlock(".extensions-filter-row::before");
 
     expect(viewRule).toContain("overflow: auto;");
+    // 滚动容器不能有 padding-top，否则容器 padding 区会在 sticky 行上方露出滚动内容。
+    expect(viewRule).toContain("padding: 0 var(--extensions-view-padding-inline);");
+    expect(viewRule).toContain("--extensions-view-padding-top: 15px;");
     expect(filterRowRule).toContain("position: sticky;");
     expect(filterRowRule).toContain("top: 0;");
     expect(filterRowRule).toContain("z-index: 100;");
-    expect(filterRowRule).toContain("isolation: isolate;");
     expect(filterRowRule).toContain("background: var(--surface-messages);");
-    expect(filterRowMaskRule).toContain("inset: calc(var(--titlebar-height, 44px) * -1) 0 0;");
-    expect(filterRowMaskRule).toContain("background: var(--surface-messages);");
+    // 顶部间距由 tab 行自身 padding 提供，margin-top 必须保持 0。
+    expect(filterRowRule).toContain(
+      "margin: 0 calc(var(--extensions-view-padding-inline) * -1) 32px;",
+    );
+    expect(filterRowRule).toContain(
+      "padding: var(--extensions-view-padding-top) var(--extensions-view-padding-inline) 16px;",
+    );
+    expect(css).not.toContain(".extensions-filter-row::before");
   });
 
   it("uses one content width across all extension tabs", () => {

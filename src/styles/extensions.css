@@ -4,13 +4,16 @@
 
 .extensions-view {
   --extensions-view-padding-inline: clamp(24px, 5vw, 96px);
-  --extensions-view-padding-top: 10px;
+  --extensions-view-padding-top: 15px;
 
   grid-column: 1;
   grid-row: 1 / -1;
   min-width: 0;
   min-height: 0;
-  padding: var(--extensions-view-padding-top) var(--extensions-view-padding-inline);
+  /* 滚动容器不能有 padding-top：sticky tab 行只能贴到内容盒顶缘，
+     容器 padding 区会形成一条缝隙露出滚过的内容。顶部间距由 tab 行
+     自身的 padding-top 提供，使其背景完整覆盖窗口顶边。 */
+  padding: 0 var(--extensions-view-padding-inline);
   overflow: auto;
   color: var(--text-primary);
   background: var(--surface-messages);
@@ -20,27 +23,17 @@
   position: sticky;
   z-index: 100;
   top: 0;
-  isolation: isolate;
   display: flex;
   flex-wrap: nowrap;
   gap: 12px;
   align-items: center;
-  margin: calc(var(--extensions-view-padding-top) * -1) calc(var(--extensions-view-padding-inline) * -1) 32px;
+  margin: 0 calc(var(--extensions-view-padding-inline) * -1) 32px;
   padding: var(--extensions-view-padding-top) var(--extensions-view-padding-inline) 16px;
   overflow-x: auto;
   background: var(--surface-messages);
   box-shadow:
     0 1px 0 var(--surface-messages),
     0 14px 22px -22px color-mix(in srgb, var(--shadow-color, #000) 24%, transparent);
-}
-
-.extensions-filter-row::before {
-  content: "";
-  position: absolute;
-  inset: calc(var(--titlebar-height, 44px) * -1) 0 0;
-  z-index: -1;
-  background: var(--surface-messages);
-  pointer-events: none;
 }
 
 .extensions-section-group {
@@ -145,7 +138,7 @@
   .extensions-view {
     --extensions-view-padding-inline: 16px;
 
-    padding: var(--extensions-view-padding-top) var(--extensions-view-padding-inline) 88px;
+    padding: 0 var(--extensions-view-padding-inline) 88px;
   }
 
   .extensions-filter-row {
