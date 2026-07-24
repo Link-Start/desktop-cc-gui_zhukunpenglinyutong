@@ -1,5 +1,5 @@
 import { useMemo, useRef } from "react";
-import type { ConversationItem } from "../../../types";
+import type { ConversationItem, EngineType } from "../../../types";
 import type {
   TodoItem,
   SubagentInfo,
@@ -45,6 +45,8 @@ type ThreadStatusSnapshot = {
 
 interface StatusPanelDataOptions {
   isCodexEngine?: boolean;
+  /** 真实引擎值;提供时优先用于 taskOutput attribution,避免二元假设误标 */
+  activeEngine?: EngineType | null;
   activeThreadId?: string | null;
   activeTurnId?: string | null;
   itemsByThread?: Record<string, ConversationItem[]>;
@@ -134,6 +136,7 @@ export function useStatusPanelData(
 ): StatusPanelData {
   const {
     isCodexEngine = false,
+    activeEngine = null,
     activeThreadId,
     activeTurnId,
     itemsByThread,
@@ -242,7 +245,7 @@ export function useStatusPanelData(
           statusPriority: threadScopedStatus ? 5 : 2,
           taskOutput: {
             id: subagentId,
-            engine: isCodexEngine ? "codex" : "claude",
+            engine: activeEngine ?? (isCodexEngine ? "codex" : "claude"),
             title: taskType,
             description: taskDescription,
             status: mapSubagentStatusToTaskOutputStatus(threadScopedStatus ?? taskStatus),
@@ -339,6 +342,7 @@ export function useStatusPanelData(
         return left.type.localeCompare(right.type);
       });
   }, [
+    activeEngine,
     isCodexEngine,
     projectionInputs.itemsByThread,
     projectionInputs.threadStatusById,

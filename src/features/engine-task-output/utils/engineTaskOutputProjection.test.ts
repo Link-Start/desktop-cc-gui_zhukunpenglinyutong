@@ -89,6 +89,44 @@ describe("engineTaskOutputProjection", () => {
     expect(source.recentOutput).toBe("Looks good");
   });
 
+  it("keeps the real engine for non-codex engines instead of relabeling as claude", () => {
+    for (const engine of ["gemini", "kimi", "opencode"] as const) {
+      const source = buildTaskOutputSourceFromNotification({
+        itemId: "message-1",
+        engine,
+        title: "backend-reviewer",
+        notification: {
+          taskId: "task-7",
+          toolUseId: "tool-7",
+          outputFile: null,
+          status: "completed",
+          summary: "Review auth flow",
+          resultText: "Looks good",
+        },
+      });
+
+      expect(source.engine).toBe(engine);
+    }
+  });
+
+  it("normalizes unknown engine values to the explicit claude fallback", () => {
+    const source = buildTaskOutputSourceFromNotification({
+      itemId: "message-1",
+      engine: "not-a-real-engine",
+      title: "backend-reviewer",
+      notification: {
+        taskId: "task-7",
+        toolUseId: "tool-7",
+        outputFile: null,
+        status: "completed",
+        summary: "Review auth flow",
+        resultText: "Looks good",
+      },
+    });
+
+    expect(source.engine).toBe("claude");
+  });
+
   it("truncates long recent output", () => {
     const truncated = engineTaskOutputProjectionInternals.truncateRecentOutput("x".repeat(2000));
     expect(truncated?.length).toBeLessThan(2000);
