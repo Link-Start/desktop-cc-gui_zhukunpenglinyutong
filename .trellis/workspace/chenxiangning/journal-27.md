@@ -1046,3 +1046,37 @@ Note: 中间 6eca222b3 为并行代理的 trellis 记录提交；未执行 archi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1111: 降低客户端常驻轮询开销
+
+**Date**: 2026-07-25
+**Task**: 降低客户端常驻轮询开销
+**Branch**: `feature/v-799`
+
+### Summary
+
+worktree/kanban/task-output/runtime-dock 四路由事件驱动+门控兜底替代固定轮询；补 OpenSpec reduce-client-polling-overhead 提案
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d042e5018` | (see git log) |
+| `f4a81691b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
