@@ -3,12 +3,12 @@
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
 - Updated At: `2026-07-24`
-- Indexed proposals: `717`
+- Indexed proposals: `721`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-07 (140)
+## 2026-07 (188)
 
 ### 2026-07-24
 
@@ -35,6 +35,10 @@
 - [`2026-07-24-remove-parallel-orphan-module`](2026-07-24-remove-parallel-orphan-module/proposal.md) — verified orphan-module removal，未修改 capability specs
 - [`2026-07-24-remove-search-workspace-indexing-layer`](2026-07-24-remove-search-workspace-indexing-layer/proposal.md) — verified dead-code removal，未修改 capability specs
 - [`2026-07-24-remove-project-map-orchestration-center`](2026-07-24-remove-project-map-orchestration-center/proposal.md) — verified implementation，已移除 `agent-task-orchestration-center` main capability spec
+- [`2026-07-24-fix-engine-attribution-and-model-id-validation`](2026-07-24-fix-engine-attribution-and-model-id-validation/proposal.md) — verified implementation，已同步 `engine-task-output-inspector` 与 `composer-model-selector-config-actions`
+- [`2026-07-24-preserve-corrupted-app-settings-on-load`](2026-07-24-preserve-corrupted-app-settings-on-load/proposal.md) — verified implementation，已同步 `app-settings-corruption-recovery`
+- [`2026-07-24-notify-settings-recovery-after-corruption`](2026-07-24-notify-settings-recovery-after-corruption/proposal.md) — verified implementation，已同步 `app-settings-corruption-recovery`：quarantine 记录一次性 recovery notice，前端加载成功后弹一次本地化 toast
+- [`2026-07-24-remove-settings-view-ts-nocheck-and-skills-dead-branch`](2026-07-24-remove-settings-view-ts-nocheck-and-skills-dead-branch/proposal.md) — verified implementation，已同步 `settings-view-type-safety`
 
 ### 2026-07-23
 
@@ -44,6 +48,13 @@
 - [`2026-07-23-add-theme-aware-syntax-and-diff-tokens`](2026-07-23-add-theme-aware-syntax-and-diff-tokens/proposal.md) — verified implementation，已同步 `settings-custom-theme-presets`
 - [`2026-07-23-fix-multi-repository-git-inline-diff-scope`](2026-07-23-fix-multi-repository-git-inline-diff-scope/proposal.md) — verified implementation，已同步 `multi-repository-git-commit-workspace` 与 `multi-repository-git-command-center`
 - [`2026-07-23-add-python-go-semantic-navigation`](2026-07-23-add-python-go-semantic-navigation/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation`
+- [`2026-07-23-add-file-editor-navigation-history`](2026-07-23-add-file-editor-navigation-history/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation`
+- [`2026-07-23-add-quick-switcher`](2026-07-23-add-quick-switcher/proposal.md) — verified implementation，已同步 `quick-context-switcher`
+- [`2026-07-23-fix-cold-start-update-depth-loop`](2026-07-23-fix-cold-start-update-depth-loop/proposal.md) — verified implementation，已同步 `client-renderer-stability-under-pressure`
+- [`2026-07-23-fix-dark-collapsed-sidebar-theme`](2026-07-23-fix-dark-collapsed-sidebar-theme/proposal.md) — verified implementation，已同步 `workspace-sidebar-visual-harmony`
+- [`2026-07-23-fix-file-editor-navigation-viewport-restore`](2026-07-23-fix-file-editor-navigation-viewport-restore/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation`
+- [`2026-07-23-fix-quick-switcher-file-activation-main-area`](2026-07-23-fix-quick-switcher-file-activation-main-area/proposal.md) — verified implementation，已同步 `quick-context-switcher`
+- [`2026-07-23-stabilize-semantic-navigation-lifecycle`](2026-07-23-stabilize-semantic-navigation-lifecycle/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation` 与 `semantic-code-navigation-provider`
 
 ### 2026-07-22
 
@@ -51,10 +62,51 @@
 - [`2026-07-22-fix-agent-completion-selection-index-alignment`](2026-07-22-fix-agent-completion-selection-index-alignment/proposal.md) — verified implementation，已同步 `composer-file-reference-completion-stability`
 - [`2026-07-22-fix-multi-runtime-npm-cli-discovery`](2026-07-22-fix-multi-runtime-npm-cli-discovery/proposal.md) — verified implementation，已同步 `semantic-code-navigation-provider`
 - [`2026-07-22-fix-symlinked-npm-cli-discovery`](2026-07-22-fix-symlinked-npm-cli-discovery/proposal.md) — verified implementation，已同步 `semantic-code-navigation-provider`
+- [`2026-07-22-add-java-typescript-semantic-navigation`](2026-07-22-add-java-typescript-semantic-navigation/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation` 与 `semantic-code-navigation-provider`
+- [`2026-07-22-add-multi-repository-git-history-branch-tree`](2026-07-22-add-multi-repository-git-history-branch-tree/proposal.md) — verified implementation，已同步 `git-history-panel`
+- [`2026-07-22-add-platform-language-server-install-hints`](2026-07-22-add-platform-language-server-install-hints/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation`
+- [`2026-07-22-compact-file-editor-context-menu`](2026-07-22-compact-file-editor-context-menu/proposal.md) — verified implementation，已同步 `client-scrollbar-visual-consistency`
+- [`2026-07-22-enhance-global-search-and-editor-selection`](2026-07-22-enhance-global-search-and-editor-selection/proposal.md) — verified implementation，已同步 `app-shortcuts`、`global-search-action-discovery` 与 `global-search-result-presentation`
+- [`2026-07-22-expose-expand-selection-context-menu`](2026-07-22-expose-expand-selection-context-menu/proposal.md) — verified implementation，已同步 `app-shortcuts` 与 `client-scrollbar-visual-consistency`
+- [`2026-07-22-fix-editor-navigation-affordances`](2026-07-22-fix-editor-navigation-affordances/proposal.md) — verified implementation，已同步 `app-shortcuts` 与 `file-view-code-intelligence-navigation`
+- [`2026-07-22-fix-file-editor-git-marker-load-race`](2026-07-22-fix-file-editor-git-marker-load-race/proposal.md) — verified implementation，已同步 `file-open-rendering-scheduler`
+- [`2026-07-22-fix-language-server-discovery-and-install-retry`](2026-07-22-fix-language-server-discovery-and-install-retry/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation` 与 `semantic-code-navigation-provider`
+- [`2026-07-22-integrate-file-note-and-git-context-actions`](2026-07-22-integrate-file-note-and-git-context-actions/proposal.md) — verified implementation，已同步 `filetree-multitab-open`
+- [`2026-07-22-move-file-toolbar-actions-to-context-menu`](2026-07-22-move-file-toolbar-actions-to-context-menu/proposal.md) — verified implementation，已同步 `filetree-multitab-open`
+- [`2026-07-22-redesign-file-tab-context-menu`](2026-07-22-redesign-file-tab-context-menu/proposal.md) — verified implementation，已同步 `filetree-multitab-open`
+- [`2026-07-22-replace-language-server-fallback-with-install-guidance`](2026-07-22-replace-language-server-fallback-with-install-guidance/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation` 与 `semantic-code-navigation-provider`
+- [`2026-07-22-upgrade-semantic-code-navigation`](2026-07-22-upgrade-semantic-code-navigation/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation` 与 `semantic-code-navigation-provider`
+
+### 2026-07-21
+
+- [`2026-07-21-add-mermaid-fullscreen-png-download`](2026-07-21-add-mermaid-fullscreen-png-download/proposal.md) — verified implementation，已同步 `markdown-mermaid-block-fullscreen-viewer`
+- [`2026-07-21-add-multi-repository-global-git-actions`](2026-07-21-add-multi-repository-global-git-actions/proposal.md) — verified implementation，已同步 `git-branch-management` 与 `multi-repository-git-command-center`
+- [`2026-07-21-decompose-generic-tool-presentation`](2026-07-21-decompose-generic-tool-presentation/proposal.md) — verified implementation，已同步 `generic-tool-presentation`
+- [`2026-07-21-enforce-messages-final-boundaries`](2026-07-21-enforce-messages-final-boundaries/proposal.md) — verified implementation，已同步 `messages-final-boundary-enforcement`
+- [`2026-07-21-fix-mermaid-png-native-save`](2026-07-21-fix-mermaid-png-native-save/proposal.md) — verified implementation，已同步 `markdown-mermaid-block-fullscreen-viewer`
+- [`2026-07-21-fix-message-row-context-and-media-scope`](2026-07-21-fix-message-row-context-and-media-scope/proposal.md) — verified implementation，已同步 `messages-row-correctness`
+- [`2026-07-21-fix-shortcut-persistence-and-add-common-modules`](2026-07-21-fix-shortcut-persistence-and-add-common-modules/proposal.md) — verified implementation，已同步 `app-shortcuts`
+- [`2026-07-21-harden-messages-module-boundaries`](2026-07-21-harden-messages-module-boundaries/proposal.md) — verified implementation，已同步 `messages-module-boundaries`
+- [`2026-07-21-isolate-message-row-owners`](2026-07-21-isolate-message-row-owners/proposal.md) — verified implementation，已同步 `message-row-ownership`
+- [`2026-07-21-isolate-messages-orchestration-controller`](2026-07-21-isolate-messages-orchestration-controller/proposal.md) — verified implementation，已同步 `messages-orchestration-ownership`
+- [`2026-07-21-isolate-messages-timeline-controller`](2026-07-21-isolate-messages-timeline-controller/proposal.md) — verified implementation，已同步 `messages-timeline-ownership`
+- [`2026-07-21-normalize-conversation-presentation-context`](2026-07-21-normalize-conversation-presentation-context/proposal.md) — verified implementation，已同步 `conversation-presentation-context-normalization`
+- [`2026-07-21-promote-shared-markdown-renderer`](2026-07-21-promote-shared-markdown-renderer/proposal.md) — verified implementation，已同步 `shared-markdown-renderer`
+- [`2026-07-21-refactor-messages-presentation-architecture`](2026-07-21-refactor-messages-presentation-architecture/proposal.md) — verified implementation，已同步 `messages-presentation-architecture`
+- [`2026-07-21-relocate-shared-message-domain-helpers`](2026-07-21-relocate-shared-message-domain-helpers/proposal.md) — verified implementation，已同步 `shared-message-domain-helpers`
+- [`2026-07-21-stabilize-git-history-cross-platform-ordering`](2026-07-21-stabilize-git-history-cross-platform-ordering/proposal.md) — verified implementation，已同步 `git-history-panel`
+- [`2026-07-21-stabilize-messages-public-input`](2026-07-21-stabilize-messages-public-input/proposal.md) — verified implementation，已同步 `messages-public-input`
 
 ### 2026-07-20
 
 - [`2026-07-20-add-caveman-curated-skill-bundle`](2026-07-20-add-caveman-curated-skill-bundle/proposal.md) — verified implementation，已同步 main spec
+- [`2026-07-20-align-codex-context-indicator-footer`](2026-07-20-align-codex-context-indicator-footer/proposal.md) — verified implementation，已同步 `composer-context-dual-view`
+- [`2026-07-20-unify-composer-submit-button-size`](2026-07-20-unify-composer-submit-button-size/proposal.md) — verified implementation，已同步 `composer-control-surface`
+
+### 2026-07-19
+
+- [`2026-07-19-fix-mermaid-fullscreen-svg-serialization`](2026-07-19-fix-mermaid-fullscreen-svg-serialization/proposal.md) — verified implementation，已同步 `markdown-mermaid-block-fullscreen-viewer`
+- [`2026-07-19-harden-mermaid-fullscreen-normalization-runtime`](2026-07-19-harden-mermaid-fullscreen-normalization-runtime/proposal.md) — verified implementation，已同步 `markdown-mermaid-block-fullscreen-viewer`
 
 ### 2026-07-18
 
@@ -66,6 +118,8 @@
 - [`2026-07-18-harden-conversation-rendering-for-large-history`](2026-07-18-harden-conversation-rendering-for-large-history/proposal.md) — product-owner acceptance waiver，已同步 main specs
 - [`2026-07-18-optimize-conversation-streaming-render-perf`](2026-07-18-optimize-conversation-streaming-render-perf/proposal.md) — duplicate trace waived，已同步 main specs
 - [`2026-07-18-redesign-workspace-sidebar-session-loading`](2026-07-18-redesign-workspace-sidebar-session-loading/proposal.md) — automated evidence closure，已同步 main specs
+- [`2026-07-18-fix-git-renamed-deleted-file-path-identity`](2026-07-18-fix-git-renamed-deleted-file-path-identity/proposal.md) — verified implementation，已同步 `git-working-tree-change-path-identity`
+- [`2026-07-18-refine-git-graph-menu-entry`](2026-07-18-refine-git-graph-menu-entry/proposal.md) — verified implementation，已同步 `git-panel-diff-view`
 
 ### 2026-07-17
 

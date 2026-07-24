@@ -1,6 +1,6 @@
 # OpenSpec Main Specs 索引
 
-`openspec/specs/*/spec.md` 是已经同步进入 mainline 的 capability behavior truth。当前索引覆盖 **403** 个 capability，并按 capability id 首字母分组。
+`openspec/specs/*/spec.md` 是已经同步进入 mainline 的 capability behavior truth。当前索引覆盖 **430** 个 capability，并按 capability id 首字母分组。
 
 ## 使用边界
 
@@ -13,11 +13,12 @@
 
 - [agent-domain-event-runtime](./agent-domain-event-runtime/spec.md)
 - [agent-domain-event-schema](./agent-domain-event-schema/spec.md)
+- [agent-startup-selection-stability](./agent-startup-selection-stability/spec.md)
 - [agent-task-center](./agent-task-center/spec.md)
-- [agent-task-orchestration-center](./agent-task-orchestration-center/spec.md)
 - [agent-task-run-history](./agent-task-run-history/spec.md)
 - [app-server-event-batching](./app-server-event-batching/spec.md)
 - [app-server-event-stream-pacing](./app-server-event-stream-pacing/spec.md)
+- [app-settings-corruption-recovery](./app-settings-corruption-recovery/spec.md)
 - [app-shell-domain-context-isolation](./app-shell-domain-context-isolation/spec.md)
 - [app-shell-exhaustive-deps-stability](./app-shell-exhaustive-deps-stability/spec.md)
 - [app-shell-runtime-boundaries](./app-shell-runtime-boundaries/spec.md)
@@ -169,6 +170,7 @@
 - [conversation-lifecycle-contract](./conversation-lifecycle-contract/spec.md)
 - [conversation-live-message-canvas-rendering](./conversation-live-message-canvas-rendering/spec.md)
 - [conversation-message-actions](./conversation-message-actions/spec.md)
+- [conversation-presentation-context-normalization](./conversation-presentation-context-normalization/spec.md)
 - [conversation-provider-stream-mitigation](./conversation-provider-stream-mitigation/spec.md)
 - [conversation-realtime-client-performance](./conversation-realtime-client-performance/spec.md)
 - [conversation-realtime-cpu-stability](./conversation-realtime-cpu-stability/spec.md)
@@ -179,11 +181,13 @@
 - [conversation-stream-latency-diagnostics](./conversation-stream-latency-diagnostics/spec.md)
 - [conversation-streaming-merge-performance](./conversation-streaming-merge-performance/spec.md)
 - [conversation-streaming-performance](./conversation-streaming-performance/spec.md)
+- [conversation-streaming-render-performance](./conversation-streaming-render-performance/spec.md)
 - [conversation-template-maintenance](./conversation-template-maintenance/spec.md)
 - [conversation-tool-card-persistence](./conversation-tool-card-persistence/spec.md)
 - [conversation-user-path-reference-cards](./conversation-user-path-reference-cards/spec.md)
 - [core-complexity-governance](./core-complexity-governance/spec.md)
 - [cross-workspace-cost-admin-view](./cross-workspace-cost-admin-view/spec.md)
+- [curated-agent-catalog](./curated-agent-catalog/spec.md)
 - [curated-skill-bundles](./curated-skill-bundles/spec.md)
 
 ## D
@@ -212,12 +216,15 @@
 - [exhaustive-deps-sentinel-pattern-stability](./exhaustive-deps-sentinel-pattern-stability/spec.md)
 - [exhaustive-deps-tail-warning-stability](./exhaustive-deps-tail-warning-stability/spec.md)
 - [exhaustive-deps-warning-governance](./exhaustive-deps-warning-governance/spec.md)
+- [extensions-management-surface](./extensions-management-surface/spec.md)
 - [external-message-special-session](./external-message-special-session/spec.md)
 
 ## F
 
 - [feishu-message-connector](./feishu-message-connector/spec.md)
 - [file-change-event-debounce](./file-change-event-debounce/spec.md)
+- [file-editor-line-navigation](./file-editor-line-navigation/spec.md)
+- [file-editor-tab-strip](./file-editor-tab-strip/spec.md)
 - [file-editor-typing-latency](./file-editor-typing-latency/spec.md)
 - [file-history-view](./file-history-view/spec.md)
 - [file-markdown-preview-render-architecture](./file-markdown-preview-render-architecture/spec.md)
@@ -234,6 +241,7 @@
 
 ## G
 
+- [generic-tool-presentation](./generic-tool-presentation/spec.md)
 - [git-branch-command-extraction-compatibility](./git-branch-command-extraction-compatibility/spec.md)
 - [git-branch-management](./git-branch-management/spec.md)
 - [git-command-center-branch-menu-stability](./git-command-center-branch-menu-stability/spec.md)
@@ -248,9 +256,11 @@
 - [git-panel-diff-view](./git-panel-diff-view/spec.md)
 - [git-pr-submission-workflow](./git-pr-submission-workflow/spec.md)
 - [git-selective-commit](./git-selective-commit/spec.md)
+- [git-working-tree-change-path-identity](./git-working-tree-change-path-identity/spec.md)
 - [git-workspace-branch-polling](./git-workspace-branch-polling/spec.md)
 - [git-worktree-base-selection](./git-worktree-base-selection/spec.md)
 - [global-runtime-notice-dock](./global-runtime-notice-dock/spec.md)
+- [global-search-action-discovery](./global-search-action-discovery/spec.md)
 - [global-search-api-endpoint-index](./global-search-api-endpoint-index/spec.md)
 - [global-search-result-presentation](./global-search-result-presentation/spec.md)
 - [global-session-history-archive-center](./global-session-history-archive-center/spec.md)
@@ -275,6 +285,7 @@
 - [kanban-task-chaining](./kanban-task-chaining/spec.md)
 - [kanban-task-scheduling](./kanban-task-scheduling/spec.md)
 - [kanban-trigger-active-state](./kanban-trigger-active-state/spec.md)
+- [kimi-engine-runtime](./kimi-engine-runtime/spec.md)
 
 ## L
 
@@ -301,9 +312,17 @@
 - [message-markdown-latex-compatibility](./message-markdown-latex-compatibility/spec.md)
 - [message-markdown-streaming-compatibility](./message-markdown-streaming-compatibility/spec.md)
 - [message-reading-navigation-reasoning-ux](./message-reading-navigation-reasoning-ux/spec.md)
+- [message-row-ownership](./message-row-ownership/spec.md)
 - [message-row-render-stability](./message-row-render-stability/spec.md)
 - [message-tool-marker-shell](./message-tool-marker-shell/spec.md)
+- [messages-final-boundary-enforcement](./messages-final-boundary-enforcement/spec.md)
+- [messages-module-boundaries](./messages-module-boundaries/spec.md)
+- [messages-orchestration-ownership](./messages-orchestration-ownership/spec.md)
 - [messages-outline-floater](./messages-outline-floater/spec.md)
+- [messages-presentation-architecture](./messages-presentation-architecture/spec.md)
+- [messages-public-input](./messages-public-input/spec.md)
+- [messages-row-correctness](./messages-row-correctness/spec.md)
+- [messages-timeline-ownership](./messages-timeline-ownership/spec.md)
 - [model-structured-output-normalization](./model-structured-output-normalization/spec.md)
 - [multi-repository-file-tree-decorations](./multi-repository-file-tree-decorations/spec.md)
 - [multi-repository-git-command-center](./multi-repository-git-command-center/spec.md)
@@ -332,6 +351,7 @@
 - [performance-compatibility-diagnostics](./performance-compatibility-diagnostics/spec.md)
 - [persistent-state-governance](./persistent-state-governance/spec.md)
 - [policy-decision-audit-surface](./policy-decision-audit-surface/spec.md)
+- [pr-ai-content-generation](./pr-ai-content-generation/spec.md)
 - [project-canvas-code-graph-import](./project-canvas-code-graph-import/spec.md)
 - [project-instruction-layering-governance](./project-instruction-layering-governance/spec.md)
 - [project-map-api-contract-discovery](./project-map-api-contract-discovery/spec.md)
@@ -352,6 +372,10 @@
 - [project-memory-ui](./project-memory-ui/spec.md)
 - [project-runtime-log-viewer](./project-runtime-log-viewer/spec.md)
 - [project-xray-panel](./project-xray-panel/spec.md)
+
+## Q
+
+- [quick-context-switcher](./quick-context-switcher/spec.md)
 
 ## R
 
@@ -378,6 +402,7 @@
 
 - [search-hydration-complement](./search-hydration-complement/spec.md)
 - [search-release-notes-diff-polish](./search-release-notes-diff-polish/spec.md)
+- [semantic-code-navigation-provider](./semantic-code-navigation-provider/spec.md)
 - [session-activity-external-file-open](./session-activity-external-file-open/spec.md)
 - [session-activity-file-open-affordances](./session-activity-file-open-affordances/spec.md)
 - [session-history-display-fidelity](./session-history-display-fidelity/spec.md)
@@ -388,6 +413,9 @@
 - [settings-local-usage-analytics](./settings-local-usage-analytics/spec.md)
 - [settings-navigation-consolidation](./settings-navigation-consolidation/spec.md)
 - [settings-surface-redesign-shortcuts](./settings-surface-redesign-shortcuts/spec.md)
+- [settings-view-type-safety](./settings-view-type-safety/spec.md)
+- [shared-markdown-renderer](./shared-markdown-renderer/spec.md)
+- [shared-message-domain-helpers](./shared-message-domain-helpers/spec.md)
 - [shared-session-engine-selection](./shared-session-engine-selection/spec.md)
 - [shared-session-thread](./shared-session-thread/spec.md)
 - [shared-state-lock-governance](./shared-state-lock-governance/spec.md)
@@ -464,6 +492,7 @@
 - [workspace-home-shadcn-ux](./workspace-home-shadcn-ux/spec.md)
 - [workspace-note-card-pool](./workspace-note-card-pool/spec.md)
 - [workspace-note-card-storage](./workspace-note-card-storage/spec.md)
+- [workspace-note-context-capture](./workspace-note-context-capture/spec.md)
 - [workspace-open-mode-routing](./workspace-open-mode-routing/spec.md)
 - [workspace-recent-conversations-bulk-management](./workspace-recent-conversations-bulk-management/spec.md)
 - [workspace-session-attribution-mode](./workspace-session-attribution-mode/spec.md)
@@ -472,5 +501,6 @@
 - [workspace-session-management](./workspace-session-management/spec.md)
 - [workspace-session-radar-overview](./workspace-session-radar-overview/spec.md)
 - [workspace-session-source-fact-cache](./workspace-session-source-fact-cache/spec.md)
+- [workspace-sidebar-session-loading](./workspace-sidebar-session-loading/spec.md)
 - [workspace-sidebar-visual-harmony](./workspace-sidebar-visual-harmony/spec.md)
 - [workspace-topbar-session-tabs](./workspace-topbar-session-tabs/spec.md)

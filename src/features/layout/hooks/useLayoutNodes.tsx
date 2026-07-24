@@ -1162,6 +1162,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const { todoTotal, subagentTotal, fileChanges, commandTotal } =
     useStatusPanelData(statusPanelItems, {
       isCodexEngine: isStatusPanelCodexEngine,
+      activeEngine: options.selectedEngine ?? null,
       activeThreadId: options.activeThreadId,
       itemsByThread: deferredThreadItemsByThread,
       threadParentById: options.threadParentById,

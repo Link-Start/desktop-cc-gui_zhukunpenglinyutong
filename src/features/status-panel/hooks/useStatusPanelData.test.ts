@@ -149,6 +149,44 @@ describe("useStatusPanelData helpers", () => {
     ]);
   });
 
+  it("attributes subagent task output to the real active engine instead of a binary fallback", () => {
+    const taskTool = createTaskTool("task-tool-1", {
+      task_id: "task-123",
+      description: "Review task",
+    });
+
+    const { result } = renderHook(() =>
+      useStatusPanelData([taskTool], {
+        activeEngine: "kimi",
+      }),
+    );
+
+    const taskSubagent = result.current.subagents.find(
+      (subagent) => subagent.id === "task-tool-1",
+    );
+
+    expect(taskSubagent?.taskOutput?.engine).toBe("kimi");
+  });
+
+  it("falls back to the legacy codex-or-claude boolean when no real engine is provided", () => {
+    const taskTool = createTaskTool("task-tool-1", {
+      task_id: "task-123",
+      description: "Review task",
+    });
+
+    const { result } = renderHook(() =>
+      useStatusPanelData([taskTool], {
+        isCodexEngine: true,
+      }),
+    );
+
+    const taskSubagent = result.current.subagents.find(
+      (subagent) => subagent.id === "task-tool-1",
+    );
+
+    expect(taskSubagent?.taskOutput?.engine).toBe("codex");
+  });
+
   it("keeps task and collab subagent navigation targets correct after scoped caching", () => {
     const taskTool = createTaskTool("task-tool-1", {
       task_id: "task-123",

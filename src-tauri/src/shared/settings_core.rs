@@ -241,6 +241,22 @@ pub(crate) async fn get_app_settings_core(app_settings: &Mutex<AppSettings>) -> 
     settings
 }
 
+/// One-shot notice recorded when startup quarantines a corrupted settings.json.
+/// `backup_file_name` is `None` when the quarantine rename itself failed.
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SettingsRecoveryNotice {
+    pub(crate) backup_file_name: Option<String>,
+}
+
+/// Take semantics: returns the pending notice once and clears it, so the frontend
+/// surfaces the corruption recovery toast exactly once per startup quarantine.
+pub(crate) async fn take_settings_recovery_notice_core(
+    notice: &Mutex<Option<SettingsRecoveryNotice>>,
+) -> Option<SettingsRecoveryNotice> {
+    notice.lock().await.take()
+}
+
 pub(crate) async fn update_app_settings_core(
     settings: AppSettings,
     app_settings: &Mutex<AppSettings>,
@@ -385,6 +401,7 @@ mod tests {
         sanitize_dark_theme_preset_id, sanitize_layout_mode, sanitize_light_theme_preset_id,
         sanitize_theme, sanitize_theme_preset_id, sanitize_ui_scale,
         set_codex_unified_exec_official_override_core, update_app_settings_core, validate_ui_scale,
+        SettingsRecoveryNotice, take_settings_recovery_notice_core,
         DARK_THEME_PRESET_CATPPUCCIN_MOCHA, DARK_THEME_PRESET_DRACULA, DARK_THEME_PRESET_GITHUB,
         DARK_THEME_PRESET_GITHUB_DIMMED, DARK_THEME_PRESET_MODERN, DARK_THEME_PRESET_MONOKAI,
         DARK_THEME_PRESET_NORD, DARK_THEME_PRESET_ONE_DARK_PRO, DARK_THEME_PRESET_PLUS,
@@ -711,6 +728,33 @@ mod tests {
             app_settings_change_requires_codex_restart(&previous, &updated),
             "clearing the curated set must restart Codex so app-server developer_instructions refresh"
         );
+    }
+
+    #[tokio::test]
+    async fn take_settings_recovery_notice_core_returns_notice_once_then_clears() {
+        let notice = Mutex::new(Some(SettingsRecoveryNotice {
+            backup_file_name: Some("settings.json.corrupted-20260724T000000Z.bak".to_string()),
+        }));
+
+        let taken = take_settings_recovery_notice_core(&notice).await;
+        assert_eq!(
+            taken,
+            Some(SettingsRecoveryNotice {
+                backup_file_name: Some("settings.json.corrupted-20260724T000000Z.bak".to_string()),
+            })
+        );
+
+        let second_take = take_settings_recovery_notice_core(&notice).await;
+        assert_eq!(second_take, None, "notice must be cleared after the take");
+    }
+
+    #[tokio::test]
+    async fn take_settings_recovery_notice_core_returns_none_when_no_notice() {
+        let notice: Mutex<Option<SettingsRecoveryNotice>> = Mutex::new(None);
+
+        let taken = take_settings_recovery_notice_core(&notice).await;
+
+        assert_eq!(taken, None);
     }
 
     #[tokio::test]

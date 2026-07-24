@@ -220,3 +220,322 @@ OpenSpec change: remove-project-map-orchestration-center
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1089: P0-4 openspec specs 索引补登与计数校准
+
+**Date**: 2026-07-24
+**Task**: P0-4 openspec specs 索引补登与计数校准
+**Branch**: `feature/v-078`
+
+### Summary
+
+补登 26 个未索引 capability 至 openspec/specs/README.md(403→429),同步校准 config.yaml/openspec/README/changes/README/project.md 计数(Active 4 / Archived 717);openspec validate specs 全绿,2 个失败为并行代理未跟踪 change;typecheck 通过
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0a723b7ec` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1090: 修复引擎二元假设并收敛 isValidModelId 校验
+
+**Date**: 2026-07-24
+**Task**: 修复引擎二元假设并收敛 isValidModelId 校验
+**Branch**: `feature/v-078`
+
+### Summary
+
+OpenSpec change fix-engine-attribution-and-model-id-validation:EngineTaskOutputEngine 放宽为 EngineType 并显式 normalize unknown 值;useStatusPanelData/StatusPanel/useLayoutNodes 透传真实引擎;vendors/types.ts 的 isValidModelId/MODEL_ID_PATTERN 收敛为 composer/types/provider 单一实现(≤128 + pattern)。typecheck/eslint/focused vitest 全部通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `38e139b37` | (see git log) |
+| `bfb61b9e2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1091: SettingsView 摘除 ts-nocheck 并清理 skills 死分支
+
+**Date**: 2026-07-24
+**Task**: P0-3 SettingsView.tsx 摘 @ts-nocheck + 删 skills 死分支
+**Branch**: `feature/v-078`
+
+### Summary
+
+OpenSpec change remove-settings-view-ts-nocheck-and-skills-dead-branch(已归档为 2026-07-24-remove-settings-view-ts-nocheck-and-skills-dead-branch):删除 SettingsView.tsx 中恒为 false 的 `activeSection === "skills"` 不可达分支(curated skills 已迁至 MCP skills subtab),修复残余 5 个 TS6133 unused import 报错(ChevronDown/ChevronUp/Trash2/getDefaultInterruptShortcut/SessionRadarHistoryDeleteResult),最终摘除第 1 行 `// @ts-nocheck`。新 capability `settings-view-type-safety` 已同步主 specs。
+
+### Main Changes
+
+- src/features/settings/components/SettingsView.tsx:删死分支 14 行、清理 5 个 unused import、摘 @ts-nocheck(唯一改动的代码文件)
+- openspec:新增并归档 change;新增 openspec/specs/settings-view-type-safety/spec.md
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `71ab03f58` | docs(openspec): 新增提案 |
+| `29ef72543` | refactor(settings): 删除不可达 skills 死分支 |
+| `37d545f4f` | fix(settings): 清理未使用 import 修复残余 tsc 报错 |
+| `b1a2ea4a5` | refactor(settings): 摘除 ts-nocheck |
+| `27ab8b906` | chore(openspec): 同步主规范并归档 |
+
+### Testing
+
+- [OK] `npm run typecheck`(tsc --noEmit)exit 0
+- [OK] `npx eslint src/features/settings/components/SettingsView.tsx` 通过
+- [OK] `npx vitest run src/features/settings/components/SettingsView.test.tsx` 52/52 通过
+- [OK] `openspec validate --all --strict` 434/434 通过
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1092: P0-1 settings 加载失败静默修复（损坏隔离备份 + 前端可见提示）
+
+**Date**: 2026-07-24
+**Task**: P0-1 settings 加载失败静默修复（损坏隔离备份 + 前端可见提示）
+**Branch**: `feature/v-078`
+
+### Summary
+
+OpenSpec change preserve-corrupted-app-settings-on-load 已归档并同步主 spec app-settings-corruption-recovery：后端 read_settings 失败时先将 settings.json 隔离备份为 .corrupted-<UTC ts>.bak 再回退默认值（GUI state.rs 与 daemon daemon_state.rs 两处 unwrap_or_default 调用点），防止后续保存覆盖写回导致用户设置不可逆丢失；前端 useAppSettings 加载 catch 补 console.error 与 pushErrorToast 用户可见提示。typecheck/eslint/focused Vitest 30/30/cargo storage 26/26/daemon_state 9/9/openspec strict 全部通过。
+
+### Main Changes
+
+### Main Changes
+
+- `src-tauri/src/storage.rs`：新增 `backup_corrupted_settings_file(path, error)`（rename 为 `settings.json.corrupted-%Y%m%dT%H%M%SZ.bak` + `[storage]` 日志）与两个单测；`read_settings` 函数体未动。
+- `src-tauri/src/state.rs` 与 `src-tauri/src/bin/cc_gui_daemon/daemon_state.rs`：两处 `unwrap_or_default()` 改 `unwrap_or_else`，失败先备份再回退 `AppSettings::default()`；`load()` 其他初始化语句未触碰。
+- `src/features/settings/hooks/useAppSettings.ts`：加载 catch 补 `console.error` + `pushErrorToast`（复用 `services/toasts`，`i18n.t(..., { defaultValue })` 带兜底，未新增 locale key）。
+- `useAppSettings.test.ts`：新增 reject 用例（defaults 保持、isLoading 收敛、toast 恰好一次）。
+- OpenSpec：`openspec/changes/archive/2026-07-24-preserve-corrupted-app-settings-on-load/` + `openspec/specs/app-settings-corruption-recovery/spec.md`；changes/README 与 archive/README 索引同步。
+
+### Testing
+
+- [OK] `npm run typecheck` exit 0（期间其他代理未提交的 SettingsView.tsx 报错与本 change 无关，其修复后全量通过）
+- [OK] `npx eslint`（2 个改动文件）无告警
+- [OK] `npx vitest run src/features/settings/hooks/useAppSettings.test.ts` 30/30（含 legacy Gemini 归一不回归）
+- [OK] `cargo test --lib storage` 26/26；`cargo test --bin cc_gui_daemon daemon_state` 9/9；`cargo check --bins` 通过
+- [OK] `openspec validate --specs --strict --no-interactive` 430/430
+
+### 邻近发现（未修复）
+
+- `read_workspaces(...).unwrap_or_default()`（state.rs 与 daemon_state.rs）对 workspaces.json 存在同类静默回退 + 覆盖写回风险。
+- 并行代理归档的 settings-view-type-safety 尚未补登 archive/README 索引（其负责方跟进）。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a1dd0795b` | (see git log) |
+| `c3d472a34` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1093: settings 损坏恢复通知链路打通（后端 recovery notice + 前端 toast + i18n）
+
+**Date**: 2026-07-24
+**Task**: settings 损坏恢复通知链路打通（后端 recovery notice + 前端 toast + i18n）
+**Branch**: `feature/v-078`
+
+### Summary
+
+OpenSpec notify-settings-recovery-after-corruption 已归档：quarantine 记录一次性 recovery notice，take_settings_recovery_notice command 暴露给前端，加载成功后弹一次本地化 toast，i18n key 补 zh/en
+
+### Main Changes
+
+### Summary
+
+OpenSpec change notify-settings-recovery-after-corruption 已归档并同步主 spec `app-settings-corruption-recovery`，打通"后端 quarantine → 前端用户可见提示"链路，修复上一轮 review 缺口：quarantine 发生在启动期，之后 `get_app_settings` 从内存态直接返回 `Ok(默认值)`，真实损坏场景下前端 catch 分支的 toast 永远不会弹。本次后端在 `AppState` 记录一次性 recovery notice（含备份文件名），新增 `take_settings_recovery_notice` command（take 语义：读取即清除）；前端 `useAppSettings` 加载成功路径调用一次，有 notice 弹一次本地化 toast；5 个 i18n key 补进 zh/en locale（其余语言走 en fallback）；修正 catch 分支文案，删除"后端已备份为 .bak"的错位表述。
+
+### Main Changes
+
+- `src-tauri/src/storage.rs`：`backup_corrupted_settings_file` 返回值改 `Option<PathBuf>`（rename 成功返回备份路径），quarantine 逻辑不变；两个既有单测适配并断言返回路径。
+- `src-tauri/src/shared/settings_core.rs`：新增 `SettingsRecoveryNotice`（camelCase serialize，`backup_file_name: Option<String>`）与 `take_settings_recovery_notice_core`（take 语义）；新增 take-once-clears / empty 两个单测。
+- `src-tauri/src/state.rs`：`AppState` 新增 `settings_recovery_notice` 字段，`load` 的 quarantine 分支记录 notice；`settings/mod.rs` 新增 command；`command_registry.rs` 注册；`daemon_state.rs` 仅 `let _ =` 适配签名（daemon 无 UI，行为不变）；两处 git 测试的 `AppState` 字面量构造补新字段。
+- `src/services/tauri/settings.ts` + barrel：新增 `SettingsRecoveryNotice` 类型与 `takeSettingsRecoveryNotice`。
+- `useAppSettings.ts`：成功路径独立 try/catch 拉取 notice（失败不影响加载），有 notice 弹一次 toast；catch 分支文案改为只描述读取失败。
+- `src/i18n/locales/zh/settings.ts` / `en/settings.ts`：补 `settingsRecoveredTitle/Message/NoBackupMessage` 与 `appSettingsLoadFailedTitle/Message` 共 5 个 key。
+- `useAppSettings.test.ts`：mock 增加 take command，新增 3 个用例 + 扩展 catch 用例（不含 .bak、不调用 take command）。
+- OpenSpec：`openspec/changes/archive/2026-07-24-notify-settings-recovery-after-corruption/` + 主 spec MODIFIED 1 条 / ADDED 2 条；archive/README 补条目 + Indexed 719→720；changes/README 补归档条目。
+
+### Testing
+
+- [OK] `npm run typecheck` 通过
+- [OK] `npx eslint`（8 个改动前端文件）无告警
+- [OK] `npx vitest run useAppSettings.test.ts` 34/34
+- [OK] 间接消费方回归：app-shell.startup / DetachedSpecHubWindow / DetachedFileExplorerWindow / ClientDocumentationWindow 25/25
+- [OK] `cargo test --lib` 1535 通过；`cargo test --bin cc_gui_daemon` 948 通过
+- [OK] `openspec validate --specs --strict --no-interactive` 430/430
+
+### 预存问题（非本次引入，仅记录）
+
+- `runtime::tests::replace_workspace_session_with_source_marks_old_session_shutdown_source` 与 `runtime::tests::replacement_waiter_does_not_swap_in_a_third_runtime` 在 lib 与 daemon bin 均失败；`git stash` 后干净树复跑同样失败，确认预存，与本次改动无关。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ae0927a17` | (see git log) |
+| `615733516` | (see git log) |
+| `9c395fa2d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1094: OpenSpec 索引终态校准
+
+**Date**: 2026-07-24
+**Task**: OpenSpec 索引终态校准
+**Branch**: `feature/v-078`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+任务目标:对 2026-07-24 并行归档造成的 openspec 索引漂移做终态校准(纯文档,单 commit 闭环,参照 0a723b7ec 先例)。
+
+主要改动:
+- openspec/specs/README.md: 删除 agent-task-orchestration-center 索引死链(spec 已由 165758fe8 移除,空目录本 checkout 已不存在),按字母序补登 app-settings-corruption-recovery(A 组)与 settings-view-type-safety(S 组),计数 429 → 430
+- openspec/changes/archive/README.md: 补登 45 条 2026-07-18~24 漏登归档条目(07-18×2、07-19×2 新建分组、07-20×2、07-21×17 新建分组、07-22×14、07-23×7、07-24×1),Indexed proposals 720 → 721,2026-07 月度分组 142 → 188(基线预存漂移一并修);其余月度组账实相符未动
+- openspec/specs/app-settings-corruption-recovery/spec.md 与 settings-view-type-safety/spec.md: TBD Purpose 占位符补写为真实 Purpose(依据各自归档 proposal)
+- openspec/README.md / config.yaml / project.md / changes/README.md: 统一 active=4 / archived=721 / specs=430;project.md 修复 Current workspace state(717/429) 与 Current Inventory(713/429) 两处自相矛盾,Updated At  bump 至 2026-07-24,追加 Update History 条目
+
+验证结果:
+- specs 索引=spec.md 文件=目录=430,diff 为空;archive 索引=目录=721,diff 为空,无死链;六个月度分组账实全部相符;active 列表与 changes/ 实际 4 目录一致
+- openspec validate --all --strict --no-interactive: 434 passed, 0 failed
+- npm run typecheck: 通过(纯文档无影响)
+
+遗留问题:
+- 全仓库约 120 个 spec.md 的 Purpose 仍是归档模板 TBD 占位符(预存系统性问题,本次只修了两个新登记 spec)
+- openspec/changes/README.md 的 2026-07-24 批次描述行"23 个 verified proposal"为 prose 摘要(当日实际 27 个归档),不在三计数口径内未改
+- 工作区未跟踪文件 docs/reports/p0-reprioritized-decision-board-2026-07-24.md 属其他代理,未动
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6bb5fc5f0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1095: P0 治理:修复 quarantine 前端通知缺口与 openspec 索引终态校准,更新决策看板
+
+**Date**: 2026-07-24
+**Task**: P0 治理:修复 quarantine 前端通知缺口与 openspec 索引终态校准,更新决策看板
+**Branch**: `feature/v-078`
+
+### Summary
+
+review 后修复:P0-1 主场景不闭环(quarantine→take_settings_recovery_notice→前端 toast,zh/en i18n 补齐,已归档 notify-settings-recovery-after-corruption);openspec 索引终态校准(430 specs/721 archived/4 active,补登 45 条预存漏登,6bb5fc5f0);决策看板文档更新并入库
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ae0927a17` | (see git log) |
+| `615733516` | (see git log) |
+| `9c395fa2d` | (see git log) |
+| `6bb5fc5f0` | (see git log) |
+| `db9d01978` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

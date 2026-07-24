@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1088
+- **Total Sessions**: 1095
 - **Last Active**: 2026-07-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~222 | Active |
+| `journal-27.md` | ~541 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,13 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1095 | 2026-07-24 | P0 治理:修复 quarantine 前端通知缺口与 openspec 索引终态校准,更新决策看板 | `ae0927a17`, `615733516`, `9c395fa2d`, `6bb5fc5f0`, `db9d01978` | `feature/v-078` |
+| 1094 | 2026-07-24 | OpenSpec 索引终态校准 | `6bb5fc5f0` | `feature/v-078` |
+| 1093 | 2026-07-24 | settings 损坏恢复通知链路打通（后端 recovery notice + 前端 toast + i18n） | `ae0927a17`, `615733516`, `9c395fa2d` | `feature/v-078` |
+| 1092 | 2026-07-24 | P0-1 settings 加载失败静默修复（损坏隔离备份 + 前端可见提示） | `a1dd0795b`, `c3d472a34` | `feature/v-078` |
+| 1091 | 2026-07-24 | SettingsView 摘除 ts-nocheck 并清理 skills 死分支 | `71ab03f58`, `29ef72543`, `37d545f4f`, `b1a2ea4a5`, `27ab8b906` | `feature/v-078` |
+| 1090 | 2026-07-24 | 修复引擎二元假设并收敛 isValidModelId 校验 | `38e139b37`, `bfb61b9e2` | `feature/v-078` |
+| 1089 | 2026-07-24 | P0-4 openspec specs 索引补登与计数校准 | `0a723b7ec` | `feature/v-078` |
 | 1088 | 2026-07-24 | 移除并归档 Project Map 编排中心 | `929acbd75`, `b83efeb9b`, `fdf925f98`, `49fdb2b4f`, `165758fe8` | `feature/v-078` |
 | 1087 | 2026-07-24 | 移除 Project Map 编排中心 S1-S4 | `929acbd75`, `b83efeb9b`, `fdf925f98`, `49fdb2b4f` | `feature/v-078` |
 | 1086 | 2026-07-24 | 清理未使用客户端模块 | `d1a90dddd7` | `feature/v-078` |

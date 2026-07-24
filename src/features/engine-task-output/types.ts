@@ -1,6 +1,6 @@
-import type { ThreadTokenUsage } from "../../types";
+import type { EngineType, ThreadTokenUsage } from "../../types";
 
-export type EngineTaskOutputEngine = "claude" | "codex";
+export type EngineTaskOutputEngine = EngineType;
 
 export type EngineTaskOutputStatus =
   | "running"
