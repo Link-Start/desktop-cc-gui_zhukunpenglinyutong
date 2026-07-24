@@ -26,20 +26,7 @@ import {
   type ComposerBranchControl,
 } from "../../composer/components/ComposerBranchBadge";
 
-type LatestAgentRun = {
-  message: string;
-  timestamp: number;
-  projectName: string;
-  groupName?: string | null;
-  workspaceId: string;
-  threadId: string;
-  isProcessing: boolean;
-};
-
 type HomeChatProps = {
-  latestAgentRuns: LatestAgentRun[];
-  isLoadingLatestAgents: boolean;
-  onSelectThread: (workspaceId: string, threadId: string) => void;
   workspaces: Array<{
     id: string;
     name: string;
