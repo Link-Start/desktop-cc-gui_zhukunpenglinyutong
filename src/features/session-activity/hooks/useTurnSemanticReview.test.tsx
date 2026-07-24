@@ -34,14 +34,16 @@ function renderReviewHook(options?: {
   enabled?: boolean;
   workspaceId?: string | null;
   turnKey?: string;
+  entries?: SemanticDiffEntry[];
+  language?: string;
 }) {
   return renderHook(() =>
     useTurnSemanticReview({
       enabled: options?.enabled ?? true,
       workspaceId: options?.workspaceId === undefined ? "ws-1" : options.workspaceId,
       turnKey: options?.turnKey ?? "turn-1",
-      entries: ENTRIES,
-      language: "en",
+      entries: options?.entries ?? ENTRIES,
+      language: options?.language ?? "en",
     }),
   );
 }
@@ -125,6 +127,49 @@ describe("useTurnSemanticReview", () => {
       expect(second.result.current.review).toEqual(REVIEW);
     });
     expect(requestTurnSemanticReviewMock).toHaveBeenCalledTimes(2);
+    second.unmount();
+  });
+
+  it("invalidates the cache when diff content changes", async () => {
+    requestTurnSemanticReviewMock.mockResolvedValue(REVIEW);
+    const first = renderReviewHook({ turnKey: "turn-diff-change" });
+    await waitFor(() => {
+      expect(first.result.current.review).toEqual(REVIEW);
+    });
+    first.unmount();
+
+    const second = renderReviewHook({
+      turnKey: "turn-diff-change",
+      entries: [{ ...ENTRIES[0]!, diff: "@@ -1 +1 @@\n-old\n+newer" }],
+    });
+    await waitFor(() => {
+      expect(second.result.current.review).toEqual(REVIEW);
+    });
+    expect(requestTurnSemanticReviewMock).toHaveBeenCalledTimes(2);
+    expect(requestTurnSemanticReviewMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        entries: [expect.objectContaining({ diff: expect.stringContaining("+newer") })],
+      }),
+    );
+    second.unmount();
+  });
+
+  it("invalidates the cache when output language changes", async () => {
+    requestTurnSemanticReviewMock.mockResolvedValue(REVIEW);
+    const first = renderReviewHook({ turnKey: "turn-language", language: "en" });
+    await waitFor(() => {
+      expect(first.result.current.review).toEqual(REVIEW);
+    });
+    first.unmount();
+
+    const second = renderReviewHook({ turnKey: "turn-language", language: "zh-CN" });
+    await waitFor(() => {
+      expect(second.result.current.review).toEqual(REVIEW);
+    });
+    expect(requestTurnSemanticReviewMock).toHaveBeenCalledTimes(2);
+    expect(requestTurnSemanticReviewMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ language: "zh-CN" }),
+    );
     second.unmount();
   });
 });

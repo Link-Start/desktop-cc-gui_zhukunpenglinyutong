@@ -7,6 +7,33 @@ const reviewCache = new Map<string, TurnSemanticReview | null>();
 const pendingRequests = new Map<string, Promise<TurnSemanticReview | null>>();
 const MAX_CACHE_ENTRIES = 100;
 
+function hashReviewInput(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${value.length}-${(hash >>> 0).toString(16)}`;
+}
+
+function buildReviewCacheKey(options: {
+  workspaceId: string | null;
+  turnKey: string;
+  entries: SemanticDiffEntry[];
+  language: string;
+}): string {
+  const serializedInput = JSON.stringify({
+    language: options.language,
+    entries: options.entries.map((entry) => ({
+      path: entry.path,
+      status: entry.status,
+      diff: entry.diff ?? "",
+      isImage: Boolean(entry.isImage),
+    })),
+  });
+  return `${options.workspaceId ?? "no-workspace"}:${options.turnKey}:${hashReviewInput(serializedInput)}`;
+}
+
 function readCache(cacheKey: string): TurnSemanticReview | null | undefined {
   if (!reviewCache.has(cacheKey)) {
     return undefined;
@@ -73,7 +100,7 @@ export function useTurnSemanticReview(
   options: UseTurnSemanticReviewOptions,
 ): UseTurnSemanticReviewResult {
   const { enabled, workspaceId, turnKey, entries, language } = options;
-  const cacheKey = `${workspaceId ?? "no-workspace"}:${turnKey}`;
+  const cacheKey = buildReviewCacheKey({ workspaceId, turnKey, entries, language });
   const [state, setState] = useState<ReviewState>(() => {
     const cached = readCache(cacheKey);
     return {

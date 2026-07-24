@@ -1,4 +1,3 @@
-import BellDot from "lucide-react/dist/esm/icons/bell-dot";
 import CircleAlert from "lucide-react/dist/esm/icons/circle-alert";
 import CircleCheck from "lucide-react/dist/esm/icons/circle-check";
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -22,7 +21,7 @@ type GlobalRuntimeNoticeDockProps = {
   onClear: () => void;
 };
 
-type MinimizedIndicatorState = "idle" | "has-notice" | "has-error";
+type MinimizedIndicatorState = "idle" | "has-error";
 
 type SidebarPanelPlacement = {
   style: CSSProperties;
@@ -258,8 +257,6 @@ export function GlobalRuntimeNoticeDock({
           <span className="global-runtime-notice-dock-indicator" aria-hidden="true">
             {minimizedIndicatorState === "has-error" ? (
               <CircleAlert className="global-runtime-notice-dock-indicator-icon" strokeWidth={2} />
-            ) : minimizedIndicatorState === "has-notice" ? (
-              <BellDot className="global-runtime-notice-dock-indicator-icon" strokeWidth={2} />
             ) : (
               <CircleCheck className="global-runtime-notice-dock-indicator-icon" strokeWidth={2} />
             )}

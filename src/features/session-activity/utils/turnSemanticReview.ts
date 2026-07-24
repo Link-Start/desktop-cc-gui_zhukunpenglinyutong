@@ -13,7 +13,6 @@ const MAX_REVIEW_FACTS = 8;
 const MAX_FACT_TEXT_CHARS = 280;
 const MAX_DIFF_CHARS_PER_FILE = 3000;
 const MAX_TOTAL_DIFF_CHARS = 14000;
-const REVIEW_TIMEOUT_MS = 60_000;
 
 const SEMANTIC_REVIEW_AUTO_SESSION = {
   sessionPurpose: "semantic-diff-review",
@@ -231,20 +230,6 @@ async function requestReviewWithEngine(options: {
   return response.text;
 }
 
-function withTimeout<T>(request: Promise<T>, timeoutMs: number): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  const timeoutRequest = new Promise<never>((_, reject) => {
-    timeoutId = globalThis.setTimeout(() => {
-      reject(new Error(`semantic review timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-  });
-  return Promise.race([request, timeoutRequest]).finally(() => {
-    if (timeoutId !== null) {
-      globalThis.clearTimeout(timeoutId);
-    }
-  });
-}
-
 // 生成 turn 级 AI review;永不 throw,失败/解析失败一律返回 null 供调用方静默降级
 export async function requestTurnSemanticReview(options: {
   workspaceId: string;
@@ -255,14 +240,11 @@ export async function requestTurnSemanticReview(options: {
   const engines: EngineType[] = ["claude", "codex"];
   for (const engine of engines) {
     try {
-      const text = await withTimeout(
-        requestReviewWithEngine({
-          workspaceId: options.workspaceId,
-          prompt,
-          engine,
-        }),
-        REVIEW_TIMEOUT_MS,
-      );
+      const text = await requestReviewWithEngine({
+        workspaceId: options.workspaceId,
+        prompt,
+        engine,
+      });
       const review = parseTurnSemanticReviewResponse(text, options.entries);
       if (review) {
         return review;

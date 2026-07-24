@@ -276,7 +276,10 @@ pub(crate) fn backup_corrupted_file(path: &PathBuf, error: &str) -> Option<PathB
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("storage.json");
-    let backup_path = path.with_file_name(format!("{file_name}.corrupted-{timestamp}.bak"));
+    let backup_path = path.with_file_name(format!(
+        "{file_name}.corrupted-{timestamp}-{}.bak",
+        Uuid::new_v4()
+    ));
     match std::fs::rename(path, &backup_path) {
         Ok(()) => {
             eprintln!(
@@ -689,6 +692,31 @@ mod tests {
         assert!(backup_path.is_none(), "missing file must not report a backup");
         assert!(!path.exists());
         assert!(!temp_dir.exists(), "no backup directory side effects");
+    }
+
+    #[test]
+    fn backup_corrupted_file_uses_unique_targets_for_repeated_quarantine() {
+        let temp_dir = std::env::temp_dir().join(format!("moss-x-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).expect("create temp dir");
+        let path = temp_dir.join("settings.json");
+
+        std::fs::write(&path, "first corrupted payload").expect("write first payload");
+        let first_backup =
+            backup_corrupted_file(&path, "first failure").expect("backup first payload");
+
+        std::fs::write(&path, "second corrupted payload").expect("write second payload");
+        let second_backup =
+            backup_corrupted_file(&path, "second failure").expect("backup second payload");
+
+        assert_ne!(first_backup, second_backup, "backup targets must be unique");
+        assert_eq!(
+            std::fs::read_to_string(first_backup).expect("read first backup"),
+            "first corrupted payload"
+        );
+        assert_eq!(
+            std::fs::read_to_string(second_backup).expect("read second backup"),
+            "second corrupted payload"
+        );
     }
 
     #[test]
