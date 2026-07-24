@@ -4,12 +4,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import type { DropResult } from "@hello-pangea/dnd";
 import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
-import Mic from "lucide-react/dist/esm/icons/mic";
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
-import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
-import FileText from "lucide-react/dist/esm/icons/file-text";
-import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Globe from "lucide-react/dist/esm/icons/globe";
@@ -61,7 +57,6 @@ import { CuratedSection } from "../../curated-skills";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
 import { deleteSessionRadarHistoryEntries } from "../../session-activity/utils/sessionRadarHistoryManagement";
 import Settings from "lucide-react/dist/esm/icons/settings";
-import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizontal";
 import BookOpen from "lucide-react/dist/esm/icons/book-open";
 import Server from "lucide-react/dist/esm/icons/server";
 import Shield from "lucide-react/dist/esm/icons/shield";
@@ -128,11 +123,6 @@ import {
   USER_MSG_LIGHT_PRESETS,
 } from "./settings-view/settingsViewAppearance";
 import {
-  SHOW_COMMIT_ENTRY,
-  SHOW_COMPOSER_ENTRY,
-  SHOW_DICTATION_ENTRY,
-  SHOW_EXPERIMENTAL_ENTRY,
-  SHOW_GIT_ENTRY,
   TEMPORARILY_DISABLED_SIDEBAR_SECTIONS as BASE_DISABLED_SIDEBAR_SECTIONS,
 } from "./settings-view/settingsViewConstants";
 import { useSystemProxySettings } from "./settings-view/hooks/useSystemProxySettings";
@@ -1913,17 +1903,6 @@ export function SettingsView({
             <Shield aria-hidden />
             {!sidebarCollapsed && t("settings.sidebarPermissions")}
           </button>
-          {SHOW_COMMIT_ENTRY && (
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "commit" ? "active" : ""}`}
-              onClick={() => setActiveSection("commit")}
-              title={sidebarCollapsed ? t("settings.sidebarCommit") : ""}
-            >
-              <GitCommitHorizontal aria-hidden />
-              {!sidebarCollapsed && t("settings.sidebarCommit")}
-            </button>
-          )}
           <button
             type="button"
             className={`settings-nav ${activeSection === "agent-prompt-management" ? "active" : ""}`}
@@ -1935,39 +1914,6 @@ export function SettingsView({
             <span className="codicon codicon-robot" />
             {!sidebarCollapsed && t("settings.sidebarAgentPromptManagement")}
           </button>
-          {SHOW_COMPOSER_ENTRY && (
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "composer" ? "active" : ""}`}
-              onClick={() => setActiveSection("composer")}
-              title={sidebarCollapsed ? t("settings.sidebarComposer") : ""}
-            >
-              <FileText aria-hidden />
-              {!sidebarCollapsed && t("settings.sidebarComposer")}
-            </button>
-          )}
-          {SHOW_DICTATION_ENTRY && (
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "dictation" ? "active" : ""}`}
-              onClick={() => setActiveSection("dictation")}
-              title={sidebarCollapsed ? t("settings.sidebarDictation") : ""}
-            >
-              <Mic aria-hidden />
-              {!sidebarCollapsed && t("settings.sidebarDictation")}
-            </button>
-          )}
-          {SHOW_GIT_ENTRY && (
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "git" ? "active" : ""}`}
-              onClick={() => setActiveSection("git")}
-              title={sidebarCollapsed ? t("settings.sidebarGit") : ""}
-            >
-              <GitBranch aria-hidden />
-              {!sidebarCollapsed && t("settings.sidebarGit")}
-            </button>
-          )}
           <button
             type="button"
             className={`settings-nav ${activeSection === "runtime-environment" ? "active" : ""}`}
@@ -1988,21 +1934,6 @@ export function SettingsView({
             <MoreHorizontalIcon aria-hidden />
             {!sidebarCollapsed && t("settings.sidebarOther")}
           </button>
-          {SHOW_EXPERIMENTAL_ENTRY && (
-            <>
-              <button
-                type="button"
-                className={`settings-nav ${activeSection === "experimental" ? "active" : ""}`}
-                onClick={() => setActiveSection("experimental")}
-                title={
-                  sidebarCollapsed ? t("settings.sidebarExperimental") : ""
-                }
-              >
-                <FlaskConical aria-hidden />
-                {!sidebarCollapsed && t("settings.sidebarExperimental")}
-              </button>
-            </>
-          )}
           <button
             type="button"
             className={`settings-nav ${activeSection === "community" ? "active" : ""}`}
