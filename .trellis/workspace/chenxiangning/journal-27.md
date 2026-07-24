@@ -881,3 +881,36 @@ Note: 中间 6eca222b3 为并行代理的 trellis 记录提交；未执行 archi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1106: 归档清理复核 OpenSpec
+
+**Date**: 2026-07-25
+**Task**: 归档清理复核 OpenSpec
+**Branch**: `feature/v-799`
+
+### Summary
+
+同步 5 条 correction requirements 到 4 个 main specs，归档 close-cleanup-review-findings，并校准 active=5、archive=731、specs=431 及补回 TokenTracker active entry。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `77040b143` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
