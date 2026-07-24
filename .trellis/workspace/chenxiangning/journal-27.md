@@ -129,3 +129,57 @@ openspec-bulk-archive-change:19 个 verified change 按时间序归档并合并 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1087: 移除 Project Map 编排中心 S1-S4
+
+**Date**: 2026-07-24
+**Task**: 移除 Project Map 编排中心 S1-S4
+**Branch**: `feature/v-078`
+
+### Summary
+
+迁移 TaskRun 事件总线，断开 app-shell/layout 引用，删除编排中心本体、i18n 与 CSS；G4 typecheck、lint、889 个 test files 全绿。
+
+### Main Changes
+
+OpenSpec change: remove-project-map-orchestration-center
+
+已完成：
+- S1：迁移 ccgui:open-task-run 事件总线至 tasks 模块。
+- S2：移除 app-shell 编排派发回调。
+- S3：移除 layout、Project Map 与 Task Center 的编排入口和装配。
+- S4：删除 agent-orchestration 目录、10 语言包、locale keys 与编排中心样式。
+- 补充清理 scrollbars.css 中 8 处残余 selector。
+- 修正 appShellLazyBoundaries.test.ts 的等价 Project Map lazy-mount 符号断言。
+
+验证：
+- npm run typecheck：通过。
+- npm run lint：通过。
+- npm run test：889/889 test files 通过。
+- runtime source 禁用符号扫描：零命中。
+- src/features/messages/orchestration/：16 个文件完整保留。
+
+后续：执行 S5 main spec 删除、OpenSpec strict validate、smoke、verification、sync/archive。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `929acbd75` | (see git log) |
+| `b83efeb9b` | (see git log) |
+| `fdf925f98` | (see git log) |
+| `49fdb2b4f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
