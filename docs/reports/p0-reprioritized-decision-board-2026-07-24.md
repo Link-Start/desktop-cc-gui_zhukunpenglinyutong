@@ -1,6 +1,6 @@
 # P0 治理清单 · 重定义优先级与决策看板
 
-> 日期:2026-07-24(当日晚已更新执行记录,见第〇节)
+> 日期:2026-07-24(07-24 晚已更新执行记录见第〇节;07-25 增量记录见第〇·二节;07-25 晚常驻轮询优化见第〇·四节)
 > 基线:分支 `feature/v-078` @ `a9c479d57`(执行后 HEAD 已推进,见第〇节)
 > 来源:对原 P0-1 ~ P0-10 清单(出自 `client-aux-modules-optimization-report-2026-07-24.md`)逐项代码核查后的修订版
 > 用途:**给决策者看**。每项任务写清楚:解决什么问题、UI 表现是什么、做了得到什么、不做会失去什么。你看完可以直接勾"做 / 不做 / 缓一缓"。
@@ -28,13 +28,99 @@
 - **review 抓到并已修复的两个真问题**:
   1. P0-1 初版 toast 在主场景不触发(后端启动期 quarantine 后 `get_app_settings` 恒返回 Ok)——已由 `notify-settings-recovery-after-corruption` 补齐:quarantine 时记录 notice,前端经新命令 `take_settings_recovery_notice`(take 语义,只弹一次)拉取并提示,zh/en locale 已补 key。
   2. 并行归档把 openspec 索引再次搞漂移(幽灵 capability 死链、2 个新 spec 漏登、Archived 计数三处矛盾 717/719/720)——已由 `6bb5fc5f0` 终态校准:索引=文件系统=430 specs / 721 archived / 4 active,另补登了 45 条预存漏登归档、修正 07 月月度计数(142→188)。
-- **预存问题(非本批引入,留待后续)**:`read_workspaces` 对 workspaces.json 有同类静默回退风险;2 个 daemon 进程组测试在本机沙箱确定性失败;约 120 个 spec.md 的 Purpose 残留归档模板 TBD。
+- **预存问题(非本批引入,留待后续)**:`read_workspaces` 对 workspaces.json 有同类静默回退风险(**07-25 已 ✅ 修复**,见第〇·二节);2 个 daemon 进程组测试在本机沙箱确定性失败;约 120 个 spec.md 的 Purpose 残留归档模板 TBD。
 
 ### 遗留跟进项(从 review 派生,未排期)
 
-- `Composer.tsx:674` 第三个 `useStatusPanelData` 调用点未传 `activeEngine`(当前无可见影响,潜伏残留)
+- `Composer.tsx:674` 第三个 `useStatusPanelData` 调用点未传 `activeEngine`(07-25 复核:仍未传,当前无可见影响,潜伏残留)
 - unknown→claude fallback 静默无日志;vendors 侧存量非法 model id 被静默过滤(低概率)
-- `daemon_state.rs` 3320 行,越 3000 行红线;`GitHistoryPanelImpl.tsx` 2803 行越 2800 档且该档 gate 未生效(原清单 #20)
+- `daemon_state.rs` 3325 行(07-25 复核,仍在涨),越 3000 行红线;`GitHistoryPanelImpl.tsx` 2803 行越 2800 档且该档 gate 未生效(原清单 #20,07-25 复核 gate exit=0 仍未通电)
+
+---
+
+## 〇·二、执行记录(2026-07-25 · 增量)
+
+**workspaces 静默回退预存问题已闭环;另修正 #19 归属(主体由独立 change 完成,清理复核只是补刀)。**
+
+| 项 | 状态 | Change(已归档) | 关键提交 |
+|---|---|---|---|
+| 预存问题①:`read_workspaces` 静默回退 | ✅ 完成 | `2026-07-24-preserve-corrupted-workspaces-on-load-and-notify` | `d51c7dee0`(后端 quarantine)+ `d87d62165`(`take_workspaces_recovery_notice`)+ `9cdd61c15`(前端挂载提示 + i18n)+ `41ca6300e`(归档并同步 `workspaces-corruption-recovery` 主 spec) |
+| 清理复核修复收口 | ✅ 完成 | `2026-07-24-close-cleanup-review-findings` | `140963bc1`(单 commit 收口)+ `77040b143`(归档 + 索引校准) |
+| #19 dock streaming 死分支 | ✅ 完成(07-24) | `2026-07-24-remove-dock-streaming-dead-branch` | `f91ab9a4a`(`ba0e0a6d5` 批量归档);残留死样式由 `140963bc1` 补刀 |
+
+### `close-cleanup-review-findings` 修复内容(140963bc1)
+
+1. composer 无 producer 的 JCEF slash/prompt callback、waiter、retry state 全删,local fallback 立即返回(不再等 30s)。
+2. semantic review cache key 绑定 diff 指纹 + language;删除不可取消请求上的前端 `Promise.race` timeout,杜绝 fallback engine 与原 engine 并发执行。
+3. settings/workspaces quarantine backup 文件名加 UUID,同秒连续 recovery 不再互相覆盖。
+4. **#19 残留补刀**:notice dock `has-notice` / `streaming` 死样式与重复 effect write 删除(主体死分支已由 `f91ab9a4a` 先行清除)。注:`"streaming"` 类型保留在 `src/types/runtime.ts`,因 `RuntimePoolSection` 活链在用,非 dock 死代码。
+
+### 07-25 复核仍未闭环(维持原判)
+
+- **P1-12 索引校验脚本**:仍无脚本、CI 仍零 openspec 覆盖;当日索引又一次靠手工校准(`77040b143`),必要性第三次被事实证实。
+- **#20 large-file gate**:GitHistoryPanelImpl 仍 2803 行(文件已迁至 `git-history-panel/components/` 子目录),`check-large-files.mjs` 实测 exit=0,红线仍未通电。
+
+---
+
+## 〇·三、P1 状态核查(2026-07-25 · 逐项代码复核)
+
+**P1 八项中 #5 已完成、#7 完成 5/6,其余 6 项未动。** 另修正:#19 的实际闭环 change 是 `2026-07-24-remove-dock-streaming-dead-branch`(`f91ab9a4a`),`close-cleanup-review-findings` 只是补刀残留死样式。
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| P1-5 aiReview 生产者接线 | ✅ 完成(07-24) | `2026-07-24-add-ai-review-producer-wiring`;`WorkspaceSessionActivityPanel.tsx:719-738` 经 `useTurnSemanticReview` 产出并传入 aiReview |
+| P1-6 browser 动作管线 | ❌ 未做 | `features/browser-agent/actions/index.ts` 在,但全仓零生产调用方(接通/删除方向仍待定) |
+| P1-7 死代码大扫除 | ✅ 5/6 | 见下方逐项;**只剩 ⑤ legacy FileMarkdownPreview** |
+| P1-8 任务回写批量事务化 | ❌ 未做 | `useSpecHub.ts:1369` 仍逐条 `updateSpecTaskChecklist` + `:1395` best-effort 反向 revert;`spec-core/runtime.ts` 无 batch API |
+| P1-9 语音后处理 | ❌ 未做 | `dictation/real.rs:1395` 仍 `no_context(true)`、无 initial_prompt;`computeDictationInsertion` 后仍原文直插输入框 |
+| P1-10 日志 AI 分析入口 | ❌ 未做 | `DebugPanel.tsx:108-113` 仍只有 copy / clear 两个按钮 |
+| P1-11 拆 kanban 执行根 hook | ❌ 未做 | `useAppShellKanbanExecutionSection.ts` 仍 1432 行;`features/kanban/execution/` 目录不存在 |
+| P1-12 openspec 索引校验脚本 | ❌ 未做 | `package.json` 无脚本、`.github/workflows/` 零 openspec 覆盖 |
+
+### P1-7 逐项明细(6 小项 + 残留字段)
+
+| 子项 | 状态 | Change / 提交 |
+|---|---|---|
+| ① bridge no-op 桩 | ✅ | `2026-07-24-remove-jcef-bridge-noop-stubs` / `51ecca64a` |
+| ② refreshCodexModelConfig 透传层 | ✅ | `2026-07-24-inline-refresh-codex-model-config-passthrough` / `cdf30cffc` |
+| ③ latestAgentRuns 死链 | ✅ | `2026-07-24-remove-latest-agent-runs-dead-chain` / `651b8d5e0` |
+| ④ 响应式布局死分支 | ✅ | `2026-07-24-remove-responsive-layout-dead-branches`(useLayoutMode / Phone / TabletLayout 全删) |
+| ⑤ legacy FileMarkdownPreview | ❌ 唯一剩余 | `SkillsSection.tsx:39` 仍 import legacy 版;`FileMarkdownPreviewFast.tsx` 还反向依赖它,需先解耦再删 |
+| ⑥ SHOW_*_ENTRY 死开关 | ✅ | `2026-07-24-remove-settings-view-dead-entry-switches` |
+| orchestrationTaskId 残留字段 | ✅ | `2026-07-24-remove-orchestration-residual-dead-fields` |
+
+---
+
+## 〇·四、执行记录(2026-07-25 晚 · 常驻轮询优化)
+
+**对审计出的 5 处高频率常驻轮询做事件驱动/门控降频改造,全部落地并通过验证。**
+
+| 项 | 状态 | Change | 关键提交 | 优化前 | 优化后 |
+|---|---|---|---|---|---|
+| worktree 3s `git status` 轮询 | ✅ 完成 | `reduce-client-polling-overhead` | `d042e5018` | 3s 裸轮询,窗口隐藏仍跑 | watcher 事件(1s 节流)+ 30s 门控兜底 |
+| kanban 20s schedule 轮询 | ✅ 完成 | `reduce-client-polling-overhead` | `d042e5018` | 20s 固定扫描,无任务空转 | next-due 对齐 `setTimeout`,无任务休眠 |
+| running 任务 output 5s 轮询 | ✅ 完成 | `reduce-client-polling-overhead` | `d042e5018` | 5s 读产物文件,隐藏不停 | `setVisibilityGatedInterval(5s)` |
+| runtime dock 5s 快照轮询 | ✅ 完成 | `reduce-client-polling-overhead` | `d042e5018` | 5s 拉池快照,无变化也拉 | Rust 差量 emit + 60s 门控兜底 |
+| dictation 33ms 电平事件 | ✅ 完成 | 单 commit 顺手修 | `9ca8d2b19` | 30fps 直推前端 setState | 100ms 10fps,相同 value 跳过 emit |
+
+### 验证
+
+- `npm run typecheck` ✅ / `npm run lint` ✅(0 errors)
+- Vitest 相关模块 297 例全绿
+- `cargo check --manifest-path src-tauri/Cargo.toml` ✅
+- `cargo test --manifest-path src-tauri/Cargo.toml runtime::` 61 passed / 2 failed(基线 flake,与本次无关)
+
+### 影响范围
+
+- 前端:worktree 面板、kanban scheduler、engine task output、runtime notice dock、events hub
+- 后端:runtime commands、lib.rs reconcile 循环、dictation real.rs
+- 用户可见行为:不变;后台静默期 IPC 与 setState 频率大幅下降
+- 新增事件:`runtime-pool-changed` 为纯增量,旧调用方不受影响
+
+### 仍需人工确认
+
+- 实机 smoke 四条路径(worktree 外部改文件/git add、kanban 准点、output 隐藏恢复、dock engine 启停)
+- `openspec validate reduce-client-polling-overhead --strict --no-interactive`
 
 ---
 
@@ -55,7 +141,7 @@
 
 ## 二、新优先级总览
 
-> 状态更新(2026-07-24 晚):P0 四项已 ✅ 完成(详见第〇节);P1-12 的"索引校验脚本"仍未做,当晚索引再次漂移的事实进一步证明了它的必要性。
+> 状态更新(2026-07-25):P0 四项 + #19 + #21 已 ✅ 完成;P1 中 #5 ✅、#7 完成 5/6(逐项复核见第〇·三节);P1-12 的"索引校验脚本"仍未做,07-25 索引再次手工校准的事实进一步证明了它的必要性。
 
 | 新优先级 | # | 任务 | 一句话代价(不做会怎样) | 用户能直接感知? |
 |---|---|---|---|---|
@@ -63,9 +149,9 @@
 | | 2 ✅ | 引擎二元假设 bug 修复(2 处) | kimi/opencode 用户的状态面板输出被错标成 "Claude" | 多引擎用户可见 |
 | | 3 ✅ | SettingsView 摘 @ts-nocheck + 删 skills 死分支 | 设置页藏着一段永远渲染不出来的死代码 | 无直接感知 |
 | | 4 ✅ | specs 索引补登 26 项 | spec 索引与代码事实源漂移,AI 协作者被误导 | 无直接感知 |
-| **P1 高 ROI** | 5 | aiReview 生产者接线 | 已建好的 AI 评审展示位永远空着 | 有(git 语义评审面板) |
+| **P1 高 ROI** | 5 ✅ | aiReview 生产者接线 | 已完成(07-24,`add-ai-review-producer-wiring`),详见第〇·三节 | 有(git 语义评审面板) |
 | | 6 | browser 动作管线:接通或删除 | 后端完整实现的动作执行能力零调用方,纯负债 | 有(浏览器自动化) |
-| | 7 | 死代码大扫除收尾(6 小项) | 死代码持续误导后来者与 AI 协作者 | 无直接感知 |
+| | 7 🔶 | 死代码大扫除收尾(6 小项) | 5/6 已清,只剩 legacy FileMarkdownPreview(SkillsSection 仍在用) | 无直接感知 |
 | | 8 | 任务回写批量事务化 | 批量勾选任务时 N 次整文件读写,慢且有中途失败风险 | 有(Spec Hub 批量操作变快) |
 | | 9 | 语音后处理(initial_prompt + LLM 清洗) | 语音输入无术语纠正、口语原文直插输入框 | 有(语音输入质量) |
 | | 10 | AI 日志/错误分析入口 | 报错时只能自己读原始日志 | 有(Debug 面板多一个按钮) |
@@ -77,8 +163,9 @@
 | | 16 | GitHub URL / rebrand 决策 | About 页指向原作者仓库;updater 同源 | 有(About 页链接) |
 | | 17 | 任务 AI 验收判定 | 依赖的 reviewTask 机制已被删除,需重建 | 有(任务验收自动化) |
 | | 18 | GitHistoryPanelImpl 类型化(扩 scope) | 上游 4 个文件全是 nocheck,~150 字段 any 透传 | 无直接感知 |
-| **顺手修** | 19 | dock streaming 死分支清理 | 原 P0-6① 已证实不是 bug,是死代码 | 无 |
+| **顺手修** | 19 ✅ | dock streaming 死分支清理 | 已随 `close-cleanup-review-findings` 收口(组件/CSS 死分支清零;`"streaming"` 类型因 RuntimePoolSection 活链保留) | 无 |
 | | 20 | large-file gate 2800 档未生效 | GitHistoryPanelImpl 2803 行已破红线但 gate 没拦 | 无 |
+| | 21 ✅ | 常驻轮询优化 | worktree/kanban/output/dock/dictation 五处高频率轮询已改造成事件驱动或门控降频 | 无 |
 
 ---
 
@@ -147,7 +234,9 @@
 
 ---
 
-### P1-5 · aiReview 生产者接线
+### P1-5 · aiReview 生产者接线 ✅(2026-07-24 已完成)
+
+> 已闭环:`2026-07-24-add-ai-review-producer-wiring`(`053cfbc04`)。`WorkspaceSessionActivityPanel.tsx:719-738` 经 `useTurnSemanticReview` 按需产出 aiReview 并传入展示位;`close-cleanup-review-findings` 又补齐了 cache 失效与 fallback 并发两个 correctness 缺口。以下原文保留作决策依据存档。
 
 **解决什么问题**
 git 语义评审的 schema(`TurnSemanticReview.aiReview`)和消费端 UI 展示逻辑都建好了,但唯一的生产调用点 `WorkspaceSessionActivityPanel.tsx:622-628` 调用时**不传 aiReview 参数**——展示位永远空着。全仓没有任何代码构造 aiReview。
@@ -180,7 +269,9 @@ browser-agent 的"动作执行"段:后端命令 `run_browser_agent_action` 已�
 
 ---
 
-### P1-7 · 死代码大扫除收尾(6 小项)
+### P1-7 · 死代码大扫除收尾(6 小项)🔶(5/6 已完成)
+
+> 状态(2026-07-25 复核):①②③④⑥ + orchestrationTaskId 残留字段均已清除(逐项 change/提交见第〇·三节明细表)。**唯一剩余:⑤ legacy FileMarkdownPreview**——`SkillsSection.tsx:39` 仍 import legacy 版,且 `FileMarkdownPreviewFast.tsx` 反向依赖它,需先解耦再删。以下原文保留作决策依据存档。
 
 **解决什么问题**
 原 P0-1 已完成 2/3(composer 死实现 ~2500 行、parallel 模块已删),剩 6 个已验证的小项:
@@ -248,7 +339,9 @@ Spec Hub 批量勾选任务完成状态时,`useSpecHub.ts:1368-1387` 对任务**
 
 ---
 
-### P1-11 · 拆 kanban 执行根 hook(1432 行)
+### P1-11 · 拆 kanban 执行根 hook(1432 行)🔶(轮询部分已由 #21 优化)
+
+> 状态(2026-07-25 复核):`useAppShellKanbanExecutionSection.ts` 内的 **20s 固定轮询调度器已由 #21 改造为 next-due 对齐定时器**(无到期任务时完全休眠),见第〇·四节。剩余工作是根 hook 本身的 1432 行拆分(含执行锁、thread 对账、telemetry 回写、完成误判启发式等),以及 AI 停止输出误判问题。
 
 **解决什么问题**
 `useAppShellKanbanExecutionSection.ts`(原 1614 行,编排派发部分已随删除案移除,现 1432 行)仍整体挂在 AppShell 根 hook 链:内含 ~15 个 useCallback + 9 个 useEffect,包括 20s `setInterval` 轮询调度器、执行锁、thread 对账、telemetry 回写。这直接触碰 AGENTS.md 渲染红线(根链禁秒级轮询、高频 setState 禁挂根 hook)。**同时它是看板 bug 源头**:任务完成判定是"AI 停止输出"启发式(`:1082-1095`),AI 中途停顿就会被误判完成、卡片自动从 inprogress 挪到 testing。
@@ -368,21 +461,23 @@ About 页 `GITHUB_URL` 指向原作者仓库(`zhukunpenglinyutong/desktop-cc-gui
 
 ### 顺手修 · 两件
 
-**19. dock streaming 死分支清理**:原 P0-6① 经核查**不是 bug**(`c585cc147` 有意简化为只显示 error),"streaming" 状态永不可达但类型/组件分支/i18n 键/spec 都还在。纯死代码清理,可并入 P1-7。
+**19. dock streaming 死分支清理 ✅(2026-07-24 完成)**:原 P0-6① 经核查**不是 bug**(`c585cc147` 有意简化为只显示 error),"streaming" 状态永不可达。已由独立 change `2026-07-24-remove-dock-streaming-dead-branch`(`f91ab9a4a`)闭环,`close-cleanup-review-findings`(`140963bc1`)补刀残留死样式。残留说明:`src/types/runtime.ts` 的 `"streaming"` 类型保留(`RuntimePoolSection` 活链在用),dock 测试仍以 streaming 状态作输入用例,均非死代码。
 
-**20. large-file gate 2800 档未生效**:`check-large-files.policy.json` 的 `feature-hotpath` 组 failThreshold=2800,`GitHistoryPanelImpl.tsx` 2803 行已越过,但 `check-large-files.mjs` 实测 exit=0——红线写了但没通电。修 gate 脚本本身,一行级问题,但它解释了为什么文件能悄悄涨破红线。
+**20. large-file gate 2800 档未生效**:`check-large-files.policy.json` 的 `feature-hotpath` 组 failThreshold=2800,`GitHistoryPanelImpl.tsx` 2803 行已越过(07-25 复核:文件已迁至 `git-history-panel/components/` 子目录,行数未变),但 `check-large-files.mjs` 实测 exit=0——红线写了但没通电。修 gate 脚本本身,一行级问题,但它解释了为什么文件能悄悄涨破红线。
+
+**21. 常驻轮询优化 ✅(2026-07-25 晚完成)**:见第〇·四节。worktree/kanban/output/dock/dictation 五处高频率轮询已改造成事件驱动或门控降频,不再后台空转。
 
 ---
 
 ## 四、决策分组建议
 
-**A. 不用犹豫,直接做(P0 四项 + 顺手两件)**
-P0-1 settings 静默、P0-2 二元假设、P0-3 SettingsView nocheck、P0-4 specs 索引补登、#19 dock 死分支、#20 gate 修复。
-共同点:全是确定性 bug 或纯减法,工作量都在半天内,无一需要产品决策。
-**状态(2026-07-24 晚):P0 四项已 ✅ 完成;#19 / #20 未做,可并入 P1-7 死代码收尾一并处理。**
+**A. 不用犹豫,直接做(P0 四项 + 顺手三件)**
+P0-1 settings 静默、P0-2 二元假设、P0-3 SettingsView nocheck、P0-4 specs 索引补登、#19 dock 死分支、#20 gate 修复、#21 常驻轮询优化。
+共同点:全是确定性 bug 或纯减法/性能优化,工作量都在半天内,无一需要产品决策。
+**状态(2026-07-25):P0 四项 + #19 + #21 已 ✅ 完成;只剩 #20(gate 修复)未做,一行级,可单独随手修或并入 P1-7。**
 
 **B. 值得做,排进迭代(P1 八项)**
-P1-5 aiReview、P1-7 死代码收尾、P1-8 批量事务化、P1-9 语音后处理、P1-10 日志 AI 分析、P1-12 索引校验脚本是**小步快跑**型;
+**状态(2026-07-25 复核):P1-5 ✅ 已完成;P1-7 只剩 legacy FileMarkdownPreview 一项;剩余待做的是 P1-8 批量事务化、P1-9 语音后处理、P1-10 日志 AI 分析、P1-12 索引校验脚本(小步快跑型)。**
 P1-6 browser 管线需你先选一个方向(接通 or 删除);
 P1-11 kanban 拆分是**其他智能化的地基**,建议作为 P1 里最先启动的大件。
 
