@@ -65,9 +65,9 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 ## Current Inventory
 
 - Active changes: `4`
-- Archive changes: `640`
-- Main specs: `406`
-- Completed task sets still active: `1`
+- Archive changes: `713`
+- Main specs: `429`
+- Completed task sets still active: `0`
 - Ready-for-implementation task sets: `0`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
 
@@ -76,7 +76,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 Active OpenSpec changes in the current working tree:
 
 - [`add-linux-native-menu-localization`](changes/add-linux-native-menu-localization/proposal.md) — 4/5; Rust gate passed, only Linux non-default-language startup smoke remains.
-- [`derive-rate-limit-label-from-window-duration`](changes/derive-rate-limit-label-from-window-duration/proposal.md) — 5/5; implementation and verification complete, pending sync/archive.
+- [`add-vendor-cli-lifecycle-header`](changes/add-vendor-cli-lifecycle-header/proposal.md) — 11/12; implementation complete, only manual installer-lifecycle smoke (missing / latest / outdated / npm view failure / post-install refresh) remains.
 - [`enable-claude-lightweight-streaming-and-frame-attribution`](changes/enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) — 15/18; implementation complete, blocked only on its Claude-stream trace, final-fidelity acceptance, and archive.
 - [`stabilize-client-runtime-and-diagnostics`](changes/stabilize-client-runtime-and-diagnostics/proposal.md) — 21/22; automated closure and functional smoke complete, quantified frame/first-delta trace retention remains open.
 
@@ -89,6 +89,32 @@ Complete active artifact links are maintained in the [`OpenSpec Change Index`](c
 The previous v0.5.11 performance and recovery follow-up chain has been archived. Future performance work should open a new chain instead of reusing the archived change directories.
 
 ## Recent Archive / Sync Snapshot
+
+### 2026-07-24 Verified Bulk Archive Batch
+
+Archived nineteen verified changes after syncing their delta specs into main specs (chronological order inside conflicting capability groups; two spec-delta repairs applied during the batch):
+
+- [`add-agency-agent-catalog`](changes/archive/2026-07-24-add-agency-agent-catalog/proposal.md) — synced `curated-agent-catalog` + `settings-navigation-consolidation`
+- [`align-kanban-codex-model-catalog`](changes/archive/2026-07-24-align-kanban-codex-model-catalog/proposal.md) — synced `codex-model-catalog-coverage`
+- [`derive-rate-limit-label-from-window-duration`](changes/archive/2026-07-24-derive-rate-limit-label-from-window-duration/proposal.md) — synced `codex-chat-canvas-usage-overview`
+- [`soften-git-pr-range-gate`](changes/archive/2026-07-24-soften-git-pr-range-gate/proposal.md) — synced `git-history-panel` + `git-operations` + `git-pr-submission-workflow`
+- [`add-kimi-engine`](changes/archive/2026-07-24-add-kimi-engine/proposal.md) — synced `kimi-engine-runtime`
+- [`fix-agent-catalog-startup-convergence`](changes/archive/2026-07-24-fix-agent-catalog-startup-convergence/proposal.md) — synced `agent-startup-selection-stability`
+- [`unify-source-aware-note-capture-workbench`](changes/archive/2026-07-24-unify-source-aware-note-capture-workbench/proposal.md) — synced `workspace-note-card-pool` + `workspace-note-card-storage` + `workspace-note-context-capture`
+- [`add-pr-ai-title-body-generator`](changes/archive/2026-07-24-add-pr-ai-title-body-generator/proposal.md) — synced `git-history-panel` + `git-pr-submission-workflow` + `pr-ai-content-generation`
+- [`fix-claude-cli-native-installer`](changes/archive/2026-07-24-fix-claude-cli-native-installer/proposal.md) — synced `cli-one-click-installer`（归档前补全 delta 中两个 MODIFIED requirement 的 requirement text）
+- [`add-file-editor-goto-line-shortcut`](changes/archive/2026-07-24-add-file-editor-goto-line-shortcut/proposal.md) — synced `file-editor-line-navigation` + `file-editor-tab-strip`
+- [`restore-git-history-branch-tree-capabilities`](changes/archive/2026-07-24-restore-git-history-branch-tree-capabilities/proposal.md) — synced `git-history-panel`
+- [`move-file-history-into-git-graph-tabs`](changes/archive/2026-07-24-move-file-history-into-git-graph-tabs/proposal.md) — synced `file-history-view` + `git-history-panel`
+- [`fix-codex-subagent-live-sidebar-convergence`](changes/archive/2026-07-24-fix-codex-subagent-live-sidebar-convergence/proposal.md) — synced `subagent-session-tree-navigation`
+- [`add-composer-prompt-enhancer-entry`](changes/archive/2026-07-24-add-composer-prompt-enhancer-entry/proposal.md) — synced `composer-prompt-enhancer`
+- [`add-file-context-menu-shortcuts`](changes/archive/2026-07-24-add-file-context-menu-shortcuts/proposal.md) — synced `app-shortcuts` + `filetree-multitab-open`
+- [`fix-messages-core-update-depth-loop`](changes/archive/2026-07-24-fix-messages-core-update-depth-loop/proposal.md) — synced `client-renderer-stability-under-pressure`
+- [`add-git-diff-section-line-count-badge`](changes/archive/2026-07-24-add-git-diff-section-line-count-badge/proposal.md) — synced `git-panel-diff-view` + `multi-repository-git-commit-workspace`
+- [`enable-file-history-resizable-pane-and-diff-horizontal-scroll`](changes/archive/2026-07-24-enable-file-history-resizable-pane-and-diff-horizontal-scroll/proposal.md) — synced `file-history-view` + `git-panel-diff-view`（归档前将 delta 由 MODIFIED 校正为 ADDED：目标 requirement 在 main spec 中不存在，行为为新增）
+- [`add-extensions-management-surface`](changes/archive/2026-07-24-add-extensions-management-surface/proposal.md) — synced `extensions-management-surface`
+
+Conflict groups resolved chronologically (older first, newer overrides): `git-history-panel`（soften → pr-ai → restore → move-file-history）、`git-pr-submission-workflow`（soften → pr-ai）、`git-panel-diff-view`（line-count-badge → file-history-resizable）、`file-history-view`（move-file-history → file-history-resizable）。
 
 ### 2026-07-18 Code-Calibrated Closure Batch
 

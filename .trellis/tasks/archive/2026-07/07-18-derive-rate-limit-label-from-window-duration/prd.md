@@ -3,7 +3,7 @@
 ## OpenSpec
 
 - Change: `derive-rate-limit-label-from-window-duration`
-- Source of truth: `openspec/changes/derive-rate-limit-label-from-window-duration/`
+- Source of truth: `openspec/changes/archive/2026-07-24-derive-rate-limit-label-from-window-duration/`
 
 ## 目标
 

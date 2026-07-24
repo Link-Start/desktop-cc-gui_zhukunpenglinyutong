@@ -733,3 +733,178 @@ When a workspace contains multiple Git repositories, Git History SHALL replace t
 
 - **WHEN** Git History receives no repository summaries
 - **THEN** it SHALL retain the legacy branch navigator as a compatibility fallback
+
+### Requirement: Create PR Large Range Confirmation
+
+The Create PR dialog SHALL allow explicit confirmation for a large but structurally valid PR range without presenting the confirmation request as a generic operation failure.
+
+#### Scenario: User confirms 241 to 300 changed files
+
+- **WHEN** backend requests `large` Range Gate confirmation
+- **THEN** panel SHALL show the evaluated `upstream/<base>...HEAD` context, push target, changed-file count, and review-risk warning
+- **AND** confirmation SHALL retry the workflow with one-shot authorization bound to the returned range fingerprint
+
+#### Scenario: User confirms more than 300 changed files
+
+- **WHEN** backend requests `diff-incomplete` Range Gate confirmation
+- **THEN** panel SHALL explicitly warn that GitHub may not display the complete diff
+- **AND** confirmation SHALL retry the workflow with one-shot authorization bound to the returned range fingerprint
+
+#### Scenario: User cancels large range confirmation
+
+- **WHEN** user declines the Range Gate confirmation
+- **THEN** panel SHALL stop before push/create
+- **AND** panel SHALL NOT show a generic retry-error notice
+
+### Requirement: Create PR Dialog AI Trigger UI
+
+The Create PR dialog SHALL provide AI auto-generation affordances on the PR title field with a single trigger.
+
+#### Scenario: Single trigger placement
+
+- **WHEN** the Create PR dialog renders
+- **THEN** exactly ONE button displaying the current engine icon SHALL appear adjacent to the PR title input
+- **AND** NO button SHALL appear on the PR body textarea
+- **AND** clicking the button SHALL open the engine/language selection menu
+- **AND** the button SHALL be disabled while generation is in flight or while prerequisites are missing
+
+#### Scenario: Wrapper uses non-label elements
+
+- **WHEN** the field containers render
+- **THEN** the wrappers (`git-history-create-branch-field`, `is-pr-content-row`) SHALL be `<div>` elements
+- **AND** inner text labels SHALL be `<span>` elements
+- **AND** NO `<label>` element SHALL be nested with a `<button>` (browser forwards the click to the associated form control, which prevents the button's `onClick` from firing)
+- **AND** the title input and body textarea SHALL retain localized accessible names through `aria-label`
+
+#### Scenario: Loading indicator with elapsed counter
+
+- **WHEN** the AI generator is running
+- **THEN** the trigger button icon SHALL spin
+- **AND** the input/textarea SHALL be disabled
+- **AND** a blue progress pill SHALL appear with text from `historyGeneratePrLoading` containing the elapsed-second counter `{{elapsed}}`
+- **AND** the counter SHALL update every 1 second
+
+#### Scenario: 60s slow warning
+
+- **WHEN** the AI generator has been running for 60+ seconds
+- **THEN** the progress pill SHALL switch to an amber variant with text from `historyGeneratePrLoadingSlow`
+- **AND** the pill SHALL include a "diff large" hint and continue the elapsed counter
+
+#### Scenario: Success indicator
+
+- **WHEN** AI generation completes successfully
+- **THEN** a green success pill SHALL appear with text from `historyGeneratePrSuccessWithEngine` containing the engine name `{{engine}}` (e.g. "✓ Claude 已生成 PR 标题与正文")
+- **AND** the title input and body textarea SHALL flash a 1.2s accent outline via `[data-ai-flash-at]` attribute
+- **AND** the success pill SHALL auto-dismiss after 3 seconds
+
+#### Scenario: Error display
+
+- **WHEN** the AI generator returns an error or times out
+- **THEN** the error message SHALL appear as a red pill (`git-history-create-pr-generation-error`)
+- **AND** the localized error SHALL map to one of `historyGeneratePrTimeout` / `historyGeneratePrUnsupportedEngine` / `historyGeneratePrMissingBaseOrHead` / `historyGeneratePrError`
+- **AND** the error SHALL NOT overwrite user-entered content
+
+#### Scenario: Language and engine menu parity
+
+- **WHEN** the user clicks the trigger button
+- **THEN** the menu SHALL expose Codex / Claude options and Chinese / English options
+- **AND** the last-used configuration SHALL be available as a quick-action entry
+- **AND** i18n keys SHALL cover `historyGeneratePrMenuTitle`, `historyGeneratePrMenuLastConfig`, `historyGeneratePrMenuCodex`, `historyGeneratePrMenuClaude`, `historyGeneratePrMenuZh`, `historyGeneratePrMenuEn`
+
+### Requirement: Shared Context Menu Opaque Styling
+
+The shared `RendererContextMenu` component SHALL render with an opaque background matching the active theme to prevent visual bleed-through from overlapping surfaces.
+
+#### Scenario: Opaque menu background
+
+- **WHEN** any consumer of `RendererContextMenu` renders (sidebar workspace menu, terminal panel, git diff menu, PR content menu)
+- **THEN** the menu background SHALL use `var(--surface-sidebar-opaque)` (fully opaque in every theme)
+- **AND** the menu SHALL NOT apply `backdrop-filter` (which samples pixels from behind the menu and can leak shadows from overlapping dialogs)
+
+### Requirement: Git History repository branch tree preserves navigation and status affordances
+
+The shared single/multi-repository branch tree SHALL preserve the complete navigation and branch-status affordances of the Git History navigator within each repository scope.
+
+#### Scenario: All branches remains selectable within the active repository
+
+- **WHEN** Git History renders a repository branch tree with an active repository
+- **THEN** the navigator SHALL expose an `All Branches` entry
+- **AND** selecting it SHALL load all branches for that active `repositoryRoot`
+- **AND** it SHALL NOT aggregate commit history across repositories
+
+#### Scenario: Useful local groups expand by default
+
+- **WHEN** a repository catalog contains a local root group or a current local branch group
+- **THEN** the local root group SHALL be expanded by default
+- **AND** the current branch group SHALL be expanded by default
+- **AND** repository/group identities SHALL remain isolated across repositories
+
+#### Scenario: Local branch rows expose complete status affordances
+
+- **WHEN** a local branch row is visible
+- **THEN** a current branch SHALL use the current-branch emphasis and expose `HEAD`
+- **AND** recognized `main`, `master`, or `zh` branch leaves SHALL expose their localized special badge
+- **AND** positive `ahead` or `behind` values SHALL render signed count badges
+- **AND** zero values SHALL NOT render empty count badges
+
+#### Scenario: Remote branch rows preserve special branch identity
+
+- **WHEN** a remote branch row for a recognized `main`, `master`, or `zh` branch leaf is visible
+- **THEN** it SHALL expose the localized special badge
+- **AND** selection/context actions SHALL retain the complete remote branch name
+
+### Requirement: Git History title layer hosts document tabs
+
+The Git History panel SHALL expose an accessible document tab strip in its integrated title layer with one pinned Git Graph tab and zero or more closable File History tabs.
+
+#### Scenario: Tabs share the existing Git Graph toolbar row
+- **WHEN** the Git History panel renders document tabs
+- **THEN** the tab strip SHALL render inside the existing Git Graph toolbar row together with project, repository, branch, status, and panel actions
+- **AND** the system MUST NOT add a second standalone title or tab row above that toolbar
+
+#### Scenario: Git Graph tab is pinned
+- **WHEN** the Git History panel opens
+- **THEN** the first tab SHALL represent Git Graph
+- **AND** it SHALL render as an icon-only compact tab with an accessible name and tooltip
+- **AND** it MUST remain available and MUST NOT expose a close action
+
+#### Scenario: File History tabs use compact file chrome
+- **WHEN** one or more File History tabs render
+- **THEN** each tab SHALL reuse the shared file-type icon, show only the basename as its visible label, and expose the full display path through its accessible name and tooltip
+- **AND** the compact close action SHALL remain geometrically centered
+- **AND** tab width SHALL fit its content up to a bounded maximum instead of reserving a fixed wide slot
+
+#### Scenario: File History tab context menu closes scoped tabs
+- **WHEN** user opens the context menu on a File History tab
+- **THEN** the menu SHALL offer Close, Close Others, and Close All actions using the shared renderer context menu
+- **AND** Close SHALL remove only the invoked target while preserving inactive-tab semantics and active-tab neighbor fallback
+- **AND** Close Others SHALL retain and activate only the invoked target
+- **AND** Close All SHALL clear every File History tab and activate the pinned Git Graph tab
+- **AND** the pinned Git Graph tab MUST NOT expose this close menu
+
+#### Scenario: Multiple file history tabs remain independently addressable
+- **WHEN** users open different file history targets
+- **THEN** each distinct `workspaceId + repositoryRoot + path` identity SHALL appear as a separate closable tab
+- **AND** each tab label SHALL expose its file display path without merging same-named files from different repositories or workspaces
+
+#### Scenario: Duplicate file target focuses the existing tab
+- **WHEN** a File History target whose identity is already open is requested again
+- **THEN** the panel SHALL activate the existing tab
+- **AND** MUST NOT append a duplicate tab
+
+#### Scenario: Active tab controls the visible workspace
+- **WHEN** the active tab is Git Graph
+- **THEN** the existing branch, commit, details, worktree and operation surfaces SHALL render unchanged
+- **WHEN** the active tab is a File History target
+- **THEN** exactly that target's File History workspace SHALL render inside the Git History body
+
+#### Scenario: Tab semantics are accessible
+- **WHEN** the title tab strip renders
+- **THEN** it SHALL expose `tablist`, `tab`, and active `tabpanel` semantics
+- **AND** each File History close action SHALL have a target-specific accessible name
+
+#### Scenario: Narrow title layer preserves access to tabs
+- **WHEN** open tabs exceed the available title width
+- **THEN** the tab strip SHALL remain usable through horizontal overflow
+- **AND** project/repository controls and the panel close action MUST remain reachable
+

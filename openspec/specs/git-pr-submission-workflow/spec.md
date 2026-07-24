@@ -68,3 +68,51 @@ GitHub Issues, Pull Requests, pull request diffs/comments, PR workflow defaults,
 - **WHEN** the app is in local backend mode and GitHub panel or PR workflow commands run
 - **THEN** existing local behavior, return shape, and error semantics MUST be preserved
 
+### Requirement: Explicit Large Range Authorization Contract
+
+The Create PR workflow SHALL represent large-range confirmation as a typed, one-shot request/result contract across local and remote backends.
+
+#### Scenario: Confirmation metadata is returned
+
+- **WHEN** changed-file count exceeds the normal Range Gate threshold without authorization
+- **THEN** result SHALL include changed-file count, threshold, severity, `requiresConfirmation=true`, and an opaque fingerprint for the evaluated base/head revisions
+- **AND** client SHALL NOT infer confirmation from human-readable error text
+
+#### Scenario: Authorized retry recomputes current range
+
+- **WHEN** user confirms the large-range warning
+- **THEN** client SHALL retry with one-shot `allowLargeRange` authorization and the confirmed range fingerprint
+- **AND** backend SHALL fetch and recompute `upstream/<base>...HEAD` before continuing
+- **AND** a fingerprint mismatch SHALL return a new confirmation requirement instead of continuing to push/create
+
+#### Scenario: Remote backend preserves authorization contract
+
+- **WHEN** PR workflow runs through daemon forwarding
+- **THEN** request SHALL preserve `allowLargeRange` and the confirmed range fingerprint
+- **AND** response SHALL preserve the complete Range Gate metadata
+- **AND** daemon fetch/diff/revision failures SHALL settle as a bounded structured precheck failure
+
+### Requirement: PR Form Prefill Source Awareness
+
+The PR workflow SHALL treat form fields (title, body) as authoritative regardless of how they were filled.
+
+#### Scenario: AI-generated title flows through unchanged
+
+- **WHEN** the AI generator fills the title and body
+- **AND** the user submits the Create PR workflow
+- **THEN** the workflow SHALL use the current form values verbatim
+- **AND** no automatic rewrite SHALL occur after submission
+
+#### Scenario: Editable after AI fill
+
+- **WHEN** the AI generator fills the title and body
+- **THEN** the user SHALL remain able to edit either field freely
+- **AND** subsequent edits SHALL be preserved on submit
+
+#### Scenario: Write-back overwrites defaults
+
+- **WHEN** the AI generator fills the title and body
+- **AND** the form previously held pre-filled default values (merge commit title / empty body template)
+- **THEN** the AI content SHALL replace the defaults unconditionally
+- **AND** a 1.2s outline flash SHALL appear on both fields to make the change visible
+

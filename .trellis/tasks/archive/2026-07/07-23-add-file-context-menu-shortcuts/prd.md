@@ -27,4 +27,4 @@
 
 ## Technical Notes
 
-优先复用 `formatShortcutForPlatform`、`matchesShortcutForPlatform`、CodeMirror `Prec.highest(keymap.of(...))` 与现有 action callbacks。详细 contract 见 `openspec/changes/add-file-context-menu-shortcuts/`。
+优先复用 `formatShortcutForPlatform`、`matchesShortcutForPlatform`、CodeMirror `Prec.highest(keymap.of(...))` 与现有 action callbacks。详细 contract 见 `openspec/changes/archive/2026-07-24-add-file-context-menu-shortcuts/`。

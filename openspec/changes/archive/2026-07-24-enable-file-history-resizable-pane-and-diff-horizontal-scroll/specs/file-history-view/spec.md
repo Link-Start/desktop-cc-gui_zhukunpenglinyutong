@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: File History Workbench 区域可拖拽 & 右侧 Diff 支持横向滚动
 
