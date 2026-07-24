@@ -1,6 +1,5 @@
 import type { DropdownItemData } from '../types';
 import type { PromptConfig } from '../../../types/prompt';
-import { sendBridgeEvent } from '../../../utils/bridge';
 import i18n from '../../../i18n/config';
 import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
 
@@ -165,19 +164,8 @@ function requestRefresh(): boolean {
     return false;
   }
 
-  const attempt = retryCount + 1;
-  const sent = sendBridgeEvent('get_prompts');
-  if (!sent) {
-    debugLog('[PromptProvider] Bridge not available yet, refresh not sent');
-    return false;
-  }
-
-  lastRefreshTime = now;
-  loadingState = 'loading';
-  retryCount = attempt;
-
-  debugLog('[PromptProvider] Requesting refresh from backend (attempt ' + retryCount + '/' + MAX_RETRY_COUNT + ')');
-  return true;
+  // JCEF bridge removed: no live backend refresh channel exists in the Tauri build.
+  return false;
 }
 
 function filterPrompts(prompts: PromptItem[], query: string): PromptItem[] {

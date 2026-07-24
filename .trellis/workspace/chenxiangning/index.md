@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1099
+- **Total Sessions**: 1101
 - **Last Active**: 2026-07-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~673 | Active |
+| `journal-27.md` | ~745 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1101 | 2026-07-24 | 删除 latestAgentRuns 死链与 refreshCodexModelConfig 透传层 | `651b8d5e0` | `feature/v-799` |
+| 1100 | 2026-07-24 | 删除 dock streaming 死分支 | `f91ab9a4a` | `feature/v-799` |
 | 1099 | 2026-07-24 | 删除响应式布局死分支 (remove-responsive-layout-dead-branches) | `d723d5d4a` | `feature/v-799` |
 | 1098 | 2026-07-24 | 接线语义 diff AI review 按需生产者 (add-ai-review-producer-wiring) | `053cfbc04` | `feature/v-799` |
 | 1097 | 2026-07-24 | 删除 SettingsView 恒 false 入口开关与死分支 | `44a32c392` | `feature/v-799` |

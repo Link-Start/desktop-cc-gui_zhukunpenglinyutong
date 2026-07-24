@@ -1,5 +1,4 @@
 import type { CommandItem, DropdownItemData } from '../types';
-import { sendBridgeEvent } from '../../../utils/bridge';
 import i18n from '../../../i18n/config';
 import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
 
@@ -38,7 +37,6 @@ type LoadingState = 'idle' | 'loading' | 'success' | 'failed';
 let cachedSdkCommands: CommandItem[] = [];
 let loadingState: LoadingState = 'idle';
 let lastRefreshTime = 0;
-let callbackRegistered = false;
 let retryCount = 0;
 let pendingWaiters: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
 const MIN_REFRESH_INTERVAL = 2000;
@@ -126,7 +124,6 @@ function normalizeSlashCommandPayload(parsed: unknown[]): CommandItem[] {
 
 export function setupSlashCommandsCallback() {
   if (typeof window === 'undefined') return;
-  if (callbackRegistered && window.updateSlashCommands) return;
 
   const handler = (json: string) => {
     debugLog('[SlashCommand] Received data from backend, length=' + json.length);
@@ -158,15 +155,6 @@ export function setupSlashCommandsCallback() {
       debugError('[SlashCommand] Failed to parse commands:', error);
     }
   };
-
-  const originalHandler = window.updateSlashCommands;
-
-  window.updateSlashCommands = (json: string) => {
-    handler(json);
-    originalHandler?.(json);
-  };
-  callbackRegistered = true;
-  debugLog('[SlashCommand] Callback registered');
 
   if (window.__pendingSlashCommands) {
     debugLog('[SlashCommand] Processing pending commands');
@@ -240,19 +228,8 @@ function requestRefresh(): boolean {
     return false;
   }
 
-  const attempt = retryCount + 1;
-  const sent = sendBridgeEvent('refresh_slash_commands');
-  if (!sent) {
-    debugLog('[SlashCommand] Bridge not available yet, refresh not sent');
-    return false;
-  }
-
-  lastRefreshTime = now;
-  loadingState = 'loading';
-  retryCount = attempt;
-
-  debugLog('[SlashCommand] Requesting refresh from backend (attempt ' + retryCount + '/' + MAX_RETRY_COUNT + ')');
-  return true;
+  // JCEF bridge removed: no live backend refresh channel exists in the Tauri build.
+  return false;
 }
 
 function isHiddenCommand(name: string): boolean {

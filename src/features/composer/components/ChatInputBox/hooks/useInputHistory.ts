@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
-import { sendToJava } from '../../../utils/bridge.js';
 
 /** localStorage key for chat input history */
 export const HISTORY_STORAGE_KEY = 'chat-input-history';
@@ -137,10 +136,8 @@ export function loadHistory(): string[] {
 
 /**
  * Delete a specific history item
- * Dual-write: localStorage + .ccgui
  */
 export function deleteHistoryItem(item: string): void {
-  // Write to localStorage (sync)
   if (canUseLocalStorage()) {
     try {
       const items = loadHistory();
@@ -160,17 +157,12 @@ export function deleteHistoryItem(item: string): void {
       // Ignore errors
     }
   }
-
-  // Also sync to .ccgui (async)
-  sendToJava('delete_input_history_item', item);
 }
 
 /**
  * Clear all history items
- * Dual-write: localStorage + .ccgui
  */
 export function clearAllHistory(): void {
-  // Write to localStorage (sync)
   if (canUseLocalStorage()) {
     try {
       window.localStorage.removeItem(HISTORY_STORAGE_KEY);
@@ -180,9 +172,6 @@ export function clearAllHistory(): void {
       // Ignore errors
     }
   }
-
-  // Also sync to .ccgui (async)
-  sendToJava('clear_input_history', {});
 }
 
 function saveHistory(items: string[]): string[] {
@@ -447,9 +436,6 @@ export function useInputHistory({
     historyRef.current = persistedItems;
     historyIndexRef.current = -1;
     draftRef.current = '';
-
-    // Also sync to .ccgui (async)
-    sendToJava('record_input_history', JSON.stringify(fragments));
   }, []);
 
   const handleKeyDown = useCallback(
@@ -570,9 +556,6 @@ export function addHistoryItem(text: string, importance: number = 1): void {
   } catch {
     // Ignore errors
   }
-
-  // Sync to backend
-  sendToJava('record_input_history', JSON.stringify([sanitized]));
 }
 
 /**
@@ -640,12 +623,6 @@ export function updateHistoryItem(
   } catch {
     // Ignore errors
   }
-
-  // Sync deletion of old item and addition of new
-  if (oldText !== sanitizedNew) {
-    sendToJava('delete_input_history_item', oldText);
-    sendToJava('record_input_history', JSON.stringify([sanitizedNew]));
-  }
 }
 
 /**
@@ -685,11 +662,6 @@ export function clearLowImportanceHistory(threshold: number = 1): number {
     window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(itemsToKeep));
     window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(newCounts));
     window.localStorage.setItem(HISTORY_TIMESTAMPS_KEY, JSON.stringify(newTimestamps));
-
-    // Sync deletions to backend
-    for (const item of itemsToDelete) {
-      sendToJava('delete_input_history_item', item);
-    }
 
     return deletedCount;
   } catch {

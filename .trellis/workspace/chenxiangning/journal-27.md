@@ -671,3 +671,75 @@ OpenSpec change remove-settings-view-dead-entry-switches：删除 settingsViewCo
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1100: 删除 dock streaming 死分支
+
+**Date**: 2026-07-24
+**Task**: 删除 dock streaming 死分支
+**Branch**: `feature/v-799`
+
+### Summary
+
+OpenSpec remove-dock-streaming-dead-branch：删除 useGlobalRuntimeNoticeDock 的 streaming 死分支（常量/类型成员/resolve 死函数）、组件 label 与指示器分支、10 locale + vitest.setup 的 statusStreaming 键；附 global-runtime-notice-dock spec delta（MODIFIED 两处 requirement，记录 2026-06-05 c585cc147 error-only 简化）。typecheck/eslint/vitest(19) 全绿。--no-commit 避免吞并并行代理 staged 变更。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f91ab9a4a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1101: 删除 latestAgentRuns 死链与 refreshCodexModelConfig 透传层
+
+**Date**: 2026-07-24
+**Task**: 删除 latestAgentRuns 死链与 refreshCodexModelConfig 透传层
+**Branch**: `feature/v-799`
+
+### Summary
+
+两个 OpenSpec change：remove-latest-agent-runs-dead-chain（删除 ~319 行死链：latestAgentRuns.ts+测试 202 行、app-shell 根层两个 useMemo 与 domain context 下传、layoutNodes 链、Home/HomeChat 死 props、四处测试同步）与 inline-refresh-codex-model-config-passthrough（删除 9 行纯透传 helper+测试，内联进 useModelConfigRefresh codex 分支，清理 startup test mock，commit cdf30cffc）。typecheck/eslint/相关 vitest（176 tests）全绿。未执行 archive，未改全局索引。
+
+### Main Changes
+
+OpenSpec changes: remove-latest-agent-runs-dead-chain, inline-refresh-codex-model-config-passthrough
+Commits: 651b8d5e0 refactor(app-shell): 删除 latestAgentRuns 首页死链; cdf30cffc refactor(models): 内联 refreshCodexModelConfig 透传层
+Deleted: src/app-shell-parts/latestAgentRuns.ts (98), src/app-shell-parts/latestAgentRuns.test.ts (104), src/features/models/refreshCodexModelConfig.ts (9), src/features/models/refreshCodexModelConfig.test.ts (26)
+Modified: src/app-shell.tsx, src/app-shell-parts/appShellDomainContexts.ts, src/app-shell-parts/useAppShellLayoutNodesSection.tsx, src/app-shell-parts/useModelConfigRefresh.ts, src/app-shell.startup.test.tsx, src/features/layout/hooks/{useLayoutNodes.tsx,layoutNodesTypes.ts,useLayoutNodes.client-ui-visibility.test.tsx}, src/features/home/components/{Home.tsx,HomeChat.tsx,Home.test.tsx,HomeChat.test.tsx,HomeChat.interactions.test.tsx}
+Verification: npm run typecheck PASS; npx eslint on changed files PASS; vitest home+app-shell-parts (87), layout hooks (87), app-shell.startup (9) all PASS.
+Note: 中间 6eca222b3 为并行代理的 trellis 记录提交；未执行 archive，全局索引文件未动。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `651b8d5e0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

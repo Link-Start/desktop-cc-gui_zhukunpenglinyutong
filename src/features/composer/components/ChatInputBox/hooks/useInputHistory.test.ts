@@ -17,11 +17,6 @@ import {
   useInputHistory,
 } from './useInputHistory';
 
-// Mock the bridge module to prevent actual IPC calls
-vi.mock('../../../utils/bridge.js', () => ({
-  sendToJava: vi.fn(),
-}));
-
 describe('useInputHistory pure functions', () => {
   beforeEach(() => {
     localStorage.clear();
