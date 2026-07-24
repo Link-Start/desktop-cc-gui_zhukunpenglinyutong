@@ -382,3 +382,73 @@ OpenSpec change preserve-corrupted-app-settings-on-load 已归档并同步主 sp
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1093: settings 损坏恢复通知链路打通（后端 recovery notice + 前端 toast + i18n）
+
+**Date**: 2026-07-24
+**Task**: settings 损坏恢复通知链路打通（后端 recovery notice + 前端 toast + i18n）
+**Branch**: `feature/v-078`
+
+### Summary
+
+OpenSpec notify-settings-recovery-after-corruption 已归档：quarantine 记录一次性 recovery notice，take_settings_recovery_notice command 暴露给前端，加载成功后弹一次本地化 toast，i18n key 补 zh/en
+
+### Main Changes
+
+### Summary
+
+OpenSpec change notify-settings-recovery-after-corruption 已归档并同步主 spec `app-settings-corruption-recovery`，打通"后端 quarantine → 前端用户可见提示"链路，修复上一轮 review 缺口：quarantine 发生在启动期，之后 `get_app_settings` 从内存态直接返回 `Ok(默认值)`，真实损坏场景下前端 catch 分支的 toast 永远不会弹。本次后端在 `AppState` 记录一次性 recovery notice（含备份文件名），新增 `take_settings_recovery_notice` command（take 语义：读取即清除）；前端 `useAppSettings` 加载成功路径调用一次，有 notice 弹一次本地化 toast；5 个 i18n key 补进 zh/en locale（其余语言走 en fallback）；修正 catch 分支文案，删除"后端已备份为 .bak"的错位表述。
+
+### Main Changes
+
+- `src-tauri/src/storage.rs`：`backup_corrupted_settings_file` 返回值改 `Option<PathBuf>`（rename 成功返回备份路径），quarantine 逻辑不变；两个既有单测适配并断言返回路径。
+- `src-tauri/src/shared/settings_core.rs`：新增 `SettingsRecoveryNotice`（camelCase serialize，`backup_file_name: Option<String>`）与 `take_settings_recovery_notice_core`（take 语义）；新增 take-once-clears / empty 两个单测。
+- `src-tauri/src/state.rs`：`AppState` 新增 `settings_recovery_notice` 字段，`load` 的 quarantine 分支记录 notice；`settings/mod.rs` 新增 command；`command_registry.rs` 注册；`daemon_state.rs` 仅 `let _ =` 适配签名（daemon 无 UI，行为不变）；两处 git 测试的 `AppState` 字面量构造补新字段。
+- `src/services/tauri/settings.ts` + barrel：新增 `SettingsRecoveryNotice` 类型与 `takeSettingsRecoveryNotice`。
+- `useAppSettings.ts`：成功路径独立 try/catch 拉取 notice（失败不影响加载），有 notice 弹一次 toast；catch 分支文案改为只描述读取失败。
+- `src/i18n/locales/zh/settings.ts` / `en/settings.ts`：补 `settingsRecoveredTitle/Message/NoBackupMessage` 与 `appSettingsLoadFailedTitle/Message` 共 5 个 key。
+- `useAppSettings.test.ts`：mock 增加 take command，新增 3 个用例 + 扩展 catch 用例（不含 .bak、不调用 take command）。
+- OpenSpec：`openspec/changes/archive/2026-07-24-notify-settings-recovery-after-corruption/` + 主 spec MODIFIED 1 条 / ADDED 2 条；archive/README 补条目 + Indexed 719→720；changes/README 补归档条目。
+
+### Testing
+
+- [OK] `npm run typecheck` 通过
+- [OK] `npx eslint`（8 个改动前端文件）无告警
+- [OK] `npx vitest run useAppSettings.test.ts` 34/34
+- [OK] 间接消费方回归：app-shell.startup / DetachedSpecHubWindow / DetachedFileExplorerWindow / ClientDocumentationWindow 25/25
+- [OK] `cargo test --lib` 1535 通过；`cargo test --bin cc_gui_daemon` 948 通过
+- [OK] `openspec validate --specs --strict --no-interactive` 430/430
+
+### 预存问题（非本次引入，仅记录）
+
+- `runtime::tests::replace_workspace_session_with_source_marks_old_session_shutdown_source` 与 `runtime::tests::replacement_waiter_does_not_swap_in_a_third_runtime` 在 lib 与 daemon bin 均失败；`git stash` 后干净树复跑同样失败，确认预存，与本次改动无关。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ae0927a17` | (see git log) |
+| `615733516` | (see git log) |
+| `9c395fa2d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
