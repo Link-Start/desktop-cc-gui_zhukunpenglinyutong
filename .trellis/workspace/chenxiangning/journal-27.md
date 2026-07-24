@@ -63,3 +63,36 @@ Review 治理：6 路并行 code review 发现的 2 个 BLOCKER（reconcile 删�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1085: OpenSpec 批量归档 19 个已验证提案
+
+**Date**: 2026-07-24
+**Task**: OpenSpec 批量归档 19 个已验证提案
+**Branch**: `feature/v-078`
+
+### Summary
+
+openspec-bulk-archive-change:19 个 verified change 按时间序归档并合并 delta specs 到主 specs(新增 8 个 capability);修复 2 个 delta 缺陷(cli-native-installer 缺 requirement 正文、file-history MODIFIED 校正为 ADDED);冲突组 git-history-panel/git-pr-submission-workflow/git-panel-diff-view/file-history-view 按旧→新合并;同步更新 project.md、changes/README.md、archive/README.md 计数与索引(archive 713 / specs 429 / active 4);修复 3 处 Trellis 归档 PRD 失效路径。validate --all --strict:433 passed。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `af472a2c4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
