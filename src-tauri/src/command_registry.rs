@@ -3,6 +3,7 @@ pub(crate) fn invoke_handler(
     tauri::generate_handler![
         // Settings
         crate::settings::get_app_settings,
+        crate::settings::take_settings_recovery_notice,
         crate::settings::update_app_settings,
         crate::settings::get_codex_config_path,
         crate::settings::get_codex_unified_exec_external_status,

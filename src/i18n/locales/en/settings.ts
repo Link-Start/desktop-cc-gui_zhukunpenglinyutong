@@ -79,6 +79,14 @@ const settings = {
     doctorRunning: "Running…",
     doctorSuccess: "All checks passed!",
     doctorFailed: "Some checks failed.",
+    appSettingsLoadFailedTitle: "Failed to load settings",
+    appSettingsLoadFailedMessage:
+      "Could not read app settings from the backend; default settings are in use for now. Check the client-backend connection.",
+    settingsRecoveredTitle: "Settings recovered",
+    settingsRecoveredMessage:
+      "The settings file was corrupted. The original file was backed up as {{backupFileName}} and default settings have been restored.",
+    settingsRecoveredNoBackupMessage:
+      "The settings file was corrupted and could not be backed up. Default settings have been restored.",
     computerUse: {
       title: "Computer Use Bridge",
       description:

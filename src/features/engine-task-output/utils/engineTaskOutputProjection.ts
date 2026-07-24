@@ -10,6 +10,22 @@ import type {
 
 const MAX_RECENT_OUTPUT_CHARS = 1600;
 
+const SUPPORTED_TASK_OUTPUT_ENGINES: readonly EngineTaskOutputEngine[] = [
+  "claude",
+  "codex",
+  "gemini",
+  "kimi",
+  "opencode",
+];
+
+function normalizeTaskOutputEngine(
+  value: EngineTaskOutputEngine | string | null | undefined,
+): EngineTaskOutputEngine {
+  return (SUPPORTED_TASK_OUTPUT_ENGINES as readonly string[]).includes(value ?? "")
+    ? (value as EngineTaskOutputEngine)
+    : "claude";
+}
+
 function normalizeOptionalText(value: string | null | undefined) {
   const normalized = value?.trim() ?? "";
   return normalized.length > 0 ? normalized : null;
@@ -81,7 +97,7 @@ export function buildTaskOutputSourceFromNotification(input: {
   title: string;
   notification: AgentTaskNotification;
 }): EngineTaskOutputSource {
-  const engine = input.engine === "codex" ? "codex" : "claude";
+  const engine = normalizeTaskOutputEngine(input.engine);
   const status = normalizeNotificationStatus(input.notification.status);
   return {
     id: input.itemId,
