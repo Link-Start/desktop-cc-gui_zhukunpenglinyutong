@@ -777,3 +777,37 @@ Note: 中间 6eca222b3 为并行代理的 trellis 记录提交；未执行 archi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1103: 归档 8 个并行清理 change 并提交 layout 死分支删除
+
+**Date**: 2026-07-24
+**Task**: 归档 8 个并行清理 change 并提交 layout 死分支删除
+**Branch**: `feature/v-799`
+
+### Summary
+
+提交 remove-responsive-layout-dead-branches 成果（删除 Phone/Tablet 布局与 useLayoutMode）；openspec archive 8 个 change，同步 global-runtime-notice-dock 与 git-panel-diff-view 主 spec；索引计数校准 archive 721→729、2026-07 组 188→196；strict 校验与 typecheck 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `43b6e8187` | (see git log) |
+| `ba0e0a6d5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
