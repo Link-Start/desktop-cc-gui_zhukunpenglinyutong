@@ -7,6 +7,7 @@ import "./styles/sidebar.footer.css";
 import "./styles/home.css";
 import "./styles/home-chat.css";
 import "./styles/main.css";
+import "./styles/extensions.css";
 import "./styles/messages.css";
 import "./styles/approval-toasts.css";
 import "./styles/error-toasts.css";

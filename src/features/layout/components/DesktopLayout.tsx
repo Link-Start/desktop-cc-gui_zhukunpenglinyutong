@@ -62,10 +62,12 @@ type DesktopLayoutProps = {
   showHome: boolean;
   showWorkspace: boolean;
   showKanban: boolean;
+  showExtensions?: boolean;
   showGitHistory: boolean;
   hideRightPanel: boolean;
   isSoloMode: boolean;
   kanbanNode: ReactNode;
+  extensionsNode?: ReactNode;
   gitHistoryNode: ReactNode;
   settingsOpen: boolean;
   settingsNode: ReactNode;
@@ -106,10 +108,12 @@ export function DesktopLayout({
   showHome,
   showWorkspace,
   showKanban,
+  showExtensions = false,
   showGitHistory,
   hideRightPanel,
   isSoloMode,
   kanbanNode,
+  extensionsNode = null,
   gitHistoryNode,
   settingsOpen,
   settingsNode,
@@ -536,6 +540,28 @@ export function DesktopLayout({
         {runtimeConsoleDockNode}
         {terminalDockNode}
       </section>
+    );
+  }
+
+  if (showExtensions && !settingsOpen) {
+    return (
+      <>
+        {sidebarNode}
+        <div
+          className="sidebar-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t("layout.resizeSidebar")}
+          onMouseDown={onSidebarResizeStart}
+        />
+        <section className="main extensions-main">
+          {errorToastsNode}
+          {globalRuntimeNoticeDockNode}
+          {extensionsNode}
+          {runtimeConsoleDockNode}
+          {terminalDockNode}
+        </section>
+      </>
     );
   }
 

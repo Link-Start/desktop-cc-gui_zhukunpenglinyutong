@@ -38,7 +38,7 @@ export type DarkThemePresetId =
 
 export type ThemePresetId = LightThemePresetId | DarkThemePresetId;
 
-export type AppMode = "chat" | "kanban" | "gitHistory";
+export type AppMode = "chat" | "kanban" | "gitHistory" | "extensions";
 
 export type ComposerEditorPreset = "default" | "helpful" | "smart";
 

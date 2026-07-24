@@ -37,9 +37,10 @@ export function useAppShellViewStateSection({
   }, []);
   const showKanban = appMode === "kanban";
   const showGitHistory = appMode === "gitHistory";
+  const showExtensions = appMode === "extensions";
   const [selectedKanbanTaskId, setSelectedKanbanTaskId] = useState<string | null>(null);
   const [workspaceHomeWorkspaceId, setWorkspaceHomeWorkspaceId] = useState<string | null>(null);
-  const showHome = (!activeWorkspace || homeOpen) && !showKanban;
+  const showHome = (!activeWorkspace || homeOpen) && !showKanban && !showExtensions;
   const showWorkspaceHome = Boolean(
     activeWorkspace &&
       !showHome &&
@@ -99,6 +100,7 @@ export function useAppShellViewStateSection({
     setSelectedKanbanTaskId,
     setWorkspaceHomeWorkspaceId,
     showGitHistory,
+    showExtensions,
     showHome,
     showKanban,
     showWorkspaceHome,

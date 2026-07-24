@@ -78,6 +78,7 @@ import EyeOff from "lucide-react/dist/esm/icons/eye-off";
 import FolderTree from "lucide-react/dist/esm/icons/folder-tree";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import House from "lucide-react/dist/esm/icons/house";
+import Blocks from "lucide-react/dist/esm/icons/blocks";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Pencil from "lucide-react/dist/esm/icons/pencil";
 import Store from "lucide-react/dist/esm/icons/store";
@@ -1477,14 +1478,6 @@ function SidebarImpl({
     return () => window.clearTimeout(handle);
   }, [debouncedQuery, searchQuery]);
 
-  const handleOpenSkillsComingSoon = useCallback(() => {
-    pushErrorToast({
-      title: t("sidebar.comingSoon"),
-      message: t("sidebar.comingSoonMessage"),
-      durationMs: 3000,
-    });
-  }, [t]);
-
   const handleToggleThreadPin = useCallback((workspaceId: string, threadId: string) => {
     if (isThreadPinned(workspaceId, threadId)) {
       unpinThread(workspaceId, threadId);
@@ -2050,13 +2043,24 @@ function SidebarImpl({
             <button
               type="button"
               className="sidebar-primary-nav-item sidebar-primary-nav-subitem is-disabled"
-              onClick={handleOpenSkillsComingSoon}
               title={t("sidebar.plugins")}
               aria-label={t("sidebar.plugins")}
               data-tauri-drag-region="false"
+              disabled
             >
               <Store className="sidebar-primary-nav-icon" aria-hidden size={20} strokeWidth={1.8} />
               <span className="sidebar-primary-nav-text">{t("sidebar.plugins")}</span>
+            </button>
+            <button
+              type="button"
+              className={`sidebar-primary-nav-item sidebar-primary-nav-subitem ${appMode === "extensions" ? "is-active" : ""}`}
+              onClick={() => onAppModeChange("extensions")}
+              title={t("sidebar.extensions")}
+              aria-label={t("sidebar.extensions")}
+              data-tauri-drag-region="false"
+            >
+              <Blocks className="sidebar-primary-nav-icon" aria-hidden size={20} strokeWidth={1.8} />
+              <span className="sidebar-primary-nav-text">{t("sidebar.extensions")}</span>
             </button>
             {showPrimaryNavGlobalSearch ? (
               <button

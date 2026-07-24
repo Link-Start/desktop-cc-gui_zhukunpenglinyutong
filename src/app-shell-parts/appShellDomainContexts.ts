@@ -609,6 +609,7 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "hideLoadingProgressDialog",
     "showDebugButton",
     "showGitHistory",
+    "showExtensions",
     "showHome",
     "showKanban",
     "showNextReleaseNotes",

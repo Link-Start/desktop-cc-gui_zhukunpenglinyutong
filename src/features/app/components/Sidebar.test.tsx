@@ -264,6 +264,18 @@ describe("Sidebar", () => {
     expect(container.querySelector(".sidebar-settings-dropdown")).toBeNull();
   });
 
+  it("keeps Market disabled and opens Extensions as a separate mode", () => {
+    const onAppModeChange = vi.fn();
+    render(<Sidebar {...baseProps} onAppModeChange={onAppModeChange} />);
+
+    expect(
+      (screen.getByRole("button", { name: "Market" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Extensions" }));
+    expect(onAppModeChange).toHaveBeenCalledWith("extensions");
+  });
+
   it("shows pinned threads even when pinned version is zero", () => {
     const workspace = {
       id: "ws-1",

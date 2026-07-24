@@ -22,6 +22,7 @@ import {
   type AppShellDomainContextName,
 } from "./appShellDomainContexts";
 import {
+  ExtensionsView,
   GitHistoryPanel,
   KanbanView,
   QuickSwitcher,
@@ -275,6 +276,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     shouldMountSpecHub,
     showGitDetail,
     showGitHistory,
+    showExtensions,
     showHome,
     showKanban,
     showNextReleaseNotes,
@@ -515,6 +517,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         isTablet={isTablet}
         showHome={showHome}
         showKanban={showKanban}
+        showExtensions={showExtensions}
         showGitHistory={showGitHistory}
         hideRightPanel={activeTab === "spec" && rightPanelCollapsed}
         isSoloMode={isSoloMode}
@@ -552,6 +555,13 @@ export function renderAppShell(ctx: RenderAppShellContext) {
                 terminalOpen={terminalOpen}
                 onToggleTerminal={handleToggleTerminalPanel}
               />
+            </Suspense>
+          ) : null
+        }
+        extensionsNode={
+          showExtensions ? (
+            <Suspense fallback={null}>
+              <ExtensionsView />
             </Suspense>
           ) : null
         }

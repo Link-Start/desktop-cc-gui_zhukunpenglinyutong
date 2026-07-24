@@ -12,10 +12,12 @@ type AppLayoutProps = {
   isTablet: boolean;
   showHome: boolean;
   showKanban: boolean;
+  showExtensions: boolean;
   showGitHistory: boolean;
   hideRightPanel: boolean;
   isSoloMode: boolean;
   kanbanNode: ReactNode;
+  extensionsNode: ReactNode;
   gitHistoryNode: ReactNode;
   showGitDetail: boolean;
   activeTab: "projects" | "codex" | "spec" | "git" | "log";
@@ -69,10 +71,12 @@ export const AppLayout = memo(function AppLayout({
   isTablet,
   showHome,
   showKanban,
+  showExtensions,
   showGitHistory,
   hideRightPanel,
   isSoloMode,
   kanbanNode,
+  extensionsNode,
   gitHistoryNode,
   showGitDetail,
   activeTab,
@@ -131,6 +135,8 @@ export const AppLayout = memo(function AppLayout({
         sidebarNode={sidebarNode}
         activeTab={activeTab}
         showGitHistory={showGitHistory}
+        showExtensions={showExtensions}
+        extensionsNode={extensionsNode}
         gitHistoryNode={gitHistoryNode}
         activeWorkspace={activeWorkspace}
         showGitDetail={showGitDetail}
@@ -159,6 +165,8 @@ export const AppLayout = memo(function AppLayout({
         errorToastsNode={errorToastsNode}
         globalRuntimeNoticeDockNode={globalRuntimeNoticeDockNode}
         showGitHistory={showGitHistory}
+        showExtensions={showExtensions}
+        extensionsNode={extensionsNode}
         gitHistoryNode={gitHistoryNode}
         homeNode={homeNode}
         showHome={showHome}
@@ -187,12 +195,14 @@ export const AppLayout = memo(function AppLayout({
       globalRuntimeNoticeDockNode={globalRuntimeNoticeDockNode}
       homeNode={homeNode}
       showHome={showHome}
-      showWorkspace={activeWorkspace && !showHome && !showKanban}
+      showWorkspace={activeWorkspace && !showHome && !showKanban && !showExtensions}
       showKanban={showKanban}
+      showExtensions={showExtensions}
       showGitHistory={showGitHistory}
       hideRightPanel={hideRightPanel}
       isSoloMode={isSoloMode}
       kanbanNode={kanbanNode}
+      extensionsNode={extensionsNode}
       gitHistoryNode={gitHistoryNode}
       settingsOpen={settingsOpen}
       settingsNode={settingsNode}

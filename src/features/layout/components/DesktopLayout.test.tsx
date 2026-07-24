@@ -55,10 +55,12 @@ function createDesktopLayout(overrides: Partial<ComponentProps<typeof DesktopLay
       showHome={false}
       showWorkspace
       showKanban={false}
+      showExtensions={false}
       showGitHistory={false}
       hideRightPanel={false}
       isSoloMode={false}
       kanbanNode={<div>kanban</div>}
+      extensionsNode={<div>extensions</div>}
       gitHistoryNode={<div>git-history</div>}
       settingsOpen={false}
       settingsNode={<div>settings</div>}
@@ -96,6 +98,21 @@ describe("DesktopLayout", () => {
   beforeEach(() => {
     clientStorageMock.getClientStoreSync.mockReset().mockReturnValue(undefined);
     clientStorageMock.writeClientStoreValue.mockReset();
+  });
+
+  it("renders Extensions as a workspace-independent page", () => {
+    const { container, getByText, queryByText } = renderDesktopLayout({
+      showExtensions: true,
+      showWorkspace: false,
+    });
+
+    expect(getByText("sidebar")).toBeTruthy();
+    expect(getByText("extensions")).toBeTruthy();
+    expect(queryByText("messages")).toBeNull();
+    expect(queryByText("composer")).toBeNull();
+    expect(queryByText("right-toolbar")).toBeNull();
+    expect(queryByText("activity-panel")).toBeNull();
+    expect(container.querySelector(".right-panel")).toBeNull();
   });
 
   it("keeps plan section expanded in normal activity view", () => {

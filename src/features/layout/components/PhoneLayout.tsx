@@ -9,6 +9,8 @@ type PhoneLayoutProps = {
   tabBarNode: ReactNode;
   sidebarNode: ReactNode;
   showGitHistory: boolean;
+  showExtensions: boolean;
+  extensionsNode: ReactNode;
   gitHistoryNode: ReactNode;
   activeTab: "projects" | "codex" | "spec" | "git" | "log";
   activeWorkspace: boolean;
@@ -35,6 +37,8 @@ export function PhoneLayout({
   tabBarNode,
   sidebarNode,
   showGitHistory,
+  showExtensions,
+  extensionsNode,
   gitHistoryNode,
   activeTab,
   activeWorkspace,
@@ -59,9 +63,10 @@ export function PhoneLayout({
       {errorToastsNode}
       {globalRuntimeNoticeDockNode}
       {!settingsOpen && showGitHistory && <div className="compact-panel">{gitHistoryNode}</div>}
+      {!settingsOpen && showExtensions && <div className="compact-panel">{extensionsNode}</div>}
       {settingsOpen && <div className="compact-panel">{settingsNode}</div>}
-      {!settingsOpen && !showGitHistory && activeTab === "projects" && <div className="compact-panel">{sidebarNode}</div>}
-      {!showGitHistory && activeTab === "codex" && (
+      {!settingsOpen && !showExtensions && !showGitHistory && activeTab === "projects" && <div className="compact-panel">{sidebarNode}</div>}
+      {!showExtensions && !showGitHistory && activeTab === "codex" && (
         <div className="compact-panel">
           {activeWorkspace ? (
             <>
@@ -74,7 +79,7 @@ export function PhoneLayout({
           )}
         </div>
       )}
-      {!showGitHistory && activeTab === "spec" && (
+      {!showExtensions && !showGitHistory && activeTab === "spec" && (
         <div className="compact-panel">
           {activeWorkspace ? (
             <>
@@ -86,7 +91,7 @@ export function PhoneLayout({
           )}
         </div>
       )}
-      {!showGitHistory && activeTab === "git" && (
+      {!showExtensions && !showGitHistory && activeTab === "git" && (
         <div className="compact-panel">
           {!activeWorkspace && compactEmptyGitNode}
           {activeWorkspace && showGitDetail && (
@@ -105,7 +110,7 @@ export function PhoneLayout({
           )}
         </div>
       )}
-      {!showGitHistory && activeTab === "log" && (
+      {!showExtensions && !showGitHistory && activeTab === "log" && (
         <div className="compact-panel">{debugPanelNode}</div>
       )}
       {tabBarNode}
