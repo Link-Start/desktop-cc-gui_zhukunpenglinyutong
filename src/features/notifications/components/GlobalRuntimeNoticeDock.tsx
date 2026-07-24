@@ -47,8 +47,6 @@ function resolveStatusLabel(
   switch (status) {
     case "has-error":
       return t("runtimeNotice.statusError");
-    case "streaming":
-      return t("runtimeNotice.statusStreaming");
     case "idle":
     default:
       return t("runtimeNotice.statusIdle");
@@ -75,9 +73,6 @@ function resolveMinimizedIndicatorState(
 ): MinimizedIndicatorState {
   if (status === "has-error") {
     return "has-error";
-  }
-  if (status === "streaming") {
-    return "has-notice";
   }
   return "idle";
 }

@@ -245,7 +245,7 @@ describe("GlobalRuntimeNoticeDock", () => {
           },
         ]}
         visibility="expanded"
-        status="streaming"
+        status="has-error"
         onExpand={vi.fn()}
         onMinimize={vi.fn()}
         onClear={vi.fn()}
@@ -255,7 +255,6 @@ describe("GlobalRuntimeNoticeDock", () => {
     expect(
       screen.queryByText("后台加载开始：Load active workspace threads（active-workspace / ws-1）"),
     ).toBeNull();
-    expect(screen.queryByText("运行中")).toBeNull();
     expect(screen.getByText("空闲")).toBeTruthy();
     expect(screen.getByText("暂无运行时提示")).toBeTruthy();
     expect(document.querySelector(".global-runtime-notice-dock")).toBeTruthy();

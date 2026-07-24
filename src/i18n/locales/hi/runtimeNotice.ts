@@ -11,7 +11,6 @@ const runtimeNotice = {
     "emptyTitle": "अभी तक कोई रनटाइम सूचना नहीं",
     "emptyDescription": "आरंभीकरण प्रगति और प्रमुख त्रुटियाँ यहाँ दिखाई देंगी।",
     "statusIdle": "निष्क्रिय",
-    "statusStreaming": "चल रहा है",
     "statusError": "त्रुटि",
     "severityInfo": "जानकारी",
     "severityWarning": "चेतावनी",

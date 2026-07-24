@@ -11,7 +11,6 @@ const runtimeNotice = {
     "emptyTitle": "尚無執行階段通知",
     "emptyDescription": "初始化進度與關鍵錯誤將顯示於此。",
     "statusIdle": "閒置",
-    "statusStreaming": "執行中",
     "statusError": "錯誤",
     "severityInfo": "資訊",
     "severityWarning": "警告",

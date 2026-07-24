@@ -135,7 +135,6 @@ vi.mock("react-i18next", () => ({
         "runtimeNotice.emptyTitle": "暂无运行时提示",
         "runtimeNotice.emptyDescription": "初始化进度和关键错误会显示在这里",
         "runtimeNotice.statusIdle": "空闲",
-        "runtimeNotice.statusStreaming": "运行中",
         "runtimeNotice.statusError": "异常",
         "runtimeNotice.severityInfo": "提示",
         "runtimeNotice.severityWarning": "警告",

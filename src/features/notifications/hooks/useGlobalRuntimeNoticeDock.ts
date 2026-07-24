@@ -19,13 +19,12 @@ import { getRuntimePoolSnapshot } from "../../../services/tauri";
 import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
 
 const GLOBAL_RUNTIME_NOTICE_DOCK_VISIBILITY_KEY = "globalRuntimeNoticeDock.visibility";
-const GLOBAL_RUNTIME_NOTICE_STREAMING_WINDOW_MS = 8000;
 const GLOBAL_RUNTIME_NOTICE_RUNTIME_POLL_MS = 5000;
 const STARTUP_COMMAND_SUCCESS_DEDUPE_BUCKET_MS = 30000;
 let lastMirroredStartupTraceSequence = 0;
 
 export type GlobalRuntimeNoticeDockVisibility = "minimized" | "expanded";
-export type GlobalRuntimeNoticeDockStatus = "idle" | "streaming" | "has-error";
+export type GlobalRuntimeNoticeDockStatus = "idle" | "has-error";
 
 type RuntimeSignalToken =
   | "startup-pending"
@@ -418,22 +417,6 @@ export function sanitizeGlobalRuntimeNoticeDockVisibility(
   value: unknown,
 ): GlobalRuntimeNoticeDockVisibility {
   return value === "expanded" ? "expanded" : "minimized";
-}
-
-export function resolveGlobalRuntimeNoticeDockStatus(
-  notices: readonly GlobalRuntimeNotice[],
-  nowMs: number,
-): GlobalRuntimeNoticeDockStatus {
-  if (notices.some((notice) => notice.severity === "error")) {
-    return "has-error";
-  }
-  const latestNotice = notices[notices.length - 1];
-  if (!latestNotice) {
-    return "idle";
-  }
-  return nowMs - latestNotice.timestampMs <= GLOBAL_RUNTIME_NOTICE_STREAMING_WINDOW_MS
-    ? "streaming"
-    : "idle";
 }
 
 export function useGlobalRuntimeNoticeDock(workspaces: readonly WorkspaceInfo[] = []) {
