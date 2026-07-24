@@ -76,6 +76,14 @@ const settings = {
     doctorRunning: "运行中…",
     doctorSuccess: "所有检查已通过！",
     doctorFailed: "部分检查失败。",
+    appSettingsLoadFailedTitle: "设置加载失败",
+    appSettingsLoadFailedMessage:
+      "无法从后端读取应用设置，已临时使用默认设置。请检查客户端与后端的连接状态。",
+    settingsRecoveredTitle: "设置已恢复",
+    settingsRecoveredMessage:
+      "设置文件已损坏，原文件已备份为 {{backupFileName}}，已回退到默认设置。",
+    settingsRecoveredNoBackupMessage:
+      "设置文件已损坏且自动备份失败，已回退到默认设置。",
     doctorAppServerProbe: "App Server 探测",
     doctorResolvedBinary: "解析后的二进制",
     doctorWrapperKind: "Wrapper 类型",

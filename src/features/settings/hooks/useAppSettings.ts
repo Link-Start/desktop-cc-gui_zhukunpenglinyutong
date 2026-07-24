@@ -7,6 +7,7 @@ import {
   runClaudeDoctor,
   runCodexDoctor,
   runKimiDoctor,
+  takeSettingsRecoveryNotice,
   updateAppSettings,
 } from "../../../services/tauri";
 import {
@@ -580,6 +581,38 @@ export function useAppSettings() {
             ),
           );
         }
+        // Startup quarantine happens before the webview loads, so getAppSettings
+        // resolves successfully even when settings.json was corrupted. The one-shot
+        // recovery notice is the only signal for that path; take semantics keep the
+        // toast to a single display even across hook remounts.
+        try {
+          const notice = await takeSettingsRecoveryNotice();
+          if (active && notice) {
+            pushErrorToast({
+              title:
+                i18n.t("settings.settingsRecoveredTitle", {
+                  defaultValue: "设置已恢复",
+                }) || "设置已恢复",
+              message: notice.backupFileName
+                ? i18n.t("settings.settingsRecoveredMessage", {
+                    backupFileName: notice.backupFileName,
+                    defaultValue:
+                      "设置文件已损坏，原文件已备份为 {{backupFileName}}，已回退到默认设置。",
+                  }) ||
+                  `设置文件已损坏，原文件已备份为 ${notice.backupFileName}，已回退到默认设置。`
+                : i18n.t("settings.settingsRecoveredNoBackupMessage", {
+                    defaultValue:
+                      "设置文件已损坏且自动备份失败，已回退到默认设置。",
+                  }) || "设置文件已损坏且自动备份失败，已回退到默认设置。",
+            });
+          }
+        } catch (noticeError) {
+          // A failed notice fetch must never break the successful settings load.
+          console.error(
+            "[useAppSettings] failed to fetch settings recovery notice",
+            noticeError,
+          );
+        }
       } catch (error) {
         // Defaults stay in place if loading settings fails, but the failure must be
         // visible: a corrupted settings file silently resets user preferences otherwise.
@@ -595,9 +628,9 @@ export function useAppSettings() {
           message:
             i18n.t("settings.appSettingsLoadFailedMessage", {
               defaultValue:
-                "已回退到默认设置。若设置文件损坏，后端已将其备份为 .bak 文件以便恢复。",
+                "无法从后端读取应用设置，已临时使用默认设置。请检查客户端与后端的连接状态。",
             }) ||
-            "已回退到默认设置。若设置文件损坏，后端已将其备份为 .bak 文件以便恢复。",
+            "无法从后端读取应用设置，已临时使用默认设置。请检查客户端与后端的连接状态。",
         });
       } finally {
         if (active) {
