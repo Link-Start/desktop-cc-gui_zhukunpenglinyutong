@@ -43,12 +43,12 @@
 
 ## S4 删模块本体与周边资产（G4）
 
-- [ ] 4.1 删除 `src/features/agent-orchestration/` 整目录（31 文件，含 14 个测试）。**删除前复核**：命令目标必须是该精确路径，不得触碰 `src/features/messages/orchestration/`。
-- [ ] 4.2 删除 10 语言包 `src/i18n/locales/*/agentOrchestration.ts` 及各 `index.ts` 的 import/spread 注册两行。
-- [ ] 4.3 删除各语言包 `projectMap.ts:764-781` 的 `orchestration.*` keys（约 10/语言）与 `taskCenter.ts:27,49` 2 keys。
-- [ ] 4.4 `workspace-home.css` 按 design.md §4.4 规程逐段删除 `orchestration-center__*` 选择器（157 处），核对无连带删除。
-- [ ] 4.5 全仓 grep 复核：`agent-orchestration`、`OrchestrationCenterView`、`TASK_MODULE_ENTRYPOINTS_ENABLED`、`agentOrchestration` 零命中（archive/docs 历史文档除外）。
-- [ ] 4.6 **Gate G4**：`npm run typecheck` + `npm run lint` + `npm run test`（全量）全绿，commit。
+- [x] 4.1 删除 `src/features/agent-orchestration/` 整目录（31 文件，含 14 个测试）。**删除前复核**：命令目标必须是该精确路径，不得触碰 `src/features/messages/orchestration/`。
+- [x] 4.2 删除 10 语言包 `src/i18n/locales/*/agentOrchestration.ts` 及各 `index.ts` 的 import/spread 注册两行。
+- [x] 4.3 删除各语言包 `projectMap.ts:764-781` 的 `orchestration.*` keys（约 10/语言）与 `taskCenter.ts:27,49` 2 keys。
+- [x] 4.4 `workspace-home.css` 按 design.md §4.4 规程逐段删除 `.orchestration-center` / `orchestration-center__*` 选择器，并从 `scrollbars.css` 共享 selector list 删除 8 处 `.orchestration-center`，核对无连带删除。
+- [x] 4.5 全仓 grep 复核：`agent-orchestration`、`OrchestrationCenterView`、`TASK_MODULE_ENTRYPOINTS_ENABLED`、`agentOrchestration` 零命中（archive/docs 历史文档除外）；同步 `appShellLazyBoundaries.test.ts` 的 Project Map lazy-mount 等价符号断言。
+- [x] 4.6 **Gate G4**：`npm run typecheck` + `npm run lint` + `npm run test`（全量）全绿，commit。
 
 ## S5 终验与 OpenSpec 收尾（G5）
 

@@ -681,20 +681,6 @@ const projectMap = {
         "noNodes": "キャンバスには少なくとも 1 つのノードが必要です。"
       }
     },
-    "orchestration": {
-      "title": "オーケストレーションのドラフト",
-      "description": "現在のノードから、ソースノード、エビデンス、リスクマーカー付きのローカルタスクドラフトを作成します。これは AI の実行を開始しません。",
-      "sourceNode": "ソースノード {{nodeId}}",
-      "evidenceCount": "{{count}} 件のエビデンス参照",
-      "reviewRequired": "レビューが必要",
-      "readyForDraft": "計画されたドラフトの準備完了",
-      "createTask": "タスクドラフトを作成",
-      "created": "{{taskId}} を作成 · {{status}} · {{evidence}} 件のエビデンス · {{risks}} 件のリスク",
-      "failure": {
-        "missing-workspace": "ワークスペース識別子がありません。タスクドラフトは作成されませんでした。",
-        "missing-node": "ソースノードは既に利用できません。タスクドラフトは作成されませんでした。"
-      }
-    },
     "confirmDeleteNodeTitle": "ナレッジノードを削除",
     "confirmDeleteNode": "「{{title}}」とその子ノードを削除しますか？これは手動の剪定です。復元するには再生成またはノードの補完が必要です。",
     "confirmDeleteNodeWarning": "これにより、子ノード、親参照も削除され、このノードを対象とする保留中の候補も却下されます。",

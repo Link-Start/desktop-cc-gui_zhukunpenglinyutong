@@ -727,22 +727,6 @@ const projectMap = {
         noNodes: "画布至少需要一个节点。",
       },
     },
-    orchestration: {
-      title: "编排任务草案 Orchestration Draft",
-      description:
-        "从当前节点创建一个本地任务草案，带上 source node、证据和风险标记；不会自动启动 AI 执行。",
-      sourceNode: "来源节点 {{nodeId}}",
-      evidenceCount: "{{count}} 条可带入证据",
-      reviewRequired: "需要人工确认",
-      readyForDraft: "可创建计划草案",
-      createTask: "创建任务草案",
-      created:
-        "已创建 {{taskId}} · {{status}} · {{evidence}} 证据 · {{risks}} 风险",
-      failure: {
-        "missing-workspace": "缺少 workspace identity，无法创建任务草案。",
-        "missing-node": "来源节点已不可用，无法创建任务草案。",
-      },
-    },
     confirmDeleteNodeTitle: "删除知识节点",
     confirmDeleteNode:
       "确认删除“{{title}}”及其子节点吗？这个操作用于人工剪枝，删除后需要重新生成或补全才能恢复。",

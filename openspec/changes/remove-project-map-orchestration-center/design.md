@@ -38,6 +38,7 @@
 | `src/app-shell-parts/useAppShellSections.ts` | `:587` destructure、`:1130` task-run actions 传参（2026-07-26 执行中补登记） | 纯删除 |
 | `src/app-shell-parts/appShellActionBoundaries.ts` | `:18` `AppShellTaskRunActions.handleDispatchOrchestrationTask` 字段（2026-07-26 执行中补登记） | 纯删除 |
 | `src/app-shell-parts/appShellActionBoundaries.test.ts` | `:56` fixture 对应字段（2026-07-26 执行中补登记） | 纯删除 |
+| `src/app-shell-parts/appShellLazyBoundaries.test.ts` | Project Map lazy-mount source assertion 从已删除的 `shouldMountProjectMapPanel` 对齐为 `isProjectMapSurfaceActive`（2026-07-24 G4 全量测试补登记） | 仅更新等价内部符号断言 |
 | `src/app-shell-parts/useAppShellKanbanExecutionSection.ts` | 派发回调删除后变为未使用的符号级联清理：`patchTaskRun`/`saveTaskRunStore` import 条目、ctx destructure 的 `activeWorkspace`/`workspaces` 条目（TS6133 noUnusedLocals 强制，2026-07-26 执行中补登记） | 纯删除 |
 | `src/features/project-map/components/ProjectMapPanel.tsx` | `:17-22` import；`:104,115`；`:149,167` prop；`:233-234` state；`:1215-1255` handler；`:1924,1937` 传参 | 纯删除 |
 | `src/features/project-map/components/ProjectMapDetailPanel.tsx` | `:71-85,103,116,147,160` 草稿入口残留（prop 已 `_` 闲置） | 纯删除 |
@@ -49,6 +50,7 @@
 | `src/features/messages/orchestration/components/MessagesLinkedRunBanner.tsx` | `:3` import 改路径（组件本体保留） | 仅 import 改路径 |
 | `src/i18n/locales/{10 语言}/agentOrchestration.ts` + 各 `index.ts` | 文件删除 + 注册两行删除；`projectMap.ts:764-781` ~10 keys；`taskCenter.ts:27,49` 2 keys | 纯删除 |
 | `src/styles/workspace-home.css` | `orchestration-center__*` 157 处选择器（约 `:571-1377`） | 逐段核对后删除 |
+| `src/styles/scrollbars.css` | 8 处 `.orchestration-center` 混合 selector（2026-07-24 S4 全仓残余扫描补登记） | 仅从 selector list 删除编排项，保留共享规则 |
 | 6 个外部测试文件 | 见 §4.3 | 删除用例 / 改 import / 删 mock |
 | `openspec/specs/agent-task-orchestration-center/` | 目录删除 | 随 verify/sync 流程 |
 
@@ -124,7 +126,9 @@ npx vitest run src/features/project-map src/features/tasks src/features/messages
 
 ### 4.4 CSS 删除的防误删规程
 
-`workspace-home.css` 的 `:571-1377` 区间内夹有非编排选择器。规程：只删选择器名以 `orchestration-center__` 开头的规则块（含其 media query 内的同名规则），删后对区间内剩余选择器逐一比对删除前快照确认无连带删除；G4 的全量测试中若有视觉相关快照用例可辅助兜底。
+`workspace-home.css` 的 `:571-1377` 区间内夹有非编排选择器。规程：只删 `.orchestration-center` / `orchestration-center__*` 规则块（含其 media query 内的同名规则），删后对区间内剩余选择器逐一比对删除前快照确认无连带删除；G4 的全量测试中若有视觉相关快照用例可辅助兜底。
+
+S4 全仓残余扫描另发现 `scrollbars.css` 仍有 8 处 `.orchestration-center`，均位于共享 scrollbar selector list。逐项删除该 selector，不改共享 declaration block。
 
 ## 5. 风险与回滚
 

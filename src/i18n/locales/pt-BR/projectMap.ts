@@ -681,20 +681,6 @@ const projectMap = {
         "noNodes": "O canvas precisa de pelo menos um nó."
       }
     },
-    "orchestration": {
-      "title": "Rascunho de orquestração",
-      "description": "Crie um rascunho de tarefa local a partir do nó atual com marcadores de nó de origem, evidência e risco. Isto não inicia a execução de IA.",
-      "sourceNode": "Nó de origem {{nodeId}}",
-      "evidenceCount": "{{count}} ref(s) de evidência",
-      "reviewRequired": "Revisão necessária",
-      "readyForDraft": "Pronto para rascunho planejado",
-      "createTask": "Criar rascunho de tarefa",
-      "created": "Criado {{taskId}} · {{status}} · {{evidence}} evidência · {{risks}} risco(s)",
-      "failure": {
-        "missing-workspace": "Identidade de workspace ausente; o rascunho de tarefa não foi criado.",
-        "missing-node": "O nó de origem não está mais disponível; o rascunho de tarefa não foi criado."
-      }
-    },
     "confirmDeleteNodeTitle": "Excluir nó de conhecimento",
     "confirmDeleteNode": "Excluir \"{{title}}\" e seus nós filhos? Isto é uma poda manual; restaurá-lo exige regeneração ou conclusão do nó.",
     "confirmDeleteNodeWarning": "Isto também remove nós filhos, referências pai e rejeita candidatos pendentes direcionados a este nó.",

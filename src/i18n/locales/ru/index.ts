@@ -2,7 +2,6 @@
 // Machine translation of src/i18n/locales/en/index.ts; keys mirror the English source.
 import about from "./about";
 import activityPanel from "./activityPanel";
-import agentOrchestration from "./agentOrchestration";
 import app from "./app";
 import approval from "./approval";
 import askUserQuestion from "./askUserQuestion";
@@ -59,7 +58,6 @@ import workspace from "./workspace";
 const locale = {
   ...about,
   ...activityPanel,
-  ...agentOrchestration,
   ...app,
   ...approval,
   ...askUserQuestion,
