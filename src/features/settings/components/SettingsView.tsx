@@ -2457,20 +2457,6 @@ export function SettingsView({
               )}
             </section>
           )}
-          {activeSection === "skills" && (
-            <>
-              <CuratedSection
-                appSettings={appSettings}
-                onUpdateAppSettings={onUpdateAppSettings}
-              />
-              <SkillsSection
-                activeWorkspace={selectedSettingsWorkspace}
-                embedded
-                appSettings={appSettings}
-                onUpdateAppSettings={onUpdateAppSettings}
-              />
-            </>
-          )}
           {activeSection === "other" && (
             <OtherSection
               title={null}
