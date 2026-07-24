@@ -584,7 +584,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     handleForkTaskRun,
     handleCloseTaskConversation,
     handleKanbanCreateTask,
-    handleDispatchOrchestrationTask,
     taskProcessingMap,
     handleDragToInProgress,
   } = useAppShellKanbanExecutionSection(ctx);
@@ -1127,7 +1126,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     handleForkTaskRun,
     handleCloseTaskConversation,
     handleKanbanCreateTask,
-    handleDispatchOrchestrationTask,
     handleDragToInProgress,
   });
   const navigationActions = defineAppShellNavigationActions({

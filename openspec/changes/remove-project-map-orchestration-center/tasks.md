@@ -24,11 +24,11 @@
 
 ## S2 剥 app-shell 派发回调（G2）
 
-- [ ] 2.1 `useAppShellKanbanExecutionSection.ts` 删 `:25-31` import、`:204-369` `handleDispatchOrchestrationTask`、`:1610` return 导出（其余行不动）。
-- [ ] 2.2 `layoutNodesTypes.ts` 删 `:8`、`:669-673`、`:1152` 相关条目。
-- [ ] 2.3 `useAppShellLayoutNodesSection.tsx` 删 `:390`、`:2211` 两处接线。
-- [ ] 2.4 `useAppShellSections.kanban-text.test.ts` 删 `:171` "orchestration dispatch wired" 整例。
-- [ ] 2.5 **Gate G2**：`npx vitest run src/app-shell-parts` + `npm run typecheck` 全绿（kanban 用例零修改通过），commit。
+- [x] 2.1 `useAppShellKanbanExecutionSection.ts` 删 `:25-31` import、`:204-369` `handleDispatchOrchestrationTask`、`:1610` return 导出（其余行不动）。（另级联清理仅被派发回调使用的 `patchTaskRun`/`saveTaskRunStore`/`activeWorkspace`/`workspaces` 未使用符号，已登记 design.md §1.2）
+- [ ] 2.2 `layoutNodesTypes.ts` 删 `:8`、`:669-673`、`:1152` 相关条目。**（执行调整：挪入 S3 commit——contract 先于消费方删除会导致 S2 typecheck 红，违背"每步可编译"原则；已登记 verification）**
+- [x] 2.3 `useAppShellLayoutNodesSection.tsx` 删 `:390`、`:2211` 两处接线。
+- [x] 2.4 `useAppShellSections.kanban-text.test.ts` 删 `:171` "orchestration dispatch wired" 整例。（连带删除仅含该例的 describe 块；并同步清理 `useAppShellSections.ts`、`appShellActionBoundaries.ts` 及其 test 中的同名字段，已登记 design.md §1.2）
+- [x] 2.5 **Gate G2**：`npx vitest run src/app-shell-parts` + `npm run typecheck` 全绿（kanban 用例零修改通过），commit。
 
 ## S3 剥 useLayoutNodes 装配与悬空入口（G3）
 

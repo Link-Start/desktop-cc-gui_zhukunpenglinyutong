@@ -53,7 +53,6 @@ describe("appShellActionBoundaries", () => {
       handleForkTaskRun: retryTaskRun,
       handleCloseTaskConversation: retryTaskRun,
       handleKanbanCreateTask: retryTaskRun,
-      handleDispatchOrchestrationTask: retryTaskRun,
       handleDragToInProgress: retryTaskRun,
     });
     const navigationActions = defineAppShellNavigationActions({

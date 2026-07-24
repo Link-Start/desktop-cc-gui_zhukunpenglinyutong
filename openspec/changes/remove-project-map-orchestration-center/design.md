@@ -35,6 +35,10 @@
 | `src/features/layout/hooks/layoutNodesTypes.ts` | `:8` import 类型；`:669-673` `onDispatchOrchestrationTask` option；`:1152` Pick 集合条目 | 纯删除 |
 | `src/app-shell-parts/useAppShellKanbanExecutionSection.ts` | `:25-31` import；`:204-369` `handleDispatchOrchestrationTask`；`:1610` return 导出 | 纯删除 |
 | `src/app-shell-parts/useAppShellLayoutNodesSection.tsx` | `:390, 2211` 两处接线 | 纯删除 |
+| `src/app-shell-parts/useAppShellSections.ts` | `:587` destructure、`:1130` task-run actions 传参（2026-07-26 执行中补登记） | 纯删除 |
+| `src/app-shell-parts/appShellActionBoundaries.ts` | `:18` `AppShellTaskRunActions.handleDispatchOrchestrationTask` 字段（2026-07-26 执行中补登记） | 纯删除 |
+| `src/app-shell-parts/appShellActionBoundaries.test.ts` | `:56` fixture 对应字段（2026-07-26 执行中补登记） | 纯删除 |
+| `src/app-shell-parts/useAppShellKanbanExecutionSection.ts` | 派发回调删除后变为未使用的符号级联清理：`patchTaskRun`/`saveTaskRunStore` import 条目、ctx destructure 的 `activeWorkspace`/`workspaces` 条目（TS6133 noUnusedLocals 强制，2026-07-26 执行中补登记） | 纯删除 |
 | `src/features/project-map/components/ProjectMapPanel.tsx` | `:17-22` import；`:104,115`；`:149,167` prop；`:233-234` state；`:1215-1255` handler；`:1924,1937` 传参 | 纯删除 |
 | `src/features/project-map/components/ProjectMapDetailPanel.tsx` | `:71-85,103,116,147,160` 草稿入口残留（prop 已 `_` 闲置） | 纯删除 |
 | `src/features/project-map/**/projectMapPanelModel.ts` / `ProjectMapPanelSurfaces.tsx` | `:105` / `:12` 各一处 | 纯删除 |
