@@ -52,8 +52,8 @@
 
 ## S5 终验与 OpenSpec 收尾（G5）
 
-- [ ] 5.1 删除 `openspec/specs/agent-task-orchestration-center/` 目录（spec delta 已声明 REMOVED）。
-- [ ] 5.2 运行 `openspec validate --all --strict --no-interactive`。
-- [ ] 5.3 手工 smoke：启动应用 → Project Map 面板正常渲染且无编排切换入口；kanban 创建/执行一个任务正常；幕布关联运行 banner 点击跳转 Task Center 正常。
-- [ ] 5.4 撰写 verification.md（基线记录、各 gate 结果、smoke 证据）。
-- [ ] 5.5 更新 `openspec/changes/README.md`（active table 进度），按流程 sync/archive。
+- [x] 5.1 删除 `openspec/specs/agent-task-orchestration-center/` 目录（spec delta 已声明 REMOVED）。
+- [x] 5.2 运行 `openspec validate --all --strict --no-interactive`。
+- [x] 5.3 手工 smoke：启动应用 → Project Map 面板正常渲染且无编排切换入口；kanban 创建/执行一个任务正常；幕布关联运行 banner 点击跳转 Task Center 正常。
+- [x] 5.4 撰写 verification.md（基线记录、各 gate 结果、smoke 证据）。
+- [x] 5.5 更新 `openspec/changes/README.md`（active table 进度），按流程 sync/archive。

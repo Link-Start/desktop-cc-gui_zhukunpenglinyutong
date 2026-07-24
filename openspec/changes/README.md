@@ -4,8 +4,8 @@
 
 - Updated At: `2026-07-24`
 - Active proposals: `4`
-- Archived proposals: `713`
-- Main capability specs: `429`
+- Archived proposals: `717`
+- Main capability specs: `428`
 
 ## Active Proposals
 
@@ -17,8 +17,8 @@
 | [`stabilize-client-runtime-and-diagnostics`](stabilize-client-runtime-and-diagnostics/proposal.md) | 21/22 | Quantified frame / first-delta trace retention | [design](stabilize-client-runtime-and-diagnostics/design.md) · [tasks](stabilize-client-runtime-and-diagnostics/tasks.md) · [specs](stabilize-client-runtime-and-diagnostics/specs/) · [verification](stabilize-client-runtime-and-diagnostics/verification.md) |
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 713 个 proposal，按月份 / 归档日期分组。
-- [2026-07-24 归档批次](archive/README.md#2026-07-24) — 19 个 verified proposal 批量归档：Kimi 引擎、Agent Catalog、扩展管理面、AI PR 标题/正文、prompt enhancer 入口、source-aware 便签捕获、file history 迁入 git graph、git history 分支树恢复、PR range gate 软化等，delta specs 全部同步 main specs。
+- [完整归档提案索引](archive/README.md) — 717 个 proposal，按月份 / 归档日期分组。
+- [2026-07-24 归档批次](archive/README.md#2026-07-24) — 23 个 verified proposal：Kimi 引擎、Agent Catalog、扩展管理面、AI PR 标题/正文、prompt enhancer 入口、source-aware 便签捕获、file history 迁入 git graph、git history 分支树恢复、PR range gate 软化与编排中心删除等。
 - [2026-07-23 `add-theme-aware-syntax-and-diff-tokens`](archive/2026-07-23-add-theme-aware-syntax-and-diff-tokens/proposal.md) — 已同步 theme preset syntax/diff tokens、稳定 root override 与外观设置实时预览。
 - [2026-07-23 `fix-multi-repository-git-inline-diff-scope`](archive/2026-07-23-fix-multi-repository-git-inline-diff-scope/proposal.md) — 已同步 multi-repository scoped inline diff、discard-all、diff layout 与 command-header actions。
 - [2026-07-23 最近活动批次](archive/README.md#2026-07-23) — `enhance-session-activity-panels`、`enhance-quick-switcher-hub`、`enhance-quick-switcher-nav-toggle` 已同步 `codex-chat-canvas-workspace-session-activity-panel` 与 `quick-context-switcher`。
