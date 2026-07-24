@@ -3,12 +3,12 @@
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
 - Updated At: `2026-07-24`
-- Indexed proposals: `716`
+- Indexed proposals: `717`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-07 (139)
+## 2026-07 (140)
 
 ### 2026-07-24
 
@@ -34,6 +34,7 @@
 - [`2026-07-24-remove-legacy-composer-input-implementation`](2026-07-24-remove-legacy-composer-input-implementation/proposal.md) — verified dead-code removal，未修改 capability specs
 - [`2026-07-24-remove-parallel-orphan-module`](2026-07-24-remove-parallel-orphan-module/proposal.md) — verified orphan-module removal，未修改 capability specs
 - [`2026-07-24-remove-search-workspace-indexing-layer`](2026-07-24-remove-search-workspace-indexing-layer/proposal.md) — verified dead-code removal，未修改 capability specs
+- [`2026-07-24-remove-project-map-orchestration-center`](2026-07-24-remove-project-map-orchestration-center/proposal.md) — verified implementation，已移除 `agent-task-orchestration-center` main capability spec
 
 ### 2026-07-23
 

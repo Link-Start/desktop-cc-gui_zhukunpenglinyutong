@@ -1,6 +1,5 @@
 import about from "./about";
 import activityPanel from "./activityPanel";
-import agentOrchestration from "./agentOrchestration";
 import app from "./app";
 import approval from "./approval";
 import askUserQuestion from "./askUserQuestion";
@@ -57,7 +56,6 @@ import workspace from "./workspace";
 const en = {
   ...about,
   ...activityPanel,
-  ...agentOrchestration,
   ...app,
   ...approval,
   ...askUserQuestion,

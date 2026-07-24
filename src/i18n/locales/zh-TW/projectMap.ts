@@ -681,20 +681,6 @@ const projectMap = {
         "noNodes": "畫布至少需要一個節點。"
       }
     },
-    "orchestration": {
-      "title": "編排草稿",
-      "description": "從目前節點建立本地任務草稿，包含來源節點、證據與風險標記。此操作不會啟動 AI 執行。",
-      "sourceNode": "來源節點 {{nodeId}}",
-      "evidenceCount": "{{count}} 個證據參考",
-      "reviewRequired": "需要審查",
-      "readyForDraft": "已就緒可建立草稿",
-      "createTask": "建立任務草稿",
-      "created": "已建立 {{taskId}} · {{status}} · {{evidence}} 個證據 · {{risks}} 個風險",
-      "failure": {
-        "missing-workspace": "缺少工作區身分；未建立任務草稿。",
-        "missing-node": "來源節點已不可用；未建立任務草稿。"
-      }
-    },
     "confirmDeleteNodeTitle": "刪除知識節點",
     "confirmDeleteNode": "刪除「{{title}}」及其子節點？這是手動修剪；還原需要重新產生或補全節點。",
     "confirmDeleteNodeWarning": "這也會移除子節點、父節點參考，並拒絕指向此節點的待處理候選。",

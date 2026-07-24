@@ -25,8 +25,7 @@ const taskCenter = {
     "noBrowserEvidence": "尚未關聯瀏覽器佐證",
     "browserEvidenceCandidates": "候選項",
     "source": {
-      "kanban": "看板",
-      "orchestration": "編排"
+      "kanban": "看板"
     },
     "browserEvidenceState": {
       "available": "可用",
@@ -48,7 +47,6 @@ const taskCenter = {
     },
     "action": {
       "openConversation": "開啟對話",
-      "openOrchestrationTask": "開啟編排任務",
       "retry": "重試",
       "resume": "繼續",
       "cancel": "取消",

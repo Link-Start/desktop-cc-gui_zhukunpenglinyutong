@@ -15,7 +15,6 @@ export type AppShellTaskRunActions = {
   handleForkTaskRun: AppShellBoundaryAction;
   handleCloseTaskConversation: AppShellBoundaryAction;
   handleKanbanCreateTask: AppShellBoundaryAction;
-  handleDispatchOrchestrationTask: AppShellBoundaryAction;
   handleDragToInProgress: AppShellBoundaryAction;
 };
 

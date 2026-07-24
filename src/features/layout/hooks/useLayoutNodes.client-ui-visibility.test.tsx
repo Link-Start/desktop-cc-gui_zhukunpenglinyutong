@@ -1005,7 +1005,6 @@ function createLayoutOptions(
     usePresentationProfile: false,
     onSelectEngine: noop,
     projectMapDatasetController: undefined,
-    onDispatchOrchestrationTask: async () => ({ ok: false }),
     claudeThinkingVisible: false,
     onResolvedClaudeThinkingVisibleChange: noop,
     onRefreshModelConfig: asyncNoop,

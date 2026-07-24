@@ -69,10 +69,7 @@ describe("AppShell lazy feature boundaries", () => {
     const shellSectionSource = readSource(join(currentDir, "useAppShellLayoutNodesSection.tsx"));
 
     expect(layoutNodesSource).toContain(
-      "const shouldMountProjectMapPanel =",
-    );
-    expect(layoutNodesSource).toContain(
-      "const projectMapPanelNode = shouldMountProjectMapPanel ?",
+      "const projectMapPanelNode = isProjectMapSurfaceActive ?",
     );
     expect(layoutNodesSource).toContain(
       "const intentCanvasPanelNode = isIntentCanvasSurfaceActive ?",

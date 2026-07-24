@@ -681,20 +681,6 @@ const projectMap = {
         "noNodes": "캔버스에는 노드가 하나 이상 필요합니다."
       }
     },
-    "orchestration": {
-      "title": "오케스트레이션 초안",
-      "description": "현재 노드에서 출발 노드, 증거, 위험 표시가 포함된 로컬 작업 초안을 만듭니다. AI 실행을 시작하지 않습니다.",
-      "sourceNode": "출발 노드 {{nodeId}}",
-      "evidenceCount": "증거 참조 {{count}}개",
-      "reviewRequired": "검토 필요",
-      "readyForDraft": "계획 초안 준비 완료",
-      "createTask": "작업 초안 생성",
-      "created": "{{taskId}} 생성 · {{status}} · 증거 {{evidence}}개 · 위험 {{risks}}개",
-      "failure": {
-        "missing-workspace": "워크스페이스 식별자가 없어 작업 초안을 생성하지 못했습니다.",
-        "missing-node": "출발 노드를 더 이상 사용할 수 없어 작업 초안을 생성하지 못했습니다."
-      }
-    },
     "confirmDeleteNodeTitle": "지식 노드 삭제",
     "confirmDeleteNode": "\"{{title}}\" 및 하위 노드를 삭제하시겠습니까? 이는 수동 정리이며, 복원하려면 재생성 또는 노드 완성이 필요합니다.",
     "confirmDeleteNodeWarning": "이 작업은 하위 노드, 상위 참조도 제거하고, 이 노드를 대상으로 하는 대기 중인 후보를 거부합니다.",

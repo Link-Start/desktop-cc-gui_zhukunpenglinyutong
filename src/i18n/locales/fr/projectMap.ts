@@ -681,20 +681,6 @@ const projectMap = {
         "noNodes": "Le canevas nécessite au moins un nœud."
       }
     },
-    "orchestration": {
-      "title": "Brouillon d'orchestration",
-      "description": "Crée un brouillon de tâche local à partir du nœud actuel avec le nœud source, les preuves et les marqueurs de risque. Cela ne démarre pas l'exécution de l'IA.",
-      "sourceNode": "Nœud source {{nodeId}}",
-      "evidenceCount": "{{count}} réf(s) de preuve",
-      "reviewRequired": "Révision requise",
-      "readyForDraft": "Prêt pour le brouillon planifié",
-      "createTask": "Créer un brouillon de tâche",
-      "created": "{{taskId}} créé · {{status}} · {{evidence}} preuves · {{risks}} risque(s)",
-      "failure": {
-        "missing-workspace": "Identité de l'espace de travail manquante ; le brouillon de tâche n'a pas été créé.",
-        "missing-node": "Le nœud source n'est plus disponible ; le brouillon de tâche n'a pas été créé."
-      }
-    },
     "confirmDeleteNodeTitle": "Supprimer le nœud de connaissance",
     "confirmDeleteNode": "Supprimer « {{title}} » et ses nœuds enfants ? Il s'agit d'un élagage manuel ; le restaurer nécessite une régénération ou une complétion de nœud.",
     "confirmDeleteNodeWarning": "Cela supprime aussi les nœuds enfants, les références au parent, et rejette les candidats en attente ciblant ce nœud.",

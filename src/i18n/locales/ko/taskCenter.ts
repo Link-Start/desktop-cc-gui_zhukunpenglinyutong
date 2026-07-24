@@ -25,8 +25,7 @@ const taskCenter = {
     "noBrowserEvidence": "연결된 브라우저 증거 없음",
     "browserEvidenceCandidates": "후보",
     "source": {
-      "kanban": "칸반",
-      "orchestration": "오케스트레이션"
+      "kanban": "칸반"
     },
     "browserEvidenceState": {
       "available": "사용 가능",
@@ -48,7 +47,6 @@ const taskCenter = {
     },
     "action": {
       "openConversation": "대화 열기",
-      "openOrchestrationTask": "오케스트레이션 작업 열기",
       "retry": "다시 시도",
       "resume": "재개",
       "cancel": "취소",
