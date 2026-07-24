@@ -9,7 +9,7 @@ use crate::app_paths;
 use crate::dictation::DictationState;
 use crate::engine::{EngineConfig, EngineManager, EngineType};
 use crate::shared::proxy_core;
-use crate::shared::settings_core::SettingsRecoveryNotice;
+use crate::shared::settings_core::{SettingsRecoveryNotice, WorkspacesRecoveryNotice};
 use crate::storage::{backup_corrupted_file, read_settings, read_workspaces};
 use crate::types::{AppSettings, WorkspaceEntry};
 use crate::workspaces::DetachedExternalChangeRuntime;
@@ -30,6 +30,9 @@ pub(crate) struct AppState {
     /// One-shot notice recorded when startup quarantines a corrupted settings.json;
     /// consumed by the `take_settings_recovery_notice` command exactly once.
     pub(crate) settings_recovery_notice: Mutex<Option<SettingsRecoveryNotice>>,
+    /// One-shot notice recorded when startup quarantines a corrupted workspaces.json;
+    /// consumed by the `take_workspaces_recovery_notice` command exactly once.
+    pub(crate) workspaces_recovery_notice: Mutex<Option<WorkspacesRecoveryNotice>>,
     pub(crate) codex_runtime_reload_lock: Mutex<()>,
     pub(crate) computer_use_activation_lock: Mutex<()>,
     pub(crate) computer_use_activation_verification:
@@ -99,9 +102,17 @@ impl AppState {
         }
         let storage_path = data_dir.join("workspaces.json");
         let settings_path = data_dir.join("settings.json");
+        let mut workspaces_recovery_notice = None;
         let workspaces = read_workspaces(&storage_path).unwrap_or_else(|error| {
-            // Quarantine the corrupted file first so a later save never destroys it.
-            let _ = backup_corrupted_file(&storage_path, &error);
+            // Quarantine the corrupted file first so a later save never destroys it,
+            // and record a one-shot notice so the frontend can tell the user what happened.
+            let backup_path = backup_corrupted_file(&storage_path, &error);
+            workspaces_recovery_notice = Some(WorkspacesRecoveryNotice {
+                backup_file_name: backup_path
+                    .as_ref()
+                    .and_then(|path| path.file_name())
+                    .map(|name| name.to_string_lossy().into_owned()),
+            });
             HashMap::new()
         });
         let mut settings_recovery_notice = None;
@@ -153,6 +164,7 @@ impl AppState {
             settings_path,
             app_settings: Mutex::new(app_settings),
             settings_recovery_notice: Mutex::new(settings_recovery_notice),
+            workspaces_recovery_notice: Mutex::new(workspaces_recovery_notice),
             codex_runtime_reload_lock: Mutex::new(()),
             computer_use_activation_lock: Mutex::new(()),
             computer_use_activation_verification: Mutex::new(None),

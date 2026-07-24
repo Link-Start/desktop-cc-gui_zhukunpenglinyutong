@@ -197,6 +197,7 @@ pub(crate) fn invoke_handler(
         crate::shared_sessions::delete_shared_session,
         // Workspaces
         crate::workspaces::list_workspaces,
+        crate::workspaces::take_workspaces_recovery_notice,
         crate::workspaces::is_workspace_path_dir,
         crate::workspaces::ensure_workspace_path_dir,
         crate::workspaces::add_workspace,

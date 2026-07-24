@@ -1280,6 +1280,7 @@ mod tests {
             settings_path: data_dir.join("settings.json"),
             app_settings: tokio::sync::Mutex::new(AppSettings::default()),
             settings_recovery_notice: tokio::sync::Mutex::new(None),
+            workspaces_recovery_notice: tokio::sync::Mutex::new(None),
             codex_runtime_reload_lock: tokio::sync::Mutex::new(()),
             computer_use_activation_lock: tokio::sync::Mutex::new(()),
             computer_use_activation_verification: tokio::sync::Mutex::new(None),
