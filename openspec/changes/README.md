@@ -3,9 +3,9 @@
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
 - Updated At: `2026-07-24`
-- Active proposals: `5`
-- Archived proposals: `729`
-- Main capability specs: `430`
+- Active proposals: `4`
+- Archived proposals: `730`
+- Main capability specs: `431`
 
 ## Active Proposals
 
@@ -14,11 +14,11 @@
 | [`add-linux-native-menu-localization`](add-linux-native-menu-localization/proposal.md) | 4/5 | Linux non-default-language startup smoke | [design](add-linux-native-menu-localization/design.md) · [tasks](add-linux-native-menu-localization/tasks.md) · [specs](add-linux-native-menu-localization/specs/) · [verification](add-linux-native-menu-localization/verification.md) |
 | [`add-vendor-cli-lifecycle-header`](add-vendor-cli-lifecycle-header/proposal.md) | 11/12 | 手工：未安装 / 最新 / outdated / npm view 失败 / 安装后刷新 smoke | [design](add-vendor-cli-lifecycle-header/design.md) · [tasks](add-vendor-cli-lifecycle-header/tasks.md) · [specs](add-vendor-cli-lifecycle-header/specs/) |
 | [`enable-claude-lightweight-streaming-and-frame-attribution`](enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) | 15/18 | Claude-stream trace、final fidelity 与 archive gate | [design](enable-claude-lightweight-streaming-and-frame-attribution/design.md) · [tasks](enable-claude-lightweight-streaming-and-frame-attribution/tasks.md) · [specs](enable-claude-lightweight-streaming-and-frame-attribution/specs/) · [verification](enable-claude-lightweight-streaming-and-frame-attribution/verification.md) |
-| [`preserve-corrupted-workspaces-on-load-and-notify`](preserve-corrupted-workspaces-on-load-and-notify/proposal.md) | 0/11 | 实现进行中 | [tasks](preserve-corrupted-workspaces-on-load-and-notify/tasks.md) · [specs](preserve-corrupted-workspaces-on-load-and-notify/specs/) |
 | [`stabilize-client-runtime-and-diagnostics`](stabilize-client-runtime-and-diagnostics/proposal.md) | 21/22 | Quantified frame / first-delta trace retention | [design](stabilize-client-runtime-and-diagnostics/design.md) · [tasks](stabilize-client-runtime-and-diagnostics/tasks.md) · [specs](stabilize-client-runtime-and-diagnostics/specs/) · [verification](stabilize-client-runtime-and-diagnostics/verification.md) |
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 729 个 proposal，按月份 / 归档日期分组。
+- [完整归档提案索引](archive/README.md) — 730 个 proposal，按月份 / 归档日期分组。
+- [2026-07-24 `preserve-corrupted-workspaces-on-load-and-notify`](archive/2026-07-24-preserve-corrupted-workspaces-on-load-and-notify/proposal.md) — 已同步 `workspaces-corruption-recovery`：`workspaces.json` 损坏时先隔离备份为 `.corrupted-<timestamp>.bak` 再回退空列表，quarantine 记录一次性 recovery notice，新增 `take_workspaces_recovery_notice` command，frontend 挂载后弹一次本地化 toast。
 - [2026-07-24 `preserve-corrupted-app-settings-on-load`](archive/2026-07-24-preserve-corrupted-app-settings-on-load/proposal.md) — 已同步 `app-settings-corruption-recovery`：`settings.json` 损坏时先隔离备份为 `.corrupted-<timestamp>.bak` 再回退默认值，frontend 加载失败改为日志 + toast 可见。
 - [2026-07-24 `notify-settings-recovery-after-corruption`](archive/2026-07-24-notify-settings-recovery-after-corruption/proposal.md) — 已同步 `app-settings-corruption-recovery`：quarantine 记录一次性 recovery notice，新增 `take_settings_recovery_notice` command，frontend 加载成功后弹一次本地化 toast。
 - [2026-07-24 归档批次](archive/README.md#2026-07-24) — 31 个 verified proposal：Kimi 引擎、Agent Catalog、扩展管理面、AI PR 标题/正文、prompt enhancer 入口、source-aware 便签捕获、file history 迁入 git graph、git history 分支树恢复、PR range gate 软化、编排中心删除，以及 8 个死链 / 死分支清理与 AI review producer 接线等。
