@@ -4,15 +4,12 @@ import { useTranslation } from "react-i18next";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import type { DropResult } from "@hello-pangea/dnd";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
 import Mic from "lucide-react/dist/esm/icons/mic";
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
 import FileText from "lucide-react/dist/esm/icons/file-text";
-import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -39,10 +36,7 @@ import type {
 } from "../../../types";
 import { loadSettingsStyles } from "../../../styles/featureStyleLoaders";
 import wxqImage from "../../../assets/wxq.png";
-import {
-  buildShortcutValue,
-  getDefaultInterruptShortcut,
-} from "../../../utils/shortcuts";
+import { buildShortcutValue } from "../../../utils/shortcuts";
 import { clampUiScale } from "../../../utils/uiScale";
 import {
   exportDiagnosticsBundle,
@@ -66,10 +60,7 @@ import { McpSection } from "./McpSection";
 import { SkillsSection } from "./SkillsSection";
 import { CuratedSection } from "../../curated-skills";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
-import {
-  deleteSessionRadarHistoryEntries,
-  type SessionRadarHistoryDeleteResult,
-} from "../../session-activity/utils/sessionRadarHistoryManagement";
+import { deleteSessionRadarHistoryEntries } from "../../session-activity/utils/sessionRadarHistoryManagement";
 import Settings from "lucide-react/dist/esm/icons/settings";
 import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizontal";
 import BookOpen from "lucide-react/dist/esm/icons/book-open";
