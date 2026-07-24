@@ -274,7 +274,7 @@ use shared::{
     codex_core, files_core, git_core, proxy_core, settings_core, thread_titles_core,
     workspaces_core, worktree_core,
 };
-use storage::{backup_corrupted_settings_file, read_settings, read_workspaces};
+use storage::{backup_corrupted_file, read_settings, read_workspaces};
 use types::{
     AppSettings, BranchInfo, GitBranchCompareCommitSets, GitBranchListItem, GitBranchUpdateResult,
     GitCommitDetails, GitCommitDiff, GitCommitFileChange, GitFileBlameResponse, GitFileDiff,

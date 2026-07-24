@@ -10,7 +10,7 @@ use crate::dictation::DictationState;
 use crate::engine::{EngineConfig, EngineManager, EngineType};
 use crate::shared::proxy_core;
 use crate::shared::settings_core::SettingsRecoveryNotice;
-use crate::storage::{backup_corrupted_settings_file, read_settings, read_workspaces};
+use crate::storage::{backup_corrupted_file, read_settings, read_workspaces};
 use crate::types::{AppSettings, WorkspaceEntry};
 use crate::workspaces::DetachedExternalChangeRuntime;
 
@@ -99,12 +99,16 @@ impl AppState {
         }
         let storage_path = data_dir.join("workspaces.json");
         let settings_path = data_dir.join("settings.json");
-        let workspaces = read_workspaces(&storage_path).unwrap_or_default();
+        let workspaces = read_workspaces(&storage_path).unwrap_or_else(|error| {
+            // Quarantine the corrupted file first so a later save never destroys it.
+            let _ = backup_corrupted_file(&storage_path, &error);
+            HashMap::new()
+        });
         let mut settings_recovery_notice = None;
         let app_settings = read_settings(&settings_path).unwrap_or_else(|error| {
             // Quarantine the corrupted file first so a later save never destroys it,
             // and record a one-shot notice so the frontend can tell the user what happened.
-            let backup_path = backup_corrupted_settings_file(&settings_path, &error);
+            let backup_path = backup_corrupted_file(&settings_path, &error);
             settings_recovery_notice = Some(SettingsRecoveryNotice {
                 backup_file_name: backup_path
                     .as_ref()
