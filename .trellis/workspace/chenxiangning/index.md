@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1093
+- **Total Sessions**: 1094
 - **Last Active**: 2026-07-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~454 | Active |
+| `journal-27.md` | ~504 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1094 | 2026-07-24 | OpenSpec 索引终态校准 | `6bb5fc5f0` | `feature/v-078` |
 | 1093 | 2026-07-24 | settings 损坏恢复通知链路打通（后端 recovery notice + 前端 toast + i18n） | `ae0927a17`, `615733516`, `9c395fa2d` | `feature/v-078` |
 | 1092 | 2026-07-24 | P0-1 settings 加载失败静默修复（损坏隔离备份 + 前端可见提示） | `a1dd0795b`, `c3d472a34` | `feature/v-078` |
 | 1091 | 2026-07-24 | SettingsView 摘除 ts-nocheck 并清理 skills 死分支 | `71ab03f58`, `29ef72543`, `37d545f4f`, `b1a2ea4a5`, `27ab8b906` | `feature/v-078` |

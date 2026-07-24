@@ -452,3 +452,53 @@ OpenSpec change notify-settings-recovery-after-corruption 已归档并同步主 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1094: OpenSpec 索引终态校准
+
+**Date**: 2026-07-24
+**Task**: OpenSpec 索引终态校准
+**Branch**: `feature/v-078`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+任务目标:对 2026-07-24 并行归档造成的 openspec 索引漂移做终态校准(纯文档,单 commit 闭环,参照 0a723b7ec 先例)。
+
+主要改动:
+- openspec/specs/README.md: 删除 agent-task-orchestration-center 索引死链(spec 已由 165758fe8 移除,空目录本 checkout 已不存在),按字母序补登 app-settings-corruption-recovery(A 组)与 settings-view-type-safety(S 组),计数 429 → 430
+- openspec/changes/archive/README.md: 补登 45 条 2026-07-18~24 漏登归档条目(07-18×2、07-19×2 新建分组、07-20×2、07-21×17 新建分组、07-22×14、07-23×7、07-24×1),Indexed proposals 720 → 721,2026-07 月度分组 142 → 188(基线预存漂移一并修);其余月度组账实相符未动
+- openspec/specs/app-settings-corruption-recovery/spec.md 与 settings-view-type-safety/spec.md: TBD Purpose 占位符补写为真实 Purpose(依据各自归档 proposal)
+- openspec/README.md / config.yaml / project.md / changes/README.md: 统一 active=4 / archived=721 / specs=430;project.md 修复 Current workspace state(717/429) 与 Current Inventory(713/429) 两处自相矛盾,Updated At  bump 至 2026-07-24,追加 Update History 条目
+
+验证结果:
+- specs 索引=spec.md 文件=目录=430,diff 为空;archive 索引=目录=721,diff 为空,无死链;六个月度分组账实全部相符;active 列表与 changes/ 实际 4 目录一致
+- openspec validate --all --strict --no-interactive: 434 passed, 0 failed
+- npm run typecheck: 通过(纯文档无影响)
+
+遗留问题:
+- 全仓库约 120 个 spec.md 的 Purpose 仍是归档模板 TBD 占位符(预存系统性问题,本次只修了两个新登记 spec)
+- openspec/changes/README.md 的 2026-07-24 批次描述行"23 个 verified proposal"为 prose 摘要(当日实际 27 个归档),不在三计数口径内未改
+- 工作区未跟踪文件 docs/reports/p0-reprioritized-decision-board-2026-07-24.md 属其他代理,未动
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6bb5fc5f0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
