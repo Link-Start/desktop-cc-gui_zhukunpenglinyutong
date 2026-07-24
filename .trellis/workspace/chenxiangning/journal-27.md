@@ -328,3 +328,57 @@ OpenSpec change remove-settings-view-ts-nocheck-and-skills-dead-branch(已归档
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1092: P0-1 settings 加载失败静默修复（损坏隔离备份 + 前端可见提示）
+
+**Date**: 2026-07-24
+**Task**: P0-1 settings 加载失败静默修复（损坏隔离备份 + 前端可见提示）
+**Branch**: `feature/v-078`
+
+### Summary
+
+OpenSpec change preserve-corrupted-app-settings-on-load 已归档并同步主 spec app-settings-corruption-recovery：后端 read_settings 失败时先将 settings.json 隔离备份为 .corrupted-<UTC ts>.bak 再回退默认值（GUI state.rs 与 daemon daemon_state.rs 两处 unwrap_or_default 调用点），防止后续保存覆盖写回导致用户设置不可逆丢失；前端 useAppSettings 加载 catch 补 console.error 与 pushErrorToast 用户可见提示。typecheck/eslint/focused Vitest 30/30/cargo storage 26/26/daemon_state 9/9/openspec strict 全部通过。
+
+### Main Changes
+
+### Main Changes
+
+- `src-tauri/src/storage.rs`：新增 `backup_corrupted_settings_file(path, error)`（rename 为 `settings.json.corrupted-%Y%m%dT%H%M%SZ.bak` + `[storage]` 日志）与两个单测；`read_settings` 函数体未动。
+- `src-tauri/src/state.rs` 与 `src-tauri/src/bin/cc_gui_daemon/daemon_state.rs`：两处 `unwrap_or_default()` 改 `unwrap_or_else`，失败先备份再回退 `AppSettings::default()`；`load()` 其他初始化语句未触碰。
+- `src/features/settings/hooks/useAppSettings.ts`：加载 catch 补 `console.error` + `pushErrorToast`（复用 `services/toasts`，`i18n.t(..., { defaultValue })` 带兜底，未新增 locale key）。
+- `useAppSettings.test.ts`：新增 reject 用例（defaults 保持、isLoading 收敛、toast 恰好一次）。
+- OpenSpec：`openspec/changes/archive/2026-07-24-preserve-corrupted-app-settings-on-load/` + `openspec/specs/app-settings-corruption-recovery/spec.md`；changes/README 与 archive/README 索引同步。
+
+### Testing
+
+- [OK] `npm run typecheck` exit 0（期间其他代理未提交的 SettingsView.tsx 报错与本 change 无关，其修复后全量通过）
+- [OK] `npx eslint`（2 个改动文件）无告警
+- [OK] `npx vitest run src/features/settings/hooks/useAppSettings.test.ts` 30/30（含 legacy Gemini 归一不回归）
+- [OK] `cargo test --lib storage` 26/26；`cargo test --bin cc_gui_daemon daemon_state` 9/9；`cargo check --bins` 通过
+- [OK] `openspec validate --specs --strict --no-interactive` 430/430
+
+### 邻近发现（未修复）
+
+- `read_workspaces(...).unwrap_or_default()`（state.rs 与 daemon_state.rs）对 workspaces.json 存在同类静默回退 + 覆盖写回风险。
+- 并行代理归档的 settings-view-type-safety 尚未补登 archive/README 索引（其负责方跟进）。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a1dd0795b` | (see git log) |
+| `c3d472a34` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
