@@ -183,3 +183,40 @@ OpenSpec change: remove-project-map-orchestration-center
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1088: 移除并归档 Project Map 编排中心
+
+**Date**: 2026-07-24
+**Task**: 移除并归档 Project Map 编排中心
+**Branch**: `feature/v-078`
+
+### Summary
+
+迁移 TaskRun 导航事件总线，移除 app-shell 与 layout 编排接线、编排中心模块及资产；保留 Kanban、Project Map 与幕布关联运行链路。完成 typecheck、lint、889/889 test files、OpenSpec strict validation、人工冷启动/Kanban/Project Map/banner smoke，并同步删除 main spec 后归档 change。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `929acbd75` | (see git log) |
+| `b83efeb9b` | (see git log) |
+| `fdf925f98` | (see git log) |
+| `49fdb2b4f` | (see git log) |
+| `165758fe8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

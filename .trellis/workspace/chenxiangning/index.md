@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1087
+- **Total Sessions**: 1088
 - **Last Active**: 2026-07-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~185 | Active |
+| `journal-27.md` | ~222 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1088 | 2026-07-24 | 移除并归档 Project Map 编排中心 | `929acbd75`, `b83efeb9b`, `fdf925f98`, `49fdb2b4f`, `165758fe8` | `feature/v-078` |
 | 1087 | 2026-07-24 | 移除 Project Map 编排中心 S1-S4 | `929acbd75`, `b83efeb9b`, `fdf925f98`, `49fdb2b4f` | `feature/v-078` |
 | 1086 | 2026-07-24 | 清理未使用客户端模块 | `d1a90dddd7` | `feature/v-078` |
 | 1085 | 2026-07-24 | OpenSpec 批量归档 19 个已验证提案 | `af472a2c4` | `feature/v-078` |
