@@ -1013,3 +1013,36 @@ Note: 中间 6eca222b3 为并行代理的 trellis 记录提交；未执行 archi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1110: 合并 upstream 0.7.9 README 更新
+
+**Date**: 2026-07-25
+**Task**: 合并 upstream 0.7.9 README 更新
+**Branch**: `feature/v-799`
+
+### Summary
+
+将 upstream/chore/bump-version-0.7.9 合并到 feature/v-799；保留本地 31 个提交并引入 upstream acknowledgements，变更仅涉及 README.md 与 README.zh-CN.md，无冲突。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f7ad30eac` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
