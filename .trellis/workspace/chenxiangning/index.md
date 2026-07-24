@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1090
+- **Total Sessions**: 1091
 - **Last Active**: 2026-07-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~289 | Active |
+| `journal-27.md` | ~330 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1091 | 2026-07-24 | SettingsView 摘除 ts-nocheck 并清理 skills 死分支 | `71ab03f58`, `29ef72543`, `37d545f4f`, `b1a2ea4a5`, `27ab8b906` | `feature/v-078` |
 | 1090 | 2026-07-24 | 修复引擎二元假设并收敛 isValidModelId 校验 | `38e139b37`, `bfb61b9e2` | `feature/v-078` |
 | 1089 | 2026-07-24 | P0-4 openspec specs 索引补登与计数校准 | `0a723b7ec` | `feature/v-078` |
 | 1088 | 2026-07-24 | 移除并归档 Project Map 编排中心 | `929acbd75`, `b83efeb9b`, `fdf925f98`, `49fdb2b4f`, `165758fe8` | `feature/v-078` |

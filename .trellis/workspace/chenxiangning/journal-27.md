@@ -287,3 +287,44 @@ OpenSpec change fix-engine-attribution-and-model-id-validation:EngineTaskOutputE
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1091: SettingsView 摘除 ts-nocheck 并清理 skills 死分支
+
+**Date**: 2026-07-24
+**Task**: P0-3 SettingsView.tsx 摘 @ts-nocheck + 删 skills 死分支
+**Branch**: `feature/v-078`
+
+### Summary
+
+OpenSpec change remove-settings-view-ts-nocheck-and-skills-dead-branch(已归档为 2026-07-24-remove-settings-view-ts-nocheck-and-skills-dead-branch):删除 SettingsView.tsx 中恒为 false 的 `activeSection === "skills"` 不可达分支(curated skills 已迁至 MCP skills subtab),修复残余 5 个 TS6133 unused import 报错(ChevronDown/ChevronUp/Trash2/getDefaultInterruptShortcut/SessionRadarHistoryDeleteResult),最终摘除第 1 行 `// @ts-nocheck`。新 capability `settings-view-type-safety` 已同步主 specs。
+
+### Main Changes
+
+- src/features/settings/components/SettingsView.tsx:删死分支 14 行、清理 5 个 unused import、摘 @ts-nocheck(唯一改动的代码文件)
+- openspec:新增并归档 change;新增 openspec/specs/settings-view-type-safety/spec.md
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `71ab03f58` | docs(openspec): 新增提案 |
+| `29ef72543` | refactor(settings): 删除不可达 skills 死分支 |
+| `37d545f4f` | fix(settings): 清理未使用 import 修复残余 tsc 报错 |
+| `b1a2ea4a5` | refactor(settings): 摘除 ts-nocheck |
+| `27ab8b906` | chore(openspec): 同步主规范并归档 |
+
+### Testing
+
+- [OK] `npm run typecheck`(tsc --noEmit)exit 0
+- [OK] `npx eslint src/features/settings/components/SettingsView.tsx` 通过
+- [OK] `npx vitest run src/features/settings/components/SettingsView.test.tsx` 52/52 通过
+- [OK] `openspec validate --all --strict` 434/434 通过
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
