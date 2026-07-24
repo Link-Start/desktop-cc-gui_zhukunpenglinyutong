@@ -1113,3 +1113,36 @@ dictation real.rs 电平事件从 33ms 30fps 降至 100ms 10fps，相同 value �
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1113: 更新 P0 决策看板记录轮询优化
+
+**Date**: 2026-07-25
+**Task**: 更新 P0 决策看板记录轮询优化
+**Branch**: `feature/v-799`
+
+### Summary
+
+docs/reports/p0-reprioritized-decision-board 新增第〇·四节，记录 5 处常驻轮询优化完成
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e1e5f2db` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

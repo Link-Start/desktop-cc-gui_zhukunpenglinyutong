@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1112
+- **Total Sessions**: 1113
 - **Last Active**: 2026-07-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~1115 | Active |
+| `journal-27.md` | ~1148 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1113 | 2026-07-25 | 更新 P0 决策看板记录轮询优化 | `1e1e5f2db` | `feature/v-799` |
 | 1112 | 2026-07-25 | 录音电平事件降频 | `9ca8d2b19` | `feature/v-799` |
 | 1111 | 2026-07-25 | 降低客户端常驻轮询开销 | `d042e5018`, `f4a81691b` | `feature/v-799` |
 | 1110 | 2026-07-25 | 合并 upstream 0.7.9 README 更新 | `f7ad30eac` | `feature/v-799` |
