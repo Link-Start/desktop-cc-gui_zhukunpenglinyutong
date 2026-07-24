@@ -163,7 +163,11 @@ impl DaemonState {
         let storage_path = config.data_dir.join("workspaces.json");
         let settings_path = config.data_dir.join("settings.json");
         let workspaces = read_workspaces(&storage_path).unwrap_or_default();
-        let app_settings = read_settings(&settings_path).unwrap_or_default();
+        let app_settings = read_settings(&settings_path).unwrap_or_else(|error| {
+            // Quarantine the corrupted file first so a later save never destroys it.
+            backup_corrupted_settings_file(&settings_path, &error);
+            AppSettings::default()
+        });
         let active_engine = resolve_supported_daemon_active_engine(
             &app_settings,
             app_settings.default_engine.as_deref(),
