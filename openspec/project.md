@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: active changes = `4`, archive changes = `640`, main specs = `406`
+- Current workspace state: active changes = `4`, archive changes = `717`, main specs = `429`
 
 ## Entry Surfaces
 

@@ -3,9 +3,9 @@
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
 - Updated At: `2026-07-24`
-- Active proposals: `4`
+- Active proposals: `5`
 - Archived proposals: `717`
-- Main capability specs: `428`
+- Main capability specs: `429`
 
 ## Active Proposals
 
@@ -15,6 +15,7 @@
 | [`add-vendor-cli-lifecycle-header`](add-vendor-cli-lifecycle-header/proposal.md) | 11/12 | 手工：未安装 / 最新 / outdated / npm view 失败 / 安装后刷新 smoke | [design](add-vendor-cli-lifecycle-header/design.md) · [tasks](add-vendor-cli-lifecycle-header/tasks.md) · [specs](add-vendor-cli-lifecycle-header/specs/) |
 | [`enable-claude-lightweight-streaming-and-frame-attribution`](enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) | 15/18 | Claude-stream trace、final fidelity 与 archive gate | [design](enable-claude-lightweight-streaming-and-frame-attribution/design.md) · [tasks](enable-claude-lightweight-streaming-and-frame-attribution/tasks.md) · [specs](enable-claude-lightweight-streaming-and-frame-attribution/specs/) · [verification](enable-claude-lightweight-streaming-and-frame-attribution/verification.md) |
 | [`stabilize-client-runtime-and-diagnostics`](stabilize-client-runtime-and-diagnostics/proposal.md) | 21/22 | Quantified frame / first-delta trace retention | [design](stabilize-client-runtime-and-diagnostics/design.md) · [tasks](stabilize-client-runtime-and-diagnostics/tasks.md) · [specs](stabilize-client-runtime-and-diagnostics/specs/) · [verification](stabilize-client-runtime-and-diagnostics/verification.md) |
+| [`preserve-corrupted-app-settings-on-load`](preserve-corrupted-app-settings-on-load/proposal.md) | 0/6 | implementation in progress | [tasks](preserve-corrupted-app-settings-on-load/tasks.md) · [specs](preserve-corrupted-app-settings-on-load/specs/) |
 ## Archived Proposals
 
 - [完整归档提案索引](archive/README.md) — 717 个 proposal，按月份 / 归档日期分组。
