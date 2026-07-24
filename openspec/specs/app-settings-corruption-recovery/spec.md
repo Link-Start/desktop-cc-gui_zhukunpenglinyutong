@@ -1,7 +1,8 @@
 # app-settings-corruption-recovery Specification
 
 ## Purpose
-TBD - created by archiving change preserve-corrupted-app-settings-on-load. Update Purpose after archive.
+
+Defines the app-settings-corruption-recovery behavior contract, covering settings load corruption handling: backend MUST quarantine an unreadable or unparseable `settings.json` into a timestamped `.corrupted-<timestamp>.bak` backup before falling back to defaults, record a one-shot recovery notice consumed via `take_settings_recovery_notice`, and the frontend MUST surface load failures and post-recovery notices through localized toasts while keeping normal settings normalization behavior unchanged.
 ## Requirements
 ### Requirement: Backend Settings Load MUST Preserve Corrupted Files Before Fallback
 

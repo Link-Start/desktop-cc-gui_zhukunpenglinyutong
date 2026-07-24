@@ -1,7 +1,7 @@
 # Project Context
 
 - Type: OpenSpec Workspace
-- Updated At: 2026-07-18T21:00:00+08:00
+- Updated At: 2026-07-24T20:46:00+08:00
 - Scope: governance snapshot for the current `mossx` repository workspace
 - Product version fact: `ccgui@0.7.5` from `package.json` and `src-tauri/tauri.conf.json`
 
@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: active changes = `4`, archive changes = `717`, main specs = `429`
+- Current workspace state: active changes = `4`, archive changes = `721`, main specs = `430`
 
 ## Entry Surfaces
 
@@ -65,8 +65,8 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 ## Current Inventory
 
 - Active changes: `4`
-- Archive changes: `713`
-- Main specs: `429`
+- Archive changes: `721`
+- Main specs: `430`
 - Completed task sets still active: `0`
 - Ready-for-implementation task sets: `0`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
@@ -388,6 +388,7 @@ npm run check:large-files
 
 ## Update History
 
+- 2026-07-24: Performed a terminal-state index calibration after same-day parallel archive waves drifted the indexes. Removed the `agent-task-orchestration-center` dead link from the specs index (its spec was deleted by the orchestration-center removal archive), registered `app-settings-corruption-recovery` and `settings-view-type-safety`, backfilled 45 missing 2026-07-18~24 entries in the archive index, calibrated the 2026-07 monthly group count 142 → 188, replaced the two new specs' TBD Purpose placeholders, and unified current counts to active=4, archive=721, specs=430. No product code was modified.
 - 2026-07-18: Reconciled four active change directories and added `stabilize-client-runtime-and-diagnostics` verification evidence. Current counts are active=4, archive=640, specs=406; one 21/22 performance-trace gate and two other manual acceptance backlogs remain active.
 - 2026-07-18: Archived `harden-conversation-rendering-for-large-history` under explicit product-owner acceptance and synced ten implemented requirements into five existing main specs; archived `2026-06-22-release-pipeline-cache-sccache` as a failed performance experiment without syncing its invalid success contract. Current counts are active=2, archive=640, specs=406. No product code was modified.
 - 2026-07-17: Re-audited project documentation against manifests, workflows, and current code; refreshed the working-tree inventory to active=11, archive=631, specs=403; added complete docs/OpenSpec navigation indexes; corrected runtime, locale, storage, CI, and workflow facts; and repaired project-owned documentation links. No business code was modified.

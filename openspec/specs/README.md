@@ -1,6 +1,6 @@
 # OpenSpec Main Specs 索引
 
-`openspec/specs/*/spec.md` 是已经同步进入 mainline 的 capability behavior truth。当前索引覆盖 **429** 个 capability，并按 capability id 首字母分组。
+`openspec/specs/*/spec.md` 是已经同步进入 mainline 的 capability behavior truth。当前索引覆盖 **430** 个 capability，并按 capability id 首字母分组。
 
 ## 使用边界
 
@@ -15,10 +15,10 @@
 - [agent-domain-event-schema](./agent-domain-event-schema/spec.md)
 - [agent-startup-selection-stability](./agent-startup-selection-stability/spec.md)
 - [agent-task-center](./agent-task-center/spec.md)
-- [agent-task-orchestration-center](./agent-task-orchestration-center/spec.md)
 - [agent-task-run-history](./agent-task-run-history/spec.md)
 - [app-server-event-batching](./app-server-event-batching/spec.md)
 - [app-server-event-stream-pacing](./app-server-event-stream-pacing/spec.md)
+- [app-settings-corruption-recovery](./app-settings-corruption-recovery/spec.md)
 - [app-shell-domain-context-isolation](./app-shell-domain-context-isolation/spec.md)
 - [app-shell-exhaustive-deps-stability](./app-shell-exhaustive-deps-stability/spec.md)
 - [app-shell-runtime-boundaries](./app-shell-runtime-boundaries/spec.md)
@@ -413,6 +413,7 @@
 - [settings-local-usage-analytics](./settings-local-usage-analytics/spec.md)
 - [settings-navigation-consolidation](./settings-navigation-consolidation/spec.md)
 - [settings-surface-redesign-shortcuts](./settings-surface-redesign-shortcuts/spec.md)
+- [settings-view-type-safety](./settings-view-type-safety/spec.md)
 - [shared-markdown-renderer](./shared-markdown-renderer/spec.md)
 - [shared-message-domain-helpers](./shared-message-domain-helpers/spec.md)
 - [shared-session-engine-selection](./shared-session-engine-selection/spec.md)

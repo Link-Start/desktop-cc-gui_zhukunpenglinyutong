@@ -1,7 +1,8 @@
 # settings-view-type-safety Specification
 
 ## Purpose
-TBD - created by archiving change remove-settings-view-ts-nocheck-and-skills-dead-branch. Update Purpose after archive.
+
+Defines the settings-view-type-safety behavior contract, covering SettingsView shell hygiene: the shell MUST NOT retain render branches keyed on `activeSection` values outside the `SettingsViewSection` union (dead branches and their dead references are removed together), and the file MUST remain under full typecheck protection without a `// @ts-nocheck` directive, with residual type errors fixed inside the file boundary and without changing `settings-view/` child component props contracts.
 ## Requirements
 ### Requirement: SettingsView shell remains free of unreachable section branches
 
