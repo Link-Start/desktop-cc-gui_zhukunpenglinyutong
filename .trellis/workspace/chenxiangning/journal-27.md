@@ -743,3 +743,37 @@ Note: 中间 6eca222b3 为并行代理的 trellis 记录提交；未执行 archi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1102: 移除 JCEF bridge no-op 桩与死链调用点 (remove-jcef-bridge-noop-stubs)
+
+**Date**: 2026-07-24
+**Task**: 移除 JCEF bridge no-op 桩与死链调用点 (remove-jcef-bridge-noop-stubs)
+**Branch**: `feature/v-799`
+
+### Summary
+
+删除 composer/utils/bridge.ts(73 行全 no-op)与 providers/createBridgeProvider.ts(231 行零引用);清理 slashCommandProvider/promptProvider 的 sendBridgeEvent 死路与 window.updateSlashCommands 注册,移除 useInputHistory 7 处 sendToJava 死写;测试改用 __pendingSlashCommands 注入。typecheck/eslint/vitest(44+545)全绿。注意:并行代理竞态导致 7 个文件被卷入 e20e5d147,删除操作独立提交于 51ecca64a。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e20e5d147` | (see git log) |
+| `51ecca64a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
