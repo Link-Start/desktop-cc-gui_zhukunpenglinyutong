@@ -3,7 +3,7 @@
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
 - Updated At: `2026-07-24`
-- Indexed proposals: `719`
+- Indexed proposals: `720`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
@@ -37,6 +37,7 @@
 - [`2026-07-24-remove-project-map-orchestration-center`](2026-07-24-remove-project-map-orchestration-center/proposal.md) — verified implementation，已移除 `agent-task-orchestration-center` main capability spec
 - [`2026-07-24-fix-engine-attribution-and-model-id-validation`](2026-07-24-fix-engine-attribution-and-model-id-validation/proposal.md) — verified implementation，已同步 `engine-task-output-inspector` 与 `composer-model-selector-config-actions`
 - [`2026-07-24-preserve-corrupted-app-settings-on-load`](2026-07-24-preserve-corrupted-app-settings-on-load/proposal.md) — verified implementation，已同步 `app-settings-corruption-recovery`
+- [`2026-07-24-notify-settings-recovery-after-corruption`](2026-07-24-notify-settings-recovery-after-corruption/proposal.md) — verified implementation，已同步 `app-settings-corruption-recovery`：quarantine 记录一次性 recovery notice，前端加载成功后弹一次本地化 toast
 
 ### 2026-07-23
 
