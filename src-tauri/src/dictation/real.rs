@@ -1243,10 +1243,18 @@ fn start_capture_thread(
     let level_task_value = level_value.clone();
     let level_task_running = running.clone();
     std::thread::spawn(move || {
+        // 100ms (~10fps) 对人眼足够平滑，且能显著降低前端 setState 频率与 IPC 耗电。
+        // 相同 value 跳过 emit，避免静默期无意义事件。
+        const LEVEL_EMIT_INTERVAL_MS: u64 = 100;
+        let mut last_emitted_bits: u32 = 0;
         while level_task_running.load(Ordering::Relaxed) {
-            let value = f32::from_bits(level_task_value.load(Ordering::Relaxed));
-            emit_event(&level_task_app, DictationEvent::Level { value });
-            std::thread::sleep(Duration::from_millis(33));
+            let bits = level_task_value.load(Ordering::Relaxed);
+            let value = f32::from_bits(bits);
+            if bits != last_emitted_bits {
+                emit_event(&level_task_app, DictationEvent::Level { value });
+                last_emitted_bits = bits;
+            }
+            std::thread::sleep(Duration::from_millis(LEVEL_EMIT_INTERVAL_MS));
         }
     });
 
