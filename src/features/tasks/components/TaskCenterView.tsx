@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TaskRunRecord, TaskRunStatus } from "../types";
+import { dispatchOpenOrchestrationTaskEvent } from "../../agent-orchestration/utils/navigationEvents";
 import {
   OPEN_TASK_RUN_EVENT,
-  dispatchOpenOrchestrationTaskEvent,
   readOpenTaskRunEvent,
-} from "../../agent-orchestration/utils/navigationEvents";
+} from "../utils/taskRunNavigationEvents";
 import {
   compareTaskRunSurfacePriority,
   describeTaskRunSurface,

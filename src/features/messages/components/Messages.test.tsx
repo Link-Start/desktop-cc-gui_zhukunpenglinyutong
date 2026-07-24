@@ -13,7 +13,7 @@ import type { ConversationItem } from "../../../types";
 import {
   OPEN_TASK_RUN_EVENT,
   readOpenTaskRunEvent,
-} from "../../agent-orchestration/utils/navigationEvents";
+} from "../../tasks/utils/taskRunNavigationEvents";
 import type { TaskRunRecord } from "../../tasks/types";
 import { Messages } from "./Messages";
 
