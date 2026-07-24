@@ -119,7 +119,6 @@
 | `src/features/spec/hooks/useSpecHub.ts` | 1694 | ts/tsx | feature-hotpath | P1 | 2400 | 800 | fail | captured |  |  |
 | `src/features/project-map/components/ProjectMapPanel.test.tsx` | 1675 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
 | `src/styles/git-history.part2.css` | 1646 | css | styles | P1 | 2200 | 800 | fail | captured |  |  |
-| `src/features/composer/components/ComposerInput.tsx` | 1634 | ts/tsx | feature-hotpath | P1 | 2400 | 800 | fail | captured |  |  |
 | `src/lib/spec-core/runtime.ts` | 1626 | ts/tsx | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src-tauri/src/runtime/tests.rs` | 1623 | rust | bridge-runtime-critical | P0 | 2200 | 800 | fail | captured |  |  |
 | `src/features/threads/hooks/useThreadItemEvents.test.ts` | 1603 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
@@ -283,4 +282,3 @@
 | `src-tauri/src/browser_agent/toolbar.rs` | 806 | rust | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src/features/messages/components/Messages.runtime-reconnect.test.tsx` | 806 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
 | `.claude/hooks/inject-subagent-context.py` | 803 | py | default-source | P1 | 2600 | 800 | fail | captured |  |  |
-

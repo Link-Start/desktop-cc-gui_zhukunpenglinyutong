@@ -3,12 +3,12 @@
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
 - Updated At: `2026-07-24`
-- Indexed proposals: `713`
+- Indexed proposals: `716`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-07 (136)
+## 2026-07 (139)
 
 ### 2026-07-24
 
@@ -31,6 +31,9 @@
 - [`2026-07-24-add-git-diff-section-line-count-badge`](2026-07-24-add-git-diff-section-line-count-badge/proposal.md) — verified implementation，已同步 `git-panel-diff-view` 与 `multi-repository-git-commit-workspace`
 - [`2026-07-24-enable-file-history-resizable-pane-and-diff-horizontal-scroll`](2026-07-24-enable-file-history-resizable-pane-and-diff-horizontal-scroll/proposal.md) — verified implementation，已同步 `file-history-view` 与 `git-panel-diff-view`
 - [`2026-07-24-add-extensions-management-surface`](2026-07-24-add-extensions-management-surface/proposal.md) — verified implementation，已同步 `extensions-management-surface`
+- [`2026-07-24-remove-legacy-composer-input-implementation`](2026-07-24-remove-legacy-composer-input-implementation/proposal.md) — verified dead-code removal，未修改 capability specs
+- [`2026-07-24-remove-parallel-orphan-module`](2026-07-24-remove-parallel-orphan-module/proposal.md) — verified orphan-module removal，未修改 capability specs
+- [`2026-07-24-remove-search-workspace-indexing-layer`](2026-07-24-remove-search-workspace-indexing-layer/proposal.md) — verified dead-code removal，未修改 capability specs
 
 ### 2026-07-23
 

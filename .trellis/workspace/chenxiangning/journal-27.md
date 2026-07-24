@@ -96,3 +96,36 @@ openspec-bulk-archive-change:19 个 verified change 按时间序归档并合并 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1086: 清理未使用客户端模块
+
+**Date**: 2026-07-24
+**Task**: 清理未使用客户端模块
+**Branch**: `feature/v-078`
+
+### Summary
+
+删除 legacy ComposerInput、parallel orphan module 与未接线 search workspace indexing layer；同步 large-file JSON/Markdown baseline；归档并索引 3 个 OpenSpec change。验证 lint、typecheck、902 个 test files、OpenSpec strict validation 433 项通过；large-file gate 仍受仓库既有 baseline debt 阻塞，与本变更无关。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d1a90dddd7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
