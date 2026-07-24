@@ -605,3 +605,36 @@ OpenSpec change remove-settings-view-dead-entry-switches：删除 settingsViewCo
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1098: 接线语义 diff AI review 按需生产者 (add-ai-review-producer-wiring)
+
+**Date**: 2026-07-24
+**Task**: 接线语义 diff AI review 按需生产者 (add-ai-review-producer-wiring)
+**Branch**: `feature/v-799`
+
+### Summary
+
+新增 turnSemanticReview utils(prompt 构建/解析校验/引擎调用)与 useTurnSemanticReview hook(semantic tab 按需触发 + per-turn cache + 失败静默降级),接线 WorkspaceSessionActivityPanel;24 focused tests + 67 panel 回归全过,typecheck/eslint/openspec validate 通过
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `053cfbc04` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
