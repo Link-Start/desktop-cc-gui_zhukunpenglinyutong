@@ -133,6 +133,26 @@ const sidebar = {
     "quickSkills": "Skills",
     "releaseNotes": "릴리스 노트",
     "threadsSection": "스레드"
+  },
+  "extensions": {
+    "usage": {
+      "checkingLabel": "tokentracker-cli 확인 중…",
+      "installingLabel": "tokentracker-cli 설치 중…",
+      "installingDesc": "잠시 걸릴 수 있습니다. 설치가 끝나면 앱이 다시 확인하고 로컬 서버를 시작합니다.",
+      "startingLabel": "tokentracker 서버 시작 중…",
+      "guideTitle": "사용 통계를 볼 수 있도록 tokentracker-cli를 설치하세요",
+      "guideDesc": "사용 통계는 tokentracker-cli가 제공합니다. 로컬 서버를 실행해 AI 도구들의 토큰 사용량을 모아 대시보드로 보여줍니다.",
+      "guideInstallLabel": "설치 명령어",
+      "guideInstallNow": "지금 설치",
+      "guideCopy": "복사",
+      "guideCopied": "복사됨",
+      "guideOpenNpm": "npm 페이지 열기",
+      "guideRecheck": "다시 감지",
+      "guideNoteHooks": "첫 실행 시 tokentracker 서버는 설치된 AI 도구에 hooks를 작성합니다(이것이 데이터 수집 방식입니다).",
+      "guideNoteTelemetry": "이 앱은 익명 텔레메트리를 비활성화했습니다.",
+      "errorTitle": "tokentracker 서버 시작 실패",
+      "errorRetry": "다시 시도"
+    }
   }
 };
 

@@ -133,6 +133,26 @@ const sidebar = {
     "quickSkills": "Skills",
     "releaseNotes": "Notes de version",
     "threadsSection": "Fils"
+  },
+  "extensions": {
+    "usage": {
+      "checkingLabel": "Vérification de tokentracker-cli…",
+      "installingLabel": "Installation de tokentracker-cli…",
+      "installingDesc": "Cela peut prendre une minute. L'application vérifiera à nouveau et démarrera le serveur local une fois l'installation terminée.",
+      "startingLabel": "Démarrage du serveur tokentracker…",
+      "guideTitle": "Installez tokentracker-cli pour voir les statistiques d'utilisation",
+      "guideDesc": "Les statistiques d'utilisation sont fournies par tokentracker-cli. Il exécute un serveur local qui agrège l'utilisation des tokens de vos outils IA et les affiche dans un tableau de bord.",
+      "guideInstallLabel": "Commande d'installation",
+      "guideInstallNow": "Installer maintenant",
+      "guideCopy": "Copier",
+      "guideCopied": "Copié",
+      "guideOpenNpm": "Ouvrir la page npm",
+      "guideRecheck": "Revérifier",
+      "guideNoteHooks": "Au premier démarrage, le serveur tokentracker écrit des hooks dans vos outils IA installés (c'est ainsi qu'il collecte les données d'utilisation).",
+      "guideNoteTelemetry": "Cette application a désactivé la télémétrie anonyme.",
+      "errorTitle": "Échec du démarrage du serveur tokentracker",
+      "errorRetry": "Réessayer"
+    }
   }
 };
 

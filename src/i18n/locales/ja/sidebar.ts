@@ -133,6 +133,26 @@ const sidebar = {
     "quickSkills": "Skills",
     "releaseNotes": "リリースノート",
     "threadsSection": "スレッド"
+  },
+  "extensions": {
+    "usage": {
+      "checkingLabel": "tokentracker-cli を確認しています…",
+      "installingLabel": "tokentracker-cli をインストールしています…",
+      "installingDesc": "少し時間がかかる場合があります。インストール後、アプリが再検出してローカルサーバーを起動します。",
+      "startingLabel": "tokentracker サーバーを起動しています…",
+      "guideTitle": "使用統計を見るには tokentracker-cli をインストール",
+      "guideDesc": "使用統計は tokentracker-cli が提供します。ローカルサーバーを起動し、各 AI ツールのトークン使用量を集約してダッシュボードに表示します。",
+      "guideInstallLabel": "インストールコマンド",
+      "guideInstallNow": "今すぐインストール",
+      "guideCopy": "コピー",
+      "guideCopied": "コピーしました",
+      "guideOpenNpm": "npm ページを開く",
+      "guideRecheck": "再検出",
+      "guideNoteHooks": "初回起動時、tokentracker サーバーはインストール済みの AI ツールに hooks を書き込みます（これがデータ収集の仕組みです）。",
+      "guideNoteTelemetry": "本アプリでは匿名テレメトリを無効化しています。",
+      "errorTitle": "tokentracker サーバーの起動に失敗しました",
+      "errorRetry": "再試行"
+    }
   }
 };
 

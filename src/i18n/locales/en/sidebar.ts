@@ -176,6 +176,27 @@ const sidebar = {
       commands: "Coming soon",
       subagents: "Coming soon",
     },
+    usage: {
+      checkingLabel: "Checking for tokentracker-cli…",
+      installingLabel: "Installing tokentracker-cli…",
+      installingDesc:
+        "This may take a minute. The app will re-check and start the local server when installation finishes.",
+      startingLabel: "Starting the tokentracker server…",
+      guideTitle: "Install tokentracker-cli to see usage stats",
+      guideDesc:
+        "Usage stats are provided by tokentracker-cli. It runs a local server that aggregates token usage from your AI tools and renders it as a dashboard.",
+      guideInstallLabel: "Install command",
+      guideInstallNow: "Install now",
+      guideCopy: "Copy",
+      guideCopied: "Copied",
+      guideOpenNpm: "Open npm page",
+      guideRecheck: "Re-check",
+      guideNoteHooks:
+        "On first launch, the tokentracker server writes hooks into your installed AI tools — that is how it collects usage data.",
+      guideNoteTelemetry: "Anonymous telemetry is disabled by this app.",
+      errorTitle: "Failed to start the tokentracker server",
+      errorRetry: "Retry",
+    },
   },
 };
 

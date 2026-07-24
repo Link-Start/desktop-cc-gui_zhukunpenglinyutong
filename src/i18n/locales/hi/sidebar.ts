@@ -133,6 +133,26 @@ const sidebar = {
     "quickSkills": "Skills",
     "releaseNotes": "रिलीज़ नोट्स",
     "threadsSection": "थ्रेड्स"
+  },
+  "extensions": {
+    "usage": {
+      "checkingLabel": "tokentracker-cli की जाँच हो रही है…",
+      "installingLabel": "tokentracker-cli इंस्टॉल हो रहा है…",
+      "installingDesc": "इसमें थोड़ा समय लग सकता है। इंस्टॉल पूरा होने पर ऐप फिर से जाँच करेगा और स्थानीय सर्वर शुरू करेगा।",
+      "startingLabel": "tokentracker सर्वर शुरू हो रहा है…",
+      "guideTitle": "उपयोग आँकड़े देखने के लिए tokentracker-cli इंस्टॉल करें",
+      "guideDesc": "उपयोग आँकड़े tokentracker-cli द्वारा प्रदान किए जाते हैं। यह एक लोकल सर्वर चलाता है जो आपके AI टूल्स के token उपयोग को एकत्र कर डैशबोर्ड पर दिखाता है।",
+      "guideInstallLabel": "इंस्टॉल कमांड",
+      "guideInstallNow": "अभी इंस्टॉल करें",
+      "guideCopy": "कॉपी करें",
+      "guideCopied": "कॉपी हो गया",
+      "guideOpenNpm": "npm पेज खोलें",
+      "guideRecheck": "फिर से जाँचें",
+      "guideNoteHooks": "पहली बार शुरू होने पर, tokentracker सर्वर इंस्टॉल किए गए AI टूल्स में hooks लिखता है (यही इसका डेटा संग्रह तरीका है)।",
+      "guideNoteTelemetry": "इस ऐप ने इसके लिए अनाम टेलीमेट्री बंद कर दी है।",
+      "errorTitle": "tokentracker सर्वर शुरू नहीं हो सका",
+      "errorRetry": "पुनः प्रयास करें"
+    }
   }
 };
 

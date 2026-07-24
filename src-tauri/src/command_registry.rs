@@ -369,6 +369,12 @@ pub(crate) fn invoke_handler(
         // Local usage
         crate::local_usage::local_usage_snapshot,
         crate::local_usage::local_usage_statistics,
+        // TokenTracker
+        crate::tokentracker::tt_detect_cli,
+        crate::tokentracker::tt_server_status,
+        crate::tokentracker::tt_install_cli,
+        crate::tokentracker::tt_ensure_server,
+        crate::tokentracker::tt_proxy,
         // Client storage
         crate::client_storage::client_store_read,
         crate::client_storage::client_store_write,

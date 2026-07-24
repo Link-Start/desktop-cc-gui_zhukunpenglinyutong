@@ -13,6 +13,8 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 
+import { UsageDashboardSection } from "./UsageDashboardSection";
+
 const SECTION_TABS = ["usage", "framework"] as const;
 
 const SECTION_TAB_ICONS = {
@@ -50,9 +52,11 @@ export function ExtensionsView() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<ActiveTab>("usage");
   const PanelIcon = PANEL_ICONS[activeTab];
+  const viewClassName =
+    activeTab === "usage" ? "extensions-view extensions-view-usage" : "extensions-view";
 
   return (
-    <section className="extensions-view" aria-label={t("extensions.title")}>
+    <section className={viewClassName} aria-label={t("extensions.title")}>
       <div className="extensions-filter-row">
         <div className="extensions-section-group" role="group" aria-label={t("extensions.sectionsLabel")}>
           {SECTION_TABS.map((tab) => {
@@ -91,21 +95,25 @@ export function ExtensionsView() {
         ))}
       </div>
 
-      <div className="extensions-empty-panel">
-        <div className="extensions-empty-panel-icon" aria-hidden>
-          <PanelIcon size={20} />
+      {activeTab === "usage" ? (
+        <UsageDashboardSection />
+      ) : (
+        <div className="extensions-empty-panel">
+          <div className="extensions-empty-panel-icon" aria-hidden>
+            <PanelIcon size={20} />
+          </div>
+          <div className="extensions-empty-panel-copy">
+            <h2>{t(`extensions.panelTitles.${activeTab}`)}</h2>
+            <p>{t(`extensions.descriptions.${activeTab}`)}</p>
+          </div>
+          <div className="extensions-empty-panel-preview" aria-hidden>
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
         </div>
-        <div className="extensions-empty-panel-copy">
-          <h2>{t(`extensions.panelTitles.${activeTab}`)}</h2>
-          <p>{t(`extensions.descriptions.${activeTab}`)}</p>
-        </div>
-        <div className="extensions-empty-panel-preview" aria-hidden>
-          <span />
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
+      )}
     </section>
   );
 }

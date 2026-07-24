@@ -173,6 +173,27 @@ const sidebar = {
       commands: "即将实现",
       subagents: "即将实现",
     },
+    usage: {
+      checkingLabel: "正在检测 tokentracker-cli…",
+      installingLabel: "正在安装 tokentracker-cli…",
+      installingDesc:
+        "可能需要一点时间。安装完成后，本应用会自动重新检测并启动本地服务。",
+      startingLabel: "正在启动 tokentracker 服务…",
+      guideTitle: "安装 tokentracker-cli 查看使用统计",
+      guideDesc:
+        "使用统计由GitHub开源项目 tokentracker-cli 提供。它在本机运行一个本地服务，汇总各 AI 工具的 token 用量，并以仪表盘展示。",
+      guideInstallLabel: "安装命令",
+      guideInstallNow: "一键安装",
+      guideCopy: "复制",
+      guideCopied: "已复制",
+      guideOpenNpm: "打开 npm 页面",
+      guideRecheck: "重新检测",
+      guideNoteHooks:
+        "首次启动时，tokentracker 服务会向已安装的 AI 工具写入 hooks（这是它的数据采集机制）。",
+      guideNoteTelemetry: "本应用已为其关闭匿名遥测。",
+      errorTitle: "tokentracker 服务启动失败",
+      errorRetry: "重试",
+    },
   },
 };
 

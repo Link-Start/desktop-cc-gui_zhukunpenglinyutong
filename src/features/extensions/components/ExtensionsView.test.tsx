@@ -34,6 +34,10 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
+vi.mock("./UsageDashboardSection", () => ({
+  UsageDashboardSection: () => <div data-testid="usage-dashboard-section" />,
+}));
+
 describe("ExtensionsView", () => {
   it("renders the section pills and extension tabs in the requested order", () => {
     render(<ExtensionsView />);
@@ -71,8 +75,9 @@ describe("ExtensionsView", () => {
 
     expect(screen.getByRole("button", { name: "Usage" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Skills" }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByRole("heading", { name: "Usage" })).toBeTruthy();
-    expect(screen.getByText("Coming soon")).toBeTruthy();
+    expect(screen.getByTestId("usage-dashboard-section")).toBeTruthy();
+    expect(screen.getByLabelText("Extensions").classList.contains("extensions-view-usage")).toBe(true);
+    expect(document.querySelector(".extensions-empty-panel")).toBeNull();
   });
 
   it("updates the introduction panel when a tab is selected", () => {
@@ -80,6 +85,8 @@ describe("ExtensionsView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Hooks" }));
 
+    expect(screen.queryByTestId("usage-dashboard-section")).toBeNull();
+    expect(screen.getByLabelText("Extensions").classList.contains("extensions-view-usage")).toBe(false);
     expect(screen.getByRole("heading", { name: "Extend your CLI with Hooks" })).toBeTruthy();
     expect(screen.getByText("Coming soon")).toBeTruthy();
   });
@@ -87,7 +94,9 @@ describe("ExtensionsView", () => {
   it("renders a structured shadcn-style empty state", () => {
     render(<ExtensionsView />);
 
-    const panel = screen.getByRole("heading", { name: "Usage" }).closest(".extensions-empty-panel");
+    fireEvent.click(screen.getByRole("button", { name: "Skills" }));
+
+    const panel = screen.getByRole("heading", { name: "Extend your CLI with Skills" }).closest(".extensions-empty-panel");
     expect(panel).toBeTruthy();
     expect(panel?.querySelector(".extensions-empty-panel-icon svg")).toBeTruthy();
     expect(panel?.querySelectorAll(".extensions-empty-panel-preview span")).toHaveLength(4);
@@ -105,6 +114,33 @@ describe("ExtensionsView", () => {
         Object.keys(locale.extensions.tabs).sort(),
       );
     }
+  });
+
+  it("keeps zh and en usage dashboard copy keys aligned", () => {
+    const expectedUsageKeys = [
+      "checkingLabel",
+      "errorRetry",
+      "errorTitle",
+      "guideCopied",
+      "guideCopy",
+      "guideDesc",
+      "guideInstallLabel",
+      "guideInstallNow",
+      "guideNoteHooks",
+      "guideNoteTelemetry",
+      "guideOpenNpm",
+      "guideRecheck",
+      "guideTitle",
+      "installingDesc",
+      "installingLabel",
+      "startingLabel",
+    ];
+    for (const locale of [enSidebar, zhSidebar]) {
+      expect(Object.keys(locale.extensions.usage).sort()).toEqual(expectedUsageKeys);
+    }
+    expect(zhSidebar.extensions.usage.guideTitle).not.toBe(
+      enSidebar.extensions.usage.guideTitle,
+    );
   });
 
   it("does not render empty state action buttons", () => {

@@ -133,6 +133,26 @@ const sidebar = {
     "quickSkills": "Навыки",
     "releaseNotes": "Заметки о выпуске",
     "threadsSection": "Треды"
+  },
+  "extensions": {
+    "usage": {
+      "checkingLabel": "Проверка tokentracker-cli…",
+      "installingLabel": "Установка tokentracker-cli…",
+      "installingDesc": "Это может занять минуту. После установки приложение снова выполнит проверку и запустит локальный сервер.",
+      "startingLabel": "Запуск сервера tokentracker…",
+      "guideTitle": "Установите tokentracker-cli, чтобы видеть статистику использования",
+      "guideDesc": "Статистику использования предоставляет tokentracker-cli. Он запускает локальный сервер, который собирает данные об использовании токенов из ваших AI-инструментов и показывает их на дашборде.",
+      "guideInstallLabel": "Команда установки",
+      "guideInstallNow": "Установить",
+      "guideCopy": "Копировать",
+      "guideCopied": "Скопировано",
+      "guideOpenNpm": "Открыть страницу npm",
+      "guideRecheck": "Проверить снова",
+      "guideNoteHooks": "При первом запуске сервер tokentracker записывает hooks в установленные AI-инструменты (так он собирает данные об использовании).",
+      "guideNoteTelemetry": "Это приложение отключило анонимную телеметрию.",
+      "errorTitle": "Не удалось запустить сервер tokentracker",
+      "errorRetry": "Повторить"
+    }
   }
 };
 

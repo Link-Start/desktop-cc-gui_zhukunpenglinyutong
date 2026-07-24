@@ -133,6 +133,26 @@ const sidebar = {
     "quickSkills": "Skills",
     "releaseNotes": "版本資訊",
     "threadsSection": "對話串"
+  },
+  "extensions": {
+    "usage": {
+      "checkingLabel": "正在偵測 tokentracker-cli…",
+      "installingLabel": "正在安裝 tokentracker-cli…",
+      "installingDesc": "可能需要一點時間。安裝完成後，應用程式會自動重新偵測並啟動本機服務。",
+      "startingLabel": "正在啟動 tokentracker 服務…",
+      "guideTitle": "安裝 tokentracker-cli 以檢視使用統計",
+      "guideDesc": "使用統計由 tokentracker-cli 提供。它會在本機執行一個本地服務，彙整各 AI 工具的 token 用量，並以儀表板呈現。",
+      "guideInstallLabel": "安裝指令",
+      "guideInstallNow": "一鍵安裝",
+      "guideCopy": "複製",
+      "guideCopied": "已複製",
+      "guideOpenNpm": "開啟 npm 頁面",
+      "guideRecheck": "重新偵測",
+      "guideNoteHooks": "首次啟動時，tokentracker 服務會向已安裝的 AI 工具寫入 hooks（這是它的資料蒐集機制）。",
+      "guideNoteTelemetry": "本應用已為其關閉匿名遥測。",
+      "errorTitle": "tokentracker 服務啟動失敗",
+      "errorRetry": "重試"
+    }
   }
 };
 
