@@ -1080,3 +1080,36 @@ worktree/kanban/task-output/runtime-dock 四路由事件驱动+门控兜底替�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1112: 录音电平事件降频
+
+**Date**: 2026-07-25
+**Task**: 录音电平事件降频
+**Branch**: `feature/v-799`
+
+### Summary
+
+dictation real.rs 电平事件从 33ms 30fps 降至 100ms 10fps，相同 value 跳过 emit
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9ca8d2b19` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
