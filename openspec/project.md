@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: active changes = `4`, archive changes = `721`, main specs = `430`
+- Current workspace state: active changes = `4`, archive changes = `729`, main specs = `430`
 
 ## Entry Surfaces
 
@@ -65,7 +65,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 ## Current Inventory
 
 - Active changes: `4`
-- Archive changes: `721`
+- Archive changes: `729`
 - Main specs: `430`
 - Completed task sets still active: `0`
 - Ready-for-implementation task sets: `0`
@@ -388,6 +388,7 @@ npm run check:large-files
 
 ## Update History
 
+- 2026-07-24: Archived eight verified changes from the parallel cleanup wave (`remove-jcef-bridge-noop-stubs`, `remove-latest-agent-runs-dead-chain`, `inline-refresh-codex-model-config-passthrough`, `remove-responsive-layout-dead-branches`, `remove-settings-view-dead-entry-switches`, `remove-orchestration-residual-dead-fields`, `remove-dock-streaming-dead-branch`, `add-ai-review-producer-wiring`); synced delta specs into existing main specs `global-runtime-notice-dock` and `git-panel-diff-view`; backfilled the eight 2026-07-24 archive index entries and calibrated the 2026-07 monthly group count 188 → 196. Current counts are active=4, archive=729, specs=430. The responsive-layout dead-branch removal was the only product-code change in this wave (committed separately).
 - 2026-07-24: Performed a terminal-state index calibration after same-day parallel archive waves drifted the indexes. Removed the `agent-task-orchestration-center` dead link from the specs index (its spec was deleted by the orchestration-center removal archive), registered `app-settings-corruption-recovery` and `settings-view-type-safety`, backfilled 45 missing 2026-07-18~24 entries in the archive index, calibrated the 2026-07 monthly group count 142 → 188, replaced the two new specs' TBD Purpose placeholders, and unified current counts to active=4, archive=721, specs=430. No product code was modified.
 - 2026-07-18: Reconciled four active change directories and added `stabilize-client-runtime-and-diagnostics` verification evidence. Current counts are active=4, archive=640, specs=406; one 21/22 performance-trace gate and two other manual acceptance backlogs remain active.
 - 2026-07-18: Archived `harden-conversation-rendering-for-large-history` under explicit product-owner acceptance and synced ten implemented requirements into five existing main specs; archived `2026-06-22-release-pipeline-cache-sccache` as a failed performance experiment without syncing its invalid success contract. Current counts are active=2, archive=640, specs=406. No product code was modified.
