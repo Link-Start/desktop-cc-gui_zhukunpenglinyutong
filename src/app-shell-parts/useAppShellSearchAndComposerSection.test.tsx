@@ -90,6 +90,7 @@ function createBoundary(
     ],
     queueMessage: vi.fn(async () => undefined),
     quickSwitcherRecentFileGroups: [],
+    quickSwitcherRunningSessions: [],
     quickSwitcherSessionGroups: [],
     resetUiScale: vi.fn(),
     searchContentFilters: ["all"],
@@ -167,6 +168,25 @@ describe("useAppShellSearchAndComposerSection", () => {
     expect(boundary.setIsSearchPaletteOpen).toHaveBeenLastCalledWith(false);
     expect(boundary.setSearchPaletteQuery).toHaveBeenCalledWith("");
     expect(boundary.setSearchPaletteSelectedIndex).toHaveBeenLastCalledWith(0);
+  });
+
+  it("relays quick switcher running sessions to the renderer context", () => {
+    const runningSessions = [
+      {
+        workspaceId: "workspace-1",
+        workspaceName: "Alpha",
+        threadId: "thread-running",
+        threadName: "Running",
+        engine: "codex",
+        startedAt: 123,
+      },
+    ];
+    const boundary = createBoundary({ quickSwitcherRunningSessions: runningSessions });
+    const { result } = renderHook(() =>
+      useAppShellSearchAndComposerSection(boundary),
+    );
+
+    expect(result.current.quickSwitcherRunningSessions).toBe(runningSessions);
   });
 
   it.each([

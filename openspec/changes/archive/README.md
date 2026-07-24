@@ -2,16 +2,46 @@
 
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
-- Updated At: `2026-07-23`
-- Indexed proposals: `647`
+- Updated At: `2026-07-24`
+- Indexed proposals: `717`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-07 (113)
+## 2026-07 (140)
+
+### 2026-07-24
+
+- [`2026-07-24-add-agency-agent-catalog`](2026-07-24-add-agency-agent-catalog/proposal.md) — verified implementation，已同步 `curated-agent-catalog` 与 `settings-navigation-consolidation`
+- [`2026-07-24-align-kanban-codex-model-catalog`](2026-07-24-align-kanban-codex-model-catalog/proposal.md) — verified implementation，已同步 `codex-model-catalog-coverage`
+- [`2026-07-24-derive-rate-limit-label-from-window-duration`](2026-07-24-derive-rate-limit-label-from-window-duration/proposal.md) — verified implementation，已同步 `codex-chat-canvas-usage-overview`
+- [`2026-07-24-soften-git-pr-range-gate`](2026-07-24-soften-git-pr-range-gate/proposal.md) — verified implementation，已同步 `git-history-panel`、`git-operations` 与 `git-pr-submission-workflow`
+- [`2026-07-24-add-kimi-engine`](2026-07-24-add-kimi-engine/proposal.md) — verified implementation，已同步 `kimi-engine-runtime`
+- [`2026-07-24-fix-agent-catalog-startup-convergence`](2026-07-24-fix-agent-catalog-startup-convergence/proposal.md) — verified implementation，已同步 `agent-startup-selection-stability`
+- [`2026-07-24-unify-source-aware-note-capture-workbench`](2026-07-24-unify-source-aware-note-capture-workbench/proposal.md) — verified implementation，已同步 `workspace-note-card-pool`、`workspace-note-card-storage` 与 `workspace-note-context-capture`
+- [`2026-07-24-add-pr-ai-title-body-generator`](2026-07-24-add-pr-ai-title-body-generator/proposal.md) — verified implementation，已同步 `git-history-panel`、`git-pr-submission-workflow` 与 `pr-ai-content-generation`
+- [`2026-07-24-fix-claude-cli-native-installer`](2026-07-24-fix-claude-cli-native-installer/proposal.md) — verified implementation，已同步 `cli-one-click-installer`
+- [`2026-07-24-add-file-editor-goto-line-shortcut`](2026-07-24-add-file-editor-goto-line-shortcut/proposal.md) — verified implementation，已同步 `file-editor-line-navigation` 与 `file-editor-tab-strip`
+- [`2026-07-24-restore-git-history-branch-tree-capabilities`](2026-07-24-restore-git-history-branch-tree-capabilities/proposal.md) — verified implementation，已同步 `git-history-panel`
+- [`2026-07-24-move-file-history-into-git-graph-tabs`](2026-07-24-move-file-history-into-git-graph-tabs/proposal.md) — verified implementation，已同步 `file-history-view` 与 `git-history-panel`
+- [`2026-07-24-fix-codex-subagent-live-sidebar-convergence`](2026-07-24-fix-codex-subagent-live-sidebar-convergence/proposal.md) — verified implementation，已同步 `subagent-session-tree-navigation`
+- [`2026-07-24-add-composer-prompt-enhancer-entry`](2026-07-24-add-composer-prompt-enhancer-entry/proposal.md) — verified implementation，已同步 `composer-prompt-enhancer`
+- [`2026-07-24-add-file-context-menu-shortcuts`](2026-07-24-add-file-context-menu-shortcuts/proposal.md) — verified implementation，已同步 `app-shortcuts` 与 `filetree-multitab-open`
+- [`2026-07-24-fix-messages-core-update-depth-loop`](2026-07-24-fix-messages-core-update-depth-loop/proposal.md) — verified implementation，已同步 `client-renderer-stability-under-pressure`
+- [`2026-07-24-add-git-diff-section-line-count-badge`](2026-07-24-add-git-diff-section-line-count-badge/proposal.md) — verified implementation，已同步 `git-panel-diff-view` 与 `multi-repository-git-commit-workspace`
+- [`2026-07-24-enable-file-history-resizable-pane-and-diff-horizontal-scroll`](2026-07-24-enable-file-history-resizable-pane-and-diff-horizontal-scroll/proposal.md) — verified implementation，已同步 `file-history-view` 与 `git-panel-diff-view`
+- [`2026-07-24-add-extensions-management-surface`](2026-07-24-add-extensions-management-surface/proposal.md) — verified implementation，已同步 `extensions-management-surface`
+- [`2026-07-24-remove-legacy-composer-input-implementation`](2026-07-24-remove-legacy-composer-input-implementation/proposal.md) — verified dead-code removal，未修改 capability specs
+- [`2026-07-24-remove-parallel-orphan-module`](2026-07-24-remove-parallel-orphan-module/proposal.md) — verified orphan-module removal，未修改 capability specs
+- [`2026-07-24-remove-search-workspace-indexing-layer`](2026-07-24-remove-search-workspace-indexing-layer/proposal.md) — verified dead-code removal，未修改 capability specs
+- [`2026-07-24-remove-project-map-orchestration-center`](2026-07-24-remove-project-map-orchestration-center/proposal.md) — verified implementation，已移除 `agent-task-orchestration-center` main capability spec
 
 ### 2026-07-23
 
+- [`2026-07-23-enhance-session-activity-panels`](2026-07-23-enhance-session-activity-panels/proposal.md) — verified implementation，已同步 `codex-chat-canvas-workspace-session-activity-panel`
+- [`2026-07-23-enhance-quick-switcher-hub`](2026-07-23-enhance-quick-switcher-hub/proposal.md) — verified implementation，已同步 `quick-context-switcher`
+- [`2026-07-23-enhance-quick-switcher-nav-toggle`](2026-07-23-enhance-quick-switcher-nav-toggle/proposal.md) — verified implementation，已同步 `quick-context-switcher`
+- [`2026-07-23-add-theme-aware-syntax-and-diff-tokens`](2026-07-23-add-theme-aware-syntax-and-diff-tokens/proposal.md) — verified implementation，已同步 `settings-custom-theme-presets`
 - [`2026-07-23-fix-multi-repository-git-inline-diff-scope`](2026-07-23-fix-multi-repository-git-inline-diff-scope/proposal.md) — verified implementation，已同步 `multi-repository-git-commit-workspace` 与 `multi-repository-git-command-center`
 - [`2026-07-23-add-python-go-semantic-navigation`](2026-07-23-add-python-go-semantic-navigation/proposal.md) — verified implementation，已同步 `file-view-code-intelligence-navigation`
 

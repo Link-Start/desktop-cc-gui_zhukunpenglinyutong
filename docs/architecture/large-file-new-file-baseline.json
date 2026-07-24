@@ -1,41 +1,21 @@
 {
-  "generatedAt": "2026-07-06T09:49:54.517Z",
+  "generatedAt": "2026-07-24T12:18:39.885Z",
   "scope": "new-file",
   "policyVersion": "2026-07-06.policy-v3",
   "entries": [
     {
-      "path": "src-tauri/src/session_management.rs",
-      "lines": 2976,
-      "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/i18n/locales/zh.part1.ts",
-      "lines": 2960,
-      "type": "i18n",
-      "policyId": "i18n",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/app/hooks/useAppServerEvents.ts",
-      "lines": 2956,
+      "path": "src/features/files/components/FileViewPanel.test.tsx",
+      "lines": 3940,
       "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
+      "policyId": "test-files",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
       "path": "src-tauri/src/bin/cc_gui_daemon/daemon_state.rs",
-      "lines": 2943,
+      "lines": 3316,
       "type": "rust",
       "policyId": "default-source",
       "priority": "P1",
@@ -44,20 +24,10 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/i18n/locales/en.part2.ts",
-      "lines": 2899,
-      "type": "i18n",
-      "policyId": "i18n",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/i18n/locales/en.part1.ts",
-      "lines": 2898,
-      "type": "i18n",
-      "policyId": "i18n",
+      "path": "src/features/git/components/GitDiffPanel.test.tsx",
+      "lines": 3279,
+      "type": "ts/tsx",
+      "policyId": "test-files",
       "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
@@ -65,7 +35,7 @@
     },
     {
       "path": "src/services/tauri.test.ts",
-      "lines": 2822,
+      "lines": 3272,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -74,18 +44,168 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadEventHandlers.test.ts",
-      "lines": 2808,
+      "path": "src/features/threads/hooks/useThreadActions.test.tsx",
+      "lines": 3229,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
       "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/git/components/GitDiffPanel.tsx",
+      "lines": 3125,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/files/components/FileViewPanel.tsx",
+      "lines": 3092,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/bin/cc_gui_daemon/git.rs",
+      "lines": 3079,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/session_management.rs",
+      "lines": 3074,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreads.ts",
+      "lines": 3041,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/app/hooks/useAppServerEvents.ts",
+      "lines": 2988,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/styles/file-view-panel.css",
+      "lines": 2972,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/git-history/components/GitHistoryPanel.test.tsx",
+      "lines": 2928,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/local_usage.rs",
+      "lines": 2917,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/backend/app_server_cli.rs",
+      "lines": 2894,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
       "path": "src/features/app/hooks/useAppServerEvents.test.tsx",
-      "lines": 2807,
+      "lines": 2888,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreadsReducer.ts",
+      "lines": 2871,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/engine/commands.rs",
+      "lines": 2847,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/session-activity/components/WorkspaceSessionActivityPanel.test.tsx",
+      "lines": 2821,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/git-history/components/git-history-panel/components/GitHistoryPanelImpl.tsx",
+      "lines": 2803,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreadEventHandlers.test.ts",
+      "lines": 2799,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -104,40 +224,10 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadActions.test.tsx",
-      "lines": 2791,
+      "path": "src/features/app/components/Sidebar.test.tsx",
+      "lines": 2740,
       "type": "ts/tsx",
       "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/hooks/useThreadsReducer.ts",
-      "lines": 2784,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/hooks/useThreads.ts",
-      "lines": 2769,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/i18n/locales/zh.part2.ts",
-      "lines": 2756,
-      "type": "i18n",
-      "policyId": "i18n",
       "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
@@ -145,108 +235,8 @@
     },
     {
       "path": "src-tauri/src/workspaces/commands.rs",
-      "lines": 2709,
+      "lines": 2738,
       "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/bin/cc_gui_daemon/git.rs",
-      "lines": 2707,
-      "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/local_usage.rs",
-      "lines": 2700,
-      "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/files/components/FileViewPanel.test.tsx",
-      "lines": 2664,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/hooks/useThreadMessaging.test.tsx",
-      "lines": 2604,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/app-shell.tsx",
-      "lines": 2597,
-      "type": "ts/tsx",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/app/components/Sidebar.test.tsx",
-      "lines": 2594,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/hooks/useThreadsReducer.test.ts",
-      "lines": 2571,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/hooks/useThreadEventHandlers.ts",
-      "lines": 2566,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/composer/components/Composer.tsx",
-      "lines": 2561,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/git/components/GitDiffPanel.tsx",
-      "lines": 2554,
-      "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,
@@ -255,11 +245,111 @@
     },
     {
       "path": "src/features/settings/components/SettingsView.tsx",
-      "lines": 2552,
+      "lines": 2687,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
       "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreadsReducer.test.ts",
+      "lines": 2654,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/styles/sidebar.css",
+      "lines": 2647,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/session-activity/components/WorkspaceSessionActivityPanel.tsx",
+      "lines": 2640,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/types.rs",
+      "lines": 2639,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/codex/mod.rs",
+      "lines": 2612,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/composer/components/Composer.tsx",
+      "lines": 2592,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/git/mod.rs",
+      "lines": 2588,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreadEventHandlers.ts",
+      "lines": 2567,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/engine/claude_history.rs",
+      "lines": 2555,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/engine/claude.rs",
+      "lines": 2552,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -269,6 +359,16 @@
       "type": "rust",
       "policyId": "default-source",
       "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/loaders/historyLoaders.test.ts",
+      "lines": 2551,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
@@ -284,38 +384,38 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/engine/claude_history.rs",
+      "path": "src/features/threads/hooks/useThreadMessaging.test.tsx",
       "lines": 2545,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/engine/commands.rs",
-      "lines": 2539,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
+      "path": "src/features/threads/hooks/useThreadMessaging.ts",
+      "lines": 2542,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/codex/mod.rs",
-      "lines": 2519,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
+      "path": "src/styles/composer.part2.css",
+      "lines": 2541,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
       "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
       "path": "src/styles/messages.part1.css",
-      "lines": 2493,
+      "lines": 2507,
       "type": "css",
       "policyId": "styles",
       "priority": "P1",
@@ -325,7 +425,7 @@
     },
     {
       "path": "src/features/settings/components/SettingsView.test.tsx",
-      "lines": 2482,
+      "lines": 2493,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -334,8 +434,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/loaders/historyLoaders.test.ts",
-      "lines": 2474,
+      "path": "src/features/messages/components/Messages.live-behavior.test.tsx",
+      "lines": 2469,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -344,9 +444,19 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/engine/claude.rs",
-      "lines": 2467,
-      "type": "rust",
+      "path": "src/features/files/components/FileTreePanel.tsx",
+      "lines": 2466,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/app-shell.tsx",
+      "lines": 2460,
+      "type": "ts/tsx",
       "policyId": "bridge-runtime-critical",
       "priority": "P0",
       "warnThreshold": 2200,
@@ -354,8 +464,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/styles/file-view-panel.css",
+      "path": "src-tauri/src/bin/cc_gui_daemon.rs",
       "lines": 2459,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/styles/diff.css",
+      "lines": 2455,
       "type": "css",
       "policyId": "styles",
       "priority": "P1",
@@ -364,7 +484,7 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/styles/sidebar.css",
+      "path": "src/styles/main.css",
       "lines": 2450,
       "type": "css",
       "policyId": "styles",
@@ -375,7 +495,7 @@
     },
     {
       "path": "src/utils/threadItems.test.ts",
-      "lines": 2424,
+      "lines": 2449,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -384,18 +504,28 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/backend/app_server_cli.rs",
-      "lines": 2423,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
+      "path": "src/i18n/locales/en/settings.ts",
+      "lines": 2439,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadMessaging.ts",
-      "lines": 2407,
+      "path": "src/features/threads/hooks/useThreadTurnEvents.test.tsx",
+      "lines": 2414,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/git-history/components/git-history-panel/components/GitHistoryPanelView.tsx",
+      "lines": 2405,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -414,38 +544,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/git-history/components/git-history-panel/components/GitHistoryPanelImpl.tsx",
-      "lines": 2392,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/styles/composer.part2.css",
-      "lines": 2382,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/git/mod.rs",
-      "lines": 2379,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/session-activity/components/WorkspaceSessionActivityPanel.test.tsx",
-      "lines": 2366,
+      "path": "src/features/files/components/FileTreePanel.run.test.tsx",
+      "lines": 2378,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -455,11 +555,21 @@
     },
     {
       "path": "src/features/threads/loaders/claudeHistoryLoader.ts",
-      "lines": 2365,
+      "lines": 2378,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
       "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/app-shell-parts/useAppShellLayoutNodesSection.tsx",
+      "lines": 2368,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -474,18 +584,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/messages/components/MessagesCore.tsx",
+      "path": "src/styles/settings.part2.css",
       "lines": 2349,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
+      "type": "css",
+      "policyId": "styles",
       "priority": "P1",
-      "warnThreshold": 2400,
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/session-activity/components/WorkspaceSessionActivityPanel.tsx",
-      "lines": 2340,
+      "path": "src/features/layout/hooks/useLayoutNodes.tsx",
+      "lines": 2347,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
@@ -504,48 +614,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/styles/settings.part2.css",
-      "lines": 2323,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/layout/hooks/useLayoutNodes.tsx",
-      "lines": 2281,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/styles/main.css",
-      "lines": 2269,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/bin/cc_gui_daemon.rs",
-      "lines": 2266,
-      "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
+      "path": "src/i18n/locales/zh/settings.ts",
+      "lines": 2280,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
       "path": "src/features/status-panel/components/StatusPanel.test.tsx",
-      "lines": 2266,
+      "lines": 2268,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -554,48 +634,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/utils/threadItems.ts",
-      "lines": 2255,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/hooks/useThreadTurnEvents.test.tsx",
-      "lines": 2248,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/composer/components/ChatInputBox/ChatInputBoxAdapter.tsx",
-      "lines": 2247,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/styles/diff.css",
-      "lines": 2211,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/types.rs",
-      "lines": 2208,
+      "path": "src-tauri/src/local_usage/tests.rs",
+      "lines": 2259,
       "type": "rust",
       "policyId": "default-source",
       "priority": "P1",
@@ -604,18 +644,28 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/git-history/components/git-history-panel/components/GitHistoryPanelView.tsx",
-      "lines": 2206,
+      "path": "src/features/app/components/Sidebar.tsx",
+      "lines": 2238,
       "type": "ts/tsx",
-      "policyId": "feature-hotpath",
+      "policyId": "default-source",
       "priority": "P1",
-      "warnThreshold": 2400,
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/git/commands.rs",
+      "lines": 2213,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
       "path": "src/styles/session-activity.css",
-      "lines": 2200,
+      "lines": 2212,
       "type": "css",
       "policyId": "styles",
       "priority": "P1",
@@ -624,8 +674,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
+      "path": "src/features/composer/components/ChatInputBox/ChatInputBoxAdapter.tsx",
+      "lines": 2205,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
       "path": "src/styles/settings.part1.css",
-      "lines": 2159,
+      "lines": 2191,
       "type": "css",
       "policyId": "styles",
       "priority": "P1",
@@ -635,17 +695,7 @@
     },
     {
       "path": "src/features/git-history/components/git-history-panel/hooks/useGitHistoryPanelInteractions.tsx",
-      "lines": 2144,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/messages/components/Markdown.tsx",
-      "lines": 2142,
+      "lines": 2188,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -655,7 +705,7 @@
     },
     {
       "path": "src/styles/tool-blocks.css",
-      "lines": 2134,
+      "lines": 2144,
       "type": "css",
       "policyId": "styles",
       "priority": "P1",
@@ -674,62 +724,12 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/composer/components/ChatInputBox/ChatInputBoxAdapter.test.tsx",
-      "lines": 2119,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src-tauri/src/engine/claude/tests_core.rs",
       "lines": 2115,
       "type": "rust",
       "policyId": "bridge-runtime-critical",
       "priority": "P0",
       "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/git/commands.rs",
-      "lines": 2105,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/messages/components/MessagesTimeline.tsx",
-      "lines": 2097,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/local_usage/tests.rs",
-      "lines": 2091,
-      "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/app/components/Sidebar.tsx",
-      "lines": 2079,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -744,6 +744,26 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
+      "path": "src/features/threads/loaders/claudeHistoryLoader.test.ts",
+      "lines": 2069,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/composer/components/ChatInputBox/ChatInputBoxAdapter.test.tsx",
+      "lines": 2065,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
       "path": "src-tauri/src/shared/workspaces_core.rs",
       "lines": 2063,
       "type": "rust",
@@ -754,40 +774,80 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/app-shell-parts/useAppShellLayoutNodesSection.tsx",
+      "path": "src/i18n/locales/zh-TW/settings.ts",
       "lines": 2057,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/files/components/FileTreePanel.tsx",
-      "lines": 2042,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
+      "path": "src/i18n/locales/es/settings.ts",
+      "lines": 2056,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/files/components/FileViewPanel.tsx",
-      "lines": 2033,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
+      "path": "src/i18n/locales/fr/settings.ts",
+      "lines": 2056,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/loaders/claudeHistoryLoader.test.ts",
-      "lines": 2033,
-      "type": "ts/tsx",
-      "policyId": "test-files",
+      "path": "src/i18n/locales/hi/settings.ts",
+      "lines": 2056,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/ja/settings.ts",
+      "lines": 2056,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/ko/settings.ts",
+      "lines": 2056,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/pt-BR/settings.ts",
+      "lines": 2056,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/ru/settings.ts",
+      "lines": 2056,
+      "type": "i18n",
+      "policyId": "i18n",
       "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
@@ -795,7 +855,7 @@
     },
     {
       "path": "src/features/project-map/hooks/useProjectMapDataset.test.tsx",
-      "lines": 2026,
+      "lines": 2006,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -804,8 +864,28 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
+      "path": "src-tauri/src/note_cards.rs",
+      "lines": 2004,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreadItemEvents.ts",
+      "lines": 1946,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
       "path": "src/features/project-map/components/ProjectMapPanel.tsx",
-      "lines": 2001,
+      "lines": 1945,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
@@ -814,8 +894,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/messages/rows/components/MessageRow.tsx",
-      "lines": 2000,
+      "path": "src/features/threads/utils/streamLatencyDiagnostics.ts",
+      "lines": 1945,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -830,16 +910,6 @@
       "policyId": "bridge-runtime-critical",
       "priority": "P0",
       "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/utils/streamLatencyDiagnostics.ts",
-      "lines": 1931,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -864,8 +934,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/git-history/components/GitHistoryPanel.test.tsx",
-      "lines": 1893,
+      "path": "src/features/layout/hooks/useLayoutNodes.client-ui-visibility.test.tsx",
+      "lines": 1869,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -875,7 +945,7 @@
     },
     {
       "path": "src/styles/project-map.css",
-      "lines": 1858,
+      "lines": 1860,
       "type": "css",
       "policyId": "styles",
       "priority": "P1",
@@ -884,20 +954,10 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/i18n/locales/en.part5.ts",
-      "lines": 1853,
-      "type": "i18n",
-      "policyId": "i18n",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/i18n/locales/zh.part5.ts",
-      "lines": 1851,
-      "type": "i18n",
-      "policyId": "i18n",
+      "path": "src/features/project-map/services/projectMapGenerationWorker.test.ts",
+      "lines": 1854,
+      "type": "ts/tsx",
+      "policyId": "test-files",
       "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
@@ -924,8 +984,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/project-map/services/projectMapGenerationWorker.test.ts",
-      "lines": 1831,
+      "path": "src/styles/git-history.part2.css",
+      "lines": 1827,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useQueuedSend.test.tsx",
+      "lines": 1826,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -934,12 +1004,12 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadItemEvents.ts",
-      "lines": 1826,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
+      "path": "src-tauri/src/backend/app_server_tests.rs",
+      "lines": 1812,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -954,12 +1024,22 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/note_cards.rs",
-      "lines": 1804,
-      "type": "rust",
-      "policyId": "default-source",
+      "path": "src/features/threads/hooks/useThreadActions.helpers.ts",
+      "lines": 1808,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
       "priority": "P1",
-      "warnThreshold": 2600,
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/git/commands_branch.rs",
+      "lines": 1801,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -970,6 +1050,16 @@
       "policyId": "test-files",
       "priority": "P2",
       "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/messages/components/MessagesCore.tsx",
+      "lines": 1798,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -985,7 +1075,7 @@
     },
     {
       "path": "src/features/composer/components/ChatInputBox/ChatInputBox.tsx",
-      "lines": 1784,
+      "lines": 1782,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -994,18 +1084,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/git/commands_branch.rs",
+      "path": "src-tauri/src/shared/codex_core.rs",
       "lines": 1754,
       "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
       "path": "src/styles/composer.part1.css",
-      "lines": 1749,
+      "lines": 1754,
       "type": "css",
       "policyId": "styles",
       "priority": "P1",
@@ -1014,18 +1104,28 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadActions.helpers.ts",
-      "lines": 1729,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
+      "path": "src-tauri/src/code_intel.rs",
+      "lines": 1749,
+      "type": "rust",
+      "policyId": "default-source",
       "priority": "P1",
-      "warnThreshold": 2400,
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/backend/app_server_tests.rs",
-      "lines": 1720,
+      "path": "src/styles/scrollbars.css",
+      "lines": 1715,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/engine/gemini_tests.rs",
+      "lines": 1713,
       "type": "rust",
       "policyId": "bridge-runtime-critical",
       "priority": "P0",
@@ -1034,18 +1134,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useQueuedSend.test.tsx",
-      "lines": 1718,
+      "path": "src/features/project-map/services/projectMapGenerationWorker.ts",
+      "lines": 1712,
       "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
+      "policyId": "default-source",
+      "priority": "P1",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
       "path": "src/features/session-activity/adapters/buildWorkspaceSessionActivity.ts",
-      "lines": 1708,
+      "lines": 1711,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
@@ -1060,26 +1160,6 @@
       "policyId": "styles",
       "priority": "P1",
       "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/shared/codex_core.rs",
-      "lines": 1706,
-      "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/project-map/services/projectMapGenerationWorker.ts",
-      "lines": 1706,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1104,8 +1184,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/project-map/components/ProjectMapPanel.test.tsx",
-      "lines": 1675,
+      "path": "src/features/threads/hooks/useThreadItemEvents.test.ts",
+      "lines": 1681,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -1114,22 +1194,32 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/styles/git-history.part2.css",
-      "lines": 1646,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
+      "path": "src-tauri/src/engine/gemini.rs",
+      "lines": 1675,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
       "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/composer/components/ComposerInput.tsx",
-      "lines": 1634,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
+      "path": "src-tauri/src/engine/events.rs",
+      "lines": 1647,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/runtime/tests.rs",
+      "lines": 1632,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1144,18 +1234,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/runtime/tests.rs",
-      "lines": 1623,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/hooks/useThreadItemEvents.test.ts",
-      "lines": 1603,
+      "path": "src/features/project-map/components/ProjectMapPanel.test.tsx",
+      "lines": 1619,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -1164,32 +1244,22 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/files/components/FileTreePanel.run.test.tsx",
-      "lines": 1602,
+      "path": "src/utils/threadItems.ts",
+      "lines": 1596,
       "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/app-shell-parts/useAppShellKanbanExecutionSection.ts",
-      "lines": 1593,
+      "path": "src/features/files/components/FileMarkdownPreview.tsx",
+      "lines": 1581,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/engine/events.rs",
-      "lines": 1589,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1214,6 +1284,26 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
+      "path": "src/features/messages/components/Messages.test.tsx",
+      "lines": 1566,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/project-map/hooks/useProjectMapDataset.ts",
+      "lines": 1560,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
       "path": "src/styles/project-memory.css",
       "lines": 1559,
       "type": "css",
@@ -1224,68 +1314,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/files/components/FileMarkdownPreview.tsx",
-      "lines": 1547,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/project-map/hooks/useProjectMapDataset.ts",
-      "lines": 1546,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/messages/components/toolBlocks/GenericToolBlock.tsx",
-      "lines": 1528,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/hooks/useThreads.memory-race.integration.test.tsx",
-      "lines": 1516,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/messages/components/Messages.live-behavior.test.tsx",
-      "lines": 1510,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/messages/components/Messages.test.tsx",
-      "lines": 1496,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/bin/cc_gui_daemon/web_service_runtime.rs",
-      "lines": 1490,
+      "path": "src-tauri/src/code_intel_lsp.rs",
+      "lines": 1557,
       "type": "rust",
       "policyId": "default-source",
       "priority": "P1",
@@ -1294,12 +1324,102 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/app-shell.startup.test.tsx",
-      "lines": 1470,
+      "path": "src/services/rendererDiagnostics.ts",
+      "lines": 1554,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/git-history/components/git-history-panel/components/GitHistoryPanelDialogs.tsx",
+      "lines": 1548,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreadActions.ts",
+      "lines": 1548,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/styles/git-history.part1.css",
+      "lines": 1545,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/bin/cc_gui_daemon/web_service_runtime.rs",
+      "lines": 1544,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/codex/installer.rs",
+      "lines": 1525,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/engine/claude_history_inline_tests.rs",
+      "lines": 1518,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreads.memory-race.integration.test.tsx",
+      "lines": 1517,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
       "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/app-shell.startup.test.tsx",
+      "lines": 1506,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/engine/status.rs",
+      "lines": 1492,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1314,32 +1434,12 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/engine/claude_history_inline_tests.rs",
-      "lines": 1467,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src/features/session-activity/adapters/buildWorkspaceSessionActivity.test.ts",
       "lines": 1465,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
       "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/git-history/components/git-history-panel/components/GitHistoryPanelDialogs.tsx",
-      "lines": 1464,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1359,6 +1459,26 @@
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/contracts/realtimeHistoryParity.test.ts",
+      "lines": 1440,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/app-shell-parts/useAppShellKanbanExecutionSection.ts",
+      "lines": 1432,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
@@ -1384,32 +1504,62 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadActions.ts",
-      "lines": 1418,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/settings/components/settings-view/sections/CodexSection.tsx",
-      "lines": 1417,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/engine/gemini.rs",
-      "lines": 1412,
+      "path": "src-tauri/src/vendors/commands.rs",
+      "lines": 1416,
       "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreadActionsResumeThread.ts",
+      "lines": 1413,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/git/components/GitDiffViewer.tsx",
+      "lines": 1403,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/git_utils.rs",
+      "lines": 1401,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/styles/diff-viewer.css",
+      "lines": 1400,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
       "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/app/hooks/useSidebarMenus.test.tsx",
+      "lines": 1398,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1424,12 +1574,22 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/styles/workspace-home.css",
-      "lines": 1380,
+      "path": "src/features/composer/components/ChatInputBox/styles/selectors.css",
+      "lines": 1381,
       "type": "css",
-      "policyId": "styles",
+      "policyId": "feature-hotpath",
       "priority": "P1",
-      "warnThreshold": 2200,
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/engine/hooks/useEngineController.test.tsx",
+      "lines": 1379,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1444,16 +1604,6 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/styles/diff-viewer.css",
-      "lines": 1376,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src-tauri/src/runtime_log/mod.rs",
       "lines": 1373,
       "type": "rust",
@@ -1464,38 +1614,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/layout/hooks/useLayoutNodes.client-ui-visibility.test.tsx",
-      "lines": 1373,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/composer/components/ChatInputBox/styles/selectors.css",
-      "lines": 1371,
-      "type": "css",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/contracts/realtimeHistoryParity.test.ts",
-      "lines": 1366,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/backend/app_server.rs",
-      "lines": 1353,
+      "path": "src-tauri/src/engine/commands_tests.rs",
+      "lines": 1372,
       "type": "rust",
       "policyId": "bridge-runtime-critical",
       "priority": "P0",
@@ -1504,12 +1624,52 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/vendors/commands.rs",
-      "lines": 1345,
+      "path": "src-tauri/src/backend/app_server.rs",
+      "lines": 1358,
       "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreadTurnEvents.ts",
+      "lines": 1356,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/theme/constants/vscodeThemePresets.ts",
+      "lines": 1348,
+      "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/styles/file-tree.css",
+      "lines": 1338,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/styles/worktree-modal.css",
+      "lines": 1336,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1524,28 +1684,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/styles/worktree-modal.css",
-      "lines": 1331,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/engine/hooks/useEngineController.test.tsx",
-      "lines": 1325,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src/features/threads/contracts/conversationAssembler.test.ts",
-      "lines": 1325,
+      "lines": 1330,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -1554,8 +1694,28 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/git/components/GitDiffViewer.tsx",
-      "lines": 1317,
+      "path": "src/features/threads/hooks/useThreadsReducer.threadlist-pending.test.ts",
+      "lines": 1328,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/browser_agent/toolbar.rs",
+      "lines": 1324,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/note-cards/components/WorkspaceNoteCardPanel.tsx",
+      "lines": 1323,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
@@ -1564,8 +1724,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadTurnEvents.ts",
-      "lines": 1314,
+      "path": "src/features/layout/hooks/layoutNodesTypes.ts",
+      "lines": 1316,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreadMessagingSessionTooling.ts",
+      "lines": 1309,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -1574,12 +1744,22 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadMessagingSessionTooling.ts",
+      "path": "src/test/vitest.setup.ts",
       "lines": 1306,
       "type": "ts/tsx",
-      "policyId": "feature-hotpath",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/files/components/FileViewBody.tsx",
+      "lines": 1305,
+      "type": "ts/tsx",
+      "policyId": "default-source",
       "priority": "P1",
-      "warnThreshold": 2400,
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1594,6 +1774,16 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
+      "path": "src/styles/settings.part2.basic-redesign.css",
+      "lines": 1290,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
       "path": "src/features/settings/components/SkillsSection.tsx",
       "lines": 1289,
       "type": "ts/tsx",
@@ -1604,12 +1794,42 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/git-history/components/GitHistoryWorktreePanel.tsx",
-      "lines": 1284,
+      "path": "src/features/threads/hooks/useThreadActionsSessionRuntime.ts",
+      "lines": 1282,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
       "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/app/hooks/useSidebarMenus.ts",
+      "lines": 1276,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/engine/claude/tests_stream.rs",
+      "lines": 1266,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreadActions.rewind.test.tsx",
+      "lines": 1266,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1634,22 +1854,12 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/test/vitest.setup.ts",
-      "lines": 1255,
+      "path": "src/services/rendererDiagnostics.test.ts",
+      "lines": 1250,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
       "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/styles/file-tree.css",
-      "lines": 1248,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1664,18 +1874,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/layout/hooks/layoutNodesTypes.ts",
-      "lines": 1239,
+      "path": "src/features/threads/hooks/useQueuedSend.ts",
+      "lines": 1238,
       "type": "ts/tsx",
-      "policyId": "default-source",
+      "policyId": "feature-hotpath",
       "priority": "P1",
-      "warnThreshold": 2600,
+      "warnThreshold": 2400,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
       "path": "src/styles/composer.rewind-modal.css",
-      "lines": 1233,
+      "lines": 1236,
       "type": "css",
       "policyId": "styles",
       "priority": "P1",
@@ -1705,37 +1915,7 @@
     },
     {
       "path": "src/features/settings/components/settings-view/sections/RuntimePoolSection.tsx",
-      "lines": 1216,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/git/components/GitDiffPanel.test.tsx",
-      "lines": 1213,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/agent-orchestration/components/OrchestrationCenterView.tsx",
-      "lines": 1210,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/hooks/useQueuedSend.ts",
-      "lines": 1210,
+      "lines": 1214,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -1754,72 +1934,82 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/app/hooks/useSidebarMenus.test.tsx",
-      "lines": 1205,
+      "path": "src/app-shell-parts/useAppShellSections.ts",
+      "lines": 1200,
       "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/code_intel.rs",
-      "lines": 1197,
-      "type": "rust",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/engine/claude/tests_stream.rs",
-      "lines": 1188,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/shared_sessions.rs",
-      "lines": 1185,
-      "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/styles/git-history.part1.css",
-      "lines": 1169,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/engine/status.rs",
-      "lines": 1161,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
       "path": "src/features/threads/hooks/useThreadActions.codex-rewind.test.tsx",
-      "lines": 1160,
+      "lines": 1184,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
       "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/settings/components/settings-view/sections/CodexSection.tsx",
+      "lines": 1179,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/shared_sessions.rs",
+      "lines": 1177,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/hooks/useThreads.integration.test.tsx",
+      "lines": 1172,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/messages/components/Messages.rich-content.test.tsx",
+      "lines": 1171,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/git-history/components/GitHistoryWorktreePanel.tsx",
+      "lines": 1159,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/codex/codex_tests.rs",
+      "lines": 1150,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1834,72 +2024,12 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadActions.rewind.test.tsx",
-      "lines": 1146,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src/styles/home-chat.css",
-      "lines": 1146,
+      "lines": 1139,
       "type": "css",
       "policyId": "styles",
       "priority": "P1",
       "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/styles/messages.part2.css",
-      "lines": 1146,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/styles/settings.part2.basic-redesign.css",
-      "lines": 1144,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/files/components/FileViewBody.tsx",
-      "lines": 1141,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/app-shell-parts/useAppShellSections.ts",
-      "lines": 1135,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/threads/hooks/useThreadsReducer.threadlist-pending.test.ts",
-      "lines": 1132,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1935,7 +2065,7 @@
     },
     {
       "path": "src/features/threads/hooks/threadReducerTextMerge.ts",
-      "lines": 1118,
+      "lines": 1122,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -1944,18 +2074,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/engine/commands_tests.rs",
-      "lines": 1116,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src/styles/git-history.part1.overview.css",
-      "lines": 1114,
+      "lines": 1115,
       "type": "css",
       "policyId": "styles",
       "priority": "P1",
@@ -1965,7 +2085,7 @@
     },
     {
       "path": "src/features/project-map/services/projectMapPersistence.ts",
-      "lines": 1108,
+      "lines": 1114,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
@@ -1974,18 +2094,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadActionsResumeThread.ts",
-      "lines": 1095,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
+      "path": "src/styles/messages.part2.css",
+      "lines": 1114,
+      "type": "css",
+      "policyId": "styles",
       "priority": "P1",
-      "warnThreshold": 2400,
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreads.integration.test.tsx",
-      "lines": 1087,
+      "path": "src/features/app/hooks/useGitPanelController.test.tsx",
+      "lines": 1101,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -1994,11 +2114,11 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/app/hooks/useSidebarMenus.ts",
-      "lines": 1064,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
+      "path": "src/i18n/locales/en/projectMap.ts",
+      "lines": 1086,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
@@ -2024,7 +2144,27 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/theme/constants/vscodeThemePresets.ts",
+      "path": "src/app-shell-parts/useAppShellSearchRadarSection.ts",
+      "lines": 1054,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/app/components/ThreadList.test.tsx",
+      "lines": 1053,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/status-panel/components/CheckpointPanel.tsx",
       "lines": 1051,
       "type": "ts/tsx",
       "policyId": "default-source",
@@ -2035,11 +2175,21 @@
     },
     {
       "path": "src/features/composer/components/ChatInputBox/ChatInputBoxFooter.tsx",
-      "lines": 1049,
+      "lines": 1044,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
       "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/zh/projectMap.ts",
+      "lines": 1040,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -2054,16 +2204,6 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/codex/codex_tests.rs",
-      "lines": 1036,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src-tauri/src/backend/app_server_runtime_lifecycle.rs",
       "lines": 1033,
       "type": "rust",
@@ -2074,7 +2214,27 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/operation-facts/operationFacts.ts",
+      "path": "src/features/extensions/tokentracker-dashboard/ui/dashboard/components/ActivityHeatmap.jsx",
+      "lines": 1028,
+      "type": "js/jsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/composer/components/ChatInputBox/selectors/ConfigSelect.tsx",
+      "lines": 1026,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/files/components/FileCodeMirrorEditorImpl.tsx",
       "lines": 1026,
       "type": "ts/tsx",
       "policyId": "default-source",
@@ -2084,8 +2244,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/services/rendererDiagnostics.ts",
-      "lines": 1020,
+      "path": "src/features/operation-facts/operationFacts.ts",
+      "lines": 1026,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
@@ -2104,6 +2264,36 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
+      "path": "src/features/app/hooks/useGitPanelController.ts",
+      "lines": 1018,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/composer/components/ChatInputBox/hooks/usePasteAndDrop.ts",
+      "lines": 1015,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/app/components/Sidebar.session-folders.test.tsx",
+      "lines": 1014,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
       "path": "src/features/opencode/components/OpenCodeControlPanel.tsx",
       "lines": 1011,
       "type": "ts/tsx",
@@ -2114,8 +2304,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/composer/components/ChatInputBox/selectors/ConfigSelect.tsx",
-      "lines": 1007,
+      "path": "src/features/workspaces/hooks/useWorkspaces.ts",
+      "lines": 1009,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -2124,18 +2314,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/app/components/Sidebar.session-folders.test.tsx",
-      "lines": 1005,
+      "path": "src/features/engine/hooks/useEngineController.ts",
+      "lines": 1008,
       "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
+      "policyId": "default-source",
+      "priority": "P1",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/workspaces/hooks/useWorkspaces.ts",
-      "lines": 1005,
+      "path": "src/features/messages/rows/components/MessageRow.tsx",
+      "lines": 1006,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -2154,28 +2344,28 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/engine/hooks/useEngineController.ts",
-      "lines": 990,
+      "path": "src/app-shell-parts/useAppShellLayoutNodesSection.test.ts",
+      "lines": 988,
       "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
+      "policyId": "test-files",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/status-panel/components/CheckpointPanel.tsx",
+      "path": "src/features/messages/components/MessagesRows.stream-mitigation.test.tsx",
       "lines": 987,
       "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
+      "policyId": "test-files",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/composer/components/ChatInputBox/types.ts",
-      "lines": 986,
+      "path": "src/features/composer/hooks/useComposerAutocompleteState.ts",
+      "lines": 980,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -2204,6 +2394,96 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
+      "path": "src/features/composer/components/ChatInputBox/types.ts",
+      "lines": 978,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/es/projectMap.ts",
+      "lines": 976,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/fr/projectMap.ts",
+      "lines": 976,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/hi/projectMap.ts",
+      "lines": 976,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/ja/projectMap.ts",
+      "lines": 976,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/ko/projectMap.ts",
+      "lines": 976,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/pt-BR/projectMap.ts",
+      "lines": 976,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/ru/projectMap.ts",
+      "lines": 976,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/zh-TW/projectMap.ts",
+      "lines": 976,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
       "path": "src/features/intent-canvas/utils/scene.ts",
       "lines": 966,
       "type": "ts/tsx",
@@ -2214,22 +2494,22 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/composer/components/ChatInputBox/hooks/usePasteAndDrop.ts",
-      "lines": 962,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
+      "path": "src/styles/settings.part1.vendor-panels.css",
+      "lines": 965,
+      "type": "css",
+      "policyId": "styles",
       "priority": "P1",
-      "warnThreshold": 2400,
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadActionsSessionRuntime.ts",
-      "lines": 960,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
+      "path": "src-tauri/src/engine/claude/user_input.rs",
+      "lines": 964,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -2239,26 +2519,6 @@
       "type": "mjs",
       "policyId": "default-source",
       "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/composer/hooks/useComposerAutocompleteState.ts",
-      "lines": 953,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/messages/components/Messages.rich-content.test.tsx",
-      "lines": 951,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
@@ -2274,8 +2534,18 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/composer/components/ChatInputBox/styles/context-bar.css",
+      "path": "src/features/vendors/components/VendorSettingsPanel.tsx",
       "lines": 948,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/composer/components/ChatInputBox/styles/context-bar.css",
+      "lines": 943,
       "type": "css",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -2289,6 +2559,16 @@
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/app-shell-parts/useAppShellSearchRadarSection.test.tsx",
+      "lines": 940,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
@@ -2394,6 +2674,16 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
+      "path": "src-tauri/src/shared/settings_core.rs",
+      "lines": 914,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
       "path": "src/styles/project-map.inspector.css",
       "lines": 913,
       "type": "css",
@@ -2419,16 +2709,6 @@
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src-tauri/src/shared/settings_core.rs",
-      "lines": 905,
-      "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
@@ -2464,8 +2744,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/status-panel/components/StatusPanel.tsx",
-      "lines": 886,
+      "path": "src/features/kanban/components/KanbanBoard.tsx",
+      "lines": 892,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
@@ -2474,18 +2754,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/settings/components/McpSection.tsx",
-      "lines": 884,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/kanban/components/KanbanBoard.tsx",
-      "lines": 883,
+      "path": "src/features/status-panel/components/StatusPanel.tsx",
+      "lines": 886,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
@@ -2514,6 +2784,16 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
+      "path": "src/features/settings/components/settings-view/sections/WebServiceSettings.test.tsx",
+      "lines": 876,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
       "path": "src-tauri/src/computer_use/broker.rs",
       "lines": 875,
       "type": "rust",
@@ -2524,8 +2804,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/hooks/useThreadMessaging.context-injection.test.tsx",
-      "lines": 873,
+      "path": "src/features/messages/components/toolBlocks/GenericToolBlock.test.tsx",
+      "lines": 875,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -2554,9 +2834,19 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": ".agents/skills/vercel-optimize/lib/vercel.mjs",
-      "lines": 864,
-      "type": "mjs",
+      "path": "src/features/threads/hooks/useThreadMessaging.context-injection.test.tsx",
+      "lines": 869,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/app-shell-parts/appShellDomainContexts.ts",
+      "lines": 867,
+      "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,
@@ -2564,9 +2854,19 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/note-cards/components/WorkspaceNoteCardPanel.tsx",
+      "path": "src-tauri/src/codex/thread_listing.rs",
+      "lines": 866,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": ".agents/skills/vercel-optimize/lib/vercel.mjs",
       "lines": 864,
-      "type": "ts/tsx",
+      "type": "mjs",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,
@@ -2594,18 +2894,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/engine/gemini_tests.rs",
-      "lines": 856,
-      "type": "rust",
-      "policyId": "bridge-runtime-critical",
-      "priority": "P0",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/messages/components/MessagesRows.stream-mitigation.test.tsx",
-      "lines": 853,
+      "path": "src/features/git-history/components/GitHistoryWorktreePanel.test.tsx",
+      "lines": 847,
       "type": "ts/tsx",
       "policyId": "test-files",
       "priority": "P2",
@@ -2614,8 +2904,8 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/engine/claude/user_input.rs",
-      "lines": 840,
+      "path": "src-tauri/src/git/commands_pr_workflow.rs",
+      "lines": 843,
       "type": "rust",
       "policyId": "bridge-runtime-critical",
       "priority": "P0",
@@ -2624,12 +2914,22 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/services/rendererDiagnostics.test.ts",
+      "path": "src/features/settings/components/settings-view/sections/WebServiceSettings.tsx",
       "lines": 839,
       "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/threads/assembly/conversationAssembler.ts",
+      "lines": 834,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -2664,12 +2964,32 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/app-shell-parts/appShellDomainContexts.ts",
-      "lines": 827,
+      "path": "src/features/extensions/tokentracker-dashboard/hooks/use-trend-data.ts",
+      "lines": 825,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/layout/components/DesktopLayout.tsx",
+      "lines": 824,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/composer/components/ComposerBranchBadge.tsx",
+      "lines": 819,
+      "type": "ts/tsx",
+      "policyId": "feature-hotpath",
+      "priority": "P1",
+      "warnThreshold": 2400,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -2694,12 +3014,42 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
+      "path": "src/features/extensions/tokentracker-dashboard/ui/dashboard/components/ActivityHeatmap3D.jsx",
+      "lines": 814,
+      "type": "js/jsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
       "path": "src/utils/threadItemsAssistantText.ts",
       "lines": 814,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/engine/kimi.rs",
+      "lines": 812,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/engine/kimi_history.rs",
+      "lines": 811,
+      "type": "rust",
+      "policyId": "bridge-runtime-critical",
+      "priority": "P0",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -2714,29 +3064,19 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/threads/assembly/conversationAssembler.ts",
-      "lines": 809,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/app/components/ThreadList.test.tsx",
-      "lines": 807,
-      "type": "ts/tsx",
-      "policyId": "test-files",
+      "path": "src/i18n/locales/en/git.ts",
+      "lines": 808,
+      "type": "i18n",
+      "policyId": "i18n",
       "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/browser_agent/toolbar.rs",
+      "path": "src/features/app/components/ThreadList.tsx",
       "lines": 806,
-      "type": "rust",
+      "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,

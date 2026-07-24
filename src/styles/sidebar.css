@@ -53,7 +53,6 @@
   color: var(--text-strong);
 }
 
-/* 置灰但仍可点击（点击弹「即将开放」提示） */
 .sidebar-primary-nav-item.is-disabled {
   color: var(--text-faint);
   opacity: 0.6;

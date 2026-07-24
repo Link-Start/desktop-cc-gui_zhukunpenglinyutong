@@ -59,6 +59,7 @@ import {
   DEFAULT_UI_FONT_FAMILY,
 } from "../../../../../utils/fonts";
 import { LanguageSelector } from "../../LanguageSelector";
+import { SyntaxAndDiffPreview } from "./SyntaxAndDiffPreview";
 
 type BasicAppearanceSectionProps = {
   appSettings: AppSettings;
@@ -341,6 +342,7 @@ export function BasicAppearanceSection({
             </div>
           </div>
         ) : null}
+        <SyntaxAndDiffPreview appearance={resolvedAppearanceTheme} />
         <div className="settings-field settings-basic-item settings-window-transparency-item">
           <div className="settings-toggle-row settings-window-transparency-toggle">
             <div className="settings-basic-field-header">

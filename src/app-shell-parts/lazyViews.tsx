@@ -24,6 +24,12 @@ export const GitHistoryPanel = lazy(() =>
   })),
 );
 
+export const ExtensionsView = lazy(() =>
+  import("../features/extensions/components/ExtensionsView").then((module) => ({
+    default: module.ExtensionsView,
+  })),
+);
+
 export const WorkspaceHome = lazy(() =>
   import("../features/workspaces/components/WorkspaceHome").then((module) => ({
     default: module.WorkspaceHome,

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelOption, WorkspaceInfo } from "./types";
 import { getThreadComposerSelectionStorageKey } from "./app-shell-parts/selectedComposerSession";
@@ -1308,6 +1308,26 @@ describe("AppShell startup", () => {
       expect(view.getByTestId("app-shell-sentinel")).toBeTruthy();
     });
     expect(agentSessionMocks.reloadAgentCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates Extensions mode to the rendered layout context", async () => {
+    render(<AppShell />);
+
+    await waitFor(() => {
+      expect(startupState.renderCtx?.handleAppModeChange).toBeTypeOf("function");
+    });
+
+    act(() => {
+      const handleAppModeChange = startupState.renderCtx?.handleAppModeChange as
+        | ((mode: "extensions") => void)
+        | undefined;
+      handleAppModeChange?.("extensions");
+    });
+
+    await waitFor(() => {
+      expect(startupState.renderCtx?.appMode).toBe("extensions");
+    });
+    expect(startupState.renderCtx?.showExtensions).toBe(true);
   });
 
   it("mounts with a stored thread-scoped codex composer selection without entering an update loop", async () => {

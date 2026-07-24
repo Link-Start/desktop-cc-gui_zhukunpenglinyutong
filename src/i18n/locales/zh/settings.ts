@@ -24,6 +24,14 @@ const settings = {
       "自定义主题会套用所选配色，但运行时仍按 {{appearance}} 外观渲染。",
     themePresetDescription:
       "为“自定义”主题选择任意一套 VS Code 风格配色。当前 preset 会按 {{appearance}} 外观生效。",
+    themePreviewTitle: "代码 & Diff 配色预览",
+    themePreviewHelp:
+      "随当前主题 preset 实时刷新。下方面板展示代码块 / Markdown / 文件预览 / Diff 视图所用的 token 与 diff 颜色。",
+    themePreviewCodePanel: "代码块 (Markdown)",
+    themePreviewFilePanel: "文件预览 (file-view)",
+    themePreviewDiffPanel: "Diff 行级",
+    themePreviewLegendAdd: "新增",
+    themePreviewLegendDel: "删除",
     themePresetDarkModern: "Dark Modern",
     themePresetDarkPlus: "Dark+",
     themePresetLightModern: "Light Modern",

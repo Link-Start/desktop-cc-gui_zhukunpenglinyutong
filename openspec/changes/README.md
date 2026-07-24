@@ -2,26 +2,26 @@
 
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
-- Updated At: `2026-07-23`
-- Active proposals: `6`
-- Archived proposals: `647`
-- Main capability specs: `406`
+- Updated At: `2026-07-24`
+- Active proposals: `4`
+- Archived proposals: `717`
+- Main capability specs: `428`
 
 ## Active Proposals
 
 | Change | Progress | Current gate | Artifacts |
 |---|---:|---|---|
 | [`add-linux-native-menu-localization`](add-linux-native-menu-localization/proposal.md) | 4/5 | Linux non-default-language startup smoke | [design](add-linux-native-menu-localization/design.md) · [tasks](add-linux-native-menu-localization/tasks.md) · [specs](add-linux-native-menu-localization/specs/) · [verification](add-linux-native-menu-localization/verification.md) |
-| [`enable-file-history-resizable-pane-and-diff-horizontal-scroll`](enable-file-history-resizable-pane-and-diff-horizontal-scroll/proposal.md) | 4/4 | openspec validate | [design](enable-file-history-resizable-pane-and-diff-horizontal-scroll/design.md) · [tasks](enable-file-history-resizable-pane-and-diff-horizontal-scroll/tasks.md) · [specs](enable-file-history-resizable-pane-and-diff-horizontal-scroll/specs/) |
-| [`derive-rate-limit-label-from-window-duration`](derive-rate-limit-label-from-window-duration/proposal.md) | 5/5 | Completed; pending sync/archive | [design](derive-rate-limit-label-from-window-duration/design.md) · [tasks](derive-rate-limit-label-from-window-duration/tasks.md) · [specs](derive-rate-limit-label-from-window-duration/specs/) |
+| [`add-vendor-cli-lifecycle-header`](add-vendor-cli-lifecycle-header/proposal.md) | 11/12 | 手工：未安装 / 最新 / outdated / npm view 失败 / 安装后刷新 smoke | [design](add-vendor-cli-lifecycle-header/design.md) · [tasks](add-vendor-cli-lifecycle-header/tasks.md) · [specs](add-vendor-cli-lifecycle-header/specs/) |
 | [`enable-claude-lightweight-streaming-and-frame-attribution`](enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) | 15/18 | Claude-stream trace、final fidelity 与 archive gate | [design](enable-claude-lightweight-streaming-and-frame-attribution/design.md) · [tasks](enable-claude-lightweight-streaming-and-frame-attribution/tasks.md) · [specs](enable-claude-lightweight-streaming-and-frame-attribution/specs/) · [verification](enable-claude-lightweight-streaming-and-frame-attribution/verification.md) |
 | [`stabilize-client-runtime-and-diagnostics`](stabilize-client-runtime-and-diagnostics/proposal.md) | 21/22 | Quantified frame / first-delta trace retention | [design](stabilize-client-runtime-and-diagnostics/design.md) · [tasks](stabilize-client-runtime-and-diagnostics/tasks.md) · [specs](stabilize-client-runtime-and-diagnostics/specs/) · [verification](stabilize-client-runtime-and-diagnostics/verification.md) |
-| [`fix-codex-subagent-live-sidebar-convergence`](fix-codex-subagent-live-sidebar-convergence/proposal.md) | 6/6 | Completed; pending sync/archive | [design](fix-codex-subagent-live-sidebar-convergence/design.md) · [tasks](fix-codex-subagent-live-sidebar-convergence/tasks.md) · [specs](fix-codex-subagent-live-sidebar-convergence/specs/) · [verification](fix-codex-subagent-live-sidebar-convergence/verification.md) |
-
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 647 个 proposal，按月份 / 归档日期分组。
+- [完整归档提案索引](archive/README.md) — 717 个 proposal，按月份 / 归档日期分组。
+- [2026-07-24 归档批次](archive/README.md#2026-07-24) — 23 个 verified proposal：Kimi 引擎、Agent Catalog、扩展管理面、AI PR 标题/正文、prompt enhancer 入口、source-aware 便签捕获、file history 迁入 git graph、git history 分支树恢复、PR range gate 软化与编排中心删除等。
+- [2026-07-23 `add-theme-aware-syntax-and-diff-tokens`](archive/2026-07-23-add-theme-aware-syntax-and-diff-tokens/proposal.md) — 已同步 theme preset syntax/diff tokens、稳定 root override 与外观设置实时预览。
 - [2026-07-23 `fix-multi-repository-git-inline-diff-scope`](archive/2026-07-23-fix-multi-repository-git-inline-diff-scope/proposal.md) — 已同步 multi-repository scoped inline diff、discard-all、diff layout 与 command-header actions。
+- [2026-07-23 最近活动批次](archive/README.md#2026-07-23) — `enhance-session-activity-panels`、`enhance-quick-switcher-hub`、`enhance-quick-switcher-nav-toggle` 已同步 `codex-chat-canvas-workspace-session-activity-panel` 与 `quick-context-switcher`。
 - [2026-07-23 归档批次](archive/README.md#2026-07-23) — Python/Pyright 与 Go/gopls semantic navigation 已接入 external provider runtime。
 - [2026-07-22 归档批次](archive/README.md#2026-07-22) — 已修复 multi-runtime/symlinked npm CLI discovery，并完成文件树定位与 completion selection index 对齐。
 - [2026-07-20 归档批次](archive/README.md#2026-07-20) — Caveman bundled curated skill 已验证并同步 main spec。

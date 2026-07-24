@@ -13,6 +13,8 @@ const activityPanel = {
     "eventsCount": "{{count}} इवेंट",
     "sessionsCount": "{{count}} सत्र",
     "liveNow": "लाइव",
+    "collapsedLiveBadge": "{{count}} सत्र चल रहे हैं",
+    "collapsedLiveBadge_other": "{{count}} सत्र चल रहे हैं",
     "command": "कमांड",
     "commandPendingSummary": "कमांड चल रही है",
     "commandCategories": {
@@ -97,7 +99,13 @@ const activityPanel = {
       "unreadMark": "अपठित",
       "readMark": "पठित",
       "deleteHistoryEntry": "{{name}} हटाएं",
-      "deleteDateGroupEntries": "{{date}} की सभी {{count}} प्रविष्टियां हटाएं"
+      "deleteDateGroupEntries": "{{date}} की सभी {{count}} प्रविष्टियां हटाएं",
+      "confirmDeleteDateGroup": "क्या {{date}} की सभी {{count}} प्रविष्टियां हटाएं?",
+      "confirmDeleteDateGroup_other": "क्या {{date}} की सभी {{count}} प्रविष्टियां हटाएं?",
+      "deleteFailedTitle": "हटाने में विफल",
+      "deleteFailedBody": "{{count}} प्रविष्टियां हटाने में विफल। कृपया पुनः प्रयास करें।",
+      "deleteFailedBody_other": "{{count}} प्रविष्टियां हटाने में विफल। कृपया पुनः प्रयास करें।",
+      "deleteFailedDismiss": "बंद करें"
     },
     "status": {
       "running": "चल रहा",

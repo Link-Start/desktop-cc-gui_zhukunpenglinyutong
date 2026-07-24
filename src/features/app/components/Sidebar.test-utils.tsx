@@ -57,6 +57,8 @@ vi.mock("react-i18next", () => ({
         "sidebar.quickAutomation": "Automation",
         "sidebar.quickSearch": "Search",
         "sidebar.quickSkills": "Skills",
+        "sidebar.plugins": "Market",
+        "sidebar.extensions": "Extensions",
         "lockScreen.lock": "Lock",
         "sidebar.projects": "Projects",
         "sidebar.mcpSkillsMarket": "MCP & Skills Market",

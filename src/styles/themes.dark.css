@@ -177,11 +177,60 @@
   --dropdown-add-text-color: #d0d0d0;
   --dropdown-shadow-color: rgba(0, 0, 0, 0.5);
   --dropdown-text-color: #e6e7ea;
+  /* preset 驱动的代码 / diff token fallback (dark) — preset 数据缺失时兜底 */
+  --message-code-token-comment: rgba(150, 170, 200, 0.78);
+  --message-code-token-punctuation: rgba(200, 210, 220, 0.85);
+  --message-code-token-constant: #ff7b72;
+  --message-code-token-number: #f2cc60;
+  --message-code-token-string: #7ee787;
+  --message-code-token-operator: rgba(200, 210, 220, 0.9);
+  --message-code-token-keyword: #8bd5ff;
+  --message-code-token-function: #d2a8ff;
+  --fvp-token-comment: rgba(150, 170, 200, 0.78);
+  --fvp-token-punctuation: rgba(200, 210, 220, 0.85);
+  --fvp-token-property: #ff7b72;
+  --fvp-token-number: #f2cc60;
+  --fvp-token-string: #7ee787;
+  --fvp-token-operator: rgba(200, 210, 220, 0.9);
+  --fvp-token-keyword: #8bd5ff;
+  --fvp-token-function: #d2a8ff;
+  --diff-token-comment: rgba(150, 170, 200, 0.78);
+  --diff-token-punctuation: rgba(200, 210, 220, 0.85);
+  --diff-token-property: #ff7b72;
+  --diff-token-number: #f2cc60;
+  --diff-token-string: #7ee787;
+  --diff-token-variable: rgba(200, 210, 220, 0.9);
+  --diff-token-keyword: #8bd5ff;
+  --diff-token-function: #d2a8ff;
+  --session-activity-command-output-comment: rgba(150, 170, 200, 0.78);
+  --session-activity-command-output-punctuation: rgba(200, 210, 220, 0.85);
+  --session-activity-command-output-constant: #ff7b72;
+  --session-activity-command-output-number: #f2cc60;
+  --session-activity-command-output-string: #7ee787;
+  --session-activity-command-output-operator: rgba(200, 210, 220, 0.9);
+  --session-activity-command-output-keyword: #8bd5ff;
+  --session-activity-command-output-function: #d2a8ff;
+  --file-preview-token-comment: rgba(150, 170, 200, 0.78);
+  --file-preview-token-punctuation: rgba(200, 210, 220, 0.85);
+  --file-preview-token-property: #ff7b72;
+  --file-preview-token-number: #f2cc60;
+  --file-preview-token-string: #7ee787;
+  --file-preview-token-operator: rgba(200, 210, 220, 0.9);
+  --file-preview-token-keyword: #8bd5ff;
+  --file-preview-token-function: #d2a8ff;
+  --diff-inserted-text: #2ea043;
+  --diff-inserted-bg: color-mix(in srgb, #2ea043 16%, transparent);
+  --diff-inserted-gutter: color-mix(in srgb, #2ea043 44%, transparent);
+  --diff-removed-text: #f85149;
+  --diff-removed-bg: color-mix(in srgb, #f85149 16%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, #f85149 44%, transparent);
+
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 }
+
 
 /* Kanban modal - ensure opaque background in dark mode (Tauri window is transparent) */
 .kanban-modal-overlay {

@@ -5,7 +5,6 @@ import type {
   IntentCanvasDocument,
   IntentCanvasOpenRequest,
 } from "../../intent-canvas/types";
-import type { OrchestrationDispatchConfirmation } from "../../agent-orchestration";
 import type { AgentTaskScrollRequest } from "../../messages";
 import type { SubagentInfo } from "../../status-panel/types";
 import type {
@@ -666,11 +665,6 @@ export type LayoutNodesFlatOptions = {
   selectedModelId: string | null;
   projectMapDatasetController?: ProjectMapDatasetController;
   onSelectModel: (id: string | null) => void;
-  onDispatchOrchestrationTask?: (
-    confirmation: OrchestrationDispatchConfirmation,
-  ) =>
-    | Promise<{ ok: boolean; taskId?: string | null; reason?: string }>
-    | { ok: boolean; taskId?: string | null; reason?: string };
   reasoningOptions: string[];
   selectedEffort: string | null;
   onSelectEffort: (effort: string | null) => void;
@@ -1149,7 +1143,6 @@ export type ComposerLayoutNodesOptions = Pick<
   | "selectedModelId"
   | "projectMapDatasetController"
   | "onSelectModel"
-  | "onDispatchOrchestrationTask"
   | "intentCanvasOpenRequest"
   | "onOpenIntentCanvas"
   | "onIntentCanvasOpenRequestConsumed"

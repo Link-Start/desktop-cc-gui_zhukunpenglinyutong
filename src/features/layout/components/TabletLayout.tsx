@@ -9,6 +9,8 @@ type TabletLayoutProps = {
   errorToastsNode: ReactNode;
   globalRuntimeNoticeDockNode: ReactNode;
   showGitHistory: boolean;
+  showExtensions: boolean;
+  extensionsNode: ReactNode;
   gitHistoryNode: ReactNode;
   homeNode: ReactNode;
   showHome: boolean;
@@ -33,6 +35,8 @@ export function TabletLayout({
   errorToastsNode,
   globalRuntimeNoticeDockNode,
   showGitHistory,
+  showExtensions,
+  extensionsNode,
   gitHistoryNode,
   homeNode,
   showHome,
@@ -67,9 +71,10 @@ export function TabletLayout({
         {errorToastsNode}
         {globalRuntimeNoticeDockNode}
         {settingsOpen && settingsNode}
+        {!settingsOpen && showExtensions && extensionsNode}
         {!settingsOpen && showGitHistory && gitHistoryNode}
         {!settingsOpen && showHome && homeNode}
-        {!settingsOpen && !showGitHistory && showWorkspace && (
+        {!settingsOpen && !showExtensions && !showGitHistory && showWorkspace && (
           <>
             <MainTopbar leftNode={topbarLeftNode} className="tablet-topbar" />
             {tabletTab === "codex" && (

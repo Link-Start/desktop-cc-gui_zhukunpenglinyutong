@@ -681,20 +681,6 @@ const projectMap = {
         "noNodes": "El lienzo necesita al menos un nodo."
       }
     },
-    "orchestration": {
-      "title": "Borrador de orquestación",
-      "description": "Crea un borrador de tarea local a partir del nodo actual con marcadores de nodo de origen, evidencia y riesgo. Esto no inicia la ejecución de IA.",
-      "sourceNode": "Nodo de origen {{nodeId}}",
-      "evidenceCount": "{{count}} referencia(s) de evidencia",
-      "reviewRequired": "Revisión requerida",
-      "readyForDraft": "Listo para el borrador planificado",
-      "createTask": "Crear borrador de tarea",
-      "created": "Creado {{taskId}} · {{status}} · {{evidence}} evidencia · {{risks}} riesgo(s)",
-      "failure": {
-        "missing-workspace": "Falta la identidad del espacio de trabajo; no se creó el borrador de tarea.",
-        "missing-node": "El nodo de origen ya no está disponible; no se creó el borrador de tarea."
-      }
-    },
     "confirmDeleteNodeTitle": "Eliminar nodo de conocimiento",
     "confirmDeleteNode": "¿Eliminar \"{{title}}\" y sus nodos hijos? Esto es una poda manual; restaurarlo requiere regeneración o completar el nodo.",
     "confirmDeleteNodeWarning": "Esto también elimina los nodos hijos, las referencias del padre y rechaza los candidatos pendientes dirigidos a este nodo.",

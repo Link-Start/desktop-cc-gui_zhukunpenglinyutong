@@ -188,6 +188,7 @@ export type RenderAppShellFlattenedContext = {
   shouldMountSpecHub: any;
   showGitDetail: any;
   showGitHistory: any;
+  showExtensions: any;
   showHome: any;
   showKanban: any;
   showNextReleaseNotes: any;

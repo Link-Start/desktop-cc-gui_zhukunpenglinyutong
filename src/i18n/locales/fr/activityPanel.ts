@@ -13,6 +13,8 @@ const activityPanel = {
     "eventsCount": "{{count}} événements",
     "sessionsCount": "{{count}} sessions",
     "liveNow": "en direct",
+    "collapsedLiveBadge": "{{count}} session en cours",
+    "collapsedLiveBadge_other": "{{count}} sessions en cours",
     "command": "Commande",
     "commandPendingSummary": "Exécution de la commande",
     "commandCategories": {
@@ -97,7 +99,13 @@ const activityPanel = {
       "unreadMark": "Non lu",
       "readMark": "Lu",
       "deleteHistoryEntry": "Supprimer {{name}}",
-      "deleteDateGroupEntries": "Supprimer les {{count}} entrées du {{date}}"
+      "deleteDateGroupEntries": "Supprimer les {{count}} entrées du {{date}}",
+      "confirmDeleteDateGroup": "Supprimer {{count}} entrée du {{date}} ?",
+      "confirmDeleteDateGroup_other": "Supprimer les {{count}} entrées du {{date}} ?",
+      "deleteFailedTitle": "Échec de la suppression",
+      "deleteFailedBody": "Échec de la suppression de {{count}} entrée. Veuillez réessayer.",
+      "deleteFailedBody_other": "Échec de la suppression de {{count}} entrées. Veuillez réessayer.",
+      "deleteFailedDismiss": "Fermer"
     },
     "status": {
       "running": "en cours",

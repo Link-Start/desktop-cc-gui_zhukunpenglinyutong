@@ -25,4 +25,4 @@
 
 ## Technical Notes
 
-实现与验收以 `openspec/changes/move-file-history-into-git-graph-tabs/**` 为 single source of truth。
+实现与验收以 `openspec/changes/archive/2026-07-24-move-file-history-into-git-graph-tabs/**` 为 single source of truth。

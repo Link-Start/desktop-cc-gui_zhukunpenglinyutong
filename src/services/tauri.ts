@@ -14,6 +14,14 @@ export {
 } from "./tauri/messaging";
 export { localUsageSnapshot, localUsageStatistics } from "./tauri/usage";
 export {
+  ttDetectCli,
+  ttEnsureServer,
+  ttInstallCli,
+  ttProxyRequest,
+  ttServerStatus,
+} from "./tauri/tokentracker";
+export type { TtCliStatus, TtInstallResult, TtServerStatus } from "../types";
+export {
   cancelCodexLogin,
   generateRunMetadata,
   getAccountInfo,

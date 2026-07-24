@@ -25,8 +25,7 @@ const taskCenter = {
     "noBrowserEvidence": "ブラウザーの証跡がリンクされていません",
     "browserEvidenceCandidates": "候補",
     "source": {
-      "kanban": "カンバン",
-      "orchestration": "オーケストレーション"
+      "kanban": "カンバン"
     },
     "browserEvidenceState": {
       "available": "利用可能",
@@ -48,7 +47,6 @@ const taskCenter = {
     },
     "action": {
       "openConversation": "会話を開く",
-      "openOrchestrationTask": "オーケストレーションタスクを開く",
       "retry": "再試行",
       "resume": "再開",
       "cancel": "キャンセル",

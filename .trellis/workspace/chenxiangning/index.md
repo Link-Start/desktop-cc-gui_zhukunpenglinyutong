@@ -7,9 +7,9 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-26.md`
-- **Total Sessions**: 1081
-- **Last Active**: 2026-07-23
+- **Active File**: `journal-27.md`
+- **Total Sessions**: 1088
+- **Last Active**: 2026-07-24
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-26.md` | ~1904 | Active |
+| `journal-27.md` | ~222 | Active |
+| `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
@@ -54,6 +55,13 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1088 | 2026-07-24 | 移除并归档 Project Map 编排中心 | `929acbd75`, `b83efeb9b`, `fdf925f98`, `49fdb2b4f`, `165758fe8` | `feature/v-078` |
+| 1087 | 2026-07-24 | 移除 Project Map 编排中心 S1-S4 | `929acbd75`, `b83efeb9b`, `fdf925f98`, `49fdb2b4f` | `feature/v-078` |
+| 1086 | 2026-07-24 | 清理未使用客户端模块 | `d1a90dddd7` | `feature/v-078` |
+| 1085 | 2026-07-24 | OpenSpec 批量归档 19 个已验证提案 | `af472a2c4` | `feature/v-078` |
+| 1084 | 2026-07-24 | 增强最近活动面板与快速切换器交互 | `c18a3a694` | `feature/v-078` |
+| 1083 | 2026-07-24 | 归档并提交主题感知代码与 Diff 配色 | `e14684cee` | `feature/v-078` |
+| 1082 | 2026-07-23 | 修复 Quick Switcher 文件激活主区路由 | `bde99f767` | `feature/v-078` |
 | 1081 | 2026-07-23 | 合并 0.7.7 上游分支 | `11a249e04` | `feature/v-0.7.7` |
 | 1080 | 2026-07-23 | 完善 Git Diff 统计与历史预览 | `18e0fbb18` | `feature/v-0.7.7` |
 | 1079 | 2026-07-23 | 合并 0.7.7 上游更新 | `9fd0ad211` | `feature/v-0.7.7` |

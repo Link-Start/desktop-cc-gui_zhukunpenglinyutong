@@ -171,6 +171,7 @@ mod state;
 mod storage;
 mod terminal;
 mod text_encoding;
+mod tokentracker;
 mod types;
 mod utils;
 mod vendors;

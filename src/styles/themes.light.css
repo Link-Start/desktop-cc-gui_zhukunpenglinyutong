@@ -156,6 +156,54 @@
   --dropdown-add-text-color: #31353a;
   --dropdown-shadow-color: rgba(226, 226, 226, 1);
   --dropdown-text-color: #0d0d0d;
+
+  /* preset 驱动的代码 / diff token fallback (light) — preset 数据缺失时兜底 */
+  --message-code-token-comment: rgba(87, 96, 110, 0.86);
+  --message-code-token-punctuation: rgba(52, 61, 76, 0.85);
+  --message-code-token-constant: #cf222e;
+  --message-code-token-number: #b06b00;
+  --message-code-token-string: #116329;
+  --message-code-token-operator: rgba(36, 41, 47, 0.86);
+  --message-code-token-keyword: #2f6fdd;
+  --message-code-token-function: #6a46c7;
+  --fvp-token-comment: rgba(87, 96, 110, 0.86);
+  --fvp-token-punctuation: rgba(52, 61, 76, 0.85);
+  --fvp-token-property: #c2372a;
+  --fvp-token-number: #b06b00;
+  --fvp-token-string: #116329;
+  --fvp-token-operator: rgba(36, 41, 47, 0.86);
+  --fvp-token-keyword: #2f6fdd;
+  --fvp-token-function: #6a46c7;
+  --diff-token-comment: rgba(87, 96, 110, 0.86);
+  --diff-token-punctuation: rgba(52, 61, 76, 0.85);
+  --diff-token-property: #c2372a;
+  --diff-token-number: #b06b00;
+  --diff-token-string: #116329;
+  --diff-token-variable: rgba(36, 41, 47, 0.86);
+  --diff-token-keyword: #2f6fdd;
+  --diff-token-function: #6a46c7;
+  --session-activity-command-output-comment: rgba(87, 96, 110, 0.86);
+  --session-activity-command-output-punctuation: rgba(52, 61, 76, 0.85);
+  --session-activity-command-output-constant: #cf222e;
+  --session-activity-command-output-number: #b06b00;
+  --session-activity-command-output-string: #116329;
+  --session-activity-command-output-operator: rgba(36, 41, 47, 0.86);
+  --session-activity-command-output-keyword: #2f6fdd;
+  --session-activity-command-output-function: #6a46c7;
+  --file-preview-token-comment: rgba(87, 96, 110, 0.86);
+  --file-preview-token-punctuation: rgba(52, 61, 76, 0.85);
+  --file-preview-token-property: #c2372a;
+  --file-preview-token-number: #b06b00;
+  --file-preview-token-string: #116329;
+  --file-preview-token-operator: rgba(36, 41, 47, 0.86);
+  --file-preview-token-keyword: #2f6fdd;
+  --file-preview-token-function: #6a46c7;
+  --diff-inserted-text: #1a7f37;
+  --diff-inserted-bg: color-mix(in srgb, #1a7f37 16%, transparent);
+  --diff-inserted-gutter: color-mix(in srgb, #1a7f37 44%, transparent);
+  --diff-removed-text: #cf222e;
+  --diff-removed-bg: color-mix(in srgb, #cf222e 16%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, #cf222e 44%, transparent);
 }
 
 /* Collapsed sidebar: zero floating-main radius + shell contrast (home has

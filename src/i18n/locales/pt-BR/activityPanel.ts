@@ -13,6 +13,8 @@ const activityPanel = {
     "eventsCount": "{{count}} eventos",
     "sessionsCount": "{{count}} sessões",
     "liveNow": "ao vivo",
+    "collapsedLiveBadge": "{{count}} sessão em execução",
+    "collapsedLiveBadge_other": "{{count}} sessões em execução",
     "command": "Comando",
     "commandPendingSummary": "Executando comando",
     "commandCategories": {
@@ -97,7 +99,13 @@ const activityPanel = {
       "unreadMark": "Não lida",
       "readMark": "Lida",
       "deleteHistoryEntry": "Excluir {{name}}",
-      "deleteDateGroupEntries": "Excluir todas as {{count}} entradas de {{date}}"
+      "deleteDateGroupEntries": "Excluir todas as {{count}} entradas de {{date}}",
+      "confirmDeleteDateGroup": "Excluir {{count}} entrada de {{date}}?",
+      "confirmDeleteDateGroup_other": "Excluir todas as {{count}} entradas de {{date}}?",
+      "deleteFailedTitle": "Falha ao excluir",
+      "deleteFailedBody": "Falha ao excluir {{count}} entrada. Tente novamente.",
+      "deleteFailedBody_other": "Falha ao excluir {{count}} entradas. Tente novamente.",
+      "deleteFailedDismiss": "Fechar"
     },
     "status": {
       "running": "em execução",

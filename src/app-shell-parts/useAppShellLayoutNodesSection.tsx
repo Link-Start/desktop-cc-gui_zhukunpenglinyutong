@@ -33,6 +33,20 @@ import type {
 } from "../types";
 import type { QuickSwitcherNavigationId } from "../features/quick-switcher/types";
 import {
+  computeQuickSwitcherActiveNavigationIds,
+  isQuickSwitcherFilesActive,
+  isQuickSwitcherGitActive,
+  isQuickSwitcherGlobalSearchActive,
+  isQuickSwitcherIntentCanvasActive,
+  isQuickSwitcherKanbanActive,
+  isQuickSwitcherMemoryActive,
+  isQuickSwitcherNotesActive,
+  isQuickSwitcherProjectMapActive,
+  isQuickSwitcherSettingsActive,
+  pushQuickSwitcherSelectWorkspaceToast,
+  type QuickSwitcherNavigationState,
+} from "./quickSwitcherNavigationState";
+import {
   archiveWorkspaceSessions,
   clearDetachedExternalChangeMonitor,
   configureDetachedExternalChangeMonitor,
@@ -240,6 +254,7 @@ export function useAppShellLayoutNodesSection(
     closeSettings,
     collaborationModes,
     collaborationModesEnabled,
+    collapseRightPanel,
     collapseSidebar,
     commands,
     commitError,
@@ -372,7 +387,6 @@ export function useAppShellLayoutNodesSection(
     handleGenerateCommitMessage,
     handleGitPanelModeChange,
     handleInsertComposerText,
-    handleDispatchOrchestrationTask,
     handleLockPanel,
     handleMovePrompt,
     handleOpenComposerKanbanPanel,
@@ -425,6 +439,7 @@ export function useAppShellLayoutNodesSection(
     handleSync,
     handleToggleDictation,
     handleToggleRuntimeConsole,
+    handleToggleSearchPalette,
     handleToggleTerminalPanel,
     handleUnstageGitFile,
     handleUpdatePrompt,
@@ -452,6 +467,7 @@ export function useAppShellLayoutNodesSection(
     isPlanPanelDismissed,
     isProcessing,
     isReviewing,
+    isSearchPaletteOpen,
     isSoloMode,
     isTablet,
     isThreadAutoNaming,
@@ -542,6 +558,7 @@ export function useAppShellLayoutNodesSection(
     setSelectedEffort,
     setHomeOpen,
     setWorkspaceHomeWorkspaceId,
+    settingsOpen,
     showComposer,
     showLoadingProgressDialog,
     hideLoadingProgressDialog,
@@ -976,7 +993,8 @@ export function useAppShellLayoutNodesSection(
   const handleOpenIntentCanvas = useCallback(
     (request?: Omit<IntentCanvasOpenRequest, "requestId">) => {
       if (!activeWorkspace) {
-        alertError(t("intentCanvas.errors.noWorkspace"));
+        // 无效打开提示（D2）：info toast 代替旧 window.alert 阻塞弹窗。
+        pushQuickSwitcherSelectWorkspaceToast(t, "intentCanvas");
         return;
       }
       closeSettings();
@@ -1003,7 +1021,6 @@ export function useAppShellLayoutNodesSection(
     },
     [
       activeWorkspace,
-      alertError,
       closeSettings,
       collapseSidebar,
       expandRightPanel,
@@ -1437,21 +1454,170 @@ export function useAppShellLayoutNodesSection(
     setCenterMode("projectMap");
     expandRightPanel();
   });
+  // Quick Switcher「状态感知路由」的判定快照（design.md D1）。useMemo 与
+  // handleQuickSwitcherNavigate 各自内联构造，保持 predicates 纯函数化、
+  // 且不引入跨渲染的引用依赖。
+  const quickSwitcherActiveNavigationIds = useMemo<QuickSwitcherNavigationId[]>(
+    () =>
+      computeQuickSwitcherActiveNavigationIds({
+        activeTab,
+        appMode,
+        centerMode,
+        filePanelMode,
+        isCompact,
+        isSearchPaletteOpen,
+        rightPanelCollapsed,
+        settingsOpen,
+      }),
+    [
+      activeTab,
+      appMode,
+      centerMode,
+      filePanelMode,
+      isCompact,
+      isSearchPaletteOpen,
+      rightPanelCollapsed,
+      settingsOpen,
+    ],
+  );
   const handleQuickSwitcherNavigate = useEventCallback(
     (target: QuickSwitcherNavigationId) => {
+      const navigationState: QuickSwitcherNavigationState = {
+        activeTab,
+        appMode,
+        centerMode,
+        filePanelMode,
+        isCompact,
+        isSearchPaletteOpen,
+        rightPanelCollapsed,
+        settingsOpen,
+      };
+      // 首页表面关闭 helper：拦截 action（含回切分支）执行前统一调用，
+      // 与 base 的 file/session/navigate 激活路径对齐，避免 action 在 home
+      // 遮罩后执行、用户看不到反馈。纯提示分支（无 workspace toast）不打开
+      // 模块，toast 在 home 之上可见，故不关 home。委托 base 的分支由 base
+      // handler 入口统一关闭，这里不重复调用。
+      const closeHomeSurface = () => {
+        setHomeOpen(false);
+        setWorkspaceHomeWorkspaceId(null);
+      };
+      // spec 保持 open-or-focus（独立窗口，不做 toggle）。
       if (target === "spec") {
         closeQuickSwitcher();
+        closeHomeSurface();
         handleOpenSpecHub();
         return;
       }
       if (target === "intentCanvas") {
         closeQuickSwitcher();
+        if (!activeWorkspace) {
+          pushQuickSwitcherSelectWorkspaceToast(t, "intentCanvas");
+          return;
+        }
+        closeHomeSurface();
+        if (isQuickSwitcherIntentCanvasActive(navigationState)) {
+          setCenterMode("chat");
+          return;
+        }
         handleOpenIntentCanvas();
         return;
       }
       if (target === "projectMap") {
         closeQuickSwitcher();
+        if (!activeWorkspace) {
+          pushQuickSwitcherSelectWorkspaceToast(t, "projectMap");
+          return;
+        }
+        closeHomeSurface();
+        if (isQuickSwitcherProjectMapActive(navigationState)) {
+          setCenterMode("chat");
+          return;
+        }
         handleOpenProjectMap();
+        return;
+      }
+      if (target === "globalSearch") {
+        closeQuickSwitcher();
+        closeHomeSurface();
+        if (isQuickSwitcherGlobalSearchActive(navigationState)) {
+          // 已打开 → 回切关闭（现成 toggle，内部走 closeSearchPalette）。
+          handleToggleSearchPalette();
+        } else {
+          handleOpenSearchPalette();
+        }
+        return;
+      }
+      if (target === "notes") {
+        closeQuickSwitcher();
+        if (!activeWorkspace) {
+          pushQuickSwitcherSelectWorkspaceToast(t, "notes");
+          return;
+        }
+        closeHomeSurface();
+        if (isQuickSwitcherNotesActive(navigationState)) {
+          // 便签回切连带把 center mode 复位到 chat（不留残留态）。
+          collapseRightPanel();
+          setCenterMode("chat");
+          return;
+        }
+        handleOpenNotes();
+        return;
+      }
+      if (target === "memory") {
+        closeQuickSwitcher();
+        if (!activeWorkspace) {
+          pushQuickSwitcherSelectWorkspaceToast(t, "memory");
+          return;
+        }
+        closeHomeSurface();
+        if (isQuickSwitcherMemoryActive(navigationState)) {
+          collapseRightPanel();
+          return;
+        }
+        handleOpenProjectMemory();
+        return;
+      }
+      if (target === "history") {
+        closeQuickSwitcher();
+        closeHomeSurface();
+        // handleOpenGitHistoryPanel 本身是现成 toggle（gitHistory ↔ chat）。
+        handleOpenGitHistoryPanel();
+        return;
+      }
+      // files/git/kanban/settings：wrapper 只拦截「已开 → 回切」分支；
+      // 未开时委托 base handler 执行既有 open action（base 保留兜底 case）。
+      if (target === "files" || target === "git") {
+        const isActive =
+          target === "files"
+            ? isQuickSwitcherFilesActive(navigationState)
+            : isQuickSwitcherGitActive(navigationState);
+        if (isActive) {
+          closeQuickSwitcher();
+          closeHomeSurface();
+          collapseRightPanel();
+          return;
+        }
+        handleBaseQuickSwitcherNavigate(target);
+        return;
+      }
+      if (target === "kanban") {
+        if (isQuickSwitcherKanbanActive(navigationState)) {
+          closeQuickSwitcher();
+          closeHomeSurface();
+          setAppMode("chat");
+          return;
+        }
+        handleBaseQuickSwitcherNavigate(target);
+        return;
+      }
+      if (target === "settings") {
+        if (isQuickSwitcherSettingsActive(navigationState)) {
+          closeQuickSwitcher();
+          closeHomeSurface();
+          closeSettings();
+          return;
+        }
+        handleBaseQuickSwitcherNavigate(target);
         return;
       }
       handleBaseQuickSwitcherNavigate(target);
@@ -2041,7 +2207,6 @@ export function useAppShellLayoutNodesSection(
       selectedModelId: effectiveSelectedModelId,
       projectMapDatasetController,
       onSelectModel: handleSelectModel,
-      onDispatchOrchestrationTask: handleDispatchOrchestrationTask,
       intentCanvasOpenRequest,
       onOpenIntentCanvas: handleOpenIntentCanvas,
       onIntentCanvasOpenRequestConsumed: handleIntentCanvasOpenRequestConsumed,
@@ -2198,5 +2363,6 @@ export function useAppShellLayoutNodesSection(
     codeAnnotationBridgeProps,
     workspaceAliasPromptNode,
     handleQuickSwitcherNavigate,
+    quickSwitcherActiveNavigationIds,
   };
 }

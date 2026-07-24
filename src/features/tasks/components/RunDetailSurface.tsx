@@ -9,7 +9,6 @@ type RunDetailSurfaceProps = {
   comparisonRuns?: TaskRunRecord[];
   className?: string;
   onOpenConversation?: (threadId: string) => void;
-  onOpenOrchestrationTask?: (taskId: string) => void;
   onRetryRun?: (run: TaskRunRecord) => void;
   onResumeRun?: (run: TaskRunRecord) => void;
   onCancelRun?: (run: TaskRunRecord) => void;
@@ -28,7 +27,6 @@ export function RunDetailSurface({
   comparisonRuns = [],
   className = "",
   onOpenConversation,
-  onOpenOrchestrationTask,
   onRetryRun,
   onResumeRun,
   onCancelRun,
@@ -52,11 +50,6 @@ export function RunDetailSurface({
     canStartNewExecution &&
     Boolean(onForkRun && availableActions.has("fork_new_run")) &&
     !hasDuplicateConflict;
-  const orchestrationTaskId =
-    run.task.source === "orchestration"
-      ? run.task.orchestrationTaskId ?? run.task.taskId
-      : null;
-  const canOpenOrchestrationTask = Boolean(orchestrationTaskId && onOpenOrchestrationTask);
   const detailClassName = [
     "task-center__detail",
     `task-center__detail--${surface.severity}`,
@@ -143,18 +136,6 @@ export function RunDetailSurface({
             }}
           >
             {t("taskCenter.action.openConversation", "Open conversation")}
-          </button>
-        ) : null}
-        {canOpenOrchestrationTask ? (
-          <button
-            type="button"
-            onClick={() => {
-              if (orchestrationTaskId) {
-                onOpenOrchestrationTask?.(orchestrationTaskId);
-              }
-            }}
-          >
-            {t("taskCenter.action.openOrchestrationTask", "Open source task")}
           </button>
         ) : null}
         {canRetry ? (

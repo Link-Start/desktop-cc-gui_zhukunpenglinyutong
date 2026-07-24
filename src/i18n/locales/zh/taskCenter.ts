@@ -24,7 +24,6 @@ const taskCenter = {
     browserEvidenceCandidates: "候选项",
     source: {
       kanban: "看板",
-      orchestration: "编排",
     },
     browserEvidenceState: {
       available: "可用",
@@ -46,7 +45,6 @@ const taskCenter = {
     },
     action: {
       openConversation: "打开会话",
-      openOrchestrationTask: "打开编排任务",
       retry: "重试",
       resume: "恢复",
       cancel: "取消",

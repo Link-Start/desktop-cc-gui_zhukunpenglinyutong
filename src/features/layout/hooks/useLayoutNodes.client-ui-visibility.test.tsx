@@ -8,8 +8,10 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { ConversationItem, WorkspaceInfo } from "../../../types";
+import type { OpenAppMenuExtraAction } from "../../app/components/OpenAppMenu";
+import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
 import { setComposerDraft } from "../../composer/hooks/composerDraftStore";
 import { useLayoutNodes } from "./useLayoutNodes";
 import type {
@@ -1003,7 +1005,6 @@ function createLayoutOptions(
     usePresentationProfile: false,
     onSelectEngine: noop,
     projectMapDatasetController: undefined,
-    onDispatchOrchestrationTask: async () => ({ ok: false }),
     claudeThinkingVisible: false,
     onResolvedClaudeThinkingVisibleChange: noop,
     onRefreshModelConfig: asyncNoop,
@@ -1770,5 +1771,99 @@ describe("useLayoutNodes client UI visibility", () => {
       </>,
     );
     expect(capturedFileTreePanelProps?.revealRequest?.requestId).toBe(2);
+  });
+});
+
+function buildRunningRadarEntry(id: string): SessionRadarEntry {
+  return {
+    id,
+    workspaceId: "workspace-1",
+    workspaceName: "Workspace",
+    threadId: `thread-${id}`,
+    threadName: `Thread ${id}`,
+    engine: "codex",
+    preview: "",
+    updatedAt: 1,
+    isProcessing: true,
+    startedAt: 1,
+    completedAt: null,
+    durationMs: null,
+  };
+}
+
+function buildRightPanelHeaderAction(
+  isCollapsed: boolean,
+): OpenAppMenuExtraAction {
+  return {
+    id: "right-panel",
+    label: "sidebar.showGitSidebar",
+    icon: null,
+    onSelect: noop,
+    rightPanelExpandAffordance: isCollapsed,
+  };
+}
+
+function readMainHeaderExtraActions(
+  nodes: ReturnType<typeof useLayoutNodes>,
+): OpenAppMenuExtraAction[] | undefined {
+  const header = nodes.mainHeaderNode as ReactElement<{
+    openAppExtraActions?: OpenAppMenuExtraAction[];
+  }> | null;
+  return header?.props.openAppExtraActions;
+}
+
+describe("useLayoutNodes main header radar badge wiring", () => {
+  afterEach(() => {
+    clientUiVisibilityMock.visiblePanels.clear();
+    clientUiVisibilityMock.visibleControls.clear();
+    vi.clearAllMocks();
+  });
+
+  it("injects the running count badge into the collapsed right-panel affordance", async () => {
+    const { result } = await renderUseLayoutNodes(
+      createLayoutOptions({
+        mainHeaderActions: [buildRightPanelHeaderAction(true)],
+        sessionRadarRunningSessions: [
+          buildRunningRadarEntry("run-1"),
+          buildRunningRadarEntry("run-2"),
+        ],
+      }),
+    );
+
+    const actions = readMainHeaderExtraActions(result.current);
+    const rightPanelAction = actions?.find(
+      (action) => action.id === "right-panel",
+    );
+    expect(rightPanelAction?.badgeCount).toBe(2);
+  });
+
+  it("does not inject the badge when the right panel is expanded", async () => {
+    const { result } = await renderUseLayoutNodes(
+      createLayoutOptions({
+        mainHeaderActions: [buildRightPanelHeaderAction(false)],
+        sessionRadarRunningSessions: [
+          buildRunningRadarEntry("run-1"),
+          buildRunningRadarEntry("run-2"),
+        ],
+      }),
+    );
+
+    const actions = readMainHeaderExtraActions(result.current);
+    const rightPanelAction = actions?.find(
+      (action) => action.id === "right-panel",
+    );
+    expect(rightPanelAction?.badgeCount).toBeUndefined();
+  });
+
+  it("returns the original actions reference when no sessions are running", async () => {
+    const mainHeaderActions = [buildRightPanelHeaderAction(true)];
+    const { result } = await renderUseLayoutNodes(
+      createLayoutOptions({
+        mainHeaderActions,
+        sessionRadarRunningSessions: [],
+      }),
+    );
+
+    expect(readMainHeaderExtraActions(result.current)).toBe(mainHeaderActions);
   });
 });

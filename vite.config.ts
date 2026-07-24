@@ -129,6 +129,16 @@ export default defineConfig(({ command }) => ({
     port: 1420,
     strictPort: true,
     host: host || false,
+    proxy: {
+      // 纯 vite dev（非 Tauri webview）下预览 TokenTracker dashboard 用：
+      // tt-transport 在非 Tauri 环境把请求打到 /tt-dev<path>，这里转发到本地
+      // `tokentracker` CLI server。不影响 tauri dev / build。
+      "/tt-dev": {
+        target: "http://127.0.0.1:7680",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/tt-dev/, ""),
+      },
+    },
     hmr: host
       ? {
           protocol: "ws",
