@@ -76,3 +76,12 @@ The shared composer completion dropdown MUST isolate failures while mapping prov
 - **AND** the user confirms the active item with Enter or Tab
 - **THEN** the completion selection handler MUST receive the raw provider item represented by the active selectable row
 - **AND** the handler MUST NOT receive a section header or separator
+
+### Requirement: Slash completion fallback MUST NOT wait for an absent runtime producer
+
+When the Tauri build has no runtime slash-command refresh producer, the composer slash completion provider MUST return its local commands immediately and MUST NOT register or await legacy JCEF global callbacks.
+
+#### Scenario: local slash completion resolves without bridge data
+- **WHEN** the user opens slash completion and no runtime callback producer exists
+- **THEN** the provider MUST return the local command set without a loading timeout
+- **AND** it MUST NOT read or write `window.updateSlashCommands` or `window.__pendingSlashCommands`

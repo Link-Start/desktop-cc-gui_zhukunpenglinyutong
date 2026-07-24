@@ -2,16 +2,17 @@
 
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
-- Updated At: `2026-07-24`
-- Indexed proposals: `730`
+- Updated At: `2026-07-25`
+- Indexed proposals: `731`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-07 (197)
+## 2026-07 (198)
 
 ### 2026-07-24
 
+- [`2026-07-24-close-cleanup-review-findings`](2026-07-24-close-cleanup-review-findings/proposal.md) — verified correction pass，已同步 composer completion、semantic review 与 settings/workspaces corruption recovery contracts
 - [`2026-07-24-add-agency-agent-catalog`](2026-07-24-add-agency-agent-catalog/proposal.md) — verified implementation，已同步 `curated-agent-catalog` 与 `settings-navigation-consolidation`
 - [`2026-07-24-align-kanban-codex-model-catalog`](2026-07-24-align-kanban-codex-model-catalog/proposal.md) — verified implementation，已同步 `codex-model-catalog-coverage`
 - [`2026-07-24-derive-rate-limit-label-from-window-duration`](2026-07-24-derive-rate-limit-label-from-window-duration/proposal.md) — verified implementation，已同步 `codex-chat-canvas-usage-overview`
