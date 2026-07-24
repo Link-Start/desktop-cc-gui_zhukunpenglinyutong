@@ -539,3 +539,69 @@ review 后修复:P0-1 主场景不闭环(quarantine→take_settings_recovery_not
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1096: 删除 orchestration 残留死字段
+
+**Date**: 2026-07-24
+**Task**: 删除 orchestration 残留死字段
+**Branch**: `feature/v-799`
+
+### Summary
+
+OpenSpec change remove-orchestration-residual-dead-fields：删除 TaskRun 域 orchestration 残留死字段与死分支（types.ts source union/orchestrationTaskId、taskRunStorage normalize/create 分支、taskRunCoordinator 透传），清理覆盖死代码的测试；typecheck/eslint/tasks 全域 vitest 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `35c44d292` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1097: 删除 SettingsView 恒 false 入口开关与死分支
+
+**Date**: 2026-07-24
+**Task**: 删除 SettingsView 恒 false 入口开关与死分支
+**Branch**: `feature/v-799`
+
+### Summary
+
+OpenSpec change remove-settings-view-dead-entry-switches：删除 settingsViewConstants.ts 中 5 个恒 false 的 SHOW_*_ENTRY feature flag（7 行），删除 SettingsView.tsx 中对应 import、5 个仅死分支使用的 icon import（GitCommitHorizontal/FileText/Mic/GitBranch/FlaskConical）及 5 段恒 false JSX 分支（69 行），共删 76 行。typecheck/eslint/SettingsView vitest（52 项）均通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `44a32c392` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1095
+- **Total Sessions**: 1097
 - **Last Active**: 2026-07-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~541 | Active |
+| `journal-27.md` | ~607 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1097 | 2026-07-24 | 删除 SettingsView 恒 false 入口开关与死分支 | `44a32c392` | `feature/v-799` |
+| 1096 | 2026-07-24 | 删除 orchestration 残留死字段 | `35c44d292` | `feature/v-799` |
 | 1095 | 2026-07-24 | P0 治理:修复 quarantine 前端通知缺口与 openspec 索引终态校准,更新决策看板 | `ae0927a17`, `615733516`, `9c395fa2d`, `6bb5fc5f0`, `db9d01978` | `feature/v-078` |
 | 1094 | 2026-07-24 | OpenSpec 索引终态校准 | `6bb5fc5f0` | `feature/v-078` |
 | 1093 | 2026-07-24 | settings 损坏恢复通知链路打通（后端 recovery notice + 前端 toast + i18n） | `ae0927a17`, `615733516`, `9c395fa2d` | `feature/v-078` |
