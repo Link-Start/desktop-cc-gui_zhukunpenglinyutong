@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1104
+- **Total Sessions**: 1105
 - **Last Active**: 2026-07-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~850 | Active |
+| `journal-27.md` | ~883 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1105 | 2026-07-25 | 收口清理波次遗留链路 | `140963bc1` | `feature/v-799` |
 | 1104 | 2026-07-25 | 修复 workspaces.json 损坏静默回退与覆盖写回风险并完成 OpenSpec 闭环 | `42aac995f`, `d51c7dee0`, `d87d62165`, `9cdd61c15`, `41ca6300e` | `feature/v-799` |
 | 1103 | 2026-07-24 | 归档 8 个并行清理 change 并提交 layout 死分支删除 | `43b6e8187`, `ba0e0a6d5` | `feature/v-799` |
 | 1102 | 2026-07-24 | 移除 JCEF bridge no-op 桩与死链调用点 (remove-jcef-bridge-noop-stubs) | `e20e5d147`, `51ecca64a` | `feature/v-799` |

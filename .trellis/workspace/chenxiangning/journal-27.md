@@ -848,3 +848,36 @@ Note: 中间 6eca222b3 为并行代理的 trellis 记录提交；未执行 archi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1105: 收口清理波次遗留链路
+
+**Date**: 2026-07-25
+**Task**: 收口清理波次遗留链路
+**Branch**: `feature/v-799`
+
+### Summary
+
+删除无 producer 的 JCEF completion 等待链，修正 semantic review cache/fallback 与 corrupted backup 唯一性，清理 notice dead branch；focused Vitest 28/28、ESLint、typecheck、Rust 8/8 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `140963bc1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
