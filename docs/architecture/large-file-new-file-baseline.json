@@ -1124,16 +1124,6 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/composer/components/ComposerInput.tsx",
-      "lines": 1634,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src/lib/spec-core/runtime.ts",
       "lines": 1626,
       "type": "ts/tsx",
