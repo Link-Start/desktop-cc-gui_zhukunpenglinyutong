@@ -253,3 +253,37 @@ OpenSpec change: remove-project-map-orchestration-center
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1090: 修复引擎二元假设并收敛 isValidModelId 校验
+
+**Date**: 2026-07-24
+**Task**: 修复引擎二元假设并收敛 isValidModelId 校验
+**Branch**: `feature/v-078`
+
+### Summary
+
+OpenSpec change fix-engine-attribution-and-model-id-validation:EngineTaskOutputEngine 放宽为 EngineType 并显式 normalize unknown 值;useStatusPanelData/StatusPanel/useLayoutNodes 透传真实引擎;vendors/types.ts 的 isValidModelId/MODEL_ID_PATTERN 收敛为 composer/types/provider 单一实现(≤128 + pattern)。typecheck/eslint/focused vitest 全部通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `38e139b37` | (see git log) |
+| `bfb61b9e2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
