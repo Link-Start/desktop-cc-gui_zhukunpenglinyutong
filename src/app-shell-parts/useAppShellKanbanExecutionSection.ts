@@ -48,7 +48,8 @@ import {
 } from "./useAppShellSections.kanbanHelpers";
 import type { UseAppShellSectionsContext } from "./useAppShellSectionsTypes";
 
-const KANBAN_SCHEDULER_INTERVAL_MS = 20_000;
+// 到期任务的最小重查间隔：next-due 对齐定时器的下限，防止过期 nextRunAt 造成忙循环。
+const KANBAN_SCHEDULER_MIN_INTERVAL_MS = 5_000;
 const KANBAN_EXECUTION_LOCK_STALE_MS = 120_000;
 
 type CreateKanbanTaskInput = Pick<
@@ -124,9 +125,22 @@ export function useAppShellKanbanExecutionSection(
       if (!current) {
         return;
       }
+      const currentExecution = (current.execution ?? {}) as Record<
+        string,
+        unknown
+      >;
+      // 等值短路：scheduler tick 每轮都会对 processing/locked 任务写相同值，
+      // 无变化时不产生新 store 版本——既避免本文件 scheduler effect
+      // （依赖 typedKanbanTasks）自触发无限循环，也消掉无效落盘。
+      const hasEffectiveChange = Object.entries(changes).some(
+        ([key, value]) => currentExecution[key] !== value,
+      );
+      if (!hasEffectiveChange) {
+        return;
+      }
       kanbanUpdateTask(taskId, {
         execution: {
-          ...(current.execution ?? {}),
+          ...currentExecution,
           ...changes,
         },
       });
@@ -1029,15 +1043,52 @@ export function useAppShellKanbanExecutionSection(
       }
     };
 
+    // 固定 20s 轮询改为 next-due 对齐：每次 tick 后按最近的 schedule.nextRunAt
+    // 自续期 setTimeout；无到期任务时完全休眠。任务增删/改 schedule 会使本
+    // effect 重跑（typedKanbanTasks 在 deps 中），立即补一次 tick 并重算唤醒点。
+    let schedulerTimer: number | null = null;
+    const scheduleNextTick = () => {
+      if (schedulerTimer !== null) {
+        window.clearTimeout(schedulerTimer);
+        schedulerTimer = null;
+      }
+      const nowTs = Date.now();
+      let nextDueAt: number | null = null;
+      for (const task of kanbanTasksRef.current) {
+        const schedule = task.schedule;
+        if (!schedule || schedule.mode === "manual" || schedule.paused) {
+          continue;
+        }
+        if (typeof schedule.nextRunAt !== "number") {
+          continue;
+        }
+        if (nextDueAt === null || schedule.nextRunAt < nextDueAt) {
+          nextDueAt = schedule.nextRunAt;
+        }
+      }
+      if (nextDueAt === null) {
+        return;
+      }
+      const delay = Math.max(
+        nextDueAt - nowTs,
+        KANBAN_SCHEDULER_MIN_INTERVAL_MS,
+      );
+      schedulerTimer = window.setTimeout(() => {
+        schedulerTimer = null;
+        runSchedulerTick();
+        scheduleNextTick();
+      }, delay);
+    };
+
     runSchedulerTick();
-    const timer = window.setInterval(
-      runSchedulerTick,
-      KANBAN_SCHEDULER_INTERVAL_MS,
-    );
+    scheduleNextTick();
     return () => {
-      window.clearInterval(timer);
+      if (schedulerTimer !== null) {
+        window.clearTimeout(schedulerTimer);
+      }
     };
   }, [
+    typedKanbanTasks,
     typedThreadStatusById,
     kanbanUpdateTask,
     updateTaskExecution,

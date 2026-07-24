@@ -278,6 +278,14 @@ pub fn run() {
                         }
                         let settings = state.app_settings.lock().await.clone();
                         crate::runtime::commands::run_reconcile_cycle(&state, &settings).await;
+                        // 差量发布 runtime 池快照：仅变化时 emit，前端 dock
+                        // 由 5s 常驻轮询改为事件订阅 + 慢速兜底。
+                        let snapshot = state.runtime_manager.snapshot(&settings).await;
+                        crate::runtime::commands::publish_runtime_pool_snapshot_if_changed(
+                            &app_handle,
+                            &snapshot,
+                        )
+                        .await;
                     }
                 });
             }
