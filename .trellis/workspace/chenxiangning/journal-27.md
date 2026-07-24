@@ -811,3 +811,40 @@ Note: 中间 6eca222b3 为并行代理的 trellis 记录提交；未执行 archi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1104: 修复 workspaces.json 损坏静默回退与覆盖写回风险并完成 OpenSpec 闭环
+
+**Date**: 2026-07-25
+**Task**: 修复 workspaces.json 损坏静默回退与覆盖写回风险并完成 OpenSpec 闭环
+**Branch**: `feature/v-799`
+
+### Summary
+
+复用 settings 修复模式:泛化 backup_corrupted_file 先隔离备份损坏 workspaces.json 再回退空列表(GUI/daemon 两处);平行新增 WorkspacesRecoveryNotice 与 take_workspaces_recovery_notice 命令;useWorkspaces 挂载后弹一次本地化 toast(zh/en 补 key)。验证:typecheck/eslint/Vitest 49 通过,cargo lib 1538+daemon 951 通过(runtime::tests 2 个沙箱预存失败除外)。OpenSpec change preserve-corrupted-workspaces-on-load-and-notify 已归档,新主 spec workspaces-corruption-recovery 已同步,索引计数按实测补登(active=4/archive=730/specs=431),全量 strict 仅预存 add-tokentracker-usage-dashboard 失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `42aac995f` | (see git log) |
+| `d51c7dee0` | (see git log) |
+| `d87d62165` | (see git log) |
+| `9cdd61c15` | (see git log) |
+| `41ca6300e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
