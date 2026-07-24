@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1107
+- **Total Sessions**: 1108
 - **Last Active**: 2026-07-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~949 | Active |
+| `journal-27.md` | ~982 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1108 | 2026-07-25 | 整理 Pi 插件与编排调研 | `32b52cf76` | `feature/v-799` |
 | 1107 | 2026-07-25 | 整理 Obsidian 插件生态调研 | `365d8cb33` | `feature/v-799` |
 | 1106 | 2026-07-25 | 归档清理复核 OpenSpec | `77040b143` | `feature/v-799` |
 | 1105 | 2026-07-25 | 收口清理波次遗留链路 | `140963bc1` | `feature/v-799` |
