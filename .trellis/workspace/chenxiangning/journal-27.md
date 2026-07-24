@@ -220,3 +220,36 @@ OpenSpec change: remove-project-map-orchestration-center
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1089: P0-4 openspec specs 索引补登与计数校准
+
+**Date**: 2026-07-24
+**Task**: P0-4 openspec specs 索引补登与计数校准
+**Branch**: `feature/v-078`
+
+### Summary
+
+补登 26 个未索引 capability 至 openspec/specs/README.md(403→429),同步校准 config.yaml/openspec/README/changes/README/project.md 计数(Active 4 / Archived 717);openspec validate specs 全绿,2 个失败为并行代理未跟踪 change;typecheck 通过
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0a723b7ec` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
