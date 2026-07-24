@@ -4,7 +4,7 @@ export {
   pickWebAssetsArchive,
   pickWorkspacePath,
 } from "./tauri/filePickers";
-export { getConfigModel, listWorkspaces } from "./tauri/workspaceConfig";
+export { getConfigModel, listWorkspaces, takeWorkspacesRecoveryNotice } from "./tauri/workspaceConfig";
 export {
   compactThreadContext,
   engineInterruptTurn,
