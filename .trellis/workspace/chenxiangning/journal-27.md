@@ -502,3 +502,40 @@ OpenSpec change notify-settings-recovery-after-corruption 已归档并同步主 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1095: P0 治理:修复 quarantine 前端通知缺口与 openspec 索引终态校准,更新决策看板
+
+**Date**: 2026-07-24
+**Task**: P0 治理:修复 quarantine 前端通知缺口与 openspec 索引终态校准,更新决策看板
+**Branch**: `feature/v-078`
+
+### Summary
+
+review 后修复:P0-1 主场景不闭环(quarantine→take_settings_recovery_notice→前端 toast,zh/en i18n 补齐,已归档 notify-settings-recovery-after-corruption);openspec 索引终态校准(430 specs/721 archived/4 active,补登 45 条预存漏登,6bb5fc5f0);决策看板文档更新并入库
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ae0927a17` | (see git log) |
+| `615733516` | (see git log) |
+| `9c395fa2d` | (see git log) |
+| `6bb5fc5f0` | (see git log) |
+| `db9d01978` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
