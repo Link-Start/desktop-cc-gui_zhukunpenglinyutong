@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AppSettings } from "../../../types";
+import i18n from "../../../i18n";
+import { pushErrorToast } from "../../../services/toasts";
 import {
   getAppSettings,
   runClaudeDoctor,
@@ -578,8 +580,25 @@ export function useAppSettings() {
             ),
           );
         }
-      } catch {
-        // Defaults stay in place if loading settings fails.
+      } catch (error) {
+        // Defaults stay in place if loading settings fails, but the failure must be
+        // visible: a corrupted settings file silently resets user preferences otherwise.
+        console.error(
+          "[useAppSettings] failed to load app settings; falling back to defaults",
+          error,
+        );
+        pushErrorToast({
+          title:
+            i18n.t("settings.appSettingsLoadFailedTitle", {
+              defaultValue: "设置加载失败",
+            }) || "设置加载失败",
+          message:
+            i18n.t("settings.appSettingsLoadFailedMessage", {
+              defaultValue:
+                "已回退到默认设置。若设置文件损坏，后端已将其备份为 .bak 文件以便恢复。",
+            }) ||
+            "已回退到默认设置。若设置文件损坏，后端已将其备份为 .bak 文件以便恢复。",
+        });
       } finally {
         if (active) {
           setIsLoading(false);

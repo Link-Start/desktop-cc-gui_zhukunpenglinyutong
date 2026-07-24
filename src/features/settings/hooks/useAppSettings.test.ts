@@ -10,6 +10,7 @@ import {
   runKimiDoctor,
   updateAppSettings,
 } from "../../../services/tauri";
+import { pushErrorToast } from "../../../services/toasts";
 import { UI_SCALE_DEFAULT, UI_SCALE_MAX } from "../../../utils/uiScale";
 import {
   DEFAULT_UI_FONT_FAMILY,
@@ -24,11 +25,16 @@ vi.mock("../../../services/tauri", () => ({
   runKimiDoctor: vi.fn(),
 }));
 
+vi.mock("../../../services/toasts", () => ({
+  pushErrorToast: vi.fn(),
+}));
+
 const getAppSettingsMock = vi.mocked(getAppSettings);
 const runClaudeDoctorMock = vi.mocked(runClaudeDoctor);
 const runKimiDoctorMock = vi.mocked(runKimiDoctor);
 const updateAppSettingsMock = vi.mocked(updateAppSettings);
 const runCodexDoctorMock = vi.mocked(runCodexDoctor);
+const pushErrorToastMock = vi.mocked(pushErrorToast);
 
 describe("useAppSettings", () => {
   beforeEach(() => {
@@ -114,6 +120,28 @@ describe("useAppSettings", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.settings.geminiEnabled).toBe(false);
+  });
+
+  it("surfaces a toast and keeps defaults when loading settings fails", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    getAppSettingsMock.mockRejectedValue(new Error("settings read failed"));
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.settings.theme).toBe("system");
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(pushErrorToastMock).toHaveBeenCalledTimes(1);
+    expect(pushErrorToastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.any(String),
+        message: expect.any(String),
+      }),
+    );
+    consoleErrorSpy.mockRestore();
   });
 
   it("keeps an explicitly cleared curated skill list disabled", async () => {

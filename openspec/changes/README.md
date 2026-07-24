@@ -3,9 +3,9 @@
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
 - Updated At: `2026-07-24`
-- Active proposals: `5`
-- Archived proposals: `717`
-- Main capability specs: `429`
+- Active proposals: `4`
+- Archived proposals: `719`
+- Main capability specs: `431`
 
 ## Active Proposals
 
@@ -15,10 +15,10 @@
 | [`add-vendor-cli-lifecycle-header`](add-vendor-cli-lifecycle-header/proposal.md) | 11/12 | 手工：未安装 / 最新 / outdated / npm view 失败 / 安装后刷新 smoke | [design](add-vendor-cli-lifecycle-header/design.md) · [tasks](add-vendor-cli-lifecycle-header/tasks.md) · [specs](add-vendor-cli-lifecycle-header/specs/) |
 | [`enable-claude-lightweight-streaming-and-frame-attribution`](enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) | 15/18 | Claude-stream trace、final fidelity 与 archive gate | [design](enable-claude-lightweight-streaming-and-frame-attribution/design.md) · [tasks](enable-claude-lightweight-streaming-and-frame-attribution/tasks.md) · [specs](enable-claude-lightweight-streaming-and-frame-attribution/specs/) · [verification](enable-claude-lightweight-streaming-and-frame-attribution/verification.md) |
 | [`stabilize-client-runtime-and-diagnostics`](stabilize-client-runtime-and-diagnostics/proposal.md) | 21/22 | Quantified frame / first-delta trace retention | [design](stabilize-client-runtime-and-diagnostics/design.md) · [tasks](stabilize-client-runtime-and-diagnostics/tasks.md) · [specs](stabilize-client-runtime-and-diagnostics/specs/) · [verification](stabilize-client-runtime-and-diagnostics/verification.md) |
-| [`preserve-corrupted-app-settings-on-load`](preserve-corrupted-app-settings-on-load/proposal.md) | 0/6 | implementation in progress | [tasks](preserve-corrupted-app-settings-on-load/tasks.md) · [specs](preserve-corrupted-app-settings-on-load/specs/) |
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 717 个 proposal，按月份 / 归档日期分组。
+- [完整归档提案索引](archive/README.md) — 719 个 proposal，按月份 / 归档日期分组。
+- [2026-07-24 `preserve-corrupted-app-settings-on-load`](archive/2026-07-24-preserve-corrupted-app-settings-on-load/proposal.md) — 已同步 `app-settings-corruption-recovery`：`settings.json` 损坏时先隔离备份为 `.corrupted-<timestamp>.bak` 再回退默认值，frontend 加载失败改为日志 + toast 可见。
 - [2026-07-24 归档批次](archive/README.md#2026-07-24) — 23 个 verified proposal：Kimi 引擎、Agent Catalog、扩展管理面、AI PR 标题/正文、prompt enhancer 入口、source-aware 便签捕获、file history 迁入 git graph、git history 分支树恢复、PR range gate 软化与编排中心删除等。
 - [2026-07-23 `add-theme-aware-syntax-and-diff-tokens`](archive/2026-07-23-add-theme-aware-syntax-and-diff-tokens/proposal.md) — 已同步 theme preset syntax/diff tokens、稳定 root override 与外观设置实时预览。
 - [2026-07-23 `fix-multi-repository-git-inline-diff-scope`](archive/2026-07-23-fix-multi-repository-git-inline-diff-scope/proposal.md) — 已同步 multi-repository scoped inline diff、discard-all、diff layout 与 command-header actions。
