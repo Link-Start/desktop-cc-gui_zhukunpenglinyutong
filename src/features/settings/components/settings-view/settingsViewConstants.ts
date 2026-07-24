@@ -1,12 +1,5 @@
 import type { TFunction } from "i18next";
 
-// Feature flags to show/hide settings sidebar entries
-export const SHOW_DICTATION_ENTRY = false;
-export const SHOW_GIT_ENTRY = false;
-export const SHOW_EXPERIMENTAL_ENTRY = false;
-export const SHOW_COMMIT_ENTRY = false;
-export const SHOW_COMPOSER_ENTRY = false;
-
 export const DICTATION_MODELS = (t: TFunction) => [
   { id: "tiny", label: t("settings.dictationModelTiny"), size: "75 MB", note: t("settings.dictationModelFastest") },
   { id: "base", label: t("settings.dictationModelBase"), size: "142 MB", note: t("settings.dictationModelBalanced") },

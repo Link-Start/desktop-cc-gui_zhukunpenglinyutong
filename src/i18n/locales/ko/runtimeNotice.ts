@@ -11,7 +11,6 @@ const runtimeNotice = {
     "emptyTitle": "아직 런타임 알림이 없습니다",
     "emptyDescription": "초기화 진행 상황과 주요 오류가 여기에 표시됩니다.",
     "statusIdle": "대기 중",
-    "statusStreaming": "실행 중",
     "statusError": "오류",
     "severityInfo": "정보",
     "severityWarning": "경고",

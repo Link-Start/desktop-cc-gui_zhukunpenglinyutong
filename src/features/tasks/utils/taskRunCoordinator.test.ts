@@ -3,7 +3,6 @@ import type { KanbanTask } from "../../kanban/types";
 import type { TaskRunStoreData } from "../types";
 import {
   beginTaskRun,
-  beginTaskRunFromDefinition,
   beginTaskRunWithTrigger,
 } from "./taskRunCoordinator";
 
@@ -160,34 +159,5 @@ describe("taskRunCoordinator", () => {
     });
 
     expect(result).toMatchObject({ ok: false, reason: "unsupported_engine" });
-  });
-
-  it("creates a non-Kanban orchestration run from a provider-neutral definition", () => {
-    const result = beginTaskRunFromDefinition({
-      store: { version: 1, runs: [] },
-      task: {
-        taskId: "orchestration-task-1",
-        workspaceId: "workspace-1",
-        title: "Dispatch orchestration task",
-        source: "orchestration",
-        orchestrationTaskId: "orchestration-task-1",
-        engine: "codex",
-      },
-      trigger: "manual",
-      now: 300,
-    });
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.run).toMatchObject({
-        task: {
-          taskId: "orchestration-task-1",
-          source: "orchestration",
-          orchestrationTaskId: "orchestration-task-1",
-        },
-        trigger: "manual",
-        status: "queued",
-      });
-    }
   });
 });

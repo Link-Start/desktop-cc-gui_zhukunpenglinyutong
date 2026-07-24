@@ -11,7 +11,6 @@ const runtimeNotice = {
     "emptyTitle": "ランタイム通知はまだありません",
     "emptyDescription": "初期化の進行状況や主要なエラーがここに表示されます。",
     "statusIdle": "アイドル",
-    "statusStreaming": "実行中",
     "statusError": "エラー",
     "severityInfo": "情報",
     "severityWarning": "警告",

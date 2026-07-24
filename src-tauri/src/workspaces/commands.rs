@@ -49,6 +49,9 @@ use crate::codex::spawn_workspace_session;
 use crate::engine::{resolve_engine_type, EngineType};
 use crate::git_utils::resolve_git_root;
 use crate::remote_backend;
+use crate::shared::settings_core::{
+    take_workspaces_recovery_notice_core, WorkspacesRecoveryNotice,
+};
 use crate::shared::workspaces_core;
 use crate::state::AppState;
 use crate::storage::write_workspaces_preserving_existing;
@@ -1177,6 +1180,13 @@ pub(crate) async fn list_workspaces(
     }
 
     Ok(workspaces_core::list_workspaces_core(&state.workspaces, &state.sessions).await)
+}
+
+#[tauri::command]
+pub(crate) async fn take_workspaces_recovery_notice(
+    state: State<'_, AppState>,
+) -> Result<Option<WorkspacesRecoveryNotice>, String> {
+    Ok(take_workspaces_recovery_notice_core(&state.workspaces_recovery_notice).await)
 }
 
 #[tauri::command]

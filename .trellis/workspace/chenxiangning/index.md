@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1095
-- **Last Active**: 2026-07-24
+- **Total Sessions**: 1110
+- **Last Active**: 2026-07-25
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~541 | Active |
+| `journal-27.md` | ~1048 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,21 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1110 | 2026-07-25 | 合并 upstream 0.7.9 README 更新 | `f7ad30eac` | `feature/v-799` |
+| 1109 | 2026-07-25 | 汇总 Mossx 插件与 CLI 基石设计 | `ca697ef51` | `feature/v-799` |
+| 1108 | 2026-07-25 | 整理 Pi 插件与编排调研 | `32b52cf76` | `feature/v-799` |
+| 1107 | 2026-07-25 | 整理 Obsidian 插件生态调研 | `365d8cb33` | `feature/v-799` |
+| 1106 | 2026-07-25 | 归档清理复核 OpenSpec | `77040b143` | `feature/v-799` |
+| 1105 | 2026-07-25 | 收口清理波次遗留链路 | `140963bc1` | `feature/v-799` |
+| 1104 | 2026-07-25 | 修复 workspaces.json 损坏静默回退与覆盖写回风险并完成 OpenSpec 闭环 | `42aac995f`, `d51c7dee0`, `d87d62165`, `9cdd61c15`, `41ca6300e` | `feature/v-799` |
+| 1103 | 2026-07-24 | 归档 8 个并行清理 change 并提交 layout 死分支删除 | `43b6e8187`, `ba0e0a6d5` | `feature/v-799` |
+| 1102 | 2026-07-24 | 移除 JCEF bridge no-op 桩与死链调用点 (remove-jcef-bridge-noop-stubs) | `e20e5d147`, `51ecca64a` | `feature/v-799` |
+| 1101 | 2026-07-24 | 删除 latestAgentRuns 死链与 refreshCodexModelConfig 透传层 | `651b8d5e0` | `feature/v-799` |
+| 1100 | 2026-07-24 | 删除 dock streaming 死分支 | `f91ab9a4a` | `feature/v-799` |
+| 1099 | 2026-07-24 | 删除响应式布局死分支 (remove-responsive-layout-dead-branches) | `d723d5d4a` | `feature/v-799` |
+| 1098 | 2026-07-24 | 接线语义 diff AI review 按需生产者 (add-ai-review-producer-wiring) | `053cfbc04` | `feature/v-799` |
+| 1097 | 2026-07-24 | 删除 SettingsView 恒 false 入口开关与死分支 | `44a32c392` | `feature/v-799` |
+| 1096 | 2026-07-24 | 删除 orchestration 残留死字段 | `35c44d292` | `feature/v-799` |
 | 1095 | 2026-07-24 | P0 治理:修复 quarantine 前端通知缺口与 openspec 索引终态校准,更新决策看板 | `ae0927a17`, `615733516`, `9c395fa2d`, `6bb5fc5f0`, `db9d01978` | `feature/v-078` |
 | 1094 | 2026-07-24 | OpenSpec 索引终态校准 | `6bb5fc5f0` | `feature/v-078` |
 | 1093 | 2026-07-24 | settings 损坏恢复通知链路打通（后端 recovery notice + 前端 toast + i18n） | `ae0927a17`, `615733516`, `9c395fa2d` | `feature/v-078` |

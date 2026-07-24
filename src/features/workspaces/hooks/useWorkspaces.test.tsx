@@ -10,8 +10,10 @@ import {
   prewarmCodexDiskRuntime,
   renameWorktree,
   renameWorktreeUpstream,
+  takeWorkspacesRecoveryNotice,
   updateWorkspaceSettings,
 } from "../../../services/tauri";
+import { pushErrorToast } from "../../../services/toasts";
 import { useWorkspaces } from "./useWorkspaces";
 
 vi.mock("../../../services/tauri", () => ({
@@ -27,8 +29,13 @@ vi.mock("../../../services/tauri", () => ({
   prewarmCodexDiskRuntime: vi.fn(),
   removeWorkspace: vi.fn(),
   removeWorktree: vi.fn(),
+  takeWorkspacesRecoveryNotice: vi.fn(),
   updateWorkspaceCodexBin: vi.fn(),
   updateWorkspaceSettings: vi.fn(),
+}));
+
+vi.mock("../../../services/toasts", () => ({
+  pushErrorToast: vi.fn(),
 }));
 
 const worktree: WorkspaceInfo = {
@@ -66,6 +73,9 @@ const workspaceTwo: WorkspaceInfo = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default to "no pending recovery notice" so implementations never leak
+  // across cases (clearAllMocks does not reset implementations).
+  vi.mocked(takeWorkspacesRecoveryNotice).mockResolvedValue(null);
   writeClientStoreData("threads", {});
 });
 
@@ -442,5 +452,72 @@ describe("useWorkspaces sidebar cache", () => {
     await waitFor(() => {
       expect(result.current.workspaces).toEqual([workspaceTwo]);
     });
+  });
+});
+
+describe("useWorkspaces workspaces recovery notice", () => {
+  const takeNoticeMock = vi.mocked(takeWorkspacesRecoveryNotice);
+  const pushErrorToastMock = vi.mocked(pushErrorToast);
+
+  it("surfaces exactly one recovery toast when startup holds a quarantine notice", async () => {
+    const backupFileName = "workspaces.json.corrupted-20260724T000000Z.bak";
+    vi.mocked(listWorkspaces).mockResolvedValue([workspaceOne]);
+    takeNoticeMock.mockResolvedValue({ backupFileName });
+
+    const { result } = renderHook(() => useWorkspaces());
+
+    await waitFor(() => expect(result.current.workspaces).toHaveLength(1));
+    await waitFor(() => expect(pushErrorToastMock).toHaveBeenCalledTimes(1));
+
+    expect(takeNoticeMock).toHaveBeenCalledTimes(1);
+    expect(pushErrorToastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.any(String),
+        message: expect.stringContaining(backupFileName),
+      }),
+    );
+  });
+
+  it("stays silent when startup holds no recovery notice", async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([workspaceOne]);
+    takeNoticeMock.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useWorkspaces());
+
+    await waitFor(() => expect(result.current.workspaces).toHaveLength(1));
+
+    expect(takeNoticeMock).toHaveBeenCalledTimes(1);
+    expect(pushErrorToastMock).not.toHaveBeenCalled();
+  });
+
+  it("uses the backup-failed copy when the notice has no backup file name", async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([workspaceOne]);
+    takeNoticeMock.mockResolvedValue({ backupFileName: null });
+
+    const { result } = renderHook(() => useWorkspaces());
+
+    await waitFor(() => expect(result.current.workspaces).toHaveLength(1));
+    await waitFor(() => expect(pushErrorToastMock).toHaveBeenCalledTimes(1));
+
+    const toast = pushErrorToastMock.mock.calls[0]?.[0];
+    expect(toast?.message).toEqual(expect.any(String));
+    expect(toast?.message ?? "").not.toContain("{{backupFileName}}");
+    expect(toast?.message ?? "").not.toContain(".bak");
+  });
+
+  it("keeps loading workspaces when the recovery notice fetch itself fails", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    vi.mocked(listWorkspaces).mockResolvedValue([workspaceOne]);
+    takeNoticeMock.mockRejectedValue(new Error("notice fail"));
+
+    const { result } = renderHook(() => useWorkspaces());
+
+    await waitFor(() => expect(result.current.workspaces).toHaveLength(1));
+
+    expect(result.current.workspaces).toEqual([workspaceOne]);
+    expect(pushErrorToastMock).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 });

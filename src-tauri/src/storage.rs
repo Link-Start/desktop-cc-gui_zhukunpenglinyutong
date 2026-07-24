@@ -262,12 +262,12 @@ pub(crate) fn read_settings(path: &PathBuf) -> Result<AppSettings, String> {
     Ok(settings)
 }
 
-/// Quarantine an unreadable/corrupted settings file before callers fall back to
-/// defaults, so a later `write_settings` never destroys the user's original content.
+/// Quarantine an unreadable/corrupted storage JSON file before callers fall back
+/// to defaults, so a later save never destroys the user's original content.
 /// Timestamp pattern follows the project-map relationship backup convention.
 /// Returns the backup path on success so callers can surface a recovery notice;
 /// `None` when the file is missing or the rename failed.
-pub(crate) fn backup_corrupted_settings_file(path: &PathBuf, error: &str) -> Option<PathBuf> {
+pub(crate) fn backup_corrupted_file(path: &PathBuf, error: &str) -> Option<PathBuf> {
     if !path.exists() {
         return None;
     }
@@ -275,19 +275,22 @@ pub(crate) fn backup_corrupted_settings_file(path: &PathBuf, error: &str) -> Opt
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or("settings.json");
-    let backup_path = path.with_file_name(format!("{file_name}.corrupted-{timestamp}.bak"));
+        .unwrap_or("storage.json");
+    let backup_path = path.with_file_name(format!(
+        "{file_name}.corrupted-{timestamp}-{}.bak",
+        Uuid::new_v4()
+    ));
     match std::fs::rename(path, &backup_path) {
         Ok(()) => {
             eprintln!(
-                "[storage] settings file failed to load ({error}); backed up corrupted file to {}",
+                "[storage] {file_name} failed to load ({error}); backed up corrupted file to {}",
                 backup_path.display()
             );
             Some(backup_path)
         }
         Err(rename_error) => {
             eprintln!(
-                "[storage] settings file failed to load ({error}); failed to back up corrupted file {}: {rename_error}",
+                "[storage] {file_name} failed to load ({error}); failed to back up corrupted file {}: {rename_error}",
                 path.display()
             );
             None
@@ -325,8 +328,8 @@ pub(crate) fn write_json_file<T: Serialize>(path: &Path, value: &T) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::{
-        backup_corrupted_settings_file, read_settings, read_workspaces, write_settings,
-        write_workspaces, write_workspaces_preserving_existing,
+        backup_corrupted_file, read_settings, read_workspaces, write_settings, write_workspaces,
+        write_workspaces_preserving_existing,
     };
     use crate::types::{AppSettings, WorkspaceEntry, WorkspaceKind, WorkspaceSettings};
     use std::sync::{Arc, Barrier};
@@ -638,15 +641,15 @@ mod tests {
     }
 
     #[test]
-    fn backup_corrupted_settings_file_preserves_original_before_default_fallback() {
+    fn backup_corrupted_file_preserves_original_before_default_fallback() {
         let temp_dir = std::env::temp_dir().join(format!("moss-x-test-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&temp_dir).expect("create temp dir");
         let path = temp_dir.join("settings.json");
         std::fs::write(&path, "{ not valid json").expect("write corrupted settings");
 
         let error = read_settings(&path).expect_err("corrupted settings must fail");
-        let backup_path = backup_corrupted_settings_file(&path, &error)
-            .expect("quarantine must report the backup path");
+        let backup_path =
+            backup_corrupted_file(&path, &error).expect("quarantine must report the backup path");
 
         assert!(!path.exists(), "corrupted file must be moved aside");
         let backups: Vec<_> = std::fs::read_dir(&temp_dir)
@@ -682,13 +685,82 @@ mod tests {
     }
 
     #[test]
-    fn backup_corrupted_settings_file_is_noop_for_missing_file() {
+    fn backup_corrupted_file_is_noop_for_missing_file() {
         let temp_dir = std::env::temp_dir().join(format!("moss-x-test-{}", Uuid::new_v4()));
         let path = temp_dir.join("settings.json");
-        let backup_path = backup_corrupted_settings_file(&path, "missing");
+        let backup_path = backup_corrupted_file(&path, "missing");
         assert!(backup_path.is_none(), "missing file must not report a backup");
         assert!(!path.exists());
         assert!(!temp_dir.exists(), "no backup directory side effects");
+    }
+
+    #[test]
+    fn backup_corrupted_file_uses_unique_targets_for_repeated_quarantine() {
+        let temp_dir = std::env::temp_dir().join(format!("moss-x-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).expect("create temp dir");
+        let path = temp_dir.join("settings.json");
+
+        std::fs::write(&path, "first corrupted payload").expect("write first payload");
+        let first_backup =
+            backup_corrupted_file(&path, "first failure").expect("backup first payload");
+
+        std::fs::write(&path, "second corrupted payload").expect("write second payload");
+        let second_backup =
+            backup_corrupted_file(&path, "second failure").expect("backup second payload");
+
+        assert_ne!(first_backup, second_backup, "backup targets must be unique");
+        assert_eq!(
+            std::fs::read_to_string(first_backup).expect("read first backup"),
+            "first corrupted payload"
+        );
+        assert_eq!(
+            std::fs::read_to_string(second_backup).expect("read second backup"),
+            "second corrupted payload"
+        );
+    }
+
+    #[test]
+    fn backup_corrupted_file_preserves_corrupted_workspaces_before_default_fallback() {
+        let temp_dir = std::env::temp_dir().join(format!("moss-x-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).expect("create temp dir");
+        let path = temp_dir.join("workspaces.json");
+        std::fs::write(&path, "[ { broken workspaces").expect("write corrupted workspaces");
+
+        let error = read_workspaces(&path).expect_err("corrupted workspaces must fail");
+        let backup_path =
+            backup_corrupted_file(&path, &error).expect("quarantine must report the backup path");
+
+        assert!(!path.exists(), "corrupted file must be moved aside");
+        let backups: Vec<_> = std::fs::read_dir(&temp_dir)
+            .expect("read temp dir")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("workspaces.json.corrupted-")
+            })
+            .collect();
+        assert_eq!(backups.len(), 1, "exactly one backup file expected");
+        assert_eq!(
+            backups[0].path(),
+            backup_path,
+            "returned backup path must match the quarantined file"
+        );
+        assert!(
+            backups[0].file_name().to_string_lossy().ends_with(".bak"),
+            "backup file must use .bak suffix"
+        );
+        let preserved = std::fs::read_to_string(backups[0].path()).expect("read backup");
+        assert_eq!(preserved, "[ { broken workspaces");
+        // After quarantine, a fresh save writes a new workspaces.json instead of
+        // destroying the user's original content.
+        write_workspaces(&path, &[]).expect("write empty default workspaces");
+        assert!(path.exists());
+        assert_eq!(
+            std::fs::read_to_string(backups[0].path()).expect("backup remains"),
+            "[ { broken workspaces"
+        );
     }
 
     #[test]

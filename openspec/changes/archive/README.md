@@ -2,16 +2,17 @@
 
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
-- Updated At: `2026-07-24`
-- Indexed proposals: `721`
+- Updated At: `2026-07-25`
+- Indexed proposals: `731`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-07 (188)
+## 2026-07 (198)
 
 ### 2026-07-24
 
+- [`2026-07-24-close-cleanup-review-findings`](2026-07-24-close-cleanup-review-findings/proposal.md) — verified correction pass，已同步 composer completion、semantic review 与 settings/workspaces corruption recovery contracts
 - [`2026-07-24-add-agency-agent-catalog`](2026-07-24-add-agency-agent-catalog/proposal.md) — verified implementation，已同步 `curated-agent-catalog` 与 `settings-navigation-consolidation`
 - [`2026-07-24-align-kanban-codex-model-catalog`](2026-07-24-align-kanban-codex-model-catalog/proposal.md) — verified implementation，已同步 `codex-model-catalog-coverage`
 - [`2026-07-24-derive-rate-limit-label-from-window-duration`](2026-07-24-derive-rate-limit-label-from-window-duration/proposal.md) — verified implementation，已同步 `codex-chat-canvas-usage-overview`
@@ -39,6 +40,15 @@
 - [`2026-07-24-preserve-corrupted-app-settings-on-load`](2026-07-24-preserve-corrupted-app-settings-on-load/proposal.md) — verified implementation，已同步 `app-settings-corruption-recovery`
 - [`2026-07-24-notify-settings-recovery-after-corruption`](2026-07-24-notify-settings-recovery-after-corruption/proposal.md) — verified implementation，已同步 `app-settings-corruption-recovery`：quarantine 记录一次性 recovery notice，前端加载成功后弹一次本地化 toast
 - [`2026-07-24-remove-settings-view-ts-nocheck-and-skills-dead-branch`](2026-07-24-remove-settings-view-ts-nocheck-and-skills-dead-branch/proposal.md) — verified implementation，已同步 `settings-view-type-safety`
+- [`2026-07-24-remove-jcef-bridge-noop-stubs`](2026-07-24-remove-jcef-bridge-noop-stubs/proposal.md) — verified dead-code removal，未修改 capability specs
+- [`2026-07-24-remove-latest-agent-runs-dead-chain`](2026-07-24-remove-latest-agent-runs-dead-chain/proposal.md) — verified dead-code removal，未修改 capability specs
+- [`2026-07-24-inline-refresh-codex-model-config-passthrough`](2026-07-24-inline-refresh-codex-model-config-passthrough/proposal.md) — verified dead-code removal，未修改 capability specs
+- [`2026-07-24-remove-responsive-layout-dead-branches`](2026-07-24-remove-responsive-layout-dead-branches/proposal.md) — verified dead-code removal，未修改 capability specs
+- [`2026-07-24-remove-settings-view-dead-entry-switches`](2026-07-24-remove-settings-view-dead-entry-switches/proposal.md) — verified dead-code removal，未修改 capability specs
+- [`2026-07-24-remove-orchestration-residual-dead-fields`](2026-07-24-remove-orchestration-residual-dead-fields/proposal.md) — verified dead-code removal，未修改 capability specs
+- [`2026-07-24-remove-dock-streaming-dead-branch`](2026-07-24-remove-dock-streaming-dead-branch/proposal.md) — verified implementation，已同步 `global-runtime-notice-dock`
+- [`2026-07-24-add-ai-review-producer-wiring`](2026-07-24-add-ai-review-producer-wiring/proposal.md) — verified implementation，已同步 `git-panel-diff-view`
+- [`2026-07-24-preserve-corrupted-workspaces-on-load-and-notify`](2026-07-24-preserve-corrupted-workspaces-on-load-and-notify/proposal.md) — verified implementation，已同步 `workspaces-corruption-recovery`：`workspaces.json` 损坏时先隔离备份再回退空列表，quarantine 记录一次性 recovery notice，前端挂载后弹一次本地化 toast
 
 ### 2026-07-23
 

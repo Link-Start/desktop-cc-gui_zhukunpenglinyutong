@@ -39,10 +39,6 @@
   color: var(--text-strong, #f8fafc);
 }
 
-.global-runtime-notice-dock-bubble.is-has-notice {
-  color: #7dd3fc;
-}
-
 .global-runtime-notice-dock-bubble.is-has-error {
   color: #fda4af;
 }
@@ -159,11 +155,6 @@
   letter-spacing: 0.02em;
   background: rgba(148, 163, 184, 0.16);
   color: #cbd5e1;
-}
-
-.global-runtime-notice-dock-status.is-streaming {
-  background: rgba(56, 189, 248, 0.14);
-  color: #7dd3fc;
 }
 
 .global-runtime-notice-dock-status.is-has-error {
@@ -292,11 +283,6 @@
   color: #475569;
 }
 
-:root[data-theme="light"] .global-runtime-notice-dock-status.is-streaming {
-  background: rgba(56, 189, 248, 0.14);
-  color: #0f5ec7;
-}
-
 :root[data-theme="light"] .global-runtime-notice-dock-status.is-has-error {
   background: rgba(248, 113, 113, 0.14);
   color: #b91c1c;
@@ -356,12 +342,6 @@
   :root:not([data-theme]) .global-runtime-notice-dock-status {
     background: rgba(15, 23, 36, 0.08);
     color: #475569;
-  }
-
-  :root[data-theme="system"] .global-runtime-notice-dock-status.is-streaming,
-  :root:not([data-theme]) .global-runtime-notice-dock-status.is-streaming {
-    background: rgba(56, 189, 248, 0.14);
-    color: #0f5ec7;
   }
 
   :root[data-theme="system"] .global-runtime-notice-dock-status.is-has-error,

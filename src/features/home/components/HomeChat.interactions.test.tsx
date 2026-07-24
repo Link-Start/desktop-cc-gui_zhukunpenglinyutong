@@ -41,9 +41,6 @@ afterEach(() => {
 });
 
 const baseProps = {
-  latestAgentRuns: [],
-  isLoadingLatestAgents: false,
-  onSelectThread: vi.fn(),
   onSelectWorkspace: vi.fn(),
   onAddWorkspace: vi.fn(),
   composerNode: <div>Composer node</div>,

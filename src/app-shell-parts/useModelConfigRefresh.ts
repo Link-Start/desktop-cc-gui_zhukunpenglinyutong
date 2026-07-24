@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState } from "react";
 import type { DebugEntry, EngineType } from "../types";
-import { refreshCodexModelConfig } from "../features/models/refreshCodexModelConfig";
 import { resolveModelConfigEngine } from "./modelConfigEngine";
 
 type UseModelConfigRefreshParams = {
@@ -47,7 +46,7 @@ export function useModelConfigRefresh({
       });
       try {
         if (targetEngine === "codex") {
-          await refreshCodexModelConfig({ refreshModels });
+          await refreshModels();
         } else {
           await refreshEngineModels(targetEngine, { forceRefresh: true });
         }

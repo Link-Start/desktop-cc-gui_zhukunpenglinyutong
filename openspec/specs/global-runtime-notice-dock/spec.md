@@ -108,9 +108,10 @@ Defines the global-runtime-notice-dock behavior contract, covering App MUST Prov
 
 #### Scenario: first phase minimized state uses highlight instead of unread count
 
-- **WHEN** 第一阶段最小化状态收到新的 notice 或 error
-- **THEN** 系统 MUST 使用 `streaming` 或 `has-error` 等高亮语义提示变化
+- **WHEN** 第一阶段最小化状态收到新的 error notice
+- **THEN** 系统 MUST 使用 `has-error` 高亮语义提示变化
 - **AND** MUST NOT 展示数字型未读角标
+- **AND** 自 2026-06-05 `c585cc147`（`fix(runtime): 运行时提示仅显示错误消息`）起，dock 聚合状态有意简化为仅 `idle` / `has-error` 两态，MUST NOT 恢复独立的 `streaming` 运行中高亮态
 
 ### Requirement: Expanded Notice Panel MUST Provide Stable Header Layout And Empty State
 
@@ -120,7 +121,7 @@ Defines the global-runtime-notice-dock behavior contract, covering App MUST Prov
 
 - **WHEN** 用户展开全局 notice panel
 - **THEN** 面板头部 MUST 固定展示标题 `运行时提示`
-- **AND** MUST 展示一个反映聚合状态的 compact 状态标签，例如 `空闲`、`运行中` 或 `异常`
+- **AND** MUST 展示一个反映聚合状态的 compact 状态标签，取值仅 `空闲` 或 `异常`（2026-06-05 `c585cc147` 起 `运行中` streaming 态已随 error-only 简化移除）
 
 #### Scenario: expanded panel header stays action-light in phase one
 

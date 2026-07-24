@@ -7,9 +7,6 @@ export {
 export {
   slashCommandProvider,
   commandToDropdownItem,
-  setupSlashCommandsCallback,
-  resetSlashCommandsState,
-  preloadSlashCommands,
 } from './slashCommandProvider';
 
 export {
@@ -26,8 +23,6 @@ export type { AgentItem } from './agentProvider';
 export {
   promptProvider,
   promptToDropdownItem,
-  setupPromptsCallback,
-  resetPromptsState,
 } from './promptProvider';
 
 export type { PromptItem } from './promptProvider';

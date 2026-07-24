@@ -11,7 +11,6 @@ const runtimeNotice = {
     "emptyTitle": "Nenhum aviso de runtime ainda",
     "emptyDescription": "O progresso da inicialização e erros importantes aparecerão aqui.",
     "statusIdle": "Ocioso",
-    "statusStreaming": "Em execução",
     "statusError": "Erro",
     "severityInfo": "Informação",
     "severityWarning": "Aviso",

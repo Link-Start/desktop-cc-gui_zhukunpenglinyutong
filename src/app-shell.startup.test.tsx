@@ -298,12 +298,6 @@ vi.mock("./utils/platform", () => ({
   isWindowsPlatform: vi.fn(() => false),
 }));
 
-vi.mock("./features/models/refreshCodexModelConfig", () => ({
-  refreshCodexModelConfig: vi.fn(async ({ refreshModels }) => {
-    await refreshModels();
-  }),
-}));
-
 vi.mock("./services/systemNotification", () => ({
   setNotificationActionHandler: vi.fn(),
 }));

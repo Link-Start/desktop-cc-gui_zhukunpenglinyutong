@@ -8,7 +8,6 @@ const runtimeNotice = {
     emptyTitle: "暂无运行时提示",
     emptyDescription: "初始化进度和关键错误会显示在这里",
     statusIdle: "空闲",
-    statusStreaming: "运行中",
     statusError: "异常",
     severityInfo: "提示",
     severityWarning: "警告",

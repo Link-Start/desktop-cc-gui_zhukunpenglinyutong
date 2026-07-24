@@ -1606,9 +1606,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
 
   const homeNode = (
     <HomeChat
-      latestAgentRuns={options.latestAgentRuns}
-      isLoadingLatestAgents={options.isLoadingLatestAgents}
-      onSelectThread={options.onSelectHomeThread}
       workspaces={homeWorkspaceOptions}
       selectedWorkspaceId={resolveHomeWorkspaceId(
         options.activeWorkspace?.id ?? null,

@@ -1,7 +1,7 @@
 # Project Context
 
 - Type: OpenSpec Workspace
-- Updated At: 2026-07-24T20:46:00+08:00
+- Updated At: 2026-07-25T01:10:00+08:00
 - Scope: governance snapshot for the current `mossx` repository workspace
 - Product version fact: `ccgui@0.7.5` from `package.json` and `src-tauri/tauri.conf.json`
 
@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: active changes = `4`, archive changes = `721`, main specs = `430`
+- Current workspace state: active changes = `5`, archive changes = `731`, main specs = `431`
 
 ## Entry Surfaces
 
@@ -65,8 +65,8 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 ## Current Inventory
 
 - Active changes: `4`
-- Archive changes: `721`
-- Main specs: `430`
+- Archive changes: `730`
+- Main specs: `431`
 - Completed task sets still active: `0`
 - Ready-for-implementation task sets: `0`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
@@ -388,6 +388,10 @@ npm run check:large-files
 
 ## Update History
 
+- 2026-07-25: Archived `close-cleanup-review-findings` after correcting the prior cleanup wave: removed absent-producer JCEF completion waits, keyed semantic AI review cache by diff/language, kept engine fallback serial, made corrupted storage backup targets unique, and removed residual notice dock branches. Synced five requirements into four existing specs. Calibrated indexes to active=5, archive=731, specs=431 and restored the missing `add-tokentracker-usage-dashboard` active entry.
+- 2026-07-24: Implemented and archived `preserve-corrupted-workspaces-on-load-and-notify`, closing the same silent-fallback-plus-overwrite risk for `workspaces.json` that was fixed for `settings.json`: generalized `backup_corrupted_settings_file` into `backup_corrupted_file`, both GUI and daemon `load()` call sites now quarantine the corrupted file before falling back to an empty workspace map, the GUI records a one-shot `WorkspacesRecoveryNotice` consumed by the new `take_workspaces_recovery_notice` command, and `useWorkspaces` surfaces one localized toast on mount. Synced the new main capability `workspaces-corruption-recovery`. Current counts are active=4, archive=730, specs=431.
+
+- 2026-07-24: Archived eight verified changes from the parallel cleanup wave (`remove-jcef-bridge-noop-stubs`, `remove-latest-agent-runs-dead-chain`, `inline-refresh-codex-model-config-passthrough`, `remove-responsive-layout-dead-branches`, `remove-settings-view-dead-entry-switches`, `remove-orchestration-residual-dead-fields`, `remove-dock-streaming-dead-branch`, `add-ai-review-producer-wiring`); synced delta specs into existing main specs `global-runtime-notice-dock` and `git-panel-diff-view`; backfilled the eight 2026-07-24 archive index entries and calibrated the 2026-07 monthly group count 188 → 196. Current counts are active=4, archive=729, specs=430. The responsive-layout dead-branch removal was the only product-code change in this wave (committed separately).
 - 2026-07-24: Performed a terminal-state index calibration after same-day parallel archive waves drifted the indexes. Removed the `agent-task-orchestration-center` dead link from the specs index (its spec was deleted by the orchestration-center removal archive), registered `app-settings-corruption-recovery` and `settings-view-type-safety`, backfilled 45 missing 2026-07-18~24 entries in the archive index, calibrated the 2026-07 monthly group count 142 → 188, replaced the two new specs' TBD Purpose placeholders, and unified current counts to active=4, archive=721, specs=430. No product code was modified.
 - 2026-07-18: Reconciled four active change directories and added `stabilize-client-runtime-and-diagnostics` verification evidence. Current counts are active=4, archive=640, specs=406; one 21/22 performance-trace gate and two other manual acceptance backlogs remain active.
 - 2026-07-18: Archived `harden-conversation-rendering-for-large-history` under explicit product-owner acceptance and synced ten implemented requirements into five existing main specs; archived `2026-06-22-release-pipeline-cache-sccache` as a failed performance experiment without syncing its invalid success contract. Current counts are active=2, archive=640, specs=406. No product code was modified.

@@ -539,3 +539,510 @@ review 后修复:P0-1 主场景不闭环(quarantine→take_settings_recovery_not
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1096: 删除 orchestration 残留死字段
+
+**Date**: 2026-07-24
+**Task**: 删除 orchestration 残留死字段
+**Branch**: `feature/v-799`
+
+### Summary
+
+OpenSpec change remove-orchestration-residual-dead-fields：删除 TaskRun 域 orchestration 残留死字段与死分支（types.ts source union/orchestrationTaskId、taskRunStorage normalize/create 分支、taskRunCoordinator 透传），清理覆盖死代码的测试；typecheck/eslint/tasks 全域 vitest 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `35c44d292` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1097: 删除 SettingsView 恒 false 入口开关与死分支
+
+**Date**: 2026-07-24
+**Task**: 删除 SettingsView 恒 false 入口开关与死分支
+**Branch**: `feature/v-799`
+
+### Summary
+
+OpenSpec change remove-settings-view-dead-entry-switches：删除 settingsViewConstants.ts 中 5 个恒 false 的 SHOW_*_ENTRY feature flag（7 行），删除 SettingsView.tsx 中对应 import、5 个仅死分支使用的 icon import（GitCommitHorizontal/FileText/Mic/GitBranch/FlaskConical）及 5 段恒 false JSX 分支（69 行），共删 76 行。typecheck/eslint/SettingsView vitest（52 项）均通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `44a32c392` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1098: 接线语义 diff AI review 按需生产者 (add-ai-review-producer-wiring)
+
+**Date**: 2026-07-24
+**Task**: 接线语义 diff AI review 按需生产者 (add-ai-review-producer-wiring)
+**Branch**: `feature/v-799`
+
+### Summary
+
+新增 turnSemanticReview utils(prompt 构建/解析校验/引擎调用)与 useTurnSemanticReview hook(semantic tab 按需触发 + per-turn cache + 失败静默降级),接线 WorkspaceSessionActivityPanel;24 focused tests + 67 panel 回归全过,typecheck/eslint/openspec validate 通过
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `053cfbc04` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1099: 删除响应式布局死分支 (remove-responsive-layout-dead-branches)
+
+**Date**: 2026-07-24
+**Task**: 删除响应式布局死分支 (remove-responsive-layout-dead-branches)
+**Branch**: `feature/v-799`
+
+### Summary
+
+删除硬编码 desktop 的 useLayoutMode 与永远走不到的 PhoneLayout/TabletLayout(-317 行);AppLayout/useLayoutController/renderAppShell 内联恒 false 常量。验证:typecheck 0 error,eslint 0 problem,vitest 23/23。注意:改动被并行代理的整 index commit d723d5d4a(chore(trellis))捎带提交,消息与内容不符,待归档官修复历史。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d723d5d4a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1100: 删除 dock streaming 死分支
+
+**Date**: 2026-07-24
+**Task**: 删除 dock streaming 死分支
+**Branch**: `feature/v-799`
+
+### Summary
+
+OpenSpec remove-dock-streaming-dead-branch：删除 useGlobalRuntimeNoticeDock 的 streaming 死分支（常量/类型成员/resolve 死函数）、组件 label 与指示器分支、10 locale + vitest.setup 的 statusStreaming 键；附 global-runtime-notice-dock spec delta（MODIFIED 两处 requirement，记录 2026-06-05 c585cc147 error-only 简化）。typecheck/eslint/vitest(19) 全绿。--no-commit 避免吞并并行代理 staged 变更。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f91ab9a4a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1101: 删除 latestAgentRuns 死链与 refreshCodexModelConfig 透传层
+
+**Date**: 2026-07-24
+**Task**: 删除 latestAgentRuns 死链与 refreshCodexModelConfig 透传层
+**Branch**: `feature/v-799`
+
+### Summary
+
+两个 OpenSpec change：remove-latest-agent-runs-dead-chain（删除 ~319 行死链：latestAgentRuns.ts+测试 202 行、app-shell 根层两个 useMemo 与 domain context 下传、layoutNodes 链、Home/HomeChat 死 props、四处测试同步）与 inline-refresh-codex-model-config-passthrough（删除 9 行纯透传 helper+测试，内联进 useModelConfigRefresh codex 分支，清理 startup test mock，commit cdf30cffc）。typecheck/eslint/相关 vitest（176 tests）全绿。未执行 archive，未改全局索引。
+
+### Main Changes
+
+OpenSpec changes: remove-latest-agent-runs-dead-chain, inline-refresh-codex-model-config-passthrough
+Commits: 651b8d5e0 refactor(app-shell): 删除 latestAgentRuns 首页死链; cdf30cffc refactor(models): 内联 refreshCodexModelConfig 透传层
+Deleted: src/app-shell-parts/latestAgentRuns.ts (98), src/app-shell-parts/latestAgentRuns.test.ts (104), src/features/models/refreshCodexModelConfig.ts (9), src/features/models/refreshCodexModelConfig.test.ts (26)
+Modified: src/app-shell.tsx, src/app-shell-parts/appShellDomainContexts.ts, src/app-shell-parts/useAppShellLayoutNodesSection.tsx, src/app-shell-parts/useModelConfigRefresh.ts, src/app-shell.startup.test.tsx, src/features/layout/hooks/{useLayoutNodes.tsx,layoutNodesTypes.ts,useLayoutNodes.client-ui-visibility.test.tsx}, src/features/home/components/{Home.tsx,HomeChat.tsx,Home.test.tsx,HomeChat.test.tsx,HomeChat.interactions.test.tsx}
+Verification: npm run typecheck PASS; npx eslint on changed files PASS; vitest home+app-shell-parts (87), layout hooks (87), app-shell.startup (9) all PASS.
+Note: 中间 6eca222b3 为并行代理的 trellis 记录提交；未执行 archive，全局索引文件未动。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `651b8d5e0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1102: 移除 JCEF bridge no-op 桩与死链调用点 (remove-jcef-bridge-noop-stubs)
+
+**Date**: 2026-07-24
+**Task**: 移除 JCEF bridge no-op 桩与死链调用点 (remove-jcef-bridge-noop-stubs)
+**Branch**: `feature/v-799`
+
+### Summary
+
+删除 composer/utils/bridge.ts(73 行全 no-op)与 providers/createBridgeProvider.ts(231 行零引用);清理 slashCommandProvider/promptProvider 的 sendBridgeEvent 死路与 window.updateSlashCommands 注册,移除 useInputHistory 7 处 sendToJava 死写;测试改用 __pendingSlashCommands 注入。typecheck/eslint/vitest(44+545)全绿。注意:并行代理竞态导致 7 个文件被卷入 e20e5d147,删除操作独立提交于 51ecca64a。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e20e5d147` | (see git log) |
+| `51ecca64a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1103: 归档 8 个并行清理 change 并提交 layout 死分支删除
+
+**Date**: 2026-07-24
+**Task**: 归档 8 个并行清理 change 并提交 layout 死分支删除
+**Branch**: `feature/v-799`
+
+### Summary
+
+提交 remove-responsive-layout-dead-branches 成果（删除 Phone/Tablet 布局与 useLayoutMode）；openspec archive 8 个 change，同步 global-runtime-notice-dock 与 git-panel-diff-view 主 spec；索引计数校准 archive 721→729、2026-07 组 188→196；strict 校验与 typecheck 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `43b6e8187` | (see git log) |
+| `ba0e0a6d5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1104: 修复 workspaces.json 损坏静默回退与覆盖写回风险并完成 OpenSpec 闭环
+
+**Date**: 2026-07-25
+**Task**: 修复 workspaces.json 损坏静默回退与覆盖写回风险并完成 OpenSpec 闭环
+**Branch**: `feature/v-799`
+
+### Summary
+
+复用 settings 修复模式:泛化 backup_corrupted_file 先隔离备份损坏 workspaces.json 再回退空列表(GUI/daemon 两处);平行新增 WorkspacesRecoveryNotice 与 take_workspaces_recovery_notice 命令;useWorkspaces 挂载后弹一次本地化 toast(zh/en 补 key)。验证:typecheck/eslint/Vitest 49 通过,cargo lib 1538+daemon 951 通过(runtime::tests 2 个沙箱预存失败除外)。OpenSpec change preserve-corrupted-workspaces-on-load-and-notify 已归档,新主 spec workspaces-corruption-recovery 已同步,索引计数按实测补登(active=4/archive=730/specs=431),全量 strict 仅预存 add-tokentracker-usage-dashboard 失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `42aac995f` | (see git log) |
+| `d51c7dee0` | (see git log) |
+| `d87d62165` | (see git log) |
+| `9cdd61c15` | (see git log) |
+| `41ca6300e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1105: 收口清理波次遗留链路
+
+**Date**: 2026-07-25
+**Task**: 收口清理波次遗留链路
+**Branch**: `feature/v-799`
+
+### Summary
+
+删除无 producer 的 JCEF completion 等待链，修正 semantic review cache/fallback 与 corrupted backup 唯一性，清理 notice dead branch；focused Vitest 28/28、ESLint、typecheck、Rust 8/8 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `140963bc1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1106: 归档清理复核 OpenSpec
+
+**Date**: 2026-07-25
+**Task**: 归档清理复核 OpenSpec
+**Branch**: `feature/v-799`
+
+### Summary
+
+同步 5 条 correction requirements 到 4 个 main specs，归档 close-cleanup-review-findings，并校准 active=5、archive=731、specs=431 及补回 TokenTracker active entry。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `77040b143` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1107: 整理 Obsidian 插件生态调研
+
+**Date**: 2026-07-25
+**Task**: 整理 Obsidian 插件生态调研
+**Branch**: `feature/v-799`
+
+### Summary
+
+分批提交 Obsidian 插件运行时、市场治理、分发开发体验与安全信任模型四份调研文档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `365d8cb33` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1108: 整理 Pi 插件与编排调研
+
+**Date**: 2026-07-25
+**Task**: 整理 Pi 插件与编排调研
+**Branch**: `feature/v-799`
+
+### Summary
+
+分批提交 Pi 插件市场双参照架构与 pi-chat 会话编排两份调研文档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `32b52cf76` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1109: 汇总 Mossx 插件与 CLI 基石设计
+
+**Date**: 2026-07-25
+**Task**: 汇总 Mossx 插件与 CLI 基石设计
+**Branch**: `feature/v-799`
+
+### Summary
+
+提交 Mossx 插件市场、扩展体系、CLI 基石与多 CLI 串线的综合设计参考文档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ca697ef51` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1110: 合并 upstream 0.7.9 README 更新
+
+**Date**: 2026-07-25
+**Task**: 合并 upstream 0.7.9 README 更新
+**Branch**: `feature/v-799`
+
+### Summary
+
+将 upstream/chore/bump-version-0.7.9 合并到 feature/v-799；保留本地 31 个提交并引入 upstream acknowledgements，变更仅涉及 README.md 与 README.zh-CN.md，无冲突。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f7ad30eac` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

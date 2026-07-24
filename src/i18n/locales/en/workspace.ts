@@ -12,6 +12,11 @@ const workspace = {
     addWorkspaceOpenNewWindow: "Open in New Window",
     addWorkspaceRemotePathPrompt:
       "Enter the absolute project path on the daemon machine.",
+    workspacesRecoveredTitle: "Workspaces recovered",
+    workspacesRecoveredMessage:
+      "The workspaces file was corrupted. The original file was backed up as {{backupFileName}} and an empty workspace list has been restored.",
+    workspacesRecoveredNoBackupMessage:
+      "The workspaces file was corrupted and could not be backed up. An empty workspace list has been restored.",
     loadingProgressRunInBackground: "Run in background",
     loadingProgressCreateSessionTitle: "Creating session...",
     loadingProgressCreateSessionMessage:

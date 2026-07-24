@@ -198,11 +198,9 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     isEditorFileMaximized,
     isMacDesktop,
     isPanelLocked,
-    isPhone,
     isSearchPaletteOpen,
     isQuickSwitcherOpen,
     isSoloMode,
-    isTablet,
     kanbanConversationWidth,
     kanbanCreatePanel,
     kanbanDeletePanel,
@@ -513,8 +511,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         </Suspense>
       ) : null}
       <AppLayout
-        isPhone={isPhone}
-        isTablet={isTablet}
         showHome={showHome}
         showKanban={showKanban}
         showExtensions={showExtensions}
