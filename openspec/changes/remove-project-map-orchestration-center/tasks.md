@@ -25,21 +25,21 @@
 ## S2 剥 app-shell 派发回调（G2）
 
 - [x] 2.1 `useAppShellKanbanExecutionSection.ts` 删 `:25-31` import、`:204-369` `handleDispatchOrchestrationTask`、`:1610` return 导出（其余行不动）。（另级联清理仅被派发回调使用的 `patchTaskRun`/`saveTaskRunStore`/`activeWorkspace`/`workspaces` 未使用符号，已登记 design.md §1.2）
-- [ ] 2.2 `layoutNodesTypes.ts` 删 `:8`、`:669-673`、`:1152` 相关条目。**（执行调整：挪入 S3 commit——contract 先于消费方删除会导致 S2 typecheck 红，违背"每步可编译"原则；已登记 verification）**
+- [x] 2.2 `layoutNodesTypes.ts` 删 `:8`、`:669-673`、`:1152` 相关条目。**（执行调整：挪入 S3 commit——contract 先于消费方删除会导致 S2 typecheck 红，违背"每步可编译"原则；已登记 verification）**
 - [x] 2.3 `useAppShellLayoutNodesSection.tsx` 删 `:390`、`:2211` 两处接线。
 - [x] 2.4 `useAppShellSections.kanban-text.test.ts` 删 `:171` "orchestration dispatch wired" 整例。（连带删除仅含该例的 describe 块；并同步清理 `useAppShellSections.ts`、`appShellActionBoundaries.ts` 及其 test 中的同名字段，已登记 design.md §1.2）
 - [x] 2.5 **Gate G2**：`npx vitest run src/app-shell-parts` + `npm run typecheck` 全绿（kanban 用例零修改通过），commit。
 
 ## S3 剥 useLayoutNodes 装配与悬空入口（G3）
 
-- [ ] 3.1 `useLayoutNodes.tsx` 删 `:58-80` import、`:207-228` projection signature、`:2233-2473` 状态与 8 handler、`:2475-2519` 渲染切换（三元改恒渲染 ProjectMap 面板）。
-- [ ] 3.2 `useLayoutNodes.client-ui-visibility.test.tsx` 删 `:1008` option mock。
-- [ ] 3.3 `TaskCenterView.tsx` 删 `:87` 编排事件转发；`RunDetailSurface.tsx` 删 `:152-153` "打开编排任务"按钮。
-- [ ] 3.4 `TaskCenterView.test.tsx` 删编排符号与 `:94-114` 用例。
-- [ ] 3.5 `ProjectMapPanel.tsx` 删 `:17-22`、`:104,115`、`:149,167`、`:233-234`、`:1215-1255`、`:1924,1937`。
-- [ ] 3.6 `ProjectMapDetailPanel.tsx` 删 `:71-85,103,116,147,160`；`projectMapPanelModel.ts:105`、`ProjectMapPanelSurfaces.tsx:12` 各一处。
-- [ ] 3.7 `ProjectMapPanel.test.tsx` 删 `:6` import 与 `:507-597` 三个编排用例。
-- [ ] 3.8 **Gate G3**：`npx vitest run src/features/layout src/features/project-map src/features/tasks` + `npm run typecheck` 全绿，commit。
+- [x] 3.1 `useLayoutNodes.tsx` 删 `:58-80` import、`:207-228` projection signature、`:2233-2473` 状态与 8 handler、`:2475-2519` 渲染切换（三元改恒渲染 ProjectMap 面板）。（含 2.2 挪入的 `layoutNodesTypes.ts` 三处；级联清理仅服务编排代码的 `buildSpecWorkspaceSnapshot`/`SpecWorkspaceSnapshot`/`patchTaskRun`/`saveTaskRunStore` import）
+- [x] 3.2 `useLayoutNodes.client-ui-visibility.test.tsx` 删 `:1008` option mock。
+- [x] 3.3 `TaskCenterView.tsx` 删 `:87` 编排事件转发；`RunDetailSurface.tsx` 删 `:152-153` "打开编排任务"按钮。（连带删除完整 prop 链，已登记 design.md §1.2）
+- [x] 3.4 `TaskCenterView.test.tsx` 删编排符号与 `:94-114` 用例。
+- [x] 3.5 `ProjectMapPanel.tsx` 删 `:17-22`、`:104,115`、`:149,167`、`:233-234`、`:1215-1255`、`:1924,1937`。
+- [x] 3.6 `ProjectMapDetailPanel.tsx` 删 `:71-85,103,116,147,160`；`projectMapPanelModel.ts:105`、`ProjectMapPanelSurfaces.tsx:12` 各一处。（级联删 `projectMapPanelModel.ts` 未使用 import，已登记）
+- [x] 3.7 `ProjectMapPanel.test.tsx` 删 `:6` import 与编排 draft 用例 2 个（`:507`/`:516` 两个 sourceFocusNodeId 用例不引用模块、测试保留 prop，按边界保留，已登记 design.md §4.3）。
+- [x] 3.8 **Gate G3**：`npx vitest run src/features/layout src/features/project-map src/features/tasks` + `npm run typecheck` 全绿，commit。
 
 ## S4 删模块本体与周边资产（G4）
 

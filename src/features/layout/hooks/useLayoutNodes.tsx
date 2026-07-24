@@ -55,34 +55,7 @@ import {
   buildGitStatusProjectMapImpactInput,
   type ProjectMapImpactInput,
 } from "../../project-map/utils/impactSources";
-import {
-  OrchestrationCenterView,
-  applyOrchestrationReviewAction,
-  archiveOrchestrationTask,
-  collectCoreOrchestrationProviderSnapshots,
-  createManualOrchestrationTaskDraft,
-  projectLinkedTaskRunsToOrchestrationStore,
-  OPEN_ORCHESTRATION_TASK_EVENT,
-  patchOrchestrationTask,
-  readOpenOrchestrationTaskEvent,
-  readSpecHubOrchestrationCandidates,
-  saveOrchestrationTaskStore,
-  upsertOrchestrationTask,
-  useOrchestrationTaskStore,
-} from "../../agent-orchestration";
-import type {
-  OrchestrationCancelRunRequest,
-  OrchestrationDispatchConfirmation,
-  OrchestrationManualTaskDraftRequest,
-  OrchestrationReviewActionRequest,
-  OrchestrationSourceRef,
-  OrchestrationTask,
-} from "../../agent-orchestration";
 import { useTaskRunStore } from "../../tasks/hooks/useTaskRunStore";
-import {
-  patchTaskRun,
-  saveTaskRunStore,
-} from "../../tasks/utils/taskRunStorage";
 import { WorkspaceNoteCardPanel } from "../../note-cards/components/WorkspaceNoteCardPanel";
 import type {
   NoteCaptureDraft,
@@ -94,8 +67,6 @@ import { TabBar } from "../../app/components/TabBar";
 import { TabletNav } from "../../app/components/TabletNav";
 import { useStatusPanelData } from "../../status-panel/hooks/useStatusPanelData";
 import { useGlobalRuntimeNoticeDock } from "../../notifications/hooks/useGlobalRuntimeNoticeDock";
-import { buildSpecWorkspaceSnapshot } from "../../../lib/spec-core/runtime";
-import type { SpecWorkspaceSnapshot } from "../../../lib/spec-core/types";
 import type { TabType } from "../../status-panel/types";
 import type {
   EditorNavigationLocation,
@@ -204,28 +175,6 @@ const EMPTY_PROJECT_MAP_IMPACT_INPUT: ProjectMapImpactInput = {
     fileCount: 0,
   },
 };
-let lastOrchestrationProjectionSignature: string | null = null;
-
-function buildOrchestrationProjectionSignature(
-  orchestrationTaskStore: ReturnType<typeof useOrchestrationTaskStore>,
-  taskRuns: ReturnType<typeof useTaskRunStore>["runs"],
-): string {
-  return JSON.stringify({
-    tasks: orchestrationTaskStore.tasks.map((task) => ({
-      taskId: task.taskId,
-      status: task.status,
-      reviewState: task.reviewState,
-      linkedRunIds: task.linkedRunIds,
-    })),
-    runs: taskRuns.map((run) => ({
-      runId: run.runId,
-      taskId: run.task.taskId,
-      orchestrationTaskId: run.task.orchestrationTaskId,
-      status: run.status,
-      updatedAt: run.updatedAt,
-    })),
-  });
-}
 
 function toConversationEngine(
   engine: EngineType | undefined,
@@ -2230,292 +2179,24 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         : EMPTY_PROJECT_MAP_IMPACT_INPUT,
     [isProjectMapSurfaceActive, options.gitStatus.files],
   );
-  const orchestrationTaskStore = useOrchestrationTaskStore();
-  const [isOrchestrationCenterOpen, setIsOrchestrationCenterOpen] =
-    useState(false);
-  const [selectedOrchestrationTaskId, setSelectedOrchestrationTaskId] =
-    useState<string | null>(null);
-  const [projectMapSourceFocusNodeId, setProjectMapSourceFocusNodeId] =
-    useState<string | null>(null);
-  const projectMapDataset =
-    options.projectMapDatasetController?.dataset ?? null;
-  const projectMapRelationshipContextPack =
-    options.projectMapDatasetController?.relationshipContextPack ?? null;
-  const orchestrationWorkspaceId =
-    options.activeWorkspace?.id ??
-    projectMapDataset?.manifest.storageKey ??
-    null;
-  const persistedOrchestrationTasks = orchestrationTaskStore.tasks;
-  const shouldComputeProjectMapOrchestration =
-    isProjectMapSurfaceActive || isOrchestrationCenterOpen;
-  const [specWorkspaceSnapshot, setSpecWorkspaceSnapshot] =
-    useState<SpecWorkspaceSnapshot | null>(null);
-  useEffect(() => {
-    if (!shouldComputeProjectMapOrchestration || !orchestrationWorkspaceId) {
-      setSpecWorkspaceSnapshot(null);
-      return;
-    }
-    let cancelled = false;
-    buildSpecWorkspaceSnapshot({
-      workspaceId: orchestrationWorkspaceId,
-      files: options.files,
-      directories: options.directories,
-      customSpecRoot: activeWorkspaceCustomSpecRoot,
-    })
-      .then((snapshot) => {
-        if (!cancelled) {
-          setSpecWorkspaceSnapshot(snapshot);
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          console.warn(
-            "[agent-orchestration] Failed to build SpecHub provider snapshot",
-            error,
-          );
-          setSpecWorkspaceSnapshot(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeWorkspaceCustomSpecRoot,
-    orchestrationWorkspaceId,
-    options.directories,
-    options.files,
-    shouldComputeProjectMapOrchestration,
-  ]);
-  const orchestrationProviderSnapshots = useMemo(() => {
-    if (!shouldComputeProjectMapOrchestration || !orchestrationWorkspaceId) {
-      return [];
-    }
-    const coreSnapshots = collectCoreOrchestrationProviderSnapshots({
-      workspaceId: orchestrationWorkspaceId,
-      projectMapDataset,
-      projectMapRelationshipContextPack,
-      taskRuns: taskRunStore.runs,
-    });
-    if (
-      !specWorkspaceSnapshot ||
-      (specWorkspaceSnapshot.provider === "unknown" &&
-        specWorkspaceSnapshot.specRoot?.source !== "custom")
-    ) {
-      return coreSnapshots;
-    }
-    return [
-      ...coreSnapshots,
-      readSpecHubOrchestrationCandidates({
-        workspaceId: orchestrationWorkspaceId,
-        snapshot: specWorkspaceSnapshot,
-      }),
-    ];
-  }, [
-    orchestrationWorkspaceId,
-    projectMapDataset,
-    projectMapRelationshipContextPack,
-    shouldComputeProjectMapOrchestration,
-    specWorkspaceSnapshot,
-    taskRunStore.runs,
-  ]);
-  useEffect(() => {
-    if (
-      orchestrationTaskStore.tasks.length === 0 ||
-      taskRunStore.runs.length === 0
-    ) {
-      return;
-    }
-
-    const projectionSignature = buildOrchestrationProjectionSignature(
-      orchestrationTaskStore,
-      taskRunStore.runs,
-    );
-    if (lastOrchestrationProjectionSignature === projectionSignature) {
-      return;
-    }
-    lastOrchestrationProjectionSignature = projectionSignature;
-
-    const projectedStore = projectLinkedTaskRunsToOrchestrationStore({
-      orchestrationStore: orchestrationTaskStore,
-      taskRuns: taskRunStore.runs,
-    });
-    if (projectedStore !== orchestrationTaskStore) {
-      saveOrchestrationTaskStore(projectedStore);
-    }
-  }, [orchestrationTaskStore, taskRunStore.runs]);
-  const handleOpenOrchestrationTask = useCallback((taskId: string) => {
-    setSelectedOrchestrationTaskId(taskId);
-    setIsOrchestrationCenterOpen(true);
-  }, []);
-  useEffect(() => {
-    const handleOpenOrchestrationTaskEvent = (event: Event) => {
-      const taskId = readOpenOrchestrationTaskEvent(event);
-      if (taskId) {
-        handleOpenOrchestrationTask(taskId);
-      }
-    };
-
-    window.addEventListener(
-      OPEN_ORCHESTRATION_TASK_EVENT,
-      handleOpenOrchestrationTaskEvent,
-    );
-    return () => {
-      window.removeEventListener(
-        OPEN_ORCHESTRATION_TASK_EVENT,
-        handleOpenOrchestrationTaskEvent,
-      );
-    };
-  }, [handleOpenOrchestrationTask]);
-  const handleBackToProjectMapFromOrchestration = useCallback(() => {
-    setIsOrchestrationCenterOpen(false);
-  }, []);
-  const handleOpenOrchestrationSourceRef = useCallback(
-    (input: { task: OrchestrationTask; sourceRef: OrchestrationSourceRef }) => {
-      const { sourceRef } = input;
-      if (
-        sourceRef.providerId === "project-map" &&
-        sourceRef.kind === "project_map_node"
-      ) {
-        setProjectMapSourceFocusNodeId(sourceRef.id);
-        setIsOrchestrationCenterOpen(false);
-        return;
-      }
-
-      const sourcePath = sourceRef.workspaceRelativePath ?? sourceRef.path;
-      if (sourcePath) {
-        handleOpenProjectMapEvidenceFile(sourcePath);
-      }
-    },
-    [handleOpenProjectMapEvidenceFile],
-  );
-  const handleConfirmOrchestrationDispatch = useCallback(
-    async (confirmation: OrchestrationDispatchConfirmation) => {
-      const result = await options.onDispatchOrchestrationTask?.(confirmation);
-      if (result?.taskId) {
-        setSelectedOrchestrationTaskId(result.taskId);
-      }
-    },
-    [options],
-  );
-  const handleCancelOrchestrationRun = useCallback(
-    (request: OrchestrationCancelRunRequest) => {
-      const now = Date.now();
-      const nextTaskRunStore = patchTaskRun(taskRunStore, request.run.runId, {
-        status: "canceled",
-        currentStep: "canceled_before_runtime_start",
-        latestOutputSummary: "Dispatch canceled before runtime start.",
-        availableRecoveryActions: ["retry", "fork_new_run"],
-        finishedAt: now,
-        now,
-      });
-      const nextOrchestrationTaskStore = patchOrchestrationTask(
-        orchestrationTaskStore,
-        request.task.taskId,
-        {
-          status: "planned",
-          now: new Date(now).toISOString(),
-        },
-      );
-      saveTaskRunStore(nextTaskRunStore);
-      saveOrchestrationTaskStore(nextOrchestrationTaskStore);
-      setSelectedOrchestrationTaskId(request.task.taskId);
-    },
-    [orchestrationTaskStore, taskRunStore],
-  );
-  const handleOrchestrationReviewAction = useCallback(
-    (request: OrchestrationReviewActionRequest) => {
-      const result = applyOrchestrationReviewAction(request);
-      setSelectedOrchestrationTaskId(
-        result.followUpTask?.taskId ?? result.task.taskId,
-      );
-    },
-    [],
-  );
-  const handleArchiveOrchestrationTask = useCallback(
-    (task: OrchestrationTask) => {
-      const nextStore = archiveOrchestrationTask(
-        orchestrationTaskStore,
-        task.taskId,
-      );
-      saveOrchestrationTaskStore(nextStore);
-      setSelectedOrchestrationTaskId(null);
-    },
-    [orchestrationTaskStore],
-  );
-  const handleCreateManualOrchestrationTask = useCallback(
-    (request: OrchestrationManualTaskDraftRequest) => {
-      if (!orchestrationWorkspaceId) {
-        return null;
-      }
-      const task = createManualOrchestrationTaskDraft({
-        workspaceId: orchestrationWorkspaceId,
-        title: request.title,
-        scopeSummary: request.scopeSummary,
-        acceptanceSummary: request.acceptanceSummary,
-        promptSummary: request.promptSummary || null,
-        preferredEngine: request.preferredEngine,
-      });
-      const nextStore = upsertOrchestrationTask(orchestrationTaskStore, task);
-      saveOrchestrationTaskStore(nextStore);
-      setSelectedOrchestrationTaskId(task.taskId);
-      return task;
-    },
-    [orchestrationTaskStore, orchestrationWorkspaceId],
-  );
-  const handleOpenOrchestrationSession = useCallback(
-    (_task: OrchestrationTask, sessionId: string) => {
-      if (!options.activeWorkspace) {
-        return;
-      }
-      options.onSelectThread(options.activeWorkspace.id, sessionId);
-    },
-    [options],
-  );
-
-  const shouldMountProjectMapPanel =
-    isProjectMapSurfaceActive || isOrchestrationCenterOpen;
-  const projectMapPanelNode = shouldMountProjectMapPanel ? (
-    isOrchestrationCenterOpen ? (
-      <OrchestrationCenterView
-        key={`${options.activeWorkspace?.id ?? "no-workspace"}:orchestration`}
-        workspaceId={orchestrationWorkspaceId}
+  const projectMapPanelNode = isProjectMapSurfaceActive ? (
+    <Suspense fallback={<HeavyPanelFallback />}>
+      <ProjectMapPanel
+        key={options.activeWorkspace?.id ?? "no-workspace"}
+        activeWorkspace={options.activeWorkspace ?? null}
         workspaceName={options.activeWorkspace?.name ?? null}
-        persistedTasks={persistedOrchestrationTasks}
-        providerSnapshots={orchestrationProviderSnapshots}
-        selectedTaskId={selectedOrchestrationTaskId}
-        onOpenSourceRef={handleOpenOrchestrationSourceRef}
-        onConfirmDispatch={handleConfirmOrchestrationDispatch}
-        onCreateManualTask={handleCreateManualOrchestrationTask}
-        onCancelRun={handleCancelOrchestrationRun}
-        onReviewAction={handleOrchestrationReviewAction}
-        onArchiveTask={handleArchiveOrchestrationTask}
-        onOpenSession={handleOpenOrchestrationSession}
-        taskRuns={taskRunStore.runs}
-        modelOptions={options.models}
-        defaultModelId={options.selectedModelId}
-        onBackToProjectMap={handleBackToProjectMapFromOrchestration}
+        selectedEngine={options.selectedEngine ?? null}
+        selectedModelId={options.selectedModelId}
+        models={options.models}
+        datasetController={options.projectMapDatasetController}
+        changedFilePaths={projectMapImpactInput.filePaths}
+        changedFileSource={projectMapImpactInput.source}
+        activeCodeSelectionAnchor={options.activeCodeSelectionAnchor}
+        onOpenEvidenceFile={handleOpenProjectMapEvidenceFile}
+        onOpenIntentCanvas={options.onOpenIntentCanvas}
+        onOpenIntentCanvasFromRelationship={options.onOpenIntentCanvas}
       />
-    ) : (
-      <Suspense fallback={<HeavyPanelFallback />}>
-        <ProjectMapPanel
-          key={options.activeWorkspace?.id ?? "no-workspace"}
-          activeWorkspace={options.activeWorkspace ?? null}
-          workspaceName={options.activeWorkspace?.name ?? null}
-          selectedEngine={options.selectedEngine ?? null}
-          selectedModelId={options.selectedModelId}
-          models={options.models}
-          datasetController={options.projectMapDatasetController}
-          changedFilePaths={projectMapImpactInput.filePaths}
-          changedFileSource={projectMapImpactInput.source}
-          sourceFocusNodeId={projectMapSourceFocusNodeId}
-          activeCodeSelectionAnchor={options.activeCodeSelectionAnchor}
-          onOpenEvidenceFile={handleOpenProjectMapEvidenceFile}
-          onOpenOrchestrationTask={handleOpenOrchestrationTask}
-          onOpenIntentCanvas={options.onOpenIntentCanvas}
-          onOpenIntentCanvasFromRelationship={options.onOpenIntentCanvas}
-        />
-      </Suspense>
-    )
+    </Suspense>
   ) : null;
 
   const intentCanvasPanelNode = isIntentCanvasSurfaceActive ? (

@@ -3,7 +3,6 @@ import type { ComponentProps } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { loadOrchestrationTaskStore } from "../../agent-orchestration";
 import { resetClientStorageForTests } from "../../../services/clientStorage";
 import { mockProjectMapData } from "../mockProjectMapData";
 import type { ProjectMapDatasetController } from "../hooks/useProjectMapDataset";
@@ -540,61 +539,6 @@ describe("ProjectMapPanel", () => {
       "node",
       expect.objectContaining({ id: "project-core" }),
     );
-  });
-
-  it("hides the Project Map orchestration draft entry while task drafting is being redesigned", () => {
-    const openNodeGeneration = vi.fn();
-    const openOrchestrationTask = vi.fn();
-    const datasetController = createDatasetControllerMock({ openNodeGeneration });
-
-    render(
-      <ProjectMapPanel
-        workspaceName="mossx"
-        dataset={mockProjectMapData}
-        datasetController={datasetController}
-        onOpenOrchestrationTask={openOrchestrationTask}
-      />,
-    );
-
-    expect(
-      within(screen.getByLabelText("projectMap.detailPanel")).queryByRole("button", {
-        name: "projectMap.orchestration.createTask",
-      }),
-    ).toBeNull();
-    expect(loadOrchestrationTaskStore().tasks).toHaveLength(0);
-    expect(openOrchestrationTask).not.toHaveBeenCalled();
-    expect(openNodeGeneration).not.toHaveBeenCalled();
-  });
-
-  it("does not expose Project Map draft creation for risky nodes while the task module is hidden", () => {
-    const riskyDataset: ProjectMapDataset = {
-      ...mockProjectMapData,
-      nodes: mockProjectMapData.nodes.map((node) =>
-        node.id === "project-core"
-          ? {
-              ...node,
-              confidence: "low",
-              stale: true,
-              candidate: true,
-              sources: [],
-              detail: {
-                ...node.detail,
-                relatedArtifacts: [],
-                diagramArtifacts: [],
-              },
-            }
-          : node,
-      ),
-    };
-
-    render(<ProjectMapPanel workspaceName="mossx" dataset={riskyDataset} />);
-
-    expect(
-      within(screen.getByLabelText("projectMap.detailPanel")).queryByRole("button", {
-        name: "projectMap.orchestration.createTask",
-      }),
-    ).toBeNull();
-    expect(loadOrchestrationTaskStore().tasks).toHaveLength(0);
   });
 
   it("shows AI organizer action when unassigned discoveries exist", () => {

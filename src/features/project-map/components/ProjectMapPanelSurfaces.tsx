@@ -9,7 +9,6 @@ export { ProjectMapEvidenceFilesPanel } from "./ProjectMapEvidenceFilesPanel";
 export {
   DetailPanel,
   InspectorList,
-  type ProjectMapOrchestrationDraftState,
 } from "./ProjectMapDetailPanel";
 export { ProjectMapSettingsPanel } from "./ProjectMapSettingsPanel";
 export {

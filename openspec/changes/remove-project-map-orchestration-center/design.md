@@ -41,8 +41,10 @@
 | `src/app-shell-parts/useAppShellKanbanExecutionSection.ts` | 派发回调删除后变为未使用的符号级联清理：`patchTaskRun`/`saveTaskRunStore` import 条目、ctx destructure 的 `activeWorkspace`/`workspaces` 条目（TS6133 noUnusedLocals 强制，2026-07-26 执行中补登记） | 纯删除 |
 | `src/features/project-map/components/ProjectMapPanel.tsx` | `:17-22` import；`:104,115`；`:149,167` prop；`:233-234` state；`:1215-1255` handler；`:1924,1937` 传参 | 纯删除 |
 | `src/features/project-map/components/ProjectMapDetailPanel.tsx` | `:71-85,103,116,147,160` 草稿入口残留（prop 已 `_` 闲置） | 纯删除 |
-| `src/features/project-map/**/projectMapPanelModel.ts` / `ProjectMapPanelSurfaces.tsx` | `:105` / `:12` 各一处 | 纯删除 |
+| `src/features/project-map/**/projectMapPanelModel.ts` / `ProjectMapPanelSurfaces.tsx` | `:105` / `:12` 各一处；另 `projectMapPanelModel.ts` 的 `WorkspaceInfo`、`ProjectMapDataset` import 因 `:105` 函数删除变为未使用，级联删除（TS6133/TS6196 强制，2026-07-26 执行中补登记） | 纯删除 |
 | `src/features/tasks/components/TaskCenterView.tsx` | `:5-8` import 改路径（保留 `OPEN_TASK_RUN_EVENT`，删 `dispatchOpenOrchestrationTaskEvent`）；`:87` 转发删除 | 删除 + import 改路径 |
+| `src/features/tasks/components/TaskCenterView.tsx` | 悬空入口 prop 链补登记（2026-07-26）：`:23` prop 声明、`:45` destructure、`:82-88` `handleOpenOrchestrationRunTask`、`:187` 传给 RunDetailSurface（无外部调用方传入该 prop） | 纯删除 |
+| `src/features/tasks/components/RunDetailSurface.tsx` | `:12` prop 声明、`:31` destructure、`:59` `canOpenOrchestrationTask`、`:152-153` 按钮块（2026-07-26 执行中把 `:152-153` 扩为完整 prop 链） | 纯删除 |
 | `src/features/tasks/components/RunDetailSurface.tsx` | `:152-153` "打开编排任务"按钮 | 纯删除 |
 | `src/features/messages/orchestration/components/MessagesLinkedRunBanner.tsx` | `:3` import 改路径（组件本体保留） | 仅 import 改路径 |
 | `src/i18n/locales/{10 语言}/agentOrchestration.ts` + 各 `index.ts` | 文件删除 + 注册两行删除；`projectMap.ts:764-781` ~10 keys；`taskCenter.ts:27,49` 2 keys | 纯删除 |
@@ -113,7 +115,7 @@ npx vitest run src/features/project-map src/features/tasks src/features/messages
 
 | 测试文件 | 动作 |
 |---|---|
-| `ProjectMapPanel.test.tsx` | 删 `:6` import 与 `:507-597` 三个编排用例；其余不动 |
+| `ProjectMapPanel.test.tsx` | 删 `:6` import 与 `:507-597` 三个编排用例；其余不动。**执行中补登记（2026-07-26）**：该区间现有 4 个编排相关用例——`:507`/`:516` 两个 `sourceFocusNodeId` 用例不引用编排模块、测试的是保留 prop（`sourceFocusNodeId` 仍在 ProjectMapPanel 接口中），按"只删模块引用"边界保留；实际删除引用模块的 `:545-567` 与 `:569-598` 两个 draft 用例 + `:6` import |
 | `TaskCenterView.test.tsx` | 删 `:6` 编排符号与 `:94-114` 跳转编排用例；`OPEN_TASK_RUN_EVENT` import 改路径 |
 | `Messages.test.tsx` | `:14-16` import 改路径；用例本体不动 |
 | `useLayoutNodes.client-ui-visibility.test.tsx` | 删 `:1008` 的 option mock 一处 |
