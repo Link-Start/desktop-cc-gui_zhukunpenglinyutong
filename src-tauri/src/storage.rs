@@ -265,9 +265,11 @@ pub(crate) fn read_settings(path: &PathBuf) -> Result<AppSettings, String> {
 /// Quarantine an unreadable/corrupted settings file before callers fall back to
 /// defaults, so a later `write_settings` never destroys the user's original content.
 /// Timestamp pattern follows the project-map relationship backup convention.
-pub(crate) fn backup_corrupted_settings_file(path: &PathBuf, error: &str) {
+/// Returns the backup path on success so callers can surface a recovery notice;
+/// `None` when the file is missing or the rename failed.
+pub(crate) fn backup_corrupted_settings_file(path: &PathBuf, error: &str) -> Option<PathBuf> {
     if !path.exists() {
-        return;
+        return None;
     }
     let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
     let file_name = path
@@ -276,14 +278,20 @@ pub(crate) fn backup_corrupted_settings_file(path: &PathBuf, error: &str) {
         .unwrap_or("settings.json");
     let backup_path = path.with_file_name(format!("{file_name}.corrupted-{timestamp}.bak"));
     match std::fs::rename(path, &backup_path) {
-        Ok(()) => eprintln!(
-            "[storage] settings file failed to load ({error}); backed up corrupted file to {}",
-            backup_path.display()
-        ),
-        Err(rename_error) => eprintln!(
-            "[storage] settings file failed to load ({error}); failed to back up corrupted file {}: {rename_error}",
-            path.display()
-        ),
+        Ok(()) => {
+            eprintln!(
+                "[storage] settings file failed to load ({error}); backed up corrupted file to {}",
+                backup_path.display()
+            );
+            Some(backup_path)
+        }
+        Err(rename_error) => {
+            eprintln!(
+                "[storage] settings file failed to load ({error}); failed to back up corrupted file {}: {rename_error}",
+                path.display()
+            );
+            None
+        }
     }
 }
 
@@ -637,7 +645,8 @@ mod tests {
         std::fs::write(&path, "{ not valid json").expect("write corrupted settings");
 
         let error = read_settings(&path).expect_err("corrupted settings must fail");
-        backup_corrupted_settings_file(&path, &error);
+        let backup_path = backup_corrupted_settings_file(&path, &error)
+            .expect("quarantine must report the backup path");
 
         assert!(!path.exists(), "corrupted file must be moved aside");
         let backups: Vec<_> = std::fs::read_dir(&temp_dir)
@@ -651,6 +660,11 @@ mod tests {
             })
             .collect();
         assert_eq!(backups.len(), 1, "exactly one backup file expected");
+        assert_eq!(
+            backups[0].path(),
+            backup_path,
+            "returned backup path must match the quarantined file"
+        );
         assert!(
             backups[0].file_name().to_string_lossy().ends_with(".bak"),
             "backup file must use .bak suffix"
@@ -671,7 +685,8 @@ mod tests {
     fn backup_corrupted_settings_file_is_noop_for_missing_file() {
         let temp_dir = std::env::temp_dir().join(format!("moss-x-test-{}", Uuid::new_v4()));
         let path = temp_dir.join("settings.json");
-        backup_corrupted_settings_file(&path, "missing");
+        let backup_path = backup_corrupted_settings_file(&path, "missing");
+        assert!(backup_path.is_none(), "missing file must not report a backup");
         assert!(!path.exists());
         assert!(!temp_dir.exists(), "no backup directory side effects");
     }

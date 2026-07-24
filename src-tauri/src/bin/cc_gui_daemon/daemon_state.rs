@@ -165,7 +165,8 @@ impl DaemonState {
         let workspaces = read_workspaces(&storage_path).unwrap_or_default();
         let app_settings = read_settings(&settings_path).unwrap_or_else(|error| {
             // Quarantine the corrupted file first so a later save never destroys it.
-            backup_corrupted_settings_file(&settings_path, &error);
+            // The daemon has no UI surface, so no recovery notice is recorded here.
+            let _ = backup_corrupted_settings_file(&settings_path, &error);
             AppSettings::default()
         });
         let active_engine = resolve_supported_daemon_active_engine(

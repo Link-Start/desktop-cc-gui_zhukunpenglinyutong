@@ -9,6 +9,7 @@ use crate::app_paths;
 use crate::dictation::DictationState;
 use crate::engine::{EngineConfig, EngineManager, EngineType};
 use crate::shared::proxy_core;
+use crate::shared::settings_core::SettingsRecoveryNotice;
 use crate::storage::{backup_corrupted_settings_file, read_settings, read_workspaces};
 use crate::types::{AppSettings, WorkspaceEntry};
 use crate::workspaces::DetachedExternalChangeRuntime;
@@ -26,6 +27,9 @@ pub(crate) struct AppState {
     pub(crate) storage_path: PathBuf,
     pub(crate) settings_path: PathBuf,
     pub(crate) app_settings: Mutex<AppSettings>,
+    /// One-shot notice recorded when startup quarantines a corrupted settings.json;
+    /// consumed by the `take_settings_recovery_notice` command exactly once.
+    pub(crate) settings_recovery_notice: Mutex<Option<SettingsRecoveryNotice>>,
     pub(crate) codex_runtime_reload_lock: Mutex<()>,
     pub(crate) computer_use_activation_lock: Mutex<()>,
     pub(crate) computer_use_activation_verification:
@@ -96,9 +100,17 @@ impl AppState {
         let storage_path = data_dir.join("workspaces.json");
         let settings_path = data_dir.join("settings.json");
         let workspaces = read_workspaces(&storage_path).unwrap_or_default();
+        let mut settings_recovery_notice = None;
         let app_settings = read_settings(&settings_path).unwrap_or_else(|error| {
-            // Quarantine the corrupted file first so a later save never destroys it.
-            backup_corrupted_settings_file(&settings_path, &error);
+            // Quarantine the corrupted file first so a later save never destroys it,
+            // and record a one-shot notice so the frontend can tell the user what happened.
+            let backup_path = backup_corrupted_settings_file(&settings_path, &error);
+            settings_recovery_notice = Some(SettingsRecoveryNotice {
+                backup_file_name: backup_path
+                    .as_ref()
+                    .and_then(|path| path.file_name())
+                    .map(|name| name.to_string_lossy().into_owned()),
+            });
             AppSettings::default()
         });
         if let Err(error) = proxy_core::apply_app_proxy_settings(&app_settings) {
@@ -136,6 +148,7 @@ impl AppState {
             storage_path,
             settings_path,
             app_settings: Mutex::new(app_settings),
+            settings_recovery_notice: Mutex::new(settings_recovery_notice),
             codex_runtime_reload_lock: Mutex::new(()),
             computer_use_activation_lock: Mutex::new(()),
             computer_use_activation_verification: Mutex::new(None),
