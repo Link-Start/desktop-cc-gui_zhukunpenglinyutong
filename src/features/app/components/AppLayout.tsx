@@ -1,15 +1,11 @@
 import { memo } from "react";
 import type { MouseEvent, PointerEvent, ReactNode } from "react";
 import { DesktopLayout } from "../../layout/components/DesktopLayout";
-import { TabletLayout } from "../../layout/components/TabletLayout";
-import { PhoneLayout } from "../../layout/components/PhoneLayout";
 import type {
   CenterMode,
   EditorSplitCompanion,
 } from "../hooks/useGitPanelController";
 type AppLayoutProps = {
-  isPhone: boolean;
-  isTablet: boolean;
   showHome: boolean;
   showKanban: boolean;
   showExtensions: boolean;
@@ -67,8 +63,6 @@ type AppLayoutProps = {
 };
 
 export const AppLayout = memo(function AppLayout({
-  isPhone,
-  isTablet,
   showHome,
   showKanban,
   showExtensions,
@@ -78,9 +72,6 @@ export const AppLayout = memo(function AppLayout({
   kanbanNode,
   extensionsNode,
   gitHistoryNode,
-  showGitDetail,
-  activeTab,
-  tabletTab,
   centerMode,
   editorSplitLayout,
   editorSplitCompanion,
@@ -95,10 +86,7 @@ export const AppLayout = memo(function AppLayout({
   errorToastsNode,
   globalRuntimeNoticeDockNode,
   homeNode,
-  mainHeaderNode,
   desktopTopbarLeftNode,
-  tabletNavNode,
-  tabBarNode,
   rightPanelToolbarNode,
   gitDiffPanelNode,
   gitDiffViewerNode,
@@ -111,12 +99,7 @@ export const AppLayout = memo(function AppLayout({
   planPanelNode,
   runtimeConsoleDockNode,
   debugPanelNode,
-  debugPanelFullNode,
   terminalDockNode,
-  compactEmptyCodexNode,
-  compactEmptySpecNode,
-  compactEmptyGitNode,
-  compactGitBackNode,
   settingsOpen,
   settingsNode,
   onSidebarResizeStart,
@@ -124,68 +107,6 @@ export const AppLayout = memo(function AppLayout({
   onPlanPanelResizeStart,
   onGitHistoryPanelResizeStart,
 }: AppLayoutProps) {
-  if (isPhone) {
-    return (
-      <PhoneLayout
-        approvalToastsNode={approvalToastsNode}
-        updateToastNode={updateToastNode}
-        errorToastsNode={errorToastsNode}
-        globalRuntimeNoticeDockNode={globalRuntimeNoticeDockNode}
-        tabBarNode={tabBarNode}
-        sidebarNode={sidebarNode}
-        activeTab={activeTab}
-        showGitHistory={showGitHistory}
-        showExtensions={showExtensions}
-        extensionsNode={extensionsNode}
-        gitHistoryNode={gitHistoryNode}
-        activeWorkspace={activeWorkspace}
-        showGitDetail={showGitDetail}
-        compactEmptyCodexNode={compactEmptyCodexNode}
-        compactEmptySpecNode={compactEmptySpecNode}
-        compactEmptyGitNode={compactEmptyGitNode}
-        compactGitBackNode={compactGitBackNode}
-        topbarLeftNode={mainHeaderNode}
-        messagesNode={messagesNode}
-        composerNode={composerNode}
-        gitDiffPanelNode={gitDiffPanelNode}
-        gitDiffViewerNode={gitDiffViewerNode}
-        debugPanelNode={debugPanelFullNode}
-        settingsOpen={settingsOpen}
-        settingsNode={settingsNode}
-      />
-    );
-  }
-
-  if (isTablet) {
-    return (
-      <TabletLayout
-        tabletNavNode={tabletNavNode}
-        approvalToastsNode={approvalToastsNode}
-        updateToastNode={updateToastNode}
-        errorToastsNode={errorToastsNode}
-        globalRuntimeNoticeDockNode={globalRuntimeNoticeDockNode}
-        showGitHistory={showGitHistory}
-        showExtensions={showExtensions}
-        extensionsNode={extensionsNode}
-        gitHistoryNode={gitHistoryNode}
-        homeNode={homeNode}
-        showHome={showHome}
-        showWorkspace={activeWorkspace && !showHome}
-        sidebarNode={sidebarNode}
-        tabletTab={tabletTab}
-        onSidebarResizeStart={onSidebarResizeStart}
-        topbarLeftNode={mainHeaderNode}
-        messagesNode={messagesNode}
-        composerNode={composerNode}
-        gitDiffPanelNode={gitDiffPanelNode}
-        gitDiffViewerNode={gitDiffViewerNode}
-        debugPanelNode={debugPanelFullNode}
-        settingsOpen={settingsOpen}
-        settingsNode={settingsNode}
-      />
-    );
-  }
-
   return (
     <DesktopLayout
       sidebarNode={sidebarNode}
