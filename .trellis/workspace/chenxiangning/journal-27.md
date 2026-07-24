@@ -638,3 +638,36 @@ OpenSpec change remove-settings-view-dead-entry-switches：删除 settingsViewCo
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1099: 删除响应式布局死分支 (remove-responsive-layout-dead-branches)
+
+**Date**: 2026-07-24
+**Task**: 删除响应式布局死分支 (remove-responsive-layout-dead-branches)
+**Branch**: `feature/v-799`
+
+### Summary
+
+删除硬编码 desktop 的 useLayoutMode 与永远走不到的 PhoneLayout/TabletLayout(-317 行);AppLayout/useLayoutController/renderAppShell 内联恒 false 常量。验证:typecheck 0 error,eslint 0 problem,vitest 23/23。注意:改动被并行代理的整 index commit d723d5d4a(chore(trellis))捎带提交,消息与内容不符,待归档官修复历史。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d723d5d4a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
