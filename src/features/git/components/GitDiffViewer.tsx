@@ -40,7 +40,7 @@ type GitDiffViewerItem = {
   newImageMime?: string | null;
 };
 
-type GitDiffViewerProps = {
+export type GitDiffViewerProps = {
   workspaceId?: string | null;
   diffs: GitDiffViewerItem[];
   listView?: "flat" | "tree";

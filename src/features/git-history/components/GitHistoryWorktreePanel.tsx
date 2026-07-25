@@ -58,7 +58,7 @@ import {
   type RendererContextMenuState,
 } from "../../../components/ui/RendererContextMenu";
 
-type GitHistoryWorktreePanelProps = {
+export type GitHistoryWorktreePanelProps = {
   workspaceId: string;
   repositoryRoot?: string | null;
   listView: "flat" | "tree";

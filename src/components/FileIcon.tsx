@@ -1,7 +1,7 @@
 import { memo, useMemo } from 'react';
 import { getFileIcon, getFolderIcon } from '../utils/fileIcons';
 
-type FileIconProps = {
+export type FileIconProps = {
   filePath?: string;
   fileName?: string;
   isFolder?: boolean;

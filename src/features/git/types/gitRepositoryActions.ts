@@ -108,5 +108,7 @@ export function subscribeGitRepositoryActionIntent(
     pendingIntent = null;
     listener(intent);
   }
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

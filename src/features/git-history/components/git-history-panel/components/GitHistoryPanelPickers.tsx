@@ -7,7 +7,7 @@ function isActivationKey(event: KeyboardEvent<HTMLElement>): boolean {
   return event.key === "Enter" || event.key === " ";
 }
 
-type ActionSurfaceProps = {
+export type ActionSurfaceProps = {
   className?: string;
   children: ReactNode;
   disabled?: boolean;
