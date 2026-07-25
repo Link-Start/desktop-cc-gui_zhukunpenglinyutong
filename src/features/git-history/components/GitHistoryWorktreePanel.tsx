@@ -688,47 +688,6 @@ export function GitHistoryWorktreePanel({
       t,
     ],
   );
-  const handleCommitMessageGenerateClick = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
-      // 与 GitDiffPanel 一致的一键生成: 已有上次配置且引擎可用时直接生成,
-      // 否则回落到引擎菜单; 右键仍可打开菜单修改配置。
-      const lastConfig = readExecutableCommitMessageConfig();
-      if (
-        lastConfig &&
-        !commitMessageLoading &&
-        !commitLoading &&
-        !operationLoading &&
-        hasWorktreeChanges
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-        const selectedPathsForGeneration =
-          selectedCommitCount > 0
-            ? selectedCommitPaths
-            : hasExplicitCommitSelection
-              ? []
-              : undefined;
-        void handleGenerateCommitMessage(
-          lastConfig.language,
-          lastConfig.engine,
-          selectedPathsForGeneration,
-        );
-        return;
-      }
-      showCommitMessageEngineMenu(event);
-    },
-    [
-      commitLoading,
-      commitMessageLoading,
-      handleGenerateCommitMessage,
-      hasExplicitCommitSelection,
-      hasWorktreeChanges,
-      operationLoading,
-      selectedCommitCount,
-      selectedCommitPaths,
-      showCommitMessageEngineMenu,
-    ],
-  );
   const handleCommit = useCallback(
     async (selectedPaths?: string[]) => {
       if (
@@ -997,9 +956,8 @@ export function GitHistoryWorktreePanel({
               className={`git-history-worktree-generate commit-message-generate-button${
                 commitMessageLoading ? " git-history-worktree-generate--loading commit-message-generate-button--loading" : ""
               }`}
-              onClick={handleCommitMessageGenerateClick}
-              onContextMenu={(event) => {
-                showCommitMessageEngineMenu(event);
+              onClick={(event) => {
+                void showCommitMessageEngineMenu(event);
               }}
               disabled={commitMessageLoading || commitLoading || operationLoading || !hasWorktreeChanges}
               aria-haspopup="menu"

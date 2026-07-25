@@ -52,7 +52,37 @@ describe("useCustomCommands", () => {
     });
 
     unmount();
-    expect(stopClaudeCommandsWatch).toHaveBeenCalledWith("workspace-1");
+    await waitFor(() => {
+      expect(stopClaudeCommandsWatch).toHaveBeenCalledWith("workspace-1");
+    });
+  });
+
+  it("waits for a pending watcher start before stopping on unmount", async () => {
+    vi.mocked(getClaudeCommandsList).mockResolvedValue([]);
+    let resolveStart!: () => void;
+    vi.mocked(startClaudeCommandsWatch).mockImplementationOnce(
+      () => new Promise<void>((resolve) => {
+        resolveStart = resolve;
+      }),
+    );
+
+    const { unmount } = renderHook(() =>
+      useCustomCommands({
+        activeEngine: "claude",
+        workspaceId: "workspace-1",
+      }),
+    );
+    await waitFor(() => {
+      expect(startClaudeCommandsWatch).toHaveBeenCalledWith("workspace-1");
+    });
+
+    unmount();
+    expect(stopClaudeCommandsWatch).not.toHaveBeenCalled();
+
+    resolveStart();
+    await waitFor(() => {
+      expect(stopClaudeCommandsWatch).toHaveBeenCalledWith("workspace-1");
+    });
   });
 
   it("does not start the commands watcher for the opencode engine", async () => {

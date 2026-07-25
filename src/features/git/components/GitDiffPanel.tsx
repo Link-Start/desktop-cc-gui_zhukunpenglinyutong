@@ -6,7 +6,6 @@ import {
   type CommitMessageLanguage,
 } from "../../../services/tauri";
 import {
-  readLastCommitMessageConfig,
   saveLastCommitMessageConfig,
 } from "../../../utils/commitMessage";
 import {
@@ -2179,7 +2178,7 @@ function GitDiffPanelImpl({
             triggerRect.bottom + 8,
             menuSize,
           );
-      const lastConfig = readLastCommitMessageConfig();
+      const lastConfig = readExecutableCommitMessageConfig();
       const engineLabelKeys: Record<(typeof COMMIT_MESSAGE_MENU_ENGINES)[number], string> = {
         codex: "git.generateCommitMessageEngineCodex",
         claude: "git.generateCommitMessageEngineClaude",
@@ -2259,34 +2258,6 @@ function GitDiffPanelImpl({
       t,
     ],
   );
-  const handleCommitMessageGenerateClick = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
-      // 一键生成：已有上次配置且引擎可用时跳过两级菜单直接生成；
-      // 首次使用 / 引擎已被禁用 / 正在生成时回落到引擎菜单。
-      const lastConfig = readExecutableCommitMessageConfig();
-      if (
-        lastConfig &&
-        onGenerateCommitMessage &&
-        canGenerateCommitMessage &&
-        !commitMessageLoading &&
-        !commitLoading
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-        void generateCommitMessageWithConfig(lastConfig.language, lastConfig.engine);
-        return;
-      }
-      showCommitMessageEngineMenu(event);
-    },
-    [
-      canGenerateCommitMessage,
-      commitLoading,
-      commitMessageLoading,
-      generateCommitMessageWithConfig,
-      onGenerateCommitMessage,
-      showCommitMessageEngineMenu,
-    ],
-  );
   const singleCommitComposer =
     showGenerateCommitMessage && !multiRepositoryMode ? (
       <div className={`commit-message-section git-commit-composer git-commit-composer--${commitComposerPlacement}`}>
@@ -2302,9 +2273,8 @@ function GitDiffPanelImpl({
           <button
             type="button"
             className={`commit-message-generate-button${commitMessageLoading ? " commit-message-generate-button--loading" : ""}`}
-            onClick={handleCommitMessageGenerateClick}
-            onContextMenu={(event) => {
-              showCommitMessageEngineMenu(event);
+            onClick={(event) => {
+              void showCommitMessageEngineMenu(event);
             }}
             disabled={commitMessageLoading || !canGenerateCommitMessage}
             aria-haspopup="menu"

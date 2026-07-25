@@ -964,7 +964,7 @@ describe("GitDiffPanel", () => {
     });
   });
 
-  it("generates commit message in one click with the last saved configuration", async () => {
+  it("keeps engine and language selection visible with a last saved configuration", async () => {
     const onGenerateCommitMessage = vi.fn();
     saveLastCommitMessageConfig({ engine: "codex", language: "zh" });
 
@@ -977,27 +977,29 @@ describe("GitDiffPanel", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
 
-    await waitFor(() => {
-      expect(onGenerateCommitMessage).toHaveBeenCalledWith("zh", "codex");
-    });
-    // 一键路径不再弹出引擎菜单
-    expect(screen.queryByRole("menuitem", { name: "Use Codex engine" })).toBeNull();
+    expect(await screen.findByRole("menuitem", { name: "Use Codex engine" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Use Claude engine" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Use last configuration" })).toBeTruthy();
+    expect(onGenerateCommitMessage).not.toHaveBeenCalled();
   });
 
-  it("opens the engine menu from the generate button context menu even with a saved configuration", async () => {
+  it("generates from the visible last-configuration quick option", async () => {
+    const onGenerateCommitMessage = vi.fn();
     saveLastCommitMessageConfig({ engine: "codex", language: "zh" });
 
     render(
       <GitDiffPanel
         {...baseProps}
-        onGenerateCommitMessage={vi.fn()}
+        onGenerateCommitMessage={onGenerateCommitMessage}
         unstagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
       />,
     );
-    fireEvent.contextMenu(screen.getByRole("button", { name: "Generate commit message" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Use last configuration" }));
 
-    expect(await screen.findByRole("menuitem", { name: "Use Codex engine" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Use last configuration" })).toBeTruthy();
+    await waitFor(() => {
+      expect(onGenerateCommitMessage).toHaveBeenCalledWith("zh", "codex");
+    });
   });
 
   it("moves commit composer from the current page menu", async () => {
@@ -1979,6 +1981,23 @@ describe("GitDiffPanel", () => {
     expect((quickOption as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("disables the last-config quick option for a retired engine", async () => {
+    saveLastCommitMessageConfig({ engine: "opencode", language: "en" });
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        onGenerateCommitMessage={vi.fn()}
+        unstagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
+
+    const quickOption = await screen.findByRole("menuitem", {
+      name: "Use last configuration",
+    });
+    expect((quickOption as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("regenerates directly with the remembered engine and language from the quick option", async () => {
     const onGenerateCommitMessage = vi.fn();
 
@@ -1994,16 +2013,16 @@ describe("GitDiffPanel", () => {
       expect(onGenerateCommitMessage).toHaveBeenCalledWith("en", "codex");
     });
 
-    // 一键再生成：已有上次配置时单击直接生成, 不再弹出菜单
+    // 上次配置仍是可见 quick option，不改变主按钮的显式选择语义。
     fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Use last configuration" }),
+    );
 
     await waitFor(() => {
       expect(onGenerateCommitMessage).toHaveBeenCalledTimes(2);
     });
     expect(onGenerateCommitMessage).toHaveBeenLastCalledWith("en", "codex");
-    expect(
-      screen.queryByRole("menuitem", { name: "Use last configuration" }),
-    ).toBeNull();
   });
 
   it("passes selected commit scope when generating commit message from the commit section", async () => {

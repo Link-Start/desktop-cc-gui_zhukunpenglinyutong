@@ -552,7 +552,7 @@ describe("GitHistoryWorktreePanel", () => {
     });
   });
 
-  it("generates commit message in one click with the last saved configuration", async () => {
+  it("keeps engine and language selection visible with a last saved configuration", async () => {
     saveLastCommitMessageConfig({ engine: "codex", language: "zh" });
     render(<GitHistoryWorktreePanel workspaceId="w1" listView="tree" />);
 
@@ -565,19 +565,13 @@ describe("GitHistoryWorktreePanel", () => {
     });
     fireEvent.click(generateButton);
 
-    await waitFor(() => {
-      expect(mockGenerateCommitMessage).toHaveBeenCalledWith(
-        "w1",
-        "zh",
-        "codex",
-        ["src/staged.ts"],
-      );
-    });
-    // 一键路径不再弹出引擎菜单
-    expect(screen.queryByRole("menuitem", { name: "Use Codex engine" })).toBeNull();
+    expect(await screen.findByRole("menuitem", { name: "Use Codex engine" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Use Claude engine" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Use last configuration" })).toBeTruthy();
+    expect(mockGenerateCommitMessage).not.toHaveBeenCalled();
   });
 
-  it("opens engine menu with last-config quick item from the generate button context menu", async () => {
+  it("generates from the visible last-configuration quick option", async () => {
     saveLastCommitMessageConfig({ engine: "codex", language: "zh" });
     render(<GitHistoryWorktreePanel workspaceId="w1" listView="tree" />);
 
@@ -588,10 +582,17 @@ describe("GitHistoryWorktreePanel", () => {
       expect(button.disabled).toBe(false);
       return button;
     });
-    fireEvent.contextMenu(generateButton);
+    fireEvent.click(generateButton);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Use last configuration" }));
 
-    expect(await screen.findByRole("menuitem", { name: "Use Codex engine" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Use last configuration" })).toBeTruthy();
+    await waitFor(() => {
+      expect(mockGenerateCommitMessage).toHaveBeenCalledWith(
+        "w1",
+        "zh",
+        "codex",
+        ["src/staged.ts"],
+      );
+    });
   });
 
   it("scopes commit message generation to the selected repository", async () => {

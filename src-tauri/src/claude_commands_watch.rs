@@ -4,7 +4,9 @@
 //! 任何命令 `.md` 的新增/修改/删除在去抖后向前端 emit
 //! `claude-commands-changed`，由前端刷新命令补全，替代秒级轮询。
 
-use notify::{Config as NotifyConfig, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{
+    Config as NotifyConfig, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -21,24 +23,51 @@ const WATCH_DEBOUNCE: Duration = Duration::from_millis(500);
 
 #[derive(Default)]
 pub(crate) struct CommandsWatchRegistry {
-    handles: HashMap<String, JoinHandle<()>>,
+    watches: HashMap<String, CommandsWatchLease>,
+}
+
+struct CommandsWatchLease {
+    handle: JoinHandle<()>,
+    leases: usize,
 }
 
 impl CommandsWatchRegistry {
-    fn contains(&self, scope_key: &str) -> bool {
-        self.handles.contains_key(scope_key)
+    fn acquire(&mut self, scope_key: &str) -> bool {
+        let Some(watch) = self.watches.get_mut(scope_key) else {
+            return false;
+        };
+        watch.leases = watch.leases.saturating_add(1);
+        true
     }
 
     fn insert(&mut self, scope_key: String, handle: JoinHandle<()>) {
-        if let Some(previous) = self.handles.insert(scope_key, handle) {
-            previous.abort();
+        debug_assert!(!self.watches.contains_key(&scope_key));
+        self.watches
+            .insert(scope_key, CommandsWatchLease { handle, leases: 1 });
+    }
+
+    fn release(&mut self, scope_key: &str) {
+        let should_remove = match self.watches.get_mut(scope_key) {
+            Some(watch) if watch.leases > 1 => {
+                watch.leases -= 1;
+                false
+            }
+            Some(_) => true,
+            None => false,
+        };
+        if should_remove {
+            if let Some(watch) = self.watches.remove(scope_key) {
+                watch.handle.abort();
+            }
         }
     }
 
-    fn remove(&mut self, scope_key: &str) {
-        if let Some(handle) = self.handles.remove(scope_key) {
-            handle.abort();
-        }
+    #[cfg(test)]
+    fn lease_count(&self, scope_key: &str) -> usize {
+        self.watches
+            .get(scope_key)
+            .map(|watch| watch.leases)
+            .unwrap_or(0)
     }
 }
 
@@ -151,14 +180,12 @@ async fn run_commands_watcher(
 
         // flush：先补挂新出现的命令目录，再通知前端刷新。
         let state = app.state::<AppState>();
-        let candidates: Vec<PathBuf> = crate::claude_commands::resolve_commands_dirs(
-            &state,
-            workspace_id.as_deref(),
-        )
-        .await
-        .into_iter()
-        .map(|(dir, _)| dir)
-        .collect();
+        let candidates: Vec<PathBuf> =
+            crate::claude_commands::resolve_commands_dirs(&state, workspace_id.as_deref())
+                .await
+                .into_iter()
+                .map(|(dir, _)| dir)
+                .collect();
         sync_watch_targets(&mut watcher, &mut watched, &candidates);
 
         if let Err(error) = app.emit(CLAUDE_COMMANDS_CHANGED_EVENT, ()) {
@@ -178,12 +205,9 @@ pub(crate) async fn claude_commands_watch_start(
     workspace_id: Option<String>,
 ) -> Result<(), String> {
     let scope_key = watch_scope_key(workspace_id.as_deref());
-
-    {
-        let registry = state.claude_commands_watches.lock().await;
-        if registry.contains(&scope_key) {
-            return Ok(());
-        }
+    let mut registry = state.claude_commands_watches.lock().await;
+    if registry.acquire(&scope_key) {
+        return Ok(());
     }
 
     let candidates: Vec<PathBuf> =
@@ -213,7 +237,6 @@ pub(crate) async fn claude_commands_watch_start(
         watched,
     ));
 
-    let mut registry = state.claude_commands_watches.lock().await;
     registry.insert(scope_key, join);
     Ok(())
 }
@@ -225,7 +248,7 @@ pub(crate) async fn claude_commands_watch_stop(
 ) -> Result<(), String> {
     let scope_key = watch_scope_key(workspace_id.as_deref());
     let mut registry = state.claude_commands_watches.lock().await;
-    registry.remove(&scope_key);
+    registry.release(&scope_key);
     Ok(())
 }
 
@@ -319,5 +342,22 @@ mod tests {
     fn scope_key_defaults_to_global() {
         assert_eq!(watch_scope_key(None), "global");
         assert_eq!(watch_scope_key(Some("ws-1")), "ws-1");
+    }
+
+    #[tokio::test]
+    async fn registry_releases_duplicate_scope_only_after_last_lease() {
+        let mut registry = CommandsWatchRegistry::default();
+        registry.insert(
+            "ws-1".to_string(),
+            tokio::spawn(std::future::pending::<()>()),
+        );
+        assert!(registry.acquire("ws-1"));
+        assert_eq!(registry.lease_count("ws-1"), 2);
+
+        registry.release("ws-1");
+        assert_eq!(registry.lease_count("ws-1"), 1);
+
+        registry.release("ws-1");
+        assert_eq!(registry.lease_count("ws-1"), 0);
     }
 }
