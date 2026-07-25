@@ -21,6 +21,10 @@ const promptEnhancer = {
     "useEnhanced": "Utiliser l'amélioré",
     "keepOriginal": "Conserver l'original",
     "enhanceFailed": "Échec de l'amélioration du prompt",
+    "failedTimeout": "L'amélioration du prompt a expiré après {{seconds}} s. Veuillez réessayer",
+    "failedWorkspace": "L'espace de travail n'est pas prêt pour l'amélioration du prompt",
+    "failedEmpty": "Le moteur a renvoyé une amélioration vide. Veuillez réessayer",
+    "failedGeneric": "Échec de l'amélioration du prompt",
     "emptyPrompt": "Veuillez d'abord saisir un prompt",
     "copyEnhanced": "Copier l'amélioré"
   }

@@ -100,6 +100,9 @@ const chat = {
     "loadingFailed": "読み込みに失敗しました",
     "pleaseCloseAndReopen": "閉じてから再度開いてください",
     "loadingSlashCommands": "スラッシュコマンドを読み込み中...",
+    "commandsListUnavailableTitle": "コマンドを利用できません",
+    "commandsListUnavailableMessage":
+      "スラッシュコマンドの読み込みに失敗しました: {{reason}}。コマンド補完が不完全になる場合があります。自動的に再試行します。",
     "pleaseWait": "お待ちください...",
     "retrying": "再試行中 ({{count}}/{{max}})...",
     "removeAgent": "エージェントを削除",

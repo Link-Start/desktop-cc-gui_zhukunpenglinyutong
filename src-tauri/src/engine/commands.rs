@@ -1448,10 +1448,22 @@ pub async fn engine_send_message(
     variant: Option<String>,
     custom_spec_root: Option<String>,
     auto_session: Option<AutoSessionMetadata>,
+    skill_invocations: Option<Vec<crate::types::SkillInvocation>>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     let requested_engine = engine;
+    if let Some(invocations) = skill_invocations.as_ref().filter(|list| !list.is_empty()) {
+        // 契约通道已落地：接收并记录，引擎侧消费属后续协议演进。
+        log::debug!(
+            "[engine_send_message] skill_invocations received: count={} names={:?}",
+            invocations.len(),
+            invocations
+                .iter()
+                .map(|invocation| invocation.name.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
     let settings = read_app_settings_snapshot(&state).await;
 
     if remote_backend::is_remote_mode(&*state).await {
@@ -1483,6 +1495,7 @@ pub async fn engine_send_message(
                 "variant": variant,
                 "customSpecRoot": custom_spec_root,
                 "autoSession": auto_session,
+                "skillInvocations": skill_invocations,
             }),
         )
         .await;

@@ -20,6 +20,7 @@ import type {
   BrowserContextSendAttachment,
   IntentCanvasContextSendAttachment,
   SelectedAgentOption,
+  SkillInvocation,
 } from "../../../types";
 import type { AutoSessionMetadata } from "../../../services/tauri";
 import {
@@ -123,6 +124,7 @@ import { resolveSelectedAgentForSend } from "../utils/resolveSelectedAgentForSen
 import { BUILT_IN_AGENT_RESOLUTION_FAILED_EVENT } from "../../agent-catalog/events";
 
 type SendMessageOptions = {
+  skillInvocations?: SkillInvocation[];
   skipPromptExpansion?: boolean;
   skipOptimisticUserBubble?: boolean;
   suppressUserMessageRender?: boolean;
@@ -1424,6 +1426,7 @@ export function useThreadMessaging({
                 ? extractClaudeForkParentSessionId(threadId)
                 : null,
             autoSession: options?.autoSession ?? null,
+            skillInvocations: options?.skillInvocations ?? null,
             ...(customSpecRoot && shouldAttachCliSpecRootHint ? { customSpecRoot } : {}),
           });
 

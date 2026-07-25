@@ -124,6 +124,7 @@ mod backend;
 mod backend_budget;
 mod browser_agent;
 mod claude_commands;
+mod claude_commands_watch;
 mod claude_home;
 mod client_error_log;
 mod client_storage;

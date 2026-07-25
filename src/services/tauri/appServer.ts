@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { EngineModelInfo, EngineStatus, EngineType } from "../../types";
+import type { EngineModelInfo, EngineStatus, EngineType, SkillInvocation } from "../../types";
 import type { AutoSessionMetadata } from "./sessionManagement";
 import {
   isEngineRpcFallbackMode,
@@ -284,6 +284,7 @@ export async function engineSendMessage(
     variant?: string | null;
     customSpecRoot?: string | null;
     autoSession?: AutoSessionMetadata | null;
+    skillInvocations?: SkillInvocation[] | null;
   },
 ): Promise<Record<string, unknown>> {
   if (params.engine) {
@@ -314,6 +315,7 @@ export async function engineSendMessage(
       variant: params.variant ?? null,
       customSpecRoot: params.customSpecRoot ?? null,
       autoSession: params.autoSession ?? null,
+      skillInvocations: params.skillInvocations ?? null,
     });
   } catch (error) {
     if (isUnknownMethodError(error, "engine_send_message")) {

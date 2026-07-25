@@ -21,6 +21,10 @@ const promptEnhancer = {
     "useEnhanced": "개선본 사용",
     "keepOriginal": "원본 유지",
     "enhanceFailed": "프롬프트 개선에 실패했습니다",
+    "failedTimeout": "프롬프트 개선이 {{seconds}}초 후 시간 초과되었습니다. 다시 시도하세요",
+    "failedWorkspace": "워크스페이스가 준비되지 않아 프롬프트를 개선할 수 없습니다",
+    "failedEmpty": "엔진이 빈 개선 결과를 반환했습니다. 다시 시도하세요",
+    "failedGeneric": "프롬프트 개선에 실패했습니다",
     "emptyPrompt": "먼저 프롬프트를 입력하세요",
     "copyEnhanced": "개선본 복사"
   }

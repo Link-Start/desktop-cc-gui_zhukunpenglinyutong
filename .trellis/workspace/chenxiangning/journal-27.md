@@ -1212,3 +1212,135 @@ docs/reports/polling-inventory-2026-07-25.md 标记 5 项轮询优化完成
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1116: 批次1: Composer 层补全死路径裁剪
+
+**Date**: 2026-07-25
+**Task**: 批次1: Composer 层补全死路径裁剪
+**Branch**: `feature/v-0710`
+
+### Summary
+
+useComposerAutocompleteState 瘦身为 trigger 检测器，删除 useComposerAutocomplete.ts 与 ComposerInput 命名残留；OpenSpec prune-composer-autocomplete-dead-paths 已立项并完成实现
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9484986c8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1117: 统一输入历史存储并事件化命令目录刷新（批次2）
+
+**Date**: 2026-07-25
+**Task**: 统一输入历史存储并事件化命令目录刷新（批次2）
+**Branch**: `feature/v-0710`
+
+### Summary
+
+OpenSpec unify-input-history-and-commands-refresh：输入历史收敛 useInputHistoryStore 单一实现（删 usePromptHistory/死 inlineCompletion，ChatInputBox 薄壳+事件刷新，发送单写）；useCustomCommands 去冷却重试/全局兜底，错误 toast 显式化+10 locale；新增 Rust claude_commands_watch（共享 resolve_commands_dirs，500ms 去抖 emit），前端事件驱动+60s visibility-gated 兜底
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `32092503c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1118: 润色器本地化缓存与 curated skills 事件化刷新（批次3）
+
+**Date**: 2026-07-26
+**Task**: 润色器本地化缓存与 curated skills 事件化刷新（批次3）
+**Branch**: `feature/v-0710`
+
+### Summary
+
+OpenSpec modernize-prompt-enhancer-and-curated-skills-refresh 9/9：prompt enhancer 结构化错误（kind 驱动 fallback）、zh/zh-TW 中文指令、LRU 缓存（20 条命中零 IPC）、10 locale 失败文案；curated skills Rust emit curated-skills-changed，indicator 删 2s 轮询改事件 + 60s 兜底
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `85bc82b7e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1119: 批次4：技能调用契约与对话提示词沉淀
+
+**Date**: 2026-07-26
+**Task**: 批次4：技能调用契约与对话提示词沉淀
+**Branch**: `feature/v-0710`
+
+### Summary
+
+SkillInvocation 全链路透传契约、claude_command_create managed 写入、prompt-distill 对话沉淀 feature（菜单+对话框+i18n×10）
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7173c9c5f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

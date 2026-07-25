@@ -29,6 +29,7 @@ type UseMessagesInteractionsInput = {
   isThinking: boolean;
   items: ConversationItem[];
   onCaptureNote: MessagesCoreProps["interactions"]["onCaptureNote"];
+  onSaveAsPrompt: MessagesCoreProps["interactions"]["onSaveAsPrompt"];
   onExitPlanModeExecute: MessagesCoreProps["interactions"]["onExitPlanModeExecute"];
   onOpenWorkspaceFile: MessagesCoreProps["interactions"]["onOpenWorkspaceFile"];
   openTargets: MessagesCoreProps["presentation"]["openTargets"];
@@ -44,6 +45,7 @@ export function useMessagesInteractions({
   isThinking,
   items,
   onCaptureNote,
+  onSaveAsPrompt,
   onExitPlanModeExecute,
   onOpenWorkspaceFile,
   openTargets,
@@ -77,6 +79,7 @@ export function useMessagesInteractions({
     items,
     threadId,
     onCaptureNote,
+    onSaveAsPrompt,
   });
 
   useEffect(() => {

@@ -2,8 +2,7 @@
  * ChatInputBoxAdapter - Bridge between Composer.tsx props and ChatInputBox props
  *
  * This adapter translates the Composer's prop interface to ChatInputBox's interface,
- * enabling drop-in replacement of ComposerInput while maintaining 100% visual and
- * interaction consistency with idea-claude-code-gui's input box.
+ * keeping visual and interaction consistency with idea-claude-code-gui's input box.
  */
 import {
   forwardRef,

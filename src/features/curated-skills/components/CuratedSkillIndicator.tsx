@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCuratedSkills, getEnabledCuratedSkillIds } from "../../../services/tauri";
 import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
+import { subscribeCuratedSkillsChanged } from "../utils/curatedSkillsEvents";
 import { resolveLucideIcon, FALLBACK_ICON } from "../utils/resolveLucideIcon";
 import type { CuratedSkillOption } from "../../../types";
 
@@ -16,20 +17,15 @@ import type { CuratedSkillOption } from "../../../types";
  * keeping the chips to name-only avoids competing with the context
  * token indicator elsewhere in the composer.
  *
- * **Why a poll?** `AppSettings` is a per-component `useState` cache;
- * the Settings view and the composer each hold their own snapshot and
- * are not wired together. Toggling a curated skill in
- * `Settings > Skills` does NOT cause the composer tree to re-render,
- * so the indicator cannot rely on a `useAppSettings()` subscription
- * to see the change. Instead we ask the backend (the source of
- * truth) every `POLL_INTERVAL_MS` for the live enabled-id set and the
- * bundled metadata, and re-derive the display. The IPC is in-process
- * (Tauri invoke into the running Rust binary) so the cost is
- * negligible. The poll continues while the component is mounted even
- * when it currently renders null; otherwise the composer could not
- * discover a skill that was enabled from Settings.
+ * **Refresh model: event-driven, not polled.** `AppSettings` is a
+ * per-component `useState` cache; the Settings view and the composer
+ * each hold their own snapshot and are not wired together. Instead of
+ * a per-second poll, the backend emits `curated-skills-changed` after
+ * every successful toggle and this component re-fetches on that event.
+ * A slow visibility-gated interval (`FALLBACK_REFRESH_MS`) remains only
+ * as a safety net for missed events.
  */
-const POLL_INTERVAL_MS = 2000;
+const FALLBACK_REFRESH_MS = 60_000;
 
 type CuratedSkillIndicatorProps = {
   /**
@@ -106,14 +102,17 @@ export function CuratedSkillIndicator({
     };
 
     void tick();
-    // 隐藏时暂停轮询，恢复可见时立即补一次 tick——用户切回窗口看到的仍是
-    // 最新设置，但后台不再每 2s 打两次 IPC。
+    const unsubscribe = subscribeCuratedSkillsChanged(() => {
+      void tick();
+    });
+    // 事件通道遗漏时的兜底收敛：60s 可见性门控慢轮询，恢复可见时立即补一次。
     const cleanupInterval = setVisibilityGatedInterval(() => {
       void tick();
-    }, POLL_INTERVAL_MS);
+    }, FALLBACK_REFRESH_MS);
 
     return () => {
       cancelled = true;
+      unsubscribe();
       cleanupInterval();
     };
   }, []);

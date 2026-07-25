@@ -100,6 +100,9 @@ const chat = {
     "loadingFailed": "로딩 실패",
     "pleaseCloseAndReopen": "닫았다가 다시 열어 주세요",
     "loadingSlashCommands": "슬래시 명령 로딩 중...",
+    "commandsListUnavailableTitle": "명령을 사용할 수 없음",
+    "commandsListUnavailableMessage":
+      "슬래시 명령을 불러오지 못했습니다: {{reason}}. 명령 자동 완성이 불완전할 수 있으며, 자동으로 다시 시도합니다.",
     "pleaseWait": "잠시 기다려 주세요...",
     "retrying": "다시 시도 중 ({{count}}/{{max}})...",
     "removeAgent": "에이전트 제거",

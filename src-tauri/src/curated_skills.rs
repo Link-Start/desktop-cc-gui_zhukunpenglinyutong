@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use crate::types::AppSettings;
 
@@ -782,6 +782,8 @@ pub(crate) async fn set_curated_skill_enabled(
         }
     }
     state.sync_engine_configs_from_settings().await;
+    // 设置已持久化且未回滚：广播变更，前端 indicator 事件驱动刷新。
+    let _ = window.app_handle().emit("curated-skills-changed", ());
     Ok(updated)
 }
 

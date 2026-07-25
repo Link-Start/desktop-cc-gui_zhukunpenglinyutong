@@ -297,6 +297,9 @@ pub(crate) fn invoke_handler(
         crate::git::get_git_worktree_file_diff_against_branch,
         // Prompts
         crate::claude_commands::claude_commands_list,
+        crate::claude_commands::claude_command_create,
+        crate::claude_commands_watch::claude_commands_watch_start,
+        crate::claude_commands_watch::claude_commands_watch_stop,
         crate::prompts::prompts_list,
         crate::prompts::prompts_create,
         crate::prompts::prompts_update,

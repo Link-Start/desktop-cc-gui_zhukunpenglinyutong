@@ -992,6 +992,7 @@ pub async fn send_shared_session_message(
                 None,
                 custom_spec_root,
                 None,
+                None,
                 app,
                 state,
             )

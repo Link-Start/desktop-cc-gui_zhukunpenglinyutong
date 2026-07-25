@@ -383,6 +383,9 @@ mod tests {
             detached_external_change_runtime: tokio::sync::Mutex::new(
                 crate::workspaces::DetachedExternalChangeRuntime::default(),
             ),
+            claude_commands_watches: tokio::sync::Mutex::new(
+                crate::claude_commands_watch::CommandsWatchRegistry::default(),
+            ),
             runtime_manager: std::sync::Arc::new(crate::runtime::RuntimeManager::new(&data_dir)),
             renderer_heartbeats: tokio::sync::Mutex::new(
                 crate::renderer_stability::RendererHeartbeatStore::default(),

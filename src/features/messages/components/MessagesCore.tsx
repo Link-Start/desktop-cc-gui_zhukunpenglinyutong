@@ -51,6 +51,8 @@ import {
   isUserMessageConversationItem,
 } from "../utils/messageItemPredicates";
 import { parseAgentTaskNotification } from "../../engine-task-output/contracts/agentTaskNotification";
+import { usePromptDistillation } from "../../prompt-distill/hooks/usePromptDistillation";
+import { PromptDistillDialog } from "../../prompt-distill/components/PromptDistillDialog";
 import { dedupeExitPlanItemsKeepFirst } from "../utils/messagesExitPlan";
 import {
   findLastAssistantMessageIndex,
@@ -190,6 +192,7 @@ export const MessagesCore = memo(function MessagesCore({
     onPreviewFileDiff,
     onOpenWorkspaceFile,
     onCaptureNote,
+    onSaveAsPrompt: onSaveAsPromptOverride,
     onExitPlanModeExecute,
     onRecoverThreadRuntime,
     onRecoverThreadRuntimeAndResend,
@@ -225,6 +228,7 @@ export const MessagesCore = memo(function MessagesCore({
   const isThinking = conversationState.meta.isThinking;
   const isWorking = isThinking || isContextCompacting;
   const heartbeatPulse = conversationState.meta.heartbeatPulse ?? 0;
+  const promptDistillation = usePromptDistillation({ workspaceId });
   const {
     clearPendingJumpMessage,
     consumePendingHistoryExpansionMode,
@@ -509,6 +513,7 @@ export const MessagesCore = memo(function MessagesCore({
     isThinking,
     items,
     onCaptureNote,
+    onSaveAsPrompt: onSaveAsPromptOverride ?? promptDistillation.start,
     onExitPlanModeExecute,
     onOpenWorkspaceFile,
     openTargets,
@@ -1793,6 +1798,18 @@ export const MessagesCore = memo(function MessagesCore({
           className="renderer-context-menu messages-note-capture-context-menu"
         />
       ) : null}
+      <PromptDistillDialog
+        isOpen={promptDistillation.isOpen}
+        phase={promptDistillation.phase}
+        name={promptDistillation.name}
+        content={promptDistillation.content}
+        error={promptDistillation.error}
+        distillingEngine={promptDistillation.distillingEngine}
+        onNameChange={promptDistillation.setName}
+        onContentChange={promptDistillation.setContent}
+        onSave={() => void promptDistillation.save()}
+        onClose={promptDistillation.close}
+      />
     </div>
   );
 });

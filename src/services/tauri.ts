@@ -39,7 +39,11 @@ export {
   getOpenCodeCommandsList,
   getSkillsList,
   setCuratedSkillEnabled,
+  startClaudeCommandsWatch,
+  stopClaudeCommandsWatch,
+  claudeCommandCreate,
 } from "./tauri/skills";
+export type { CreatedClaudeCommand } from "./tauri/skills";
 export {
   connectOpenCodeProvider,
   exportOpenCodeSession,

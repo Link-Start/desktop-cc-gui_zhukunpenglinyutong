@@ -109,6 +109,9 @@ const chat = {
     loadingFailed: "Loading failed",
     pleaseCloseAndReopen: "Please close and reopen",
     loadingSlashCommands: "Loading slash commands...",
+    commandsListUnavailableTitle: "Commands unavailable",
+    commandsListUnavailableMessage:
+      "Failed to load slash commands: {{reason}}. Command completion may be incomplete; it will retry automatically.",
     pleaseWait: "Please wait...",
     retrying: "Retrying ({{count}}/{{max}})...",
     removeAgent: "Remove agent",
