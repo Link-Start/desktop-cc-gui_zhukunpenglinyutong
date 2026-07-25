@@ -5,9 +5,7 @@ use std::path::{Path, PathBuf};
 use tauri::State;
 use tokio::task;
 
-use crate::claude_home::{
-    commands_dir_from_home, normalize_home_path, resolve_effective_claude_home,
-};
+use crate::claude_home::{normalize_home_path, resolve_effective_claude_home};
 use crate::codex::home::{resolve_default_codex_home, resolve_workspace_codex_home};
 use crate::engine::EngineType;
 use crate::state::AppState;
@@ -32,7 +30,7 @@ pub(crate) struct ClaudeCommandEntry {
     pub(crate) content: String,
 }
 
-async fn resolve_claude_home_dir(state: &State<'_, AppState>) -> Option<PathBuf> {
+async fn resolve_claude_home_dir(state: &AppState) -> Option<PathBuf> {
     let config = state
         .engine_manager
         .get_engine_config(EngineType::Claude)
@@ -84,6 +82,13 @@ fn collect_commands_dirs(root: &Path) -> Vec<PathBuf> {
         dirs.push(fallback);
     }
     dirs
+}
+
+/// 与 `collect_commands_dirs` 同源的候选目录（不做存在性过滤）。
+/// `discover_commands_in` 对不存在目录返回空列表，因此 list 语义不变；
+/// watcher 需要完整候选集以便在目录被创建后补挂监听。
+fn candidate_commands_dirs(root: &Path) -> Vec<PathBuf> {
+    vec![root.join("commands"), root.join("Commands")]
 }
 
 fn normalize_command_name(name: &str) -> String {
@@ -307,23 +312,27 @@ fn merge_commands_by_priority(sources: Vec<Vec<ClaudeCommandEntry>>) -> Vec<Clau
     merged
 }
 
-#[tauri::command]
-pub(crate) async fn claude_commands_list(
-    state: State<'_, AppState>,
-    workspace_id: Option<String>,
-) -> Result<Vec<ClaudeCommandEntry>, String> {
+/// 解析指定 workspace 作用域下的全部命令目录候选及其来源标签。
+///
+/// 与 `claude_commands_list` 的聚合优先级一一对应，供 list 命令与
+/// `claude_commands_watch` 共享，保证 watcher 监听的目录集合与
+/// list 实际扫描的目录集合一致。
+pub(crate) async fn resolve_commands_dirs(
+    state: &AppState,
+    workspace_id: Option<&str>,
+) -> Vec<(PathBuf, &'static str)> {
     let (workspace_path, workspace_managed_dir, codex_home_dir_for_workspace) =
-        if let Some(workspace_id) = workspace_id.as_deref() {
+        if let Some(workspace_id) = workspace_id {
             let workspaces = state.workspaces.lock().await;
             match workspaces.get(workspace_id) {
                 Some(entry) => (
                     resolve_workspace_path(entry),
-                    workspace_commands_dir(&state, entry),
+                    workspace_commands_dir(state, entry),
                     resolve_codex_home_for_workspace(&workspaces, entry),
                 ),
                 None => {
                     log::warn!(
-                        "claude_commands_list received unknown workspace id: {}",
+                        "resolve_commands_dirs received unknown workspace id: {}",
                         workspace_id
                     );
                     (None, None, None)
@@ -333,75 +342,60 @@ pub(crate) async fn claude_commands_list(
             (None, None, None)
         };
 
-    let global_claude_commands_dir = resolve_claude_home_dir(&state)
-        .await
-        .and_then(|home| commands_dir_from_home(&home));
-    let global_codex_commands_dir = codex_home_dir_for_workspace
-        .or_else(resolve_default_codex_home)
-        .and_then(|home| commands_dir_from_home(&home));
-    let global_agents_commands_dir =
-        resolve_default_agents_home().and_then(|home| commands_dir_from_home(&home));
+    let mut dirs: Vec<(PathBuf, &'static str)> = Vec::new();
+
+    if let Some(dir) = workspace_managed_dir {
+        dirs.push((dir, COMMAND_SOURCE_WORKSPACE_MANAGED));
+    }
+
+    if let Some(workspace_path) = workspace_path.as_ref() {
+        for dir in candidate_commands_dirs(&workspace_path.join(".claude")) {
+            dirs.push((dir, COMMAND_SOURCE_PROJECT_CLAUDE));
+        }
+        for dir in candidate_commands_dirs(&workspace_path.join(".codex")) {
+            dirs.push((dir, COMMAND_SOURCE_PROJECT_CODEX));
+        }
+        for dir in candidate_commands_dirs(&workspace_path.join(".agents")) {
+            dirs.push((dir, COMMAND_SOURCE_PROJECT_AGENTS));
+        }
+    }
+
+    if let Some(home) = resolve_claude_home_dir(state).await {
+        for dir in candidate_commands_dirs(&home) {
+            dirs.push((dir, COMMAND_SOURCE_GLOBAL_CLAUDE));
+        }
+    }
+    let codex_home = codex_home_dir_for_workspace.or_else(resolve_default_codex_home);
+    if let Some(home) = codex_home {
+        for dir in candidate_commands_dirs(&home) {
+            dirs.push((dir, COMMAND_SOURCE_GLOBAL_CODEX));
+        }
+    }
+    if let Some(home) = resolve_default_agents_home() {
+        for dir in candidate_commands_dirs(&home) {
+            dirs.push((dir, COMMAND_SOURCE_GLOBAL_AGENTS));
+        }
+    }
+
+    dirs
+}
+
+#[tauri::command]
+pub(crate) async fn claude_commands_list(
+    state: State<'_, AppState>,
+    workspace_id: Option<String>,
+) -> Result<Vec<ClaudeCommandEntry>, String> {
+    let dirs = resolve_commands_dirs(&state, workspace_id.as_deref()).await;
 
     task::spawn_blocking(move || {
-        let workspace_managed_commands = match workspace_managed_dir {
-            Some(dir) => discover_commands_in(&dir, &dir, COMMAND_SOURCE_WORKSPACE_MANAGED),
-            None => Vec::new(),
-        };
-
-        let mut project_claude_commands: Vec<ClaudeCommandEntry> = Vec::new();
-        let mut project_codex_commands: Vec<ClaudeCommandEntry> = Vec::new();
-        let mut project_agents_commands: Vec<ClaudeCommandEntry> = Vec::new();
-        if let Some(workspace_path) = workspace_path.as_ref() {
-            let claude_dirs = collect_commands_dirs(&workspace_path.join(".claude"));
-            for dir in claude_dirs {
-                project_claude_commands.extend(discover_commands_in(
-                    &dir,
-                    &dir,
-                    COMMAND_SOURCE_PROJECT_CLAUDE,
-                ));
+        let mut sources: Vec<Vec<ClaudeCommandEntry>> = Vec::with_capacity(dirs.len());
+        for (dir, source) in dirs {
+            if !dir.exists() {
+                continue;
             }
-
-            let codex_dirs = collect_commands_dirs(&workspace_path.join(".codex"));
-            for dir in codex_dirs {
-                project_codex_commands.extend(discover_commands_in(
-                    &dir,
-                    &dir,
-                    COMMAND_SOURCE_PROJECT_CODEX,
-                ));
-            }
-
-            let agents_dirs = collect_commands_dirs(&workspace_path.join(".agents"));
-            for dir in agents_dirs {
-                project_agents_commands.extend(discover_commands_in(
-                    &dir,
-                    &dir,
-                    COMMAND_SOURCE_PROJECT_AGENTS,
-                ));
-            }
+            sources.push(discover_commands_in(&dir, &dir, source));
         }
-
-        let global_claude_commands = match global_claude_commands_dir {
-            Some(dir) => discover_commands_in(&dir, &dir, COMMAND_SOURCE_GLOBAL_CLAUDE),
-            None => Vec::new(),
-        };
-        let global_codex_commands = match global_codex_commands_dir {
-            Some(dir) => discover_commands_in(&dir, &dir, COMMAND_SOURCE_GLOBAL_CODEX),
-            None => Vec::new(),
-        };
-        let global_agents_commands = match global_agents_commands_dir {
-            Some(dir) => discover_commands_in(&dir, &dir, COMMAND_SOURCE_GLOBAL_AGENTS),
-            None => Vec::new(),
-        };
-
-        Ok(merge_commands_by_priority(vec![
-            workspace_managed_commands,
-            project_claude_commands,
-            project_codex_commands,
-            project_agents_commands,
-            global_claude_commands,
-            global_codex_commands,
-            global_agents_commands,
-        ]))
+        Ok(merge_commands_by_priority(sources))
     })
     .await
     .map_err(|_| "command discovery failed".to_string())?

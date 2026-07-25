@@ -34,9 +34,6 @@ import type { EngineDisplayInfo } from "../../engine/hooks/useEngineController";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
-import { usePromptHistory } from "../hooks/usePromptHistory";
-import { useInlineHistoryCompletion } from "../hooks/useInlineHistoryCompletion";
-import { recordHistory as recordInputHistory } from "../hooks/useInputHistoryStore";
 import { ChatInputBoxAdapter } from "./ChatInputBox/ChatInputBoxAdapter";
 import type { ChatInputBoxHandle } from "./ChatInputBox/ChatInputBoxAdapter";
 import {
@@ -251,7 +248,6 @@ type ComposerProps = {
   runtimeLifecycleState?: RuntimeLifecycleState | null;
   sendLabel?: string;
   onDraftChange?: (text: string) => void;
-  historyKey?: string | null;
   attachedImages?: string[];
   onPickImages?: () => void;
   onAttachImages?: (paths: string[]) => void;
@@ -520,7 +516,6 @@ function ComposerImpl({
   runtimeLifecycleState = null,
   sendLabel: _sendLabel = "Send",
   onDraftChange,
-  historyKey = null,
   attachedImages = [],
   onPickImages,
   onAttachImages,
@@ -1030,43 +1025,12 @@ function ComposerImpl({
   const reviewPromptOpen = Boolean(reviewPrompt);
   const suggestionsOpen = reviewPromptOpen || isAutocompleteOpen;
 
-  const {
-    handleHistoryKeyDown: _handleHistoryKeyDown,
-    handleHistoryTextChange,
-    recordHistory,
-    resetHistoryNavigation,
-  } = usePromptHistory({
-    historyKey,
-    text,
-    hasAttachments: attachedImages.length > 0,
-    disabled,
-    isAutocompleteOpen: suggestionsOpen,
-    textareaRef,
-    setText: setComposerText,
-    setSelectionStart,
-  });
-
-  const inlineCompletion = useInlineHistoryCompletion();
-
   const handleTextChangeWithHistory = useCallback(
     (next: string, cursor: number | null) => {
       markComposerInputInteraction();
-      handleHistoryTextChange(next);
       handleTextChange(next, cursor);
-      // Update inline history completion
-      if (!suggestionsOpen) {
-        inlineCompletion.updateQuery(next);
-      } else {
-        inlineCompletion.clear();
-      }
     },
-    [
-      handleHistoryTextChange,
-      handleTextChange,
-      markComposerInputInteraction,
-      suggestionsOpen,
-      inlineCompletion,
-    ],
+    [handleTextChange, markComposerInputInteraction],
   );
 
   const applyActiveFileReference = useCallback(
@@ -1420,27 +1384,16 @@ function ComposerImpl({
             detail: { url: browserNavigationUrl },
           }),
         );
-        recordHistory(trimmed);
-        recordInputHistory(trimmed);
         clearComposerContextSelections();
-        inlineCompletion.clear();
-        resetHistoryNavigation();
         setComposerText("");
         return;
       }
       if (selectedOpenCodeDirectCommand) {
         onSend(`/${selectedOpenCodeDirectCommand}`, []);
         clearComposerContextSelections();
-        inlineCompletion.clear();
-        resetHistoryNavigation();
         setComposerText("");
         return;
       }
-      if (trimmed) {
-        recordHistory(trimmed);
-        recordInputHistory(trimmed);
-      }
-      inlineCompletion.clear();
       const finalText = shouldAssemblePrompt({
         userInput: trimmed,
         selectedSkillCount: selectedSkills.length,
@@ -1532,7 +1485,6 @@ function ComposerImpl({
           currentMode === "single" ? "off" : currentMode,
         );
       });
-      resetHistoryNavigation();
       setComposerText("");
     },
     [
@@ -1553,9 +1505,6 @@ function ComposerImpl({
       selectedNoteCards,
       memoryReferenceMode,
       onSend,
-      inlineCompletion,
-      recordHistory,
-      resetHistoryNavigation,
       setComposerText,
       selectedCommonsNames,
       selectedSkillNames,
@@ -1620,18 +1569,16 @@ function ComposerImpl({
       return;
     }
     setComposerText(prefillDraft.text);
-    resetHistoryNavigation();
     onPrefillHandled?.(prefillDraft.id);
-  }, [onPrefillHandled, prefillDraft, resetHistoryNavigation, setComposerText]);
+  }, [onPrefillHandled, prefillDraft, setComposerText]);
 
   useEffect(() => {
     if (!insertText) {
       return;
     }
     setComposerText(insertText.text);
-    resetHistoryNavigation();
     onInsertHandled?.(insertText.id);
-  }, [insertText, onInsertHandled, resetHistoryNavigation, setComposerText]);
+  }, [insertText, onInsertHandled, setComposerText]);
 
   useEffect(() => {
     if (!dictationTranscript) {
@@ -1652,7 +1599,6 @@ function ComposerImpl({
       end,
     );
     setComposerText(nextText);
-    resetHistoryNavigation();
     requestAnimationFrame(() => {
       if (!textareaRef.current) {
         return;
@@ -1666,7 +1612,6 @@ function ComposerImpl({
     dictationTranscript,
     handleSelectionChange,
     onDictationTranscriptHandled,
-    resetHistoryNavigation,
     selectionStart,
     setComposerText,
     text,

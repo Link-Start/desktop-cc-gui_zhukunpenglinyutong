@@ -100,6 +100,9 @@ const chat = {
     "loadingFailed": "Error de carga",
     "pleaseCloseAndReopen": "Ciérralo y vuelve a abrirlo",
     "loadingSlashCommands": "Cargando comandos de barra...",
+    "commandsListUnavailableTitle": "Comandos no disponibles",
+    "commandsListUnavailableMessage":
+      "Error al cargar los comandos de barra: {{reason}}. El autocompletado puede estar incompleto; se reintentará automáticamente.",
     "pleaseWait": "Espera un momento...",
     "retrying": "Reintentando ({{count}}/{{max}})...",
     "removeAgent": "Quitar Agent",

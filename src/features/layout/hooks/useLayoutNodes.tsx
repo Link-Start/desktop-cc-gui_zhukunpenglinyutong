@@ -1485,7 +1485,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           files={options.files}
           directories={options.directories}
           textareaRef={options.textareaRef}
-          historyKey={options.activeWorkspace?.id ?? null}
           editorSettings={options.composerEditorSettings}
           sendShortcut={options.composerSendShortcut}
           textareaHeight={options.textareaHeight}

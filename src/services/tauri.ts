@@ -39,6 +39,8 @@ export {
   getOpenCodeCommandsList,
   getSkillsList,
   setCuratedSkillEnabled,
+  startClaudeCommandsWatch,
+  stopClaudeCommandsWatch,
 } from "./tauri/skills";
 export {
   connectOpenCodeProvider,

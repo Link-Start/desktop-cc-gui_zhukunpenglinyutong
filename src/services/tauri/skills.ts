@@ -65,6 +65,18 @@ export async function getOpenCodeCommandsList(refresh = false) {
   );
 }
 
+export async function startClaudeCommandsWatch(workspaceId?: string | null) {
+  return invoke<void>("claude_commands_watch_start", {
+    workspaceId: workspaceId ?? null,
+  });
+}
+
+export async function stopClaudeCommandsWatch(workspaceId?: string | null) {
+  return invoke<void>("claude_commands_watch_stop", {
+    workspaceId: workspaceId ?? null,
+  });
+}
+
 export async function getOpenCodeAgentsList(refresh = false) {
   return traceStartupInvoke("opencode_agents_list", "global", () =>
     invoke<unknown>("opencode_agents_list", { refresh }),

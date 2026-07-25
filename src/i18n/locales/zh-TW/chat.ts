@@ -100,6 +100,9 @@ const chat = {
     "loadingFailed": "載入失敗",
     "pleaseCloseAndReopen": "請關閉後重新開啟",
     "loadingSlashCommands": "正在載入斜線指令…",
+    "commandsListUnavailableTitle": "命令列表不可用",
+    "commandsListUnavailableMessage":
+      "載入斜線指令失敗：{{reason}}。命令補全可能不完整，稍後將自動重試。",
     "pleaseWait": "請稍候…",
     "retrying": "重試中（{{count}}/{{max}}）…",
     "removeAgent": "移除 agent",

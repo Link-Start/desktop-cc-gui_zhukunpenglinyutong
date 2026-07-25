@@ -100,6 +100,9 @@ const chat = {
     "loadingFailed": "Falha ao carregar",
     "pleaseCloseAndReopen": "Feche e reabra",
     "loadingSlashCommands": "Carregando comandos de barra...",
+    "commandsListUnavailableTitle": "Comandos indisponíveis",
+    "commandsListUnavailableMessage":
+      "Falha ao carregar os comandos de barra: {{reason}}. O autocompletar pode ficar incompleto; uma nova tentativa será feita automaticamente.",
     "pleaseWait": "Aguarde...",
     "retrying": "Tentando novamente ({{count}}/{{max}})...",
     "removeAgent": "Remover agente",
