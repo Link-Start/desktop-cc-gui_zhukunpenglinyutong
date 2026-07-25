@@ -1774,3 +1774,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1133: 清理 Markdown 旧 renderer path
+
+**Date**: 2026-07-26
+**Task**: 清理 Markdown 旧 renderer path
+**Branch**: `feature/v-0710`
+
+### Summary
+
+删除迁移后残留的 FileMarkdownPreviewRich.tsx；Rich implementation 已回到 baseline-tracked FileMarkdownPreview.tsx，canonical router 位于 FileMarkdownPreviewRouter.tsx。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `35740d89a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1132
+- **Total Sessions**: 1133
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~1776 | Active |
+| `journal-27.md` | ~1809 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1133 | 2026-07-26 | 清理 Markdown 旧 renderer path | `35740d89a` | `feature/v-0710` |
 | 1132 | 2026-07-26 | 校正 Markdown renderer large-file baseline | `380d1c016` | `feature/v-0710` |
 | 1131 | 2026-07-26 | 消除 annotation 跨批次 large-file 回退 | `68e5c2e3c` | `feature/v-0710` |
 | 1130 | 2026-07-26 | 收敛 Markdown 文件预览渲染边界 | `dbd17d55c` | `feature/v-0710` |
