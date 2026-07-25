@@ -3,7 +3,7 @@
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
 - Updated At: `2026-07-25`
-- Active proposals: `8`
+- Active proposals: `9`
 - Archived proposals: `731`
 - Main capability specs: `431`
 
@@ -11,6 +11,7 @@
 
 | Change | Progress | Current gate | Artifacts |
 |---|---:|---|---|
+| [`prune-composer-autocomplete-dead-paths`](prune-composer-autocomplete-dead-paths/proposal.md) | 9/9 | implemented，待 verify/archive 决策 | [design](prune-composer-autocomplete-dead-paths/design.md) · [tasks](prune-composer-autocomplete-dead-paths/tasks.md) · [specs](prune-composer-autocomplete-dead-paths/specs/) |
 | [`add-linux-native-menu-localization`](add-linux-native-menu-localization/proposal.md) | 4/5 | Linux non-default-language startup smoke | [design](add-linux-native-menu-localization/design.md) · [tasks](add-linux-native-menu-localization/tasks.md) · [specs](add-linux-native-menu-localization/specs/) · [verification](add-linux-native-menu-localization/verification.md) |
 | [`add-skills-hub-management`](add-skills-hub-management/proposal.md) | 14/14 | 追溯提案（已随 `b1d94a930` / `c75922dec` 合入）；archive 决策 | [tasks](add-skills-hub-management/tasks.md) · [specs](add-skills-hub-management/specs/) |
 | [`add-tokentracker-usage-dashboard`](add-tokentracker-usage-dashboard/proposal.md) | 21/21 | completion review / archive decision | [tasks](add-tokentracker-usage-dashboard/tasks.md) |

@@ -224,8 +224,6 @@ type ComposerProps = {
   commands?: CustomCommandOption[];
   files: string[];
   directories?: string[];
-  gitignoredFiles?: Set<string>;
-  gitignoredDirectories?: Set<string>;
   contextUsage?: ThreadTokenUsage | null;
   contextDualViewEnabled?: boolean;
   isContextCompacting?: boolean;
@@ -499,8 +497,6 @@ function ComposerImpl({
   commands = [],
   files,
   directories = [],
-  gitignoredFiles,
-  gitignoredDirectories,
   contextUsage = null,
   contextDualViewEnabled = false,
   isContextCompacting = false,
@@ -1023,31 +1019,11 @@ function ComposerImpl({
 
   const {
     isAutocompleteOpen,
-    activeAutocompleteTrigger: _activeAutocompleteTrigger,
-    autocompleteMatches: _autocompleteMatches,
-    highlightIndex: _highlightIndex,
-    setHighlightIndex: _setHighlightIndex,
-    applyAutocomplete: _applyAutocomplete,
-    handleInputKeyDown: _handleInputKeyDown,
     handleTextChange,
     handleSelectionChange,
   } = useComposerAutocompleteState({
     text,
     selectionStart,
-    disabled,
-    skills,
-    prompts,
-    commands,
-    files,
-    directories,
-    gitignoredFiles,
-    gitignoredDirectories,
-    workspaceId: activeWorkspaceId,
-    workspaceName: activeWorkspaceName,
-    workspacePath: activeWorkspacePath,
-    onManualMemorySelect: handleSelectManualMemory,
-    onNoteCardSelect: handleSelectNoteCard,
-    textareaRef,
     setText: setComposerText,
     setSelectionStart,
   });

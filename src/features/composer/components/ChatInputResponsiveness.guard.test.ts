@@ -35,7 +35,7 @@ function extractUseCallbackBlock(source: string, callbackName: string): string |
   return undefined;
 }
 
-describe("composer input responsiveness guard", () => {
+describe("chat input responsiveness guard", () => {
   it("keeps ChatInputBoxAdapter text propagation out of React transitions", () => {
     const source = readSource(
       "src/features/composer/components/ChatInputBox/ChatInputBoxAdapter.tsx",

@@ -1484,8 +1484,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           commands={composerCommands}
           files={options.files}
           directories={options.directories}
-          gitignoredFiles={options.gitignoredFiles}
-          gitignoredDirectories={options.gitignoredDirectories}
           textareaRef={options.textareaRef}
           historyKey={options.activeWorkspace?.id ?? null}
           editorSettings={options.composerEditorSettings}
