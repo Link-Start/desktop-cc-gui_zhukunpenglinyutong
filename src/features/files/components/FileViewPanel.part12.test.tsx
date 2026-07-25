@@ -43,43 +43,47 @@ import {
 
 void [act, cleanup, fireEvent, render, screen, waitFor, within, afterEach, describe, expect, it, vi, buildLocation, buildWindowsLocation, mermaidInitialize, mermaidRender, mockCodeMirrorDispatch, mockOpenNewDetachedFileExplorerWindow, mockPushErrorToast, FileViewPanel, resolveEditorAnnotationWidgetOrder, clearFileDocumentSessionCacheForTests, getCodeIntelDefinition, getCodeIntelImplementations, getCodeIntelReferences, getGitFileFullDiff, prepareCodeIntel, readLocalImageDataUrl, readExternalAbsoluteFile, readExternalSpecFile, readWorkspaceFile, writeExternalSpecFile, writeWorkspaceFile, loadKatexAssets, useFilePreviewPayload, getFileTreeIconSvg, openFileContentContextMenu, clickFileContextMenuItem, toggleFileGitBlame];
 
-describe("editor annotation widget ordering", () => {
-  it("keeps draft and existing markers sorted for CodeMirror ranges", () => {
-      const targets = resolveEditorAnnotationWidgetOrder({
-        maxLine: 50,
-        annotations: [
-          {
-            id: "later-marker",
-            path: "src/App.tsx",
-            lineRange: { startLine: 38, endLine: 38 },
-            body: "later",
-            source: "file-edit-mode",
-          },
-          {
-            id: "same-line-marker",
-            path: "src/App.tsx",
-            lineRange: { startLine: 12, endLine: 12 },
-            body: "same line",
-            source: "file-edit-mode",
-          },
-        ],
-        draft: {
-          lineRange: { startLine: 10, endLine: 12 },
-          source: "file-edit-mode",
-          body: "",
-        },
+describe("FileViewPanel code preview viewport pipeline", () => {
+  afterEach(() => {
+      cleanup();
+      vi.clearAllMocks();
+    });
+
+  it("uses virtualized rows for large code preview instead of mounting every line", async () => {
+      vi.mocked(readWorkspaceFile).mockResolvedValue({
+        content: Array.from(
+          { length: 1_500 },
+          (_, index) => `const value${index} = ${index};`,
+        ).join("\n"),
+        truncated: false,
       });
 
+      const { container } = render(
+        <FileViewPanel
+          workspaceId="ws-code-virtual"
+          workspacePath="/repo"
+          filePath="src/large.ts"
+          initialMode="preview"
+          openTargets={[]}
+          openAppIconById={{}}
+          selectedOpenAppId=""
+          onSelectOpenAppId={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(
+          container.querySelector(".fvp-code-preview.is-virtualized"),
+        ).toBeTruthy();
+      });
       expect(
-        targets.map((target) =>
-          target.kind === "marker"
-            ? `${target.kind}:${target.annotation.id}:${target.targetLine}:${target.side}`
-            : `${target.kind}:draft:${target.targetLine}:${target.side}`,
-        ),
-      ).toEqual([
-        "marker:same-line-marker:12:1",
-        "draft:draft:12:2",
-        "marker:later-marker:38:1",
-      ]);
+        container
+          .querySelector(".fvp-code-preview")
+          ?.getAttribute("data-code-preview-line-count"),
+      ).toBe("1500");
+      expect(container.querySelectorAll(".fvp-code-line").length).toBeLessThan(
+        1_500,
+      );
     });
 });

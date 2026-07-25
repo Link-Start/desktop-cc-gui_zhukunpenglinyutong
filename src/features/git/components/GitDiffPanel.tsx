@@ -3,16 +3,7 @@ import {
   getGitDiffs,
   getGitFileFullDiff,
   type CommitMessageEngine,
-  type CommitMessageLanguage,
 } from "../../../services/tauri";
-import {
-  saveLastCommitMessageConfig,
-} from "../../../utils/commitMessage";
-import {
-  COMMIT_MESSAGE_MENU_ENGINES,
-  readExecutableCommitMessageConfig,
-} from "../utils/commitMessageMenuConfig";
-import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
@@ -90,6 +81,13 @@ import {
   useGitCommitComposerPlacement,
   writeGitCommitComposerPlacement,
 } from "../hooks/useGitCommitComposerPlacement";
+import { useCommitMessageGenerationMenu } from "../hooks/useCommitMessageGenerationMenu";
+import {
+  getPathLeafName,
+  isMissingRepo,
+  normalizeRootPath,
+  resolveBottomCommitMessageMenuPosition,
+} from "./gitDiffPanelLayout";
 import { buildGitDiffPanelFileContextMenuItems } from "./GitDiffPanelFileContextMenu";
 import {
   resolveGitDiffFileHistoryTarget,
@@ -101,19 +99,7 @@ type ModeMenuLayout = {
   width: number;
 };
 
-export function resolveBottomCommitMessageMenuPosition(
-  triggerRect: Pick<DOMRect, "right" | "top">,
-  menuSize: { width: number; height: number },
-  viewport: { width: number; height: number },
-) {
-  const padding = 12;
-  const maxX = Math.max(padding, viewport.width - menuSize.width - padding);
-  const maxY = Math.max(padding, viewport.height - menuSize.height - padding);
-  return {
-    x: Math.min(Math.max(triggerRect.right - menuSize.width, padding), maxX),
-    y: Math.min(Math.max(triggerRect.top - menuSize.height - 8, padding), maxY),
-  };
-}
+export { resolveBottomCommitMessageMenuPosition } from "./gitDiffPanelLayout";
 
 function GitModeSelectorMount({ target, children }: { target: HTMLElement | null; children: ReactNode }) {
   return target ? createPortal(children, target) : children;
@@ -131,39 +117,6 @@ type PreviewFileState = DiffFile & {
   scopedDiffEntry: GitFileDiff | null;
   isDiffLoading: boolean;
 };
-
-function getPathLeafName(value: string | null | undefined): string {
-  if (!value) {
-    return "";
-  }
-  const normalized = value.replace(/\\/g, "/").replace(/\/+$/, "");
-  if (!normalized) {
-    return "";
-  }
-  const parts = normalized.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? "";
-}
-
-function normalizeRootPath(value: string | null | undefined) {
-  if (!value) {
-    return "";
-  }
-  return value.replace(/\\/g, "/").replace(/\/+$/, "");
-}
-
-function isMissingRepo(error: string | null | undefined) {
-  if (!error) {
-    return false;
-  }
-  const normalized = error.toLowerCase();
-  return (
-    normalized.includes("could not find repository") ||
-    normalized.includes("not a git repository") ||
-    (normalized.includes("repository") && normalized.includes("notfound")) ||
-    normalized.includes("repository not found") ||
-    normalized.includes("git root not found")
-  );
-}
 
 function renderModeIcon(mode: GitDiffPanelProps["mode"], className: string, size = 12) {
   switch (mode) {
@@ -876,7 +829,6 @@ function GitDiffPanelImpl({
   const [discardDialogSubmitting, setDiscardDialogSubmitting] = useState(false);
   const [gitContextMenu, setGitContextMenu] =
     useState<GitPanelContextMenuState | null>(null);
-  const deferredCommitLanguageMenuTimerRef = useRef<number | null>(null);
   const gitStatusRefreshSpinTimerRef = useRef<number | null>(null);
   const gitStatusRefreshSpinRafRef = useRef<number | null>(null);
   const [isGitStatusRefreshing, setIsGitStatusRefreshing] = useState(false);
@@ -1242,10 +1194,6 @@ function GitDiffPanelImpl({
   }, [isModeMenuOpen, updateModeMenuLayout]);
   useEffect(() => {
     return () => {
-      if (deferredCommitLanguageMenuTimerRef.current !== null) {
-        window.clearTimeout(deferredCommitLanguageMenuTimerRef.current);
-        deferredCommitLanguageMenuTimerRef.current = null;
-      }
       if (gitStatusRefreshSpinTimerRef.current !== null) {
         window.clearTimeout(gitStatusRefreshSpinTimerRef.current);
         gitStatusRefreshSpinTimerRef.current = null;
@@ -2087,82 +2035,8 @@ function GitDiffPanelImpl({
           : undefined,
     [selectedCommitCount, selectedCommitPaths, hasExplicitCommitSelection],
   );
-  const generateCommitMessageWithConfig = useCallback(
-    async (
-      language: CommitMessageLanguage,
-      engine: CommitMessageEngine,
-      repositorySelections?: RepositoryCommitSelection[],
-    ) => {
-      if (!onGenerateCommitMessage || !isEngineExecutionEnabled(engine)) {
-        return;
-      }
-      setCommitMessageMenuEngine(engine);
-      saveLastCommitMessageConfig({ engine, language });
-      if (repositorySelections) {
-        await onGenerateCommitMessage(language, engine, undefined, repositorySelections);
-        return;
-      }
-      if (selectedPathsForGeneration) {
-        await onGenerateCommitMessage(language, engine, selectedPathsForGeneration);
-        return;
-      }
-      await onGenerateCommitMessage(language, engine);
-    },
-    [onGenerateCommitMessage, selectedPathsForGeneration],
-  );
-  const showCommitMessageLanguageMenu = useCallback(
-    (
-      engine: CommitMessageEngine,
-      position: { x: number; y: number },
-      repositorySelections?: RepositoryCommitSelection[],
-    ) => {
-      const canGenerate = repositorySelections
-        ? repositorySelections.length > 0
-        : canGenerateCommitMessage;
-      if (!onGenerateCommitMessage || commitMessageLoading || commitLoading || !canGenerate) {
-        return;
-      }
-      setGitContextMenu({
-        ...position,
-        label: t("git.generateCommitMessage"),
-        items: [
-          {
-            type: "item",
-            id: "commit-message-zh",
-            label: t("git.generateCommitMessageChinese"),
-            onSelect: () => generateCommitMessageWithConfig("zh", engine, repositorySelections),
-          },
-          {
-            type: "item",
-            id: "commit-message-en",
-            label: t("git.generateCommitMessageEnglish"),
-            onSelect: () => generateCommitMessageWithConfig("en", engine, repositorySelections),
-          },
-        ],
-      });
-    },
-    [
-      canGenerateCommitMessage,
-      commitLoading,
-      commitMessageLoading,
-      generateCommitMessageWithConfig,
-      onGenerateCommitMessage,
-      t,
-    ],
-  );
-  const showCommitMessageEngineMenu = useCallback(
-    (
-      event: ReactMouseEvent<HTMLButtonElement>,
-      repositorySelections?: RepositoryCommitSelection[],
-    ) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const canGenerate = repositorySelections
-        ? repositorySelections.length > 0
-        : canGenerateCommitMessage;
-      if (!onGenerateCommitMessage || commitMessageLoading || commitLoading || !canGenerate) {
-        return;
-      }
+  const resolveCommitMessageMenuPosition = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
       const menuSize = {
         width: 260,
         height: 300,
@@ -2178,86 +2052,74 @@ function GitDiffPanelImpl({
             triggerRect.bottom + 8,
             menuSize,
           );
-      const lastConfig = readExecutableCommitMessageConfig();
-      const engineLabelKeys: Record<(typeof COMMIT_MESSAGE_MENU_ENGINES)[number], string> = {
-        codex: "git.generateCommitMessageEngineCodex",
-        claude: "git.generateCommitMessageEngineClaude",
-      };
-      const engineItems = COMMIT_MESSAGE_MENU_ENGINES.map((engine) => ({
-        engine,
-        label: t(engineLabelKeys[engine]),
-      }));
-      setGitContextMenu({
-        ...position,
-        label: t("git.generateCommitMessage"),
+      return position;
+    },
+    [commitComposerPlacement],
+  );
+  const buildCommitMessagePlacementItems = useCallback(
+    (): RendererContextMenuItem[] => [
+      { type: "separator", id: "commit-message-placement-separator" },
+      {
+        type: "submenu",
+        id: "commit-message-placement",
+        label: t("git.commitComposerPlacementMenuLabel"),
         items: [
           {
             type: "item",
-            id: "commit-message-last-config",
-            label: t("git.generateCommitMessageLastConfig"),
-            disabled: !lastConfig,
-            onSelect: async () => {
-              if (!lastConfig) {
-                return;
-              }
-              await generateCommitMessageWithConfig(
-                lastConfig.language,
-                lastConfig.engine,
-                repositorySelections,
-              );
-            },
+            id: "commit-message-placement-bottom",
+            label: t("git.commitComposerPlacementBottom"),
+            disabled: commitComposerPlacement === "bottom",
+            onSelect: () => writeGitCommitComposerPlacement("bottom"),
           },
-          { type: "separator", id: "commit-message-last-config-separator" },
-          ...engineItems.map<RendererContextMenuItem>(({ engine, label }) => ({
-            type: "item",
-            id: `commit-message-engine-${engine}`,
-            label,
-            onSelect: () => {
-              if (deferredCommitLanguageMenuTimerRef.current !== null) {
-                window.clearTimeout(deferredCommitLanguageMenuTimerRef.current);
-              }
-              deferredCommitLanguageMenuTimerRef.current = window.setTimeout(() => {
-                deferredCommitLanguageMenuTimerRef.current = null;
-                showCommitMessageLanguageMenu(engine, position, repositorySelections);
-              }, 0);
-            },
-          })),
-          { type: "separator", id: "commit-message-placement-separator" },
           {
-            type: "submenu",
-            id: "commit-message-placement",
-            label: t("git.commitComposerPlacementMenuLabel"),
-            items: [
-              {
-                type: "item",
-                id: "commit-message-placement-bottom",
-                label: t("git.commitComposerPlacementBottom"),
-                disabled: commitComposerPlacement === "bottom",
-                onSelect: () => writeGitCommitComposerPlacement("bottom"),
-              },
-              {
-                type: "item",
-                id: "commit-message-placement-top",
-                label: t("git.commitComposerPlacementTop"),
-                disabled: commitComposerPlacement === "top",
-                onSelect: () => writeGitCommitComposerPlacement("top"),
-              },
-            ],
+            type: "item",
+            id: "commit-message-placement-top",
+            label: t("git.commitComposerPlacementTop"),
+            disabled: commitComposerPlacement === "top",
+            onSelect: () => writeGitCommitComposerPlacement("top"),
           },
         ],
-      });
-    },
-    [
-      canGenerateCommitMessage,
-      commitComposerPlacement,
-      commitLoading,
-      commitMessageLoading,
-      generateCommitMessageWithConfig,
-      onGenerateCommitMessage,
-      showCommitMessageLanguageMenu,
-      t,
+      },
     ],
+    [commitComposerPlacement, t],
   );
+  const { showEngineMenu: showCommitMessageEngineMenu } =
+    useCommitMessageGenerationMenu<RepositoryCommitSelection[]>({
+      t,
+      busy: commitMessageLoading || commitLoading,
+      canGenerate: (repositorySelections) =>
+        Boolean(onGenerateCommitMessage) &&
+        (repositorySelections
+          ? repositorySelections.length > 0
+          : canGenerateCommitMessage),
+      generate: async (language, engine, repositorySelections) => {
+        if (!onGenerateCommitMessage) {
+          return;
+        }
+        if (repositorySelections) {
+          await onGenerateCommitMessage(
+            language,
+            engine,
+            undefined,
+            repositorySelections,
+          );
+          return;
+        }
+        if (selectedPathsForGeneration) {
+          await onGenerateCommitMessage(
+            language,
+            engine,
+            selectedPathsForGeneration,
+          );
+          return;
+        }
+        await onGenerateCommitMessage(language, engine);
+      },
+      resolvePosition: resolveCommitMessageMenuPosition,
+      setEngine: setCommitMessageMenuEngine,
+      setMenu: setGitContextMenu,
+      buildExtraItems: buildCommitMessagePlacementItems,
+    });
   const singleCommitComposer =
     showGenerateCommitMessage && !multiRepositoryMode ? (
       <div className={`commit-message-section git-commit-composer git-commit-composer--${commitComposerPlacement}`}>

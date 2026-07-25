@@ -60,14 +60,7 @@ import {
   type RendererContextMenuState,
 } from "../../../components/ui/RendererContextMenu";
 import type {
-  GitFileStatus,
-  GitRepositorySummary,
-  OpenAppTarget,
-} from "../../../types";
-import type {
-  CodeAnnotationDraftInput,
   CodeAnnotationLineRange,
-  CodeAnnotationSelection,
 } from "../../code-annotations/types";
 import { isSameCodeAnnotationPath } from "../../code-annotations/utils/codeAnnotations";
 import { loadCodeMirrorExtensionsForEditorLanguage } from "../utils/codemirrorLanguageExtensions";
@@ -103,7 +96,6 @@ import { FileViewBody } from "./FileViewBody";
 import type { FileCodeMirrorEditorHandle } from "./FileCodeMirrorEditor";
 import type { NoteCaptureDraft } from "../../note-cards/types";
 import { buildCodeSelectionNoteDraft } from "../../note-cards/utils/noteCapture";
-import type { FileHistoryTarget } from "../../git-history/types";
 import { FileViewNavigationPanel } from "./FileViewNavigationPanel";
 import { useFileDocumentState } from "../hooks/useFileDocumentState";
 import { useFileExternalSync } from "../hooks/useFileExternalSync";
@@ -113,7 +105,6 @@ import { useFilePreviewPayload } from "../hooks/useFilePreviewPayload";
 import { isThemeMutationAttribute } from "../../theme/utils/themeAppearance";
 import {
   DEFAULT_FILE_RENDER_PRESSURE,
-  type FileRenderPressure,
 } from "../types/fileRenderPressure";
 import {
   resolveFastMarkdownProfileInputs,
@@ -144,94 +135,14 @@ import {
   resolveGitBlameRepositoryPath,
 } from "../utils/gitBlame";
 import { resolveFileGitScope } from "../utils/fileGitScope";
+import {
+  NAVIGATE_BACK_SHORTCUT,
+  NAVIGATE_FORWARD_SHORTCUT,
+  resetGitLineMarkersIfNeeded,
+  type FileViewPanelProps,
+} from "./FileViewPanelContract";
 
 export { resolveEditorAnnotationWidgetOrder } from "./fileViewPanelShared";
-
-const NAVIGATE_BACK_SHORTCUT = "cmd+alt+arrowleft";
-const NAVIGATE_FORWARD_SHORTCUT = "cmd+alt+arrowright";
-
-function resetGitLineMarkersIfNeeded(markers: GitLineMarkers): GitLineMarkers {
-  if (markers.added.length === 0 && markers.modified.length === 0) {
-    return markers;
-  }
-  return { added: [], modified: [] };
-}
-
-type FileViewPanelProps = {
-  workspaceId: string;
-  workspaceName?: string | null;
-  workspacePath: string;
-  gitRoot?: string | null;
-  gitRepositories?: GitRepositorySummary[];
-  customSpecRoot?: string | null;
-  filePath: string;
-  gitStatusFiles?: GitFileStatus[];
-  openTabs?: string[];
-  activeTabPath?: string | null;
-  onActivateTab?: (path: string) => void;
-  onCloseTab?: (path: string) => void;
-  onCloseOtherTabs?: (path: string) => void;
-  onCloseAllTabs?: () => void;
-  onReorderTabs?: (nextOrder: string[]) => void;
-  fileReferenceMode?: "path" | "none";
-  onFileReferenceModeChange?: (mode: "path" | "none") => void;
-  activeFileLineRange?: { startLine: number; endLine: number } | null;
-  onActiveFileLineRangeChange?: (
-    range: { startLine: number; endLine: number } | null,
-  ) => void;
-  onActiveCodeAnchorChange?: (
-    anchor: IntentCanvasCodeSelectionAnchor | null,
-  ) => void;
-  onAssociateIntentCanvasCodeAnchor?: (
-    anchor: IntentCanvasCodeSelectionAnchor,
-  ) => Promise<void> | void;
-  initialMode?: "edit" | "preview";
-  openTargets: OpenAppTarget[];
-  openAppIconById: Record<string, string>;
-  selectedOpenAppId: string;
-  onSelectOpenAppId: (id: string) => void;
-  editorSplitLayout?: "vertical" | "horizontal";
-  onToggleEditorSplitLayout?: () => void;
-  isEditorFileMaximized?: boolean;
-  onToggleEditorFileMaximized?: () => void;
-  navigationTarget?: {
-    path: string;
-    line: number;
-    endLine?: number;
-    column: number;
-    scrollPosition?: "nearest" | "center";
-    requestId: number;
-  } | null;
-  highlightMarkers?: GitLineMarkers | null;
-  onNavigateToLocation?: (
-    path: string,
-    location: { line: number; column: number },
-  ) => void;
-  onOpenFileHistory?: (target: FileHistoryTarget) => void;
-  onRevealInFileTree?: (path: string) => void;
-  onClose: () => void;
-  onInsertText?: (text: string) => void;
-  onCreateCodeAnnotation?: (annotation: CodeAnnotationDraftInput) => void;
-  onCaptureNote?: (draft: NoteCaptureDraft) => void;
-  onRemoveCodeAnnotation?: (annotationId: string) => void;
-  codeAnnotations?: CodeAnnotationSelection[];
-  headerLayout?: "stacked" | "single-row";
-  onSingleRowLeadingAction?: () => void;
-  singleRowLeadingDirection?: "left" | "right";
-  singleRowLeadingLabel?: string;
-  externalChangeMonitoringEnabled?: boolean;
-  externalChangeTransportMode?: "watcher" | "polling";
-  externalChangePollIntervalMs?: number;
-  externalChangeApplyMode?: "auto" | "manual";
-  externalChangeAutoApplyDebounceMs?: number;
-  markdownPreviewSnapshotMode?: "stable" | "live";
-  fileRenderPressure?: FileRenderPressure;
-  saveFileShortcut?: string | null;
-  findInFileShortcut?: string | null;
-  expandSelectionShortcut?: string | null;
-  onSaveSuccess?: () => void;
-  onDirtyChange?: (isDirty: boolean) => void;
-};
 
 export function FileViewPanel({
   workspaceId,
@@ -1066,7 +977,6 @@ export function FileViewPanel({
     setEditorLocalLineRange(activeFileLineRange);
   }, [activeFileLineRange]);
 
-  // Reset mode when file changes
   useEffect(() => {
     pendingOpenFindPanelRef.current = false;
     setMode(defaultMode);
@@ -1134,7 +1044,6 @@ export function FileViewPanel({
     onDirtyChange?.(effectiveIsDirty);
   }, [effectiveIsDirty, onDirtyChange]);
 
-  // Auto-focus CodeMirror when entering edit mode
   useEffect(() => {
     if (mode === "edit" && !isLoading && !truncated) {
       requestAnimationFrame(() => {
@@ -1172,7 +1081,6 @@ export function FileViewPanel({
       });
   }, [mode, renderProfile.editorLanguage]);
 
-  // Keyboard shortcut: Cmd+S / Ctrl+S (works in any mode, including preview)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isEditableShortcutTarget(event.target)) {
@@ -1219,7 +1127,6 @@ export function FileViewPanel({
     onSingleRowLeadingAction,
   ]);
 
-  // Switch to edit mode
   const handleEnterEdit = useCallback(() => {
     if (truncated || !canEditDocument) return;
     setMode("edit");
@@ -1228,7 +1135,6 @@ export function FileViewPanel({
     });
   }, [canEditDocument, truncated]);
 
-  // Switch to preview mode
   const handleEnterPreview = useCallback(() => {
     flushEditorDraftToDocument();
     setMode("preview");
@@ -1933,7 +1839,6 @@ export function FileViewPanel({
   const effectiveMarkdownPreviewContent =
     markdownPreviewOverride?.content ?? content;
 
-  // Syntax highlighted lines for code preview
   const previewMetrics = useMemo(() => {
     if (
       mode === "preview" &&
@@ -2785,7 +2690,6 @@ export function FileViewPanel({
     </div>
   );
 
-  // ── Content area ──
   const renderContent = () => (
     <FileViewBody
       workspaceId={workspaceId}
@@ -2860,7 +2764,6 @@ export function FileViewPanel({
     />
   );
 
-  // ── Footer ──
   const navigationModeLabel =
     navigationStatus?.phase === "loading"
       ? t("files.navigationPreparing")
