@@ -152,7 +152,7 @@ const sidebar = {
       "guideNoteTelemetry": "本アプリでは匿名テレメトリを無効化しています。",
       "errorTitle": "tokentracker サーバーの起動に失敗しました",
       "errorRetry": "再試行"
-    }
+    },
   }
 };
 

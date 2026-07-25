@@ -52,7 +52,6 @@ import { CommitSection } from "./CommitSection";
 import { PromptSection } from "./PromptSection";
 import { UsageSection } from "./UsageSection";
 import { McpSection } from "./McpSection";
-import { SkillsSection } from "./SkillsSection";
 import { CuratedSection } from "../../curated-skills";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
 import { deleteSessionRadarHistoryEntries } from "../../session-activity/utils/sessionRadarHistoryManagement";
@@ -2306,18 +2305,12 @@ export function SettingsView({
                   embedded
                 />
               ) : (
-                <>
-                  <CuratedSection
-                    appSettings={appSettings}
-                    onUpdateAppSettings={onUpdateAppSettings}
-                  />
-                  <SkillsSection
-                    activeWorkspace={selectedSettingsWorkspace}
-                    embedded
-                    appSettings={appSettings}
-                    onUpdateAppSettings={onUpdateAppSettings}
-                  />
-                </>
+                // Skills 管理已整体迁移到「拓展 → Skills」（TokenTracker
+                // SkillsPage），设置侧只保留随包发布的内置精选开关。
+                <CuratedSection
+                  appSettings={appSettings}
+                  onUpdateAppSettings={onUpdateAppSettings}
+                />
               )}
             </section>
           )}

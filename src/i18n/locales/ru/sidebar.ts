@@ -152,7 +152,7 @@ const sidebar = {
       "guideNoteTelemetry": "Это приложение отключило анонимную телеметрию.",
       "errorTitle": "Не удалось запустить сервер tokentracker",
       "errorRetry": "Повторить"
-    }
+    },
   }
 };
 

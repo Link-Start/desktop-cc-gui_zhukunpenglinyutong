@@ -492,7 +492,6 @@
 
 .settings-usage-toolbar,
 .settings-mcp-toolbar,
-.settings-skills-toolbar,
 .settings-prompt-toolbar {
   display: flex;
   align-items: center;

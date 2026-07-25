@@ -152,7 +152,7 @@ const sidebar = {
       "guideNoteTelemetry": "本應用已為其關閉匿名遥測。",
       "errorTitle": "tokentracker 服務啟動失敗",
       "errorRetry": "重試"
-    }
+    },
   }
 };
 

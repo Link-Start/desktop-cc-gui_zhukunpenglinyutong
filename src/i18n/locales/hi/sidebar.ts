@@ -152,7 +152,7 @@ const sidebar = {
       "guideNoteTelemetry": "इस ऐप ने इसके लिए अनाम टेलीमेट्री बंद कर दी है।",
       "errorTitle": "tokentracker सर्वर शुरू नहीं हो सका",
       "errorRetry": "पुनः प्रयास करें"
-    }
+    },
   }
 };
 

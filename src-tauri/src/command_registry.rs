@@ -377,6 +377,9 @@ pub(crate) fn invoke_handler(
         crate::tokentracker::tt_install_cli,
         crate::tokentracker::tt_ensure_server,
         crate::tokentracker::tt_proxy,
+        // Skills Hub
+        crate::skills_hub::skills_hub_query,
+        crate::skills_hub::skills_hub_mutate,
         // Client storage
         crate::client_storage::client_store_read,
         crate::client_storage::client_store_write,

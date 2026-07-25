@@ -152,7 +152,7 @@ const sidebar = {
       "guideNoteTelemetry": "이 앱은 익명 텔레메트리를 비활성화했습니다.",
       "errorTitle": "tokentracker 서버 시작 실패",
       "errorRetry": "다시 시도"
-    }
+    },
   }
 };
 

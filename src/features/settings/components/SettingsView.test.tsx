@@ -34,8 +34,6 @@ import { pushErrorToast } from "../../../services/toasts";
 import { DEFAULT_UI_FONT_FAMILY } from "../../../utils/fonts";
 import { SettingsView } from "./SettingsView";
 
-const skillsSectionMock = vi.fn();
-
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: vi.fn(() => new Promise<string>(() => {})),
 }));
@@ -84,25 +82,6 @@ vi.mock("../../curated-skills/hooks/useCuratedSkills", () => ({
   }),
 }));
 
-vi.mock("./SkillsSection", () => ({
-  SkillsSection: (props: {
-    embedded?: boolean;
-    appSettings?: AppSettings;
-    onUpdateAppSettings?: unknown;
-  }) => {
-    skillsSectionMock(props);
-    return (
-      <div
-        data-testid={
-          props.embedded ? "embedded-skills-section" : "skills-section"
-        }
-      >
-        Mock Skills Section
-      </div>
-    );
-  },
-}));
-
 vi.mock("../../vendors/components/VendorSettingsPanel", () => ({
   VendorSettingsPanel: () => <div data-testid="vendor-settings-panel" />,
 }));
@@ -148,7 +127,6 @@ const createDeferred = <T,>() => {
 };
 
 beforeEach(() => {
-  skillsSectionMock.mockClear();
   queryLocalFontsMock.mockReset();
   queryLocalFontsMock.mockImplementation(
     () => new Promise<Array<{ family: string }>>(() => {}),
@@ -2326,16 +2304,8 @@ describe("SettingsView Shortcuts", () => {
     expect(screen.getByTestId("embedded-mcp-section")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Skills" }));
     await flushSettingsViewEffects();
-    expect(screen.getByTestId("embedded-skills-section")).toBeTruthy();
-    expect(skillsSectionMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        embedded: true,
-        appSettings: expect.objectContaining({
-          customSkillDirectories: [],
-        }),
-        onUpdateAppSettings: expect.any(Function),
-      }),
-    );
+    // Skills 管理已迁移到「拓展 → Skills」，设置侧 skills 子页只保留内置精选。
+    expect(screen.getByTestId("curated-section-stub")).toBeTruthy();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Runtime Environment" }),

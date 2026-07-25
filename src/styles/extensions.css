@@ -281,3 +281,12 @@
 .extensions-usage-dashboard .tt-dashboard main {
   padding: 0;
 }
+
+/* TokenTracker skills page section：与 usage 相同的纵向 flex 容器；滚动发生在
+   .extensions-view（与 usage 一致），vendored SkillsPage 自带 main 内边距。 */
+.extensions-skills-dashboard {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}

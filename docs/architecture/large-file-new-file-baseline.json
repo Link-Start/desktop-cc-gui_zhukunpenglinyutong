@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-24T12:18:39.885Z",
+  "generatedAt": "2026-07-24T17:32:58.402Z",
   "scope": "new-file",
   "policyVersion": "2026-07-06.policy-v3",
   "entries": [
@@ -15,7 +15,7 @@
     },
     {
       "path": "src-tauri/src/bin/cc_gui_daemon/daemon_state.rs",
-      "lines": 3316,
+      "lines": 3321,
       "type": "rust",
       "policyId": "default-source",
       "priority": "P1",
@@ -100,6 +100,16 @@
       "policyId": "feature-hotpath",
       "priority": "P1",
       "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/skills_hub.rs",
+      "lines": 2995,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -245,7 +255,7 @@
     },
     {
       "path": "src/features/settings/components/SettingsView.tsx",
-      "lines": 2687,
+      "lines": 2656,
       "type": "ts/tsx",
       "policyId": "feature-hotpath",
       "priority": "P1",
@@ -424,16 +434,6 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/settings/components/SettingsView.test.tsx",
-      "lines": 2493,
-      "type": "ts/tsx",
-      "policyId": "test-files",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src/features/messages/components/Messages.live-behavior.test.tsx",
       "lines": 2469,
       "type": "ts/tsx",
@@ -449,6 +449,16 @@
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/features/settings/components/SettingsView.test.tsx",
+      "lines": 2463,
+      "type": "ts/tsx",
+      "policyId": "test-files",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
@@ -504,16 +514,6 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/i18n/locales/en/settings.ts",
-      "lines": 2439,
-      "type": "i18n",
-      "policyId": "i18n",
-      "priority": "P2",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src/features/threads/hooks/useThreadTurnEvents.test.tsx",
       "lines": 2414,
       "type": "ts/tsx",
@@ -530,6 +530,16 @@
       "policyId": "feature-hotpath",
       "priority": "P1",
       "warnThreshold": 2400,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/en/settings.ts",
+      "lines": 2400,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -584,22 +594,22 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/styles/settings.part2.css",
-      "lines": 2349,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src/features/layout/hooks/useLayoutNodes.tsx",
-      "lines": 2347,
+      "lines": 2348,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/styles/settings.part2.css",
+      "lines": 2348,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
+      "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -609,16 +619,6 @@
       "type": "rust",
       "policyId": "default-source",
       "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/i18n/locales/zh/settings.ts",
-      "lines": 2280,
-      "type": "i18n",
-      "policyId": "i18n",
-      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
@@ -639,6 +639,16 @@
       "type": "rust",
       "policyId": "default-source",
       "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/i18n/locales/zh/settings.ts",
+      "lines": 2242,
+      "type": "i18n",
+      "policyId": "i18n",
+      "priority": "P2",
       "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
@@ -775,7 +785,7 @@
     },
     {
       "path": "src/i18n/locales/zh-TW/settings.ts",
-      "lines": 2057,
+      "lines": 2013,
       "type": "i18n",
       "policyId": "i18n",
       "priority": "P2",
@@ -785,7 +795,7 @@
     },
     {
       "path": "src/i18n/locales/es/settings.ts",
-      "lines": 2056,
+      "lines": 2012,
       "type": "i18n",
       "policyId": "i18n",
       "priority": "P2",
@@ -795,7 +805,7 @@
     },
     {
       "path": "src/i18n/locales/fr/settings.ts",
-      "lines": 2056,
+      "lines": 2012,
       "type": "i18n",
       "policyId": "i18n",
       "priority": "P2",
@@ -805,7 +815,7 @@
     },
     {
       "path": "src/i18n/locales/hi/settings.ts",
-      "lines": 2056,
+      "lines": 2012,
       "type": "i18n",
       "policyId": "i18n",
       "priority": "P2",
@@ -815,7 +825,7 @@
     },
     {
       "path": "src/i18n/locales/ja/settings.ts",
-      "lines": 2056,
+      "lines": 2012,
       "type": "i18n",
       "policyId": "i18n",
       "priority": "P2",
@@ -825,7 +835,7 @@
     },
     {
       "path": "src/i18n/locales/ko/settings.ts",
-      "lines": 2056,
+      "lines": 2012,
       "type": "i18n",
       "policyId": "i18n",
       "priority": "P2",
@@ -835,7 +845,7 @@
     },
     {
       "path": "src/i18n/locales/pt-BR/settings.ts",
-      "lines": 2056,
+      "lines": 2012,
       "type": "i18n",
       "policyId": "i18n",
       "priority": "P2",
@@ -845,7 +855,7 @@
     },
     {
       "path": "src/i18n/locales/ru/settings.ts",
-      "lines": 2056,
+      "lines": 2012,
       "type": "i18n",
       "policyId": "i18n",
       "priority": "P2",
@@ -1035,7 +1045,7 @@
     },
     {
       "path": "src-tauri/src/git/commands_branch.rs",
-      "lines": 1801,
+      "lines": 1802,
       "type": "rust",
       "policyId": "bridge-runtime-critical",
       "priority": "P0",
@@ -1114,12 +1124,12 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/styles/scrollbars.css",
-      "lines": 1715,
-      "type": "css",
-      "policyId": "styles",
+      "path": "src/features/extensions/tokentracker-dashboard/pages/SkillsPage.jsx",
+      "lines": 1728,
+      "type": "js/jsx",
+      "policyId": "default-source",
       "priority": "P1",
-      "warnThreshold": 2200,
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -1199,6 +1209,16 @@
       "type": "rust",
       "policyId": "bridge-runtime-critical",
       "priority": "P0",
+      "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src/styles/scrollbars.css",
+      "lines": 1667,
+      "type": "css",
+      "policyId": "styles",
+      "priority": "P1",
       "warnThreshold": 2200,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
@@ -1784,16 +1804,6 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/settings/components/SkillsSection.tsx",
-      "lines": 1289,
-      "type": "ts/tsx",
-      "policyId": "feature-hotpath",
-      "priority": "P1",
-      "warnThreshold": 2400,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src/features/threads/hooks/useThreadActionsSessionRuntime.ts",
       "lines": 1282,
       "type": "ts/tsx",
@@ -2364,6 +2374,16 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
+      "path": "src/features/status-panel/hooks/useStatusPanelData.ts",
+      "lines": 983,
+      "type": "ts/tsx",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
       "path": "src/features/composer/hooks/useComposerAutocompleteState.ts",
       "lines": 980,
       "type": "ts/tsx",
@@ -2377,16 +2397,6 @@
       "path": ".agents/skills/huashu-design/scripts/html2pptx.js",
       "lines": 979,
       "type": "js/jsx",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/status-panel/hooks/useStatusPanelData.ts",
-      "lines": 979,
-      "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,
@@ -2510,6 +2520,16 @@
       "policyId": "bridge-runtime-critical",
       "priority": "P0",
       "warnThreshold": 2200,
+      "failThreshold": 800,
+      "thresholdSource": "new-file-ratchet"
+    },
+    {
+      "path": "src-tauri/src/shared/settings_core.rs",
+      "lines": 958,
+      "type": "rust",
+      "policyId": "default-source",
+      "priority": "P1",
+      "warnThreshold": 2600,
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
@@ -2674,16 +2694,6 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src-tauri/src/shared/settings_core.rs",
-      "lines": 914,
-      "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src/styles/project-map.inspector.css",
       "lines": 913,
       "type": "css",
@@ -2755,7 +2765,7 @@
     },
     {
       "path": "src/features/status-panel/components/StatusPanel.tsx",
-      "lines": 886,
+      "lines": 887,
       "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",

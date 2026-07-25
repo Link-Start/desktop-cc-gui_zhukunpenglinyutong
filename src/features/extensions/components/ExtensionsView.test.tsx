@@ -21,9 +21,11 @@ const translations = vi.hoisted(
   "extensions.panelTitles.usage": "Usage",
   "extensions.panelTitles.framework": "AI Framework",
   "extensions.panelTitles.skills": "Extend your CLI with Skills",
+  "extensions.panelTitles.mcps": "Extend your CLI with MCP servers",
   "extensions.panelTitles.hooks": "Extend your CLI with Hooks",
   "extensions.descriptions.usage": "Coming soon",
   "extensions.descriptions.skills": "Coming soon",
+  "extensions.descriptions.mcps": "Coming soon",
   "extensions.descriptions.hooks": "Coming soon",
   }),
 );
@@ -36,6 +38,10 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("./UsageDashboardSection", () => ({
   UsageDashboardSection: () => <div data-testid="usage-dashboard-section" />,
+}));
+
+vi.mock("./SkillsDashboardSection", () => ({
+  SkillsDashboardSection: () => <div data-testid="skills-dashboard-section" />,
 }));
 
 describe("ExtensionsView", () => {
@@ -80,6 +86,16 @@ describe("ExtensionsView", () => {
     expect(document.querySelector(".extensions-empty-panel")).toBeNull();
   });
 
+  it("renders the skills dashboard section when the Skills tab is selected", () => {
+    render(<ExtensionsView />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Skills" }));
+
+    expect(screen.queryByTestId("usage-dashboard-section")).toBeNull();
+    expect(screen.getByTestId("skills-dashboard-section")).toBeTruthy();
+    expect(document.querySelector(".extensions-empty-panel")).toBeNull();
+  });
+
   it("updates the introduction panel when a tab is selected", () => {
     render(<ExtensionsView />);
 
@@ -94,9 +110,9 @@ describe("ExtensionsView", () => {
   it("renders a structured shadcn-style empty state", () => {
     render(<ExtensionsView />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mcps" }));
 
-    const panel = screen.getByRole("heading", { name: "Extend your CLI with Skills" }).closest(".extensions-empty-panel");
+    const panel = screen.getByRole("heading", { name: "Extend your CLI with MCP servers" }).closest(".extensions-empty-panel");
     expect(panel).toBeTruthy();
     expect(panel?.querySelector(".extensions-empty-panel-icon svg")).toBeTruthy();
     expect(panel?.querySelectorAll(".extensions-empty-panel-preview span")).toHaveLength(4);

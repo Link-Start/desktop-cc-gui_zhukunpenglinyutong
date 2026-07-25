@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 
+import { SkillsDashboardSection } from "./SkillsDashboardSection";
 import { UsageDashboardSection } from "./UsageDashboardSection";
 
 const SECTION_TABS = ["usage", "framework"] as const;
@@ -97,6 +98,8 @@ export function ExtensionsView() {
 
       {activeTab === "usage" ? (
         <UsageDashboardSection />
+      ) : activeTab === "skills" ? (
+        <SkillsDashboardSection />
       ) : (
         <div className="extensions-empty-panel">
           <div className="extensions-empty-panel-icon" aria-hidden>

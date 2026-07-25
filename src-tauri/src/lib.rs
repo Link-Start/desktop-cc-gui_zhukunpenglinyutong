@@ -165,6 +165,7 @@ mod settings;
 mod shared;
 mod shared_sessions;
 mod skills;
+mod skills_hub;
 mod snapshot_throttle;
 mod startup_guard;
 mod state;

@@ -15,8 +15,11 @@
    * can adopt the shadcn icon-button look without inheriting the global
    * radius/padding/font. `:where()` has zero specificity, so this exclusion
    * does not change how the global rule applies to the other ~300 buttons.
+   * `.tt-dashboard button`（vendored TokenTracker 页面）同样排除：该页面
+   * 自带完整设计系统，全局 radius/padding/font 会把它的裸 <button>
+   * （skills tab、agent dot 等）撑变形。
    */
-  button:not(:where(.markdown-codeblock-copy)) {
+  button:not(:where(.markdown-codeblock-copy, .tt-dashboard button)) {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;

@@ -152,7 +152,7 @@ const sidebar = {
       "guideNoteTelemetry": "Esta aplicación ha desactivado la telemetría anónima.",
       "errorTitle": "No se pudo iniciar el servidor de tokentracker",
       "errorRetry": "Reintentar"
-    }
+    },
   }
 };
 
