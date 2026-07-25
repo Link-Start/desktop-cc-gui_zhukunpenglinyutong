@@ -1232,7 +1232,7 @@ useComposerAutocompleteState 瘦身为 trigger 检测器，删除 useComposerAut
 
 | Hash | Message |
 |------|---------|
-| `9f969c0a5` | (see git log) |
+| `9484986c8` | (see git log) |
 
 ### Testing
 
@@ -1265,7 +1265,7 @@ OpenSpec unify-input-history-and-commands-refresh：输入历史收敛 useInputH
 
 | Hash | Message |
 |------|---------|
-| `81d9a47f9` | (see git log) |
+| `32092503c` | (see git log) |
 
 ### Testing
 
@@ -1298,7 +1298,7 @@ OpenSpec modernize-prompt-enhancer-and-curated-skills-refresh 9/9：prompt enhan
 
 | Hash | Message |
 |------|---------|
-| `5a76671b3` | (see git log) |
+| `85bc82b7e` | (see git log) |
 
 ### Testing
 
@@ -1331,7 +1331,7 @@ SkillInvocation 全链路透传契约、claude_command_create managed 写入、p
 
 | Hash | Message |
 |------|---------|
-| `99a92ac48` | (see git log) |
+| `7173c9c5f` | (see git log) |
 
 ### Testing
 
