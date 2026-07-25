@@ -1212,3 +1212,69 @@ docs/reports/polling-inventory-2026-07-25.md 标记 5 项轮询优化完成
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1116: 批次1: Composer 层补全死路径裁剪
+
+**Date**: 2026-07-25
+**Task**: 批次1: Composer 层补全死路径裁剪
+**Branch**: `feature/v-0710`
+
+### Summary
+
+useComposerAutocompleteState 瘦身为 trigger 检测器，删除 useComposerAutocomplete.ts 与 ComposerInput 命名残留；OpenSpec prune-composer-autocomplete-dead-paths 已立项并完成实现
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9f969c0a5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1117: 统一输入历史存储并事件化命令目录刷新（批次2）
+
+**Date**: 2026-07-25
+**Task**: 统一输入历史存储并事件化命令目录刷新（批次2）
+**Branch**: `feature/v-0710`
+
+### Summary
+
+OpenSpec unify-input-history-and-commands-refresh：输入历史收敛 useInputHistoryStore 单一实现（删 usePromptHistory/死 inlineCompletion，ChatInputBox 薄壳+事件刷新，发送单写）；useCustomCommands 去冷却重试/全局兜底，错误 toast 显式化+10 locale；新增 Rust claude_commands_watch（共享 resolve_commands_dirs，500ms 去抖 emit），前端事件驱动+60s visibility-gated 兜底
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `81d9a47f9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
