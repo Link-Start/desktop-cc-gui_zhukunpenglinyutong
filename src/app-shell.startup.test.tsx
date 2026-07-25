@@ -1163,9 +1163,9 @@ vi.mock("./features/app/hooks/useComposerController", () => ({
   }),
 }));
 
-vi.mock("./features/app/hooks/useLiveEditPreview", () => ({
+vi.mock("./features/live-edit-preview/hooks/useLiveEditPreview", () => ({
   useLiveEditPreview: () => ({
-    enabled: false,
+    markManualNavigation: createNoopFunction(),
   }),
 }));
 

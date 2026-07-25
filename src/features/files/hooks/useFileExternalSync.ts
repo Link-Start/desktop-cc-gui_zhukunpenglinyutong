@@ -477,11 +477,31 @@ export function useFileExternalSync({
       }, externalChangePollIntervalMs);
     };
 
-    scheduleNext();
+    // visibility 门控：窗口隐藏时暂停兜底轮询，恢复可见时先补一跳再恢复周期，
+    // 语义与 setVisibilityGatedInterval 一致，但保持递归 setTimeout 的
+    // "in-flight 完成后才排下一跳"结构。
+    const handleVisibilityChange = () => {
+      if (cancelled) {
+        return;
+      }
+      window.clearTimeout(timeoutId);
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      void refreshFromDisk("polling", "polling-tick").finally(() => {
+        scheduleNext();
+      });
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    if (document.visibilityState !== "hidden") {
+      scheduleNext();
+    }
 
     return () => {
       cancelled = true;
       window.clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [
     externalChangeMonitoringEnabled,
