@@ -1741,3 +1741,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1132: 校正 Markdown renderer large-file baseline
+
+**Date**: 2026-07-26
+**Task**: 校正 Markdown renderer large-file baseline
+**Branch**: `feature/v-0710`
+
+### Summary
+
+最终 large-file gate 发现新 Rich path 触发 800 行 new-file ratchet；将 567 行 canonical router 固定到 FileMarkdownPreviewRouter.tsx，1581 行 feature-complete Rich 保留原 baseline-tracked path，Fast 仍为 11 行兼容入口。74 个增量测试、typecheck、touched ESLint 通过，large-file failures 从 15 回落到 14。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `380d1c016` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
