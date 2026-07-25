@@ -1344,3 +1344,202 @@ SkillInvocation 全链路透传契约、claude_command_create managed 写入、p
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1120: 工程工具链修复批次1: files 重复符号合并与兜底轮询治理
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次1: files 重复符号合并与兜底轮询治理
+**Branch**: `feature/v-0710`
+
+### Summary
+
+合并 fileViewPanelShared/Internals 10 个重复导出符号(internals 死代码清理 658->295 行); 兜底轮询 2s->30s + visibility 门控; 修复 app-shell.startup 失效 mock (useLiveEditPreview 路径与形状)。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 3/4/12
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `04764a654` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1121: 工程工具链修复批次2: GitHistoryPanelPickers 摘除 @ts-nocheck
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次2: GitHistoryPanelPickers 摘除 @ts-nocheck
+**Branch**: `feature/v-0710`
+
+### Summary
+
+第一片 nocheck slice: Pickers 494 行补 KeyboardEvent 类型导入后零错误通过 typecheck; 共享类型 GitHistoryPanelTypes.ts 验证可用。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 1
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dbcd943eb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1122: 工程工具链修复批次3: AI commit message 一键生成
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次3: AI commit message 一键生成
+**Branch**: `feature/v-0710`
+
+### Summary
+
+GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开菜单; 复用既有 config 持久化; 新增 2 测试并语义合并 1 个存量测试。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 6
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `55f18aa24` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1123: 工程工具链修复批次4: worktree 面板收敛共享 AI commit 实现
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次4: worktree 面板收敛共享 AI commit 实现
+**Branch**: `feature/v-0710`
+
+### Summary
+
+新增 commitMessageMenuConfig 共享事实源; worktree 面板获得一键生成+last-config 菜单项; 持久化下沉到生成路径; 测试补 localStorage 清理与 2 个新用例。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 7
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9fb13076e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1124: 缓存消息搜索索引并规范 Worktree 分支命名
+
+**Date**: 2026-07-26
+**Task**: 缓存消息搜索索引并规范 Worktree 分支命名
+**Branch**: `feature/v-0710`
+
+### Summary
+
+为 Message Search 增加 immutable snapshot WeakMap 索引缓存和 normalizedText，移除 Worktree 随机默认分支名并增加 UI/hook 双层必填校验；补充 focused tests、影响报告与 OpenSpec 主规范并完成归档。验证 31 个增量测试、targeted ESLint、typecheck 和 strict OpenSpec validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d077890b8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1125: 修复 Composer 与命令并发边界并更新工具链报告
+
+**Date**: 2026-07-26
+**Task**: 修复 Composer 与命令并发边界并更新工具链报告
+**Branch**: `feature/v-0710`
+
+### Summary
+
+恢复 AI commit message 的显式 engine/language 选择；隔离 Prompt Enhancer workspace cache；修复 managed command 原子创建与 watcher lease 生命周期；补齐 OpenSpec、Trellis executable contracts 和回归测试；基于最新代码更新工程工具链现状与影响范围。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `296fad4a5` | (see git log) |
+| `c3cbbf0ad` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

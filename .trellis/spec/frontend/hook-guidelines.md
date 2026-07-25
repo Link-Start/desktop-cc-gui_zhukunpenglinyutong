@@ -441,3 +441,63 @@ await updateBranch(branchName, repositoryRoot);
 - Reasoning content streaming MUST cover both:
   - first-token reasoning delta dispatches without a queued transition
   - steady-state reasoning delta remains batched after cadence flush
+
+## Scenario: Effect-Owned Runtime Watcher Lease
+
+### 1. Scope / Trigger
+
+- Trigger：React hook 通过 async Tauri `start` / `stop` commands 拥有 backend watcher、listener task 或长生命周期 runtime resource。
+- 目标：cleanup 不得越过 pending start；StrictMode/remount 的 overlapping owners 不得互相误停。
+
+### 2. Signatures
+
+- Frontend owner：`useCustomCommands` 的 `startClaudeCommandsWatch(workspaceId)` / `stopClaudeCommandsWatch(workspaceId)`。
+- Backend owner：`claude_commands_watch_start(workspace_id)` / `claude_commands_watch_stop(workspace_id)`。
+- Registry identity：normalized `workspaceId | "global"` + one watcher handle + `leases: usize`。
+
+### 3. Contracts
+
+- Effect MUST 保存 `startPromise`；cleanup MUST 在该 promise 成功 settle 后调用 matching stop。
+- Start 失败时 cleanup MUST NOT 发送无对应 lease 的 stop。
+- Backend duplicate start MUST acquire one additional lease，不得创建第二个 watcher。
+- Stop MUST release exactly one lease；只有 lease count 归零时才 abort/remove handle。
+- 首次 missing check、watcher create 与 registry insert MUST 位于同一 lifecycle critical section。
+
+### 4. Validation & Error Matrix
+
+| 时序 | 必须行为 | 禁止行为 |
+|---|---|---|
+| start pending → unmount | start settle 后 stop | stop 先返回、start 后插入失管 handle |
+| StrictMode start₁ → start₂ → stop₁ | lease `2 → 1`，watcher 存活 | stop₁ 直接 remove 第二个 owner |
+| final stop₂ | lease `1 → 0`，abort/remove | watcher 永久残留 |
+| start reject → cleanup | 记录 start error，不 stop | release 不存在的 lease |
+
+### 5. Good / Base / Bad Cases
+
+- Good：effect cleanup 串在自己的 `startPromise.then(...)` 后；Rust registry 以 lease count 表达 overlapping ownership。
+- Base：单 owner mount/unmount 为 `0 → 1 → 0`。
+- Bad：fire-and-forget `start()`，cleanup 立即 fire-and-forget `stop()`；IPC completion order 可反转。
+
+### 6. Tests Required
+
+- Hook test MUST 使用 pending start promise，断言 unmount 前 stop 未调用、resolve 后 stop 精确调用一次。
+- Rust registry test MUST 覆盖 duplicate acquire 为 2、第一次 release 保留 1、第二次 release 清零。
+- Focused gate：`npx vitest run src/features/commands/hooks/useCustomCommands.test.tsx` 与 `cargo test --manifest-path src-tauri/Cargo.toml claude_commands_watch --lib`。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+startWatcher(scope);
+return () => stopWatcher(scope);
+```
+
+#### Correct
+
+```typescript
+const startPromise = startWatcher(scope);
+return () => {
+  void startPromise.then(() => stopWatcher(scope)).catch(() => {});
+};
+```

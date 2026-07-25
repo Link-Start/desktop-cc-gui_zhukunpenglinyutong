@@ -601,4 +601,75 @@ describe("useFileExternalSync", () => {
       expect(result.current.externalPendingRefresh).toBeNull();
       expect(result.current.externalChangeSyncState).toBe("in-sync");
     });
+
+    it("pauses fallback polling while hidden and refreshes immediately on visibility resume", async () => {
+      vi.useFakeTimers();
+      vi.mocked(readWorkspaceFile).mockResolvedValue({
+        content: "saved content",
+        truncated: false,
+      });
+
+      renderHook(() => {
+        const savedContentRef = useRef("saved content");
+        const latestIsDirtyRef = useRef(false);
+        const externalDiskSnapshotRef = useRef<{ content: string; truncated: boolean } | null>({
+          content: "saved content",
+          truncated: false,
+        });
+
+        return useFileExternalSync({
+          filePath: "src/visibility.ts",
+          workspaceId: "ws-sync",
+          workspaceRelativeFilePath: "src/visibility.ts",
+          fileReadTargetDomain: "workspace",
+          externalChangeMonitoringEnabled: true,
+          externalChangeTransportMode: "polling",
+          externalChangePollIntervalMs: 20,
+          isBinary: false,
+          isDirty: false,
+          isLoading: false,
+          caseInsensitivePathCompare: false,
+          replaceDocumentSnapshot: () => {},
+          previewSnapshotVersion: 1,
+          savedContentRef,
+          latestIsDirtyRef,
+          externalDiskSnapshotRef,
+          autoSyncedMessage: "auto synced",
+        });
+      });
+
+      // 可见状态下按间隔轮询
+      await act(async () => {
+        vi.advanceTimersByTime(25);
+        await Promise.resolve();
+      });
+      expect(readWorkspaceFile).toHaveBeenCalledTimes(1);
+
+      // 隐藏后不再轮询
+      act(() => {
+        Object.defineProperty(document, "visibilityState", {
+          value: "hidden",
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(200);
+        await Promise.resolve();
+      });
+      expect(readWorkspaceFile).toHaveBeenCalledTimes(1);
+
+      // 恢复可见立即补一跳，无需再等一个间隔
+      act(() => {
+        Object.defineProperty(document, "visibilityState", {
+          value: "visible",
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(readWorkspaceFile).toHaveBeenCalledTimes(2);
+    });
   });

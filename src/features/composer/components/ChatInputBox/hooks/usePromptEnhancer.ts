@@ -93,12 +93,19 @@ const ENHANCER_CACHE_MAX_ENTRIES = 20;
 const enhancerResultCache = new Map<string, string>();
 
 function enhancerCacheKey(options: {
+  workspaceId: string;
   text: string;
   engine: EngineType;
   model: string | null;
   locale: string;
 }): string {
-  return [options.locale, options.engine, options.model ?? '', options.text].join('|');
+  return [
+    options.workspaceId.trim(),
+    options.locale,
+    options.engine,
+    options.model ?? '',
+    options.text,
+  ].join('|');
 }
 
 function readEnhancerCache(key: string): string | null {
@@ -445,6 +452,15 @@ export function usePromptEnhancer({
     };
   }, []);
 
+  useEffect(() => {
+    activeRequestIdRef.current += 1;
+    setShowEnhancerDialog(false);
+    setIsEnhancing(false);
+    setOriginalPrompt('');
+    setEnhancedPrompt('');
+    setCanUseEnhancedPrompt(false);
+  }, [workspaceId]);
+
   const closeEnhancerDialog = useCallback(() => {
     activeRequestIdRef.current += 1;
     setShowEnhancerDialog(false);
@@ -518,6 +534,7 @@ export function usePromptEnhancer({
       engine === 'claude' ? buildPromptEnhancerInstruction(content, 'codex', locale) : null;
     const requestModel = resolveRuntimeEnhancerModel(modelGroups, engine, selectedEnhancerModel);
     const cacheKey = enhancerCacheKey({
+      workspaceId,
       text: content,
       engine,
       model: requestModel,
@@ -577,7 +594,13 @@ export function usePromptEnhancer({
               return;
             }
             writeEnhancerCache(
-              enhancerCacheKey({ text: content, engine: 'codex', model: null, locale }),
+              enhancerCacheKey({
+                workspaceId,
+                text: content,
+                engine: 'codex',
+                model: null,
+                locale,
+              }),
               fallbackRewrittenPrompt,
             );
             setEnhancedPrompt(fallbackRewrittenPrompt);

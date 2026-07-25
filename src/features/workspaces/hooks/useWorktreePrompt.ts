@@ -352,13 +352,10 @@ export function useWorktreePrompt({
   }, [promptWorkspaceId, t]);
 
   const openPrompt = useCallback((workspace: WorkspaceInfo) => {
-    const defaultBranch = `codex/${new Date().toISOString().slice(0, 10)}-${Math.random()
-      .toString(36)
-      .slice(2, 6)}`;
     const savedSetupScript = normalizeSetupScript(workspace.settings.worktreeSetupScript);
     setWorktreePrompt({
       workspace,
-      branch: defaultBranch,
+      branch: "",
       baseRef: "",
       baseRefOptions: [],
       isLoadingBaseRefs: true,
@@ -501,6 +498,21 @@ export function useWorktreePrompt({
     const snapshot = worktreePrompt;
     if (snapshot.isNonGitRepository) {
       const message = t("workspace.nonGitRepositoryError");
+      setWorktreePrompt((prev) =>
+        prev
+          ? {
+              ...prev,
+              isSubmitting: false,
+              error: message,
+              errorRetryCommand: null,
+            }
+          : prev,
+      );
+      onErrorRef.current?.(message);
+      return;
+    }
+    if (!snapshot.branch.trim()) {
+      const message = t("workspace.worktreeCreateErrorBranchRequired");
       setWorktreePrompt((prev) =>
         prev
           ? {

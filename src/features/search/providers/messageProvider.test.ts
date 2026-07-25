@@ -21,4 +21,20 @@ describe("searchMessages", () => {
     expect(results[0]?.threadId).toBe("t-1");
     expect(results[0]?.kind).toBe("message");
   });
+
+  it("preserves case-insensitive matching with cached normalized text", () => {
+    const threadItemsByThread = {
+      "t-1": [{ id: "m1", kind: "message", role: "user", text: "Hello MossX" }],
+    } satisfies Parameters<typeof searchMessages>[0]["threadItemsByThread"];
+    const options = {
+      workspaceId: "ws-a",
+      threads: [{ id: "t-1", name: "Build", updatedAt: 2 }],
+      threadItemsByThread,
+    };
+
+    const lower = searchMessages({ ...options, query: "hello" });
+    const upper = searchMessages({ ...options, query: "HELLO" });
+
+    expect(upper).toEqual(lower);
+  });
 });

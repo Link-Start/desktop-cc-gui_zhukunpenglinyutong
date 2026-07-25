@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use tauri::State;
 use tokio::task;
@@ -430,11 +431,23 @@ fn write_managed_command(
     content: &str,
 ) -> Result<ClaudeCommandEntry, String> {
     let path = dir.join(format!("{name}.md"));
-    if path.exists() {
-        return Err(format!("command `{name}` already exists"));
-    }
     fs::create_dir_all(dir).map_err(|error| format!("create commands dir failed: {error}"))?;
-    fs::write(&path, content).map_err(|error| format!("write command failed: {error}"))?;
+    let mut file = match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+            return Err(format!("command `{name}` already exists"));
+        }
+        Err(error) => return Err(format!("create command failed: {error}")),
+    };
+    if let Err(error) = file.write_all(content.as_bytes()) {
+        drop(file);
+        let _ = fs::remove_file(&path);
+        return Err(format!("write command failed: {error}"));
+    }
     Ok(ClaudeCommandEntry {
         name: name.to_string(),
         path: path.to_string_lossy().to_string(),
@@ -527,8 +540,42 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_command_create_never_overwrites_the_winner() {
+        use std::sync::{Arc, Barrier};
+
+        let dir = Arc::new(new_temp_dir("command-create-concurrent"));
+        let barrier = Arc::new(Barrier::new(2));
+        let mut workers = Vec::new();
+        for content in ["第一版", "第二版"] {
+            let dir = Arc::clone(&dir);
+            let barrier = Arc::clone(&barrier);
+            workers.push(std::thread::spawn(move || {
+                barrier.wait();
+                write_managed_command(&dir, "review", content)
+            }));
+        }
+
+        let results: Vec<_> = workers
+            .into_iter()
+            .map(|worker| worker.join().expect("worker should not panic"))
+            .collect();
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+        assert!(results
+            .iter()
+            .filter_map(|result| result.as_ref().err())
+            .all(|error| error.contains("already exists")));
+
+        let written = fs::read_to_string(dir.join("review.md")).expect("read winner");
+        assert!(written == "第一版" || written == "第二版");
+    }
+
+    #[test]
     fn normalize_new_command_name_rejects_invalid_and_normalizes_case() {
-        assert_eq!(normalize_new_command_name(" Commit-Msg ").as_deref(), Ok("commit-msg"));
+        assert_eq!(
+            normalize_new_command_name(" Commit-Msg ").as_deref(),
+            Ok("commit-msg")
+        );
         for raw in ["", "  ", "a/b", "..", "-lead", "_lead", "name.md", "名字"] {
             assert!(
                 normalize_new_command_name(raw).is_err(),

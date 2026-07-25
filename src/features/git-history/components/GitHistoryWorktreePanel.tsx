@@ -37,7 +37,14 @@ import {
 import type { GitFileStatus } from "../../../types";
 import { subscribeDetachedExternalFileChangeBatch } from "../../../services/events";
 import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
-import { sanitizeGeneratedCommitMessage } from "../../../utils/commitMessage";
+import {
+  sanitizeGeneratedCommitMessage,
+  saveLastCommitMessageConfig,
+} from "../../../utils/commitMessage";
+import {
+  COMMIT_MESSAGE_MENU_ENGINES,
+  readExecutableCommitMessageConfig,
+} from "../../git/utils/commitMessageMenuConfig";
 import { localizeGitErrorMessage } from "../gitErrorI18n";
 import { runScopedCommitOperation } from "../../git/utils/commitScope";
 import {
@@ -529,6 +536,10 @@ export function GitHistoryWorktreePanel({
       if (commitMessageLoading || commitLoading) {
         return;
       }
+      // 与 GitDiffPanel 同一事实源: 任何路径的生成都更新菜单图标与持久化配置,
+      // 一键生成下次才能直接命中上次选择。
+      setCommitMessageMenuEngine(engine);
+      saveLastCommitMessageConfig({ engine, language });
       setCommitMessageError(null);
       setCommitMessageLoading(true);
       try {
@@ -580,7 +591,6 @@ export function GitHistoryWorktreePanel({
             id: "commit-message-zh",
             label: t("git.generateCommitMessageChinese"),
             onSelect: async () => {
-              setCommitMessageMenuEngine(engine);
               await handleGenerateCommitMessage("zh", engine, selectedPathsForGeneration);
             },
           },
@@ -589,7 +599,6 @@ export function GitHistoryWorktreePanel({
             id: "commit-message-en",
             label: t("git.generateCommitMessageEnglish"),
             onSelect: async () => {
-              setCommitMessageMenuEngine(engine);
               await handleGenerateCommitMessage("en", engine, selectedPathsForGeneration);
             },
           },
@@ -616,32 +625,68 @@ export function GitHistoryWorktreePanel({
       }
       const position = clampRendererContextMenuPosition(event.clientX, event.clientY, {
         width: 260,
-        height: 180,
+        height: 240,
       });
-      const engineItems: Array<{ engine: CommitMessageEngine; label: string }> = [
-        { engine: "codex", label: t("git.generateCommitMessageEngineCodex") },
-        { engine: "claude", label: t("git.generateCommitMessageEngineClaude") },
-      ];
+      const selectedPathsForGeneration =
+        selectedCommitCount > 0
+          ? selectedCommitPaths
+          : hasExplicitCommitSelection
+            ? []
+            : undefined;
+      const lastConfig = readExecutableCommitMessageConfig();
+      const engineLabelKeys: Record<(typeof COMMIT_MESSAGE_MENU_ENGINES)[number], string> = {
+        codex: "git.generateCommitMessageEngineCodex",
+        claude: "git.generateCommitMessageEngineClaude",
+      };
       setCommitMessageContextMenu({
         ...position,
         label: t("git.generateCommitMessage"),
-        items: engineItems.map(({ engine, label }) => ({
-          type: "item",
-          id: `commit-message-engine-${engine}`,
-          label,
-          onSelect: () => {
-            if (deferredCommitLanguageMenuTimerRef.current !== null) {
-              window.clearTimeout(deferredCommitLanguageMenuTimerRef.current);
-            }
-            deferredCommitLanguageMenuTimerRef.current = window.setTimeout(() => {
-              deferredCommitLanguageMenuTimerRef.current = null;
-              showCommitMessageLanguageMenu(engine, position);
-            }, 0);
+        items: [
+          {
+            type: "item",
+            id: "commit-message-last-config",
+            label: t("git.generateCommitMessageLastConfig"),
+            disabled: !lastConfig,
+            onSelect: async () => {
+              if (!lastConfig) {
+                return;
+              }
+              await handleGenerateCommitMessage(
+                lastConfig.language,
+                lastConfig.engine,
+                selectedPathsForGeneration,
+              );
+            },
           },
-        })),
+          { type: "separator", id: "commit-message-last-config-separator" },
+          ...COMMIT_MESSAGE_MENU_ENGINES.map((engine) => ({
+            type: "item" as const,
+            id: `commit-message-engine-${engine}`,
+            label: t(engineLabelKeys[engine]),
+            onSelect: () => {
+              if (deferredCommitLanguageMenuTimerRef.current !== null) {
+                window.clearTimeout(deferredCommitLanguageMenuTimerRef.current);
+              }
+              deferredCommitLanguageMenuTimerRef.current = window.setTimeout(() => {
+                deferredCommitLanguageMenuTimerRef.current = null;
+                showCommitMessageLanguageMenu(engine, position);
+              }, 0);
+            },
+          })),
+        ],
       });
     },
-    [commitLoading, commitMessageLoading, operationLoading, showCommitMessageLanguageMenu, t],
+    [
+      commitLoading,
+      commitMessageLoading,
+      handleGenerateCommitMessage,
+      hasExplicitCommitSelection,
+      operationLoading,
+      selectedCommitCount,
+      selectedCommitPaths,
+      showCommitMessageLanguageMenu,
+      t,
+    ],
   );
   const handleCommit = useCallback(
     async (selectedPaths?: string[]) => {

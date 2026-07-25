@@ -1,399 +1,331 @@
-# 工程工具链优化项 · 逐项影响明细
+# 当前工程工具链优化现状与影响范围
 
-> **日期**：2026-07-25
-> **基线**：分支 `feature/v-799` @ `c75922dec`
-> **来源**：从 `client-aux-modules-governance-report-2026-07-25.md` 摘出"工程工具链（files / git / git-history / terminal / live-edit-preview / code-annotations / markdown）"一节的 12 项，逐项展开"现状 → 影响 → 处理后影响 → UI 变化"
-> **核对方法**：逐项对照当前 HEAD 源码与生产 caller；治理报告中有三处描述与现状有出入，本文按当前事实修正并显式标注
-> **行号声明**：行号为 `c75922dec` 快照，后续提交请按 symbol 搜索
-
----
-
-## 总览
-
-| # | 优化项 | 优先级 | 真实状态（已按 HEAD 修正） | UI 变化 |
-|---|---|---|---|---|
-| 1 | Git History 5 文件共 9438 行 `@ts-nocheck` | P0 | ❌ 未做（行数逐一吻合，路径已迁移） | 无 |
-| 2 | `GitDiffPanel.tsx` 3125 行 / `FileViewPanel.tsx` 3092 行 | P0-P1 | ❌ 未做（gate 红灯主犯） | 无 |
-| 3 | `fileViewPanelShared` / `fileViewPanelInternals` 重复纯函数 | P0 | 🔶 部分变化（仍剩 10 个重复导出符号） | 无 |
-| 4 | 文件外部变更 2s 轮询 | P1 | 🔶 已重构但 **2s 兜底间隔仍在**，且常量本身重复定义 | 无 |
-| 5 | `aiReview` 无生产者 | P1 | ✅ 已接线（路径已迁至 session-activity） | 无 |
-| 6 | AI commit message 藏太深 | P1 | 🔶 **描述部分过时**：已有显眼按钮，但仍需两级菜单、无流式 | **有**（一键+流式） |
-| 7 | worktree 面板重复实现 AI commit | P1 | ❌ 未做（1200 行，平行实现坐实） | 无 |
-| 8 | terminal 零 addon | P1 | ❌ 未做（已核实零引用） | **有**（搜索/链接/问 AI） |
-| 9 | code-annotations 批注只带行号 | P1 | ❌ 未做（无内容快照） | **有**（批注不漂移） |
-| 10 | diff/compare 组件族 6+ 个平行演化 | P2 | ❌ 未做（已清点出 7 个组件 + 4 个子件） | 无 |
-| 11 | `FileMarkdownPreview.tsx` 1581 行仍是生产依赖 | P1 | 🔶 部分变化（Fast wrapper 仍渲染 legacy） | 无 |
-| 12 | stale mock 路径不符 | P1 | ❌ 未做（已定位到具体失效 mock） | 无 |
-
----
-
-## 1. Git History 5 文件共 9438 行 `@ts-nocheck`
-
-**状态**：❌ 未做。**路径修正**：文件已迁入 `components/git-history-panel/` 子目录，治理报告里的旧路径已失效；行数逐一吻合。
-
-### 现状（证据）
-
-当前 5 个文件全部带 `@ts-nocheck`，合计 **9438 行**：
-
-| 文件 | 行数 |
-|---|---:|
-| `components/git-history-panel/components/GitHistoryPanelImpl.tsx` | 2803 |
-| `components/git-history-panel/components/GitHistoryPanelView.tsx` | 2405 |
-| `components/git-history-panel/hooks/useGitHistoryPanelInteractions.tsx` | 2188 |
-| `components/git-history-panel/components/GitHistoryPanelDialogs.tsx` | 1548 |
-| `components/git-history-panel/components/GitHistoryPanelPickers.tsx` | 494 |
-
-删除分支、force-delete、reset、rebase、checkout 等**不可逆 Git 操作**的处理函数横跨 Interactions → Dialogs → Impl 三个文件分布。
-
-### 影响什么
-
-- **高危链路零类型保护**：一个 handler 的入参类型写错（比如把 branch name 传成 commit hash），TypeScript 不会报警，运行时才知道——对不可逆操作来说这等于裸奔。
-- **单拆 Impl 无法恢复边界安全**：组件间 props 靠 nocheck 下的隐式 any 穿透，只拆一个文件，接口边界依然是 any。
-- **AI 协作者风险放大**：AI 改代码高度依赖类型信号做约束，9438 行 nocheck 区域是 AI 误改的重灾区。
-
-### 处理后的影响
-
-- **先补 shared props/action types**：为 Impl ↔ View ↔ Dialogs ↔ Pickers 之间的 props 定义显式接口（这是摘 nocheck 的真正瓶颈，不是行数）。
-- **再按完整 interaction slice 渐进摘**：例如"删除分支"全链路（按钮 → handler → 确认对话框 → 执行）作为一个 slice 一次摘完，避免半摘状态下 any 从边界渗入。
-- 风险点：摘 nocheck 会暴露存量类型错误，预期要修几十处；按 slice 摘可以把每批修复控制在可 review 的规模。
-
-### UI 变化
-
-**无**。纯类型安全与可维护性。
-
----
-
-## 2. `GitDiffPanel.tsx` 3125 行 / `FileViewPanel.tsx` 3092 行
-
-**状态**：❌ 未做。这两个文件是当前 **large-file gate 红灯的直接主犯**（治理报告 P0-H 17 项失败中的 frontend hard failure 前两名）。
-
-### 现状（证据）
-
-- `src/features/git/components/GitDiffPanel.tsx` **3125 行**：单文件承载 stage/unstage、commit、PR、AI commit message（引擎/语言两级菜单）、多仓库模式、context menu 体系。
-- `src/features/files/components/FileViewPanel.tsx` **3092 行**，**26 处 `useEffect`**（治理报告写 25，当前为 26）：文件读取、外部变更同步、git blame、编辑器草稿、二进制检测、typing 诊断等副作用全部聚合在一个组件里。
-- 两者都在 `large-file-new-file-baseline`，但 hard baseline `entries` 为空 → gate 判为 `status=new` 直接失败。
-
-### 影响什么
-
-- **CI 治理命令直接红灯**：`npm run check:large-files:gate` 失败 17 项，导致无法区分"新增回退"与"已知债务"——门禁失去信号价值。
-- **高频工程入口的回归半径**：Git 面板和文件查看器是每天用的入口，每次改动都在 3000+ 行单文件里做外科手术，review 难度和误伤概率双高。
-- **副作用网**：26 个 useEffect 之间的执行顺序依赖，是 FileViewPanel 各类"状态不同步"疑难 bug 的温床。
-
-### 处理后的影响
-
-**先决策，再动手**（治理报告原话）：立即拆分 vs 带 owner/期限的临时 hard baseline。建议：
-
-- `GitDiffPanel` 按 **command orchestration / selection / preview / dialog** 拆 owner：commit 编排（stage/commit/AI commit）一个 owner，diff 选择与预览一个，context menu/对话框一个。
-- `FileViewPanel` 已有大量 hooks（`useFileExternalSync`、`useFileGitBlame`、`useFileDocumentState`），拆分方向是把 26 个 useEffect 按域下沉到这些 hooks，组件壳只做组合。
-- 风险点：两文件测试体量同样巨大（`GitDiffPanel.test.tsx` 3279 行、`FileViewPanel.test.tsx` 3940 行，也在 gate 红灯清单里），拆分时测试要同步按 owner 切分。
-
-### UI 变化
-
-**无**。纯结构优化；间接效果是这两个高频入口的 bug 率和 review 成本下降。
-
----
-
-## 3. `fileViewPanelShared.ts` / `fileViewPanelInternals.ts` 重复纯函数
-
-**状态**：🔶 部分变化。两文件已不是整份同实现，但**仍有 10 个重复导出符号**。
-
-### 现状（证据）
-
-- `fileViewPanelShared.ts` 415 行 / `fileViewPanelInternals.ts` 658 行。
-- 重复导出符号（当前 HEAD 逐一比对）：
-  ```
-  EDITOR_LINE_RANGE_SYNC_DELAY_MS
-  EXTERNAL_CHANGE_POLL_INTERVAL_MS   ← 注意：第 4 项的轮询常量本身就是重复定义
-  formatEditorLineRangeKey
-  formatFileSize
-  hasGitLineMarkers
-  isSameEditorLineRange
-  resolveAbsolutePath
-  resolveDeclarationCodeSelectionAnchor
-  resolveEditorAnnotationWidgetOrder
-  resolveEditorTheme
-  ```
-
-### 影响什么
-
-- **双份维护**：改 `resolveEditorTheme` 或调轮询常量要改两处，漏一处就是行为分裂——而这种漂移**已经发生过一次**（这就是当初出现两个文件的原因）。
-- 常量重复尤其危险：`EXTERNAL_CHANGE_POLL_INTERVAL_MS` 两处都定义成 2000，未来有人改其中一处，两个消费方静默拿到不同值。
-
-### 处理后的影响
-
-- **按 symbol 合并**：每个重复符号保留一个事实源（建议收进 `fileViewPanelShared.ts`），另一处 re-export 过渡后删除。
-- 10 个符号是有限集合，一次可清完；清完加一条 lint/codeowner 约定防止再分裂。
-- 治理报告特别提醒：**避免整文件替换**——两文件已各有独有内容，整文件覆盖会误杀（这是 8.1 事故复盘里的同款教训）。
-
-### UI 变化
-
-**无**。
-
----
-
-## 4. 文件外部变更 2s 轮询
-
-**状态**：🔶 治理报告标"已重构"，但核实发现**两个遗留点**。
-
-### 现状（证据）
-
-- `useFileExternalSync.ts:78` 已有 `externalChangeTransportMode: "watcher" | "polling"` 双通道，watcher 为主（`:154` watcher 事件队列、`:391` 统一 `refreshFromDisk(source, eventKind)` 入口）——**重构属实**。
-- 但：**兜底间隔常量仍是 2 秒**（`EXTERNAL_CHANGE_POLL_INTERVAL_MS = 2_000`），`useFileExternalSync.ts:457-474` 在 `polling` 模式下按此间隔 `refreshFromDisk("polling", "polling-tick")`。
-- 且该常量在 shared / internals **重复定义**（见第 3 项）。
-
-### 影响什么
-
-- watcher 正常时无影响；一旦 watcher 不可用（远端 workspace、watcher 崩溃），fallback 到 **2 秒全量 stat 轮询**——直接撞仓库红线"事件驱动 + ≥30s 兜底轮询，禁秒级轮询"。
-- 2s 全量轮询对大文件/慢磁盘是实打实的 IO 开销。
-
-### 处理后的影响
-
-- 兜底间隔改为 **≥30s 且 visibility-gated**（仓库已有 `setVisibilityGatedInterval` 先例，GitHistoryWorktreePanel 同款改造已落地，可直接抄）。
-- watcher 失效本身应**显式提示**（"文件监听不可用，已降级为低频刷新"），而不是静默 2s 轮询。
-
-### UI 变化
-
-**基本无**。可选增加：watcher 失效时文件标签页出现降级提示徽标。
-
----
-
-## 5. `semanticDiffSummary.ts` 的 `aiReview` 无生产者
-
-**状态**：✅ **已接线**。路径修正：面板已从 `workspaces/components` 迁至 `session-activity/components`。
-
-### 现状（证据）
-
-`src/features/session-activity/components/WorkspaceSessionActivityPanel.tsx:719-738`：`useTurnSemanticReview` 产出 `aiReview`，`:727` 判空，`:735` 注入 summary 构建——schema/UI/生产者三段已闭环。
-
-### UI 变化
-
-**无**（已闭环项，仅存档）。Session Activity 的语义 diff 评审位正常出内容。
-
----
-
-## 6. AI commit message 藏太深
-
-**状态修正**：治理报告称"要右键→引擎→语言两级菜单，99% 用户找不到"——**部分过时**。
-
-### 现状（证据）
-
-- **已有显眼按钮**：`GitDiffPanel.tsx:2266-2285`，commit 输入框旁有常驻 `commit-message-generate-button`（带引擎图标），不是只能右键。
-- **但点击后仍要走两级菜单**：按钮 `onClick → showCommitMessageEngineMenu`（`:2270`）→ 选引擎（Codex/Claude）→ 再选语言（中/英，`showCommitMessageLanguageMenu` `:2109-2130`）。**点 3 次才生成**。
-- **无流式**：`useGitCommitController.ts:105-152` `handleGenerateCommitMessage` `await` 完整结果后一次性 `setCommitMessage`——生成期间只有按钮转圈，用户干等。
-- **已有未利用的优化素材**：`saveLastCommitMessageConfig({ engine, language })`（`:2096`）已记住上次选择——做"一键按上次配置直接生成"的基础设施已就位。
-
-### 影响什么
-
-- 三级点击（按钮 → 引擎 → 语言）+ 无流式等待 = 用户宁可自己手写 commit message，AI 功能形同虚设。
-- 多仓库模式下入口更深（`showGenerateCommitMessage && !multiRepositoryMode`，`:2255`）。
-
-### 处理后的影响
-
-- **一键生成**：单击按钮直接按上次配置（engine + language 已持久化）生成；长按/右键才弹出菜单改配置。3 次点击 → 1 次。
-- **流式输出**：commit message 逐字流入输入框，等待感从"转圈 10 秒"变为"秒见首字"。
-- **自动分组建议**（治理报告建议项）：按改动文件语义建议拆成多个 commit。
-- 风险点：流式需要 engine 侧支持增量输出；一键默认要处理"首次使用无历史配置"的 fallback。
-
-### UI 变化
-
-**有**：
-
-1. 按钮单击直接生成（菜单变为辅助入口）。
-2. commit message **逐字流式出现**在输入框内，可中途打断修改。
-3. 可选：自动分组建议以多个 commit 草稿卡片呈现。
-
----
-
-## 7. worktree 面板重复实现 AI commit
-
-**状态**：❌ 未做（当前 HEAD 已核实，平行实现坐实）。
-
-### 现状（证据）
-
-`src/features/git-history/components/GitHistoryWorktreePanel.tsx` **1200 行**，自带一整套与 GitDiffPanel 平行的实现：
-
-- 自有 stage/unstage：`:33-35` `stageGitAll / stageGitFile / unstageGitFile`
-- 自有 AI commit：`:29` `generateCommitMessageWithEngine`，`:536-542` 调用，`:576-623` 同样的"语言（中/英）→ 引擎（Codex/Claude）"两级菜单
-- 同样的 `sanitizeGeneratedCommitMessage` 清洗、同样的 `runScopedCommitOperation`
-
-### 影响什么
-
-- **两套平行演化**：第 6 项在 GitDiffPanel 做的任何改进（一键、流式、分组建议）不会自动惠及 worktree 面板——上次治理给一边加了功能，另一边就是旧体验。
-- 同一 bug 要修两遍（比如 commit message 清洗逻辑）。
-
-### 处理后的影响
-
-- 把 stage/commit/AI-commit 抽成共享 hook（如 `useGitCommitActions`），两个面板消费同一实现。
-- **顺序建议**：先做第 6 项（在 GitDiffPanel 把体验改对），再收敛——否则会把"对的体验"和"错的体验"一起抽象固化。
-- 风险点：worktree 面板的 commit scope 语义（`runScopedCommitOperation`）与 diff 面板不同，抽象时 scope 参数要显式化。
-
-### UI 变化
-
-**无直接变化**；间接效果：worktree 面板自动获得第 6 项的一键 + 流式体验。
-
----
-
-## 8. terminal 零 addon
-
-**状态**：❌ 未做（当前 HEAD 已核实零引用）。
-
-### 现状（证据)
-
-- `src/features/terminal/hooks/useTerminalSession.ts:3-32`：只加载 `xterm` + `addon-fit` 两个依赖。
-- 全仓 `SearchAddon` / `SerializeAddon` / `WebLinksAddon` **零引用**——终端没有搜索、没有会话序列化、没有 URL 可点。
-- `src/services/tauri/terminalRuntime.ts:36-69` 已有 `runtimeLog*` 后端通道（session 快照、profile 探测），但终端面板**没有"把这段报错发给 AI"的入口**。
-
-### 影响什么
-
-- **终端就是个裸命令行**：日志里找一次错误要肉眼滚屏；看到链接要手动复制；报错要自己粘贴到对话框问 AI。
-- runtimeLog 通道已建好却接不到产品上——又一条"差一步"的死资产。
-
-### 处理后的影响
-
-- 补三个 addon：**Search**（Cmd+F 终端内搜索）、**WebLinks**（URL 可点击）、Serialize（会话恢复，可选）。
-- **"报错→问 AI"链路**：终端选中文本/检测到非零退出码时，出现"问 AI"按钮，把 tail 日志 + 退出码 + 当前 workspace 上下文喂给引擎（复用 prompt enhancer 已验证的隐藏 session 通道）。
-- 风险点：xterm addon 版本需与当前 xterm 主版本匹配；"问 AI"要控制注入的日志体量（tail N 行 + 截断）。
-
-### UI 变化
-
-**有**：
-
-1. 终端内 **Cmd+F 搜索栏**。
-2. 终端输出中的 **URL 变可点击链接**。
-3. 选中报错文本 / 命令失败时出现"**问 AI**"按钮。
-
----
-
-## 9. code-annotations 批注只带行号
-
-**状态**：❌ 未做（当前 HEAD 已核实）。
-
-### 现状（证据）
-
-- `src/features/code-annotations/utils/codeAnnotations.ts:85-91` 有 `stableAnnotationHash`（对内容做 djb2 hash 的工具），`:94-97` `formatCodeAnnotationForPrompt` 把批注格式化为 `@file 路径:行范围 + 标注正文`——**锚点只有文件路径 + 行号**，hash 工具存在但没用于锚点快照。
-- 批注不存所标注代码的**内容快照**：代码一变（插入/删除行），行号即漂移。
-
-### 影响什么
-
-- **批注保质期极短**：AI 帮你改了代码，行号全移，之前的批注指向错误位置甚至悬空——"行号漂移即失效"。
-- 发给 AI 的批注上下文（`formatCodeAnnotationForPrompt`）可能引用到错误的代码行，AI 基于错位信息回答。
-
-### 处理后的影响
-
-- **锚点快照**：批注保存时带上所标注代码的文本快照 + `stableAnnotationHash`。
-- **漂移重定位**：打开文件时按快照内容在新文本里模糊匹配（锚点行上下文 ±N 行窗口搜索），自动修正行号；匹配失败标记为"已漂移"。
-- 进阶（治理报告建议）：漂移严重时用 AI 重定位。
-- 风险点：大文件全量模糊匹配要限窗口；重定位结果需用户可确认/可撤销。
-
-### UI 变化
-
-**有**：
-
-1. 批注在代码变动后**自动吸附到正确位置**，不再悬空。
-2. 无法重定位的批注显示"**已漂移**"标记，可手动重新锚定。
-
----
-
-## 10. diff/compare 组件族 6+ 个平行演化
-
-**状态**：❌ 未做（当前 HEAD 清点）。
-
-### 现状（证据）
-
-当前 `src/features/git/components/` 下的 diff 相关组件族：
-
-| 组件 | 角色 |
-|---|---|
-| `DiffBlock.tsx` | 单块 diff 渲染 |
-| `GitDiffViewer.tsx` | diff 查看器 |
-| `ImageDiffCard.tsx` | 图片 diff |
-| `WorkspaceEditableDiffCompare.tsx` | 可编辑对比 |
-| `WorkspaceEditableDiffReviewSurface.tsx` | 可编辑评审面 |
-| `WorkspaceReadOnlyDiffCompare.tsx` | 只读对比 |
-| `settings/.../SyntaxAndDiffPreview.tsx` | 设置页 diff 预览 |
-
-外加 `GitDiffPanel` 的 4 个子件（`CommitScope / FileSections / Inclusion / SectionActions`）。治理报告估"6+ 个、4000+ 行"，清点属实，且"可编辑 vs 只读 vs 评审面"三者的边界最模糊。
-
-### 影响什么
-
-- 修一个 diff 渲染 bug（比如空 hunks 显示异常），要先判断用户走的是哪条路径——EditableCompare、ReadOnlyCompare 还是 DiffViewer？
-- 样式/交互改进（如行内注释、展开上下文）要在多个组件里各做一遍。
-
-### 处理后的影响
-
-- **diff 组件族重切分**：统一为一个 core diff renderer（hunks 解析 + 渲染），Editable/ReadOnly/Review 作为**能力层**（editing、review annotations）叠加，而不是三个平行组件。
-- 风险点：P2 优先级，体量不小；建议排在第 2 项（GitDiffPanel 拆分）之后，复用其拆分中沉淀的 owner 边界。
-
-### UI 变化
-
-**无直接变化**；间接效果：diff 相关 bug 修一处全场景生效。
-
----
-
-## 11. `FileMarkdownPreview.tsx` 1581 行仍是生产依赖
-
-**状态**：🔶 部分变化。`SkillsSection.tsx` 已删除（旧耦合点没了），但 legacy 实现仍被 Fast wrapper 生产依赖。
-
-### 现状（证据）
-
-- `FileMarkdownPreviewFast.tsx:10` `import { FileMarkdownPreview } from "./FileMarkdownPreview"`，`:434` **直接渲染 legacy 实现**。
-- `FileMarkdownPreviewFast.tsx` 自身 556 行，其注释（`:30`）自述*"mount the rich `FileMarkdownPreview` directly"*——**"Fast" 不是独立管线，是 legacy 的条件渲染外壳**。
-- 生产链路：`FileViewBody.tsx` 用 Fast wrapper → wrapper 在需要富渲染时回落 legacy。
-
-### 影响什么
-
-- "删掉 1581 行 legacy"这个直觉动作会**直接破坏文件预览**——Fast wrapper 的富渲染路径整个依赖它。
-- legacy 1581 行继续累积维护成本，且名字（Preview vs PreviewFast）持续误导维护者以为有两条独立管线。
-
-### 处理后的影响
-
-- **先迁出 rich preview 能力**：把 legacy 里 Fast wrapper 实际用到的渲染能力抽成共享模块，legacy 瘦身后要么删除、要么重命名为真实角色（如 `MarkdownRichRenderer`）。
-- 风险点：先理清 Fast wrapper 在哪些条件回落 legacy（`:434` 周边条件），迁移以这些条件为边界；这是删除型任务，按 capability 分片立项。
-
-### UI 变化
-
-**无**。纯结构优化。
-
----
-
-## 12. stale mock 路径不符
-
-**状态**：❌ 未做。已定位到**具体失效 mock**。
-
-### 现状（证据）
-
-- `src/app-shell.startup.test.tsx:1165-1169` mock 了 `./features/app/hooks/useLiveEditPreview`——**该路径不存在**。
-- 真实模块在 `src/features/live-edit-preview/hooks/useLiveEditPreview.ts`（live-edit-preview 已独立成 feature）。
-- `vi.mock` 指向不存在的路径 = 静默无效；同文件其他 mock（`usePullRequestComposer`、`useSoloMode`）已核实路径有效，**只有这一个失效**。
-
-### 影响什么
-
-- **测试在跑真实 hook**：startup 测试本想把 live-edit-preview 关掉（`enabled: false`），实际跑的是真实现——测试结果依赖真 hook 的行为，"可能测了个寂寞"。
-- 更隐蔽的风险：真 hook 若在测试环境里发起副作用（IPC/存储），测试可能偶发失败或互相污染，排查时很难想到是 mock 没生效。
-
-### 处理后的影响
-
-- 修正 mock 路径为 `./features/live-edit-preview/hooks/useLiveEditPreview`——一行修复。
-- 顺手加防御：对关键 mock 用 `vi.mocked(...)` 断言生效，或在 CI 加一条"mock 路径存在性"检查脚本（成本极低，防复发）。
-
-### UI 变化
-
-**无**。测试可信度修复。
-
----
-
-## 附：实施顺序建议
-
-| 批次 | 项 | 理由 |
-|---|---|---|
-| 第一批（快赢 + 决策） | **#12 一行修 mock**、**#2 的"拆 or baseline"决策**、#3 按 symbol 合并 | #12 成本一行；#2 的决策是解锁 gate 红灯的前提；#3 是有限集合 |
-| 第二批（类型安全） | #1 Git History shared types → 按 slice 摘 nocheck | P0，高危不可逆链路；先做 types 再摘，别反过来 |
-| 第三批（用户体验） | #6 一键 + 流式 → #7 收敛 worktree → #8 terminal addon + 问 AI | #6 先做对再收敛 #7；#8 是最大 UI 增量 |
-| 第四批（结构与存量） | #2 拆分执行、#4 兜底间隔 ≥30s、#11 迁出 rich preview、#9 锚点快照、#10 diff 重切分 | #10 依赖 #2 沉淀的边界；#11 是删除型任务需分片立项 |
-
-> ⚠️ 三条提醒：
-> - **#2 是 gate 红灯的直接来源**，拖一天，"新增回退 vs 已知债务"就一天无法区分——决策本身比执行更紧急；
-> - **#3 和第 1 项的拆分都要遵守"语义合并、不整文件覆盖"**（8.1 事故教训）；
-> - **#4 的 2s 兜底直接撞仓库轮询红线**，建议随 #3 一起处理（同一个重复常量）。
+> **复核日期**：2026-07-26
 >
-> 每项动手前请在 OpenSpec 按 capability 分片立项，避免大颗粒提案烂尾。
+> **代码基线**：分支 `feature/v-0710`，HEAD `e6c8b2433`
+>
+> **工作区说明**：第 6 项包含当前尚未提交的 AI commit message 交互修复，其余结论以 HEAD 和当前 working tree 的实际源码为准
+>
+> **文档目标**：回答 12 个工程工具链问题现在做到哪一步、影响哪些用户与代码，以及下一步应处理什么
+>
+> **核对方法**：按 symbol、生产 caller、测试、line count 和治理命令逐项核对；行号会随提交变化，定位时应优先搜索 symbol
+
+这 12 项目前有 4 项完成、4 项部分完成、4 项未完成。文件外部变更轮询和 stale mock 已完成治理；AI commit message 已恢复 engine 与 language 的显式选择。当前最高风险仍是 large-file gate 的 17 项失败，以及 Git History 仍有 8,944 行 `@ts-nocheck`。
+
+## 状态总览
+
+| # | 优化项 | 优先级 | 当前状态 | 主要影响范围 |
+|---|---|---:|---|---|
+| 1 | Git History 大面积 `@ts-nocheck` | P0 | 🔶 部分完成：1 个文件已摘，4 个文件仍有 8,944 行 | Git History 高危操作、类型检查、AI 改码安全 |
+| 2 | `GitDiffPanel` 与 `FileViewPanel` 超大文件 | P0-P1 | ❌ 未完成：large-file gate 仍有 17 项失败 | CI gate、Git Changes、文件编辑与预览 |
+| 3 | File View 重复纯函数 | P0 | ✅ 已完成：重复导出从 10 个降为 0 | File View 共享逻辑、维护一致性 |
+| 4 | 文件外部变更 2s 轮询 | P1 | ✅ 已完成：30s 兜底、visibility gate、单一常量 | 文件同步、后台 IO、慢磁盘与远端 workspace |
+| 5 | `aiReview` 无生产者 | P1 | ✅ 已完成：生产与消费链路闭环 | Session Activity、semantic diff summary |
+| 6 | AI commit message 选择入口 | P1 | 🔶 部分完成：显式三层选择已恢复，流式生成未做 | Git Changes、Git History Worktree、Codex/Claude、中英文 |
+| 7 | Worktree 面板重复实现 AI commit | P1 | 🔶 部分完成：配置事实源共享，执行编排仍重复 | 两套 commit UI、修复同步成本 |
+| 8 | Terminal 能力不足 | P1 | 🔶 部分完成：选区可发送 Composer，addon 仍只有 Fit | Terminal 搜索、链接、错误上下文 |
+| 9 | Code annotation 锚点会漂移 | P1 | ❌ 未完成：仍只有路径与行号 | 批注可靠性、AI prompt 上下文 |
+| 10 | Diff/compare 组件平行演化 | P2 | ❌ 未完成：11 个相关组件共 4,650 行 | Diff 渲染、评审、只读与可编辑对比 |
+| 11 | Markdown legacy renderer 仍在生产链 | P1 | ❌ 未完成：Fast wrapper 仍依赖 1,581 行 legacy | Markdown 预览、outline、Mermaid、图片 |
+| 12 | Live Edit Preview stale mock | P1 | ✅ 已完成：mock 已指向真实路径 | AppShell startup test 可信度 |
+
+## 影响范围矩阵
+
+| 项 | 用户可见影响 | Runtime / IO | 代码与维护 | 测试与 Gate |
+|---|---|---|---|---|
+| #1 | 无直接 UI 变化 | Git 高危操作仍按现有流程执行 | 4 个核心文件失去 TypeScript 保护 | 类型检查无法覆盖 8,944 行 |
+| #2 | 无直接 UI 变化 | 大组件副作用仍集中 | Git/File 两个高频入口回归半径大 | large-file gate 17 项失败 |
+| #3 | 无 | 无新增 runtime 成本 | File View helper 已恢复单一事实源 | 重复实现风险下降 |
+| #4 | watcher 失效时刷新最长等待增加 | fallback IO 从 2s 降为 30s，隐藏窗口暂停 | polling 常量只保留一份 | 已有 polling 与 visibility tests |
+| #5 | Session Activity 可展示 AI review facts | semantic review 进入 summary 构建 | schema、producer、consumer 已闭环 | semantic summary tests 覆盖 |
+| #6 | 可随时切换 engine 与中文/English | 仍等待完整结果，无 token streaming | 两个入口共享 menu config policy | 两个 panel tests 覆盖选择路径 |
+| #7 | 两个入口体验接近但实现仍可能漂移 | 两条 generation/commit 调用链 | 同类 bug 仍可能修两次 | 两套 component tests |
+| #8 | 右键可把终端选区发送到 Composer | 未增加 addon 与后台任务 | 缺 Search/WebLinks/Serialize 集成 | TerminalPanel selection tests 已覆盖 |
+| #9 | 代码变化后批注可能错位 | 无额外 runtime 成本 | annotation 缺内容快照与重定位 | 缺漂移回归测试 |
+| #10 | 不同 diff surface 可能行为不一致 | 重复渲染与状态逻辑 | 11 个组件平行维护 | 测试分散在多个 surface |
+| #11 | 富 Markdown 预览继续可用 | rich path 仍加载 legacy renderer | Fast 与 legacy 命名和职责不清 | 删除 legacy 会直接破坏生产链 |
+| #12 | 无 | startup test 不再误跑真实 hook | mock 路径与生产 import 对齐 | 测试隔离恢复 |
+
+## 1. Git History 类型保护只完成第一步
+
+**状态**：🔶 部分完成。`GitHistoryPanelPickers.tsx` 已在 `dbcd943eb` 摘除 `@ts-nocheck`，另外 4 个文件仍保留该指令。
+
+### 当前证据
+
+| 文件 | 行数 | 状态 |
+|---|---:|---|
+| `GitHistoryPanelImpl.tsx` | 2,803 | `@ts-nocheck` |
+| `GitHistoryPanelView.tsx` | 2,405 | `@ts-nocheck` |
+| `useGitHistoryPanelInteractions.tsx` | 2,188 | `@ts-nocheck` |
+| `GitHistoryPanelDialogs.tsx` | 1,548 | `@ts-nocheck` |
+| `GitHistoryPanelPickers.tsx` | 493 | 已恢复类型检查 |
+
+未受 TypeScript 保护的代码共 8,944 行。删除分支、force delete、reset、rebase 和 checkout 等操作仍跨 `Interactions → Dialogs → Impl` 分布。
+
+### 影响范围
+
+- **用户与数据安全**：高危 Git 操作的参数错误只能在 runtime 暴露
+- **开发体验**：IDE、refactor 和 TypeScript 无法验证跨组件 props
+- **AI 协作**：AI 无法借助类型系统识别 branch name、commit hash 和 dialog payload 的边界
+- **回归范围**：修改任一 interaction slice 时，需要人工追踪多个 nocheck 文件
+
+### 剩余动作
+
+先定义共享 props 与 action types，再按完整 interaction slice 摘除。下一片建议选择“删除分支”或“reset”，一次覆盖按钮、handler、dialog、执行与测试。
+
+## 2. 两个高频入口仍被 large-file gate 阻断
+
+**状态**：❌ 未完成。`npm run check:large-files:gate` 当前报告 17 项失败。
+
+### 当前证据
+
+- `GitDiffPanel.tsx`：3,132 行
+- `FileViewPanel.tsx`：3,092 行，25 处 `useEffect`
+- `GitDiffPanel.test.tsx`：3,336 行
+- `FileViewPanel.test.tsx`：3,940 行
+
+这 4 个文件都以 `status=new` 触发 hard failure。17 项失败还包含 Rust runtime、Threads 和 CSS 文件，因此拆分这 4 个文件只能解决本项，不能让整个 gate 变绿。
+
+### 影响范围
+
+- **Git Changes**：stage、commit、AI commit、Pull Request 和 context menu 集中在一个组件
+- **File View**：读取、草稿、外部同步、Git blame、二进制判断和 typing diagnostics 集中在一个组件
+- **CI**：gate 持续红灯，新增超限和存量债务无法区分
+- **Review**：单次修改面对 3,000 行以上实现和测试，误伤概率高
+
+### 剩余动作
+
+不要只为数字拆文件。先按 capability owner 切分 production code，再同步拆分测试。每批应让一个完整功能片独立拥有 state、effects 和 tests。
+
+## 3. File View 重复纯函数已经清理
+
+**状态**：✅ 已完成。`04764a654` 合并了重复 helper，并缩小 `fileViewPanelInternals.ts`。
+
+### 当前证据
+
+- `fileViewPanelShared.ts`：417 行
+- `fileViewPanelInternals.ts`：295 行
+- 两个文件的重复导出 symbol：0
+- `EXTERNAL_CHANGE_POLL_INTERVAL_MS` 只在 shared 文件定义
+
+### 影响范围
+
+- **行为一致性**：theme、path、line range、annotation order 和 polling interval 不再有双份实现
+- **维护成本**：修改 shared helper 只需更新一个事实源
+- **风险变化**：整文件合并风险已消除，后续应按 symbol 继续维护边界
+
+本项无需继续实施。后续 review 只需防止 internals 再复制 shared exports。
+
+## 4. 文件外部变更轮询已经符合当前红线
+
+**状态**：✅ 已完成。`04764a654` 将 fallback interval 从 2s 调整为 30s，并增加 visibility gate。
+
+### 当前证据
+
+- `EXTERNAL_CHANGE_POLL_INTERVAL_MS = 30_000`
+- watcher 和 polling 仍通过 `externalChangeTransportMode` 明确分流
+- polling 使用递归 `setTimeout`，上一轮完成后才安排下一轮
+- 窗口隐藏时停止计时，恢复可见时先刷新一次
+- watcher event 与 polling 都进入统一 `refreshFromDisk`
+
+### 影响范围
+
+- **IO**：fallback stat/read 频率最多降为原来的十五分之一
+- **后台资源**：隐藏窗口不再继续轮询
+- **同步延迟**：watcher 不可用时，后台变化的被动发现窗口从 2s 增加到最长 30s
+- **正确性**：递归调度避免慢磁盘下多个 polling request 重叠
+
+本项已闭环。剩余观察项是 watcher fallback 的可观测性，不应重新引入秒级轮询。
+
+## 5. `aiReview` 已形成生产闭环
+
+**状态**：✅ 已完成。
+
+### 当前证据
+
+`WorkspaceSessionActivityPanel` 调用 `useTurnSemanticReview` 生成 `aiReview`，过滤空 facts 后将其传入 semantic diff summary。`semanticDiffSummary.ts` 负责消费 facts。
+
+### 影响范围
+
+- **用户界面**：Session Activity 可以显示 AI 提取的变更事实
+- **数据流**：hook、panel、summary schema 和 renderer 已闭环
+- **测试**：semantic summary 已覆盖有无 `aiReview` 的输入
+
+本项无需新增生产者。后续应只关注 facts 质量和生成成本。
+
+## 6. AI commit message 已恢复显式选择
+
+**状态**：🔶 部分完成。当前 working tree 已修复“历史配置导致直接生成”的交互回退；流式生成仍未实现。
+
+### 当前交互
+
+1. 点击常驻 AI commit 按钮
+2. 选择 **使用上次配置**、**Codex** 或 **Claude**
+3. 选择 engine 时，再选择 **中文** 或 **English**
+4. 生成 commit message
+
+`GitDiffPanel` 和 `GitHistoryWorktreePanel` 都使用该流程。历史配置只作为可见快捷项，不再跳过 engine menu。retired 或 disabled engine 也不能通过旧配置绕过当前 menu catalog。
+
+### 影响范围
+
+- **Git Changes**：单仓与多仓 commit composer 都能显式选择 engine 与 language
+- **Git History Worktree**：worktree commit composer 使用相同选择策略
+- **用户控制权**：每次生成都可以切换 Codex/Claude 和中文/English
+- **兼容性**：有效历史配置仍可通过菜单一项完成快捷生成
+- **等待体验**：生成仍是 request/response，一次性写入输入框，没有 token streaming
+
+### 剩余动作
+
+将“流式生成”拆为独立需求评估。它需要 engine adapter、取消语义、partial result 和输入框覆盖策略，不能只改按钮状态。
+
+## 7. Worktree 只共享了配置策略
+
+**状态**：🔶 部分完成。`9fb13076e` 和当前修复让两个面板共享 AI commit menu catalog 与 persisted config policy，但没有统一执行编排。
+
+### 当前证据
+
+`GitHistoryWorktreePanel.tsx` 仍有 1,245 行，并继续直接调用：
+
+- `stageGitAll`、`stageGitFile`、`unstageGitFile`
+- `generateCommitMessageWithEngine`
+- `sanitizeGeneratedCommitMessage`
+- `runScopedCommitOperation`
+
+### 影响范围
+
+- **已收敛**：engine catalog、last config 合法性和显式选择策略
+- **仍重复**：loading、error、selected paths、repository scope、generation 和 commit orchestration
+- **测试成本**：同一交互规则仍要在两个 panel test suite 中验证
+- **回归风险**：共享配置之外的 bug 仍可能只修到一个入口
+
+### 剩余动作
+
+先抽取 commit generation controller，再评估 stage/commit orchestration。不要直接合并整块 UI，因为 worktree 的 repository scope 与 GitDiffPanel 不同。
+
+## 8. Terminal 已有 Composer 入口，但仍缺 addon
+
+**状态**：🔶 部分完成。
+
+### 当前证据
+
+- `useTerminalSession.ts` 只加载 `@xterm/addon-fit`
+- `SearchAddon`、`WebLinksAddon` 和 `SerializeAddon` 仍是零引用
+- `TerminalPanel` 已支持右键把当前 xterm selection 发送到 Composer
+- selection tests 覆盖精确文本、重复调用、空选区和旧选区清理
+
+### 影响范围
+
+- **已改善**：用户不再需要手动复制选中的终端错误到 Composer
+- **仍缺搜索**：长日志无法通过 terminal 内 Cmd+F 定位
+- **仍缺链接**：URL 不能由 WebLinksAddon 提供统一点击行为
+- **仍缺错误语义**：非零 exit code 不会自动形成带 workspace context 的提问
+- **依赖范围**：新增 addon 会修改 package dependencies、xterm 初始化和 Terminal tests
+
+### 剩余动作
+
+优先评估 SearchAddon 与 WebLinksAddon。SerializeAddon 涉及 session persistence，价值和数据边界不同，应单独立项。
+
+## 9. Code annotation 仍会随行号漂移
+
+**状态**：❌ 未完成。
+
+### 当前证据
+
+`createCodeAnnotationSelection` 使用路径、行范围和正文构造稳定 ID。`formatCodeAnnotationForPrompt` 只输出 `@file` 引用与批注正文。数据结构没有保存所选代码快照，也没有重定位结果。
+
+### 影响范围
+
+- **编辑器**：插入或删除代码后，旧批注可能指向错误行
+- **AI prompt**：发送给 AI 的 `@file` 行范围可能已经失效
+- **持久化**：缺少 snapshot、hash version 和 drift status，无法可靠迁移
+- **性能**：未来重定位必须限制搜索窗口，避免在大文件做全量模糊匹配
+
+### 剩余动作
+
+先扩展 annotation contract，保存 selected code snapshot 与上下文 hash。随后实现限定窗口的精确匹配，再考虑模糊匹配。
+
+## 10. Diff/compare 组件仍有 4,650 行平行实现
+
+**状态**：❌ 未完成。
+
+### 当前证据
+
+当前相关 production components 共 11 个、4,650 行：
+
+- 6 个主要 surface：`DiffBlock`、`GitDiffViewer`、`ImageDiffCard`、`WorkspaceEditableDiffCompare`、`WorkspaceEditableDiffReviewSurface`、`WorkspaceReadOnlyDiffCompare`
+- 4 个 `GitDiffPanel` 子组件：CommitScope、FileSections、Inclusion、SectionActions
+- 1 个 settings preview：`SyntaxAndDiffPreview`
+
+### 影响范围
+
+- **渲染一致性**：hunk、empty state、toolbar 和 syntax style 可能在不同 surface 分裂
+- **能力扩展**：inline annotation、context expansion 或 image diff 改进需要确认多个入口
+- **测试**：Editable、Review、ReadOnly 和 Viewer 各有独立测试边界
+- **拆分依赖**：本项与 #2 的 `GitDiffPanel` owner 拆分直接相关
+
+### 剩余动作
+
+先建立 renderer capability matrix，区分 core diff rendering、editing、review annotation 和 read-only policy。不要先建通用大组件。
+
+## 11. Fast Markdown wrapper 仍依赖 legacy renderer
+
+**状态**：❌ 未完成。
+
+### 当前证据
+
+- `FileMarkdownPreview.tsx`：1,581 行
+- `FileMarkdownPreviewFast.tsx`：556 行
+- Fast wrapper 直接 import 并渲染 `FileMarkdownPreview`
+- `FileViewBody` 的生产链路仍使用 Fast wrapper
+- fast path 不适用或发生 mismatch 时会回退 rich ReactMarkdown path
+
+### 影响范围
+
+- **生产功能**：直接删除 legacy 会破坏 rich Markdown、outline、Mermaid、图片和 fallback
+- **加载与渲染**：Fast wrapper 不是完全独立 renderer，而是 fast/rich router
+- **维护认知**：`Fast` 与 legacy 名称容易让开发者误判依赖关系
+- **测试**：迁移必须覆盖 fast path、rich path 和 mismatch fallback
+
+### 剩余动作
+
+先把 rich renderer 的稳定能力边界命名清楚，再迁移调用。目标不是删除行数，而是让 fast parser 与 rich renderer 各自拥有明确 contract。
+
+## 12. Live Edit Preview stale mock 已修复
+
+**状态**：✅ 已完成。修复包含在 `04764a654`。
+
+### 当前证据
+
+`src/app-shell.startup.test.tsx` 现在 mock：
+
+```typescript
+vi.mock("./features/live-edit-preview/hooks/useLiveEditPreview", () => ({
+  useLiveEditPreview: () => ({
+    enabled: false,
+  }),
+}));
+```
+
+该路径与 `useAppShellSections.ts` 的生产 import 对齐，真实模块存在于 `src/features/live-edit-preview/hooks/useLiveEditPreview.ts`。
+
+### 影响范围
+
+- **测试隔离**：startup test 不再误跑真实 Live Edit Preview hook
+- **副作用控制**：IPC 与 storage 行为不会因 stale mock 泄漏进测试
+- **UI**：无生产 UI 变化
+
+本项无需继续实施。
+
+## 当前实施顺序
+
+| 顺序 | 项目 | 原因 |
+|---:|---|---|
+| 1 | #2 large-file gate 决策 | 17 项失败持续降低 gate 信号价值，需要先区分存量 baseline 与本轮拆分目标 |
+| 2 | #1 Git History 类型切片 | 涉及不可逆 Git 操作，8,944 行缺少类型保护 |
+| 3 | #7 commit generation controller | #6 的交互策略已稳定，可以开始收敛执行层 |
+| 4 | #9 annotation snapshot contract | 先修数据契约，才能实现可靠重定位 |
+| 5 | #8 SearchAddon / WebLinksAddon | 用户收益明确，依赖面小于 session serialization |
+| 6 | #11 Markdown renderer 边界 | 删除型重构，需要按 fast/rich capability 分片 |
+| 7 | #10 diff capability matrix | 依赖 #2 的 owner 边界，优先级保持 P2 |
+
+#3、#4、#5 和 #12 已闭环，不应继续占用实施批次。#6 当前只剩流式生成议题，应作为独立产品与 runtime contract 评估，不应回退已恢复的 engine/language 显式选择。

@@ -421,6 +421,103 @@ describe('usePromptEnhancer', () => {
     expect(sendSync).toHaveBeenCalledTimes(1);
   });
 
+  it('does not reuse cached enhancements across workspaces', async () => {
+    const sendSync = vi.mocked(engineSendMessageSync);
+    sendSync.mockImplementation(async (workspaceId) => ({
+      engine: 'claude',
+      text: `enhanced:${workspaceId}`,
+    }));
+    let workspaceId = 'ws-a';
+    const { result, rerender } = renderHook(() =>
+      usePromptEnhancer({
+        workspaceId,
+        editableRef: { current: null },
+        getTextContent: () => 'same draft',
+        currentProvider: 'claude',
+        selectedModel: 'claude-sonnet-4-5',
+        modelGroups: defaultModelGroups,
+        setHasContent: vi.fn(),
+        handleInput: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+    await waitFor(() => {
+      expect(result.current.enhancedPrompt).toBe('enhanced:ws-a');
+    });
+    act(() => {
+      result.current.handleCloseEnhancerDialog();
+    });
+
+    workspaceId = 'ws-b';
+    rerender();
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+    await waitFor(() => {
+      expect(result.current.enhancedPrompt).toBe('enhanced:ws-b');
+    });
+
+    expect(sendSync).toHaveBeenCalledTimes(2);
+    expect(sendSync.mock.calls.map(([scope]) => scope)).toEqual(['ws-a', 'ws-b']);
+  });
+
+  it('invalidates an in-flight enhancement when the workspace changes', async () => {
+    const sendSync = vi.mocked(engineSendMessageSync);
+    let resolveRequest!: (value: { engine: 'claude'; text: string }) => void;
+    sendSync.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+    let workspaceId = 'ws-a';
+    const { result, rerender } = renderHook(() =>
+      usePromptEnhancer({
+        workspaceId,
+        editableRef: { current: null },
+        getTextContent: () => 'same draft',
+        currentProvider: 'claude',
+        selectedModel: 'claude-sonnet-4-5',
+        modelGroups: defaultModelGroups,
+        setHasContent: vi.fn(),
+        handleInput: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+    await waitFor(() => {
+      expect(result.current.isEnhancing).toBe(true);
+    });
+
+    workspaceId = 'ws-b';
+    rerender();
+    await waitFor(() => {
+      expect(result.current.showEnhancerDialog).toBe(false);
+      expect(result.current.isEnhancing).toBe(false);
+    });
+
+    resolveRequest({ engine: 'claude', text: 'stale workspace result' });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.enhancedPrompt).toBe('');
+    expect(result.current.canUseEnhancedPrompt).toBe(false);
+  });
+
   it('does not cache failed enhancements and retries the engine', async () => {
     const sendSync = vi.mocked(engineSendMessageSync);
     sendSync

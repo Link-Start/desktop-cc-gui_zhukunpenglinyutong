@@ -6,9 +6,12 @@ import {
   type CommitMessageLanguage,
 } from "../../../services/tauri";
 import {
-  readLastCommitMessageConfig,
   saveLastCommitMessageConfig,
 } from "../../../utils/commitMessage";
+import {
+  COMMIT_MESSAGE_MENU_ENGINES,
+  readExecutableCommitMessageConfig,
+} from "../utils/commitMessageMenuConfig";
 import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
@@ -2175,11 +2178,15 @@ function GitDiffPanelImpl({
             triggerRect.bottom + 8,
             menuSize,
           );
-      const lastConfig = readLastCommitMessageConfig();
-      const engineItems: Array<{ engine: CommitMessageEngine; label: string }> = [
-        { engine: "codex", label: t("git.generateCommitMessageEngineCodex") },
-        { engine: "claude", label: t("git.generateCommitMessageEngineClaude") },
-      ];
+      const lastConfig = readExecutableCommitMessageConfig();
+      const engineLabelKeys: Record<(typeof COMMIT_MESSAGE_MENU_ENGINES)[number], string> = {
+        codex: "git.generateCommitMessageEngineCodex",
+        claude: "git.generateCommitMessageEngineClaude",
+      };
+      const engineItems = COMMIT_MESSAGE_MENU_ENGINES.map((engine) => ({
+        engine,
+        label: t(engineLabelKeys[engine]),
+      }));
       setGitContextMenu({
         ...position,
         label: t("git.generateCommitMessage"),

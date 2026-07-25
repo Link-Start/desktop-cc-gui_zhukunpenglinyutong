@@ -174,11 +174,14 @@ export function useCustomCommands({
     if (activeEngine === "opencode") {
       return;
     }
-    startClaudeCommandsWatch(workspaceId).catch((error) => {
+    const startPromise = startClaudeCommandsWatch(workspaceId);
+    void startPromise.catch((error) => {
       logCommandError("commands-watch-start-error", "commands/watch start error", error);
     });
     return () => {
-      stopClaudeCommandsWatch(workspaceId).catch(() => {});
+      void startPromise
+        .then(() => stopClaudeCommandsWatch(workspaceId))
+        .catch(() => {});
     };
   }, [activeEngine, logCommandError, workspaceId]);
 

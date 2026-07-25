@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1119
+- **Total Sessions**: 1125
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~1346 | Active |
+| `journal-27.md` | ~1545 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,12 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1125 | 2026-07-26 | 修复 Composer 与命令并发边界并更新工具链报告 | `296fad4a5`, `c3cbbf0ad` | `feature/v-0710` |
+| 1124 | 2026-07-26 | 缓存消息搜索索引并规范 Worktree 分支命名 | `d077890b8` | `feature/v-0710` |
+| 1123 | 2026-07-26 | 工程工具链修复批次4: worktree 面板收敛共享 AI commit 实现 | `9fb13076e` | `feature/v-0710` |
+| 1122 | 2026-07-26 | 工程工具链修复批次3: AI commit message 一键生成 | `55f18aa24` | `feature/v-0710` |
+| 1121 | 2026-07-26 | 工程工具链修复批次2: GitHistoryPanelPickers 摘除 @ts-nocheck | `dbcd943eb` | `feature/v-0710` |
+| 1120 | 2026-07-26 | 工程工具链修复批次1: files 重复符号合并与兜底轮询治理 | `04764a654` | `feature/v-0710` |
 | 1119 | 2026-07-26 | 批次4：技能调用契约与对话提示词沉淀 | `bee87c4f8` | `feature/v-0710` |
 | 1118 | 2026-07-26 | 润色器本地化缓存与 curated skills 事件化刷新（批次3） | `5a76671b3` | `feature/v-0710` |
 | 1117 | 2026-07-25 | 统一输入历史存储并事件化命令目录刷新（批次2） | `81d9a47f9` | `feature/v-0710` |
