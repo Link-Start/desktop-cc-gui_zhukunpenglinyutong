@@ -1476,3 +1476,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1124: 缓存消息搜索索引并规范 Worktree 分支命名
+
+**Date**: 2026-07-26
+**Task**: 缓存消息搜索索引并规范 Worktree 分支命名
+**Branch**: `feature/v-0710`
+
+### Summary
+
+为 Message Search 增加 immutable snapshot WeakMap 索引缓存和 normalizedText，移除 Worktree 随机默认分支名并增加 UI/hook 双层必填校验；补充 focused tests、影响报告与 OpenSpec 主规范并完成归档。验证 31 个增量测试、targeted ESLint、typecheck 和 strict OpenSpec validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d077890b8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
