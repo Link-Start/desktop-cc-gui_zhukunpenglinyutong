@@ -1,8 +1,8 @@
 // Vendored from upstream src/pages/SkillsPage.jsx. Adaptations:
 //   - local-mode gate also passes inside the Tauri webview (tt_proxy transport
 //     is always local), mirroring the vendored DashboardPage pattern.
-// Everything else (tabs / search / agent filter / batch ops / install /
-// trash-undo / update checks / deep links) is byte-identical to upstream.
+//   - My Skills uses sticky bulk actions and lightweight row windowing so
+//     large local skill libraries remain responsive in the desktop shell.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Select } from "@base-ui/react/select";
@@ -70,6 +70,9 @@ const TARGET_CHIP_ICON_CLASSES = {
 };
 const SOURCE_ALL = "all";
 const SOURCE_SKILLSSH = "skillssh";
+const MY_SKILLS_VIRTUAL_ROW_HEIGHT = 88;
+const MY_SKILLS_VIRTUAL_OVERSCAN = 8;
+const MY_SKILLS_VIRTUAL_THRESHOLD = 80;
 
 function getSkillKey(skill) {
   return `${skill.repoOwner || "local"}/${skill.repoName || "local"}:${skill.directory}`;
@@ -421,10 +424,15 @@ function BatchToolbar({ count, targets, busy, onBulkSync, onBulkRemove, onClear 
             </Popover.Positioner>
           </Popover.Portal>
         </Popover.Root>
-        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onBulkRemove}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onBulkRemove}
+          className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 transition-colors duration-200 hover:border-red-300 hover:bg-red-100 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-400/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-red-100 disabled:bg-red-50 disabled:text-red-300 disabled:opacity-60 dark:border-red-900/60 dark:bg-red-950/25 dark:text-red-300 dark:hover:border-red-800 dark:hover:bg-red-950/45 dark:hover:text-red-200 dark:disabled:border-red-950 dark:disabled:bg-red-950/20 dark:disabled:text-red-900"
+        >
           <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
           {copy("skills.select.bulk_remove")}
-        </Button>
+        </button>
         <button
           type="button"
           onClick={onClear}
@@ -434,6 +442,129 @@ function BatchToolbar({ count, targets, busy, onBulkSync, onBulkRemove, onClear 
           {copy("skills.select.clear")}
         </button>
       </div>
+    </div>
+  );
+}
+
+function findScrollContainer(element) {
+  return element?.closest?.(".extensions-view") || null;
+}
+
+function getVisibleSkillRange(listElement, itemCount) {
+  const scrollContainer = findScrollContainer(listElement);
+  const viewportHeight = scrollContainer?.clientHeight || window.innerHeight || 720;
+  let scrollTop = 0;
+  if (scrollContainer) {
+    const listRect = listElement.getBoundingClientRect();
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const listTop = scrollContainer.scrollTop + listRect.top - containerRect.top;
+    scrollTop = Math.max(0, scrollContainer.scrollTop - listTop);
+  } else {
+    scrollTop = Math.max(0, window.scrollY - listElement.getBoundingClientRect().top);
+  }
+  const start = Math.max(0, Math.floor(scrollTop / MY_SKILLS_VIRTUAL_ROW_HEIGHT) - MY_SKILLS_VIRTUAL_OVERSCAN);
+  const end = Math.min(
+    itemCount,
+    Math.ceil((scrollTop + viewportHeight) / MY_SKILLS_VIRTUAL_ROW_HEIGHT) + MY_SKILLS_VIRTUAL_OVERSCAN,
+  );
+  return { start, end };
+}
+
+function VirtualSkillRows({
+  items,
+  targets,
+  selectedId,
+  onSelect,
+  selectedIds,
+  onToggleSelect,
+  onToggleTarget,
+  updates,
+  busyKey,
+}) {
+  const listRef = useRef(null);
+  const [range, setRange] = useState(() => ({
+    start: 0,
+    end: Math.min(items.length, MY_SKILLS_VIRTUAL_THRESHOLD),
+  }));
+  const shouldVirtualize = items.length > MY_SKILLS_VIRTUAL_THRESHOLD;
+
+  const updateRange = useCallback(() => {
+    const element = listRef.current;
+    if (!element) return;
+    const nextRange = getVisibleSkillRange(element, items.length);
+    setRange((previousRange) =>
+      previousRange.start === nextRange.start && previousRange.end === nextRange.end
+        ? previousRange
+        : nextRange,
+    );
+  }, [items.length]);
+
+  useEffect(() => {
+    if (!shouldVirtualize) {
+      setRange({ start: 0, end: items.length });
+      return undefined;
+    }
+    updateRange();
+    const element = listRef.current;
+    const scrollContainer = findScrollContainer(element);
+    const target = scrollContainer || window;
+    target.addEventListener("scroll", updateRange, { passive: true });
+    window.addEventListener("resize", updateRange);
+    return () => {
+      target.removeEventListener("scroll", updateRange);
+      window.removeEventListener("resize", updateRange);
+    };
+  }, [items.length, shouldVirtualize, updateRange]);
+
+  const rangeStart = shouldVirtualize ? Math.min(range.start, Math.max(0, items.length - 1)) : 0;
+  const rangeEnd = shouldVirtualize ? Math.min(items.length, Math.max(range.end, rangeStart + 1)) : items.length;
+  const visibleItems = shouldVirtualize ? items.slice(rangeStart, rangeEnd) : items;
+  const containerStyle = shouldVirtualize
+    ? { height: items.length * MY_SKILLS_VIRTUAL_ROW_HEIGHT }
+    : undefined;
+
+  return (
+    <div
+      ref={listRef}
+      data-virtualized={shouldVirtualize ? "true" : "false"}
+      className={cn(
+        "relative",
+        shouldVirtualize ? "overflow-hidden" : "divide-y divide-oai-gray-200/70 dark:divide-oai-gray-800/70",
+      )}
+      style={containerStyle}
+    >
+      {visibleItems.map((skill, index) => {
+        const itemIndex = shouldVirtualize ? rangeStart + index : index;
+        const row = (
+          <SkillRow
+            key={skill.id || skill.key}
+            skill={skill}
+            targets={targets}
+            selected={selectedId === (skill.id || skill.directory)}
+            onSelect={onSelect}
+            selectable
+            checked={selectedIds.has(skill.id)}
+            onToggleSelect={onToggleSelect}
+            onToggleTarget={onToggleTarget}
+            hasUpdate={Boolean(skill.id && updates?.[skill.id])}
+            busyKey={busyKey}
+          />
+        );
+        return shouldVirtualize ? (
+          <div
+            key={skill.id || skill.key}
+            className="absolute left-0 right-0 overflow-hidden border-b border-oai-gray-200/70 dark:border-oai-gray-800/70"
+            style={{
+              height: MY_SKILLS_VIRTUAL_ROW_HEIGHT,
+              transform: `translateY(${itemIndex * MY_SKILLS_VIRTUAL_ROW_HEIGHT}px)`,
+            }}
+          >
+            {row}
+          </div>
+        ) : (
+          row
+        );
+      })}
     </div>
   );
 }
@@ -464,29 +595,31 @@ function MySkillsView({
   const selectionCount = selectedIds.size;
   return (
     <div>
-      {selectionCount > 0 ? (
-        <BatchToolbar
-          count={selectionCount}
-          targets={targets}
-          busy={busyKey === "batch"}
-          onBulkSync={onBulkSync}
-          onBulkRemove={onBulkRemove}
-          onClear={onClearSelection}
-        />
-      ) : (
-        <FilterToolbar
-          agentFilter={agentFilter}
-          agentOptions={agentOptions}
-          onAgentFilter={onAgentFilter}
-          filteredCount={items.length}
-          totalCount={totalCount}
-          anyFilter={anyFilter}
-          onClearFilters={onClearFilters}
-          searchQuery={searchQuery}
-          onSearchQuery={onSearchQuery}
-          searchPlaceholder={searchPlaceholder}
-        />
-      )}
+      <div className={cn(selectionCount > 0 && "extensions-skills-sticky-actions")}>
+        {selectionCount > 0 ? (
+          <BatchToolbar
+            count={selectionCount}
+            targets={targets}
+            busy={busyKey === "batch"}
+            onBulkSync={onBulkSync}
+            onBulkRemove={onBulkRemove}
+            onClear={onClearSelection}
+          />
+        ) : (
+          <FilterToolbar
+            agentFilter={agentFilter}
+            agentOptions={agentOptions}
+            onAgentFilter={onAgentFilter}
+            filteredCount={items.length}
+            totalCount={totalCount}
+            anyFilter={anyFilter}
+            onClearFilters={onClearFilters}
+            searchQuery={searchQuery}
+            onSearchQuery={onSearchQuery}
+            searchPlaceholder={searchPlaceholder}
+          />
+        )}
+      </div>
       {items.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-oai-gray-200 px-4 py-10 text-center text-sm text-oai-gray-500 dark:border-oai-gray-800 dark:text-oai-gray-400">
           <p>{copy("skills.empty.no_match")}</p>
@@ -495,23 +628,17 @@ function MySkillsView({
           </Button>
         </div>
       ) : (
-        <div className="divide-y divide-oai-gray-200/70 dark:divide-oai-gray-800/70">
-          {items.map((skill) => (
-            <SkillRow
-              key={skill.id || skill.key}
-              skill={skill}
-              targets={targets}
-              selected={selectedId === (skill.id || skill.directory)}
-              onSelect={onSelect}
-              selectable
-              checked={selectedIds.has(skill.id)}
-              onToggleSelect={onToggleSelect}
-              onToggleTarget={onToggleTarget}
-              hasUpdate={Boolean(skill.id && updates?.[skill.id])}
-              busyKey={busyKey}
-            />
-          ))}
-        </div>
+        <VirtualSkillRows
+          items={items}
+          targets={targets}
+          selectedId={selectedId}
+          onSelect={onSelect}
+          selectedIds={selectedIds}
+          onToggleSelect={onToggleSelect}
+          onToggleTarget={onToggleTarget}
+          updates={updates}
+          busyKey={busyKey}
+        />
       )}
     </div>
   );

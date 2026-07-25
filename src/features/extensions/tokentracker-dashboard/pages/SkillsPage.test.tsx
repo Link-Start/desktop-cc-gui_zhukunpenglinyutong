@@ -40,6 +40,7 @@ vi.mock("../lib/skills-api", () => ({
 }));
 
 beforeEach(() => {
+  window.history.replaceState({}, "", "/");
   vi.mocked(getInstalledSkills).mockResolvedValue({
     targets: [
       { id: "claude", label: "Claude" },
@@ -77,6 +78,17 @@ beforeEach(() => {
   vi.mocked(addSkillRepo).mockResolvedValue({ ok: true });
   vi.mocked(removeSkillRepo).mockResolvedValue({ ok: true });
 });
+
+function makeSkill(index: number) {
+  return {
+    id: `skill-${index}`,
+    name: `Skill ${index}`,
+    directory: `skill-${index}`,
+    description: `Installed skill ${index}.`,
+    targets: ["claude"],
+    managed: true,
+  };
+}
 
 describe("SkillsPage", () => {
   it("renders installed skills instead of the empty state", async () => {
@@ -179,5 +191,34 @@ describe("SkillsPage", () => {
     expect(await screen.findByText("Remote Apple Notes")).toBeTruthy();
     expect(screen.getByRole("button", { name: copy("skills.action.install") })).toBeTruthy();
     expect(screen.queryByRole("button", { name: copy("skills.card.manage") })).toBeNull();
+  });
+
+  it("keeps bulk actions sticky when a skill is selected", async () => {
+    const user = userEvent.setup();
+    render(<SkillsPage />);
+
+    await user.click(await screen.findByRole("checkbox", { name: copy("skills.select.row_aria", { name: "Alpha Skill" }) }));
+
+    const toolbar = screen.getByRole("toolbar", { name: copy("skills.select.toolbar_aria") });
+    expect(toolbar.closest(".extensions-skills-sticky-actions")).toBeTruthy();
+    const bulkRemoveButton = screen.getByRole("button", { name: copy("skills.select.bulk_remove") });
+    expect(bulkRemoveButton.className).toContain("border-red-200");
+    expect(bulkRemoveButton.className).toContain("text-red-700");
+  });
+
+  it("windows long installed skill lists", async () => {
+    vi.mocked(getInstalledSkills).mockResolvedValue({
+      targets: [{ id: "claude", label: "Claude" }],
+      skills: Array.from({ length: 140 }, (_, index) => makeSkill(index + 1)),
+    });
+
+    const { container } = render(<SkillsPage />);
+
+    expect(await screen.findByText("Skill 1")).toBeTruthy();
+    await waitFor(() => {
+      const list = container.querySelector('[data-virtualized="true"]');
+      expect(list).toBeTruthy();
+      expect(container.querySelectorAll('[data-skill-row="1"]').length).toBeLessThan(80);
+    });
   });
 });

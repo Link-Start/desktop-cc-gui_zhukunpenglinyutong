@@ -5,6 +5,7 @@
 .extensions-view {
   --extensions-view-padding-inline: clamp(24px, 5vw, 96px);
   --extensions-view-padding-top: 15px;
+  --extensions-filter-row-sticky-height: calc(var(--extensions-view-padding-top) + 56px);
 
   grid-column: 1;
   grid-row: 1 / -1;
@@ -137,6 +138,7 @@
 @media (max-width: 760px) {
   .extensions-view {
     --extensions-view-padding-inline: 16px;
+    --extensions-filter-row-sticky-height: calc(var(--extensions-view-padding-top) + 108px);
 
     padding: 0 var(--extensions-view-padding-inline) 88px;
   }
@@ -289,4 +291,18 @@
   min-height: 0;
   flex: 1;
   flex-direction: column;
+}
+
+.extensions-skills-dashboard .tt-dashboard main {
+  padding-top: 10px;
+}
+
+.extensions-skills-sticky-actions {
+  position: sticky;
+  z-index: 90;
+  top: var(--extensions-filter-row-sticky-height);
+  margin: 0 -2px;
+  padding: 0 2px 8px;
+  background: var(--surface-messages);
+  box-shadow: 0 16px 22px -24px color-mix(in srgb, var(--shadow-color, #000) 35%, transparent);
 }
