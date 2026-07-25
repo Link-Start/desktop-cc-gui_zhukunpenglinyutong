@@ -1509,3 +1509,37 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1125: 修复 Composer 与命令并发边界并更新工具链报告
+
+**Date**: 2026-07-26
+**Task**: 修复 Composer 与命令并发边界并更新工具链报告
+**Branch**: `feature/v-0710`
+
+### Summary
+
+恢复 AI commit message 的显式 engine/language 选择；隔离 Prompt Enhancer workspace cache；修复 managed command 原子创建与 watcher lease 生命周期；补齐 OpenSpec、Trellis executable contracts 和回归测试；基于最新代码更新工程工具链现状与影响范围。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `296fad4a5` | (see git log) |
+| `c3cbbf0ad` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
