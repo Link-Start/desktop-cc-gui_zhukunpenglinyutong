@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1127
+- **Total Sessions**: 1128
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~1611 | Active |
+| `journal-27.md` | ~1644 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1128 | 2026-07-26 | 增加 Terminal 搜索与安全链接 | `d8b592095` | `feature/v-0710` |
 | 1127 | 2026-07-26 | 模块化 Git 与 File 高频入口 | `26cbce638` | `feature/v-0710` |
 | 1126 | 2026-07-26 | 恢复 Git History 核心类型保护 | `38b5134b1` | `feature/v-0710` |
 | 1125 | 2026-07-26 | 修复 Composer 与命令并发边界并更新工具链报告 | `296fad4a5`, `c3cbbf0ad` | `feature/v-0710` |

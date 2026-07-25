@@ -1609,3 +1609,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1128: 增加 Terminal 搜索与安全链接
+
+**Date**: 2026-07-26
+**Task**: 增加 Terminal 搜索与安全链接
+**Branch**: `feature/v-0710`
+
+### Summary
+
+集成 xterm SearchAddon 与 WebLinksAddon，增加 Cmd/Ctrl+F 搜索栏、匹配导航和 Escape close；仅允许 http/https 交给 opener，addon 失败时保留基础 Terminal。26 个增量测试、typecheck 与 touched ESLint 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8b592095` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
