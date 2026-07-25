@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1125
+- **Total Sessions**: 1126
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~1545 | Active |
+| `journal-27.md` | ~1578 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1126 | 2026-07-26 | 恢复 Git History 核心类型保护 | `38b5134b1` | `feature/v-0710` |
 | 1125 | 2026-07-26 | 修复 Composer 与命令并发边界并更新工具链报告 | `296fad4a5`, `c3cbbf0ad` | `feature/v-0710` |
 | 1124 | 2026-07-26 | 缓存消息搜索索引并规范 Worktree 分支命名 | `d077890b8` | `feature/v-0710` |
 | 1123 | 2026-07-26 | 工程工具链修复批次4: worktree 面板收敛共享 AI commit 实现 | `9fb13076e` | `feature/v-0710` |

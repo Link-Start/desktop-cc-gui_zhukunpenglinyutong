@@ -1543,3 +1543,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1126: 恢复 Git History 核心类型保护
+
+**Date**: 2026-07-26
+**Task**: 恢复 Git History 核心类型保护
+**Branch**: `feature/v-0710`
+
+### Summary
+
+移除四个 Git History 核心文件的 @ts-nocheck，建立 typed scope contract，统一 branch compare state，修复 repository action effect cleanup；62 个增量测试、TypeScript、ESLint、runtime contract 与 static import gate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `38b5134b1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
