@@ -156,6 +156,7 @@ import {
   resolveGitDiffFileHistoryTarget,
   resolveRepositoryWorkspaceFilePath,
 } from "./GitDiffPanelFileScope";
+import { saveLastCommitMessageConfig } from "../../../utils/commitMessage";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(),
@@ -961,6 +962,42 @@ describe("GitDiffPanel", () => {
     await waitFor(() => {
       expect(onGenerateCommitMessage).toHaveBeenCalledWith("en", "codex");
     });
+  });
+
+  it("generates commit message in one click with the last saved configuration", async () => {
+    const onGenerateCommitMessage = vi.fn();
+    saveLastCommitMessageConfig({ engine: "codex", language: "zh" });
+
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        onGenerateCommitMessage={onGenerateCommitMessage}
+        unstagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
+
+    await waitFor(() => {
+      expect(onGenerateCommitMessage).toHaveBeenCalledWith("zh", "codex");
+    });
+    // 一键路径不再弹出引擎菜单
+    expect(screen.queryByRole("menuitem", { name: "Use Codex engine" })).toBeNull();
+  });
+
+  it("opens the engine menu from the generate button context menu even with a saved configuration", async () => {
+    saveLastCommitMessageConfig({ engine: "codex", language: "zh" });
+
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        onGenerateCommitMessage={vi.fn()}
+        unstagedFiles={[{ path: "file.txt", status: "M", additions: 1, deletions: 0 }]}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Generate commit message" }));
+
+    expect(await screen.findByRole("menuitem", { name: "Use Codex engine" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Use last configuration" })).toBeTruthy();
   });
 
   it("moves commit composer from the current page menu", async () => {
@@ -1957,15 +1994,16 @@ describe("GitDiffPanel", () => {
       expect(onGenerateCommitMessage).toHaveBeenCalledWith("en", "codex");
     });
 
+    // 一键再生成：已有上次配置时单击直接生成, 不再弹出菜单
     fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
-    fireEvent.click(
-      await screen.findByRole("menuitem", { name: "Use last configuration" }),
-    );
 
     await waitFor(() => {
       expect(onGenerateCommitMessage).toHaveBeenCalledTimes(2);
     });
     expect(onGenerateCommitMessage).toHaveBeenLastCalledWith("en", "codex");
+    expect(
+      screen.queryByRole("menuitem", { name: "Use last configuration" }),
+    ).toBeNull();
   });
 
   it("passes selected commit scope when generating commit message from the commit section", async () => {
