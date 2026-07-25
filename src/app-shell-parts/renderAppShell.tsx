@@ -557,7 +557,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         extensionsNode={
           showExtensions ? (
             <Suspense fallback={null}>
-              <ExtensionsView />
+              <ExtensionsView activeWorkspace={activeWorkspace} />
             </Suspense>
           ) : null
         }

@@ -153,6 +153,69 @@ const sidebar = {
       "errorTitle": "tokentracker सर्वर शुरू नहीं हो सका",
       "errorRetry": "पुनः प्रयास करें"
     },
+    "mcps": {
+      "title": "MCPs",
+      "refresh": "रीफ्रेश करें",
+      "tabs": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "filter": {
+        "sourceLabel": "स्रोत",
+        "sourceAll": "सभी स्रोत",
+        "sourceConfig": "कॉन्फ़िग फ़ाइल",
+        "sourceRuntime": "रनटाइम",
+        "resultCount": "{{filtered}} / {{total}} सर्वर",
+        "clear": "फ़िल्टर साफ़ करें"
+      },
+      "search": {
+        "placeholder": "MCP सर्वर खोजें…",
+        "aria": "MCP सर्वर खोजें",
+        "clear": "खोज साफ़ करें"
+      },
+      "groups": {
+        "config": "कॉन्फ़िग फ़ाइल",
+        "runtime": "रनटाइम"
+      },
+      "row": {
+        "openDetails": "{{name}} का विवरण खोलें",
+        "toolsCount": "{{count}} टूल"
+      },
+      "badges": {
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "builtIn": "अंतर्निहित",
+        "statusUnknown": "स्थिति अज्ञात"
+      },
+      "toggle": {
+        "ariaEnable": "{{name}} सक्षम करें",
+        "ariaDisable": "{{name}} अक्षम करें",
+        "failed": "{{name}} की सक्षम स्थिति बदलने में विफल: {{message}}"
+      },
+      "detail": {
+        "close": "विवरण बंद करें",
+        "sectionTitle": "सर्वर विवरण",
+        "source": "स्रोत",
+        "sourceClaude": "~/.claude.json",
+        "sourceCcgui": "~/.ccgui/config.json",
+        "transport": "ट्रांसपोर्ट",
+        "transportUnknown": "अज्ञात ट्रांसपोर्ट",
+        "command": "कमांड",
+        "commandMeta": "{{command}} · args {{args}}",
+        "url": "URL",
+        "urlMeta": "URL: {{url}}",
+        "status": "स्थिति",
+        "auth": "प्रमाणीकरण",
+        "tools": "टूल",
+        "resourcesTemplatesLabel": "संसाधन / टेम्पलेट",
+        "resourcesTemplates": "संसाधन {{resources}} / टेम्पलेट {{templates}}"
+      },
+      "empty": {
+        "title": "कोई MCP सर्वर नहीं मिला",
+        "description": "अपनी कॉन्फ़िग फ़ाइल में MCP सर्वर जोड़ें, फिर उन्हें यहाँ देखने के लिए रीफ्रेश करें।",
+        "noMatch": "वर्तमान फ़िल्टर से कोई MCP सर्वर मेल नहीं खाता"
+      }
+    },
   }
 };
 

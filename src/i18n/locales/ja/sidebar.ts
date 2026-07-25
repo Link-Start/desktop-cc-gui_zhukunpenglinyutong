@@ -153,6 +153,69 @@ const sidebar = {
       "errorTitle": "tokentracker サーバーの起動に失敗しました",
       "errorRetry": "再試行"
     },
+    "mcps": {
+      "title": "MCPs",
+      "refresh": "更新",
+      "tabs": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "filter": {
+        "sourceLabel": "ソース",
+        "sourceAll": "すべてのソース",
+        "sourceConfig": "設定ファイル",
+        "sourceRuntime": "ランタイム",
+        "resultCount": "{{filtered}} / {{total}} サーバー",
+        "clear": "フィルターをクリア"
+      },
+      "search": {
+        "placeholder": "MCP サーバーを検索…",
+        "aria": "MCP サーバーを検索",
+        "clear": "検索をクリア"
+      },
+      "groups": {
+        "config": "設定ファイル",
+        "runtime": "ランタイム"
+      },
+      "row": {
+        "openDetails": "{{name}} の詳細を開く",
+        "toolsCount": "{{count}} ツール"
+      },
+      "badges": {
+        "enabled": "有効",
+        "disabled": "無効",
+        "builtIn": "組み込み",
+        "statusUnknown": "ステータス不明"
+      },
+      "toggle": {
+        "ariaEnable": "{{name}} を有効にする",
+        "ariaDisable": "{{name}} を無効にする",
+        "failed": "{{name}} の有効状態の切り替えに失敗しました：{{message}}"
+      },
+      "detail": {
+        "close": "詳細を閉じる",
+        "sectionTitle": "サーバーの詳細",
+        "source": "ソース",
+        "sourceClaude": "~/.claude.json",
+        "sourceCcgui": "~/.ccgui/config.json",
+        "transport": "トランスポート",
+        "transportUnknown": "不明なトランスポート",
+        "command": "コマンド",
+        "commandMeta": "{{command}} · 引数 {{args}}",
+        "url": "URL",
+        "urlMeta": "URL：{{url}}",
+        "status": "ステータス",
+        "auth": "認証",
+        "tools": "ツール",
+        "resourcesTemplatesLabel": "リソース / テンプレート",
+        "resourcesTemplates": "リソース {{resources}} / テンプレート {{templates}}"
+      },
+      "empty": {
+        "title": "MCP サーバーが見つかりません",
+        "description": "設定ファイルに MCP サーバーを追加してから更新すると、ここに表示されます。",
+        "noMatch": "現在のフィルターに一致する MCP サーバーはありません"
+      }
+    },
   }
 };
 

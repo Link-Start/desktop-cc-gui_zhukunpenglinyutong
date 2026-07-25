@@ -695,116 +695,6 @@ const settings = {
       hoursAgo: "h ago",
       noData: "No usage data available yet.",
     },
-    mcpPanel: {
-      title: "MCP Servers",
-      description:
-        "Inspect MCP readiness, runtime inventory, and effective rules for each engine.",
-      workspaceRequired:
-        "Add and open at least one workspace to query MCP status.",
-      serverCount: "{{count}} servers · {{toolCount}} tools",
-      refresh: "Refresh",
-      enabled: "Enabled",
-      disabled: "Disabled",
-      overviewActiveEngine: "Selected engine",
-      overviewDetectedEngines: "Detected engines",
-      detectedEnginesValue: "{{installed}} / {{total}} installed",
-      overviewDetectedDesc:
-        "Shows which clients can currently provide MCP-related context.",
-      overviewLiveInventory: "Live inventory",
-      overviewInventoryDesc:
-        "Runtime inventory follows the selected engine when supported.",
-      enginesTitle: "By engine",
-      enginesDesc:
-        "Each engine has a different source of truth and refresh rule.",
-      engineSelectLabel: "Select engine to inspect",
-      detailsTitle: "Detailed status and rules",
-      detailsDesc:
-        "Read configuration entry points, runtime availability, and visible MCP servers.",
-      engineClaude: "Claude Code",
-      engineCodex: "Codex",
-      engineGemini: "Gemini",
-      engineOpenCode: "OpenCode",
-      engineStatusActive: "Active",
-      engineStatusInstalled: "Installed",
-      engineStatusUnavailable: "Unavailable",
-      detailVersion: "Version",
-      detailBinary: "Binary path",
-      detailMode: "Display mode",
-      detailConfigPaths: "Config entry points",
-      detailRuntimeStatus: "Runtime visibility",
-      detailWorkspace: "Workspace",
-      detailError: "Detection note",
-      valueUnknown: "Unknown",
-      valueUnavailable: "Unavailable",
-      rulesTitle: "Runtime rules",
-      environmentTitle: "Environment details",
-      configServersTitle: "Config-defined servers",
-      runtimeServersTitle: "Runtime servers",
-      runtimeServersClaudeDesc:
-        "Servers reported by the last Claude run in this workspace, including the built-in AskUserQuestion server (ccgui).",
-      builtInBadge: "Built-in",
-      sessionOverviewTitle: "Session overview",
-      noConfigServers:
-        "No servers were discovered from the known config source.",
-      noRuntimeServers: "No runtime servers were reported.",
-      noOpenCodeSnapshot:
-        "OpenCode runtime snapshot is not available in the current context.",
-      detectEmptyTitle: "No engine data returned",
-      detectEmptyDesc:
-        "Refresh after the engine runtime is ready, or verify the local daemon/web-service connection.",
-      ruleModeLabel: "Mode",
-      ruleScopeLabel: "Scope",
-      ruleSourceLabel: "Source",
-      ruleRefreshLabel: "Refresh",
-      ruleRuntimeLabel: "Visible inventory",
-      ruleModeConfigOnly: "Config-driven",
-      ruleModeRuntimeRead: "Runtime inventory",
-      ruleModeSessionRead: "Session inventory",
-      ruleScopeClaude:
-        "User-level config. Shared across Claude sessions on this machine.",
-      ruleScopeCodex: "Global config plus workspace runtime inspection.",
-      ruleScopeGemini:
-        "Client config. Effective behavior depends on Gemini-side runtime loading.",
-      ruleScopeOpenCode: "Current workspace session only.",
-      ruleSourceClaude: "~/.claude.json and Claude settings files.",
-      ruleSourceCodex:
-        "~/.ccgui/config.json, ~/.codex/config.toml, and workspace runtime status.",
-      ruleSourceGemini: "~/.gemini/settings.json and compatible bridge config.",
-      ruleSourceOpenCode: "OpenCode workspace runtime snapshot.",
-      ruleRefreshConfig:
-        "Refresh this page after editing config files or restarting the client.",
-      ruleRefreshRuntime: "Use Refresh to re-read the latest runtime snapshot.",
-      ruleRuntimeConfigOnly:
-        "This page shows config entry points, not per-server runtime inventory.",
-      ruleRuntimeCodex:
-        "Config-defined servers plus workspace runtime-reported tools and auth state.",
-      ruleRuntimeOpenCode:
-        "Session-level global state and per-server enabled status are shown read-only.",
-      runtimeStatusOpenCodeReady:
-        "Workspace selected. Session snapshot can be queried.",
-      runtimeStatusWorkspaceRequired:
-        "Select a workspace to query runtime state.",
-      runtimeStatusCodexReady:
-        "Workspace selected. Runtime inventory can be queried.",
-      runtimeStatusWorkspaceOptional:
-        "Global config is visible. Workspace runtime inventory needs a workspace.",
-      runtimeStatusConfigOnly: "Config entry points only.",
-      sourceClaude: "Source: ~/.claude.json",
-      sourceCcgui: "Source: ~/.ccgui/config.json",
-      commandMeta: "{{command}} · args {{args}}",
-      urlMeta: "URL: {{url}}",
-      transportUnknown: "unknown transport",
-      pathWorkspaceSession: "Current workspace session",
-      pathRuntimeInjection: "OpenCode runtime injection",
-      globalToggle: "Global toggle",
-      globalToggleDesc:
-        "When disabled, OpenCode will stop injecting MCP tools.",
-      noServers: "No MCP servers configured.",
-      statusUnknown: "status unknown",
-      authUnknown: "auth unknown",
-      resourcesTemplates: "resources {{resources}} / templates {{templates}}",
-      noTools: "No tools",
-    },
     skillsPanel: {
       title: "Skills",
     },
@@ -2353,7 +2243,7 @@ const settings = {
       },
     },
     sidebarProjectManagement: "Project Management",
-    sidebarMcpSkills: "MCP / Skills",
+    sidebarMcpSkills: "Skills",
     sidebarAgentPromptManagement: "Agents / Prompts",
     sidebarRuntimeEnvironment: "Runtime Environment",
     basicShortcutsTab: "Shortcuts",
@@ -2363,7 +2253,7 @@ const settings = {
     projectManagementDescription:
       "Manage project groups and real workspace sessions from one place.",
     mcpSkillsDescription:
-      "Inspect MCP servers and browse global Skills from one place.",
+      "Manage the curated Skills bundled with this app.",
     projectManagementGroupsTab: "Groups",
     projectManagementSessionsTab: "Session Management",
     projectManagementUsageTab: "Usage",

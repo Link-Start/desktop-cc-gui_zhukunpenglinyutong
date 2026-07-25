@@ -41,7 +41,8 @@ pub(crate) use self::installer::{
     CliInstallStrategy, CliVersionStatus,
 };
 use self::mcp_config::{
-    list_global_mcp_servers as list_global_mcp_servers_impl, GlobalMcpServerEntry,
+    list_global_mcp_servers as list_global_mcp_servers_impl,
+    set_global_mcp_server_enabled as set_global_mcp_server_enabled_impl, GlobalMcpServerEntry,
 };
 use self::model_selection::{normalize_model_id, pick_model_from_model_list_response};
 use self::provider_fork::{
@@ -920,6 +921,15 @@ pub(crate) async fn list_threads(
 #[tauri::command]
 pub(crate) async fn list_global_mcp_servers() -> Result<Vec<GlobalMcpServerEntry>, String> {
     list_global_mcp_servers_impl().await
+}
+
+#[tauri::command]
+pub(crate) async fn set_global_mcp_server_enabled(
+    name: String,
+    source: String,
+    enabled: bool,
+) -> Result<(), String> {
+    set_global_mcp_server_enabled_impl(name, source, enabled).await
 }
 
 #[tauri::command]

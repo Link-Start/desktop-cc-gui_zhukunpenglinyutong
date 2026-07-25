@@ -51,12 +51,10 @@ import { PlaceholderSection } from "./PlaceholderSection";
 import { CommitSection } from "./CommitSection";
 import { PromptSection } from "./PromptSection";
 import { UsageSection } from "./UsageSection";
-import { McpSection } from "./McpSection";
 import { CuratedSection } from "../../curated-skills";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
 import { deleteSessionRadarHistoryEntries } from "../../session-activity/utils/sessionRadarHistoryManagement";
 import Settings from "lucide-react/dist/esm/icons/settings";
-import BookOpen from "lucide-react/dist/esm/icons/book-open";
 import Server from "lucide-react/dist/esm/icons/server";
 import Shield from "lucide-react/dist/esm/icons/shield";
 import BarChart3 from "lucide-react/dist/esm/icons/bar-chart-3";
@@ -369,9 +367,6 @@ export function SettingsView({
   const [agentPromptSubTab, setAgentPromptSubTab] = useState<
     "agents" | "prompts"
   >("agents");
-  const [mcpManagementSubTab, setMcpManagementSubTab] = useState<
-    "servers" | "skills"
-  >("servers");
   const [runtimeEnvironmentSubTab, setRuntimeEnvironmentSubTab] = useState<
     "runtime-pool" | "cli-validation"
   >("runtime-pool");
@@ -692,10 +687,6 @@ export function SettingsView({
     }
     return sessionWorkspaceOptions[0] ?? null;
   }, [activeWorkspace, sessionWorkspaceOptions, settingsWorkspaceId]);
-  const mcpContextWorkspace = useMemo(
-    () => activeWorkspace ?? projects[0] ?? null,
-    [activeWorkspace, projects],
-  );
   const handleDeleteSessionRadarHistoryInSettings = useCallback(
     async (entries: SessionRadarEntry[]) => {
       const targets = entries.map((entry) => ({
@@ -907,12 +898,8 @@ export function SettingsView({
         setAgentPromptSubTab("prompts");
         return;
       case "mcp-servers":
-        setActiveSection("mcp");
-        setMcpManagementSubTab("servers");
-        return;
       case "mcp-skills":
         setActiveSection("mcp");
-        setMcpManagementSubTab("skills");
         return;
       case "runtime-pool":
         setActiveSection("runtime-environment");
@@ -2276,42 +2263,13 @@ export function SettingsView({
             />
           )}
           {activeSection === "mcp" && (
-            <section
-              className="settings-section settings-section-tabbed"
-              data-settings-tab={mcpManagementSubTab}
-            >
-              <div className="settings-basic-tabs">
-                <button
-                  type="button"
-                  className={`settings-basic-tab ${mcpManagementSubTab === "servers" ? "active" : ""}`}
-                  onClick={() => setMcpManagementSubTab("servers")}
-                >
-                  <Server className="settings-basic-tab-icon" aria-hidden />
-                  {t("settings.mcpPanel.title")}
-                </button>
-                <button
-                  type="button"
-                  className={`settings-basic-tab ${mcpManagementSubTab === "skills" ? "active" : ""}`}
-                  onClick={() => setMcpManagementSubTab("skills")}
-                >
-                  <BookOpen className="settings-basic-tab-icon" aria-hidden />
-                  {t("settings.skillsPanel.title")}
-                </button>
-              </div>
-              {mcpManagementSubTab === "servers" ? (
-                <McpSection
-                  activeWorkspace={mcpContextWorkspace}
-                  activeEngine={activeEngine}
-                  embedded
-                />
-              ) : (
-                // Skills 管理已整体迁移到「拓展 → Skills」（TokenTracker
-                // SkillsPage），设置侧只保留随包发布的内置精选开关。
-                <CuratedSection
-                  appSettings={appSettings}
-                  onUpdateAppSettings={onUpdateAppSettings}
-                />
-              )}
+            // MCP 服务器清单已整体迁移到「拓展 → Mcps」；设置侧只保留
+            // 随包发布的内置精选 Skills 开关。
+            <section className="settings-section">
+              <CuratedSection
+                appSettings={appSettings}
+                onUpdateAppSettings={onUpdateAppSettings}
+              />
             </section>
           )}
           {activeSection === "permissions" && (

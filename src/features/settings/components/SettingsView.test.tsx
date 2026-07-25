@@ -61,14 +61,6 @@ vi.mock("@/features/computer-use/components/ComputerUseStatusCard", () => ({
   ComputerUseStatusCard: () => <div data-testid="computer-use-status-card" />,
 }));
 
-vi.mock("./McpSection", () => ({
-  McpSection: ({ embedded }: { embedded?: boolean }) => (
-    <div data-testid={embedded ? "embedded-mcp-section" : "mcp-section"}>
-      Mock MCP Section
-    </div>
-  ),
-}));
-
 vi.mock("../../curated-skills/components/CuratedSection", () => ({
   CuratedSection: () => <div data-testid="curated-section-stub">Mock Curated Section</div>,
 }));
@@ -718,7 +710,6 @@ describe("SettingsView Display", () => {
     expect(
       sidebarQueries.queryByRole("button", { name: "CLI Validation" }),
     ).toBeNull();
-    expect(sidebarQueries.queryByRole("button", { name: "Skills" })).toBeNull();
     const providersEntry = sidebarQueries.getByRole("button", {
       name: "settings.sidebarProviders",
     });
@@ -738,7 +729,7 @@ describe("SettingsView Display", () => {
       sidebarQueries.getByRole("button", { name: "Project Management" }),
     ).toBeTruthy();
     expect(
-      sidebarQueries.getByRole("button", { name: "MCP / Skills" }),
+      sidebarQueries.getByRole("button", { name: "Skills" }),
     ).toBeTruthy();
     expect(
       sidebarQueries.getByRole("button", { name: "Agents / Prompts" }),
@@ -2296,15 +2287,9 @@ describe("SettingsView Shortcuts", () => {
     await flushSettingsViewEffects();
     expect(screen.getByText("settings.prompt.title")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "MCP / Skills" }));
-    await flushSettingsViewEffects();
-    expect(screen.getByRole("button", { name: "MCP Servers" })).toBeTruthy();
-    expectTabButtonHasIcon("MCP Servers");
-    expectTabButtonHasIcon("Skills");
-    expect(screen.getByTestId("embedded-mcp-section")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Skills" }));
     await flushSettingsViewEffects();
-    // Skills 管理已迁移到「拓展 → Skills」，设置侧 skills 子页只保留内置精选。
+    // MCP 服务器清单已迁移到「拓展 → Mcps」；设置侧该页只保留内置精选 Skills。
     expect(screen.getByTestId("curated-section-stub")).toBeTruthy();
 
     fireEvent.click(

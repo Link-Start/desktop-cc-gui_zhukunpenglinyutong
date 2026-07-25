@@ -167,6 +167,7 @@ pub(crate) fn invoke_handler(
         crate::codex::rewind_codex_thread,
         crate::codex::list_threads,
         crate::codex::list_global_mcp_servers,
+        crate::codex::set_global_mcp_server_enabled,
         crate::codex::list_mcp_server_status,
         crate::codex::archive_thread,
         crate::codex::delete_codex_session,

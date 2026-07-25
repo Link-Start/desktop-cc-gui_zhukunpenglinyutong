@@ -153,6 +153,69 @@ const sidebar = {
       "errorTitle": "tokentracker 服務啟動失敗",
       "errorRetry": "重試"
     },
+    "mcps": {
+      "title": "MCPs",
+      "refresh": "重新整理",
+      "tabs": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "filter": {
+        "sourceLabel": "來源",
+        "sourceAll": "全部來源",
+        "sourceConfig": "設定檔",
+        "sourceRuntime": "執行階段",
+        "resultCount": "{{filtered}} / {{total}} 個伺服器",
+        "clear": "清除篩選"
+      },
+      "search": {
+        "placeholder": "搜尋 MCP 伺服器…",
+        "aria": "搜尋 MCP 伺服器",
+        "clear": "清除搜尋"
+      },
+      "groups": {
+        "config": "設定檔",
+        "runtime": "執行階段"
+      },
+      "row": {
+        "openDetails": "開啟 {{name}} 的詳情",
+        "toolsCount": "{{count}} 個工具"
+      },
+      "badges": {
+        "enabled": "已啟用",
+        "disabled": "已停用",
+        "builtIn": "內建",
+        "statusUnknown": "狀態未知"
+      },
+      "toggle": {
+        "ariaEnable": "啟用 {{name}}",
+        "ariaDisable": "停用 {{name}}",
+        "failed": "切換 {{name}} 的啟用狀態失敗：{{message}}"
+      },
+      "detail": {
+        "close": "關閉詳情",
+        "sectionTitle": "伺服器詳情",
+        "source": "來源",
+        "sourceClaude": "~/.claude.json",
+        "sourceCcgui": "~/.ccgui/config.json",
+        "transport": "傳輸方式",
+        "transportUnknown": "未知傳輸方式",
+        "command": "命令",
+        "commandMeta": "{{command}} · 引數 {{args}}",
+        "url": "URL",
+        "urlMeta": "URL：{{url}}",
+        "status": "狀態",
+        "auth": "授權",
+        "tools": "工具",
+        "resourcesTemplatesLabel": "資源 / 範本",
+        "resourcesTemplates": "資源 {{resources}} / 範本 {{templates}}"
+      },
+      "empty": {
+        "title": "未發現 MCP 伺服器",
+        "description": "在設定檔中新增 MCP 伺服器後，重新整理即可在此查看。",
+        "noMatch": "沒有符合目前篩選條件的 MCP 伺服器"
+      }
+    },
   }
 };
 

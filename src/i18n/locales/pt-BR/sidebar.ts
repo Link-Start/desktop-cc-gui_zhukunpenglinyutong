@@ -153,6 +153,69 @@ const sidebar = {
       "errorTitle": "Falha ao iniciar o servidor tokentracker",
       "errorRetry": "Tentar novamente"
     },
+    "mcps": {
+      "title": "MCPs",
+      "refresh": "Atualizar",
+      "tabs": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "filter": {
+        "sourceLabel": "Fonte",
+        "sourceAll": "Todas as fontes",
+        "sourceConfig": "Arquivo de configuração",
+        "sourceRuntime": "Tempo de execução",
+        "resultCount": "{{filtered}} / {{total}} servidores",
+        "clear": "Limpar filtros"
+      },
+      "search": {
+        "placeholder": "Pesquisar servidores MCP…",
+        "aria": "Pesquisar servidores MCP",
+        "clear": "Limpar pesquisa"
+      },
+      "groups": {
+        "config": "Arquivo de configuração",
+        "runtime": "Tempo de execução"
+      },
+      "row": {
+        "openDetails": "Abrir detalhes de {{name}}",
+        "toolsCount": "{{count}} ferramentas"
+      },
+      "badges": {
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "builtIn": "Integrado",
+        "statusUnknown": "Status desconhecido"
+      },
+      "toggle": {
+        "ariaEnable": "Ativar {{name}}",
+        "ariaDisable": "Desativar {{name}}",
+        "failed": "Falha ao alternar o estado de ativação de {{name}}: {{message}}"
+      },
+      "detail": {
+        "close": "Fechar detalhes",
+        "sectionTitle": "Detalhes do servidor",
+        "source": "Fonte",
+        "sourceClaude": "~/.claude.json",
+        "sourceCcgui": "~/.ccgui/config.json",
+        "transport": "Transporte",
+        "transportUnknown": "Transporte desconhecido",
+        "command": "Comando",
+        "commandMeta": "{{command}} · args {{args}}",
+        "url": "URL",
+        "urlMeta": "URL: {{url}}",
+        "status": "Status",
+        "auth": "Autenticação",
+        "tools": "Ferramentas",
+        "resourcesTemplatesLabel": "Recursos / modelos",
+        "resourcesTemplates": "Recursos {{resources}} / modelos {{templates}}"
+      },
+      "empty": {
+        "title": "Nenhum servidor MCP encontrado",
+        "description": "Adicione servidores MCP ao seu arquivo de configuração e atualize para vê-los aqui.",
+        "noMatch": "Nenhum servidor MCP corresponde aos filtros atuais"
+      }
+    },
   }
 };
 

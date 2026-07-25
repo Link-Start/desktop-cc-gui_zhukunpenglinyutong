@@ -153,6 +153,69 @@ const sidebar = {
       "errorTitle": "No se pudo iniciar el servidor de tokentracker",
       "errorRetry": "Reintentar"
     },
+    "mcps": {
+      "title": "MCPs",
+      "refresh": "Actualizar",
+      "tabs": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "filter": {
+        "sourceLabel": "Fuente",
+        "sourceAll": "Todas las fuentes",
+        "sourceConfig": "Archivo de configuración",
+        "sourceRuntime": "Tiempo de ejecución",
+        "resultCount": "{{filtered}} / {{total}} servidores",
+        "clear": "Limpiar filtros"
+      },
+      "search": {
+        "placeholder": "Buscar servidores MCP…",
+        "aria": "Buscar servidores MCP",
+        "clear": "Limpiar búsqueda"
+      },
+      "groups": {
+        "config": "Archivo de configuración",
+        "runtime": "Tiempo de ejecución"
+      },
+      "row": {
+        "openDetails": "Abrir detalles de {{name}}",
+        "toolsCount": "{{count}} herramientas"
+      },
+      "badges": {
+        "enabled": "Habilitado",
+        "disabled": "Deshabilitado",
+        "builtIn": "Integrado",
+        "statusUnknown": "Estado desconocido"
+      },
+      "toggle": {
+        "ariaEnable": "Habilitar {{name}}",
+        "ariaDisable": "Deshabilitar {{name}}",
+        "failed": "No se pudo cambiar el estado de habilitación de {{name}}: {{message}}"
+      },
+      "detail": {
+        "close": "Cerrar detalles",
+        "sectionTitle": "Detalles del servidor",
+        "source": "Fuente",
+        "sourceClaude": "~/.claude.json",
+        "sourceCcgui": "~/.ccgui/config.json",
+        "transport": "Transporte",
+        "transportUnknown": "Transporte desconocido",
+        "command": "Comando",
+        "commandMeta": "{{command}} · args {{args}}",
+        "url": "URL",
+        "urlMeta": "URL: {{url}}",
+        "status": "Estado",
+        "auth": "Autenticación",
+        "tools": "Herramientas",
+        "resourcesTemplatesLabel": "Recursos / plantillas",
+        "resourcesTemplates": "Recursos {{resources}} / plantillas {{templates}}"
+      },
+      "empty": {
+        "title": "No se encontraron servidores MCP",
+        "description": "Añade servidores MCP a tu archivo de configuración y luego actualiza para verlos aquí.",
+        "noMatch": "Ningún servidor MCP coincide con los filtros actuales"
+      }
+    },
   }
 };
 

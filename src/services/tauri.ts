@@ -566,6 +566,7 @@ export {
   listClaudeSessions,
   listGeminiSessions,
   listGlobalMcpServers,
+  setGlobalMcpServerEnabled,
   listKimiSessions,
   listMcpServerStatus,
   listThreads,

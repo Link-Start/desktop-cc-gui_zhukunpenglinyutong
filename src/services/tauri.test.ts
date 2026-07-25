@@ -29,6 +29,7 @@ import {
   listThreads,
   listMcpServerStatus,
   listGlobalMcpServers,
+  setGlobalMcpServerEnabled,
   readGlobalAgentsMd,
   readGlobalCodexAuthJson,
   readGlobalCodexConfigToml,
@@ -1616,6 +1617,19 @@ describe("tauri invoke wrappers", () => {
     await listGlobalMcpServers();
 
     expect(invokeMock).toHaveBeenCalledWith("list_global_mcp_servers");
+  });
+
+  it("invokes set_global_mcp_server_enabled", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await setGlobalMcpServerEnabled("github", "ccgui_config", false);
+
+    expect(invokeMock).toHaveBeenCalledWith("set_global_mcp_server_enabled", {
+      name: "github",
+      source: "ccgui_config",
+      enabled: false,
+    });
   });
 
   it("invokes stage_git_all", async () => {
