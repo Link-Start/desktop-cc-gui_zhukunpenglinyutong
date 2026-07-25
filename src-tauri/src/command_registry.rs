@@ -3,6 +3,7 @@ pub(crate) fn invoke_handler(
     tauri::generate_handler![
         // Settings
         crate::settings::get_app_settings,
+        crate::settings::take_settings_recovery_notice,
         crate::settings::update_app_settings,
         crate::settings::get_codex_config_path,
         crate::settings::get_codex_unified_exec_external_status,
@@ -166,6 +167,7 @@ pub(crate) fn invoke_handler(
         crate::codex::rewind_codex_thread,
         crate::codex::list_threads,
         crate::codex::list_global_mcp_servers,
+        crate::codex::set_global_mcp_server_enabled,
         crate::codex::list_mcp_server_status,
         crate::codex::archive_thread,
         crate::codex::delete_codex_session,
@@ -196,6 +198,7 @@ pub(crate) fn invoke_handler(
         crate::shared_sessions::delete_shared_session,
         // Workspaces
         crate::workspaces::list_workspaces,
+        crate::workspaces::take_workspaces_recovery_notice,
         crate::workspaces::is_workspace_path_dir,
         crate::workspaces::ensure_workspace_path_dir,
         crate::workspaces::add_workspace,
@@ -375,6 +378,9 @@ pub(crate) fn invoke_handler(
         crate::tokentracker::tt_install_cli,
         crate::tokentracker::tt_ensure_server,
         crate::tokentracker::tt_proxy,
+        // Skills Hub
+        crate::skills_hub::skills_hub_query,
+        crate::skills_hub::skills_hub_mutate,
         // Client storage
         crate::client_storage::client_store_read,
         crate::client_storage::client_store_write,

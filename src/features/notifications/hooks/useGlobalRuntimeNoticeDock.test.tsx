@@ -13,7 +13,6 @@ import {
   traceStartupCommand,
 } from "../../startup-orchestration/utils/startupTrace";
 import {
-  resolveGlobalRuntimeNoticeDockStatus,
   sanitizeGlobalRuntimeNoticeDockVisibility,
   useGlobalRuntimeNoticeDock,
 } from "./useGlobalRuntimeNoticeDock";
@@ -223,7 +222,6 @@ describe("useGlobalRuntimeNoticeDock", () => {
     });
 
     expect(result.current.status).toBe("idle");
-    expect(resolveGlobalRuntimeNoticeDockStatus(result.current.notices, Date.now())).toBe("idle");
   });
 
   it("keeps exposed notices stable when invisible info notices are appended", async () => {

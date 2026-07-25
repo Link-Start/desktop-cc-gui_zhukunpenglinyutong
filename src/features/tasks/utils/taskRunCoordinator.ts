@@ -32,7 +32,6 @@ export type BeginTaskRunDefinition = {
   workspaceId: string;
   title?: string | null;
   source?: TaskRunDefinitionRef["source"];
-  orchestrationTaskId?: string | null;
   engine: TaskRunRecord["engine"];
   model?: string | null;
   linkedThreadId?: string | null;
@@ -124,7 +123,6 @@ export function beginTaskRunFromDefinition(params: {
       workspaceId: params.task.workspaceId,
       taskTitle: params.task.title,
       taskSource: params.task.source,
-      orchestrationTaskId: params.task.orchestrationTaskId,
       engine: params.task.engine,
       model: params.task.model,
       trigger: params.trigger,

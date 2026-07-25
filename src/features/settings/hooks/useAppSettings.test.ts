@@ -8,8 +8,10 @@ import {
   runClaudeDoctor,
   runCodexDoctor,
   runKimiDoctor,
+  takeSettingsRecoveryNotice,
   updateAppSettings,
 } from "../../../services/tauri";
+import { pushErrorToast } from "../../../services/toasts";
 import { UI_SCALE_DEFAULT, UI_SCALE_MAX } from "../../../utils/uiScale";
 import {
   DEFAULT_UI_FONT_FAMILY,
@@ -22,6 +24,11 @@ vi.mock("../../../services/tauri", () => ({
   runClaudeDoctor: vi.fn(),
   runCodexDoctor: vi.fn(),
   runKimiDoctor: vi.fn(),
+  takeSettingsRecoveryNotice: vi.fn(),
+}));
+
+vi.mock("../../../services/toasts", () => ({
+  pushErrorToast: vi.fn(),
 }));
 
 const getAppSettingsMock = vi.mocked(getAppSettings);
@@ -29,10 +36,15 @@ const runClaudeDoctorMock = vi.mocked(runClaudeDoctor);
 const runKimiDoctorMock = vi.mocked(runKimiDoctor);
 const updateAppSettingsMock = vi.mocked(updateAppSettings);
 const runCodexDoctorMock = vi.mocked(runCodexDoctor);
+const takeSettingsRecoveryNoticeMock = vi.mocked(takeSettingsRecoveryNotice);
+const pushErrorToastMock = vi.mocked(pushErrorToast);
 
 describe("useAppSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default to "no pending recovery notice" so implementations never leak
+    // across cases (clearAllMocks does not reset implementations).
+    takeSettingsRecoveryNoticeMock.mockResolvedValue(null);
     window.localStorage.clear();
   });
 
@@ -114,6 +126,101 @@ describe("useAppSettings", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.settings.geminiEnabled).toBe(false);
+  });
+
+  it("surfaces a toast and keeps defaults when loading settings fails", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    getAppSettingsMock.mockRejectedValue(new Error("settings read failed"));
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.settings.theme).toBe("system");
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(pushErrorToastMock).toHaveBeenCalledTimes(1);
+    expect(pushErrorToastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.any(String),
+        message: expect.any(String),
+      }),
+    );
+    // The invoke-failure copy must not claim a backend backup that never happened.
+    const failureToast = pushErrorToastMock.mock.calls[0]?.[0];
+    expect(failureToast?.message ?? "").not.toContain(".bak");
+    // The invoke-failure path never reaches the recovery-notice command.
+    expect(takeSettingsRecoveryNoticeMock).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("surfaces exactly one recovery toast when load succeeds with a quarantine notice", async () => {
+    const backupFileName = "settings.json.corrupted-20260724T000000Z.bak";
+    getAppSettingsMock.mockResolvedValue({} as AppSettings);
+    takeSettingsRecoveryNoticeMock.mockResolvedValue({ backupFileName });
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() =>
+      expect(pushErrorToastMock).toHaveBeenCalledTimes(1),
+    );
+
+    expect(takeSettingsRecoveryNoticeMock).toHaveBeenCalledTimes(1);
+    expect(pushErrorToastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.any(String),
+        message: expect.stringContaining(backupFileName),
+      }),
+    );
+  });
+
+  it("stays silent when load succeeds without a recovery notice", async () => {
+    getAppSettingsMock.mockResolvedValue({} as AppSettings);
+    takeSettingsRecoveryNoticeMock.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(takeSettingsRecoveryNoticeMock).toHaveBeenCalledTimes(1);
+    expect(pushErrorToastMock).not.toHaveBeenCalled();
+  });
+
+  it("uses the backup-failed copy when the notice has no backup file name", async () => {
+    getAppSettingsMock.mockResolvedValue({} as AppSettings);
+    takeSettingsRecoveryNoticeMock.mockResolvedValue({ backupFileName: null });
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() =>
+      expect(pushErrorToastMock).toHaveBeenCalledTimes(1),
+    );
+
+    const toast = pushErrorToastMock.mock.calls[0]?.[0];
+    expect(toast?.message).toEqual(expect.any(String));
+    expect(toast?.message ?? "").not.toContain("{{backupFileName}}");
+    expect(toast?.message ?? "").not.toContain(".bak");
+  });
+
+  it("keeps loaded settings when the recovery notice fetch itself fails", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    getAppSettingsMock.mockResolvedValue({
+      theme: "dark",
+    } as unknown as AppSettings);
+    takeSettingsRecoveryNoticeMock.mockRejectedValue(new Error("notice fail"));
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.settings.theme).toBe("dark");
+    expect(pushErrorToastMock).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 
   it("keeps an explicitly cleared curated skill list disabled", async () => {

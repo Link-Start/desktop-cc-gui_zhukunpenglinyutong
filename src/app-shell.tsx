@@ -93,11 +93,6 @@ import { useAppShellEditorLayoutSection } from "./app-shell-parts/useAppShellEdi
 import { useAppShellSearchPaletteSection } from "./app-shell-parts/useAppShellSearchPaletteSection";
 import { useAppShellQuickSwitcherSection } from "./app-shell-parts/useAppShellQuickSwitcherSection";
 import { useAppShellClaudeThinkingSection } from "./app-shell-parts/useAppShellClaudeThinkingSection";
-import {
-  buildLatestAgentRuns,
-  resolveLatestAgentFeedLoading,
-} from "./app-shell-parts/latestAgentRuns";
-
 export function AppShell() {
   const { t } = useTranslation();
   const handleOpenGitHistoryFromFileHistory = useCallback(() => {
@@ -1049,29 +1044,6 @@ export function AppShell() {
     setSelectedDiffPath,
   });
 
-  const latestAgentRuns = useMemo(
-    () =>
-      buildLatestAgentRuns({
-        getWorkspaceGroupName,
-        lastAgentMessageByThread,
-        threadStatusById,
-        threadsByWorkspace,
-        workspaces,
-      }),
-    [
-      getWorkspaceGroupName,
-      lastAgentMessageByThread,
-      threadStatusById,
-      threadsByWorkspace,
-      workspaces,
-    ],
-  );
-  const isLoadingLatestAgents = useMemo(
-    () =>
-      resolveLatestAgentFeedLoading({ hasLoaded, threadListLoadingByWorkspace, workspaces }),
-    [hasLoaded, threadListLoadingByWorkspace, workspaces],
-  );
-
   const activeRateLimits = activeWorkspaceId
     ? (rateLimitsByWorkspace[activeWorkspaceId] ?? null)
     : null;
@@ -1987,7 +1959,6 @@ export function AppShell() {
       isDeleteThreadPromptBusy,
       isEditorFileMaximized,
       isFilesLoading,
-      isLoadingLatestAgents,
       isMacDesktop,
       isModelConfigRefreshing,
       isPanelLocked,
@@ -2018,7 +1989,6 @@ export function AppShell() {
       kanbanViewState,
       lastAgentMessageByThread,
       lastCodexModeSyncThreadRef,
-      latestAgentRuns,
       launchScriptState,
       launchScriptsState,
       listThreadsForWorkspace,

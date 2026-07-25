@@ -4,7 +4,7 @@ export {
   pickWebAssetsArchive,
   pickWorkspacePath,
 } from "./tauri/filePickers";
-export { getConfigModel, listWorkspaces } from "./tauri/workspaceConfig";
+export { getConfigModel, listWorkspaces, takeWorkspacesRecoveryNotice } from "./tauri/workspaceConfig";
 export {
   compactThreadContext,
   engineInterruptTurn,
@@ -164,8 +164,8 @@ export {
   renameWorkspaceSessionFolder,
   unarchiveWorkspaceSessions,
 } from "./tauri/sessionManagement";
-export type { CodexRuntimeReloadResult } from "./tauri/settings";
-export { getAppSettings, getCodexConfigPath, getCodexUnifiedExecExternalStatus, reloadCodexRuntimeConfig, restoreCodexUnifiedExecOfficialDefault, setCodexUnifiedExecOfficialOverride, updateAppSettings } from "./tauri/settings";
+export type { CodexRuntimeReloadResult, SettingsRecoveryNotice } from "./tauri/settings";
+export { getAppSettings, getCodexConfigPath, getCodexUnifiedExecExternalStatus, reloadCodexRuntimeConfig, restoreCodexUnifiedExecOfficialDefault, setCodexUnifiedExecOfficialOverride, takeSettingsRecoveryNotice, updateAppSettings } from "./tauri/settings";
 export type {
   AgentMdResponse,
   ClaudeMdResponse,
@@ -566,6 +566,7 @@ export {
   listClaudeSessions,
   listGeminiSessions,
   listGlobalMcpServers,
+  setGlobalMcpServerEnabled,
   listKimiSessions,
   listMcpServerStatus,
   listThreads,

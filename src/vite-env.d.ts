@@ -9,9 +9,6 @@ interface Window {
   insertCodeSnippetAtCursor?: (selectionInfo: string) => void;
   updateAgents?: (json: string) => void;
   onFileListResult?: (json: string) => void;
-  updatePrompts?: (json: string) => void;
-  updateSlashCommands?: (json: string) => void;
-  __pendingSlashCommands?: string;
   sendToJava?: (message: string) => void;
   __fileTreeDragPaths?: string[];
   __fileTreeDragStamp?: number;

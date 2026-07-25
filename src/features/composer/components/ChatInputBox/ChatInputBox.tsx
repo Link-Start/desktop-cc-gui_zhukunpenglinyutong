@@ -59,7 +59,6 @@ import {
   agentToDropdownItem,
   promptProvider,
   promptToDropdownItem,
-  preloadSlashCommands,
   type AgentItem,
 } from './providers/index.js';
 import { debounce } from './utils/debounce.js';
@@ -1352,14 +1351,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       commandCompletion,
       focusInput,
     });
-
-    // Preload slash commands on mount to improve perceived performance
-    // Load command data before user types "/" so it's immediately available
-    useEffect(() => {
-      if (!commandCompletionProvider) {
-        preloadSlashCommands();
-      }
-    }, [commandCompletionProvider]);
 
     useSpaceKeyListener({ editableRef, onKeyDown: handleKeyDownForTagRendering });
 

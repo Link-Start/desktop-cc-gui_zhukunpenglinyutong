@@ -17,6 +17,7 @@ describe("extensions layout", () => {
     // 滚动容器不能有 padding-top，否则容器 padding 区会在 sticky 行上方露出滚动内容。
     expect(viewRule).toContain("padding: 0 var(--extensions-view-padding-inline);");
     expect(viewRule).toContain("--extensions-view-padding-top: 15px;");
+    expect(viewRule).toContain("--extensions-filter-row-sticky-height: calc(var(--extensions-view-padding-top) + 56px);");
     expect(filterRowRule).toContain("position: sticky;");
     expect(filterRowRule).toContain("top: 0;");
     expect(filterRowRule).toContain("z-index: 100;");
@@ -36,5 +37,14 @@ describe("extensions layout", () => {
 
     expect(viewRule).toContain("--extensions-view-padding-inline: clamp(24px, 5vw, 96px);");
     expect(css).not.toContain(".extensions-view-usage {\n  --extensions-view-padding-inline");
+  });
+
+  it("pins Skills bulk actions below the extension tab row", () => {
+    const stickyActionsRule = getCssRuleBlock(".extensions-skills-sticky-actions");
+
+    expect(stickyActionsRule).toContain("position: sticky;");
+    expect(stickyActionsRule).toContain("top: var(--extensions-filter-row-sticky-height);");
+    expect(stickyActionsRule).toContain("z-index: 90;");
+    expect(stickyActionsRule).toContain("background: var(--surface-messages);");
   });
 });

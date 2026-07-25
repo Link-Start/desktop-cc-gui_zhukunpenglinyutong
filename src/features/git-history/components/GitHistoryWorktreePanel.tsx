@@ -35,6 +35,8 @@ import {
   unstageGitFile,
 } from "../../../services/tauri";
 import type { GitFileStatus } from "../../../types";
+import { subscribeDetachedExternalFileChangeBatch } from "../../../services/events";
+import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
 import { sanitizeGeneratedCommitMessage } from "../../../utils/commitMessage";
 import { localizeGitErrorMessage } from "../gitErrorI18n";
 import { runScopedCommitOperation } from "../../git/utils/commitScope";
@@ -92,6 +94,10 @@ const EMPTY_STATUS: GitStatusState = {
   totalAdditions: 0,
   totalDeletions: 0,
 };
+
+// watcher 事件触发的最小刷新间隔；30s 门控轮询兜底 .git/index 盲区。
+const WATCHER_REFRESH_THROTTLE_MS = 1_000;
+const STATUS_BACKSTOP_INTERVAL_MS = 30_000;
 
 function getPathLeafName(path: string | null | undefined): string {
   if (!path) {
@@ -314,13 +320,48 @@ export function GitHistoryWorktreePanel({
     setCollapsedFolders(new Set());
     setDiscardAllDialogOpen(false);
     void refreshStatus();
-    const timer = window.setInterval(() => {
+
+    // 主通道：watcher 批次事件（Rust 侧已按 100ms 窗口合并）驱动刷新，
+    // 前端再做 1s 节流，避免构建类连续写入刷爆 IPC。
+    let trailingTimer: number | null = null;
+    let lastWatcherRefreshAt = 0;
+    const unsubscribeWatcher = subscribeDetachedExternalFileChangeBatch(
+      (batch) => {
+        if (!batch.some((event) => event.workspaceId === workspaceId)) {
+          return;
+        }
+        const now = Date.now();
+        const elapsed = now - lastWatcherRefreshAt;
+        if (elapsed >= WATCHER_REFRESH_THROTTLE_MS) {
+          lastWatcherRefreshAt = now;
+          void refreshStatus();
+          return;
+        }
+        if (trailingTimer !== null) {
+          return;
+        }
+        trailingTimer = window.setTimeout(() => {
+          trailingTimer = null;
+          lastWatcherRefreshAt = Date.now();
+          void refreshStatus();
+        }, WATCHER_REFRESH_THROTTLE_MS - elapsed);
+      },
+    );
+
+    // 兜底：外部 `git add` 只改 .git/index，watcher 未必覆盖；
+    // 门控慢速轮询保证 staging 状态最终收敛，窗口隐藏时归零。
+    const cleanupBackstop = setVisibilityGatedInterval(() => {
       void refreshStatus();
-    }, 3000);
+    }, STATUS_BACKSTOP_INTERVAL_MS);
+
     return () => {
-      window.clearInterval(timer);
+      unsubscribeWatcher();
+      cleanupBackstop();
+      if (trailingTimer !== null) {
+        window.clearTimeout(trailingTimer);
+      }
     };
-  }, [onSummaryChange, refreshStatus]);
+  }, [onSummaryChange, refreshStatus, workspaceId]);
 
   useEffect(() => {
     return () => {

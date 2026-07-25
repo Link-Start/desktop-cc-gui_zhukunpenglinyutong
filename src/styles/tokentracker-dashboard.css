@@ -131,10 +131,13 @@
 
 /* Dashboard scope: suppress focus outlines and Tailwind ring on Tab/click
    focus (upstream applied this globally). Inputs keep their own border-color
-   :focus styling defined per-component. */
+   :focus styling defined per-component. box-shadow 一并清掉：macOS 26 的
+   WKWebView/Safari 用圆角 box-shadow 画 UA focus ring（upstream 的意图就是
+   dashboard 内完全无焦点环）。 */
 .tt-dashboard *:focus,
 .tt-dashboard *:focus-visible {
   outline: none !important;
+  box-shadow: none !important;
   --tw-ring-shadow: 0 0 #0000 !important;
   --tw-ring-offset-shadow: 0 0 #0000 !important;
 }

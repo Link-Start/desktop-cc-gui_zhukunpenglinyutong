@@ -10,6 +10,12 @@ declare module "@/features/extensions/tokentracker-dashboard/pages/DashboardPage
   }>;
 }
 
+declare module "@/features/extensions/tokentracker-dashboard/pages/SkillsPage.jsx" {
+  import type { ComponentType } from "react";
+
+  export const SkillsPage: ComponentType;
+}
+
 declare module "@/features/extensions/tokentracker-dashboard/ui/foundation/LocaleProvider.jsx" {
   import type { ComponentType, ReactNode } from "react";
 
@@ -32,4 +38,53 @@ declare module "@/features/extensions/tokentracker-dashboard/ui/foundation/Theme
   import type { ComponentType, ReactNode } from "react";
 
   export const ThemeProvider: ComponentType<{ children?: ReactNode }>;
+}
+
+declare module "@/features/extensions/tokentracker-dashboard/ui/components/Toast.jsx" {
+  import type { ComponentType, ReactNode } from "react";
+
+  export const ToastProvider: ComponentType<{ children?: ReactNode }>;
+}
+
+declare module "@/features/extensions/tokentracker-dashboard/ui/components/Button.jsx" {
+  import type { ComponentType, ReactNode } from "react";
+
+  export const Button: ComponentType<{
+    children?: ReactNode;
+    variant?: "primary" | "secondary" | "ghost";
+    size?: "sm" | "md" | "lg";
+    type?: "button" | "submit" | "reset";
+    onClick?: () => void;
+    disabled?: boolean;
+    className?: string;
+  }>;
+}
+
+declare module "@/features/extensions/tokentracker-dashboard/ui/components/Input.jsx" {
+  import type { ComponentType, ChangeEvent, KeyboardEvent } from "react";
+
+  export const Input: ComponentType<{
+    id?: string;
+    value?: string;
+    onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
+    onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
+    placeholder?: string;
+    disabled?: boolean;
+    type?: string;
+    label?: string;
+    error?: string;
+    className?: string;
+    "aria-label"?: string;
+  }>;
+}
+
+declare module "@/features/extensions/tokentracker-dashboard/ui/dashboard/components/ProviderIcon.jsx" {
+  import type { ComponentType } from "react";
+
+  export const ProviderIcon: ComponentType<{
+    provider?: string;
+    size?: number;
+    color?: string;
+    className?: string;
+  }>;
 }

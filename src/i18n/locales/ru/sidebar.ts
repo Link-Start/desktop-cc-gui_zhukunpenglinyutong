@@ -152,7 +152,70 @@ const sidebar = {
       "guideNoteTelemetry": "Это приложение отключило анонимную телеметрию.",
       "errorTitle": "Не удалось запустить сервер tokentracker",
       "errorRetry": "Повторить"
-    }
+    },
+    "mcps": {
+      "title": "MCPs",
+      "refresh": "Обновить",
+      "tabs": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "filter": {
+        "sourceLabel": "Источник",
+        "sourceAll": "Все источники",
+        "sourceConfig": "Файл конфигурации",
+        "sourceRuntime": "Среда выполнения",
+        "resultCount": "{{filtered}} / {{total}} серверов",
+        "clear": "Очистить фильтры"
+      },
+      "search": {
+        "placeholder": "Поиск серверов MCP…",
+        "aria": "Поиск серверов MCP",
+        "clear": "Очистить поиск"
+      },
+      "groups": {
+        "config": "Файл конфигурации",
+        "runtime": "Среда выполнения"
+      },
+      "row": {
+        "openDetails": "Открыть сведения о {{name}}",
+        "toolsCount": "{{count}} инструментов"
+      },
+      "badges": {
+        "enabled": "Включено",
+        "disabled": "Отключено",
+        "builtIn": "Встроенный",
+        "statusUnknown": "Статус неизвестен"
+      },
+      "toggle": {
+        "ariaEnable": "Включить {{name}}",
+        "ariaDisable": "Отключить {{name}}",
+        "failed": "Не удалось переключить состояние включения {{name}}: {{message}}"
+      },
+      "detail": {
+        "close": "Закрыть сведения",
+        "sectionTitle": "Сведения о сервере",
+        "source": "Источник",
+        "sourceClaude": "~/.claude.json",
+        "sourceCcgui": "~/.ccgui/config.json",
+        "transport": "Транспорт",
+        "transportUnknown": "Неизвестный транспорт",
+        "command": "Команда",
+        "commandMeta": "{{command}} · аргументы {{args}}",
+        "url": "URL",
+        "urlMeta": "URL: {{url}}",
+        "status": "Статус",
+        "auth": "Аутентификация",
+        "tools": "Инструменты",
+        "resourcesTemplatesLabel": "Ресурсы / шаблоны",
+        "resourcesTemplates": "Ресурсы {{resources}} / шаблоны {{templates}}"
+      },
+      "empty": {
+        "title": "Серверы MCP не найдены",
+        "description": "Добавьте серверы MCP в файл конфигурации и обновите, чтобы увидеть их здесь.",
+        "noMatch": "Ни один сервер MCP не соответствует текущим фильтрам"
+      }
+    },
   }
 };
 

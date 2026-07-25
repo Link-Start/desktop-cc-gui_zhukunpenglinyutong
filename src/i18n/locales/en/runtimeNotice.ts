@@ -9,7 +9,6 @@ const runtimeNotice = {
     emptyDescription:
       "Initialization progress and key errors will appear here.",
     statusIdle: "Idle",
-    statusStreaming: "Running",
     statusError: "Error",
     severityInfo: "Info",
     severityWarning: "Warning",

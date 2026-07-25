@@ -197,6 +197,70 @@ const sidebar = {
       errorTitle: "Failed to start the tokentracker server",
       errorRetry: "Retry",
     },
+    mcps: {
+      title: "MCPs",
+      refresh: "Refresh",
+      tabs: {
+        claude: "Claude Code",
+        codex: "Codex",
+      },
+      filter: {
+        sourceLabel: "Source",
+        sourceAll: "All sources",
+        sourceConfig: "Config file",
+        sourceRuntime: "Runtime",
+        resultCount: "{{filtered}} / {{total}} servers",
+        clear: "Clear filters",
+      },
+      search: {
+        placeholder: "Search MCP servers…",
+        aria: "Search MCP servers",
+        clear: "Clear search",
+      },
+      groups: {
+        config: "Config file",
+        runtime: "Runtime",
+      },
+      row: {
+        openDetails: "Open details for {{name}}",
+        toolsCount: "{{count}} tools",
+      },
+      badges: {
+        enabled: "Enabled",
+        disabled: "Disabled",
+        builtIn: "Built-in",
+        statusUnknown: "Status unknown",
+      },
+      toggle: {
+        ariaEnable: "Enable {{name}}",
+        ariaDisable: "Disable {{name}}",
+        failed: "Failed to toggle {{name}}: {{message}}",
+      },
+      detail: {
+        close: "Close details",
+        sectionTitle: "Server details",
+        source: "Source",
+        sourceClaude: "~/.claude.json",
+        sourceCcgui: "~/.ccgui/config.json",
+        transport: "Transport",
+        transportUnknown: "Unknown transport",
+        command: "Command",
+        commandMeta: "{{command}} · args {{args}}",
+        url: "URL",
+        urlMeta: "URL: {{url}}",
+        status: "Status",
+        auth: "Auth",
+        tools: "Tools",
+        resourcesTemplatesLabel: "Resources / templates",
+        resourcesTemplates: "Resources {{resources}} / templates {{templates}}",
+      },
+      empty: {
+        title: "No MCP servers found",
+        description:
+          "Add MCP servers to your config file, then refresh to see them here.",
+        noMatch: "No MCP servers match the current filters",
+      },
+    },
   },
 };
 

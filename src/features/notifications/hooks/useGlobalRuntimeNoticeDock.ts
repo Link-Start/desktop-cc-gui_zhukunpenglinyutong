@@ -16,16 +16,18 @@ import {
   type GlobalRuntimeNoticeSeverity,
 } from "../../../services/globalRuntimeNotices";
 import { getRuntimePoolSnapshot } from "../../../services/tauri";
+import { subscribeRuntimePoolChanged } from "../../../services/events";
 import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
 
 const GLOBAL_RUNTIME_NOTICE_DOCK_VISIBILITY_KEY = "globalRuntimeNoticeDock.visibility";
-const GLOBAL_RUNTIME_NOTICE_STREAMING_WINDOW_MS = 8000;
-const GLOBAL_RUNTIME_NOTICE_RUNTIME_POLL_MS = 5000;
+// 慢速兜底：主通道是 Rust 差量 emit 的 runtime-pool-changed 事件；
+// 60s 门控轮询只用于防事件丢失后的漂移收敛。
+const GLOBAL_RUNTIME_NOTICE_RUNTIME_BACKSTOP_MS = 60_000;
 const STARTUP_COMMAND_SUCCESS_DEDUPE_BUCKET_MS = 30000;
 let lastMirroredStartupTraceSequence = 0;
 
 export type GlobalRuntimeNoticeDockVisibility = "minimized" | "expanded";
-export type GlobalRuntimeNoticeDockStatus = "idle" | "streaming" | "has-error";
+export type GlobalRuntimeNoticeDockStatus = "idle" | "has-error";
 
 type RuntimeSignalToken =
   | "startup-pending"
@@ -420,22 +422,6 @@ export function sanitizeGlobalRuntimeNoticeDockVisibility(
   return value === "expanded" ? "expanded" : "minimized";
 }
 
-export function resolveGlobalRuntimeNoticeDockStatus(
-  notices: readonly GlobalRuntimeNotice[],
-  nowMs: number,
-): GlobalRuntimeNoticeDockStatus {
-  if (notices.some((notice) => notice.severity === "error")) {
-    return "has-error";
-  }
-  const latestNotice = notices[notices.length - 1];
-  if (!latestNotice) {
-    return "idle";
-  }
-  return nowMs - latestNotice.timestampMs <= GLOBAL_RUNTIME_NOTICE_STREAMING_WINDOW_MS
-    ? "streaming"
-    : "idle";
-}
-
 export function useGlobalRuntimeNoticeDock(workspaces: readonly WorkspaceInfo[] = []) {
   const [notices, setNotices] = useState<GlobalRuntimeNotice[]>([]);
   const [runtimeRows, setRuntimeRows] = useState<RuntimePoolRow[]>([]);
@@ -498,21 +484,25 @@ export function useGlobalRuntimeNoticeDock(workspaces: readonly WorkspaceInfo[] 
   useEffect(() => {
     let disposed = false;
 
+    const applyRuntimeSnapshot = (snapshot: RuntimePoolSnapshot) => {
+      setRuntimeRows((previousRows) =>
+        areRuntimeRowsSignalEquivalent(previousRows, snapshot.rows)
+          ? previousRows
+          : snapshot.rows,
+      );
+      runtimeStateByWorkspaceRef.current = reconcileRuntimeSnapshot(
+        snapshot,
+        runtimeStateByWorkspaceRef.current,
+      );
+    };
+
     const loadRuntimeSnapshot = async () => {
       try {
         const snapshot = await getRuntimePoolSnapshot();
         if (disposed) {
           return;
         }
-        setRuntimeRows((previousRows) =>
-          areRuntimeRowsSignalEquivalent(previousRows, snapshot.rows)
-            ? previousRows
-            : snapshot.rows,
-        );
-        runtimeStateByWorkspaceRef.current = reconcileRuntimeSnapshot(
-          snapshot,
-          runtimeStateByWorkspaceRef.current,
-        );
+        applyRuntimeSnapshot(snapshot);
       } catch (error) {
         if (!disposed) {
           console.error("[runtimeNoticeDock] failed to load runtime snapshot", error);
@@ -521,13 +511,20 @@ export function useGlobalRuntimeNoticeDock(workspaces: readonly WorkspaceInfo[] 
     };
 
     void loadRuntimeSnapshot();
-    // 隐藏时暂停 runtime 池轮询，恢复可见时立即补一次快照。
+    // 主通道：Rust reconcile/mutation 后的差量事件，变化即刷新。
+    const unsubscribeRuntimePool = subscribeRuntimePoolChanged((snapshot) => {
+      if (!disposed) {
+        applyRuntimeSnapshot(snapshot);
+      }
+    });
+    // 兜底：隐藏时暂停轮询，恢复可见时立即补一次快照，防事件丢失漂移。
     const cleanupInterval = setVisibilityGatedInterval(() => {
       void loadRuntimeSnapshot();
-    }, GLOBAL_RUNTIME_NOTICE_RUNTIME_POLL_MS);
+    }, GLOBAL_RUNTIME_NOTICE_RUNTIME_BACKSTOP_MS);
 
     return () => {
       disposed = true;
+      unsubscribeRuntimePool();
       cleanupInterval();
     };
   }, []);

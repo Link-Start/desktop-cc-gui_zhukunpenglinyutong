@@ -1,29 +1,11 @@
 import { useTranslation } from "react-i18next";
 import Plus from "lucide-react/dist/esm/icons/plus";
 
-type LatestAgentRun = {
-  message: string;
-  timestamp: number;
-  projectName: string;
-  groupName?: string | null;
-  workspaceId: string;
-  threadId: string;
-  isProcessing: boolean;
-};
-
 type HomeProps = {
   onOpenProject: () => void;
-  latestAgentRuns: LatestAgentRun[];
-  isLoadingLatestAgents: boolean;
-  onSelectThread: (workspaceId: string, threadId: string) => void;
 };
 
-export function Home({
-  onOpenProject,
-  latestAgentRuns: _latestAgentRuns,
-  isLoadingLatestAgents: _isLoadingLatestAgents,
-  onSelectThread: _onSelectThread,
-}: HomeProps) {
+export function Home({ onOpenProject }: HomeProps) {
   const { t } = useTranslation();
 
   return (

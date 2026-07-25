@@ -11,7 +11,6 @@ const runtimeNotice = {
     "emptyTitle": "Уведомлений среды выполнения пока нет",
     "emptyDescription": "Здесь будут показаны ход инициализации и ключевые ошибки.",
     "statusIdle": "Простой",
-    "statusStreaming": "Выполняется",
     "statusError": "Ошибка",
     "severityInfo": "Информация",
     "severityWarning": "Предупреждение",

@@ -152,7 +152,70 @@ const sidebar = {
       "guideNoteTelemetry": "Cette application a désactivé la télémétrie anonyme.",
       "errorTitle": "Échec du démarrage du serveur tokentracker",
       "errorRetry": "Réessayer"
-    }
+    },
+    "mcps": {
+      "title": "MCPs",
+      "refresh": "Actualiser",
+      "tabs": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "filter": {
+        "sourceLabel": "Source",
+        "sourceAll": "Toutes les sources",
+        "sourceConfig": "Fichier de configuration",
+        "sourceRuntime": "Exécution",
+        "resultCount": "{{filtered}} / {{total}} serveurs",
+        "clear": "Effacer les filtres"
+      },
+      "search": {
+        "placeholder": "Rechercher des serveurs MCP…",
+        "aria": "Rechercher des serveurs MCP",
+        "clear": "Effacer la recherche"
+      },
+      "groups": {
+        "config": "Fichier de configuration",
+        "runtime": "Exécution"
+      },
+      "row": {
+        "openDetails": "Ouvrir les détails de {{name}}",
+        "toolsCount": "{{count}} outils"
+      },
+      "badges": {
+        "enabled": "Activé",
+        "disabled": "Désactivé",
+        "builtIn": "Intégré",
+        "statusUnknown": "État inconnu"
+      },
+      "toggle": {
+        "ariaEnable": "Activer {{name}}",
+        "ariaDisable": "Désactiver {{name}}",
+        "failed": "Échec du changement de l'état d'activation de {{name}} : {{message}}"
+      },
+      "detail": {
+        "close": "Fermer les détails",
+        "sectionTitle": "Détails du serveur",
+        "source": "Source",
+        "sourceClaude": "~/.claude.json",
+        "sourceCcgui": "~/.ccgui/config.json",
+        "transport": "Transport",
+        "transportUnknown": "Transport inconnu",
+        "command": "Commande",
+        "commandMeta": "{{command}} · args {{args}}",
+        "url": "URL",
+        "urlMeta": "URL : {{url}}",
+        "status": "État",
+        "auth": "Authentification",
+        "tools": "Outils",
+        "resourcesTemplatesLabel": "Ressources / modèles",
+        "resourcesTemplates": "Ressources {{resources}} / modèles {{templates}}"
+      },
+      "empty": {
+        "title": "Aucun serveur MCP trouvé",
+        "description": "Ajoutez des serveurs MCP à votre fichier de configuration, puis actualisez pour les voir ici.",
+        "noMatch": "Aucun serveur MCP ne correspond aux filtres actuels"
+      }
+    },
   }
 };
 

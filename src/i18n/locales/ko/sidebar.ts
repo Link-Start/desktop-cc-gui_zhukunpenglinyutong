@@ -152,7 +152,70 @@ const sidebar = {
       "guideNoteTelemetry": "이 앱은 익명 텔레메트리를 비활성화했습니다.",
       "errorTitle": "tokentracker 서버 시작 실패",
       "errorRetry": "다시 시도"
-    }
+    },
+    "mcps": {
+      "title": "MCPs",
+      "refresh": "새로 고침",
+      "tabs": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "filter": {
+        "sourceLabel": "원본",
+        "sourceAll": "모든 원본",
+        "sourceConfig": "구성 파일",
+        "sourceRuntime": "런타임",
+        "resultCount": "{{filtered}} / {{total}} 서버",
+        "clear": "필터 지우기"
+      },
+      "search": {
+        "placeholder": "MCP 서버 검색…",
+        "aria": "MCP 서버 검색",
+        "clear": "검색 지우기"
+      },
+      "groups": {
+        "config": "구성 파일",
+        "runtime": "런타임"
+      },
+      "row": {
+        "openDetails": "{{name}} 세부 정보 열기",
+        "toolsCount": "도구 {{count}}개"
+      },
+      "badges": {
+        "enabled": "활성화됨",
+        "disabled": "비활성화됨",
+        "builtIn": "내장",
+        "statusUnknown": "상태 알 수 없음"
+      },
+      "toggle": {
+        "ariaEnable": "{{name}} 활성화",
+        "ariaDisable": "{{name}} 비활성화",
+        "failed": "{{name}}의 활성화 상태를 전환하지 못했습니다: {{message}}"
+      },
+      "detail": {
+        "close": "세부 정보 닫기",
+        "sectionTitle": "서버 세부 정보",
+        "source": "원본",
+        "sourceClaude": "~/.claude.json",
+        "sourceCcgui": "~/.ccgui/config.json",
+        "transport": "전송",
+        "transportUnknown": "알 수 없는 전송",
+        "command": "명령",
+        "commandMeta": "{{command}} · 인수 {{args}}",
+        "url": "URL",
+        "urlMeta": "URL: {{url}}",
+        "status": "상태",
+        "auth": "인증",
+        "tools": "도구",
+        "resourcesTemplatesLabel": "리소스 / 템플릿",
+        "resourcesTemplates": "리소스 {{resources}}개 / 템플릿 {{templates}}개"
+      },
+      "empty": {
+        "title": "MCP 서버를 찾을 수 없음",
+        "description": "구성 파일에 MCP 서버를 추가한 후 새로 고치면 여기에 표시됩니다.",
+        "noMatch": "현재 필터와 일치하는 MCP 서버가 없습니다"
+      }
+    },
   }
 };
 

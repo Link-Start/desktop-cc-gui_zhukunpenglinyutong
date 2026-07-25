@@ -57,6 +57,20 @@ export default defineConfig(({ command }) => ({
       "@codemirror/search",
     ],
   },
+  optimizeDeps: {
+    include: [
+      // vendored TokenTracker 页面（usage / skills）全部经 React.lazy 异步
+      // 加载，vite 的 entry 扫描发现不了这些只出现在 lazy chunk 里的依赖；
+      // 首次点击进入页面时才被发现会触发 re-optimize + 整页 reload，这里
+      // 显式预 bundling。
+      "@base-ui/react/checkbox",
+      "@base-ui/react/dialog",
+      "@base-ui/react/popover",
+      "@base-ui/react/select",
+      "@base-ui/react/toast",
+      "motion/react",
+    ],
+  },
   worker: {
     format: "es",
     plugins: () => [

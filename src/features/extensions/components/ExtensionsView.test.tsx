@@ -21,9 +21,11 @@ const translations = vi.hoisted(
   "extensions.panelTitles.usage": "Usage",
   "extensions.panelTitles.framework": "AI Framework",
   "extensions.panelTitles.skills": "Extend your CLI with Skills",
+  "extensions.panelTitles.mcps": "Extend your CLI with MCP servers",
   "extensions.panelTitles.hooks": "Extend your CLI with Hooks",
   "extensions.descriptions.usage": "Coming soon",
   "extensions.descriptions.skills": "Coming soon",
+  "extensions.descriptions.mcps": "Coming soon",
   "extensions.descriptions.hooks": "Coming soon",
   }),
 );
@@ -38,9 +40,21 @@ vi.mock("./UsageDashboardSection", () => ({
   UsageDashboardSection: () => <div data-testid="usage-dashboard-section" />,
 }));
 
+vi.mock("./SkillsDashboardSection", () => ({
+  SkillsDashboardSection: () => <div data-testid="skills-dashboard-section" />,
+}));
+
+vi.mock("./McpsDashboardSection", () => ({
+  McpsDashboardSection: () => <div data-testid="mcps-dashboard-section" />,
+}));
+
+function renderExtensionsView() {
+  return render(<ExtensionsView activeWorkspace={null} />);
+}
+
 describe("ExtensionsView", () => {
   it("renders the section pills and extension tabs in the requested order", () => {
-    render(<ExtensionsView />);
+    renderExtensionsView();
 
     const sectionGroup = screen.getByRole("group", { name: "Usage and framework" });
     expect(
@@ -60,7 +74,7 @@ describe("ExtensionsView", () => {
   });
 
   it("gives section pills an icon but keeps extension tabs icon-less", () => {
-    render(<ExtensionsView />);
+    renderExtensionsView();
 
     const sectionGroup = screen.getByRole("group", { name: "Usage and framework" });
     for (const button of within(sectionGroup).getAllByRole("button")) {
@@ -71,7 +85,7 @@ describe("ExtensionsView", () => {
   });
 
   it("defaults to the usage section when the page opens", () => {
-    render(<ExtensionsView />);
+    renderExtensionsView();
 
     expect(screen.getByRole("button", { name: "Usage" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Skills" }).getAttribute("aria-pressed")).toBe("false");
@@ -80,8 +94,18 @@ describe("ExtensionsView", () => {
     expect(document.querySelector(".extensions-empty-panel")).toBeNull();
   });
 
+  it("renders the skills dashboard section when the Skills tab is selected", () => {
+    renderExtensionsView();
+
+    fireEvent.click(screen.getByRole("button", { name: "Skills" }));
+
+    expect(screen.queryByTestId("usage-dashboard-section")).toBeNull();
+    expect(screen.getByTestId("skills-dashboard-section")).toBeTruthy();
+    expect(document.querySelector(".extensions-empty-panel")).toBeNull();
+  });
+
   it("updates the introduction panel when a tab is selected", () => {
-    render(<ExtensionsView />);
+    renderExtensionsView();
 
     fireEvent.click(screen.getByRole("button", { name: "Hooks" }));
 
@@ -91,12 +115,22 @@ describe("ExtensionsView", () => {
     expect(screen.getByText("Coming soon")).toBeTruthy();
   });
 
+  it("renders the mcps dashboard section when the Mcps tab is selected", () => {
+    renderExtensionsView();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mcps" }));
+
+    expect(screen.queryByTestId("usage-dashboard-section")).toBeNull();
+    expect(screen.getByTestId("mcps-dashboard-section")).toBeTruthy();
+    expect(document.querySelector(".extensions-empty-panel")).toBeNull();
+  });
+
   it("renders a structured shadcn-style empty state", () => {
-    render(<ExtensionsView />);
+    renderExtensionsView();
 
-    fireEvent.click(screen.getByRole("button", { name: "Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hooks" }));
 
-    const panel = screen.getByRole("heading", { name: "Extend your CLI with Skills" }).closest(".extensions-empty-panel");
+    const panel = screen.getByRole("heading", { name: "Extend your CLI with Hooks" }).closest(".extensions-empty-panel");
     expect(panel).toBeTruthy();
     expect(panel?.querySelector(".extensions-empty-panel-icon svg")).toBeTruthy();
     expect(panel?.querySelectorAll(".extensions-empty-panel-preview span")).toHaveLength(4);
@@ -144,7 +178,7 @@ describe("ExtensionsView", () => {
   });
 
   it("does not render empty state action buttons", () => {
-    render(<ExtensionsView />);
+    renderExtensionsView();
 
     expect(screen.getByRole("button", { name: "Skills" }).dataset.size).toBe("sm");
     expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
@@ -152,7 +186,7 @@ describe("ExtensionsView", () => {
   });
 
   it("keeps tab button dimensions stable across active state changes", () => {
-    render(<ExtensionsView />);
+    renderExtensionsView();
 
     for (const name of ["Usage", "AI Framework", "Skills", "Subagents"]) {
       expect(screen.getByRole("button", { name }).classList.contains("extensions-filter-tab")).toBe(true);
@@ -160,7 +194,7 @@ describe("ExtensionsView", () => {
   });
 
   it("keeps the top search surface hidden", () => {
-    render(<ExtensionsView />);
+    renderExtensionsView();
 
     expect(screen.queryByLabelText("Search extensions")).toBeNull();
     expect(screen.queryByPlaceholderText(/Search/)).toBeNull();

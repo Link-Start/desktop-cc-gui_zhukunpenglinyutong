@@ -225,6 +225,54 @@ describe("buildSemanticDiffSummary", () => {
     );
   });
 
+  it("distributes AI review facts into all four zones", () => {
+    const makeFact = (
+      category: "intent" | "behavior" | "risk" | "validation",
+      text: string,
+    ) => ({
+      category,
+      text,
+      confidence: "medium" as const,
+      evidenceRefs: [{ type: "file" as const, id: "src/App.tsx", path: "src/App.tsx" }],
+    });
+    const summary = buildSemanticDiffSummary({
+      entries: [
+        {
+          path: "src/App.tsx",
+          status: "M",
+          diff: "@@ -1 +1 @@\n-old\n+new",
+        },
+      ],
+      aiReview: {
+        source: "ai",
+        generatedAt: 1,
+        facts: [
+          makeFact("intent", "AI intent fact."),
+          makeFact("behavior", "AI behavior fact."),
+          makeFact("risk", "AI risk fact."),
+          makeFact("validation", "AI validation fact."),
+        ],
+      },
+    });
+
+    for (const [zone, text] of [
+      [summary.intent, "AI intent fact."],
+      [summary.behavior, "AI behavior fact."],
+      [summary.risks, "AI risk fact."],
+      [summary.validation, "AI validation fact."],
+    ] as const) {
+      expect(zone).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            textKey: "git.semanticDiff.ai.fact",
+            source: "ai",
+            values: expect.objectContaining({ text }),
+          }),
+        ]),
+      );
+    }
+  });
+
   it("accepts AI review facts only when they carry evidence refs", () => {
     const summary = buildSemanticDiffSummary({
       entries: [

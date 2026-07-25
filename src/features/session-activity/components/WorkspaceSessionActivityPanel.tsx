@@ -20,11 +20,13 @@ import { WorkspaceEditableDiffReviewSurface } from "../../git/components/Workspa
 import type { EditableDiffDraftActions } from "../../git/components/WorkspaceEditableDiffCompare";
 import {
   buildSemanticDiffSummary,
+  type SemanticDiffEntry,
   type SemanticEvidenceRef,
   type SemanticDiffSummary,
   type SemanticDiffSummaryItem,
   type TurnValidationEvidence,
 } from "../../git/utils/semanticDiffSummary";
+import { useTurnSemanticReview } from "../hooks/useTurnSemanticReview";
 import type { CodeAnnotationBridgeProps } from "../../code-annotations/types";
 import { Markdown } from "../../../markdown/components/Markdown";
 import {
@@ -702,8 +704,38 @@ function TurnArtifactsSection({
   workspaceId,
   renderSemanticSummaryList,
 }: TurnArtifactsSectionProps) {
-  const { t } = useTranslation();
-  const artifactSummary = useMemo(() => buildTurnArtifactSummary(group.events), [group.events]);
+  const { t, i18n } = useTranslation();
+  const baseSummary = useMemo(() => buildTurnArtifactSummary(group.events), [group.events]);
+  const reviewEntries = useMemo<SemanticDiffEntry[]>(
+    () =>
+      baseSummary?.files.map((file) => ({
+        path: file.filePath,
+        status: file.statusLetter,
+        diff: file.diff ?? "",
+      })) ?? [],
+    [baseSummary],
+  );
+  // AI review 只在用户点开 semantic tab 时按需生成,按 turn 缓存;失败静默降级为纯规则事实
+  const { review: aiReview } = useTurnSemanticReview({
+    enabled: activeArtifactTab === "semantic",
+    workspaceId,
+    turnKey: group.id,
+    entries: reviewEntries,
+    language: i18n.language,
+  });
+  const artifactSummary = useMemo(() => {
+    if (!baseSummary || !aiReview || aiReview.facts.length === 0) {
+      return baseSummary;
+    }
+    return {
+      ...baseSummary,
+      semanticSummary: buildSemanticDiffSummary({
+        entries: reviewEntries,
+        validationEvidence: buildTurnValidationEvidence(group.events),
+        aiReview,
+      }),
+    };
+  }, [baseSummary, aiReview, reviewEntries, group.events]);
   if (!artifactSummary) {
     return null;
   }

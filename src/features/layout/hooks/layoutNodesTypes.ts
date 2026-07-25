@@ -305,17 +305,6 @@ export type LayoutNodesFlatOptions = {
   onDismissUpdate: () => void;
   errorToasts: ErrorToast[];
   onDismissErrorToast: (id: string) => void;
-  latestAgentRuns: Array<{
-    threadId: string;
-    message: string;
-    timestamp: number;
-    projectName: string;
-    groupName?: string | null;
-    workspaceId: string;
-    isProcessing: boolean;
-  }>;
-  isLoadingLatestAgents: boolean;
-  onSelectHomeThread: (workspaceId: string, threadId: string) => void;
   onSelectHomeWorkspace: (workspaceId: string) => void;
   activeWorkspace: WorkspaceInfo | null;
   activeParentWorkspace: WorkspaceInfo | null;
@@ -874,9 +863,6 @@ export type ChromeLayoutNodesOptions = Pick<
   | "onDismissUpdate"
   | "errorToasts"
   | "onDismissErrorToast"
-  | "latestAgentRuns"
-  | "isLoadingLatestAgents"
-  | "onSelectHomeThread"
   | "onOpenSpecHub"
   | "showLoadingProgressDialog"
   | "hideLoadingProgressDialog"

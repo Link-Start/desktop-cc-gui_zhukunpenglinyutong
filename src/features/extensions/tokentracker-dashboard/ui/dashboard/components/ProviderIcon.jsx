@@ -305,22 +305,49 @@ const PROVIDER_ICON_MAP = {
   ZED: ZedIcon,
 };
 
+// Vendored change (WKWebView fix): the five brand logos used by the skills
+// page's agent targets are rendered as INLINE svg now. Upstream renders them
+// via <img src="/brand-logos/*.svg">, but macOS WKWebView (the Tauri webview)
+// does not paint these SVG files in <img> context, which left the agent dots
+// blank. The raw bytes still come from the same upstream files (copied to
+// assets/brand-logos/); the remaining logo entries stay on the <img> path.
+import antigravitySvg from "../../../assets/brand-logos/antigravity.svg?raw";
+import claudeCodeSvg from "../../../assets/brand-logos/claude-code.svg?raw";
+import codexSvg from "../../../assets/brand-logos/codex.svg?raw";
+import geminiSvg from "../../../assets/brand-logos/gemini.svg?raw";
+import opencodeSvg from "../../../assets/brand-logos/opencode.svg?raw";
+
+// 内联前规整 svg 根标签：剥掉文件自带的 width/height/style（如 width="1em"），
+// 统一改成 100% 填充外层尺寸容器。
+function patchBrandSvgRoot(raw) {
+  return raw.replace(/<svg\b[^>]*>/, (tag) =>
+    tag
+      .replace(/\s(width|height|style)="[^"]*"/g, "")
+      .replace("<svg", '<svg width="100%" height="100%" style="display:block" aria-hidden="true"'),
+  );
+}
+
+const PROVIDER_INLINE_SVG_MAP = {
+  ANTIGRAVITY: patchBrandSvgRoot(antigravitySvg),
+  CLAUDE: patchBrandSvgRoot(claudeCodeSvg),
+  CODEX: patchBrandSvgRoot(codexSvg),
+  GEMINI: patchBrandSvgRoot(geminiSvg),
+  OPENCODE: patchBrandSvgRoot(opencodeSvg),
+};
+
 // Multi-color brand SVG assets in /public/brand-logos/. Only logos that have
 // real brand colors live here — mono logos (cursor/kiro/copilot/kimi all use
 // `fill="currentColor"`) must render through the inline component path so they
 // inherit the surrounding text color, since <img> doesn't resolve currentColor.
+// NOTE(vendored): ANTIGRAVITY / CLAUDE / CODEX / GEMINI / OPENCODE were moved
+// to PROVIDER_INLINE_SVG_MAP above (WKWebView <img> 渲染修复)。
 const PROVIDER_LOGO_MAP = {
-  ANTIGRAVITY: "/brand-logos/antigravity.svg",
   ANYTHINGLLM: "/brand-logos/anythingllm.svg",
-  CLAUDE: "/brand-logos/claude-code.svg",
-  CODEX: "/brand-logos/codex.svg",
   DEEPSEEK: "/brand-logos/deepseek.svg",
-  GEMINI: "/brand-logos/gemini.svg",
   "KILO-CLI": "/brand-logos/kilo.svg",
   "KILO-CODE": "/brand-logos/kilo.svg",
   MIMO: "/brand-logos/mimo.svg",
   OPENCLAW: "/brand-logos/openclaw.svg",
-  OPENCODE: "/brand-logos/opencode.svg",
 };
 
 // AnythingLLM publishes this compact mark in white. Keep the official asset
@@ -354,6 +381,20 @@ function PlaceholderIcon({ size = 16, className = "" }) {
  */
 export function ProviderIcon({ provider, size = 16, color, className = "" }) {
   const normalized = provider?.toUpperCase?.() || "";
+
+  // Vendored WKWebView path: agent 品牌 logo 内联渲染（不再走 <img>）。
+  const inlineSvg = PROVIDER_INLINE_SVG_MAP[normalized];
+  if (inlineSvg) {
+    return (
+      <span
+        className={className}
+        style={{ width: size, height: size, display: "inline-flex", flexShrink: 0 }}
+        aria-hidden
+        dangerouslySetInnerHTML={{ __html: inlineSvg }}
+      />
+    );
+  }
+
   const logoSrc = PROVIDER_LOGO_MAP[normalized];
 
   if (logoSrc) {

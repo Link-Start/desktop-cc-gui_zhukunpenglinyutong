@@ -259,8 +259,6 @@ function normalizeRun(raw: unknown): TaskRunRecord | null {
   const status = normalizeStatus(input.status);
   const trigger = normalizeTrigger(input.trigger);
   const updatedAt = normalizeFiniteNumber(input.updatedAt);
-  const taskSource = taskInput.source === "orchestration" ? "orchestration" : "kanban";
-  const orchestrationTaskId = normalizeNullableString(taskInput.orchestrationTaskId);
   if (
     !runId ||
     !taskId ||
@@ -276,10 +274,9 @@ function normalizeRun(raw: unknown): TaskRunRecord | null {
     runId,
     task: {
       taskId,
-      source: taskSource,
+      source: "kanban",
       workspaceId,
       title: normalizeNullableString(taskInput.title),
-      orchestrationTaskId: taskSource === "orchestration" ? orchestrationTaskId ?? taskId : null,
     },
     engine,
     model: normalizeNullableString(input.model),
@@ -385,10 +382,6 @@ export function createTaskRunRecord(input: CreateTaskRunInput): TaskRunRecord {
       source: input.taskSource ?? "kanban",
       workspaceId: input.workspaceId,
       title: input.taskTitle ?? null,
-      orchestrationTaskId:
-        (input.taskSource ?? "kanban") === "orchestration"
-          ? input.orchestrationTaskId ?? input.taskId
-          : null,
     },
     engine: input.engine,
     model: normalizeNullableString(input.model),

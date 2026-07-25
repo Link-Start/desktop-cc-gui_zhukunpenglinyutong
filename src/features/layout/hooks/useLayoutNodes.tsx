@@ -1162,6 +1162,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const { todoTotal, subagentTotal, fileChanges, commandTotal } =
     useStatusPanelData(statusPanelItems, {
       isCodexEngine: isStatusPanelCodexEngine,
+      activeEngine: options.selectedEngine ?? null,
       activeThreadId: options.activeThreadId,
       itemsByThread: deferredThreadItemsByThread,
       threadParentById: options.threadParentById,
@@ -1605,9 +1606,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
 
   const homeNode = (
     <HomeChat
-      latestAgentRuns={options.latestAgentRuns}
-      isLoadingLatestAgents={options.isLoadingLatestAgents}
-      onSelectThread={options.onSelectHomeThread}
       workspaces={homeWorkspaceOptions}
       selectedWorkspaceId={resolveHomeWorkspaceId(
         options.activeWorkspace?.id ?? null,

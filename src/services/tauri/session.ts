@@ -159,6 +159,18 @@ export async function listGlobalMcpServers() {
   return invoke<GlobalMcpServerEntry[]>("list_global_mcp_servers");
 }
 
+export async function setGlobalMcpServerEnabled(
+  name: string,
+  source: GlobalMcpServerEntry["source"],
+  enabled: boolean,
+) {
+  return invoke<void>("set_global_mcp_server_enabled", {
+    name,
+    source,
+    enabled,
+  });
+}
+
 export async function resumeThread(workspaceId: string, threadId: string) {
   return invoke<Record<string, unknown> | null>("resume_thread", {
     workspaceId,

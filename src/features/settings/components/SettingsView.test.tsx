@@ -34,8 +34,6 @@ import { pushErrorToast } from "../../../services/toasts";
 import { DEFAULT_UI_FONT_FAMILY } from "../../../utils/fonts";
 import { SettingsView } from "./SettingsView";
 
-const skillsSectionMock = vi.fn();
-
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: vi.fn(() => new Promise<string>(() => {})),
 }));
@@ -63,14 +61,6 @@ vi.mock("@/features/computer-use/components/ComputerUseStatusCard", () => ({
   ComputerUseStatusCard: () => <div data-testid="computer-use-status-card" />,
 }));
 
-vi.mock("./McpSection", () => ({
-  McpSection: ({ embedded }: { embedded?: boolean }) => (
-    <div data-testid={embedded ? "embedded-mcp-section" : "mcp-section"}>
-      Mock MCP Section
-    </div>
-  ),
-}));
-
 vi.mock("../../curated-skills/components/CuratedSection", () => ({
   CuratedSection: () => <div data-testid="curated-section-stub">Mock Curated Section</div>,
 }));
@@ -82,25 +72,6 @@ vi.mock("../../curated-skills/hooks/useCuratedSkills", () => ({
     error: null,
     refresh: () => Promise.resolve(),
   }),
-}));
-
-vi.mock("./SkillsSection", () => ({
-  SkillsSection: (props: {
-    embedded?: boolean;
-    appSettings?: AppSettings;
-    onUpdateAppSettings?: unknown;
-  }) => {
-    skillsSectionMock(props);
-    return (
-      <div
-        data-testid={
-          props.embedded ? "embedded-skills-section" : "skills-section"
-        }
-      >
-        Mock Skills Section
-      </div>
-    );
-  },
 }));
 
 vi.mock("../../vendors/components/VendorSettingsPanel", () => ({
@@ -148,7 +119,6 @@ const createDeferred = <T,>() => {
 };
 
 beforeEach(() => {
-  skillsSectionMock.mockClear();
   queryLocalFontsMock.mockReset();
   queryLocalFontsMock.mockImplementation(
     () => new Promise<Array<{ family: string }>>(() => {}),
@@ -740,7 +710,6 @@ describe("SettingsView Display", () => {
     expect(
       sidebarQueries.queryByRole("button", { name: "CLI Validation" }),
     ).toBeNull();
-    expect(sidebarQueries.queryByRole("button", { name: "Skills" })).toBeNull();
     const providersEntry = sidebarQueries.getByRole("button", {
       name: "settings.sidebarProviders",
     });
@@ -760,7 +729,7 @@ describe("SettingsView Display", () => {
       sidebarQueries.getByRole("button", { name: "Project Management" }),
     ).toBeTruthy();
     expect(
-      sidebarQueries.getByRole("button", { name: "MCP / Skills" }),
+      sidebarQueries.getByRole("button", { name: "Skills" }),
     ).toBeTruthy();
     expect(
       sidebarQueries.getByRole("button", { name: "Agents / Prompts" }),
@@ -2318,24 +2287,10 @@ describe("SettingsView Shortcuts", () => {
     await flushSettingsViewEffects();
     expect(screen.getByText("settings.prompt.title")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "MCP / Skills" }));
-    await flushSettingsViewEffects();
-    expect(screen.getByRole("button", { name: "MCP Servers" })).toBeTruthy();
-    expectTabButtonHasIcon("MCP Servers");
-    expectTabButtonHasIcon("Skills");
-    expect(screen.getByTestId("embedded-mcp-section")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Skills" }));
     await flushSettingsViewEffects();
-    expect(screen.getByTestId("embedded-skills-section")).toBeTruthy();
-    expect(skillsSectionMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        embedded: true,
-        appSettings: expect.objectContaining({
-          customSkillDirectories: [],
-        }),
-        onUpdateAppSettings: expect.any(Function),
-      }),
-    );
+    // MCP 服务器清单已迁移到「拓展 → Mcps」；设置侧该页只保留内置精选 Skills。
+    expect(screen.getByTestId("curated-section-stub")).toBeTruthy();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Runtime Environment" }),

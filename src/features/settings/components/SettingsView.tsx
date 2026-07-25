@@ -1,19 +1,11 @@
-// @ts-nocheck
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import type { DropResult } from "@hello-pangea/dnd";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
-import Mic from "lucide-react/dist/esm/icons/mic";
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
-import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
-import FileText from "lucide-react/dist/esm/icons/file-text";
-import Trash2 from "lucide-react/dist/esm/icons/trash-2";
-import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Globe from "lucide-react/dist/esm/icons/globe";
@@ -39,10 +31,7 @@ import type {
 } from "../../../types";
 import { loadSettingsStyles } from "../../../styles/featureStyleLoaders";
 import wxqImage from "../../../assets/wxq.png";
-import {
-  buildShortcutValue,
-  getDefaultInterruptShortcut,
-} from "../../../utils/shortcuts";
+import { buildShortcutValue } from "../../../utils/shortcuts";
 import { clampUiScale } from "../../../utils/uiScale";
 import {
   exportDiagnosticsBundle,
@@ -62,17 +51,10 @@ import { PlaceholderSection } from "./PlaceholderSection";
 import { CommitSection } from "./CommitSection";
 import { PromptSection } from "./PromptSection";
 import { UsageSection } from "./UsageSection";
-import { McpSection } from "./McpSection";
-import { SkillsSection } from "./SkillsSection";
 import { CuratedSection } from "../../curated-skills";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
-import {
-  deleteSessionRadarHistoryEntries,
-  type SessionRadarHistoryDeleteResult,
-} from "../../session-activity/utils/sessionRadarHistoryManagement";
+import { deleteSessionRadarHistoryEntries } from "../../session-activity/utils/sessionRadarHistoryManagement";
 import Settings from "lucide-react/dist/esm/icons/settings";
-import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizontal";
-import BookOpen from "lucide-react/dist/esm/icons/book-open";
 import Server from "lucide-react/dist/esm/icons/server";
 import Shield from "lucide-react/dist/esm/icons/shield";
 import BarChart3 from "lucide-react/dist/esm/icons/bar-chart-3";
@@ -138,11 +120,6 @@ import {
   USER_MSG_LIGHT_PRESETS,
 } from "./settings-view/settingsViewAppearance";
 import {
-  SHOW_COMMIT_ENTRY,
-  SHOW_COMPOSER_ENTRY,
-  SHOW_DICTATION_ENTRY,
-  SHOW_EXPERIMENTAL_ENTRY,
-  SHOW_GIT_ENTRY,
   TEMPORARILY_DISABLED_SIDEBAR_SECTIONS as BASE_DISABLED_SIDEBAR_SECTIONS,
 } from "./settings-view/settingsViewConstants";
 import { useSystemProxySettings } from "./settings-view/hooks/useSystemProxySettings";
@@ -390,9 +367,6 @@ export function SettingsView({
   const [agentPromptSubTab, setAgentPromptSubTab] = useState<
     "agents" | "prompts"
   >("agents");
-  const [mcpManagementSubTab, setMcpManagementSubTab] = useState<
-    "servers" | "skills"
-  >("servers");
   const [runtimeEnvironmentSubTab, setRuntimeEnvironmentSubTab] = useState<
     "runtime-pool" | "cli-validation"
   >("runtime-pool");
@@ -713,10 +687,6 @@ export function SettingsView({
     }
     return sessionWorkspaceOptions[0] ?? null;
   }, [activeWorkspace, sessionWorkspaceOptions, settingsWorkspaceId]);
-  const mcpContextWorkspace = useMemo(
-    () => activeWorkspace ?? projects[0] ?? null,
-    [activeWorkspace, projects],
-  );
   const handleDeleteSessionRadarHistoryInSettings = useCallback(
     async (entries: SessionRadarEntry[]) => {
       const targets = entries.map((entry) => ({
@@ -928,12 +898,8 @@ export function SettingsView({
         setAgentPromptSubTab("prompts");
         return;
       case "mcp-servers":
-        setActiveSection("mcp");
-        setMcpManagementSubTab("servers");
-        return;
       case "mcp-skills":
         setActiveSection("mcp");
-        setMcpManagementSubTab("skills");
         return;
       case "runtime-pool":
         setActiveSection("runtime-environment");
@@ -1923,17 +1889,6 @@ export function SettingsView({
             <Shield aria-hidden />
             {!sidebarCollapsed && t("settings.sidebarPermissions")}
           </button>
-          {SHOW_COMMIT_ENTRY && (
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "commit" ? "active" : ""}`}
-              onClick={() => setActiveSection("commit")}
-              title={sidebarCollapsed ? t("settings.sidebarCommit") : ""}
-            >
-              <GitCommitHorizontal aria-hidden />
-              {!sidebarCollapsed && t("settings.sidebarCommit")}
-            </button>
-          )}
           <button
             type="button"
             className={`settings-nav ${activeSection === "agent-prompt-management" ? "active" : ""}`}
@@ -1945,39 +1900,6 @@ export function SettingsView({
             <span className="codicon codicon-robot" />
             {!sidebarCollapsed && t("settings.sidebarAgentPromptManagement")}
           </button>
-          {SHOW_COMPOSER_ENTRY && (
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "composer" ? "active" : ""}`}
-              onClick={() => setActiveSection("composer")}
-              title={sidebarCollapsed ? t("settings.sidebarComposer") : ""}
-            >
-              <FileText aria-hidden />
-              {!sidebarCollapsed && t("settings.sidebarComposer")}
-            </button>
-          )}
-          {SHOW_DICTATION_ENTRY && (
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "dictation" ? "active" : ""}`}
-              onClick={() => setActiveSection("dictation")}
-              title={sidebarCollapsed ? t("settings.sidebarDictation") : ""}
-            >
-              <Mic aria-hidden />
-              {!sidebarCollapsed && t("settings.sidebarDictation")}
-            </button>
-          )}
-          {SHOW_GIT_ENTRY && (
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "git" ? "active" : ""}`}
-              onClick={() => setActiveSection("git")}
-              title={sidebarCollapsed ? t("settings.sidebarGit") : ""}
-            >
-              <GitBranch aria-hidden />
-              {!sidebarCollapsed && t("settings.sidebarGit")}
-            </button>
-          )}
           <button
             type="button"
             className={`settings-nav ${activeSection === "runtime-environment" ? "active" : ""}`}
@@ -1998,21 +1920,6 @@ export function SettingsView({
             <MoreHorizontalIcon aria-hidden />
             {!sidebarCollapsed && t("settings.sidebarOther")}
           </button>
-          {SHOW_EXPERIMENTAL_ENTRY && (
-            <>
-              <button
-                type="button"
-                className={`settings-nav ${activeSection === "experimental" ? "active" : ""}`}
-                onClick={() => setActiveSection("experimental")}
-                title={
-                  sidebarCollapsed ? t("settings.sidebarExperimental") : ""
-                }
-              >
-                <FlaskConical aria-hidden />
-                {!sidebarCollapsed && t("settings.sidebarExperimental")}
-              </button>
-            </>
-          )}
           <button
             type="button"
             className={`settings-nav ${activeSection === "community" ? "active" : ""}`}
@@ -2356,48 +2263,13 @@ export function SettingsView({
             />
           )}
           {activeSection === "mcp" && (
-            <section
-              className="settings-section settings-section-tabbed"
-              data-settings-tab={mcpManagementSubTab}
-            >
-              <div className="settings-basic-tabs">
-                <button
-                  type="button"
-                  className={`settings-basic-tab ${mcpManagementSubTab === "servers" ? "active" : ""}`}
-                  onClick={() => setMcpManagementSubTab("servers")}
-                >
-                  <Server className="settings-basic-tab-icon" aria-hidden />
-                  {t("settings.mcpPanel.title")}
-                </button>
-                <button
-                  type="button"
-                  className={`settings-basic-tab ${mcpManagementSubTab === "skills" ? "active" : ""}`}
-                  onClick={() => setMcpManagementSubTab("skills")}
-                >
-                  <BookOpen className="settings-basic-tab-icon" aria-hidden />
-                  {t("settings.skillsPanel.title")}
-                </button>
-              </div>
-              {mcpManagementSubTab === "servers" ? (
-                <McpSection
-                  activeWorkspace={mcpContextWorkspace}
-                  activeEngine={activeEngine}
-                  embedded
-                />
-              ) : (
-                <>
-                  <CuratedSection
-                    appSettings={appSettings}
-                    onUpdateAppSettings={onUpdateAppSettings}
-                  />
-                  <SkillsSection
-                    activeWorkspace={selectedSettingsWorkspace}
-                    embedded
-                    appSettings={appSettings}
-                    onUpdateAppSettings={onUpdateAppSettings}
-                  />
-                </>
-              )}
+            // MCP 服务器清单已整体迁移到「拓展 → Mcps」；设置侧只保留
+            // 随包发布的内置精选 Skills 开关。
+            <section className="settings-section">
+              <CuratedSection
+                appSettings={appSettings}
+                onUpdateAppSettings={onUpdateAppSettings}
+              />
             </section>
           )}
           {activeSection === "permissions" && (
@@ -2456,20 +2328,6 @@ export function SettingsView({
                 />
               )}
             </section>
-          )}
-          {activeSection === "skills" && (
-            <>
-              <CuratedSection
-                appSettings={appSettings}
-                onUpdateAppSettings={onUpdateAppSettings}
-              />
-              <SkillsSection
-                activeWorkspace={selectedSettingsWorkspace}
-                embedded
-                appSettings={appSettings}
-                onUpdateAppSettings={onUpdateAppSettings}
-              />
-            </>
           )}
           {activeSection === "other" && (
             <OtherSection

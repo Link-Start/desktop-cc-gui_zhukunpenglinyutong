@@ -11,8 +11,11 @@ import Webhook from "lucide-react/dist/esm/icons/webhook";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { WorkspaceInfo } from "../../../types";
 import { Button } from "@/components/ui/button";
 
+import { McpsDashboardSection } from "./McpsDashboardSection";
+import { SkillsDashboardSection } from "./SkillsDashboardSection";
 import { UsageDashboardSection } from "./UsageDashboardSection";
 
 const SECTION_TABS = ["usage", "framework"] as const;
@@ -48,7 +51,11 @@ const PANEL_ICONS = {
   subagents: Bot,
 } as const satisfies Record<ActiveTab, typeof BarChart3>;
 
-export function ExtensionsView() {
+type ExtensionsViewProps = {
+  activeWorkspace: WorkspaceInfo | null;
+};
+
+export function ExtensionsView({ activeWorkspace }: ExtensionsViewProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<ActiveTab>("usage");
   const PanelIcon = PANEL_ICONS[activeTab];
@@ -97,6 +104,10 @@ export function ExtensionsView() {
 
       {activeTab === "usage" ? (
         <UsageDashboardSection />
+      ) : activeTab === "skills" ? (
+        <SkillsDashboardSection />
+      ) : activeTab === "mcps" ? (
+        <McpsDashboardSection activeWorkspace={activeWorkspace} />
       ) : (
         <div className="extensions-empty-panel">
           <div className="extensions-empty-panel-icon" aria-hidden>

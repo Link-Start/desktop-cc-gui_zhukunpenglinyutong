@@ -11,6 +11,11 @@ const workspace = {
     addWorkspaceOpenCurrent: "加入当前窗口",
     addWorkspaceOpenNewWindow: "新开窗口",
     addWorkspaceRemotePathPrompt: "请输入 daemon 所在机器上的项目绝对路径。",
+    workspacesRecoveredTitle: "工作区已恢复",
+    workspacesRecoveredMessage:
+      "工作区文件已损坏，原文件已备份为 {{backupFileName}}，已回退到空工作区列表。",
+    workspacesRecoveredNoBackupMessage:
+      "工作区文件已损坏且自动备份失败，已回退到空工作区列表。",
     loadingProgressRunInBackground: "后台运行",
     loadingProgressCreateSessionTitle: "正在创建会话...",
     loadingProgressCreateSessionMessage:

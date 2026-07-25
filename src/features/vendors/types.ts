@@ -3,6 +3,14 @@
  * 数据格式与 idea-claude-code-gui 项目完全兼容
  */
 
+// model id 校验的单一事实源为 composer/types/provider(长度 ≤128 + pattern 校验);
+// 此处经 import 别名再导出,保持 vendors feature 既有导入路径与函数引用不变,
+// 避免两份漂移的实现。
+import {
+  MODEL_ID_PATTERN as COMPOSER_MODEL_ID_PATTERN,
+  isValidModelId as isValidComposerModelId,
+} from "../composer/types/provider";
+
 // ============ Constants ============
 
 export const STORAGE_KEYS = {
@@ -17,16 +25,10 @@ export const LOCAL_SETTINGS_PROVIDER_ID = "__local_settings_json__";
 
 export const LOCAL_KIMI_PROVIDER_ID = "__local_config_toml__";
 
-export const MODEL_ID_PATTERN = /^[a-zA-Z0-9._\-/:]+$/;
-
 // ============ Validation Helpers ============
 
-export function isValidModelId(id: string): boolean {
-  if (!id || typeof id !== 'string') return false;
-  const trimmed = id.trim();
-  if (trimmed.length === 0 || trimmed.length > 256) return false;
-  return true;
-}
+export const MODEL_ID_PATTERN = COMPOSER_MODEL_ID_PATTERN;
+export const isValidModelId = isValidComposerModelId;
 
 export function isValidCodexCustomModel(model: unknown): model is CodexCustomModel {
   if (!model || typeof model !== 'object') return false;

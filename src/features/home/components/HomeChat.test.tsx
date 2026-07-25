@@ -36,9 +36,6 @@ vi.mock("react-i18next", () => ({
 }));
 
 const baseProps = {
-  latestAgentRuns: [],
-  isLoadingLatestAgents: false,
-  onSelectThread: vi.fn(),
   onSelectWorkspace: vi.fn(),
   onAddWorkspace: vi.fn(),
   composerNode: <div>Composer node</div>,
@@ -157,26 +154,9 @@ describe("HomeChat", () => {
   });
 
   it("does not render recent conversations on the home page", () => {
-    const handleSelectThread = vi.fn();
+    render(<HomeChat {...baseProps} />);
 
-    render(
-      <HomeChat
-        {...baseProps}
-        onSelectThread={handleSelectThread}
-        latestAgentRuns={[{
-          workspaceId: "ws-1",
-          threadId: "thread-1",
-          projectName: "desktop-cc-gui",
-          message: "Follow up",
-          timestamp: 1,
-          isProcessing: false,
-        }]}
-      />,
-    );
-
-    expect(screen.queryByText("Follow up")).toBeNull();
     expect(screen.queryByText("Recent conversations")).toBeNull();
-    expect(handleSelectThread).not.toHaveBeenCalled();
   });
 });
 

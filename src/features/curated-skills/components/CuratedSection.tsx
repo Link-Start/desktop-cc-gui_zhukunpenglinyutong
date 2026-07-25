@@ -18,12 +18,11 @@ import { resolveLucideIcon } from "../utils/resolveLucideIcon";
 /**
  * Settings panel for client-bundled curated skills (V0.5.14+).
  *
- * Visual contract: curated is rendered **above** `SkillsSection` and
- * wears a "Built-in" badge so the user can tell at a glance that it
- * ships with the desktop client (vs. `SkillsSection`, which renders
- * user-installed global / project / custom skills with source
- * badges). The two surfaces never share data and never share CSS
- * class names.
+ * Visual contract: curated wears a "Built-in" badge so the user can
+ * tell at a glance that it ships with the desktop client. User-installed
+ * skills are managed in the Extensions → Skills surface (TokenTracker
+ * SkillsPage), not here; the two surfaces never share data and never
+ * share CSS class names.
  *
  * Renders an empty-state placeholder when 0 curated skills are
  * loaded, so first-time users can see the concept exists; in the MVP

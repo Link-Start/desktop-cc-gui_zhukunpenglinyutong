@@ -23,9 +23,6 @@ vi.mock("react-i18next", () => ({
 
 const baseProps = {
   onOpenProject: vi.fn(),
-  latestAgentRuns: [],
-  isLoadingLatestAgents: false,
-  onSelectThread: vi.fn(),
 };
 
 describe("Home", () => {
