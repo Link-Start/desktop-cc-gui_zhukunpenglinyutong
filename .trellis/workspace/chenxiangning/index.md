@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1114
+- **Total Sessions**: 1115
 - **Last Active**: 2026-07-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~1181 | Active |
+| `journal-27.md` | ~1214 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1115 | 2026-07-25 | 补录 skills-hub 与 mcp-inventory 追溯 OpenSpec 提案 | `27c47acb9` | `feature/v-799` |
 | 1114 | 2026-07-25 | 更新轮询盘点文档执行状态 | `33f21674d` | `feature/v-799` |
 | 1113 | 2026-07-25 | 更新 P0 决策看板记录轮询优化 | `1e1e5f2db` | `feature/v-799` |
 | 1112 | 2026-07-25 | 录音电平事件降频 | `9ca8d2b19` | `feature/v-799` |
