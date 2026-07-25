@@ -375,12 +375,19 @@ describe("FileViewPanel markdown modes", () => {
         screen.getByRole("button", { name: /files\.annotationSubmit/i }),
       );
 
-      expect(onCreateCodeAnnotation).toHaveBeenCalledWith({
+      expect(onCreateCodeAnnotation).toHaveBeenCalledWith(expect.objectContaining({
         path: "src/value.ts",
         lineRange: { startLine: 1, endLine: 2 },
         body: "检查两行导出的命名是否一致",
         source: "file-preview-mode",
-      });
+        anchor: expect.objectContaining({
+          version: 1,
+          selectedText: [
+            "export const value = 1;",
+            "export const next = 2;",
+          ].join("\n"),
+        }),
+      }));
       expect(writeWorkspaceFile).not.toHaveBeenCalled();
       expect(writeExternalSpecFile).not.toHaveBeenCalled();
     });

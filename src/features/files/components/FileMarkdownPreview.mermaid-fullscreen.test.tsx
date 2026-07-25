@@ -11,9 +11,9 @@ vi.mock("mermaid", () => ({
 }));
 
 import {
-  FileMarkdownPreview,
   clearFileMarkdownPreviewRuntimeCachesForTests,
-} from "./FileMarkdownPreview";
+  FileMarkdownPreviewRich as FileMarkdownPreview,
+} from "./FileMarkdownPreviewRich";
 
 const t = (key: string) => {
   const dict: Record<string, string> = {
