@@ -2991,6 +2991,7 @@ describe("tauri invoke wrappers", () => {
       variant: null,
       customSpecRoot: null,
       autoSession: null,
+      skillInvocations: null,
     });
   });
 
@@ -3026,6 +3027,7 @@ describe("tauri invoke wrappers", () => {
       variant: null,
       customSpecRoot: null,
       autoSession: null,
+      skillInvocations: null,
     });
   });
 
@@ -3057,6 +3059,38 @@ describe("tauri invoke wrappers", () => {
       variant: null,
       customSpecRoot: null,
       autoSession: null,
+      skillInvocations: null,
+    });
+  });
+
+  it("passes structured skill invocations through engine_send_message payload", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ engine: "claude" });
+
+    await engineSendMessage("ws-claude", {
+      text: "/Code-Review 请审查这段代码",
+      engine: "claude",
+      skillInvocations: [{ name: "Code-Review" }],
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("engine_send_message", {
+      workspaceId: "ws-claude",
+      text: "/Code-Review 请审查这段代码",
+      engine: "claude",
+      model: null,
+      effort: null,
+      disableThinking: false,
+      images: null,
+      continueSession: false,
+      accessMode: null,
+      threadId: null,
+      sessionId: null,
+      forkSessionId: null,
+      agent: null,
+      variant: null,
+      customSpecRoot: null,
+      autoSession: null,
+      skillInvocations: [{ name: "Code-Review" }],
     });
   });
 

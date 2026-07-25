@@ -59,6 +59,8 @@ import type {
 import { useStatusPanelData } from "../../status-panel/hooks/useStatusPanelData";
 import {
   assembleSinglePrompt,
+  expandLeadingManagedCommand,
+  assembleSkillInvocations,
   shouldAssemblePrompt,
 } from "../utils/promptAssembler";
 import { buildComposerSendReadiness } from "../utils/composerSendReadiness";
@@ -1394,18 +1396,28 @@ function ComposerImpl({
         setComposerText("");
         return;
       }
-      const finalText = shouldAssemblePrompt({
+      const shouldAssembleSelectedSkills = shouldAssemblePrompt({
         userInput: trimmed,
         selectedSkillCount: selectedSkills.length,
         selectedCommonsCount: selectedCommons.length,
-      })
+      });
+      const finalText = shouldAssembleSelectedSkills
         ? assembleSinglePrompt({
             userInput: trimmed,
             skills: selectedSkills,
             commons: selectedCommons.map((item) => ({ name: item.name })),
           })
         : trimmed;
-      const finalTextWithReference = applyActiveFileReference(finalText);
+      // 结构化契约与降级文本同源于一次组装：仅在真正发生拼接时下发。
+      const skillInvocations = shouldAssembleSelectedSkills
+        ? assembleSkillInvocations({
+            skills: selectedSkills,
+            commons: selectedCommons.map((item) => ({ name: item.name })),
+          })
+        : [];
+      // managed 目录命令引擎不可见，发送前在客户端展开为正文。
+      const expandedFinalText = expandLeadingManagedCommand(finalText, commands);
+      const finalTextWithReference = applyActiveFileReference(expandedFinalText);
       const resolvedFinalText = replaceVisibleFileReferenceLabels(
         normalizeInlineFileReferenceTokens(finalTextWithReference),
         selectedInlineFileReferences,
@@ -1421,11 +1433,13 @@ function ComposerImpl({
       const browserContextAttachment = browserContext.attachment;
       const hasBrowserContextAttachment = Boolean(browserContextAttachment);
       const sendOptions =
+        skillInvocations.length > 0 ||
         selectedMemoryIds.length > 0 ||
         selectedNoteCardIds.length > 0 ||
         shouldReferenceMemory ||
         hasBrowserContextAttachment
           ? {
+              ...(skillInvocations.length > 0 ? { skillInvocations } : {}),
               ...(shouldReferenceMemory ? { memoryReferenceEnabled: true } : {}),
               ...(selectedMemoryIds.length > 0
                 ? { selectedMemoryIds, selectedMemoryInjectionMode }
@@ -1494,6 +1508,7 @@ function ComposerImpl({
       disabled,
       intentCanvasAttachments.length,
       applyActiveFileReference,
+      commands,
       opencodeDisconnected,
       selectedOpenCodeDirectCommand,
       selectedCommons,

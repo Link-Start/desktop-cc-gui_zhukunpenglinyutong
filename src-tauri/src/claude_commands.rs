@@ -401,6 +401,77 @@ pub(crate) async fn claude_commands_list(
     .map_err(|_| "command discovery failed".to_string())?
 }
 
+/// 校验并归一化自定义命令名：小写字母/数字开头，仅含 `[a-z0-9-_]`。
+/// 拒绝路径分隔符与 `..`，保证写入目标恒为 managed 目录内单层文件。
+fn normalize_new_command_name(raw: &str) -> Result<String, String> {
+    let normalized = raw.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return Err("command name is required".to_string());
+    }
+    let valid = normalized
+        .chars()
+        .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_')
+        && normalized
+            .chars()
+            .next()
+            .is_some_and(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit());
+    if !valid {
+        return Err(format!(
+            "invalid command name `{raw}`: use lowercase letters, digits, `-` or `_`"
+        ));
+    }
+    Ok(normalized)
+}
+
+/// 在 managed 目录写入 `<name>.md`；重名拒绝（不静默覆盖）。
+fn write_managed_command(
+    dir: &Path,
+    name: &str,
+    content: &str,
+) -> Result<ClaudeCommandEntry, String> {
+    let path = dir.join(format!("{name}.md"));
+    if path.exists() {
+        return Err(format!("command `{name}` already exists"));
+    }
+    fs::create_dir_all(dir).map_err(|error| format!("create commands dir failed: {error}"))?;
+    fs::write(&path, content).map_err(|error| format!("write command failed: {error}"))?;
+    Ok(ClaudeCommandEntry {
+        name: name.to_string(),
+        path: path.to_string_lossy().to_string(),
+        source: COMMAND_SOURCE_WORKSPACE_MANAGED.to_string(),
+        description: None,
+        argument_hint: None,
+        content: content.to_string(),
+    })
+}
+
+/// 对话沉淀（save-as-prompt）落盘入口：写入 workspace managed commands 目录。
+/// 该目录在 `claude_commands_list` 聚合中优先级最高，且被
+/// `claude_commands_watch` 监听——保存后前端经事件自动可见。
+#[tauri::command]
+pub(crate) async fn claude_command_create(
+    workspace_id: String,
+    name: String,
+    content: String,
+    state: State<'_, AppState>,
+) -> Result<ClaudeCommandEntry, String> {
+    let normalized_name = normalize_new_command_name(&name)?;
+    if content.trim().is_empty() {
+        return Err("command content is required".to_string());
+    }
+    let managed_dir = {
+        let workspaces = state.workspaces.lock().await;
+        let entry = workspaces
+            .get(&workspace_id)
+            .ok_or_else(|| format!("unknown workspace id: {workspace_id}"))?;
+        workspace_commands_dir(&state, entry)
+            .ok_or_else(|| "workspace commands dir unavailable".to_string())?
+    };
+    task::spawn_blocking(move || write_managed_command(&managed_dir, &normalized_name, &content))
+        .await
+        .map_err(|_| "command create failed".to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -425,6 +496,44 @@ mod tests {
             description: None,
             argument_hint: None,
             content: String::new(),
+        }
+    }
+
+    #[test]
+    fn write_managed_command_creates_markdown_file() {
+        let dir = new_temp_dir("command-create");
+        let entry = write_managed_command(&dir, "commit-msg", "按规范写提交信息\n")
+            .expect("write should succeed");
+
+        assert_eq!(entry.name, "commit-msg");
+        assert_eq!(entry.source, COMMAND_SOURCE_WORKSPACE_MANAGED);
+        assert_eq!(entry.content, "按规范写提交信息\n");
+        let written = fs::read_to_string(dir.join("commit-msg.md")).expect("read written file");
+        assert_eq!(written, "按规范写提交信息\n");
+    }
+
+    #[test]
+    fn write_managed_command_rejects_duplicate_without_overwrite() {
+        let dir = new_temp_dir("command-create-dup");
+        write_managed_command(&dir, "review", "第一版").expect("first write");
+        let error = match write_managed_command(&dir, "review", "第二版") {
+            Ok(_) => panic!("duplicate must be rejected"),
+            Err(error) => error,
+        };
+
+        assert!(error.contains("already exists"));
+        let written = fs::read_to_string(dir.join("review.md")).expect("read written file");
+        assert_eq!(written, "第一版");
+    }
+
+    #[test]
+    fn normalize_new_command_name_rejects_invalid_and_normalizes_case() {
+        assert_eq!(normalize_new_command_name(" Commit-Msg ").as_deref(), Ok("commit-msg"));
+        for raw in ["", "  ", "a/b", "..", "-lead", "_lead", "name.md", "名字"] {
+            assert!(
+                normalize_new_command_name(raw).is_err(),
+                "expected rejection for `{raw}`"
+            );
         }
     }
 

@@ -89,6 +89,7 @@ export type MessagesProps = {
   presentationProfile?: PresentationProfile | null;
   onOpenWorkspaceFile?: (path: string) => void;
   onCaptureNote?: (draft: NoteCaptureDraft) => void;
+  onSaveAsPrompt?: (sourceText: string) => void;
   agentTaskScrollRequest?: AgentTaskScrollRequest | null;
   onRecoverThreadRuntime?: (
     workspaceId: string,

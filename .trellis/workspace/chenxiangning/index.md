@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1117
-- **Last Active**: 2026-07-25
+- **Total Sessions**: 1119
+- **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~1280 | Active |
+| `journal-27.md` | ~1346 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1119 | 2026-07-26 | 批次4：技能调用契约与对话提示词沉淀 | `bee87c4f8` | `feature/v-0710` |
+| 1118 | 2026-07-26 | 润色器本地化缓存与 curated skills 事件化刷新（批次3） | `5a76671b3` | `feature/v-0710` |
 | 1117 | 2026-07-25 | 统一输入历史存储并事件化命令目录刷新（批次2） | `81d9a47f9` | `feature/v-0710` |
 | 1116 | 2026-07-25 | 批次1: Composer 层补全死路径裁剪 | `9f969c0a5` | `feature/v-0710` |
 | 1115 | 2026-07-25 | 补录 skills-hub 与 mcp-inventory 追溯 OpenSpec 提案 | `27c47acb9` | `feature/v-799` |

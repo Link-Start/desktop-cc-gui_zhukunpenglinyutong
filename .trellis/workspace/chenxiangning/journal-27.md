@@ -1278,3 +1278,69 @@ OpenSpec unify-input-history-and-commands-refresh：输入历史收敛 useInputH
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1118: 润色器本地化缓存与 curated skills 事件化刷新（批次3）
+
+**Date**: 2026-07-26
+**Task**: 润色器本地化缓存与 curated skills 事件化刷新（批次3）
+**Branch**: `feature/v-0710`
+
+### Summary
+
+OpenSpec modernize-prompt-enhancer-and-curated-skills-refresh 9/9：prompt enhancer 结构化错误（kind 驱动 fallback）、zh/zh-TW 中文指令、LRU 缓存（20 条命中零 IPC）、10 locale 失败文案；curated skills Rust emit curated-skills-changed，indicator 删 2s 轮询改事件 + 60s 兜底
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5a76671b3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1119: 批次4：技能调用契约与对话提示词沉淀
+
+**Date**: 2026-07-26
+**Task**: 批次4：技能调用契约与对话提示词沉淀
+**Branch**: `feature/v-0710`
+
+### Summary
+
+SkillInvocation 全链路透传契约、claude_command_create managed 写入、prompt-distill 对话沉淀 feature（菜单+对话框+i18n×10）
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `99a92ac48` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

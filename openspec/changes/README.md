@@ -3,7 +3,7 @@
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
 - Updated At: `2026-07-26`
-- Active proposals: `11`
+- Active proposals: `12`
 - Archived proposals: `731`
 - Main capability specs: `431`
 
@@ -11,8 +11,9 @@
 
 | Change | Progress | Current gate | Artifacts |
 |---|---:|---|---|
-| [`modernize-prompt-enhancer-and-curated-skills-refresh`](modernize-prompt-enhancer-and-curated-skills-refresh/proposal.md) | 9/9 | implemented，待 verify/archive 决策 | [design](modernize-prompt-enhancer-and-curated-skills-refresh/design.md) · [tasks](modernize-prompt-enhancer-and-curated-skills-refresh/tasks.md) · [specs](modernize-prompt-enhancer-and-curated-skills-refresh/specs/) |
-| [`prune-composer-autocomplete-dead-paths`](prune-composer-autocomplete-dead-paths/proposal.md) | 9/9 | implemented，待 verify/archive 决策 | [design](prune-composer-autocomplete-dead-paths/design.md) · [tasks](prune-composer-autocomplete-dead-paths/tasks.md) · [specs](prune-composer-autocomplete-dead-paths/specs/) |
+| [`add-skill-invocation-contract-and-prompt-distill`](add-skill-invocation-contract-and-prompt-distill/proposal.md) | 11/11 | implemented，待 verify/archive 决策 | [design](add-skill-invocation-contract-and-prompt-distill/design.md) · [tasks](add-skill-invocation-contract-and-prompt-distill/tasks.md) · [specs](add-skill-invocation-contract-and-prompt-distill/specs/) |
+| [`modernize-prompt-enhancer-and-curated-skills-refresh`](modernize-prompt-enhancer-and-curated-skills-refresh/proposal.md) | 11/11 | implemented，待 verify/archive 决策 | [design](modernize-prompt-enhancer-and-curated-skills-refresh/design.md) · [tasks](modernize-prompt-enhancer-and-curated-skills-refresh/tasks.md) · [specs](modernize-prompt-enhancer-and-curated-skills-refresh/specs/) |
+| [`prune-composer-autocomplete-dead-paths`](prune-composer-autocomplete-dead-paths/proposal.md) | 11/11 | implemented，待 verify/archive 决策 | [design](prune-composer-autocomplete-dead-paths/design.md) · [tasks](prune-composer-autocomplete-dead-paths/tasks.md) · [specs](prune-composer-autocomplete-dead-paths/specs/) |
 | [`unify-input-history-and-commands-refresh`](unify-input-history-and-commands-refresh/proposal.md) | 12/12 | implemented，待 verify/archive 决策 | [design](unify-input-history-and-commands-refresh/design.md) · [tasks](unify-input-history-and-commands-refresh/tasks.md) · [specs](unify-input-history-and-commands-refresh/specs/) |
 | [`add-linux-native-menu-localization`](add-linux-native-menu-localization/proposal.md) | 4/5 | Linux non-default-language startup smoke | [design](add-linux-native-menu-localization/design.md) · [tasks](add-linux-native-menu-localization/tasks.md) · [specs](add-linux-native-menu-localization/specs/) · [verification](add-linux-native-menu-localization/verification.md) |
 | [`add-skills-hub-management`](add-skills-hub-management/proposal.md) | 14/14 | 追溯提案（已随 `b1d94a930` / `c75922dec` 合入）；archive 决策 | [tasks](add-skills-hub-management/tasks.md) · [specs](add-skills-hub-management/specs/) |
