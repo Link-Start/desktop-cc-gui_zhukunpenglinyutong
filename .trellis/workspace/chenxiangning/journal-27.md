@@ -1179,3 +1179,36 @@ docs/reports/polling-inventory-2026-07-25.md 标记 5 项轮询优化完成
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1115: 补录 skills-hub 与 mcp-inventory 追溯 OpenSpec 提案
+
+**Date**: 2026-07-25
+**Task**: 补录 skills-hub 与 mcp-inventory 追溯 OpenSpec 提案
+**Branch**: `feature/v-799`
+
+### Summary
+
+为朱昆鹏 7/25 已合入但缺提案的 skills（b1d94a930/c75922dec）与 MCP inventory（101a19abb）变更补录追溯性 OpenSpec 提案：add-skills-hub-management 与 move-mcp-inventory-to-extensions，各含 proposal/tasks/spec deltas，strict validation 通过，active 索引 6→8。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `27c47acb9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
