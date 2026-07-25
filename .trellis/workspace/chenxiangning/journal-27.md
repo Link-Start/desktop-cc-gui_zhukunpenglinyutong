@@ -1576,3 +1576,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1127: 模块化 Git 与 File 高频入口
+
+**Date**: 2026-07-26
+**Task**: 模块化 Git 与 File 高频入口
+**Branch**: `feature/v-0710`
+
+### Summary
+
+拆分 GitDiffPanel、FileViewPanel 及超大测试，四个目标文件退出 large-file gate；统一两套 AI commit generation menu/controller，新增 diff presentation model。增量测试 230 项及 Git History 58 项通过，typecheck、ESLint、OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `26cbce638` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
