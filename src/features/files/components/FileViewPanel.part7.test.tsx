@@ -255,12 +255,16 @@ describe("FileViewPanel markdown modes", () => {
         screen.getByRole("button", { name: /files\.annotationSubmit/i }),
       );
 
-      expect(onCreateCodeAnnotation).toHaveBeenCalledWith({
+      expect(onCreateCodeAnnotation).toHaveBeenCalledWith(expect.objectContaining({
         path: "docs/guide.md",
         lineRange: { startLine: 3, endLine: 4 },
         body: "请检查标题和正文是否一致",
         source: "file-preview-mode",
-      });
+        anchor: expect.objectContaining({
+          version: 1,
+          selectedText: "body\ntail",
+        }),
+      }));
       expect(writeWorkspaceFile).not.toHaveBeenCalled();
       expect(writeExternalSpecFile).not.toHaveBeenCalled();
     });
@@ -306,12 +310,12 @@ describe("FileViewPanel markdown modes", () => {
         screen.getByRole("button", { name: /files\.annotationSubmit/i }),
       );
 
-      expect(onCreateCodeAnnotation).toHaveBeenCalledWith({
+      expect(onCreateCodeAnnotation).toHaveBeenCalledWith(expect.objectContaining({
         path: "docs/math.md",
         lineRange: { startLine: 5, endLine: 5 },
         body: "check target",
         source: "file-preview-mode",
-      });
+      }));
     });
 
   it("keeps markdown annotation typing local until submit to avoid sticky repeated input", async () => {
@@ -373,12 +377,12 @@ describe("FileViewPanel markdown modes", () => {
         screen.getByRole("button", { name: /files\.annotationSubmit/i }),
       );
 
-      expect(onCreateCodeAnnotation).toHaveBeenCalledWith({
+      expect(onCreateCodeAnnotation).toHaveBeenCalledWith(expect.objectContaining({
         path: "docs/guide.md",
         lineRange: { startLine: 3, endLine: 4 },
         body: "haoni abc",
         source: "file-preview-mode",
-      });
+      }));
     });
 
   it("isolates markdown annotation input from composition and file shortcuts", async () => {
@@ -433,12 +437,12 @@ describe("FileViewPanel markdown modes", () => {
       expect(
         screen.queryByPlaceholderText(/files\.annotationPlaceholder/i),
       ).toBeNull();
-      expect(onCreateCodeAnnotation).toHaveBeenCalledWith({
+      expect(onCreateCodeAnnotation).toHaveBeenCalledWith(expect.objectContaining({
         path: "docs/guide.md",
         lineRange: { startLine: 3, endLine: 4 },
         body: "这个公式不对",
         source: "file-preview-mode",
-      });
+      }));
     });
 
   it("renders markdown list annotation draft only once for nested blocks", async () => {

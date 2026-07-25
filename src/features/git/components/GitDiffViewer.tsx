@@ -24,6 +24,7 @@ import type {
   CodeAnnotationSelection,
 } from "../../code-annotations/types";
 import {
+  createCodeAnnotationAnchorFromSnapshot,
   formatCodeAnnotationLineRange,
   isSameCodeAnnotationPath,
 } from "../../code-annotations/utils/codeAnnotations";
@@ -161,6 +162,23 @@ const DiffCard = memo(function DiffCard({
       : `L${selectedAnnotationLineRange.startLine}-L${selectedAnnotationLineRange.endLine}`
     : null;
   const canCreateCodeAnnotation = Boolean(onCreateCodeAnnotation);
+  const annotationDraftAnchor = useMemo(() => {
+    if (!annotationDraft) {
+      return undefined;
+    }
+    return createCodeAnnotationAnchorFromSnapshot(
+      parsedLines
+        .filter(
+          (line) =>
+            (line.type === "add" || line.type === "context") &&
+            typeof line.newLine === "number" &&
+            line.newLine >= annotationDraft.lineRange.startLine &&
+            line.newLine <= annotationDraft.lineRange.endLine,
+        )
+        .map((line) => line.text)
+        .join("\n"),
+    );
+  }, [annotationDraft, parsedLines]);
 
   // Stable prop identities for the (now memoized) DiffBlock. Previously these
   // were inline closures recreated every render, so a status poll or mount-time
@@ -273,6 +291,7 @@ const DiffCard = memo(function DiffCard({
                       lineRange: annotationDraft.lineRange,
                       body,
                       source: codeAnnotationSurface,
+                      anchor: annotationDraftAnchor,
                     });
                     setAnnotationDraft(null);
                   }}
@@ -288,6 +307,7 @@ const DiffCard = memo(function DiffCard({
     },
     [
       annotationDraft,
+      annotationDraftAnchor,
       codeAnnotationSurface,
       normalizedEntryPath,
       onCreateCodeAnnotation,

@@ -62,7 +62,11 @@ import {
 import type {
   CodeAnnotationLineRange,
 } from "../../code-annotations/types";
-import { isSameCodeAnnotationPath } from "../../code-annotations/utils/codeAnnotations";
+import {
+  createCodeAnnotationAnchor,
+  isSameCodeAnnotationPath,
+  resolveCodeAnnotationAnchor,
+} from "../../code-annotations/utils/codeAnnotations";
 import { loadCodeMirrorExtensionsForEditorLanguage } from "../utils/codemirrorLanguageExtensions";
 import {
   parseLineMarkersFromDiff,
@@ -306,30 +310,6 @@ export function FileViewPanel({
     }
     beginAnnotationDraft(lineRange, "file-edit-mode");
   }, [activeAnnotationLineRange, annotationDraft, beginAnnotationDraft]);
-  const handleConfirmAnnotationDraft = useCallback(
-    (bodyOverride?: string) => {
-      if (!annotationDraft) {
-        return;
-      }
-      const body = (
-        bodyOverride ??
-        annotationDraftBodyRef.current ??
-        annotationDraft.body
-      ).trim();
-      if (!body) {
-        return;
-      }
-      onCreateCodeAnnotation?.({
-        path: filePath,
-        lineRange: annotationDraft.lineRange,
-        body,
-        source: annotationDraft.source,
-      });
-      annotationDraftBodyRef.current = "";
-      setAnnotationDraft(null);
-    },
-    [annotationDraft, filePath, onCreateCodeAnnotation],
-  );
   const clearPendingEditorLineRangeSync = useCallback(() => {
     if (editorLineRangeSyncTimerRef.current !== null) {
       window.clearTimeout(editorLineRangeSyncTimerRef.current);
@@ -501,6 +481,37 @@ export function FileViewPanel({
     skipTextRead,
     externalAbsoluteReadOnlyMessage: t("files.externalAbsoluteReadOnly"),
   });
+  const editorDraftContentRef = useRef(content);
+  const handleConfirmAnnotationDraft = useCallback(
+    (bodyOverride?: string) => {
+      if (!annotationDraft) {
+        return;
+      }
+      const body = (
+        bodyOverride ??
+        annotationDraftBodyRef.current ??
+        annotationDraft.body
+      ).trim();
+      if (!body) {
+        return;
+      }
+      onCreateCodeAnnotation?.({
+        path: filePath,
+        lineRange: annotationDraft.lineRange,
+        body,
+        source: annotationDraft.source,
+        anchor: createCodeAnnotationAnchor(
+          annotationDraft.source === "file-edit-mode"
+            ? editorDraftContentRef.current
+            : content,
+          annotationDraft.lineRange,
+        ),
+      });
+      annotationDraftBodyRef.current = "";
+      setAnnotationDraft(null);
+    },
+    [annotationDraft, content, filePath, onCreateCodeAnnotation],
+  );
   const currentFileRenderToken = useMemo(
     () =>
       [
@@ -512,7 +523,6 @@ export function FileViewPanel({
   );
   const latestFileRenderTokenRef = useRef(currentFileRenderToken);
   latestFileRenderTokenRef.current = currentFileRenderToken;
-  const editorDraftContentRef = useRef(content);
   const [editorDraftDirty, setEditorDraftDirty] = useState(false);
   const effectiveIsDirty = isDirty || editorDraftDirty;
   latestIsDirtyRef.current = effectiveIsDirty;
@@ -1919,11 +1929,22 @@ export function FileViewPanel({
     [documentSnapshot, shouldBuildCodePreviewLines],
   );
   const visibleCodeAnnotations = useMemo(
-    () =>
-      codeAnnotations.filter((annotation) =>
-        isSameCodeAnnotationPath(annotation.path, filePath),
-      ),
-    [codeAnnotations, filePath],
+    () => {
+      const annotationContent =
+        mode === "edit" ? editorDraftContentRef.current : content;
+      return codeAnnotations
+        .filter((annotation) =>
+          isSameCodeAnnotationPath(annotation.path, filePath),
+        )
+        .map((annotation) => ({
+          ...annotation,
+          lineRange: resolveCodeAnnotationAnchor(
+            annotationContent,
+            annotation,
+          ).lineRange,
+        }));
+    },
+    [codeAnnotations, content, filePath, mode],
   );
   const highlightedLines = useMemo(
     () =>
