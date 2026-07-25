@@ -14,7 +14,7 @@ import { copy } from "../lib/copy";
 import { useLocale } from "../hooks/useLocale.js";
 import { useCurrency } from "../hooks/useCurrency.js";
 import { useTokenFormat } from "../hooks/useTokenFormat.js";
-import { TOKEN_FORMAT_MODES } from "../lib/token-format.js";
+import { getNextTokenFormatMode } from "../lib/token-format.js";
 import { getDetailsSortColumns, sortDailyRows } from "../lib/daily";
 import { getRangeForPeriod } from "../lib/date-range";
 import { DETAILS_PAGE_SIZE, paginateRows, trimLeadingZeroMonths } from "../lib/details";
@@ -669,11 +669,7 @@ export function DashboardPage({ baseUrl, onMainContentVisible }) {
   const summaryTotalTokens = hasSummary ? getBillableTotal(summary) : 0;
   const summaryValue = formatTokens(summaryTotalTokens);
   const toggleSummaryFormat = useCallback(() => {
-    setTokenFormatMode(
-      tokenFormatMode === TOKEN_FORMAT_MODES.COMPACT
-        ? TOKEN_FORMAT_MODES.FULL
-        : TOKEN_FORMAT_MODES.COMPACT,
-    );
+    setTokenFormatMode(getNextTokenFormatMode(tokenFormatMode));
   }, [setTokenFormatMode, tokenFormatMode]);
 
   const periodsForDisplay = PERIODS;

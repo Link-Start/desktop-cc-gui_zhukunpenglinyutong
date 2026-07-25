@@ -146,7 +146,7 @@ dashboard.core_index.expand_label,dashboard,DashboardPage,UsagePanel,toggle,"▸
 dashboard.core_index.collapse_aria,dashboard,DashboardPage,UsagePanel,toggle_aria,"Collapse model breakdown",,active
 dashboard.core_index.expand_aria,dashboard,DashboardPage,UsagePanel,toggle_aria,"Expand model breakdown",,active
 usage.summary.total,ui,UsagePanel,UsagePanel,summary_label_total,"Total tokens",,active
-usage.summary.toggle_aria,ui,DashboardPage,UsageOverview,summary_toggle_aria,"Toggle compact number format",,active
+usage.summary.toggle_aria,ui,DashboardPage,UsageOverview,summary_toggle_aria,"Toggle token number format",,active
 usage.metric.total,ui,UsagePanel,UsagePanel,metric_total,"Total",,active
 usage.metric.input,ui,UsagePanel,UsagePanel,metric_input,"Input",,active
 usage.metric.output,ui,UsagePanel,UsagePanel,metric_output,"Output",,active
