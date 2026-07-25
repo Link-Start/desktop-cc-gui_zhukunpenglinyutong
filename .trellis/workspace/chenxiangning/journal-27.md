@@ -1708,3 +1708,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1131: 消除 annotation 跨批次 large-file 回退
+
+**Date**: 2026-07-26
+**Task**: 消除 annotation 跨批次 large-file 回退
+**Branch**: `feature/v-0710`
+
+### Summary
+
+最终审计发现 annotation anchor 集成令 FileViewPanel 回升到 3016 行；将 anchor attach 与 file relocation 下沉到 code-annotation helper，FileViewPanel 回落至 2997 行。41 个增量测试、typecheck、touched ESLint 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68e5c2e3c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
