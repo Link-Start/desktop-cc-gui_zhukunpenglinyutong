@@ -59,19 +59,13 @@ import {
   type RendererContextMenuLeafItem,
   type RendererContextMenuState,
 } from "../../../components/ui/RendererContextMenu";
-import type {
-  CodeAnnotationLineRange,
-} from "../../code-annotations/types";
+import type { CodeAnnotationLineRange } from "../../code-annotations/types";
 import {
-  createCodeAnnotationAnchor,
-  isSameCodeAnnotationPath,
-  resolveCodeAnnotationAnchor,
+  attachCodeAnnotationAnchor,
+  resolveCodeAnnotationsForFile,
 } from "../../code-annotations/utils/codeAnnotations";
 import { loadCodeMirrorExtensionsForEditorLanguage } from "../utils/codemirrorLanguageExtensions";
-import {
-  parseLineMarkersFromDiff,
-  type GitLineMarkers,
-} from "../utils/gitLineMarkers";
+import { parseLineMarkersFromDiff, type GitLineMarkers } from "../utils/gitLineMarkers";
 import {
   isLikelyWindowsFsPath,
   normalizeComparablePath,
@@ -92,10 +86,7 @@ import {
   type FileEditorTypingDiagnosticsSession,
 } from "../utils/fileEditorTypingDiagnostics";
 import { loadFileViewStyles } from "../../../styles/featureStyleLoaders";
-import {
-  resolveDefaultFileViewMode,
-  resolveFileViewSurface,
-} from "../utils/fileViewSurface";
+import { resolveDefaultFileViewMode, resolveFileViewSurface } from "../utils/fileViewSurface";
 import { FileViewBody } from "./FileViewBody";
 import type { FileCodeMirrorEditorHandle } from "./FileCodeMirrorEditor";
 import type { NoteCaptureDraft } from "../../note-cards/types";
@@ -107,9 +98,7 @@ import { useFileGitBlame } from "../hooks/useFileGitBlame";
 import { useFileNavigation } from "../hooks/useFileNavigation";
 import { useFilePreviewPayload } from "../hooks/useFilePreviewPayload";
 import { isThemeMutationAttribute } from "../../theme/utils/themeAppearance";
-import {
-  DEFAULT_FILE_RENDER_PRESSURE,
-} from "../types/fileRenderPressure";
+import { DEFAULT_FILE_RENDER_PRESSURE } from "../types/fileRenderPressure";
 import {
   resolveFastMarkdownProfileInputs,
   resolveFastMarkdownRendererProfile,
@@ -495,18 +484,19 @@ export function FileViewPanel({
       if (!body) {
         return;
       }
-      onCreateCodeAnnotation?.({
-        path: filePath,
-        lineRange: annotationDraft.lineRange,
-        body,
-        source: annotationDraft.source,
-        anchor: createCodeAnnotationAnchor(
+      onCreateCodeAnnotation?.(
+        attachCodeAnnotationAnchor(
+          {
+            path: filePath,
+            lineRange: annotationDraft.lineRange,
+            body,
+            source: annotationDraft.source,
+          },
           annotationDraft.source === "file-edit-mode"
             ? editorDraftContentRef.current
             : content,
-          annotationDraft.lineRange,
         ),
-      });
+      );
       annotationDraftBodyRef.current = "";
       setAnnotationDraft(null);
     },
@@ -1929,21 +1919,12 @@ export function FileViewPanel({
     [documentSnapshot, shouldBuildCodePreviewLines],
   );
   const visibleCodeAnnotations = useMemo(
-    () => {
-      const annotationContent =
-        mode === "edit" ? editorDraftContentRef.current : content;
-      return codeAnnotations
-        .filter((annotation) =>
-          isSameCodeAnnotationPath(annotation.path, filePath),
-        )
-        .map((annotation) => ({
-          ...annotation,
-          lineRange: resolveCodeAnnotationAnchor(
-            annotationContent,
-            annotation,
-          ).lineRange,
-        }));
-    },
+    () =>
+      resolveCodeAnnotationsForFile(
+        mode === "edit" ? editorDraftContentRef.current : content,
+        filePath,
+        codeAnnotations,
+      ),
     [codeAnnotations, content, filePath, mode],
   );
   const highlightedLines = useMemo(

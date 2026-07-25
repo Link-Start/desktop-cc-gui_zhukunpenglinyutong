@@ -77,6 +77,16 @@ export function createCodeAnnotationAnchor(
   );
 }
 
+export function attachCodeAnnotationAnchor(
+  input: CodeAnnotationDraftInput,
+  content: string,
+): CodeAnnotationDraftInput {
+  return {
+    ...input,
+    anchor: createCodeAnnotationAnchor(content, input.lineRange),
+  };
+}
+
 function normalizeAnnotationPath(path: string) {
   return path.trim().replace(/\\/g, "/").replace(/^\/+/, "");
 }
@@ -290,6 +300,19 @@ export function resolveCodeAnnotationAnchor(
     },
     status: "relocated",
   };
+}
+
+export function resolveCodeAnnotationsForFile(
+  content: string,
+  filePath: string,
+  annotations: CodeAnnotationSelection[],
+) {
+  return annotations
+    .filter((annotation) => isSameCodeAnnotationPath(annotation.path, filePath))
+    .map((annotation) => ({
+      ...annotation,
+      lineRange: resolveCodeAnnotationAnchor(content, annotation).lineRange,
+    }));
 }
 
 export function appendCodeAnnotationsToPrompt(
