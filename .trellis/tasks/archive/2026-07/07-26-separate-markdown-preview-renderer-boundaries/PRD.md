@@ -4,7 +4,7 @@
 
 ## 目标
 
-- `FileMarkdownPreview` 成为 production canonical router。
+- `FileMarkdownPreviewRouter.tsx` 成为 production canonical router。
 - rich ReactMarkdown implementation 显式独立。
 - Fast 旧入口只保留兼容 re-export。
 - fast/rich/fallback 行为零回退。

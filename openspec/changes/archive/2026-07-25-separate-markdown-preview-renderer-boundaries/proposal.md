@@ -7,8 +7,8 @@ Markdown file preview 当前以 `FileMarkdownPreviewFast` 作为 production rout
 
 ## What Changes
 
-- `FileMarkdownPreview.tsx` 收敛为唯一 canonical router。
-- 原 rich ReactMarkdown implementation 显式命名为 `FileMarkdownPreviewRich.tsx`。
+- `FileMarkdownPreviewRouter.tsx` 收敛为唯一 canonical router。
+- 原 rich ReactMarkdown implementation 在 baseline-tracked `FileMarkdownPreview.tsx` 中显式导出为 `FileMarkdownPreviewRich`。
 - `FileViewBody` 改为只 import canonical router。
 - `FileMarkdownPreviewFast.tsx` 降为无逻辑 compatibility re-export。
 - 保持 fast profile、rich profile、local-image fallback、runtime cache reset 行为不变。
@@ -21,8 +21,8 @@ Markdown file preview 当前以 `FileMarkdownPreviewFast` 作为 production rout
 
 ## Impact
 
-- Production router：`src/features/files/components/FileMarkdownPreview.tsx`
-- Rich implementation：`src/features/files/components/FileMarkdownPreviewRich.tsx`
+- Production router：`src/features/files/components/FileMarkdownPreviewRouter.tsx`
+- Rich implementation：`src/features/files/components/FileMarkdownPreview.tsx`
 - Compatibility entry：`src/features/files/components/FileMarkdownPreviewFast.tsx`
 - Consumer：`src/features/files/components/FileViewBody.tsx`
 - Focused Markdown/FileView tests；无新增 dependency

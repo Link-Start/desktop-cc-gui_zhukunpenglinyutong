@@ -26,7 +26,7 @@ import {
   type FileCodeMirrorEditorHandle,
 } from "./FileCodeMirrorEditor";
 import { FileDocumentPreview } from "./FileDocumentPreview";
-import { FileMarkdownPreview } from "./FileMarkdownPreview";
+import { FileMarkdownPreview } from "./FileMarkdownPreviewRouter";
 import { FileStructuredPreview } from "./FileStructuredPreview";
 import { FileTabularPreview } from "./FileTabularPreview";
 import type { FilePreviewPayload } from "../hooks/useFilePreviewPayload";

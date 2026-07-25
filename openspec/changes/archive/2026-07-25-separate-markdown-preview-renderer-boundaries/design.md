@@ -8,7 +8,7 @@
 
 ### Canonical router
 
-把现有 router 移到 `FileMarkdownPreview.tsx` 并导出：
+把现有 router 移到 `FileMarkdownPreviewRouter.tsx` 并导出：
 
 - `FileMarkdownPreview`
 - `FileMarkdownPreviewProps`
@@ -17,7 +17,7 @@ router 是 production 唯一入口，继续拥有 profile selection、fast fallb
 
 ### Explicit implementation
 
-原 renderer 移到 `FileMarkdownPreviewRich.tsx` 并导出：
+原 renderer 保留在 baseline-tracked `FileMarkdownPreview.tsx` 并导出：
 
 - `FileMarkdownPreviewRich`
 - `FileMarkdownPreviewRichProps`

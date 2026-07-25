@@ -6,7 +6,7 @@ import { loadKatexAssets } from "../../markdown/markdownMath";
 import {
   clearFileMarkdownPreviewRuntimeCachesForTests,
   FileMarkdownPreviewRich as FileMarkdownPreview,
-} from "./FileMarkdownPreviewRich";
+} from "./FileMarkdownPreview";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(),

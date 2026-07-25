@@ -12,9 +12,9 @@
 - touched-file ESLint、`git diff --check` passed.
 - `openspec validate separate-markdown-preview-renderer-boundaries --strict --no-interactive` passed.
 - Import graph：
-  - production `FileViewBody -> FileMarkdownPreview`
+  - production `FileViewBody -> FileMarkdownPreviewRouter`
   - canonical router `-> FileMarkdownPreviewRich`
-  - compatibility `FileMarkdownPreviewFast -> FileMarkdownPreview`
+  - compatibility `FileMarkdownPreviewFast -> FileMarkdownPreviewRouter`
   - rich implementation 无反向 import
 
 ## Review
@@ -23,6 +23,7 @@
   造成 Mermaid stable body 断裂与 fullscreen 测试超时。
 - router 改用 module-level stable empty annotations；rich boundary 使用 `memo`，隔离 router-only state
   churn。失败用例重跑通过。
-- 1582 行实现仍作为 feature-complete rich fallback 存在，不伪装成已删除；其职责和 import direction
-  已显式化。Fast compatibility entry 仅 11 行、无 renderer state/logic。
+- 1582 行实现仍作为 feature-complete rich fallback 存在，不伪装成已删除；为避免新增大文件绕过
+  large-file baseline，它保留在原 baseline-tracked path 并显式导出 Rich symbol。Fast compatibility
+  entry 仅 11 行、无 renderer state/logic。
 - 无新增 dependency，profile/fallback/annotation/cache-reset contract 保持。

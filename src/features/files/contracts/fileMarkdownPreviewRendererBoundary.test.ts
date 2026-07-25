@@ -12,7 +12,7 @@ describe("file Markdown preview renderer boundary", () => {
     );
 
     expect(consumerSource).toContain(
-      'import { FileMarkdownPreview } from "./FileMarkdownPreview";',
+      'import { FileMarkdownPreview } from "./FileMarkdownPreviewRouter";',
     );
     expect(consumerSource).not.toContain('from "./FileMarkdownPreviewFast"');
     expect(consumerSource).not.toContain('from "./FileMarkdownPreviewRich"');
@@ -20,14 +20,14 @@ describe("file Markdown preview renderer boundary", () => {
 
   it("keeps renderer dependencies one-way", () => {
     const routerSource = readSource(
-      "src/features/files/components/FileMarkdownPreview.tsx",
+      "src/features/files/components/FileMarkdownPreviewRouter.tsx",
     );
     const richSource = readSource(
-      "src/features/files/components/FileMarkdownPreviewRich.tsx",
+      "src/features/files/components/FileMarkdownPreview.tsx",
     );
 
-    expect(routerSource).toContain('from "./FileMarkdownPreviewRich"');
-    expect(richSource).not.toContain('from "./FileMarkdownPreview"');
+    expect(routerSource).toContain('from "./FileMarkdownPreview"');
+    expect(richSource).not.toContain('from "./FileMarkdownPreviewRouter"');
     expect(richSource).not.toContain('from "./FileMarkdownPreviewFast"');
   });
 

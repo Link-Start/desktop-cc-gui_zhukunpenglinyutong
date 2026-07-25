@@ -6,7 +6,7 @@ TBD - created by archiving change separate-markdown-preview-renderer-boundaries.
 ### Requirement: File Markdown preview MUST expose one canonical production router
 
 Production file-preview consumers MUST import `FileMarkdownPreview` from
-`FileMarkdownPreview.tsx`. The canonical router MUST own renderer profile selection,
+`FileMarkdownPreviewRouter.tsx`. The canonical router MUST own renderer profile selection,
 outline orchestration, and fast-to-rich fallback.
 
 #### Scenario: FileView renders Markdown
@@ -18,7 +18,7 @@ outline orchestration, and fast-to-rich fallback.
 ### Requirement: Rich renderer MUST have an explicit one-way boundary
 
 The ReactMarkdown implementation MUST be exported as `FileMarkdownPreviewRich` from
-`FileMarkdownPreviewRich.tsx`. It MUST NOT import the canonical router or compatibility
+the baseline-tracked `FileMarkdownPreview.tsx`. It MUST NOT import the canonical router or compatibility
 entry. The canonical router MAY import the rich implementation as its fallback.
 
 #### Scenario: Fast renderer requests fallback

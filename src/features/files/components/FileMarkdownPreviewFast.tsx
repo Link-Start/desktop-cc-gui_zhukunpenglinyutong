@@ -1,11 +1,11 @@
 /**
  * Compatibility entry for existing callers.
  *
- * New production code imports `FileMarkdownPreview` from `./FileMarkdownPreview`.
+ * New production code imports `FileMarkdownPreview` from `./FileMarkdownPreviewRouter`.
  */
 export {
   FileMarkdownPreview as FileMarkdownPreviewFast,
-} from "./FileMarkdownPreview";
+} from "./FileMarkdownPreviewRouter";
 export type {
   FileMarkdownPreviewProps as FileMarkdownPreviewFastProps,
-} from "./FileMarkdownPreview";
+} from "./FileMarkdownPreviewRouter";

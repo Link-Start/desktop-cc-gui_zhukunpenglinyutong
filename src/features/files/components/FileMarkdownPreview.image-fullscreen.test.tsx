@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { FileMarkdownPreviewRich as FileMarkdownPreview } from "./FileMarkdownPreviewRich";
+import { FileMarkdownPreviewRich as FileMarkdownPreview } from "./FileMarkdownPreview";
 
 vi.mock("react-markdown", () => ({
   default: ({
