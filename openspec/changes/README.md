@@ -3,7 +3,7 @@
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
 - Updated At: `2026-07-25`
-- Active proposals: `6`
+- Active proposals: `8`
 - Archived proposals: `731`
 - Main capability specs: `431`
 
@@ -12,9 +12,11 @@
 | Change | Progress | Current gate | Artifacts |
 |---|---:|---|---|
 | [`add-linux-native-menu-localization`](add-linux-native-menu-localization/proposal.md) | 4/5 | Linux non-default-language startup smoke | [design](add-linux-native-menu-localization/design.md) · [tasks](add-linux-native-menu-localization/tasks.md) · [specs](add-linux-native-menu-localization/specs/) · [verification](add-linux-native-menu-localization/verification.md) |
+| [`add-skills-hub-management`](add-skills-hub-management/proposal.md) | 14/14 | 追溯提案（已随 `b1d94a930` / `c75922dec` 合入）；archive 决策 | [tasks](add-skills-hub-management/tasks.md) · [specs](add-skills-hub-management/specs/) |
 | [`add-tokentracker-usage-dashboard`](add-tokentracker-usage-dashboard/proposal.md) | 21/21 | completion review / archive decision | [tasks](add-tokentracker-usage-dashboard/tasks.md) |
 | [`add-vendor-cli-lifecycle-header`](add-vendor-cli-lifecycle-header/proposal.md) | 11/12 | 手工：未安装 / 最新 / outdated / npm view 失败 / 安装后刷新 smoke | [design](add-vendor-cli-lifecycle-header/design.md) · [tasks](add-vendor-cli-lifecycle-header/tasks.md) · [specs](add-vendor-cli-lifecycle-header/specs/) |
 | [`enable-claude-lightweight-streaming-and-frame-attribution`](enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) | 15/18 | Claude-stream trace、final fidelity 与 archive gate | [design](enable-claude-lightweight-streaming-and-frame-attribution/design.md) · [tasks](enable-claude-lightweight-streaming-and-frame-attribution/tasks.md) · [specs](enable-claude-lightweight-streaming-and-frame-attribution/specs/) · [verification](enable-claude-lightweight-streaming-and-frame-attribution/verification.md) |
+| [`move-mcp-inventory-to-extensions`](move-mcp-inventory-to-extensions/proposal.md) | 12/12 | 追溯提案（已随 `101a19abb` 合入）；archive 决策 | [tasks](move-mcp-inventory-to-extensions/tasks.md) · [specs](move-mcp-inventory-to-extensions/specs/) |
 | [`reduce-client-polling-overhead`](reduce-client-polling-overhead/proposal.md) | 10/11 | 实机 smoke：worktree/kanban/output/dock 四条路径 | [design](reduce-client-polling-overhead/design.md) · [tasks](reduce-client-polling-overhead/tasks.md) · [specs](reduce-client-polling-overhead/specs/) · [verification](reduce-client-polling-overhead/verification.md) |
 | [`stabilize-client-runtime-and-diagnostics`](stabilize-client-runtime-and-diagnostics/proposal.md) | 21/22 | Quantified frame / first-delta trace retention | [design](stabilize-client-runtime-and-diagnostics/design.md) · [tasks](stabilize-client-runtime-and-diagnostics/tasks.md) · [specs](stabilize-client-runtime-and-diagnostics/specs/) · [verification](stabilize-client-runtime-and-diagnostics/verification.md) |
 ## Archived Proposals
