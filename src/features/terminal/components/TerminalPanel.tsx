@@ -1,4 +1,12 @@
-import { useCallback, useState, type MouseEvent, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type RefObject,
+} from "react";
 import { useTranslation } from "react-i18next";
 import type { TerminalStatus } from "../../../types";
 import {
@@ -15,6 +23,8 @@ type TerminalPanelProps = {
   message: string;
   /** 读取 xterm 内部选区文本(即用户看到的拖蓝高亮),无选区时返回空串。 */
   getSelection: () => string;
+  findNext: (query: string) => boolean;
+  findPrevious: (query: string) => boolean;
   onInsertText: (text: string) => void;
 };
 
@@ -23,10 +33,51 @@ export function TerminalPanel({
   status,
   message,
   getSelection,
+  findNext,
+  findPrevious,
   onInsertText,
 }: TerminalPanelProps) {
   const { t } = useTranslation();
   const [contextMenu, setContextMenu] = useState<RendererContextMenuState | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [hasSearchMatch, setHasSearchMatch] = useState<boolean | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (searchOpen) {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }
+  }, [searchOpen]);
+
+  const runSearch = useCallback(
+    (direction: "next" | "previous") => {
+      setHasSearchMatch(
+        direction === "next"
+          ? findNext(searchQuery)
+          : findPrevious(searchQuery),
+      );
+    },
+    [findNext, findPrevious, searchQuery],
+  );
+
+  const handleShellKeyDownCapture = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        event.stopPropagation();
+        setSearchOpen(true);
+        return;
+      }
+      if (event.key === "Escape" && searchOpen) {
+        event.preventDefault();
+        setSearchOpen(false);
+        setHasSearchMatch(null);
+      }
+    },
+    [searchOpen],
+  );
 
   const handleContextMenu = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -60,7 +111,60 @@ export function TerminalPanel({
   );
 
   return (
-    <div className="terminal-shell">
+    <div
+      className="terminal-shell"
+      onKeyDownCapture={handleShellKeyDownCapture}
+    >
+      {searchOpen ? (
+        <div className="terminal-search" role="search">
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            aria-label={t("terminal.searchInput")}
+            placeholder={t("terminal.searchPlaceholder")}
+            onChange={(event) => {
+              const query = event.target.value;
+              setSearchQuery(query);
+              setHasSearchMatch(query.trim() ? findNext(query) : null);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                runSearch(event.shiftKey ? "previous" : "next");
+              }
+            }}
+          />
+          <button
+            type="button"
+            aria-label={t("terminal.searchPrevious")}
+            onClick={() => runSearch("previous")}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            aria-label={t("terminal.searchNext")}
+            onClick={() => runSearch("next")}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            aria-label={t("terminal.searchClose")}
+            onClick={() => {
+              setSearchOpen(false);
+              setHasSearchMatch(null);
+            }}
+          >
+            ×
+          </button>
+          {hasSearchMatch === false ? (
+            <span className="terminal-search-empty">
+              {t("terminal.searchNoResults")}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <div
         ref={containerRef}
         className="terminal-surface"

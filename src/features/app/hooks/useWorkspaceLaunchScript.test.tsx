@@ -25,7 +25,9 @@ const terminalState: TerminalSessionState = {
   hasSession: false,
   readyKey: null,
   cleanupTerminalSession: vi.fn(),
-  getSelection: () => "",
+      getSelection: () => "",
+      findNext: vi.fn(() => false),
+      findPrevious: vi.fn(() => false),
 };
 
 describe("useWorkspaceLaunchScript", () => {

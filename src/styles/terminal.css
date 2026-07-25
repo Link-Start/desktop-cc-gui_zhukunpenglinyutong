@@ -184,6 +184,52 @@
   box-sizing: border-box;
 }
 
+.terminal-search {
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: var(--surface-card);
+  box-shadow: var(--shadow-popover, 0 10px 24px rgba(0, 0, 0, 0.24));
+}
+
+.terminal-search input {
+  width: 190px;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.terminal-search button {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.terminal-search button:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.terminal-search-empty {
+  padding: 0 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .terminal-surface .xterm,
 .terminal-surface .xterm-screen,
 .terminal-surface .xterm-viewport {
