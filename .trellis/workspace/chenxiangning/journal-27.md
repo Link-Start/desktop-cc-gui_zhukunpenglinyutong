@@ -1675,3 +1675,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1130: 收敛 Markdown 文件预览渲染边界
+
+**Date**: 2026-07-26
+**Task**: 收敛 Markdown 文件预览渲染边界
+**Branch**: `feature/v-0710`
+
+### Summary
+
+将 FileMarkdownPreview 收敛为 canonical router，rich implementation 显式拆到 FileMarkdownPreviewRich，Fast 旧入口降为 11 行兼容别名，FileViewBody 只依赖 canonical router；修复 outline state 导致 Mermaid subtree 重挂载。74 个增量测试、typecheck、touched ESLint 与 strict OpenSpec validate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dbd17d55c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
