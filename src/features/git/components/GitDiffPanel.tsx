@@ -9,6 +9,10 @@ import {
   readLastCommitMessageConfig,
   saveLastCommitMessageConfig,
 } from "../../../utils/commitMessage";
+import {
+  COMMIT_MESSAGE_MENU_ENGINES,
+  readExecutableCommitMessageConfig,
+} from "../utils/commitMessageMenuConfig";
 import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
@@ -2176,10 +2180,14 @@ function GitDiffPanelImpl({
             menuSize,
           );
       const lastConfig = readLastCommitMessageConfig();
-      const engineItems: Array<{ engine: CommitMessageEngine; label: string }> = [
-        { engine: "codex", label: t("git.generateCommitMessageEngineCodex") },
-        { engine: "claude", label: t("git.generateCommitMessageEngineClaude") },
-      ];
+      const engineLabelKeys: Record<(typeof COMMIT_MESSAGE_MENU_ENGINES)[number], string> = {
+        codex: "git.generateCommitMessageEngineCodex",
+        claude: "git.generateCommitMessageEngineClaude",
+      };
+      const engineItems = COMMIT_MESSAGE_MENU_ENGINES.map((engine) => ({
+        engine,
+        label: t(engineLabelKeys[engine]),
+      }));
       setGitContextMenu({
         ...position,
         label: t("git.generateCommitMessage"),
@@ -2255,10 +2263,9 @@ function GitDiffPanelImpl({
     (event: ReactMouseEvent<HTMLButtonElement>) => {
       // 一键生成：已有上次配置且引擎可用时跳过两级菜单直接生成；
       // 首次使用 / 引擎已被禁用 / 正在生成时回落到引擎菜单。
-      const lastConfig = readLastCommitMessageConfig();
+      const lastConfig = readExecutableCommitMessageConfig();
       if (
         lastConfig &&
-        isEngineExecutionEnabled(lastConfig.engine) &&
         onGenerateCommitMessage &&
         canGenerateCommitMessage &&
         !commitMessageLoading &&
