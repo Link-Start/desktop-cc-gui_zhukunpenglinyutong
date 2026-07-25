@@ -1642,3 +1642,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1129: 稳定代码标注锚点
+
+**Date**: 2026-07-26
+**Task**: 稳定代码标注锚点
+**Branch**: `feature/v-0710`
+
+### Summary
+
+为文件与 diff 标注保存 versioned exact snapshot/context fingerprint；在原位置 ±120 行内安全重定位，歧义返回 stale；Prompt 附带选中代码。44 个增量测试、typecheck、touched ESLint 与 strict OpenSpec validate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `175edc732` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

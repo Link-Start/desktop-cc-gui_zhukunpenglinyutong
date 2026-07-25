@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-27.md`
-- **Total Sessions**: 1128
+- **Total Sessions**: 1129
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~1644 | Active |
+| `journal-27.md` | ~1677 | Active |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +55,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1129 | 2026-07-26 | 稳定代码标注锚点 | `175edc732` | `feature/v-0710` |
 | 1128 | 2026-07-26 | 增加 Terminal 搜索与安全链接 | `d8b592095` | `feature/v-0710` |
 | 1127 | 2026-07-26 | 模块化 Git 与 File 高频入口 | `26cbce638` | `feature/v-0710` |
 | 1126 | 2026-07-26 | 恢复 Git History 核心类型保护 | `38b5134b1` | `feature/v-0710` |
