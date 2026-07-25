@@ -1344,3 +1344,135 @@ SkillInvocation 全链路透传契约、claude_command_create managed 写入、p
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1120: 工程工具链修复批次1: files 重复符号合并与兜底轮询治理
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次1: files 重复符号合并与兜底轮询治理
+**Branch**: `feature/v-0710`
+
+### Summary
+
+合并 fileViewPanelShared/Internals 10 个重复导出符号(internals 死代码清理 658->295 行); 兜底轮询 2s->30s + visibility 门控; 修复 app-shell.startup 失效 mock (useLiveEditPreview 路径与形状)。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 3/4/12
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `04764a654` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1121: 工程工具链修复批次2: GitHistoryPanelPickers 摘除 @ts-nocheck
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次2: GitHistoryPanelPickers 摘除 @ts-nocheck
+**Branch**: `feature/v-0710`
+
+### Summary
+
+第一片 nocheck slice: Pickers 494 行补 KeyboardEvent 类型导入后零错误通过 typecheck; 共享类型 GitHistoryPanelTypes.ts 验证可用。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 1
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dbcd943eb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1122: 工程工具链修复批次3: AI commit message 一键生成
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次3: AI commit message 一键生成
+**Branch**: `feature/v-0710`
+
+### Summary
+
+GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开菜单; 复用既有 config 持久化; 新增 2 测试并语义合并 1 个存量测试。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 6
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `55f18aa24` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1123: 工程工具链修复批次4: worktree 面板收敛共享 AI commit 实现
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次4: worktree 面板收敛共享 AI commit 实现
+**Branch**: `feature/v-0710`
+
+### Summary
+
+新增 commitMessageMenuConfig 共享事实源; worktree 面板获得一键生成+last-config 菜单项; 持久化下沉到生成路径; 测试补 localStorage 清理与 2 个新用例。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 7
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9fb13076e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
