@@ -1150,3 +1150,36 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1173: 补充 0.7.10 变更记录
+
+**Date**: 2026-07-27
+**Task**: 补充 0.7.10 变更记录
+**Branch**: `feature/v-0710`
+
+### Summary
+
+更新 CHANGELOG.md，将 feature/v-0710 分支 7/26 之后的 engine、threads、vendors、git 等 20+ 业务 commit 归类补入 0.7.10 中英双语条目
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1cccac7e7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
