@@ -2173,11 +2173,28 @@ pub(crate) async fn record_engine_provider_binding_core(
 ) -> Result<bool, String> {
     let workspace_id = normalize_workspace_id(&workspace_id)?;
     ensure_workspace_exists(workspaces, &workspace_id).await?;
-    let session_id = normalize_session_ids(vec![session_id])?
+    record_engine_provider_binding_at_path(
+        storage_path,
+        &workspace_id,
+        &session_id,
+        &engine,
+        &binding,
+    )
+}
+
+pub(crate) fn record_engine_provider_binding_at_path(
+    storage_path: &Path,
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+    binding: &EngineProviderBinding,
+) -> Result<bool, String> {
+    let workspace_id = normalize_workspace_id(workspace_id)?;
+    let session_id = normalize_session_ids(vec![session_id.to_string()])?
         .into_iter()
         .next()
         .ok_or_else(|| "session_id is required".to_string())?;
-    let stable_key = engine_provider_binding_stable_key(&workspace_id, &session_id, &engine)
+    let stable_key = engine_provider_binding_stable_key(&workspace_id, &session_id, engine)
         .ok_or_else(|| "engine is required".to_string())?;
     let path = catalog_metadata_path(storage_path, &workspace_id)?;
     with_storage_lock(&path, || {
@@ -2191,10 +2208,36 @@ pub(crate) async fn record_engine_provider_binding_core(
         }
         metadata
             .engine_provider_binding_by_session_key
-            .insert(stable_key, binding);
+            .insert(stable_key, binding.clone());
         write_catalog_metadata_unlocked(&path, &metadata)?;
         Ok(true)
     })
+}
+
+pub(crate) fn schedule_engine_provider_binding_record(
+    storage_path: PathBuf,
+    workspace_id: String,
+    session_id: String,
+    engine: String,
+    binding: EngineProviderBinding,
+) {
+    tokio::task::spawn_blocking(move || {
+        if let Err(error) = record_engine_provider_binding_at_path(
+            &storage_path,
+            &workspace_id,
+            &session_id,
+            &engine,
+            &binding,
+        ) {
+            log::error!(
+                "[engine.provider_binding] failed to persist canonical binding engine={} workspace={} session={}: {}",
+                engine,
+                workspace_id,
+                session_id,
+                error
+            );
+        }
+    });
 }
 
 pub(crate) async fn create_workspace_session_folder_core(

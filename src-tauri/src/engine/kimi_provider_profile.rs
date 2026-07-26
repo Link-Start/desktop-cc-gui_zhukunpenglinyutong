@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -7,6 +9,7 @@ use serde_json::Value;
 
 use crate::app_paths;
 use crate::session_management::EngineProviderBinding;
+use crate::storage::with_storage_lock;
 use crate::types::KimiProviderConfig;
 
 pub(crate) const KIMI_LOCAL_PROVIDER_PROFILE_ID: &str = "__local_config_toml__";
@@ -227,6 +230,48 @@ pub(crate) fn materialize_kimi_provider_at(
     config_path: &Path,
     backup_existing: bool,
 ) -> Result<(), String> {
+    with_storage_lock(config_path, || {
+        materialize_kimi_provider_at_unlocked(provider, config_path, backup_existing)
+    })
+}
+
+fn write_kimi_provider_temp_file(path: &Path, content: &str) -> Result<(), String> {
+    let mut options = OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(path)
+        .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
+    if let Err(error) = file
+        .write_all(content.as_bytes())
+        .and_then(|_| file.sync_all())
+    {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(format!("failed to write {}: {error}", path.display()));
+    }
+    Ok(())
+}
+
+fn secure_kimi_provider_file(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+            .map_err(|error| format!("failed to secure {}: {error}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn materialize_kimi_provider_at_unlocked(
+    provider: &KimiProviderConfig,
+    config_path: &Path,
+    backup_existing: bool,
+) -> Result<(), String> {
     let original = match fs::read_to_string(config_path) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
@@ -238,6 +283,9 @@ pub(crate) fn materialize_kimi_provider_at(
         }
     };
     let rendered = render_kimi_provider_config(&original, provider)?;
+    if original == rendered && config_path.exists() {
+        return secure_kimi_provider_file(config_path);
+    }
     if let Some(parent) = config_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
@@ -248,18 +296,16 @@ pub(crate) fn materialize_kimi_provider_at(
             .map_err(|error| format!("failed to back up {}: {error}", config_path.display()))?;
     }
     let tmp_path = config_path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
-    fs::write(&tmp_path, rendered)
-        .map_err(|error| format!("failed to write {}: {error}", tmp_path.display()))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&tmp_path, fs::Permissions::from_mode(0o600))
-            .map_err(|error| format!("failed to secure {}: {error}", tmp_path.display()))?;
-    }
+    write_kimi_provider_temp_file(&tmp_path, &rendered)?;
     #[cfg(windows)]
     if config_path.exists() {
-        fs::remove_file(config_path)
-            .map_err(|error| format!("failed to replace {}: {error}", config_path.display()))?;
+        if let Err(error) = fs::remove_file(config_path) {
+            let _ = fs::remove_file(&tmp_path);
+            return Err(format!(
+                "failed to replace {}: {error}",
+                config_path.display()
+            ));
+        }
     }
     if let Err(error) = fs::rename(&tmp_path, config_path) {
         let _ = fs::remove_file(&tmp_path);
@@ -268,7 +314,7 @@ pub(crate) fn materialize_kimi_provider_at(
             config_path.display()
         ));
     }
-    Ok(())
+    secure_kimi_provider_file(config_path)
 }
 
 pub(crate) fn resolve_kimi_provider_launch_profile(
@@ -366,6 +412,73 @@ mod tests {
                 0o600
             );
         }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn provider_temp_file_is_owner_only_from_creation() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!("mossx-kimi-temp-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create temp root");
+        let path = root.join("provider.tmp");
+
+        write_kimi_provider_temp_file(&path, "api_key = \"secret\"").expect("write secure temp");
+
+        assert_eq!(
+            fs::metadata(&path).expect("metadata").permissions().mode() & 0o777,
+            0o600
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn concurrent_materialization_keeps_valid_provider_config() {
+        let root = std::env::temp_dir().join(format!("mossx-kimi-concurrent-{}", Uuid::new_v4()));
+        let path = root.join("provider-a").join("config.toml");
+        let provider = sample_provider();
+        let workers = (0..4)
+            .map(|_| {
+                let path = path.clone();
+                let provider = provider.clone();
+                std::thread::spawn(move || materialize_kimi_provider_at(&provider, &path, false))
+            })
+            .collect::<Vec<_>>();
+
+        for worker in workers {
+            worker
+                .join()
+                .expect("materialization worker")
+                .expect("materialize provider");
+        }
+
+        let rendered = fs::read_to_string(&path).expect("read final config");
+        let parsed: toml::Table = toml::from_str(&rendered).expect("parse final config");
+        assert_eq!(
+            parsed.get("default_model").and_then(toml::Value::as_str),
+            Some("ccgui/kimi-k2")
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unchanged_materialization_keeps_existing_inode() {
+        use std::os::unix::fs::MetadataExt;
+
+        let root = std::env::temp_dir().join(format!("mossx-kimi-idempotent-{}", Uuid::new_v4()));
+        let path = root.join("provider-a").join("config.toml");
+        let provider = sample_provider();
+        materialize_kimi_provider_at(&provider, &path, false).expect("first materialization");
+        let first_inode = fs::metadata(&path).expect("first metadata").ino();
+
+        materialize_kimi_provider_at(&provider, &path, false).expect("second materialization");
+
+        assert_eq!(
+            fs::metadata(&path).expect("second metadata").ino(),
+            first_inode
+        );
         let _ = fs::remove_dir_all(root);
     }
 }

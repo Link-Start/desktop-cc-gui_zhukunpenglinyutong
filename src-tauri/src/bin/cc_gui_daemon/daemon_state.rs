@@ -1169,6 +1169,11 @@ impl DaemonState {
                 let reasoning_item_id_clone = reasoning_item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
                 let mut accumulated_agent_text = String::new();
+                let provider_binding_for_forwarder = provider_launch_profile
+                    .as_ref()
+                    .map(|profile| profile.binding.clone());
+                let provider_binding_storage_path = self.storage_path.clone();
+                let provider_binding_workspace_id = workspace_id.clone();
                 tokio::spawn(async move {
                     let deadline = tokio::time::Instant::now()
                         + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
@@ -1212,6 +1217,25 @@ impl DaemonState {
                         let is_terminal = event.is_terminal();
                         let is_turn_completed =
                             matches!(event, engine::events::EngineEvent::TurnCompleted { .. });
+                        if let (
+                            Some(binding),
+                            engine::events::EngineEvent::SessionStarted {
+                                session_id,
+                                engine: engine::EngineType::Claude,
+                                ..
+                            },
+                        ) = (provider_binding_for_forwarder.as_ref(), &event)
+                        {
+                            if !session_id.is_empty() && session_id != "pending" {
+                                session_management::schedule_engine_provider_binding_record(
+                                    provider_binding_storage_path.clone(),
+                                    provider_binding_workspace_id.clone(),
+                                    session_id.clone(),
+                                    "claude".to_string(),
+                                    binding.clone(),
+                                );
+                            }
+                        }
 
                         if let engine::events::EngineEvent::TextDelta { text, .. } = &event {
                             accumulated_agent_text.push_str(text);
@@ -1785,14 +1809,14 @@ impl DaemonState {
                     .as_deref()
                     .or(provider_binding_lookup_session_id.as_deref())
                     .unwrap_or(thread_id.as_str());
-                if let Some(binding) = provider_launch_profile.binding {
+                if let Some(binding) = provider_launch_profile.binding.as_ref() {
                     session_management::record_engine_provider_binding_core(
                         &self.workspaces,
                         self.storage_path.as_path(),
                         workspace_id.clone(),
                         binding_session_id.to_string(),
                         "kimi".to_string(),
-                        binding,
+                        binding.clone(),
                     )
                     .await?;
                 }
@@ -1805,6 +1829,9 @@ impl DaemonState {
                 let item_id_clone = item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
                 let mut accumulated_agent_text = String::new();
+                let provider_binding_for_forwarder = provider_launch_profile.binding.clone();
+                let provider_binding_storage_path = self.storage_path.clone();
+                let provider_binding_workspace_id = workspace_id.clone();
                 tokio::spawn(async move {
                     let deadline = tokio::time::Instant::now()
                         + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
@@ -1833,6 +1860,25 @@ impl DaemonState {
                             &event,
                         );
                         let is_terminal = event.is_terminal();
+                        if let (
+                            Some(binding),
+                            engine::events::EngineEvent::SessionStarted {
+                                session_id,
+                                engine: engine::EngineType::Kimi,
+                                ..
+                            },
+                        ) = (provider_binding_for_forwarder.as_ref(), &event)
+                        {
+                            if !session_id.is_empty() && session_id != "pending" {
+                                session_management::schedule_engine_provider_binding_record(
+                                    provider_binding_storage_path.clone(),
+                                    provider_binding_workspace_id.clone(),
+                                    session_id.clone(),
+                                    "kimi".to_string(),
+                                    binding.clone(),
+                                );
+                            }
+                        }
                         let render_lane = match &event {
                             engine::events::EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,
                             engine::events::EngineEvent::ReasoningDelta { .. } => {

@@ -1678,6 +1678,11 @@ pub async fn engine_send_message(
             let runtime_manager = state.runtime_manager.clone();
             let workspace_entry_for_forwarder = workspace_entry.clone();
             let session_for_forwarder = session.clone();
+            let provider_binding_for_forwarder = provider_launch_profile
+                .as_ref()
+                .map(|profile| profile.binding.clone());
+            let provider_binding_storage_path = state.storage_path.clone();
+            let provider_binding_workspace_id = workspace_id.clone();
 
             // Spawn event forwarder: reads from broadcast channel and emits Tauri events.
             tokio::spawn(async move {
@@ -1733,6 +1738,25 @@ pub async fn engine_send_message(
                     let is_turn_completed =
                         matches!(turn_event.event, EngineEvent::TurnCompleted { .. });
                     let event = turn_event.event;
+                    if let (
+                        Some(binding),
+                        EngineEvent::SessionStarted {
+                            session_id,
+                            engine: EngineType::Claude,
+                            ..
+                        },
+                    ) = (provider_binding_for_forwarder.as_ref(), &event)
+                    {
+                        if !session_id.is_empty() && session_id != "pending" {
+                            session_management::schedule_engine_provider_binding_record(
+                                provider_binding_storage_path.clone(),
+                                provider_binding_workspace_id.clone(),
+                                session_id.clone(),
+                                "claude".to_string(),
+                                binding.clone(),
+                            );
+                        }
+                    }
                     let stream_timing = turn_event.stream_timing;
                     let did_finish = handle_claude_forwarder_event(
                         event,
@@ -2283,14 +2307,14 @@ pub async fn engine_send_message(
                 .as_deref()
                 .or(provider_binding_lookup_session_id.as_deref())
                 .unwrap_or(thread_id.as_str());
-            if let Some(binding) = provider_launch_profile.binding {
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
                 crate::session_management::record_engine_provider_binding_core(
                     &state.workspaces,
                     state.storage_path.as_path(),
                     workspace_id.clone(),
                     binding_session_id.to_string(),
                     "kimi".to_string(),
-                    binding,
+                    binding.clone(),
                 )
                 .await?;
             }
@@ -2302,6 +2326,9 @@ pub async fn engine_send_message(
             let item_id_clone = item_id.clone();
             let turn_id_for_forwarder = turn_id.clone();
             let mut accumulated_agent_text = String::new();
+            let provider_binding_for_forwarder = provider_launch_profile.binding.clone();
+            let provider_binding_storage_path = state.storage_path.clone();
+            let provider_binding_workspace_id = workspace_id.clone();
             tokio::spawn(async move {
                 let deadline = tokio::time::Instant::now()
                     + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
@@ -2326,6 +2353,25 @@ pub async fn engine_send_message(
                     }
 
                     let event = turn_event.event;
+                    if let (
+                        Some(binding),
+                        EngineEvent::SessionStarted {
+                            session_id,
+                            engine: EngineType::Kimi,
+                            ..
+                        },
+                    ) = (provider_binding_for_forwarder.as_ref(), &event)
+                    {
+                        if !session_id.is_empty() && session_id != "pending" {
+                            session_management::schedule_engine_provider_binding_record(
+                                provider_binding_storage_path.clone(),
+                                provider_binding_workspace_id.clone(),
+                                session_id.clone(),
+                                "kimi".to_string(),
+                                binding.clone(),
+                            );
+                        }
+                    }
                     let is_terminal = event.is_terminal();
                     let render_lane = match &event {
                         EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,

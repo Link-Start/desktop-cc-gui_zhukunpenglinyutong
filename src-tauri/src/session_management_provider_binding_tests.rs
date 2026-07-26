@@ -113,6 +113,36 @@ async fn record_engine_provider_binding_is_idempotent_and_restart_readable() {
 }
 
 #[test]
+fn canonical_identity_binding_is_restart_readable_without_second_send() {
+    let base = std::env::temp_dir().join(format!("canonical-provider-binding-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&base).expect("create temp dir");
+    let storage_path = base.join("workspaces.json");
+    std::fs::write(&storage_path, "[]").expect("seed storage path");
+    let binding = EngineProviderBinding {
+        provider_profile_id: "provider-a".to_string(),
+        provider_profile_source: "managed".to_string(),
+        provider_profile_name: "Provider A".to_string(),
+        provider_availability: "available".to_string(),
+    };
+
+    assert!(record_engine_provider_binding_at_path(
+        &storage_path,
+        "ws-1",
+        "session-canonical-1",
+        "kimi",
+        &binding,
+    )
+    .expect("record canonical binding"));
+
+    let reloaded = read_catalog_metadata(&storage_path, "ws-1").expect("reload metadata");
+    assert_eq!(
+        engine_provider_binding_for_session(&reloaded, "ws-1", "kimi:session-canonical-1", "kimi",),
+        Some(binding)
+    );
+    std::fs::remove_dir_all(base).ok();
+}
+
+#[test]
 fn effective_engine_provider_profile_prefers_request_then_catalog_then_default() {
     let base = std::env::temp_dir().join(format!("engine-provider-resolution-{}", Uuid::new_v4()));
     std::fs::create_dir_all(&base).expect("create temp dir");
