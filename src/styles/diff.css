@@ -2249,6 +2249,8 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
   height: 14px;
   flex-shrink: 0;
 }
+
+.commit-message-generate-menu {
   position: absolute;
   top: 34px;
   right: 0;
