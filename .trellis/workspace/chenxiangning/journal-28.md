@@ -764,3 +764,37 @@ GitDiffPanel 与 GitMultiRepositoryChanges 的提交区统一改为 textarea 右
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1162: 提交工作区遗留改动：rustfmt 格式化与治理闭环报告
+
+**Date**: 2026-07-26
+**Task**: 提交工作区遗留改动：rustfmt 格式化与治理闭环报告
+**Branch**: `feature/v-0710`
+
+### Summary
+
+rustfmt 纯格式化（14 文件无行为变更）+ 引擎模型接入层报告更新为治理闭环版；工作区已清空
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ea8f60ad0` | (see git log) |
+| `ca744e4e4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

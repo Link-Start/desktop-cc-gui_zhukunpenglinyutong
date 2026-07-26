@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1161
+- **Total Sessions**: 1162
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~766 | Active |
+| `journal-28.md` | ~800 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1162 | 2026-07-26 | 提交工作区遗留改动：rustfmt 格式化与治理闭环报告 | `ea8f60ad0`, `ca744e4e4` | `feature/v-0710` |
 | 1161 | 2026-07-26 | 修复 diff.css 选择器断裂 | `97de96d5d` | `feature/v-0710` |
 | 1160 | 2026-07-26 | 归档供应商绑定复审修复 | `9dd236a8f` | `feature/v-0710` |
 | 1159 | 2026-07-26 | 同步供应商绑定复审证据 | `b86a31bab` | `feature/v-0710` |
