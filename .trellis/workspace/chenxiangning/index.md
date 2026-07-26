@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1158
+- **Total Sessions**: 1159
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~667 | Active |
+| `journal-28.md` | ~700 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1159 | 2026-07-26 | 同步供应商绑定复审证据 | `b86a31bab` | `feature/v-0710` |
 | 1158 | 2026-07-26 | 阻止供应商选择静默回退 | `4934c8f39` | `feature/v-0710` |
 | 1157 | 2026-07-26 | 加固会话供应商运行边界 | `c39b3e537` | `feature/v-0710` |
 | 1156 | 2026-07-26 | 归档：重设计 Git 提交区域为右侧操作列 | `3b233e473` | `feature/v-0710` |

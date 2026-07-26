@@ -665,3 +665,36 @@ GitDiffPanel 与 GitMultiRepositoryChanges 的提交区统一改为 textarea 右
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1159: 同步供应商绑定复审证据
+
+**Date**: 2026-07-26
+**Task**: 同步供应商绑定复审证据
+**Branch**: `feature/v-0710`
+
+### Summary
+
+同步 canonical binding、Kimi runtime hardening 与 fail-closed provider selection 到 main specs，记录增量验证和二次 review 证据。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b86a31bab` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
