@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1168
+- **Total Sessions**: 1169
 - **Last Active**: 2026-07-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~998 | Active |
+| `journal-28.md` | ~1031 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1169 | 2026-07-27 | 归档错误提示 OpenSpec 变更 | `f8a9a1f86` | `feature/v-0710` |
 | 1168 | 2026-07-27 | vendors: CC Switch 供应商导入 | `90d1b1e5e` | `feature/v-0710` |
 | 1167 | 2026-07-27 | 完成错误提示 OpenSpec 状态 | `b8a38771e` | `feature/v-0710` |
 | 1166 | 2026-07-27 | 统一错误提示并禁用原生 Alert | `4d0f2eaee` | `feature/v-0710` |

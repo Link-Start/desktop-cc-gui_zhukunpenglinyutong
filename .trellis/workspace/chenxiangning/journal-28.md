@@ -996,3 +996,36 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1169: 归档错误提示 OpenSpec 变更
+
+**Date**: 2026-07-27
+**Task**: 归档错误提示 OpenSpec 变更
+**Branch**: `feature/v-0710`
+
+### Summary
+
+产品验收通过后，将 improve-codex-provider-protocol-error delta specs 同步至 codex-provider-scoped-session-launch，并新增 frontend-error-feedback main spec；归档至 2026-07-27 路径并更新 OpenSpec 索引。仅运行两个受影响 spec 的 strict validation、链接检查和 diff check，未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f8a9a1f86` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
