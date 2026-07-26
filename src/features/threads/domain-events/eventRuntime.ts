@@ -14,6 +14,7 @@ export type DomainEventRuntimeController = {
 
 export function createDomainEventRuntimeController(): DomainEventRuntimeController {
   const subscribers = new Set<DomainEventSubscriber>();
+  const settledRunIds = new Set<string>();
 
   const runtime = Object.freeze({
     firstConsumer: "governance-evidence-bridge" as const,
@@ -33,6 +34,13 @@ export function createDomainEventRuntimeController(): DomainEventRuntimeControll
   return Object.freeze({
     runtime,
     emitInternal(event: DomainEvent) {
+      if (event.type === "run.settled") {
+        const runId = event.runId ?? event.sessionId;
+        if (settledRunIds.has(runId)) {
+          return;
+        }
+        settledRunIds.add(runId);
+      }
       for (const subscriber of Array.from(subscribers)) {
         subscriber(event);
       }

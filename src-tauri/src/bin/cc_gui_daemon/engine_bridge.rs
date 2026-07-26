@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[path = "../../engine/agent_event_bus.rs"]
+pub(crate) mod agent_event_bus;
 #[allow(dead_code)]
 #[path = "../../engine/claude.rs"]
 pub mod claude;

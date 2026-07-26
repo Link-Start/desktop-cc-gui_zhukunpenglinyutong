@@ -54,6 +54,13 @@ describe("domain event derivation fixtures", () => {
           threadStatusById: { "thread-1": { isProcessing: false, hasUnread: false, isReviewing: false, processingStartedAt: null, lastDurationMs: 20 } },
         }),
       ],
+      "run.settled": [
+        state({ activeTurnIdByThread: { "thread-1": "turn-1" } }),
+        state({
+          activeTurnIdByThread: { "thread-1": null },
+          threadStatusById: { "thread-1": { isProcessing: false, hasUnread: false, isReviewing: false, processingStartedAt: null, lastDurationMs: 20 } },
+        }),
+      ],
       "turn.failed": [
         state({ itemsByThread: { "thread-1": [{ id: "tool-1", kind: "tool", toolType: "shell", title: "Shell", detail: "", status: "running" }] } }),
         state({ itemsByThread: { "thread-1": [{ id: "tool-1", kind: "tool", toolType: "shell", title: "Shell", detail: "", status: "failed", output: "boom" }] } }),

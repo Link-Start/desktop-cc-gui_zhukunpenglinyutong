@@ -1129,6 +1129,7 @@ impl DaemonState {
 
                 let mut receiver = session.subscribe();
                 let event_sink = self.event_sink.clone();
+                let agent_event_bus = self.engine_manager.agent_event_bus();
                 let mut current_thread_id = thread_id.clone();
                 let assistant_item_id_clone = assistant_item_id.clone();
                 let reasoning_item_id_clone = reasoning_item_id.clone();
@@ -1166,6 +1167,14 @@ impl DaemonState {
                                 } if context_usage_source.as_deref() == Some("context_command")
                             );
                         let event = turn_event.event;
+                        agent_event_bus.publish_engine_event(
+                            engine::EngineType::Claude,
+                            &current_thread_id,
+                            None,
+                            &turn_id_for_forwarder,
+                            Some(&turn_id_for_forwarder),
+                            &event,
+                        );
                         let is_terminal = event.is_terminal();
                         let is_turn_completed =
                             matches!(event, engine::events::EngineEvent::TurnCompleted { .. });
@@ -1201,6 +1210,7 @@ impl DaemonState {
                             }
                         }
 
+                        // Frontend compatibility sink: projection happens only after private bus ingress.
                         if let Some(payload) =
                             engine::events::engine_event_to_app_server_event_with_turn_context(
                                 &event,
@@ -1367,6 +1377,7 @@ impl DaemonState {
 
                 let mut receiver = session.subscribe();
                 let event_sink = self.event_sink.clone();
+                let agent_event_bus = self.engine_manager.agent_event_bus();
                 let mut current_thread_id = thread_id.clone();
                 let item_id_clone = item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
@@ -1388,6 +1399,14 @@ impl DaemonState {
                         }
 
                         let event = turn_event.event;
+                        agent_event_bus.publish_engine_event(
+                            engine::EngineType::OpenCode,
+                            &current_thread_id,
+                            None,
+                            &turn_id_for_forwarder,
+                            Some(&turn_id_for_forwarder),
+                            &event,
+                        );
                         let is_terminal = event.is_terminal();
 
                         if let Some(payload) =
@@ -1508,6 +1527,7 @@ impl DaemonState {
 
                 let mut receiver = session.subscribe();
                 let event_sink = self.event_sink.clone();
+                let agent_event_bus = self.engine_manager.agent_event_bus();
                 let mut current_thread_id = thread_id.clone();
                 let item_id_clone = item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
@@ -1536,6 +1556,14 @@ impl DaemonState {
                         }
 
                         let event = turn_event.event;
+                        agent_event_bus.publish_engine_event(
+                            engine::EngineType::Gemini,
+                            &current_thread_id,
+                            None,
+                            &turn_id_for_forwarder,
+                            Some(&turn_id_for_forwarder),
+                            &event,
+                        );
                         let is_terminal = event.is_terminal();
                         let render_lane = match &event {
                             engine::events::EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,
@@ -1698,6 +1726,7 @@ impl DaemonState {
 
                 let mut receiver = session.subscribe();
                 let event_sink = self.event_sink.clone();
+                let agent_event_bus = self.engine_manager.agent_event_bus();
                 let mut current_thread_id = thread_id.clone();
                 let item_id_clone = item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
@@ -1721,6 +1750,14 @@ impl DaemonState {
                         }
 
                         let event = turn_event.event;
+                        agent_event_bus.publish_engine_event(
+                            engine::EngineType::Kimi,
+                            &current_thread_id,
+                            None,
+                            &turn_id_for_forwarder,
+                            Some(&turn_id_for_forwarder),
+                            &event,
+                        );
                         let is_terminal = event.is_terminal();
                         let render_lane = match &event {
                             engine::events::EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,

@@ -8,18 +8,21 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
+use super::agent_event_bus::AgentEventBus;
 use super::claude::{ClaudeSession, ClaudeSessionManager};
 use super::gemini::GeminiSession;
 use super::kimi::KimiSession;
 use super::opencode::OpenCodeSession;
 use super::status::{
-    detect_all_engines, detect_claude_status, detect_codex_status, detect_opencode_status,
-    detect_kimi_status,
+    detect_all_engines, detect_claude_status, detect_codex_status, detect_kimi_status,
+    detect_opencode_status,
 };
 use super::{disabled_engine_status, EngineConfig, EngineStatus, EngineType};
 
 /// Unified engine manager
 pub struct EngineManager {
+    /// Private domain-event fan-out. Producers publish without waiting for sinks.
+    pub(crate) agent_event_bus: AgentEventBus,
     /// Currently active engine type (global default)
     active_engine: RwLock<EngineType>,
 
@@ -55,6 +58,7 @@ impl EngineManager {
     /// Create a new engine manager
     pub fn new() -> Self {
         Self {
+            agent_event_bus: AgentEventBus::new(),
             active_engine: RwLock::new(EngineType::default()),
             engine_statuses: RwLock::new(HashMap::new()),
             claude_manager: Arc::new(ClaudeSessionManager::new()),
@@ -63,6 +67,10 @@ impl EngineManager {
             kimi_sessions: Mutex::new(HashMap::new()),
             engine_configs: RwLock::new(HashMap::new()),
         }
+    }
+
+    pub(crate) fn agent_event_bus(&self) -> AgentEventBus {
+        self.agent_event_bus.clone()
     }
 
     /// Get the currently active engine type

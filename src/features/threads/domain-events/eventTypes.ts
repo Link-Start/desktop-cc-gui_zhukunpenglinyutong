@@ -1,4 +1,5 @@
 import type { MessageDomainEvent } from "./events/message";
+import type { RunDomainEvent } from "./events/run";
 import type { SessionDomainEvent } from "./events/session";
 import type { ToolDomainEvent } from "./events/tool";
 import type { TurnDomainEvent } from "./events/turn";
@@ -9,7 +10,8 @@ export type DomainEvent =
   | TurnDomainEvent
   | MessageDomainEvent
   | ToolDomainEvent
-  | UsageDomainEvent;
+  | UsageDomainEvent
+  | RunDomainEvent;
 
 export type DomainEventType = DomainEvent["type"];
 
@@ -24,4 +26,5 @@ export const DOMAIN_EVENT_TYPES = [
   "tool.started",
   "tool.completed",
   "usage.updated",
+  "run.settled",
 ] as const satisfies readonly DomainEventType[];
