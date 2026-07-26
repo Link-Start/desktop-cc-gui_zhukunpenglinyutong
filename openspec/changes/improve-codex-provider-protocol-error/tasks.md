@@ -32,4 +32,4 @@
 ## 7. Incremental verification and delivery
 
 - [x] 7.1 [P0] 运行 focused Vitest、target ESLint、typecheck、Rust focused tests、runtime contracts 与 OpenSpec strict validation，不运行 full suite；依赖：5.2、6.3。
-- [ ] 7.2 [P0] review scope、独立提交并执行 Trellis session record；依赖：7.1。
+- [x] 7.2 [P0] review scope、独立提交并执行 Trellis session record；依赖：7.1。
