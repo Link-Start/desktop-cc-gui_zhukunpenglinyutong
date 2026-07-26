@@ -30,7 +30,7 @@ describe("resolveCodexProviderLabel", () => {
     ).toBe("custom/openai");
   });
 
-  it("uses managed provider id as fallback but hides disk and empty bindings", () => {
+  it("uses managed provider id as fallback and labels disk config as local", () => {
     expect(
       resolveCodexProviderLabel({
         ...codexThread,
@@ -42,7 +42,7 @@ describe("resolveCodexProviderLabel", () => {
         ...codexThread,
         providerProfileId: "__disk__",
       }),
-    ).toBeNull();
+    ).toBe("local");
     expect(
       resolveCodexProviderLabel({
         ...codexThread,
@@ -67,15 +67,23 @@ describe("resolveCodexProviderLabel", () => {
     },
   );
 
-  it.each([
-    ["claude", "__local_settings_json__"],
-    ["kimi", "__local_config_toml__"],
-  ] as const)("hides local/default labels for %s", (engineSource, providerProfileId) => {
+  it("labels Claude Code local settings as local", () => {
     expect(
       resolveEngineProviderLabel({
         ...codexThread,
-        engineSource,
-        providerProfileId,
+        engineSource: "claude",
+        providerProfileId: "__local_settings_json__",
+        providerProfileName: "Local config",
+      }),
+    ).toBe("local");
+  });
+
+  it("keeps Kimi local/default labels hidden", () => {
+    expect(
+      resolveEngineProviderLabel({
+        ...codexThread,
+        engineSource: "kimi",
+        providerProfileId: "__local_config_toml__",
         providerProfileName: "Local config",
       }),
     ).toBeNull();

@@ -95,11 +95,9 @@ export function mergeCodexModels(
   dynamicModels: ModelInfo[],
   customModels: ModelInfo[],
   selectedModel: string,
-  options: { includeBuiltInModels?: boolean } = {},
 ): ModelInfo[] {
   const mergedModels: ModelInfo[] = [];
   const seenIdentities = new Map<string, number>();
-  const includeBuiltInModels = options.includeBuiltInModels ?? true;
 
   dynamicModels.forEach((model) => upsertModel(mergedModels, seenIdentities, model));
   customModels.forEach((model) => upsertModel(mergedModels, seenIdentities, model, true));
@@ -109,9 +107,7 @@ export function mergeCodexModels(
       label: selectedModel,
     });
   }
-  if (includeBuiltInModels) {
-    CODEX_MODELS.forEach((model) => upsertModel(mergedModels, seenIdentities, model));
-  }
+  CODEX_MODELS.forEach((model) => upsertModel(mergedModels, seenIdentities, model));
 
   return mergedModels;
 }
@@ -238,7 +234,6 @@ export function resolveAvailableModels({
       dynamicModels,
       scopedCustomModels,
       selectedModel,
-      { includeBuiltInModels: dynamicModels.length === 0 },
     );
   }
 

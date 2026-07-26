@@ -1283,3 +1283,69 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1177: 修复 Composer 启动期选择状态循环更新
+
+**Date**: 2026-07-27
+**Task**: 修复 Composer 启动期选择状态循环更新
+**Branch**: `feature/v-0710`
+
+### Summary
+
+基于 production bundle 行列、renderer diagnostics 与持久化选择状态定位 React #185；让 active thread repair 同步 cache/store/ref/state，等值写入跳过 React setter；补回归测试、OpenSpec 与 Trellis executable contract。验证 focused Vitest 64 tests、typecheck、lint、runtime contracts、production build、OpenSpec strict；按用户要求未启动 App 且跳过全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `66e503fab` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1178: 补全 Codex 模型与本地标签
+
+**Date**: 2026-07-27
+**Task**: 补全 Codex 模型与本地标签
+**Branch**: `feature/v-0710`
+
+### Summary
+
+补齐 Codex 默认模型目录，统一内外 Composer 菜单的 partial runtime fallback 合并，并为 Codex/Claude 本地磁盘会话显示 local 标签；完成 focused tests、typecheck、lint、catalog/runtime contracts 与 OpenSpec strict validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `816d4ac06` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

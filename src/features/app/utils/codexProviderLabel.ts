@@ -5,10 +5,9 @@ import {
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
 } from "../../threads/constants/codexProviderProfiles";
 
-const DEFAULT_PROVIDER_PROFILE_IDS = new Set([
+const LOCAL_PROVIDER_PROFILE_IDS = new Set([
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_ID,
-  KIMI_LOCAL_PROVIDER_PROFILE_ID,
 ]);
 
 export function resolveEngineProviderLabel(thread: ThreadSummary) {
@@ -18,7 +17,10 @@ export function resolveEngineProviderLabel(thread: ThreadSummary) {
   }
 
   const profileId = thread.providerProfileId?.trim() ?? "";
-  if (DEFAULT_PROVIDER_PROFILE_IDS.has(profileId)) {
+  if (LOCAL_PROVIDER_PROFILE_IDS.has(profileId)) {
+    return "local";
+  }
+  if (profileId === KIMI_LOCAL_PROVIDER_PROFILE_ID) {
     return null;
   }
   const label =

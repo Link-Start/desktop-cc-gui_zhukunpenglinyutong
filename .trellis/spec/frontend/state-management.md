@@ -71,6 +71,66 @@ const safeWidth =
 setPanelWidth(safeWidth);
 ```
 
+## Scenario: Active selection persistence convergence
+
+### 1. Scope / Trigger
+
+- Trigger：修改 active thread/session selection 的 repair、`clientStorage` persistence、memory cache 或 active React state。
+- 目标：避免 durable state 已更新但 active state 仍读取旧值，导致 effect 重复 repair 和 AppShell render loop。
+
+### 2. Signatures
+
+- `persistSelectionForThread(workspaceId, threadId, selection): void`
+- active facts：selection ref + React state
+- durable facts：session cache + `clientStorage`
+
+### 3. Contracts
+
+- persistence owner MUST 只 normalize 一次，并将同一 normalized value 发布到 cache/store。
+- target 是 active session 时，persistence owner MUST 同步 active ref 与 React state。
+- target 不是 active session 时，MUST NOT 改写 active ref/state。
+- semantically equal selection MUST skip React setter，不能只依赖 setter updater 返回旧引用。
+- repair effect 的 next render MUST 观察到 repaired value 并停止。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| active selection repair | cache/store/ref/state 同步收敛 | 只写 store/cache |
+| inactive selection persistence | 只更新目标 session | 污染 active selection |
+| repeated equal persistence | 不调用 React setter、不增加 render | 每次构造等价 state |
+| malformed persisted value | normalize 后再发布 | raw value 进入 active state |
+
+### 5. Good / Base / Bad Cases
+
+- Good：shared persistence owner 比对 active session key，统一发布 normalized selection。
+- Base：inactive session 只更新自身 cache/store。
+- Bad：repair effect 写 store 后继续消费旧 active state，并在后续 render 重复 repair。
+
+### 6. Tests Required
+
+- active repair 后 ref/state 立即等于 durable normalized value。
+- repeated equal persistence 保留 state reference，render count 不增加。
+- inactive session persistence 不改变 active selection。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+writeSelectionForSessionKey(sessionKey, normalized);
+```
+
+#### Correct
+
+```ts
+writeSelectionForSessionKey(sessionKey, normalized);
+if (sessionKey === activeSessionKey && !selectionsEqual(activeSelectionRef.current, normalized)) {
+  activeSelectionRef.current = normalized;
+  setActiveSelection(normalized);
+}
+```
+
 ## Scenario: Composer Input Responsiveness Under Streaming Load
 
 ### 1. Scope / Trigger

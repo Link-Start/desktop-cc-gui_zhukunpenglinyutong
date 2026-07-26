@@ -1,3 +1,23 @@
+## ADDED Requirements
+
+### Requirement: Composer Selection Repair MUST Converge
+
+When provider catalog hydration repairs the active thread model or reasoning effort, the Composer MUST publish the normalized selection to both durable storage and active in-memory selection state.
+Persisting a semantically equal selection MUST preserve state identity and MUST NOT trigger another
+render.
+
+#### Scenario: active provider selection is repaired
+
+- **WHEN** catalog hydration determines that the active provider thread selection requires repair
+- **THEN** cache, durable storage, active selection ref, and active selection state MUST observe the same normalized value
+- **AND** the next render MUST NOT schedule the same repair again
+
+#### Scenario: repeated equal persistence
+
+- **WHEN** the active thread receives a persistence request equal to its current normalized selection
+- **THEN** active selection state MUST retain its existing reference
+- **AND** no additional render MUST be scheduled
+
 ## MODIFIED Requirements
 
 ### Requirement: Provider Groups MUST Use Provider-Scoped Model Catalogs

@@ -49,3 +49,15 @@
 - [x] 9.1 [P0, depends: 8.1] 将相同的 non-empty thread model truth contract 扩展到 provider-bound Claude Code thread；catalog loading/absence 不得触发 default repair。
 - [x] 9.2 [P0, depends: 9.1] 补 arbitrary Claude provider model 在 catalog unavailable 时保持 model/effort 且不触发 repair persistence 的 regression test。
 - [x] 9.3 [P0, depends: 9.1,9.2] 运行 focused Vitest、typecheck、lint、runtime contracts 与 strict OpenSpec validation，并完成 diff review。
+
+## 10. Composer Startup Convergence
+
+- [x] 10.1 [P0, depends: 8.1,9.1] active thread 的 model/effort repair 写入 cache/store 时必须同步 active selection state，并对语义相同值保持 reference identity，阻断 AppShell 启动期重复 repair。
+- [x] 10.2 [P0, depends: 10.1] 补 active provider thread repair 与重复等值写入 regression tests，断言首次 repair 后立即收敛且不会产生额外 render。
+- [x] 10.3 [P0, depends: 10.1,10.2] 运行 focused Vitest、typecheck、lint、production build、runtime contracts 与 strict OpenSpec validation。
+
+## 11. Local Session Labels And Complete Codex Fallback
+
+- [x] 11.1 [P1, depends: 3.1] Codex `__disk__` 与 Claude Code `__local_settings_json__` 会话标签显示 `local`，managed provider 与 Kimi local 行为不变；补 pure helper regression tests。
+- [x] 11.2 [P1, depends: 2.3] 在共享 generated model catalog 补齐 `gpt-5.4-mini` 与 `gpt-5.3-codex-spark`，并让 partial runtime catalog 在所有 Composer model surfaces 继续追加 generated 补缺；保持官方顺序与 `gpt-5.6-sol` default，补 fallback roster regression test。
+- [x] 11.3 [P1, depends: 11.1,11.2] 同步 Trellis contract，运行 focused Vitest、typecheck、lint、model-provider contract 与 strict OpenSpec validation。

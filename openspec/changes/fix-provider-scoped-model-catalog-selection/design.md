@@ -135,3 +135,29 @@ Rollback 可整体撤回 optional field与 scoped sync；无 storage/schema migr
 ## Open Questions
 
 - 无。用户已确认 public/common models 必须追加，并整体去重。
+
+### 10. Active Composer Repair 必须同步内存事实
+
+provider catalog hydration 可能发现已持久化 effort 与当前 model capability 不一致。repair owner
+调用 `persistComposerSelectionForThread` 后，cache、store 与 active selection state 必须在同一
+次更新中收敛：
+
+```text
+repair selection
+  -> normalize once
+  -> update session cache/store when changed
+  -> update active selection ref/state when target is active thread
+  -> next render observes repaired value and stops
+```
+
+仅写 cache/store 会让 Composer effect 继续读取旧 active selection；同时 cache state 更新会改变
+上层 resolver identity，扩大根 hook 链的重复 render 风险。修复放在 shared persistence owner，
+不在各个 repair caller 增加局部 guard。
+
+### 11. Local 标签与 Codex fallback roster 保持显式
+
+不改 `model/list`、provider resolver 或 Composer catalog composition。Codex 当前可选模型直接补入
+共享 `generatedModelCatalog.json`，由既有 Rust/TypeScript consumers 同源读取；runtime/config
+仍按既有 precedence 覆盖同 model identity。会话列表继续复用 `resolveEngineProviderLabel`，
+仅将 Codex `__disk__` 与 Claude `__local_settings_json__` 映射为稳定技术标签 `local`，Kimi
+local/default 维持既有隐藏行为。

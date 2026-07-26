@@ -10,6 +10,16 @@ import {
 const serializeModels = (models: Array<{ id: string; model?: string; label?: string; source?: string }>) =>
   models.map((model) => `${model.id}:${model.model ?? ''}:${model.source ?? ''}:${model.label ?? model.id}`).join(',');
 
+const CODEX_FALLBACK_MODEL_IDS = [
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
+  'gpt-5.5',
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gpt-5.3-codex-spark',
+];
+
 describe('ChatInputBox model options', () => {
   afterEach(() => {
     window.localStorage.clear();
@@ -101,6 +111,7 @@ describe('ChatInputBox model options', () => {
       'provider-a-model',
       'gpt-public',
       'public-model',
+      ...CODEX_FALLBACK_MODEL_IDS,
     ]);
     expect(models[0]).toEqual(
       expect.objectContaining({
@@ -153,7 +164,7 @@ describe('ChatInputBox model options', () => {
     expect(modelList).not.toContain('claude-sonnet-4-6');
   });
 
-  it('does not duplicate Codex models when the parent already passes a hydrated catalog', () => {
+  it('deduplicates a partial Codex runtime catalog and fills generated models', () => {
     window.localStorage.setItem(
       STORAGE_KEYS.CODEX_CUSTOM_MODELS,
       JSON.stringify([
@@ -196,7 +207,11 @@ describe('ChatInputBox model options', () => {
     expect(modelEntries.filter((entry) => entry.startsWith('gpt-5.5:'))).toHaveLength(1);
     expect(modelEntries.filter((entry) => entry.startsWith('demo:'))).toHaveLength(1);
     expect(modelEntries.filter((entry) => entry.startsWith('user-custom-codex:'))).toHaveLength(1);
-    expect(modelList).not.toContain('gpt-5.4');
+    expect(modelList).toContain('gpt-5.4::fallback:gpt-5.4');
+    expect(modelList).toContain('gpt-5.4-mini::fallback:gpt-5.4-mini');
+    expect(modelList).toContain(
+      'gpt-5.3-codex-spark::fallback:gpt-5.3-codex-spark',
+    );
   });
 
   it('falls back to built-in Codex models when the parent provides none', () => {
@@ -206,12 +221,17 @@ describe('ChatInputBox model options', () => {
       selectedModel: '',
       modelStorageSnapshot: readModelStorageSnapshot(),
     }));
+    const modelEntries = modelList.split(',').filter(Boolean);
 
     expect(modelList).toContain('gpt-5.5::fallback:gpt-5.5');
     expect(modelList).toContain('gpt-5.4::fallback:gpt-5.4');
-    expect(modelList).not.toContain('gpt-5.4-mini');
-    expect(modelList).not.toContain('gpt-5.3-codex');
-    expect(modelList).not.toContain('gpt-5.3-codex-spark');
+    expect(modelList).toContain('gpt-5.4-mini::fallback:gpt-5.4-mini');
+    expect(
+      modelEntries.some((entry) => entry.startsWith('gpt-5.3-codex:')),
+    ).toBe(false);
+    expect(modelList).toContain(
+      'gpt-5.3-codex-spark::fallback:gpt-5.3-codex-spark',
+    );
     expect(modelList).not.toContain('gpt-5.2');
   });
 
@@ -266,8 +286,11 @@ describe('ChatInputBox model options', () => {
     });
 
     expect(groups.map((group) => group.providerId)).toEqual(['codex']);
-    expect(groups.find((group) => group.providerId === 'codex')?.models).toEqual([
-      { id: 'gpt-5.4', label: 'GPT-5.4 runtime' },
+    expect(
+      groups.find((group) => group.providerId === 'codex')?.models.map((model) => model.id),
+    ).toEqual([
+      'gpt-5.4',
+      ...CODEX_FALLBACK_MODEL_IDS.filter((id) => id !== 'gpt-5.4'),
     ]);
   });
 
@@ -334,8 +357,8 @@ describe('ChatInputBox model options', () => {
       },
       { id: 'claude-from-settings', label: 'Claude From Settings' },
     ]);
-    expect(groups.find((group) => group.providerId === 'codex')?.models).toEqual([
-      { id: 'codex-from-config', label: 'Codex From Config' },
-    ]);
+    expect(
+      groups.find((group) => group.providerId === 'codex')?.models.map((model) => model.id),
+    ).toEqual(['codex-from-config', ...CODEX_FALLBACK_MODEL_IDS]);
   });
 });
