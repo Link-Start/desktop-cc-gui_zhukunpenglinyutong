@@ -467,3 +467,36 @@ Batch E：按 thread state 发送 provider、identity convergence、Claude fork/
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1153: 收敛差异面板推送入口为工具栏角标按钮
+
+**Date**: 2026-07-26
+**Task**: 收敛差异面板推送入口为工具栏角标按钮
+**Branch**: `feature/v-0710`
+
+### Summary
+
+GitDiffPanel 大号推送按钮改为头部工具栏 icon+角标，commitsAhead=0 隐藏；清理孤立样式与 i18n key；OpenSpec: compact-diff-push-button
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `926cc86f2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
