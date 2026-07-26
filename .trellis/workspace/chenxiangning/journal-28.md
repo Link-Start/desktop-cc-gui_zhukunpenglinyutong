@@ -798,3 +798,36 @@ rustfmt 纯格式化（14 文件无行为变更）+ 引擎模型接入层报告�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1163: 补充截图消息单次投递回归测试
+
+**Date**: 2026-07-26
+**Task**: 补充截图消息单次投递回归测试
+**Branch**: `feature/v-0710`
+
+### Summary
+
+确认 16:49 消息投递语义修复已覆盖重复投递根因，并为 Codex 队列中的截图 follow-up 补充 terminal pulse 后仅投递一次的回归测试；增量 66 tests、目标 ESLint 与 git diff --check 均通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `27d18bda0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
