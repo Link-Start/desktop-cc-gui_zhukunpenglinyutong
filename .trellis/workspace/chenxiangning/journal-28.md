@@ -897,3 +897,36 @@ rustfmt 纯格式化（14 文件无行为变更）+ 引擎模型接入层报告�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1166: 统一错误提示并禁用原生 Alert
+
+**Date**: 2026-07-27
+**Task**: 统一错误提示并禁用原生 Alert
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修复 Codex 供应商非法 TOML 仍展示原生解析弹窗的问题；增加安全错误 marker 与本地化全局 Toast，迁移 renderer 现存 native Alert，加入 ESLint 硬门禁，并同步 OpenSpec 与 frontend quality code-spec。增量 Vitest 34/34、Rust 13/13、target ESLint、typecheck、runtime contracts、OpenSpec strict validation 均通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4d0f2eaee` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
