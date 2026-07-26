@@ -1283,3 +1283,36 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1177: 修复 Composer 启动期选择状态循环更新
+
+**Date**: 2026-07-27
+**Task**: 修复 Composer 启动期选择状态循环更新
+**Branch**: `feature/v-0710`
+
+### Summary
+
+基于 production bundle 行列、renderer diagnostics 与持久化选择状态定位 React #185；让 active thread repair 同步 cache/store/ref/state，等值写入跳过 React setter；补回归测试、OpenSpec 与 Trellis executable contract。验证 focused Vitest 64 tests、typecheck、lint、runtime contracts、production build、OpenSpec strict；按用户要求未启动 App 且跳过全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `66e503fab` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
