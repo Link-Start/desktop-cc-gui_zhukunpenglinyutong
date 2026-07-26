@@ -38,3 +38,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1140: 收敛模型与供应商目录
+
+**Date**: 2026-07-26
+**Task**: 收敛模型与供应商目录
+**Branch**: `feature/v-0710`
+
+### Summary
+
+建立 generated model catalog 单一 fallback 事实源，统一 provider/protocol/provenance DTO、runtime 优先 merge 与 last-good cache；迁移 Codex/Gemini/Kimi/Claude consumers，清理 Gemini preview roster 和 Claude legacy storage 多写。增量 Vitest、Rust status tests、daemon check、TypeScript、catalog gate 与 OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8695ca7eb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
