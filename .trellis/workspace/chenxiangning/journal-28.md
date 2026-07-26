@@ -963,3 +963,36 @@ rustfmt 纯格式化（14 文件无行为变更）+ 引擎模型接入层报告�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1168: vendors: CC Switch 供应商导入
+
+**Date**: 2026-07-27
+**Task**: vendors: CC Switch 供应商导入
+**Branch**: `feature/v-0710`
+
+### Summary
+
+Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-switch，SQLite v3 + legacy JSON 兜底，勾选式对话框导入，name+baseUrl 去重，Kimi v1 隐藏入口）
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `90d1b1e5e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
