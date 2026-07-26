@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-27.md`
-- **Total Sessions**: 1134
+- **Active File**: `journal-28.md`
+- **Total Sessions**: 1143
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~1842 | Active |
+| `journal-28.md` | ~172 | Active |
+| `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +56,15 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1143 | 2026-07-26 | 归档引擎接入重构提案 | `65a174d26` | `feature/v-0710` |
+| 1142 | 2026-07-26 | 收薄引擎控制器门面 | `1dfdfb47d` | `feature/v-0710` |
+| 1141 | 2026-07-26 | 收紧 Kimi Claude OpenCode 治理边界 | `d4fbdcd7b` | `feature/v-0710` |
+| 1140 | 2026-07-26 | 收敛模型与供应商目录 | `8695ca7eb` | `feature/v-0710` |
+| 1139 | 2026-07-26 | 统一消息投递与可执行会话注册 | `43e5d0f7c` | `feature/v-0710` |
+| 1138 | 2026-07-26 | 建立引擎适配器协议注册表 | `4825b8a50` | `feature/v-0710` |
+| 1137 | 2026-07-26 | 建立统一引擎运行时事件总线 | `edf325f58` | `feature/v-0710` |
+| 1136 | 2026-07-26 | 统一引擎能力契约与会话身份 | `d8e4e177a` | `feature/v-0710` |
+| 1135 | 2026-07-26 | 修复文件读取失败加载卡死 | `574b056cb` | `feature/v-0710` |
 | 1134 | 2026-07-26 | 更新工程工具链优化影响报告 | `1d4834097` | `feature/v-0710` |
 | 1133 | 2026-07-26 | 清理 Markdown 旧 renderer path | `35740d89a` | `feature/v-0710` |
 | 1132 | 2026-07-26 | 校正 Markdown renderer large-file baseline | `380d1c016` | `feature/v-0710` |

@@ -18,7 +18,6 @@ import { pushThreadFailureRuntimeNotice } from "../../../services/globalRuntimeN
 import { getThreadTimestamp } from "../../../utils/threadItems";
 import {
   isClaudeForkThreadId,
-  isClaudeRuntimeThreadId,
   isClaudeSessionBootstrapThreadId,
 } from "../utils/claudeForkThread";
 import {
@@ -33,27 +32,17 @@ import { hasCodexBackgroundHelperPreview } from "../utils/codexBackgroundHelpers
 import { isCodexPrewarmThreadStart } from "../utils/codexPendingPrewarm";
 import { renameLiveAssistantTextThread } from "../utils/liveAssistantTextChannel";
 import { resolveCodexSubagentIdentity } from "../utils/codexSubagentIdentity";
+import {
+  inferEngineFromLegacyThreadId,
+  isPendingSessionForEngine,
+} from "../contracts/engineRuntimeIdentity";
 import type { ThreadAction } from "./useThreadsReducer";
 
 /**
  * Infer engine type from thread ID.
  * Claude/Gemini/Kimi/OpenCode threads use "<engine>:" or "<engine>-pending-" prefixes.
  */
-function inferEngineFromThreadId(threadId: string): "claude" | "codex" | "gemini" | "kimi" | "opencode" {
-  if (isClaudeRuntimeThreadId(threadId)) {
-    return "claude";
-  }
-  if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")) {
-    return "gemini";
-  }
-  if (threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-")) {
-    return "kimi";
-  }
-  if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")) {
-    return "opencode";
-  }
-  return "codex";
-}
+const inferEngineFromThreadId = inferEngineFromLegacyThreadId;
 
 type ContextCompactionSourcePayload = {
   auto?: boolean | null;
@@ -143,7 +132,7 @@ function isPendingThreadForEngine(
   if (engine === "claude") {
     return isClaudeSessionBootstrapThreadId(threadId);
   }
-  return threadId.startsWith(`${engine}-pending-`);
+  return isPendingSessionForEngine(engine, threadId);
 }
 
 type UseThreadTurnEventsOptions = {

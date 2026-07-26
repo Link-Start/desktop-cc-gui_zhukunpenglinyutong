@@ -1205,13 +1205,6 @@ export function useAppShellLayoutNodesSection(
       }
     },
   );
-  const enabledEngines = useMemo(
-    () => ({
-      gemini: appSettings.geminiEnabled !== false,
-      opencode: appSettings.opencodeEnabled !== false,
-    }),
-    [appSettings.geminiEnabled, appSettings.opencodeEnabled],
-  );
   const handleToggleWorkspaceCollapse = useEventCallback(
     (workspaceId: string, collapsed: boolean) => {
       const target = workspacesById.get(workspaceId);
@@ -1892,7 +1885,6 @@ export function useAppShellLayoutNodesSection(
       onConnectWorkspace: handleConnectWorkspace,
       onAddAgent: handleAddAgent,
       engineOptions: availableEngines,
-      enabledEngines,
       onRefreshEngineOptions: refreshEngines,
       onAddSharedAgent: handleStartSharedConversation,
       onAddWorktreeAgent: handleAddWorktreeAgent,

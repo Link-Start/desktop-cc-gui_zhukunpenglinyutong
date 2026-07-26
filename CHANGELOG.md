@@ -2,6 +2,136 @@
 
 ---
 
+##### **2026年7月26日（v0.7.10）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.7.10`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(composer)`: 沉淀技能调用契约与对话命令，润色器接入本地化缓存，curated skills 变更改为事件化刷新，技能链路响应更及时
+- `feat(git)`: AI commit message 支持一键按上次配置生成，无需重复选择引擎与参数
+- `feat(terminal)`: 终端新增搜索与安全链接能力，输出内容可检索、链接可安全打开
+- `feat(annotation)`: 稳定代码标注锚点，文件标注锚点组装复用统一逻辑，定位不再漂移
+- `feat(tokentracker)`: Token 用量支持中文数字格式展示
+
+🔧 Improvements
+- `refactor(markdown)`: 收敛文件预览渲染边界并遵循渲染器大文件基线，清理旧渲染器路径
+- `refactor(git)`: 拆分文件与差异高频入口；worktree 面板收敛共享 AI commit 配置事实源，消除多处重复定义
+- `refactor(git-history)`: 恢复核心面板类型保护，摘除 `GitHistoryPanelPickers` 的 `@ts-nocheck`
+- `refactor(files)`: 合并 fileViewPanel 重复纯函数并治理兜底轮询，降低空闲开销
+- `refactor(composer)`: 统一输入历史存储、事件化命令目录刷新，裁剪补全死路径与 ComposerInput 残留
+
+🐛 Fixes
+- `fix(composer)`: 修复提交生成与命令执行的并发边界，避免并发操作互相干扰
+- `fix(navigation)`: 缓存消息索引并移除随机分支名，导航跳转更稳定
+
+English:
+
+✨ Features
+- Bump the app version to `0.7.10` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(composer)`: formalize the skill-invocation contract and conversation commands, add localized caching for the prompt polisher, and switch curated-skill updates to event-driven refresh
+- `feat(git)`: allow AI commit messages to be regenerated with one click using the last-used configuration, without reselecting the engine and options
+- `feat(terminal)`: add search and safe-link handling to the terminal so output is searchable and links open securely
+- `feat(annotation)`: stabilize code annotation anchors by reusing a unified anchor-assembly path, eliminating position drift
+- `feat(tokentracker)`: support Chinese numeral formatting for token usage displays
+
+🔧 Improvements
+- `refactor(markdown)`: consolidate file-preview rendering boundaries under the large-file renderer baseline and remove the legacy renderer path
+- `refactor(git)`: split high-frequency file and diff entry points; converge the worktree panel on a single shared source of truth for AI commit configuration
+- `refactor(git-history)`: restore type safety in the core panel and remove `@ts-nocheck` from `GitHistoryPanelPickers`
+- `refactor(files)`: merge duplicated pure functions in fileViewPanel and rein in fallback polling to reduce idle overhead
+- `refactor(composer)`: unify input-history storage, make the command catalog refresh event-driven, and prune dead completion paths and ComposerInput remnants
+
+🐛 Fixes
+- `fix(composer)`: fix the concurrency boundary between commit generation and command execution so concurrent actions no longer interfere
+- `fix(navigation)`: cache the message index and remove random branch names, making navigation jumps stable
+
+---
+
+##### **2026年7月25日（v0.7.9）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.7.9`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(extensions)`: 新增 Skills Hub 与 MCP inventory 视图，集中管理技能与 MCP 服务清单
+- `feat(session-activity)`: 接线语义 diff AI review 按需生产者，会话活动支持按需触发 AI 审查
+
+🔧 Improvements
+- `perf(client)`: 降低 worktree / kanban / output / dock 常驻轮询开销；录音电平事件降频至 100ms 并跳过相同值
+- `perf(skills)`: 大技能列表保持响应，避免加载卡顿
+- `refactor`: 清理波次收敛——删除响应式布局死分支、JCEF bridge no-op 桩、app-shell 死链、notice dock streaming 死分支与 orchestration 残留死字段
+- `refactor(settings)`: 摘除 SettingsView 的 `@ts-nocheck`，恢复类型检查保护
+- 优化文件 tab 当前打开标识
+
+🐛 Fixes
+- `fix(settings)`: 损坏的设置文件先隔离备份再回退默认值，加载成功后提示恢复结果并补齐错误日志与 i18n 文案
+- `fix(workspaces)`: 损坏的 workspaces.json 同样先隔离备份再回退，前端挂载后提示工作区损坏恢复
+- `fix(engine-task-output)`: 修复引擎二元假设并透传真实引擎归因，任务输出不再误判来源
+- `fix(vendors)`: 收敛 `isValidModelId` 为 composer 单一实现，消除多处分歧校验
+- `fix(cleanup)`: 收口清理波次遗留链路
+
+English:
+
+✨ Features
+- Bump the app version to `0.7.9` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(extensions)`: add a Skills Hub and an MCP inventory view to centrally manage skills and MCP server listings
+- `feat(session-activity)`: wire an on-demand semantic-diff AI review producer so session activity can trigger AI review when needed
+
+🔧 Improvements
+- `perf(client)`: reduce standing polling overhead across worktree, kanban, output, and dock surfaces; throttle dictation level events to 100ms and skip unchanged values
+- `perf(skills)`: keep large skill lists responsive without load-time stalls
+- `refactor`: cleanup-wave convergence — remove dead responsive-layout branches, the JCEF bridge no-op stub, dead app-shell links, dead notice-dock streaming branches, and leftover orchestration fields
+- `refactor(settings)`: remove `@ts-nocheck` from SettingsView and restore type-check protection
+- refine the currently-open indicator on file tabs
+
+🐛 Fixes
+- `fix(settings)`: quarantine and back up a corrupted settings file before falling back to defaults, surface the recovery after a successful load, and add error logging plus i18n copy
+- `fix(workspaces)`: apply the same quarantine-then-fallback flow to a corrupted workspaces.json and notify about workspace recovery after the frontend mounts
+- `fix(engine-task-output)`: fix the binary engine assumption and propagate true engine attribution so task output is no longer misattributed
+- `fix(vendors)`: converge `isValidModelId` on the single composer implementation, eliminating divergent validation
+- `fix(cleanup)`: close out leftover paths from the cleanup wave
+
+---
+
+##### **2026年7月24日（v0.7.8）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.7.8`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(extensions)`: 扩展管理独立隔离，形成自包含的 extensions 模块边界
+- `feat`: 接入 tokenpacker CLI，扩展 Token 处理能力
+- `feat(session-activity)`: 增强最近活动面板与快速切换器交互
+- `feat(theme)`: 增加主题感知代码与差异配色，代码块与 diff 随主题自动适配
+
+🔧 Improvements
+- `refactor(orchestration)`: 移除编排中心本体、装配与派发接线，open-task-run 事件总线迁移至 tasks 模块，精简应用骨架
+- `refactor(client)`: 清理未使用的客户端模块
+
+🐛 Fixes
+- `fix(quick-switcher)`: 修复文件激活时主区路由错误
+- `fix(styles)`: 修复扩展页签 sticky 布局间隙
+
+English:
+
+✨ Features
+- Bump the app version to `0.7.8` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(extensions)`: isolate extension management into a self-contained module boundary
+- `feat`: connect to the tokenpacker CLI to extend token-processing capabilities
+- `feat(session-activity)`: enhance recent-activity panel and quick-switcher interactions
+- `feat(theme)`: add theme-aware code and diff colors so code blocks and diffs adapt to the active theme
+
+🔧 Improvements
+- `refactor(orchestration)`: remove the orchestration center along with its assembly and dispatch wiring, migrate the open-task-run event bus to the tasks module, and slim down the app shell
+- `refactor(client)`: remove unused client modules
+
+🐛 Fixes
+- `fix(quick-switcher)`: fix incorrect main-area routing when activating a file
+- `fix(styles)`: fix the sticky layout gap on extension tabs
+
+---
+
 ##### **2026年7月23日（v0.7.7）**
 
 中文：

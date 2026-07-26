@@ -1840,3 +1840,135 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1135: 修复文件读取失败加载卡死
+
+**Date**: 2026-07-26
+**Task**: 修复文件读取失败加载卡死
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修复 useFileDocumentState 在读取失败与读取期间产生本地脏改时 loading 状态不收敛；新增两条 regression tests；经 product owner 授权 waived Windows manual gate，同步 file-document-loading-error-surface main spec 并归档 OpenSpec change。验证：lint 0 errors、typecheck 通过、focused tests 12/12、目标 OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `574b056cb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1136: 统一引擎能力契约与会话身份
+
+**Date**: 2026-07-26
+**Task**: 统一引擎能力契约与会话身份
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 OpenSpec Batch 0：生成式 capability matrix、Rust/TypeScript DTO 对齐、foundation capability keys、统一 legacy thread identity parser、持久 alias tombstone 上限与 Kimi scanner 治理；增量 TypeScript/Rust/OpenSpec 门禁通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8e4e177a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1137: 建立统一引擎运行时事件总线
+
+**Date**: 2026-07-26
+**Task**: 建立统一引擎运行时事件总线
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 OpenSpec Batch 1：Rust MossxAgentEvent bus、critical/delta backpressure、run.settled 去重、daemon CLI ingress 与前端 domain event compatibility；增量 Vitest、Rust tests、daemon check、TypeScript compile 和 strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `edf325f58` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1138: 建立引擎适配器协议注册表
+
+**Date**: 2026-07-26
+**Task**: 建立引擎适配器协议注册表
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 OpenSpec Batch 2：前端/Rust Engine registry、EngineId/provenance、EngineProtocol/EngineAdapter 分层、one-shot/persistent registration、RuntimeManager generation 复用与 registry parity gate；增量测试和 strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4825b8a50` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

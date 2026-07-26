@@ -19,6 +19,7 @@ import {
   type TurnTraceSummary,
 } from "../utils/turnTraceCorrelation";
 import type { RealtimeReplayEvent } from "./realtimeReplayTypes";
+import { inferEngineFromLegacyThreadId } from "./engineRuntimeIdentity";
 
 const REPLAY_FLUSH_WINDOW_MS = 12;
 const ASSISTANT_FIRST_VISIBLE_ROW_AFTER_MS = 16;
@@ -32,19 +33,7 @@ function inferEngineFromThreadId(threadId: string): TurnTraceDimensions["engine"
   if (typeof threadId !== "string" || threadId.length === 0) {
     return "codex";
   }
-  if (threadId.startsWith("claude:") || threadId.startsWith("claude-")) {
-    return "claude";
-  }
-  if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-")) {
-    return "gemini";
-  }
-  if (threadId.startsWith("kimi:") || threadId.startsWith("kimi-")) {
-    return "kimi";
-  }
-  if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-")) {
-    return "opencode";
-  }
-  return "codex";
+  return inferEngineFromLegacyThreadId(threadId);
 }
 
 type PerTurnState = {

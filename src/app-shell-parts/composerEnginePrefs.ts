@@ -1,6 +1,7 @@
 import type { AccessMode, ComposerEnginePrefs, EngineType } from "../types";
+import { BUILTIN_ENGINE_TYPES } from "../features/engine/engineRegistry";
 
-const ENGINE_TYPES: EngineType[] = ["claude", "codex", "gemini", "kimi", "opencode"];
+const ENGINE_TYPES: readonly EngineType[] = BUILTIN_ENGINE_TYPES;
 const ACCESS_MODES = new Set<AccessMode>([
   "default",
   "read-only",

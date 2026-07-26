@@ -638,17 +638,6 @@ vi.mock("./features/engine/hooks/useEngineController", () => ({
   }),
 }));
 
-vi.mock("./app-shell-parts/useOpenCodeSelection", () => ({
-  useOpenCodeSelection: () => ({
-    openCodeAgents: [],
-    resolveOpenCodeAgentForThread: () => null,
-    resolveOpenCodeVariantForThread: () => null,
-    selectOpenCodeAgentForThread: createNoopFunction(),
-    selectOpenCodeVariantForThread: createNoopFunction(),
-    syncActiveOpenCodeThread: createNoopFunction(),
-  }),
-}));
-
 vi.mock("./features/kanban/hooks/useKanbanStore", () => ({
   useKanbanStore: () => ({
     panels: [],

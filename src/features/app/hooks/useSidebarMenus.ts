@@ -124,7 +124,6 @@ type SidebarMenuHandlers = {
   ) => Promise<string | null> | string | null | void;
   codexProviderProfiles?: CodexProviderProfileOption[];
   engineOptions?: EngineDisplayInfo[];
-  enabledEngines?: Partial<Record<EngineType, boolean>>;
   onRefreshEngineOptions?: () =>
     | Promise<EngineRefreshResult | void>
     | EngineRefreshResult
@@ -197,7 +196,6 @@ function resolveEngineDisplayName(engineType: EngineType): string {
 export function useSidebarMenus({
   onAddAgent,
   engineOptions = [],
-  enabledEngines,
   onRefreshEngineOptions,
   onAddSharedAgent,
   onAssignNewSessionToFolder,
@@ -590,20 +588,8 @@ export function useSidebarMenus({
   );
 
   const isEngineSessionEntryVisible = useCallback(
-    (engineType: EngineType) => {
-      if (!isEngineExecutionEnabled(engineType)) {
-        return false;
-      }
-      switch (engineType) {
-        case "opencode":
-          return enabledEngines?.[engineType] !== false;
-        case "claude":
-        case "codex":
-        default:
-          return true;
-      }
-    },
-    [enabledEngines],
+    (engineType: EngineType) => isEngineExecutionEnabled(engineType),
+    [],
   );
 
   const [codexSelectedProfileId, setCodexSelectedProfileId] = useState<

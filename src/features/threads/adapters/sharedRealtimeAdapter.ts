@@ -7,6 +7,7 @@ import type {
   NormalizedThreadEvent,
   RealtimeAdapter,
 } from "../contracts/conversationCurtainContracts";
+import { inferEngineFromLegacyThreadId } from "../contracts/engineRuntimeIdentity";
 
 type RawRealtimeAdapterInput = {
   workspaceId: string;
@@ -402,24 +403,10 @@ function mapCodexRawGeneratedImageEvent({
   });
 }
 
-import { isClaudeRuntimeThreadId } from "../utils/claudeForkThread";
-
 export function inferEngineFromThreadId(
   threadId: string,
 ): ConversationEngine {
-  if (isClaudeRuntimeThreadId(threadId)) {
-    return "claude";
-  }
-  if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")) {
-    return "gemini";
-  }
-  if (threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-")) {
-    return "kimi";
-  }
-  if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")) {
-    return "opencode";
-  }
-  return "codex";
+  return inferEngineFromLegacyThreadId(threadId);
 }
 
 export function mapCommonRealtimeEvent(

@@ -374,7 +374,7 @@ export function useThreadActionsSessionRuntime({
         selectedProviderBinding,
       });
 
-      if (engine === "claude" || engine === "kimi" || engine === "opencode") {
+      if (engine === "claude" || engine === "kimi") {
         const prefix = engine;
         const threadId = `${prefix}-pending-${Date.now()}-${Math.random()
           .toString(36)

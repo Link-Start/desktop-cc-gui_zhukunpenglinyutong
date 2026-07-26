@@ -4,6 +4,10 @@ export type ClaudeCustomModelFact = {
   label: string;
   description?: string;
   source: "custom";
+  catalogSource: "configured";
+  provider: string;
+  protocol: "anthropic-messages";
+  provenance: "local-storage:claude-custom-models";
 };
 
 export function normalizeClaudeCustomModels(input: unknown): ClaudeCustomModelFact[] {
@@ -44,6 +48,10 @@ export function normalizeClaudeCustomModels(input: unknown): ClaudeCustomModelFa
       label,
       description,
       source: "custom",
+      catalogSource: "configured",
+      provider: "anthropic",
+      protocol: "anthropic-messages",
+      provenance: "local-storage:claude-custom-models",
     });
     seenIds.add(id);
   }

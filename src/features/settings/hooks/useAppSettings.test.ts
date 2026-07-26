@@ -534,7 +534,7 @@ describe("useAppSettings", () => {
     );
   });
 
-  it("preserves explicitly enabled OpenCode gate while loading settings", async () => {
+  it("normalizes a legacy enabled OpenCode gate to soft-retired", async () => {
     getAppSettingsMock.mockResolvedValue({
       opencodeEnabled: true,
     } as AppSettings);
@@ -543,7 +543,7 @@ describe("useAppSettings", () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.settings.opencodeEnabled).toBe(true);
+    expect(result.current.settings.opencodeEnabled).toBe(false);
   });
 
   it("persists settings via updateAppSettings and updates local state", async () => {

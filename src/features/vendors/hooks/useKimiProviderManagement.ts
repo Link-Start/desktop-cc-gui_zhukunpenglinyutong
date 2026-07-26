@@ -67,8 +67,19 @@ export function useKimiProviderManagement() {
     try {
       const config = await getCurrentKimiConfig();
       setCurrentKimiConfig(config);
-    } catch {
+      if (
+        config.configStatus === "malformed" ||
+        config.configStatus === "io-error"
+      ) {
+        setKimiProviderError(
+          config.diagnostic ?? `Kimi config is ${config.configStatus}.`,
+        );
+      }
+    } catch (error) {
       setCurrentKimiConfig(null);
+      setKimiProviderError(
+        getErrorMessage(error, "Failed to inspect Kimi config."),
+      );
     }
   }, []);
 
@@ -141,9 +152,13 @@ export function useKimiProviderManagement() {
     if (!provider) return;
 
     try {
-      await deleteKimiProvider(provider.id);
-      setKimiProviderError(null);
+      const result = await deleteKimiProvider(provider.id);
       await loadKimiProviders();
+      setKimiProviderError(
+        result.status === "partial-warning"
+          ? result.warning ?? "Kimi provider deleted with residual config."
+          : null,
+      );
     } catch (error) {
       setKimiProviderError(
         getErrorMessage(error, "Failed to delete Kimi provider."),

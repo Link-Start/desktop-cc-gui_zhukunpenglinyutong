@@ -55,6 +55,9 @@ describe("useModels", () => {
             id: "remote-1",
             model: "gpt-5.1",
             displayName: "GPT-5.1",
+            provider: "provider-from-runtime",
+            protocol: "custom-responses",
+            provenance: "runtime:model/list",
             supportedReasoningEfforts: [],
             defaultReasoningEffort: null,
             isDefault: true,
@@ -75,6 +78,16 @@ describe("useModels", () => {
       id: "custom-model",
       model: "custom-model",
     });
+    expect(result.current.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "remote-1",
+          provider: "provider-from-runtime",
+          protocol: "custom-responses",
+          provenance: "runtime:model/list",
+        }),
+      ]),
+    );
     expect(result.current.selectedModel?.model).toBe("custom-model");
     expect(result.current.reasoningSupported).toBe(false);
   });
@@ -627,6 +640,48 @@ describe("useModels", () => {
     });
 
     expect(getModelList).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves the last-good runtime catalog when a refresh fails", async () => {
+    vi.mocked(getModelList)
+      .mockResolvedValueOnce({
+        result: {
+          data: [
+            {
+              id: "runtime-model",
+              model: "runtime-model",
+              displayName: "Runtime Model",
+              supportedReasoningEfforts: [],
+              defaultReasoningEffort: null,
+              isDefault: true,
+            },
+          ],
+        },
+      })
+      .mockRejectedValueOnce(new Error("model/list failed"));
+    vi.mocked(getConfigModel).mockResolvedValue(null);
+
+    const { result } = renderHook(() =>
+      useModels({ activeWorkspace: workspace }),
+    );
+    await waitFor(() =>
+      expect(result.current.selectedModelId).toBe("runtime-model"),
+    );
+
+    await act(async () => {
+      await result.current.refreshModels();
+    });
+
+    expect(result.current.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "runtime-model",
+          displayName: "Runtime Model",
+          source: "cache:stale",
+        }),
+      ]),
+    );
+    expect(result.current.selectedModelId).toBe("runtime-model");
   });
 
   it("does not mark the global selection as ready when the workspace catalog request fails", async () => {

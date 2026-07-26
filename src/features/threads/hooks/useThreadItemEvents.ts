@@ -42,6 +42,7 @@ import {
   noteThreadReducerWorkMeasured,
 } from "../utils/streamLatencyDiagnostics";
 import { recordHotspotSample } from "../../../services/perfBaseline/hotspotTracker";
+import { inferEngineFromLegacyThreadId } from "../contracts/engineRuntimeIdentity";
 
 const CLAUDE_STREAM_DEBUG_FLAG_KEY = "ccgui.debug.claude.stream";
 // A4 流式正文外部化（docs/perf/a4-live-text-externalization-plan.md）：
@@ -52,21 +53,7 @@ const LIVE_TEXT_EXTERNALIZATION_ENABLED = isLiveTextExternalizationEnabled();
  * Infer engine type from thread ID.
  * Claude/Gemini/Kimi/OpenCode threads use "<engine>:" or "<engine>-pending-" prefixes.
  */
-function inferEngineFromThreadId(threadId: string): "claude" | "codex" | "gemini" | "kimi" | "opencode" {
-  if (threadId.startsWith("claude:") || threadId.startsWith("claude-pending-")) {
-    return "claude";
-  }
-  if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")) {
-    return "gemini";
-  }
-  if (threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-")) {
-    return "kimi";
-  }
-  if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")) {
-    return "opencode";
-  }
-  return "codex";
-}
+const inferEngineFromThreadId = inferEngineFromLegacyThreadId;
 
 export function canProgressEventStartProcessing(
   engine: "claude" | "codex" | "gemini" | "kimi" | "opencode",

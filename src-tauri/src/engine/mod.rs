@@ -7,6 +7,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub(crate) mod adapter_registry;
+pub(crate) mod agent_event_bus;
 #[cfg(test)]
 mod capability_matrix;
 pub mod claude;
@@ -93,15 +95,15 @@ impl EngineType {
 }
 
 pub(crate) const OPENCODE_DISABLED_DIAGNOSTIC: &str =
-    "OpenCode CLI is disabled in CLI validation settings";
+    "OpenCode CLI is soft-retired and blocked by runtime policy";
 
 pub(crate) fn engine_enabled_in_settings(
-    settings: &crate::types::AppSettings,
+    _settings: &crate::types::AppSettings,
     engine_type: EngineType,
 ) -> bool {
     match engine_type {
         EngineType::Gemini => crate::engine_policy::GEMINI_RUNTIME_ENABLED,
-        EngineType::OpenCode => settings.opencode_enabled,
+        EngineType::OpenCode => false,
         EngineType::Claude | EngineType::Codex | EngineType::Kimi => true,
     }
 }
@@ -184,8 +186,20 @@ pub struct ModelInfo {
     #[serde(default)]
     pub description: String,
     /// Provider name (e.g., "anthropic", "openai")
-    #[serde(skip_serializing)]
+    #[serde(default)]
     pub provider: Option<String>,
+    /// API/wire protocol, independent from provider identity.
+    #[serde(default)]
+    pub protocol: Option<String>,
+    /// Source owner used to explain catalog precedence.
+    #[serde(default)]
+    pub provenance: Option<String>,
+    #[serde(default)]
+    pub observed_at: Option<u64>,
+    #[serde(default)]
+    pub last_verified_at: Option<String>,
+    #[serde(default)]
+    pub lifecycle: Option<String>,
     /// Discovery/configuration source for diagnostics.
     #[serde(default = "default_model_source")]
     pub source: String,
@@ -205,6 +219,11 @@ impl ModelInfo {
             default: false,
             description: String::new(),
             provider: None,
+            protocol: None,
+            provenance: None,
+            observed_at: None,
+            last_verified_at: None,
+            lifecycle: None,
             source: default_model_source(),
         }
     }
@@ -216,6 +235,31 @@ impl ModelInfo {
 
     pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
         self.provider = Some(provider.into());
+        self
+    }
+
+    pub fn with_protocol(mut self, protocol: impl Into<String>) -> Self {
+        self.protocol = Some(protocol.into());
+        self
+    }
+
+    pub fn with_provenance(mut self, provenance: impl Into<String>) -> Self {
+        self.provenance = Some(provenance.into());
+        self
+    }
+
+    pub fn with_observed_at(mut self, observed_at: u64) -> Self {
+        self.observed_at = Some(observed_at);
+        self
+    }
+
+    pub fn with_fallback_freshness(
+        mut self,
+        last_verified_at: impl Into<String>,
+        lifecycle: impl Into<String>,
+    ) -> Self {
+        self.last_verified_at = Some(last_verified_at.into());
+        self.lifecycle = Some(lifecycle.into());
         self
     }
 
@@ -450,6 +494,18 @@ mod tests {
         assert_eq!(
             engine_disabled_diagnostic(EngineType::Gemini),
             Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC)
+        );
+    }
+
+    #[test]
+    fn opencode_retirement_policy_ignores_legacy_enabled_setting() {
+        let mut settings = crate::types::AppSettings::default();
+        settings.opencode_enabled = true;
+
+        assert!(!engine_enabled_in_settings(&settings, EngineType::OpenCode));
+        assert_eq!(
+            engine_disabled_diagnostic(EngineType::OpenCode),
+            Some(OPENCODE_DISABLED_DIAGNOSTIC)
         );
     }
 }

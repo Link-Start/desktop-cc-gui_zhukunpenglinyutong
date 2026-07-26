@@ -82,6 +82,20 @@ export const domainEventDerivationFixtures = {
     }
     return null;
   },
+  "run.settled"(prev: ThreadState, next: ThreadState, context: DomainEventDerivationContext): DomainEvent | null {
+    const prevTurnId = prev.activeTurnIdByThread[context.sessionId] ?? null;
+    const nextTurnId = next.activeTurnIdByThread[context.sessionId] ?? null;
+    return prevTurnId && !nextTurnId
+      ? domainEventFactories.runSettled({
+          ...common(context),
+          runId: prevTurnId,
+          status: "completed",
+          evidence: {
+            durationMs: next.threadStatusById[context.sessionId]?.lastDurationMs ?? null,
+          },
+        })
+      : null;
+  },
   "turn.failed"(prev: ThreadState, next: ThreadState, context: DomainEventDerivationContext): DomainEvent | null {
     const failedTool = findItemByKind(getItems(next, context.sessionId), "tool");
     const prevFailedTool = findItemByKind(getItems(prev, context.sessionId), "tool");

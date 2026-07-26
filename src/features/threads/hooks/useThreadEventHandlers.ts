@@ -1338,7 +1338,14 @@ export function useThreadEventHandlers({
         occurredAt: new Date().toISOString(),
         workspaceId,
         sessionId: threadId,
+        logicalSessionId: threadId,
+        runId: turnId,
         engine: inferThreadEngine(threadId),
+        engineId: inferThreadEngine(threadId),
+        provenance: {
+          source: "frontend-compatibility-sink",
+          rawEventType: status === "completed" ? "turn/completed" : "turn/error",
+        },
         turnId,
       };
       domainEventController.emitInternal(
@@ -1351,6 +1358,13 @@ export function useThreadEventHandlers({
               ...common,
               errorMessage: payload?.errorMessage ?? "turn failed",
             }),
+      );
+      domainEventController.emitInternal(
+        domainEventFactories.runSettled({
+          ...common,
+          status,
+          evidence: payload ?? {},
+        }),
       );
     },
     [domainEventController],

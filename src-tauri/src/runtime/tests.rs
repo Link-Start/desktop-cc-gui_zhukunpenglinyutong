@@ -6,7 +6,7 @@ use super::process_diagnostics::{
 use super::{
     build_engine_observability, replace_workspace_session_with_source,
     replace_workspace_session_with_terminator, terminate_replaced_workspace_session,
-    write_json_atomically, RuntimeAcquireDisposition, RuntimeEndedRecord,
+    write_json_atomically, ExecutableSessionState, RuntimeAcquireDisposition, RuntimeEndedRecord,
     RuntimeEngineObservability, RuntimeLifecycleState, RuntimeManager, RuntimeProcessDiagnostics,
     RuntimeState, TurnReconciliationRuntimeStatus, TurnReconciliationStatusQuery,
     TurnReconciliationStatusSource,
@@ -1100,6 +1100,21 @@ async fn terminal_turn_events_clear_foreground_resume_pending_continuity() {
             }),
         )
         .await;
+    let settled_entry = tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            if let Ok(Some(executable)) =
+                manager.executable_registry.resolve("thread-1", None).await
+            {
+                if executable.state == ExecutableSessionState::Settled {
+                    break executable;
+                }
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("settlement control work should complete outside the event callback");
+    assert_eq!(settled_entry.last_settled_run_id.as_deref(), Some("turn-1"));
 
     let completed_snapshot = manager.snapshot(&AppSettings::default()).await;
     let completed_row = completed_snapshot

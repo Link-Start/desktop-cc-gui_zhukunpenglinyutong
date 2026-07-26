@@ -521,7 +521,6 @@ describe("useEngineController", () => {
       "claude",
       "codex",
       "kimi",
-      "opencode",
     ]);
     expect(
       result.current.availableEngines.every(
@@ -530,7 +529,24 @@ describe("useEngineController", () => {
     ).toBe(true);
   });
 
-  it("keeps opencode ready without automatic provider health probing", async () => {
+  it("keeps the facade snapshot stable across unrelated parent renders", () => {
+    detectEnginesMock.mockImplementation(
+      () => new Promise<EngineStatus[]>((_resolve) => undefined),
+    );
+    getActiveEngineMock.mockImplementation(
+      () => new Promise<"claude">((_resolve) => undefined),
+    );
+
+    const { result, rerender } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+    const firstSnapshot = result.current;
+    rerender();
+
+    expect(result.current).toBe(firstSnapshot);
+  });
+
+  it("keeps detected OpenCode outside production engine surfaces", async () => {
     detectEnginesMock.mockResolvedValue([
       {
         engineType: "claude",
@@ -617,8 +633,7 @@ describe("useEngineController", () => {
     const opencodeEngine = result.current.availableEngines.find(
       (engine) => engine.type === "opencode",
     );
-    expect(opencodeEngine?.availabilityState).toBe("ready");
-    expect(opencodeEngine?.availabilityLabelKey).toBeNull();
+    expect(opencodeEngine).toBeUndefined();
   });
 
   it("hides disabled Gemini and OpenCode engines from available engine surfaces", async () => {
@@ -675,10 +690,6 @@ describe("useEngineController", () => {
     const { result } = renderHook(() =>
       useEngineController({
         activeWorkspace: null,
-        enabledEngines: {
-          gemini: false,
-          opencode: false,
-        },
       }),
     );
 

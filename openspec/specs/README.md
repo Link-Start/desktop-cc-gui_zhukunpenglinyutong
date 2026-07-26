@@ -1,6 +1,6 @@
 # OpenSpec Main Specs 索引
 
-`openspec/specs/*/spec.md` 是已经同步进入 mainline 的 capability behavior truth。当前索引覆盖 **431** 个 capability，并按 capability id 首字母分组。
+`openspec/specs/*/spec.md` 是已经同步进入 mainline 的 capability behavior truth。当前索引覆盖 **432** 个 capability，并按 capability id 首字母分组。
 
 ## 使用边界
 
@@ -223,6 +223,7 @@
 
 - [feishu-message-connector](./feishu-message-connector/spec.md)
 - [file-change-event-debounce](./file-change-event-debounce/spec.md)
+- [file-document-loading-error-surface](./file-document-loading-error-surface/spec.md)
 - [file-editor-line-navigation](./file-editor-line-navigation/spec.md)
 - [file-editor-tab-strip](./file-editor-tab-strip/spec.md)
 - [file-editor-typing-latency](./file-editor-typing-latency/spec.md)

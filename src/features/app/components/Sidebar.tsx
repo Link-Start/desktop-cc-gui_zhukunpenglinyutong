@@ -158,7 +158,6 @@ type SidebarProps = {
     options?: { folderId?: string | null } & CodexProviderProfileSelection,
   ) => Promise<string | null> | string | null | void;
   engineOptions?: EngineDisplayInfo[];
-  enabledEngines?: Partial<Record<EngineType, boolean>>;
   onRefreshEngineOptions?: () =>
     | Promise<EngineRefreshResult | void>
     | EngineRefreshResult
@@ -259,7 +258,6 @@ function SidebarImpl({
   onConnectWorkspace,
   onAddAgent,
   engineOptions = [],
-  enabledEngines,
   onRefreshEngineOptions,
   onAddSharedAgent,
   onAddWorktreeAgent,
@@ -905,7 +903,6 @@ function SidebarImpl({
       onAddAgent,
       codexProviderProfiles,
       engineOptions,
-      enabledEngines,
       onRefreshEngineOptions,
       onAddSharedAgent,
       onAssignNewSessionToFolder: assignNewSessionToFolder,

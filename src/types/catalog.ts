@@ -80,6 +80,12 @@ export type ModelOption = {
   displayName: string;
   description: string;
   source: string;
+  provider?: string | null;
+  protocol?: string | null;
+  provenance?: string | null;
+  observedAt?: number | null;
+  lastVerifiedAt?: string | null;
+  lifecycle?: string | null;
   providerProfileId?: string | null;
   supportedReasoningEfforts: { reasoningEffort: string; description: string }[];
   defaultReasoningEffort: string | null;

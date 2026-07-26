@@ -9,10 +9,16 @@ import {
   buildQueuedHandoffBubbleItem,
   type QueuedHandoffBubble,
 } from "../utils/queuedHandoffBubble";
+import {
+  createEngineMessageDeliveryDiagnostic,
+  decideEngineMessageDelivery,
+  type EngineMessageDeliveryDiagnostic,
+} from "../contracts/engineMessageDelivery";
 
 const OPENCODE_INFLIGHT_STALL_MS = 18_000;
 const FUSION_RESUME_TIMEOUT_MS = 48_000;
 const QUEUED_HANDOFF_BUBBLE_TTL_MS = 60_000;
+const DELIVERY_DIAGNOSTIC_LIMIT = 100;
 
 type UseQueuedSendOptions = {
   activeThreadId: string | null;
@@ -329,6 +335,18 @@ export function useQueuedSend({
     Record<string, ThreadFusionState | null>
   >({});
   const previousActiveThreadIdRef = useRef<string | null>(activeThreadId);
+  const queuedAfterTerminalPulseRef = useRef(new Map<string, number>());
+  const deliveryDiagnosticsRef = useRef<EngineMessageDeliveryDiagnostic[]>([]);
+
+  const recordDeliveryDecision = useCallback(
+    (diagnostic: EngineMessageDeliveryDiagnostic) => {
+      deliveryDiagnosticsRef.current = [
+        ...deliveryDiagnosticsRef.current.slice(-(DELIVERY_DIAGNOSTIC_LIMIT - 1)),
+        diagnostic,
+      ];
+    },
+    [],
+  );
 
   const activeQueue = useMemo(
     () => (activeThreadId ? queuedByThread[activeThreadId] ?? [] : []),
@@ -343,6 +361,18 @@ export function useQueuedSend({
     [activeThreadId, queuedHandoffByThread],
   );
   const activeFusingMessageId = activeFusion?.messageId ?? null;
+  const activeSteeringRoute = useMemo(() => {
+    if (!activeThreadId || !activeTurnId || !steerEnabled) {
+      return false;
+    }
+    const decision = decideEngineMessageDelivery({
+      intent: "steer",
+      engine: activeEngine,
+      sessionId: activeThreadId,
+      activeRunId: activeTurnId,
+    });
+    return decision.status !== "rejected" && decision.route === "steer";
+  }, [activeEngine, activeThreadId, activeTurnId, steerEnabled]);
   const canFuseActiveQueue = useMemo(
     () =>
       Boolean(
@@ -353,18 +383,18 @@ export function useQueuedSend({
           !isClaudePendingBootstrapThread &&
           isProcessing &&
           !isReviewing &&
-          (steerEnabled || interruptTurn),
+          (activeSteeringRoute || interruptTurn),
       ),
     [
       activeFusion,
       activeQueue.length,
       activeThreadId,
+      activeSteeringRoute,
       activeWorkspace,
       isClaudePendingBootstrapThread,
       interruptTurn,
       isProcessing,
       isReviewing,
-      steerEnabled,
     ],
   );
 
@@ -484,6 +514,7 @@ export function useQueuedSend({
 
   const removeQueuedMessage = useCallback(
     (threadId: string, messageId: string) => {
+      queuedAfterTerminalPulseRef.current.delete(messageId);
       setQueuedByThread((prev) => ({
         ...prev,
         [threadId]: (prev[threadId] ?? []).filter(
@@ -792,13 +823,38 @@ export function useQueuedSend({
       }
       const shouldQueueWhileProcessing =
         isProcessing && (!steerEnabled || isClaudePendingBootstrapThread);
+      const deliveryRequest = {
+        intent:
+          isProcessing && steerEnabled && activeTurnId ? "steer" : "prompt",
+        engine: activeEngine,
+        sessionId: activeThreadId,
+        activeRunId: isProcessing ? activeTurnId ?? null : null,
+        allowFollowUpFallback: true,
+      } as const;
+      const deliveryResult = decideEngineMessageDelivery(deliveryRequest);
+      recordDeliveryDecision(
+        createEngineMessageDeliveryDiagnostic(deliveryRequest, deliveryResult),
+      );
       // A pending AskUserQuestion also holds the queue: the turn is alive but
       // blocked on the answer, so a fresh send must queue rather than dispatch.
-      if (activeThreadId && (shouldQueueWhileProcessing || hasPendingUserInput)) {
+      if (
+        activeThreadId &&
+        (shouldQueueWhileProcessing ||
+          hasPendingUserInput ||
+          (deliveryResult.status === "degraded" &&
+            deliveryResult.route === "queue") ||
+          (deliveryResult.status === "accepted" && deliveryResult.route === "queue"))
+      ) {
         const item = buildQueuedMessage(trimmed, nextImages, options);
+        if (isProcessing && activeTurnId) {
+          queuedAfterTerminalPulseRef.current.set(item.id, activeTerminalPulse);
+        }
         enqueueMessage(activeThreadId, item);
         clearActiveImages();
         return;
+      }
+      if (deliveryResult.status === "rejected") {
+        throw new Error(`Message delivery rejected: ${deliveryResult.reason}`);
       }
       await dispatchQueuedMessage(buildQueuedMessage(trimmed, nextImages, options));
       clearActiveImages();
@@ -806,6 +862,8 @@ export function useQueuedSend({
     [
       activeEngine,
       activeThreadId,
+      activeTerminalPulse,
+      activeTurnId,
       buildQueuedMessage,
       clearActiveImages,
       dispatchQueuedMessage,
@@ -814,6 +872,7 @@ export function useQueuedSend({
       isClaudePendingBootstrapThread,
       isProcessing,
       isReviewing,
+      recordDeliveryDecision,
       steerEnabled,
     ],
   );
@@ -842,15 +901,21 @@ export function useQueuedSend({
         return;
       }
       const item = buildQueuedMessage(trimmed, nextImages, options);
+      if (isProcessing && activeTurnId) {
+        queuedAfterTerminalPulseRef.current.set(item.id, activeTerminalPulse);
+      }
       enqueueMessage(activeThreadId, item);
       clearActiveImages();
     },
     [
       activeEngine,
       activeThreadId,
+      activeTerminalPulse,
+      activeTurnId,
       buildQueuedMessage,
       clearActiveImages,
       enqueueMessage,
+      isProcessing,
       isReviewing,
     ],
   );
@@ -881,8 +946,30 @@ export function useQueuedSend({
       if (!isQueuedMessageFuseEligible(item)) {
         return;
       }
+      const predecessorTerminalPulse =
+        queuedAfterTerminalPulseRef.current.get(messageId);
 
-      const useSameRunContinuation = steerEnabled;
+      const steeringDecision = decideEngineMessageDelivery({
+        intent: "steer",
+        engine: activeEngine,
+        sessionId: threadId,
+        activeRunId: activeTurnId ?? null,
+      });
+      recordDeliveryDecision(
+        createEngineMessageDeliveryDiagnostic(
+          {
+            intent: "steer",
+            engine: activeEngine,
+            sessionId: threadId,
+            activeRunId: activeTurnId ?? null,
+          },
+          steeringDecision,
+        ),
+      );
+      const useSameRunContinuation =
+        steerEnabled &&
+        steeringDecision.status !== "rejected" &&
+        steeringDecision.route === "steer";
       const canUseSafeCutover =
         !useSameRunContinuation && typeof interruptTurn === "function";
       if (!useSameRunContinuation && !canUseSafeCutover) {
@@ -907,6 +994,7 @@ export function useQueuedSend({
           (entry) => entry.id !== messageId,
         ),
       }));
+      queuedAfterTerminalPulseRef.current.delete(messageId);
 
       try {
         if (!useSameRunContinuation && interruptTurn) {
@@ -946,6 +1034,12 @@ export function useQueuedSend({
         });
       } catch (error) {
         setFusionByThread((prev) => ({ ...prev, [threadId]: null }));
+        if (predecessorTerminalPulse !== undefined) {
+          queuedAfterTerminalPulseRef.current.set(
+            messageId,
+            predecessorTerminalPulse,
+          );
+        }
         insertQueuedMessageAt(threadId, item, originalIndex);
         throw error;
       }
@@ -965,6 +1059,7 @@ export function useQueuedSend({
       isProcessing,
       isReviewing,
       queuedByThread,
+      recordDeliveryDecision,
       steerEnabled,
     ],
   );
@@ -1174,6 +1269,14 @@ export function useQueuedSend({
     if (!nextItem) {
       return;
     }
+    const predecessorTerminalPulse =
+      queuedAfterTerminalPulseRef.current.get(nextItem.id);
+    if (
+      predecessorTerminalPulse !== undefined &&
+      activeTerminalPulse <= predecessorTerminalPulse
+    ) {
+      return;
+    }
     const nextTrimmedText = nextItem.text.trim();
     const shouldCreateHandoffBubble =
       activeEngine === "codex" &&
@@ -1194,6 +1297,7 @@ export function useQueuedSend({
       ...prev,
       [threadId]: (prev[threadId] ?? []).slice(1),
     }));
+    queuedAfterTerminalPulseRef.current.delete(nextItem.id);
     (async () => {
       try {
         const dispatchedRun = await dispatchQueuedMessage(nextItem, {
@@ -1214,6 +1318,7 @@ export function useQueuedSend({
   }, [
     activeEngine,
     activeThreadId,
+    activeTerminalPulse,
     dispatchQueuedMessage,
     fusionByThread,
     hasPendingUserInput,

@@ -58,6 +58,22 @@ test("marks allowlisted engine branches without hiding them", () => {
   assert.equal(findings[0]?.allowed, true);
 });
 
+test("loads Kimi from the canonical engine id registry", () => {
+  const findings = scanEngineNameBranchesInternals.scanEngineNameBranchesInText(
+    "if (selectedEngine === 'kimi') { return true; }\n",
+    "src/example.ts",
+  );
+
+  assert.deepEqual(scanEngineNameBranchesInternals.ENGINE_IDS, [
+    "claude",
+    "codex",
+    "gemini",
+    "kimi",
+    "opencode",
+  ]);
+  assert.equal(findings[0]?.expression, "selectedEngine === 'kimi'");
+});
+
 test("normalizes Windows-style input paths for scanning", async () => {
   await withTempDir(async (root) => {
     await writeFile(
@@ -116,6 +132,7 @@ test("cli emits deterministic JSON", async () => {
     assert.deepEqual(JSON.parse(result.stdout), {
       version: 1,
       root: ".",
+      engineIds: ["claude", "codex", "gemini", "kimi", "opencode"],
       scannedFiles: 1,
       findingCount: 1,
       findings: [

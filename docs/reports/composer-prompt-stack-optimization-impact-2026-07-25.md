@@ -1,19 +1,20 @@
 # 输入与提示词体系优化项 · 逐项影响明细
 
-> **日期**：2026-07-25（**2026-07-26 复核更新**：四个批次全部落地，逐项状态见下）
-> **基线**：分支 `feature/v-799` @ `c75922dec` → **当前复核**：分支 `feature/v-0710` @ `bee87c4f8`
+> **日期**：2026-07-25（**2026-07-26 复核更新**：四个批次全部落地，逐项状态见下；**同日二次复核** @ `713ef5f2c`：9 项状态定性不变，`296fad4a5` 并发边界加固与 hash 漂移已同步）
+> **基线**：分支 `feature/v-799` @ `c75922dec` → **当前复核**：分支 `feature/v-0710` @ `713ef5f2c`
 > **来源**：从 `client-aux-modules-governance-report-2026-07-25.md` 摘出你选定的 9 项，逐项展开"现状 → 影响 → 处理后影响 → UI 变化"
 > **核对方法**：逐项对照当前 HEAD 源码与生产 caller；你贴的清单里有两项状态已过时，本文按当前事实修正并显式标注
 > **行号声明**：行号为 `c75922dec` 快照，后续提交请按 symbol 搜索
 >
-> **2026-07-26 落地批次**（与文末"实施顺序建议"四批一一对应）：
+> **2026-07-26 落地批次**（与文末"实施顺序建议"四批一一对应；hash 为 rebase 后当前分支上的值，原 `9f969c0a5`/`81d9a47f9`/`5a76671b3`/`bee87c4f8` 一一对应）：
 >
 > | 批次 | 提交 | 覆盖项 |
 > |---|---|---|
-> | 批次1 纯清理 | `9f969c0a5` refactor(composer): 裁剪 Composer 层补全死路径与 ComposerInput 残留 | #1、#3 |
-> | 批次2 行为一致性 | `81d9a47f9` refactor(composer): 统一输入历史存储并事件化命令目录刷新 | #2、#5 |
-> | 批次3 体验升级 | `5a76671b3` feat(composer): 润色器本地化缓存与 curated skills 事件化刷新 | #7（部分）、#8 |
-> | 批次4 增量能力 | `bee87c4f8` feat(composer): 技能调用契约与对话提示词沉淀 | #6（契约部分）、#9（prompt 通道） |
+> | 批次1 纯清理 | `9484986c8` refactor(composer): 裁剪 Composer 层补全死路径与 ComposerInput 残留 | #1、#3 |
+> | 批次2 行为一致性 | `32092503c` refactor(composer): 统一输入历史存储并事件化命令目录刷新 | #2、#5 |
+> | 批次3 体验升级 | `85bc82b7e` feat(composer): 润色器本地化缓存与 curated skills 事件化刷新 | #7（部分）、#8 |
+> | 批次4 增量能力 | `7173c9c5f` feat(composer): 技能调用契约与对话命令沉淀 | #6（契约部分）、#9（prompt 通道） |
+> | 加固 | `296fad4a5` fix(composer): 修复提交生成与命令并发边界 | #5、#7 的并发健壮性（不改变状态定性） |
 
 ---
 
@@ -35,7 +36,7 @@
 
 ## 1. `ComposerInput.tsx` 1641 行死实现未删
 
-**2026-07-26 复核**：✅ **已完成**（批次1 `9f969c0a5`）。两处残留均已清理：`ChatInputBoxAdapter.tsx` 头部注释已移除 ComposerInput 迁移叙事；guard test 已重命名为 `ChatInputResponsiveness.guard.test.ts`。本项关闭。
+**2026-07-26 复核**：✅ **已完成**（批次1 `9484986c8`）。两处残留均已清理：`ChatInputBoxAdapter.tsx` 头部注释已移除 ComposerInput 迁移叙事；guard test 已重命名为 `ChatInputResponsiveness.guard.test.ts`。本项关闭。
 
 **原状态（07-25）**：原清单写"未做"，但当前 `src/` 下该文件**已删除**（治理报告 07-25 复核亦确认 ✅）。残留物只有两个：
 
@@ -67,7 +68,9 @@
 
 ## 2. 输入历史三套并存、发送时双写
 
-**2026-07-26 复核**：✅ **已完成**（批次2 `81d9a47f9`，OpenSpec: composer-input-history）。`usePromptHistory.ts`（245 行）与 `useInlineHistoryCompletion.ts`（169 行）已删除，`useInputHistoryStore` 成为唯一实现；`Composer.tsx` 中 `recordHistory` 双写调用已移除，发送时单写。历史数据按设计取舍（见该 change 的 design.md）。本项关闭。
+**2026-07-26 复核**：✅ **已完成**（批次2 `32092503c`，OpenSpec: composer-input-history）。`usePromptHistory.ts`（245 行）与旧版 `useInlineHistoryCompletion.ts`（169 行独立实现）已删除，`useInputHistoryStore` 成为唯一实现；`Composer.tsx` 中 `recordHistory` 双写调用已移除，发送时单写。历史数据按设计取舍（见该 change 的 design.md）。本项关闭。
+
+**2026-07-26 二次复核修正**：`useInlineHistoryCompletion.ts` 后续在 `0e56bb3a6` 以新实现重建（现 167 行），但它是统一 store 的**只读消费者**（`loadHistoryItems`/`loadHistoryCounts` 均 import 自 `useInputHistoryStore`），被 `ChatInputBox.tsx` 与 `TaskCreateModal.tsx` 使用——"单一 store"结论不受影响。
 
 **原状态（07-25）**：❌ 未做（双写仍在）。以下证据为 `c75922dec` 快照存档：
 
@@ -101,7 +104,7 @@
 
 ## 3. 自动补全两套引擎同时跑
 
-**2026-07-26 复核**：✅ **已完成**（批次1 `9f969c0a5`，OpenSpec: prune-composer-autocomplete-dead-paths）。`useComposerAutocompleteState.ts` 从 976 行瘦身为 **88 行**的 trigger 上下文检测器，被弃用的记忆/便签 IPC、文件打分、item 构建与 `apply`/`handleInputKeyDown` 死输出全部删除；唯一消费者已消失的 `useComposerAutocomplete.ts`（279 行）同步删除；测试已同步收敛。每次键入不再白跑一轮记忆 IPC 与文件打分。本项关闭。
+**2026-07-26 复核**：✅ **已完成**（批次1 `9484986c8`，OpenSpec: prune-composer-autocomplete-dead-paths）。`useComposerAutocompleteState.ts` 从 976 行瘦身为 **88 行**的 trigger 上下文检测器，被弃用的记忆/便签 IPC、文件打分、item 构建与 `apply`/`handleInputKeyDown` 死输出全部删除；唯一消费者已消失的 `useComposerAutocomplete.ts`（279 行）同步删除；测试已同步收敛。每次键入不再白跑一轮记忆 IPC 与文件打分。本项关闭。
 
 **原状态（07-25）**：❌ 未做。以下证据为 `c75922dec` 快照存档：
 
@@ -153,12 +156,14 @@
 
 ## 5. 自定义命令空结果 15s 冷却 + 全局兜底启发式
 
-**2026-07-26 复核**：✅ **已完成**（批次2 `81d9a47f9`，OpenSpec: claude-commands-fs-watch / composer-command-completion）。全部四个问题点均已处理：
+**2026-07-26 复核**：✅ **已完成**（批次2 `32092503c`，OpenSpec: claude-commands-fs-watch / composer-command-completion）。全部四个问题点均已处理：
 
 1. **15s 冷却 + 空爆发重试已删除**——`EMPTY_CLAUDE_COMMANDS_RETRY_COOLDOWN_MS`/`lastEmptyBurst` 逻辑不复存在。
 2. **全局兜底已删除**——空结果即显示空，不再 `getClaudeCommandsList(null)` 冒充。
 3. **失败显式化**——请求失败与空结果分离：失败时 `reportCommandsFailure` 推送 error toast（`chat.commandsListUnavailable*`，已配 10 语言文案），`commandsError` 随 hook 导出。
-4. **fs watch 已上线**——新增 Rust `claude_commands_watch.rs`（323 行）监视 `.claude/commands/` 目录，变更去抖后发 `claude-commands-changed` 事件触发即时刷新；另保留 **60s 可见性门控兜底轮询**（符合"禁秒级轮询"红线）。
+4. **fs watch 已上线**——Rust `claude_commands_watch.rs` 监视 `.claude/commands/` 目录，变更去抖后发 `claude-commands-changed` 事件触发即时刷新；另保留 **60s 可见性门控兜底轮询**（符合"禁秒级轮询"红线）。
+
+**2026-07-26 二次复核补充**（加固提交 `296fad4a5`，不改变状态定性）：watch registry 从"contains 即跳过 / stop 即 abort"改为**租约计数**（同一 workspace scope 多消费者挂载时，stop 仅在最后一个租约释放后 abort watcher），并修复 start 路径两次取锁的 TOCTOU 竞态；前端 cleanup 改为等待 startPromise resolve 后再 stop，消除快速卸载导致的 watcher 泄漏。`claude_commands_watch.rs` 现为 363 行。
 
 本项关闭。以下证据为 `c75922dec` 快照存档：
 
@@ -198,10 +203,10 @@
 
 ## 6. 技能调用纯文本拼接
 
-**2026-07-26 复核**：🔶 **部分完成**（批次4 `bee87c4f8`，OpenSpec: composer-skill-invocation-contract）。
+**2026-07-26 复核**：🔶 **部分完成**（批次4 `7173c9c5f`，OpenSpec: composer-skill-invocation-contract）。
 
 已落地：
-- 结构化契约已定义并贯通双端：`SkillInvocation { name, args? }`（`src/types/conversation.ts:424`）随 `MessageSendOptions.skillInvocations` 下发；`assembleSkillInvocations`（`promptAssembler.ts:32`）与 `toSlashToken` 同一归一化规则生成；Rust 侧 `engine/commands.rs:1451` 接收并透传 `skill_invocations`。
+- 结构化契约已定义并贯通双端：`SkillInvocation { name, args? }`（`src/types/conversation.ts:424`）随 `MessageSendOptions.skillInvocations` 下发；`assembleSkillInvocations`（`promptAssembler.ts`，当前 :67，行号有漂移）与 `toSlashToken` 同一归一化规则生成；Rust 侧 `engine/commands.rs:1451` 接收并透传 `skill_invocations`。
 - 文本拼接保留为协议载体/降级展示，不再是唯一通道。
 
 未落地：
@@ -241,14 +246,16 @@
 
 ## 7. prompt enhancer 粗糙
 
-**2026-07-26 复核**：🔶 **部分完成**（批次3 `5a76671b3`，OpenSpec: composer-prompt-enhancer）。四个粗糙点中两项已修、两项保留：
+**2026-07-26 复核**：🔶 **部分完成**（批次3 `85bc82b7e`，OpenSpec: composer-prompt-enhancer）。四个粗糙点中两项已修、两项保留：
 
 | 粗糙点 | 状态 |
 |---|---|
-| 英文硬编码 system prompt | ✅ **已修**：`resolveEnhancerLocale`（`usePromptEnhancer.ts:136`）按界面语言 zh/en 生成润色指令，中文语境优化已落地 |
-| 每次新建 session、无缓存 | ✅ **已修**：LRU 结果缓存（`enhancerResultCache`，key = `locale\|engine\|model\|text`，`ENHANCER_CACHE_MAX_ENTRIES` 上限淘汰），同一文本二次润色秒回零 token |
-| 子串匹配错误分类 | ❌ **仍在**：`:70-79` 仍用 `normalized.includes(needle)` 匹配错误文案 |
+| 英文硬编码 system prompt | ✅ **已修**：`resolveEnhancerLocale`（`usePromptEnhancer.ts`，当前 :143，行号有漂移）按界面语言 zh/en 生成润色指令，中文语境优化已落地 |
+| 每次新建 session、无缓存 | ✅ **已修**：LRU 结果缓存（`enhancerResultCache`，上限 20 条淘汰），同一文本二次润色秒回零 token |
+| 子串匹配错误分类 | ❌ **仍在**：仍用 `normalized.includes(needle)` 匹配错误文案 |
 | 阻塞式弹窗、无流式 | ❌ **仍在**：`PromptEnhancerDialog.tsx` 保留，无流式输出、无就地 diff |
+
+**2026-07-26 二次复核补充**（加固提交 `296fad4a5`）：缓存 key 已从 `locale|engine|model|text` 扩展为 **`workspaceId|locale|engine|model|text`**，修复跨工作区缓存串味；新增 workspace 切换保护——切换工作区时使在途润色请求失效并重置弹窗/加载/结果状态，防止上一工作区的异步结果落入新工作区。
 
 剩余工作建议单独立项：流式输出 + 就地 diff 替换 + 错误分类结构化（用引擎错误码替代文案子串）。
 
@@ -292,7 +299,7 @@
 
 ## 8. curated-skills 重型基础设施只服务 2 个条目
 
-**2026-07-26 复核**：🔶 **事件化完成，产品决策未做**（批次3 `5a76671b3`，OpenSpec: curated-skills-settings-sync）。
+**2026-07-26 复核**：🔶 **事件化完成，产品决策未做**（批次3 `85bc82b7e`，OpenSpec: curated-skills-settings-sync）。
 
 已落地：
 - **2s 轮询已消除**：后端在每次 toggle 成功后发 `curated-skills-changed` 事件，`CuratedSkillIndicator` 经 `subscribeCuratedSkillsChanged` 即时重取（`curatedSkillsEvents.ts`）。
@@ -300,8 +307,10 @@
 - 内容未变时保留旧引用，避免常驻 composer 叶子被强制重渲染。
 
 未落地：
-- **"扩容 or 降级"产品决策仍悬置**——bundled skill 仍只有 2 个，校验/锁文件/注入链路的维护税问题原样存在。
+- **"扩容 or 降级"产品决策仍悬置**——curated 注入链路的受益面仍只有 2 个 bundled skill（`caveman`、`lazy-senior-dev`），校验/注入链路的维护税问题原样存在。
 - bundled curated skill 与 Skills Hub 用户安装技能的**展示边界**仍未收敛。
+
+**2026-07-26 二次复核修正**：`skills-lock.json` 已扩至 12 条（新增 github 来源 vercel/writing 系列与 1 个 bundled `huashu-design`）——"锁文件只服务 2 个条目"的表述对锁文件本身不再精确，但 **curated 注入链路的受益面仍为 2 个**，核心结论不变。
 
 **原状态（07-25）**：🔶 半修复。以下证据为 `c75922dec` 快照存档：
 
@@ -333,7 +342,7 @@
 
 ## 9. "对话→prompt/skill"一键沉淀缺失
 
-**2026-07-26 复核**：🔶 **部分完成**（批次4 `bee87c4f8`，OpenSpec: conversation-prompt-distill）。
+**2026-07-26 复核**：🔶 **部分完成**（批次4 `7173c9c5f`，OpenSpec: conversation-prompt-distill）。
 
 已落地（"存为 Prompt"全链路）：
 - 新增 `src/features/prompt-distill/`：`usePromptDistillation`（297 行，复用 enhancer 已验证的隐藏 session 通道）、`PromptDistillDialog`（提炼预览，可编辑后保存）、`distillInstruction`（AI 提炼指令，自动插入 `$ARGUMENTS` 参数位）。
@@ -379,10 +388,11 @@
 
 | 批次 | 项 | 结果 |
 |---|---|---|
-| 第一批（纯清理，零风险） | #1 残留注释、#3 砍弃用输出 | ✅ `9f969c0a5` — #1、#3 关闭 |
-| 第二批（行为一致性） | #2 历史单一实现、#5 命令 fs watch + 去兜底 | ✅ `81d9a47f9` — #2、#5 关闭 |
-| 第三批（体验升级） | #7 enhancer 流式化、#8 curated 决策 | 🔶 `5a76671b3` — #7 修了本地化+缓存（流式/diff/错误码未做）；#8 事件化完成（产品决策悬置） |
-| 第四批（增量能力） | #6 技能契约、#9 对话沉淀 | 🔶 `bee87c4f8` — #6 结构化契约下发（`args` 恒空）；#9 "存为 Prompt"上线（"存为 Skill"未做） |
+| 第一批（纯清理，零风险） | #1 残留注释、#3 砍弃用输出 | ✅ `9484986c8` — #1、#3 关闭 |
+| 第二批（行为一致性） | #2 历史单一实现、#5 命令 fs watch + 去兜底 | ✅ `32092503c` — #2、#5 关闭 |
+| 第三批（体验升级） | #7 enhancer 流式化、#8 curated 决策 | 🔶 `85bc82b7e` — #7 修了本地化+缓存（流式/diff/错误码未做）；#8 事件化完成（产品决策悬置） |
+| 第四批（增量能力） | #6 技能契约、#9 对话沉淀 | 🔶 `7173c9c5f` — #6 结构化契约下发（`args` 恒空）；#9 "存为 Prompt"上线（"存为 Skill"未做） |
+| 加固（并发边界） | #5 watch 租约计数、#7 缓存 key 加 workspace 维度 | ✅ `296fad4a5` — 状态定性不变，并发健壮性提升 |
 
 ### 剩余尾项（后续立项候选）
 

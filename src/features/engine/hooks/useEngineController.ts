@@ -5,7 +5,6 @@ import type {
   EngineModelInfo,
   EngineStatus,
   EngineType,
-  ModelOption,
   WorkspaceInfo,
 } from "../../../types";
 import {
@@ -16,22 +15,30 @@ import {
   runCodexDoctor,
   switchEngine,
 } from "../../../services/tauri";
-import {
-  getClientStoreSync,
-  writeClientStoreValue,
-} from "../../../services/clientStorage";
-import { pushGlobalRuntimeNotice } from "../../../services/globalRuntimeNotices";
-import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
-import {
-  STORAGE_KEYS as PROVIDER_STORAGE_KEYS,
-  validateCodexCustomModels,
-} from "../../composer/types/provider";
-import { readClaudeCustomModelsFromStorage } from "../../models/claudeCustomModels";
 import { startupOrchestrator } from "../../startup-orchestration/utils/startupOrchestrator";
+import {
+  buildAvailableEngines,
+  ENABLED_ENGINE_TYPES,
+  type EngineDisplayInfo,
+} from "./engineControllerAvailability";
+import {
+  engineModelToOption,
+  normalizeEngineModelEntry,
+  projectActiveEngineModels,
+  projectEngineModelCatalogs,
+} from "./engineControllerCatalog";
+import {
+  buildCodexSwitchUnavailablePayload,
+  persistEngineSelection,
+  readPersistedEngineSelection,
+} from "./engineControllerSelection";
+import { useEngineRuntimeNotices } from "./useEngineRuntimeNotices";
+import { useEngineCatalogRevision } from "./useEngineCatalogRevision";
+
+export type { EngineDisplayInfo } from "./engineControllerAvailability";
 
 type UseEngineControllerOptions = {
   activeWorkspace: WorkspaceInfo | null;
-  enabledEngines?: Partial<Record<EngineType, boolean>>;
   onDebug?: (entry: DebugEntry) => void;
 };
 
@@ -40,99 +47,12 @@ type RefreshEngineModelsOptions = {
   phase?: "idle-prewarm" | "on-demand";
 };
 
-/**
- * Engine display information for UI
- */
-export type EngineDisplayInfo = {
-  type: EngineType;
-  displayName: string;
-  shortName: string;
-  installed: boolean;
-  version: string | null;
-  error: string | null;
-  availabilityState?: "loading" | "ready" | "requires-login" | "unavailable";
-  availabilityLabelKey?: string | null;
-};
-
 export type EngineRefreshResult = {
   availableEngines: EngineDisplayInfo[];
   activeEngine: EngineType;
 };
 
-/**
- * Map engine type to display information
- */
-const ENGINE_DISPLAY_MAP: Record<
-  EngineType,
-  { displayName: string; shortName: string }
-> = {
-  claude: { displayName: "Claude Code", shortName: "Claude Code" },
-  codex: { displayName: "Codex CLI", shortName: "Codex" },
-  gemini: { displayName: "Gemini CLI", shortName: "Gemini" },
-  kimi: { displayName: "Kimi CLI", shortName: "Kimi" },
-  opencode: { displayName: "OpenCode", shortName: "OpenCode" },
-};
-
-function buildAvailableEngines(
-  engineStatuses: EngineStatus[],
-  isInitialized: boolean,
-  enabledEngineTypes: EngineType[],
-): EngineDisplayInfo[] {
-  return enabledEngineTypes.map((engineType) => {
-    const status = engineStatuses.find((entry) => entry.engineType === engineType) ?? null;
-    const baseInfo = ENGINE_DISPLAY_MAP[engineType];
-    let availabilityState: EngineDisplayInfo["availabilityState"] = "unavailable";
-    let availabilityLabelKey: string | null = "sidebar.cliNotInstalled";
-
-    if (!isInitialized) {
-      availabilityState = "loading";
-      availabilityLabelKey = "workspace.engineStatusLoading";
-    } else if (status?.installed) {
-      availabilityState = "ready";
-      availabilityLabelKey = null;
-    }
-
-    return {
-      type: engineType,
-      displayName: baseInfo?.displayName ?? engineType,
-      shortName: baseInfo?.shortName ?? engineType,
-      installed: status?.installed ?? false,
-      version: availabilityState === "loading" ? null : (status?.version ?? null),
-      error: status?.error ?? null,
-      availabilityState,
-      availabilityLabelKey,
-    };
-  });
-}
-
-function buildCodexSwitchUnavailablePayload(
-  doctorResult: CodexDoctorResult | null,
-  doctorError: unknown,
-) {
-  let doctorErrorMessage: string | null = null;
-  if (doctorError instanceof Error) {
-    doctorErrorMessage = doctorError.message;
-  } else if (doctorError) {
-    doctorErrorMessage = String(doctorError);
-  }
-
-  return {
-    message: "Engine codex is not installed",
-    doctorOk: doctorResult?.ok ?? false,
-    doctorError: doctorErrorMessage,
-    environmentDiagnosis: doctorResult?.environmentDiagnosis ?? null,
-    resolvedBinaryPath:
-      doctorResult?.resolvedBinaryPath ??
-      doctorResult?.environmentDiagnosis?.resolvedBinaryPath ??
-      null,
-    pathEnvUsed: doctorResult?.pathEnvUsed ?? null,
-  };
-}
-
 const WEB_RUNTIME_DEFAULT_ENGINE: EngineType = "codex";
-const ENGINE_TYPES: EngineType[] = ["claude", "codex", "gemini", "kimi", "opencode"];
-const ENGINE_SELECTION_STORE = "composer";
-const ENGINE_SELECTION_KEY = "selectedEngine";
 const WEB_RUNTIME_INITIAL_STATUSES: EngineStatus[] = [
   {
     engineType: "codex",
@@ -150,226 +70,11 @@ const WEB_RUNTIME_INITIAL_STATUSES: EngineStatus[] = [
     error: null,
   },
 ];
-const GEMINI_DEFAULT_MODEL_ID = "gemini-2.5-flash-lite";
-const GEMINI_PRESET_MODEL_IDS = [
-  "gemini-2.5-flash-lite",
-  "gemini-3-flash-preview",
-  "gemini-2.5-flash",
-  "gemini-2.5-pro",
-  "gemini-3.1-pro-preview",
-] as const;
-
-const UNKNOWN_MODEL_SOURCE = "unknown";
-const CUSTOM_MODEL_SOURCE = "custom";
-
-function normalizeGeminiModelEntry(
-  model: Partial<EngineModelInfo> & { id: string },
-): EngineModelInfo {
-  const normalizedId = model.id.trim();
-  const normalizedModel = model.model?.trim() || normalizedId;
-  return {
-    id: normalizedId,
-    model: normalizedModel,
-    displayName:
-      model.displayName && model.displayName.trim().length > 0
-        ? model.displayName.trim()
-        : normalizedId,
-    description: model.description?.trim() ?? "",
-    source: model.source?.trim() || UNKNOWN_MODEL_SOURCE,
-    isDefault: Boolean(model.isDefault),
-  };
-}
-
-function normalizeEngineModelEntry(
-  model: Partial<EngineModelInfo> & { id: string },
-  fallbackSource = UNKNOWN_MODEL_SOURCE,
-): EngineModelInfo {
-  const normalizedId = model.id.trim();
-  const runtimeModel = model.model?.trim() || normalizedId;
-  return {
-    id: normalizedId,
-    model: runtimeModel,
-    displayName:
-      model.displayName && model.displayName.trim().length > 0
-        ? model.displayName.trim()
-        : normalizedId,
-    description: model.description?.trim() ?? "",
-    source: model.source?.trim() || fallbackSource,
-    isDefault: Boolean(model.isDefault),
-  };
-}
-
-function getEngineModelIdentity(model: Pick<EngineModelInfo, "id" | "model">): string {
-  const runtimeModel = model.model?.trim();
-  if (runtimeModel && runtimeModel.length > 0) {
-    return runtimeModel;
-  }
-  return model.id.trim();
-}
-
-function appendGeminiPresetModels(models: EngineModelInfo[]): EngineModelInfo[] {
-  const merged: EngineModelInfo[] = [];
-  const seenIds = new Set<string>();
-
-  const pushModel = (model: Partial<EngineModelInfo> & { id: string }) => {
-    const normalized = normalizeGeminiModelEntry(model);
-    if (!normalized.id || seenIds.has(normalized.id)) {
-      return;
-    }
-    seenIds.add(normalized.id);
-    merged.push(normalized);
-  };
-
-  models.forEach(pushModel);
-  GEMINI_PRESET_MODEL_IDS.forEach((id) => {
-    pushModel({ id, displayName: id, description: id, isDefault: false });
-  });
-
-  return merged;
-}
-
-function mergeGeminiModels(
-  engineModels: EngineModelInfo[],
-  customModels: EngineModelInfo[],
-): EngineModelInfo[] {
-  const customGeminiIds = new Set(customModels.map((model) => model.id));
-  const mergedModels =
-    customModels.length === 0
-      ? engineModels
-      : [
-          ...customModels,
-          ...engineModels.filter((model) => !customGeminiIds.has(model.id)),
-        ];
-  return enforceGeminiDefaultModel(appendGeminiPresetModels(mergedModels));
-}
-
-function enforceGeminiDefaultModel(models: EngineModelInfo[]): EngineModelInfo[] {
-  if (!models.some((model) => model.id === GEMINI_DEFAULT_MODEL_ID)) {
-    return models;
-  }
-  return models.map((model) => ({
-    ...model,
-    isDefault: model.id === GEMINI_DEFAULT_MODEL_ID,
-  }));
-}
-
-function readCustomGeminiModels(): EngineModelInfo[] {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return [];
-  }
-  try {
-    const raw = window.localStorage.getItem(PROVIDER_STORAGE_KEYS.GEMINI_CUSTOM_MODELS);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    const models = validateCodexCustomModels(parsed);
-    return models.map((model) => ({
-      id: model.id,
-      model: model.id,
-      displayName: model.label?.trim() || model.id,
-      description: model.description?.trim() ?? "",
-      source: CUSTOM_MODEL_SOURCE,
-      isDefault: false,
-    }));
-  } catch {
-    return [];
-  }
-}
-
-function readCustomClaudeModels(): EngineModelInfo[] {
-  return readClaudeCustomModelsFromStorage(
-    PROVIDER_STORAGE_KEYS.CLAUDE_CUSTOM_MODELS,
-  ).map((model) => ({
-    id: model.id,
-    model: model.model,
-    displayName: model.label,
-    description: model.description ?? "",
-    source: CUSTOM_MODEL_SOURCE,
-    isDefault: false,
-  }));
-}
-
-function mergeClaudeModelsPreserveDefault(
-  engineModels: EngineModelInfo[],
-  customModels: EngineModelInfo[],
-): EngineModelInfo[] {
-  if (customModels.length === 0) {
-    return engineModels;
-  }
-  const engineDefaultIdentities = new Set(
-    engineModels
-      .filter((model) => model.isDefault)
-      .map((model) => getEngineModelIdentity(model)),
-  );
-  const patchedCustomModels = customModels.map((model) => ({
-    ...model,
-    isDefault: engineDefaultIdentities.has(getEngineModelIdentity(model)),
-    source: model.source?.trim() || CUSTOM_MODEL_SOURCE,
-  }));
-  const customRuntimeModels = new Set(
-    patchedCustomModels.map((model) => getEngineModelIdentity(model)),
-  );
-  return [
-    ...patchedCustomModels,
-    ...engineModels.filter(
-      (model) => !customRuntimeModels.has(getEngineModelIdentity(model)),
-    ),
-  ];
-}
-
-function isSupportedEngineType(value: unknown): value is EngineType {
-  return (
-    value === "claude" ||
-    value === "codex" ||
-    value === "gemini" ||
-    value === "kimi" ||
-    value === "opencode"
-  );
-}
-
-function readPersistedEngineSelection(): EngineType | null {
-  const stored = getClientStoreSync<string>(
-    ENGINE_SELECTION_STORE,
-    ENGINE_SELECTION_KEY,
-  );
-  return isSupportedEngineType(stored) && isEngineExecutionEnabled(stored)
-    ? stored
-    : null;
-}
-
-function persistEngineSelection(engineType: EngineType) {
-  writeClientStoreValue(
-    ENGINE_SELECTION_STORE,
-    ENGINE_SELECTION_KEY,
-    engineType,
-    { immediate: true },
-  );
-}
-
-/**
- * Convert EngineModelInfo to ModelOption format for UI compatibility
- */
-function engineModelToOption(model: EngineModelInfo): ModelOption {
-  const normalized = normalizeEngineModelEntry(model);
-  return {
-    id: normalized.id,
-    model: normalized.model ?? normalized.id,
-    displayName: normalized.displayName,
-    description: normalized.description,
-    source: normalized.source ?? UNKNOWN_MODEL_SOURCE,
-    supportedReasoningEfforts: [],
-    defaultReasoningEffort: null,
-    isDefault: normalized.isDefault,
-  };
-}
-
 /**
  * Hook for managing multi-engine state and selection
  */
 export function useEngineController({
   activeWorkspace,
-  enabledEngines,
   onDebug,
 }: UseEngineControllerOptions) {
   // Engine detection state
@@ -382,32 +87,15 @@ export function useEngineController({
   const [engineModels, setEngineModels] = useState<EngineModelInfo[]>([]);
   const [isDetecting, setIsDetecting] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [customModelsVersion, setCustomModelsVersion] = useState(0);
+  const customModelsVersion = useEngineCatalogRevision();
 
   // Track initialization
   const initRef = useRef(false);
   const detectPromiseRef = useRef<Promise<EngineRefreshResult | void> | null>(null);
   const lastWorkspaceId = useRef<string | null>(null);
-  const previousAvailabilityRef = useRef<
-    Partial<Record<EngineType, EngineDisplayInfo["availabilityState"]>>
-  >({});
-
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
-  const opencodeEnabled = enabledEngines?.opencode !== false;
-  const enabledEngineTypes = useMemo(
-    () =>
-      ENGINE_TYPES.filter((engineType) => {
-        if (!isEngineExecutionEnabled(engineType)) {
-          return false;
-        }
-        if (engineType === "opencode") {
-          return opencodeEnabled;
-        }
-        return true;
-      }),
-    [opencodeEnabled],
-  );
+  const enabledEngineTypes = ENABLED_ENGINE_TYPES;
 
   const loadModelsForEngine = useCallback(
     async (
@@ -415,10 +103,7 @@ export function useEngineController({
       fallbackModels: EngineModelInfo[] = [],
       options: RefreshEngineModelsOptions = {},
     ) => {
-      if (
-        !isEngineExecutionEnabled(engineType) ||
-        !enabledEngineTypes.includes(engineType)
-      ) {
+      if (!enabledEngineTypes.includes(engineType)) {
         return [];
       }
       try {
@@ -599,11 +284,7 @@ export function useEngineController({
           payload: { statuses, currentEngine: nextActiveEngine },
         });
 
-        const nextAvailableEngines = buildAvailableEngines(
-          statuses,
-          true,
-          enabledEngineTypes,
-        );
+        const nextAvailableEngines = buildAvailableEngines(statuses, true);
 
         setEngineStatuses(statuses);
         setActiveEngineState(nextActiveEngine);
@@ -767,8 +448,8 @@ export function useEngineController({
    * Get display information for all engines
    */
   const availableEngines = useMemo(
-    () => buildAvailableEngines(engineStatuses, isInitialized, enabledEngineTypes),
-    [enabledEngineTypes, engineStatuses, isInitialized],
+    () => buildAvailableEngines(engineStatuses, isInitialized),
+    [engineStatuses, isInitialized],
   );
 
   /**
@@ -799,101 +480,28 @@ export function useEngineController({
     return installedEngines.length > 1;
   }, [installedEngines]);
 
-  const mappedEngineModels = useMemo((): EngineModelInfo[] => {
-    // Keep memo output aligned with localStorage-backed custom model mutations.
-    const storageRevision = customModelsVersion;
-    void storageRevision;
-    if (activeEngine === "gemini") {
-      const customGeminiModels = readCustomGeminiModels();
-      return mergeGeminiModels(engineModels, customGeminiModels);
-    }
-    if (activeEngine !== "claude") {
-      return engineModels.map((model) => normalizeEngineModelEntry(model));
-    }
-    const customClaudeModels = readCustomClaudeModels();
-    const mergedModels = mergeClaudeModelsPreserveDefault(
-      engineModels.map((model) => normalizeEngineModelEntry(model)),
-      customClaudeModels,
-    );
-    return mergedModels;
-  }, [activeEngine, engineModels, customModelsVersion]);
+  const mappedEngineModels = useMemo(
+    () => projectActiveEngineModels(activeEngine, engineModels),
+    [activeEngine, engineModels, customModelsVersion],
+  );
 
   /**
    * Convert engine models to ModelOption format for UI compatibility
    */
-  const engineModelsAsOptions = useMemo((): ModelOption[] => {
-    return mappedEngineModels.map(engineModelToOption);
-  }, [mappedEngineModels]);
-
-  const engineModelCatalogsAsOptions = useMemo(
-    (): Partial<Record<EngineType, ModelOption[]>> => {
-      const storageRevision = customModelsVersion;
-      void storageRevision;
-      const catalogs: Partial<Record<EngineType, ModelOption[]>> = {};
-
-      for (const status of engineStatuses) {
-        if (!status.installed) {
-          continue;
-        }
-        const statusModels = status.models.map((model) =>
-          normalizeEngineModelEntry(model),
-        );
-        const baseModels =
-          status.engineType === activeEngine ? mappedEngineModels : statusModels;
-
-        let catalogModels: EngineModelInfo[];
-        if (status.engineType === "claude") {
-          catalogModels = mergeClaudeModelsPreserveDefault(
-            baseModels.map((model) => normalizeEngineModelEntry(model)),
-            readCustomClaudeModels(),
-          );
-        } else if (status.engineType === "gemini") {
-          catalogModels = mergeGeminiModels(
-            baseModels.map((model) => normalizeEngineModelEntry(model)),
-            readCustomGeminiModels(),
-          );
-        } else {
-          catalogModels = baseModels.map((model) =>
-            normalizeEngineModelEntry(model),
-          );
-        }
-
-        catalogs[status.engineType] = catalogModels.map(engineModelToOption);
-      }
-
-      return catalogs;
-    },
-    [activeEngine, customModelsVersion, engineStatuses, mappedEngineModels],
+  const engineModelsAsOptions = useMemo(
+    () => mappedEngineModels.map(engineModelToOption),
+    [mappedEngineModels],
   );
 
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (
-        e.key === PROVIDER_STORAGE_KEYS.GEMINI_CUSTOM_MODELS ||
-        e.key === PROVIDER_STORAGE_KEYS.CLAUDE_CUSTOM_MODELS
-      ) {
-        setCustomModelsVersion((value) => value + 1);
-      }
-    };
-
-    const handleCustomStorageChange = (e: Event) => {
-      const customEvent = e as CustomEvent<{ key: string }>;
-      if (
-        customEvent.detail?.key === PROVIDER_STORAGE_KEYS.GEMINI_CUSTOM_MODELS ||
-        customEvent.detail?.key === PROVIDER_STORAGE_KEYS.CLAUDE_CUSTOM_MODELS
-      ) {
-        setCustomModelsVersion((value) => value + 1);
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    window.addEventListener("localStorageChange", handleCustomStorageChange);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener("localStorageChange", handleCustomStorageChange);
-    };
-  }, []);
+  const engineModelCatalogsAsOptions = useMemo(
+    () =>
+      projectEngineModelCatalogs(
+        engineStatuses,
+        activeEngine,
+        mappedEngineModels,
+      ),
+    [activeEngine, customModelsVersion, engineStatuses, mappedEngineModels],
+  );
 
   // Initialize on mount
   useEffect(() => {
@@ -903,13 +511,6 @@ export function useEngineController({
     initRef.current = true;
     refreshEngines();
   }, [refreshEngines]);
-
-  useEffect(() => {
-    if (!initRef.current) {
-      return;
-    }
-    void refreshEngines();
-  }, [refreshEngines, opencodeEnabled]);
 
   // Reset models when workspace changes
   useEffect(() => {
@@ -929,80 +530,42 @@ export function useEngineController({
     refreshEngineModels,
   ]);
 
-  useEffect(() => {
-    if (!isInitialized) {
-      return;
-    }
+  useEngineRuntimeNotices(availableEngines, isInitialized);
 
-    const previousAvailability = previousAvailabilityRef.current;
-    const nextAvailability: Partial<
-      Record<EngineType, EngineDisplayInfo["availabilityState"]>
-    > = {};
-
-    availableEngines.forEach((engine) => {
-      const nextState = engine.availabilityState ?? (engine.installed ? "ready" : "unavailable");
-      const previousState = previousAvailability[engine.type];
-      nextAvailability[engine.type] = nextState;
-
-      if (nextState === previousState) {
-        return;
-      }
-
-      let severity: "info" | "warning" = "info";
-      let messageKey: string | null = null;
-
-      if (nextState === "requires-login") {
-        severity = "warning";
-        messageKey = "runtimeNotice.engine.requiresLogin";
-      } else if (nextState === "unavailable") {
-        severity = "warning";
-        messageKey = "runtimeNotice.engine.unavailable";
-      } else if (
-        nextState === "ready" &&
-        previousState != null &&
-        previousState !== "ready"
-      ) {
-        messageKey = "runtimeNotice.engine.ready";
-      }
-
-      if (!messageKey) {
-        return;
-      }
-
-      pushGlobalRuntimeNotice({
-        severity,
-        category: "diagnostic",
-        messageKey,
-        messageParams: {
-          engine: engine.displayName,
-        },
-        dedupeKey: `engine:${engine.type}:${nextState}`,
-      });
-    });
-
-    previousAvailabilityRef.current = nextAvailability;
-  }, [availableEngines, isInitialized]);
-
-  return {
-    // State
-    activeEngine,
-    engineStatuses,
-    engineModels,
-    engineModelsAsOptions,
-    engineModelCatalogsAsOptions,
-    isDetecting,
-    isInitialized,
-
-    // Computed
-    availableEngines,
-    installedEngines,
-    currentEngineStatus,
-    currentEngineDisplay,
-    hasMultipleEngines,
-
-    // Actions
-    setActiveEngine,
-    refreshEngines,
-    refreshEngineModels,
-  };
+  return useMemo(
+    () => ({
+      activeEngine,
+      engineStatuses,
+      engineModels,
+      engineModelsAsOptions,
+      engineModelCatalogsAsOptions,
+      isDetecting,
+      isInitialized,
+      availableEngines,
+      installedEngines,
+      currentEngineStatus,
+      currentEngineDisplay,
+      hasMultipleEngines,
+      setActiveEngine,
+      refreshEngines,
+      refreshEngineModels,
+    }),
+    [
+      activeEngine,
+      availableEngines,
+      currentEngineDisplay,
+      currentEngineStatus,
+      engineModelCatalogsAsOptions,
+      engineModels,
+      engineModelsAsOptions,
+      engineStatuses,
+      hasMultipleEngines,
+      installedEngines,
+      isDetecting,
+      isInitialized,
+      refreshEngineModels,
+      refreshEngines,
+      setActiveEngine,
+    ],
+  );
 }

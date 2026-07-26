@@ -380,14 +380,23 @@ describe("useThreadEventHandlers diagnostics", () => {
       result.current.onTurnCompleted("ws-1", "thread-1", "turn-1");
     });
 
-    expect(subscriber).toHaveBeenCalledTimes(1);
-    expect(subscriber).toHaveBeenCalledWith(
+    expect(subscriber).toHaveBeenCalledTimes(2);
+    expect(subscriber).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         type: "turn.completed",
         workspaceId: "ws-1",
         sessionId: "thread-1",
         turnId: "turn-1",
         durationMs: 125,
+      }),
+    );
+    expect(subscriber).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: "run.settled",
+        runId: "turn-1",
+        status: "completed",
       }),
     );
   });
@@ -409,14 +418,23 @@ describe("useThreadEventHandlers diagnostics", () => {
       });
     });
 
-    expect(subscriber).toHaveBeenCalledTimes(1);
-    expect(subscriber).toHaveBeenCalledWith(
+    expect(subscriber).toHaveBeenCalledTimes(2);
+    expect(subscriber).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         type: "turn.failed",
         workspaceId: "ws-1",
         sessionId: "thread-1",
         turnId: "turn-1",
         errorMessage: "boom",
+      }),
+    );
+    expect(subscriber).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: "run.settled",
+        runId: "turn-1",
+        status: "failed",
       }),
     );
   });
