@@ -17,4 +17,4 @@
 
 - [x] 4.1 [P0, depends: 1.2,2.1,2.2,3.2] 跑 targeted Rust/Vitest、TypeScript、runtime contracts、strict OpenSpec validation 与 `git diff --check`
 - [x] 4.2 [P0, depends: 4.1] 二次独立 review correctness/security/concurrency/render hard lines，记录 code-review evidence
-- [ ] 4.3 [P1, depends: 4.2] sync delta specs、archive change、提交并执行 Trellis session record
+- [x] 4.3 [P1, depends: 4.2] sync delta specs、archive change、提交并执行 Trellis session record
