@@ -1250,3 +1250,36 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1176: 修复供应商会话模型选择与推理强度
+
+**Date**: 2026-07-27
+**Task**: 修复供应商会话模型选择与推理强度
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修复 provider-bound Codex 会话 reasoning metadata 丢失及 Codex/Claude Code 自定义模型被 catalog 校验重置的问题；非空 thread model 作为选择事实保留，catalog 暂时缺失不再触发默认模型 repair。Focused Vitest 53/53、typecheck、runtime contracts、OpenSpec strict validation 通过；lint 0 errors、8 个既有 warnings；按用户要求未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `715c09e4a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
