@@ -1076,3 +1076,44 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1171: 修复 CLI 版本状态与供应商页头重叠
+
+**Date**: 2026-07-27
+**Task**: 修复 CLI 版本状态与供应商页头重叠
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修复代理启动提示被误识别为 CLI 版本、latest 未知却显示最新版，以及顶部操作区空间分配问题。
+
+### Main Changes
+
+本次完成 CLI 版本状态与供应商页头布局修复。
+
+- 后端仅接受可信 Claude semver 输出，忽略 login shell 代理提示与 URL。
+- 前端仅在 latest version 已知时显示“已是最新”或升级目标。
+- 桌面端标题与版本操作保持右对齐单行空间分配，窄屏按需换行。
+- 新增 Rust/React/CSS contract regression tests。
+
+验证：目标 Vitest 26/26、Rust 2/2、typecheck、ESLint、diff check 与 OpenSpec strict validate 均通过。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `01010d4e5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
