@@ -36,9 +36,9 @@ Every domain event type MUST be declared as `Readonly<>` in TypeScript. Pure fac
 - **THEN** the returned object SHOULD be `Object.freeze`-d
 - **AND** runtime mutation in dev mode SHOULD throw (production behavior MAY be unfrozen for performance)
 
-### Requirement: Domain Event Schema MUST Cover The Initial Ten Event Types
+### Requirement: Domain Event Schema MUST Cover The Initial Eleven Event Types
 
-The capability MUST provide schema definitions for the following ten event types and no more in this change:
+The capability MUST provide schema definitions for the following eleven event types:
 
 1. `session.started`
 2. `session.ended`
@@ -50,12 +50,15 @@ The capability MUST provide schema definitions for the following ten event types
 8. `tool.started`
 9. `tool.completed`
 10. `usage.updated`
+11. `run.settled`
 
-#### Scenario: only the documented ten event types are exported
+Adding another event type MUST require an OpenSpec change.
+
+#### Scenario: documented event union includes run settlement
 
 - **WHEN** the capability is shipped
-- **THEN** the exported `DomainEvent` type union MUST equal the documented ten event types
-- **AND** adding an 11th type MUST require a new OpenSpec change
+- **THEN** the exported domain event union MUST include the documented eleven event types
+- **AND** `run.settled` MUST be the only generic run-completion event
 
 ### Requirement: Domain Event Naming MUST Use `domain.action` Form With Limited Domain Set
 
@@ -68,24 +71,18 @@ Event `type` strings MUST follow `<domain>.<action>` or `<domain>.<sub>.<action>
 
 ### Requirement: Every Domain Event MUST Carry Common Identity Fields
 
-Every domain event MUST include the following common fields:
+Every domain event MUST include `type`、`occurredAt`、`workspaceId`、`logicalSessionId`、`runId`、`engineId` and provenance. Turn/item events MUST include applicable `turnId` / `itemId`; legacy `sessionId` and built-in `engine` projections MAY remain during migration.
 
-- `type: string` (matching the documented form)
-- `occurredAt: string` (ISO 8601)
-- `workspaceId: string`
-- `sessionId: string`
-- `engine: EngineType`
+#### Scenario: factories enforce runtime identity
 
-#### Scenario: factories enforce common identity fields at type level
+- **WHEN** a runtime event factory is invoked without logical session、run、engine or provenance
+- **THEN** typecheck or schema validation MUST reject the event
 
-- **WHEN** a factory is invoked without one of the common fields
-- **THEN** TypeScript MUST reject the code with a typecheck error
-
-#### Scenario: occurredAt is ISO 8601
+#### Scenario: occurredAt and provenance remain explicit
 
 - **WHEN** a factory produces an event
-- **THEN** `occurredAt` MUST be an ISO 8601 string
-- **AND** factories MUST NOT default `occurredAt` silently; the caller MUST provide a clock value
+- **THEN** `occurredAt` MUST be caller-provided ISO 8601
+- **AND** provenance MUST identify the producing adapter/protocol source
 
 ### Requirement: Domain Event Schema MUST Be Derivable From Reducer Mutations By Pure Function
 

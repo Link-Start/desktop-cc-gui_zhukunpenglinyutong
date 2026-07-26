@@ -966,20 +966,20 @@ npm exec -- vitest run \
 
 ### 10.4 OpenSpec change 落盘映射
 
-以下 change 已补齐 `proposal.md + design.md + spec deltas + tasks.md`，均为 ready for implementation：
+以下 change 已完成实现、验证、spec sync 与 archive：
 
-| 批次    | OpenSpec change                              | 任务数 | 依赖/执行说明                       |
-| ------- | -------------------------------------------- | -----: | ----------------------------------- |
-| Batch 0 | `align-engine-runtime-capability-contract`   |      8 | 首个 P0 gate                        |
-| Batch 0 | `establish-logical-session-runtime-identity` |      8 | 依赖 capability contract            |
-| Batch 1 | `establish-unified-engine-event-bus`         |      9 | 依赖 runtime identity               |
-| Batch 2 | `define-engine-adapter-protocol-registry`    |      9 | 依赖 capability contract            |
-| Batch 3 | `define-engine-message-delivery-semantics`   |      8 | 依赖 capability + event bus         |
-| Batch 3 | `establish-executable-session-registry`      |      9 | 依赖 identity + adapter registry    |
-| Batch 4 | `converge-model-provider-catalog-runtime`    |     10 | 依赖 capability contract            |
-| Batch 5 | `harden-kimi-engine-governance`              |      8 | canonical regression 为 P0；其余 P1 |
-| Batch 5 | `harden-claude-provider-management`          |      8 | 可在 foundation 外并行              |
-| Batch 5 | `enforce-opencode-soft-retirement-boundary`  |      9 | 可在 foundation 外并行              |
-| Batch 6 | `migrate-engine-controller-facade`           |     10 | 前序 owner 稳定后执行               |
+| 批次    | OpenSpec change                              | 任务数 | 状态                    | 依赖/执行说明                       |
+| ------- | -------------------------------------------- | -----: | ----------------------- | ----------------------------------- |
+| Batch 0 | `align-engine-runtime-capability-contract`   |      8 | ✅ 已归档（2026-07-26） | 首个 P0 gate                        |
+| Batch 0 | `establish-logical-session-runtime-identity` |      8 | ✅ 已归档（2026-07-26） | 依赖 capability contract            |
+| Batch 1 | `establish-unified-engine-event-bus`         |      9 | ✅ 已归档（2026-07-26） | 依赖 runtime identity               |
+| Batch 2 | `define-engine-adapter-protocol-registry`    |      9 | ✅ 已归档（2026-07-26） | 依赖 capability contract            |
+| Batch 3 | `define-engine-message-delivery-semantics`   |      8 | ✅ 已归档（2026-07-26） | 依赖 capability + event bus         |
+| Batch 3 | `establish-executable-session-registry`      |      9 | ✅ 已归档（2026-07-26） | 依赖 identity + adapter registry    |
+| Batch 4 | `converge-model-provider-catalog-runtime`    |     10 | ✅ 已归档（2026-07-26） | 依赖 capability contract            |
+| Batch 5 | `harden-kimi-engine-governance`              |      8 | ✅ 已归档（2026-07-26） | canonical regression 为 P0；其余 P1 |
+| Batch 5 | `harden-claude-provider-management`          |      8 | ✅ 已归档（2026-07-26） | 可在 foundation 外并行              |
+| Batch 5 | `enforce-opencode-soft-retirement-boundary`  |      9 | ✅ 已归档（2026-07-26） | 可在 foundation 外并行              |
+| Batch 6 | `migrate-engine-controller-facade`           |     10 | ✅ 已归档（2026-07-26） | 前序 owner 稳定后执行               |
 
-共 96 个小任务；每项均标注 priority、depends、input、output 和 verify，目标为单项两小时内可闭环。
+共 96 个小任务，完成率 96/96。每个 change 均保留 `implementation-evidence.md`，主 specs 已同步；OpenCode 的旧 `opencode-engine` active spec 已被 soft-retirement contract 替代。

@@ -75,3 +75,18 @@ Kanban 任务创建与编辑 selector 在 engine 为 Codex 时，MUST 使用 Com
 - **THEN** task payload MUST 保留所选 model id
 - **AND** 现有 `KanbanTask.modelId` storage 与 execution contract MUST 保持兼容
 
+### Requirement: Codex Catalog MUST Use Shared Source Precedence And Last-Good Cache
+
+Codex model discovery MUST participate in the shared `runtime > configured > cached > generated fallback` contract and MUST NOT maintain divergent frontend/backend fallback rosters.
+
+#### Scenario: Codex model/list succeeds
+
+- **WHEN** runtime `model/list` returns a valid catalog
+- **THEN** runtime facts MUST override generated fallback metadata
+- **AND** the validated result MUST become last-good cache
+
+#### Scenario: Codex model/list fails
+
+- **WHEN** runtime refresh fails after a successful catalog
+- **THEN** last-good catalog MUST remain available with stale/error metadata
+
