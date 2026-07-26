@@ -4,41 +4,25 @@
 
 Defines Claude provider management behavior for managed provider ordering, backend-driven model discovery, and safe default provider settings.
 ## Requirements
-### Requirement: Claude provider order SHALL be user-controlled and activation-safe
+### Requirement: Claude provider order SHALL be user-controlled and storage-safe
 
-系统 SHALL 允许用户持久化重排 managed Claude providers 而不改变 active provider。全局 active provider 的语义 MUST 被理解为「无绑定会话的默认供应商」；已建立 per-session 绑定的会话不受全局切换影响。
+系统 SHALL 允许用户持久化重排 managed Claude providers，且 reorder MUST NOT 改变任何现有或新建会话的 provider binding。
 
 #### Scenario: local provider remains pinned
 - **WHEN** the Claude provider list is rendered
 - **THEN** the `Local settings.json` provider SHALL appear before managed providers
 - **AND** it SHALL NOT be included in the draggable provider list
 
-#### Scenario: active provider remains pinned outside draggable list
-- **WHEN** a managed Claude provider is active
-- **THEN** the active provider SHALL render above non-active managed providers
-- **AND** the active provider SHALL NOT expose a drag handle
-- **AND** dragging non-active providers SHALL NOT change which provider is active
-
-#### Scenario: non-active provider reorder is persisted
-- **WHEN** the user drags a non-active managed Claude provider to a new position
+#### Scenario: managed provider reorder is persisted
+- **WHEN** the user drags a managed Claude provider to a new position
 - **THEN** the frontend SHALL send the full managed provider id order to the backend
 - **AND** the backend SHALL persist deterministic `sortOrder` values for existing managed providers
 - **AND** missing or legacy `sortOrder` values SHALL fall back to `createdAt` order for migration compatibility
-
-#### Scenario: previous active provider returns to stored position
-- **WHEN** the user switches active provider after providers have been reordered
-- **THEN** the newly active provider SHALL be visually pinned
-- **AND** the previously active provider SHALL return to its persisted order among non-active providers
 
 #### Scenario: reorder failure rolls back from durable state
 - **WHEN** persisting a Claude provider reorder fails
 - **THEN** the frontend SHALL reload providers from the backend
 - **AND** the visible order SHALL return to the durable backend state
-
-#### Scenario: global switch leaves managed-bound sessions untouched
-- **WHEN** 用户在设置页切换全局 active provider（触发 `~/.claude/settings.json` 写入）
-- **THEN** 已有 managed per-session 绑定的 Claude 会话的后续发送 MUST 继续按绑定注入 env
-- **AND** 无绑定或 `__local_settings_json__` 会话 MUST 跟随新的全局配置
 
 ### Requirement: Claude Conversation Creation MUST Select A Provider Profile
 
@@ -64,9 +48,9 @@ Defines Claude provider management behavior for managed provider ordering, backe
 - **AND** MUST NOT 改变任何已有会话的绑定
 - **AND** MUST NOT 触发全局 `~/.claude/settings.json` 写入
 
-### Requirement: Claude Provider MUST Take Effect Via Per-Turn Environment Injection
+### Requirement: Claude Provider MUST Take Effect Via Per-Turn Launch Configuration
 
-绑定 managed provider 的 Claude 会话 MUST 通过 spawn 时的环境变量注入使供应商生效，而非写入全局 settings.json。
+绑定 managed provider 的 Claude 会话 MUST 通过 spawn 时的 normalized environment 与 command-line settings override 使供应商生效，而非写入全局 settings.json。
 
 #### Scenario: managed provider env is injected per turn
 
@@ -74,10 +58,12 @@ Defines Claude provider management behavior for managed provider ordering, backe
 - **THEN** 后端 MUST 从 `~/.ccgui/config.json` 的 `claude.providers[id].settingsConfig.env` 解析键值对
 - **AND** MUST 在该 turn 的 `claude` 进程中通过 `cmd.env` 注入全部键值（含 `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` 等，不过滤键名）
 
-#### Scenario: env injection overrides global settings.json
+#### Scenario: command-line settings override global settings.json
 
 - **WHEN** 全局 `~/.claude/settings.json` 的 `env` 块与绑定 provider 的 `settingsConfig.env` 存在相同键
-- **THEN** per-turn 注入的环境变量 MUST 生效（进程 env 优先级高于 settings.json）
+- **THEN** backend MUST 为该 turn 物化 private settings override，并通过 `--settings` 传给 Claude Code
+- **AND** override MUST 与 process env 使用同一份 normalized provider environment
+- **AND** turn 结束后 MUST 清理 private settings artifact
 
 #### Scenario: missing provider fails the send with a clear error
 
@@ -175,3 +161,33 @@ Provider load、save、switch、delete and migration operations MUST return type
 - **WHEN** canonical migration succeeds but deleting a legacy key fails
 - **THEN** canonical success MUST remain
 - **AND** diagnostics MUST expose cleanup warning
+
+### Requirement: Claude Managed Provider Rows MUST Describe New-Conversation Availability
+
+Claude provider management UI MUST represent managed providers as selectable launch profiles for new conversations, not as active runtime switches.
+
+#### Scenario: managed provider row is available for new sessions
+
+- **WHEN** 设置页渲染任意 managed Claude provider
+- **THEN** status cell MUST 显示“新会话可选”的 localized badge
+- **AND** row MUST NOT 显示“启用”按钮或触发 `vendor_switch_claude_provider`
+
+#### Scenario: provider management does not mutate global Claude settings
+
+- **WHEN** 用户在设置页 reorder、edit 或查看 managed Claude provider
+- **THEN** 系统 MUST NOT 因 status interaction 写入 `~/.claude/settings.json`
+- **AND** 既有 managed-bound conversations MUST 保持原 provider binding
+
+#### Scenario: managed provider dialog describes isolated storage
+
+- **WHEN** 用户新增或编辑 managed Claude provider
+- **THEN** dialog description MUST 明确配置独立存储于 desktop-cc-gui
+- **AND** MUST 明确不会写入 `~/.claude/settings.json`
+- **AND** MUST NOT 使用“立即应用到 `~/.claude/settings.json`”之类的 global-switch 文案
+
+#### Scenario: local official config remains explicit
+
+- **WHEN** 设置页渲染 local `~/.claude/settings.json` official card
+- **THEN** UI MUST 明确它是 local/default configuration
+- **AND** MUST 保留编辑入口
+- **AND** MUST NOT 把它描述成隔离的 managed provider
