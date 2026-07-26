@@ -1349,3 +1349,36 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1179: 完善多 CLI 与多供应商会话架构设计
+
+**Date**: 2026-07-27
+**Task**: 完善多 CLI 与多供应商会话架构设计
+**Branch**: `feature/v-0710`
+
+### Summary
+
+研究 LiveAgent、pi、pi-chat 与主流 Agent Runtime，补齐 Shared Session 的 Canonical Turn、Runtime ACK、SQLite Event Log V2、UI 状态机和 Hidden Binding Provisioning 契约，并给出 OpenSpec 切分与验收矩阵。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9feb2520e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
