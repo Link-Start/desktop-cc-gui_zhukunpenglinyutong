@@ -269,3 +269,36 @@ Batch B：desktop/daemon 从 durable binding 解析 Claude provider，managed pr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1147: 修复 retired OpenCode 启动会话探测
+
+**Date**: 2026-07-26
+**Task**: 修复 retired OpenCode 启动会话探测
+**Branch**: `feature/v-0710`
+
+### Summary
+
+关闭 normal workspace hydration 的 opencode_session_list 探测，移除 startup owner，补充 retirement gate、增量回归测试与 OpenSpec 归档；6 个聚焦测试文件共 100 tests、typecheck、ESLint、retirement gate 和 OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `23c0c1e93` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

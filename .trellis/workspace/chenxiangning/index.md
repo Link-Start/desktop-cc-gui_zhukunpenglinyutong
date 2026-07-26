@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1146
+- **Total Sessions**: 1147
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~271 | Active |
+| `journal-28.md` | ~304 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1147 | 2026-07-26 | 修复 retired OpenCode 启动会话探测 | `23c0c1e93` | `feature/v-0710` |
 | 1146 | 2026-07-26 | 支持 Claude 会话级供应商环境 | `81c62b0da` | `feature/v-0710` |
 | 1145 | 2026-07-26 | 统一会话供应商绑定契约 | `2f09d9256` | `feature/v-0710` |
 | 1144 | 2026-07-26 | 校准会话级供应商绑定提案 | `ffa804434` | `feature/v-0710` |
