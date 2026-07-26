@@ -104,12 +104,14 @@ pub(crate) struct WorkspaceSessionCatalogEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct CodexProviderBinding {
+pub(crate) struct EngineProviderBinding {
     pub(crate) provider_profile_id: String,
     pub(crate) provider_profile_source: String,
     pub(crate) provider_profile_name: String,
     pub(crate) provider_availability: String,
 }
+
+pub(crate) type CodexProviderBinding = EngineProviderBinding;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -335,6 +337,8 @@ pub(crate) struct WorkspaceSessionCatalogMetadata {
     pub(crate) auto_session_by_session_id: HashMap<String, AutoSessionMetadata>,
     #[serde(default)]
     pub(crate) codex_provider_binding_by_session_id: HashMap<String, CodexProviderBinding>,
+    #[serde(default)]
+    pub(crate) engine_provider_binding_by_session_key: HashMap<String, EngineProviderBinding>,
 }
 
 #[derive(Debug, Clone)]

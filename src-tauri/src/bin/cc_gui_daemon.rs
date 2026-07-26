@@ -1634,6 +1634,7 @@ async fn handle_rpc_request(
             let fork_session_id = parse_optional_string(&params, "forkSessionId");
             let agent = parse_optional_string(&params, "agent");
             let variant = parse_optional_string(&params, "variant");
+            let provider_profile_id = parse_optional_string(&params, "providerProfileId");
             let custom_spec_root = parse_optional_string(&params, "customSpecRoot");
             let auto_session =
                 serde_json::from_value::<Option<session_management::AutoSessionMetadata>>(
@@ -1656,6 +1657,7 @@ async fn handle_rpc_request(
                     fork_session_id,
                     agent,
                     variant,
+                    provider_profile_id,
                     custom_spec_root,
                     auto_session,
                 )

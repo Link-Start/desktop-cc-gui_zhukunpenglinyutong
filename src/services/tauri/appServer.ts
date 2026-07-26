@@ -282,6 +282,7 @@ export async function engineSendMessage(
     threadId?: string | null;
     agent?: string | null;
     variant?: string | null;
+    providerProfileId?: string | null;
     customSpecRoot?: string | null;
     autoSession?: AutoSessionMetadata | null;
     skillInvocations?: SkillInvocation[] | null;
@@ -313,6 +314,7 @@ export async function engineSendMessage(
       forkSessionId: params.forkSessionId ?? null,
       agent: params.agent ?? null,
       variant: params.variant ?? null,
+      providerProfileId: params.providerProfileId ?? null,
       customSpecRoot: params.customSpecRoot ?? null,
       autoSession: params.autoSession ?? null,
       skillInvocations: params.skillInvocations ?? null,

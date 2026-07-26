@@ -1414,7 +1414,7 @@ fn finalize_existing_catalog_entry(
     metadata_by_workspace_id: &HashMap<String, WorkspaceSessionCatalogMetadata>,
 ) -> WorkspaceSessionCatalogEntry {
     mark_entry_as_existing_on_disk(&mut entry);
-    apply_codex_provider_binding(&mut entry, metadata_by_workspace_id);
+    apply_engine_provider_binding(&mut entry, metadata_by_workspace_id);
     apply_codex_provider_home_binding_fallback(&mut entry);
     apply_folder_assignment(&mut entry, metadata_by_workspace_id);
     apply_auto_session_metadata(&mut entry, metadata_by_workspace_id);
@@ -1755,9 +1755,31 @@ fn is_stable_catalog_metadata_key(session_id: &str) -> bool {
     let canonical_session_id = parts.next().unwrap_or_default();
     matches!(
         engine,
-        "codex" | "claude" | "gemini" | "opencode" | "shared"
+        "codex" | "claude" | "gemini" | "kimi" | "opencode" | "shared"
     ) && !workspace_id.trim().is_empty()
         && !canonical_session_id.trim().is_empty()
+}
+
+fn engine_provider_binding_stable_key(
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+) -> Option<String> {
+    let workspace_id = workspace_id.trim();
+    let session_id = session_id.trim();
+    let engine = engine.trim().to_ascii_lowercase();
+    if workspace_id.is_empty() || session_id.is_empty() || engine.is_empty() {
+        return None;
+    }
+
+    let canonical_session_id = if is_stable_catalog_metadata_key(session_id) {
+        session_id.splitn(3, ':').nth(2).unwrap_or(session_id)
+    } else {
+        session_id
+            .strip_prefix(&format!("{engine}:"))
+            .unwrap_or(session_id)
+    };
+    Some(format!("{engine}:{workspace_id}:{canonical_session_id}"))
 }
 
 fn metadata_stable_key_for_session_id(workspace_id: &str, session_id: &str) -> String {
@@ -1844,19 +1866,63 @@ pub(crate) fn codex_provider_binding_for_session(
         })
 }
 
-fn apply_codex_provider_binding(
+pub(crate) fn engine_provider_binding_for_session(
+    metadata: &WorkspaceSessionCatalogMetadata,
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+) -> Option<EngineProviderBinding> {
+    engine_provider_binding_stable_key(workspace_id, session_id, engine)
+        .and_then(|key| {
+            metadata
+                .engine_provider_binding_by_session_key
+                .get(&key)
+                .cloned()
+        })
+        .or_else(|| {
+            engine
+                .eq_ignore_ascii_case("codex")
+                .then(|| codex_provider_binding_for_session(metadata, workspace_id, session_id))
+                .flatten()
+        })
+}
+
+pub(crate) fn resolve_engine_provider_profile_id(
+    storage_path: &Path,
+    workspace_id: &str,
+    session_id: Option<&str>,
+    engine: &str,
+    requested_provider_profile_id: Option<&str>,
+) -> Result<Option<String>, String> {
+    if let Some(requested) = requested_provider_profile_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Ok(Some(requested.to_string()));
+    }
+    let Some(session_id) = session_id.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let metadata = read_catalog_metadata(storage_path, workspace_id)?;
+    Ok(
+        engine_provider_binding_for_session(&metadata, workspace_id, session_id, engine)
+            .map(|binding| binding.provider_profile_id),
+    )
+}
+
+fn apply_engine_provider_binding(
     entry: &mut WorkspaceSessionCatalogEntry,
     metadata_by_workspace_id: &HashMap<String, WorkspaceSessionCatalogMetadata>,
 ) {
-    if !entry.engine.eq_ignore_ascii_case("codex") {
-        return;
-    }
     let Some(metadata) = metadata_by_workspace_id.get(&entry.workspace_id) else {
         return;
     };
-    let Some(binding) =
-        codex_provider_binding_for_session(metadata, &entry.workspace_id, &entry.session_id)
-    else {
+    let Some(binding) = engine_provider_binding_for_session(
+        metadata,
+        &entry.workspace_id,
+        &entry.session_id,
+        &entry.engine,
+    ) else {
         return;
     };
     entry.provider_profile_id = Some(binding.provider_profile_id);
@@ -1953,6 +2019,10 @@ fn remove_catalog_metadata_for_session(
         metadata.archived_at_by_session_id.remove(&key);
         metadata.folder_id_by_session_id.remove(&key);
         metadata.auto_session_by_session_id.remove(&key);
+        metadata
+            .engine_provider_binding_by_session_key
+            .remove(&key);
+        metadata.codex_provider_binding_by_session_id.remove(&key);
     }
 }
 
@@ -1964,6 +2034,8 @@ fn remove_catalog_metadata_for_target(
         metadata.archived_at_by_session_id.remove(key);
         metadata.folder_id_by_session_id.remove(key);
         metadata.auto_session_by_session_id.remove(key);
+        metadata.engine_provider_binding_by_session_key.remove(key);
+        metadata.codex_provider_binding_by_session_id.remove(key);
     }
 }
 
@@ -2088,6 +2160,40 @@ pub(crate) async fn record_codex_provider_binding_core(
                 .insert(key, binding.clone());
         }
         Ok(())
+    })
+}
+
+pub(crate) async fn record_engine_provider_binding_core(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    storage_path: &Path,
+    workspace_id: String,
+    session_id: String,
+    engine: String,
+    binding: EngineProviderBinding,
+) -> Result<bool, String> {
+    let workspace_id = normalize_workspace_id(&workspace_id)?;
+    ensure_workspace_exists(workspaces, &workspace_id).await?;
+    let session_id = normalize_session_ids(vec![session_id])?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "session_id is required".to_string())?;
+    let stable_key = engine_provider_binding_stable_key(&workspace_id, &session_id, &engine)
+        .ok_or_else(|| "engine is required".to_string())?;
+    let path = catalog_metadata_path(storage_path, &workspace_id)?;
+    with_storage_lock(&path, || {
+        let mut metadata = read_catalog_metadata_from_path(&path)?;
+        if metadata
+            .engine_provider_binding_by_session_key
+            .get(&stable_key)
+            == Some(&binding)
+        {
+            return Ok(false);
+        }
+        metadata
+            .engine_provider_binding_by_session_key
+            .insert(stable_key, binding);
+        write_catalog_metadata_unlocked(&path, &metadata)?;
+        Ok(true)
     })
 }
 
@@ -3065,6 +3171,7 @@ mod tests {
     include!("session_management_test_support.rs");
     include!("session_management_tests.rs");
     include!("session_management_metadata_provider_tests.rs");
+    include!("session_management_provider_binding_tests.rs");
     include!("session_management_folder_tests.rs");
     include!("session_management_folder_assignment_tests.rs");
     include!("session_management_archive_delete_tests.rs");

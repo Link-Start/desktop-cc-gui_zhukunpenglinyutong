@@ -2989,6 +2989,7 @@ describe("tauri invoke wrappers", () => {
       forkSessionId: null,
       agent: null,
       variant: null,
+      providerProfileId: null,
       customSpecRoot: null,
       autoSession: null,
       skillInvocations: null,
@@ -3008,6 +3009,7 @@ describe("tauri invoke wrappers", () => {
       model: "Cxn[1m]",
       effort: "high",
       threadId: "claude:session-1",
+      providerProfileId: "claude-provider-a",
     });
 
     expect(invokeMock).toHaveBeenCalledWith("engine_send_message", {
@@ -3025,6 +3027,7 @@ describe("tauri invoke wrappers", () => {
       forkSessionId: null,
       agent: null,
       variant: null,
+      providerProfileId: "claude-provider-a",
       customSpecRoot: null,
       autoSession: null,
       skillInvocations: null,
@@ -3057,6 +3060,7 @@ describe("tauri invoke wrappers", () => {
       forkSessionId: "parent-session-1",
       agent: null,
       variant: null,
+      providerProfileId: null,
       customSpecRoot: null,
       autoSession: null,
       skillInvocations: null,
@@ -3088,6 +3092,7 @@ describe("tauri invoke wrappers", () => {
       forkSessionId: null,
       agent: null,
       variant: null,
+      providerProfileId: null,
       customSpecRoot: null,
       autoSession: null,
       skillInvocations: [{ name: "Code-Review" }],

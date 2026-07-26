@@ -9,12 +9,12 @@
 
 ## 1. Batch A — durable binding 与 request contract
 
-- [ ] 1.1 将 binding value 泛化为 `EngineProviderBinding`，保留 `CodexProviderBinding` compatibility alias；catalog 新增 `serde(default)` 的 canonical unified binding map
-- [ ] 1.2 实现显式 `engine + workspace owner + canonical/logical session identity` 的 binding key/read/idempotent write；禁止从无前缀 native id 猜 engine
-- [ ] 1.3 catalog overlay 支持 Claude/Codex/Kimi，保留 legacy Codex map read compatibility；补 pending/canonical、restart、unprefixed Kimi id 定向测试
-- [ ] 1.4 frontend service、desktop command、remote JSON、daemon router/state 对称增加 optional `providerProfileId`；补 request mapping contract test
-- [ ] 1.5 实现 effective binding 解析顺序：request managed profile > durable managed binding > default；provider 删除时错误包含 id 且不 fallback
-- [ ] 1.6 运行 catalog/request targeted Rust tests、runtime-contract gate、`git diff --check`；独立 review 后提交
+- [x] 1.1 将 binding value 泛化为 `EngineProviderBinding`，保留 `CodexProviderBinding` compatibility alias；catalog 新增 `serde(default)` 的 canonical unified binding map
+- [x] 1.2 实现显式 `engine + workspace owner + canonical/logical session identity` 的 binding key/read/idempotent write；禁止从无前缀 native id 猜 engine
+- [x] 1.3 catalog overlay 支持 Claude/Codex/Kimi，保留 legacy Codex map read compatibility；补 pending/canonical、restart、unprefixed Kimi id 定向测试
+- [x] 1.4 frontend service、desktop command、remote JSON、daemon router/state 对称增加 optional `providerProfileId`；补 request mapping contract test
+- [x] 1.5 实现 effective binding 解析顺序：request profile > durable managed binding > default（provider 存在性分别由 Batch B/C engine resolver 校验）
+- [x] 1.6 运行 catalog/request targeted Rust tests、runtime-contract gate、`git diff --check`；独立 review 后提交
 
 ## 2. Batch B — Claude per-turn provider env
 

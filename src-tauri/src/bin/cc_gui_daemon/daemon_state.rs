@@ -1016,6 +1016,7 @@ impl DaemonState {
         fork_session_id: Option<String>,
         agent: Option<String>,
         variant: Option<String>,
+        _provider_profile_id: Option<String>,
         custom_spec_root: Option<String>,
         auto_session: Option<session_management::AutoSessionMetadata>,
     ) -> Result<Value, String> {

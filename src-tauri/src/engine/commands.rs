@@ -1446,6 +1446,7 @@ pub async fn engine_send_message(
     fork_session_id: Option<String>,
     agent: Option<String>,
     variant: Option<String>,
+    provider_profile_id: Option<String>,
     custom_spec_root: Option<String>,
     auto_session: Option<AutoSessionMetadata>,
     skill_invocations: Option<Vec<crate::types::SkillInvocation>>,
@@ -1493,6 +1494,7 @@ pub async fn engine_send_message(
                 "forkSessionId": fork_session_id,
                 "agent": agent,
                 "variant": variant,
+                "providerProfileId": provider_profile_id,
                 "customSpecRoot": custom_spec_root,
                 "autoSession": auto_session,
                 "skillInvocations": skill_invocations,
@@ -1506,7 +1508,7 @@ pub async fn engine_send_message(
     let effective_engine =
         resolve_enabled_engine_for_send(&settings, requested_engine, active_engine)?;
     log::info!(
-        "[engine_send_message] engine={:?} active_engine={:?} workspace_id={} model={:?} continue_session={} thread_id={:?} session_id={:?} fork_session_id={:?} agent={:?} variant={:?}",
+        "[engine_send_message] engine={:?} active_engine={:?} workspace_id={} model={:?} continue_session={} thread_id={:?} session_id={:?} fork_session_id={:?} agent={:?} variant={:?} provider_profile_id={:?}",
         effective_engine,
         active_engine,
         workspace_id,
@@ -1516,7 +1518,8 @@ pub async fn engine_send_message(
         session_id,
         fork_session_id,
         agent,
-        variant
+        variant,
+        provider_profile_id
     );
     if let Some(explicit_engine) = requested_engine {
         if explicit_engine != active_engine {
