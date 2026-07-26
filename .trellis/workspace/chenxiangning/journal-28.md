@@ -335,3 +335,36 @@ Batch C：Kimi provider home 物化、provider-aware runtime ownership、desktop
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1149: 完成三引擎会话供应商选择
+
+**Date**: 2026-07-26
+**Task**: 完成三引擎会话供应商选择
+**Branch**: `feature/v-0710`
+
+### Summary
+
+Batch D：Sidebar 加载 Claude/Codex/Kimi provider、会话菜单选择记忆、local/default 归一化和 optimistic thread binding。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1a7f90a3c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
