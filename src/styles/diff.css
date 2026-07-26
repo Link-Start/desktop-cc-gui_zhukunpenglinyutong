@@ -701,6 +701,65 @@
   }
 }
 
+.git-status-push-button {
+  height: 20px;
+  border: 0;
+  border-radius: var(--diff-radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.git-status-push-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.git-status-push-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 40%, transparent);
+}
+
+.git-status-push-button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.git-status-push-button svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+  stroke: currentColor !important;
+  stroke-width: 1.9;
+  opacity: 1 !important;
+}
+
+.git-status-push-button .commit-button-spinner {
+  width: 12px;
+  height: 12px;
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
+  border-top-color: currentColor;
+}
+
+.git-status-push-count {
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--muted-foreground) 22%, transparent);
+  color: var(--foreground);
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .diff-tree-summary-root-toggle,
 .diff-tree-summary-root-icon {
   flex: 0 0 auto;
@@ -2239,86 +2298,6 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
   border: 2px solid color-mix(in srgb, var(--primary-foreground) 35%, transparent);
   border-top-color: var(--primary-foreground);
   animation: spin 0.9s linear infinite;
-}
-
-/* Push section */
-.push-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.push-sync-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.push-button {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--primary-foreground);
-  background: var(--primary);
-  border: 1px solid transparent;
-  border-radius: var(--diff-radius-md);
-  cursor: pointer;
-  transition: background 150ms ease, opacity 150ms ease;
-}
-
-.push-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary) 90%, transparent);
-}
-
-.push-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.push-button-secondary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--secondary-foreground);
-  background: var(--secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--diff-radius-md);
-  cursor: pointer;
-  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
-}
-
-.push-button-secondary:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--accent-foreground);
-  border-color: var(--border);
-}
-
-.push-button-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.push-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--primary-foreground);
-  background: color-mix(in srgb, var(--primary-foreground) 22%, transparent);
-  border-radius: 999px;
 }
 
 .diff-danger-dialog-overlay {

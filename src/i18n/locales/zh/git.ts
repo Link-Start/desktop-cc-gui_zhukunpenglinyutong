@@ -727,7 +727,6 @@ const git = {
     prsModeDescription: "查看拉取请求状态",
     applyWorktreeChanges: "将更改应用到父工作区",
     applyWorktreeChangesAction: "应用工作树更改",
-    pushButton: "推送",
     pushCommits: "推送 {{count}} 个提交",
     pushCommits_other: "推送 {{count}} 个提交",
     revertAllTitle: "撤销所有更改",

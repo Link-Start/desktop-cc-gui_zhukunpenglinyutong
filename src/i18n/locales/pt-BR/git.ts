@@ -629,7 +629,6 @@ const git = {
     "prsModeDescription": "Revisar pull requests",
     "applyWorktreeChanges": "Aplicar alterações ao workspace pai",
     "applyWorktreeChangesAction": "Aplicar alterações do worktree",
-    "pushButton": "Push",
     "pushCommits": "Enviar {{count}} commit",
     "pushCommits_other": "Enviar {{count}} commits",
     "revertAllTitle": "Reverter todas as alterações",

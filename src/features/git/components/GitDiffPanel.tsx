@@ -1989,6 +1989,27 @@ function GitDiffPanelImpl({
         <RefreshCw className="git-status-refresh-icon" size={13} aria-hidden />
       </button>
     ) : null;
+  const gitStatusPushButton =
+    mode === "diff" && commitsAhead > 0 && onPush ? (
+      <button
+        type="button"
+        className="git-status-push-button"
+        onClick={(event) => {
+          event.stopPropagation();
+          void onPush();
+        }}
+        disabled={pushLoading}
+        aria-label={t("git.pushCommits", { count: commitsAhead })}
+        title={t("git.pushCommits", { count: commitsAhead })}
+      >
+        {pushLoading ? (
+          <span className="commit-button-spinner" aria-hidden />
+        ) : (
+          <Upload size={13} aria-hidden />
+        )}
+        <span className="git-status-push-count">{commitsAhead}</span>
+      </button>
+    ) : null;
   const hasGitRoot = Boolean(gitRoot && gitRoot.trim());
   const activeRootPath = (gitRoot ?? "").trim() || (workspacePath ?? "").trim() || (workspaceId ?? "").trim();
   const activeRootPathDisplay = activeRootPath || t("git.unknown");
@@ -2319,6 +2340,7 @@ function GitDiffPanelImpl({
               )}
             </div>
             {gitStatusRefreshButton}
+            {gitStatusPushButton}
             </>
           </GitModeSelectorMount>
           {showApplyWorktree && (
@@ -2520,28 +2542,8 @@ function GitDiffPanelImpl({
           ) : null}
           {commitComposerPlacement === "top" ? singleCommitComposer : null}
           {!multiRepositoryMode ? <div className="diff-commit-workspace-content">
-          {/* Show Push button when there are commits to push */}
-          {commitsAhead > 0 && !stagedFiles.length && (
-            <div className="push-section">
-              {pushError && (
-                <div className="commit-message-error">{pushError}</div>
-              )}
-              <button
-                type="button"
-                className="push-button"
-                onClick={() => void onPush?.()}
-                disabled={pushLoading}
-                title={t("git.pushCommits", { count: commitsAhead })}
-              >
-                {pushLoading ? (
-                  <span className="commit-button-spinner" aria-hidden />
-                ) : (
-                  <Upload size={14} aria-hidden />
-                )}
-                <span>{t("git.pushButton")}</span>
-                <span className="push-count">{commitsAhead}</span>
-              </button>
-            </div>
+          {!hasAnyChanges && pushError && (
+            <div className="commit-message-error">{pushError}</div>
           )}
           {!error && !stagedFiles.length && !unstagedFiles.length && commitsAhead === 0 && (
             <div className="diff-empty">{t("git.noChangesDetected")}</div>
