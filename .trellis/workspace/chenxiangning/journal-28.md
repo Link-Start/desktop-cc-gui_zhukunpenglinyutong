@@ -137,3 +137,36 @@ Kimi 增加 config 四态诊断、provider cleanup partial warning 与 promotion
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1143: 归档引擎接入重构提案
+
+**Date**: 2026-07-26
+**Task**: 归档引擎接入重构提案
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 11 个 OpenSpec change 的 verify、主 specs 同步与归档；96/96 tasks 闭环，更新治理报告状态；109 个增量测试和治理 gate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `65a174d26` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
