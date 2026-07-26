@@ -1183,3 +1183,37 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1174: 闭环修复 Claude 多供应商运行时隔离
+
+**Date**: 2026-07-27
+**Task**: 闭环修复 Claude 多供应商运行时隔离
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修复 managed Claude provider 被本机 Local settings 覆盖的问题：为每个 turn 注入 private command-line settings override，覆盖 primary、retry、AskUserQuestion 与 approval resume；完成增量测试、人工验收、主 specs 同步、OpenSpec change 与 Trellis task 归档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `099391845` | (see git log) |
+| `1427b37b8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
