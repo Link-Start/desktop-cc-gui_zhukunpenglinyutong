@@ -1541,6 +1541,22 @@ pub async fn engine_send_message(
                     .cloned()
                     .ok_or_else(|| "Workspace not found".to_string())?
             };
+            let provider_binding_lookup_session_id = session_id
+                .as_deref()
+                .or(thread_id.as_deref())
+                .map(str::to_string);
+            let effective_provider_profile_id =
+                crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    provider_binding_lookup_session_id.as_deref(),
+                    "claude",
+                    provider_profile_id.as_deref(),
+                )?;
+            let provider_launch_profile =
+                crate::engine::claude::resolve_claude_provider_launch_profile(
+                    effective_provider_profile_id.as_deref(),
+                )?;
             let workspace_path = std::path::PathBuf::from(&workspace_entry.path);
             state
                 .runtime_manager
@@ -1611,6 +1627,23 @@ pub async fn engine_send_message(
             });
 
             let response_session_id = resolved_session_id.clone();
+            if let Some(provider_launch_profile) = provider_launch_profile.as_ref() {
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .or(provider_binding_lookup_session_id.as_deref())
+                    .ok_or_else(|| {
+                        "Claude provider binding requires a session identity".to_string()
+                    })?;
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "claude".to_string(),
+                    provider_launch_profile.binding.clone(),
+                )
+                .await?;
+            }
             let auto_session_for_record = auto_session.clone();
             let params = super::SendMessageParams {
                 text,
@@ -1747,21 +1780,24 @@ pub async fn engine_send_message(
             let runtime_manager_for_sender = state.runtime_manager.clone();
             let workspace_entry_for_sender = workspace_entry.clone();
             let app_settings_snapshot = state.app_settings.lock().await.clone();
+            let provider_env = provider_launch_profile.map(|profile| profile.env);
             tokio::spawn(async move {
                 let send_result = if has_images {
                     session_clone
-                        .send_message_with_app_settings(
+                        .send_message_with_app_settings_and_provider_env(
                             params,
                             &turn_id_clone,
                             Some(&app_settings_snapshot),
+                            provider_env.as_ref(),
                         )
                         .await
                 } else {
                     session_clone
-                        .send_message_with_app_settings(
+                        .send_message_with_app_settings_and_provider_env(
                             params,
                             &turn_id_clone,
                             Some(&app_settings_snapshot),
+                            provider_env.as_ref(),
                         )
                         .await
                 };

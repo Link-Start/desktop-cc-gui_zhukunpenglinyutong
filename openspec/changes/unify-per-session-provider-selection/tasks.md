@@ -18,11 +18,11 @@
 
 ## 2. Batch B — Claude per-turn provider env
 
-- [ ] 2.1 从既有 Claude vendor config 暴露窄 provider env resolver：local/None 无 override，managed 返回完整 env，missing provider 显式失败
-- [ ] 2.2 为 Claude send/build command 增加 engine-specific provider env launch context；保持 `SendMessageParams` 与旧调用入口兼容
-- [ ] 2.3 `engine_send_message` Claude 分支消费 effective binding、持久化 managed binding，并在每个 turn 注入 env
-- [ ] 2.4 补 local/default、managed env、env override、missing provider、双 provider 并行定向测试
-- [ ] 2.5 运行 Claude targeted Rust tests、`git diff --check`；独立 review 后提交
+- [x] 2.1 从既有 Claude vendor config 暴露窄 provider env resolver：local/None 无 override，managed 返回完整 env，missing provider 显式失败
+- [x] 2.2 为 Claude send/build command 增加 engine-specific provider env launch context；保持 `SendMessageParams` 与旧调用入口兼容
+- [x] 2.3 `engine_send_message` Claude 分支消费 effective binding、持久化 managed binding，并在每个 turn 注入 env
+- [x] 2.4 补 local/default、managed env、env override、missing provider、双 provider 并行定向测试
+- [x] 2.5 运行 Claude targeted Rust tests、`git diff --check`；独立 review 后提交
 
 ## 3. Batch C — Kimi provider home 与 runtime ownership
 

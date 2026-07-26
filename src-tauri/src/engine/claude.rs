@@ -4,7 +4,7 @@
 //! streaming JSON output.
 
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -46,6 +46,8 @@ mod lifecycle;
 mod manager;
 #[path = "claude/native_skill_mirror.rs"]
 mod native_skill_mirror;
+#[path = "claude/provider_profile.rs"]
+mod provider_profile;
 #[path = "claude_stream_helpers.rs"]
 mod stream_helpers;
 mod user_input;
@@ -69,6 +71,7 @@ pub use askuser_mcp::{global as askuser_mcp_global, AskUserMcpServer};
 #[allow(unused_imports)]
 pub use askuser_mcp::init_global as init_askuser_mcp_global;
 pub use manager::ClaudeSessionManager;
+pub(crate) use provider_profile::resolve_claude_provider_launch_profile;
 #[cfg(test)]
 use stream_helpers::extract_text_from_content;
 #[cfg(test)]
@@ -858,6 +861,25 @@ impl ClaudeSession {
         app_settings: Option<&crate::types::AppSettings>,
         activation_hint_file: Option<&Path>,
     ) -> Command {
+        self.build_command_with_provider_env(
+            params,
+            use_stream_json_input,
+            include_hook_events,
+            app_settings,
+            activation_hint_file,
+            None,
+        )
+    }
+
+    fn build_command_with_provider_env(
+        &self,
+        params: &SendMessageParams,
+        use_stream_json_input: bool,
+        include_hook_events: bool,
+        app_settings: Option<&crate::types::AppSettings>,
+        activation_hint_file: Option<&Path>,
+        provider_env: Option<&BTreeMap<String, String>>,
+    ) -> Command {
         // Resolve the Claude CLI binary path:
         // 1. Use custom bin_path if configured
         // 2. Otherwise use find_cli_binary() to search npm global, cargo, etc.
@@ -1056,6 +1078,9 @@ impl ClaudeSession {
         if params.disable_thinking {
             cmd.env("CLAUDE_CODE_DISABLE_THINKING", "1");
         }
+        if let Some(provider_env) = provider_env {
+            cmd.envs(provider_env);
+        }
 
         cmd
     }
@@ -1080,13 +1105,24 @@ impl ClaudeSession {
         turn_id: &str,
         app_settings: Option<&crate::types::AppSettings>,
     ) -> Result<String, String> {
+        self.send_message_with_app_settings_and_provider_env(params, turn_id, app_settings, None)
+            .await
+    }
+
+    pub async fn send_message_with_app_settings_and_provider_env(
+        &self,
+        params: SendMessageParams,
+        turn_id: &str,
+        app_settings: Option<&crate::types::AppSettings>,
+        provider_env: Option<&BTreeMap<String, String>>,
+    ) -> Result<String, String> {
         // Mark this as the active turn so a mid-turn MCP AskUserQuestion can find
         // the live event subscriber. Cleared on any exit path via the guard.
         self.set_active_turn(Some(turn_id));
         let _active_turn_guard = ActiveTurnGuard { session: self };
 
         match self
-            .send_message_attempt(params.clone(), turn_id, true, app_settings)
+            .send_message_attempt(params.clone(), turn_id, true, app_settings, provider_env)
             .await
         {
             Err(error) if Self::is_unknown_include_hook_events_error(&error) => {
@@ -1094,7 +1130,7 @@ impl ClaudeSession {
                     "[claude] --include-hook-events unsupported, retrying without hook events: {}",
                     error
                 );
-                self.send_message_attempt(params, turn_id, false, app_settings)
+                self.send_message_attempt(params, turn_id, false, app_settings, provider_env)
                     .await
             }
             result => result,
@@ -1122,6 +1158,7 @@ impl ClaudeSession {
         turn_id: &str,
         include_hook_events: bool,
         app_settings: Option<&crate::types::AppSettings>,
+        provider_env: Option<&BTreeMap<String, String>>,
     ) -> Result<String, String> {
         if self.is_disposed() {
             let error_msg = "Claude session disposed; refusing to start new process".to_string();
@@ -1176,12 +1213,13 @@ impl ClaudeSession {
             }
         };
 
-        let mut cmd = self.build_command(
+        let mut cmd = self.build_command_with_provider_env(
             &params,
             use_stream_json_input,
             include_hook_events,
             app_settings,
             activation_hint_file.as_deref(),
+            provider_env,
         );
         Self::configure_spawn_command(&mut cmd);
 

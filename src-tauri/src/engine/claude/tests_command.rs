@@ -78,6 +78,102 @@ fn build_command_marks_gui_launch_as_claude_non_interactive() {
 }
 
 #[test]
+fn build_command_injects_managed_provider_env_per_turn() {
+    let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
+    let mut params = SendMessageParams::default();
+    params.text = "hello".to_string();
+    let provider_env = BTreeMap::from([
+        (
+            "ANTHROPIC_AUTH_TOKEN".to_string(),
+            "managed-token".to_string(),
+        ),
+        (
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://managed.example.test".to_string(),
+        ),
+    ]);
+
+    let command = session.build_command_with_provider_env(
+        &params,
+        false,
+        true,
+        None,
+        None,
+        Some(&provider_env),
+    );
+    let env = command
+        .as_std()
+        .get_envs()
+        .filter_map(|(key, value)| {
+            value.map(|value| {
+                (
+                    key.to_string_lossy().to_string(),
+                    value.to_string_lossy().to_string(),
+                )
+            })
+        })
+        .collect::<HashMap<_, _>>();
+
+    assert_eq!(
+        env.get("ANTHROPIC_AUTH_TOKEN").map(String::as_str),
+        Some("managed-token")
+    );
+    assert_eq!(
+        env.get("ANTHROPIC_BASE_URL").map(String::as_str),
+        Some("https://managed.example.test")
+    );
+}
+
+#[test]
+fn build_command_keeps_parallel_provider_env_isolated() {
+    let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
+    let mut params = SendMessageParams::default();
+    params.text = "hello".to_string();
+    let provider_a = BTreeMap::from([(
+        "ANTHROPIC_BASE_URL".to_string(),
+        "https://provider-a.example.test".to_string(),
+    )]);
+    let provider_b = BTreeMap::from([(
+        "ANTHROPIC_BASE_URL".to_string(),
+        "https://provider-b.example.test".to_string(),
+    )]);
+
+    let command_a = session.build_command_with_provider_env(
+        &params,
+        false,
+        true,
+        None,
+        None,
+        Some(&provider_a),
+    );
+    let command_b = session.build_command_with_provider_env(
+        &params,
+        false,
+        true,
+        None,
+        None,
+        Some(&provider_b),
+    );
+    let base_url = |command: &Command| {
+        command
+            .as_std()
+            .get_envs()
+            .find(|(key, _)| *key == "ANTHROPIC_BASE_URL")
+            .and_then(|(_, value)| value)
+            .map(|value| value.to_string_lossy().to_string())
+    };
+
+    assert_eq!(
+        base_url(&command_a).as_deref(),
+        Some("https://provider-a.example.test")
+    );
+    assert_eq!(
+        base_url(&command_b).as_deref(),
+        Some("https://provider-b.example.test")
+    );
+}
+
+#[test]
 fn build_command_can_omit_hook_events_for_legacy_retry() {
     let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
     let mut params = SendMessageParams::default();

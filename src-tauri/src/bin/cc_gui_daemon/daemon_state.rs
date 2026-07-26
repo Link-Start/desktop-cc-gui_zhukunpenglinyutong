@@ -1016,7 +1016,7 @@ impl DaemonState {
         fork_session_id: Option<String>,
         agent: Option<String>,
         variant: Option<String>,
-        _provider_profile_id: Option<String>,
+        provider_profile_id: Option<String>,
         custom_spec_root: Option<String>,
         auto_session: Option<session_management::AutoSessionMetadata>,
     ) -> Result<Value, String> {
@@ -1047,6 +1047,22 @@ impl DaemonState {
                 .await
             }
             engine::EngineType::Claude => {
+                let provider_binding_lookup_session_id = session_id
+                    .as_deref()
+                    .or(thread_id.as_deref())
+                    .map(str::to_string);
+                let effective_provider_profile_id =
+                    session_management::resolve_engine_provider_profile_id(
+                        self.storage_path.as_path(),
+                        &workspace_id,
+                        provider_binding_lookup_session_id.as_deref(),
+                        "claude",
+                        provider_profile_id.as_deref(),
+                    )?;
+                let provider_launch_profile =
+                    engine::claude::resolve_claude_provider_launch_profile(
+                        effective_provider_profile_id.as_deref(),
+                    )?;
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
                 let session = self
                     .engine_manager
@@ -1107,6 +1123,23 @@ impl DaemonState {
                 });
 
                 let response_session_id = resolved_session_id.clone();
+                if let Some(provider_launch_profile) = provider_launch_profile.as_ref() {
+                    let binding_session_id = response_session_id
+                        .as_deref()
+                        .or(provider_binding_lookup_session_id.as_deref())
+                        .ok_or_else(|| {
+                            "Claude provider binding requires a session identity".to_string()
+                        })?;
+                    session_management::record_engine_provider_binding_core(
+                        &self.workspaces,
+                        self.storage_path.as_path(),
+                        workspace_id.clone(),
+                        binding_session_id.to_string(),
+                        "claude".to_string(),
+                        provider_launch_profile.binding.clone(),
+                    )
+                    .await?;
+                }
                 let params = engine::SendMessageParams {
                     text,
                     model: sanitized_model,
@@ -1273,21 +1306,24 @@ impl DaemonState {
                 let session_clone = session.clone();
                 let turn_id_clone = turn_id.clone();
                 let settings_for_send = settings.clone();
+                let provider_env = provider_launch_profile.map(|profile| profile.env);
                 tokio::spawn(async move {
                     let send_result = if has_images {
                         session_clone
-                            .send_message_with_app_settings(
+                            .send_message_with_app_settings_and_provider_env(
                                 params,
                                 &turn_id_clone,
                                 Some(&settings_for_send),
+                                provider_env.as_ref(),
                             )
                             .await
                     } else {
                         session_clone
-                            .send_message_with_auto_compact_retry_with_app_settings(
+                            .send_message_with_auto_compact_retry_with_launch_context(
                                 params,
                                 &turn_id_clone,
                                 Some(&settings_for_send),
+                                provider_env.as_ref(),
                             )
                             .await
                     };
