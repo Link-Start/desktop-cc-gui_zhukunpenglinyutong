@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub(crate) mod agent_event_bus;
+pub(crate) mod adapter_registry;
 #[cfg(test)]
 mod capability_matrix;
 pub mod claude;

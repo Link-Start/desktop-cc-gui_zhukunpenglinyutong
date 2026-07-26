@@ -1,3 +1,46 @@
 {
-  "engineIds": ["claude", "codex", "gemini", "kimi", "opencode"]
+  "schemaVersion": "1.0",
+  "engineIds": ["claude", "codex", "gemini", "kimi", "opencode"],
+  "engines": [
+    {
+      "id": "claude",
+      "displayName": "Claude Code",
+      "adapterId": "builtin.claude",
+      "protocolFamily": "stream-json-cli",
+      "executionModel": "one-shot",
+      "capabilityProfile": "claude"
+    },
+    {
+      "id": "codex",
+      "displayName": "Codex",
+      "adapterId": "builtin.codex",
+      "protocolFamily": "app-server-json-rpc",
+      "executionModel": "persistent",
+      "capabilityProfile": "codex"
+    },
+    {
+      "id": "gemini",
+      "displayName": "Gemini",
+      "adapterId": "builtin.gemini",
+      "protocolFamily": "stream-json-cli",
+      "executionModel": "one-shot",
+      "capabilityProfile": "gemini"
+    },
+    {
+      "id": "kimi",
+      "displayName": "Kimi CLI",
+      "adapterId": "builtin.kimi",
+      "protocolFamily": "stream-json-cli",
+      "executionModel": "one-shot",
+      "capabilityProfile": "kimi"
+    },
+    {
+      "id": "opencode",
+      "displayName": "OpenCode",
+      "adapterId": "builtin.opencode",
+      "protocolFamily": "stream-json-cli",
+      "executionModel": "one-shot",
+      "capabilityProfile": "opencode"
+    }
+  ]
 }

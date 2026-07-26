@@ -28,6 +28,10 @@ import {
 } from "../../composer/types/provider";
 import { readClaudeCustomModelsFromStorage } from "../../models/claudeCustomModels";
 import { startupOrchestrator } from "../../startup-orchestration/utils/startupOrchestrator";
+import {
+  BUILTIN_ENGINE_TYPES,
+  isSupportedEngineType,
+} from "../engineRegistry";
 
 type UseEngineControllerOptions = {
   activeWorkspace: WorkspaceInfo | null;
@@ -130,7 +134,7 @@ function buildCodexSwitchUnavailablePayload(
 }
 
 const WEB_RUNTIME_DEFAULT_ENGINE: EngineType = "codex";
-const ENGINE_TYPES: EngineType[] = ["claude", "codex", "gemini", "kimi", "opencode"];
+const ENGINE_TYPES: readonly EngineType[] = BUILTIN_ENGINE_TYPES;
 const ENGINE_SELECTION_STORE = "composer";
 const ENGINE_SELECTION_KEY = "selectedEngine";
 const WEB_RUNTIME_INITIAL_STATUSES: EngineStatus[] = [
@@ -316,16 +320,6 @@ function mergeClaudeModelsPreserveDefault(
       (model) => !customRuntimeModels.has(getEngineModelIdentity(model)),
     ),
   ];
-}
-
-function isSupportedEngineType(value: unknown): value is EngineType {
-  return (
-    value === "claude" ||
-    value === "codex" ||
-    value === "gemini" ||
-    value === "kimi" ||
-    value === "opencode"
-  );
 }
 
 function readPersistedEngineSelection(): EngineType | null {

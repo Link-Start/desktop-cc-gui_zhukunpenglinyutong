@@ -1,16 +1,9 @@
 import type { EngineType } from "../../../types";
 import type { EngineDisplayInfo } from "../hooks/useEngineController";
-
-const IMPLEMENTED_ENGINE_SET = new Set<EngineType>([
-  "claude",
-  "codex",
-  "gemini",
-  "kimi",
-  "opencode",
-]);
+import { isSupportedEngineType } from "../engineRegistry";
 
 export function isEngineImplemented(engine: EngineType): boolean {
-  return IMPLEMENTED_ENGINE_SET.has(engine);
+  return isSupportedEngineType(engine);
 }
 
 export function isEngineInstalled(

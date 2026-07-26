@@ -3,6 +3,8 @@ use serde_json::Value;
 
 #[path = "../../engine/agent_event_bus.rs"]
 pub(crate) mod agent_event_bus;
+#[path = "../../engine/adapter_registry.rs"]
+pub(crate) mod adapter_registry;
 #[allow(dead_code)]
 #[path = "../../engine/claude.rs"]
 pub mod claude;

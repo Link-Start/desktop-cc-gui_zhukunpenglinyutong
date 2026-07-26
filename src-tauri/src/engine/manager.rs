@@ -8,6 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
+use super::adapter_registry::{EngineAdapterRegistry, EngineId};
 use super::agent_event_bus::AgentEventBus;
 use super::claude::{ClaudeSession, ClaudeSessionManager};
 use super::gemini::GeminiSession;
@@ -23,6 +24,7 @@ use super::{disabled_engine_status, EngineConfig, EngineStatus, EngineType};
 pub struct EngineManager {
     /// Private domain-event fan-out. Producers publish without waiting for sinks.
     pub(crate) agent_event_bus: AgentEventBus,
+    adapter_registry: EngineAdapterRegistry,
     /// Currently active engine type (global default)
     active_engine: RwLock<EngineType>,
 
@@ -59,6 +61,7 @@ impl EngineManager {
     pub fn new() -> Self {
         Self {
             agent_event_bus: AgentEventBus::new(),
+            adapter_registry: EngineAdapterRegistry::with_builtins(),
             active_engine: RwLock::new(EngineType::default()),
             engine_statuses: RwLock::new(HashMap::new()),
             claude_manager: Arc::new(ClaudeSessionManager::new()),
@@ -117,6 +120,26 @@ impl EngineManager {
         _gemini_enabled: bool,
         opencode_enabled: bool,
     ) -> EngineStatus {
+        let engine_id = EngineId::builtin(engine_type);
+        let registry_entry = self
+            .adapter_registry
+            .get(&engine_id)
+            .expect("built-in engine must be registered before detection");
+        let adapter = self
+            .adapter_registry
+            .adapter(&engine_id)
+            .expect("built-in engine adapter must be registered");
+        let protocol = self
+            .adapter_registry
+            .protocol(&engine_id)
+            .expect("built-in engine protocol must be registered");
+        debug_assert_eq!(adapter.engine_id(), &engine_id);
+        debug_assert_eq!(
+            adapter.declared_capability_profile(),
+            registry_entry.capability_profile
+        );
+        debug_assert_eq!(protocol.family(), registry_entry.protocol_family);
+        debug_assert_eq!(protocol.execution_model(), registry_entry.execution_model);
         let configs = self.engine_configs.read().await;
         let config = configs.get(&engine_type);
         let bin = config.and_then(|c| c.bin_path.as_deref());
