@@ -533,3 +533,36 @@ GitDiffPanel 大号推送按钮改为头部工具栏 icon+角标，commitsAhead=
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1155: 重设计 Git 提交区域为右侧操作列（含多仓统一）
+
+**Date**: 2026-07-26
+**Task**: 重设计 Git 提交区域为右侧操作列（含多仓统一）
+**Branch**: `feature/v-0710`
+
+### Summary
+
+GitDiffPanel 与 GitMultiRepositoryChanges 的提交区统一改为 textarea 右侧竖向操作列（AI 生成 + 提交），移除底部提交按钮；OpenSpec: redesign-git-commit-composer
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `aeee0744b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
