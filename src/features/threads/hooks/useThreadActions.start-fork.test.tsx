@@ -231,6 +231,37 @@ describe("useThreadActions start/fork", () => {
     );
   });
 
+  it.each(["claude", "kimi"] as const)(
+    "keeps the selected provider on optimistic %s threads",
+    async (engine) => {
+      const { result, dispatch } = renderActions();
+
+      let threadId: string | null = null;
+      await act(async () => {
+        threadId = await result.current.startThreadForWorkspace("ws-1", {
+          engine,
+          providerProfileId: "provider-a",
+          providerProfile: {
+            id: "provider-a",
+            name: "Provider A",
+            source: "managed",
+          },
+        });
+      });
+
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "ensureThread",
+          threadId,
+          engine,
+          providerProfileId: "provider-a",
+          providerProfileName: "Provider A",
+          providerProfileSource: "managed",
+        }),
+      );
+    },
+  );
+
   it("creates distinct pending threads for rapid consecutive codex creates", async () => {
     vi.mocked(startThread)
       .mockResolvedValueOnce({ result: { thread: { id: "thread-a" } } })

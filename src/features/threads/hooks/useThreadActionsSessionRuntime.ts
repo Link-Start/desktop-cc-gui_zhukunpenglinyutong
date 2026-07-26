@@ -5,7 +5,7 @@ import type { DebugEntry } from "../../../types";
 import type { AutoSessionMetadata } from "../../../services/tauri";
 import {
   CODEX_DISK_PROVIDER_PROFILE_ID,
-  type CodexProviderProfileOption,
+  type EngineProviderProfileOption,
 } from "../constants/codexProviderProfiles";
 import {
   registerCodexPrewarm,
@@ -80,7 +80,7 @@ type RewindFromMessageOptions = {
   mode?: RewindMode;
   operation?: "fork" | "rewind";
   providerProfileId?: string | null;
-  providerProfile?: CodexProviderProfileOption | null;
+  providerProfile?: EngineProviderProfileOption | null;
 };
 
 type UseThreadActionsSessionRuntimeOptions = {
@@ -333,7 +333,7 @@ export function useThreadActionsSessionRuntime({
         folderId?: string | null;
         autoSession?: AutoSessionMetadata | null;
         providerProfileId?: string | null;
-        providerProfile?: CodexProviderProfileOption | null;
+        providerProfile?: EngineProviderProfileOption | null;
       },
     ) => {
       const shouldActivate = options?.activate !== false;
@@ -393,6 +393,7 @@ export function useThreadActionsSessionRuntime({
           engine,
           ...(folderId ? { folderId } : {}),
           ...autoSessionPayload,
+          ...selectedProviderBinding,
         });
         if (shouldActivate) {
           dispatch({ type: "setActiveThreadId", workspaceId, threadId });
@@ -553,7 +554,7 @@ export function useThreadActionsSessionRuntime({
       options?: {
         activate?: boolean;
         providerProfileId?: string | null;
-        providerProfile?: CodexProviderProfileOption | null;
+        providerProfile?: EngineProviderProfileOption | null;
       },
     ) => {
       if (!threadId) {

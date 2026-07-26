@@ -6,6 +6,9 @@ import { baseProps, resetSidebarTestMocks } from "./Sidebar.test-utils";
 import {
   assignWorkspaceSessionFolder,
   createWorkspaceSessionFolder,
+  getClaudeProviders,
+  getCodexProviders,
+  getKimiProviders,
   listWorkspaceSessionFolders,
   renameWorkspaceSessionFolder,
 } from "../../../services/tauri";
@@ -47,6 +50,16 @@ describe("sidebarInternals", () => {
 });
 
 describe("Sidebar", () => {
+  it("loads Claude, Codex, and Kimi provider catalogs once on mount", async () => {
+    render(<Sidebar {...baseProps} />);
+
+    await waitFor(() => {
+      expect(getClaudeProviders).toHaveBeenCalledTimes(1);
+      expect(getCodexProviders).toHaveBeenCalledTimes(1);
+      expect(getKimiProviders).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("keeps search input hidden when search toggle is not present", () => {
     render(<Sidebar {...baseProps} />);
 
@@ -2056,9 +2069,14 @@ describe("Sidebar", () => {
     });
 
     await vi.waitFor(() => {
-      expect(onAddAgent).toHaveBeenCalledWith(workspace, "claude", {
-        folderId: "folder-parent",
-      });
+      expect(onAddAgent).toHaveBeenCalledWith(
+        workspace,
+        "claude",
+        expect.objectContaining({
+          folderId: "folder-parent",
+          providerProfileId: "__local_settings_json__",
+        }),
+      );
     });
     expect(assignWorkspaceSessionFolder).not.toHaveBeenCalled();
     expect(pushErrorToast).not.toHaveBeenCalledWith(

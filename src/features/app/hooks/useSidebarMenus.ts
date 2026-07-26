@@ -28,29 +28,38 @@ import {
   toggleSidebarWorkspacePinnedActionId,
 } from "./useSidebarWorkspacePinnedActions";
 import {
+  CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
+  CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
   CODEX_DISK_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_NAME,
-  type CodexProviderProfileSelection,
-  type CodexProviderProfileOption,
+  KIMI_LOCAL_PROVIDER_PROFILE_ID,
+  KIMI_LOCAL_PROVIDER_PROFILE_NAME,
+  type EngineProviderProfileSelection,
+  type EngineProviderProfileOption,
 } from "../../threads/constants/codexProviderProfiles";
 
-const CODEX_LAST_PROVIDER_PROFILE_KEY = "codexLastProviderProfileId";
+const LAST_PROVIDER_PROFILE_KEYS = {
+  claude: "claudeLastProviderProfileId",
+  codex: "codexLastProviderProfileId",
+  kimi: "kimiLastProviderProfileId",
+} as const;
+type ProviderEngine = keyof typeof LAST_PROVIDER_PROFILE_KEYS;
 
 const PINNABLE_WORKSPACE_ACTION_ID_SET = new Set<string>(
   PINNABLE_WORKSPACE_ACTION_IDS,
 );
 
-function readCodexLastProviderProfileId(): string | null {
+function readLastProviderProfileId(engine: ProviderEngine): string | null {
   try {
-    return window.localStorage.getItem(CODEX_LAST_PROVIDER_PROFILE_KEY);
+    return window.localStorage.getItem(LAST_PROVIDER_PROFILE_KEYS[engine]);
   } catch {
     return null;
   }
 }
 
-function writeCodexLastProviderProfileId(id: string) {
+function writeLastProviderProfileId(engine: ProviderEngine, id: string) {
   try {
-    window.localStorage.setItem(CODEX_LAST_PROVIDER_PROFILE_KEY, id);
+    window.localStorage.setItem(LAST_PROVIDER_PROFILE_KEYS[engine], id);
   } catch {
     // ignore storage write failures
   }
@@ -120,9 +129,11 @@ type SidebarMenuHandlers = {
   onAddAgent: (
     workspace: WorkspaceInfo,
     engine?: EngineType,
-    options?: { folderId?: string | null } & CodexProviderProfileSelection,
+    options?: { folderId?: string | null } & EngineProviderProfileSelection,
   ) => Promise<string | null> | string | null | void;
-  codexProviderProfiles?: CodexProviderProfileOption[];
+  claudeProviderProfiles?: EngineProviderProfileOption[];
+  codexProviderProfiles?: EngineProviderProfileOption[];
+  kimiProviderProfiles?: EngineProviderProfileOption[];
   engineOptions?: EngineDisplayInfo[];
   onRefreshEngineOptions?: () =>
     | Promise<EngineRefreshResult | void>
@@ -222,7 +233,9 @@ export function useSidebarMenus({
   onRenameWorkspaceAlias,
   onAddWorktreeAgent,
   onAddCloneAgent,
+  claudeProviderProfiles = [],
   codexProviderProfiles = [],
+  kimiProviderProfiles = [],
 }: SidebarMenuHandlers) {
   const { t } = useTranslation();
   const [workspaceMenuState, setWorkspaceMenuState] =
@@ -592,9 +605,15 @@ export function useSidebarMenus({
     [],
   );
 
-  const [codexSelectedProfileId, setCodexSelectedProfileId] = useState<
+  const [claudeSelectedProfileId, setClaudeSelectedProfileId] = useState<
     string | null
-  >(() => readCodexLastProviderProfileId());
+  >(() => readLastProviderProfileId("claude"));
+  const [codexSelectedProfileId, setCodexSelectedProfileId] = useState<string | null>(
+    () => readLastProviderProfileId("codex"),
+  );
+  const [kimiSelectedProfileId, setKimiSelectedProfileId] = useState<string | null>(
+    () => readLastProviderProfileId("kimi"),
+  );
 
   const buildSessionMenuGroup = useCallback(
     (
@@ -610,7 +629,7 @@ export function useSidebarMenus({
       };
       const runAddAgent = (
         engine: EngineType,
-        actionOptions?: CodexProviderProfileSelection,
+        actionOptions?: EngineProviderProfileSelection,
       ) => {
         if (!isEngineExecutionEnabled(engine)) {
           return null;
@@ -632,17 +651,44 @@ export function useSidebarMenus({
         }
         return onAddAgent(workspace, engine);
       };
-      const codexProfiles: CodexProviderProfileOption[] = [
+      const buildProviderProfiles = (
+        localId: string,
+        localName: string,
+        managedProfiles: EngineProviderProfileOption[],
+      ): EngineProviderProfileOption[] => [
         {
-          id: CODEX_DISK_PROVIDER_PROFILE_ID,
-          name: CODEX_DISK_PROVIDER_PROFILE_NAME,
+          id: localId,
+          name: localName,
           source: "disk",
         },
-        ...codexProviderProfiles.filter((profile) => profile.source === "managed"),
+        ...managedProfiles.filter(
+          (profile) => profile.source === "managed" && profile.id !== localId,
+        ),
       ];
+      const claudeProfiles = buildProviderProfiles(
+        CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
+        CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
+        claudeProviderProfiles,
+      );
+      const codexProfiles = buildProviderProfiles(
+        CODEX_DISK_PROVIDER_PROFILE_ID,
+        CODEX_DISK_PROVIDER_PROFILE_NAME,
+        codexProviderProfiles,
+      );
+      const kimiProfiles = buildProviderProfiles(
+        KIMI_LOCAL_PROVIDER_PROFILE_ID,
+        KIMI_LOCAL_PROVIDER_PROFILE_NAME,
+        kimiProviderProfiles,
+      );
+      const claudeSelectedProfile =
+        claudeProfiles.find((profile) => profile.id === claudeSelectedProfileId) ??
+        claudeProfiles[0];
       const codexSelectedProfile =
         codexProfiles.find((profile) => profile.id === codexSelectedProfileId) ??
         codexProfiles[0];
+      const kimiSelectedProfile =
+        kimiProfiles.find((profile) => profile.id === kimiSelectedProfileId) ??
+        kimiProfiles[0];
       const actions = [
         {
           id: "new-session-shared",
@@ -658,11 +704,39 @@ export function useSidebarMenus({
           id: "new-session-claude",
           label: t("workspace.engineClaudeCode"),
           iconKind: "engine-claude",
+          submenuTitle: t("sidebar.claudeProviderChoiceTitle"),
+          selectionHint: t("sidebar.claudeProviderSelectedTip"),
           ...resolveEngineActionMeta(workspace, "claude"),
           onSelect: async () => {
-            const threadId = await runAddAgent("claude");
+            const threadId = await runAddAgent("claude", {
+              providerProfileId: claudeSelectedProfile.id,
+              providerProfile: claudeSelectedProfile,
+            });
             await handleCreatedSession(threadId);
           },
+          children: claudeProfiles.map((profile) => ({
+            id: `new-session-claude-provider-${profile.id}`,
+            label: profile.name,
+            badgeLabel:
+              profile.source === "disk"
+                ? t("sidebar.providerFollowsGlobalLabel")
+                : t("sidebar.providerIsolatedConfigLabel"),
+            iconKind: "engine-claude" as const,
+            ...resolveEngineActionMeta(workspace, "claude"),
+            selected: profile.id === claudeSelectedProfile.id,
+            keepMenuOpen: true,
+            onSelect: () => {
+              writeLastProviderProfileId("claude", profile.id);
+              setClaudeSelectedProfileId(profile.id);
+              pushGlobalRuntimeNotice({
+                severity: "info",
+                category: "runtime",
+                messageKey: "runtimeNotice.claude.providerSelected",
+                messageParams: { name: profile.name },
+                dedupeKey: `claude-provider-selected-${profile.id}`,
+              });
+            },
+          })),
         },
         {
           id: "new-session-codex",
@@ -690,7 +764,7 @@ export function useSidebarMenus({
             selected: profile.id === codexSelectedProfile.id,
             keepMenuOpen: true,
             onSelect: () => {
-              writeCodexLastProviderProfileId(profile.id);
+              writeLastProviderProfileId("codex", profile.id);
               setCodexSelectedProfileId(profile.id);
               pushGlobalRuntimeNotice({
                 severity: "info",
@@ -729,11 +803,39 @@ export function useSidebarMenus({
           id: "new-session-kimi",
           label: t("workspace.engineKimi"),
           iconKind: "engine-kimi",
+          submenuTitle: t("sidebar.kimiProviderChoiceTitle"),
+          selectionHint: t("sidebar.kimiProviderSelectedTip"),
           ...resolveEngineActionMeta(workspace, "kimi"),
           onSelect: async () => {
-            const threadId = await runAddAgent("kimi");
+            const threadId = await runAddAgent("kimi", {
+              providerProfileId: kimiSelectedProfile.id,
+              providerProfile: kimiSelectedProfile,
+            });
             await handleCreatedSession(threadId);
           },
+          children: kimiProfiles.map((profile) => ({
+            id: `new-session-kimi-provider-${profile.id}`,
+            label: profile.name,
+            badgeLabel:
+              profile.source === "disk"
+                ? t("sidebar.providerFollowsGlobalLabel")
+                : t("sidebar.providerIsolatedConfigLabel"),
+            iconKind: "engine-kimi" as const,
+            ...resolveEngineActionMeta(workspace, "kimi"),
+            selected: profile.id === kimiSelectedProfile.id,
+            keepMenuOpen: true,
+            onSelect: () => {
+              writeLastProviderProfileId("kimi", profile.id);
+              setKimiSelectedProfileId(profile.id);
+              pushGlobalRuntimeNotice({
+                severity: "info",
+                category: "runtime",
+                messageKey: "runtimeNotice.kimi.providerSelected",
+                messageParams: { name: profile.name },
+                dedupeKey: `kimi-provider-selected-${profile.id}`,
+              });
+            },
+          })),
         },
       ] satisfies WorkspaceMenuAction[];
 
@@ -758,8 +860,12 @@ export function useSidebarMenus({
       onAddAgent,
       onAddSharedAgent,
       onAssignNewSessionToFolder,
+      claudeProviderProfiles,
+      claudeSelectedProfileId,
       codexProviderProfiles,
       codexSelectedProfileId,
+      kimiProviderProfiles,
+      kimiSelectedProfileId,
       resolveEngineActionMeta,
       isEngineSessionEntryVisible,
     ],

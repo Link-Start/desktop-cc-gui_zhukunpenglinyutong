@@ -36,12 +36,12 @@
 
 ## 4. Batch D — frontend provider selection
 
-- [ ] 4.1 泛化 `EngineProviderProfileOption` 与三引擎 local/default constants/storage keys，保留 Codex type alias
-- [ ] 4.2 `Sidebar` 加载 Claude/Codex/Kimi provider profiles，复用 normalization、取消保护、错误 fallback，避免 root 高频刷新
-- [ ] 4.3 `useSidebarMenus` 为 Claude/Kimi 增加 provider submenu、selection memory、提示与中英文文案；local/default 明示跟随全局
-- [ ] 4.4 Claude/Kimi 乐观 `ensureThread` 写入现有 `selectedProviderBinding`
-- [ ] 4.5 补 provider loading/menu/local-default/optimistic thread 定向 Vitest
-- [ ] 4.6 运行受影响 Vitest、TypeScript typecheck、`git diff --check`；独立 review 后提交
+- [x] 4.1 泛化 `EngineProviderProfileOption` 与三引擎 local/default constants/storage keys，保留 Codex type alias
+- [x] 4.2 `Sidebar` 加载 Claude/Codex/Kimi provider profiles，复用 normalization、取消保护、错误 fallback，避免 root 高频刷新
+- [x] 4.3 `useSidebarMenus` 为 Claude/Kimi 增加 provider submenu、selection memory、提示与中英文文案；local/default 明示跟随全局
+- [x] 4.4 Claude/Kimi 乐观 `ensureThread` 写入现有 `selectedProviderBinding`
+- [x] 4.5 补 provider loading/menu/local-default/optimistic thread 定向 Vitest
+- [x] 4.6 运行受影响 Vitest、TypeScript typecheck、`git diff --check`；独立 review 后提交
 
 ## 5. Batch E — send、identity convergence、fork 与 label
 

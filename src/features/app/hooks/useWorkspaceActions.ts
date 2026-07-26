@@ -15,11 +15,11 @@ import {
 import { pushErrorToast } from "../../../services/toasts";
 import type { DebugEntry, EngineType, WorkspaceInfo } from "../../../types";
 import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
-import type { CodexProviderProfileSelection } from "../../threads/constants/codexProviderProfiles";
+import type { EngineProviderProfileSelection } from "../../threads/constants/codexProviderProfiles";
 import { CODEX_DISK_PROVIDER_PROFILE_ID } from "../../threads/constants/codexProviderProfiles";
 
 type WorkspaceOpenMode = "current-window" | "new-window";
-type SessionCreationOptions = CodexProviderProfileSelection & {
+type SessionCreationOptions = EngineProviderProfileSelection & {
   folderId?: string | null;
 };
 const SESSION_CREATION_EMPTY_THREAD_ID = "SESSION_CREATION_EMPTY_THREAD_ID";
@@ -91,7 +91,7 @@ type Params = {
       engine?: EngineType;
       folderId?: string | null;
       providerProfileId?: string | null;
-      providerProfile?: CodexProviderProfileSelection["providerProfile"];
+      providerProfile?: EngineProviderProfileSelection["providerProfile"];
     },
   ) => Promise<string | null>;
   setActiveThreadId: (threadId: string | null, workspaceId: string) => void;

@@ -679,6 +679,81 @@ describe("useSidebarMenus", () => {
     );
   });
 
+  it.each([
+    {
+      engine: "claude" as const,
+      localId: "__local_settings_json__",
+      storageKey: "claudeLastProviderProfileId",
+    },
+    {
+      engine: "kimi" as const,
+      localId: "__local_config_toml__",
+      storageKey: "kimiLastProviderProfileId",
+    },
+  ])(
+    "selects and remembers $engine provider without creating from the submenu",
+    async ({ engine, localId, storageKey }) => {
+      window.localStorage.removeItem(storageKey);
+      const handlers = createHandlers();
+      const profileProp =
+        engine === "claude"
+          ? {
+              claudeProviderProfiles: [
+                { id: localId, name: "Local", source: "managed" as const },
+                { id: "provider-a", name: "Provider A", source: "managed" as const },
+              ],
+            }
+          : {
+              kimiProviderProfiles: [
+                { id: localId, name: "Local", source: "managed" as const },
+                { id: "provider-a", name: "Provider A", source: "managed" as const },
+              ],
+            };
+      const { result } = renderHook(() =>
+        useSidebarMenus({ ...handlers, ...profileProp }),
+      );
+      const openMenu = async () => {
+        await act(async () => {
+          result.current.showWorkspaceMenu(
+            {
+              clientX: 160,
+              clientY: 120,
+              preventDefault: vi.fn(),
+              stopPropagation: vi.fn(),
+            } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0],
+            workspace,
+          );
+        });
+        return result.current.workspaceMenuState?.groups
+          .find((group) => group.id === "new-session")
+          ?.actions.find((action) => action.id === `new-session-${engine}`);
+      };
+
+      const action = await openMenu();
+      expect(action?.children).toHaveLength(2);
+      expect(action?.children?.find((child) => child.selected)?.id).toBe(
+        `new-session-${engine}-provider-${localId}`,
+      );
+      await act(async () => {
+        await action?.children
+          ?.find((child) => child.id === `new-session-${engine}-provider-provider-a`)
+          ?.onSelect();
+      });
+      expect(handlers.onAddAgent).not.toHaveBeenCalled();
+      expect(window.localStorage.getItem(storageKey)).toBe("provider-a");
+
+      const reopened = await openMenu();
+      await act(async () => {
+        await reopened?.onSelect();
+      });
+      expect(handlers.onAddAgent).toHaveBeenCalledWith(
+        workspace,
+        engine,
+        expect.objectContaining({ providerProfileId: "provider-a" }),
+      );
+    },
+  );
+
   it("cannot trigger session creation through a hidden Gemini entry", async () => {
     const handlers = createHandlers();
     const { result } = renderHook(() => useSidebarMenus(handlers));

@@ -65,8 +65,14 @@ const runtimeNotice = {
         "{{name}} selected. Click the Codex entry to create a session.",
     },
     claude: {
+      providerSelected:
+        "{{name}} selected. Click the Claude Code entry to create a session.",
       resumeCommandCopied:
         "Claude resume command copied. If the TUI /resume picker does not show this GUI session, run claude --resume {{sessionId}} or /resume {{sessionId}} explicitly.",
+    },
+    kimi: {
+      providerSelected:
+        "{{name}} selected. Click the Kimi CLI entry to create a session.",
     },
     error: {
       createSessionRecoveryRequired:

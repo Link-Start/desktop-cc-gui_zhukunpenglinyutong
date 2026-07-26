@@ -8,7 +8,13 @@ import type {
   WorkspaceInfo,
 } from "../../../types";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent, ReactNode, RefObject } from "react";
+import type {
+  Dispatch,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+  RefObject,
+  SetStateAction,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import { ThreadList } from "./ThreadList";
@@ -103,11 +109,13 @@ import {
   listWorkspaceSessionFolders,
   renameWorkspaceSessionFolder,
   type WorkspaceSessionFolder,
+  getClaudeProviders,
   getCodexProviders,
+  getKimiProviders,
 } from "../../../services/tauri";
 import type {
-  CodexProviderProfileOption,
-  CodexProviderProfileSelection,
+  EngineProviderProfileOption,
+  EngineProviderProfileSelection,
 } from "../../threads/constants/codexProviderProfiles";
 import {
   runWithLoadingProgress,
@@ -155,7 +163,7 @@ type SidebarProps = {
   onAddAgent: (
     workspace: WorkspaceInfo,
     engine?: EngineType,
-    options?: { folderId?: string | null } & CodexProviderProfileSelection,
+    options?: { folderId?: string | null } & EngineProviderProfileSelection,
   ) => Promise<string | null> | string | null | void;
   engineOptions?: EngineDisplayInfo[];
   onRefreshEngineOptions?: () =>
@@ -355,8 +363,14 @@ function SidebarImpl({
     pendingSessionFolderIntentByWorkspaceId,
     setPendingSessionFolderIntentByWorkspaceId,
   ] = useState<Record<string, Record<string, string>>>(() => ({}));
+  const [claudeProviderProfiles, setClaudeProviderProfiles] = useState<
+    EngineProviderProfileOption[]
+  >([]);
   const [codexProviderProfiles, setCodexProviderProfiles] = useState<
-    CodexProviderProfileOption[]
+    EngineProviderProfileOption[]
+  >([]);
+  const [kimiProviderProfiles, setKimiProviderProfiles] = useState<
+    EngineProviderProfileOption[]
   >([]);
   const [localRootSessionFolderDraftRequestByWorkspaceId, setLocalRootSessionFolderDraftRequestByWorkspaceId] = useState<
     Record<string, number>
@@ -759,19 +773,23 @@ function SidebarImpl({
 
   useEffect(() => {
     let cancelled = false;
-    getCodexProviders()
-      .then((providers) => {
+    const loadProfiles = async (
+      load: () => Promise<Array<{ id: string; name: string }>>,
+      setProfiles: Dispatch<SetStateAction<EngineProviderProfileOption[]>>,
+    ) => {
+      try {
+        const providers = await load();
         if (cancelled) {
           return;
         }
         const nextProfiles = providers
-            .map((provider) => ({
-              id: provider.id.trim(),
-              name: provider.name.trim() || provider.id.trim(),
-              source: "managed" as const,
-            }))
-            .filter((provider) => provider.id.length > 0);
-        setCodexProviderProfiles((currentProfiles) => {
+          .filter((provider) => provider.id.trim().length > 0)
+          .map((provider) => ({
+            id: provider.id.trim(),
+            name: provider.name.trim() || provider.id.trim(),
+            source: "managed" as const,
+          }));
+        setProfiles((currentProfiles) => {
           if (
             currentProfiles.length === nextProfiles.length &&
             currentProfiles.every((currentProfile, index) => {
@@ -787,14 +805,17 @@ function SidebarImpl({
           }
           return nextProfiles;
         });
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) {
-          setCodexProviderProfiles((currentProfiles) =>
+          setProfiles((currentProfiles) =>
             currentProfiles.length === 0 ? currentProfiles : [],
           );
         }
-      });
+      }
+    };
+    void loadProfiles(getClaudeProviders, setClaudeProviderProfiles);
+    void loadProfiles(getCodexProviders, setCodexProviderProfiles);
+    void loadProfiles(getKimiProviders, setKimiProviderProfiles);
     return () => {
       cancelled = true;
     };
@@ -901,7 +922,9 @@ function SidebarImpl({
   } =
     useSidebarMenus({
       onAddAgent,
+      claudeProviderProfiles,
       codexProviderProfiles,
+      kimiProviderProfiles,
       engineOptions,
       onRefreshEngineOptions,
       onAddSharedAgent,
