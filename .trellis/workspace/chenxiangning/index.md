@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-27.md`
-- **Total Sessions**: 1138
+- **Active File**: `journal-28.md`
+- **Total Sessions**: 1139
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-27.md` | ~1974 | Active |
+| `journal-28.md` | ~40 | Active |
+| `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
@@ -55,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1139 | 2026-07-26 | 统一消息投递与可执行会话注册 | `43e5d0f7c` | `feature/v-0710` |
 | 1138 | 2026-07-26 | 建立引擎适配器协议注册表 | `4825b8a50` | `feature/v-0710` |
 | 1137 | 2026-07-26 | 建立统一引擎运行时事件总线 | `edf325f58` | `feature/v-0710` |
 | 1136 | 2026-07-26 | 统一引擎能力契约与会话身份 | `d8e4e177a` | `feature/v-0710` |
