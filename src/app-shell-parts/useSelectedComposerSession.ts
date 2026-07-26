@@ -155,8 +155,28 @@ export function useSelectedComposerSession({
       }
       const normalized = normalizeComposerSessionSelectionForThread(threadId, selection);
       writeSelectionForSessionKey(sessionKey, normalized);
+      const activeSessionKey = resolveSelectedComposerSessionKey(
+        activeWorkspaceId,
+        activeThreadId,
+      );
+      if (sessionKey !== activeSessionKey) {
+        return;
+      }
+      const currentSelection = selectedComposerSelectionRef.current;
+      if (selectionsEqual(currentSelection, normalized)) {
+        return;
+      }
+      selectedComposerSelectionRef.current = normalized;
+      setSelectedComposerSelection((currentState) =>
+        selectionsEqual(currentState, normalized) ? currentState : normalized
+      );
     },
-    [resolveSelectedComposerSessionKey, writeSelectionForSessionKey],
+    [
+      activeThreadId,
+      activeWorkspaceId,
+      resolveSelectedComposerSessionKey,
+      writeSelectionForSessionKey,
+    ],
   );
 
   const handleSelectComposerSelection = useCallback(
