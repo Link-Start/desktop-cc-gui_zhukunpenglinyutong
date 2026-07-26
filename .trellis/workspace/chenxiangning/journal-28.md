@@ -864,3 +864,36 @@ rustfmt 纯格式化（14 文件无行为变更）+ 引擎模型接入层报告�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1165: 优化 Codex 供应商协议错误提示
+
+**Date**: 2026-07-27
+**Task**: 优化 Codex 供应商协议错误提示
+**Branch**: `feature/v-0710`
+
+### Summary
+
+为 Codex managed provider 增加 wire_api=chat 启动前预检，使用稳定错误标识映射本地化全局 sticky Error Toast，避免展示 Broken pipe；增量通过 23 个 frontend focused tests、11 个 Rust focused tests、target ESLint、typecheck、runtime contracts 与 OpenSpec strict validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db3e06af27b887dc629bbbc9fff51782b15bbd68` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

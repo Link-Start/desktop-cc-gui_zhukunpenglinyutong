@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1164
+- **Total Sessions**: 1165
 - **Last Active**: 2026-07-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~866 | Active |
+| `journal-28.md` | ~899 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1165 | 2026-07-27 | 优化 Codex 供应商协议错误提示 | `db3e06af27b887dc629bbbc9fff51782b15bbd68` | `feature/v-0710` |
 | 1164 | 2026-07-27 | 隔离供应商模型目录与会话配置 | `34b758e33` | `feature/v-0710` |
 | 1163 | 2026-07-26 | 补充截图消息单次投递回归测试 | `27d18bda0` | `feature/v-0710` |
 | 1162 | 2026-07-26 | 提交工作区遗留改动：rustfmt 格式化与治理闭环报告 | `ea8f60ad0`, `ca744e4e4` | `feature/v-0710` |
