@@ -5,6 +5,7 @@ import { useComposerMenuActions } from "../features/composer/hooks/useComposerMe
 import { useComposerShortcuts } from "../features/composer/hooks/useComposerShortcuts";
 import { usePersistComposerSettings } from "../features/app/hooks/usePersistComposerSettings";
 import {
+  enrichScopedCodexReasoningMetadata,
   getEffectiveModels,
   getEffectiveReasoningOptions,
   getEffectiveReasoningSupported,
@@ -55,7 +56,7 @@ export function useAppShellComposerModelSection({
       activeThreadId !== null &&
       activeProviderProfileId?.trim()
     ) {
-      return engineModelsAsOptions;
+      return enrichScopedCodexReasoningMetadata(engineModelsAsOptions, models);
     }
     return getEffectiveModels(activeEngine, models, engineModelsAsOptions);
   }, [
@@ -98,13 +99,17 @@ export function useAppShellComposerModelSection({
       selectedModelId,
       activeThreadSelectedModelId: selectedComposerSelection?.modelId ?? null,
       hasActiveThread: hasActiveComposerThread,
-      codexModels: models,
+      allowUnknownActiveThreadModel:
+        (activeEngine === "codex" || activeEngine === "claude") &&
+        Boolean(activeProviderProfileId?.trim()),
+      codexModels: effectiveModels,
       engineModelsAsOptions,
       engineSelectedModelIdByType,
     });
   }, [
     activeEngine,
-    models,
+    activeProviderProfileId,
+    effectiveModels,
     engineModelsAsOptions,
     engineSelectedModelIdByType,
     hasActiveComposerThread,

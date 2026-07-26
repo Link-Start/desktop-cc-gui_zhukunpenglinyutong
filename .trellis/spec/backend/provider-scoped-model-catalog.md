@@ -52,6 +52,9 @@ type EngineModelInfo = {
 - local/disk sentinel：resolver 返回 `None`，保持对应 CLI 的本地配置行为。
 - managed provider：只读取该 provider profile 的 model fields/custom models，不读取其他 provider 或默认 managed config。
 - provider models 必须先于 public generated/built-in models 合并；按 runtime `model` identity 稳定去重，provider row 获胜。
+- frontend 将 provider-scoped Codex rows 投影到 Composer 时，MUST 仅按 normalized runtime `model` identity 从权威 Codex catalog 补缺 reasoning capability；MUST NOT 覆盖 provider-owned metadata，也不得为 unmatched provider-only model 伪造 capability。
+- active provider-bound Codex thread 的非空用户模型名 MUST 直接保留，不得经过 current/global catalog 白名单校验；catalog loading/refresh/absence 不得触发默认模型 repair 回写。blank value 继续走既有 fallback。
+- active provider-bound Claude Code thread 采用相同的 non-empty thread model truth contract；catalog loading/refresh/absence 不得重置 model 或 reasoning effort。blank value 继续走既有 fallback。
 - public custom model 的 `providerProfileId` 为 `null`；可追加到当前 provider catalog。
 - Codex localStorage custom model 若属于其他 `providerProfileId`，Composer 必须过滤。
 - Desktop remote forwarding 与 daemon dispatch 必须原样透传 `providerProfileId`。

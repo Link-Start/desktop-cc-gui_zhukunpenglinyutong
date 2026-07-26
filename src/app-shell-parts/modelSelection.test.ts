@@ -76,6 +76,39 @@ describe("modelSelection", () => {
     ).toBe("codex-alt");
   });
 
+  it.each(["MiniMax-M3", "deepseek/custom-v4", "vendor.model:latest"])(
+    "keeps provider-bound custom Codex model %s without catalog validation",
+    (modelId) => {
+      expect(
+        getEffectiveSelectedModelId({
+          activeEngine: "codex",
+          selectedModelId: "codex-default",
+          activeThreadSelectedModelId: ` ${modelId} `,
+          hasActiveThread: true,
+          allowUnknownActiveThreadModel: true,
+          codexModels,
+          engineModelsAsOptions: [],
+          engineSelectedModelIdByType: {},
+        }),
+      ).toBe(modelId);
+    },
+  );
+
+  it("does not preserve a blank provider-bound Codex model id", () => {
+    expect(
+      getEffectiveSelectedModelId({
+        activeEngine: "codex",
+        selectedModelId: "codex-alt",
+        activeThreadSelectedModelId: "   ",
+        hasActiveThread: true,
+        allowUnknownActiveThreadModel: true,
+        codexModels,
+        engineModelsAsOptions: [],
+        engineSelectedModelIdByType: {},
+      }),
+    ).toBe("codex-alt");
+  });
+
   it("falls back to the shared Codex effort when the active thread effort is empty", () => {
     expect(
       getEffectiveSelectedEffort({
@@ -188,6 +221,21 @@ describe("modelSelection", () => {
         engineSelectedModelIdByType,
       }),
     ).toBe("engine-alt");
+  });
+
+  it("keeps a provider-bound Claude model without catalog validation", () => {
+    expect(
+      getEffectiveSelectedModelId({
+        activeEngine: "claude",
+        selectedModelId: null,
+        activeThreadSelectedModelId: " vendor/claude-compatible-model ",
+        hasActiveThread: true,
+        allowUnknownActiveThreadModel: true,
+        codexModels,
+        engineModelsAsOptions: [],
+        engineSelectedModelIdByType: {},
+      }),
+    ).toBe("vendor/claude-compatible-model");
   });
 
   it("ignores the global engine selection for active threads without a stored model", () => {
