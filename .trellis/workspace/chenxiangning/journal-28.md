@@ -1217,3 +1217,36 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1175: 安全合入 upstream 0.7.10 数字格式修复
+
+**Date**: 2026-07-27
+**Task**: 安全合入 upstream 0.7.10 数字格式修复
+**Branch**: `feature/v-0710`
+
+### Summary
+
+在合并前创建 backup/feature-v-0710-before-upstream-merge-20260727 安全分支；重新 fetch 并确认本地 65 个独有提交与远端单提交无文件重叠；使用 --no-ff 语义合并 upstream/chore/bump-version-0.7.10，保留双方能力；仅运行 token-format.test.ts 增量测试（2/2 通过）与 diff check，未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6f2533ec7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
