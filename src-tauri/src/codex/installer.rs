@@ -556,10 +556,7 @@ pub(crate) fn extract_semver(raw: &str) -> Option<SemVerParts> {
                 while index < bytes.len() && bytes[index].is_ascii_digit() {
                     index += 1;
                 }
-                if index < bytes.len()
-                    && bytes[index] == b'.'
-                    && minor_start < index
-                {
+                if index < bytes.len() && bytes[index] == b'.' && minor_start < index {
                     let minor_str = &trimmed[minor_start..index];
                     index += 1;
                     let patch_start = index;
@@ -596,10 +593,7 @@ pub(crate) fn is_update_available(local: &str, latest: &str) -> bool {
     }
 }
 
-async fn run_npm_view_version(
-    package: &str,
-    path_env: Option<&String>,
-) -> Result<String, String> {
+async fn run_npm_view_version(package: &str, path_env: Option<&String>) -> Result<String, String> {
     let npm_binary = find_cli_binary("npm", None)
         .map(|path| path.to_string_lossy().to_string())
         .unwrap_or_else(|| "npm".to_string());
@@ -687,16 +681,23 @@ async fn run_claude_version_via_interactive_shell() -> Option<(String, String)> 
         command.stdout(std::process::Stdio::piped());
         command.stderr(std::process::Stdio::piped());
 
-        let output = timeout(Duration::from_secs(PREFLIGHT_TIMEOUT_SECS), command.output())
-            .await
-            .ok()?
-            .ok()?;
+        let output = timeout(
+            Duration::from_secs(PREFLIGHT_TIMEOUT_SECS),
+            command.output(),
+        )
+        .await
+        .ok()?
+        .ok()?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         let combined = format!("{stdout}\n{stderr}");
         let mut path: Option<String> = None;
         let mut version: Option<String> = None;
-        for line in combined.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        for line in combined
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+        {
             let candidate = Path::new(line);
             if path.is_none() && candidate.is_absolute() && candidate.exists() {
                 path = Some(line.to_string());
@@ -737,12 +738,12 @@ async fn resolve_claude_local_version(
     match run_binary_version(&binary, path_env).await {
         Ok(Some(raw)) => {
             let version = pick_claude_version_line(&raw).unwrap_or(raw);
-            (
-                Some(version),
-                Some(format!("resolved binary: {binary}")),
-            )
+            (Some(version), Some(format!("resolved binary: {binary}")))
         }
-        Ok(None) => (None, Some(format!("resolved binary had empty version: {binary}"))),
+        Ok(None) => (
+            None,
+            Some(format!("resolved binary had empty version: {binary}")),
+        ),
         Err(error) => (None, Some(format!("failed to probe {binary}: {error}"))),
     }
 }
@@ -795,9 +796,9 @@ pub(crate) async fn resolve_cli_version_status(
         }
     } else {
         details = Some(match details {
-            Some(existing) => format!(
-                "{existing}; Node/npm is not available for registry version probe."
-            ),
+            Some(existing) => {
+                format!("{existing}; Node/npm is not available for registry version probe.")
+            }
             None => "Node/npm is not available for registry version probe.".to_string(),
         });
         None
@@ -875,13 +876,12 @@ pub(crate) async fn build_cli_install_plan_with_backend(
             } else if cfg!(target_os = "windows") {
                 // PowerShell is expected on Windows; install script itself is official.
             } else if !Path::new("/bin/bash").exists() {
-                blockers.push("/bin/bash is required for Claude Code native installer.".to_string());
+                blockers
+                    .push("/bin/bash is required for Claude Code native installer.".to_string());
             } else if matches!(
                 action,
                 CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest
-            ) && run_binary_version("curl", path_env.as_ref())
-                .await
-                .is_err()
+            ) && run_binary_version("curl", path_env.as_ref()).await.is_err()
             {
                 blockers.push(
                     "curl is required for Claude Code native installer (curl -fsSL https://claude.ai/install.sh | bash)."
@@ -1173,9 +1173,7 @@ async fn run_post_install_doctor(
         CliInstallEngine::Claude => {
             crate::codex::run_claude_doctor_with_settings(None, settings).await
         }
-        CliInstallEngine::Kimi => {
-            crate::codex::run_kimi_doctor_with_settings(None, settings).await
-        }
+        CliInstallEngine::Kimi => crate::codex::run_kimi_doctor_with_settings(None, settings).await,
     }
 }
 
@@ -1468,10 +1466,8 @@ mod tests {
 
     #[test]
     fn pick_claude_version_line_prefers_claude_code_output() {
-        let picked = pick_claude_version_line(
-            "同步配置…\nreclaude: ok\n2.0.52 (Claude Code)\n",
-        )
-        .expect("version line");
+        let picked = pick_claude_version_line("同步配置…\nreclaude: ok\n2.0.52 (Claude Code)\n")
+            .expect("version line");
         assert_eq!(picked, "2.0.52 (Claude Code)");
     }
 

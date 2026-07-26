@@ -12,14 +12,14 @@
 //! In `-p` mode Kimi always runs under the `auto` permission policy, so no
 //! approval events exist. Thinking content is not written to the JSONL stream.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
-use tokio::sync::{Mutex, RwLock, broadcast};
+use tokio::sync::{broadcast, Mutex, RwLock};
 
 use super::events::EngineEvent;
 use super::{EngineConfig, EngineType, SendMessageParams};

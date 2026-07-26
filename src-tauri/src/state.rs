@@ -40,8 +40,7 @@ pub(crate) struct AppState {
     pub(crate) dictation: Mutex<DictationState>,
     pub(crate) codex_login_cancels: Mutex<HashMap<String, oneshot::Sender<()>>>,
     pub(crate) detached_external_change_runtime: Mutex<DetachedExternalChangeRuntime>,
-    pub(crate) claude_commands_watches:
-        Mutex<crate::claude_commands_watch::CommandsWatchRegistry>,
+    pub(crate) claude_commands_watches: Mutex<crate::claude_commands_watch::CommandsWatchRegistry>,
     pub(crate) runtime_manager: Arc<crate::runtime::RuntimeManager>,
     pub(crate) renderer_heartbeats: Mutex<crate::renderer_stability::RendererHeartbeatStore>,
     pub(crate) semantic_navigation_runtime: crate::code_intel_lsp::SemanticNavigationRuntime,

@@ -31,14 +31,13 @@ pub(crate) mod thread_mode_state;
 use self::args::resolve_workspace_codex_args;
 use self::commit_message::{build_commit_message_prompt, combine_repository_diff_sections};
 pub(crate) use self::doctor::{
-    run_claude_doctor_with_settings, run_codex_doctor_with_settings,
-    run_kimi_doctor_with_settings,
+    run_claude_doctor_with_settings, run_codex_doctor_with_settings, run_kimi_doctor_with_settings,
 };
 pub(crate) use self::home::{resolve_default_codex_home, resolve_workspace_codex_home};
 pub(crate) use self::installer::{
-    build_cli_install_plan_with_backend, resolve_cli_version_status, run_cli_installer_with_progress,
-    CliInstallAction, CliInstallBackend, CliInstallEngine, CliInstallProgressEvent,
-    CliInstallStrategy, CliVersionStatus,
+    build_cli_install_plan_with_backend, resolve_cli_version_status,
+    run_cli_installer_with_progress, CliInstallAction, CliInstallBackend, CliInstallEngine,
+    CliInstallProgressEvent, CliInstallStrategy, CliVersionStatus,
 };
 use self::mcp_config::{
     list_global_mcp_servers as list_global_mcp_servers_impl,

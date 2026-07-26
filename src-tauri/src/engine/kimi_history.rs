@@ -249,17 +249,12 @@ async fn read_index_entries(base_dir: &Path) -> Vec<KimiSessionIndexEntry> {
             }
             serde_json::from_str::<KimiSessionIndexEntry>(line).ok()
         })
-        .filter(|entry| {
-            !entry.session_id.trim().is_empty() && !entry.session_dir.trim().is_empty()
-        })
+        .filter(|entry| !entry.session_id.trim().is_empty() && !entry.session_dir.trim().is_empty())
         .collect()
 }
 
 fn wire_log_path(session_dir: &Path) -> PathBuf {
-    session_dir
-        .join("agents")
-        .join("main")
-        .join("wire.jsonl")
+    session_dir.join("agents").join("main").join("wire.jsonl")
 }
 
 fn extract_input_text(input: Option<&Value>) -> String {
@@ -536,9 +531,7 @@ fn parse_messages_from_wire(raw: &str) -> KimiSessionLoadResult {
                             .get("output")
                             .and_then(|v| v.as_str())
                             .map(|value| value.to_string())
-                            .unwrap_or_else(|| {
-                                serde_json::to_string(&result).unwrap_or_default()
-                            });
+                            .unwrap_or_else(|| serde_json::to_string(&result).unwrap_or_default());
                         if output_text.trim().is_empty() {
                             continue;
                         }
@@ -756,7 +749,10 @@ mod tests {
         assert_eq!(result.messages[2].text, "你好！");
         assert_eq!(result.messages[3].kind, "tool");
         assert_eq!(result.messages[3].tool_type.as_deref(), Some("Grep"));
-        assert_eq!(result.messages[3].title.as_deref(), Some("Searching for kimi"));
+        assert_eq!(
+            result.messages[3].title.as_deref(),
+            Some("Searching for kimi")
+        );
         assert_eq!(result.messages[4].id, "tool_1-result");
         assert_eq!(result.messages[4].tool_type.as_deref(), Some("result"));
         assert_eq!(result.messages[4].text, "src/main.rs");
@@ -787,9 +783,15 @@ mod tests {
 
     #[test]
     fn matches_workspace_path_variants() {
-        let variants = vec!["/Users/demo/repo".to_string(), "/private/Users/demo/repo".to_string()];
+        let variants = vec![
+            "/Users/demo/repo".to_string(),
+            "/private/Users/demo/repo".to_string(),
+        ];
         assert!(matches_workspace_path("/Users/demo/repo", &variants));
-        assert!(matches_workspace_path("/private/Users/demo/repo", &variants));
+        assert!(matches_workspace_path(
+            "/private/Users/demo/repo",
+            &variants
+        ));
         assert!(!matches_workspace_path("/Users/demo/other", &variants));
         assert!(!matches_workspace_path("", &variants));
     }

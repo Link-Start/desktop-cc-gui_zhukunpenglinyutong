@@ -2019,9 +2019,7 @@ fn remove_catalog_metadata_for_session(
         metadata.archived_at_by_session_id.remove(&key);
         metadata.folder_id_by_session_id.remove(&key);
         metadata.auto_session_by_session_id.remove(&key);
-        metadata
-            .engine_provider_binding_by_session_key
-            .remove(&key);
+        metadata.engine_provider_binding_by_session_key.remove(&key);
         metadata.codex_provider_binding_by_session_id.remove(&key);
     }
 }
