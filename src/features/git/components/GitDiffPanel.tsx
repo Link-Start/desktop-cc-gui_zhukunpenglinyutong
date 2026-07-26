@@ -35,7 +35,6 @@ import FileIcon from "../../../components/FileIcon";
 import { UnsavedChangesDialog } from "../../../components/ui/UnsavedChangesDialog";
 import { CommitMessageEngineIcon } from "./CommitMessageEngineIcon";
 import {
-  CommitButton,
   useGitCommitSelection,
 } from "./GitDiffPanelCommitScope";
 import {
@@ -2141,6 +2140,15 @@ function GitDiffPanelImpl({
       setMenu: setGitContextMenu,
       buildExtraItems: buildCommitMessagePlacementItems,
     });
+  const hasMessage = commitMessage.trim().length > 0;
+  const canCommit = hasMessage && selectedCommitCount > 0 && !commitLoading;
+  const commitTitle = !hasMessage
+    ? t("git.enterCommitMessage")
+    : selectedCommitCount === 0 && hasAnyChanges
+      ? t("git.selectFilesToCommit")
+      : !hasAnyChanges
+        ? t("git.noChangesToCommit")
+        : t("git.commitSelectedChanges");
   const singleCommitComposer =
     showGenerateCommitMessage && !multiRepositoryMode ? (
       <div className={`commit-message-section git-commit-composer git-commit-composer--${commitComposerPlacement}`}>
@@ -2153,27 +2161,59 @@ function GitDiffPanelImpl({
             disabled={commitMessageLoading}
             rows={2}
           />
-          <button
-            type="button"
-            className={`commit-message-generate-button${commitMessageLoading ? " commit-message-generate-button--loading" : ""}`}
-            onClick={(event) => {
-              void showCommitMessageEngineMenu(event);
-            }}
-            disabled={commitMessageLoading || !canGenerateCommitMessage}
-            aria-haspopup="menu"
-            title={
-              stagedFiles.length > 0
-                ? t("git.generateCommitMessageStaged")
-                : t("git.generateCommitMessageUnstaged")
-            }
-            aria-label={t("git.generateCommitMessage")}
-          >
-            <CommitMessageEngineIcon
-              engine={commitMessageMenuEngine}
-              size={14}
-              className={`commit-message-engine-icon${commitMessageLoading ? " commit-message-engine-icon--spinning" : ""}`}
-            />
-          </button>
+          <div className="commit-message-actions">
+            <button
+              type="button"
+              className={`commit-message-generate-button${commitMessageLoading ? " commit-message-generate-button--loading" : ""}`}
+              onClick={(event) => {
+                void showCommitMessageEngineMenu(event);
+              }}
+              disabled={commitMessageLoading || !canGenerateCommitMessage}
+              aria-haspopup="menu"
+              title={
+                stagedFiles.length > 0
+                  ? t("git.generateCommitMessageStaged")
+                  : t("git.generateCommitMessageUnstaged")
+              }
+              aria-label={t("git.generateCommitMessage")}
+            >
+              <CommitMessageEngineIcon
+                engine={commitMessageMenuEngine}
+                size={14}
+                className={`commit-message-engine-icon${commitMessageLoading ? " commit-message-engine-icon--spinning" : ""}`}
+              />
+            </button>
+            <button
+              type="button"
+              className="commit-message-commit-button"
+              onClick={() => {
+                if (canCommit) {
+                  void onCommit?.(selectedCommitPaths);
+                }
+              }}
+              disabled={!canCommit}
+              title={commitTitle}
+              aria-label={commitLoading ? t("git.committing") : t("git.commit")}
+            >
+              {commitLoading ? (
+                <span className="commit-button-spinner" aria-hidden />
+              ) : (
+                <svg
+                  width={14}
+                  height={14}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
         {commitMessageError && (
           <div className="commit-message-error">{commitMessageError}</div>
@@ -2187,14 +2227,6 @@ function GitDiffPanelImpl({
         {syncError && (
           <div className="commit-message-error">{syncError}</div>
         )}
-        <CommitButton
-          commitMessage={commitMessage}
-          selectedCount={selectedCommitCount}
-          hasAnyChanges={hasAnyChanges}
-          commitLoading={commitLoading}
-          selectedPaths={selectedCommitPaths}
-          onCommit={onCommit}
-        />
         <div className="commit-message-hint" aria-live="polite">
           {commitScopeHint}
         </div>

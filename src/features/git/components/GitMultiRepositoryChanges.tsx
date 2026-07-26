@@ -183,38 +183,59 @@ export function GitMultiRepositoryChanges({
           disabled={commitLoading || commitMessageLoading}
           rows={2}
         />
-        {onOpenGenerateMenu ? (
+        <div className="commit-message-actions">
+          {onOpenGenerateMenu ? (
+            <button
+              type="button"
+              className={`commit-message-generate-button${commitMessageLoading ? " commit-message-generate-button--loading" : ""}`}
+              onClick={(event) => onOpenGenerateMenu(event, selections)}
+              disabled={!canGenerateCommitMessage}
+              aria-haspopup="menu"
+              title={t("git.generateCommitMessage")}
+              aria-label={t("git.generateCommitMessage")}
+            >
+              <CommitMessageEngineIcon
+                engine={commitMessageEngine}
+                size={14}
+                className={`commit-message-engine-icon${commitMessageLoading ? " commit-message-engine-icon--spinning" : ""}`}
+              />
+            </button>
+          ) : null}
           <button
             type="button"
-            className={`commit-message-generate-button${commitMessageLoading ? " commit-message-generate-button--loading" : ""}`}
-            onClick={(event) => onOpenGenerateMenu(event, selections)}
-            disabled={!canGenerateCommitMessage}
-            aria-haspopup="menu"
-            title={t("git.generateCommitMessage")}
-            aria-label={t("git.generateCommitMessage")}
+            className="commit-message-commit-button"
+            disabled={!canCommit}
+            onClick={() => canCommit && void onCommitRepositories?.(selections)}
+            title={!commitMessage.trim()
+              ? t("git.enterCommitMessage")
+              : selectedCount === 0
+                ? t("git.selectFilesToCommit")
+                : t("git.commitSelectedChanges")}
+            aria-label={commitLoading ? t("git.committing") : t("git.commit")}
           >
-            <CommitMessageEngineIcon
-              engine={commitMessageEngine}
-              size={14}
-              className={`commit-message-engine-icon${commitMessageLoading ? " commit-message-engine-icon--spinning" : ""}`}
-            />
+            {commitLoading ? (
+              <span className="commit-button-spinner" aria-hidden />
+            ) : (
+              <svg
+                width={14}
+                height={14}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            )}
           </button>
-        ) : null}
+        </div>
       </div>
       {commitMessageError ? <div className="commit-message-error">{commitMessageError}</div> : null}
       {commitError ? <div className="commit-message-error">{commitError}</div> : null}
       {commitSummary ? <div className="git-repository-commit-summary" aria-live="polite">{commitSummary}</div> : null}
-      <div className="commit-button-container">
-        <button
-          type="button"
-          className="commit-button"
-          disabled={!canCommit}
-          onClick={() => canCommit && void onCommitRepositories?.(selections)}
-        >
-          {commitLoading ? <span className="commit-button-spinner" aria-hidden /> : null}
-          <span>{commitLoading ? t("git.committing") : t("git.commit")}</span>
-        </button>
-      </div>
       <div className="commit-message-hint" aria-live="polite">
         {t("git.filesChanged", { count: selectedCount })}
       </div>
