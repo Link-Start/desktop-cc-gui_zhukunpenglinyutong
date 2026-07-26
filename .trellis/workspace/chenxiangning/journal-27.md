@@ -1840,3 +1840,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1135: 修复文件读取失败加载卡死
+
+**Date**: 2026-07-26
+**Task**: 修复文件读取失败加载卡死
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修复 useFileDocumentState 在读取失败与读取期间产生本地脏改时 loading 状态不收敛；新增两条 regression tests；经 product owner 授权 waived Windows manual gate，同步 file-document-loading-error-surface main spec 并归档 OpenSpec change。验证：lint 0 errors、typecheck 通过、focused tests 12/12、目标 OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `574b056cb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
