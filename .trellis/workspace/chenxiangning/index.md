@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1171
+- **Total Sessions**: 1172
 - **Last Active**: 2026-07-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~1119 | Active |
+| `journal-28.md` | ~1152 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1172 | 2026-07-27 | 建立 Claude 供应商会话隔离基础 | `dcebf6a1a` | `feature/v-0710` |
 | 1171 | 2026-07-27 | 修复 CLI 版本状态与供应商页头重叠 | `01010d4e5` | `feature/v-0710` |
 | 1170 | 2026-07-27 | 设置侧 Skills 改文案为内置精选并补充行为说明 | `c1636a880` | `feature/v-0710` |
 | 1169 | 2026-07-27 | 归档错误提示 OpenSpec 变更 | `f8a9a1f86` | `feature/v-0710` |

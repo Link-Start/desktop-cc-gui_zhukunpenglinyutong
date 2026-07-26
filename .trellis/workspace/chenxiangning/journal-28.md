@@ -1117,3 +1117,36 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1172: 建立 Claude 供应商会话隔离基础
+
+**Date**: 2026-07-27
+**Task**: 建立 Claude 供应商会话隔离基础
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 Claude provider-scoped 模型目录、runtime owner、secondary spawn 继承与供应商 UI 调整；用户已验收供应商创建和模型获取，保留 Claude CLI user settings precedence 后续修复，当前任务不归档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dcebf6a1a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
