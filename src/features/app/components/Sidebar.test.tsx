@@ -60,6 +60,22 @@ describe("Sidebar", () => {
     });
   });
 
+  it("surfaces provider catalog load failures instead of silently clearing selection", async () => {
+    vi.mocked(getKimiProviders).mockRejectedValueOnce(
+      new Error("provider catalog unavailable"),
+    );
+
+    render(<Sidebar {...baseProps} />);
+
+    await waitFor(() => {
+      expect(pushErrorToast).toHaveBeenCalledWith({
+        title: "sidebar.providerCatalogLoadFailed",
+        message: "provider catalog unavailable",
+        durationMs: 5000,
+      });
+    });
+  });
+
   it("keeps search input hidden when search toggle is not present", () => {
     render(<Sidebar {...baseProps} />);
 

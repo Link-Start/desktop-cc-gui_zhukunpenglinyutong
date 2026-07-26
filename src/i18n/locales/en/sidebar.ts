@@ -68,6 +68,8 @@ const sidebar = {
       "Selected. Click Kimi CLI on the left to start a session.",
     providerFollowsGlobalLabel: "Follows global config",
     providerIsolatedConfigLabel: "Isolated config",
+    providerUnavailableLabel: "Provider unavailable",
+    providerCatalogLoadFailed: "Failed to load {{engine}} providers",
     sessionActionsGroup: "New Session",
     newSessionInFolder: "New session in {{name}}",
     activateWorkspace: "Open in main panel",

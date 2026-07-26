@@ -634,6 +634,9 @@ export function useSidebarMenus({
         if (!isEngineExecutionEnabled(engine)) {
           return null;
         }
+        if (actionOptions?.providerProfile?.availability === "unavailable") {
+          return null;
+        }
         const creationOptions = {
           ...(targetFolderId ? { folderId: targetFolderId } : {}),
           ...(actionOptions?.providerProfileId
@@ -655,30 +658,61 @@ export function useSidebarMenus({
         localId: string,
         localName: string,
         managedProfiles: EngineProviderProfileOption[],
-      ): EngineProviderProfileOption[] => [
-        {
-          id: localId,
-          name: localName,
-          source: "disk",
-        },
-        ...managedProfiles.filter(
-          (profile) => profile.source === "managed" && profile.id !== localId,
-        ),
-      ];
+        rememberedProfileId: string | null,
+      ): EngineProviderProfileOption[] => {
+        const profiles: EngineProviderProfileOption[] = [
+          {
+            id: localId,
+            name: localName,
+            source: "disk",
+          },
+          ...managedProfiles.filter(
+            (profile) => profile.source === "managed" && profile.id !== localId,
+          ),
+        ];
+        const rememberedId = rememberedProfileId?.trim() ?? "";
+        if (
+          rememberedId &&
+          rememberedId !== localId &&
+          !profiles.some((profile) => profile.id === rememberedId)
+        ) {
+          profiles.push({
+            id: rememberedId,
+            name: rememberedId,
+            source: "managed",
+            availability: "unavailable",
+          });
+        }
+        return profiles;
+      };
+      const withProviderAvailability = (
+        engineMeta: ReturnType<typeof resolveEngineActionMeta>,
+        profile: EngineProviderProfileOption,
+      ) =>
+        profile.availability === "unavailable"
+          ? {
+              ...engineMeta,
+              unavailable: true,
+              statusLabel: t("sidebar.providerUnavailableLabel"),
+            }
+          : engineMeta;
       const claudeProfiles = buildProviderProfiles(
         CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
         CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
         claudeProviderProfiles,
+        claudeSelectedProfileId,
       );
       const codexProfiles = buildProviderProfiles(
         CODEX_DISK_PROVIDER_PROFILE_ID,
         CODEX_DISK_PROVIDER_PROFILE_NAME,
         codexProviderProfiles,
+        codexSelectedProfileId,
       );
       const kimiProfiles = buildProviderProfiles(
         KIMI_LOCAL_PROVIDER_PROFILE_ID,
         KIMI_LOCAL_PROVIDER_PROFILE_NAME,
         kimiProviderProfiles,
+        kimiSelectedProfileId,
       );
       const claudeSelectedProfile =
         claudeProfiles.find((profile) => profile.id === claudeSelectedProfileId) ??
@@ -706,7 +740,10 @@ export function useSidebarMenus({
           iconKind: "engine-claude",
           submenuTitle: t("sidebar.claudeProviderChoiceTitle"),
           selectionHint: t("sidebar.claudeProviderSelectedTip"),
-          ...resolveEngineActionMeta(workspace, "claude"),
+          ...withProviderAvailability(
+            resolveEngineActionMeta(workspace, "claude"),
+            claudeSelectedProfile,
+          ),
           onSelect: async () => {
             const threadId = await runAddAgent("claude", {
               providerProfileId: claudeSelectedProfile.id,
@@ -718,11 +755,16 @@ export function useSidebarMenus({
             id: `new-session-claude-provider-${profile.id}`,
             label: profile.name,
             badgeLabel:
-              profile.source === "disk"
+              profile.availability === "unavailable"
+                ? t("sidebar.providerUnavailableLabel")
+                : profile.source === "disk"
                 ? t("sidebar.providerFollowsGlobalLabel")
                 : t("sidebar.providerIsolatedConfigLabel"),
             iconKind: "engine-claude" as const,
-            ...resolveEngineActionMeta(workspace, "claude"),
+            ...withProviderAvailability(
+              resolveEngineActionMeta(workspace, "claude"),
+              profile,
+            ),
             selected: profile.id === claudeSelectedProfile.id,
             keepMenuOpen: true,
             onSelect: () => {
@@ -744,7 +786,10 @@ export function useSidebarMenus({
           iconKind: "engine-codex",
           submenuTitle: t("sidebar.codexProviderChoiceTitle"),
           selectionHint: t("sidebar.codexProviderSelectedTip"),
-          ...resolveEngineActionMeta(workspace, "codex"),
+          ...withProviderAvailability(
+            resolveEngineActionMeta(workspace, "codex"),
+            codexSelectedProfile,
+          ),
           onSelect: async () => {
             const threadId = await runAddAgent("codex", {
               providerProfileId: codexSelectedProfile.id,
@@ -756,11 +801,16 @@ export function useSidebarMenus({
             id: `new-session-codex-provider-${profile.id}`,
             label: profile.name,
             badgeLabel:
-              profile.source === "disk"
+              profile.availability === "unavailable"
+                ? t("sidebar.providerUnavailableLabel")
+                : profile.source === "disk"
                 ? t("sidebar.codexProviderDiskConfigLabel")
                 : t("sidebar.codexProviderCustomConfigLabel"),
             iconKind: "engine-codex" as const,
-            ...resolveEngineActionMeta(workspace, "codex"),
+            ...withProviderAvailability(
+              resolveEngineActionMeta(workspace, "codex"),
+              profile,
+            ),
             selected: profile.id === codexSelectedProfile.id,
             keepMenuOpen: true,
             onSelect: () => {
@@ -805,7 +855,10 @@ export function useSidebarMenus({
           iconKind: "engine-kimi",
           submenuTitle: t("sidebar.kimiProviderChoiceTitle"),
           selectionHint: t("sidebar.kimiProviderSelectedTip"),
-          ...resolveEngineActionMeta(workspace, "kimi"),
+          ...withProviderAvailability(
+            resolveEngineActionMeta(workspace, "kimi"),
+            kimiSelectedProfile,
+          ),
           onSelect: async () => {
             const threadId = await runAddAgent("kimi", {
               providerProfileId: kimiSelectedProfile.id,
@@ -817,11 +870,16 @@ export function useSidebarMenus({
             id: `new-session-kimi-provider-${profile.id}`,
             label: profile.name,
             badgeLabel:
-              profile.source === "disk"
+              profile.availability === "unavailable"
+                ? t("sidebar.providerUnavailableLabel")
+                : profile.source === "disk"
                 ? t("sidebar.providerFollowsGlobalLabel")
                 : t("sidebar.providerIsolatedConfigLabel"),
             iconKind: "engine-kimi" as const,
-            ...resolveEngineActionMeta(workspace, "kimi"),
+            ...withProviderAvailability(
+              resolveEngineActionMeta(workspace, "kimi"),
+              profile,
+            ),
             selected: profile.id === kimiSelectedProfile.id,
             keepMenuOpen: true,
             onSelect: () => {

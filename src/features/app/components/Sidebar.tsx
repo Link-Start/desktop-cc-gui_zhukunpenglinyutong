@@ -372,6 +372,17 @@ function SidebarImpl({
   const [kimiProviderProfiles, setKimiProviderProfiles] = useState<
     EngineProviderProfileOption[]
   >([]);
+  const providerCatalogLoadErrorTitlesRef = useRef({
+    claude: t("sidebar.providerCatalogLoadFailed", {
+      engine: t("workspace.engineClaudeCode"),
+    }),
+    codex: t("sidebar.providerCatalogLoadFailed", {
+      engine: t("workspace.engineCodex"),
+    }),
+    kimi: t("sidebar.providerCatalogLoadFailed", {
+      engine: t("workspace.engineKimi"),
+    }),
+  });
   const [localRootSessionFolderDraftRequestByWorkspaceId, setLocalRootSessionFolderDraftRequestByWorkspaceId] = useState<
     Record<string, number>
   >(() => ({}));
@@ -774,6 +785,7 @@ function SidebarImpl({
   useEffect(() => {
     let cancelled = false;
     const loadProfiles = async (
+      engine: "claude" | "codex" | "kimi",
       load: () => Promise<Array<{ id: string; name: string }>>,
       setProfiles: Dispatch<SetStateAction<EngineProviderProfileOption[]>>,
     ) => {
@@ -805,17 +817,19 @@ function SidebarImpl({
           }
           return nextProfiles;
         });
-      } catch {
+      } catch (error: unknown) {
         if (!cancelled) {
-          setProfiles((currentProfiles) =>
-            currentProfiles.length === 0 ? currentProfiles : [],
-          );
+          pushErrorToast({
+            title: providerCatalogLoadErrorTitlesRef.current[engine],
+            message: error instanceof Error ? error.message : String(error),
+            durationMs: 5000,
+          });
         }
       }
     };
-    void loadProfiles(getClaudeProviders, setClaudeProviderProfiles);
-    void loadProfiles(getCodexProviders, setCodexProviderProfiles);
-    void loadProfiles(getKimiProviders, setKimiProviderProfiles);
+    void loadProfiles("claude", getClaudeProviders, setClaudeProviderProfiles);
+    void loadProfiles("codex", getCodexProviders, setCodexProviderProfiles);
+    void loadProfiles("kimi", getKimiProviders, setKimiProviderProfiles);
     return () => {
       cancelled = true;
     };

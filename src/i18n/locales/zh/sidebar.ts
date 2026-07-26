@@ -66,6 +66,8 @@ const sidebar = {
     kimiProviderSelectedTip: "已选择，点击左侧 Kimi CLI 即可直接开启会话",
     providerFollowsGlobalLabel: "跟随全局配置",
     providerIsolatedConfigLabel: "独立配置",
+    providerUnavailableLabel: "供应商不可用",
+    providerCatalogLoadFailed: "{{engine}} 供应商加载失败",
     sessionActionsGroup: "新建会话",
     newSessionInFolder: "在 {{name}} 中新建会话",
     activateWorkspace: "切到主区",

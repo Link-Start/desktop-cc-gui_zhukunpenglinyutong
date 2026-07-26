@@ -9,6 +9,7 @@ export type EngineProviderProfileOption = {
   id: string;
   name: string;
   source: "disk" | "managed";
+  availability?: "available" | "unavailable";
 };
 
 export type EngineProviderProfileSelection = {

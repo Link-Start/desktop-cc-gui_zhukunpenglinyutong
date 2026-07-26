@@ -49,6 +49,7 @@ vi.mock("react-i18next", () => ({
         "sidebar.codexProviderChoiceTitle": "Provider selection",
         "sidebar.codexProviderDiskConfigLabel": "Disk config",
         "sidebar.codexProviderCustomConfigLabel": "Custom config",
+        "sidebar.providerUnavailableLabel": "Provider unavailable",
         "sidebar.workspaceActionsGroup": "Workspace actions",
         "sidebar.activateWorkspace": "Open in main panel",
         "sidebar.setWorkspaceAlias": "Set alias",
@@ -753,6 +754,42 @@ describe("useSidebarMenus", () => {
       );
     },
   );
+
+  it("keeps a missing remembered managed provider unavailable instead of falling back local", async () => {
+    window.localStorage.setItem("kimiLastProviderProfileId", "provider-missing");
+    const handlers = createHandlers();
+    const { result } = renderHook(() =>
+      useSidebarMenus({ ...handlers, kimiProviderProfiles: [] }),
+    );
+
+    await act(async () => {
+      result.current.showWorkspaceMenu(
+        {
+          clientX: 160,
+          clientY: 120,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0],
+        workspace,
+      );
+    });
+
+    const action = result.current.workspaceMenuState?.groups
+      .find((group) => group.id === "new-session")
+      ?.actions.find((entry) => entry.id === "new-session-kimi");
+    const selected = action?.children?.find((child) => child.selected);
+
+    expect(action?.unavailable).toBe(true);
+    expect(selected).toMatchObject({
+      id: "new-session-kimi-provider-provider-missing",
+      unavailable: true,
+      badgeLabel: "Provider unavailable",
+    });
+    await act(async () => {
+      await action?.onSelect();
+    });
+    expect(handlers.onAddAgent).not.toHaveBeenCalled();
+  });
 
   it("cannot trigger session creation through a hidden Gemini entry", async () => {
     const handlers = createHandlers();
