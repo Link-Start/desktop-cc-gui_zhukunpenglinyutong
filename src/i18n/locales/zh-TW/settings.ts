@@ -1887,7 +1887,7 @@ const settings = {
       }
     },
     "sidebarProjectManagement": "專案管理",
-    "sidebarMcpSkills": "Skills",
+    "sidebarMcpSkills": "精選",
     "sidebarAgentPromptManagement": "Agent / 提示詞",
     "sidebarRuntimeEnvironment": "執行環境",
     "basicShortcutsTab": "快速鍵",

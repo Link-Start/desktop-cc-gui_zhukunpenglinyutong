@@ -1886,7 +1886,7 @@ const settings = {
       }
     },
     "sidebarProjectManagement": "Управление проектами",
-    "sidebarMcpSkills": "Навыки",
+    "sidebarMcpSkills": "Подобранные",
     "sidebarAgentPromptManagement": "Агенты / Промпты",
     "sidebarRuntimeEnvironment": "Среда выполнения",
     "basicShortcutsTab": "Горячие клавиши",

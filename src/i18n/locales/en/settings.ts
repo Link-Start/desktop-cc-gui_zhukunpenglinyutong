@@ -2267,7 +2267,7 @@ const settings = {
       },
     },
     sidebarProjectManagement: "Project Management",
-    sidebarMcpSkills: "Skills",
+    sidebarMcpSkills: "Curated",
     sidebarAgentPromptManagement: "Agents / Prompts",
     sidebarRuntimeEnvironment: "Runtime Environment",
     basicShortcutsTab: "Shortcuts",

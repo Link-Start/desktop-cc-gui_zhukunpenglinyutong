@@ -23,6 +23,8 @@ const common = {
     curatedError: "Couldn't load curated skills.",
     curatedSubtitle:
       "Client-bundled, version-pinned, shipped with the desktop client. No network.",
+    curatedDetailHint:
+      "When enabled, the selected skill is automatically injected into the system prompt for every conversation, shaping the AI's tone and behavior without any manual invocation. When disabled, it is not injected at all. This differs from user-installed skills under Extensions → Skills, which only take effect when explicitly called or matched.",
     curatedBundledBadge: "Built-in",
     curatedCategoryCodeStyle: "Code style",
     curatedCategoryUiDesign: "UI design",

@@ -1886,7 +1886,7 @@ const settings = {
       }
     },
     "sidebarProjectManagement": "プロジェクト管理",
-    "sidebarMcpSkills": "スキル",
+    "sidebarMcpSkills": "厳選",
     "sidebarAgentPromptManagement": "Agent / プロンプト",
     "sidebarRuntimeEnvironment": "実行環境",
     "basicShortcutsTab": "ショートカット",

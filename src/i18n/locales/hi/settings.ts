@@ -1886,7 +1886,7 @@ const settings = {
       }
     },
     "sidebarProjectManagement": "प्रोजेक्ट प्रबंधन",
-    "sidebarMcpSkills": "कौशल",
+    "sidebarMcpSkills": "क्यूरेटेड",
     "sidebarAgentPromptManagement": "Agent / Prompt",
     "sidebarRuntimeEnvironment": "रनटाइम एनवायरनमेंट",
     "basicShortcutsTab": "शॉर्टकट",

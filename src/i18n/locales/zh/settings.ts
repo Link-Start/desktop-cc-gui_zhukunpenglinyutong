@@ -2126,7 +2126,7 @@ const settings = {
       },
     },
     sidebarProjectManagement: "项目管理",
-    sidebarMcpSkills: "Skills",
+    sidebarMcpSkills: "内置精选",
     sidebarAgentPromptManagement: "智能体/提示词",
     sidebarRuntimeEnvironment: "运行环境",
     basicShortcutsTab: "快捷键",

@@ -1886,7 +1886,7 @@ const settings = {
       }
     },
     "sidebarProjectManagement": "Gestión de proyectos",
-    "sidebarMcpSkills": "Skills",
+    "sidebarMcpSkills": "Seleccionadas",
     "sidebarAgentPromptManagement": "Agentes / Prompts",
     "sidebarRuntimeEnvironment": "Entorno de ejecución",
     "basicShortcutsTab": "Atajos",

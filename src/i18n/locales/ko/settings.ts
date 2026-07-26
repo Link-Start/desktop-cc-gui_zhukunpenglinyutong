@@ -1886,7 +1886,7 @@ const settings = {
       }
     },
     "sidebarProjectManagement": "프로젝트 관리",
-    "sidebarMcpSkills": "스킬",
+    "sidebarMcpSkills": "선별됨",
     "sidebarAgentPromptManagement": "Agents / 프롬프트",
     "sidebarRuntimeEnvironment": "런타임 환경",
     "basicShortcutsTab": "단축키",
