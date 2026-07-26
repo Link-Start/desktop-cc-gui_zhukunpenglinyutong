@@ -1,5 +1,20 @@
 ## ADDED Requirements
 
+### Requirement: Local Session Provider Tags MUST Identify Disk Configuration
+
+When session-list provider labels are enabled, local Codex and Claude Code sessions MUST render the stable technical tag `local` so users can distinguish disk-backed configuration from managed providers.
+
+#### Scenario: Codex disk session is listed
+
+- **WHEN** a Codex thread is bound to `__disk__`
+- **THEN** its provider tag MUST display `local`
+- **AND** it MUST NOT expose the internal profile name `codex-tui/default-config`
+
+#### Scenario: Claude Code local session is listed
+
+- **WHEN** a Claude Code thread is bound to `__local_settings_json__`
+- **THEN** its provider tag MUST display `local`
+
 ### Requirement: Provider Configuration Badges MUST Use Consistent Semantics
 
 The new-conversation provider selector MUST describe local/disk profiles and managed profiles with the same semantic labels across Claude Code, Codex, and Kimi CLI.

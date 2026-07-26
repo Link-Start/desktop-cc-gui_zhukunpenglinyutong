@@ -1,5 +1,15 @@
 ## MODIFIED Requirements
 
+### Requirement: Codex Generated Fallback MUST Cover Current Selectable Models
+
+Codex generated fallback catalog MUST enumerate the current non-legacy models exposed by the supported Codex CLI model selector. Runtime/configured entries MAY override matching metadata, but an unavailable or partial runtime catalog MUST still leave every current selectable model visible in every Composer model surface.
+
+#### Scenario: Codex runtime catalog is unavailable
+
+- **WHEN** Codex `model/list` is unavailable, empty, partial, or not yet connected
+- **THEN** the fallback catalog MUST include `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, and `gpt-5.3-codex-spark`
+- **AND** `gpt-5.6-sol` MUST remain the default
+
 ### Requirement: Catalog Sources MUST Follow One Deterministic Precedence
 
 Every engine model catalog MUST merge sources in `provider-owned runtime/configured > public user-configured > public generated fallback` order with deterministic dedupe. For a managed provider request, disk/global provider-specific configured entries MUST NOT be treated as public entries. Dedupe MUST use normalized runtime model identity, falling back to model ID when no runtime value exists.

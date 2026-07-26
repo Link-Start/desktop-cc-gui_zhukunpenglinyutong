@@ -153,3 +153,11 @@ repair selection
 仅写 cache/store 会让 Composer effect 继续读取旧 active selection；同时 cache state 更新会改变
 上层 resolver identity，扩大根 hook 链的重复 render 风险。修复放在 shared persistence owner，
 不在各个 repair caller 增加局部 guard。
+
+### 11. Local 标签与 Codex fallback roster 保持显式
+
+不改 `model/list`、provider resolver 或 Composer catalog composition。Codex 当前可选模型直接补入
+共享 `generatedModelCatalog.json`，由既有 Rust/TypeScript consumers 同源读取；runtime/config
+仍按既有 precedence 覆盖同 model identity。会话列表继续复用 `resolveEngineProviderLabel`，
+仅将 Codex `__disk__` 与 Claude `__local_settings_json__` 映射为稳定技术标签 `local`，Kimi
+local/default 维持既有隐藏行为。
