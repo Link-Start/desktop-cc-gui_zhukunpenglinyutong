@@ -16,6 +16,8 @@ const errors = {
       "The runtime was restarting while creating this session. The app already retried once. Reconnect the workspace and try again.",
     codexProviderWireApiUnsupported:
       'The current Codex CLI does not support wire_api = "chat". If this provider supports the Responses API, use wire_api = "responses". If it only supports Chat Completions, configure a protocol conversion service or router first.',
+    codexProviderConfigInvalid:
+      "This Codex provider configuration is not valid TOML. Check the syntax and use straight English half-width quotes (\") instead of smart quotes.",
     reconnectAndRetryCreateSession: "Reconnect and retry creation",
     reconnectingAndRetryingCreateSession:
       "Reconnecting and retrying creation...",

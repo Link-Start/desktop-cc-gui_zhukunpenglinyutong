@@ -59,19 +59,29 @@ copy 同时说明：
 
 替代方案：使用 `ConfirmDialog`。拒绝，因为不存在 confirm/cancel 决策，强制二次确认会制造错误语义。
 
+### Decision 5：TOML parse error 与协议错误使用独立 marker
+
+shared Codex provider parser 对非法 TOML 返回 `[codex_provider_config_invalid]`。Frontend 仅展示本地化修复建议；backend 丢弃可能携带 source excerpt 的 raw parser diagnostic，只把稳定 generic marker/message 传入现有 Debug payload。这样既保留错误分类能力，也避免 parser source excerpt、line/column 和配置内容进入 UI 或日志。
+
+### Decision 6：renderer 生产代码禁用 native Alert
+
+所有普通错误反馈复用现有 `pushErrorToast`。`.eslintrc.cjs` 同时使用 `no-restricted-globals` 与 `no-restricted-properties`，分别阻止 `alert()` 与 `window.alert()`；测试文件关闭这两条限制，以允许 negative assertion 与 security fixture。需要用户确认的交互继续使用现有 Dialog/Confirm contract，不能用 Alert 代替。
+
 ## Risks / Trade-offs
 
 - [Risk] 未来 Codex CLI 重新支持 `chat` → validator 与当前产品支持矩阵同步移除；稳定 marker 便于单点回滚。
 - [Risk] `wire_api = "chat"` 位于未被 top-level `model_provider` 引用的 table → 仍须阻断，因为 Codex 会解析完整 provider map；错误 detail 指明具体 table id，便于用户清理。
 - [Risk] config 缺少 `model_provider` 或 `wire_api` → 保持现有 Codex parser 权威，不新增猜测性阻断。
 - [Trade-off] 只覆盖确定的 `chat` incompatibility，不泛化所有配置错误；其他错误继续使用既有链路。
+- [Trade-off] production Alert 禁令会迁移现存少量调用点；换取统一 styling、非阻塞行为、i18n 与可测试性。
 
 ## Migration Plan
 
 1. 新增 backend validator 与 unit tests。
 2. 增加 frontend marker classifier、全局 sticky Error Toast、i18n copy 与 hook tests。
-3. 执行 focused tests、typecheck、runtime contracts、OpenSpec strict validation。
-4. 回滚时删除 validator 调用与 marker mapping；无数据迁移。
+3. 迁移现存 renderer Alert、增加 ESLint guard 与 Trellis code-spec。
+4. 执行 focused tests、typecheck、runtime contracts、OpenSpec strict validation。
+5. 回滚时删除 validator 调用、marker mapping 与 ESLint guard；无数据迁移。
 
 ## Open Questions
 

@@ -4,10 +4,11 @@ Codex managed provider 使用已被当前 Codex CLI 移除的 `wire_api = "chat"
 
 ## 目标与边界
 
-- 仅处理 `engine=codex` 的 managed provider `configToml` 协议预检与 create-session 友好提示。
+- 处理 `engine=codex` 的 managed provider `configToml` 语法/协议预检与 create-session 友好提示。
 - provider 名称只是 display metadata；不得按 `Kimi`、`MiniMax` 等名称分支。
 - backend 保留稳定诊断标识，frontend 负责用户可读的本地化 copy。
 - 明确区分“供应商支持 Responses API”与“供应商仅支持 Chat Completions”两种修复路径。
+- 统一 renderer 生产代码的错误反馈出口，禁止使用 native `alert()` / `window.alert()`。
 
 ## 非目标
 
@@ -19,8 +20,10 @@ Codex managed provider 使用已被当前 Codex CLI 移除的 `wire_api = "chat"
 ## What Changes
 
 - 在 Codex managed provider runtime materialization 前解析完整 `configToml`，检测任一 provider table 中当前 Codex CLI 不支持的 `wire_api = "chat"`。
+- TOML parse failure 返回稳定、可分类且不泄露配置正文的 marker；UI 提示检查 TOML syntax 与英文半角引号，不展示 raw parser stack。
 - 返回稳定、可分类的 provider protocol error，阻止无意义的 app-server spawn/retry。
 - create-session frontend 将该错误转换为本地化、可操作的协议兼容提示，不再向用户展示 `Broken pipe` 或 OS error code。
+- 所有 renderer 生产错误反馈统一复用 global Error Toast；ESLint 阻止新增 native Alert。
 - 增加 backend Good/Base/Bad case 与 frontend error mapping 回归测试。
 
 ## 方案对比
@@ -32,7 +35,7 @@ Codex managed provider 使用已被当前 Codex CLI 移除的 `wire_api = "chat"
 
 ### New Capabilities
 
-无。
+- `frontend-error-feedback`: renderer 生产代码 MUST 使用非阻塞、可本地化的应用内反馈，MUST NOT 调用 native Alert。
 
 ### Modified Capabilities
 
@@ -50,5 +53,7 @@ Codex managed provider 使用已被当前 Codex CLI 移除的 `wire_api = "chat"
 - 任一 provider table 含 `wire_api = "chat"` 的 Codex managed provider 在 app-server 启动前失败。
 - UI 明确提示当前 Codex CLI 不支持 `chat`，并说明 Responses 或协议转换两条处理路径。
 - UI 不显示 `Broken pipe`、`os error 32`。
+- 非法 TOML 不显示 raw parser stack，并提示检查英文半角引号。
+- `src/**` 生产代码不存在 `alert()` / `window.alert()`；ESLint 可阻止重新引入。
 - `wire_api = "responses"` 与未配置 `wire_api` 的现有 provider 行为不变。
 - 不读取、记录或输出 provider API key。

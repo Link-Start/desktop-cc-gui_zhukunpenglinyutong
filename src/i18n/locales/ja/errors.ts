@@ -16,6 +16,7 @@ const errors = {
     "failedToCreateSessionNoThreadId": "ランタイムが新しいセッション ID を返しませんでした。",
     "failedToCreateSessionRuntimeRecovering": "このセッションの作成中にランタイムが再起動していました。アプリはすでに一度再試行しました。ワークスペースを再接続して、もう一度お試しください。",
     "codexProviderWireApiUnsupported": "現在の Codex CLI は wire_api = \"chat\" をサポートしていません。このプロバイダーが Responses API をサポートする場合は wire_api = \"responses\" を使用してください。Chat Completions のみをサポートする場合は、先にプロトコル変換サービスまたは router を設定してください。",
+    "codexProviderConfigInvalid": "この Codex プロバイダー設定は有効な TOML ではありません。構文を確認し、スマートクォートではなく半角の英語直線引用符 (\") を使用してください。",
     "reconnectAndRetryCreateSession": "再接続して作成を再試行",
     "reconnectingAndRetryingCreateSession": "再接続して作成を再試行中...",
     "runtimeRecovered": "ランタイムが復旧しました。",

@@ -16,6 +16,7 @@ const errors = {
     "failedToCreateSessionNoThreadId": "런타임이 새 세션 id를 반환하지 않았습니다.",
     "failedToCreateSessionRuntimeRecovering": "이 세션을 생성하는 동안 런타임이 재시작 중이었습니다. 앱이 이미 한 번 재시도했습니다. 작업 공간을 재연결하고 다시 시도하세요.",
     "codexProviderWireApiUnsupported": "현재 Codex CLI는 wire_api = \"chat\"을 지원하지 않습니다. 이 공급자가 Responses API를 지원하면 wire_api = \"responses\"를 사용하세요. Chat Completions만 지원하면 먼저 프로토콜 변환 서비스 또는 router를 구성하세요.",
+    "codexProviderConfigInvalid": "이 Codex 공급자 설정은 유효한 TOML이 아닙니다. 구문을 확인하고 스마트 따옴표 대신 영문 반각 직선 따옴표(\")를 사용하세요.",
     "reconnectAndRetryCreateSession": "재연결 후 생성 재시도",
     "reconnectingAndRetryingCreateSession": "재연결하여 생성을 재시도하는 중...",
     "runtimeRecovered": "런타임이 복구되었습니다.",

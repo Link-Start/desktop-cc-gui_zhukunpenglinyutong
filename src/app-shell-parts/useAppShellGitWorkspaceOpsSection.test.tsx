@@ -507,4 +507,28 @@ describe("useAppShellGitWorkspaceOpsSection", () => {
     expect(checkoutBranch).toHaveBeenNthCalledWith(1, "release/1.0", "", false);
     expect(checkoutBranch).toHaveBeenNthCalledWith(2, "release/1.0", "docs", false);
   });
+
+  it("routes shared action errors through the global Error Toast", () => {
+    const { result } = renderHook(() =>
+      useAppShellGitWorkspaceOpsSection({
+        activeWorkspace: workspace,
+        addDebugEntry: vi.fn(),
+        clearGitRootCandidates: vi.fn(),
+        gitStatus: { isGitRepository: true, error: null, files: [] },
+        refreshGitDiffs: vi.fn(),
+        refreshGitStatus: vi.fn(),
+        t: (key) => key,
+        updateWorkspaceSettings: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      result.current.alertError(new Error("git action failed"));
+    });
+
+    expect(pushErrorToast).toHaveBeenCalledWith({
+      title: "errors.requestFailed",
+      message: "git action failed",
+    });
+  });
 });

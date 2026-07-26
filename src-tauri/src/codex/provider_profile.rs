@@ -13,6 +13,8 @@ pub(crate) const CODEX_DISK_PROVIDER_PROFILE_ID: &str = "__disk__";
 pub(crate) const CODEX_DISK_PROVIDER_PROFILE_NAME: &str = "codex-tui/default-config";
 pub(crate) const CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX: &str =
     "[codex_provider_wire_api_unsupported]";
+pub(crate) const CODEX_PROVIDER_CONFIG_INVALID_ERROR_PREFIX: &str =
+    "[codex_provider_config_invalid]";
 
 impl CodexProviderBinding {
     pub(crate) fn disk() -> Self {
@@ -303,9 +305,7 @@ pub(crate) fn resolve_codex_provider_default_model(
 }
 
 fn configured_model_from_config_toml(config_toml: &str) -> Result<Option<String>, String> {
-    let value: toml::Value = config_toml
-        .parse()
-        .map_err(|error| format!("invalid Codex provider configToml: {error}"))?;
+    let value = parse_codex_provider_config(config_toml)?;
     Ok(value
         .get("model")
         .and_then(toml::Value::as_str)
@@ -314,10 +314,14 @@ fn configured_model_from_config_toml(config_toml: &str) -> Result<Option<String>
         .map(str::to_string))
 }
 
+fn parse_codex_provider_config(config_toml: &str) -> Result<toml::Value, String> {
+    config_toml.parse().map_err(|_| {
+        format!("{CODEX_PROVIDER_CONFIG_INVALID_ERROR_PREFIX} Codex provider configToml is not valid TOML.")
+    })
+}
+
 fn validate_codex_provider_wire_api(config_toml: &str, provider_name: &str) -> Result<(), String> {
-    let value: toml::Value = config_toml
-        .parse()
-        .map_err(|error| format!("invalid Codex provider configToml: {error}"))?;
+    let value = parse_codex_provider_config(config_toml)?;
     let Some(model_providers) = value.get("model_providers").and_then(toml::Value::as_table) else {
         return Ok(());
     };
@@ -354,9 +358,7 @@ fn write_file_with_owner_only_permissions(path: &Path, content: &str) -> Result<
 }
 
 fn extract_launch_critical_overrides(config_toml: &str) -> Result<Vec<String>, String> {
-    let value: toml::Value = config_toml
-        .parse()
-        .map_err(|error| format!("invalid Codex provider configToml: {error}"))?;
+    let value = parse_codex_provider_config(config_toml)?;
     let mut overrides = Vec::new();
     for key in ["model", "model_provider", "approval_policy", "sandbox_mode"] {
         if let Some(raw_value) = value.get(key) {
@@ -519,6 +521,17 @@ wire_api = "chat"
     }
 
     #[test]
+    fn parse_provider_config_rejects_smart_quotes_without_echoing_source() {
+        let config_toml = "wire_api = “chat\"";
+        let error =
+            parse_codex_provider_config(config_toml).expect_err("smart quote is invalid TOML");
+
+        assert!(error.starts_with(CODEX_PROVIDER_CONFIG_INVALID_ERROR_PREFIX));
+        assert!(!error.contains("“chat"));
+        assert!(!error.contains("wire_api"));
+    }
+
+    #[test]
     fn validate_wire_api_allows_responses_and_missing_wire_api() {
         for config_toml in [
             r#"
@@ -659,6 +672,23 @@ wire_api = "chat"
             materialize_codex_provider_profile_in_root(profile, &root).expect_err("unsupported");
         assert!(error.starts_with(CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX));
         assert!(!root.join("chat-provider").exists());
+    }
+
+    #[test]
+    fn materialize_managed_provider_rejects_invalid_toml_before_writing_provider_home() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-codex-provider-profile-{}", Uuid::new_v4()));
+        let profile = CodexProviderProfile::Managed {
+            id: "invalid-provider".to_string(),
+            name: "Invalid Provider".to_string(),
+            config_toml: "wire_api = “chat\"".to_string(),
+            auth_json: None,
+        };
+
+        let error =
+            materialize_codex_provider_profile_in_root(profile, &root).expect_err("invalid TOML");
+        assert!(error.starts_with(CODEX_PROVIDER_CONFIG_INVALID_ERROR_PREFIX));
+        assert!(!root.join("invalid-provider").exists());
     }
 
     #[test]

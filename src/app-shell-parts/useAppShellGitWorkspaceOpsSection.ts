@@ -257,8 +257,11 @@ export function useAppShellGitWorkspaceOpsSection({
     };
   });
   const alertError = useCallback((error: unknown) => {
-    alert(error instanceof Error ? error.message : String(error));
-  }, []);
+    pushErrorToast({
+      title: t("errors.requestFailed"),
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }, [t]);
   const handleOpenDetachedFileExplorer = useCallback(
     async (initialFilePath?: string | null) => {
       if (!activeWorkspace) {

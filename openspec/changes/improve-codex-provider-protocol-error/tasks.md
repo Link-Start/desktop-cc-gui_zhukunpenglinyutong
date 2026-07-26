@@ -17,3 +17,19 @@
 
 - [x] 4.1 [P0] 将 Codex protocol incompatibility 从 native `window.alert` 切换到现有 global sticky Error Toast；依赖：2.1；验证：focused hook test 断言 toast payload 与 alert 未调用。
 - [x] 4.2 [P0] 执行增量 review、focused Vitest、target ESLint、typecheck、Rust focused tests 与 OpenSpec strict validation；依赖：4.1；输出：scope 内检查通过后独立提交。
+
+## 5. Invalid TOML error contract
+
+- [x] 5.1 [P0] shared Codex provider parser 对非法 TOML 返回稳定 `[codex_provider_config_invalid]` marker，且 materialization 前失败；依赖：无；验证：Rust focused tests 覆盖 smart quote 与 secret-safe marker。
+- [x] 5.2 [P0] create-session frontend 将 invalid config marker 映射为本地化 global sticky Error Toast，不展示 raw parser stack；依赖：5.1；验证：focused hook test。
+
+## 6. Native Alert elimination
+
+- [x] 6.1 [P0] 将 `src/**` 现存生产 `alert()` / `window.alert()` 迁移到 existing `pushErrorToast`；依赖：无；验证：target tests 与 production source scan。
+- [x] 6.2 [P0] 在 ESLint 增加 production native Alert 禁令，同时允许 test-only assertions/fixtures；依赖：6.1；验证：target ESLint 与 intentional negative lint probe。
+- [x] 6.3 [P1] 使用 `update-spec` 更新 frontend quality code-spec，写明 scope、contract、matrix、tests 与 Wrong/Correct；依赖：6.2；验证：人工 spec review。
+
+## 7. Incremental verification and delivery
+
+- [x] 7.1 [P0] 运行 focused Vitest、target ESLint、typecheck、Rust focused tests、runtime contracts 与 OpenSpec strict validation，不运行 full suite；依赖：5.2、6.3。
+- [ ] 7.2 [P0] review scope、独立提交并执行 Trellis session record；依赖：7.1。

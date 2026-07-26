@@ -30,3 +30,11 @@ Codex managed provider create-session MUST validate every configured model provi
 - **WHEN** `configToml` contains an unselected provider table with `wire_api = "chat"` but the effective top-level `model_provider` selects a different provider
 - **THEN** protocol preflight MUST reject the configuration before runtime launch
 - **AND** diagnostic detail MUST identify the incompatible provider table without exposing credentials
+
+#### Scenario: managed provider configuration is invalid TOML
+
+- **WHEN** Codex managed provider `configToml` cannot be parsed, including values using non-ASCII smart quotes
+- **THEN** backend MUST return stable marker `[codex_provider_config_invalid]`
+- **AND** frontend MUST show localized guidance through the global custom sticky Error Toast
+- **AND** user-facing copy MUST recommend checking TOML syntax and English half-width quotes
+- **AND** user-facing copy MUST NOT include raw parser stack, source excerpt, credentials, or native `window.alert`

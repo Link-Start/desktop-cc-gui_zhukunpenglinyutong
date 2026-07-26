@@ -16,6 +16,7 @@ const errors = {
     "failedToCreateSessionNoThreadId": "Среда выполнения не вернула идентификатор новой сессии.",
     "failedToCreateSessionRuntimeRecovering": "Среда выполнения перезапускалась во время создания этой сессии. Приложение уже повторило попытку один раз. Переподключите рабочую область и попробуйте снова.",
     "codexProviderWireApiUnsupported": "Текущая версия Codex CLI не поддерживает wire_api = \"chat\". Если поставщик поддерживает Responses API, используйте wire_api = \"responses\". Если поддерживается только Chat Completions, сначала настройте сервис преобразования протокола или router.",
+    "codexProviderConfigInvalid": "Конфигурация этого поставщика Codex не является допустимым TOML. Проверьте синтаксис и используйте прямые английские кавычки (\") вместо типографских.",
     "reconnectAndRetryCreateSession": "Переподключиться и повторить создание",
     "reconnectingAndRetryingCreateSession": "Переподключение и повтор создания...",
     "runtimeRecovered": "Среда выполнения восстановлена.",

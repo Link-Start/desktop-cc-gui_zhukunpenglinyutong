@@ -27,11 +27,12 @@ const CREATE_SESSION_RUNTIME_RECOVERING_ERROR_PREFIX =
   "[SESSION_CREATE_RUNTIME_RECOVERING]";
 const CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX =
   "[codex_provider_wire_api_unsupported]";
+const CODEX_PROVIDER_CONFIG_INVALID_ERROR_PREFIX =
+  "[codex_provider_config_invalid]";
 const CREATE_SESSION_RECOVERY_TOAST_ID_PREFIX = "create-session-recovery";
 const CREATE_SESSION_RECOVERY_PROGRESS_TOAST_ID_PREFIX =
   "create-session-recovery-progress";
-const CREATE_SESSION_PROVIDER_PROTOCOL_TOAST_ID_PREFIX =
-  "create-session-provider-protocol";
+const CREATE_SESSION_FAILURE_TOAST_ID_PREFIX = "create-session-failure";
 
 function isDiskProviderSelection(options?: SessionCreationOptions) {
   const providerProfileId =
@@ -189,6 +190,9 @@ export function useWorkspaceActions({
 
   const localizeSessionCreationErrorMessage = useCallback(
     (message: string): string => {
+      if (message.startsWith(CODEX_PROVIDER_CONFIG_INVALID_ERROR_PREFIX)) {
+        return t("errors.codexProviderConfigInvalid");
+      }
       if (message.startsWith(CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX)) {
         return t("errors.codexProviderWireApiUnsupported");
       }
@@ -375,19 +379,14 @@ export function useWorkspaceActions({
     (
       workspace: WorkspaceInfo,
       targetEngine: EngineType,
-      message: string,
       detail: string,
     ) => {
-      if (message.startsWith(CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX)) {
-        pushErrorToast({
-          id: `${CREATE_SESSION_PROVIDER_PROTOCOL_TOAST_ID_PREFIX}-${workspace.id}-${targetEngine}`,
-          title: t("errors.failedToCreateSession"),
-          message: detail,
-          sticky: true,
-        });
-        return;
-      }
-      alert(`${t("errors.failedToCreateSession")}\n\n${detail}`);
+      pushErrorToast({
+        id: `${CREATE_SESSION_FAILURE_TOAST_ID_PREFIX}-${workspace.id}-${targetEngine}`,
+        title: t("errors.failedToCreateSession"),
+        message: detail,
+        sticky: true,
+      });
     },
     [t],
   );
@@ -437,7 +436,10 @@ export function useWorkspaceActions({
           label: "workspace/open-new-window error",
           payload: message,
         });
-        alert(`${t("errors.failedToOpenNewWindow")}\n\n${localizeErrorMessage(message)}`);
+        pushErrorToast({
+          title: t("errors.failedToOpenNewWindow"),
+          message: localizeErrorMessage(message),
+        });
       }
     },
     [
@@ -477,7 +479,10 @@ export function useWorkspaceActions({
           label: "workspace/add error",
           payload: message,
         });
-        alert(`${t("errors.failedToAddWorkspace")}\n\n${localizeErrorMessage(message)}`);
+        pushErrorToast({
+          title: t("errors.failedToAddWorkspace"),
+          message: localizeErrorMessage(message),
+        });
       }
     },
     [
@@ -525,7 +530,10 @@ export function useWorkspaceActions({
         label: "workspace/add error",
         payload: message,
       });
-      alert(`${t("errors.failedToAddWorkspace")}\n\n${localizeErrorMessage(message)}`);
+      pushErrorToast({
+        title: t("errors.failedToAddWorkspace"),
+        message: localizeErrorMessage(message),
+      });
     }
   }, [
     handleAddWorkspaceFromPath,
@@ -603,7 +611,6 @@ export function useWorkspaceActions({
             showSessionCreationFailure(
               workspace,
               targetEngine,
-              retryMessage,
               detail,
             );
             return null;
@@ -656,7 +663,7 @@ export function useWorkspaceActions({
             error: message,
           },
         });
-        showSessionCreationFailure(workspace, targetEngine, message, detail);
+        showSessionCreationFailure(workspace, targetEngine, detail);
         return null;
       }
     },
