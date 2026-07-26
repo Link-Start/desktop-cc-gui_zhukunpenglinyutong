@@ -1,6 +1,6 @@
 ## Context
 
-Codex managed provider 使用 `codex::{workspaceId}::{providerProfileId}` runtime key，并将 provider config 物化到独立 `CODEX_HOME`。Claude CLI 的执行模型不同：每个 turn 都 spawn 一个短生命周期 `claude -p` child process，history/resume 默认共享 Claude home。现有实现已经在 primary send path 注入 `provider_env`，但 manager、MCP locator 与部分 secondary spawn 仍以 workspace-only state 工作。
+Codex managed provider 使用 `codex::{workspaceId}::{providerProfileId}` runtime key，并将 provider config 物化到独立 `CODEX_HOME`。Claude CLI 的执行模型不同：每个 turn 都 spawn 一个短生命周期 `claude -p` child process，history/resume 默认共享 Claude home。现有实现已经在 primary send path 注入 `provider_env`，但 Claude CLI 仍会加载 `~/.claude/settings.json`；其中 `env` 可在 CLI 启动阶段覆盖 inherited process env，因此仅注入 process env 不能证明 managed provider 最终生效。
 
 约束：
 
@@ -61,6 +61,16 @@ secondary spawn 必须从 turn context 取 env：
 
 context 清理必须与现有 ephemeral turn cleanup 同生命周期，错误与 interrupt 路径也必须释放；不得在日志输出 env value。
 
+### D3.1. managed provider 使用 command-line settings override
+
+managed turn MUST 为 normalized provider env 创建 turn-scoped private settings file，并通过 `--settings <path>` 传给每个 Claude child。Claude CLI 将 command-line settings 置于 user/project/local settings 之上，因此 provider auth/base URL/model 不再被 `~/.claude/settings.json` 覆盖。
+
+- settings file 只包含本 turn 的 normalized `env`，不复制或修改用户 settings。
+- secret 只进入 private file 与 child environment，不得进入 command argument value、日志或 diagnostic payload。
+- file 使用随机目录，Unix directory mode 为 `0700`、file mode 为 `0600`；turn attempt 结束后由 RAII cleanup 删除。
+- local/default turn 不创建 settings override，继续读取现有 Claude settings。
+- AskUserQuestion/approval resume 复用同一 turn-scoped path；legacy retry 重新创建等价 private override。
+
 ### D4. control path 使用 workspace scan，turn path使用精确 owner
 
 - workspace interrupt/remove/shutdown：枚举该 workspace 的全部 Claude runtime，逐个 interrupt；只有成功终止的 owner 才移除。
@@ -70,7 +80,7 @@ context 清理必须与现有 ephemeral turn cleanup 同生命周期，错误与
 
 ### D5. 不物化 Claude provider home
 
-方案 B（独立 `CLAUDE_CONFIG_DIR`）可提供文件级隔离，但会改变 history、resume、MCP servers、skills 与用户现有 settings 的可见性。本变更仅把 managed provider 的 network/auth/model env 作为 child-process override，同时共享 durable history home。
+方案 B（独立 `CLAUDE_CONFIG_DIR`）可提供文件级隔离，但会改变 history、resume、MCP servers、skills 与用户现有 settings 的可见性。本变更把 managed provider 的 network/auth/model env 同时作为 child-process env 与 command-line settings override，同时共享 durable history home。
 
 local/default runtime不注入 managed env，保持现有 disk/global behavior。managed runtime绝不调用 provider switch/write command。
 
@@ -99,6 +109,7 @@ backend switch command与 persisted `current` 字段暂时保留读取兼容，�
 - **[Risk] AskUser MCP locator 改动影响 legacy local runtime** → 保留 workspace-only local fallback，并补新旧 URL/lookup tests。
 - **[Risk] manager key 扩展导致 workspace cleanup 漏 owner** → 提供 manager-level `sessions_for_workspace` / `remove_workspace_sessions`，所有 workspace control path统一复用。
 - **[Risk] provider config 编辑期间同一 thread下一 turn读取新 env** → 保持当前“每次 send 解析最新配置”的行为；binding id不变，删除则 fail closed。
+- **[Risk] token 出现在 process args 或遗留临时文件** → `--settings` 只接收 private file path；file 内容不记录日志，并由 turn-scoped RAII guard清理。
 - **[Risk] shared Claude history包含不同 provider会话** → 这是刻意的兼容选择；catalog binding继续负责 provider attribution。
 - **[Risk] CSS 修改影响三种 CLI header** → 使用已有 feature-scoped selectors，并覆盖 Claude/Codex/Kimi header component tests。
 

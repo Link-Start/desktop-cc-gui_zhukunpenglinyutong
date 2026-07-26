@@ -100,6 +100,7 @@ fn build_command_injects_managed_provider_env_per_turn() {
         None,
         None,
         Some(&provider_env),
+        None,
     );
     let env = command
         .as_std()
@@ -125,6 +126,114 @@ fn build_command_injects_managed_provider_env_per_turn() {
 }
 
 #[test]
+fn build_command_uses_private_provider_settings_without_exposing_secret_in_args() {
+    let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
+    let mut params = SendMessageParams::default();
+    params.text = "hello".to_string();
+    let provider_env = BTreeMap::from([
+        (
+            "ANTHROPIC_AUTH_TOKEN".to_string(),
+            "managed-secret-token".to_string(),
+        ),
+        (
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://managed.example.test".to_string(),
+        ),
+    ]);
+    let settings_override = ClaudeProviderSettingsOverride::create(Some(&provider_env))
+        .expect("create private provider settings")
+        .expect("managed provider settings");
+
+    let command = session.build_command_with_provider_env(
+        &params,
+        false,
+        true,
+        None,
+        None,
+        Some(&provider_env),
+        Some(settings_override.path()),
+    );
+    let args = command
+        .as_std()
+        .get_args()
+        .map(|arg| arg.to_string_lossy().to_string())
+        .collect::<Vec<_>>();
+
+    assert!(args.windows(2).any(|window| {
+        window[0] == "--settings" && Path::new(&window[1]) == settings_override.path()
+    }));
+    assert!(!args.iter().any(|arg| arg.contains("managed-secret-token")));
+}
+
+#[test]
+fn private_provider_settings_clear_inherited_routing_and_cleanup_on_drop() {
+    let provider_env = BTreeMap::from([
+        (
+            "ANTHROPIC_API_KEY".to_string(),
+            "provider-api-key".to_string(),
+        ),
+        (
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://provider.example.test".to_string(),
+        ),
+    ]);
+    let settings_path = {
+        let settings_override = ClaudeProviderSettingsOverride::create(Some(&provider_env))
+            .expect("create private provider settings")
+            .expect("managed provider settings");
+        let settings_path = settings_override.path().to_path_buf();
+        let settings: Value = serde_json::from_str(
+            &fs::read_to_string(&settings_path).expect("read private provider settings"),
+        )
+        .expect("parse private provider settings");
+        let env = settings
+            .get("env")
+            .and_then(Value::as_object)
+            .expect("settings env object");
+
+        assert_eq!(
+            env.get("ANTHROPIC_API_KEY").and_then(Value::as_str),
+            Some("provider-api-key")
+        );
+        assert_eq!(
+            env.get("ANTHROPIC_AUTH_TOKEN").and_then(Value::as_str),
+            Some("")
+        );
+        assert_eq!(env.get("ANTHROPIC_MODEL").and_then(Value::as_str), Some(""));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(settings_path.parent().expect("settings directory"))
+                    .expect("settings directory metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o700
+            );
+            assert_eq!(
+                fs::metadata(&settings_path)
+                    .expect("settings file metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+        }
+        settings_path
+    };
+
+    assert!(!settings_path.exists());
+}
+
+#[test]
+fn local_provider_does_not_create_settings_override() {
+    assert!(ClaudeProviderSettingsOverride::create(None)
+        .expect("local provider settings resolution")
+        .is_none());
+}
+
+#[test]
 fn build_command_keeps_parallel_provider_env_isolated() {
     let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
     let mut params = SendMessageParams::default();
@@ -137,6 +246,12 @@ fn build_command_keeps_parallel_provider_env_isolated() {
         "ANTHROPIC_BASE_URL".to_string(),
         "https://provider-b.example.test".to_string(),
     )]);
+    let settings_a = ClaudeProviderSettingsOverride::create(Some(&provider_a))
+        .expect("create provider A settings")
+        .expect("provider A settings");
+    let settings_b = ClaudeProviderSettingsOverride::create(Some(&provider_b))
+        .expect("create provider B settings")
+        .expect("provider B settings");
 
     let command_a = session.build_command_with_provider_env(
         &params,
@@ -145,6 +260,7 @@ fn build_command_keeps_parallel_provider_env_isolated() {
         None,
         None,
         Some(&provider_a),
+        Some(settings_a.path()),
     );
     let command_b = session.build_command_with_provider_env(
         &params,
@@ -153,6 +269,7 @@ fn build_command_keeps_parallel_provider_env_isolated() {
         None,
         None,
         Some(&provider_b),
+        Some(settings_b.path()),
     );
     let base_url = |command: &Command| {
         command
@@ -169,6 +286,23 @@ fn build_command_keeps_parallel_provider_env_isolated() {
     );
     assert_eq!(
         base_url(&command_b).as_deref(),
+        Some("https://provider-b.example.test")
+    );
+    assert_ne!(settings_a.path(), settings_b.path());
+    let settings_base_url = |path: &Path| {
+        serde_json::from_str::<Value>(&fs::read_to_string(path).expect("read provider settings"))
+            .expect("parse provider settings")
+            .get("env")
+            .and_then(|env| env.get("ANTHROPIC_BASE_URL"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    };
+    assert_eq!(
+        settings_base_url(settings_a.path()).as_deref(),
+        Some("https://provider-a.example.test")
+    );
+    assert_eq!(
+        settings_base_url(settings_b.path()).as_deref(),
         Some("https://provider-b.example.test")
     );
 }

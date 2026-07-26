@@ -151,6 +151,7 @@ impl ClaudeSession {
         params: &SendMessageParams,
         new_session_id: &Option<String>,
         include_hook_events: bool,
+        provider_settings_path: Option<&Path>,
     ) -> Result<Option<tokio::io::Lines<BufReader<tokio::process::ChildStdout>>>, String> {
         let notify = self.get_or_create_approval_notify(turn_id);
         log::info!("File approval detected, waiting for approval resolution (up to 5 min)...");
@@ -219,6 +220,7 @@ impl ClaudeSession {
             None,
             None,
             provider_env.as_ref(),
+            provider_settings_path,
         );
         Self::configure_spawn_command(&mut cmd);
         match cmd.spawn() {
@@ -465,6 +467,7 @@ impl ClaudeSession {
         params: &SendMessageParams,
         new_session_id: &Option<String>,
         include_hook_events: bool,
+        provider_settings_path: Option<&Path>,
     ) -> Result<Option<tokio::io::Lines<BufReader<tokio::process::ChildStdout>>>, String> {
         let notify = self.get_or_create_user_input_notify(turn_id);
         log::info!("AskUserQuestion detected, waiting for user (up to 5 min)…");
@@ -597,6 +600,7 @@ impl ClaudeSession {
             None,
             None,
             provider_env.as_ref(),
+            provider_settings_path,
         );
         Self::configure_spawn_command(&mut cmd);
         match cmd.spawn() {

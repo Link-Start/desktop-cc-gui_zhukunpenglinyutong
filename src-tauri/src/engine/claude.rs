@@ -5,6 +5,8 @@
 
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
+use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -81,6 +83,108 @@ use stream_helpers::{
     is_claude_stream_control_line, looks_like_claude_runtime_error, merge_text_chunks,
     parse_claude_stream_json_line, tool_input_signature,
 };
+
+const CLAUDE_PROVIDER_ROUTING_ENV_KEYS: &[&str] = &[
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+    "ANTHROPIC_REASONING_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
+    "CLAUDE_CODE_USE_BEDROCK",
+    "CLAUDE_CODE_USE_FOUNDRY",
+    "CLAUDE_CODE_USE_MANTLE",
+    "CLAUDE_CODE_USE_VERTEX",
+];
+
+struct ClaudeProviderSettingsOverride {
+    directory: PathBuf,
+    settings_path: PathBuf,
+}
+
+impl ClaudeProviderSettingsOverride {
+    fn create(provider_env: Option<&BTreeMap<String, String>>) -> Result<Option<Self>, String> {
+        let Some(provider_env) = provider_env else {
+            return Ok(None);
+        };
+        let directory = std::env::temp_dir().join(format!(
+            "ccgui-claude-provider-settings-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let mut directory_builder = fs::DirBuilder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            directory_builder.mode(0o700);
+        }
+        directory_builder.create(&directory).map_err(|error| {
+            format!("Failed to create private Claude provider settings directory: {error}")
+        })?;
+
+        let settings_path = directory.join("settings.json");
+        let write_result = (|| -> Result<(), String> {
+            let mut settings_env = provider_env.clone();
+            for key in CLAUDE_PROVIDER_ROUTING_ENV_KEYS {
+                settings_env
+                    .entry((*key).to_string())
+                    .or_insert_with(String::new);
+            }
+            let payload = serde_json::to_vec(&json!({ "env": settings_env })).map_err(|error| {
+                format!("Failed to serialize Claude provider settings: {error}")
+            })?;
+            let mut options = fs::OpenOptions::new();
+            options.create_new(true).write(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            let mut settings_file = options.open(&settings_path).map_err(|error| {
+                format!("Failed to create private Claude provider settings file: {error}")
+            })?;
+            settings_file.write_all(&payload).map_err(|error| {
+                format!("Failed to write private Claude provider settings file: {error}")
+            })?;
+            settings_file.sync_all().map_err(|error| {
+                format!("Failed to sync private Claude provider settings file: {error}")
+            })
+        })();
+        if let Err(error) = write_result {
+            let _ = fs::remove_dir_all(&directory);
+            return Err(error);
+        }
+
+        Ok(Some(Self {
+            directory,
+            settings_path,
+        }))
+    }
+
+    fn path(&self) -> &Path {
+        &self.settings_path
+    }
+}
+
+impl Drop for ClaudeProviderSettingsOverride {
+    fn drop(&mut self) {
+        if let Err(error) = fs::remove_dir_all(&self.directory) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                log::warn!(
+                    "[claude] failed to clean private provider settings directory: {}",
+                    error
+                );
+            }
+        }
+    }
+}
 
 impl Drop for ClaudeSession {
     fn drop(&mut self) {
@@ -883,6 +987,7 @@ impl ClaudeSession {
             app_settings,
             activation_hint_file,
             None,
+            None,
         )
     }
 
@@ -894,6 +999,7 @@ impl ClaudeSession {
         app_settings: Option<&crate::types::AppSettings>,
         activation_hint_file: Option<&Path>,
         provider_env: Option<&BTreeMap<String, String>>,
+        provider_settings_path: Option<&Path>,
     ) -> Command {
         // Resolve the Claude CLI binary path:
         // 1. Use custom bin_path if configured
@@ -954,6 +1060,10 @@ impl ClaudeSession {
 
         if let Some(path) = activation_hint_file {
             cmd.arg("--append-system-prompt-file");
+            cmd.arg(path);
+        }
+        if let Some(path) = provider_settings_path {
+            cmd.arg("--settings");
             cmd.arg(path);
         }
 
@@ -1253,6 +1363,25 @@ impl ClaudeSession {
             }
         };
 
+        let provider_settings_override = match ClaudeProviderSettingsOverride::create(provider_env)
+        {
+            Ok(settings_override) => settings_override,
+            Err(error_msg) => {
+                self.emit_turn_event(
+                    turn_id,
+                    EngineEvent::TurnError {
+                        workspace_id: self.workspace_id.clone(),
+                        error: error_msg.clone(),
+                        code: Some("claude_provider_settings_override_failed".to_string()),
+                    },
+                );
+                self.clear_turn_ephemeral_state(turn_id);
+                return Err(error_msg);
+            }
+        };
+        let provider_settings_path = provider_settings_override
+            .as_ref()
+            .map(ClaudeProviderSettingsOverride::path);
         let mut cmd = self.build_command_with_provider_env(
             &params,
             use_stream_json_input,
@@ -1260,6 +1389,7 @@ impl ClaudeSession {
             app_settings,
             activation_hint_file.as_deref(),
             provider_env,
+            provider_settings_path,
         );
         Self::configure_spawn_command(&mut cmd);
 
@@ -1697,6 +1827,7 @@ impl ClaudeSession {
                                     &params,
                                     &new_session_id,
                                     include_hook_events,
+                                    provider_settings_path,
                                 )
                                 .await
                             {
@@ -1730,6 +1861,7 @@ impl ClaudeSession {
                                     &params,
                                     &new_session_id,
                                     include_hook_events,
+                                    provider_settings_path,
                                 )
                                 .await
                             {

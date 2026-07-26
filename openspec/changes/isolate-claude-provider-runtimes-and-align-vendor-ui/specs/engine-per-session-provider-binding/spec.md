@@ -49,3 +49,14 @@ Claude runtime manager MUST use workspace owner and provider profile identity as
 - **AND** provider-scoped model catalog 与 primary/secondary child launch MUST 使用同一份 normalized environment
 - **AND** `null`、object 或 array value MUST 返回包含 provider id 与 env key 的 contextual error
 - **AND** invalid composite value MUST NOT fallback 到 local/default runtime 或 global model catalog
+
+#### Scenario: managed provider overrides user settings without global mutation
+
+- **GIVEN** `~/.claude/settings.json` 包含另一供应商的 `ANTHROPIC_*` environment
+- **WHEN** 绑定 managed provider 的 Claude turn 启动 primary child 或 same-turn resume child
+- **THEN** child MUST 同时接收 normalized provider process env 与 command-line `--settings` override
+- **AND** command-line settings MUST 包含当前 provider 的 auth、base URL 与 model environment
+- **AND** Local settings 中的同名 environment MUST NOT 覆盖当前 provider
+- **AND** secret MUST NOT 直接出现在 process arguments、日志或 diagnostic payload
+- **AND** private settings artifact MUST 在 turn attempt 结束后清理
+- **AND** local/default turn MUST NOT 创建或传入 managed settings override

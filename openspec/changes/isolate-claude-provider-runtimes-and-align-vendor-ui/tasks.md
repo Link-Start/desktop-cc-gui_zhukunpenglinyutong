@@ -40,3 +40,9 @@
 - [x] 7.1 在 shared Claude provider resolver 中兼容 JSON string/number/boolean scalar，统一转换为 process env string；`null`、object、array 保持 contextual fail-closed。
 - [x] 7.2 补 DeepSeek `max_history/max_tokens` numeric env、boolean scalar 与 invalid composite regression tests，验证 catalog/launch 共用 normalized env。
 - [x] 7.3 运行 Claude focused Rust tests、Desktop/daemon compile、model catalog/runtime contracts、typecheck、strict OpenSpec validation 与 cross-layer review。
+
+## 8. Claude CLI Settings Precedence Closure（P0）
+
+- [x] 8.1 为 managed turn 创建 private settings override，并在 shared Claude command builder 注入 `--settings <path>`；Local 保持无 override。
+- [x] 8.2 让 approval/AskUser resume 复用同一 turn override，legacy retry 重新物化等价配置；确保 secret 不进入 args/log。
+- [x] 8.3 补 managed/local command、parallel provider 与 cleanup regression tests；只运行受影响 Rust tests、compile check、strict OpenSpec validation 与 diff review。
