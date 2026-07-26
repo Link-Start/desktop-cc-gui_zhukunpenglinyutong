@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import LayoutList from "lucide-react/dist/esm/icons/layout-list";
 import PackagePlus from "lucide-react/dist/esm/icons/package-plus";
+import Import from "lucide-react/dist/esm/icons/import";
 import Search from "lucide-react/dist/esm/icons/search";
 import type { CodexCustomModel, CodexProviderConfig } from "../types";
 import { LOCAL_KIMI_PROVIDER_ID, STORAGE_KEYS, validateCodexCustomModels } from "../types";
@@ -20,6 +21,12 @@ import { CodexProviderDialog } from "./CodexProviderDialog";
 import { KimiProviderDialog } from "./KimiProviderDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { CustomModelDialog } from "./CustomModelDialog";
+import { CcSwitchImportDialog } from "./CcSwitchImportDialog";
+import {
+  extractCodexTomlBaseUrl,
+  type CcSwitchImportTarget,
+  type ExistingProviderKey,
+} from "../hooks/useCcSwitchImport";
 import { CurrentCodexGlobalConfigCard } from "./CurrentCodexGlobalConfigCard";
 import {
   CLI_DOCS_HREF_BY_ID,
@@ -188,6 +195,49 @@ export function VendorSettingsPanel({
   const claude = useProviderManagement();
   const codex = useCodexProviderManagement();
   const kimi = useKimiProviderManagement();
+  const [ccSwitchImportTarget, setCcSwitchImportTarget] =
+    useState<CcSwitchImportTarget | null>(null);
+
+  // CC Switch 导入去重视图: 各列表现有供应商的 name + baseUrl
+  const claudeExistingProviderKeys = useMemo<ExistingProviderKey[]>(
+    () =>
+      claude.providers.map((provider) => ({
+        name: provider.name,
+        baseUrl: provider.settingsConfig?.env?.ANTHROPIC_BASE_URL ?? null,
+      })),
+    [claude.providers],
+  );
+  const codexExistingProviderKeys = useMemo<ExistingProviderKey[]>(
+    () =>
+      codex.codexProviders.map((provider) => ({
+        name: provider.name,
+        baseUrl: extractCodexTomlBaseUrl(provider.configToml),
+      })),
+    [codex.codexProviders],
+  );
+  const ccSwitchExistingProviderKeys =
+    ccSwitchImportTarget === "codex"
+      ? codexExistingProviderKeys
+      : claudeExistingProviderKeys;
+
+  const handleCcSwitchImported = useCallback(() => {
+    if (ccSwitchImportTarget === "claude") {
+      void claude.loadProviders();
+    } else if (ccSwitchImportTarget === "codex") {
+      void codex.loadCodexProviders();
+    }
+  }, [ccSwitchImportTarget, claude, codex]);
+
+  const renderCcSwitchImportButton = (target: CcSwitchImportTarget) => (
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={() => setCcSwitchImportTarget(target)}
+    >
+      <Import size={14} />
+      {t("settings.vendor.ccSwitchImport.entry")}
+    </Button>
+  );
   const claudeModels = usePluginModels(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS);
   const codexModels = usePluginModels(STORAGE_KEYS.CODEX_CUSTOM_MODELS);
   const codexModelCount = codexModels.models.length;
@@ -577,6 +627,7 @@ export function VendorSettingsPanel({
                 </Button>
               }
               onAdd={claude.handleAddProvider}
+              trailingActions={renderCcSwitchImportButton("claude")}
               onEditLocalSettings={claude.handleOpenClaudeSettingsJsonDialog}
               onEdit={claude.handleEditProvider}
               onDelete={claude.handleDeleteProvider}
@@ -781,6 +832,7 @@ export function VendorSettingsPanel({
                 </Button>
               }
               onAdd={codex.handleAddCodexProvider}
+              trailingActions={renderCcSwitchImportButton("codex")}
               onEdit={codex.handleEditCodexProvider}
               onDelete={codex.handleDeleteCodexProvider}
             />
@@ -909,6 +961,13 @@ export function VendorSettingsPanel({
         onClose={closeModelDialog}
         initialAddMode={modelDialogAddMode}
         modelValidation={dialogTarget === "claude" ? "shape-only" : "model-id"}
+      />
+      <CcSwitchImportDialog
+        isOpen={ccSwitchImportTarget !== null}
+        target={ccSwitchImportTarget ?? "claude"}
+        existingProviders={ccSwitchExistingProviderKeys}
+        onClose={() => setCcSwitchImportTarget(null)}
+        onImported={handleCcSwitchImported}
       />
     </div>
   );

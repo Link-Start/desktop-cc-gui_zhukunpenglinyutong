@@ -24,6 +24,8 @@ interface ProviderListProps {
   providers: ProviderConfig[];
   loading: boolean;
   headerActions?: ReactNode;
+  /** 渲染在「+ 添加」按钮之后 */
+  trailingActions?: ReactNode;
   onAdd: () => void;
   onEditLocalSettings: () => void;
   onEdit: (provider: ProviderConfig) => void;
@@ -68,6 +70,7 @@ export function ProviderList({
   providers,
   loading,
   headerActions,
+  trailingActions,
   onAdd,
   onEditLocalSettings,
   onEdit,
@@ -277,6 +280,7 @@ export function ProviderList({
           <Button size="sm" onClick={onAdd}>
             + {t("settings.vendor.add")}
           </Button>
+          {trailingActions}
         </div>
       </div>
 

@@ -425,6 +425,7 @@ pub(crate) fn invoke_handler(
         crate::vendors::vendor_delete_kimi_provider,
         crate::vendors::vendor_switch_kimi_provider,
         crate::vendors::vendor_fetch_kimi_models,
+        crate::vendors::vendor_list_cc_switch_providers,
         // Open paths
         crate::get_pending_open_paths
     ]
