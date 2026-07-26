@@ -2,7 +2,7 @@
 
 ---
 
-##### **2026年7月26日（v0.7.10）**
+##### **2026年7月27日（v0.7.10）**
 
 中文：
 
@@ -10,9 +10,14 @@
 - 升级应用版本号到 `0.7.10`，同步前端包配置、lockfile 与 Tauri 打包配置
 - `feat(composer)`: 沉淀技能调用契约与对话命令，润色器接入本地化缓存，curated skills 变更改为事件化刷新，技能链路响应更及时
 - `feat(git)`: AI commit message 支持一键按上次配置生成，无需重复选择引擎与参数
+- `feat(git)`: 重设计提交区域为右侧操作列，差异面板推送入口收敛为工具栏角标按钮
 - `feat(terminal)`: 终端新增搜索与安全链接能力，输出内容可检索、链接可安全打开
 - `feat(annotation)`: 稳定代码标注锚点，文件标注锚点组装复用统一逻辑，定位不再漂移
 - `feat(tokentracker)`: Token 用量支持中文数字格式展示
+- `feat(engine)`: 建立统一运行时事件总线，统一消息投递与会话注册，奠定引擎接入重构基础
+- `feat(threads)`: 收敛会话供应商绑定；sidebar 支持会话级供应商选择，Claude / Kimi 支持会话级供应商运行环境隔离
+- `feat(vendors)`: 支持从 CC Switch 导入供应商配置
+- `feat(curated-skills)`: 设置侧 Skills 更名为内置精选并补充行为说明
 
 🔧 Improvements
 - `refactor(markdown)`: 收敛文件预览渲染边界并遵循渲染器大文件基线，清理旧渲染器路径
@@ -20,10 +25,21 @@
 - `refactor(git-history)`: 恢复核心面板类型保护，摘除 `GitHistoryPanelPickers` 的 `@ts-nocheck`
 - `refactor(files)`: 合并 fileViewPanel 重复纯函数并治理兜底轮询，降低空闲开销
 - `refactor(composer)`: 统一输入历史存储、事件化命令目录刷新，裁剪补全死路径与 ComposerInput 残留
+- `refactor(engine)`: 统一能力契约与会话身份，建立适配器协议注册表，收薄引擎控制器门面并收紧 CLI 兼容治理边界
+- `refactor(models)`: 收敛模型供应商目录
+- `refactor(claude)`: 建立供应商会话隔离基础
 
 🐛 Fixes
 - `fix(composer)`: 修复提交生成与命令执行的并发边界，避免并发操作互相干扰
 - `fix(navigation)`: 缓存消息索引并移除随机分支名，导航跳转更稳定
+- `fix(files)`: 修复文件读取失败导致的加载卡死
+- `fix(opencode)`: 停止启动期会话探测，避免无谓开销
+- `fix(engine)`: 加固会话供应商运行边界，隔离供应商模型目录与会话配置
+- `fix(sidebar)`: 阻止供应商选择静默回退
+- `fix(styles)`: 修复 diff.css 中丢失的 `.commit-message-generate-menu` 选择器
+- `fix(codex)`: 优化供应商协议错误提示
+- `fix(error)`: 统一错误提示并禁用原生 Alert
+- `fix(vendors)`: 修复 CLI 版本状态与头部重叠
 
 English:
 
@@ -31,9 +47,14 @@ English:
 - Bump the app version to `0.7.10` across frontend package metadata, the lockfile, and Tauri bundle configuration
 - `feat(composer)`: formalize the skill-invocation contract and conversation commands, add localized caching for the prompt polisher, and switch curated-skill updates to event-driven refresh
 - `feat(git)`: allow AI commit messages to be regenerated with one click using the last-used configuration, without reselecting the engine and options
+- `feat(git)`: redesign the commit area as a right-side action column and collapse the diff-panel push entry into a toolbar badge button
 - `feat(terminal)`: add search and safe-link handling to the terminal so output is searchable and links open securely
 - `feat(annotation)`: stabilize code annotation anchors by reusing a unified anchor-assembly path, eliminating position drift
 - `feat(tokentracker)`: support Chinese numeral formatting for token usage displays
+- `feat(engine)`: establish a unified runtime event bus and unify message delivery with session registration, laying the groundwork for the engine-integration refactor
+- `feat(threads)`: converge session vendor binding; the sidebar now supports per-session vendor selection, and Claude / Kimi support isolated per-session vendor runtime environments
+- `feat(vendors)`: support importing vendor configurations from CC Switch
+- `feat(curated-skills)`: rename the settings-side Skills entry to built-in curated skills and add behavior documentation
 
 🔧 Improvements
 - `refactor(markdown)`: consolidate file-preview rendering boundaries under the large-file renderer baseline and remove the legacy renderer path
@@ -41,10 +62,21 @@ English:
 - `refactor(git-history)`: restore type safety in the core panel and remove `@ts-nocheck` from `GitHistoryPanelPickers`
 - `refactor(files)`: merge duplicated pure functions in fileViewPanel and rein in fallback polling to reduce idle overhead
 - `refactor(composer)`: unify input-history storage, make the command catalog refresh event-driven, and prune dead completion paths and ComposerInput remnants
+- `refactor(engine)`: unify the capability contract and session identity, establish an adapter protocol registry, slim down the engine controller facade, and tighten the CLI compatibility governance boundary
+- `refactor(models)`: converge the model vendor catalog
+- `refactor(claude)`: lay the foundation for vendor session isolation
 
 🐛 Fixes
 - `fix(composer)`: fix the concurrency boundary between commit generation and command execution so concurrent actions no longer interfere
 - `fix(navigation)`: cache the message index and remove random branch names, making navigation jumps stable
+- `fix(files)`: fix the loading deadlock caused by file-read failures
+- `fix(opencode)`: stop session probing at startup to avoid unnecessary overhead
+- `fix(engine)`: harden the session vendor runtime boundary and isolate vendor model catalogs from session configuration
+- `fix(sidebar)`: prevent silent fallback of the vendor selection
+- `fix(styles)`: restore the missing `.commit-message-generate-menu` selector in diff.css
+- `fix(codex)`: improve vendor protocol error messages
+- `fix(error)`: unify error prompts and disable native Alert dialogs
+- `fix(vendors)`: fix the CLI version status overlapping the header
 
 ---
 
