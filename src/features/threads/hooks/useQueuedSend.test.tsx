@@ -1103,6 +1103,7 @@ describe("useQueuedSend", () => {
   it("fuses queued message into the active run without interrupting when steer is enabled", async () => {
     const interruptTurn = vi.fn().mockResolvedValue(undefined);
     const options = makeOptions({
+      activeTurnId: "turn-1",
       isProcessing: true,
       steerEnabled: true,
       interruptTurn,
@@ -1146,6 +1147,7 @@ describe("useQueuedSend", () => {
 
   it("keeps later queued items fusible during consecutive same-run fusions", async () => {
     const options = makeOptions({
+      activeTurnId: "turn-1",
       isProcessing: true,
       steerEnabled: true,
       interruptTurn: vi.fn().mockResolvedValue(undefined),
@@ -1207,6 +1209,7 @@ describe("useQueuedSend", () => {
     const handleFusionStalled = vi.fn();
     const sendUserMessage = vi.fn().mockResolvedValue(undefined);
     const options = makeOptions({
+      activeTurnId: "turn-1",
       isProcessing: true,
       steerEnabled: true,
       sendUserMessage,
@@ -1242,7 +1245,7 @@ describe("useQueuedSend", () => {
     expect(sendUserMessage).toHaveBeenNthCalledWith(1, "Fuse first", []);
 
     await act(async () => {
-      rerender({ ...options, isProcessing: false });
+      rerender({ ...options, activeTerminalPulse: 1, isProcessing: false });
     });
     await act(async () => {
       await Promise.resolve();
@@ -1256,6 +1259,7 @@ describe("useQueuedSend", () => {
     const handleFusionStalled = vi.fn();
     const sendUserMessage = vi.fn().mockResolvedValue(undefined);
     const options = makeOptions({
+      activeTurnId: "turn-1",
       isProcessing: true,
       steerEnabled: true,
       sendUserMessage,
@@ -1518,6 +1522,49 @@ describe("useQueuedSend", () => {
     ]);
   });
 
+  it("preserves settlement gating when failed fusion returns to the queue", async () => {
+    const sendUserMessage = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValue(undefined);
+    const options = makeOptions({
+      activeTurnId: "turn-1",
+      isProcessing: true,
+      steerEnabled: true,
+      sendUserMessage,
+    });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("Retry after settlement");
+    });
+    const messageId = result.current.activeQueue[0]?.id;
+
+    await expect(
+      act(async () => {
+        await result.current.fuseQueuedMessage("thread-1", messageId!);
+      }),
+    ).rejects.toThrow("boom");
+
+    await act(async () => {
+      rerender({ ...options, isProcessing: false });
+      await Promise.resolve();
+    });
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      rerender({ ...options, activeTerminalPulse: 1, isProcessing: false });
+      await Promise.resolve();
+    });
+    expect(sendUserMessage).toHaveBeenNthCalledWith(
+      2,
+      "Retry after settlement",
+      [],
+    );
+  });
+
   it("pauses same-thread auto-drain while fusion is unresolved", async () => {
     const interruptTurn = vi.fn().mockResolvedValue(undefined);
     const options = makeOptions({
@@ -1576,7 +1623,12 @@ describe("useQueuedSend", () => {
     });
 
     await act(async () => {
-      rerender({ ...options, activeTurnId: "turn-2", isProcessing: false });
+      rerender({
+        ...options,
+        activeTurnId: "turn-2",
+        activeTerminalPulse: 1,
+        isProcessing: false,
+      });
     });
     await act(async () => {
       await Promise.resolve();
@@ -1634,6 +1686,13 @@ describe("useQueuedSend", () => {
     });
     await act(async () => {
       await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      rerender({ ...options, activeTerminalPulse: 1, isProcessing: false });
     });
     await act(async () => {
       await Promise.resolve();
@@ -1701,6 +1760,13 @@ describe("useQueuedSend", () => {
     });
     await act(async () => {
       await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      rerender({ ...options, activeTerminalPulse: 1, isProcessing: false });
     });
     await act(async () => {
       await Promise.resolve();
