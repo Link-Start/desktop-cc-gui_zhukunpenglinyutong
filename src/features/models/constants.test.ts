@@ -4,6 +4,7 @@ import {
   STORAGE_KEYS,
   applyModelMapping,
   getModelMapping,
+  migrateModelMappingStorage,
   resolveModelMappingValue,
   saveModelMapping,
 } from "./constants";
@@ -81,12 +82,35 @@ describe("model mapping", () => {
     window.localStorage.setItem("mossx-claude-model-mapping", "{}");
     window.localStorage.setItem("codemoss-claude-model-mapping", "{}");
 
-    saveModelMapping({ opus: "claude-opus-custom" });
+    expect(saveModelMapping({ opus: "claude-opus-custom" })).toMatchObject({
+      ok: true,
+    });
 
     expect(window.localStorage.getItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING)).toBe(
       JSON.stringify({ opus: "claude-opus-custom" }),
     );
     expect(window.localStorage.getItem("mossx-claude-model-mapping")).toBeNull();
     expect(window.localStorage.getItem("codemoss-claude-model-mapping")).toBeNull();
+  });
+
+  it("preserves canonical mapping when legacy values coexist and migration repeats", () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CLAUDE_MODEL_MAPPING,
+      JSON.stringify({ sonnet: "canonical-model" }),
+    );
+    window.localStorage.setItem(
+      "mossx-claude-model-mapping",
+      JSON.stringify({ sonnet: "legacy-model" }),
+    );
+
+    expect(migrateModelMappingStorage().mapping).toEqual({
+      sonnet: "canonical-model",
+    });
+    expect(migrateModelMappingStorage().mapping).toEqual({
+      sonnet: "canonical-model",
+    });
+    expect(
+      window.localStorage.getItem("mossx-claude-model-mapping"),
+    ).toBeNull();
   });
 });

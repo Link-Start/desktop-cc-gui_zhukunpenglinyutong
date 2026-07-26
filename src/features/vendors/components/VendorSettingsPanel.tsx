@@ -49,10 +49,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-const LEGACY_CLAUDE_MAPPING_KEYS = [
-  "mossx-claude-model-mapping",
-  "codemoss-claude-model-mapping",
-];
 const CODEX_PLUGIN_MODELS_MIGRATION_MARKER =
   "codemoss-codex-plugin-models-migrated-v1";
 type ModelDialogTarget = "claude" | "codex";
@@ -187,7 +183,6 @@ export function VendorSettingsPanel({
   const [unifiedExecActionBusy, setUnifiedExecActionBusy] = useState(false);
   const [unifiedExecActionNotice, setUnifiedExecActionNotice] =
     useState<InlineNoticeState>(null);
-  const didRunLegacyMigrationRef = useRef(false);
   const didSeedCodexPluginModelsRef = useRef(false);
 
   const claude = useProviderManagement();
@@ -303,40 +298,6 @@ export function VendorSettingsPanel({
     }
     void refreshUnifiedExecExternalStatus();
   }, [activeCli, refreshUnifiedExecExternalStatus]);
-
-  useEffect(() => {
-    if (didRunLegacyMigrationRef.current) {
-      return;
-    }
-    if (typeof window === "undefined" || !window.localStorage) {
-      return;
-    }
-    const canonicalKey = STORAGE_KEYS.CLAUDE_MODEL_MAPPING;
-    const hasCanonical = Boolean(window.localStorage.getItem(canonicalKey));
-    if (hasCanonical) {
-      didRunLegacyMigrationRef.current = true;
-      return;
-    }
-
-    for (const legacyKey of LEGACY_CLAUDE_MAPPING_KEYS) {
-      const value = window.localStorage.getItem(legacyKey);
-      if (!value) {
-        continue;
-      }
-      try {
-        window.localStorage.setItem(canonicalKey, value);
-        window.dispatchEvent(
-          new CustomEvent("localStorageChange", {
-            detail: { key: canonicalKey },
-          }),
-        );
-      } catch {
-        // ignore migration write errors
-      }
-      break;
-    }
-    didRunLegacyMigrationRef.current = true;
-  }, []);
 
   useEffect(() => {
     if (didSeedCodexPluginModelsRef.current) {
@@ -592,6 +553,11 @@ export function VendorSettingsPanel({
               actions={<CliLifecycleHeaderActions />}
             />
             <CliLifecycleInstallerPanel />
+            {claude.providerError ? (
+              <div className="settings-help" role="alert">
+                {claude.providerError.message}
+              </div>
+            ) : null}
             <ProviderList
               providers={claude.providers}
               loading={claude.loading}
@@ -622,6 +588,7 @@ export function VendorSettingsPanel({
               provider={claude.providerDialog.provider}
               onClose={claude.handleCloseProviderDialog}
               onSave={claude.handleSaveProvider}
+              actionError={claude.providerError?.message}
             />
             <ClaudeSettingsJsonDialog
               isOpen={claude.claudeSettingsJsonDialogOpen}

@@ -387,7 +387,7 @@ function normalizeAppSettings(
       ? settings.terminalShellPath.trim()
       : null,
     geminiEnabled: false,
-    opencodeEnabled: settings.opencodeEnabled === true,
+    opencodeEnabled: false,
     sessionAttributionMode:
       settings.sessionAttributionMode === "workspace-only"
         ? "workspace-only"

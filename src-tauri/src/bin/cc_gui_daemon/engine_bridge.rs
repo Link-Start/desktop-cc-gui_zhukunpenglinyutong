@@ -461,15 +461,15 @@ impl std::fmt::Display for EngineType {
 }
 
 pub(crate) const OPENCODE_DISABLED_DIAGNOSTIC: &str =
-    "OpenCode CLI is disabled in CLI validation settings";
+    "OpenCode CLI is soft-retired and blocked by runtime policy";
 
 pub(crate) fn engine_enabled_in_settings(
-    settings: &crate::types::AppSettings,
+    _settings: &crate::types::AppSettings,
     engine_type: EngineType,
 ) -> bool {
     match engine_type {
         EngineType::Gemini => crate::engine_policy::GEMINI_RUNTIME_ENABLED,
-        EngineType::OpenCode => settings.opencode_enabled,
+        EngineType::OpenCode => false,
         EngineType::Claude | EngineType::Codex | EngineType::Kimi => true,
     }
 }
@@ -776,6 +776,18 @@ mod runtime_policy_tests {
         assert_eq!(
             engine_disabled_diagnostic(EngineType::Gemini),
             Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC)
+        );
+    }
+
+    #[test]
+    fn daemon_opencode_retirement_policy_ignores_legacy_enabled_setting() {
+        let mut settings = crate::types::AppSettings::default();
+        settings.opencode_enabled = true;
+
+        assert!(!engine_enabled_in_settings(&settings, EngineType::OpenCode));
+        assert_eq!(
+            ensure_engine_enabled(&settings, EngineType::OpenCode),
+            Err(super::OPENCODE_DISABLED_DIAGNOSTIC.to_string())
         );
     }
 }

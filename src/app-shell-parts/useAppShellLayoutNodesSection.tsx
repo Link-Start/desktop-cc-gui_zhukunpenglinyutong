@@ -1208,9 +1208,9 @@ export function useAppShellLayoutNodesSection(
   const enabledEngines = useMemo(
     () => ({
       gemini: appSettings.geminiEnabled !== false,
-      opencode: appSettings.opencodeEnabled !== false,
+      opencode: false,
     }),
-    [appSettings.geminiEnabled, appSettings.opencodeEnabled],
+    [appSettings.geminiEnabled],
   );
   const handleToggleWorkspaceCollapse = useEventCallback(
     (workspaceId: string, collapsed: boolean) => {

@@ -64,9 +64,6 @@ vi.mock("../../context-ledger/utils/contextLedgerProjection", async () => {
   };
 });
 
-vi.mock("../../opencode/components/OpenCodeControlPanel", () => ({
-  OpenCodeControlPanel: () => null,
-}));
 
 vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   ChatInputBoxAdapter: ({

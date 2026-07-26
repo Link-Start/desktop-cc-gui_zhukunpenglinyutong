@@ -521,7 +521,6 @@ describe("useEngineController", () => {
       "claude",
       "codex",
       "kimi",
-      "opencode",
     ]);
     expect(
       result.current.availableEngines.every(
@@ -530,7 +529,7 @@ describe("useEngineController", () => {
     ).toBe(true);
   });
 
-  it("keeps opencode ready without automatic provider health probing", async () => {
+  it("keeps detected OpenCode outside production engine surfaces", async () => {
     detectEnginesMock.mockResolvedValue([
       {
         engineType: "claude",
@@ -617,8 +616,7 @@ describe("useEngineController", () => {
     const opencodeEngine = result.current.availableEngines.find(
       (engine) => engine.type === "opencode",
     );
-    expect(opencodeEngine?.availabilityState).toBe("ready");
-    expect(opencodeEngine?.availabilityLabelKey).toBeNull();
+    expect(opencodeEngine).toBeUndefined();
   });
 
   it("hides disabled Gemini and OpenCode engines from available engine surfaces", async () => {

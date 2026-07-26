@@ -144,6 +144,13 @@ export interface KimiCurrentConfig {
   defaultModel: string;
   providerId?: string;
   providerName?: string;
+  configStatus?: "missing" | "loaded" | "malformed" | "io-error";
+  diagnostic?: string;
+}
+
+export interface KimiProviderDeleteResult {
+  status: "success" | "partial-warning";
+  warning?: string;
 }
 
 export const GEMINI_AUTH_MODES = [

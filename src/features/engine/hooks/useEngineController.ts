@@ -367,7 +367,6 @@ function engineModelToOption(model: EngineModelInfo): ModelOption {
  */
 export function useEngineController({
   activeWorkspace,
-  enabledEngines,
   onDebug,
 }: UseEngineControllerOptions) {
   // Engine detection state
@@ -392,7 +391,7 @@ export function useEngineController({
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
-  const opencodeEnabled = enabledEngines?.opencode !== false;
+  const opencodeEnabled = false;
   const enabledEngineTypes = useMemo(
     () =>
       ENGINE_TYPES.filter((engineType) => {

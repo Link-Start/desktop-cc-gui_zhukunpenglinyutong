@@ -18,9 +18,6 @@ vi.mock("../../engine/components/EngineSelector", () => ({
   EngineSelector: () => null,
 }));
 
-vi.mock("../../opencode/components/OpenCodeControlPanel", () => ({
-  OpenCodeControlPanel: () => null,
-}));
 
 vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   ChatInputBoxAdapter: ({

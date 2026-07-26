@@ -82,10 +82,34 @@ export function resolveModelMappingValue(
 /**
  * Get model mapping from localStorage
  */
-export function getModelMapping(): ModelMapping {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return {};
+export type ModelMappingStorageResult = Readonly<{
+  mapping: ModelMapping;
+  warnings: readonly string[];
+}>;
+
+function parseStoredModelMapping(stored: string): ModelMapping {
+  const parsed = JSON.parse(stored);
+  const mapping: ModelMapping = {};
+  if (typeof parsed.main === "string" && parsed.main.trim()) {
+    mapping.main = parsed.main.trim();
   }
+  if (typeof parsed.haiku === "string" && parsed.haiku.trim()) {
+    mapping.haiku = parsed.haiku.trim();
+  }
+  if (typeof parsed.sonnet === "string" && parsed.sonnet.trim()) {
+    mapping.sonnet = parsed.sonnet.trim();
+  }
+  if (typeof parsed.opus === "string" && parsed.opus.trim()) {
+    mapping.opus = parsed.opus.trim();
+  }
+  return mapping;
+}
+
+export function migrateModelMappingStorage(): ModelMappingStorageResult {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return Object.freeze({ mapping: {}, warnings: ["localStorage unavailable"] });
+  }
+  const warnings: string[] = [];
   const candidateKeys = [
     STORAGE_KEYS.CLAUDE_MODEL_MAPPING,
     ...LEGACY_CLAUDE_MODEL_MAPPING_KEYS,
@@ -96,55 +120,65 @@ export function getModelMapping(): ModelMapping {
       if (!stored) {
         continue;
       }
-      const parsed = JSON.parse(stored);
-      // Basic validation: ensure all values are strings if present
-      const mapping: ModelMapping = {};
-      if (typeof parsed.main === "string" && parsed.main.trim()) {
-        mapping.main = parsed.main.trim();
-      }
-      if (typeof parsed.haiku === "string" && parsed.haiku.trim()) {
-        mapping.haiku = parsed.haiku.trim();
-      }
-      if (typeof parsed.sonnet === "string" && parsed.sonnet.trim()) {
-        mapping.sonnet = parsed.sonnet.trim();
-      }
-      if (typeof parsed.opus === "string" && parsed.opus.trim()) {
-        mapping.opus = parsed.opus.trim();
-      }
+      const mapping = parseStoredModelMapping(stored);
       if (Object.keys(mapping).length > 0 || key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
         if (key !== STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
           window.localStorage.setItem(
             STORAGE_KEYS.CLAUDE_MODEL_MAPPING,
             JSON.stringify(mapping),
           );
-          for (const legacyKey of LEGACY_CLAUDE_MODEL_MAPPING_KEYS) {
+        }
+        for (const legacyKey of LEGACY_CLAUDE_MODEL_MAPPING_KEYS) {
+          try {
             window.localStorage.removeItem(legacyKey);
+          } catch (error) {
+            warnings.push(
+              `Failed to remove legacy Claude model mapping ${legacyKey}: ${String(error)}`,
+            );
           }
         }
-        return mapping;
+        return Object.freeze({
+          mapping,
+          warnings: Object.freeze(warnings),
+        });
       }
-    } catch {
+    } catch (error) {
+      warnings.push(`Failed to migrate Claude model mapping ${key}: ${String(error)}`);
       continue;
     }
   }
-  return {};
+  return Object.freeze({ mapping: {}, warnings: Object.freeze(warnings) });
+}
+
+export function getModelMapping(): ModelMapping {
+  return migrateModelMappingStorage().mapping;
 }
 
 /**
  * Save model mapping to localStorage
  */
-export function saveModelMapping(mapping: ModelMapping): void {
+export function saveModelMapping(
+  mapping: ModelMapping,
+): Readonly<{ ok: true; warnings: readonly string[] } | { ok: false; error: string }> {
   if (typeof window === "undefined" || !window.localStorage) {
-    return;
+    return Object.freeze({ ok: false, error: "localStorage unavailable" });
   }
   try {
+    const warnings: string[] = [];
     const serialized = JSON.stringify(mapping);
     window.localStorage.setItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING, serialized);
     for (const legacyKey of LEGACY_CLAUDE_MODEL_MAPPING_KEYS) {
-      window.localStorage.removeItem(legacyKey);
+      try {
+        window.localStorage.removeItem(legacyKey);
+      } catch (error) {
+        warnings.push(
+          `Failed to remove legacy Claude model mapping ${legacyKey}: ${String(error)}`,
+        );
+      }
     }
-  } catch {
-    // Silently fail if localStorage is not available
+    return Object.freeze({ ok: true, warnings: Object.freeze(warnings) });
+  } catch (error) {
+    return Object.freeze({ ok: false, error: String(error) });
   }
 }
 

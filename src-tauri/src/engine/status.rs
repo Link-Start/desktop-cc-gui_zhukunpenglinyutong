@@ -404,7 +404,7 @@ pub async fn detect_kimi_status(custom_bin: Option<&str>) -> EngineStatus {
     }
 
     let home_dir = get_kimi_home_dir();
-    let models = get_kimi_models(home_dir.as_deref());
+    let (models, config_diagnostic) = get_kimi_models(home_dir.as_deref());
     let default_model = models.iter().find(|m| m.default).map(|m| m.id.clone());
 
     EngineStatus {
@@ -416,7 +416,7 @@ pub async fn detect_kimi_status(custom_bin: Option<&str>) -> EngineStatus {
         models,
         default_model,
         features: EngineFeatures::kimi(),
-        error: None,
+        error: config_diagnostic,
     }
 }
 
@@ -484,8 +484,11 @@ fn get_builtin_kimi_models() -> Vec<ModelInfo> {
 /// Get Kimi CLI available models by parsing `$KIMI_CODE_HOME/config.toml`.
 /// Falls back to the built-in catalog when the config file is missing or
 /// defines no models.
-fn get_kimi_models(home_dir: Option<&std::path::Path>) -> Vec<ModelInfo> {
-    let mut models = read_kimi_models_from_config(home_dir).unwrap_or_default();
+fn get_kimi_models(home_dir: Option<&std::path::Path>) -> (Vec<ModelInfo>, Option<String>) {
+    let (mut models, config_diagnostic) = match read_kimi_models_from_config(home_dir) {
+        Ok(models) => (models.unwrap_or_default(), None),
+        Err(error) => (Vec::new(), Some(error)),
+    };
 
     // KIMI_MODEL_NAME synthesizes a temporary model that takes priority over
     // default_model in config.toml (mirrors the CLI's own precedence).
@@ -521,22 +524,45 @@ fn get_kimi_models(home_dir: Option<&std::path::Path>) -> Vec<ModelInfo> {
     }
 
     if models.is_empty() {
-        return get_builtin_kimi_models();
+        return (get_builtin_kimi_models(), config_diagnostic);
     }
-    models
+    (models, config_diagnostic)
 }
 
 /// Parse `[models.*]` entries and `default_model` from kimi's config.toml.
-fn read_kimi_models_from_config(home_dir: Option<&std::path::Path>) -> Option<Vec<ModelInfo>> {
-    let config_path = home_dir?.join("config.toml");
-    let content = std::fs::read_to_string(config_path).ok()?;
-    let root = content.parse::<toml::Value>().ok()?;
+fn read_kimi_models_from_config(
+    home_dir: Option<&std::path::Path>,
+) -> Result<Option<Vec<ModelInfo>>, String> {
+    let Some(home_dir) = home_dir else {
+        return Ok(None);
+    };
+    let config_path = home_dir.join("config.toml");
+    let content = match std::fs::read_to_string(&config_path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(format!(
+                "Kimi config io-error at {}: {}",
+                config_path.display(),
+                error
+            ))
+        }
+    };
+    let root = content.parse::<toml::Value>().map_err(|error| {
+        format!(
+            "Kimi config malformed at {}: {}",
+            config_path.display(),
+            error
+        )
+    })?;
     let default_alias = root
         .get("default_model")
         .and_then(|value| value.as_str())
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
-    let models_table = root.get("models")?.as_table()?;
+    let Some(models_table) = root.get("models").and_then(|value| value.as_table()) else {
+        return Ok(Some(Vec::new()));
+    };
 
     let mut models = Vec::new();
     for (alias, entry) in models_table {
@@ -576,7 +602,7 @@ fn read_kimi_models_from_config(home_dir: Option<&std::path::Path>) -> Option<Ve
         let default = models.remove(index);
         models.insert(0, default);
     }
-    Some(models)
+    Ok(Some(models))
 }
 
 /// Get Codex CLI available models (hardcoded as they don't change frequently)

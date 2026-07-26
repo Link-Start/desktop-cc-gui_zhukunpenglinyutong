@@ -3,6 +3,7 @@ import type {
   ClaudeCurrentConfig as VendorClaudeCurrentConfig,
   CodexProviderConfig as VendorCodexProviderConfig,
   KimiCurrentConfig as VendorKimiCurrentConfig,
+  KimiProviderDeleteResult as VendorKimiProviderDeleteResult,
   KimiProviderConfig as VendorKimiProviderConfig,
   ProviderConfig as VendorProviderConfig,
 } from "../../features/vendors/types";
@@ -115,8 +116,12 @@ export async function updateKimiProvider(
   return invoke("vendor_update_kimi_provider", { id, updates });
 }
 
-export async function deleteKimiProvider(id: string): Promise<void> {
-  return invoke("vendor_delete_kimi_provider", { id });
+export async function deleteKimiProvider(
+  id: string,
+): Promise<VendorKimiProviderDeleteResult> {
+  return invoke<VendorKimiProviderDeleteResult>("vendor_delete_kimi_provider", {
+    id,
+  });
 }
 
 export async function switchKimiProvider(id: string): Promise<void> {
