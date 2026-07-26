@@ -4,8 +4,8 @@
 
 - Updated At: `2026-07-26`
 - Active proposals: `12`
-- Archived proposals: `731`
-- Main capability specs: `431`
+- Archived proposals: `732`
+- Main capability specs: `432`
 
 ## Active Proposals
 
@@ -25,7 +25,8 @@
 | [`stabilize-client-runtime-and-diagnostics`](stabilize-client-runtime-and-diagnostics/proposal.md) | 21/22 | Quantified frame / first-delta trace retention | [design](stabilize-client-runtime-and-diagnostics/design.md) · [tasks](stabilize-client-runtime-and-diagnostics/tasks.md) · [specs](stabilize-client-runtime-and-diagnostics/specs/) · [verification](stabilize-client-runtime-and-diagnostics/verification.md) |
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 731 个 proposal，按月份 / 归档日期分组。
+- [完整归档提案索引](archive/README.md) — 732 个 proposal，按月份 / 归档日期分组。
+- [2026-07-26 `fix-file-document-loading-error-stuck-state`](archive/2026-07-26-fix-file-document-loading-error-stuck-state/proposal.md) — 已同步 `file-document-loading-error-surface`；文件读取失败或读取期间产生本地脏改后，loading 状态必须收敛且错误可见。
 - [2026-07-24 `close-cleanup-review-findings`](archive/2026-07-24-close-cleanup-review-findings/proposal.md) — 已同步 composer completion、semantic review cache/fallback、settings/workspaces corruption backup uniqueness；并删除 JCEF/notice residual dead branches。
 - [2026-07-24 `preserve-corrupted-workspaces-on-load-and-notify`](archive/2026-07-24-preserve-corrupted-workspaces-on-load-and-notify/proposal.md) — 已同步 `workspaces-corruption-recovery`：`workspaces.json` 损坏时先隔离备份为 `.corrupted-<timestamp>.bak` 再回退空列表，quarantine 记录一次性 recovery notice，新增 `take_workspaces_recovery_notice` command，frontend 挂载后弹一次本地化 toast。
 - [2026-07-24 `preserve-corrupted-app-settings-on-load`](archive/2026-07-24-preserve-corrupted-app-settings-on-load/proposal.md) — 已同步 `app-settings-corruption-recovery`：`settings.json` 损坏时先隔离备份为 `.corrupted-<timestamp>.bak` 再回退默认值，frontend 加载失败改为日志 + toast 可见。

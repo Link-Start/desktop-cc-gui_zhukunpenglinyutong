@@ -460,4 +460,63 @@ describe("useFileDocumentState", () => {
       expect(secondRender.result.current.isDirty).toBe(false);
     });
   });
+
+  it("exposes read errors instead of leaving the file stuck in loading", async () => {
+    vi.mocked(readWorkspaceFile).mockRejectedValue(
+      new Error("Path is not within allowed directories."),
+    );
+
+    const { result } = renderHook(
+      (props: HookProps) => useFileDocumentState(props),
+      {
+        initialProps: {
+          workspaceId: "ws-read-error",
+          customSpecRoot: null,
+          workspaceRelativeFilePath: "transient-bouncing-flask.md",
+          fileReadTarget: makeWorkspaceTarget("transient-bouncing-flask.md"),
+          skipTextRead: false,
+          externalAbsoluteReadOnlyMessage: "read only",
+        },
+      },
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.error).toBe("Path is not within allowed directories.");
+    expect(result.current.content).toBe("");
+  });
+
+  it("stops loading when an in-flight read resolves after the user edited the file", async () => {
+    let resolveRead: (value: { content: string; truncated: boolean }) => void;
+    vi.mocked(readWorkspaceFile).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+
+    const { result } = renderHook(
+      (props: HookProps) => useFileDocumentState(props),
+      {
+        initialProps: {
+          workspaceId: "ws-edit-during-read",
+          customSpecRoot: null,
+          workspaceRelativeFilePath: "src/value.ts",
+          fileReadTarget: makeWorkspaceTarget("src/value.ts"),
+          skipTextRead: false,
+          externalAbsoluteReadOnlyMessage: "read only",
+        },
+      },
+    );
+
+    expect(result.current.isLoading).toBe(true);
+    act(() => result.current.setContent("const localDraft = 2;"));
+    await act(async () => {
+      resolveRead({ content: "const disk = 3;", truncated: false });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.content).toBe("const localDraft = 2;");
+    expect(result.current.isDirty).toBe(true);
+  });
 });

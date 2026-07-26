@@ -282,6 +282,7 @@ export function useFileDocumentState({
       .then((response) => {
         if (cancelled || currentRequest !== requestIdRef.current) return;
         if (latestIsDirtyRef.current) {
+          setLoadedFileReadTargetKey(fileReadTargetKey);
           return;
         }
         const nextContent = response.content ?? "";
@@ -310,6 +311,7 @@ export function useFileDocumentState({
       .catch((readError) => {
         if (cancelled || currentRequest !== requestIdRef.current) return;
         setError(readError instanceof Error ? readError.message : String(readError));
+        setLoadedFileReadTargetKey(fileReadTargetKey);
       })
       .finally(() => {
         if (!cancelled && currentRequest === requestIdRef.current) {
