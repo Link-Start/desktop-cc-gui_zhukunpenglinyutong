@@ -170,3 +170,36 @@ Kimi 增加 config 四态诊断、provider cleanup partial warning 与 promotion
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1144: 校准会话级供应商绑定提案
+
+**Date**: 2026-07-26
+**Task**: 校准会话级供应商绑定提案
+**Branch**: `feature/v-0710`
+
+### Summary
+
+基于已归档 CLI foundation 重写方案：统一 durable binding map，采用 Claude per-turn env、Kimi provider home/runtime ownership，补齐 desktop/daemon 对称与增量验证任务。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ffa804434` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
