@@ -546,10 +546,6 @@ export function AppShell() {
     refreshEngines,
   } = useEngineController({
     activeWorkspace,
-    enabledEngines: {
-      gemini: appSettings.geminiEnabled !== false,
-      opencode: false,
-    },
     onDebug: addDebugEntry,
   });
   activeEngineRef.current = activeEngine;

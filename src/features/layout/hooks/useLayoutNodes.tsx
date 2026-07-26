@@ -721,7 +721,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onConnectWorkspace={options.onConnectWorkspace}
         onAddAgent={options.onAddAgent}
         engineOptions={options.engineOptions}
-        enabledEngines={options.enabledEngines}
         onRefreshEngineOptions={options.onRefreshEngineOptions}
         onAddSharedAgent={options.onAddSharedAgent}
         onAddWorktreeAgent={options.onAddWorktreeAgent}

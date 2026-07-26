@@ -1,0 +1,221 @@
+import type {
+  EngineModelInfo,
+  EngineStatus,
+  EngineType,
+  ModelOption,
+} from "../../../types";
+import {
+  STORAGE_KEYS as PROVIDER_STORAGE_KEYS,
+  validateCodexCustomModels,
+} from "../../composer/types/provider";
+import { readClaudeCustomModelsFromStorage } from "../../models/claudeCustomModels";
+import { getGeneratedModelFallbacks } from "../../models/generatedModelFallbacks";
+
+const UNKNOWN_MODEL_SOURCE = "unknown";
+const CUSTOM_MODEL_SOURCE = "custom";
+const GEMINI_FALLBACK_MODELS = getGeneratedModelFallbacks("gemini");
+const GEMINI_DEFAULT_MODEL_ID =
+  GEMINI_FALLBACK_MODELS.find((model) => model.default)?.id ??
+  GEMINI_FALLBACK_MODELS[0]?.id ??
+  "";
+
+export function isEngineCatalogStorageKey(key: string | null | undefined) {
+  return (
+    key === PROVIDER_STORAGE_KEYS.GEMINI_CUSTOM_MODELS ||
+    key === PROVIDER_STORAGE_KEYS.CLAUDE_CUSTOM_MODELS
+  );
+}
+
+export function normalizeEngineModelEntry(
+  model: Partial<EngineModelInfo> & { id: string },
+  fallbackSource = UNKNOWN_MODEL_SOURCE,
+): EngineModelInfo {
+  const normalizedId = model.id.trim();
+  const runtimeModel = model.model?.trim() || normalizedId;
+  return {
+    id: normalizedId,
+    model: runtimeModel,
+    displayName:
+      model.displayName && model.displayName.trim().length > 0
+        ? model.displayName.trim()
+        : normalizedId,
+    description: model.description?.trim() ?? "",
+    source: model.source?.trim() || fallbackSource,
+    isDefault: Boolean(model.isDefault),
+  };
+}
+
+function getEngineModelIdentity(
+  model: Pick<EngineModelInfo, "id" | "model">,
+): string {
+  return model.model?.trim() || model.id.trim();
+}
+
+function appendGeminiFallbackModels(
+  models: readonly EngineModelInfo[],
+): EngineModelInfo[] {
+  const merged: EngineModelInfo[] = [];
+  const seenIds = new Set<string>();
+  const pushModel = (model: Partial<EngineModelInfo> & { id: string }) => {
+    const normalized = normalizeEngineModelEntry(model);
+    if (!normalized.id || seenIds.has(normalized.id)) {
+      return;
+    }
+    seenIds.add(normalized.id);
+    merged.push(normalized);
+  };
+
+  models.forEach(pushModel);
+  GEMINI_FALLBACK_MODELS.forEach((model) =>
+    pushModel({
+      id: model.id,
+      displayName: model.label,
+      description: model.description,
+      source: "fallback",
+      isDefault: Boolean(model.default),
+    }),
+  );
+  return merged;
+}
+
+function mergeGeminiModels(
+  engineModels: readonly EngineModelInfo[],
+  customModels: readonly EngineModelInfo[],
+): EngineModelInfo[] {
+  const customIds = new Set(customModels.map((model) => model.id));
+  const merged =
+    customModels.length === 0
+      ? [...engineModels]
+      : [
+          ...customModels,
+          ...engineModels.filter((model) => !customIds.has(model.id)),
+        ];
+  const withFallback = appendGeminiFallbackModels(merged);
+  if (!withFallback.some((model) => model.id === GEMINI_DEFAULT_MODEL_ID)) {
+    return withFallback;
+  }
+  return withFallback.map((model) => ({
+    ...model,
+    isDefault: model.id === GEMINI_DEFAULT_MODEL_ID,
+  }));
+}
+
+function readCustomGeminiModels(): EngineModelInfo[] {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(
+      PROVIDER_STORAGE_KEYS.GEMINI_CUSTOM_MODELS,
+    );
+    if (!raw) {
+      return [];
+    }
+    return validateCodexCustomModels(JSON.parse(raw)).map((model) => ({
+      id: model.id,
+      model: model.id,
+      displayName: model.label?.trim() || model.id,
+      description: model.description?.trim() ?? "",
+      source: CUSTOM_MODEL_SOURCE,
+      isDefault: false,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function readCustomClaudeModels(): EngineModelInfo[] {
+  return readClaudeCustomModelsFromStorage(
+    PROVIDER_STORAGE_KEYS.CLAUDE_CUSTOM_MODELS,
+  ).map((model) => ({
+    id: model.id,
+    model: model.model,
+    displayName: model.label,
+    description: model.description ?? "",
+    source: CUSTOM_MODEL_SOURCE,
+    isDefault: false,
+  }));
+}
+
+function mergeClaudeModels(
+  engineModels: readonly EngineModelInfo[],
+  customModels: readonly EngineModelInfo[],
+): EngineModelInfo[] {
+  if (customModels.length === 0) {
+    return [...engineModels];
+  }
+  const defaults = new Set(
+    engineModels
+      .filter((model) => model.isDefault)
+      .map(getEngineModelIdentity),
+  );
+  const patchedCustomModels = customModels.map((model) => ({
+    ...model,
+    isDefault: defaults.has(getEngineModelIdentity(model)),
+    source: model.source?.trim() || CUSTOM_MODEL_SOURCE,
+  }));
+  const customRuntimeModels = new Set(
+    patchedCustomModels.map(getEngineModelIdentity),
+  );
+  return [
+    ...patchedCustomModels,
+    ...engineModels.filter(
+      (model) => !customRuntimeModels.has(getEngineModelIdentity(model)),
+    ),
+  ];
+}
+
+function projectEngineModels(
+  engineType: EngineType,
+  models: readonly EngineModelInfo[],
+): EngineModelInfo[] {
+  const normalized = models.map((model) => normalizeEngineModelEntry(model));
+  if (engineType === "gemini") {
+    return mergeGeminiModels(normalized, readCustomGeminiModels());
+  }
+  if (engineType === "claude") {
+    return mergeClaudeModels(normalized, readCustomClaudeModels());
+  }
+  return normalized;
+}
+
+export function engineModelToOption(model: EngineModelInfo): ModelOption {
+  const normalized = normalizeEngineModelEntry(model);
+  return {
+    id: normalized.id,
+    model: normalized.model ?? normalized.id,
+    displayName: normalized.displayName,
+    description: normalized.description,
+    source: normalized.source ?? UNKNOWN_MODEL_SOURCE,
+    supportedReasoningEfforts: [],
+    defaultReasoningEffort: null,
+    isDefault: normalized.isDefault,
+  };
+}
+
+export function projectActiveEngineModels(
+  activeEngine: EngineType,
+  engineModels: readonly EngineModelInfo[],
+): EngineModelInfo[] {
+  return projectEngineModels(activeEngine, engineModels);
+}
+
+export function projectEngineModelCatalogs(
+  engineStatuses: readonly EngineStatus[],
+  activeEngine: EngineType,
+  activeModels: readonly EngineModelInfo[],
+): Partial<Record<EngineType, ModelOption[]>> {
+  const catalogs: Partial<Record<EngineType, ModelOption[]>> = {};
+  for (const status of engineStatuses) {
+    if (!status.installed) {
+      continue;
+    }
+    const baseModels =
+      status.engineType === activeEngine ? activeModels : status.models;
+    catalogs[status.engineType] = projectEngineModels(
+      status.engineType,
+      baseModels,
+    ).map(engineModelToOption);
+  }
+  return catalogs;
+}

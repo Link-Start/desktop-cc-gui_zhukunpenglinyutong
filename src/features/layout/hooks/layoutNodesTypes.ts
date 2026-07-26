@@ -224,7 +224,6 @@ export type LayoutNodesFlatOptions = {
     options?: { folderId?: string | null } & CodexProviderProfileSelection,
   ) => Promise<string | null>;
   engineOptions?: EngineDisplayInfo[];
-  enabledEngines?: Partial<Record<EngineType, boolean>>;
   onRefreshEngineOptions?: () =>
     | Promise<
         | import("../../engine/hooks/useEngineController").EngineRefreshResult
@@ -823,7 +822,6 @@ export type ChromeLayoutNodesOptions = Pick<
   | "onConnectWorkspace"
   | "onAddAgent"
   | "engineOptions"
-  | "enabledEngines"
   | "onRefreshEngineOptions"
   | "onAddSharedAgent"
   | "onAddWorktreeAgent"

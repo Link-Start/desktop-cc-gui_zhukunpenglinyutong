@@ -529,6 +529,23 @@ describe("useEngineController", () => {
     ).toBe(true);
   });
 
+  it("keeps the facade snapshot stable across unrelated parent renders", () => {
+    detectEnginesMock.mockImplementation(
+      () => new Promise<EngineStatus[]>((_resolve) => undefined),
+    );
+    getActiveEngineMock.mockImplementation(
+      () => new Promise<"claude">((_resolve) => undefined),
+    );
+
+    const { result, rerender } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+    const firstSnapshot = result.current;
+    rerender();
+
+    expect(result.current).toBe(firstSnapshot);
+  });
+
   it("keeps detected OpenCode outside production engine surfaces", async () => {
     detectEnginesMock.mockResolvedValue([
       {
@@ -673,10 +690,6 @@ describe("useEngineController", () => {
     const { result } = renderHook(() =>
       useEngineController({
         activeWorkspace: null,
-        enabledEngines: {
-          gemini: false,
-          opencode: false,
-        },
       }),
     );
 

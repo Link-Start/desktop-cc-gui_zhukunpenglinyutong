@@ -381,7 +381,7 @@ describe("useSidebarMenus", () => {
     },
   );
 
-  it("does not auto-probe opencode login state when the menu opens or rerenders", async () => {
+  it("keeps retired OpenCode out of the session menu without probing health", async () => {
     const handlers = createHandlers();
     handlers.engineOptions = [];
 
@@ -406,8 +406,7 @@ describe("useSidebarMenus", () => {
       .find((group) => group.id === "new-session")
       ?.actions.find((action) => action.id === "new-session-opencode");
 
-    expect(opencodeAction?.unavailable).toBe(false);
-    expect(opencodeAction?.statusLabel).toBeNull();
+    expect(opencodeAction).toBeUndefined();
     expect(getOpenCodeProviderHealthMock).not.toHaveBeenCalled();
   });
 
@@ -1160,214 +1159,6 @@ describe("useSidebarMenus", () => {
     expect(handlers.onRenameWorkspaceAlias).toHaveBeenCalledWith(workspace);
   });
 
-  it("marks opencode as sign-in required only after manual refresh detects disconnection", async () => {
-    getOpenCodeProviderHealthMock.mockResolvedValueOnce({
-      provider: "openai",
-      connected: false,
-      credentialCount: 0,
-      matched: false,
-      authenticatedProviders: [],
-      error: null,
-    });
-    const handlers = createHandlers();
-    const { result } = renderHook(() => useSidebarMenus(handlers));
-
-    await act(async () => {
-      const event = {
-        clientX: 180,
-        clientY: 180,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, workspace);
-    });
-
-    const opencodeAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    expect(opencodeAction?.unavailable).toBe(false);
-    expect(opencodeAction?.statusLabel).toBeNull();
-
-    await act(async () => {
-      await opencodeAction?.onRefresh?.();
-    });
-
-    await waitFor(() => {
-      const refreshedAction = result.current.workspaceMenuState?.groups
-        .find((group) => group.id === "new-session")
-        ?.actions.find((action) => action.id === "new-session-opencode");
-      expect(refreshedAction?.unavailable).toBe(true);
-      expect(refreshedAction?.statusLabel).toBe("Sign in required");
-    });
-  });
-
-  it("manual opencode refresh probes login state once engine refresh reports it installed", async () => {
-    getOpenCodeProviderHealthMock.mockResolvedValueOnce({
-      provider: "openai",
-      connected: false,
-      credentialCount: 0,
-      matched: false,
-      authenticatedProviders: [],
-      error: null,
-    });
-    const handlers = createHandlers();
-    handlers.engineOptions = [];
-    let rerenderHook:
-      | ((nextHandlers: ReturnType<typeof createHandlers>) => void)
-      | null = null;
-    handlers.onRefreshEngineOptions = vi.fn(async () => {
-      rerenderHook?.(createHandlers());
-    });
-
-    const { result, rerender } = renderHook(
-      (nextHandlers: ReturnType<typeof createHandlers>) => useSidebarMenus(nextHandlers),
-      { initialProps: handlers },
-    );
-    rerenderHook = rerender;
-
-    act(() => {
-      const event = {
-        clientX: 160,
-        clientY: 120,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, workspace);
-    });
-
-    const opencodeAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    await act(async () => {
-      await opencodeAction?.onRefresh?.();
-    });
-
-    await waitFor(() => {
-      const refreshedAction = result.current.workspaceMenuState?.groups
-        .find((group) => group.id === "new-session")
-        ?.actions.find((action) => action.id === "new-session-opencode");
-      expect(refreshedAction?.unavailable).toBe(true);
-      expect(refreshedAction?.statusLabel).toBe("Sign in required");
-    });
-
-    expect(getOpenCodeProviderHealthMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not leave opencode stuck in loading when manual provider health lookup fails", async () => {
-    getOpenCodeProviderHealthMock.mockRejectedValueOnce(new Error("probe failed"));
-    const handlers = createHandlers();
-    const { result } = renderHook(() => useSidebarMenus(handlers));
-
-    await act(async () => {
-      const event = {
-        clientX: 180,
-        clientY: 180,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, workspace);
-    });
-
-    const opencodeAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    await act(async () => {
-      await opencodeAction?.onRefresh?.();
-    });
-
-    await waitFor(() => {
-      const refreshedAction = result.current.workspaceMenuState?.groups
-        .find((group) => group.id === "new-session")
-        ?.actions.find((action) => action.id === "new-session-opencode");
-      expect(refreshedAction?.unavailable).toBe(false);
-      expect(refreshedAction?.statusLabel).toBeNull();
-    });
-  });
-
-  it("does not let stale opencode health keep disconnected workspaces blocked", async () => {
-    getOpenCodeProviderHealthMock.mockResolvedValueOnce({
-      provider: "openai",
-      connected: false,
-      credentialCount: 0,
-      matched: false,
-      authenticatedProviders: [],
-      error: null,
-    });
-    const handlers = createHandlers();
-    const { result } = renderHook(() => useSidebarMenus(handlers));
-
-    await act(async () => {
-      const event = {
-        clientX: 180,
-        clientY: 180,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, workspace);
-    });
-
-    const opencodeAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    await act(async () => {
-      await opencodeAction?.onRefresh?.();
-    });
-
-    await waitFor(() => {
-      const refreshedAction = result.current.workspaceMenuState?.groups
-        .find((group) => group.id === "new-session")
-        ?.actions.find((action) => action.id === "new-session-opencode");
-      expect(refreshedAction?.unavailable).toBe(true);
-    });
-
-    act(() => {
-      const event = {
-        clientX: 200,
-        clientY: 200,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, {
-        ...workspace,
-        connected: false,
-      });
-    });
-
-    const disconnectedAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    expect(disconnectedAction?.unavailable).toBe(false);
-    expect(disconnectedAction?.statusLabel).toBeNull();
-  });
-
-  it("opens workspace menu without auto-probing opencode health", async () => {
-    const handlers = createHandlers();
-    const { result } = renderHook(() => useSidebarMenus(handlers));
-
-    await act(async () => {
-      const event = {
-        clientX: 180,
-        clientY: 180,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, workspace);
-    });
-
-    const opencodeAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    expect(opencodeAction?.unavailable).toBe(false);
-    expect(opencodeAction?.statusLabel).toBeNull();
-    expect(getOpenCodeProviderHealthMock).not.toHaveBeenCalled();
-  });
-
   it("shows session-only menu for worktree plus entry", async () => {
     const handlers = createHandlers();
     const { result } = renderHook(() => useSidebarMenus(handlers));
@@ -1391,7 +1182,6 @@ describe("useSidebarMenus", () => {
       "new-session-shared",
       "new-session-claude",
       "new-session-codex",
-      "new-session-opencode",
       "new-session-kimi",
     ]);
   });

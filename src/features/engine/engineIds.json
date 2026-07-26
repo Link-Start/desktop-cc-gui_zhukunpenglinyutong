@@ -5,6 +5,7 @@
     {
       "id": "claude",
       "displayName": "Claude Code",
+      "shortName": "Claude Code",
       "adapterId": "builtin.claude",
       "protocolFamily": "stream-json-cli",
       "executionModel": "one-shot",
@@ -12,7 +13,8 @@
     },
     {
       "id": "codex",
-      "displayName": "Codex",
+      "displayName": "Codex CLI",
+      "shortName": "Codex",
       "adapterId": "builtin.codex",
       "protocolFamily": "app-server-json-rpc",
       "executionModel": "persistent",
@@ -20,7 +22,8 @@
     },
     {
       "id": "gemini",
-      "displayName": "Gemini",
+      "displayName": "Gemini CLI",
+      "shortName": "Gemini",
       "adapterId": "builtin.gemini",
       "protocolFamily": "stream-json-cli",
       "executionModel": "one-shot",
@@ -29,6 +32,7 @@
     {
       "id": "kimi",
       "displayName": "Kimi CLI",
+      "shortName": "Kimi",
       "adapterId": "builtin.kimi",
       "protocolFamily": "stream-json-cli",
       "executionModel": "one-shot",
@@ -37,6 +41,7 @@
     {
       "id": "opencode",
       "displayName": "OpenCode",
+      "shortName": "OpenCode",
       "adapterId": "builtin.opencode",
       "protocolFamily": "stream-json-cli",
       "executionModel": "one-shot",

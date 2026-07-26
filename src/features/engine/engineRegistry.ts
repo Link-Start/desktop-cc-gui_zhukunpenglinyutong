@@ -21,6 +21,7 @@ export type EngineRegistrySource =
 export type EngineRegistryEntry = Readonly<{
   id: EngineId;
   displayName: string;
+  shortName?: string;
   adapterId: string;
   protocolFamily: EngineProtocolFamily;
   executionModel: EngineExecutionModel;

@@ -26,8 +26,8 @@ const appShell = read("src/app-shell.tsx");
 if (/useOpenCodeSelection|useOpenCodeThreadBinding/.test(appShell)) {
   fail("AppShell still mounts an OpenCode-specific root hook");
 }
-if (!/opencode:\s*false/.test(appShell)) {
-  fail("AppShell does not force the OpenCode engine gate closed");
+if (/enabledEngines\s*:/.test(appShell)) {
+  fail("AppShell still owns a bypassable optional-engine gate");
 }
 
 const bootstrap = read("src/bootstrap.ts");
@@ -55,8 +55,14 @@ if (!/opencodeEnabled:\s*false/.test(settings)) {
 const engineController = read(
   "src/features/engine/hooks/useEngineController.ts",
 );
-if (!/const opencodeEnabled = false/.test(engineController)) {
-  fail("engine controller can still reactivate OpenCode");
+const engineAvailability = read(
+  "src/features/engine/hooks/engineControllerAvailability.ts",
+);
+if (
+  !engineController.includes("ENABLED_ENGINE_TYPES") ||
+  !/engineType !== "opencode"/.test(engineAvailability)
+) {
+  fail("engine controller availability owner can still reactivate OpenCode");
 }
 
 process.stdout.write("OpenCode soft-retirement boundary valid\n");

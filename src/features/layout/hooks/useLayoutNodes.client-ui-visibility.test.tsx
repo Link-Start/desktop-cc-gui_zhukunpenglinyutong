@@ -904,7 +904,6 @@ function createLayoutOptions(
     handleExitPlanModeExecute: noop,
     onOpenDictationSettings: noop,
     engineOptions: [],
-    enabledEngines: {},
     onRefreshEngineOptions: asyncNoop,
     deleteConfirmThreadId: null,
     deleteConfirmWorkspaceId: null,
