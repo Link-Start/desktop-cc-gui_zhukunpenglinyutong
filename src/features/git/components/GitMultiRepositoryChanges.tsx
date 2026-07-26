@@ -174,7 +174,7 @@ export function GitMultiRepositoryChanges({
   const canGenerateCommitMessage = selectedCount > 0 && !commitMessageLoading && !commitLoading;
   const commitComposer = (
     <div className={`commit-message-section git-commit-composer git-commit-composer--${commitComposerPlacement}`}>
-      <div className="commit-message-input-wrapper">
+      <div className="commit-message-composer-row">
         <textarea
           className="commit-message-input"
           placeholder={t("git.commitMessage")}

@@ -28,9 +28,6 @@ The diff panel commit composer SHALL place the AI message generation button and 
 - **WHEN** user clicks the commit button in the right action column
 - **THEN** system SHALL invoke the same `onCommit` callback with `selectedPaths` as before
 
-- **WHEN** user clicks the commit button in the right action column
-- **THEN** system SHALL invoke the same `onCommit` callback with `selectedPaths` as before
-
 ## REMOVED Requirements
 
 ### Requirement: Full-Width Commit Button Below Commit Message Textarea

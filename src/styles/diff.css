@@ -2093,14 +2093,17 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
 }
 
 .commit-message-input-wrapper {
+  position: relative;
+}
+
+.commit-message-composer-row {
   display: flex;
   align-items: stretch;
   gap: 6px;
 }
 
 .commit-message-input {
-  flex: 1 1 auto;
-  min-width: 0;
+  width: 100%;
   font-family: var(--code-font-family);
   font-size: var(--code-font-size, 12px);
   line-height: 1.5;
@@ -2108,11 +2111,19 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
   background: var(--background);
   border: 1px solid var(--input);
   border-radius: var(--diff-radius-md);
-  padding: 8px 10px;
+  padding: 8px 36px 8px 10px;
   resize: vertical;
+  min-height: 48px;
+  max-height: 120px;
+  transition: border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.commit-message-composer-row .commit-message-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
   min-height: 66px;
   max-height: 140px;
-  transition: border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
 .commit-message-input::placeholder {
@@ -2131,6 +2142,49 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
   cursor: not-allowed;
 }
 
+.commit-message-generate-button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--diff-radius-sm);
+  border: 1px solid var(--border);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.commit-message-generate-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--border);
+}
+
+.commit-message-generate-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.commit-message-generate-button svg,
+.commit-message-generate-button img {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.commit-message-generate-button--loading {
+  opacity: 1;
+}
+
+.commit-message-generate-button--loading:disabled {
+  opacity: 1;
+}
+
 .commit-message-actions {
   flex: 0 0 auto;
   display: flex;
@@ -2146,6 +2200,7 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
 .commit-message-actions .commit-message-generate-button,
 .commit-message-actions .commit-message-commit-button {
   flex: 1 1 auto;
+  position: static;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2194,16 +2249,6 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
   height: 14px;
   flex-shrink: 0;
 }
-
-.commit-message-generate-button--loading {
-  opacity: 1;
-}
-
-.commit-message-generate-button--loading:disabled {
-  opacity: 1;
-}
-
-.commit-message-generate-menu {
   position: absolute;
   top: 34px;
   right: 0;
