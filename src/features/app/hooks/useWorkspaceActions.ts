@@ -25,9 +25,13 @@ type SessionCreationOptions = EngineProviderProfileSelection & {
 const SESSION_CREATION_EMPTY_THREAD_ID = "SESSION_CREATION_EMPTY_THREAD_ID";
 const CREATE_SESSION_RUNTIME_RECOVERING_ERROR_PREFIX =
   "[SESSION_CREATE_RUNTIME_RECOVERING]";
+const CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX =
+  "[codex_provider_wire_api_unsupported]";
 const CREATE_SESSION_RECOVERY_TOAST_ID_PREFIX = "create-session-recovery";
 const CREATE_SESSION_RECOVERY_PROGRESS_TOAST_ID_PREFIX =
   "create-session-recovery-progress";
+const CREATE_SESSION_PROVIDER_PROTOCOL_TOAST_ID_PREFIX =
+  "create-session-provider-protocol";
 
 function isDiskProviderSelection(options?: SessionCreationOptions) {
   const providerProfileId =
@@ -185,6 +189,9 @@ export function useWorkspaceActions({
 
   const localizeSessionCreationErrorMessage = useCallback(
     (message: string): string => {
+      if (message.startsWith(CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX)) {
+        return t("errors.codexProviderWireApiUnsupported");
+      }
       if (isRecoverableRuntimeCreateSessionError(message)) {
         return t("errors.failedToCreateSessionRuntimeRecovering");
       }
@@ -362,6 +369,27 @@ export function useWorkspaceActions({
       retryCreateSessionAfterRuntimeRecovery,
       t,
     ],
+  );
+
+  const showSessionCreationFailure = useCallback(
+    (
+      workspace: WorkspaceInfo,
+      targetEngine: EngineType,
+      message: string,
+      detail: string,
+    ) => {
+      if (message.startsWith(CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX)) {
+        pushErrorToast({
+          id: `${CREATE_SESSION_PROVIDER_PROTOCOL_TOAST_ID_PREFIX}-${workspace.id}-${targetEngine}`,
+          title: t("errors.failedToCreateSession"),
+          message: detail,
+          sticky: true,
+        });
+        return;
+      }
+      alert(`${t("errors.failedToCreateSession")}\n\n${detail}`);
+    },
+    [t],
   );
 
   const handleWorkspaceAdded = useCallback(
@@ -572,7 +600,12 @@ export function useWorkspaceActions({
                 error: retryMessage,
               },
             });
-            alert(`${t("errors.failedToCreateSession")}\n\n${detail}`);
+            showSessionCreationFailure(
+              workspace,
+              targetEngine,
+              retryMessage,
+              detail,
+            );
             return null;
           }
         }
@@ -623,7 +656,7 @@ export function useWorkspaceActions({
             error: message,
           },
         });
-        alert(`${t("errors.failedToCreateSession")}\n\n${detail}`);
+        showSessionCreationFailure(workspace, targetEngine, message, detail);
         return null;
       }
     },
@@ -633,6 +666,7 @@ export function useWorkspaceActions({
       resolveSessionCreationErrorDetail,
       runCreateSessionFlow,
       showRecoverableCreateSessionToast,
+      showSessionCreationFailure,
       t,
     ],
   );

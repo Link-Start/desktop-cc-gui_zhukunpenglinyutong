@@ -15,6 +15,7 @@ const errors = {
     "failedToCreateSession": "セッションの作成に失敗しました。",
     "failedToCreateSessionNoThreadId": "ランタイムが新しいセッション ID を返しませんでした。",
     "failedToCreateSessionRuntimeRecovering": "このセッションの作成中にランタイムが再起動していました。アプリはすでに一度再試行しました。ワークスペースを再接続して、もう一度お試しください。",
+    "codexProviderWireApiUnsupported": "現在の Codex CLI は wire_api = \"chat\" をサポートしていません。このプロバイダーが Responses API をサポートする場合は wire_api = \"responses\" を使用してください。Chat Completions のみをサポートする場合は、先にプロトコル変換サービスまたは router を設定してください。",
     "reconnectAndRetryCreateSession": "再接続して作成を再試行",
     "reconnectingAndRetryingCreateSession": "再接続して作成を再試行中...",
     "runtimeRecovered": "ランタイムが復旧しました。",

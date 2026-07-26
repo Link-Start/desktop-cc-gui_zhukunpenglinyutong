@@ -14,6 +14,8 @@ const errors = {
       "The runtime did not return a new session id.",
     failedToCreateSessionRuntimeRecovering:
       "The runtime was restarting while creating this session. The app already retried once. Reconnect the workspace and try again.",
+    codexProviderWireApiUnsupported:
+      'The current Codex CLI does not support wire_api = "chat". If this provider supports the Responses API, use wire_api = "responses". If it only supports Chat Completions, configure a protocol conversion service or router first.',
     reconnectAndRetryCreateSession: "Reconnect and retry creation",
     reconnectingAndRetryingCreateSession:
       "Reconnecting and retrying creation...",

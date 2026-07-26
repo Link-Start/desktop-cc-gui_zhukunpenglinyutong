@@ -11,6 +11,8 @@ use crate::types::CodexProviderConfig;
 
 pub(crate) const CODEX_DISK_PROVIDER_PROFILE_ID: &str = "__disk__";
 pub(crate) const CODEX_DISK_PROVIDER_PROFILE_NAME: &str = "codex-tui/default-config";
+pub(crate) const CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX: &str =
+    "[codex_provider_wire_api_unsupported]";
 
 impl CodexProviderBinding {
     pub(crate) fn disk() -> Self {
@@ -312,6 +314,27 @@ fn configured_model_from_config_toml(config_toml: &str) -> Result<Option<String>
         .map(str::to_string))
 }
 
+fn validate_codex_provider_wire_api(config_toml: &str, provider_name: &str) -> Result<(), String> {
+    let value: toml::Value = config_toml
+        .parse()
+        .map_err(|error| format!("invalid Codex provider configToml: {error}"))?;
+    let Some(model_providers) = value.get("model_providers").and_then(toml::Value::as_table) else {
+        return Ok(());
+    };
+    for (model_provider, provider) in model_providers {
+        let wire_api = provider
+            .get("wire_api")
+            .and_then(toml::Value::as_str)
+            .map(str::trim);
+        if wire_api.is_some_and(|wire_api| wire_api.eq_ignore_ascii_case("chat")) {
+            return Err(format!(
+                "{CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX} Codex provider {provider_name} configures model provider {model_provider} with wire_api = \"chat\", which is not supported by the current Codex CLI."
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn provider_home_for_id_in_root(root: &Path, provider_id: &str) -> Result<PathBuf, String> {
     let segment = sanitize_provider_path_segment(provider_id)?;
     Ok(root.join(segment))
@@ -385,6 +408,7 @@ fn materialize_codex_provider_profile_in_root(
             config_toml,
             auth_json,
         } => {
+            validate_codex_provider_wire_api(&config_toml, &name)?;
             let provider_home = provider_home_for_id_in_root(provider_homes_root, &id)?;
             fs::create_dir_all(&provider_home).map_err(|error| {
                 format!(
@@ -478,6 +502,62 @@ model = "ignored-nested-model"
     }
 
     #[test]
+    fn validate_wire_api_rejects_chat_in_any_model_provider_table() {
+        let error = validate_codex_provider_wire_api(
+            r#"
+model_provider = "crs"
+
+[model_providers.crs]
+wire_api = "chat"
+"#,
+            "Kimi",
+        )
+        .expect_err("chat wire API must fail before launch");
+        assert!(error.starts_with(CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX));
+        assert!(error.contains("wire_api = \"chat\""));
+        assert!(!error.contains("sk-"));
+    }
+
+    #[test]
+    fn validate_wire_api_allows_responses_and_missing_wire_api() {
+        for config_toml in [
+            r#"
+model_provider = "crs"
+[model_providers.crs]
+wire_api = "responses"
+"#,
+            r#"model = "gpt-5""#,
+            r#"
+model_provider = "responses-provider"
+[model_providers.responses-provider]
+wire_api = "responses"
+[model_providers.unused-chat-provider]
+base_url = "https://example.test/v1"
+"#,
+        ] {
+            validate_codex_provider_wire_api(config_toml, "Provider")
+                .expect("supported or missing wire API must keep existing launch behavior");
+        }
+    }
+
+    #[test]
+    fn validate_wire_api_rejects_chat_in_unselected_provider_table() {
+        let error = validate_codex_provider_wire_api(
+            r#"
+model_provider = "responses-provider"
+[model_providers.responses-provider]
+wire_api = "responses"
+[model_providers.unused-chat-provider]
+wire_api = "chat"
+"#,
+            "Mixed Provider",
+        )
+        .expect_err("Codex parses every model provider table during config loading");
+        assert!(error.starts_with(CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX));
+        assert!(error.contains("unused-chat-provider"));
+    }
+
+    #[test]
     fn join_shell_escaped_codex_args_preserves_values_with_spaces_and_quotes() {
         let args = vec![
             "-c".to_string(),
@@ -557,6 +637,28 @@ model_provider = "openai"
             materialize_codex_provider_profile_in_root(profile, &root).expect_err("invalid id");
         assert!(error.contains("invalid Codex provider id"));
         assert!(!root.join("provider-a").exists());
+    }
+
+    #[test]
+    fn materialize_managed_provider_rejects_chat_before_writing_provider_home() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-codex-provider-profile-{}", Uuid::new_v4()));
+        let profile = CodexProviderProfile::Managed {
+            id: "chat-provider".to_string(),
+            name: "Chat Provider".to_string(),
+            config_toml: r#"
+model_provider = "crs"
+[model_providers.crs]
+wire_api = "chat"
+"#
+            .to_string(),
+            auth_json: None,
+        };
+
+        let error =
+            materialize_codex_provider_profile_in_root(profile, &root).expect_err("unsupported");
+        assert!(error.starts_with(CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX));
+        assert!(!root.join("chat-provider").exists());
     }
 
     #[test]

@@ -13,6 +13,8 @@ const errors = {
     failedToCreateSessionNoThreadId: "运行时没有返回新的会话 ID。",
     failedToCreateSessionRuntimeRecovering:
       "创建会话时运行时正在重启。应用已自动重试一次，请重连工作区后再试。",
+    codexProviderWireApiUnsupported:
+      '当前 Codex CLI 不支持 wire_api = "chat"。如果该供应商支持 Responses API，请改为 wire_api = "responses"；如果只支持 Chat Completions，请先配置协议转换服务或 router。',
     reconnectAndRetryCreateSession: "重连并重试创建",
     reconnectingAndRetryingCreateSession: "正在重连并重试创建...",
     runtimeRecovered: "运行时已恢复。",

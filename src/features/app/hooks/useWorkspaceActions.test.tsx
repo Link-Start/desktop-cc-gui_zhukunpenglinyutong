@@ -25,6 +25,8 @@ vi.mock("react-i18next", () => ({
           return `open:${String(options?.project ?? "")}`;
         case "errors.failedToCreateSessionRuntimeRecovering":
           return "errors.failedToCreateSessionRuntimeRecovering";
+        case "errors.codexProviderWireApiUnsupported":
+          return "errors.codexProviderWireApiUnsupported";
         case "errors.reconnectAndRetryCreateSession":
           return "errors.reconnectAndRetryCreateSession";
         case "errors.reconnectingAndRetryingCreateSession":
@@ -526,6 +528,37 @@ describe("useWorkspaceActions", () => {
         sticky: true,
       }),
     );
+    expect(window.alert).not.toHaveBeenCalled();
+  });
+
+  it("explains unsupported Codex chat wire API instead of exposing transport errors", async () => {
+    const options = makeOptions({
+      startThreadForWorkspace: vi.fn(async () => {
+        throw new Error(
+          '[codex_provider_wire_api_unsupported] Codex provider Kimi configures model provider crs with wire_api = "chat".',
+        );
+      }),
+    });
+    const { result } = renderHook(() => useWorkspaceActions(options));
+
+    await act(async () => {
+      await result.current.handleAddAgent(baseWorkspace, "codex", {
+        providerProfileId: "provider-named-kimi",
+      });
+    });
+
+    expect(ensureRuntimeReady).not.toHaveBeenCalled();
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "create-session-provider-protocol-ws-1-codex",
+        title: "errors.failedToCreateSession",
+        message: "errors.codexProviderWireApiUnsupported",
+        sticky: true,
+      }),
+    );
+    expect(
+      JSON.stringify(vi.mocked(pushErrorToast).mock.calls[0]?.[0]),
+    ).not.toMatch(/broken pipe|os error 32/i);
     expect(window.alert).not.toHaveBeenCalled();
   });
 

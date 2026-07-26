@@ -15,6 +15,7 @@ const errors = {
     "failedToCreateSession": "सत्र बनाने में विफल।",
     "failedToCreateSessionNoThreadId": "रनटाइम ने कोई नई सत्र आईडी नहीं लौटाई।",
     "failedToCreateSessionRuntimeRecovering": "इस सत्र को बनाते समय रनटाइम पुनः आरंभ हो रहा था। ऐप पहले ही एक बार पुनः प्रयास कर चुका है। वर्कस्पेस को पुनः कनेक्ट करें और फिर प्रयास करें।",
+    "codexProviderWireApiUnsupported": "वर्तमान Codex CLI wire_api = \"chat\" का समर्थन नहीं करता। यदि यह provider Responses API का समर्थन करता है, तो wire_api = \"responses\" का उपयोग करें। यदि यह केवल Chat Completions का समर्थन करता है, तो पहले protocol conversion service या router कॉन्फ़िगर करें।",
     "reconnectAndRetryCreateSession": "पुनः कनेक्ट करें और निर्माण पुनः प्रयास करें",
     "reconnectingAndRetryingCreateSession": "पुनः कनेक्ट और निर्माण पुनः प्रयास हो रहा है...",
     "runtimeRecovered": "रनटाइम पुनर्प्राप्त हुआ।",
