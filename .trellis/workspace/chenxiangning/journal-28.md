@@ -71,3 +71,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1141: 收紧 Kimi Claude OpenCode 治理边界
+
+**Date**: 2026-07-26
+**Task**: 收紧 Kimi Claude OpenCode 治理边界
+**Branch**: `feature/v-0710`
+
+### Summary
+
+Kimi 增加 config 四态诊断、provider cleanup partial warning 与 promotion 增量回归；Claude 收敛 canonical storage migration 并传播 typed provider errors；OpenCode 固化 soft-retirement 前后端 fail-closed policy，移除 AppShell root hooks、1011 行 panel 与专属全局 CSS。增量 frontend/Rust/daemon/TypeScript/scanner/OpenSpec strict 门禁通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d4fbdcd7b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
