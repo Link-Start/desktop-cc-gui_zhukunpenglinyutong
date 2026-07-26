@@ -54,8 +54,8 @@
 
 ## 6. Close-loop verification
 
-- [ ] 6.1 执行全部新增/受影响 targeted Rust tests 与 Vitest（仍不运行全量测试）
-- [ ] 6.2 执行 TypeScript typecheck、runtime-contract gate、change strict validation 与 diff hygiene
-- [ ] 6.3 独立 review desktop/daemon parity、provider deletion error、Kimi ownership cleanup、render hard lines
-- [ ] 6.4 记录实现证据与人工验收清单，执行 OpenSpec verify
+- [x] 6.1 执行全部新增/受影响 targeted Rust tests 与 Vitest（仍不运行全量测试）
+- [x] 6.2 执行 TypeScript typecheck、runtime-contract gate、change strict validation 与 diff hygiene
+- [x] 6.3 独立 review desktop/daemon parity、provider deletion error、Kimi ownership cleanup、render hard lines
+- [x] 6.4 记录实现证据与人工验收清单，执行 OpenSpec verify
 - [ ] 6.5 sync delta specs、archive change，并验证 archive 后规范可见性
