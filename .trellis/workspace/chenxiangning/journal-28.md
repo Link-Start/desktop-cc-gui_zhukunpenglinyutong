@@ -831,3 +831,36 @@ rustfmt 纯格式化（14 文件无行为变更）+ 引擎模型接入层报告�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1164: 隔离供应商模型目录与会话配置
+
+**Date**: 2026-07-27
+**Task**: 隔离供应商模型目录与会话配置
+**Branch**: `feature/v-0710`
+
+### Summary
+
+独立提交 OpenSpec change fix-provider-scoped-model-catalog-selection：模型目录按 engineType + providerProfileId 隔离，追加公共模型并去重；Codex managed provider 使用自身默认模型；Broken pipe 在同 provider runtime 内有界恢复并隐藏原始 OS 错误。保留后续真实场景细节排查，未归档 change；CC Switch 工作区改动未纳入。验证：typecheck、目标 ESLint、focused Vitest、Rust tests、runtime contracts、cargo check、OpenSpec strict validate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `34b758e33` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
