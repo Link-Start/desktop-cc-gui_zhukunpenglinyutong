@@ -33,9 +33,6 @@ export function formatChineseCompactNumber(value, { decimals = 1 } = {}) {
   const safeDecimals = Math.max(0, Math.min(6, Math.floor(decimals)));
   const units = [
     [100000000, "亿"],
-    [10000000, "千万"],
-    [1000000, "百万"],
-    [100000, "十万"],
     [10000, "万"],
     [1000, "千"],
   ];

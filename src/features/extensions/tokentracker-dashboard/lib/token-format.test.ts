@@ -27,11 +27,17 @@ describe("tokentracker token format", () => {
     expect(formatTokenCount(5_600_000_000, { mode: TOKEN_FORMAT_MODES.CHINESE })).toBe(
       "56亿",
     );
-    expect(formatTokenCount(12_000_000, { mode: TOKEN_FORMAT_MODES.CHINESE })).toBe(
-      "1.2千万",
+    expect(formatTokenCount(460_000, { mode: TOKEN_FORMAT_MODES.CHINESE })).toBe(
+      "46万",
     );
-    expect(formatTokenCount(5_000_000, { mode: TOKEN_FORMAT_MODES.CHINESE })).toBe(
-      "5百万",
+    expect(formatTokenCount(1_200_000, { mode: TOKEN_FORMAT_MODES.CHINESE })).toBe(
+      "120万",
+    );
+    expect(formatTokenCount(13_000_000, { mode: TOKEN_FORMAT_MODES.CHINESE })).toBe(
+      "1300万",
+    );
+    expect(formatTokenCount(120_000_000, { mode: TOKEN_FORMAT_MODES.CHINESE })).toBe(
+      "1.2亿",
     );
     expect(formatTokenCount(90_000, { mode: TOKEN_FORMAT_MODES.CHINESE })).toBe(
       "9万",
