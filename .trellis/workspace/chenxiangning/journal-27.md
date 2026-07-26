@@ -1939,3 +1939,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1138: 建立引擎适配器协议注册表
+
+**Date**: 2026-07-26
+**Task**: 建立引擎适配器协议注册表
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 OpenSpec Batch 2：前端/Rust Engine registry、EngineId/provenance、EngineProtocol/EngineAdapter 分层、one-shot/persistent registration、RuntimeManager generation 复用与 registry parity gate；增量测试和 strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4825b8a50` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
