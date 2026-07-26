@@ -10,6 +10,7 @@ import {
   MODEL_ID_PATTERN as COMPOSER_MODEL_ID_PATTERN,
   isValidModelId as isValidComposerModelId,
 } from "../composer/types/provider";
+import { STORAGE_KEYS as MODEL_STORAGE_KEYS } from "../models/constants";
 
 // ============ Constants ============
 
@@ -18,7 +19,7 @@ export const STORAGE_KEYS = {
   CLAUDE_CUSTOM_MODELS: 'claude-custom-models',
   GEMINI_CUSTOM_MODELS: 'gemini-custom-models',
   /** @deprecated Use STORAGE_KEYS from features/models/constants instead for model mapping */
-  CLAUDE_MODEL_MAPPING: 'claude-model-mapping',
+  CLAUDE_MODEL_MAPPING: MODEL_STORAGE_KEYS.CLAUDE_MODEL_MAPPING,
 } as const;
 
 export const LOCAL_SETTINGS_PROVIDER_ID = "__local_settings_json__";

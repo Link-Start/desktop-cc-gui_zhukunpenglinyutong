@@ -2,6 +2,7 @@ import type { ModelInfo, ProviderId, ProviderModelCatalogs } from './types';
 import { AVAILABLE_PROVIDERS, CODEX_MODELS } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import { readClaudeCustomModelsFromStorage } from '../../../models/claudeCustomModels';
+import { getGeneratedModelFallbacks } from '../../../models/generatedModelFallbacks';
 
 export const RELEVANT_MODEL_STORAGE_KEYS = new Set<string>([
   STORAGE_KEYS.CODEX_CUSTOM_MODELS,
@@ -24,10 +25,13 @@ export type ProviderModelGroup = {
   enabled: boolean;
 };
 
-const GEMINI_GROUP_MODELS: ModelInfo[] = [
-  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-];
+const GEMINI_GROUP_MODELS: ModelInfo[] = getGeneratedModelFallbacks('gemini').map(
+  (model) => ({
+    id: model.id,
+    label: model.label,
+    source: 'fallback',
+  }),
+);
 
 export const resolveModelConfigProvider = (provider: string) =>
   provider === 'codex' ? 'codex' : provider === 'gemini' ? 'gemini' : 'claude';

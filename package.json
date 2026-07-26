@@ -29,6 +29,7 @@
     "check:runtime-contracts": "npm run check:app-shell:runtime-contract && npm run check:git-history:runtime-contract",
     "check:engine-capability-matrix": "node scripts/check-engine-capability-matrix.mjs",
     "check:engine-adapter-registry": "node scripts/check-engine-adapter-registry.mjs",
+    "check:model-provider-catalog": "node scripts/check-model-provider-catalog.mjs",
     "check:capability-aware-policy-router": "node scripts/scan-engine-name-branches.mjs",
     "check:context-ledger-cost-budget": "node scripts/check-context-ledger-cost-budget.mjs",
     "check:checkpoint-policy-chain": "node scripts/check-checkpoint-policy-chain.mjs",

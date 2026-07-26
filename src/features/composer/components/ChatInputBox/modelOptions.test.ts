@@ -160,8 +160,8 @@ describe('ChatInputBox model options', () => {
       modelStorageSnapshot: readModelStorageSnapshot(),
     }));
 
-    expect(modelList).toContain('gpt-5.5:::gpt-5.5');
-    expect(modelList).toContain('gpt-5.4:::gpt-5.4');
+    expect(modelList).toContain('gpt-5.5::fallback:gpt-5.5');
+    expect(modelList).toContain('gpt-5.4::fallback:gpt-5.4');
     expect(modelList).not.toContain('gpt-5.4-mini');
     expect(modelList).not.toContain('gpt-5.3-codex');
     expect(modelList).not.toContain('gpt-5.3-codex-spark');
@@ -183,7 +183,7 @@ describe('ChatInputBox model options', () => {
 
     expect(modelList).toContain('gpt-5.4:::My GPT 5.4');
     expect(modelList.match(/gpt-5\.4:/g)).toHaveLength(1);
-    expect(modelList).toContain('gpt-5.5:::gpt-5.5');
+    expect(modelList).toContain('gpt-5.5::fallback:gpt-5.5');
   });
 
   it('does not apply legacy Claude mapping to dynamic backend models', () => {
@@ -251,8 +251,9 @@ describe('ChatInputBox model options', () => {
 
     expect(groups.map((group) => group.providerId)).toEqual(['codex', 'gemini']);
     expect(geminiGroup?.models.map((model) => model.id)).toEqual([
-      'gemini-2.5-pro',
+      'gemini-2.5-flash-lite',
       'gemini-2.5-flash',
+      'gemini-2.5-pro',
     ]);
   });
 

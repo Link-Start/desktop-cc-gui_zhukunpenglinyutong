@@ -112,6 +112,15 @@ export function getModelMapping(): ModelMapping {
         mapping.opus = parsed.opus.trim();
       }
       if (Object.keys(mapping).length > 0 || key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
+        if (key !== STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
+          window.localStorage.setItem(
+            STORAGE_KEYS.CLAUDE_MODEL_MAPPING,
+            JSON.stringify(mapping),
+          );
+          for (const legacyKey of LEGACY_CLAUDE_MODEL_MAPPING_KEYS) {
+            window.localStorage.removeItem(legacyKey);
+          }
+        }
         return mapping;
       }
     } catch {
@@ -132,7 +141,7 @@ export function saveModelMapping(mapping: ModelMapping): void {
     const serialized = JSON.stringify(mapping);
     window.localStorage.setItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING, serialized);
     for (const legacyKey of LEGACY_CLAUDE_MODEL_MAPPING_KEYS) {
-      window.localStorage.setItem(legacyKey, serialized);
+      window.localStorage.removeItem(legacyKey);
     }
   } catch {
     // Silently fail if localStorage is not available

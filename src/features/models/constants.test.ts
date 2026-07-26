@@ -5,6 +5,7 @@ import {
   applyModelMapping,
   getModelMapping,
   resolveModelMappingValue,
+  saveModelMapping,
 } from "./constants";
 
 afterEach(() => {
@@ -66,5 +67,26 @@ describe("model mapping", () => {
     );
 
     expect(getModelMapping()).toEqual({ sonnet: "glm-4.7" });
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING) ?? "{}",
+      ),
+    ).toEqual({ sonnet: "glm-4.7" });
+    expect(
+      window.localStorage.getItem("mossx-claude-model-mapping"),
+    ).toBeNull();
+  });
+
+  it("writes only the canonical Claude mapping key", () => {
+    window.localStorage.setItem("mossx-claude-model-mapping", "{}");
+    window.localStorage.setItem("codemoss-claude-model-mapping", "{}");
+
+    saveModelMapping({ opus: "claude-opus-custom" });
+
+    expect(window.localStorage.getItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING)).toBe(
+      JSON.stringify({ opus: "claude-opus-custom" }),
+    );
+    expect(window.localStorage.getItem("mossx-claude-model-mapping")).toBeNull();
+    expect(window.localStorage.getItem("codemoss-claude-model-mapping")).toBeNull();
   });
 });

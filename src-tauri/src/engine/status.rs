@@ -2,9 +2,10 @@
 //!
 //! Detects installed CLI tools and their capabilities.
 
+use serde::Deserialize;
 use serde_json::Value;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::process::Command;
 use tokio::time::timeout;
 
@@ -17,6 +18,74 @@ use crate::backend::app_server_cli::resolve_safe_opencode_binary;
 const DETECTION_TIMEOUT: Duration = Duration::from_secs(10);
 /// OpenCode model listing can be significantly slower than version probes.
 const OPENCODE_MODELS_TIMEOUT: Duration = Duration::from_secs(30);
+const GENERATED_MODEL_CATALOG_JSON: &str =
+    include_str!("../../../src/features/models/generatedModelCatalog.json");
+
+#[derive(Deserialize)]
+struct GeneratedModelCatalog {
+    #[serde(rename = "lastVerifiedAt")]
+    last_verified_at: String,
+    engines: GeneratedModelCatalogEngines,
+}
+
+#[derive(Deserialize)]
+struct GeneratedModelCatalogEngines {
+    codex: Vec<GeneratedModelEntry>,
+    gemini: Vec<GeneratedModelEntry>,
+    kimi: Vec<GeneratedModelEntry>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GeneratedModelEntry {
+    id: String,
+    label: String,
+    #[serde(default)]
+    description: String,
+    provider: String,
+    protocol: String,
+    lifecycle: String,
+    #[serde(default)]
+    default: bool,
+}
+
+fn get_generated_fallback_models(engine: EngineType) -> Vec<ModelInfo> {
+    let Ok(catalog) = serde_json::from_str::<GeneratedModelCatalog>(GENERATED_MODEL_CATALOG_JSON)
+    else {
+        log::error!("[model-catalog] generated fallback artifact is invalid");
+        return Vec::new();
+    };
+    let last_verified_at = catalog.last_verified_at;
+    let entries = match engine {
+        EngineType::Codex => catalog.engines.codex,
+        EngineType::Gemini => catalog.engines.gemini,
+        EngineType::Kimi => catalog.engines.kimi,
+        _ => return Vec::new(),
+    };
+    entries
+        .into_iter()
+        .map(|entry| {
+            let mut model = ModelInfo::new(entry.id, entry.label)
+                .with_description(entry.description)
+                .with_provider(entry.provider)
+                .with_protocol(entry.protocol)
+                .with_provenance("generated:model-catalog")
+                .with_fallback_freshness(last_verified_at.clone(), entry.lifecycle)
+                .with_source("fallback");
+            if entry.default {
+                model = model.as_default();
+            }
+            model
+        })
+        .collect()
+}
+
+fn model_catalog_now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
 
 /// Build a tokio Command that correctly handles .cmd/.bat files on Windows.
 /// Uses CREATE_NO_WINDOW to prevent visible console windows.
@@ -409,18 +478,7 @@ fn get_kimi_home_dir() -> Option<PathBuf> {
 /// Built-in fallback models used when `~/.kimi-code/config.toml` is missing
 /// or has no `[models]` table yet (e.g. fresh install before first run).
 fn get_builtin_kimi_models() -> Vec<ModelInfo> {
-    vec![
-        ModelInfo::new("kimi-code/k3", "K3")
-            .as_default()
-            .with_provider("kimi")
-            .with_source("builtin"),
-        ModelInfo::new("kimi-code/kimi-for-coding", "Kimi for Coding")
-            .with_provider("kimi")
-            .with_source("builtin"),
-        ModelInfo::new("kimi-code/kimi-for-coding-highspeed", "Kimi for Coding (Highspeed)")
-            .with_provider("kimi")
-            .with_source("builtin"),
-    ]
+    get_generated_fallback_models(EngineType::Kimi)
 }
 
 /// Get Kimi CLI available models by parsing `$KIMI_CODE_HOME/config.toml`.
@@ -452,6 +510,9 @@ fn get_kimi_models(home_dir: Option<&std::path::Path>) -> Vec<ModelInfo> {
                     ModelInfo::new(env_model, display)
                         .as_default()
                         .with_provider("kimi")
+                        .with_protocol("kimi")
+                        .with_provenance("env:KIMI_MODEL_NAME")
+                        .with_observed_at(model_catalog_now_ms())
                         .with_description("Configured via KIMI_MODEL_NAME")
                         .with_source("env"),
                 );
@@ -497,7 +558,11 @@ fn read_kimi_models_from_config(home_dir: Option<&std::path::Path>) -> Option<Ve
             .and_then(|value| value.as_str())
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
-        let mut info = ModelInfo::new(alias.clone(), display_name).with_source("config");
+        let mut info = ModelInfo::new(alias.clone(), display_name)
+            .with_protocol("kimi-config")
+            .with_provenance("config:KIMI_CODE_HOME/config.toml")
+            .with_observed_at(model_catalog_now_ms())
+            .with_source("config");
         if let Some(provider) = provider {
             info = info.with_provider(provider);
         }
@@ -516,25 +581,12 @@ fn read_kimi_models_from_config(home_dir: Option<&std::path::Path>) -> Option<Ve
 
 /// Get Codex CLI available models (hardcoded as they don't change frequently)
 fn get_codex_models() -> Vec<ModelInfo> {
-    vec![
-        ModelInfo::new("gpt-5.3-codex", "GPT-5.3 Codex")
-            .as_default()
-            .with_provider("openai"),
-        ModelInfo::new("gpt-5.2-codex", "GPT-5.2 Codex").with_provider("openai"),
-        ModelInfo::new("gpt-5.4", "GPT-5.4").with_provider("openai"),
-        ModelInfo::new("gpt-5.1-codex-max", "GPT-5.1 Codex Max").with_provider("openai"),
-        ModelInfo::new("gpt-5.1-codex-mini", "GPT-5.1 Codex Mini").with_provider("openai"),
-    ]
+    get_generated_fallback_models(EngineType::Codex)
 }
 
 /// Get Gemini CLI available models (stable defaults + preview model).
 fn get_gemini_models() -> Vec<ModelInfo> {
-    let mut models = vec![
-        ModelInfo::new("gemini-2.5-pro", "Gemini 2.5 Pro")
-            .as_default()
-            .with_provider("google"),
-        ModelInfo::new("gemini-2.5-flash", "Gemini 2.5 Flash").with_provider("google"),
-    ];
+    let mut models = get_generated_fallback_models(EngineType::Gemini);
 
     if let Some(configured_model) = read_configured_gemini_model() {
         for model in &mut models {
@@ -595,18 +647,26 @@ fn get_builtin_claude_models() -> Vec<ModelInfo> {
         ModelInfo::new("claude-opus-4-8", "Opus 4.8")
             .as_default()
             .with_provider("anthropic")
+            .with_protocol("anthropic-messages")
+            .with_provenance("curated:claude-builtin")
             .with_description("Best for everyday, complex tasks")
             .with_source("builtin"),
         ModelInfo::new("claude-fable-5", "Fable 5")
             .with_provider("anthropic")
+            .with_protocol("anthropic-messages")
+            .with_provenance("curated:claude-builtin")
             .with_description("Most capable for the hardest and longest-running tasks")
             .with_source("builtin"),
         ModelInfo::new("claude-sonnet-5", "Sonnet 5")
             .with_provider("anthropic")
+            .with_protocol("anthropic-messages")
+            .with_provenance("curated:claude-builtin")
             .with_description("Efficient for routine tasks")
             .with_source("builtin"),
         ModelInfo::new("claude-haiku-4-5-20251001", "Haiku 4.5")
             .with_provider("anthropic")
+            .with_protocol("anthropic-messages")
+            .with_provenance("curated:claude-builtin")
             .with_description("Fastest for quick answers")
             .with_source("builtin"),
     ]
@@ -775,6 +835,9 @@ fn push_claude_settings_model_entry(
     let mut entry = ModelInfo::new(id, runtime_model)
         .with_runtime_model(runtime_model)
         .with_provider("anthropic")
+        .with_protocol("anthropic-messages")
+        .with_provenance("settings:claude-model-override")
+        .with_observed_at(model_catalog_now_ms())
         .with_description(description)
         .with_source("settings-override");
     if is_default {
@@ -1179,6 +1242,36 @@ mod tests {
     }
 
     #[test]
+    fn generated_fallback_round_trips_provider_protocol_and_provenance() {
+        let codex = get_codex_models();
+        let gemini = get_gemini_models();
+        let kimi = get_builtin_kimi_models();
+        assert!(!codex.is_empty());
+        assert!(!gemini.is_empty());
+        assert!(!kimi.is_empty());
+        assert!(codex.iter().all(|model| {
+            model.provider.as_deref() == Some("openai")
+                && model.protocol.as_deref() == Some("openai-responses")
+                && model.provenance.as_deref() == Some("generated:model-catalog")
+        }));
+        assert!(kimi.iter().all(|model| {
+            model.provider.as_deref() == Some("kimi")
+                && model.protocol.as_deref() == Some("kimi")
+                && model.provenance.as_deref() == Some("generated:model-catalog")
+        }));
+        assert!(gemini.iter().all(|model| {
+            model.provider.as_deref() == Some("google")
+                && model.protocol.as_deref() == Some("google-gemini")
+                && model.provenance.as_deref() == Some("generated:model-catalog")
+        }));
+        let serialized = serde_json::to_value(&codex[0]).expect("serialize model");
+        assert_eq!(serialized["provider"], "openai");
+        assert_eq!(serialized["protocol"], "openai-responses");
+        assert_eq!(serialized["lastVerifiedAt"], "2026-07-26");
+        assert_eq!(serialized["lifecycle"], "fallback");
+    }
+
+    #[test]
     fn home_dir_detection() {
         // These should not panic
         let _ = get_claude_home_dir();
@@ -1190,8 +1283,16 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_engine_type_supports_opencode() {
-        let resolved =
-            resolve_engine_type(Some("opencode"), Some("claude"), None, None, None, None, None).await;
+        let resolved = resolve_engine_type(
+            Some("opencode"),
+            Some("claude"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
         assert_eq!(resolved, EngineType::OpenCode);
     }
 

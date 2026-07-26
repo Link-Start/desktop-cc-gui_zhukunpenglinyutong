@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[path = "../../engine/agent_event_bus.rs"]
-pub(crate) mod agent_event_bus;
 #[path = "../../engine/adapter_registry.rs"]
 pub(crate) mod adapter_registry;
+#[path = "../../engine/agent_event_bus.rs"]
+pub(crate) mod agent_event_bus;
 #[allow(dead_code)]
 #[path = "../../engine/claude.rs"]
 pub mod claude;
@@ -520,8 +520,18 @@ pub struct ModelInfo {
     pub default: bool,
     #[serde(default)]
     pub description: String,
-    #[serde(skip_serializing)]
+    #[serde(default)]
     pub provider: Option<String>,
+    #[serde(default)]
+    pub protocol: Option<String>,
+    #[serde(default)]
+    pub provenance: Option<String>,
+    #[serde(default)]
+    pub observed_at: Option<u64>,
+    #[serde(default)]
+    pub last_verified_at: Option<String>,
+    #[serde(default)]
+    pub lifecycle: Option<String>,
     #[serde(default = "default_model_source")]
     pub source: String,
 }
@@ -540,6 +550,11 @@ impl ModelInfo {
             default: false,
             description: String::new(),
             provider: None,
+            protocol: None,
+            provenance: None,
+            observed_at: None,
+            last_verified_at: None,
+            lifecycle: None,
             source: default_model_source(),
         }
     }
@@ -551,6 +566,31 @@ impl ModelInfo {
 
     pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
         self.provider = Some(provider.into());
+        self
+    }
+
+    pub fn with_protocol(mut self, protocol: impl Into<String>) -> Self {
+        self.protocol = Some(protocol.into());
+        self
+    }
+
+    pub fn with_provenance(mut self, provenance: impl Into<String>) -> Self {
+        self.provenance = Some(provenance.into());
+        self
+    }
+
+    pub fn with_observed_at(mut self, observed_at: u64) -> Self {
+        self.observed_at = Some(observed_at);
+        self
+    }
+
+    pub fn with_fallback_freshness(
+        mut self,
+        last_verified_at: impl Into<String>,
+        lifecycle: impl Into<String>,
+    ) -> Self {
+        self.last_verified_at = Some(last_verified_at.into());
+        self.lifecycle = Some(lifecycle.into());
         self
     }
 

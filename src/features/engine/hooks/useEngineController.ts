@@ -27,6 +27,7 @@ import {
   validateCodexCustomModels,
 } from "../../composer/types/provider";
 import { readClaudeCustomModelsFromStorage } from "../../models/claudeCustomModels";
+import { getGeneratedModelFallbacks } from "../../models/generatedModelFallbacks";
 import { startupOrchestrator } from "../../startup-orchestration/utils/startupOrchestrator";
 import {
   BUILTIN_ENGINE_TYPES,
@@ -154,14 +155,11 @@ const WEB_RUNTIME_INITIAL_STATUSES: EngineStatus[] = [
     error: null,
   },
 ];
-const GEMINI_DEFAULT_MODEL_ID = "gemini-2.5-flash-lite";
-const GEMINI_PRESET_MODEL_IDS = [
-  "gemini-2.5-flash-lite",
-  "gemini-3-flash-preview",
-  "gemini-2.5-flash",
-  "gemini-2.5-pro",
-  "gemini-3.1-pro-preview",
-] as const;
+const GEMINI_FALLBACK_MODELS = getGeneratedModelFallbacks("gemini");
+const GEMINI_DEFAULT_MODEL_ID =
+  GEMINI_FALLBACK_MODELS.find((model) => model.default)?.id ??
+  GEMINI_FALLBACK_MODELS[0]?.id ??
+  "";
 
 const UNKNOWN_MODEL_SOURCE = "unknown";
 const CUSTOM_MODEL_SOURCE = "custom";
@@ -225,8 +223,14 @@ function appendGeminiPresetModels(models: EngineModelInfo[]): EngineModelInfo[] 
   };
 
   models.forEach(pushModel);
-  GEMINI_PRESET_MODEL_IDS.forEach((id) => {
-    pushModel({ id, displayName: id, description: id, isDefault: false });
+  GEMINI_FALLBACK_MODELS.forEach((model) => {
+    pushModel({
+      id: model.id,
+      displayName: model.label,
+      description: model.description,
+      source: "fallback",
+      isDefault: Boolean(model.default),
+    });
   });
 
   return merged;
