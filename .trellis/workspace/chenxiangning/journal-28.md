@@ -632,3 +632,36 @@ GitDiffPanel 与 GitMultiRepositoryChanges 的提交区统一改为 textarea 右
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1158: 阻止供应商选择静默回退
+
+**Date**: 2026-07-26
+**Task**: 阻止供应商选择静默回退
+**Branch**: `feature/v-0710`
+
+### Summary
+
+复审并修复 Sidebar provider catalog 错误吞没与 remembered managed provider 静默回退；80 个目标 Vitest 与 TypeScript 检查通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4934c8f39` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
