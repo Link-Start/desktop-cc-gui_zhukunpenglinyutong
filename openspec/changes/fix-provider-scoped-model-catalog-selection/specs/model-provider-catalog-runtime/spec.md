@@ -44,6 +44,13 @@ Catalog entries MUST carry provider identity separately from API/wire protocol a
 
 Catalog refresh MUST replace cache only after successful validation; failure MUST retain last-good entries with error diagnostics. A stale response for a previously active provider scope MUST NOT replace the currently active scope.
 
+#### Scenario: provider scope changes before the new catalog returns
+
+- **WHEN** active thread binding changes from local/global or provider A to managed provider B
+- **THEN** frontend MUST immediately publish provider B's last-good catalog when one exists
+- **AND** when provider B has no last-good catalog, frontend MUST expose an empty/loading catalog until B resolves
+- **AND** models from local/global or provider A MUST NOT remain selectable during the request
+
 #### Scenario: provider refresh fails
 
 - **WHEN** a previous successful provider-scoped catalog exists

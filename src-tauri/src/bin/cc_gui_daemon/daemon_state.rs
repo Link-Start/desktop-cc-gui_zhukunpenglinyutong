@@ -1073,7 +1073,11 @@ impl DaemonState {
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
                 let session = self
                     .engine_manager
-                    .get_claude_session(&workspace_id, &workspace_path)
+                    .get_claude_session_for_provider(
+                        &workspace_id,
+                        &workspace_path,
+                        effective_provider_profile_id.as_deref(),
+                    )
                     .await;
                 let has_images = images
                     .as_ref()
@@ -2308,15 +2312,10 @@ impl DaemonState {
         let active_engine = self.get_active_engine().await;
         match active_engine {
             engine::EngineType::Claude => {
-                if let Some(session) = self
-                    .engine_manager
+                self.engine_manager
                     .claude_manager
-                    .get_session(&workspace_id)
+                    .interrupt_workspace_sessions(&workspace_id)
                     .await
-                {
-                    session.interrupt().await?;
-                }
-                Ok(())
             }
             engine::EngineType::Codex => Ok(()),
             engine::EngineType::OpenCode => {
@@ -2357,7 +2356,7 @@ impl DaemonState {
                 if let Some(session) = self
                     .engine_manager
                     .claude_manager
-                    .get_session(&workspace_id)
+                    .session_for_turn(&workspace_id, &turn_id)
                     .await
                 {
                     session.interrupt_turn(&turn_id).await?;
@@ -3460,6 +3459,25 @@ impl DaemonState {
         request_id: Value,
         result: Value,
     ) -> Result<Value, String> {
+        if request_id.is_string() {
+            for session in self
+                .engine_manager
+                .claude_manager
+                .sessions_for_workspace(&workspace_id)
+                .await
+            {
+                if session.has_pending_user_input(&request_id) {
+                    session.respond_to_user_input(request_id, result).await?;
+                    return Ok(json!({ "ok": true }));
+                }
+                if session.has_pending_approval_request(&request_id) {
+                    session
+                        .respond_to_approval_request(request_id, result)
+                        .await?;
+                    return Ok(json!({ "ok": true }));
+                }
+            }
+        }
         codex_core::respond_to_server_request_core(
             &self.sessions,
             workspace_id,

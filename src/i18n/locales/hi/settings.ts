@@ -1104,8 +1104,8 @@ const settings = {
       "dialog": {
         "addTitle": "Claude प्रदाता जोड़ें",
         "editTitle": "Claude प्रदाता संपादित करें",
-        "addDescription": "एक नया प्रदाता कॉन्फ़िगर करें। कॉन्फ़िग ~/.claude/settings.json में लिखा जाएगा।",
-        "editDescription": "अपडेट तुरंत ~/.claude/settings.json पर लागू होते हैं।",
+        "addDescription": "प्रदाता desktop-cc-gui में अलग से संग्रहीत होता है और केवल उससे जुड़ी बातचीत में उपयोग होता है। ~/.claude/settings.json बदला नहीं जाता।",
+        "editDescription": "अपडेट desktop-cc-gui में अलग रहते हैं और इस प्रदाता से जुड़ी बातचीत पर लागू होते हैं। ~/.claude/settings.json बदला नहीं जाता।",
         "securityNotice": "सूचना: सभी सेटिंग्स आपकी मशीन पर स्थानीय रहती हैं। यह प्रोजेक्ट 100% ओपन सोर्स है।",
         "presetGroup": "त्वरित प्रीसेट",
         "providerName": "प्रदाता नाम",

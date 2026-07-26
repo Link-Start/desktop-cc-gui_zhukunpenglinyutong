@@ -20,7 +20,35 @@ async fn session_manager_get_or_create() {
         .await;
 
     // Should return the same session
-    assert_eq!(session1.workspace_id, session2.workspace_id);
+    assert!(Arc::ptr_eq(&session1, &session2));
+}
+
+#[tokio::test]
+async fn session_manager_isolates_provider_runtimes_in_the_same_workspace() {
+    let manager = ClaudeSessionManager::new();
+    let workspace_path = std::env::temp_dir().join("ccgui-claude-provider-runtime-ws");
+
+    let local = manager
+        .get_or_create_session("ws-1", workspace_path.as_path())
+        .await;
+    let provider_a = manager
+        .get_or_create_session_for_provider("ws-1", workspace_path.as_path(), Some("provider-a"))
+        .await;
+    let provider_b = manager
+        .get_or_create_session_for_provider("ws-1", workspace_path.as_path(), Some("provider-b"))
+        .await;
+
+    assert!(!Arc::ptr_eq(&local, &provider_a));
+    assert!(!Arc::ptr_eq(&provider_a, &provider_b));
+    assert_ne!(provider_a.runtime_locator(), provider_b.runtime_locator());
+    assert_eq!(manager.sessions_for_workspace("ws-1").await.len(), 3);
+    assert!(Arc::ptr_eq(
+        &provider_a,
+        &manager
+            .get_session_by_locator("ws-1", provider_a.runtime_locator())
+            .await
+            .expect("provider A runtime by opaque locator"),
+    ));
 }
 
 #[test]

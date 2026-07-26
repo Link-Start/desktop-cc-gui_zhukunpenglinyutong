@@ -112,10 +112,14 @@ export function useEngineController({
       const providerProfileId = options.providerProfileId?.trim() || null;
       const catalogScope = providerProfileId ?? "__global__";
       const catalogRequestKey = `${engineType}:${catalogScope}`;
+      const previousCatalogRequestKey = visibleCatalogRequestKeyRef.current;
       visibleCatalogRequestKeyRef.current = catalogRequestKey;
       const scopedFallbackModels = providerProfileId
         ? (lastGoodModelsByScopeRef.current.get(catalogRequestKey) ?? [])
         : fallbackModels;
+      if (previousCatalogRequestKey !== catalogRequestKey) {
+        setEngineModels(scopedFallbackModels.map((model) => normalizeEngineModelEntry(model)));
+      }
       try {
         const phase = options.phase ?? (options.forceRefresh ? "on-demand" : "idle-prewarm");
         const models = await startupOrchestrator.run({
@@ -146,9 +150,7 @@ export function useEngineController({
           models.length > 0 || options.forceRefresh || providerProfileId
             ? models
             : fallbackModels;
-        const nextModels = sourceModels.map((model) =>
-          normalizeEngineModelEntry(model),
-        );
+        const nextModels = sourceModels.map((model) => normalizeEngineModelEntry(model));
         lastGoodModelsByScopeRef.current.set(catalogRequestKey, nextModels);
         if (visibleCatalogRequestKeyRef.current === catalogRequestKey) {
           setEngineModels(nextModels);
@@ -166,9 +168,7 @@ export function useEngineController({
             error: error instanceof Error ? error.message : String(error),
           },
         });
-        const normalizedFallback = scopedFallbackModels.map((model) =>
-          normalizeEngineModelEntry(model),
-        );
+        const normalizedFallback = scopedFallbackModels.map((model) => normalizeEngineModelEntry(model));
         if (visibleCatalogRequestKeyRef.current === catalogRequestKey) {
           setEngineModels(normalizedFallback);
         }

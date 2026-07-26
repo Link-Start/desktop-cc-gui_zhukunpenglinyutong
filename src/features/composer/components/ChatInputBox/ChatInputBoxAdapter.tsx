@@ -48,7 +48,6 @@ import {
   getClaudeProviders,
   getClaudeAlwaysThinkingEnabled,
   setClaudeAlwaysThinkingEnabled,
-  switchClaudeProvider,
   updateClaudeProvider,
   getWorkspaceFiles,
   getWorkspaceDirectoryChildren,
@@ -1296,13 +1295,8 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
             },
           };
           await updateClaudeProvider(activeProvider.id, nextProvider);
-          await switchClaudeProvider(activeProvider.id);
         } catch {
-          try {
-            await setClaudeAlwaysThinkingEnabled(enabled);
-          } catch {
-            setLocalAlwaysThinkingEnabled(rollbackValue);
-          }
+          setLocalAlwaysThinkingEnabled(rollbackValue);
         }
       },
       [isCodexEngine, localAlwaysThinkingEnabled, onToggleThinking],

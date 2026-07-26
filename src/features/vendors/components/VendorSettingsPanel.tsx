@@ -631,7 +631,6 @@ export function VendorSettingsPanel({
               onEditLocalSettings={claude.handleOpenClaudeSettingsJsonDialog}
               onEdit={claude.handleEditProvider}
               onDelete={claude.handleDeleteProvider}
-              onSwitch={claude.handleSwitchProvider}
               onReorder={claude.handleReorderProviders}
             />
             <ProviderDialog

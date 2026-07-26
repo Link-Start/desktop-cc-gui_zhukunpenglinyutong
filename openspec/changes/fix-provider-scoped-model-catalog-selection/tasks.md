@@ -25,3 +25,9 @@
 - [x] 5.2 [P0, depends: 5.1] 将 pipe disconnect 纳入 shared create-session bounded retry；重建同一 provider runtime，持续失败转换为稳定 recovery error；同步 Desktop/daemon tests。
 - [x] 5.3 [P0, depends: 5.2] frontend 兼容 raw pipe error，只显示 recoverable toast、不调用 native alert；用 `useWorkspaceActions` tests 覆盖 managed/disk provider。
 - [x] 5.4 [P0, depends: 5.1,5.2,5.3] 更新 Trellis executable contracts，运行 focused Rust/Vitest、typecheck、lint、runtime contracts、OpenSpec strict validate 与 cross-layer verification。
+
+## 6. Manual-Acceptance Regression Closure
+
+- [x] 6.1 [P0, depends: 2.1,2.2] provider scope 切换开始时立即发布该 scope 的 last-good catalog；无缓存时清空旧 scope，禁止请求期间继续展示 disk/global 或其他 provider models。
+- [x] 6.2 [P0, depends: 6.1] 补“选择 managed Claude provider → 创建 pending thread → provider catalog 收敛”的 regression tests，断言旧 `gpt-*` model 不可见、provider default model 可选。
+- [x] 6.3 [P0, depends: 6.1,6.2] 运行 focused Vitest、typecheck、lint、runtime contracts、strict OpenSpec validation 与 cross-layer review。

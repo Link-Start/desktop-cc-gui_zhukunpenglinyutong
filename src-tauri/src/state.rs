@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
@@ -73,8 +73,15 @@ impl AppState {
             .await;
 
         if previous_claude_bin != new_claude_bin {
-            let sessions = self.engine_manager.claude_manager.list_sessions().await;
-            for (workspace_id, _session) in sessions {
+            let workspace_ids = self
+                .engine_manager
+                .claude_manager
+                .list_sessions()
+                .await
+                .into_iter()
+                .map(|(workspace_id, _session)| workspace_id)
+                .collect::<HashSet<_>>();
+            for workspace_id in workspace_ids {
                 self.engine_manager
                     .remove_claude_session(&workspace_id)
                     .await;

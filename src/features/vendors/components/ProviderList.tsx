@@ -30,7 +30,6 @@ interface ProviderListProps {
   onEditLocalSettings: () => void;
   onEdit: (provider: ProviderConfig) => void;
   onDelete: (provider: ProviderConfig) => void;
-  onSwitch: (id: string) => void;
   onReorder: (orderedIds: string[]) => void;
 }
 
@@ -39,31 +38,17 @@ export function buildClaudeProviderReorderIds(
   sourceIndex: number,
   destinationIndex: number,
 ): string[] {
-  const activeProvider =
-    regularProviders.find((provider) => provider.isActive) ?? null;
-  const others = regularProviders.filter((provider) => !provider.isActive);
-  const newOthers = Array.from(others);
-  const [moved] = newOthers.splice(sourceIndex, 1);
+  const reorderedProviders = Array.from(regularProviders);
+  const [moved] = reorderedProviders.splice(sourceIndex, 1);
   if (!moved) {
     return regularProviders.map((provider) => provider.id);
   }
   const safeDestinationIndex = Math.min(
     Math.max(destinationIndex, 0),
-    newOthers.length,
+    reorderedProviders.length,
   );
-  newOthers.splice(safeDestinationIndex, 0, moved);
-
-  if (!activeProvider) {
-    return newOthers.map((provider) => provider.id);
-  }
-
-  const homeIndex = regularProviders.findIndex(
-    (provider) => provider.id === activeProvider.id,
-  );
-  const safeHomeIndex = Math.min(Math.max(homeIndex, 0), newOthers.length);
-  const newFull = Array.from(newOthers);
-  newFull.splice(safeHomeIndex, 0, activeProvider);
-  return newFull.map((provider) => provider.id);
+  reorderedProviders.splice(safeDestinationIndex, 0, moved);
+  return reorderedProviders.map((provider) => provider.id);
 }
 
 export function ProviderList({
@@ -75,7 +60,6 @@ export function ProviderList({
   onEditLocalSettings,
   onEdit,
   onDelete,
-  onSwitch,
   onReorder,
 }: ProviderListProps) {
   const { t } = useTranslation();
@@ -89,12 +73,6 @@ export function ProviderList({
     (provider) =>
       provider.id !== LOCAL_SETTINGS_PROVIDER_ID && !provider.isLocalProvider,
   );
-  const activeProvider =
-    regularProviders.find((provider) => provider.isActive) ?? null;
-  const otherProviders = regularProviders.filter(
-    (provider) => !provider.isActive,
-  );
-
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) {
       return;
@@ -138,14 +116,17 @@ export function ProviderList({
         style={options.rowStyle}
         className={cn(
           "vendor-provider-table-row",
-          provider.isActive && "active",
+          isLocalProvider && provider.isActive && "active",
           isLocalProvider && "vendor-local-provider-row",
           options.isDragging && "is-dragging",
           options.rowProps?.className,
         )}
       >
         {options.includeDragCell !== false ? (
-          <td data-slot="table-cell" className="vendor-provider-table-drag-cell">
+          <td
+            data-slot="table-cell"
+            className="vendor-provider-table-drag-cell"
+          >
             {options.dragHandle}
           </td>
         ) : null}
@@ -186,26 +167,22 @@ export function ProviderList({
           data-slot="table-cell"
           className="vendor-provider-table-status-cell"
         >
-          {provider.isActive ? (
-            <Badge
-              variant="outline"
-              className="text-stone-700 dark:text-stone-200"
-            >
-              <span
-                aria-hidden="true"
-                className="size-1.5 rounded-full bg-emerald-500"
-              />
-              {t("settings.vendor.inUse")}
-            </Badge>
-          ) : (
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => onSwitch(provider.id)}
-            >
-              {t("settings.vendor.enable")}
-            </Button>
-          )}
+          <Badge
+            variant="outline"
+            className="text-stone-700 dark:text-stone-200"
+          >
+            {isLocalProvider && provider.isActive ? (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 rounded-full bg-emerald-500"
+                />
+                {t("settings.vendor.inUse")}
+              </>
+            ) : (
+              t("settings.vendor.availableForNewCodexSessions")
+            )}
+          </Badge>
         </td>
         <td
           data-slot="table-cell"
@@ -263,7 +240,10 @@ export function ProviderList({
             emptyText=""
             showHeader={false}
             renderRows={() => (
-              <tbody className="vendor-provider-table-body" data-slot="table-body">
+              <tbody
+                className="vendor-provider-table-body"
+                data-slot="table-body"
+              >
                 {renderProviderRow(localProvider, { includeDragCell: false })}
               </tbody>
             )}
@@ -291,15 +271,7 @@ export function ProviderList({
         includeDragColumn
         renderRows={() => (
           <>
-            {activeProvider && (
-              <tbody
-                className="vendor-provider-table-body"
-                data-slot="table-body"
-              >
-                {activeProvider && renderProviderRow(activeProvider)}
-              </tbody>
-            )}
-            {otherProviders.length > 0 && (
+            {regularProviders.length > 0 && (
               <DragDropContext onDragEnd={handleDragEnd}>
                 <Droppable droppableId="vendor-provider-list">
                   {(provided) => (
@@ -309,7 +281,7 @@ export function ProviderList({
                       {...provided.droppableProps}
                       ref={provided.innerRef}
                     >
-                      {otherProviders.map((provider, index) => (
+                      {regularProviders.map((provider, index) => (
                         <Draggable
                           key={provider.id}
                           draggableId={provider.id}

@@ -1343,9 +1343,9 @@ const settings = {
         addTitle: "Add Claude Provider",
         editTitle: "Edit Claude Provider",
         addDescription:
-          "Configure a new provider. The config will be written into ~/.claude/settings.json.",
+          "The provider is stored separately in desktop-cc-gui and used only by conversations bound to it. ~/.claude/settings.json is not modified.",
         editDescription:
-          "Updates are applied to ~/.claude/settings.json immediately.",
+          "Updates remain isolated in desktop-cc-gui and apply to conversations bound to this provider. ~/.claude/settings.json is not modified.",
         securityNotice:
           "Notice: all settings stay local on your machine. This project is 100% open source.",
         presetGroup: "Quick Presets",

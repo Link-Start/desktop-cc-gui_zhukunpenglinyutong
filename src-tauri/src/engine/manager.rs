@@ -287,17 +287,36 @@ impl EngineManager {
             .await
     }
 
+    pub async fn get_claude_session_for_provider(
+        &self,
+        workspace_id: &str,
+        workspace_path: &Path,
+        provider_profile_id: Option<&str>,
+    ) -> Arc<ClaudeSession> {
+        self.claude_manager
+            .get_or_create_session_for_provider(workspace_id, workspace_path, provider_profile_id)
+            .await
+    }
+
     /// Remove a Claude session
     pub async fn remove_claude_session(&self, workspace_id: &str) {
-        if let Some(session) = self.claude_manager.remove_session(workspace_id).await {
-            session.mark_disposed();
+        for (runtime_key, session) in self
+            .claude_manager
+            .runtime_sessions_for_workspace(workspace_id)
+            .await
+        {
             if let Err(error) = session.interrupt().await {
                 log::warn!(
                     "[engine_manager] failed to interrupt claude session during remove (workspace={}): {}",
                     workspace_id,
                     error
                 );
+                continue;
             }
+            session.mark_disposed();
+            self.claude_manager
+                .remove_runtime_session(&runtime_key)
+                .await;
         }
     }
 

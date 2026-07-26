@@ -1117,6 +1117,67 @@ describe("useEngineController", () => {
     ).toBe(false);
   });
 
+  it("hides the previous scope while a provider catalog is loading", async () => {
+    const publicModels: EngineStatus["models"] = [
+      {
+        id: "gpt-5.5",
+        displayName: "gpt-5.5",
+        description: "global",
+        isDefault: true,
+      },
+    ];
+    detectEnginesMock.mockResolvedValue([
+      createEngineStatus("claude", true, publicModels),
+    ]);
+    getActiveEngineMock.mockResolvedValue("claude");
+    getEngineModelsMock.mockResolvedValueOnce(publicModels);
+
+    const { result } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+    await waitFor(() => expect(result.current.isInitialized).toBe(true));
+    expect(result.current.engineModelsAsOptions[0]?.id).toBe("gpt-5.5");
+
+    const deepSeekRequest = createDeferred<EngineStatus["models"]>();
+    getEngineModelsMock.mockReset();
+    getEngineModelsMock.mockImplementationOnce(() => deepSeekRequest.promise);
+
+    let refreshPromise: Promise<unknown> = Promise.resolve();
+    act(() => {
+      refreshPromise = result.current.refreshEngineModels("claude", {
+        providerProfileId: "provider-deepseek",
+      });
+    });
+
+    expect(result.current.engineModelsAsOptions).toEqual([]);
+
+    deepSeekRequest.resolve([
+      {
+        id: "deepseek-v4-pro",
+        displayName: "deepseek-v4-pro",
+        description: "provider",
+        providerProfileId: "provider-deepseek",
+        isDefault: true,
+      },
+    ]);
+    await act(async () => {
+      await refreshPromise;
+    });
+
+    expect(result.current.engineModelsAsOptions).toEqual([
+      expect.objectContaining({
+        id: "deepseek-v4-pro",
+        providerProfileId: "provider-deepseek",
+        isDefault: true,
+      }),
+    ]);
+    expect(
+      result.current.engineModelsAsOptions.some(
+        (model) => model.id === "gpt-5.5",
+      ),
+    ).toBe(false);
+  });
+
   it("retains the same provider last-good catalog when refresh fails", async () => {
     const publicModels: EngineStatus["models"] = [
       {

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import enSettings from "../../../i18n/locales/en/settings";
+import zhSettings from "../../../i18n/locales/zh/settings";
 import { defaultConfigJson } from "./ProviderDialog";
 
 describe("ProviderDialog defaultConfigJson", () => {
@@ -46,5 +48,19 @@ describe("ProviderDialog defaultConfigJson", () => {
       MAX_THINKING_TOKENS: "31999",
       MCP_TIMEOUT: "60000",
     });
+  });
+
+  it("describes managed providers as isolated from the global Claude settings", () => {
+    const enDialog = enSettings.settings.vendor.dialog;
+    const zhDialog = zhSettings.settings.vendor.dialog;
+
+    expect(enDialog.addDescription).toContain("stored separately in desktop-cc-gui");
+    expect(enDialog.editDescription).toContain(
+      "~/.claude/settings.json is not modified",
+    );
+    expect(zhDialog.addDescription).toContain("独立存储在 desktop-cc-gui");
+    expect(zhDialog.editDescription).toContain(
+      "不会修改 ~/.claude/settings.json",
+    );
   });
 });

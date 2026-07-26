@@ -1104,8 +1104,8 @@ const settings = {
       "dialog": {
         "addTitle": "Adicionar provedor Claude",
         "editTitle": "Editar provedor Claude",
-        "addDescription": "Configure um novo provedor. A configuração será gravada em ~/.claude/settings.json.",
-        "editDescription": "As atualizações são aplicadas a ~/.claude/settings.json imediatamente.",
+        "addDescription": "O provedor é armazenado separadamente no desktop-cc-gui e usado apenas por conversas vinculadas a ele. ~/.claude/settings.json não é modificado.",
+        "editDescription": "As atualizações permanecem isoladas no desktop-cc-gui e se aplicam às conversas vinculadas. ~/.claude/settings.json não é modificado.",
         "securityNotice": "Aviso: todas as configurações permanecem localmente na sua máquina. Este projeto é 100% de código aberto.",
         "presetGroup": "Predefinições rápidas",
         "providerName": "Nome do provedor",

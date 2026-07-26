@@ -6,14 +6,10 @@ import {
   addClaudeProvider,
   updateClaudeProvider,
   deleteClaudeProvider,
-  switchClaudeProvider,
   reorderClaudeProviders,
   getCurrentClaudeConfig,
 } from "../../../services/tauri";
-import {
-  STORAGE_KEYS,
-  migrateModelMappingStorage,
-} from "../../models/constants";
+import { migrateModelMappingStorage } from "../../models/constants";
 
 export interface ProviderDialogState {
   isOpen: boolean;
@@ -28,7 +24,6 @@ export interface DeleteConfirmState {
 export type ClaudeProviderAction =
   | "load"
   | "save"
-  | "switch"
   | "reorder"
   | "delete"
   | "storage";
@@ -82,65 +77,11 @@ export function useProviderManagement() {
     provider: null,
   });
 
-  const syncActiveProviderModelMapping = useCallback(
-    (provider?: ProviderConfig | null) => {
-      if (typeof window === "undefined" || !window.localStorage) return;
-      const storageKey = STORAGE_KEYS.CLAUDE_MODEL_MAPPING;
-      if (!provider?.settingsConfig?.env) {
-        try {
-          window.localStorage.removeItem(storageKey);
-          window.dispatchEvent(
-            new CustomEvent("localStorageChange", {
-              detail: { key: storageKey },
-            }),
-          );
-        } catch (error) {
-          throw providerActionError("storage", error);
-        }
-        return;
-      }
-      const env = provider.settingsConfig.env as Record<string, unknown>;
-      const mapping = {
-        main: env.ANTHROPIC_MODEL ?? "",
-        haiku: env.ANTHROPIC_DEFAULT_HAIKU_MODEL ?? "",
-        sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? "",
-        opus: env.ANTHROPIC_DEFAULT_OPUS_MODEL ?? "",
-      };
-      const hasValue = Object.values(mapping).some(
-        (v) => v && String(v).trim().length > 0,
-      );
-      try {
-        if (hasValue) {
-          const serialized = JSON.stringify(mapping);
-          window.localStorage.setItem(storageKey, serialized);
-          // Dispatch custom event so useModels picks it up in the same tab
-          window.dispatchEvent(
-            new CustomEvent("localStorageChange", {
-              detail: { key: storageKey },
-            }),
-          );
-        } else {
-          window.localStorage.removeItem(storageKey);
-          window.dispatchEvent(
-            new CustomEvent("localStorageChange", {
-              detail: { key: storageKey },
-            }),
-          );
-        }
-      } catch (error) {
-        throw providerActionError("storage", error);
-      }
-    },
-    [],
-  );
-
   const loadProviders = useCallback(async () => {
     setLoading(true);
     try {
       const list = await getClaudeProviders();
       setProviders(list);
-      const active = list.find((p: ProviderConfig) => p.isActive);
-      syncActiveProviderModelMapping(active ?? null);
       return { ok: true } as const;
     } catch (error) {
       const actionError =
@@ -152,7 +93,7 @@ export function useProviderManagement() {
     } finally {
       setLoading(false);
     }
-  }, [syncActiveProviderModelMapping]);
+  }, []);
 
   const loadCurrentConfig = useCallback(async () => {
     setCurrentConfigLoading(true);
@@ -250,19 +191,11 @@ export function useProviderManagement() {
           const currentProvider =
             providers.find((p) => p.id === providerId) ||
             providerDialog.provider!;
-          const isActive = currentProvider.isActive;
 
           await updateClaudeProvider(providerId, {
             ...currentProvider,
             ...updates,
           });
-
-          if (isActive) {
-            syncActiveProviderModelMapping({
-              ...currentProvider,
-              settingsConfig: parsedConfig,
-            });
-          }
         }
 
         setProviderDialog({ isOpen: false, provider: null });
@@ -281,32 +214,9 @@ export function useProviderManagement() {
     [
       providerDialog.provider,
       providers,
-      syncActiveProviderModelMapping,
       loadProviders,
       loadCurrentConfig,
     ],
-  );
-
-  const handleSwitchProvider = useCallback(
-    async (id: string) => {
-      try {
-        await switchClaudeProvider(id);
-        // Sync model mapping only after backend succeeds
-        const target = providers.find((p) => p.id === id);
-        if (target) {
-          syncActiveProviderModelMapping(target);
-        }
-        await Promise.all([loadProviders(), loadCurrentConfig()]);
-        setProviderError(null);
-        return { ok: true } as const;
-      } catch (cause) {
-        const error = providerActionError("switch", cause);
-        await loadProviders();
-        setProviderError(error);
-        return { ok: false, error } as const;
-      }
-    },
-    [providers, syncActiveProviderModelMapping, loadProviders, loadCurrentConfig],
   );
 
   const handleReorderProviders = useCallback(
@@ -394,7 +304,6 @@ export function useProviderManagement() {
     handleCloseClaudeSettingsJsonDialog,
     handleClaudeSettingsJsonSaved,
     handleSaveProvider,
-    handleSwitchProvider,
     handleReorderProviders,
     handleDeleteProvider,
     confirmDeleteProvider,

@@ -268,9 +268,23 @@ async fn compact_claude_thread(
             .ok_or_else(|| "Workspace not found".to_string())?
     };
     let workspace_path = PathBuf::from(&workspace_entry.path);
+    let provider_profile_id = crate::session_management::resolve_engine_provider_profile_id(
+        state.storage_path.as_path(),
+        &workspace_id,
+        Some(&session_id),
+        "claude",
+        None,
+    )?;
+    let provider_launch_profile = crate::engine::claude::resolve_claude_provider_launch_profile(
+        provider_profile_id.as_deref(),
+    )?;
     let session = state
         .engine_manager
-        .get_claude_session(&workspace_id, &workspace_path)
+        .get_claude_session_for_provider(
+            &workspace_id,
+            &workspace_path,
+            provider_profile_id.as_deref(),
+        )
         .await;
 
     emit_manual_compaction_event(
@@ -298,7 +312,15 @@ async fn compact_claude_thread(
     // conversation and legitimately takes minutes on a large context. send_message
     // already has a 90s first-event watchdog (claude.rs) guarding a true hang, and
     // the auto-compact path (lifecycle.rs) runs uncapped too — matching it here.
-    let compact_result = session.send_message(params, &turn_id).await;
+    let app_settings = state.app_settings.lock().await.clone();
+    let compact_result = session
+        .send_message_with_app_settings_and_provider_env(
+            params,
+            &turn_id,
+            Some(&app_settings),
+            provider_launch_profile.as_ref().map(|profile| &profile.env),
+        )
+        .await;
 
     match compact_result {
         Ok(result_text) => {
@@ -1758,10 +1780,10 @@ pub(crate) async fn respond_to_server_request(
     // Prefer request-id based Claude routing so AskUserQuestion responses
     // are delivered to the correct waiting Claude turn even when global
     // active-engine state is stale.
-    if let Some(session) = state
+    for session in state
         .engine_manager
         .claude_manager
-        .get_session(&workspace_id)
+        .sessions_for_workspace(&workspace_id)
         .await
     {
         if session.has_pending_user_input(&request_id) {

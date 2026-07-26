@@ -1575,7 +1575,11 @@ pub async fn engine_send_message(
                 .await;
 
             let session = manager
-                .get_claude_session(&workspace_id, &workspace_path)
+                .get_claude_session_for_provider(
+                    &workspace_id,
+                    &workspace_path,
+                    effective_provider_profile_id.as_deref(),
+                )
                 .await;
 
             let has_images = images
@@ -2893,10 +2897,10 @@ pub async fn engine_interrupt(
 
     match active_engine {
         EngineType::Claude => {
-            if let Some(session) = manager.claude_manager.get_session(&workspace_id).await {
-                session.interrupt().await?;
-            }
-            Ok(())
+            manager
+                .claude_manager
+                .interrupt_workspace_sessions(&workspace_id)
+                .await
         }
         EngineType::Codex => {
             // Codex interrupts are handled via turn_interrupt RPC from the frontend.
@@ -2952,7 +2956,11 @@ pub async fn engine_interrupt_turn(
 
     match target_engine {
         EngineType::Claude => {
-            if let Some(session) = manager.claude_manager.get_session(&workspace_id).await {
+            if let Some(session) = manager
+                .claude_manager
+                .session_for_turn(&workspace_id, &turn_id)
+                .await
+            {
                 session.interrupt_turn(&turn_id).await?;
             }
             Ok(())

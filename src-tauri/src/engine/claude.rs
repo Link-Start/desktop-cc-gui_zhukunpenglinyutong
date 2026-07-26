@@ -299,6 +299,8 @@ fn unix_timestamp_ms() -> u64 {
 pub struct ClaudeSession {
     /// Workspace identifier
     pub workspace_id: String,
+    /// Opaque in-process locator used by the AskUserQuestion MCP bridge.
+    runtime_locator: String,
     /// Workspace directory path
     pub workspace_path: PathBuf,
     /// Current Claude session ID (for --resume)
@@ -362,6 +364,9 @@ pub struct ClaudeSession {
     /// `send_message_with_app_settings`. The in-process MCP server reads this to
     /// route a mid-turn AskUserQuestion to the live turn's event subscriber.
     active_turn_id: StdMutex<Option<String>>,
+    /// Provider environment captured for the lifetime of a turn, including
+    /// approval/AskUserQuestion resume subprocesses.
+    provider_env_by_turn: StdMutex<HashMap<String, BTreeMap<String, String>>>,
 }
 
 /// Clears the session's active turn on drop, covering every exit path of
@@ -611,6 +616,7 @@ impl ClaudeSession {
 
         Self {
             workspace_id,
+            runtime_locator: uuid::Uuid::new_v4().simple().to_string(),
             workspace_path,
             session_id: RwLock::new(None),
             event_sender,
@@ -639,7 +645,16 @@ impl ClaudeSession {
             ask_user_question_resume_diagnostic_sink: StdMutex::new(None),
             mcp_answer_waiters: StdMutex::new(HashMap::new()),
             active_turn_id: StdMutex::new(None),
+            provider_env_by_turn: StdMutex::new(HashMap::new()),
         }
+    }
+
+    pub(crate) fn runtime_locator(&self) -> &str {
+        &self.runtime_locator
+    }
+
+    pub(crate) async fn has_active_turn(&self, turn_id: &str) -> bool {
+        self.active_processes.lock().await.contains_key(turn_id)
     }
 
     pub(crate) fn register_turn_thread_id(&self, turn_id: &str, thread_id: &str) {
@@ -981,7 +996,7 @@ impl ClaudeSession {
         if !is_plan_mode {
             if let Some(server) = crate::engine::claude::askuser_mcp_global() {
                 cmd.arg("--mcp-config");
-                cmd.arg(server.mcp_config_json(&self.workspace_id));
+                cmd.arg(server.mcp_config_json(&self.workspace_id, &self.runtime_locator));
                 cmd.arg("--allowedTools");
                 cmd.arg(crate::engine::claude::AskUserMcpServer::allowed_tool_name());
                 // The CLI's per-request MCP tool-call fetch timeout defaults to 60s
@@ -1116,6 +1131,7 @@ impl ClaudeSession {
         app_settings: Option<&crate::types::AppSettings>,
         provider_env: Option<&BTreeMap<String, String>>,
     ) -> Result<String, String> {
+        self.remember_provider_env_for_turn(turn_id, provider_env);
         // Mark this as the active turn so a mid-turn MCP AskUserQuestion can find
         // the live event subscriber. Cleared on any exit path via the guard.
         self.set_active_turn(Some(turn_id));
@@ -1141,6 +1157,30 @@ impl ClaudeSession {
         if let Ok(mut active) = self.active_turn_id.lock() {
             *active = turn_id.map(ToOwned::to_owned);
         }
+    }
+
+    fn remember_provider_env_for_turn(
+        &self,
+        turn_id: &str,
+        provider_env: Option<&BTreeMap<String, String>>,
+    ) {
+        if let Ok(mut environments) = self.provider_env_by_turn.lock() {
+            match provider_env {
+                Some(environment) => {
+                    environments.insert(turn_id.to_string(), environment.clone());
+                }
+                None => {
+                    environments.remove(turn_id);
+                }
+            }
+        }
+    }
+
+    fn provider_env_for_turn(&self, turn_id: &str) -> Option<BTreeMap<String, String>> {
+        self.provider_env_by_turn
+            .lock()
+            .ok()
+            .and_then(|environments| environments.get(turn_id).cloned())
     }
 
     /// The turn currently being processed, if any. Used by the in-process MCP
@@ -2062,6 +2102,7 @@ impl ClaudeSession {
             active.drain().collect()
         };
         let mut first_terminate_error: Option<String> = None;
+        let mut failed_children = Vec::new();
         for (turn_id, mut child) in children {
             if let Err(error) = self.terminate_child_process(&turn_id, &mut child).await {
                 log::warn!(
@@ -2070,9 +2111,18 @@ impl ClaudeSession {
                     error
                 );
                 if first_terminate_error.is_none() {
-                    first_terminate_error = Some(error);
+                    first_terminate_error = Some(error.clone());
                 }
+                failed_children.push((turn_id, child));
+            } else {
+                self.clear_turn_ephemeral_state(&turn_id);
             }
+        }
+        if !failed_children.is_empty() {
+            let mut active = self.active_processes.lock().await;
+            active.extend(failed_children);
+            return Err(first_terminate_error
+                .unwrap_or_else(|| "Failed to terminate Claude child process".to_string()));
         }
         // Clean up tool tracking state that would otherwise leak from interrupted turns.
         // Use unwrap_or_else to still clear even if the mutex was poisoned by a panic.
@@ -2120,9 +2170,10 @@ impl ClaudeSession {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
-        if let Some(error) = first_terminate_error {
-            return Err(error);
-        }
+        self.provider_env_by_turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
         Ok(())
     }
 
@@ -2134,7 +2185,15 @@ impl ClaudeSession {
             active.remove(turn_id)
         };
         if let Some(child_proc) = child.as_mut() {
-            self.terminate_child_process(turn_id, child_proc).await?;
+            if let Err(error) = self.terminate_child_process(turn_id, child_proc).await {
+                if let Some(child) = child {
+                    self.active_processes
+                        .lock()
+                        .await
+                        .insert(turn_id.to_string(), child);
+                }
+                return Err(error);
+            }
         }
         self.clear_turn_ephemeral_state(turn_id);
         Ok(())

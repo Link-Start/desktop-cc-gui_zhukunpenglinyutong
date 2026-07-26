@@ -1104,8 +1104,8 @@ const settings = {
       "dialog": {
         "addTitle": "Claude プロバイダーを追加",
         "editTitle": "Claude プロバイダーを編集",
-        "addDescription": "新しいプロバイダーを設定します。設定は ~/.claude/settings.json に書き込まれます。",
-        "editDescription": "変更は ~/.claude/settings.json に即座に適用されます。",
+        "addDescription": "プロバイダー設定は desktop-cc-gui に独立して保存され、そのプロバイダーに紐づく会話だけで使用されます。~/.claude/settings.json は変更されません。",
+        "editDescription": "更新は desktop-cc-gui 内で独立したまま、紐づく会話に適用されます。~/.claude/settings.json は変更されません。",
         "securityNotice": "注意: すべての設定はお使いのマシン内にローカルで保持されます。このプロジェクトは 100% オープンソースです。",
         "presetGroup": "クイックプリセット",
         "providerName": "プロバイダー名",

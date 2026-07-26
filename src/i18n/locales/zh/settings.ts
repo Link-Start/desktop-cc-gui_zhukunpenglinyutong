@@ -1265,8 +1265,9 @@ const settings = {
         addTitle: "添加 Claude 供应商",
         editTitle: "编辑 Claude 供应商",
         addDescription:
-          "配置新的供应商信息，配置将写入 ~/.claude/settings.json。",
-        editDescription: "更新后将立即应用到 ~/.claude/settings.json。",
+          "供应商配置将独立存储在 desktop-cc-gui 中，仅供绑定该供应商的会话使用，不会修改 ~/.claude/settings.json。",
+        editDescription:
+          "更新后仍独立存储在 desktop-cc-gui 中，并应用于绑定该供应商的会话；不会修改 ~/.claude/settings.json。",
         securityNotice:
           "声明：当前设置全部在您电脑本地，本项目100%开源，请放心使用",
         presetGroup: "快捷配置",
