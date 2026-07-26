@@ -1906,3 +1906,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1137: 建立统一引擎运行时事件总线
+
+**Date**: 2026-07-26
+**Task**: 建立统一引擎运行时事件总线
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 OpenSpec Batch 1：Rust MossxAgentEvent bus、critical/delta backpressure、run.settled 去重、daemon CLI ingress 与前端 domain event compatibility；增量 Vitest、Rust tests、daemon check、TypeScript compile 和 strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `edf325f58` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
