@@ -401,3 +401,36 @@ Batch E：按 thread state 发送 provider、identity convergence、Claude fork/
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1151: 验证会话级供应商绑定实现
+
+**Date**: 2026-07-26
+**Task**: 验证会话级供应商绑定实现
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成增量测试、cross-layer review、OpenSpec strict verify，并记录人工验收清单。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d9c54418e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

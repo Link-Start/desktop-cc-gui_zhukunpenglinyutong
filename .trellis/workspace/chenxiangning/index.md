@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1150
+- **Total Sessions**: 1151
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~403 | Active |
+| `journal-28.md` | ~436 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1151 | 2026-07-26 | 验证会话级供应商绑定实现 | `d9c54418e` | `feature/v-0710` |
 | 1150 | 2026-07-26 | 收敛会话供应商绑定链路 | `9e40ad7e0` | `feature/v-0710` |
 | 1149 | 2026-07-26 | 完成三引擎会话供应商选择 | `1a7f90a3c` | `feature/v-0710` |
 | 1148 | 2026-07-26 | 完成会话级 Kimi 供应商隔离 | `206395691` | `feature/v-0710` |
