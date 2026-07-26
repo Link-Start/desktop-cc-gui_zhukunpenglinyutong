@@ -1725,9 +1725,31 @@ impl DaemonState {
             }
             engine::EngineType::Kimi => {
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let provider_binding_lookup_session_id = session_id
+                    .as_deref()
+                    .or(thread_id.as_deref())
+                    .map(str::to_string);
+                let effective_provider_profile_id =
+                    session_management::resolve_engine_provider_profile_id(
+                        self.storage_path.as_path(),
+                        &workspace_id,
+                        provider_binding_lookup_session_id.as_deref(),
+                        "kimi",
+                        provider_profile_id.as_deref(),
+                    )?;
+                let provider_launch_profile =
+                    engine::kimi_provider_profile::resolve_kimi_provider_launch_profile(
+                        &workspace_id,
+                        effective_provider_profile_id.as_deref(),
+                    )?;
                 let session = self
                     .engine_manager
-                    .get_or_create_kimi_session(&workspace_id, &workspace_path)
+                    .get_or_create_kimi_session_for_runtime(
+                        &workspace_id,
+                        &workspace_path,
+                        &provider_launch_profile.runtime_key,
+                        provider_launch_profile.home_dir.as_deref(),
+                    )
                     .await;
                 let resolved_session_id = resolve_kimi_session_id_for_engine_send(
                     continue_session,
@@ -1759,6 +1781,21 @@ impl DaemonState {
 
                 let turn_id = format!("kimi-turn-{}", uuid::Uuid::new_v4());
                 let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .or(provider_binding_lookup_session_id.as_deref())
+                    .unwrap_or(thread_id.as_str());
+                if let Some(binding) = provider_launch_profile.binding {
+                    session_management::record_engine_provider_binding_core(
+                        &self.workspaces,
+                        self.storage_path.as_path(),
+                        workspace_id.clone(),
+                        binding_session_id.to_string(),
+                        "kimi".to_string(),
+                        binding,
+                    )
+                    .await?;
+                }
                 let item_id = format!("kimi-item-{}", uuid::Uuid::new_v4());
 
                 let mut receiver = session.subscribe();
@@ -2246,10 +2283,9 @@ impl DaemonState {
                 Ok(())
             }
             engine::EngineType::Kimi => {
-                if let Some(session) = self.engine_manager.get_kimi_session(&workspace_id).await {
-                    session.interrupt().await?;
-                }
-                Ok(())
+                self.engine_manager
+                    .interrupt_kimi_sessions(&workspace_id, None)
+                    .await
             }
         }
     }
@@ -2293,10 +2329,9 @@ impl DaemonState {
                 Ok(())
             }
             engine::EngineType::Kimi => {
-                if let Some(session) = self.engine_manager.get_kimi_session(&workspace_id).await {
-                    session.interrupt_turn(&turn_id).await?;
-                }
-                Ok(())
+                self.engine_manager
+                    .interrupt_kimi_sessions(&workspace_id, Some(&turn_id))
+                    .await
             }
         }
     }

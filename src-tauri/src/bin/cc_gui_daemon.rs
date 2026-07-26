@@ -2423,6 +2423,9 @@ fn main() {
         if let Err(error) = state.engine_manager.shutdown_gemini_sessions().await {
             eprintln!("cc_gui_daemon Gemini shutdown failed: {error}");
         }
+        if let Err(error) = state.engine_manager.shutdown_kimi_sessions().await {
+            eprintln!("cc_gui_daemon Kimi shutdown failed: {error}");
+        }
         let codex_sessions = {
             let mut sessions = state.sessions.lock().await;
             sessions

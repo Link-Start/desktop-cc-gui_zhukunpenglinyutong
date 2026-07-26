@@ -32,6 +32,7 @@ pub mod gemini_history;
 pub(crate) mod gemini_proxy_guard;
 pub mod kimi;
 pub mod kimi_history;
+pub(crate) mod kimi_provider_profile;
 pub mod manager;
 pub mod opencode;
 pub(crate) mod remote_bridge;

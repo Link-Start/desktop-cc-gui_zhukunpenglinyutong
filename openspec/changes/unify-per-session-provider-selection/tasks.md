@@ -26,13 +26,13 @@
 
 ## 3. Batch C — Kimi provider home 与 runtime ownership
 
-- [ ] 3.1 在 app paths 增加 `~/.ccgui/kimi-provider-homes` 路径
-- [ ] 3.2 将既有 Kimi TOML builder/write-at-path 提炼为可复用 helper；保持 `providers/models/default_model` 一致、路径安全与 0600
-- [ ] 3.3 实现 Kimi profile resolver/materializer：local/None 使用 global home，managed 使用独立 home，missing provider 显式失败
-- [ ] 3.4 Kimi manager key 纳入 provider；workspace interrupt、turn interrupt、list、remove、shutdown 查找全部 matching runtime
-- [ ] 3.5 cleanup 失败显式传播并保留 process owner；`engine_send_message` Kimi 分支消费 effective binding并持久化 managed binding
-- [ ] 3.6 补 materialization、path traversal、permission、`KIMI_CODE_HOME`、双 provider、workspace cleanup 定向测试
-- [ ] 3.7 运行 Kimi targeted Rust tests、`git diff --check`；独立 review 后提交
+- [x] 3.1 在 app paths 增加 `~/.ccgui/kimi-provider-homes` 路径
+- [x] 3.2 将既有 Kimi TOML builder/write-at-path 提炼为可复用 helper；保持 `providers/models/default_model` 一致、路径安全与 0600
+- [x] 3.3 实现 Kimi profile resolver/materializer：local/None 使用 global home，managed 使用独立 home，missing provider 显式失败
+- [x] 3.4 Kimi manager key 纳入 provider；workspace interrupt、turn interrupt、list、remove、shutdown 查找全部 matching runtime
+- [x] 3.5 cleanup 失败显式传播并保留 process owner；`engine_send_message` Kimi 分支消费 effective binding并持久化 managed binding
+- [x] 3.6 补 materialization、path traversal、permission、`KIMI_CODE_HOME`、双 provider、workspace cleanup 定向测试
+- [x] 3.7 运行 Kimi targeted Rust tests、`git diff --check`；独立 review 后提交
 
 ## 4. Batch D — frontend provider selection
 

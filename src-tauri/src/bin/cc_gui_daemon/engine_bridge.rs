@@ -31,6 +31,8 @@ pub(crate) mod gemini_proxy_guard;
 pub mod kimi;
 #[path = "../../engine/kimi_history.rs"]
 pub mod kimi_history;
+#[path = "../../engine/kimi_provider_profile.rs"]
+pub(crate) mod kimi_provider_profile;
 #[allow(dead_code)]
 #[path = "../../engine/manager.rs"]
 pub mod manager;

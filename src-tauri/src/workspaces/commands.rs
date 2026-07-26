@@ -623,8 +623,23 @@ async fn cleanup_engine_sessions_for_workspace(
         .engine_manager
         .remove_opencode_session(workspace_id)
         .await;
-    gemini_cleanup_result
-        .map_err(|error| format!("Gemini cleanup failed for workspace {workspace_id}: {error}"))
+    let kimi_cleanup_result = state.engine_manager.remove_kimi_session(workspace_id).await;
+    match (gemini_cleanup_result, kimi_cleanup_result) {
+        (Ok(()), Ok(())) => Ok(()),
+        (gemini, kimi) => {
+            let mut errors = Vec::new();
+            if let Err(error) = gemini {
+                errors.push(format!("Gemini cleanup failed: {error}"));
+            }
+            if let Err(error) = kimi {
+                errors.push(format!("Kimi cleanup failed: {error}"));
+            }
+            Err(format!(
+                "Engine cleanup failed for workspace {workspace_id}: {}",
+                errors.join("; ")
+            ))
+        }
+    }
 }
 
 #[tauri::command]

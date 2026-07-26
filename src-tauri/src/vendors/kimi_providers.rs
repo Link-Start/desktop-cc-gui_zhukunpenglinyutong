@@ -23,12 +23,14 @@ use super::commands::{
     set_provider_created_at, updated_provider_created_at, write_config, VendorModelListResult,
 };
 
-const LOCAL_KIMI_PROVIDER_ID: &str = "__local_config_toml__";
+use crate::engine::kimi_provider_profile::{
+    materialize_kimi_provider_at, value_to_kimi_provider, KIMI_LOCAL_PROVIDER_PROFILE_ID,
+};
+
+const LOCAL_KIMI_PROVIDER_ID: &str = KIMI_LOCAL_PROVIDER_PROFILE_ID;
 const LOCAL_KIMI_PROVIDER_NAME: &str = "Local config.toml";
 const LOCAL_KIMI_PROVIDER_REMARK: &str = "Use configuration directly from ~/.kimi-code/config.toml";
 const KIMI_PROVIDER_TOML_PREFIX: &str = "ccgui:";
-const KIMI_MODEL_TOML_PREFIX: &str = "ccgui/";
-const DEFAULT_KIMI_PROVIDER_TYPE: &str = "openai";
 
 fn kimi_config_toml_path() -> Result<PathBuf, String> {
     if let Some(home) = std::env::var_os("KIMI_CODE_HOME").filter(|value| !value.is_empty()) {
@@ -55,48 +57,6 @@ fn build_local_provider(is_active: bool) -> KimiProviderConfig {
         max_context_size: None,
         display_name: None,
     }
-}
-
-fn value_to_kimi_provider(
-    id: &str,
-    value: &Value,
-    is_active: bool,
-) -> Result<KimiProviderConfig, String> {
-    let read_string = |key: &str| {
-        value
-            .get(key)
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string()
-    };
-    Ok(KimiProviderConfig {
-        id: id.to_string(),
-        name: read_string("name"),
-        remark: value
-            .get("remark")
-            .and_then(|v| v.as_str())
-            .map(String::from),
-        website_url: value
-            .get("websiteUrl")
-            .and_then(|v| v.as_str())
-            .map(String::from),
-        created_at: value.get("createdAt").and_then(|v| v.as_i64()),
-        sort_order: value.get("sortOrder").and_then(|v| v.as_i64()),
-        is_active,
-        is_local_provider: value.get("isLocalProvider").and_then(|v| v.as_bool()),
-        base_url: read_string("baseUrl"),
-        api_key: read_string("apiKey"),
-        model: read_string("model"),
-        provider_type: value
-            .get("providerType")
-            .and_then(|v| v.as_str())
-            .map(String::from),
-        max_context_size: value.get("maxContextSize").and_then(|v| v.as_i64()),
-        display_name: value
-            .get("displayName")
-            .and_then(|v| v.as_str())
-            .map(String::from),
-    })
 }
 
 fn kimi_provider_to_value(provider: &KimiProviderConfig) -> Value {
@@ -150,114 +110,7 @@ fn sort_kimi_providers(providers: &mut [KimiProviderConfig]) {
 /// The original file is backed up to config.toml.bak before rewriting.
 fn apply_provider_to_kimi_config(provider: &KimiProviderConfig) -> Result<(), String> {
     let path = kimi_config_toml_path()?;
-    let original = std::fs::read_to_string(&path).unwrap_or_default();
-    let mut doc: toml::Table = if original.trim().is_empty() {
-        toml::Table::new()
-    } else {
-        toml::from_str(&original)
-            .map_err(|error| format!("Failed to parse {}: {}", path.display(), error))?
-    };
-
-    let provider_toml_id = format!("{}{}", KIMI_PROVIDER_TOML_PREFIX, provider.id);
-    let model_toml_alias = format!("{}{}", KIMI_MODEL_TOML_PREFIX, provider.model.trim());
-    if provider.model.trim().is_empty() {
-        return Err("Kimi provider model is required".to_string());
-    }
-
-    let mut provider_table = toml::Table::new();
-    provider_table.insert(
-        "type".to_string(),
-        toml::Value::String(
-            provider
-                .provider_type
-                .clone()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| DEFAULT_KIMI_PROVIDER_TYPE.to_string()),
-        ),
-    );
-    provider_table.insert(
-        "base_url".to_string(),
-        toml::Value::String(provider.base_url.trim().to_string()),
-    );
-    if !provider.api_key.trim().is_empty() {
-        provider_table.insert(
-            "api_key".to_string(),
-            toml::Value::String(provider.api_key.trim().to_string()),
-        );
-    }
-
-    let mut model_table = toml::Table::new();
-    model_table.insert(
-        "provider".to_string(),
-        toml::Value::String(provider_toml_id.clone()),
-    );
-    model_table.insert(
-        "model".to_string(),
-        toml::Value::String(provider.model.trim().to_string()),
-    );
-    if let Some(max_context_size) = provider.max_context_size {
-        model_table.insert(
-            "max_context_size".to_string(),
-            toml::Value::Integer(max_context_size),
-        );
-    }
-    if let Some(ref display_name) = provider.display_name {
-        if !display_name.trim().is_empty() {
-            model_table.insert(
-                "display_name".to_string(),
-                toml::Value::String(display_name.trim().to_string()),
-            );
-        }
-    }
-
-    let providers = doc
-        .entry("providers")
-        .or_insert_with(|| toml::Value::Table(toml::Table::new()));
-    let providers = providers
-        .as_table_mut()
-        .ok_or_else(|| "`providers` in ~/.kimi-code/config.toml is not a table".to_string())?;
-    providers.insert(provider_toml_id, toml::Value::Table(provider_table));
-
-    let models = doc
-        .entry("models")
-        .or_insert_with(|| toml::Value::Table(toml::Table::new()));
-    let models = models
-        .as_table_mut()
-        .ok_or_else(|| "`models` in ~/.kimi-code/config.toml is not a table".to_string())?;
-    models.insert(model_toml_alias.clone(), toml::Value::Table(model_table));
-
-    doc.insert(
-        "default_model".to_string(),
-        toml::Value::String(model_toml_alias),
-    );
-
-    let rendered = toml::to_string_pretty(&doc)
-        .map_err(|error| format!("Failed to serialize ~/.kimi-code/config.toml: {}", error))?;
-
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| format!("Failed to create ~/.kimi-code dir: {}", error))?;
-    }
-    if path.exists() {
-        let backup_path = path.with_extension("toml.bak");
-        std::fs::copy(&path, &backup_path).map_err(|error| {
-            format!(
-                "Failed to back up ~/.kimi-code/config.toml to {}: {}",
-                backup_path.display(),
-                error
-            )
-        })?;
-    }
-
-    let tmp_path = path.with_extension("toml.tmp");
-    std::fs::write(&tmp_path, rendered).map_err(|error| {
-        format!(
-            "Failed to write ~/.kimi-code/config.toml temp file: {}",
-            error
-        )
-    })?;
-    std::fs::rename(&tmp_path, &path)
-        .map_err(|error| format!("Failed to replace ~/.kimi-code/config.toml: {}", error))
+    materialize_kimi_provider_at(provider, &path, true)
 }
 
 /// Remove `ccgui:`-namespaced entries while keeping durable provider deletion
