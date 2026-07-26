@@ -566,3 +566,36 @@ GitDiffPanel 与 GitMultiRepositoryChanges 的提交区统一改为 textarea 右
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1156: 归档：重设计 Git 提交区域为右侧操作列
+
+**Date**: 2026-07-26
+**Task**: 归档：重设计 Git 提交区域为右侧操作列
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修复 .commit-message-generate-button 样式冲突；OpenSpec redesign-git-commit-composer 已归档并同步主 spec
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3b233e473` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
