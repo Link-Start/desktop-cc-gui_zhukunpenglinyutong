@@ -104,3 +104,36 @@ Kimi 增加 config 四态诊断、provider cleanup partial warning 与 promotion
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1142: 收薄引擎控制器门面
+
+**Date**: 2026-07-26
+**Task**: 收薄引擎控制器门面
+**Branch**: `feature/v-0710`
+
+### Summary
+
+拆分 availability、selection、catalog、notice 与 storage lifecycle owner；关闭 OpenCode 新执行入口；通过 88 个增量测试、typecheck 与结构治理 gate。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1dfdfb47d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
