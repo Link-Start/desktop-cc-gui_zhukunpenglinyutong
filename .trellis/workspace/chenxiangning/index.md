@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1144
+- **Total Sessions**: 1145
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~205 | Active |
+| `journal-28.md` | ~238 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1145 | 2026-07-26 | 统一会话供应商绑定契约 | `2f09d9256` | `feature/v-0710` |
 | 1144 | 2026-07-26 | 校准会话级供应商绑定提案 | `ffa804434` | `feature/v-0710` |
 | 1143 | 2026-07-26 | 归档引擎接入重构提案 | `65a174d26` | `feature/v-0710` |
 | 1142 | 2026-07-26 | 收薄引擎控制器门面 | `1dfdfb47d` | `feature/v-0710` |

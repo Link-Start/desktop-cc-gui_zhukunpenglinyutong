@@ -203,3 +203,36 @@ Kimi 增加 config 四态诊断、provider cleanup partial warning 与 promotion
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1145: 统一会话供应商绑定契约
+
+**Date**: 2026-07-26
+**Task**: 统一会话供应商绑定契约
+**Branch**: `feature/v-0710`
+
+### Summary
+
+Batch A：新增统一 durable engine provider binding map、显式 engine stable key、幂等写入与删除清理；打通 frontend/desktop/remote daemon 的 providerProfileId request contract。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2f09d9256` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
