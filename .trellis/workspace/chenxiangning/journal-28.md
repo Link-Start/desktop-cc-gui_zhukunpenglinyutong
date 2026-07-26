@@ -1316,3 +1316,36 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1178: 补全 Codex 模型与本地标签
+
+**Date**: 2026-07-27
+**Task**: 补全 Codex 模型与本地标签
+**Branch**: `feature/v-0710`
+
+### Summary
+
+补齐 Codex 默认模型目录，统一内外 Composer 菜单的 partial runtime fallback 合并，并为 Codex/Claude 本地磁盘会话显示 local 标签；完成 focused tests、typecheck、lint、catalog/runtime contracts 与 OpenSpec strict validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `816d4ac06` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
