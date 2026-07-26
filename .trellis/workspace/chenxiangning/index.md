@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1153
+- **Total Sessions**: 1154
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~502 | Active |
+| `journal-28.md` | ~535 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1154 | 2026-07-26 | 建立供应商绑定复审修复提案 | `0921e8ac2` | `feature/v-0710` |
 | 1153 | 2026-07-26 | 收敛差异面板推送入口为工具栏角标按钮 | `926cc86f2` | `feature/v-0710` |
 | 1152 | 2026-07-26 | 归档会话级供应商绑定变更 | `825b49f67` | `feature/v-0710` |
 | 1151 | 2026-07-26 | 验证会话级供应商绑定实现 | `d9c54418e` | `feature/v-0710` |

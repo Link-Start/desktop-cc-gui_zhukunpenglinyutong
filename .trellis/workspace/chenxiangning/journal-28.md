@@ -500,3 +500,36 @@ GitDiffPanel 大号推送按钮改为头部工具栏 icon+角标，commitsAhead=
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1154: 建立供应商绑定复审修复提案
+
+**Date**: 2026-07-26
+**Task**: 建立供应商绑定复审修复提案
+**Branch**: `feature/v-0710`
+
+### Summary
+
+提交代码复审发现的 canonical binding、Kimi interrupt、secret materialization 与 frontend fail-closed 修复计划。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0921e8ac2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
