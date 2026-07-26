@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1175
+- **Total Sessions**: 1176
 - **Last Active**: 2026-07-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~1252 | Active |
+| `journal-28.md` | ~1285 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1176 | 2026-07-27 | 修复供应商会话模型选择与推理强度 | `715c09e4a` | `feature/v-0710` |
 | 1175 | 2026-07-27 | 安全合入 upstream 0.7.10 数字格式修复 | `6f2533ec7` | `feature/v-0710` |
 | 1174 | 2026-07-27 | 闭环修复 Claude 多供应商运行时隔离 | `099391845`, `1427b37b8` | `feature/v-0710` |
 | 1173 | 2026-07-27 | 补充 0.7.10 变更记录 | `1cccac7e7` | `feature/v-0710` |

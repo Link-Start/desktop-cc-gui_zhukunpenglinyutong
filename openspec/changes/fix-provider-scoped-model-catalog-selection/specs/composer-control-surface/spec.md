@@ -17,6 +17,29 @@ The grouped Composer model selector MUST resolve each engine group from provider
 - **THEN** the selector MUST show one row
 - **AND** the provider-owned label and metadata MUST take precedence
 
+#### Scenario: provider-scoped Codex model preserves reasoning capabilities
+
+- **WHEN** a provider-scoped Codex model matches an authoritative Codex catalog row by normalized runtime model identity
+- **THEN** missing `supportedReasoningEfforts` and `defaultReasoningEffort` MUST be inherited from the authoritative row
+- **AND** provider-owned label, origin, profile binding, and explicit reasoning metadata MUST remain authoritative
+- **AND** an unmatched provider-only model MUST NOT receive inferred reasoning capabilities
+
+#### Scenario: user selects an arbitrary provider-bound Codex model
+
+- **WHEN** an active provider-bound Codex thread stores a non-empty user-selected model name
+- **THEN** Composer MUST preserve the selected model without requiring membership in the current or global Codex catalog
+- **AND** temporary catalog loading, refresh, or absence MUST NOT invalidate the selection
+- **AND** selection repair MUST NOT replace it with a global/default model
+- **AND** blank model names MUST continue through the existing fallback path
+
+#### Scenario: user selects an arbitrary provider-bound Claude Code model
+
+- **WHEN** an active provider-bound Claude Code thread stores a non-empty user-selected model name
+- **THEN** Composer MUST preserve the selected model without requiring membership in the current Claude catalog
+- **AND** temporary catalog loading, refresh, or absence MUST NOT invalidate the model or its reasoning effort
+- **AND** selection repair MUST NOT replace it with a default model
+- **AND** blank model names MUST continue through the existing fallback path
+
 #### Scenario: switching parallel provider sessions updates catalog
 
 - **WHEN** the same workspace contains active sessions bound to different provider profiles

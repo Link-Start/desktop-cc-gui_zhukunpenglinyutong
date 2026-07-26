@@ -31,3 +31,21 @@
 - [x] 6.1 [P0, depends: 2.1,2.2] provider scope 切换开始时立即发布该 scope 的 last-good catalog；无缓存时清空旧 scope，禁止请求期间继续展示 disk/global 或其他 provider models。
 - [x] 6.2 [P0, depends: 6.1] 补“选择 managed Claude provider → 创建 pending thread → provider catalog 收敛”的 regression tests，断言旧 `gpt-*` model 不可见、provider default model 可选。
 - [x] 6.3 [P0, depends: 6.1,6.2] 运行 focused Vitest、typecheck、lint、runtime contracts、strict OpenSpec validation 与 cross-layer review。
+
+## 7. Provider-Scoped Reasoning Capability Preservation
+
+- [x] 7.1 [P0, depends: 2.2] provider-scoped Codex model 按 normalized runtime identity 从权威 Codex catalog 补缺 `supportedReasoningEfforts/defaultReasoningEffort`；provider-owned metadata 必须保持优先，未知模型不得伪造 capability。
+- [x] 7.2 [P0, depends: 7.1] 补 Codex managed provider reasoning 回归测试，并验证 Claude Code provider-bound thread 继续使用既有完整 reasoning options。
+- [x] 7.3 [P0, depends: 7.1,7.2] 运行 focused Vitest、typecheck、lint、runtime contracts 与 strict OpenSpec validation。
+
+## 8. Provider-Scoped User Model Selection
+
+- [x] 8.1 [P0, depends: 2.2] active provider-bound Codex thread 的非空用户模型名不得经过 current/global catalog 白名单校验；catalog 暂时缺行时仍必须保留选择，不得回写默认模型。
+- [x] 8.2 [P0, depends: 8.1] 补 MiniMax 与其他 arbitrary custom model name 保持选择、blank value fallback、catalog 暂时为空且不触发 repair persistence 的 regression tests，同时保留 global Codex fallback behavior。
+- [x] 8.3 [P0, depends: 8.1,8.2] 运行 focused Vitest、typecheck、lint、runtime contracts 与 strict OpenSpec validation。
+
+## 9. Claude Provider-Scoped User Model Selection
+
+- [x] 9.1 [P0, depends: 8.1] 将相同的 non-empty thread model truth contract 扩展到 provider-bound Claude Code thread；catalog loading/absence 不得触发 default repair。
+- [x] 9.2 [P0, depends: 9.1] 补 arbitrary Claude provider model 在 catalog unavailable 时保持 model/effort 且不触发 repair persistence 的 regression test。
+- [x] 9.3 [P0, depends: 9.1,9.2] 运行 focused Vitest、typecheck、lint、runtime contracts 与 strict OpenSpec validation，并完成 diff review。

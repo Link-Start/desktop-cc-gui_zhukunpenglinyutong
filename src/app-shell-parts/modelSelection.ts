@@ -6,6 +6,7 @@ type GetEffectiveSelectedModelIdOptions = {
   selectedModelId: string | null;
   activeThreadSelectedModelId: string | null;
   hasActiveThread: boolean;
+  allowUnknownActiveThreadModel?: boolean;
   codexModels: ModelOption[];
   engineModelsAsOptions: ModelOption[];
   engineSelectedModelIdByType: Partial<Record<EngineType, string | null>>;
@@ -48,7 +49,7 @@ function getDefaultModelId(models: ModelOption[]) {
   return models.find((model) => model.isDefault)?.id ?? models[0]?.id ?? null;
 }
 
-function normalizeReasoningEffort(value: unknown): string | null {
+function normalizeNonEmptyString(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
@@ -60,6 +61,49 @@ function getNormalizedReasoningOptions(reasoningOptions: string[]) {
   return Array.from(
     new Set(reasoningOptions.map((option) => option.trim()).filter(Boolean)),
   );
+}
+
+function getModelRuntimeIdentity(model: ModelOption): string {
+  const runtimeModel = model.model.trim();
+  return (runtimeModel || model.id.trim()).toLowerCase();
+}
+
+export function enrichScopedCodexReasoningMetadata(
+  scopedModels: ModelOption[],
+  authoritativeModels: ModelOption[],
+): ModelOption[] {
+  const authoritativeByIdentity = new Map(
+    authoritativeModels.flatMap((model) => {
+      const identity = getModelRuntimeIdentity(model);
+      return identity ? [[identity, model] as const] : [];
+    }),
+  );
+  return scopedModels.map((scopedModel) => {
+    const authoritativeModel = authoritativeByIdentity.get(
+      getModelRuntimeIdentity(scopedModel),
+    );
+    if (!authoritativeModel) {
+      return scopedModel;
+    }
+    const supportedReasoningEfforts =
+      scopedModel.supportedReasoningEfforts.length > 0
+        ? scopedModel.supportedReasoningEfforts
+        : authoritativeModel.supportedReasoningEfforts;
+    const defaultReasoningEffort =
+      scopedModel.defaultReasoningEffort ??
+      authoritativeModel.defaultReasoningEffort;
+    if (
+      supportedReasoningEfforts === scopedModel.supportedReasoningEfforts &&
+      defaultReasoningEffort === scopedModel.defaultReasoningEffort
+    ) {
+      return scopedModel;
+    }
+    return {
+      ...scopedModel,
+      supportedReasoningEfforts,
+      defaultReasoningEffort,
+    };
+  });
 }
 
 export function isReasoningEffortSupportedForEngine(
@@ -117,10 +161,21 @@ export function getEffectiveSelectedModelId({
   selectedModelId,
   activeThreadSelectedModelId,
   hasActiveThread,
+  allowUnknownActiveThreadModel = false,
   codexModels,
   engineModelsAsOptions,
   engineSelectedModelIdByType,
 }: GetEffectiveSelectedModelIdOptions) {
+  const unrestrictedThreadModelId = normalizeNonEmptyString(
+    activeThreadSelectedModelId,
+  );
+  if (
+    hasActiveThread &&
+    allowUnknownActiveThreadModel &&
+    unrestrictedThreadModelId
+  ) {
+    return unrestrictedThreadModelId;
+  }
   if (activeEngine === "codex") {
     const selectedCodexModelId = findModelById(codexModels, selectedModelId)?.id ?? null;
     const threadCodexModelId =
@@ -199,7 +254,7 @@ export function getReasoningOptionsForModel(model: ModelOption | null): string[]
   if (supported.length > 0) {
     return supported;
   }
-  const defaultEffort = normalizeReasoningEffort(model?.defaultReasoningEffort);
+  const defaultEffort = normalizeNonEmptyString(model?.defaultReasoningEffort);
   return defaultEffort ? [defaultEffort] : [];
 }
 
