@@ -57,8 +57,6 @@ const sidebar = {
     newCloneAgent: "新建克隆代理",
     newWindow: "新建窗口",
     codexProviderChoiceTitle: "供应商选择",
-    codexProviderDiskConfigLabel: "磁盘配置",
-    codexProviderCustomConfigLabel: "自定义配置",
     codexProviderSelectedTip: "已选择，点击左侧 Codex 即可直接开启会话",
     claudeProviderChoiceTitle: "供应商选择",
     claudeProviderSelectedTip: "已选择，点击左侧 Claude Code 即可直接开启会话",

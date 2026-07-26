@@ -354,6 +354,28 @@ pub(crate) fn resolve_kimi_provider_launch_profile(
     })
 }
 
+pub(crate) fn resolve_kimi_provider_model_config(
+    provider_profile_id: &str,
+) -> Result<Option<KimiProviderConfig>, String> {
+    let profile_id = normalize_profile_id(Some(provider_profile_id));
+    if profile_id == KIMI_LOCAL_PROVIDER_PROFILE_ID {
+        return Ok(None);
+    }
+    let value = read_config()?
+        .kimi
+        .providers
+        .remove(profile_id)
+        .ok_or_else(|| format!("Kimi provider {profile_id} not found"))?;
+    let provider = value_to_kimi_provider(profile_id, &value, false)?;
+    if provider.name.trim().is_empty() {
+        return Err(format!("Kimi provider {profile_id} is missing a name"));
+    }
+    if provider.model.trim().is_empty() {
+        return Err(format!("Kimi provider {} has empty model", provider.name));
+    }
+    Ok(Some(provider))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

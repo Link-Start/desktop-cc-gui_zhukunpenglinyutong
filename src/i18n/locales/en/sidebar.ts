@@ -56,8 +56,6 @@ const sidebar = {
     newWorktreeAgent: "New worktree agent",
     newCloneAgent: "New clone agent",
     codexProviderChoiceTitle: "Provider selection",
-    codexProviderDiskConfigLabel: "Disk config",
-    codexProviderCustomConfigLabel: "Custom config",
     codexProviderSelectedTip:
       "Selected. Click Codex on the left to start a session.",
     claudeProviderChoiceTitle: "Provider selection",

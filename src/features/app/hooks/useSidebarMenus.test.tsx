@@ -47,8 +47,8 @@ vi.mock("react-i18next", () => ({
         "sidebar.sessionActionsGroup": "New session",
         "sidebar.newSharedSession": "Shared Session",
         "sidebar.codexProviderChoiceTitle": "Provider selection",
-        "sidebar.codexProviderDiskConfigLabel": "Disk config",
-        "sidebar.codexProviderCustomConfigLabel": "Custom config",
+        "sidebar.providerFollowsGlobalLabel": "Follows global config",
+        "sidebar.providerIsolatedConfigLabel": "Isolated config",
         "sidebar.providerUnavailableLabel": "Provider unavailable",
         "sidebar.workspaceActionsGroup": "Workspace actions",
         "sidebar.activateWorkspace": "Open in main panel",
@@ -592,11 +592,11 @@ describe("useSidebarMenus", () => {
     ).toEqual([
       {
         id: "new-session-codex-provider-__disk__",
-        badgeLabel: "Disk config",
+        badgeLabel: "Follows global config",
       },
       {
         id: "new-session-codex-provider-provider-openai",
-        badgeLabel: "Custom config",
+        badgeLabel: "Isolated config",
       },
     ]);
   });

@@ -498,6 +498,63 @@ describe("useWorkspaceActions", () => {
     );
   });
 
+  it("does not expose raw broken pipe for managed codex provider creation", async () => {
+    const options = makeOptions({
+      startThreadForWorkspace: vi.fn(async () => {
+        throw new Error("Broken pipe (os error 32)");
+      }),
+    });
+    const { result } = renderHook(() => useWorkspaceActions(options));
+
+    await act(async () => {
+      await result.current.handleAddAgent(baseWorkspace, "codex", {
+        providerProfileId: "provider-named-kimi",
+        providerProfile: {
+          id: "provider-named-kimi",
+          name: "Kimi",
+          source: "managed",
+        },
+      });
+    });
+
+    expect(ensureRuntimeReady).not.toHaveBeenCalled();
+    expect(options.startThreadForWorkspace).toHaveBeenCalledTimes(1);
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "create-session-recovery-ws-1-codex",
+        message: "errors.failedToCreateSessionRuntimeRecovering",
+        sticky: true,
+      }),
+    );
+    expect(window.alert).not.toHaveBeenCalled();
+  });
+
+  it("redacts persistent raw broken pipe after disk codex compatibility recovery", async () => {
+    const options = makeOptions({
+      startThreadForWorkspace: vi.fn(async () => {
+        throw new Error("Broken pipe (os error 32)");
+      }),
+    });
+    const { result } = renderHook(() => useWorkspaceActions(options));
+
+    await act(async () => {
+      await result.current.handleAddAgent(baseWorkspace, "codex", {
+        providerProfileId: "__disk__",
+      });
+    });
+
+    expect(ensureRuntimeReady).toHaveBeenCalledWith("ws-1");
+    expect(options.startThreadForWorkspace).toHaveBeenCalledTimes(2);
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "create-session-recovery-ws-1-codex",
+        message: "errors.failedToCreateSessionRuntimeRecovering",
+        sticky: true,
+      }),
+    );
+    expect(window.alert).not.toHaveBeenCalled();
+  });
+
   it("does not apply disk readiness recovery copy to managed codex provider creation", async () => {
     const options = makeOptions({
       startThreadForWorkspace: vi.fn(async () => {

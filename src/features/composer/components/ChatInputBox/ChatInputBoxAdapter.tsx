@@ -468,6 +468,7 @@ export interface ChatInputBoxAdapterProps {
   onSelectEngine?: (engine: EngineType) => void;
   models?: AdapterModelOption[];
   providerModelCatalogs?: Partial<Record<EngineType, AdapterModelOption[]>>;
+  providerProfileId?: string | null;
   onSelectModel?: (id: string) => void;
 
   // Reasoning
@@ -1037,6 +1038,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onSelectEngine,
       models,
       providerModelCatalogs,
+      providerProfileId,
       onSelectModel,
       reasoningOptions,
       selectedEffort,
@@ -2111,6 +2113,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         providerModelCatalogs={normalizedProviderModelCatalogs}
         permissionMode={permissionMode}
         currentProvider={engineToProvider(selectedEngine)}
+        currentProviderProfileId={providerProfileId}
         providerAvailability={providerAvailability}
         providerVersions={providerVersions}
         providerStatusLabels={providerStatusLabels}

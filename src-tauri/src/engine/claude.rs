@@ -47,7 +47,7 @@ mod manager;
 #[path = "claude/native_skill_mirror.rs"]
 mod native_skill_mirror;
 #[path = "claude/provider_profile.rs"]
-mod provider_profile;
+pub(crate) mod provider_profile;
 #[path = "claude_stream_helpers.rs"]
 mod stream_helpers;
 mod user_input;

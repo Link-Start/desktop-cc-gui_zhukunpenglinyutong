@@ -35,12 +35,18 @@ function isDiskProviderSelection(options?: SessionCreationOptions) {
   return !providerProfileId || providerProfileId === CODEX_DISK_PROVIDER_PROFILE_ID;
 }
 
-function isStoppingRuntimeCreateSessionError(message: string): boolean {
+function isRecoverableRuntimeCreateSessionError(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
     message.startsWith(CREATE_SESSION_RUNTIME_RECOVERING_ERROR_PREFIX) ||
     normalized.includes("manual shutdown") ||
     normalized.includes("manual_shutdown") ||
+    normalized.includes("broken pipe") ||
+    normalized.includes("the pipe is being closed") ||
+    normalized.includes("the pipe has been ended") ||
+    normalized.includes("os error 32") ||
+    normalized.includes("os error 109") ||
+    normalized.includes("os error 232") ||
     (normalized.includes("[runtime_ended]") && normalized.includes("stopped after"))
   );
 }
@@ -179,7 +185,7 @@ export function useWorkspaceActions({
 
   const localizeSessionCreationErrorMessage = useCallback(
     (message: string): string => {
-      if (isStoppingRuntimeCreateSessionError(message)) {
+      if (isRecoverableRuntimeCreateSessionError(message)) {
         return t("errors.failedToCreateSessionRuntimeRecovering");
       }
       return localizeErrorMessage(message);
@@ -516,7 +522,7 @@ export function useWorkspaceActions({
         const shouldAttemptDiskRecovery =
           targetEngine === "codex" &&
           isDiskProviderSelection(options) &&
-          isStoppingRuntimeCreateSessionError(message);
+          isRecoverableRuntimeCreateSessionError(message);
         const shouldShowDiskReadinessRecovery =
           targetEngine === "codex" &&
           isDiskProviderSelection(options) &&
@@ -539,7 +545,7 @@ export function useWorkspaceActions({
           } catch (retryError) {
             const retryMessage =
               retryError instanceof Error ? retryError.message : String(retryError);
-            if (isStoppingRuntimeCreateSessionError(retryMessage)) {
+            if (isRecoverableRuntimeCreateSessionError(retryMessage)) {
               onDebug({
                 id: `${Date.now()}-client-create-session-recovery-toast`,
                 timestamp: Date.now(),
@@ -590,7 +596,7 @@ export function useWorkspaceActions({
           );
           return null;
         }
-        if (isStoppingRuntimeCreateSessionError(message)) {
+        if (isRecoverableRuntimeCreateSessionError(message)) {
           onDebug({
             id: `${Date.now()}-client-create-session-recovery-toast`,
             timestamp: Date.now(),

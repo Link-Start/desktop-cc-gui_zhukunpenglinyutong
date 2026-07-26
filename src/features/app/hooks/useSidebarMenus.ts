@@ -804,8 +804,8 @@ export function useSidebarMenus({
               profile.availability === "unavailable"
                 ? t("sidebar.providerUnavailableLabel")
                 : profile.source === "disk"
-                ? t("sidebar.codexProviderDiskConfigLabel")
-                : t("sidebar.codexProviderCustomConfigLabel"),
+                ? t("sidebar.providerFollowsGlobalLabel")
+                : t("sidebar.providerIsolatedConfigLabel"),
             iconKind: "engine-codex" as const,
             ...withProviderAvailability(
               resolveEngineActionMeta(workspace, "codex"),

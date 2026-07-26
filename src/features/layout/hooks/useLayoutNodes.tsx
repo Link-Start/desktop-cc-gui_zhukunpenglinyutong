@@ -1455,6 +1455,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onSelectEngine={options.onSelectEngine}
           models={options.models}
           providerModelCatalogs={options.providerModelCatalogs}
+          providerProfileId={activeThreadSummary?.providerProfileId ?? null}
           selectedModelId={options.selectedModelId}
           onSelectModel={options.onSelectModel}
           reasoningOptions={options.reasoningOptions}

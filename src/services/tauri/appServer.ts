@@ -233,16 +233,24 @@ export async function getEngineActiveProcessDiagnostics(): Promise<EngineActiveP
  */
 export async function getEngineModels(
   engineType: EngineType,
-  options: { forceRefresh?: boolean } = {},
+  options: { forceRefresh?: boolean; providerProfileId?: string | null } = {},
 ): Promise<EngineModelInfo[]> {
   assertEngineExecutionEnabled(engineType);
   if (isEngineRpcFallbackMode() && engineType !== "codex") {
     return [];
   }
   try {
-    const params: { engineType: EngineType; forceRefresh?: boolean } = {
+    const params: {
+      engineType: EngineType;
+      forceRefresh?: boolean;
+      providerProfileId?: string;
+    } = {
       engineType,
     };
+    const providerProfileId = options.providerProfileId?.trim();
+    if (providerProfileId) {
+      params.providerProfileId = providerProfileId;
+    }
     if (options.forceRefresh) {
       params.forceRefresh = true;
     }

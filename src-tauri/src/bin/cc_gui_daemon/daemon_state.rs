@@ -66,18 +66,18 @@ where
     let first_attempt = start_thread().await;
     let response = match first_attempt {
         Ok(response) => Ok(response),
-        Err(error) if is_stopping_runtime_race_error(&error) => {
+        Err(error) if is_create_session_runtime_recovery_error(&error) => {
             log::warn!(
-                "[daemon.start_thread] retrying after stopping runtime race for workspace {}: {}",
+                "[daemon.start_thread] retrying after runtime disconnect for workspace {}: {}",
                 workspace_id,
                 error
             );
             ensure_runtime().await?;
             match start_thread().await {
                 Ok(response) => Ok(response),
-                Err(retry_error) if is_stopping_runtime_race_error(&retry_error) => {
+                Err(retry_error) if is_create_session_runtime_recovery_error(&retry_error) => {
                     log::warn!(
-                        "[daemon.start_thread] stopping runtime race retry exhausted for workspace {}: {}",
+                        "[daemon.start_thread] runtime disconnect retry exhausted for workspace {}: {}",
                         workspace_id,
                         retry_error
                     );
@@ -102,7 +102,7 @@ use codex_local_threads::{
     CODEX_DAEMON_LOCAL_THREAD_LIST_PARTIAL_SOURCE, CODEX_DAEMON_LOCAL_THREAD_LIST_TIMEOUT_MS,
 };
 use runtime_helpers::{
-    create_session_runtime_recovering_error, is_stopping_runtime_race_error,
+    create_session_runtime_recovering_error, is_create_session_runtime_recovery_error,
     is_valid_claude_model_for_passthrough,
 };
 
@@ -925,10 +925,16 @@ impl DaemonState {
     pub(super) async fn get_engine_models(
         &self,
         engine_type: engine::EngineType,
-    ) -> Vec<engine::ModelInfo> {
+        provider_profile_id: Option<&str>,
+    ) -> Result<Vec<engine::ModelInfo>, String> {
         let settings = self.app_settings.lock().await.clone();
         if !engine::engine_enabled_in_settings(&settings, engine_type) {
-            return Vec::new();
+            return Ok(Vec::new());
+        }
+        if let Some(models) =
+            engine::status::get_provider_scoped_engine_models(engine_type, provider_profile_id)?
+        {
+            return Ok(models);
         }
         match engine_type {
             engine::EngineType::OpenCode => {
@@ -945,19 +951,20 @@ impl DaemonState {
                     .unwrap_or_default();
 
                 if !fresh_models.is_empty() {
-                    return fresh_models;
+                    return Ok(fresh_models);
                 }
 
-                self.get_engine_status(engine_type)
+                Ok(self
+                    .get_engine_status(engine_type)
                     .await
                     .map(|status| status.models)
-                    .unwrap_or_default()
+                    .unwrap_or_default())
             }
-            _ => self
+            _ => Ok(self
                 .get_engine_status(engine_type)
                 .await
                 .map(|status| status.models)
-                .unwrap_or_default(),
+                .unwrap_or_default()),
         }
     }
 

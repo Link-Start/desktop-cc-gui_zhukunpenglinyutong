@@ -264,6 +264,54 @@ pub(crate) fn resolve_codex_provider_profile(
     })
 }
 
+pub(crate) fn resolve_codex_provider_model_config(
+    provider_profile_id: &str,
+) -> Result<Option<(String, Vec<crate::types::CodexCustomModel>)>, String> {
+    let profile_id = normalize_profile_id(Some(provider_profile_id));
+    if profile_id == CODEX_DISK_PROVIDER_PROFILE_ID {
+        return Ok(None);
+    }
+    let config = read_config()?;
+    let value = config
+        .codex
+        .providers
+        .get(&profile_id)
+        .ok_or_else(|| format!("Codex provider {profile_id} not found"))?;
+    let provider = value_to_codex_provider(&profile_id, value)?;
+    let config_toml = provider.config_toml.unwrap_or_default().trim().to_string();
+    if config_toml.is_empty() {
+        return Err(format!(
+            "Codex provider {} has empty configToml",
+            provider.name
+        ));
+    }
+    Ok(Some((
+        config_toml,
+        provider.custom_models.unwrap_or_default(),
+    )))
+}
+
+pub(crate) fn resolve_codex_provider_default_model(
+    provider_profile_id: &str,
+) -> Result<Option<String>, String> {
+    let Some((config_toml, _)) = resolve_codex_provider_model_config(provider_profile_id)? else {
+        return Ok(None);
+    };
+    configured_model_from_config_toml(&config_toml)
+}
+
+fn configured_model_from_config_toml(config_toml: &str) -> Result<Option<String>, String> {
+    let value: toml::Value = config_toml
+        .parse()
+        .map_err(|error| format!("invalid Codex provider configToml: {error}"))?;
+    Ok(value
+        .get("model")
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string))
+}
+
 fn provider_home_for_id_in_root(root: &Path, provider_id: &str) -> Result<PathBuf, String> {
     let segment = sanitize_provider_path_segment(provider_id)?;
     Ok(root.join(segment))
@@ -407,6 +455,26 @@ base_url = "https://example.test"
         assert!(overrides.contains(&r#"model="gpt-5""#.to_string()));
         assert!(overrides.contains(&r#"model_provider="openai""#.to_string()));
         assert!(overrides.contains(&r#"sandbox_mode="workspace-write""#.to_string()));
+    }
+
+    #[test]
+    fn configured_model_reads_only_non_empty_top_level_model() {
+        assert_eq!(
+            configured_model_from_config_toml(
+                r#"
+model = "kimi-for-coding"
+[model_providers.crs]
+model = "ignored-nested-model"
+"#,
+            )
+            .expect("valid config"),
+            Some("kimi-for-coding".to_string())
+        );
+        assert_eq!(
+            configured_model_from_config_toml("model_provider = \"crs\"")
+                .expect("valid config without model"),
+            None
+        );
     }
 
     #[test]

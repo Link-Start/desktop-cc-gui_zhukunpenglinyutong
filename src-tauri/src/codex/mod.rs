@@ -49,7 +49,9 @@ use self::provider_fork::{
 };
 use self::provider_profile::{resolve_codex_provider_profile, CODEX_DISK_PROVIDER_PROFILE_ID};
 use self::run_metadata::{extract_json_value, sanitize_run_worktree_name};
-use self::thread_listing::{build_unified_codex_thread_page, resolve_workspace_fallback_model};
+use self::thread_listing::{
+    build_unified_codex_thread_page, resolve_provider_scoped_fallback_model,
+};
 use crate::backend::app_server::{
     spawn_workspace_session_inner_with_settings, CodexAppServerLaunchOptions,
 };
@@ -213,7 +215,7 @@ pub(crate) use self::session_runtime::ensure_codex_session;
 pub(crate) use self::session_runtime::{
     attach_hook_safe_fallback_metadata, create_session_runtime_recovering_error,
     ensure_codex_session_for_provider, ensure_codex_session_without_session_hooks_for_provider,
-    is_hook_safe_fallback_trigger, is_stopping_runtime_race_error,
+    is_create_session_runtime_recovery_error, is_hook_safe_fallback_trigger,
 };
 #[cfg(test)]
 use self::start_thread_retry::{
@@ -638,9 +640,14 @@ pub(crate) async fn start_thread(
         .await;
     }
 
-    let resolved_model = resolve_workspace_fallback_model(&state, &workspace_id).await;
     let normalized_provider_profile_id =
         codex_core::normalize_provider_profile_id(provider_profile_id.as_deref());
+    let resolved_model = resolve_provider_scoped_fallback_model(
+        &state,
+        &workspace_id,
+        &normalized_provider_profile_id,
+    )
+    .await?;
     let response = start_thread_with_runtime_retry_for_provider(
         &workspace_id,
         resolved_model,
@@ -1233,7 +1240,7 @@ pub(crate) async fn send_user_message(
     let effective_model = if normalized_model.is_some() {
         normalized_model
     } else {
-        resolve_workspace_fallback_model(&state, &workspace_id).await
+        resolve_provider_scoped_fallback_model(&state, &workspace_id, &provider_profile_id).await?
     };
     let (mode_enforcement_enabled, extra_developer_instructions) = {
         let settings = state.app_settings.lock().await;

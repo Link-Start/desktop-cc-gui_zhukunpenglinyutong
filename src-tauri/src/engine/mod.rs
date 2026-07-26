@@ -195,6 +195,9 @@ pub struct ModelInfo {
     /// Source owner used to explain catalog precedence.
     #[serde(default)]
     pub provenance: Option<String>,
+    /// Managed provider profile that owns this configured model.
+    #[serde(default)]
+    pub provider_profile_id: Option<String>,
     #[serde(default)]
     pub observed_at: Option<u64>,
     #[serde(default)]
@@ -222,6 +225,7 @@ impl ModelInfo {
             provider: None,
             protocol: None,
             provenance: None,
+            provider_profile_id: None,
             observed_at: None,
             last_verified_at: None,
             lifecycle: None,
@@ -246,6 +250,11 @@ impl ModelInfo {
 
     pub fn with_provenance(mut self, provenance: impl Into<String>) -> Self {
         self.provenance = Some(provenance.into());
+        self
+    }
+
+    pub fn with_provider_profile_id(mut self, provider_profile_id: impl Into<String>) -> Self {
+        self.provider_profile_id = Some(provider_profile_id.into());
         self
     }
 

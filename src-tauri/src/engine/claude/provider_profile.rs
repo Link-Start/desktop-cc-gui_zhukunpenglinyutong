@@ -95,6 +95,13 @@ pub(crate) fn resolve_claude_provider_launch_profile(
     )
 }
 
+pub(crate) fn resolve_claude_provider_model_env(
+    provider_profile_id: &str,
+) -> Result<Option<BTreeMap<String, String>>, String> {
+    resolve_claude_provider_launch_profile(Some(provider_profile_id))
+        .map(|profile| profile.map(|profile| profile.env))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -228,3 +228,67 @@ async fn daemon_disk_start_retries_stopping_runtime_before_confirming() {
         ["ensure", "start:1", "ensure", "start:2", "confirm:thread-2"]
     );
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn daemon_disk_start_retries_broken_pipe_before_confirming() {
+    let events = Rc::new(RefCell::new(Vec::<String>::new()));
+    let start_count = Rc::new(RefCell::new(0_u8));
+    let result = run_daemon_disk_start_thread_with_readiness(
+        "ws-1",
+        || {
+            let events = Rc::clone(&events);
+            async move {
+                events.borrow_mut().push("ensure".to_string());
+                Ok(())
+            }
+        },
+        || {
+            let events = Rc::clone(&events);
+            let start_count = Rc::clone(&start_count);
+            async move {
+                let mut count = start_count.borrow_mut();
+                *count += 1;
+                events.borrow_mut().push(format!("start:{count}"));
+                if *count == 1 {
+                    Err("Broken pipe (os error 32)".to_string())
+                } else {
+                    Ok(json!({ "result": { "threadId": "thread-2" } }))
+                }
+            }
+        },
+        |thread_id| {
+            let events = Rc::clone(&events);
+            async move {
+                events.borrow_mut().push(format!("confirm:{thread_id}"));
+                Ok(())
+            }
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        codex_core::extract_thread_id_from_response(&result).as_deref(),
+        Some("thread-2")
+    );
+    assert_eq!(
+        events.borrow().as_slice(),
+        ["ensure", "start:1", "ensure", "start:2", "confirm:thread-2"]
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn daemon_disk_start_redacts_persistent_broken_pipe() {
+    let error = run_daemon_disk_start_thread_with_readiness(
+        "ws-1",
+        || async { Ok(()) },
+        || async { Err("Broken pipe (os error 32)".to_string()) },
+        |_| async { Ok(()) },
+    )
+    .await
+    .unwrap_err();
+
+    assert!(error.starts_with("[SESSION_CREATE_RUNTIME_RECOVERING]"));
+    assert!(!error.to_ascii_lowercase().contains("broken pipe"));
+    assert!(!error.contains("os error 32"));
+}

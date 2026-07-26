@@ -1336,6 +1336,7 @@ pub async fn get_engine_active_process_diagnostics(
 #[tauri::command]
 pub async fn get_engine_models(
     engine_type: EngineType,
+    provider_profile_id: Option<String>,
     force_refresh: Option<bool>,
     state: State<'_, AppState>,
     app: AppHandle,
@@ -1349,9 +1350,19 @@ pub async fn get_engine_models(
             &*state,
             &app,
             "get_engine_models",
-            json!({ "engineType": engine_type, "forceRefresh": force_refresh }),
+            json!({
+                "engineType": engine_type,
+                "providerProfileId": provider_profile_id,
+                "forceRefresh": force_refresh
+            }),
         )
         .await;
+    }
+    if let Some(models) = crate::engine::status::get_provider_scoped_engine_models(
+        engine_type,
+        provider_profile_id.as_deref(),
+    )? {
+        return Ok(models);
     }
     let manager = &state.engine_manager;
 

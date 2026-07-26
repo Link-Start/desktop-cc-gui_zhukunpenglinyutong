@@ -192,6 +192,7 @@ type ComposerProps = {
   // Model props
   models: { id: string; displayName: string; model: string }[];
   providerModelCatalogs?: Partial<Record<EngineType, ModelOption[]>>;
+  providerProfileId?: string | null;
   selectedModelId: string | null;
   onSelectModel: (id: string) => void;
   reasoningOptions: string[];
@@ -466,6 +467,7 @@ function ComposerImpl({
   onSelectEngine,
   models,
   providerModelCatalogs,
+  providerProfileId,
   selectedModelId,
   onSelectModel,
   reasoningOptions,
@@ -2349,6 +2351,7 @@ function ComposerImpl({
               onSelectEngine={onSelectEngine}
               models={models}
               providerModelCatalogs={providerModelCatalogs}
+              providerProfileId={providerProfileId}
               onSelectModel={onSelectModel}
               reasoningOptions={reasoningOptions}
               selectedEffort={selectedEffort}

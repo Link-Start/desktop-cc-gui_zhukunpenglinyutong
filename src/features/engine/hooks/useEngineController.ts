@@ -45,6 +45,7 @@ type UseEngineControllerOptions = {
 type RefreshEngineModelsOptions = {
   forceRefresh?: boolean;
   phase?: "idle-prewarm" | "on-demand";
+  providerProfileId?: string | null;
 };
 
 export type EngineRefreshResult = {
@@ -92,6 +93,8 @@ export function useEngineController({
   // Track initialization
   const initRef = useRef(false);
   const detectPromiseRef = useRef<Promise<EngineRefreshResult | void> | null>(null);
+  const visibleCatalogRequestKeyRef = useRef<string | null>(null);
+  const lastGoodModelsByScopeRef = useRef(new Map<string, EngineModelInfo[]>());
   const lastWorkspaceId = useRef<string | null>(null);
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
@@ -106,32 +109,50 @@ export function useEngineController({
       if (!enabledEngineTypes.includes(engineType)) {
         return [];
       }
+      const providerProfileId = options.providerProfileId?.trim() || null;
+      const catalogScope = providerProfileId ?? "__global__";
+      const catalogRequestKey = `${engineType}:${catalogScope}`;
+      visibleCatalogRequestKeyRef.current = catalogRequestKey;
+      const scopedFallbackModels = providerProfileId
+        ? (lastGoodModelsByScopeRef.current.get(catalogRequestKey) ?? [])
+        : fallbackModels;
       try {
         const phase = options.phase ?? (options.forceRefresh ? "on-demand" : "idle-prewarm");
         const models = await startupOrchestrator.run({
-          id: `engine-models:${engineType}`,
+          id: `engine-models:${engineType}:${catalogScope}`,
           phase,
           priority: phase === "on-demand" ? 85 : 30,
-          dedupeKey: `engine-models:${engineType}:${options.forceRefresh ? "force" : "cached"}`,
+          dedupeKey: `engine-models:${engineType}:${catalogScope}:${options.forceRefresh ? "force" : "cached"}`,
           concurrencyKey: "engine-model-catalog",
           timeoutMs: 8_000,
           workspaceScope: "global",
           cancelPolicy: "yield-only",
           traceLabel: "engine/models",
           commandLabel: "get_engine_models",
-          run: () =>
-            options.forceRefresh
+          run: () => {
+            if (providerProfileId) {
+              return getEngineModels(engineType, {
+                ...(options.forceRefresh ? { forceRefresh: true } : {}),
+                providerProfileId,
+              });
+            }
+            return options.forceRefresh
               ? getEngineModels(engineType, { forceRefresh: true })
-              : getEngineModels(engineType),
-          fallback: () => fallbackModels,
+              : getEngineModels(engineType);
+          },
+          fallback: () => scopedFallbackModels,
         });
         const sourceModels =
-          models.length > 0 || options.forceRefresh ? models : fallbackModels;
+          models.length > 0 || options.forceRefresh || providerProfileId
+            ? models
+            : fallbackModels;
         const nextModels = sourceModels.map((model) =>
           normalizeEngineModelEntry(model),
         );
-        // Keep fallback instead of clearing to empty, avoids transient "-" model state.
-        setEngineModels(nextModels);
+        lastGoodModelsByScopeRef.current.set(catalogRequestKey, nextModels);
+        if (visibleCatalogRequestKeyRef.current === catalogRequestKey) {
+          setEngineModels(nextModels);
+        }
         return nextModels;
       } catch (error) {
         onDebug?.({
@@ -141,13 +162,16 @@ export function useEngineController({
           label: "engine/models load error",
           payload: {
             engine: engineType,
+            providerProfileId,
             error: error instanceof Error ? error.message : String(error),
           },
         });
-        const normalizedFallback = fallbackModels.map((model) =>
+        const normalizedFallback = scopedFallbackModels.map((model) =>
           normalizeEngineModelEntry(model),
         );
-        setEngineModels(normalizedFallback);
+        if (visibleCatalogRequestKeyRef.current === catalogRequestKey) {
+          setEngineModels(normalizedFallback);
+        }
         return normalizedFallback;
       }
     },
@@ -171,7 +195,11 @@ export function useEngineController({
         status.models,
         options,
       );
-      if (options.forceRefresh && nextModels.length > 0) {
+      if (
+        options.forceRefresh &&
+        !options.providerProfileId?.trim() &&
+        nextModels.length > 0
+      ) {
         setEngineStatuses((currentStatuses) =>
           currentStatuses.map((entry) =>
             entry.engineType === engineType

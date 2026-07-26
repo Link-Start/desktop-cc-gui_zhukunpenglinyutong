@@ -3247,6 +3247,26 @@ describe("tauri invoke wrappers", () => {
     });
   });
 
+  it("maps get_engine_models provider scope without leaking blank ids", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValue([]);
+
+    await getEngineModels("kimi", {
+      providerProfileId: "  provider-k3  ",
+      forceRefresh: true,
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith("get_engine_models", {
+      engineType: "kimi",
+      providerProfileId: "provider-k3",
+      forceRefresh: true,
+    });
+
+    await getEngineModels("kimi", { providerProfileId: "   " });
+    expect(invokeMock).toHaveBeenLastCalledWith("get_engine_models", {
+      engineType: "kimi",
+    });
+  });
+
   it("maps engine_interrupt params", async () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockResolvedValueOnce(undefined);
