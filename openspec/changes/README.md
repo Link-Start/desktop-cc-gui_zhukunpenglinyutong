@@ -2,10 +2,10 @@
 
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
-- Updated At: `2026-07-26`
+- Updated At: `2026-07-27`
 - Active proposals: `24`
-- Archived proposals: `739`
-- Main capability specs: `437`
+- Archived proposals: `740`
+- Main capability specs: `438`
 
 ## Active Proposals
 
@@ -38,7 +38,8 @@
 
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 732 个 proposal，按月份 / 归档日期分组。
+- [完整归档提案索引](archive/README.md) — 733 个 proposal，按月份 / 归档日期分组。
+- [2026-07-27 `improve-codex-provider-protocol-error`](archive/2026-07-27-improve-codex-provider-protocol-error/proposal.md) — 已同步 Codex provider TOML/protocol error contract 与 renderer native Alert 禁令。
 - [2026-07-26 `fix-file-document-loading-error-stuck-state`](archive/2026-07-26-fix-file-document-loading-error-stuck-state/proposal.md) — 已同步 `file-document-loading-error-surface`；文件读取失败或读取期间产生本地脏改后，loading 状态必须收敛且错误可见。
 - [2026-07-24 `close-cleanup-review-findings`](archive/2026-07-24-close-cleanup-review-findings/proposal.md) — 已同步 composer completion、semantic review cache/fallback、settings/workspaces corruption backup uniqueness；并删除 JCEF/notice residual dead branches。
 - [2026-07-24 `preserve-corrupted-workspaces-on-load-and-notify`](archive/2026-07-24-preserve-corrupted-workspaces-on-load-and-notify/proposal.md) — 已同步 `workspaces-corruption-recovery`：`workspaces.json` 损坏时先隔离备份为 `.corrupted-<timestamp>.bak` 再回退空列表，quarantine 记录一次性 recovery notice，新增 `take_workspaces_recovery_notice` command，frontend 挂载后弹一次本地化 toast。

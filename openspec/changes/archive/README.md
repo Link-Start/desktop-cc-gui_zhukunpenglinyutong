@@ -2,13 +2,17 @@
 
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
-- Updated At: `2026-07-26`
-- Indexed proposals: `732`
+- Updated At: `2026-07-27`
+- Indexed proposals: `733`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-07 (199)
+## 2026-07 (200)
+
+### 2026-07-27
+
+- [`2026-07-27-improve-codex-provider-protocol-error`](2026-07-27-improve-codex-provider-protocol-error/proposal.md) — verified implementation，已同步 `codex-provider-scoped-session-launch` 与新增 `frontend-error-feedback`；Codex managed provider 非法 TOML/unsupported wire protocol 使用本地化 global Error Toast，renderer production code 禁止 native Alert
 
 ### 2026-07-26
 

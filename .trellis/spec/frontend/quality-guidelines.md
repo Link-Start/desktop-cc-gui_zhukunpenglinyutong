@@ -12,6 +12,7 @@
 
 - 在 feature 里直接 `invoke()`，绕过 `services/tauri.ts`。
 - 交互界面硬编码文本，绕过 i18n。
+- renderer 生产代码调用 native `alert()` / `window.alert()`；错误反馈必须使用 application-owned Error Toast 或 domain dialog。
 - 复制粘贴相似逻辑，不做 reuse 评估。
 - 修改大样式文件不跑 large-file 检查。
 - 在核心流程里随意引入 `any`。
@@ -27,6 +28,69 @@
 - 关键行为变更必须补 tests 或 contract check。
 - 图标按钮 tooltip 激活后必须能关闭，禁止留下悬浮残影。
 - 动态创建 Tauri `WebviewWindow` 时，window label pattern 必须同步覆盖 `src-tauri/capabilities/*.json`，并用 contract test 锁定；DOM `data-tauri-drag-region` 只解决命中区域，不会自动授予动态窗口权限。
+
+## Scenario: Renderer Error Feedback Must Not Use Native Alert
+
+### 1. Scope / Trigger
+
+- Trigger：新增或修改 `src/**/*.ts(x)` 中的用户错误反馈。
+- 目标：错误反馈保持 application-owned、non-blocking、localizable 与 testable。
+
+### 2. Signatures
+
+- 普通错误：`pushErrorToast({ title, message, ...options }): void`
+- 需要用户决策：复用现有 domain Dialog / Confirm contract。
+- 禁止接口：`alert(message)`、`window.alert(message)`。
+
+### 3. Contracts
+
+- renderer production code MUST NOT 调用 native `alert()` / `window.alert()`。
+- 非阻塞错误 MUST 使用 existing global Error Toast；需要确认/取消语义时 MUST 使用 application-owned Dialog。
+- user-facing title/copy MUST 走 i18n；raw backend diagnostic MAY 进入已有 Debug/logging channel，但 MUST 遵守 secret redaction。
+- test-only negative assertions 与 security fixture strings MAY 保留 `alert` 文本，但不得在生产路径执行。
+- ESLint MUST 通过 `no-restricted-globals` 与 `no-restricted-properties` 阻止新增 native Alert。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| 普通 action 失败 | global Error Toast | native Alert 阻塞 renderer |
+| 需要用户确认 | domain Dialog / Confirm | 用 Alert 模拟确认 |
+| backend 返回 raw parser error | 映射为本地化 copy，诊断进入 Debug | 将 parser source excerpt 直接展示 |
+| test 验证未调用 Alert | test override 可访问 mock | production override 绕过 lint |
+
+### 5. Good/Base/Bad Cases
+
+- Good：稳定 error marker 映射 i18n copy，再调用 `pushErrorToast`。
+- Base：未知错误 normalize 为 string 后进入 Toast，UI 不崩溃。
+- Bad：catch 中直接 `alert(String(error))` 或 `window.alert(...)`。
+
+### 6. Tests Required
+
+- error path MUST 断言 `pushErrorToast` payload。
+- 从 native Alert 迁移的关键链路 MUST 断言 Alert 未调用，或由 production source/lint gate 证明不存在调用。
+- ESLint config 变更 MUST 执行 target lint，并用 intentional negative probe 证明禁令生效。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+catch (error) {
+  window.alert(error instanceof Error ? error.message : String(error));
+}
+```
+
+#### Correct
+
+```typescript
+catch (error) {
+  pushErrorToast({
+    title: t("errors.requestFailed"),
+    message: error instanceof Error ? error.message : String(error),
+  });
+}
+```
 
 ## Large Tree / Commit Scope 性能约束
 

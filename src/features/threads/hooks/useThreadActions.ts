@@ -306,7 +306,7 @@ export function useThreadActions({
       const isLatestThreadListRequest = () =>
         threadListRequestSeqRef.current[workspace.id] === requestSeq;
       const preserveState = options?.preserveState ?? false;
-      const includeOpenCodeSessions = options?.includeOpenCodeSessions ?? true;
+      const includeOpenCodeSessions = options?.includeOpenCodeSessions ?? false;
       const deletedThreadIds = [
         ...new Set(
           (options?.deletedThreadIds ?? [])

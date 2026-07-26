@@ -35,6 +35,17 @@ if (/opencode-panel\.css/.test(bootstrap)) {
   fail("OpenCode-only global CSS remains eagerly imported");
 }
 
+const threadActions = read("src/features/threads/hooks/useThreadActions.ts");
+if (!/includeOpenCodeSessions\s*=\s*options\?\.includeOpenCodeSessions\s*\?\?\s*false/.test(threadActions)) {
+  fail("normal thread hydration can still probe retired OpenCode sessions");
+}
+const startupOwners = read(
+  "src/features/startup-orchestration/utils/startupOwners.ts",
+);
+if (/commandLabel:\s*["']opencode_session_list["']/.test(startupOwners)) {
+  fail("retired OpenCode session discovery remains registered as startup work");
+}
+
 for (const relativePath of [
   "src-tauri/src/engine/mod.rs",
   "src-tauri/src/bin/cc_gui_daemon/engine_bridge.rs",

@@ -77,6 +77,30 @@ function renderSection(overrides: Record<string, unknown> = {}) {
 }
 
 describe("useAppShellComposerModelSection handleSelectModel", () => {
+  it("uses the bound Codex provider catalog instead of the global model list", () => {
+    const providerModels = [
+      makeModel("provider-a-model", { providerProfileId: "provider-a" }),
+      makeModel("gpt-public"),
+    ];
+    const { result } = renderSection({
+      activeEngine: "codex",
+      activeThreadId: "codex-thread-1",
+      activeProviderProfileId: "provider-a",
+      engineModelsAsOptions: providerModels,
+      models: [makeModel("global-default-model")],
+    });
+
+    expect(result.current.effectiveModels.map((model) => model.id)).toEqual([
+      "provider-a-model",
+      "gpt-public",
+    ]);
+    expect(
+      result.current.effectiveModels.some(
+        (model) => model.id === "global-default-model",
+      ),
+    ).toBe(false);
+  });
+
   it("stores cross-engine picks under the owning engine and persists its pref", () => {
     const persistComposerEnginePref = vi.fn();
     const handleSelectComposerSelection = vi.fn();

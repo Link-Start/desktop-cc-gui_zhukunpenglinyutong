@@ -15,6 +15,8 @@ const errors = {
     "failedToCreateSession": "No se pudo crear la sesión.",
     "failedToCreateSessionNoThreadId": "El runtime no devolvió un nuevo id de sesión.",
     "failedToCreateSessionRuntimeRecovering": "El runtime se estaba reiniciando al crear esta sesión. La app ya reintentó una vez. Reconecta el espacio de trabajo e inténtalo de nuevo.",
+    "codexProviderWireApiUnsupported": "La versión actual de Codex CLI no admite wire_api = \"chat\". Si este proveedor admite Responses API, usa wire_api = \"responses\". Si solo admite Chat Completions, configura primero un servicio de conversión de protocolo o router.",
+    "codexProviderConfigInvalid": "La configuración de este proveedor de Codex no es TOML válido. Comprueba la sintaxis y usa comillas rectas inglesas (\") en lugar de comillas tipográficas.",
     "reconnectAndRetryCreateSession": "Reconectar y reintentar la creación",
     "reconnectingAndRetryingCreateSession": "Reconectando y reintentando la creación...",
     "runtimeRecovered": "Runtime recuperado.",

@@ -629,7 +629,6 @@ const git = {
     "prsModeDescription": "pull requests की समीक्षा करें",
     "applyWorktreeChanges": "मूल workspace पर बदलाव लागू करें",
     "applyWorktreeChangesAction": "Worktree बदलाव लागू करें",
-    "pushButton": "Push",
     "pushCommits": "{{count}} commit push करें",
     "pushCommits_other": "{{count}} commits push करें",
     "revertAllTitle": "सभी बदलाव revert करें",

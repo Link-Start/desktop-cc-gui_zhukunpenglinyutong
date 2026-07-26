@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useRef } from "react";
 import type { Dispatch, MutableRefObject } from "react";
 
-import type { DebugEntry } from "../../../types";
+import type { DebugEntry, ThreadSummary } from "../../../types";
 import type { AutoSessionMetadata } from "../../../services/tauri";
 import {
   CODEX_DISK_PROVIDER_PROFILE_ID,
-  type CodexProviderProfileOption,
+  type EngineProviderProfileOption,
 } from "../constants/codexProviderProfiles";
 import {
   registerCodexPrewarm,
@@ -67,6 +67,40 @@ import { assertEngineExecutionEnabled } from "../../../utils/engineExecutionPoli
 
 type OnDebug = (entry: DebugEntry) => void;
 
+type ProviderSelectionOptions = {
+  providerProfileId?: string | null;
+  providerProfile?: EngineProviderProfileOption | null;
+};
+
+function resolveChildProviderBinding(
+  parentThread: ThreadSummary | undefined,
+  options?: ProviderSelectionOptions,
+) {
+  const hasExplicitSelection =
+    Boolean(options?.providerProfile) ||
+    Boolean(options?.providerProfileId?.trim());
+  if (hasExplicitSelection) {
+    return providerBindingFromSelectedProfile(
+      options?.providerProfile,
+      options?.providerProfileId,
+    );
+  }
+  return {
+    ...(parentThread?.providerProfileId
+      ? { providerProfileId: parentThread.providerProfileId }
+      : {}),
+    ...(parentThread?.providerProfileSource
+      ? { providerProfileSource: parentThread.providerProfileSource }
+      : {}),
+    ...(parentThread?.providerProfileName
+      ? { providerProfileName: parentThread.providerProfileName }
+      : {}),
+    ...(parentThread?.providerAvailability
+      ? { providerAvailability: parentThread.providerAvailability }
+      : {}),
+  };
+}
+
 type ResumeThreadForWorkspace = (
   workspaceId: string,
   threadId: string,
@@ -75,12 +109,10 @@ type ResumeThreadForWorkspace = (
   options?: { preferLocalCodexHistory?: boolean },
 ) => Promise<string | null>;
 
-type RewindFromMessageOptions = {
+type RewindFromMessageOptions = ProviderSelectionOptions & {
   activate?: boolean;
   mode?: RewindMode;
   operation?: "fork" | "rewind";
-  providerProfileId?: string | null;
-  providerProfile?: CodexProviderProfileOption | null;
 };
 
 type UseThreadActionsSessionRuntimeOptions = {
@@ -333,7 +365,7 @@ export function useThreadActionsSessionRuntime({
         folderId?: string | null;
         autoSession?: AutoSessionMetadata | null;
         providerProfileId?: string | null;
-        providerProfile?: CodexProviderProfileOption | null;
+        providerProfile?: EngineProviderProfileOption | null;
       },
     ) => {
       const shouldActivate = options?.activate !== false;
@@ -393,6 +425,7 @@ export function useThreadActionsSessionRuntime({
           engine,
           ...(folderId ? { folderId } : {}),
           ...autoSessionPayload,
+          ...selectedProviderBinding,
         });
         if (shouldActivate) {
           dispatch({ type: "setActiveThreadId", workspaceId, threadId });
@@ -553,16 +586,16 @@ export function useThreadActionsSessionRuntime({
       options?: {
         activate?: boolean;
         providerProfileId?: string | null;
-        providerProfile?: CodexProviderProfileOption | null;
+        providerProfile?: EngineProviderProfileOption | null;
       },
     ) => {
       if (!threadId) {
         return null;
       }
       const shouldActivate = options?.activate !== false;
-      const selectedProviderBinding = providerBindingFromSelectedProfile(
-        options?.providerProfile,
-        options?.providerProfileId,
+      const selectedProviderBinding = resolveChildProviderBinding(
+        threadsByWorkspace[workspaceId]?.find((thread) => thread.id === threadId),
+        options,
       );
       const providerProfileId =
         selectedProviderBinding.providerProfileId?.trim() || null;
@@ -708,6 +741,10 @@ export function useThreadActionsSessionRuntime({
         return null;
       }
       const shouldActivate = options?.activate !== false;
+      const inheritedProviderBinding = resolveChildProviderBinding(
+        threadsByWorkspace[workspaceId]?.find((thread) => thread.id === threadId),
+        options,
+      );
       const operation = options?.operation ?? "rewind";
       const rewindMode = normalizeRewindMode(options?.mode);
       const shouldRestoreFiles = shouldRestoreWorkspaceFiles(rewindMode);
@@ -854,6 +891,7 @@ export function useThreadActionsSessionRuntime({
             workspaceId,
             threadId: forkedThreadId,
             engine: "claude",
+            ...inheritedProviderBinding,
           });
           const forkThreadName = resolveClaudeForkThreadName({
             workspaceId,

@@ -31,6 +31,8 @@ pub(crate) mod gemini_proxy_guard;
 pub mod kimi;
 #[path = "../../engine/kimi_history.rs"]
 pub mod kimi_history;
+#[path = "../../engine/kimi_provider_profile.rs"]
+pub(crate) mod kimi_provider_profile;
 #[allow(dead_code)]
 #[path = "../../engine/manager.rs"]
 pub mod manager;
@@ -527,6 +529,8 @@ pub struct ModelInfo {
     #[serde(default)]
     pub provenance: Option<String>,
     #[serde(default)]
+    pub provider_profile_id: Option<String>,
+    #[serde(default)]
     pub observed_at: Option<u64>,
     #[serde(default)]
     pub last_verified_at: Option<String>,
@@ -552,6 +556,7 @@ impl ModelInfo {
             provider: None,
             protocol: None,
             provenance: None,
+            provider_profile_id: None,
             observed_at: None,
             last_verified_at: None,
             lifecycle: None,
@@ -576,6 +581,11 @@ impl ModelInfo {
 
     pub fn with_provenance(mut self, provenance: impl Into<String>) -> Self {
         self.provenance = Some(provenance.into());
+        self
+    }
+
+    pub fn with_provider_profile_id(mut self, provider_profile_id: impl Into<String>) -> Self {
+        self.provider_profile_id = Some(provider_profile_id.into());
         self
     }
 

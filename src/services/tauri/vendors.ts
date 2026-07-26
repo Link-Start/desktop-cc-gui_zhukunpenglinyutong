@@ -138,6 +138,31 @@ export async function fetchKimiProviderModels(
   });
 }
 
+export type CcSwitchAppType = "claude" | "codex";
+
+export interface CcSwitchProvider {
+  id: string;
+  name: string;
+  category: string | null;
+  websiteUrl: string | null;
+  baseUrl: string | null;
+  hasApiKey: boolean;
+  settingsConfig: Record<string, unknown>;
+}
+
+export interface CcSwitchProviderList {
+  available: boolean;
+  providers: CcSwitchProvider[];
+}
+
+export async function listCcSwitchProviders(
+  appType: CcSwitchAppType,
+): Promise<CcSwitchProviderList> {
+  return invoke<CcSwitchProviderList>("vendor_list_cc_switch_providers", {
+    appType,
+  });
+}
+
 export interface GeminiVendorSettings {
   enabled: boolean;
   env: Record<string, string>;

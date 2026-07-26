@@ -629,7 +629,6 @@ const git = {
     "prsModeDescription": "プルリクエストをレビュー",
     "applyWorktreeChanges": "変更を親ワークスペースに適用",
     "applyWorktreeChangesAction": "Worktree の変更を適用",
-    "pushButton": "Push",
     "pushCommits": "{{count}} 件のコミットを Push",
     "pushCommits_other": "{{count}} 件のコミットを Push",
     "revertAllTitle": "すべての変更を元に戻す",

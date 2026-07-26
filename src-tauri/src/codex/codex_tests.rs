@@ -614,6 +614,46 @@ async fn start_thread_retry_reacquires_after_manual_shutdown_race() {
 }
 
 #[tokio::test]
+async fn start_thread_retry_reacquires_after_broken_pipe() {
+    let ensure_calls = Arc::new(AtomicUsize::new(0));
+    let start_calls = Arc::new(AtomicUsize::new(0));
+
+    let result = run_start_thread_with_retry(
+        "ws-1",
+        {
+            let ensure_calls = Arc::clone(&ensure_calls);
+            move || {
+                let ensure_calls = Arc::clone(&ensure_calls);
+                async move {
+                    ensure_calls.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                }
+            }
+        },
+        {
+            let start_calls = Arc::clone(&start_calls);
+            move || {
+                let start_calls = Arc::clone(&start_calls);
+                async move {
+                    let attempt = start_calls.fetch_add(1, Ordering::SeqCst);
+                    if attempt == 0 {
+                        Err("Broken pipe (os error 32)".to_string())
+                    } else {
+                        Ok(json!({ "result": { "threadId": "thread-recovered" } }))
+                    }
+                }
+            }
+        },
+    )
+    .await
+    .expect("broken pipe should reacquire and retry once");
+
+    assert_eq!(result["result"]["threadId"], "thread-recovered");
+    assert_eq!(ensure_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(start_calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
 async fn start_thread_retry_does_not_retry_non_runtime_shutdown_errors() {
     let ensure_calls = Arc::new(AtomicUsize::new(0));
     let start_calls = Arc::new(AtomicUsize::new(0));
@@ -686,6 +726,21 @@ async fn start_thread_retry_returns_recoverable_error_when_stopping_race_persist
     assert_eq!(error, create_session_runtime_recovering_error());
     assert_eq!(ensure_calls.load(Ordering::SeqCst), 2);
     assert_eq!(start_calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn start_thread_retry_redacts_persistent_broken_pipe() {
+    let error = run_start_thread_with_retry(
+        "ws-1",
+        || async { Ok(()) },
+        || async { Err("Broken pipe (os error 32)".to_string()) },
+    )
+    .await
+    .expect_err("persistent broken pipe should become a stable recovery error");
+
+    assert_eq!(error, create_session_runtime_recovering_error());
+    assert!(!error.to_ascii_lowercase().contains("broken pipe"));
+    assert!(!error.contains("os error 32"));
 }
 
 #[tokio::test]

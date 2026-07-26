@@ -41,8 +41,8 @@ pub struct EngineManager {
     /// Gemini sessions per workspace
     gemini_sessions: Mutex<GeminiSessionRegistry>,
 
-    /// Kimi sessions per workspace
-    kimi_sessions: Mutex<HashMap<String, Arc<KimiSession>>>,
+    /// Kimi sessions per workspace/provider runtime.
+    kimi_sessions: Mutex<HashMap<String, KimiSessionEntry>>,
 
     /// Engine configurations
     engine_configs: RwLock<HashMap<EngineType, EngineConfig>>,
@@ -54,6 +54,22 @@ struct GeminiSessionRegistry {
     // Workspace ID 是非复用 UUID；持久 tombstone 阻止旧请求在删除后重新取得 process owner。
     removed_workspaces: HashSet<String>,
     shutting_down: bool,
+}
+
+struct KimiSessionEntry {
+    workspace_id: String,
+    session: Arc<KimiSession>,
+}
+
+fn kimi_engine_config_with_home(
+    mut config: Option<EngineConfig>,
+    home_dir: Option<&Path>,
+) -> Option<EngineConfig> {
+    if let Some(home_dir) = home_dir {
+        config.get_or_insert_with(EngineConfig::default).home_dir =
+            Some(home_dir.to_string_lossy().to_string());
+    }
+    config
 }
 
 impl EngineManager {
@@ -271,17 +287,36 @@ impl EngineManager {
             .await
     }
 
+    pub async fn get_claude_session_for_provider(
+        &self,
+        workspace_id: &str,
+        workspace_path: &Path,
+        provider_profile_id: Option<&str>,
+    ) -> Arc<ClaudeSession> {
+        self.claude_manager
+            .get_or_create_session_for_provider(workspace_id, workspace_path, provider_profile_id)
+            .await
+    }
+
     /// Remove a Claude session
     pub async fn remove_claude_session(&self, workspace_id: &str) {
-        if let Some(session) = self.claude_manager.remove_session(workspace_id).await {
-            session.mark_disposed();
+        for (runtime_key, session) in self
+            .claude_manager
+            .runtime_sessions_for_workspace(workspace_id)
+            .await
+        {
             if let Err(error) = session.interrupt().await {
                 log::warn!(
                     "[engine_manager] failed to interrupt claude session during remove (workspace={}): {}",
                     workspace_id,
                     error
                 );
+                continue;
             }
+            session.mark_disposed();
+            self.claude_manager
+                .remove_runtime_session(&runtime_key)
+                .await;
         }
     }
 
@@ -470,43 +505,160 @@ impl EngineManager {
         workspace_id: &str,
         workspace_path: &Path,
     ) -> Arc<KimiSession> {
+        self.get_or_create_kimi_session_for_runtime(
+            workspace_id,
+            workspace_path,
+            workspace_id,
+            None,
+        )
+        .await
+    }
+
+    /// Get or create a Kimi session isolated by provider runtime key.
+    pub async fn get_or_create_kimi_session_for_runtime(
+        &self,
+        workspace_id: &str,
+        workspace_path: &Path,
+        runtime_key: &str,
+        home_dir: Option<&Path>,
+    ) -> Arc<KimiSession> {
         {
             let sessions = self.kimi_sessions.lock().await;
-            if let Some(session) = sessions.get(workspace_id) {
-                return session.clone();
+            if let Some(entry) = sessions.get(runtime_key) {
+                return entry.session.clone();
             }
         }
 
-        let config = self.get_engine_config(EngineType::Kimi).await;
+        let config =
+            kimi_engine_config_with_home(self.get_engine_config(EngineType::Kimi).await, home_dir);
         let session = Arc::new(KimiSession::new(
             workspace_id.to_string(),
             workspace_path.to_path_buf(),
             config,
         ));
         let mut sessions = self.kimi_sessions.lock().await;
-        sessions.insert(workspace_id.to_string(), session.clone());
+        if let Some(entry) = sessions.get(runtime_key) {
+            return entry.session.clone();
+        }
+        sessions.insert(
+            runtime_key.to_string(),
+            KimiSessionEntry {
+                workspace_id: workspace_id.to_string(),
+                session: session.clone(),
+            },
+        );
         session
     }
 
     /// Get Kimi session by workspace
     pub async fn get_kimi_session(&self, workspace_id: &str) -> Option<Arc<KimiSession>> {
         let sessions = self.kimi_sessions.lock().await;
-        sessions.get(workspace_id).cloned()
+        sessions
+            .values()
+            .find(|entry| entry.workspace_id == workspace_id)
+            .map(|entry| entry.session.clone())
+    }
+
+    /// Snapshot all Kimi sessions owned by a workspace.
+    pub async fn get_kimi_sessions(&self, workspace_id: &str) -> Vec<Arc<KimiSession>> {
+        let sessions = self.kimi_sessions.lock().await;
+        sessions
+            .values()
+            .filter(|entry| entry.workspace_id == workspace_id)
+            .map(|entry| entry.session.clone())
+            .collect()
+    }
+
+    /// Interrupt all provider-scoped Kimi runtimes owned by a workspace.
+    pub async fn interrupt_kimi_sessions(
+        &self,
+        workspace_id: &str,
+        turn_id: Option<&str>,
+    ) -> Result<(), String> {
+        let sessions = self.get_kimi_sessions(workspace_id).await;
+        let mut errors = Vec::new();
+        for session in sessions {
+            let result = match turn_id {
+                Some(turn_id) => session.interrupt_turn(turn_id).await,
+                None => session.interrupt().await,
+            };
+            if let Err(error) = result {
+                errors.push(error);
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "failed to interrupt {} Kimi runtime(s): {}",
+                errors.len(),
+                errors.join("; ")
+            ))
+        }
     }
 
     /// Snapshot all tracked Kimi sessions.
     pub async fn list_kimi_sessions(&self) -> Vec<(String, Arc<KimiSession>)> {
         let sessions = self.kimi_sessions.lock().await;
         sessions
-            .iter()
-            .map(|(workspace_id, session)| (workspace_id.clone(), session.clone()))
+            .values()
+            .map(|entry| (entry.workspace_id.clone(), entry.session.clone()))
             .collect()
     }
 
-    /// Remove a Kimi session
-    pub async fn remove_kimi_session(&self, workspace_id: &str) {
+    /// Stop and remove all Kimi runtimes for a workspace. Failed owners stay tracked.
+    pub async fn remove_kimi_session(&self, workspace_id: &str) -> Result<(), String> {
+        let candidates = {
+            let sessions = self.kimi_sessions.lock().await;
+            sessions
+                .iter()
+                .filter(|(_, entry)| entry.workspace_id == workspace_id)
+                .map(|(runtime_key, entry)| (runtime_key.clone(), entry.session.clone()))
+                .collect::<Vec<_>>()
+        };
+        let mut completed = Vec::new();
+        let mut errors = Vec::new();
+        for (runtime_key, session) in candidates {
+            match session.interrupt().await {
+                Ok(()) => completed.push(runtime_key),
+                Err(error) => errors.push(error),
+            }
+        }
         let mut sessions = self.kimi_sessions.lock().await;
-        sessions.remove(workspace_id);
+        for runtime_key in completed {
+            sessions.remove(&runtime_key);
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "failed to close {} Kimi runtime(s): {}",
+                errors.len(),
+                errors.join("; ")
+            ))
+        }
+    }
+
+    /// Stop all provider-scoped Kimi runtimes during host shutdown.
+    pub async fn shutdown_kimi_sessions(&self) -> Result<(), String> {
+        let workspace_ids = {
+            let sessions = self.kimi_sessions.lock().await;
+            sessions
+                .values()
+                .map(|entry| entry.workspace_id.clone())
+                .collect::<HashSet<_>>()
+        };
+        let mut errors = Vec::new();
+        for workspace_id in workspace_ids {
+            if let Err(error) = self.remove_kimi_session(&workspace_id).await {
+                errors.push(error);
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join("; "))
+        }
     }
 
     // ==================== Utility Methods ====================
@@ -736,6 +888,55 @@ mod tests {
         assert_eq!(
             cached.error.as_deref(),
             Some(super::super::OPENCODE_DISABLED_DIAGNOSTIC)
+        );
+    }
+
+    #[tokio::test]
+    async fn kimi_sessions_are_reused_per_runtime_and_isolated_between_providers() {
+        let manager = EngineManager::new();
+        let workspace_path = std::env::temp_dir().join("mossx-kimi-runtime-isolation");
+        let first = manager
+            .get_or_create_kimi_session_for_runtime(
+                "workspace-1",
+                &workspace_path,
+                "kimi::workspace-1::provider-a",
+                Some(&workspace_path.join("provider-a")),
+            )
+            .await;
+        let reused = manager
+            .get_or_create_kimi_session_for_runtime(
+                "workspace-1",
+                &workspace_path,
+                "kimi::workspace-1::provider-a",
+                Some(&workspace_path.join("provider-a")),
+            )
+            .await;
+        let isolated = manager
+            .get_or_create_kimi_session_for_runtime(
+                "workspace-1",
+                &workspace_path,
+                "kimi::workspace-1::provider-b",
+                Some(&workspace_path.join("provider-b")),
+            )
+            .await;
+
+        assert!(Arc::ptr_eq(&first, &reused));
+        assert!(!Arc::ptr_eq(&first, &isolated));
+        assert_eq!(manager.get_kimi_sessions("workspace-1").await.len(), 2);
+        manager
+            .remove_kimi_session("workspace-1")
+            .await
+            .expect("remove Kimi runtimes");
+        assert!(manager.get_kimi_sessions("workspace-1").await.is_empty());
+    }
+
+    #[test]
+    fn kimi_provider_home_flows_into_engine_config() {
+        let home = Path::new("/tmp/mossx-kimi-provider-a");
+        let config = kimi_engine_config_with_home(None, Some(home)).expect("Kimi config");
+        assert_eq!(
+            config.home_dir.as_deref(),
+            Some(home.to_string_lossy().as_ref())
         );
     }
 }

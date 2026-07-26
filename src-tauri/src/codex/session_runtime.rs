@@ -162,6 +162,19 @@ pub(crate) fn is_stopping_runtime_race_error(error: &str) -> bool {
         || (normalized.contains("[runtime_ended]") && normalized.contains("stopped after"))
 }
 
+pub(crate) fn is_create_session_runtime_recovery_error(error: &str) -> bool {
+    if is_stopping_runtime_race_error(error) {
+        return true;
+    }
+    let normalized = error.to_ascii_lowercase();
+    normalized.contains("broken pipe")
+        || normalized.contains("the pipe is being closed")
+        || normalized.contains("the pipe has been ended")
+        || normalized.contains("os error 32")
+        || normalized.contains("os error 109")
+        || normalized.contains("os error 232")
+}
+
 pub(crate) fn create_session_runtime_recovering_error() -> String {
     format!(
         "{CREATE_SESSION_RUNTIME_RECOVERING_ERROR_PREFIX} Managed runtime was restarting while creating this session. The app retried automatically but could not acquire a healthy runtime yet. Reconnect the workspace and try again."
@@ -493,9 +506,10 @@ fn merge_codex_args(base: Option<String>, override_args: Option<String>) -> Opti
 mod tests {
     use super::{
         attach_hook_safe_fallback_metadata, create_session_runtime_recovering_error,
-        is_hook_safe_fallback_trigger, is_stopping_runtime_race_error,
-        load_workspace_entries_for_runtime_start, reuse_existing_session_if_healthy,
-        summarize_fallback_failure, CREATE_SESSION_RUNTIME_RECOVERING_ERROR_PREFIX,
+        is_create_session_runtime_recovery_error, is_hook_safe_fallback_trigger,
+        is_stopping_runtime_race_error, load_workspace_entries_for_runtime_start,
+        reuse_existing_session_if_healthy, summarize_fallback_failure,
+        CREATE_SESSION_RUNTIME_RECOVERING_ERROR_PREFIX,
     };
     use crate::runtime::{RuntimeAcquireGate, RuntimeManager};
     use crate::types::WorkspaceEntry;
@@ -612,6 +626,23 @@ mod tests {
             "Managed runtime stopped after manual shutdown."
         ));
         assert!(!is_stopping_runtime_race_error("workspace not connected"));
+    }
+
+    #[test]
+    fn create_session_runtime_recovery_error_matches_pipe_disconnects() {
+        for error in [
+            "Broken pipe (os error 32)",
+            "The pipe is being closed. (os error 232)",
+            "The pipe has been ended. (os error 109)",
+        ] {
+            assert!(
+                is_create_session_runtime_recovery_error(error),
+                "expected recoverable pipe error: {error}"
+            );
+        }
+        assert!(!is_create_session_runtime_recovery_error(
+            "workspace not connected"
+        ));
     }
 
     #[test]

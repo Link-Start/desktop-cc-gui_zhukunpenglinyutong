@@ -87,6 +87,187 @@ fn model_catalog_now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+fn merge_provider_models_with_public(
+    provider_models: Vec<ModelInfo>,
+    public_models: Vec<ModelInfo>,
+) -> Vec<ModelInfo> {
+    dedupe_models_preserve_order(provider_models.into_iter().chain(public_models).collect())
+}
+
+fn public_models_for_engine(engine_type: EngineType) -> Vec<ModelInfo> {
+    match engine_type {
+        EngineType::Claude => get_builtin_claude_models(),
+        EngineType::Codex | EngineType::Kimi => get_generated_fallback_models(engine_type),
+        EngineType::Gemini | EngineType::OpenCode => Vec::new(),
+    }
+}
+
+fn claude_provider_models_from_env(
+    provider_profile_id: &str,
+    env: &std::collections::BTreeMap<String, String>,
+) -> Vec<ModelInfo> {
+    let overrides = ClaudeModelOverrides {
+        main: normalize_non_empty(env.get("ANTHROPIC_MODEL").cloned()),
+        sonnet: normalize_non_empty(env.get("ANTHROPIC_DEFAULT_SONNET_MODEL").cloned()),
+        opus: normalize_non_empty(env.get("ANTHROPIC_DEFAULT_OPUS_MODEL").cloned()),
+        haiku: normalize_non_empty(env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL").cloned()),
+        reasoning: normalize_non_empty(env.get("ANTHROPIC_REASONING_MODEL").cloned()),
+    };
+    build_claude_settings_model_entries(&overrides)
+        .into_iter()
+        .map(|model| model.with_provider_profile_id(provider_profile_id))
+        .collect()
+}
+
+fn codex_provider_models_from_config(
+    provider_profile_id: &str,
+    config_toml: &str,
+    custom_models: Vec<crate::types::CodexCustomModel>,
+) -> Result<Vec<ModelInfo>, String> {
+    let config: toml::Value = config_toml
+        .parse()
+        .map_err(|error| format!("invalid Codex provider configToml: {error}"))?;
+    let configured_model = config
+        .get("model")
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let configured_provider = config
+        .get("model_provider")
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let mut models = custom_models
+        .into_iter()
+        .filter_map(|custom_model| {
+            let id = custom_model.id.trim().to_string();
+            if id.is_empty() {
+                return None;
+            }
+            let label = custom_model.label.trim();
+            let mut model = ModelInfo::new(
+                id.clone(),
+                if label.is_empty() { id.as_str() } else { label },
+            )
+            .with_runtime_model(id)
+            .with_source("provider-custom")
+            .with_provenance("provider:codex-custom-model")
+            .with_provider_profile_id(provider_profile_id);
+            if let Some(description) = custom_model
+                .description
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                model = model.with_description(description);
+            }
+            if let Some(provider) = configured_provider {
+                model = model.with_provider(provider);
+            }
+            Some(model)
+        })
+        .collect::<Vec<_>>();
+    if let Some(runtime_model) = configured_model {
+        if let Some(existing) = models
+            .iter_mut()
+            .find(|model| model.model.trim() == runtime_model)
+        {
+            existing.default = true;
+        } else {
+            let mut model = ModelInfo::new(runtime_model, runtime_model)
+                .with_runtime_model(runtime_model)
+                .with_source("provider-config")
+                .with_provenance("provider:codex-config-toml")
+                .with_provider_profile_id(provider_profile_id)
+                .as_default();
+            if let Some(provider) = configured_provider {
+                model = model.with_provider(provider);
+            }
+            models.insert(0, model);
+        }
+    }
+    Ok(dedupe_models_preserve_order(models))
+}
+
+fn kimi_provider_models_from_config(
+    provider_profile_id: &str,
+    provider: crate::types::KimiProviderConfig,
+) -> Vec<ModelInfo> {
+    let runtime_model = provider.model.trim();
+    if runtime_model.is_empty() {
+        return Vec::new();
+    }
+    let display_name = provider
+        .display_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(runtime_model);
+    let provider_name = provider
+        .provider_type
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("kimi");
+    vec![ModelInfo::new(runtime_model, display_name)
+        .with_runtime_model(runtime_model)
+        .with_provider(provider_name)
+        .with_protocol("kimi")
+        .with_source("provider-config")
+        .with_provenance("provider:kimi-config")
+        .with_provider_profile_id(provider_profile_id)
+        .as_default()]
+}
+
+pub(crate) fn get_provider_scoped_engine_models(
+    engine_type: EngineType,
+    provider_profile_id: Option<&str>,
+) -> Result<Option<Vec<ModelInfo>>, String> {
+    let Some(provider_profile_id) = provider_profile_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    let provider_models = match engine_type {
+        EngineType::Claude => {
+            let Some(env) =
+                crate::engine::claude::provider_profile::resolve_claude_provider_model_env(
+                    provider_profile_id,
+                )?
+            else {
+                return Ok(None);
+            };
+            claude_provider_models_from_env(provider_profile_id, &env)
+        }
+        EngineType::Codex => {
+            let Some((config_toml, custom_models)) =
+                crate::codex::provider_profile::resolve_codex_provider_model_config(
+                    provider_profile_id,
+                )?
+            else {
+                return Ok(None);
+            };
+            codex_provider_models_from_config(provider_profile_id, &config_toml, custom_models)?
+        }
+        EngineType::Kimi => {
+            let Some(provider) =
+                crate::engine::kimi_provider_profile::resolve_kimi_provider_model_config(
+                    provider_profile_id,
+                )?
+            else {
+                return Ok(None);
+            };
+            kimi_provider_models_from_config(provider_profile_id, provider)
+        }
+        EngineType::Gemini | EngineType::OpenCode => return Ok(None),
+    };
+    Ok(Some(merge_provider_models_with_public(
+        provider_models,
+        public_models_for_engine(engine_type),
+    )))
+}
+
 /// Build a tokio Command that correctly handles .cmd/.bat files on Windows.
 /// Uses CREATE_NO_WINDOW to prevent visible console windows.
 #[allow(unused_variables)]
@@ -1265,6 +1446,95 @@ mod tests {
         ]);
         assert_eq!(models.len(), 1);
         assert_eq!(models[0].source, "cli-discovered");
+    }
+
+    #[test]
+    fn claude_provider_catalog_precedes_and_appends_public_models() {
+        let env = std::collections::BTreeMap::from([(
+            "ANTHROPIC_MODEL".to_string(),
+            "claude-opus-4-8".to_string(),
+        )]);
+        let models = merge_provider_models_with_public(
+            claude_provider_models_from_env("provider-a", &env),
+            public_models_for_engine(EngineType::Claude),
+        );
+
+        assert_eq!(
+            models
+                .iter()
+                .filter(|model| model.model == "claude-opus-4-8")
+                .count(),
+            1
+        );
+        assert_eq!(models[0].provider_profile_id.as_deref(), Some("provider-a"));
+        assert!(models.iter().any(|model| model.model == "claude-sonnet-5"));
+    }
+
+    #[test]
+    fn codex_provider_catalog_merges_config_custom_and_public_models() {
+        let provider_models = codex_provider_models_from_config(
+            "provider-a",
+            "model = \"gpt-5.3-codex\"\nmodel_provider = \"proxy-a\"\n",
+            vec![crate::types::CodexCustomModel {
+                id: "provider-only".to_string(),
+                label: "Provider Only".to_string(),
+                description: None,
+            }],
+        )
+        .expect("parse provider catalog");
+        let models = merge_provider_models_with_public(
+            provider_models,
+            public_models_for_engine(EngineType::Codex),
+        );
+
+        assert_eq!(
+            models
+                .iter()
+                .filter(|model| model.model == "gpt-5.3-codex")
+                .count(),
+            1
+        );
+        assert!(models.iter().any(|model| {
+            model.model == "provider-only"
+                && model.provider_profile_id.as_deref() == Some("provider-a")
+        }));
+        assert!(models
+            .iter()
+            .any(|model| { model.source == "fallback" && model.provider_profile_id.is_none() }));
+    }
+
+    #[test]
+    fn kimi_provider_catalog_precedes_duplicate_public_model() {
+        let provider = crate::types::KimiProviderConfig {
+            id: "provider-a".to_string(),
+            name: "Provider A".to_string(),
+            remark: None,
+            website_url: None,
+            created_at: None,
+            sort_order: None,
+            is_active: false,
+            is_local_provider: None,
+            base_url: "https://example.test".to_string(),
+            api_key: "secret".to_string(),
+            model: "kimi-for-coding".to_string(),
+            provider_type: Some("openai".to_string()),
+            max_context_size: None,
+            display_name: Some("Provider Kimi".to_string()),
+        };
+        let models = merge_provider_models_with_public(
+            kimi_provider_models_from_config("provider-a", provider),
+            public_models_for_engine(EngineType::Kimi),
+        );
+
+        assert_eq!(
+            models
+                .iter()
+                .filter(|model| model.model == "kimi-for-coding")
+                .count(),
+            1
+        );
+        assert_eq!(models[0].name, "Provider Kimi");
+        assert_eq!(models[0].provider_profile_id.as_deref(), Some("provider-a"));
     }
 
     #[test]

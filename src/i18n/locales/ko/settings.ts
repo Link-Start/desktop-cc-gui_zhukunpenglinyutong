@@ -1104,8 +1104,8 @@ const settings = {
       "dialog": {
         "addTitle": "Claude 공급자 추가",
         "editTitle": "Claude 공급자 편집",
-        "addDescription": "새 공급자를 구성합니다. 구성은 ~/.claude/settings.json에 기록됩니다.",
-        "editDescription": "업데이트는 ~/.claude/settings.json에 즉시 적용됩니다.",
+        "addDescription": "공급자 구성은 desktop-cc-gui에 독립적으로 저장되며 해당 공급자에 연결된 대화에서만 사용됩니다. ~/.claude/settings.json은 수정하지 않습니다.",
+        "editDescription": "업데이트는 desktop-cc-gui에 독립적으로 유지되고 해당 공급자에 연결된 대화에 적용됩니다. ~/.claude/settings.json은 수정하지 않습니다.",
         "securityNotice": "안내: 모든 설정은 사용자 컴퓨터에 로컬로 유지됩니다. 이 프로젝트는 100% 오픈 소스입니다.",
         "presetGroup": "빠른 프리셋",
         "providerName": "공급자 이름",
@@ -1886,7 +1886,7 @@ const settings = {
       }
     },
     "sidebarProjectManagement": "프로젝트 관리",
-    "sidebarMcpSkills": "스킬",
+    "sidebarMcpSkills": "선별됨",
     "sidebarAgentPromptManagement": "Agents / 프롬프트",
     "sidebarRuntimeEnvironment": "런타임 환경",
     "basicShortcutsTab": "단축키",

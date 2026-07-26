@@ -22,7 +22,7 @@ function provider(
 }
 
 describe("buildClaudeProviderReorderIds", () => {
-  it("reorders non-active providers and inserts active at its home index", () => {
+  it("reorders every managed provider without active-provider pinning", () => {
     const providers = [
       provider("a"),
       provider("b", { isActive: true }),
@@ -30,9 +30,9 @@ describe("buildClaudeProviderReorderIds", () => {
     ];
 
     expect(buildClaudeProviderReorderIds(providers, 1, 0)).toEqual([
-      "c",
       "b",
       "a",
+      "c",
     ]);
   });
 
@@ -65,7 +65,6 @@ describe("ProviderList", () => {
         onEditLocalSettings={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
-        onSwitch={vi.fn()}
         onReorder={vi.fn()}
       />,
     );
@@ -76,22 +75,24 @@ describe("ProviderList", () => {
 
     expect(cardNames).toEqual([
       "settings.vendor.officialConfig",
-      "ProviderB",
       "ProviderA",
+      "ProviderB",
       "ProviderC",
     ]);
     expect(
       Array.from(container.querySelectorAll(".vendor-list-title")).map(
         (element) => element.textContent,
       ),
-    ).toEqual(["settings.vendor.officialConfig", "settings.vendor.thirdPartyConfig"]);
+    ).toEqual([
+      "settings.vendor.officialConfig",
+      "settings.vendor.thirdPartyConfig",
+    ]);
     expect(
       container.querySelectorAll("[title='settings.vendor.dragToReorder']"),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 
-  it("keeps enable, edit, and delete actions in the compact table", () => {
-    const onSwitch = vi.fn();
+  it("marks managed providers as new-session options without a global switch", () => {
     const onEditLocalSettings = vi.fn();
     const onEdit = vi.fn();
     const onDelete = vi.fn();
@@ -109,22 +110,23 @@ describe("ProviderList", () => {
         onEditLocalSettings={onEditLocalSettings}
         onEdit={onEdit}
         onDelete={onDelete}
-        onSwitch={onSwitch}
         onReorder={vi.fn()}
       />,
     );
 
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "settings.vendor.enable" })[1],
-    );
     fireEvent.click(screen.getAllByTitle("settings.vendor.edit")[0]);
     fireEvent.click(screen.getAllByTitle("settings.vendor.edit")[1]);
     fireEvent.click(screen.getAllByTitle("settings.vendor.delete")[0]);
 
-    expect(onSwitch).toHaveBeenCalledWith("a");
+    expect(
+      screen.getAllByText("settings.vendor.availableForNewCodexSessions"),
+    ).toHaveLength(3);
+    expect(
+      screen.queryByRole("button", { name: "settings.vendor.enable" }),
+    ).toBeNull();
     expect(onEditLocalSettings).toHaveBeenCalledTimes(1);
-    expect(onEdit).toHaveBeenCalledWith(providerB);
-    expect(onDelete).toHaveBeenCalledWith(providerB);
+    expect(onEdit).toHaveBeenCalledWith(providerA);
+    expect(onDelete).toHaveBeenCalledWith(providerA);
   });
 
   it("renders provider name suffix as secondary text", () => {
@@ -136,7 +138,6 @@ describe("ProviderList", () => {
         onEditLocalSettings={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
-        onSwitch={vi.fn()}
         onReorder={vi.fn()}
       />,
     );
@@ -161,7 +162,6 @@ describe("ProviderList", () => {
         onEditLocalSettings={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
-        onSwitch={vi.fn()}
         onReorder={vi.fn()}
       />,
     );
@@ -169,6 +169,8 @@ describe("ProviderList", () => {
     expect(
       screen.getByRole("button", { name: "settings.vendor.pluginModels" }),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: /settings\.vendor\.add/ })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /settings\.vendor\.add/ }),
+    ).toBeTruthy();
   });
 });

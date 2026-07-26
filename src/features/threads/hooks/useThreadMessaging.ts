@@ -1408,6 +1408,8 @@ export function useThreadMessaging({
           }
 
           const sendRequestedAt = Date.now();
+          const providerProfileId =
+            getThreadProviderProfileId?.(workspace.id, threadId) ?? null;
           response = await engineSendMessageService(workspace.id, {
             text: finalText,
             engine: resolvedEngine,
@@ -1421,6 +1423,7 @@ export function useThreadMessaging({
             threadId: threadId,
             agent: resolvedOpenCodeAgent,
             variant: resolvedOpenCodeVariant,
+            providerProfileId,
             forkSessionId:
               resolvedEngine === "claude"
                 ? extractClaudeForkParentSessionId(threadId)

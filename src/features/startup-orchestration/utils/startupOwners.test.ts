@@ -10,6 +10,14 @@ describe("startup owner map", () => {
     expect(findDuplicateStartupOwners()).toEqual([]);
   });
 
+  it("does not register retired OpenCode session discovery as startup work", () => {
+    expect(
+      STARTUP_OWNER_RECORDS.some(
+        (record) => record.commandLabel === "opencode_session_list",
+      ),
+    ).toBe(false);
+  });
+
   it("detects legacy/orchestrator double ownership", () => {
     const records: StartupOwnerRecord[] = [
       ...STARTUP_OWNER_RECORDS,

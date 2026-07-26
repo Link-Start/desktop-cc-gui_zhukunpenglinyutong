@@ -183,11 +183,13 @@ export function isRelevantModelStorageKey(key: string | null | undefined): boole
 
 export function resolveAvailableModels({
   currentProvider,
+  currentProviderProfileId,
   models,
   selectedModel,
   modelStorageSnapshot,
 }: {
   currentProvider: string;
+  currentProviderProfileId?: string | null;
   models?: ModelInfo[];
   selectedModel: string;
   modelStorageSnapshot: ModelStorageSnapshot;
@@ -222,9 +224,19 @@ export function resolveAvailableModels({
   }
   if (currentProvider === 'codex') {
     const dynamicModels = Array.isArray(models) ? models : [];
+    const normalizedProviderProfileId = currentProviderProfileId?.trim() || null;
+    const scopedCustomModels = normalizedProviderProfileId
+      ? modelStorageSnapshot.codexCustomModels.filter((model) => {
+          const modelProviderProfileId = model.providerProfileId?.trim() || null;
+          return (
+            modelProviderProfileId === null ||
+            modelProviderProfileId === normalizedProviderProfileId
+          );
+        })
+      : modelStorageSnapshot.codexCustomModels;
     return mergeCodexModels(
       dynamicModels,
-      modelStorageSnapshot.codexCustomModels,
+      scopedCustomModels,
       selectedModel,
       { includeBuiltInModels: dynamicModels.length === 0 },
     );
@@ -243,6 +255,7 @@ export function resolveAvailableModels({
 function resolveProviderModels({
   providerId,
   currentProvider,
+  currentProviderProfileId,
   models,
   selectedModel,
   modelStorageSnapshot,
@@ -250,6 +263,7 @@ function resolveProviderModels({
 }: {
   providerId: ProviderId;
   currentProvider: string;
+  currentProviderProfileId?: string | null;
   models?: ModelInfo[];
   selectedModel: string;
   modelStorageSnapshot: ModelStorageSnapshot;
@@ -265,6 +279,8 @@ function resolveProviderModels({
     (providerId === currentProvider ? models : undefined);
   const resolvedModels = resolveAvailableModels({
     currentProvider: providerId,
+    currentProviderProfileId:
+      providerId === currentProvider ? currentProviderProfileId : null,
     models: providerDynamicModels,
     selectedModel: providerSelectedModel,
     modelStorageSnapshot,
@@ -284,6 +300,7 @@ function resolveProviderModels({
 
 export function resolveProviderModelGroups({
   currentProvider,
+  currentProviderProfileId,
   models,
   selectedModel,
   modelStorageSnapshot,
@@ -292,6 +309,7 @@ export function resolveProviderModelGroups({
   resolveProviderLabel,
 }: {
   currentProvider: string;
+  currentProviderProfileId?: string | null;
   models?: ModelInfo[];
   selectedModel: string;
   modelStorageSnapshot: ModelStorageSnapshot;
@@ -304,6 +322,7 @@ export function resolveProviderModelGroups({
     const groupModels = resolveProviderModels({
       providerId: provider.id,
       currentProvider,
+      currentProviderProfileId,
       models,
       selectedModel,
       modelStorageSnapshot,

@@ -363,6 +363,7 @@ export {
   getGeminiVendorPreflight,
   getGeminiVendorSettings,
   getKimiProviders,
+  listCcSwitchProviders,
   reorderClaudeProviders,
   saveGeminiVendorSettings,
   saveClaudeSettingsJson,
@@ -375,6 +376,9 @@ export {
   updateKimiProvider,
 } from "./tauri/vendors";
 export type {
+  CcSwitchAppType,
+  CcSwitchProvider,
+  CcSwitchProviderList,
   GeminiVendorPreflightCheck,
   GeminiVendorPreflightResult,
   GeminiVendorSettings,

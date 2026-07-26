@@ -76,6 +76,13 @@
   line-height: 1.45;
 }
 
+.curated-section-hint {
+  font-size: 12px;
+  color: var(--text-subtle);
+  line-height: 1.45;
+  margin-bottom: 4px;
+}
+
 .curated-section-empty {
   font-size: 12px;
   color: var(--text-faint);

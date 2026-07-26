@@ -18,6 +18,7 @@ import MoreHorizontal from "lucide-react/dist/esm/icons/more-horizontal";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import ScrollText from "lucide-react/dist/esm/icons/scroll-text";
 import Search from "lucide-react/dist/esm/icons/search";
+import { pushErrorToast } from "../../../services/toasts";
 
 type PromptPanelProps = {
   prompts: CustomPromptOption[];
@@ -96,7 +97,10 @@ export function PromptPanel({
   const normalizedQuery = query.trim().toLowerCase();
 
   const showError = (error: unknown) => {
-    window.alert(error instanceof Error ? error.message : String(error));
+    pushErrorToast({
+      title: t("errors.requestFailed"),
+      message: error instanceof Error ? error.message : String(error),
+    });
   };
 
   const resetEditorState = () => {

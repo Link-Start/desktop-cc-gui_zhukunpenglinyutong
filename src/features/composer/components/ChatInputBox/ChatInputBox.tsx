@@ -183,6 +183,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       providerModelCatalogs,
       permissionMode = 'bypassPermissions',
       currentProvider = 'claude',
+      currentProviderProfileId,
       providerAvailability,
       providerVersions,
       providerStatusLabels,
@@ -324,15 +325,23 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     const availableModels = useMemo(
       () => resolveAvailableModels({
         currentProvider,
+        currentProviderProfileId,
         models,
         selectedModel,
         modelStorageSnapshot,
       }),
-      [currentProvider, modelStorageSnapshot, models, selectedModel],
+      [
+        currentProvider,
+        currentProviderProfileId,
+        modelStorageSnapshot,
+        models,
+        selectedModel,
+      ],
     );
     const providerModelGroups = useMemo(
       () => resolveProviderModelGroups({
         currentProvider,
+        currentProviderProfileId,
         models,
         selectedModel,
         modelStorageSnapshot,
@@ -343,6 +352,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       }),
       [
         currentProvider,
+        currentProviderProfileId,
         modelStorageSnapshot,
         models,
         providerAvailability,

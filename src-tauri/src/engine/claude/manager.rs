@@ -37,9 +37,21 @@ impl ClaudeSessionManager {
         workspace_id: &str,
         workspace_path: &Path,
     ) -> Arc<ClaudeSession> {
+        self.get_or_create_session_for_provider(workspace_id, workspace_path, None)
+            .await
+    }
+
+    /// Get or create a provider-scoped session for a workspace.
+    pub async fn get_or_create_session_for_provider(
+        &self,
+        workspace_id: &str,
+        workspace_path: &Path,
+        provider_profile_id: Option<&str>,
+    ) -> Arc<ClaudeSession> {
+        let runtime_key = provider_profile::claude_runtime_key(workspace_id, provider_profile_id);
         let mut sessions = self.sessions.lock().await;
 
-        if let Some(session) = sessions.get(workspace_id) {
+        if let Some(session) = sessions.get(&runtime_key) {
             return session.clone();
         }
 
@@ -56,28 +68,103 @@ impl ClaudeSessionManager {
             .and_then(|current| current.clone());
         session.set_ask_user_question_resume_diagnostic_sink(diagnostic_sink);
 
-        sessions.insert(workspace_id.to_string(), session.clone());
+        sessions.insert(runtime_key, session.clone());
         session
     }
 
-    /// Remove a session
-    pub async fn remove_session(&self, workspace_id: &str) -> Option<Arc<ClaudeSession>> {
-        let mut sessions = self.sessions.lock().await;
-        sessions.remove(workspace_id)
+    /// Get the local/default compatibility session if it exists.
+    pub async fn get_session(&self, workspace_id: &str) -> Option<Arc<ClaudeSession>> {
+        self.get_session_for_provider(workspace_id, None).await
     }
 
-    /// Get a session if it exists
-    pub async fn get_session(&self, workspace_id: &str) -> Option<Arc<ClaudeSession>> {
+    pub async fn get_session_for_provider(
+        &self,
+        workspace_id: &str,
+        provider_profile_id: Option<&str>,
+    ) -> Option<Arc<ClaudeSession>> {
+        let runtime_key = provider_profile::claude_runtime_key(workspace_id, provider_profile_id);
         let sessions = self.sessions.lock().await;
-        sessions.get(workspace_id).cloned()
+        sessions.get(&runtime_key).cloned()
+    }
+
+    pub async fn get_session_by_locator(
+        &self,
+        workspace_id: &str,
+        runtime_locator: &str,
+    ) -> Option<Arc<ClaudeSession>> {
+        let sessions = self.sessions.lock().await;
+        sessions
+            .values()
+            .find(|session| {
+                session.workspace_id == workspace_id && session.runtime_locator() == runtime_locator
+            })
+            .cloned()
+    }
+
+    pub async fn sessions_for_workspace(&self, workspace_id: &str) -> Vec<Arc<ClaudeSession>> {
+        let sessions = self.sessions.lock().await;
+        sessions
+            .values()
+            .filter(|session| session.workspace_id == workspace_id)
+            .cloned()
+            .collect()
+    }
+
+    pub async fn interrupt_workspace_sessions(&self, workspace_id: &str) -> Result<(), String> {
+        let sessions = self.runtime_sessions_for_workspace(workspace_id).await;
+        let mut failures = Vec::new();
+        for (runtime_key, session) in sessions {
+            if let Err(error) = session.interrupt().await {
+                failures.push(format!("{runtime_key}: {error}"));
+            }
+        }
+        if failures.is_empty() {
+            return Ok(());
+        }
+        Err(format!(
+            "Failed to interrupt {} Claude runtime(s) for workspace {}: {}",
+            failures.len(),
+            workspace_id,
+            failures.join("; ")
+        ))
+    }
+
+    pub async fn session_for_turn(
+        &self,
+        workspace_id: &str,
+        turn_id: &str,
+    ) -> Option<Arc<ClaudeSession>> {
+        let sessions = self.sessions_for_workspace(workspace_id).await;
+        for session in sessions {
+            if session.has_active_turn(turn_id).await {
+                return Some(session);
+            }
+        }
+        None
+    }
+
+    pub async fn remove_runtime_session(&self, runtime_key: &str) -> Option<Arc<ClaudeSession>> {
+        self.sessions.lock().await.remove(runtime_key)
+    }
+
+    pub async fn runtime_sessions_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> Vec<(String, Arc<ClaudeSession>)> {
+        let sessions = self.sessions.lock().await;
+        sessions
+            .iter()
+            .filter(|(_, session)| session.workspace_id == workspace_id)
+            .map(|(runtime_key, session)| (runtime_key.clone(), session.clone()))
+            .collect()
     }
 
     /// Snapshot all tracked sessions.
     pub async fn list_sessions(&self) -> Vec<(String, Arc<ClaudeSession>)> {
         let sessions = self.sessions.lock().await;
         sessions
-            .iter()
-            .map(|(workspace_id, session)| (workspace_id.clone(), session.clone()))
+            .values()
+            .map(|session| (session.workspace_id.clone(), session.clone()))
             .collect()
     }
 

@@ -20,20 +20,36 @@ function getCssRuleBlock(css: string, selector: string): string {
 describe("vendor settings panel compact layout", () => {
   it("keeps the engine list and icons compact but readable", () => {
     const navRule = getCssRuleBlock(vendorPanelsCss, ".vendor-engine-nav");
-    const searchRule = getCssRuleBlock(vendorPanelsCss, ".vendor-engine-search");
+    const searchRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-engine-search",
+    );
     const tabRule = getCssRuleBlock(vendorPanelsCss, ".vendor-engine-tab");
     const iconRule = getCssRuleBlock(vendorPanelsCss, ".vendor-engine-icon");
-    const panelRule = getCssRuleBlock(vendorPanelsCss, ".vendor-settings-panel");
+    const panelRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-settings-panel",
+    );
     const contentRule = getCssRuleBlock(
       vendorPanelsCss,
       ".vendor-settings-content",
     );
-    const mobileContentRule = vendorPanelsCss.match(
-      /@media \(max-width: 900px\)[\s\S]*?\.vendor-settings-content\s*\{([^}]*)\}/,
-    )?.[1] ?? "";
-    const headingRule = getCssRuleBlock(vendorPanelsCss, ".vendor-section-heading");
-    const tabContentRule = getCssRuleBlock(vendorPanelsCss, ".vendor-tab-content");
-    const providerListRule = getCssRuleBlock(vendorPanelsCss, ".vendor-provider-list");
+    const mobileContentRule =
+      vendorPanelsCss.match(
+        /@media \(max-width: 900px\)[\s\S]*?\.vendor-settings-content\s*\{([^}]*)\}/,
+      )?.[1] ?? "";
+    const headingRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-section-heading",
+    );
+    const tabContentRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-tab-content",
+    );
+    const providerListRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-provider-list",
+    );
     const officialSectionRule = getCssRuleBlock(
       vendorPanelsCss,
       ".vendor-provider-list > .vendor-provider-list",
@@ -46,7 +62,10 @@ describe("vendor settings panel compact layout", () => {
       vendorPanelsCss,
       ".vendor-provider-list > .vendor-list-header + .vendor-provider-table-stack",
     );
-    const listHeaderRule = getCssRuleBlock(vendorPanelsCss, ".vendor-list-header");
+    const listHeaderRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-list-header",
+    );
     const frameRule = getCssRuleBlock(
       vendorPanelsCss,
       ".vendor-provider-table-frame",
@@ -66,14 +85,33 @@ describe("vendor settings panel compact layout", () => {
     const emptyRule = getCssRuleBlock(vendorPanelsCss, ".vendor-empty");
     const buttonRule = getCssRuleBlock(
       vendorPanelsCss,
-      ".vendor-settings-panel [data-slot=\"button\"]",
+      '.vendor-settings-panel [data-slot="button"]',
     );
     const badgeRule = getCssRuleBlock(
       vendorPanelsCss,
-      ".vendor-settings-panel [data-slot=\"badge\"]",
+      '.vendor-settings-panel [data-slot="badge"]',
     );
     const logoRule = getCssRuleBlock(vendorPanelsCss, ".vendor-cli-logo-img");
-    const brandTitleRule = getCssRuleBlock(vendorPanelsCss, ".vendor-brand-title");
+    const brandTitleRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-brand-title",
+    );
+    const brandHeaderRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-brand-header",
+    );
+    const brandMainRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-brand-main",
+    );
+    const brandActionsRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-brand-actions",
+    );
+    const cliVersionRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-cli-version",
+    );
     const monoLogoRule = getCssRuleBlock(
       vendorPanelsCss,
       ".vendor-cli-logo-img-mono",
@@ -129,6 +167,12 @@ describe("vendor settings panel compact layout", () => {
     expect(logoRule).toContain("width: 15px;");
     expect(logoRule).toContain("height: 15px;");
     expect(brandTitleRule).toContain("font-weight: 400;");
+    expect(brandHeaderRule).toContain("flex-wrap: wrap;");
+    expect(brandMainRule).toContain("flex: 1 1 240px;");
+    expect(brandActionsRule).toContain("flex: 1 1 auto;");
+    expect(brandActionsRule).toContain("flex-wrap: wrap;");
+    expect(brandActionsRule).toContain("max-width: 100%;");
+    expect(cliVersionRule).toContain("flex-wrap: wrap;");
     expect(monoLogoRule).toContain("filter: grayscale(1) brightness(0);");
     expect(iflowLogoRule).not.toContain("linear-gradient");
   });

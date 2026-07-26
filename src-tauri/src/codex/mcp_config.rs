@@ -421,10 +421,9 @@ mod tests {
             r#"{"mcpServers":{"alpha":{"command":"npx"}},"disabledMcpServers":["alpha"]}"#,
         )
         .expect("parse claude root");
-        let ccgui_root: Value = serde_json::from_str(
-            r#"{"mcpServers":{"beta":{"url":"https://x","type":"http"}}}"#,
-        )
-        .expect("parse ccgui root");
+        let ccgui_root: Value =
+            serde_json::from_str(r#"{"mcpServers":{"beta":{"url":"https://x","type":"http"}}}"#)
+                .expect("parse ccgui root");
 
         let claude_entries =
             parse_mcp_entries_from_json_value(&claude_root, "claude_json").expect("claude entries");

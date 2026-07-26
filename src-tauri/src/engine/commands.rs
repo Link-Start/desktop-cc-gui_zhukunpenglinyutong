@@ -1336,6 +1336,7 @@ pub async fn get_engine_active_process_diagnostics(
 #[tauri::command]
 pub async fn get_engine_models(
     engine_type: EngineType,
+    provider_profile_id: Option<String>,
     force_refresh: Option<bool>,
     state: State<'_, AppState>,
     app: AppHandle,
@@ -1349,9 +1350,19 @@ pub async fn get_engine_models(
             &*state,
             &app,
             "get_engine_models",
-            json!({ "engineType": engine_type, "forceRefresh": force_refresh }),
+            json!({
+                "engineType": engine_type,
+                "providerProfileId": provider_profile_id,
+                "forceRefresh": force_refresh
+            }),
         )
         .await;
+    }
+    if let Some(models) = crate::engine::status::get_provider_scoped_engine_models(
+        engine_type,
+        provider_profile_id.as_deref(),
+    )? {
+        return Ok(models);
     }
     let manager = &state.engine_manager;
 
@@ -1446,6 +1457,7 @@ pub async fn engine_send_message(
     fork_session_id: Option<String>,
     agent: Option<String>,
     variant: Option<String>,
+    provider_profile_id: Option<String>,
     custom_spec_root: Option<String>,
     auto_session: Option<AutoSessionMetadata>,
     skill_invocations: Option<Vec<crate::types::SkillInvocation>>,
@@ -1493,6 +1505,7 @@ pub async fn engine_send_message(
                 "forkSessionId": fork_session_id,
                 "agent": agent,
                 "variant": variant,
+                "providerProfileId": provider_profile_id,
                 "customSpecRoot": custom_spec_root,
                 "autoSession": auto_session,
                 "skillInvocations": skill_invocations,
@@ -1506,7 +1519,7 @@ pub async fn engine_send_message(
     let effective_engine =
         resolve_enabled_engine_for_send(&settings, requested_engine, active_engine)?;
     log::info!(
-        "[engine_send_message] engine={:?} active_engine={:?} workspace_id={} model={:?} continue_session={} thread_id={:?} session_id={:?} fork_session_id={:?} agent={:?} variant={:?}",
+        "[engine_send_message] engine={:?} active_engine={:?} workspace_id={} model={:?} continue_session={} thread_id={:?} session_id={:?} fork_session_id={:?} agent={:?} variant={:?} provider_profile_id={:?}",
         effective_engine,
         active_engine,
         workspace_id,
@@ -1516,7 +1529,8 @@ pub async fn engine_send_message(
         session_id,
         fork_session_id,
         agent,
-        variant
+        variant,
+        provider_profile_id
     );
     if let Some(explicit_engine) = requested_engine {
         if explicit_engine != active_engine {
@@ -1538,6 +1552,22 @@ pub async fn engine_send_message(
                     .cloned()
                     .ok_or_else(|| "Workspace not found".to_string())?
             };
+            let provider_binding_lookup_session_id = session_id
+                .as_deref()
+                .or(thread_id.as_deref())
+                .map(str::to_string);
+            let effective_provider_profile_id =
+                crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    provider_binding_lookup_session_id.as_deref(),
+                    "claude",
+                    provider_profile_id.as_deref(),
+                )?;
+            let provider_launch_profile =
+                crate::engine::claude::resolve_claude_provider_launch_profile(
+                    effective_provider_profile_id.as_deref(),
+                )?;
             let workspace_path = std::path::PathBuf::from(&workspace_entry.path);
             state
                 .runtime_manager
@@ -1545,7 +1575,11 @@ pub async fn engine_send_message(
                 .await;
 
             let session = manager
-                .get_claude_session(&workspace_id, &workspace_path)
+                .get_claude_session_for_provider(
+                    &workspace_id,
+                    &workspace_path,
+                    effective_provider_profile_id.as_deref(),
+                )
                 .await;
 
             let has_images = images
@@ -1608,6 +1642,23 @@ pub async fn engine_send_message(
             });
 
             let response_session_id = resolved_session_id.clone();
+            if let Some(provider_launch_profile) = provider_launch_profile.as_ref() {
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .or(provider_binding_lookup_session_id.as_deref())
+                    .ok_or_else(|| {
+                        "Claude provider binding requires a session identity".to_string()
+                    })?;
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "claude".to_string(),
+                    provider_launch_profile.binding.clone(),
+                )
+                .await?;
+            }
             let auto_session_for_record = auto_session.clone();
             let params = super::SendMessageParams {
                 text,
@@ -1642,6 +1693,11 @@ pub async fn engine_send_message(
             let runtime_manager = state.runtime_manager.clone();
             let workspace_entry_for_forwarder = workspace_entry.clone();
             let session_for_forwarder = session.clone();
+            let provider_binding_for_forwarder = provider_launch_profile
+                .as_ref()
+                .map(|profile| profile.binding.clone());
+            let provider_binding_storage_path = state.storage_path.clone();
+            let provider_binding_workspace_id = workspace_id.clone();
 
             // Spawn event forwarder: reads from broadcast channel and emits Tauri events.
             tokio::spawn(async move {
@@ -1697,6 +1753,25 @@ pub async fn engine_send_message(
                     let is_turn_completed =
                         matches!(turn_event.event, EngineEvent::TurnCompleted { .. });
                     let event = turn_event.event;
+                    if let (
+                        Some(binding),
+                        EngineEvent::SessionStarted {
+                            session_id,
+                            engine: EngineType::Claude,
+                            ..
+                        },
+                    ) = (provider_binding_for_forwarder.as_ref(), &event)
+                    {
+                        if !session_id.is_empty() && session_id != "pending" {
+                            session_management::schedule_engine_provider_binding_record(
+                                provider_binding_storage_path.clone(),
+                                provider_binding_workspace_id.clone(),
+                                session_id.clone(),
+                                "claude".to_string(),
+                                binding.clone(),
+                            );
+                        }
+                    }
                     let stream_timing = turn_event.stream_timing;
                     let did_finish = handle_claude_forwarder_event(
                         event,
@@ -1744,21 +1819,24 @@ pub async fn engine_send_message(
             let runtime_manager_for_sender = state.runtime_manager.clone();
             let workspace_entry_for_sender = workspace_entry.clone();
             let app_settings_snapshot = state.app_settings.lock().await.clone();
+            let provider_env = provider_launch_profile.map(|profile| profile.env);
             tokio::spawn(async move {
                 let send_result = if has_images {
                     session_clone
-                        .send_message_with_app_settings(
+                        .send_message_with_app_settings_and_provider_env(
                             params,
                             &turn_id_clone,
                             Some(&app_settings_snapshot),
+                            provider_env.as_ref(),
                         )
                         .await
                 } else {
                     session_clone
-                        .send_message_with_app_settings(
+                        .send_message_with_app_settings_and_provider_env(
                             params,
                             &turn_id_clone,
                             Some(&app_settings_snapshot),
+                            provider_env.as_ref(),
                         )
                         .await
                 };
@@ -2185,9 +2263,30 @@ pub async fn engine_send_message(
                     .map(|w| std::path::PathBuf::from(&w.path))
                     .ok_or_else(|| "Workspace not found".to_string())?
             };
-
+            let provider_binding_lookup_session_id = session_id
+                .as_deref()
+                .or(thread_id.as_deref())
+                .map(str::to_string);
+            let effective_provider_profile_id =
+                crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    provider_binding_lookup_session_id.as_deref(),
+                    "kimi",
+                    provider_profile_id.as_deref(),
+                )?;
+            let provider_launch_profile =
+                crate::engine::kimi_provider_profile::resolve_kimi_provider_launch_profile(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                )?;
             let session = manager
-                .get_or_create_kimi_session(&workspace_id, &workspace_path)
+                .get_or_create_kimi_session_for_runtime(
+                    &workspace_id,
+                    &workspace_path,
+                    &provider_launch_profile.runtime_key,
+                    provider_launch_profile.home_dir.as_deref(),
+                )
                 .await;
 
             let resolved_session_id = resolve_kimi_session_id_for_engine_send(
@@ -2219,6 +2318,21 @@ pub async fn engine_send_message(
 
             let turn_id = format!("kimi-turn-{}", uuid::Uuid::new_v4());
             let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+            let binding_session_id = response_session_id
+                .as_deref()
+                .or(provider_binding_lookup_session_id.as_deref())
+                .unwrap_or(thread_id.as_str());
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "kimi".to_string(),
+                    binding.clone(),
+                )
+                .await?;
+            }
             let item_id = format!("kimi-item-{}", uuid::Uuid::new_v4());
 
             let mut receiver = session.subscribe();
@@ -2227,6 +2341,9 @@ pub async fn engine_send_message(
             let item_id_clone = item_id.clone();
             let turn_id_for_forwarder = turn_id.clone();
             let mut accumulated_agent_text = String::new();
+            let provider_binding_for_forwarder = provider_launch_profile.binding.clone();
+            let provider_binding_storage_path = state.storage_path.clone();
+            let provider_binding_workspace_id = workspace_id.clone();
             tokio::spawn(async move {
                 let deadline = tokio::time::Instant::now()
                     + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
@@ -2251,6 +2368,25 @@ pub async fn engine_send_message(
                     }
 
                     let event = turn_event.event;
+                    if let (
+                        Some(binding),
+                        EngineEvent::SessionStarted {
+                            session_id,
+                            engine: EngineType::Kimi,
+                            ..
+                        },
+                    ) = (provider_binding_for_forwarder.as_ref(), &event)
+                    {
+                        if !session_id.is_empty() && session_id != "pending" {
+                            session_management::schedule_engine_provider_binding_record(
+                                provider_binding_storage_path.clone(),
+                                provider_binding_workspace_id.clone(),
+                                session_id.clone(),
+                                "kimi".to_string(),
+                                binding.clone(),
+                            );
+                        }
+                    }
                     let is_terminal = event.is_terminal();
                     let render_lane = match &event {
                         EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,
@@ -2761,10 +2897,10 @@ pub async fn engine_interrupt(
 
     match active_engine {
         EngineType::Claude => {
-            if let Some(session) = manager.claude_manager.get_session(&workspace_id).await {
-                session.interrupt().await?;
-            }
-            Ok(())
+            manager
+                .claude_manager
+                .interrupt_workspace_sessions(&workspace_id)
+                .await
         }
         EngineType::Codex => {
             // Codex interrupts are handled via turn_interrupt RPC from the frontend.
@@ -2787,12 +2923,7 @@ pub async fn engine_interrupt(
             }
             Ok(())
         }
-        EngineType::Kimi => {
-            if let Some(session) = manager.get_kimi_session(&workspace_id).await {
-                session.interrupt().await?;
-            }
-            Ok(())
-        }
+        EngineType::Kimi => manager.interrupt_kimi_sessions(&workspace_id, None).await,
     }
 }
 
@@ -2825,7 +2956,11 @@ pub async fn engine_interrupt_turn(
 
     match target_engine {
         EngineType::Claude => {
-            if let Some(session) = manager.claude_manager.get_session(&workspace_id).await {
+            if let Some(session) = manager
+                .claude_manager
+                .session_for_turn(&workspace_id, &turn_id)
+                .await
+            {
                 session.interrupt_turn(&turn_id).await?;
             }
             Ok(())
@@ -2847,10 +2982,9 @@ pub async fn engine_interrupt_turn(
             Ok(())
         }
         EngineType::Kimi => {
-            if let Some(session) = manager.get_kimi_session(&workspace_id).await {
-                session.interrupt_turn(&turn_id).await?;
-            }
-            Ok(())
+            manager
+                .interrupt_kimi_sessions(&workspace_id, Some(&turn_id))
+                .await
         }
     }
 }

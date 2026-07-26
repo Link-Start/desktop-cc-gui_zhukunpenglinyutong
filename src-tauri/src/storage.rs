@@ -689,7 +689,10 @@ mod tests {
         let temp_dir = std::env::temp_dir().join(format!("moss-x-test-{}", Uuid::new_v4()));
         let path = temp_dir.join("settings.json");
         let backup_path = backup_corrupted_file(&path, "missing");
-        assert!(backup_path.is_none(), "missing file must not report a backup");
+        assert!(
+            backup_path.is_none(),
+            "missing file must not report a backup"
+        );
         assert!(!path.exists());
         assert!(!temp_dir.exists(), "no backup directory side effects");
     }

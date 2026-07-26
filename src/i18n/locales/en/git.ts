@@ -768,7 +768,6 @@ const git = {
     prsModeDescription: "Review pull requests",
     applyWorktreeChanges: "Apply changes to parent workspace",
     applyWorktreeChangesAction: "Apply worktree changes",
-    pushButton: "Push",
     pushCommits: "Push {{count}} commit",
     pushCommits_other: "Push {{count}} commits",
     revertAllTitle: "Revert all changes",

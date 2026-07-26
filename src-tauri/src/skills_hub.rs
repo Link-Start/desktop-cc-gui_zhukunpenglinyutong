@@ -41,7 +41,8 @@ const USAGE_CACHE_TTL_MS: i64 = 10 * 60 * 1000; // 10 分钟
 const MAX_LOCAL_SKILL_SCAN_DEPTH: usize = 3; // upstream MAX_LOCAL_SKILL_SCAN_DEPTH
 const DISCOVER_MAX_SKILLS_PER_REPO: usize = 200; // upstream discover 单 repo 截断 200
 const POPULAR_SEED_QUERIES: [&str; 12] = [
-    "agent", "code", "test", "review", "git", "web", "design", "data", "docs", "python", "api", "deploy",
+    "agent", "code", "test", "review", "git", "web", "design", "data", "docs", "python", "api",
+    "deploy",
 ];
 const HASH_IGNORE: [&str; 4] = [".git", ".DS_Store", "Thumbs.db", ".gitignore"];
 
@@ -84,7 +85,10 @@ type SkillResult<T> = Result<T, SkillError>;
 // ===== 路径解析：SSOT 根目录（可注入）与 8 个 sync target =====
 
 fn now_ms() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 fn home_dir() -> PathBuf {
@@ -146,7 +150,9 @@ fn resolve_grok_home() -> PathBuf {
 }
 
 fn is_dir(path: &Path) -> bool {
-    fs::metadata(path).map(|meta| meta.is_dir()).unwrap_or(false)
+    fs::metadata(path)
+        .map(|meta| meta.is_dir())
+        .unwrap_or(false)
 }
 
 /// 对应 upstream antigravity-paths.js 的 resolveAntigravitySkillDirs。
@@ -172,7 +178,11 @@ fn resolve_antigravity_skill_dirs() -> Vec<PathBuf> {
     if is_dir(&gemini_home.join("antigravity-ide")) {
         dirs.push(ide_skills);
     }
-    if dirs.is_empty() { vec![main_skills] } else { dirs } // 都不存在时回退 main，保证 targetList 稳定
+    if dirs.is_empty() {
+        vec![main_skills]
+    } else {
+        dirs
+    } // 都不存在时回退 main，保证 targetList 稳定
 }
 
 /// 8 个 sync target 的目录种类；目录在调用时按 env/home 动态解析。
@@ -196,14 +206,54 @@ struct Target {
 
 /// 与 upstream TARGETS 顺序固定一致。
 static TARGETS: [Target; 8] = [
-    Target { id: "claude", label: "Claude", visible: true, kind: TargetKind::Claude },
-    Target { id: "codex", label: "Codex", visible: true, kind: TargetKind::Codex },
-    Target { id: "grok", label: "Grok", visible: true, kind: TargetKind::Grok },
-    Target { id: "antigravity", label: "Antigravity", visible: true, kind: TargetKind::Antigravity },
-    Target { id: "gemini", label: "Gemini", visible: true, kind: TargetKind::Gemini },
-    Target { id: "opencode", label: "OpenCode", visible: true, kind: TargetKind::Opencode },
-    Target { id: "hermes", label: "Hermes", visible: true, kind: TargetKind::Hermes },
-    Target { id: "agents", label: "Agents", visible: false, kind: TargetKind::Agents },
+    Target {
+        id: "claude",
+        label: "Claude",
+        visible: true,
+        kind: TargetKind::Claude,
+    },
+    Target {
+        id: "codex",
+        label: "Codex",
+        visible: true,
+        kind: TargetKind::Codex,
+    },
+    Target {
+        id: "grok",
+        label: "Grok",
+        visible: true,
+        kind: TargetKind::Grok,
+    },
+    Target {
+        id: "antigravity",
+        label: "Antigravity",
+        visible: true,
+        kind: TargetKind::Antigravity,
+    },
+    Target {
+        id: "gemini",
+        label: "Gemini",
+        visible: true,
+        kind: TargetKind::Gemini,
+    },
+    Target {
+        id: "opencode",
+        label: "OpenCode",
+        visible: true,
+        kind: TargetKind::Opencode,
+    },
+    Target {
+        id: "hermes",
+        label: "Hermes",
+        visible: true,
+        kind: TargetKind::Hermes,
+    },
+    Target {
+        id: "agents",
+        label: "Agents",
+        visible: false,
+        kind: TargetKind::Agents,
+    },
 ];
 
 fn target_by_id(id: &str) -> Option<&'static Target> {
@@ -242,7 +292,9 @@ fn target_list() -> Vec<Value> {
 // ===== 小工具：JSON / fs / 编码 / JS 语义兼容 =====
 
 fn read_text(path: &Path) -> Option<String> {
-    fs::read(path).ok().map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+    fs::read(path)
+        .ok()
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
 }
 
 fn read_json(path: &Path) -> Option<Value> {
@@ -276,7 +328,8 @@ fn write_json(path: &Path, value: &Value) -> SkillResult<()> {
     if let Some(parent) = path.parent() {
         ensure_dir(parent)?;
     }
-    let mut text = serde_json::to_string_pretty(value).map_err(|e| SkillError::other(e.to_string()))?;
+    let mut text =
+        serde_json::to_string_pretty(value).map_err(|e| SkillError::other(e.to_string()))?;
     text.push('\n');
     write_file_private(path, &text).map_err(SkillError::from)
 }
@@ -297,7 +350,9 @@ fn append_line_private(path: &Path, line: &str) -> std::io::Result<()> {
 }
 
 fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path).map(|meta| meta.file_type().is_symlink()).unwrap_or(false)
+    fs::symlink_metadata(path)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false)
 }
 
 /// upstream removePath：entity 或 dangling symlink 存在才删除，递归 force、吞错。
@@ -317,7 +372,9 @@ fn resolve_lexical(path: &Path) -> PathBuf {
     let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")).join(path)
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("/"))
+            .join(path)
     };
     let mut out = PathBuf::new();
     for component in absolute.components() {
@@ -392,7 +449,8 @@ fn symlink_dir(source: &Path, dest: &Path) -> std::io::Result<()> {
 
 /// JS `encodeURIComponent`：保留 A-Za-z0-9 与 `- _ . ! ~ * ' ( )`。
 fn encode_uri_component(value: &str) -> String {
-    const UNRESERVED: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()";
+    const UNRESERVED: &[u8] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()";
     let mut out = String::new();
     for byte in value.as_bytes() {
         if UNRESERVED.contains(byte) {
@@ -422,13 +480,22 @@ fn encode_form_param(value: &str) -> String {
 
 /// GitHub raw/doc URL 的 path 部分逐段 encodeURIComponent。
 fn encode_url_path(path: &str) -> String {
-    path.split('/').map(encode_uri_component).collect::<Vec<_>>().join("/")
+    path.split('/')
+        .map(encode_uri_component)
+        .collect::<Vec<_>>()
+        .join("/")
 }
 fn github_raw_url(owner: &str, name: &str, branch: &str, file_path: &str) -> String {
-    format!("https://raw.githubusercontent.com/{owner}/{name}/{branch}/{}", encode_url_path(file_path))
+    format!(
+        "https://raw.githubusercontent.com/{owner}/{name}/{branch}/{}",
+        encode_url_path(file_path)
+    )
 }
 fn github_doc_url(owner: &str, name: &str, branch: &str, file_path: &str) -> String {
-    format!("https://github.com/{owner}/{name}/blob/{branch}/{}", encode_url_path(file_path))
+    format!(
+        "https://github.com/{owner}/{name}/blob/{branch}/{}",
+        encode_url_path(file_path)
+    )
 }
 
 /// uninstall trash 名：`base64url(directory, 无 padding)`。
@@ -452,11 +519,21 @@ fn js_string(value: Option<&Value>) -> String {
 fn js_f64(value: &Value) -> f64 {
     match value {
         Value::Null => 0.0,
-        Value::Bool(b) => if *b { 1.0 } else { 0.0 },
+        Value::Bool(b) => {
+            if *b {
+                1.0
+            } else {
+                0.0
+            }
+        }
         Value::Number(n) => n.as_f64().unwrap_or(f64::NAN),
         Value::String(s) => {
             let t = s.trim();
-            if t.is_empty() { 0.0 } else { t.parse::<f64>().unwrap_or(f64::NAN) }
+            if t.is_empty() {
+                0.0
+            } else {
+                t.parse::<f64>().unwrap_or(f64::NAN)
+            }
         }
         _ => f64::NAN,
     }
@@ -468,13 +545,22 @@ fn js_number_or(value: Option<&Value>, default: f64) -> f64 {
         None | Some(Value::Null) => default,
         Some(v) => {
             let n = js_f64(v);
-            if n == 0.0 || n.is_nan() { default } else { n }
-        }    }
+            if n == 0.0 || n.is_nan() {
+                default
+            } else {
+                n
+            }
+        }
+    }
 }
 
 /// JS Number 的 JSON 序列化：整数值输出为整数（避免 serde_json 把 5.0 打成 "5.0"）。
 fn json_number(n: f64) -> Value {
-    if n.fract() == 0.0 && n.abs() <= 9.0e15 { json!(n as i64) } else { json!(n) }
+    if n.fract() == 0.0 && n.abs() <= 9.0e15 {
+        json!(n as i64)
+    } else {
+        json!(n)
+    }
 }
 
 /// JS 的 Unicode 大小写不敏感比较（`a.toLowerCase() === b.toLowerCase()`）。
@@ -505,7 +591,10 @@ fn is_win32_absolute(value: &str) -> bool {
     if bytes[0] == b'/' || bytes[0] == b'\\' {
         return true;
     }
-    bytes.len() > 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && (bytes[2] == b'/' || bytes[2] == b'\\')
+    bytes.len() > 2
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'/' || bytes[2] == b'\\')
 }
 
 /// upstream sanitizeRelativePath：`\`→`/`，拒绝对路径/NUL/`.`/`..`/含 `:` 段。
@@ -519,7 +608,11 @@ fn sanitize_relative_path(value: &str) -> Option<String> {
         return None;
     }
     let parts: Vec<&str> = raw.split('/').filter(|part| !part.is_empty()).collect();
-    if parts.is_empty() || parts.iter().any(|part| *part == "." || *part == ".." || part.contains(':')) {
+    if parts.is_empty()
+        || parts
+            .iter()
+            .any(|part| *part == "." || *part == ".." || part.contains(':'))
+    {
         return None;
     }
     Some(parts.join("/"))
@@ -584,7 +677,9 @@ fn assert_not_nested(source: &Path, dest: &Path) -> SkillResult<()> {
         return Ok(());
     }
     if path_strictly_within(&a, &b) || path_strictly_within(&b, &a) {
-        return Err(SkillError::other("Refusing to sync a skill into its own directory tree"));
+        return Err(SkillError::other(
+            "Refusing to sync a skill into its own directory tree",
+        ));
     }
     Ok(())
 }
@@ -658,16 +753,31 @@ struct SkillMetadata {
 fn read_skill_metadata(markdown: &str, fallback_name: &str) -> SkillMetadata {
     let source = extract_frontmatter(markdown).unwrap_or(markdown);
     let name_field = read_yaml_field(source, "name");
-    let name = if !name_field.is_empty() { name_field } else if !fallback_name.is_empty() { fallback_name.to_string() } else { "Skill".to_string() };
-    let description = read_yaml_field(source, "description").split_whitespace().collect::<Vec<_>>().join(" ");
-    SkillMetadata { name: name.trim().to_string(), description }
+    let name = if !name_field.is_empty() {
+        name_field
+    } else if !fallback_name.is_empty() {
+        fallback_name.to_string()
+    } else {
+        "Skill".to_string()
+    };
+    let description = read_yaml_field(source, "description")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    SkillMetadata {
+        name: name.trim().to_string(),
+        description,
+    }
 }
 
 /// upstream findSkillMarker：SKILL.md（优先大写）或 skill.md，stat 为 file 才算。
 fn find_skill_marker(dir: &Path) -> Option<PathBuf> {
     for name in ["SKILL.md", "skill.md"] {
         let candidate = dir.join(name);
-        if fs::metadata(&candidate).map(|meta| meta.is_file()).unwrap_or(false) {
+        if fs::metadata(&candidate)
+            .map(|meta| meta.is_file())
+            .unwrap_or(false)
+        {
             return Some(candidate);
         }
     }
@@ -695,7 +805,11 @@ fn scan_skill_directories(root_dir: &Path) -> Vec<String> {
             if name.is_empty() || name.starts_with('.') {
                 continue;
             }
-            let rel = if rel_dir.is_empty() { name.clone() } else { format!("{rel_dir}/{name}") };
+            let rel = if rel_dir.is_empty() {
+                name.clone()
+            } else {
+                format!("{rel_dir}/{name}")
+            };
             let full = entry.path();
             if find_skill_marker(&full).is_some() {
                 found.push(rel);
@@ -717,7 +831,11 @@ fn scan_skill_directories(root_dir: &Path) -> Vec<String> {
 #[cfg(unix)]
 fn exec_bit_of(meta: &fs::Metadata) -> u8 {
     use std::os::unix::fs::PermissionsExt;
-    if meta.permissions().mode() & 0o111 != 0 { 1 } else { 0 }
+    if meta.permissions().mode() & 0o111 != 0 {
+        1
+    } else {
+        0
+    }
 }
 
 #[cfg(not(unix))]
@@ -730,7 +848,11 @@ fn exec_bit_of(_meta: &fs::Metadata) -> u8 {
 /// 读失败跳过内容但仍加尾部 NUL。
 fn hash_directory(dir: &Path) -> String {
     fn walk(base: &Path, rel_dir: &str, hasher: &mut Sha256) {
-        let abs_dir = if rel_dir.is_empty() { base.to_path_buf() } else { base.join(rel_dir) };
+        let abs_dir = if rel_dir.is_empty() {
+            base.to_path_buf()
+        } else {
+            base.join(rel_dir)
+        };
         let Ok(read_dir) = fs::read_dir(&abs_dir) else {
             return;
         };
@@ -741,7 +863,11 @@ fn hash_directory(dir: &Path) -> String {
             if HASH_IGNORE.contains(&name.as_str()) {
                 continue;
             }
-            let rel = if rel_dir.is_empty() { name.clone() } else { format!("{rel_dir}/{name}") };
+            let rel = if rel_dir.is_empty() {
+                name.clone()
+            } else {
+                format!("{rel_dir}/{name}")
+            };
             let Ok(file_type) = entry.file_type() else {
                 continue;
             };
@@ -779,9 +905,16 @@ fn source_signature_from_tree(tree: &[Value], source_dir: &str) -> Option<String
             if entry.get("type").and_then(Value::as_str) != Some("blob") {
                 return None;
             }
-            let sha = entry.get("sha").and_then(Value::as_str).filter(|s| !s.is_empty())?;
+            let sha = entry
+                .get("sha")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())?;
             let path = entry.get("path").and_then(Value::as_str).unwrap_or("");
-            if path == source_dir || path.starts_with(&prefix) { Some(format!("{path}:{sha}")) } else { None }
+            if path == source_dir || path.starts_with(&prefix) {
+                Some(format!("{path}:{sha}"))
+            } else {
+                None
+            }
         })
         .collect();
     if rels.is_empty() {
@@ -815,21 +948,38 @@ fn default_repos() -> Vec<Value> {
 fn read_registry() -> Registry {
     if let Some(value) = read_json(&registry_path()) {
         if value.is_object() {
-            let repos = value.get("repos").and_then(Value::as_array).cloned().unwrap_or_else(default_repos);
-            let skills = value.get("skills").and_then(Value::as_array).cloned().unwrap_or_default();
+            let repos = value
+                .get("repos")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_else(default_repos);
+            let skills = value
+                .get("skills")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
             return Registry { repos, skills };
         }
     }
-    Registry { repos: default_repos(), skills: Vec::new() }
+    Registry {
+        repos: default_repos(),
+        skills: Vec::new(),
+    }
 }
 
 fn save_registry(registry: &Registry) -> SkillResult<()> {
-    write_json(&registry_path(), &json!({"repos": &registry.repos, "skills": &registry.skills}))
+    write_json(
+        &registry_path(),
+        &json!({"repos": &registry.repos, "skills": &registry.skills}),
+    )
 }
 
 /// 条目的 trashedAt（JS truthy 语义：非零数字才算 trashed）。
 fn trashed_at_of(skill: &Value) -> Option<f64> {
-    skill.get("trashedAt").and_then(Value::as_f64).filter(|n| *n != 0.0)
+    skill
+        .get("trashedAt")
+        .and_then(Value::as_f64)
+        .filter(|n| *n != 0.0)
 }
 
 /// upstream purgeExpiredTrash：trashedAt 距今 ≥ TRASH_TTL_MS → 删 trash 目录 + registry
@@ -872,7 +1022,9 @@ fn append_activity(event: Value) {
         }
         let line = serde_json::to_string(&Value::Object(record)).unwrap_or_default();
         append_line_private(&activity_path(), &format!("{line}\n"))?;
-        let size = fs::metadata(&activity_path()).map(|meta| meta.len()).unwrap_or(0);
+        let size = fs::metadata(&activity_path())
+            .map(|meta| meta.len())
+            .unwrap_or(0);
         if size > ACTIVITY_TRIM_BYTES {
             if let Some(raw) = read_text(&activity_path()) {
                 let lines: Vec<&str> = raw.split('\n').filter(|l| !l.is_empty()).collect();
@@ -887,7 +1039,9 @@ fn append_activity(event: Value) {
 /// upstream readActivity：取末尾 limit 行（clamp [1,500]，0 → 100），解析失败的行丢弃，最新在前。
 fn read_activity(limit: i64) -> Vec<Value> {
     let want = (if limit == 0 { 100 } else { limit }).clamp(1, ACTIVITY_MAX as i64) as usize;
-    let Some(raw) = read_text(&activity_path()) else { return Vec::new() };
+    let Some(raw) = read_text(&activity_path()) else {
+        return Vec::new();
+    };
     let lines: Vec<&str> = raw.split('\n').filter(|l| !l.is_empty()).collect();
     lines[lines.len().saturating_sub(want)..]
         .iter()
@@ -907,13 +1061,17 @@ fn http_client() -> SkillResult<reqwest::Client> {
 }
 
 fn rate_limit_error(status: reqwest::StatusCode) -> SkillError {
-    let msg = format!("GitHub rate-limited this request (HTTP {}). Try again later.", status.as_u16());
+    let msg = format!(
+        "GitHub rate-limited this request (HTTP {}). Try again later.",
+        status.as_u16()
+    );
     SkillError::RateLimited(msg)
 }
 
 async fn fetch_checked(response: reqwest::Response) -> SkillResult<reqwest::Response> {
     let status = response.status();
-    if status == reqwest::StatusCode::TOO_MANY_REQUESTS || status == reqwest::StatusCode::FORBIDDEN {
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS || status == reqwest::StatusCode::FORBIDDEN
+    {
         return Err(rate_limit_error(status));
     }
     if !status.is_success() {
@@ -954,7 +1112,12 @@ async fn fetch_text(client: &reqwest::Client, url: &str) -> SkillResult<String> 
 
 /// upstream getRepoTree：branch 回退链 [配置 branch（除非 =~ /^head$/i）, main, master]
 /// 去重逐个尝试；全部失败抛最后一个错误。
-async fn get_repo_tree(client: &reqwest::Client, owner: &str, name: &str, branch: &str) -> SkillResult<(String, Vec<Value>)> {
+async fn get_repo_tree(
+    client: &reqwest::Client,
+    owner: &str,
+    name: &str,
+    branch: &str,
+) -> SkillResult<(String, Vec<Value>)> {
     let mut branches: Vec<String> = Vec::new();
     if !branch.is_empty() && !eq_ignore_case(branch, "head") {
         branches.push(branch.to_string());
@@ -985,7 +1148,11 @@ async fn get_repo_tree(client: &reqwest::Client, owner: &str, name: &str, branch
 /// upstream mapWithConcurrency：固定 limit 的 worker 池，结果按输入顺序对齐。
 /// （upstream 用 Promise.all，任一 reject 整体 reject；这里收集全部结果由调用方决定，
 /// 等价于 allSettled + 调用方首个错误上抛。）
-async fn map_with_concurrency<T, R, F, Fut>(items: Vec<T>, limit: usize, worker: F) -> Vec<Result<R, SkillError>>
+async fn map_with_concurrency<T, R, F, Fut>(
+    items: Vec<T>,
+    limit: usize,
+    worker: F,
+) -> Vec<Result<R, SkillError>>
 where
     T: Send + 'static,
     R: Send + 'static,
@@ -1029,7 +1196,9 @@ where
 fn classify_in_dirs(directory: &str, base_dirs: &[PathBuf]) -> &'static str {
     let mut state = "off";
     for base_dir in base_dirs {
-        let Some(candidate) = target_skill_path(base_dir, directory) else { continue };
+        let Some(candidate) = target_skill_path(base_dir, directory) else {
+            continue;
+        };
         if candidate.exists() {
             return "synced";
         }
@@ -1041,13 +1210,17 @@ fn classify_in_dirs(directory: &str, base_dirs: &[PathBuf]) -> &'static str {
 }
 
 fn classify_target_skill(directory: &str, target_id: &str) -> &'static str {
-    let Some(target) = target_by_id(target_id) else { return "off" };
+    let Some(target) = target_by_id(target_id) else {
+        return "off";
+    };
     classify_in_dirs(directory, &target_dirs(target))
 }
 
 /// upstream scanTargetSkill：任一 baseDir 下候选存在（含 symlink）即 true。
 fn scan_target_skill(directory: &str, target_id: &str) -> bool {
-    let Some(target) = target_by_id(target_id) else { return false };
+    let Some(target) = target_by_id(target_id) else {
+        return false;
+    };
     target_dirs(target).iter().any(|base_dir| {
         target_skill_path(base_dir, directory)
             .map(|candidate| candidate.exists() || is_symlink(&candidate))
@@ -1057,11 +1230,13 @@ fn scan_target_skill(directory: &str, target_id: &str) -> bool {
 
 /// upstream syncSkillToTarget：SSOT → target 的 symlink，任何失败回退整目录递归 copy。
 fn sync_skill_to_target(directory: &str, target_id: &str) -> SkillResult<()> {
-    let target =
-        target_by_id(target_id).ok_or_else(|| SkillError::other(format!("Unsupported target: {target_id}")))?;
+    let target = target_by_id(target_id)
+        .ok_or_else(|| SkillError::other(format!("Unsupported target: {target_id}")))?;
     let source = managed_skill_path(directory)?;
     if !source.exists() {
-        return Err(SkillError::other(format!("Managed skill not found: {directory}")));
+        return Err(SkillError::other(format!(
+            "Managed skill not found: {directory}"
+        )));
     }
     for base_dir in target_dirs(target) {
         let dest = target_skill_path(&base_dir, directory)
@@ -1080,9 +1255,13 @@ fn sync_skill_to_target(directory: &str, target_id: &str) -> SkillResult<()> {
 
 /// upstream removeSkillFromTarget：removePath + 逐级清理空祖先到 baseDir。
 fn remove_skill_from_target(directory: &str, target_id: &str) {
-    let Some(target) = target_by_id(target_id) else { return };
+    let Some(target) = target_by_id(target_id) else {
+        return;
+    };
     for base_dir in target_dirs(target) {
-        let Some(target_path) = target_skill_path(&base_dir, directory) else { continue };
+        let Some(target_path) = target_skill_path(&base_dir, directory) else {
+            continue;
+        };
         remove_path(&target_path);
         if let Some(parent) = target_path.parent() {
             remove_empty_ancestors(parent, &base_dir);
@@ -1093,7 +1272,8 @@ fn remove_skill_from_target(directory: &str, target_id: &str) {
 /// 在 registry skills 中按 `id == id || key == id` 查找（upstream 多个 mutation 共用）。
 fn find_skill_position(skills: &[Value], id: &str) -> Option<usize> {
     skills.iter().position(|entry| {
-        entry.get("id").and_then(Value::as_str) == Some(id) || entry.get("key").and_then(Value::as_str) == Some(id)
+        entry.get("id").and_then(Value::as_str) == Some(id)
+            || entry.get("key").and_then(Value::as_str) == Some(id)
     })
 }
 
@@ -1110,7 +1290,12 @@ fn list_installed_skills() -> Vec<Value> {
         let intended: HashSet<String> = skill
             .get("targets")
             .and_then(Value::as_array)
-            .map(|arr| arr.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
             .unwrap_or_default();
         let mut target_states = Map::new();
         let mut targets: Vec<Value> = Vec::new();
@@ -1132,8 +1317,10 @@ fn list_installed_skills() -> Vec<Value> {
         managed.push(Value::Object(entry));
     }
 
-    let managed_dirs: HashSet<String> =
-        managed.iter().map(|skill| js_string(skill.get("directory")).to_lowercase()).collect();
+    let managed_dirs: HashSet<String> = managed
+        .iter()
+        .map(|skill| js_string(skill.get("directory")).to_lowercase())
+        .collect();
 
     // unmanaged：扫描全部 8 个 target 的本地 skill，跨 target 按 directory 小写合并。
     let mut unmanaged: Vec<Value> = Vec::new();
@@ -1144,16 +1331,21 @@ fn list_installed_skills() -> Vec<Value> {
                 if directory.is_empty() || managed_dirs.contains(&directory.to_lowercase()) {
                     continue;
                 }
-                let Some(marker) = find_skill_marker(&base_dir.join(&directory)) else { continue };
+                let Some(marker) = find_skill_marker(&base_dir.join(&directory)) else {
+                    continue;
+                };
                 let markdown = read_text(&marker).unwrap_or_default();
-                let fallback = install_name_from_directory(&directory).unwrap_or_else(|| directory.clone());
+                let fallback =
+                    install_name_from_directory(&directory).unwrap_or_else(|| directory.clone());
                 let metadata = read_skill_metadata(&markdown, &fallback);
                 let key = directory.to_lowercase();
                 let index = match unmanaged_index.get(&key) {
                     Some(&i) => i,
                     None => {
-                        let target_states: Map<String, Value> =
-                            TARGETS.iter().map(|t| (t.id.to_string(), json!("off"))).collect();
+                        let target_states: Map<String, Value> = TARGETS
+                            .iter()
+                            .map(|t| (t.id.to_string(), json!("off")))
+                            .collect();
                         unmanaged.push(json!({
                             "id": format!("local:{directory}"),
                             "key": format!("local:{directory}"),
@@ -1185,7 +1377,9 @@ fn list_installed_skills() -> Vec<Value> {
                 }
                 if let Some(paths) = entry.get_mut("targetPaths").and_then(Value::as_object_mut) {
                     // 只记录首个命中的 target 路径。
-                    paths.entry(target.id.to_string()).or_insert_with(|| json!(base_dir.join(&directory).to_string_lossy()));
+                    paths
+                        .entry(target.id.to_string())
+                        .or_insert_with(|| json!(base_dir.join(&directory).to_string_lossy()));
                 }
             }
         }
@@ -1208,7 +1402,11 @@ async fn install_skill(skill_input: &Value, target_ids: &[String]) -> SkillResul
     let repo_name = js_string(skill_input.get("repoName"));
     let repo_branch = {
         let branch = js_string(skill_input.get("repoBranch"));
-        if branch.is_empty() { "main".to_string() } else { branch }
+        if branch.is_empty() {
+            "main".to_string()
+        } else {
+            branch
+        }
     };
     if repo_owner.is_empty() || repo_name.is_empty() {
         return Err(SkillError::other("Missing GitHub repository information"));
@@ -1228,11 +1426,20 @@ async fn install_skill(skill_input: &Value, target_ids: &[String]) -> SkillResul
         .iter()
         .find(|entry| {
             let dir = js_string(entry.get("directory"));
-            let repo =
-                format!("{}/{}", js_string(entry.get("repoOwner")), js_string(entry.get("repoName"))).to_lowercase();
+            let repo = format!(
+                "{}/{}",
+                js_string(entry.get("repoOwner")),
+                js_string(entry.get("repoName"))
+            )
+            .to_lowercase();
             eq_ignore_case(&dir, &install_name) && repo != new_repo
         })
-        .map(|entry| (js_string(entry.get("repoOwner")), js_string(entry.get("repoName"))));
+        .map(|entry| {
+            (
+                js_string(entry.get("repoOwner")),
+                js_string(entry.get("repoName")),
+            )
+        });
     if let Some((owner, name)) = conflict {
         return Err(SkillError::other(format!(
             "Skill directory \"{install_name}\" is already managed by {owner}/{name}"
@@ -1253,8 +1460,16 @@ async fn install_skill(skill_input: &Value, target_ids: &[String]) -> SkillResul
                     .unwrap_or(false)
         })
         .collect();
-    if !files.iter().any(|entry| entry.get("path").and_then(Value::as_str).map(is_skill_md_path).unwrap_or(false)) {
-        return Err(SkillError::other("SKILL.md not found in selected directory"));
+    if !files.iter().any(|entry| {
+        entry
+            .get("path")
+            .and_then(Value::as_str)
+            .map(is_skill_md_path)
+            .unwrap_or(false)
+    }) {
+        return Err(SkillError::other(
+            "SKILL.md not found in selected directory",
+        ));
     }
 
     let dest = managed_skill_path(&install_name)?;
@@ -1266,16 +1481,25 @@ async fn install_skill(skill_input: &Value, target_ids: &[String]) -> SkillResul
         for entry in &files {
             let path = entry.get("path").and_then(Value::as_str).unwrap_or("");
             let relative = if path == source_dir {
-                Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+                Path::new(path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
             } else {
                 path[source_dir.len() + 1..].to_string()
             };
-            let Some(safe_relative) = sanitize_relative_path(&relative) else { continue };
+            let Some(safe_relative) = sanitize_relative_path(&relative) else {
+                continue;
+            };
             let out = temp.join(&safe_relative);
             if let Some(parent) = out.parent() {
                 ensure_dir(parent)?;
             }
-            let text = fetch_text(&client, &github_raw_url(&repo_owner, &repo_name, &branch, path)).await?;
+            let text = fetch_text(
+                &client,
+                &github_raw_url(&repo_owner, &repo_name, &branch, path),
+            )
+            .await?;
             fs::write(&out, text)?;
         }
         remove_path(&dest);
@@ -1293,11 +1517,22 @@ async fn install_skill(skill_input: &Value, target_ids: &[String]) -> SkillResul
     // 从落盘 SKILL.md（优先大写，其次 skill.md）重读 name/description。
     let marker = find_skill_marker(&dest);
     let skill_md = marker.and_then(|m| read_text(&m)).unwrap_or_default();
-    let fallback_name = if skill_name_input.is_empty() { install_name.clone() } else { skill_name_input.clone() };
+    let fallback_name = if skill_name_input.is_empty() {
+        install_name.clone()
+    } else {
+        skill_name_input.clone()
+    };
     let metadata = read_skill_metadata(&skill_md, &fallback_name);
-    let description = if metadata.description.is_empty() { skill_description_input.clone() } else { metadata.description };
-    let selected_targets: Vec<String> =
-        target_ids.iter().filter(|id| target_by_id(id).is_some()).cloned().collect();
+    let description = if metadata.description.is_empty() {
+        skill_description_input.clone()
+    } else {
+        metadata.description
+    };
+    let selected_targets: Vec<String> = target_ids
+        .iter()
+        .filter(|id| target_by_id(id).is_some())
+        .cloned()
+        .collect();
 
     let id = format!("{repo_owner}/{repo_name}:{source_dir}");
     let mut installed = Map::new();
@@ -1310,7 +1545,12 @@ async fn install_skill(skill_input: &Value, target_ids: &[String]) -> SkillResul
     // readmeUrl 恒用大写 SKILL.md（与 upstream 一致）。
     installed.insert(
         "readmeUrl".to_string(),
-        json!(github_doc_url(&repo_owner, &repo_name, &branch, &format!("{source_dir}/SKILL.md"))),
+        json!(github_doc_url(
+            &repo_owner,
+            &repo_name,
+            &branch,
+            &format!("{source_dir}/SKILL.md")
+        )),
     );
     installed.insert("repoOwner".to_string(), json!(repo_owner));
     installed.insert("repoName".to_string(), json!(repo_name));
@@ -1371,13 +1611,20 @@ fn uninstall_skill(id: &str) -> SkillResult<Value> {
             let mut trashed = skill.as_object().cloned().unwrap_or_default();
             trashed.insert("trashedAt".to_string(), json!(stamp));
             trashed.insert("trashedDirectory".to_string(), json!(trash_name));
-            trashed.insert("previousTargets".to_string(), skill.get("targets").cloned().unwrap_or_else(|| json!([])));
+            trashed.insert(
+                "previousTargets".to_string(),
+                skill.get("targets").cloned().unwrap_or_else(|| json!([])),
+            );
             trashed.insert("targets".to_string(), json!([]));
-            registry.skills.retain(|entry| entry.get("id").and_then(Value::as_str) != entry_id.as_deref());
+            registry
+                .skills
+                .retain(|entry| entry.get("id").and_then(Value::as_str) != entry_id.as_deref());
             registry.skills.push(Value::Object(trashed));
             save_registry(&registry)?;
             purge_expired_trash();
-            append_activity(json!({"action": "uninstall", "name": skill_name, "directory": directory}));
+            append_activity(
+                json!({"action": "uninstall", "name": skill_name, "directory": directory}),
+            );
             return Ok(json!({
                 "ok": true,
                 "trashed": true,
@@ -1391,7 +1638,9 @@ fn uninstall_skill(id: &str) -> SkillResult<Value> {
             remove_empty_ancestors(parent, &ssot_dir());
         }
     }
-    registry.skills.retain(|entry| entry.get("id").and_then(Value::as_str) != entry_id.as_deref());
+    registry
+        .skills
+        .retain(|entry| entry.get("id").and_then(Value::as_str) != entry_id.as_deref());
     save_registry(&registry)?;
     append_activity(json!({"action": "uninstall", "name": skill_name, "directory": directory}));
     Ok(json!({"ok": true, "trashed": false}))
@@ -1424,7 +1673,12 @@ fn restore_skill(id: &str) -> SkillResult<Value> {
     let targets: Vec<String> = skill
         .get("previousTargets")
         .and_then(Value::as_array)
-        .map(|arr| arr.iter().filter_map(Value::as_str).map(str::to_string).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
         .unwrap_or_default();
     let mut restored = skill.as_object().cloned().unwrap_or_default();
     restored.insert("targets".to_string(), json!(&targets));
@@ -1454,7 +1708,11 @@ fn set_skill_targets(id: &str, target_ids: &[String]) -> SkillResult<Value> {
     };
     let skill = registry.skills[index].clone();
     let directory = js_string(skill.get("directory"));
-    let selected: Vec<String> = target_ids.iter().filter(|tid| target_by_id(tid).is_some()).cloned().collect();
+    let selected: Vec<String> = target_ids
+        .iter()
+        .filter(|tid| target_by_id(tid).is_some())
+        .cloned()
+        .collect();
     for target in TARGETS.iter() {
         if selected.iter().any(|tid| tid == target.id) {
             sync_skill_to_target(&directory, target.id)?;
@@ -1481,7 +1739,9 @@ fn find_local_skill_source(directory: &str) -> Option<(PathBuf, String)> {
     let source_dir = sanitize_local_skill_path(directory)?;
     for target in TARGETS.iter() {
         for base_dir in target_dirs(target) {
-            let Some(skill_path) = target_skill_path(&base_dir, &source_dir) else { continue };
+            let Some(skill_path) = target_skill_path(&base_dir, &source_dir) else {
+                continue;
+            };
             if find_skill_marker(&skill_path).is_some() {
                 return Some((skill_path, target.id.to_string()));
             }
@@ -1504,7 +1764,11 @@ fn import_local_skill(directory: &str, target_ids: &[String]) -> SkillResult<Val
     if let Some(existing) = existing {
         let existing_id = js_string(existing.get("id"));
         let existing_key = js_string(existing.get("key"));
-        let id_or_key = if existing_id.is_empty() { existing_key } else { existing_id };
+        let id_or_key = if existing_id.is_empty() {
+            existing_key
+        } else {
+            existing_id
+        };
         if !id_or_key.starts_with("local:") {
             return Err(SkillError::other(format!(
                 "Skill directory \"{source_dir}\" is already managed by another installed skill"
@@ -1512,7 +1776,11 @@ fn import_local_skill(directory: &str, target_ids: &[String]) -> SkillResult<Val
         }
         if target_ids.is_empty() {
             let mut skill = existing.as_object().cloned().unwrap_or_default();
-            let targets = existing.get("targets").and_then(Value::as_array).cloned().unwrap_or_default();
+            let targets = existing
+                .get("targets")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
             skill.insert("managed".to_string(), json!(true));
             skill.insert("targets".to_string(), Value::Array(targets));
             return Ok(json!({"ok": true, "skill": Value::Object(skill)}));
@@ -1529,12 +1797,19 @@ fn import_local_skill(directory: &str, target_ids: &[String]) -> SkillResult<Val
     let markdown = marker.and_then(|m| read_text(&m)).unwrap_or_default();
     let fallback = install_name_from_directory(&source_dir).unwrap_or_default();
     let metadata = read_skill_metadata(&markdown, &fallback);
-    let discovered: Vec<String> =
-        TARGETS.iter().filter(|t| scan_target_skill(&source_dir, t.id)).map(|t| t.id.to_string()).collect();
-    let selected: Vec<String> = (if target_ids.is_empty() { discovered } else { target_ids.to_vec() })
-        .into_iter()
-        .filter(|tid| target_by_id(tid).is_some())
+    let discovered: Vec<String> = TARGETS
+        .iter()
+        .filter(|t| scan_target_skill(&source_dir, t.id))
+        .map(|t| t.id.to_string())
         .collect();
+    let selected: Vec<String> = (if target_ids.is_empty() {
+        discovered
+    } else {
+        target_ids.to_vec()
+    })
+    .into_iter()
+    .filter(|tid| target_by_id(tid).is_some())
+    .collect();
 
     let local_id = format!("local:{source_dir}");
     let mut skill = Map::new();
@@ -1583,7 +1858,9 @@ fn delete_local_skill(directory: &str, target_ids: &[String]) -> SkillResult<Val
     for target_id in &selected {
         remove_skill_from_target(&install_name, target_id);
     }
-    append_activity(json!({"action": "delete_local", "directory": install_name, "targets": &selected}));
+    append_activity(
+        json!({"action": "delete_local", "directory": install_name, "targets": &selected}),
+    );
     Ok(json!({"ok": true}))
 }
 
@@ -1595,7 +1872,11 @@ fn normalize_repo(repo: &Value) -> Value {
     let name = js_string(repo.get("name")).trim().to_string();
     let branch = {
         let branch = js_string(repo.get("branch")).trim().to_string();
-        if branch.is_empty() { "main".to_string() } else { branch }
+        if branch.is_empty() {
+            "main".to_string()
+        } else {
+            branch
+        }
     };
     let enabled = repo.get("enabled").and_then(Value::as_bool).unwrap_or(true);
     json!({"owner": owner, "name": name, "branch": branch, "enabled": enabled})
@@ -1607,7 +1888,9 @@ fn owner_name_valid(value: &str) -> bool {
     if bytes.is_empty() || bytes.len() > 100 || !bytes[0].is_ascii_alphanumeric() {
         return false;
     }
-    bytes[1..].iter().all(|b| b.is_ascii_alphanumeric() || *b == b'.' || *b == b'_' || *b == b'-')
+    bytes[1..]
+        .iter()
+        .all(|b| b.is_ascii_alphanumeric() || *b == b'.' || *b == b'_' || *b == b'-')
 }
 
 fn list_repos() -> Vec<Value> {
@@ -1621,7 +1904,13 @@ fn invalidate_discover_cache() {
 /// 按 `"owner/name"` 小写去重（upstream addRepo/removeRepo 共用）。
 fn retain_repos_not(repos: &mut Vec<Value>, key: &str) {
     repos.retain(|entry| {
-        format!("{}/{}", js_string(entry.get("owner")), js_string(entry.get("name"))).to_lowercase() != key
+        format!(
+            "{}/{}",
+            js_string(entry.get("owner")),
+            js_string(entry.get("name"))
+        )
+        .to_lowercase()
+            != key
     });
 }
 
@@ -1635,13 +1924,20 @@ fn add_repo(repo_input: &Value) -> SkillResult<Value> {
         return Err(SkillError::other("Repository owner and name are required"));
     }
     if !owner_name_valid(&owner) || !owner_name_valid(&name) {
-        return Err(SkillError::other("Repository owner and name may only contain letters, digits, '.', '_', or '-'"));
+        return Err(SkillError::other(
+            "Repository owner and name may only contain letters, digits, '.', '_', or '-'",
+        ));
     }
     if !owner_name_valid(&branch) {
-        return Err(SkillError::other("Repository branch contains unsupported characters"));
+        return Err(SkillError::other(
+            "Repository branch contains unsupported characters",
+        ));
     }
     let mut registry = read_registry();
-    retain_repos_not(&mut registry.repos, &format!("{owner}/{name}").to_lowercase());
+    retain_repos_not(
+        &mut registry.repos,
+        &format!("{owner}/{name}").to_lowercase(),
+    );
     registry.repos.push(repo.clone());
     save_registry(&registry)?;
     invalidate_discover_cache();
@@ -1651,7 +1947,10 @@ fn add_repo(repo_input: &Value) -> SkillResult<Value> {
 /// upstream removeRepo。
 fn remove_repo(owner: &str, name: &str) -> SkillResult<Value> {
     let mut registry = read_registry();
-    retain_repos_not(&mut registry.repos, &format!("{owner}/{name}").to_lowercase());
+    retain_repos_not(
+        &mut registry.repos,
+        &format!("{owner}/{name}").to_lowercase(),
+    );
     save_registry(&registry)?;
     invalidate_discover_cache();
     Ok(json!({"ok": true}))
@@ -1665,7 +1964,8 @@ fn is_skill_md_path(path: &str) -> bool {
     if bytes.len() == "skill.md".len() {
         return bytes.eq_ignore_ascii_case(b"skill.md");
     }
-    bytes.len() >= "/skill.md".len() && bytes[bytes.len() - "/skill.md".len()..].eq_ignore_ascii_case(b"/skill.md")
+    bytes.len() >= "/skill.md".len()
+        && bytes[bytes.len() - "/skill.md".len()..].eq_ignore_ascii_case(b"/skill.md")
 }
 
 /// 对应 upstream 的 `docPath.replace(/(^|\/)(?:SKILL|skill)\.md$/i, "")`。
@@ -1674,7 +1974,9 @@ fn strip_skill_md_suffix(doc_path: &str) -> &str {
     if bytes.len() == "skill.md".len() && bytes.eq_ignore_ascii_case(b"skill.md") {
         return "";
     }
-    if bytes.len() >= "/skill.md".len() && bytes[bytes.len() - "/skill.md".len()..].eq_ignore_ascii_case(b"/skill.md") {
+    if bytes.len() >= "/skill.md".len()
+        && bytes[bytes.len() - "/skill.md".len()..].eq_ignore_ascii_case(b"/skill.md")
+    {
         return &doc_path[..doc_path.len() - "/skill.md".len()];
     }
     doc_path
@@ -1682,7 +1984,10 @@ fn strip_skill_md_suffix(doc_path: &str) -> &str {
 
 /// upstream discoverRepoSkills：tree 里 SKILL.md blob 截 200，并发 4 拉 raw frontmatter，
 /// 非 RateLimit 失败用 `{name: installName, description: ""}` fallback 保留条目。
-async fn discover_repo_skills(client: &reqwest::Client, repo_input: &Value) -> SkillResult<Vec<Value>> {
+async fn discover_repo_skills(
+    client: &reqwest::Client,
+    repo_input: &Value,
+) -> SkillResult<Vec<Value>> {
     let repo = normalize_repo(repo_input);
     let owner = js_string(repo.get("owner"));
     let name = js_string(repo.get("name"));
@@ -1690,11 +1995,17 @@ async fn discover_repo_skills(client: &reqwest::Client, repo_input: &Value) -> S
     if owner.is_empty() || name.is_empty() || !enabled {
         return Ok(Vec::new());
     }
-    let (branch, tree) = get_repo_tree(client, &owner, &name, &js_string(repo.get("branch"))).await?;
+    let (branch, tree) =
+        get_repo_tree(client, &owner, &name, &js_string(repo.get("branch"))).await?;
     let skill_files: Vec<String> = tree
         .iter()
         .filter(|entry| entry.get("type").and_then(Value::as_str) == Some("blob"))
-        .filter_map(|entry| entry.get("path").and_then(Value::as_str).map(str::to_string))
+        .filter_map(|entry| {
+            entry
+                .get("path")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
         .filter(|path| is_skill_md_path(path))
         .take(DISCOVER_MAX_SKILLS_PER_REPO)
         .collect();
@@ -1703,44 +2014,55 @@ async fn discover_repo_skills(client: &reqwest::Client, repo_input: &Value) -> S
     let name = Arc::new(name);
     let branch = Arc::new(branch);
     let worker_client = client.clone();
-    let results = map_with_concurrency(skill_files, DISCOVER_CONCURRENCY, move |doc_path: String| {
-        let client = worker_client.clone();
-        let owner = Arc::clone(&owner);
-        let name = Arc::clone(&name);
-        let branch = Arc::clone(&branch);
-        async move {
-            let doc_path = doc_path.replace('\\', "/");
-            // 根目录 SKILL.md → repo.name。
-            let stripped = strip_skill_md_suffix(&doc_path);
-            let directory = if stripped.is_empty() { name.as_str().to_string() } else { stripped.to_string() };
-            let Some(install_name) = install_name_from_directory(&directory) else { return Ok(None) };
-            let mut meta_name = install_name.clone();
-            let mut meta_description = String::new();
-            match fetch_text(&client, &github_raw_url(&owner, &name, &branch, &doc_path)).await {
-                Ok(markdown) => {
-                    let metadata = read_skill_metadata(&markdown, &install_name);
-                    meta_name = metadata.name;
-                    meta_description = metadata.description;
-                }
-                Err(error) => {
-                    if error.is_rate_limited() {
-                        return Err(error);
+    let results = map_with_concurrency(
+        skill_files,
+        DISCOVER_CONCURRENCY,
+        move |doc_path: String| {
+            let client = worker_client.clone();
+            let owner = Arc::clone(&owner);
+            let name = Arc::clone(&name);
+            let branch = Arc::clone(&branch);
+            async move {
+                let doc_path = doc_path.replace('\\', "/");
+                // 根目录 SKILL.md → repo.name。
+                let stripped = strip_skill_md_suffix(&doc_path);
+                let directory = if stripped.is_empty() {
+                    name.as_str().to_string()
+                } else {
+                    stripped.to_string()
+                };
+                let Some(install_name) = install_name_from_directory(&directory) else {
+                    return Ok(None);
+                };
+                let mut meta_name = install_name.clone();
+                let mut meta_description = String::new();
+                match fetch_text(&client, &github_raw_url(&owner, &name, &branch, &doc_path)).await
+                {
+                    Ok(markdown) => {
+                        let metadata = read_skill_metadata(&markdown, &install_name);
+                        meta_name = metadata.name;
+                        meta_description = metadata.description;
                     }
-                    // 非 RateLimit 失败：保留条目（metadata fallback）。
+                    Err(error) => {
+                        if error.is_rate_limited() {
+                            return Err(error);
+                        }
+                        // 非 RateLimit 失败：保留条目（metadata fallback）。
+                    }
                 }
+                Ok(Some(json!({
+                    "key": format!("{}/{}:{directory}", owner, name),
+                    "name": meta_name,
+                    "description": meta_description,
+                    "directory": directory,
+                    "readmeUrl": github_doc_url(&owner, &name, &branch, &doc_path),
+                    "repoOwner": owner.as_str(),
+                    "repoName": name.as_str(),
+                    "repoBranch": branch.as_str(),
+                })))
             }
-            Ok(Some(json!({
-                "key": format!("{}/{}:{directory}", owner, name),
-                "name": meta_name,
-                "description": meta_description,
-                "directory": directory,
-                "readmeUrl": github_doc_url(&owner, &name, &branch, &doc_path),
-                "repoOwner": owner.as_str(),
-                "repoName": name.as_str(),
-                "repoBranch": branch.as_str(),
-            })))
-        }
-    })
+        },
+    )
     .await;
 
     let mut skills = Vec::new();
@@ -1783,7 +2105,12 @@ fn discover_fingerprint(repos: &[Value]) -> String {
     let mut parts: Vec<String> = repos
         .iter()
         .map(|repo| {
-            format!("{}/{}@{}", js_string(repo.get("owner")), js_string(repo.get("name")), js_string(repo.get("branch")))
+            format!(
+                "{}/{}@{}",
+                js_string(repo.get("owner")),
+                js_string(repo.get("name")),
+                js_string(repo.get("branch"))
+            )
         })
         .collect();
     parts.sort();
@@ -1805,7 +2132,10 @@ fn read_discover_cache(fingerprint: &str) -> Option<(Vec<Value>, i64)> {
 }
 
 fn write_discover_cache(fingerprint: &str, skills: &[Value]) -> SkillResult<()> {
-    write_json(&discover_cache_path(), &json!({"fingerprint": fingerprint, "generatedAt": now_ms(), "skills": skills}))
+    write_json(
+        &discover_cache_path(),
+        &json!({"fingerprint": fingerprint, "generatedAt": now_ms(), "skills": skills}),
+    )
 }
 
 /// upstream discoverSkills：allSettled 语义（单 repo 失败不拖垮其他，
@@ -1856,7 +2186,14 @@ async fn discover_skills(force: bool) -> SkillResult<Value> {
 }
 
 /// 缓存命中判定：`fingerprint` 相等 + `<key>` 时间戳在 TTL 内 + 指定字段类型校验。
-fn cache_hit(cached: &Value, fingerprint: &str, ts_key: &str, ttl_ms: i64, payload_key: &str, want_object: bool) -> bool {
+fn cache_hit(
+    cached: &Value,
+    fingerprint: &str,
+    ts_key: &str,
+    ttl_ms: i64,
+    payload_key: &str,
+    want_object: bool,
+) -> bool {
     let fresh = cached
         .get(ts_key)
         .and_then(Value::as_f64)
@@ -1889,14 +2226,27 @@ async fn check_updates(force: bool) -> SkillResult<Value> {
         .collect();
     let mut fingerprint_parts: Vec<String> = managed
         .iter()
-        .map(|skill| format!("{}@{}", js_string(skill.get("id")), js_string(skill.get("sourceSignature"))))
+        .map(|skill| {
+            format!(
+                "{}@{}",
+                js_string(skill.get("id")),
+                js_string(skill.get("sourceSignature"))
+            )
+        })
         .collect();
     fingerprint_parts.sort();
     let fingerprint = fingerprint_parts.join("|");
 
     if !force {
         if let Some(cached) = read_json(&updates_cache_path()) {
-            if cache_hit(&cached, &fingerprint, "checkedAt", UPDATE_CACHE_TTL_MS, "updates", true) {
+            if cache_hit(
+                &cached,
+                &fingerprint,
+                "checkedAt",
+                UPDATE_CACHE_TTL_MS,
+                "updates",
+                true,
+            ) {
                 let updates = cached.get("updates").cloned().unwrap_or_else(|| json!({}));
                 let checked_at = cached.get("checkedAt").cloned().unwrap_or(Value::Null);
                 return Ok(json!({"updates": updates, "checkedAt": checked_at, "cached": true}));
@@ -1912,7 +2262,11 @@ async fn check_updates(force: bool) -> SkillResult<Value> {
         let name = js_string(skill.get("repoName"));
         let branch = {
             let branch = js_string(skill.get("repoBranch"));
-            if branch.is_empty() { "main".to_string() } else { branch }
+            if branch.is_empty() {
+                "main".to_string()
+            } else {
+                branch
+            }
         };
         let key = format!("{owner}/{name}@{branch}").to_lowercase();
         let index = match group_index.get(&key) {
@@ -1948,10 +2302,17 @@ async fn check_updates(force: bool) -> SkillResult<Value> {
                 for skill in &skills {
                     let source = {
                         let source_directory = js_string(skill.get("sourceDirectory"));
-                        if source_directory.is_empty() { js_string(skill.get("directory")) } else { source_directory }
+                        if source_directory.is_empty() {
+                            js_string(skill.get("directory"))
+                        } else {
+                            source_directory
+                        }
                     };
                     if let Some(signature) = source_signature_from_tree(&tree, &source) {
-                        updates.push((js_string(skill.get("id")), signature != js_string(skill.get("sourceSignature"))));
+                        updates.push((
+                            js_string(skill.get("id")),
+                            signature != js_string(skill.get("sourceSignature")),
+                        ));
                     }
                 }
                 Ok(updates)
@@ -1975,18 +2336,30 @@ async fn check_updates(force: bool) -> SkillResult<Value> {
 }
 
 /// upstream searchSkillsSh：`q.trim()` 长度 <2 短路；解析 skills.sh 响应。
-async fn search_skills_sh(client: &reqwest::Client, query: &str, limit: f64, offset: f64) -> SkillResult<Value> {
+async fn search_skills_sh(
+    client: &reqwest::Client,
+    query: &str,
+    limit: f64,
+    offset: f64,
+) -> SkillResult<Value> {
     let q = query.trim().to_string();
     // JS length 是 UTF-16 code unit 数，用 encode_utf16 对齐。
     if q.encode_utf16().count() < 2 {
         return Ok(json!({"query": q, "totalCount": 0, "skills": []}));
     }
     let limit = {
-        let n = if limit == 0.0 || limit.is_nan() { 20.0 } else { limit };
+        let n = if limit == 0.0 || limit.is_nan() {
+            20.0
+        } else {
+            limit
+        };
         n.min(50.0).max(1.0) as i64
     };
     let offset = if offset.is_nan() { 0.0 } else { offset }.max(0.0) as i64;
-    let url = format!("https://skills.sh/api/search?q={}&limit={limit}&offset={offset}", encode_form_param(&q));
+    let url = format!(
+        "https://skills.sh/api/search?q={}&limit={limit}&offset={offset}",
+        encode_form_param(&q)
+    );
     let data = fetch_json(client, &url).await?;
     let skills: Vec<Value> = data
         .get("skills")
@@ -1995,12 +2368,20 @@ async fn search_skills_sh(client: &reqwest::Client, query: &str, limit: f64, off
         .unwrap_or_default();
     let total_count = {
         let count = data.get("count").map(js_f64).unwrap_or(f64::NAN);
-        let n = if count == 0.0 || count.is_nan() { skills.len() as f64 } else { count };
+        let n = if count == 0.0 || count.is_nan() {
+            skills.len() as f64
+        } else {
+            count
+        };
         json_number(n)
     };
     let query_out = {
         let data_query = js_string(data.get("query"));
-        if data_query.is_empty() { q } else { data_query }
+        if data_query.is_empty() {
+            q
+        } else {
+            data_query
+        }
     };
     Ok(json!({"query": query_out, "totalCount": total_count, "skills": skills}))
 }
@@ -2020,7 +2401,11 @@ fn parse_search_entry(entry: &Value) -> Option<Value> {
             id
         } else {
             let skill_id = js_string(entry.get("skillId"));
-            let inner = if !skill_id.is_empty() { skill_id } else { js_string(entry.get("name")) };
+            let inner = if !skill_id.is_empty() {
+                skill_id
+            } else {
+                js_string(entry.get("name"))
+            };
             format!("{owner}/{repo_name}:{inner}")
         }
     };
@@ -2030,12 +2415,20 @@ fn parse_search_entry(entry: &Value) -> Option<Value> {
             name
         } else {
             let skill_id = js_string(entry.get("skillId"));
-            if !skill_id.is_empty() { skill_id } else { "Skill".to_string() }
+            if !skill_id.is_empty() {
+                skill_id
+            } else {
+                "Skill".to_string()
+            }
         }
     };
     let directory = {
         let skill_id = js_string(entry.get("skillId"));
-        if !skill_id.is_empty() { skill_id } else { js_string(entry.get("name")) }
+        if !skill_id.is_empty() {
+            skill_id
+        } else {
+            js_string(entry.get("name"))
+        }
     };
     Some(json!({
         "key": key,
@@ -2054,7 +2447,11 @@ fn parse_search_entry(entry: &Value) -> Option<Value> {
 /// installs 降序，截 200 写缓存（6h TTL）。
 async fn fetch_popular_skills_sh(force: bool, limit: f64) -> SkillResult<Value> {
     let cap = {
-        let n = if limit == 0.0 || limit.is_nan() { 60.0 } else { limit };
+        let n = if limit == 0.0 || limit.is_nan() {
+            60.0
+        } else {
+            limit
+        };
         n.min(200.0).max(1.0) as i64 as usize
     };
     if !force {
@@ -2068,7 +2465,9 @@ async fn fetch_popular_skills_sh(force: bool, limit: f64) -> SkillResult<Value> 
                 if let Some(skills) = cached.get("skills").and_then(Value::as_array) {
                     let sliced: Vec<Value> = skills.iter().take(cap).cloned().collect();
                     let generated_at = cached.get("generatedAt").cloned().unwrap_or(Value::Null);
-                    return Ok(json!({"skills": sliced, "cached": true, "generatedAt": generated_at}));
+                    return Ok(
+                        json!({"skills": sliced, "cached": true, "generatedAt": generated_at}),
+                    );
                 }
             }
         }
@@ -2076,13 +2475,20 @@ async fn fetch_popular_skills_sh(force: bool, limit: f64) -> SkillResult<Value> 
     let client = http_client()?;
     let worker_client = client.clone();
     let lists = map_with_concurrency(
-        POPULAR_SEED_QUERIES.iter().map(|q| q.to_string()).collect::<Vec<_>>(),
+        POPULAR_SEED_QUERIES
+            .iter()
+            .map(|q| q.to_string())
+            .collect::<Vec<_>>(),
         DISCOVER_CONCURRENCY,
         move |q: String| {
             let client = worker_client.clone();
             async move {
                 match search_skills_sh(&client, &q, 30.0, 0.0).await {
-                    Ok(data) => Ok(data.get("skills").and_then(Value::as_array).cloned().unwrap_or_default()),
+                    Ok(data) => Ok(data
+                        .get("skills")
+                        .and_then(Value::as_array)
+                        .cloned()
+                        .unwrap_or_default()),
                     Err(error) => {
                         if error.is_rate_limited() {
                             Err(error)
@@ -2136,7 +2542,10 @@ async fn fetch_popular_skills_sh(force: bool, limit: f64) -> SkillResult<Value> 
         bi.partial_cmp(&ai).unwrap_or(std::cmp::Ordering::Equal)
     });
     merged.truncate(200);
-    write_json(&popular_cache_path(), &json!({"generatedAt": now_ms(), "skills": &merged}))?;
+    write_json(
+        &popular_cache_path(),
+        &json!({"generatedAt": now_ms(), "skills": &merged}),
+    )?;
     let sliced: Vec<Value> = merged.into_iter().take(cap).collect();
     Ok(json!({"skills": sliced, "cached": false, "generatedAt": now_ms()}))
 }
@@ -2156,21 +2565,32 @@ struct TranscriptFile {
 /// upstream listTranscriptFiles：任意深度递归收集 .jsonl（stat 失败跳过），按 path 排序。
 fn list_transcript_files(root_dir: &Path) -> Vec<TranscriptFile> {
     fn walk(dir: &Path, out: &mut Vec<TranscriptFile>) {
-        let Ok(read_dir) = fs::read_dir(dir) else { return };
+        let Ok(read_dir) = fs::read_dir(dir) else {
+            return;
+        };
         for entry in read_dir.filter_map(|entry| entry.ok()) {
-            let Ok(file_type) = entry.file_type() else { continue };
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
             let full = entry.path();
             if file_type.is_dir() {
                 walk(&full, out);
-            } else if file_type.is_file() && entry.file_name().to_string_lossy().ends_with(".jsonl") {
-                let Ok(meta) = fs::metadata(&full) else { continue };
+            } else if file_type.is_file() && entry.file_name().to_string_lossy().ends_with(".jsonl")
+            {
+                let Ok(meta) = fs::metadata(&full) else {
+                    continue;
+                };
                 let mtime_ms = meta
                     .modified()
                     .ok()
                     .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                     .map(|d| d.as_millis() as i64)
                     .unwrap_or(0);
-                out.push(TranscriptFile { path: full.to_string_lossy().into_owned(), size: meta.len(), mtime_ms });
+                out.push(TranscriptFile {
+                    path: full.to_string_lossy().into_owned(),
+                    size: meta.len(),
+                    mtime_ms,
+                });
             }
         }
     }
@@ -2191,7 +2611,11 @@ fn fingerprint_files(files: &[TranscriptFile]) -> String {
 
 /// upstream toInt：有限正数 floor，否则 0。
 fn to_int(value: f64) -> i64 {
-    if value.is_finite() && value > 0.0 { value.floor() as i64 } else { 0 }
+    if value.is_finite() && value > 0.0 {
+        value.floor() as i64
+    } else {
+        0
+    }
 }
 
 /// 与 upstream SKILL_TOKEN_KEYS 对应的五列（内部用 f64 累计均摊份额）。
@@ -2232,7 +2656,9 @@ fn scan_transcript_file(
     seen_block_ids: &mut HashSet<String>,
 ) {
     use std::io::BufRead;
-    let Ok(file) = fs::File::open(path) else { return };
+    let Ok(file) = fs::File::open(path) else {
+        return;
+    };
     let reader = std::io::BufReader::new(file);
     for line_bytes in reader.split(b'\n') {
         let Ok(line_bytes) = line_bytes else { continue };
@@ -2241,8 +2667,14 @@ fn scan_transcript_file(
         if !line.contains("\"name\":\"Skill\"") {
             continue;
         }
-        let Ok(obj) = serde_json::from_str::<Value>(line) else { continue };
-        let Some(content) = obj.get("message").and_then(|m| m.get("content")).and_then(Value::as_array) else {
+        let Ok(obj) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        let Some(content) = obj
+            .get("message")
+            .and_then(|m| m.get("content"))
+            .and_then(Value::as_array)
+        else {
             continue;
         };
         // 先收集本 turn 的 fresh Skill 调用，再均摊 usage。
@@ -2254,13 +2686,18 @@ fn scan_transcript_file(
             if block.get("name").and_then(Value::as_str) != Some("Skill") {
                 continue;
             }
-            let id = block.get("id").and_then(Value::as_str).filter(|s| !s.is_empty());
+            let id = block
+                .get("id")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty());
             if let Some(id) = id {
                 if seen_block_ids.contains(id) {
                     continue;
                 }
             }
-            let skill_name = js_string(block.get("input").and_then(|input| input.get("skill"))).trim().to_string();
+            let skill_name = js_string(block.get("input").and_then(|input| input.get("skill")))
+                .trim()
+                .to_string();
             if skill_name.is_empty() {
                 continue;
             }
@@ -2272,7 +2709,10 @@ fn scan_transcript_file(
         if blocks.is_empty() {
             continue;
         }
-        let ts = obj.get("timestamp").and_then(Value::as_str).map(str::to_string);
+        let ts = obj
+            .get("timestamp")
+            .and_then(Value::as_str)
+            .map(str::to_string);
         let turn_tokens = normalize_usage(obj.get("message").and_then(|m| m.get("usage")));
         let share = 1.0 / blocks.len() as f64;
         for skill_name in blocks {
@@ -2293,7 +2733,12 @@ fn scan_transcript_file(
             let entry = &mut skills[entry_index];
             entry.invocations += 1; // invocations 不摊
             if let Some(ts) = &ts {
-                if entry.last_used_at.as_deref().map(|current| ts.as_str() > current).unwrap_or(true) {
+                if entry
+                    .last_used_at
+                    .as_deref()
+                    .map(|current| ts.as_str() > current)
+                    .unwrap_or(true)
+                {
                     entry.last_used_at = Some(ts.clone());
                 }
             }
@@ -2350,7 +2795,14 @@ fn scan_skill_usage(home: &Path, force: bool) -> Value {
     let fingerprint = fingerprint_files(&files);
     if !force {
         if let Some(cached) = read_json(&usage_cache_path()) {
-            if cache_hit(&cached, &fingerprint, "generatedAt", USAGE_CACHE_TTL_MS, "skills", false) {
+            if cache_hit(
+                &cached,
+                &fingerprint,
+                "generatedAt",
+                USAGE_CACHE_TTL_MS,
+                "skills",
+                false,
+            ) {
                 let mut result = cached.as_object().cloned().unwrap_or_default();
                 result.insert("cached".to_string(), json!(true));
                 return Value::Object(result);
@@ -2445,7 +2897,11 @@ fn skill_usage_query(force: bool) -> Value {
     };
 
     let mut used_skill_ids: HashSet<String> = HashSet::new();
-    let usage_skills = usage.get("skills").and_then(Value::as_array).cloned().unwrap_or_default();
+    let usage_skills = usage
+        .get("skills")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let mut joined: Vec<Value> = Vec::new();
     for entry in &usage_skills {
         let matched = find_installed(&js_string(entry.get("skill")));
@@ -2466,7 +2922,13 @@ fn skill_usage_query(force: bool) -> Value {
     }
     let unused_installed: Vec<Value> = installed
         .iter()
-        .filter(|skill| skill.get("id").and_then(Value::as_str).map(|id| !used_skill_ids.contains(id)).unwrap_or(true))
+        .filter(|skill| {
+            skill
+                .get("id")
+                .and_then(Value::as_str)
+                .map(|id| !used_skill_ids.contains(id))
+                .unwrap_or(true)
+        })
         .map(|skill| {
             json!({
                 "skillId": skill.get("id").cloned().unwrap_or(Value::Null),
@@ -2494,33 +2956,50 @@ fn param_force(params: &Value) -> bool {
 
 /// payload 里的字符串数组参数；key 缺失/非数组 → None（调用方决定默认值）。
 fn string_array_param(payload: &Value, key: &str) -> Option<Vec<String>> {
-    payload.get(key).and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(str::to_string).collect())
+    payload.get(key).and_then(Value::as_array).map(|arr| {
+        arr.iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect()
+    })
 }
 
 /// Skills Hub 查询端点（upstream GET /functions/tokentracker-skills）。
 #[tauri::command]
 pub(crate) async fn skills_hub_query(mode: String, params: Value) -> Result<Value, String> {
-    let mode = if mode.is_empty() { "installed" } else { mode.as_str() };
+    let mode = if mode.is_empty() {
+        "installed"
+    } else {
+        mode.as_str()
+    };
     match mode {
-        "installed" => tokio::task::spawn_blocking(|| {
-            json!({"targets": target_list(), "skills": list_installed_skills()})
-        })
+        "installed" => tokio::task::spawn_blocking(
+            || json!({"targets": target_list(), "skills": list_installed_skills()}),
+        )
         .await
         .map_err(|e| format!("skills task failed: {e}")),
         "repos" => Ok(json!({"repos": list_repos()})),
-        "discover" => discover_skills(param_force(&params)).await.map_err(|e| e.to_string()),
+        "discover" => discover_skills(param_force(&params))
+            .await
+            .map_err(|e| e.to_string()),
         "search" => {
             let q = js_string(params.get("q"));
             let limit = js_number_or(params.get("limit"), 20.0);
             let offset = js_number_or(params.get("offset"), 0.0);
             let client = http_client().map_err(|e| e.to_string())?;
-            search_skills_sh(&client, &q, limit, offset).await.map_err(|e| e.to_string())
+            search_skills_sh(&client, &q, limit, offset)
+                .await
+                .map_err(|e| e.to_string())
         }
         "popular" => {
             let limit = js_number_or(params.get("limit"), 60.0);
-            fetch_popular_skills_sh(param_force(&params), limit).await.map_err(|e| e.to_string())
+            fetch_popular_skills_sh(param_force(&params), limit)
+                .await
+                .map_err(|e| e.to_string())
         }
-        "updates" => check_updates(param_force(&params)).await.map_err(|e| e.to_string()),
+        "updates" => check_updates(param_force(&params))
+            .await
+            .map_err(|e| e.to_string()),
         "activity" => {
             let limit = js_number_or(params.get("limit"), 50.0) as i64;
             Ok(json!({"activity": read_activity(limit)}))
@@ -2543,7 +3022,9 @@ pub(crate) async fn skills_hub_mutate(action: String, payload: Value) -> Result<
             let skill = payload.get("skill").cloned().unwrap_or(Value::Null);
             let targets = string_array_param(&payload, "targets")
                 .unwrap_or_else(|| vec!["claude".to_string(), "codex".to_string()]);
-            install_skill(&skill, &targets).await.map_err(|e| e.to_string())
+            install_skill(&skill, &targets)
+                .await
+                .map_err(|e| e.to_string())
         }
         "uninstall" => uninstall_skill(&js_string(payload.get("id"))).map_err(|e| e.to_string()),
         "restore" => restore_skill(&js_string(payload.get("id"))).map_err(|e| e.to_string()),
@@ -2553,16 +3034,22 @@ pub(crate) async fn skills_hub_mutate(action: String, payload: Value) -> Result<
         }
         "import_local" => {
             let targets = string_array_param(&payload, "targets").unwrap_or_default();
-            import_local_skill(&js_string(payload.get("directory")), &targets).map_err(|e| e.to_string())
+            import_local_skill(&js_string(payload.get("directory")), &targets)
+                .map_err(|e| e.to_string())
         }
         "delete_local" => {
             let targets = string_array_param(&payload, "targets").unwrap_or_default();
-            delete_local_skill(&js_string(payload.get("directory")), &targets).map_err(|e| e.to_string())
+            delete_local_skill(&js_string(payload.get("directory")), &targets)
+                .map_err(|e| e.to_string())
         }
-        "add_repo" => add_repo(payload.get("repo").unwrap_or(&Value::Null)).map_err(|e| e.to_string()),
-        "remove_repo" => {
-            remove_repo(&js_string(payload.get("owner")), &js_string(payload.get("name"))).map_err(|e| e.to_string())
+        "add_repo" => {
+            add_repo(payload.get("repo").unwrap_or(&Value::Null)).map_err(|e| e.to_string())
         }
+        "remove_repo" => remove_repo(
+            &js_string(payload.get("owner")),
+            &js_string(payload.get("name")),
+        )
+        .map_err(|e| e.to_string()),
         _ => Err("Unknown skills action".to_string()),
     }
 }
@@ -2638,7 +3125,10 @@ mod tests {
     fn sanitize_path_segment_boundaries() {
         assert_eq!(sanitize_path_segment("pdf"), Some("pdf".to_string()));
         assert_eq!(sanitize_path_segment("  pdf  "), Some("pdf".to_string()));
-        assert_eq!(sanitize_path_segment(".hidden"), Some(".hidden".to_string()));
+        assert_eq!(
+            sanitize_path_segment(".hidden"),
+            Some(".hidden".to_string())
+        );
         assert_eq!(sanitize_path_segment(""), None);
         assert_eq!(sanitize_path_segment("."), None);
         assert_eq!(sanitize_path_segment(".."), None);
@@ -2679,7 +3169,10 @@ mod tests {
     #[test]
     fn install_name_from_directory_semantics() {
         assert_eq!(install_name_from_directory("a/b").as_deref(), Some("b"));
-        assert_eq!(install_name_from_directory("single").as_deref(), Some("single"));
+        assert_eq!(
+            install_name_from_directory("single").as_deref(),
+            Some("single")
+        );
         assert_eq!(install_name_from_directory(".."), None);
         assert_eq!(install_name_from_directory("/abs"), None);
     }
@@ -2687,7 +3180,10 @@ mod tests {
     #[test]
     fn read_yaml_field_variants() {
         assert_eq!(read_yaml_field("name: pdf-tools\n", "name"), "pdf-tools");
-        assert_eq!(read_yaml_field("name: \"quoted name\"\n", "name"), "quoted name");
+        assert_eq!(
+            read_yaml_field("name: \"quoted name\"\n", "name"),
+            "quoted name"
+        );
         assert_eq!(read_yaml_field("name: 'single'\n", "name"), "single");
         assert_eq!(read_yaml_field("other: 1\n", "name"), "");
         // key 后必须紧跟冒号。
@@ -2756,7 +3252,11 @@ mod tests {
         {
             use std::os::unix::fs::PermissionsExt;
             let before = hash_directory(&skill);
-            fs::set_permissions(skill.join("sub").join("a.txt"), fs::Permissions::from_mode(0o755)).unwrap();
+            fs::set_permissions(
+                skill.join("sub").join("a.txt"),
+                fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
             assert_ne!(before, hash_directory(&skill));
         }
     }
@@ -2786,7 +3286,10 @@ mod tests {
         let temp = TestDir::new("tsp");
         let root = temp.path().join("skills");
         // root 不存在：ENOENT 放行。
-        assert_eq!(target_skill_path(&root, "a/b"), Some(resolve_lexical(&root.join("a").join("b"))));
+        assert_eq!(
+            target_skill_path(&root, "a/b"),
+            Some(resolve_lexical(&root.join("a").join("b")))
+        );
         fs::create_dir_all(&root).unwrap();
         // `..` / 绝对路径被拒。
         assert_eq!(target_skill_path(&root, "../x"), None);
@@ -2823,11 +3326,21 @@ mod tests {
         assert_eq!(classify_in_dirs("demo", std::slice::from_ref(&base)), "off");
         // 实体目录 → synced。
         fs::create_dir_all(base.join("demo")).unwrap();
-        assert_eq!(classify_in_dirs("demo", std::slice::from_ref(&base)), "synced");
+        assert_eq!(
+            classify_in_dirs("demo", std::slice::from_ref(&base)),
+            "synced"
+        );
         // 悬空 symlink → orphan。
         fs::remove_dir_all(base.join("demo")).unwrap();
-        symlink_dir(Path::new("/nonexistent-ccgui-test-target"), &base.join("demo")).unwrap();
-        assert_eq!(classify_in_dirs("demo", std::slice::from_ref(&base)), "orphan");
+        symlink_dir(
+            Path::new("/nonexistent-ccgui-test-target"),
+            &base.join("demo"),
+        )
+        .unwrap();
+        assert_eq!(
+            classify_in_dirs("demo", std::slice::from_ref(&base)),
+            "orphan"
+        );
     }
 
     #[test]
@@ -2840,7 +3353,11 @@ mod tests {
         fs::create_dir_all(claude_skills.join("demo")).unwrap();
         assert_eq!(classify_target_skill("demo", "claude"), "synced");
         fs::remove_dir_all(claude_skills.join("demo")).unwrap();
-        symlink_dir(Path::new("/nonexistent-ccgui-test-target"), &claude_skills.join("demo")).unwrap();
+        symlink_dir(
+            Path::new("/nonexistent-ccgui-test-target"),
+            &claude_skills.join("demo"),
+        )
+        .unwrap();
         assert_eq!(classify_target_skill("demo", "claude"), "orphan");
         assert_eq!(classify_target_skill("demo", "bogus-target"), "off");
     }
@@ -2849,7 +3366,10 @@ mod tests {
     fn registry_roundtrip_and_defaults() {
         let temp = TestDir::new("registry");
         let _env = EnvGuard::new(&[("CCGUI_SKILLS_HOME", temp.path())]);
-        let registry = Registry { repos: default_repos(), skills: vec![json!({"id": "o/n:dir", "directory": "dir", "targets": ["claude"]})] };
+        let registry = Registry {
+            repos: default_repos(),
+            skills: vec![json!({"id": "o/n:dir", "directory": "dir", "targets": ["claude"]})],
+        };
         save_registry(&registry).unwrap();
         // unix 下 registry.json 权限 0o600。
         #[cfg(unix)]
@@ -2861,7 +3381,10 @@ mod tests {
         let loaded = read_registry();
         assert_eq!(loaded.repos.len(), 4);
         assert_eq!(loaded.skills.len(), 1);
-        assert_eq!(loaded.skills[0].get("id").and_then(Value::as_str), Some("o/n:dir"));
+        assert_eq!(
+            loaded.skills[0].get("id").and_then(Value::as_str),
+            Some("o/n:dir")
+        );
         // 坏文件 → 默认值。
         fs::write(registry_path(), b"not json").unwrap();
         let loaded = read_registry();
@@ -2871,7 +3394,10 @@ mod tests {
         fs::write(registry_path(), br#"{"repos":123,"skills":{}}"#).unwrap();
         let loaded = read_registry();
         assert_eq!(loaded.repos.len(), 4);
-        assert_eq!(loaded.repos[0].get("owner").and_then(Value::as_str), Some("anthropics"));
+        assert_eq!(
+            loaded.repos[0].get("owner").and_then(Value::as_str),
+            Some("anthropics")
+        );
         assert!(loaded.skills.is_empty());
         // 文件缺失 → 默认。
         let _ = fs::remove_file(registry_path());
@@ -2901,7 +3427,10 @@ mod tests {
         purge_expired_trash();
         let after = read_registry();
         assert_eq!(after.skills.len(), 2);
-        assert!(after.skills.iter().all(|s| s.get("directory").and_then(Value::as_str) != Some("old")));
+        assert!(after
+            .skills
+            .iter()
+            .all(|s| s.get("directory").and_then(Value::as_str) != Some("old")));
         assert!(!old_trash.exists());
     }
 
@@ -2918,7 +3447,10 @@ mod tests {
                 format!(r#"{{"type":"tool_use","name":"Skill","id":"{id}","input":{{"skill":"{skill}"}}}}"#)
             })
             .collect();
-        format!(r#"{{"timestamp":"{ts}","message":{{"model":"m","usage":{usage},"content":[{}]}}}}"#, content.join(","))
+        format!(
+            r#"{{"timestamp":"{ts}","message":{{"model":"m","usage":{usage},"content":[{}]}}}}"#,
+            content.join(",")
+        )
     }
 
     #[test]
@@ -2953,7 +3485,10 @@ mod tests {
 
         let result = scan_skill_usage(home.path(), false);
         assert_eq!(result.get("scannedFiles").and_then(Value::as_i64), Some(2));
-        assert_eq!(result.get("totalInvocations").and_then(Value::as_i64), Some(3));
+        assert_eq!(
+            result.get("totalInvocations").and_then(Value::as_i64),
+            Some(3)
+        );
         assert_eq!(result.get("cached").and_then(Value::as_bool), Some(false));
         let skills = result.get("skills").and_then(Value::as_array).unwrap();
         // 按 invocations 降序：pdf(2) 在前，xlsx(1) 在后。
@@ -2961,35 +3496,79 @@ mod tests {
         let pdf = &skills[0];
         assert_eq!(pdf.get("skill").and_then(Value::as_str), Some("pdf"));
         assert_eq!(pdf.get("invocations").and_then(Value::as_i64), Some(2));
-        assert_eq!(pdf.get("lastUsedAt").and_then(Value::as_str), Some("2026-01-02T00:00:00.000Z"));
+        assert_eq!(
+            pdf.get("lastUsedAt").and_then(Value::as_str),
+            Some("2026-01-02T00:00:00.000Z")
+        );
         let pdf_tokens = pdf.get("tokens").unwrap();
         // b1 独占 turn：100/50/20/10；b2 摊半：45/15 → 145/65/20/10。
-        assert_eq!(pdf_tokens.get("input_tokens").and_then(Value::as_i64), Some(145));
-        assert_eq!(pdf_tokens.get("output_tokens").and_then(Value::as_i64), Some(65));
-        assert_eq!(pdf_tokens.get("cached_input_tokens").and_then(Value::as_i64), Some(20));
-        assert_eq!(pdf_tokens.get("cache_creation_input_tokens").and_then(Value::as_i64), Some(10));
-        assert_eq!(pdf_tokens.get("total_tokens").and_then(Value::as_i64), Some(240));
+        assert_eq!(
+            pdf_tokens.get("input_tokens").and_then(Value::as_i64),
+            Some(145)
+        );
+        assert_eq!(
+            pdf_tokens.get("output_tokens").and_then(Value::as_i64),
+            Some(65)
+        );
+        assert_eq!(
+            pdf_tokens
+                .get("cached_input_tokens")
+                .and_then(Value::as_i64),
+            Some(20)
+        );
+        assert_eq!(
+            pdf_tokens
+                .get("cache_creation_input_tokens")
+                .and_then(Value::as_i64),
+            Some(10)
+        );
+        assert_eq!(
+            pdf_tokens.get("total_tokens").and_then(Value::as_i64),
+            Some(240)
+        );
         let xlsx = &skills[1];
         assert_eq!(xlsx.get("skill").and_then(Value::as_str), Some("xlsx"));
         assert_eq!(xlsx.get("invocations").and_then(Value::as_i64), Some(1));
         let xlsx_tokens = xlsx.get("tokens").unwrap();
-        assert_eq!(xlsx_tokens.get("input_tokens").and_then(Value::as_i64), Some(45));
-        assert_eq!(xlsx_tokens.get("total_tokens").and_then(Value::as_i64), Some(60));
+        assert_eq!(
+            xlsx_tokens.get("input_tokens").and_then(Value::as_i64),
+            Some(45)
+        );
+        assert_eq!(
+            xlsx_tokens.get("total_tokens").and_then(Value::as_i64),
+            Some(60)
+        );
 
         // fingerprint 不变 → 第二次命中缓存。
         let cached = scan_skill_usage(home.path(), false);
         assert_eq!(cached.get("cached").and_then(Value::as_bool), Some(true));
-        assert_eq!(cached.get("totalInvocations").and_then(Value::as_i64), Some(3));
+        assert_eq!(
+            cached.get("totalInvocations").and_then(Value::as_i64),
+            Some(3)
+        );
         // 文件变化 → fingerprint 失效 → 重新扫描。
         write_transcript(
             home.path(),
             "p1",
             "c.jsonl",
-            &[skill_block_line("2026-01-03T00:00:00.000Z", &[("b9", "pptx")], r#"{"input_tokens":7}"#)],
+            &[skill_block_line(
+                "2026-01-03T00:00:00.000Z",
+                &[("b9", "pptx")],
+                r#"{"input_tokens":7}"#,
+            )],
         );
         let refreshed = scan_skill_usage(home.path(), false);
-        assert_eq!(refreshed.get("cached").and_then(Value::as_bool), Some(false));
-        assert_eq!(refreshed.get("totalInvocations").and_then(Value::as_i64), Some(4));
-        assert_eq!(refreshed.get("scannedFiles").and_then(Value::as_i64), Some(3));
+        assert_eq!(
+            refreshed.get("cached").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            refreshed.get("totalInvocations").and_then(Value::as_i64),
+            Some(4)
+        );
+        assert_eq!(
+            refreshed.get("scannedFiles").and_then(Value::as_i64),
+            Some(3)
+        );
     }
 }

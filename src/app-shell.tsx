@@ -74,7 +74,7 @@ import { useModelConfigRefresh } from "./app-shell-parts/useModelConfigRefresh";
 import { useWorkspacePathsIntake } from "./app-shell-parts/useWorkspacePathsIntake";
 import { useAppShellWorktreeChromeSection } from "./app-shell-parts/useAppShellWorktreeChromeSection";
 import { useCollaborationModeThreadSync } from "./app-shell-parts/useCollaborationModeThreadSync";
-import { useClaudeModelRefreshOnNewThread } from "./app-shell-parts/useClaudeModelRefreshOnNewThread";
+import { useProviderModelCatalogSync } from "./app-shell-parts/useProviderModelCatalogSync";
 import { useAppShellComposerModelSection } from "./app-shell-parts/useAppShellComposerModelSection";
 import { useAppShellViewStateSection } from "./app-shell-parts/useAppShellViewStateSection";
 import { defineAppShellRuntimeActions } from "./app-shell-parts/appShellActionBoundaries";
@@ -560,13 +560,6 @@ export function AppShell() {
     defaultAccessMode: appSettings.defaultAccessMode,
     persistComposerEnginePref,
   });
-  const { handleRefreshModelConfig, isModelConfigRefreshing } =
-    useModelConfigRefresh({
-      activeEngine,
-      addDebugEntry,
-      refreshEngineModels,
-      refreshModels,
-    });
   const openCodeAgents = RETIRED_OPENCODE_AGENTS;
   const resolveOpenCodeAgentForThread = resolveRetiredOpenCodeSelection;
   const resolveOpenCodeVariantForThread = resolveRetiredOpenCodeSelection;
@@ -852,6 +845,12 @@ export function AppShell() {
     resolveEngineDefaultComposerSelection,
     onDebug: addDebugEntry,
   });
+  const activeThreadProviderProfileId =
+    (activeWorkspaceId
+      ? threadsByWorkspace[activeWorkspaceId]?.find(
+          (thread) => thread.id === activeThreadId,
+        )?.providerProfileId
+      : null) ?? null;
   const {
     collaborationModePayload,
     effectiveModels,
@@ -872,6 +871,7 @@ export function AppShell() {
     accessMode,
     activeEngine,
     activeThreadId,
+    activeProviderProfileId: activeThreadProviderProfileId,
     activeWorkspaceId,
     appSettings,
     appSettingsLoading,
@@ -911,13 +911,22 @@ export function AppShell() {
     onDebug: addDebugEntry,
   });
 
-  useClaudeModelRefreshOnNewThread({
+  useProviderModelCatalogSync({
     activeEngine,
     activeThreadId,
     activeWorkspaceId,
+    providerProfileId: activeThreadProviderProfileId,
     addDebugEntry,
     refreshEngineModels,
   });
+  const { handleRefreshModelConfig, isModelConfigRefreshing } =
+    useModelConfigRefresh({
+      activeEngine,
+      activeProviderProfileId: activeThreadProviderProfileId,
+      addDebugEntry,
+      refreshEngineModels,
+      refreshModels,
+    });
 
   const { handleUserInputSubmitWithPlanApply, handleExitPlanModeExecute } =
     usePlanApplyHandlers({

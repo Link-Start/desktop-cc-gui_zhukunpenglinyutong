@@ -50,10 +50,33 @@ module.exports = {
         ],
       },
     ],
+    'no-restricted-globals': [
+      'error',
+      {
+        name: 'alert',
+        message: 'Use the application-owned Error Toast or dialog instead of native alert().',
+      },
+    ],
+    'no-restricted-properties': [
+      'error',
+      {
+        object: 'window',
+        property: 'alert',
+        message:
+          'Use the application-owned Error Toast or dialog instead of window.alert().',
+      },
+    ],
   },
   overrides: [
     {
       files: ['**/*.ts', '**/*.tsx'],
+    },
+    {
+      files: ['**/*.test.ts', '**/*.test.tsx', '**/__tests__/**/*.ts', '**/__tests__/**/*.tsx'],
+      rules: {
+        'no-restricted-globals': 'off',
+        'no-restricted-properties': 'off',
+      },
     },
     {
       files: [

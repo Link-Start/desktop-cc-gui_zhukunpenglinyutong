@@ -35,7 +35,6 @@ import FileIcon from "../../../components/FileIcon";
 import { UnsavedChangesDialog } from "../../../components/ui/UnsavedChangesDialog";
 import { CommitMessageEngineIcon } from "./CommitMessageEngineIcon";
 import {
-  CommitButton,
   useGitCommitSelection,
 } from "./GitDiffPanelCommitScope";
 import {
@@ -1989,6 +1988,27 @@ function GitDiffPanelImpl({
         <RefreshCw className="git-status-refresh-icon" size={13} aria-hidden />
       </button>
     ) : null;
+  const gitStatusPushButton =
+    mode === "diff" && commitsAhead > 0 && onPush ? (
+      <button
+        type="button"
+        className="git-status-push-button"
+        onClick={(event) => {
+          event.stopPropagation();
+          void onPush();
+        }}
+        disabled={pushLoading}
+        aria-label={t("git.pushCommits", { count: commitsAhead })}
+        title={t("git.pushCommits", { count: commitsAhead })}
+      >
+        {pushLoading ? (
+          <span className="commit-button-spinner" aria-hidden />
+        ) : (
+          <Upload size={13} aria-hidden />
+        )}
+        <span className="git-status-push-count">{commitsAhead}</span>
+      </button>
+    ) : null;
   const hasGitRoot = Boolean(gitRoot && gitRoot.trim());
   const activeRootPath = (gitRoot ?? "").trim() || (workspacePath ?? "").trim() || (workspaceId ?? "").trim();
   const activeRootPathDisplay = activeRootPath || t("git.unknown");
@@ -2120,10 +2140,19 @@ function GitDiffPanelImpl({
       setMenu: setGitContextMenu,
       buildExtraItems: buildCommitMessagePlacementItems,
     });
+  const hasMessage = commitMessage.trim().length > 0;
+  const canCommit = hasMessage && selectedCommitCount > 0 && !commitLoading;
+  const commitTitle = !hasMessage
+    ? t("git.enterCommitMessage")
+    : selectedCommitCount === 0 && hasAnyChanges
+      ? t("git.selectFilesToCommit")
+      : !hasAnyChanges
+        ? t("git.noChangesToCommit")
+        : t("git.commitSelectedChanges");
   const singleCommitComposer =
     showGenerateCommitMessage && !multiRepositoryMode ? (
       <div className={`commit-message-section git-commit-composer git-commit-composer--${commitComposerPlacement}`}>
-        <div className="commit-message-input-wrapper">
+        <div className="commit-message-composer-row">
           <textarea
             className="commit-message-input"
             placeholder={t("git.commitMessage")}
@@ -2132,27 +2161,59 @@ function GitDiffPanelImpl({
             disabled={commitMessageLoading}
             rows={2}
           />
-          <button
-            type="button"
-            className={`commit-message-generate-button${commitMessageLoading ? " commit-message-generate-button--loading" : ""}`}
-            onClick={(event) => {
-              void showCommitMessageEngineMenu(event);
-            }}
-            disabled={commitMessageLoading || !canGenerateCommitMessage}
-            aria-haspopup="menu"
-            title={
-              stagedFiles.length > 0
-                ? t("git.generateCommitMessageStaged")
-                : t("git.generateCommitMessageUnstaged")
-            }
-            aria-label={t("git.generateCommitMessage")}
-          >
-            <CommitMessageEngineIcon
-              engine={commitMessageMenuEngine}
-              size={14}
-              className={`commit-message-engine-icon${commitMessageLoading ? " commit-message-engine-icon--spinning" : ""}`}
-            />
-          </button>
+          <div className="commit-message-actions">
+            <button
+              type="button"
+              className={`commit-message-generate-button${commitMessageLoading ? " commit-message-generate-button--loading" : ""}`}
+              onClick={(event) => {
+                void showCommitMessageEngineMenu(event);
+              }}
+              disabled={commitMessageLoading || !canGenerateCommitMessage}
+              aria-haspopup="menu"
+              title={
+                stagedFiles.length > 0
+                  ? t("git.generateCommitMessageStaged")
+                  : t("git.generateCommitMessageUnstaged")
+              }
+              aria-label={t("git.generateCommitMessage")}
+            >
+              <CommitMessageEngineIcon
+                engine={commitMessageMenuEngine}
+                size={14}
+                className={`commit-message-engine-icon${commitMessageLoading ? " commit-message-engine-icon--spinning" : ""}`}
+              />
+            </button>
+            <button
+              type="button"
+              className="commit-message-commit-button"
+              onClick={() => {
+                if (canCommit) {
+                  void onCommit?.(selectedCommitPaths);
+                }
+              }}
+              disabled={!canCommit}
+              title={commitTitle}
+              aria-label={commitLoading ? t("git.committing") : t("git.commit")}
+            >
+              {commitLoading ? (
+                <span className="commit-button-spinner" aria-hidden />
+              ) : (
+                <svg
+                  width={14}
+                  height={14}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
         {commitMessageError && (
           <div className="commit-message-error">{commitMessageError}</div>
@@ -2166,14 +2227,6 @@ function GitDiffPanelImpl({
         {syncError && (
           <div className="commit-message-error">{syncError}</div>
         )}
-        <CommitButton
-          commitMessage={commitMessage}
-          selectedCount={selectedCommitCount}
-          hasAnyChanges={hasAnyChanges}
-          commitLoading={commitLoading}
-          selectedPaths={selectedCommitPaths}
-          onCommit={onCommit}
-        />
         <div className="commit-message-hint" aria-live="polite">
           {commitScopeHint}
         </div>
@@ -2319,6 +2372,7 @@ function GitDiffPanelImpl({
               )}
             </div>
             {gitStatusRefreshButton}
+            {gitStatusPushButton}
             </>
           </GitModeSelectorMount>
           {showApplyWorktree && (
@@ -2520,28 +2574,8 @@ function GitDiffPanelImpl({
           ) : null}
           {commitComposerPlacement === "top" ? singleCommitComposer : null}
           {!multiRepositoryMode ? <div className="diff-commit-workspace-content">
-          {/* Show Push button when there are commits to push */}
-          {commitsAhead > 0 && !stagedFiles.length && (
-            <div className="push-section">
-              {pushError && (
-                <div className="commit-message-error">{pushError}</div>
-              )}
-              <button
-                type="button"
-                className="push-button"
-                onClick={() => void onPush?.()}
-                disabled={pushLoading}
-                title={t("git.pushCommits", { count: commitsAhead })}
-              >
-                {pushLoading ? (
-                  <span className="commit-button-spinner" aria-hidden />
-                ) : (
-                  <Upload size={14} aria-hidden />
-                )}
-                <span>{t("git.pushButton")}</span>
-                <span className="push-count">{commitsAhead}</span>
-              </button>
-            </div>
+          {!hasAnyChanges && pushError && (
+            <div className="commit-message-error">{pushError}</div>
           )}
           {!error && !stagedFiles.length && !unstagedFiles.length && commitsAhead === 0 && (
             <div className="diff-empty">{t("git.noChangesDetected")}</div>

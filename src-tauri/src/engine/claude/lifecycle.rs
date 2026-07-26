@@ -185,8 +185,29 @@ impl ClaudeSession {
         turn_id: &str,
         app_settings: Option<&crate::types::AppSettings>,
     ) -> Result<String, String> {
+        self.send_message_with_auto_compact_retry_with_launch_context(
+            params,
+            turn_id,
+            app_settings,
+            None,
+        )
+        .await
+    }
+
+    pub async fn send_message_with_auto_compact_retry_with_launch_context(
+        &self,
+        params: SendMessageParams,
+        turn_id: &str,
+        app_settings: Option<&crate::types::AppSettings>,
+        provider_env: Option<&BTreeMap<String, String>>,
+    ) -> Result<String, String> {
         let first_attempt = self
-            .send_message_with_app_settings(params.clone(), turn_id, app_settings)
+            .send_message_with_app_settings_and_provider_env(
+                params.clone(),
+                turn_id,
+                app_settings,
+                provider_env,
+            )
             .await;
         let first_error = match first_attempt {
             Ok(response) => return Ok(response),
@@ -214,7 +235,12 @@ impl ClaudeSession {
         }
         let compact_turn_id = format!("{turn_id}::auto-compact");
         if let Err(compact_error) = self
-            .send_message_with_app_settings(compact_params, &compact_turn_id, app_settings)
+            .send_message_with_app_settings_and_provider_env(
+                compact_params,
+                &compact_turn_id,
+                app_settings,
+                provider_env,
+            )
             .await
         {
             let compact_error = Self::clear_retryable_prompt_too_long_marker(compact_error);
@@ -235,7 +261,12 @@ impl ClaudeSession {
             retry_params.session_id = self.get_session_id().await;
         }
         match self
-            .send_message_with_app_settings(retry_params, turn_id, app_settings)
+            .send_message_with_app_settings_and_provider_env(
+                retry_params,
+                turn_id,
+                app_settings,
+                provider_env,
+            )
             .await
         {
             Ok(response) => Ok(response),

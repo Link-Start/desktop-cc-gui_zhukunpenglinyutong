@@ -64,6 +64,53 @@ describe('ChatInputBox model options', () => {
     );
   });
 
+  it('keeps public and matching Codex models while excluding other provider origins', () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CODEX_CUSTOM_MODELS,
+      JSON.stringify([
+        { id: 'public-model', label: 'Public Model' },
+        {
+          id: 'provider-a-model',
+          label: 'Provider A Model',
+          providerProfileId: 'provider-a',
+        },
+        {
+          id: 'provider-b-model',
+          label: 'Provider B Model',
+          providerProfileId: 'provider-b',
+        },
+      ]),
+    );
+
+    const models = resolveAvailableModels({
+      currentProvider: 'codex',
+      currentProviderProfileId: 'provider-a',
+      models: [
+        {
+          id: 'provider-a-model',
+          label: 'Runtime Provider A',
+          providerProfileId: 'provider-a',
+        },
+        { id: 'gpt-public', label: 'GPT Public' },
+      ],
+      selectedModel: '',
+      modelStorageSnapshot: readModelStorageSnapshot(),
+    });
+
+    expect(models.map((model) => model.id)).toEqual([
+      'provider-a-model',
+      'gpt-public',
+      'public-model',
+    ]);
+    expect(models[0]).toEqual(
+      expect.objectContaining({
+        label: 'Provider A Model',
+        providerProfileId: 'provider-a',
+      }),
+    );
+    expect(models.some((model) => model.id === 'provider-b-model')).toBe(false);
+  });
+
   it('preserves user-entered Claude custom model ids without regex filtering', () => {
     window.localStorage.setItem(
       STORAGE_KEYS.CLAUDE_CUSTOM_MODELS,

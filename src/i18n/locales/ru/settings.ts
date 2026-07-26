@@ -1104,8 +1104,8 @@ const settings = {
       "dialog": {
         "addTitle": "Добавить поставщика Claude",
         "editTitle": "Изменить поставщика Claude",
-        "addDescription": "Настройте нового поставщика. Конфигурация будет записана в ~/.claude/settings.json.",
-        "editDescription": "Изменения применяются к ~/.claude/settings.json немедленно.",
+        "addDescription": "Поставщик хранится отдельно в desktop-cc-gui и используется только в привязанных к нему диалогах. ~/.claude/settings.json не изменяется.",
+        "editDescription": "Обновления остаются изолированными в desktop-cc-gui и применяются к привязанным диалогам. ~/.claude/settings.json не изменяется.",
         "securityNotice": "Примечание: все настройки остаются локально на вашей машине. Этот проект на 100% с открытым исходным кодом.",
         "presetGroup": "Быстрые пресеты",
         "providerName": "Имя поставщика",
@@ -1886,7 +1886,7 @@ const settings = {
       }
     },
     "sidebarProjectManagement": "Управление проектами",
-    "sidebarMcpSkills": "Навыки",
+    "sidebarMcpSkills": "Подобранные",
     "sidebarAgentPromptManagement": "Агенты / Промпты",
     "sidebarRuntimeEnvironment": "Среда выполнения",
     "basicShortcutsTab": "Горячие клавиши",

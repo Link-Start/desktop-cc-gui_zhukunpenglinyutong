@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
@@ -40,8 +40,7 @@ pub(crate) struct AppState {
     pub(crate) dictation: Mutex<DictationState>,
     pub(crate) codex_login_cancels: Mutex<HashMap<String, oneshot::Sender<()>>>,
     pub(crate) detached_external_change_runtime: Mutex<DetachedExternalChangeRuntime>,
-    pub(crate) claude_commands_watches:
-        Mutex<crate::claude_commands_watch::CommandsWatchRegistry>,
+    pub(crate) claude_commands_watches: Mutex<crate::claude_commands_watch::CommandsWatchRegistry>,
     pub(crate) runtime_manager: Arc<crate::runtime::RuntimeManager>,
     pub(crate) renderer_heartbeats: Mutex<crate::renderer_stability::RendererHeartbeatStore>,
     pub(crate) semantic_navigation_runtime: crate::code_intel_lsp::SemanticNavigationRuntime,
@@ -74,8 +73,15 @@ impl AppState {
             .await;
 
         if previous_claude_bin != new_claude_bin {
-            let sessions = self.engine_manager.claude_manager.list_sessions().await;
-            for (workspace_id, _session) in sessions {
+            let workspace_ids = self
+                .engine_manager
+                .claude_manager
+                .list_sessions()
+                .await
+                .into_iter()
+                .map(|(workspace_id, _session)| workspace_id)
+                .collect::<HashSet<_>>();
+            for workspace_id in workspace_ids {
                 self.engine_manager
                     .remove_claude_session(&workspace_id)
                     .await;

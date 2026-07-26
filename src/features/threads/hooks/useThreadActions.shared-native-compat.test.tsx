@@ -185,7 +185,9 @@ describe("useThreadActions shared/native compatibility", () => {
     const { result, dispatch } = renderActions();
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeOpenCodeSessions: true,
+      });
     });
 
     await waitFor(() => {

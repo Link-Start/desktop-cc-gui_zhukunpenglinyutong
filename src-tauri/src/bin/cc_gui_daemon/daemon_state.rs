@@ -66,18 +66,18 @@ where
     let first_attempt = start_thread().await;
     let response = match first_attempt {
         Ok(response) => Ok(response),
-        Err(error) if is_stopping_runtime_race_error(&error) => {
+        Err(error) if is_create_session_runtime_recovery_error(&error) => {
             log::warn!(
-                "[daemon.start_thread] retrying after stopping runtime race for workspace {}: {}",
+                "[daemon.start_thread] retrying after runtime disconnect for workspace {}: {}",
                 workspace_id,
                 error
             );
             ensure_runtime().await?;
             match start_thread().await {
                 Ok(response) => Ok(response),
-                Err(retry_error) if is_stopping_runtime_race_error(&retry_error) => {
+                Err(retry_error) if is_create_session_runtime_recovery_error(&retry_error) => {
                     log::warn!(
-                        "[daemon.start_thread] stopping runtime race retry exhausted for workspace {}: {}",
+                        "[daemon.start_thread] runtime disconnect retry exhausted for workspace {}: {}",
                         workspace_id,
                         retry_error
                     );
@@ -102,7 +102,7 @@ use codex_local_threads::{
     CODEX_DAEMON_LOCAL_THREAD_LIST_PARTIAL_SOURCE, CODEX_DAEMON_LOCAL_THREAD_LIST_TIMEOUT_MS,
 };
 use runtime_helpers::{
-    create_session_runtime_recovering_error, is_stopping_runtime_race_error,
+    create_session_runtime_recovering_error, is_create_session_runtime_recovery_error,
     is_valid_claude_model_for_passthrough,
 };
 
@@ -925,10 +925,16 @@ impl DaemonState {
     pub(super) async fn get_engine_models(
         &self,
         engine_type: engine::EngineType,
-    ) -> Vec<engine::ModelInfo> {
+        provider_profile_id: Option<&str>,
+    ) -> Result<Vec<engine::ModelInfo>, String> {
         let settings = self.app_settings.lock().await.clone();
         if !engine::engine_enabled_in_settings(&settings, engine_type) {
-            return Vec::new();
+            return Ok(Vec::new());
+        }
+        if let Some(models) =
+            engine::status::get_provider_scoped_engine_models(engine_type, provider_profile_id)?
+        {
+            return Ok(models);
         }
         match engine_type {
             engine::EngineType::OpenCode => {
@@ -945,19 +951,20 @@ impl DaemonState {
                     .unwrap_or_default();
 
                 if !fresh_models.is_empty() {
-                    return fresh_models;
+                    return Ok(fresh_models);
                 }
 
-                self.get_engine_status(engine_type)
+                Ok(self
+                    .get_engine_status(engine_type)
                     .await
                     .map(|status| status.models)
-                    .unwrap_or_default()
+                    .unwrap_or_default())
             }
-            _ => self
+            _ => Ok(self
                 .get_engine_status(engine_type)
                 .await
                 .map(|status| status.models)
-                .unwrap_or_default(),
+                .unwrap_or_default()),
         }
     }
 
@@ -1016,6 +1023,7 @@ impl DaemonState {
         fork_session_id: Option<String>,
         agent: Option<String>,
         variant: Option<String>,
+        provider_profile_id: Option<String>,
         custom_spec_root: Option<String>,
         auto_session: Option<session_management::AutoSessionMetadata>,
     ) -> Result<Value, String> {
@@ -1046,10 +1054,30 @@ impl DaemonState {
                 .await
             }
             engine::EngineType::Claude => {
+                let provider_binding_lookup_session_id = session_id
+                    .as_deref()
+                    .or(thread_id.as_deref())
+                    .map(str::to_string);
+                let effective_provider_profile_id =
+                    session_management::resolve_engine_provider_profile_id(
+                        self.storage_path.as_path(),
+                        &workspace_id,
+                        provider_binding_lookup_session_id.as_deref(),
+                        "claude",
+                        provider_profile_id.as_deref(),
+                    )?;
+                let provider_launch_profile =
+                    engine::claude::resolve_claude_provider_launch_profile(
+                        effective_provider_profile_id.as_deref(),
+                    )?;
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
                 let session = self
                     .engine_manager
-                    .get_claude_session(&workspace_id, &workspace_path)
+                    .get_claude_session_for_provider(
+                        &workspace_id,
+                        &workspace_path,
+                        effective_provider_profile_id.as_deref(),
+                    )
                     .await;
                 let has_images = images
                     .as_ref()
@@ -1106,6 +1134,23 @@ impl DaemonState {
                 });
 
                 let response_session_id = resolved_session_id.clone();
+                if let Some(provider_launch_profile) = provider_launch_profile.as_ref() {
+                    let binding_session_id = response_session_id
+                        .as_deref()
+                        .or(provider_binding_lookup_session_id.as_deref())
+                        .ok_or_else(|| {
+                            "Claude provider binding requires a session identity".to_string()
+                        })?;
+                    session_management::record_engine_provider_binding_core(
+                        &self.workspaces,
+                        self.storage_path.as_path(),
+                        workspace_id.clone(),
+                        binding_session_id.to_string(),
+                        "claude".to_string(),
+                        provider_launch_profile.binding.clone(),
+                    )
+                    .await?;
+                }
                 let params = engine::SendMessageParams {
                     text,
                     model: sanitized_model,
@@ -1135,6 +1180,11 @@ impl DaemonState {
                 let reasoning_item_id_clone = reasoning_item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
                 let mut accumulated_agent_text = String::new();
+                let provider_binding_for_forwarder = provider_launch_profile
+                    .as_ref()
+                    .map(|profile| profile.binding.clone());
+                let provider_binding_storage_path = self.storage_path.clone();
+                let provider_binding_workspace_id = workspace_id.clone();
                 tokio::spawn(async move {
                     let deadline = tokio::time::Instant::now()
                         + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
@@ -1178,6 +1228,25 @@ impl DaemonState {
                         let is_terminal = event.is_terminal();
                         let is_turn_completed =
                             matches!(event, engine::events::EngineEvent::TurnCompleted { .. });
+                        if let (
+                            Some(binding),
+                            engine::events::EngineEvent::SessionStarted {
+                                session_id,
+                                engine: engine::EngineType::Claude,
+                                ..
+                            },
+                        ) = (provider_binding_for_forwarder.as_ref(), &event)
+                        {
+                            if !session_id.is_empty() && session_id != "pending" {
+                                session_management::schedule_engine_provider_binding_record(
+                                    provider_binding_storage_path.clone(),
+                                    provider_binding_workspace_id.clone(),
+                                    session_id.clone(),
+                                    "claude".to_string(),
+                                    binding.clone(),
+                                );
+                            }
+                        }
 
                         if let engine::events::EngineEvent::TextDelta { text, .. } = &event {
                             accumulated_agent_text.push_str(text);
@@ -1272,21 +1341,24 @@ impl DaemonState {
                 let session_clone = session.clone();
                 let turn_id_clone = turn_id.clone();
                 let settings_for_send = settings.clone();
+                let provider_env = provider_launch_profile.map(|profile| profile.env);
                 tokio::spawn(async move {
                     let send_result = if has_images {
                         session_clone
-                            .send_message_with_app_settings(
+                            .send_message_with_app_settings_and_provider_env(
                                 params,
                                 &turn_id_clone,
                                 Some(&settings_for_send),
+                                provider_env.as_ref(),
                             )
                             .await
                     } else {
                         session_clone
-                            .send_message_with_auto_compact_retry_with_app_settings(
+                            .send_message_with_auto_compact_retry_with_launch_context(
                                 params,
                                 &turn_id_clone,
                                 Some(&settings_for_send),
+                                provider_env.as_ref(),
                             )
                             .await
                     };
@@ -1688,9 +1760,31 @@ impl DaemonState {
             }
             engine::EngineType::Kimi => {
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let provider_binding_lookup_session_id = session_id
+                    .as_deref()
+                    .or(thread_id.as_deref())
+                    .map(str::to_string);
+                let effective_provider_profile_id =
+                    session_management::resolve_engine_provider_profile_id(
+                        self.storage_path.as_path(),
+                        &workspace_id,
+                        provider_binding_lookup_session_id.as_deref(),
+                        "kimi",
+                        provider_profile_id.as_deref(),
+                    )?;
+                let provider_launch_profile =
+                    engine::kimi_provider_profile::resolve_kimi_provider_launch_profile(
+                        &workspace_id,
+                        effective_provider_profile_id.as_deref(),
+                    )?;
                 let session = self
                     .engine_manager
-                    .get_or_create_kimi_session(&workspace_id, &workspace_path)
+                    .get_or_create_kimi_session_for_runtime(
+                        &workspace_id,
+                        &workspace_path,
+                        &provider_launch_profile.runtime_key,
+                        provider_launch_profile.home_dir.as_deref(),
+                    )
                     .await;
                 let resolved_session_id = resolve_kimi_session_id_for_engine_send(
                     continue_session,
@@ -1722,6 +1816,21 @@ impl DaemonState {
 
                 let turn_id = format!("kimi-turn-{}", uuid::Uuid::new_v4());
                 let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .or(provider_binding_lookup_session_id.as_deref())
+                    .unwrap_or(thread_id.as_str());
+                if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                    session_management::record_engine_provider_binding_core(
+                        &self.workspaces,
+                        self.storage_path.as_path(),
+                        workspace_id.clone(),
+                        binding_session_id.to_string(),
+                        "kimi".to_string(),
+                        binding.clone(),
+                    )
+                    .await?;
+                }
                 let item_id = format!("kimi-item-{}", uuid::Uuid::new_v4());
 
                 let mut receiver = session.subscribe();
@@ -1731,6 +1840,9 @@ impl DaemonState {
                 let item_id_clone = item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
                 let mut accumulated_agent_text = String::new();
+                let provider_binding_for_forwarder = provider_launch_profile.binding.clone();
+                let provider_binding_storage_path = self.storage_path.clone();
+                let provider_binding_workspace_id = workspace_id.clone();
                 tokio::spawn(async move {
                     let deadline = tokio::time::Instant::now()
                         + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
@@ -1759,6 +1871,25 @@ impl DaemonState {
                             &event,
                         );
                         let is_terminal = event.is_terminal();
+                        if let (
+                            Some(binding),
+                            engine::events::EngineEvent::SessionStarted {
+                                session_id,
+                                engine: engine::EngineType::Kimi,
+                                ..
+                            },
+                        ) = (provider_binding_for_forwarder.as_ref(), &event)
+                        {
+                            if !session_id.is_empty() && session_id != "pending" {
+                                session_management::schedule_engine_provider_binding_record(
+                                    provider_binding_storage_path.clone(),
+                                    provider_binding_workspace_id.clone(),
+                                    session_id.clone(),
+                                    "kimi".to_string(),
+                                    binding.clone(),
+                                );
+                            }
+                        }
                         let render_lane = match &event {
                             engine::events::EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,
                             engine::events::EngineEvent::ReasoningDelta { .. } => {
@@ -2181,15 +2312,10 @@ impl DaemonState {
         let active_engine = self.get_active_engine().await;
         match active_engine {
             engine::EngineType::Claude => {
-                if let Some(session) = self
-                    .engine_manager
+                self.engine_manager
                     .claude_manager
-                    .get_session(&workspace_id)
+                    .interrupt_workspace_sessions(&workspace_id)
                     .await
-                {
-                    session.interrupt().await?;
-                }
-                Ok(())
             }
             engine::EngineType::Codex => Ok(()),
             engine::EngineType::OpenCode => {
@@ -2209,10 +2335,9 @@ impl DaemonState {
                 Ok(())
             }
             engine::EngineType::Kimi => {
-                if let Some(session) = self.engine_manager.get_kimi_session(&workspace_id).await {
-                    session.interrupt().await?;
-                }
-                Ok(())
+                self.engine_manager
+                    .interrupt_kimi_sessions(&workspace_id, None)
+                    .await
             }
         }
     }
@@ -2231,7 +2356,7 @@ impl DaemonState {
                 if let Some(session) = self
                     .engine_manager
                     .claude_manager
-                    .get_session(&workspace_id)
+                    .session_for_turn(&workspace_id, &turn_id)
                     .await
                 {
                     session.interrupt_turn(&turn_id).await?;
@@ -2256,10 +2381,9 @@ impl DaemonState {
                 Ok(())
             }
             engine::EngineType::Kimi => {
-                if let Some(session) = self.engine_manager.get_kimi_session(&workspace_id).await {
-                    session.interrupt_turn(&turn_id).await?;
-                }
-                Ok(())
+                self.engine_manager
+                    .interrupt_kimi_sessions(&workspace_id, Some(&turn_id))
+                    .await
             }
         }
     }
@@ -3335,6 +3459,25 @@ impl DaemonState {
         request_id: Value,
         result: Value,
     ) -> Result<Value, String> {
+        if request_id.is_string() {
+            for session in self
+                .engine_manager
+                .claude_manager
+                .sessions_for_workspace(&workspace_id)
+                .await
+            {
+                if session.has_pending_user_input(&request_id) {
+                    session.respond_to_user_input(request_id, result).await?;
+                    return Ok(json!({ "ok": true }));
+                }
+                if session.has_pending_approval_request(&request_id) {
+                    session
+                        .respond_to_approval_request(request_id, result)
+                        .await?;
+                    return Ok(json!({ "ok": true }));
+                }
+            }
+        }
         codex_core::respond_to_server_request_core(
             &self.sessions,
             workspace_id,

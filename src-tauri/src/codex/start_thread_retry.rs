@@ -5,7 +5,7 @@ use super::provider_profile::CODEX_DISK_PROVIDER_PROFILE_ID;
 use super::{
     attach_hook_safe_fallback_metadata, create_session_runtime_recovering_error,
     ensure_codex_session_for_provider, ensure_codex_session_without_session_hooks_for_provider,
-    is_hook_safe_fallback_trigger, is_stopping_runtime_race_error, normalize_model_id,
+    is_create_session_runtime_recovery_error, is_hook_safe_fallback_trigger, normalize_model_id,
 };
 use crate::shared::codex_core;
 use crate::state::AppState;
@@ -56,9 +56,9 @@ where
     let first_attempt = start_thread().await;
     match first_attempt {
         Ok(response) => Ok(response),
-        Err(error) if is_stopping_runtime_race_error(&error) => {
+        Err(error) if is_create_session_runtime_recovery_error(&error) => {
             log::warn!(
-                "[start_thread] retrying after stopping runtime race for workspace {}: {}",
+                "[start_thread] retrying after runtime disconnect for workspace {}: {}",
                 workspace_id,
                 error
             );
@@ -66,9 +66,9 @@ where
             ensure_runtime().await?;
             match start_thread().await {
                 Ok(response) => Ok(response),
-                Err(retry_error) if is_stopping_runtime_race_error(&retry_error) => {
+                Err(retry_error) if is_create_session_runtime_recovery_error(&retry_error) => {
                     log::warn!(
-                        "[start_thread] stopping runtime race retry exhausted for workspace {}: {}",
+                        "[start_thread] runtime disconnect retry exhausted for workspace {}: {}",
                         workspace_id,
                         retry_error
                     );
@@ -202,7 +202,7 @@ pub(crate) async fn start_thread_with_runtime_retry_for_provider(
             state
                 .runtime_manager
                 .lifecycle_coordinator()
-                .record_quarantine_probe("codex", workspace_id, "create-session-stopping-race")
+                .record_quarantine_probe("codex", workspace_id, "create-session-runtime-recovery")
                 .await
         },
         || {

@@ -14,7 +14,7 @@ import type { ThreadMoveFolderTarget } from "../hooks/useSidebarMenus";
 import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
 import { EngineIcon } from "../../engine/components/EngineIcon";
 import { SharedSessionIcon } from "../../shared-session/components/SharedSessionIcon";
-import { resolveCodexProviderLabel } from "../utils/codexProviderLabel";
+import { resolveEngineProviderLabel } from "../utils/codexProviderLabel";
 import { THREAD_ROW_TOOLTIP_DELAY_MS } from "../constants";
 import { getExitedSessionRowVisibility } from "../utils/exitedSessionRows";
 import {
@@ -217,7 +217,7 @@ const ThreadRowItem = memo(function ThreadRowItem({
       ? ({ "--thread-indent": `${indentPx}px` } as CSSProperties)
       : undefined;
   const engineIconType = engineSource as EngineType;
-  const providerLabel = resolveCodexProviderLabel(thread);
+  const providerLabel = resolveEngineProviderLabel(thread);
   const isProviderUnavailable = thread.providerAvailability === "unavailable";
   const rowButtonRef = useRef<HTMLButtonElement | null>(null);
   const rowButton = (

@@ -149,7 +149,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     });
 
     expect(mockState.updateClaudeProvider).toHaveBeenCalledTimes(1);
-    expect(mockState.switchClaudeProvider).toHaveBeenCalledWith('provider-1');
+    expect(mockState.switchClaudeProvider).not.toHaveBeenCalled();
     expect(mockState.updateClaudeProvider).toHaveBeenCalledWith(
       'provider-1',
       expect.objectContaining({
@@ -956,6 +956,26 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     expect(mockState.setClaudeAlwaysThinkingEnabled).toHaveBeenCalledWith(true);
     expect(mockState.updateClaudeProvider).not.toHaveBeenCalled();
     expect(mockState.switchClaudeProvider).not.toHaveBeenCalled();
+  });
+
+  it('rolls back a failed managed-provider update without writing global settings', async () => {
+    mockState.updateClaudeProvider.mockRejectedValueOnce(new Error('write failed'));
+
+    renderAdapter();
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+    const getLatest = () => mockState.latestProps as {
+      alwaysThinkingEnabled?: boolean;
+      onToggleThinking?: (enabled: boolean) => void | Promise<void>;
+    };
+
+    await act(async () => {
+      await Promise.resolve(getLatest().onToggleThinking?.(true));
+    });
+
+    expect(mockState.updateClaudeProvider).toHaveBeenCalledTimes(1);
+    expect(mockState.setClaudeAlwaysThinkingEnabled).not.toHaveBeenCalled();
+    expect(getLatest().alwaysThinkingEnabled).toBe(false);
   });
 
   it('forwards send shortcut to ChatInputBox', async () => {
