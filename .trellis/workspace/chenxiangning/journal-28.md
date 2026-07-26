@@ -434,3 +434,36 @@ Batch E：按 thread state 发送 provider、identity convergence、Claude fork/
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1152: 归档会话级供应商绑定变更
+
+**Date**: 2026-07-26
+**Task**: 归档会话级供应商绑定变更
+**Branch**: `feature/v-0710`
+
+### Summary
+
+同步 Claude、Kimi 与统一会话供应商绑定主规范，完成 OpenSpec 归档和可见性验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `825b49f67` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
