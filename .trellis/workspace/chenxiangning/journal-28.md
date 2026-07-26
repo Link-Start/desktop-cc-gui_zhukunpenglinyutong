@@ -698,3 +698,36 @@ GitDiffPanel 与 GitMultiRepositoryChanges 的提交区统一改为 textarea 右
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1160: 归档供应商绑定复审修复
+
+**Date**: 2026-07-26
+**Task**: 归档供应商绑定复审修复
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 OpenSpec verify、main spec sync 与 archive；复审修复 change 全任务闭环。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9dd236a8f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
