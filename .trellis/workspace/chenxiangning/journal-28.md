@@ -930,3 +930,36 @@ rustfmt 纯格式化（14 文件无行为变更）+ 引擎模型接入层报告�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1167: 完成错误提示 OpenSpec 状态
+
+**Date**: 2026-07-27
+**Task**: 完成错误提示 OpenSpec 状态
+**Branch**: `feature/v-0710`
+
+### Summary
+
+在代码提交和首次 Trellis record 完成后，将 improve-codex-provider-protocol-error 的最终交付任务更新为完成，使 OpenSpec 任务进度从 14/15 收敛为 15/15。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b8a38771e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
