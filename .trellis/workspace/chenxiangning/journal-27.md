@@ -1873,3 +1873,36 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1136: 统一引擎能力契约与会话身份
+
+**Date**: 2026-07-26
+**Task**: 统一引擎能力契约与会话身份
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 OpenSpec Batch 0：生成式 capability matrix、Rust/TypeScript DTO 对齐、foundation capability keys、统一 legacy thread identity parser、持久 alias tombstone 上限与 Kimi scanner 治理；增量 TypeScript/Rust/OpenSpec 门禁通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8e4e177a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
