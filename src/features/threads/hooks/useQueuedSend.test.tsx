@@ -211,6 +211,60 @@ describe("useQueuedSend", () => {
     expect(result.current.activeQueue).toHaveLength(0);
   });
 
+  it("delivers a queued screenshot follow-up once after the active Codex run settles", async () => {
+    const sendUserMessageToThread = vi.fn().mockResolvedValue(undefined);
+    const options = makeOptions({
+      activeEngine: "codex",
+      activeTurnId: "turn-1",
+      isProcessing: true,
+      steerEnabled: false,
+      sendUserMessageToThread,
+    });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+    const screenshots = [
+      "file:///tmp/provider-menu-1.png",
+      "file:///tmp/provider-menu-2.png",
+    ];
+
+    await act(async () => {
+      await result.current.handleSend("检查截图中的供应商菜单", screenshots);
+    });
+
+    expect(sendUserMessageToThread).not.toHaveBeenCalled();
+    expect(result.current.activeQueue).toHaveLength(1);
+    expect(result.current.activeQueue[0]).toMatchObject({
+      text: "检查截图中的供应商菜单",
+      images: screenshots,
+    });
+
+    await act(async () => {
+      rerender({ ...options, isProcessing: false });
+      await Promise.resolve();
+    });
+    expect(sendUserMessageToThread).not.toHaveBeenCalled();
+
+    await act(async () => {
+      rerender({ ...options, activeTerminalPulse: 1, isProcessing: false });
+      await Promise.resolve();
+    });
+    expect(sendUserMessageToThread).toHaveBeenCalledTimes(1);
+    expect(sendUserMessageToThread).toHaveBeenCalledWith(
+      workspace,
+      "thread-1",
+      "检查截图中的供应商菜单",
+      screenshots,
+      undefined,
+    );
+
+    await act(async () => {
+      rerender({ ...options, activeTerminalPulse: 2, isProcessing: false });
+      await Promise.resolve();
+    });
+    expect(sendUserMessageToThread).toHaveBeenCalledTimes(1);
+  });
+
   it("queues while processing on claude pending thread even when steer is enabled", async () => {
     const options = makeOptions({
       activeEngine: "claude",
