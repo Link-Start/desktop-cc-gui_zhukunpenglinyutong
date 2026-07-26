@@ -236,3 +236,36 @@ Batch A：新增统一 durable engine provider binding map、显式 engine stabl
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1146: 支持 Claude 会话级供应商环境
+
+**Date**: 2026-07-26
+**Task**: 支持 Claude 会话级供应商环境
+**Branch**: `feature/v-0710`
+
+### Summary
+
+Batch B：desktop/daemon 从 durable binding 解析 Claude provider，managed profile 每 turn 注入独立 env；normal send、legacy retry 与 auto-compact 均保留 launch context，缺失 provider 显式失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `81c62b0da` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
