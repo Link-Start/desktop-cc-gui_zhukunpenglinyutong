@@ -643,25 +643,39 @@ fn pick_claude_version_line(output: &str) -> Option<String> {
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .collect();
-    if lines.is_empty() {
-        return None;
-    }
     // Prefer the line that looks like Claude Code version output.
     if let Some(line) = lines
         .iter()
         .rev()
-        .find(|line| line.to_ascii_lowercase().contains("claude code"))
+        .find(|line| line.to_ascii_lowercase().contains("claude") && extract_semver(line).is_some())
     {
         return Some((*line).to_string());
     }
-    if let Some(line) = lines
+    lines
         .iter()
         .rev()
-        .find(|line| extract_semver(line).is_some())
-    {
-        return Some((*line).to_string());
-    }
-    Some(lines[lines.len() - 1].to_string())
+        .find(|line| {
+            let version_token = line
+                .trim_start_matches(|character| character == 'v' || character == 'V')
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .split(|character| character == '-' || character == '+')
+                .next()
+                .unwrap_or_default();
+            let mut parts = version_token.split('.');
+            matches!(
+                (parts.next(), parts.next(), parts.next(), parts.next()),
+                (Some(major), Some(minor), Some(patch), None)
+                    if !major.is_empty()
+                        && !minor.is_empty()
+                        && !patch.is_empty()
+                        && major.bytes().all(|byte| byte.is_ascii_digit())
+                        && minor.bytes().all(|byte| byte.is_ascii_digit())
+                        && patch.bytes().all(|byte| byte.is_ascii_digit())
+            )
+        })
+        .map(|line| (*line).to_string())
 }
 
 /// Match Terminal exactly: interactive login shell runs `claude -v`.
@@ -737,8 +751,11 @@ async fn resolve_claude_local_version(
         .unwrap_or_else(|| "claude".to_string());
     match run_binary_version(&binary, path_env).await {
         Ok(Some(raw)) => {
-            let version = pick_claude_version_line(&raw).unwrap_or(raw);
-            (Some(version), Some(format!("resolved binary: {binary}")))
+            let version = pick_claude_version_line(&raw);
+            (
+                version,
+                Some(format!("resolved binary version output: {binary}")),
+            )
         }
         Ok(None) => (
             None,
@@ -1469,6 +1486,19 @@ mod tests {
         let picked = pick_claude_version_line("同步配置…\nreclaude: ok\n2.0.52 (Claude Code)\n")
             .expect("version line");
         assert_eq!(picked, "2.0.52 (Claude Code)");
+    }
+
+    #[test]
+    fn pick_claude_version_line_ignores_interactive_shell_proxy_banner() {
+        let picked = pick_claude_version_line(
+            "✅ 代理已开启 → http://127.0.0.1:7890\n/opt/homebrew/bin/claude\n2.0.52 (Claude Code)\n",
+        )
+        .expect("version line");
+        assert_eq!(picked, "2.0.52 (Claude Code)");
+        assert_eq!(
+            pick_claude_version_line("✅ 代理已开启 → http://127.0.0.1:7890\n"),
+            None
+        );
     }
 
     #[test]

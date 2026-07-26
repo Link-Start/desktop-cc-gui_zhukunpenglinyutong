@@ -117,7 +117,11 @@
 }
 
 .vendor-engine-search:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 46%, var(--settings-basic-divider));
+  border-color: color-mix(
+    in srgb,
+    var(--accent) 46%,
+    var(--settings-basic-divider)
+  );
   color: var(--text-secondary);
 }
 
@@ -262,6 +266,7 @@
 
 .vendor-brand-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
@@ -275,6 +280,7 @@
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex: 1 1 240px;
 }
 
 .vendor-brand-logo {
@@ -327,15 +333,21 @@
 
 .vendor-brand-actions {
   display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
-  flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .vendor-cli-version {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .vendor-cli-lifecycle-buttons {
@@ -347,10 +359,19 @@
 }
 
 @media (max-width: 720px) {
-  .vendor-brand-header,
-  .vendor-brand-actions {
+  .vendor-brand-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .vendor-brand-actions {
+    width: 100%;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .vendor-cli-lifecycle-buttons {
+    justify-content: flex-start;
   }
 }
 
