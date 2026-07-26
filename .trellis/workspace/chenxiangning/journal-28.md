@@ -731,3 +731,36 @@ GitDiffPanel 与 GitMultiRepositoryChanges 的提交区统一改为 textarea 右
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1161: 修复 diff.css 选择器断裂
+
+**Date**: 2026-07-26
+**Task**: 修复 diff.css 选择器断裂
+**Branch**: `feature/v-0710`
+
+### Summary
+
+补上误删的 .commit-message-generate-menu 选择器，恢复面板样式解析
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `97de96d5d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
