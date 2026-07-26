@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadKatexAssets } from "../../markdown/markdownMath";
 import {
   clearFileMarkdownPreviewRuntimeCachesForTests,
-  FileMarkdownPreview,
+  FileMarkdownPreviewRich as FileMarkdownPreview,
 } from "./FileMarkdownPreview";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({

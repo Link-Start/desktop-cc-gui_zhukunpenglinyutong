@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
+import type { SearchAddon } from "@xterm/addon-search";
+import type { WebLinksAddon } from "@xterm/addon-web-links";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { DebugEntry, TerminalStatus, WorkspaceInfo } from "../../../types";
 import { buildErrorDebugEntry } from "../../../utils/debugEntries";
 import { subscribeTerminalOutput, type TerminalOutputEvent } from "../../../services/events";
@@ -20,6 +23,8 @@ const MAX_CACHED_SESSIONS = 10;
 type XtermModules = {
   Terminal: typeof import("@xterm/xterm").Terminal;
   FitAddon: typeof import("@xterm/addon-fit").FitAddon;
+  SearchAddon: typeof import("@xterm/addon-search").SearchAddon | null;
+  WebLinksAddon: typeof import("@xterm/addon-web-links").WebLinksAddon | null;
 };
 
 // 本 hook 被 app-shell 常驻区段静态可达；xterm(~250KB+CSS) 若静态导入会进启动包。
@@ -32,10 +37,20 @@ function loadXtermModules(): Promise<XtermModules> {
       import("@xterm/xterm"),
       import("@xterm/addon-fit"),
       import("@xterm/xterm/css/xterm.css"),
-    ]).then(([xterm, fit]) => ({
-      Terminal: xterm.Terminal,
-      FitAddon: fit.FitAddon,
-    }));
+    ]).then(async ([xterm, fit]) => {
+      const [search, webLinks] = await Promise.allSettled([
+        import("@xterm/addon-search"),
+        import("@xterm/addon-web-links"),
+      ]);
+      return {
+        Terminal: xterm.Terminal,
+        FitAddon: fit.FitAddon,
+        SearchAddon:
+          search.status === "fulfilled" ? search.value.SearchAddon : null,
+        WebLinksAddon:
+          webLinks.status === "fulfilled" ? webLinks.value.WebLinksAddon : null,
+      };
+    });
   }
   return xtermModulesPromise;
 }
@@ -65,7 +80,18 @@ export type TerminalSessionState = {
   readyKey: string | null;
   cleanupTerminalSession: (workspaceId: string, terminalId: string) => void;
   getSelection: () => string;
+  findNext: (query: string) => boolean;
+  findPrevious: (query: string) => boolean;
 };
+
+export function isSafeTerminalWebUrl(value: string): boolean {
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 function appendBuffer(existing: string | undefined, data: string): string {
   const next = (existing ?? "") + data;
@@ -131,6 +157,8 @@ export function useTerminalSession({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const searchAddonRef = useRef<SearchAddon | null>(null);
+  const webLinksAddonRef = useRef<WebLinksAddon | null>(null);
   const inputDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const openedSessionsRef = useRef<Set<string>>(new Set());
   const outputBuffersRef = useRef<Map<string, string>>(new Map());
@@ -186,6 +214,23 @@ export function useTerminalSession({
       return "";
     }
     return terminal.getSelection().trim();
+  }, []);
+  const findNext = useCallback((query: string) => {
+    const normalized = query.trim();
+    return normalized
+      ? (searchAddonRef.current?.findNext(normalized, {
+          caseSensitive: false,
+          incremental: true,
+        }) ?? false)
+      : false;
+  }, []);
+  const findPrevious = useCallback((query: string) => {
+    const normalized = query.trim();
+    return normalized
+      ? (searchAddonRef.current?.findPrevious(normalized, {
+          caseSensitive: false,
+        }) ?? false)
+      : false;
   }, []);
 
   const refreshTerminal = useCallback(() => {
@@ -270,6 +315,8 @@ export function useTerminalSession({
         terminalRef.current = null;
       }
       fitAddonRef.current = null;
+      searchAddonRef.current = null;
+      webLinksAddonRef.current = null;
       renderedKeyRef.current = null;
       return;
     }
@@ -279,7 +326,7 @@ export function useTerminalSession({
     }
     let cancelled = false;
     void loadXtermModules()
-      .then(({ Terminal, FitAddon }) => {
+      .then(({ Terminal, FitAddon, SearchAddon, WebLinksAddon }) => {
         if (cancelled || terminalRef.current || !containerRef.current) {
           return;
         }
@@ -292,11 +339,32 @@ export function useTerminalSession({
           scrollback: 5000,
         });
         const fitAddon = new FitAddon();
+        const searchAddon = SearchAddon ? new SearchAddon() : null;
+        const webLinksAddon = WebLinksAddon
+          ? new WebLinksAddon((_event, uri) => {
+              if (!isSafeTerminalWebUrl(uri)) {
+                return;
+              }
+              void openUrl(uri).catch((error) => {
+                onDebug?.(
+                  buildErrorDebugEntry("terminal link open error", error),
+                );
+              });
+            })
+          : null;
         terminal.loadAddon(fitAddon);
+        if (searchAddon) {
+          terminal.loadAddon(searchAddon);
+        }
+        if (webLinksAddon) {
+          terminal.loadAddon(webLinksAddon);
+        }
         terminal.open(containerRef.current);
         fitAddon.fit();
         terminalRef.current = terminal;
         fitAddonRef.current = fitAddon;
+        searchAddonRef.current = searchAddon;
+        webLinksAddonRef.current = webLinksAddon;
         applyTerminalAppearance();
 
         inputDisposableRef.current = terminal.onData((data: string) => {
@@ -340,6 +408,8 @@ export function useTerminalSession({
         terminalRef.current = null;
       }
       fitAddonRef.current = null;
+      searchAddonRef.current = null;
+      webLinksAddonRef.current = null;
     };
   }, []);
 
@@ -487,5 +557,7 @@ export function useTerminalSession({
     readyKey,
     cleanupTerminalSession,
     getSelection,
+    findNext,
+    findPrevious,
   };
 }

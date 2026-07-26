@@ -446,7 +446,9 @@ describe("useAppShellWorkspaceFlowsSection", () => {
       hasSession: true,
       readyKey: "ws-1:claude-terminal",
       cleanupTerminalSession: vi.fn(),
-      getSelection: () => "",
+          getSelection: () => "",
+          findNext: vi.fn(() => false),
+          findPrevious: vi.fn(() => false),
     };
     const terminalControllerReadyState = {
       terminalTabs: [],

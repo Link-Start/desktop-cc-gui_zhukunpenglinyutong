@@ -1543,3 +1543,300 @@ GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1126: 恢复 Git History 核心类型保护
+
+**Date**: 2026-07-26
+**Task**: 恢复 Git History 核心类型保护
+**Branch**: `feature/v-0710`
+
+### Summary
+
+移除四个 Git History 核心文件的 @ts-nocheck，建立 typed scope contract，统一 branch compare state，修复 repository action effect cleanup；62 个增量测试、TypeScript、ESLint、runtime contract 与 static import gate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `38b5134b1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1127: 模块化 Git 与 File 高频入口
+
+**Date**: 2026-07-26
+**Task**: 模块化 Git 与 File 高频入口
+**Branch**: `feature/v-0710`
+
+### Summary
+
+拆分 GitDiffPanel、FileViewPanel 及超大测试，四个目标文件退出 large-file gate；统一两套 AI commit generation menu/controller，新增 diff presentation model。增量测试 230 项及 Git History 58 项通过，typecheck、ESLint、OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `26cbce638` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1128: 增加 Terminal 搜索与安全链接
+
+**Date**: 2026-07-26
+**Task**: 增加 Terminal 搜索与安全链接
+**Branch**: `feature/v-0710`
+
+### Summary
+
+集成 xterm SearchAddon 与 WebLinksAddon，增加 Cmd/Ctrl+F 搜索栏、匹配导航和 Escape close；仅允许 http/https 交给 opener，addon 失败时保留基础 Terminal。26 个增量测试、typecheck 与 touched ESLint 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8b592095` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1129: 稳定代码标注锚点
+
+**Date**: 2026-07-26
+**Task**: 稳定代码标注锚点
+**Branch**: `feature/v-0710`
+
+### Summary
+
+为文件与 diff 标注保存 versioned exact snapshot/context fingerprint；在原位置 ±120 行内安全重定位，歧义返回 stale；Prompt 附带选中代码。44 个增量测试、typecheck、touched ESLint 与 strict OpenSpec validate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `175edc732` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1130: 收敛 Markdown 文件预览渲染边界
+
+**Date**: 2026-07-26
+**Task**: 收敛 Markdown 文件预览渲染边界
+**Branch**: `feature/v-0710`
+
+### Summary
+
+将 FileMarkdownPreview 收敛为 canonical router，rich implementation 显式拆到 FileMarkdownPreviewRich，Fast 旧入口降为 11 行兼容别名，FileViewBody 只依赖 canonical router；修复 outline state 导致 Mermaid subtree 重挂载。74 个增量测试、typecheck、touched ESLint 与 strict OpenSpec validate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dbd17d55c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1131: 消除 annotation 跨批次 large-file 回退
+
+**Date**: 2026-07-26
+**Task**: 消除 annotation 跨批次 large-file 回退
+**Branch**: `feature/v-0710`
+
+### Summary
+
+最终审计发现 annotation anchor 集成令 FileViewPanel 回升到 3016 行；将 anchor attach 与 file relocation 下沉到 code-annotation helper，FileViewPanel 回落至 2997 行。41 个增量测试、typecheck、touched ESLint 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68e5c2e3c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1132: 校正 Markdown renderer large-file baseline
+
+**Date**: 2026-07-26
+**Task**: 校正 Markdown renderer large-file baseline
+**Branch**: `feature/v-0710`
+
+### Summary
+
+最终 large-file gate 发现新 Rich path 触发 800 行 new-file ratchet；将 567 行 canonical router 固定到 FileMarkdownPreviewRouter.tsx，1581 行 feature-complete Rich 保留原 baseline-tracked path，Fast 仍为 11 行兼容入口。74 个增量测试、typecheck、touched ESLint 通过，large-file failures 从 15 回落到 14。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `380d1c016` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1133: 清理 Markdown 旧 renderer path
+
+**Date**: 2026-07-26
+**Task**: 清理 Markdown 旧 renderer path
+**Branch**: `feature/v-0710`
+
+### Summary
+
+删除迁移后残留的 FileMarkdownPreviewRich.tsx；Rich implementation 已回到 baseline-tracked FileMarkdownPreview.tsx，canonical router 位于 FileMarkdownPreviewRouter.tsx。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `35740d89a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1134: 更新工程工具链优化影响报告
+
+**Date**: 2026-07-26
+**Task**: 更新工程工具链优化影响报告
+**Branch**: `feature/v-0710`
+
+### Summary
+
+基于最新代码重写 12 项工程工具链现状，重点更新 #1/#2/#7/#8/#9/#10/#11 的代码事实、影响范围、增量测试、commit 与 residual debt。明确 large-file gate 仍 14 项失败，OpenSpec 全局 447 通过/2 个既有 active change 失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1d4834097` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

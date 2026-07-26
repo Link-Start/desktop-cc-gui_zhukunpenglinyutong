@@ -22,10 +22,12 @@ import {
   useFileCompareEditorTheme,
 } from "../../files/components/WorkspaceFileComparePanel";
 import { parseDiff } from "../../../utils/diff";
+import type { DiffPresentationEntry } from "../utils/diffPresentationModel";
 
-type WorkspaceReadOnlyDiffCompareProps = {
-  filePath: string;
-  diff: string;
+type WorkspaceReadOnlyDiffCompareProps = Pick<
+  DiffPresentationEntry,
+  "filePath" | "diff"
+> & {
   loadFullDiff?: ((path: string) => Promise<string>) | null;
   useFullDiff?: boolean;
   headerControlsTarget?: HTMLElement | null;

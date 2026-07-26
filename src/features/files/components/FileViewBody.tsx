@@ -26,7 +26,7 @@ import {
   type FileCodeMirrorEditorHandle,
 } from "./FileCodeMirrorEditor";
 import { FileDocumentPreview } from "./FileDocumentPreview";
-import { FileMarkdownPreviewFast } from "./FileMarkdownPreviewFast";
+import { FileMarkdownPreview } from "./FileMarkdownPreviewRouter";
 import { FileStructuredPreview } from "./FileStructuredPreview";
 import { FileTabularPreview } from "./FileTabularPreview";
 import type { FilePreviewPayload } from "../hooks/useFilePreviewPayload";
@@ -1089,7 +1089,7 @@ export function FileViewBody({
           : content);
     return (
       <div className="fvp-markdown-preview-frame">
-        <FileMarkdownPreviewFast
+        <FileMarkdownPreview
           key={filePath}
           workspaceId={workspaceId}
           sourceFilePath={sourceFilePath}

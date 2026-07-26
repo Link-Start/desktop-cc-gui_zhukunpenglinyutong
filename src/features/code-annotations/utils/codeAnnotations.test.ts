@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   appendCodeAnnotationsToPrompt,
   buildCodeAnnotationDedupeKey,
+  createCodeAnnotationAnchor,
   createCodeAnnotationSelection,
   formatCodeAnnotationForPrompt,
   isSameCodeAnnotationPath,
   normalizeCodeAnnotationTarget,
+  resolveCodeAnnotationAnchor,
 } from "./codeAnnotations";
 
 describe("code annotation helpers", () => {
@@ -90,5 +92,129 @@ describe("code annotation helpers", () => {
     expect(isSameCodeAnnotationPath("C:\\Repo\\src\\App.tsx", "c:/repo/src/App.tsx")).toBe(true);
     expect(isSameCodeAnnotationPath("src/App.tsx", "src/app.tsx")).toBe(false);
     expect(isSameCodeAnnotationPath("", "src/App.tsx")).toBe(false);
+  });
+
+  it("relocates an exact anchored selection after lines are inserted above it", () => {
+    const originalContent = [
+      "import React from 'react';",
+      "",
+      "function App() {",
+      "  return <main>Hello</main>;",
+      "}",
+    ].join("\n");
+    const anchor = createCodeAnnotationAnchor(originalContent, {
+      startLine: 3,
+      endLine: 4,
+    });
+    expect(anchor?.selectedText).toBe(
+      "function App() {\n  return <main>Hello</main>;",
+    );
+
+    expect(
+      resolveCodeAnnotationAnchor(
+        ["// inserted", "// inserted again", originalContent].join("\n"),
+        {
+          lineRange: { startLine: 3, endLine: 4 },
+          anchor,
+        },
+      ),
+    ).toEqual({
+      lineRange: { startLine: 5, endLine: 6 },
+      status: "relocated",
+    });
+  });
+
+  it("uses context fingerprint to resolve duplicate exact snapshots", () => {
+    const originalContent = [
+      "first context",
+      "shared();",
+      "first suffix",
+      "second context",
+      "shared();",
+      "second suffix",
+    ].join("\n");
+    const anchor = createCodeAnnotationAnchor(originalContent, {
+      startLine: 5,
+      endLine: 5,
+    });
+    const shiftedContent = [
+      "inserted",
+      "first context",
+      "shared();",
+      "first suffix",
+      "second context",
+      "shared();",
+      "second suffix",
+    ].join("\n");
+
+    expect(
+      resolveCodeAnnotationAnchor(shiftedContent, {
+        lineRange: { startLine: 5, endLine: 5 },
+        anchor,
+      }),
+    ).toEqual({
+      lineRange: { startLine: 6, endLine: 6 },
+      status: "relocated",
+    });
+  });
+
+  it("returns stale for ambiguous or out-of-window matches", () => {
+    const ambiguousAnchor = createCodeAnnotationAnchor(
+      "shared();",
+      { startLine: 1, endLine: 1 },
+    );
+    expect(
+      resolveCodeAnnotationAnchor(
+        ["unchanged", "changed", "shared();", "gap", "shared();"].join("\n"),
+        {
+          lineRange: { startLine: 2, endLine: 2 },
+          anchor: ambiguousAnchor,
+        },
+      ).status,
+    ).toBe("stale");
+
+    const originalContent = ["before", "target();", "after"].join("\n");
+    const distantAnchor = createCodeAnnotationAnchor(originalContent, {
+      startLine: 2,
+      endLine: 2,
+    });
+    const distantContent = [
+      "before changed",
+      ...Array.from({ length: 121 }, (_, index) => `padding ${index}`),
+      "target();",
+      "after",
+    ].join("\n");
+    expect(
+      resolveCodeAnnotationAnchor(distantContent, {
+        lineRange: { startLine: 2, endLine: 2 },
+        anchor: distantAnchor,
+      }).status,
+    ).toBe("stale");
+  });
+
+  it("keeps legacy annotations unanchored and includes snapshots in new prompts", () => {
+    expect(
+      resolveCodeAnnotationAnchor("one\ntwo", {
+        lineRange: { startLine: 2, endLine: 2 },
+      }),
+    ).toEqual({
+      lineRange: { startLine: 2, endLine: 2 },
+      status: "unanchored",
+    });
+
+    const anchor = createCodeAnnotationAnchor("one\ntwo", {
+      startLine: 2,
+      endLine: 2,
+    });
+    const selection = createCodeAnnotationSelection({
+      path: "src/App.tsx",
+      lineRange: { startLine: 2, endLine: 2 },
+      body: "解释",
+      source: "file-preview-mode",
+      anchor,
+    });
+    expect(selection ? formatCodeAnnotationForPrompt(selection) : "").toBe(
+      "@file `src/App.tsx#L2`\n标注：解释\n选中代码：\ntwo",
+    );
   });
 });
