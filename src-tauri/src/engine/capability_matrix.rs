@@ -1,6 +1,8 @@
 use super::{EngineFeatures, EngineType};
 
-pub const CAPABILITY_KEYS: [&str; 9] = [
+include!("capability_matrix.generated.rs");
+
+pub const CAPABILITY_KEYS: [&str; 15] = [
     "streaming.text",
     "streaming.reasoning",
     "streaming.tool-output",
@@ -10,6 +12,12 @@ pub const CAPABILITY_KEYS: [&str; 9] = [
     "collaboration.mode",
     "session.continuation",
     "image.input",
+    "input.mid-turn",
+    "session.resume",
+    "session.fork",
+    "session.switch",
+    "session.tree",
+    "rpc.server",
 ];
 
 pub fn capability_state(engine_type: EngineType, capability: &str) -> &'static str {
@@ -31,6 +39,10 @@ pub fn capability_state(engine_type: EngineType, capability: &str) -> &'static s
         "collaboration.mode" => bool_state(features.collaboration_mode),
         "session.continuation" => bool_state(features.session_resume),
         "image.input" => bool_state(features.image_input),
+        "session.resume" => bool_state(features.session_resume),
+        "input.mid-turn" | "session.fork" | "session.switch" | "session.tree" | "rpc.server" => {
+            "unknown"
+        }
         _ => "unknown",
     }
 }
@@ -61,8 +73,15 @@ mod tests {
                 "collaboration.mode",
                 "session.continuation",
                 "image.input",
+                "input.mid-turn",
+                "session.resume",
+                "session.fork",
+                "session.switch",
+                "session.tree",
+                "rpc.server",
             ]
         );
+        assert_eq!(CAPABILITY_KEYS, SPEC_CAPABILITY_KEYS);
     }
 
     #[test]
@@ -91,6 +110,22 @@ mod tests {
         assert_eq!(
             capability_state(EngineType::OpenCode, "image.input"),
             "unsupported"
+        );
+    }
+
+    #[test]
+    fn generated_spec_stance_covers_foundation_capabilities() {
+        assert_eq!(
+            spec_capability_state(EngineType::Kimi, "input.mid-turn"),
+            "unsupported"
+        );
+        assert_eq!(
+            spec_capability_state(EngineType::Codex, "rpc.server"),
+            "supported"
+        );
+        assert_eq!(
+            spec_capability_state(EngineType::Claude, "session.fork"),
+            "supported"
         );
     }
 }

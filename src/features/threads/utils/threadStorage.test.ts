@@ -12,6 +12,7 @@ vi.mock("../../../services/clientStorage", () => ({
 
 import {
   MAX_CUSTOM_NAME_ENTRIES,
+  MAX_THREAD_ALIAS_ENTRIES,
   buildClearedThreadAliases,
   buildUpdatedThreadAliases,
   collectCanonicalActiveThreadRebindings,
@@ -80,6 +81,7 @@ describe("threadStorage aliases", () => {
           "claude:session-a": "claude:session-b",
           "opencode:session-a": "opencode:session-b",
           "gemini:session-a": "gemini:session-b",
+          "kimi:session-a": "kimi:session-b",
         },
         "claude:session-current",
         "claude:session-next",
@@ -94,6 +96,25 @@ describe("threadStorage aliases", () => {
     ).toEqual({
       "claude-pending-123": "claude:session-next",
     });
+  });
+
+  it("keeps durable forwarding tombstones bounded", () => {
+    const aliases = Object.fromEntries(
+      Array.from({ length: MAX_THREAD_ALIAS_ENTRIES + 2 }, (_, index) => [
+        `pending-${index}`,
+        `native-${index}`,
+      ]),
+    );
+
+    const normalized = buildUpdatedThreadAliases(
+      aliases,
+      "pending-latest",
+      "native-latest",
+    );
+
+    expect(Object.keys(normalized)).toHaveLength(MAX_THREAD_ALIAS_ENTRIES);
+    expect(normalized["pending-0"]).toBeUndefined();
+    expect(normalized["pending-latest"]).toBe("native-latest");
   });
 
   it("persists normalized alias maps", () => {

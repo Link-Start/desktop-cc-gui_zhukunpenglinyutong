@@ -13,6 +13,7 @@ export type CanonicalActiveThreadRebinding = {
   threadId: string;
   canonicalThreadId: string;
 };
+export const MAX_THREAD_ALIAS_ENTRIES = 2_000;
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -23,6 +24,7 @@ function isFinalizedNativeThreadId(threadId: string) {
   return (
     normalizedThreadId.startsWith("claude:") ||
     normalizedThreadId.startsWith("gemini:") ||
+    normalizedThreadId.startsWith("kimi:") ||
     normalizedThreadId.startsWith("opencode:")
   );
 }
@@ -126,7 +128,12 @@ export function normalizeThreadAliases(raw: unknown): ThreadAliasMap {
     }
   });
 
-  return flattened;
+  const flattenedEntries = Object.entries(flattened);
+  return Object.fromEntries(
+    flattenedEntries.slice(
+      Math.max(0, flattenedEntries.length - MAX_THREAD_ALIAS_ENTRIES),
+    ),
+  );
 }
 
 export function resolveCanonicalThreadAlias(
@@ -213,7 +220,7 @@ export function buildUpdatedThreadAliases(
     }
     normalizedCurrent[sourceThreadId] = canonicalThreadId;
   });
-  return normalizedCurrent;
+  return normalizeThreadAliases(normalizedCurrent);
 }
 
 export function buildClearedThreadAliases(

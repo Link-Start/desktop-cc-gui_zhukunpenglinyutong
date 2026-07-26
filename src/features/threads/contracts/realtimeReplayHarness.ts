@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { ConversationItem } from "../../../types";
 import type { ThreadAction, ThreadState } from "../hooks/useThreadsReducer";
 import { __resetRealtimePerfFlagCacheForTests } from "../utils/realtimePerfFlags";
+import { inferEngineFromLegacyThreadId as inferEngineFromThreadId } from "./engineRuntimeIdentity";
 import type { ReplayProfile, RealtimeReplayEvent } from "./realtimeReplayTypes";
 
 const ABSOLUTE_EPOCH_MS = 1_710_000_000_000;
@@ -147,22 +148,6 @@ function percentile(values: number[], ratio: number): number {
   const sorted = [...values].sort((left, right) => left - right);
   const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * ratio) - 1));
   return sorted[index] ?? 0;
-}
-
-function inferEngineFromThreadId(threadId: string): "codex" | "claude" | "gemini" | "kimi" | "opencode" {
-  if (threadId.startsWith("claude:") || threadId.startsWith("claude-")) {
-    return "claude";
-  }
-  if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-")) {
-    return "gemini";
-  }
-  if (threadId.startsWith("kimi:") || threadId.startsWith("kimi-")) {
-    return "kimi";
-  }
-  if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-")) {
-    return "opencode";
-  }
-  return "codex";
 }
 
 function resolveAbsoluteTimestamp(atMs: number) {

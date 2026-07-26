@@ -1,7 +1,7 @@
 # Project Context
 
 - Type: OpenSpec Workspace
-- Updated At: 2026-07-25T01:10:00+08:00
+- Updated At: 2026-07-26T14:39:23+08:00
 - Scope: governance snapshot for the current `mossx` repository workspace
 - Product version fact: `ccgui@0.7.5` from `package.json` and `src-tauri/tauri.conf.json`
 
@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: active changes = `5`, archive changes = `731`, main specs = `431`
+- Current workspace state: active changes = `24`, archive changes = `739`, main specs = `437`
 
 ## Entry Surfaces
 
@@ -64,21 +64,21 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 ## Current Inventory
 
-- Active changes: `4`
-- Archive changes: `730`
-- Main specs: `431`
-- Completed task sets still active: `0`
-- Ready-for-implementation task sets: `0`
+- Active changes: `24`
+- Archive changes: `739`
+- Main specs: `437`
+- Completed task sets still active: `8`
+- Ready-for-implementation task sets: `11`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
 
 ## Active Changes
 
-Active OpenSpec changes in the current working tree:
+Active OpenSpec changes in the current working tree are grouped as follows:
 
-- [`add-linux-native-menu-localization`](changes/add-linux-native-menu-localization/proposal.md) — 4/5; Rust gate passed, only Linux non-default-language startup smoke remains.
-- [`add-vendor-cli-lifecycle-header`](changes/add-vendor-cli-lifecycle-header/proposal.md) — 11/12; implementation complete, only manual installer-lifecycle smoke (missing / latest / outdated / npm view failure / post-install refresh) remains.
-- [`enable-claude-lightweight-streaming-and-frame-attribution`](changes/enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) — 15/18; implementation complete, blocked only on its Claude-stream trace, final-fidelity acceptance, and archive.
-- [`stabilize-client-runtime-and-diagnostics`](changes/stabilize-client-runtime-and-diagnostics/proposal.md) — 21/22; automated closure and functional smoke complete, quantified frame/first-delta trace retention remains open.
+- CLI foundation：11 个 change 已完成 proposal / design / spec deltas / tasks，按 Batch 0-6 从 capability、identity、event bus 推进到 adapter、delivery、session、catalog、compatibility 和 controller cleanup。
+- 已实现待 verify/archive：8 个 change。
+- 尚有执行/人工 gate：`add-linux-native-menu-localization`、`add-vendor-cli-lifecycle-header`、`enable-claude-lightweight-streaming-and-frame-attribution`、`reduce-client-polling-overhead`、`stabilize-client-runtime-and-diagnostics`。
+- 全工作区 strict validation 当前有两个既有 blocker：`add-tokentracker-usage-dashboard` 与 `reduce-client-polling-overhead` 缺少 spec delta；CLI foundation 11 个 change 均已单独 strict validation 通过。
 
 Calibration rule: `openspec validate --strict` proves artifact structure only. Implementation verification uses code/test/live-run evidence in each `verification.md`; manual gates may be waived only when deterministic coverage or a newer owner makes the old gate non-discriminating.
 
@@ -325,17 +325,17 @@ This snapshot is evidence-oriented. It does not claim full product QA for every 
 
 易漂移事实必须回到代码或 manifest，不从历史 plan / audit snapshot 反推：
 
-| Fact | Canonical source |
-|---|---|
-| Product version and npm scripts | `package.json`, `package-lock.json` |
-| Tauri product version and bundle | `src-tauri/tauri.conf.json` |
-| Rust crate metadata | `src-tauri/Cargo.toml` |
-| Runtime engine model | `src/types/engine.ts`, `src-tauri/src/engine/mod.rs`, `src-tauri/src/command_registry.rs` |
-| WebView locales | `src/i18n/index.ts`, `src/i18n/locales/*` |
-| Theme presets | `src/features/theme/constants/vscodeThemePresets.ts` |
-| CI triggers | `.github/workflows/ci.yml` |
-| Large-file gates | `scripts/check-large-files.policy.json`, `package.json`, `.github/workflows/large-file-governance.yml` |
-| Active/archive/spec inventory | `openspec/changes/*`, `openspec/changes/archive/*`, `openspec/specs/*` |
+| Fact                             | Canonical source                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Product version and npm scripts  | `package.json`, `package-lock.json`                                                                    |
+| Tauri product version and bundle | `src-tauri/tauri.conf.json`                                                                            |
+| Rust crate metadata              | `src-tauri/Cargo.toml`                                                                                 |
+| Runtime engine model             | `src/types/engine.ts`, `src-tauri/src/engine/mod.rs`, `src-tauri/src/command_registry.rs`              |
+| WebView locales                  | `src/i18n/index.ts`, `src/i18n/locales/*`                                                              |
+| Theme presets                    | `src/features/theme/constants/vscodeThemePresets.ts`                                                   |
+| CI triggers                      | `.github/workflows/ci.yml`                                                                             |
+| Large-file gates                 | `scripts/check-large-files.policy.json`, `package.json`, `.github/workflows/large-file-governance.yml` |
+| Active/archive/spec inventory    | `openspec/changes/*`, `openspec/changes/archive/*`, `openspec/specs/*`                                 |
 
 ## Namespace Policy
 
@@ -388,6 +388,7 @@ npm run check:large-files
 
 ## Update History
 
+- 2026-07-26: 将 engine/model 接入治理拆为 11 个 CLI foundation changes，覆盖 capability、runtime identity、`MossxAgentEvent` bus、`run.settled`、adapter/protocol registry、message delivery、executable session registry、model/provider catalog、Kimi/Claude/OpenCode compatibility 与 controller facade migration；共 96 个未执行任务。11 个 change 均完成 proposal/design/spec deltas/tasks 并单独 strict validation 通过。全工作区 strict validation 仍被既有 `add-tokentracker-usage-dashboard`、`reduce-client-polling-overhead` 缺失 spec delta 阻塞。校准当前目录计数为 active=24、archive=739、specs=437；无业务代码改动。
 - 2026-07-25: Archived `close-cleanup-review-findings` after correcting the prior cleanup wave: removed absent-producer JCEF completion waits, keyed semantic AI review cache by diff/language, kept engine fallback serial, made corrupted storage backup targets unique, and removed residual notice dock branches. Synced five requirements into four existing specs. Calibrated indexes to active=5, archive=731, specs=431 and restored the missing `add-tokentracker-usage-dashboard` active entry.
 - 2026-07-24: Implemented and archived `preserve-corrupted-workspaces-on-load-and-notify`, closing the same silent-fallback-plus-overwrite risk for `workspaces.json` that was fixed for `settings.json`: generalized `backup_corrupted_settings_file` into `backup_corrupted_file`, both GUI and daemon `load()` call sites now quarantine the corrupted file before falling back to an empty workspace map, the GUI records a one-shot `WorkspacesRecoveryNotice` consumed by the new `take_workspaces_recovery_notice` command, and `useWorkspaces` surfaces one localized toast on mount. Synced the new main capability `workspaces-corruption-recovery`. Current counts are active=4, archive=730, specs=431.
 
