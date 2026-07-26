@@ -1029,3 +1029,50 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1170: 设置侧 Skills 改文案为内置精选并补充行为说明
+
+**Date**: 2026-07-27
+**Task**: 设置侧 Skills 改文案为内置精选并补充行为说明
+**Branch**: `feature/v-0710`
+
+### Summary
+
+将设置侧 sidebarMcpSkills 改为内置精选，新增 curatedDetailHint 说明开关含义及与普通 skill 的区别
+
+### Main Changes
+
+## 变更范围
+- 左侧设置入口文案：sidebarMcpSkills 从 "Skills" 改为「内置精选」及 9 种外语对应译法。
+- 右侧内置精选区块：新增详情说明 common.curatedDetailHint，解释开启/关闭会决定该 Skill 是否随每次对话自动注入系统提示词，并说明其与「拓展 → Skills」用户安装技能的区别。
+
+## 修改文件
+- src/i18n/locales/{zh,en,zh-TW,ja,ko,es,fr,hi,pt-BR,ru}/settings.ts
+- src/i18n/locales/{zh,en,zh-TW,ja,ko,es,fr,hi,pt-BR,ru}/common.ts
+- src/features/curated-skills/components/CuratedSection.tsx
+- src/styles/settings.skills.css
+
+## 验证
+- npx tsc --noEmit 通过
+- npx vitest run CuratedSection.test.tsx SettingsView.test.tsx：60 个测试通过
+- npx vitest run src/i18n：17 个测试通过
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c1636a880` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
