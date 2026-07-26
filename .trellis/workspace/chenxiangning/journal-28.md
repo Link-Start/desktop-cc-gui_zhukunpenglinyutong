@@ -302,3 +302,36 @@ Batch B：desktop/daemon 从 durable binding 解析 Claude provider，managed pr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1148: 完成会话级 Kimi 供应商隔离
+
+**Date**: 2026-07-26
+**Task**: 完成会话级 Kimi 供应商隔离
+**Branch**: `feature/v-0710`
+
+### Summary
+
+Batch C：Kimi provider home 物化、provider-aware runtime ownership、desktop/daemon 对称路由、workspace cleanup 与增量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `206395691` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
