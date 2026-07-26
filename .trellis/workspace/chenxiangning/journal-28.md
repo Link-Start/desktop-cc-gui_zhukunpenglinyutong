@@ -368,3 +368,36 @@ Batch D：Sidebar 加载 Claude/Codex/Kimi provider、会话菜单选择记忆�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1150: 收敛会话供应商绑定链路
+
+**Date**: 2026-07-26
+**Task**: 收敛会话供应商绑定链路
+**Branch**: `feature/v-0710`
+
+### Summary
+
+Batch E：按 thread state 发送 provider、identity convergence、Claude fork/Kimi continue 继承与三引擎 provider label。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9e40ad7e0` | feat(threads): 收敛会话供应商绑定 |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
