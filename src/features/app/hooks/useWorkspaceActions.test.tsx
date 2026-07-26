@@ -131,20 +131,21 @@ describe("useWorkspaceActions", () => {
     expect(options.hideLoadingProgressDialog).toHaveBeenCalledWith("loading-1");
   });
 
-  it("falls back to current active engine when no explicit engine provided", async () => {
+  it("rejects a retired active engine when no explicit engine is provided", async () => {
     const options = makeOptions({ activeEngine: "opencode" });
 
     const { result } = renderHook(() => useWorkspaceActions(options));
 
+    let threadId: string | null = "unexpected";
     await act(async () => {
-      await result.current.handleAddAgent(baseWorkspace);
+      threadId = await result.current.handleAddAgent(baseWorkspace);
     });
 
+    expect(threadId).toBeNull();
     expect(options.setActiveEngine).not.toHaveBeenCalled();
-    expect(options.startThreadForWorkspace).toHaveBeenCalledWith("ws-1", {
-      engine: "opencode",
-    });
-    expect(options.hideLoadingProgressDialog).toHaveBeenCalledWith("loading-1");
+    expect(options.startThreadForWorkspace).not.toHaveBeenCalled();
+    expect(options.showLoadingProgressDialog).not.toHaveBeenCalled();
+    expect(options.hideLoadingProgressDialog).not.toHaveBeenCalled();
   });
 
   it("rejects Gemini session creation before switching or starting a thread", async () => {

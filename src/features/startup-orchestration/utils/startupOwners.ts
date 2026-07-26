@@ -81,12 +81,6 @@ export const STARTUP_OWNER_RECORDS: readonly StartupOwnerRecord[] = [
     scope: "global",
   },
   {
-    commandLabel: "opencode_session_list",
-    ownerKind: "legacy-hook",
-    ownerId: "useThreadActions",
-    scope: "workspace",
-  },
-  {
     commandLabel: "list_gemini_sessions",
     ownerKind: "legacy-hook",
     ownerId: "useThreadActions",

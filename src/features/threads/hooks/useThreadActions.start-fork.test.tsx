@@ -133,7 +133,7 @@ describe("useThreadActions start/fork", () => {
 
     await expect(
       result.current.startThreadForWorkspace("ws-1", { engine: "gemini" }),
-    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
 
     expect(startThread).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();
@@ -576,30 +576,18 @@ describe("useThreadActions start/fork", () => {
     ]);
   });
 
-  it("starts an opencode pending thread locally", async () => {
+  it("rejects retired opencode thread creation before any owner side effect", async () => {
     const { result, dispatch, loadedThreadsRef } = renderActions();
 
-    let threadId: string | null = null;
-    await act(async () => {
-      threadId = await result.current.startThreadForWorkspace("ws-1", {
+    await expect(
+      result.current.startThreadForWorkspace("ws-1", {
         engine: "opencode",
-      });
-    });
+      }),
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
 
-    expect(threadId).toMatch(/^opencode-pending-/);
     expect(startThread).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "ensureThread",
-      workspaceId: "ws-1",
-      threadId,
-      engine: "opencode",
-    });
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "setActiveThreadId",
-      workspaceId: "ws-1",
-      threadId,
-    });
-    expect(threadId ? loadedThreadsRef.current[threadId] : false).toBe(true);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(loadedThreadsRef.current).toEqual({});
   });
 
   it("forks a thread and activates the fork", async () => {
