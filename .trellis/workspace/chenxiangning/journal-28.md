@@ -599,3 +599,36 @@ GitDiffPanel 与 GitMultiRepositoryChanges 的提交区统一改为 textarea 右
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1157: 加固会话供应商运行边界
+
+**Date**: 2026-07-26
+**Task**: 加固会话供应商运行边界
+**Branch**: `feature/v-0710`
+
+### Summary
+
+复审并修复 canonical provider binding 持久化、Kimi interrupt 隔离、provider 配置文件并发与权限；增量 Rust 测试通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c39b3e537` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
