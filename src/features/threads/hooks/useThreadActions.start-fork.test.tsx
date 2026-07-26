@@ -718,6 +718,43 @@ describe("useThreadActions start/fork", () => {
     });
   });
 
+  it("inherits the parent provider when forking a Claude thread", async () => {
+    const { result, dispatch } = renderActions({
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "claude:session-parent",
+            name: "Parent",
+            updatedAt: 1,
+            engineSource: "claude",
+            providerProfileId: "provider-a",
+            providerProfileSource: "managed",
+            providerProfileName: "Provider A",
+            providerAvailability: "available",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      await result.current.forkThreadForWorkspace(
+        "ws-1",
+        "claude:session-parent",
+      );
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ensureThread",
+        workspaceId: "ws-1",
+        engine: "claude",
+        providerProfileId: "provider-a",
+        providerProfileSource: "managed",
+        providerProfileName: "Provider A",
+      }),
+    );
+  });
+
   it("forks a thread without activating when requested", async () => {
     vi.mocked(forkThread).mockResolvedValue({
       result: { thread: { id: "thread-fork-2" } },

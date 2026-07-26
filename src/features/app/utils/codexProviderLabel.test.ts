@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ThreadSummary } from "../../../types";
-import { resolveCodexProviderLabel } from "./codexProviderLabel";
+import {
+  resolveCodexProviderLabel,
+  resolveEngineProviderLabel,
+} from "./codexProviderLabel";
 
 const codexThread: ThreadSummary = {
   id: "codex:session-1",
@@ -50,12 +53,30 @@ describe("resolveCodexProviderLabel", () => {
     ).toBeNull();
   });
 
-  it("does not render labels for non-Codex threads", () => {
+  it.each(["claude", "kimi"] as const)(
+    "renders managed provider labels for %s threads",
+    (engineSource) => {
+      expect(
+        resolveEngineProviderLabel({
+          ...codexThread,
+          engineSource,
+          providerProfileId: "provider-a",
+          providerProfileName: "Provider A",
+        }),
+      ).toBe("Provider A");
+    },
+  );
+
+  it.each([
+    ["claude", "__local_settings_json__"],
+    ["kimi", "__local_config_toml__"],
+  ] as const)("hides local/default labels for %s", (engineSource, providerProfileId) => {
     expect(
-      resolveCodexProviderLabel({
+      resolveEngineProviderLabel({
         ...codexThread,
-        engineSource: "claude",
-        sourceLabel: "custom/openai",
+        engineSource,
+        providerProfileId,
+        providerProfileName: "Local config",
       }),
     ).toBeNull();
   });

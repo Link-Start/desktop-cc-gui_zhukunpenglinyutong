@@ -31,6 +31,32 @@ const CLAUDE_PENDING_NATIVE_SESSION_WAIT_MESSAGE =
   "Claude session is still initializing. Wait for the session to finish binding, then send again.";
 
 describe("useThreadMessaging", () => {
+  it.each(["claude", "kimi"] as const)(
+    "sends the current %s thread provider binding to the engine",
+    async (engine) => {
+      const threadId = `${engine}:session-1`;
+      const { result } = makeThreadMessagingHook(engine, {
+        activeThreadId: threadId,
+        ensuredThreadId: threadId,
+        threadEngineById: { [threadId]: engine },
+        providerProfileByThread: { [threadId]: "provider-a" },
+      });
+
+      await act(async () => {
+        await result.current.sendUserMessage("hello");
+      });
+
+      expect(engineSendMessage).toHaveBeenCalledWith(
+        "ws-1",
+        expect.objectContaining({
+          engine,
+          threadId,
+          providerProfileId: "provider-a",
+        }),
+      );
+    },
+  );
+
   beforeEach(() => {
     resetThreadMessagingTestMocks();
   });

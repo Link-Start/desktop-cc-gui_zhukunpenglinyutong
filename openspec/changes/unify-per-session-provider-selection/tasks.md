@@ -45,12 +45,12 @@
 
 ## 5. Batch E — send、identity convergence、fork 与 label
 
-- [ ] 5.1 `engineSendMessage` 与 messaging hook 每次从当前 thread state 透传 `providerProfileId`，不读取菜单当前值
-- [ ] 5.2 pending → canonical replacement、catalog hydration 与 restart recovery 保留 `providerProfile*`
-- [ ] 5.3 Claude fork / Kimi continue child thread 继承父 thread binding
-- [ ] 5.4 provider label projection 泛化到 Claude/Codex/Kimi；local/default 不显示为 managed isolation
-- [ ] 5.5 补 send、rename/hydration、fork/continue、label 定向 Vitest
-- [ ] 5.6 运行受影响 Vitest、TypeScript typecheck、runtime-contract gate、`git diff --check`；独立 review 后提交
+- [x] 5.1 `engineSendMessage` 与 messaging hook 每次从当前 thread state 透传 `providerProfileId`，不读取菜单当前值
+- [x] 5.2 pending → canonical replacement、catalog hydration 与 restart recovery 保留 `providerProfile*`
+- [x] 5.3 Claude fork / Kimi continue child thread 继承父 thread binding
+- [x] 5.4 provider label projection 泛化到 Claude/Codex/Kimi；local/default 不显示为 managed isolation
+- [x] 5.5 补 send、rename/hydration、fork/continue、label 定向 Vitest
+- [x] 5.6 运行受影响 Vitest、TypeScript typecheck、runtime-contract gate、`git diff --check`；独立 review 后提交
 
 ## 6. Close-loop verification
 

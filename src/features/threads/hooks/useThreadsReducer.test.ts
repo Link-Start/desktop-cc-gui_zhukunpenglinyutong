@@ -9,6 +9,40 @@ import { initialState, threadReducer } from "./useThreadsReducer";
 import type { ThreadState } from "./useThreadsReducer";
 
 describe("threadReducer", () => {
+  it("preserves Kimi provider binding when pending identity converges to canonical", () => {
+    const withPending = threadReducer(initialState, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "kimi-pending-1",
+      engine: "kimi",
+      providerProfileId: "provider-a",
+      providerProfileSource: "managed",
+      providerProfileName: "Provider A",
+      providerAvailability: "available",
+    });
+    const withCanonical = threadReducer(withPending, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "kimi:session-1",
+      engine: "kimi",
+    });
+    const renamed = threadReducer(withCanonical, {
+      type: "renameThreadId",
+      workspaceId: "ws-1",
+      oldThreadId: "kimi-pending-1",
+      newThreadId: "kimi:session-1",
+    });
+
+    expect(renamed.threadsByWorkspace["ws-1"]).toHaveLength(1);
+    expect(renamed.threadsByWorkspace["ws-1"]?.[0]).toMatchObject({
+      id: "kimi:session-1",
+      providerProfileId: "provider-a",
+      providerProfileSource: "managed",
+      providerProfileName: "Provider A",
+      providerAvailability: "available",
+    });
+  });
+
   it("ensures thread with default name and active selection", () => {
     const next = threadReducer(initialState, {
       type: "ensureThread",

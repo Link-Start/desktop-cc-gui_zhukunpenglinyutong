@@ -476,6 +476,40 @@ describe("useThreadActions.helpers", () => {
     });
   });
 
+  it.each(["claude", "kimi"] as const)(
+    "hydrates provider metadata for %s catalog rows",
+    (engine) => {
+      const merged = mergeCodexCatalogSessionSummaries(
+        [],
+        [
+          {
+            sessionId: `${engine}:session-1`,
+            workspaceId: "workspace-1",
+            title: "Provider restored session",
+            updatedAt: 120,
+            engine,
+            providerProfileId: "provider-a",
+            providerProfileSource: "managed",
+            providerProfileName: "Provider A",
+            providerAvailability: "available",
+          },
+        ],
+        "workspace-1",
+        {},
+        () => undefined,
+      );
+
+      expect(merged[0]).toMatchObject({
+        id: `${engine}:session-1`,
+        engineSource: engine,
+        providerProfileId: "provider-a",
+        providerProfileSource: "managed",
+        providerProfileName: "Provider A",
+        providerAvailability: "available",
+      });
+    },
+  );
+
   it("preserves provider-backed Codex rows during degraded continuity", () => {
     const merged = mergeDegradedCodexContinuitySummaries(
       [],
