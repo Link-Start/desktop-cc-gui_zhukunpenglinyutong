@@ -2,7 +2,7 @@
 
 > **日期**：2026-07-25
 > **基线**：分支 `feature/v-799` @ `c75922dec`
-> **复核**：2026-07-26 于 `feature/v-0710` @ `e6c8b2433` 再次核对；`c75922dec..e6c8b2433` 未修改本文涉及的生产源码
+> **复核**：2026-07-26 首次复核与 #1/#7 修复均由 `d077890b8` 一并落地（原文误记为 `e6c8b2433`，该提交上 #1/#7 尚未修复）；**同日二次复核** @ `713ef5f2c`：`d077890b8..HEAD` 未修改本文涉及的生产源码，9 项状态与行数、常量值全部一致
 > **来源**：从 `client-aux-modules-governance-report-2026-07-25.md` 摘出"检索与导航（search / quick-switcher / project-map / workspaces）"一节的 9 项，逐项展开"现状 → 影响 → 处理后影响 → UI 变化"
 > **核对方法**：逐项对照源码、生产 caller 与现行 OpenSpec；本文区分"已确认缺陷""架构债务""产品决策项"，避免把现行 contract 误写成未完成需求
 > **行号声明**：行号为 `c75922dec` 快照，后续提交请按 symbol 搜索
@@ -54,7 +54,7 @@
 
 ### 现状（证据）
 
-- **SearchPalette = 已统一**：`src/features/search/hooks/useUnifiedSearch.ts` 聚合了 **8 类 provider**（messages / files / commands / history / kanban / threads / skills / apis），统一走 `ranking/score.ts` 的 `compareSearchResults` + `ranking/recencyStore` 的 frecency，并有防抖（`SEARCH_DEBOUNCE_MS`）、provider 限额（`SEARCH_PROVIDER_LIMITS`）和性能上报（`searchMetrics`）。
+- **SearchPalette = 已统一**：`src/features/search/hooks/useUnifiedSearch.ts` 聚合了 **8 类 provider**（messages / files / commands / history / kanban / threads / skills / apis），统一走 `ranking/score.ts` 的 `compareSearchResults` + `ranking/recencyStore` 的 frecency，并有防抖（`SEARCH_DEBOUNCE_MS`）、provider 限额（`SEARCH_PROVIDER_LIMITS`）和性能上报（`searchMetrics`）。注：`providers/` 目录另有 `actionsProvider` 与 `recentDiscoveryProvider` 两个文件未接入 useUnifiedSearch，复查时勿按目录文件数误计。
 - **QuickSwitcher = 有意独立**：`openspec/specs/quick-context-switcher/spec.md` 明确要求它保持 compact non-search navigation surface，MUST NOT 提供 search input、typing filter 或 provider hydration。QuickSwitcher 的第一项已可跳转 Global Search。
 - **会话内搜索 = 未找到独立实现**：在 `src/features/threads`、`src/features/conversation` 下未检索到独立的会话内搜索打分实现，疑似已并入统一搜索或尚未建设——**此点待复核**，不能继续按"三套独立打分"估算工作量。
 
@@ -81,7 +81,7 @@
 
 - `src/features/quick-switcher/types.ts:1`：`QUICK_SWITCHER_RECENT_LIMIT = 30`，recent collections 按 contract 保持有界。
 - 数据结构 `QuickSwitcherRecentFile` 只有 `workspaceId / path / touchedAt / source("opened" | "ai-modified")`——**纯时间序，无 frecency（频率 × 新近度）打分**。
-- `QuickSwitcher.tsx` 中无查询输入处理，只渲染导航、最近会话与最近文件；Global Search 是导航区第一项。
+- `QuickSwitcher.tsx`（实际路径 `src/features/quick-switcher/components/QuickSwitcher.tsx`）中无查询输入处理，只渲染导航、最近会话与最近文件；Global Search 是导航区第一项。
 
 ### 影响什么
 

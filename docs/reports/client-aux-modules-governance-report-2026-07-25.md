@@ -3,10 +3,12 @@
 > **日期**：2026-07-25
 > **原始基线**：分支 `feature/v-078` @ `a9c479d57`
 > **复核基线**：分支 `feature/v-799` @ `c75922dec`（2026-07-25）
+> **最新复核**：分支 `feature/v-0710` @ `713ef5f2cd`（2026-07-26）
 > **来源**：合并以下三份报告并去冗余
 > - `client-aux-modules-optimization-report-2026-07-24.md`
 > - `p0-reprioritized-decision-board-2026-07-24.md`
 > - `polling-inventory-2026-07-25.md`
+> **增量校准**：交叉核对 `composer-prompt-stack-optimization-impact-2026-07-25.md`、`search-navigation-optimization-impact-2026-07-25.md`、`engineering-toolchain-optimization-impact-2026-07-25.md`
 > **范围**：除画布/幕布渲染外，前端辅助功能、系统运维、治理层的技术债务与智能化机会
 > **复核方法**：全量扫描 `src/**`、`src-tauri/src/**`、配置、测试、large-file policy、OpenSpec artifacts；逐项核对生产 caller，不以文件存在或单次提交说明代替调用链证据
 
@@ -20,59 +22,61 @@
 
 ### 本次复核修订
 
-本次按当前 HEAD 全量复核 3,237 个 TypeScript/JavaScript/Rust 源文件，并交叉检查生产 caller、测试和治理 artifacts。以下变化会直接影响治理优先级：
+本次按当前 HEAD 全量复核 3,286 个 TypeScript/JavaScript/Rust 源文件，并交叉检查生产 caller、测试、OpenSpec 与 static gate。07-25 报告创建后，输入体系、搜索导航和工程工具链已有连续实现，以下变化会直接影响治理优先级：
 
-- `ComposerInput.tsx` 与 `SkillsSection.tsx` 已删除，原 P0-A 已闭环；`FileMarkdownPreview.tsx` 仍被 `FileMarkdownPreviewFast.tsx` 生产依赖，不能再描述为只需解耦 `SkillsSection`。
-- OpenSpec 目录与 `changes/README.md` 当前账实一致：active=6、archive=731、specs=431；但 `openspec/project.md` 同时残留 active=5、active=4/archive=730 和 `ccgui@0.7.5` 三组旧事实。
-- Skills Hub 已在 `b1d94a930` 落地 6,545 行新增代码，并在 `c75922dec` 增加长列表 windowing；OpenSpec proposal/main specs 对 Skills Hub、`skills_hub_query`、`skills_hub_mutate` 均零命中，行为规范缺口比索引漂移更严重。
-- large-file policy、baseline 文件和 CI wiring 已存在，但当前 `npm run check:large-files:gate` **实测失败 17 项**：16 个 policy hard-limit failure，加 1 个 855 行 `src-tauri/src/storage.rs` new-file ratchet failure。当前门禁不是“已闭环”，而是已经暴露出未登记/未治理债务。
-- browser action 不是“后端零调用方”：前端已有 `runBrowserAgentAction` Tauri wrapper，但业务 UI 无消费者。问题仍是动作管线未接到产品入口。
-- `useAppShellKanbanExecutionSection.ts` 已从 1614 行降到 1483 行，20 秒固定轮询已改为 next-due `setTimeout`；完成判定和周期任务字符串匹配仍在。
-- 引擎归因修复只覆盖显式传入 `activeEngine` 的路径。`Composer.tsx:674-680` 调用 `useStatusPanelData` 时仍只传 `isCodexEngine`，非 Codex 引擎仍可能回退成 Claude。
-- 旧报告把 search indexing 标成“已删”不准确。`messageIndex.ts` 仍被 `messageProvider.ts:25-28` 生产调用，并在每次查询时重建全部消息索引。
-- 当前关键体量：`GitDiffPanel.tsx` 3125 行、`FileViewPanel.tsx` 3092 行、`skills_hub.rs` 2995 行、`useAppServerEvents.ts` 2988 行、`SettingsView.tsx` 2587 行、`ProjectMapPanel.tsx` 1945 行、`SkillsPage.jsx` 1855 行、`real.rs` 1475 行。
+- Composer 清理批次已闭环输入历史双写、重复 autocomplete 计算和命令目录轮询；prompt enhancer、结构化 skill invocation 与“对话→Prompt”已部分落地。
+- Git History 5 个核心文件已全部摘除 `@ts-nocheck`，原 494 条 diagnostics 清零；代价是 `GitHistoryPanelImpl.tsx` 增至 4,841 行、`GitHistoryPanelView.tsx` 增至 3,226 行，二者成为新的 large-file failure。
+- `GitDiffPanel.tsx` / `FileViewPanel.tsx` 已降到 2,994 / 2,997 行，primary tests 已拆成小于 800 行的 parts；全局 large-file gate 仍有 14 项失败，不能把目标文件达标写成全局闭环。
+- Terminal 已接入 `SearchAddon` / `WebLinksAddon`；code annotation 已增加 versioned snapshot 与精确重定位；diff surfaces 已共享 presentation model；Markdown preview 已形成 router / rich fallback / compatibility alias 单向边界。
+- message search 已按 immutable snapshot 使用 `WeakMap` 缓存索引；worktree 不再生成随机默认分支名，改为显式输入。QuickSwitcher 的无搜索、30 条上限属于现行 OpenSpec contract，不应继续列作缺陷。
+- Skills Hub 已补 `add-skills-hub-management` 追溯 change，但尚未 sync/archive 成 main spec；OpenSpec 当前目录为 active=13、archive=738、specs=436，`changes/README.md` 与 `project.md` 的快照仍未同步。
+- browser action 仍只有 `runBrowserAgentAction` Tauri wrapper，无业务 UI consumer；Composer 调用 `useStatusPanelData` 仍未传 `activeEngine`，非 Codex 引擎仍可能回退成 Claude。
+- 当前关键体量：`GitHistoryPanelImpl.tsx` 4,841 行、`daemon_state.rs` 3,325 行、`GitHistoryPanelView.tsx` 3,226 行、`useThreads.ts` 3,041 行、`skills_hub.rs` 2,995 行、`GitDiffPanel.tsx` 2,994 行、`FileViewPanel.tsx` 2,997 行、`useAppServerEvents.ts` 2,988 行。
 
 ### 全量扫描基线
 
 | 指标 | 当前值 | 治理含义 |
 |---|---:|---|
-| TypeScript / JavaScript / Rust 源文件 | 3,237 | 本次扫描覆盖 `src/**` 与 `src-tauri/src/**`，不是只看最近提交 |
-| 非测试源码总行数 | 667,584 | large-file 问题是系统性存量，不是单文件异常 |
-| 非测试源码中 ≥1000 行文件 | 149 | 需要按高变更频率和不可逆操作风险排序，而不是一次性全拆 |
-| 非测试源码中 ≥2400 行文件 | 32 | 已进入 `feature-hotpath` warning 或接近 default-source warning |
-| 非测试源码中 ≥2800 行文件 | 13 | 体量事实不等于 gate failure 数；不同 policy kind 阈值不同，且测试文件另计 |
-| `@ts-nocheck` 生产文件 | 6 | Spec Hub 1 个；Git History 5 个、合计 9438 行 |
+| TypeScript / JavaScript / Rust 源文件 | 3,286 | 本次扫描覆盖 `src/**` 与 `src-tauri/src/**`，不是只看最近提交 |
+| 非测试源码总行数 | 676,807 | large-file 问题是系统性存量，不是单文件异常 |
+| 非测试源码中 ≥1000 行文件 | 153 | 需要按高变更频率和不可逆操作风险排序，而不是一次性全拆 |
+| 非测试源码中 ≥2400 行文件 | 33 | 已进入 `feature-hotpath` warning 或接近 default-source warning |
+| 非测试源码中 ≥2800 行文件 | 15 | 体量事实不等于 gate failure 数；不同 policy kind 阈值不同，且测试文件另计 |
+| `@ts-nocheck` 生产文件 | 1 | 仅剩 25 行 minified `SpecHubPresentationalImpl.tsx`；Git History 5 个核心文件已清零 |
 
 ### large-file gate 当前红灯明细
 
 | failure 类别 | 数量 | 当前文件 |
 |---|---:|---|
-| Frontend production policy hard | 6 | `GitDiffPanel.tsx` 3125、`FileViewPanel.tsx` 3092、`useThreads.ts` 3041、`file-view-panel.css` 2972、`useThreadsReducer.ts` 2871、`GitHistoryPanelImpl.tsx` 2803 |
-| Rust production policy hard | 6 | `daemon_state.rs` 3325、`daemon/git.rs` 3079、`session_management.rs` 3074、`backend/app_server_cli.rs` 2894、`engine/commands.rs` 2847、`codex/mod.rs` 2612 |
-| Test policy hard | 4 | `FileViewPanel.test.tsx` 3940、`GitDiffPanel.test.tsx` 3279、`services/tauri.test.ts` 3272、`useThreadActions.test.tsx` 3229 |
+| Frontend production policy hard | 5 | `GitHistoryPanelImpl.tsx` 4841、`GitHistoryPanelView.tsx` 3226、`useThreads.ts` 3041、`file-view-panel.css` 2972、`useThreadsReducer.ts` 2871 |
+| Rust production policy hard | 6 | `daemon_state.rs` 3325、`daemon/git.rs` 3079、`session_management.rs` 3074、`backend/app_server_cli.rs` 2894、`engine/commands.rs` 2860、`codex/mod.rs` 2622 |
+| Test policy hard | 2 | `services/tauri.test.ts` 3320、`useThreadActions.test.tsx` 3229 |
 | New-file ratchet | 1 | `src-tauri/src/storage.rs` 855；当前不在 `large-file-new-file-baseline.json` |
 
 根因分两层：
 
-1. `docs/architecture/large-file-baseline.json` 当前 `entries` 为空，因此 16 个超过各自 hard threshold 的文件都被判为 `status=new`，不能按“存量已接纳”解释。
+1. `docs/architecture/large-file-baseline.json` 当前 `entries` 为空，因此 13 个超过各自 hard threshold 的文件都被判为 `status=new`，不能按“存量已接纳”解释。
 2. `large-file-new-file-baseline.json` 虽含大量大文件，却遗漏当前 855 行的 `src-tauri/src/storage.rs`，触发独立 new-file ratchet。
 
-> 🛠 **深度推演**：当前根因不是单纯“文件太大”或“缺少 AI 按钮”，而是事实 owner 与治理 owner 同时分裂。large-file policy、hard baseline、new-file baseline 三者没有形成一致账本；OpenSpec index、`project.md` 与代码各自维护状态；engine attribution 同时接受真实 `activeEngine` 和 legacy boolean；Skills 又把 typed domain 压进两个 generic `Value` command。继续逐点补 UI 会扩大漂移。优先级应先恢复 gate 与 behavior truth，再收紧 typed contract、拆高风险 owner，最后做智能化增强。
+> 🛠 **深度推演**：本轮证明“恢复 contract”比“机械拆行”更有效：Git/File 入口通过 shared hook、presentation model、renderer router 和 test harness 降低耦合，但 Git History 为恢复类型安全反而扩大了文件体量。large-file 数字只能做触发器，不能替代 owner 设计。下一阶段应先让 OpenSpec 与 gate 恢复可信，再按 capability 拆 Git History / Threads / Rust runtime，最后推进 AI 增强。
 
-### 已闭环事项（07-24 ~ 07-25）
+### 已闭环事项（07-24 ~ 07-26）
 
 | 项 | 状态 | 解决什么问题 | 关键提交 / 备注 |
 |---|---|---|---|
 | P0-1 settings 加载失败静默修复 | ✅ | 设置文件损坏时前后端都无声回退默认值，保存会不可逆覆盖原文件 | `a1dd0795b` + `c3d472a34` + `ae0927a17` |
-| P0-2 引擎二元假设 + `isValidModelId` 不一致 | 🔶 | model id 双源已修；StatusPanel 主路径已透传真实引擎，但 Composer sibling caller 仍遗漏 `activeEngine` | `38e139b37` + `bfb61b9e2`；`Composer.tsx:674-680` |
-| P0-3 SettingsView 摘 `@ts-nocheck` + skills 死分支 | ✅ | 设置页已恢复类型检查，旧 `SkillsSection.tsx` 已删除；2587 行体量债务仍保留 | `29ef72543` / `37d545f4f` / `b1a2ea4a5` |
-| P0-4 specs 索引补登 26 项 | ✅ | 当时把 capability 索引从 403 补至 429；当前复核为 431 | `0a723b7ec` + `6bb5fc5f0` |
+| P0-2 引擎二元假设 + `isValidModelId` 不一致 | 🔶 | model id 双源已修；StatusPanel 主路径已透传真实引擎，但 Composer sibling caller 仍遗漏 `activeEngine` | `38e139b37` + `bfb61b9e2`；按 `useStatusPanelData(performanceScopedItems` 定位 |
+| P0-3 SettingsView 摘 `@ts-nocheck` + skills 死分支 | ✅ | 设置页已恢复类型检查，旧 `SkillsSection.tsx` 已删除；2545 行体量债务仍保留 | `29ef72543` / `37d545f4f` / `b1a2ea4a5` |
+| P0-4 specs 索引补登 26 项 | ✅ | 当时把 capability 索引从 403 补至 429；当前 main spec 目录已增至 436 | `0a723b7ec` + `6bb5fc5f0` |
 | `read_workspaces` 静默回退 | ✅ | workspaces.json 损坏同样无声覆盖 | `d51c7dee0` + `d87d62165` + `9cdd61c15` |
 | #19 dock streaming 死分支 | ✅ | "streaming" 状态永不可达却残留组件/CSS | `f91ab9a4a` + `140963bc1` |
 | #21 常驻轮询优化 | ✅ | worktree/kanban/output/dock/dictation 五处高频率轮询改造成事件驱动或门控降频 | `d042e5018` + `9ca8d2b19` |
 | P1-5 aiReview 生产者接线 | ✅ | Session Activity 语义 diff 评审位永远空着 | `053cfbc04` + `140963bc1` |
-| P1-7 死代码大扫除 | 🔶 | bridge no-op、refreshCodexModelConfig、latestAgentRuns、响应式布局、SHOW_*、`ComposerInput.tsx`、`SkillsSection.tsx` 已清 | `FileMarkdownPreview.tsx` 仍是生产实现，需先解耦 Fast wrapper |
-| P0-H large-file gate | ❌ 当前红灯 | policy/baseline/CI wiring 已落地，但本次命令实测失败 17 项；hard baseline 为空，new-file baseline 又遗漏 `src-tauri/src/storage.rs` | `npm run check:large-files:gate`；`.artifacts/large-files-gate.json` |
+| P1-7 死代码与 renderer 边界清理 | ✅ | bridge no-op、refreshCodexModelConfig、latestAgentRuns、响应式布局、SHOW_*、`ComposerInput.tsx`、`SkillsSection.tsx` 已清；Markdown router / rich fallback / alias 边界已显式化 | `dbd17d55c` + `380d1c016` + `35740d89a` |
+| Composer 输入/补全/commands 批次 | ✅ | 输入历史收敛为单一 store；重复 autocomplete 计算删除；commands 改 fs watch + 显式错误 | `9484986c8` + `32092503c` + `296fad4a5` |
+| 工程工具链目标批次 | ✅ 目标闭环 | Git History 恢复 typecheck；Git/File 目标文件退出 gate；Terminal、annotation、diff、Markdown boundary 落地 | `38b5134b1` ~ `35740d89a`；全局 gate 仍红 |
+| Search index / worktree default | ✅ | message index 按 snapshot 缓存；随机默认分支名移除 | `d077890b8` |
+| P0-H large-file gate | ❌ 当前红灯 | policy/baseline/CI wiring 已落地，本次命令实测失败 14 项；hard baseline 为空，new-file baseline 又遗漏 `src-tauri/src/storage.rs` | `npm run check:large-files:gate`；`.artifacts/large-files-gate.json` |
 | Skills 长列表渲染 | ✅ | installed skills 超过 80 条后只渲染可视窗口，并固定批量操作栏 | `c75922dec`；`SkillsPage.jsx:449-636` |
 
 ### 仍需你做决策
@@ -81,6 +85,7 @@
 - **记忆语义检索**：embedding 方案没定（本地模型 vs 复用引擎通道），不能按"差一步"估算。
 - **GitHub URL / rebrand**：About、Settings、updater 与 bundle identifier 都沿用上游身份，要改就是一组改动。
 - **任务 AI 验收判定**：原 follow-up 机制已随编排中心删除，需重建。
+- **QuickSwitcher 边界**：现行 spec 明确它是无搜索的 compact recent-context surface；是否与 Global Search 合并必须先改产品 contract。
 
 ---
 
@@ -90,19 +95,19 @@
 
 | 问题 | 原因 / 现状证据 | 影响（大白话） | 优先级 | 状态 | 建议 |
 |---|---|---|---|---|---|
-| `ComposerInput.tsx` JCEF 死实现 | `src/` 下已无该文件；仅测试夹具与 `ChatInputBoxAdapter.tsx:5` 迁移注释残留 | 已不再进入产物 | P0 | ✅ 已删 | 清理残留命名可降为 P3 |
-| Composer 组件成"上帝组件" | `Composer.tsx` 2592 行 / `ChatInputBoxAdapter.tsx` 2205 行 / `ChatInputBox.tsx` 1773 行；adapter 接口 94 字段，JSX 再透传约 95 项 | 改一处要翻三栋楼；新功能不敢加 | P1 | 未做 | 按职责拆分，消解 adapter 层 |
-| 输入历史三套并存、发送时双写 | `Composer.tsx:1447-1465` `recordHistory` + `recordInputHistory` | 各入口历史/补全/搜索结果口径不一致 | P0 | 未做 | 统一输入历史单一实现 |
-| 自动补全两套引擎同时跑 | `useComposerAutocompleteState.ts` 980 行输出大部分被下划线弃用；ChatInputBox 内 7 个 dropdown 独立完成补全 | 一套算完就被丢弃，浪费性能 | P0 | 未做 | 砍掉 `useComposerAutocompleteState` 弃用输出 |
+| `ComposerInput.tsx` JCEF 死实现 | 本体、adapter 迁移注释与 guard test 旧命名均已清理 | 已不再进入产物，也不再留下误导性迁移叙事 | P0 | ✅ 已闭环 | — |
+| Composer 组件成"上帝组件" | `Composer.tsx` 2528 行 / `ChatInputBoxAdapter.tsx` 2204 行 / `ChatInputBox.tsx` 1773 行；adapter 仍承担大面积透传 | 改一处要翻三栋楼；新功能不敢加 | P1 | 部分减量 | 按职责拆分，消解 adapter 层 |
+| 输入历史三套并存、发送时双写 | `usePromptHistory.ts` 与旧 ChatInputBox 内联 history hook 已删除；`useInputHistoryStore` 成为单一 store，发送时单写 | 历史口径与持久化已收敛 | P0 | ✅ 已闭环 | 保持单一 store contract |
+| 自动补全两套引擎同时跑 | `useComposerAutocompleteState.ts` 已从约 980 行降至 88 行，只检测 trigger context；候选计算与渲染由 ChatInputBox providers 唯一承担 | 重复候选计算已删除 | P0 | ✅ 已闭环 | 保持 provider 单一计算 owner |
 | slash/prompt bridge no-op 死链路 | `providers/slashCommandProvider.ts:244` `sendBridgeEvent` 永远 false；`window.updateSlashCommands` 不会被调用 | ~700 行死链路误导维护者 | P0 | ✅ 已清 | — |
-| 自定义命令空结果 15s 冷却 + 全局兜底启发式 | `useCustomCommands.ts:120-166`；失败静默；加文件无 fs 感知 | 把别的 workspace 不可用的命令展示给你 | P1 | 未做 | 加 fs watch；失败显式处理；去掉全局兜底 |
-| 技能调用纯文本拼接 | `promptAssembler.ts:42-55` 把 `/skill-name` 当普通文本拼进消息；`SkillsSection.tsx` 已在 `b1d94a930` 删除，skills UI 迁入 Extensions/TokenTracker | 无结构化参数传递，AI 理解靠猜 | P1 | 部分变化 | 保留技能契约结构化议题；删除旧 Settings 证据 |
-| prompt enhancer 粗糙 | 子串匹配错误分类；60s 阻塞弹窗；英文硬编码 system prompt；每次新建隐藏 session 无缓存 | 中文用户点润色要干等一分钟 | P1 | 未做 | 改为流式 + 就地 diff + 发送前自动润色 |
-| curated-skills 基础设施与新 Skills Hub 并存 | `CuratedSkillIndicator.tsx:111` 仍以 visibility-gated 2 秒轮询设置；Extensions Skills 走独立 `skills_hub.rs` | 两套技能面继续分化，设置变化仍靠轮询感知 | P1 | 部分变化 | 先明确 bundled curated skill 与用户安装 skill 的边界，再用 settings event 去轮询 |
+| 自定义命令空结果 15s 冷却 + 全局兜底启发式 | `claude_commands_watch.rs` 提供 fs watch；`useCustomCommands.ts` 订阅事件并显式上报失败；`296fad4a5` 修复 managed command 并发边界 | workspace 命令刷新与错误可见性已恢复 | P1 | ✅ 已闭环 | 保持 watcher 主通道与并发 guard |
+| 技能调用纯文本拼接 | `Composer.tsx` 已组装 `skillInvocations` typed metadata 并随消息下发；`promptAssembler.ts` 保留兼容文本；`args` 产品输入通道尚未落地 | 引擎可获得结构化技能身份，但参数仍依赖 prompt | P1 | 🔶 部分完成 | 后续为 `args` 建 typed UI / protocol contract |
+| prompt enhancer 粗糙 | 已加入本地化 system prompt、LRU cache、managed command 并发保护；仍是非流式 60s request，未做就地 diff 与稳定错误码分类 | 重复润色与英文偏置已下降，长等待和结果审阅成本仍在 | P1 | 🔶 部分完成 | 流式 + 就地 diff + typed error |
+| curated-skills 基础设施与新 Skills Hub 并存 | `CuratedSkillIndicator` 已改 settings event 主通道 + visibility-gated 60s backstop；Extensions Skills 仍走独立 `skills_hub.rs` | 高频设置轮询已消失，两套 skill domain 边界仍需治理 | P1 | 🔶 事件化完成 | 明确 bundled curated skill 与用户安装 skill 的 ownership |
 | `skills_hub.rs` 新增即成 2995 行单体 | 测试模块前已有 130 个函数，同时负责 path 安全、registry、trash、GitHub fetch、安装同步、usage 扫描；两个 command 以 `String + serde_json::Value` 做总分发 | 一个协议字段改动会同时影响文件系统、网络、安装和 UI，编译期无法校验 action payload | P1 | 新增债务 | 按 registry/install/discovery/usage 拆模块；为 query/mutation 建 typed request/response |
 | `SkillsPage.jsx` 1855 行 / 27 `useState` | `c75922dec` 已为 >80 条 installed skills 增加 88px 固定行高 windowing，并补 sticky bulk actions；页面仍承载安装、仓库、搜索、更新、usage、trash 全流程 | 长列表 mount 风暴已止血，但单页状态与本地 vendor diff 继续扩大 | P1 | 部分修复 | 保留 windowing；按 My/Browse/mutation controller 拆分本地适配层 |
 | Skills vendored 偏差登记不完整 | `c75922dec` 修改 `SkillsPage.jsx` 215 行，但 `.trellis/spec/frontend/tokentracker-dashboard-vendored.md` 的“其他适配点”未登记 windowing/sticky toolbar | 下次同步 upstream 时可能把性能修复覆盖掉，或误判为无意 drift | P1 | 未做 | 在 vendored deviation 清单登记 commit、symbol、测试和同步策略 |
-| "对话→prompt/skill"一键沉淀缺失 | enhancer 隐藏 session 通道已验证可行 | 有价值对话无法沉淀为可复用模板 | P2 | 未做 | AI 提炼模板 + `$ARGUMENTS` 参数位 |
+| "对话→prompt/skill"一键沉淀缺失 | Messages 已新增 `PromptDistillDialog` 与 `usePromptDistillation`，可把对话存为 Prompt；存为 Skill 尚未实现 | Prompt 沉淀链路已打通，Skill 资产化仍需手工 | P2 | 🔶 部分完成 | 复用 distill contract 增加“存为 Skill” |
 
 ### 2. 多代理编排与任务管理（agent-orchestration / agent-catalog / parallel / tasks / kanban / plan）
 
@@ -139,7 +144,7 @@
 | 语义检索 544 行建成未接线 | `projectMemorySemanticRetrieval.ts` 完整实现；`useThreadMessaging.ts:535-539` 从不传 `semanticProvider`；`memoryScout.ts:256,262` 分支永远跳过；`ProjectMemoryEmbeddingProvider` 只有接口无生产实现 | 你用的是关键词逐字匹配，"部署"召不回"上线"；544 行骨架空转 | P2 | 未做 | 先定 embedding 方案，再接线或删除 |
 | 记忆入库靠机械规则 | `outputDigest.ts:38-60` 正则清洗 + 前 3 句截断；`memoryKindClassifier.ts:20-80` 硬编码关键词打分；`IDENTITY_RECALL_PHRASES` 枚举中文句式 | 记忆质量天花板低；"AI 提炼"其实是规则洗出来的 | P1 | 未做 | 复用 `generateThreadTitle` 通道 LLM 化摘要/分类 |
 | 定价 fixture 硬编码 + 预算/成本历史存 localStorage | `pricing/fixtures/claude.ts:11-27`；`budgetStore.ts:41`、`costHistoryStore.ts:25` | 价格调了界面还显示旧价；预算与后端持久化体系不一致 | P1 | 未做 | 远端可更新 + 预算迁后端 |
-| threads hooks 四巨石 | `useThreads.ts` 3041 行、`useThreadMessaging.ts` 2542 行、`useThreadEventHandlers.ts` 2567 行、`useThreadActions.ts` 1548 行；`claudeHistoryLoader.ts` 2378 行 | 新增引擎仍需触碰大体量 hook/loader | P2 | 部分变化 | 抽统一事件 schema，泛化 loader/adapter |
+| threads hooks 四巨石 | `useThreads.ts` 3041 行、`useThreadMessaging.ts` 2545 行、`useThreadEventHandlers.ts` 2567 行、`useThreadActions.ts` 1548 行；`claudeHistoryLoader.ts` 2378 行 | 新增引擎仍需触碰大体量 hook/loader | P2 | 部分变化 | 抽统一事件 schema，泛化 loader/adapter |
 | 邮件驱动续聊等边缘功能耦合在核心链 | 非核心能力塞在 threads 主链路 | 核心链路变重；边缘场景污染通用路径 | P1 | 未做 | 边缘能力插件化或剥离 |
 | 检索超时硬编码 1.5s | `messageRuntimeController.ts:6` | 大记忆库词法全扫易超时静默降级 | P1 | 未做 | 自适应超时或流式返回 |
 | shared-session 绑定双写无 reconcile | 内存 Map + 后端双写；pending id 靠前缀字符串识别 | "明明显示已绑定却找不到会话" | P1 | 未做 | 以后端为单一事实源 |
@@ -148,30 +153,30 @@
 
 | 问题 | 原因 / 现状证据 | 影响（大白话） | 优先级 | 状态 | 建议 |
 |---|---|---|---|---|---|
-| Git History 5 文件共 9438 行 `@ts-nocheck` | Impl 2803、View 2405、Interactions 2188、Dialogs 1548、Pickers 494 行；删除分支/reset/rebase 等不可逆操作跨文件分布 | git 高危链路失去类型保护，单拆 Impl 也无法恢复边界安全 | P0 | 未做 | 先补 shared props/action types，再按完整 interaction slice 渐进摘 nocheck |
-| `GitDiffPanel.tsx` 3125 行 / `FileViewPanel.tsx` 3092 行 | 两者虽在 `large-file-new-file-baseline`，但不在当前为空的 hard baseline；本次 gate 均报 `status=new`。前者含 stage/commit/PR/AI commit，后者有 25 个 `useEffect` | 当前已直接阻断 gate；高频工程入口仍在单文件聚合副作用 | P0-P1 | 未做 | 先决定“立即拆分”或“带 owner/期限的临时 hard baseline”；随后按 command orchestration、selection、preview、dialog 拆 owner |
-| `fileViewPanelShared.ts` / `fileViewPanelInternals.ts` 重复纯函数 | 当前分别 415 / 658 行；同名 helper 仍有重复实现，但两文件已不是整份同实现 | 重复逻辑仍可能漂移 | P0 | 部分变化 | 按 symbol 合并重复 helper，避免整文件替换 |
-| 文件外部变更 2s 轮询 | watcher 已为主通道；`fileViewPanelShared.ts` 保留 polling backstop | 后台空转已下降，但兜底周期仍需遵守门控基线 | P1 | 已重构 | 保持 watcher 优先；仅保留 visibility-gated 低频 backstop |
+| Git History 5 文件共 9438 行 `@ts-nocheck` | 5 个核心文件已全部恢复 typecheck，原 494 条 diagnostics 清零；当前 Impl 4841、View 3226、Interactions 2778、Dialogs 2024、Pickers 493 行 | 高危 Git 链路恢复类型保护，但 Impl / View 已成为 large-file failure | P0 | ✅ 类型安全闭环 | 按 capability 拆文件；禁止重新引入 `@ts-nocheck` |
+| `GitDiffPanel.tsx` / `FileViewPanel.tsx` 超大文件 | production 已降至 2994 / 2997 行；primary tests 拆为小于 800 行的 parts；两目标均退出当前 gate failure 清单 | 高频入口的测试与部分 contract 已拆出，但 production 仍接近 3000 行 | P0-P1 | ✅ 目标闭环，债务保留 | 继续按 orchestration / selection / preview owner 拆分，不机械切行 |
+| `fileViewPanelShared.ts` / `fileViewPanelInternals.ts` 重复纯函数 | 当前分别 417 / 295 行；重复 export 已清零，internals 复用 shared implementation | 漂移源已移除 | P0 | ✅ 已闭环 | 维持 shared 单一事实源 |
+| 文件外部变更 2s 轮询 | watcher 为主通道；fallback 已改为 visibility-gated 30s | 静默期 IPC 与后台空转显著下降 | P1 | ✅ 已闭环 | 保持 watcher + 30s reconcile contract |
 | `semanticDiffSummary.ts` 的 `aiReview` 无生产者 | schema/UI 就绪，全仓无调用构造 | "AI 审查本次改动"界面永远等不到内容 | P1 | ✅ 已接线 | `WorkspaceSessionActivityPanel.tsx:719-738` 产出 |
-| AI commit message 藏太深 | `GitDiffPanel.tsx:2150-2248` 要右键→引擎→语言两级菜单；无默认一键无流式 | 99% 用户找不到 | P1 | 未做 | 一键 + 流式 + 自动分组建议 |
-| worktree 面板重复实现 AI commit | `GitHistoryWorktreePanel.tsx` 已增至 1200 行，仍自行实现 stage/commit/AI-commit | 两套平行演化 | P1 | 未做 | 收敛 worktree/diff 重复逻辑 |
-| terminal 零 addon | search/serialize/web-links grep 零引用；`terminalRuntime.ts` 已有 runtimeLog 后端通道但无"报错→问 AI"链路 | 终端就是个裸命令行，无搜索、无链接识别、不能把报错发给 AI | P1 | 未做 | 补 addon + "报错→问 AI"入口 |
-| code-annotations 批注只带行号 | `codeAnnotations.ts:94-99` 无内容快照 | 行号漂移即失效 | P1 | 未做 | 锚点快照 + 漂移 AI 重定位 |
-| diff/compare 组件族 6+ 个平行演化 | 4000+ 行，边界模糊 | 重复实现 | P2 | 未做 | diff 组件族重切分 |
-| `FileMarkdownPreview.tsx` 1581 行仍是生产依赖 | `SkillsSection.tsx` 已删除，但 `FileMarkdownPreviewFast.tsx:10,434` 仍 import 并渲染 legacy 实现；`FileViewBody.tsx:29,1092` 使用 Fast wrapper | “Fast”并非独立管线，直接删除会破坏文件预览 | P1 | 部分变化 | 先迁出 rich preview 能力，再评估删除或重命名 |
-| stale mock 路径不符 | `app-shell.startup.test.tsx:1172` mock 路径与实际模块不符 | 测试在跑真实 hook，可能测了个寂寞 | P1 | 未做 | 修正 mock 或补真实测试 |
+| AI commit message 藏太深 | GitDiff 常驻按钮已支持按 last config 一键生成，并保留 engine / language 切换；尚未流式生成 | 高频入口已可发现，长生成反馈仍不足 | P1 | ✅ 当前需求完成 | 是否增加流式与自动分组需另立体验目标 |
+| worktree 面板重复实现 AI commit | GitDiff 与 Worktree 已共享 168 行 `useCommitMessageGenerationMenu`，generation guard / persistence / engine / language contract 收敛；stage/commit scope policy 各自保留 | 生成逻辑漂移源已移除 | P1 | ✅ generation contract 闭环 | 不强行合并两 surface 的 scope policy |
+| terminal 零 addon | 已动态加载 `SearchAddon` / `WebLinksAddon`，支持 Cmd/Ctrl+F、前后查找和安全 URL；原 Composer handoff 保留，addon 失败不阻塞 terminal | 搜索与链接能力已补齐；“报错→问 AI”仍缺少结构化上下文 | P1 | 🔶 基础能力闭环 | 后续只补日志诊断 handoff，不重做 terminal runtime |
+| code-annotations 批注只带行号 | annotation schema 已增加 versioned snapshot / context fingerprint；±120 行 exact relocation，歧义返回 stale | 编辑插行后可自动重定位，避免静默错绑 | P1 | ✅ 已闭环 | 只有 exact relocation 失败率超预算时再评估 AI 重定位 |
+| diff/compare 组件族 6+ 个平行演化 | editable / review / read-only surfaces 已共享 `DiffPresentationEntry` 与 normalization core；editing policy 仍独立 | path/name/media 展示事实源已统一 | P2 | ✅ shared core 闭环 | 保留 surface policy 分层 |
+| Markdown preview renderer 边界混乱 | `FileMarkdownPreviewRouter.tsx` 567 行成为 canonical production 入口；`FileMarkdownPreview.tsx` 1581 行显式命名 Rich fallback；Fast 仅 11 行 compatibility alias | production import 单向，legacy 名称不再伪装独立 fast pipeline | P1 | ✅ 已闭环 | 后续按 router / rich capability 拆分，不直接删除 fallback |
+| stale mock 路径不符 | `app-shell.startup.test.tsx` mock 已与生产 hook 对齐 | 测试不再意外执行真实 hook | P1 | ✅ 已闭环 | — |
 
 ### 6. 检索与导航（search / quick-switcher / project-map / workspaces）
 
 | 问题 | 原因 / 现状证据 | 影响（大白话） | 优先级 | 状态 | 建议 |
 |---|---|---|---|---|---|
-| message search 每次查询全量重建索引 | `messageProvider.ts:25-28` 生产调用 `buildWorkspaceMessageIndex`；`messageIndex.ts:9-32` 每次遍历所有 thread items 后再做 substring scan | 消息越多，每次输入的同步工作越大；旧死索引删除不等于搜索性能闭环 | P1 | 部分清理 | 按 workspace/thread version 缓存增量索引，并将 query scoring 与 index build 分离 |
-| 三个搜索入口各自为政 | SearchPalette / QuickSwitcher / 会话内搜索三套独立打分 | 同一条内容在不同入口排名不一样 | P1 | 未做 | 统一搜索入口 + 意图路由 |
-| QuickSwitcher 无查询、硬上限 30 条 | `types.ts:1`；导航 contract 双层拦截靠注释维系 | 能力重叠又受限 | P1 | 未做 | 并入统一搜索或补 frecency |
+| message search 每次查询全量重建索引 | `messageIndex.ts` 已用 module-local `WeakMap` 按 immutable snapshot + ordered thread ids 缓存 build 结果；query 仍做 substring scan | 重复遍历、装箱与 lowercase 已消除；超大索引查询仍是 O(全部消息文本) | P1 | ✅ 当前瓶颈已修 | 只有性能数据仍超预算时再评估 trigram / inverted index |
+| 三个搜索入口各自为政 | SearchPalette 已由 `useUnifiedSearch` 聚合 8 类 provider 并统一 ranking/frecency；QuickSwitcher 按 spec 独立承担 recent-context navigation；未找到第三套会话内独立打分实现 | 原“三套独立打分”结论不成立 | 待决策 | 结论已校正 | 先验证双入口是否造成认知问题，再决定是否改 OpenSpec |
+| QuickSwitcher 无查询、硬上限 30 条 | `quick-context-switcher` main spec 明确要求 compact non-search surface，recent sessions/files 各限 30 条；Global Search 是其导航入口 | 这是有界 MRU contract，不是功能缺失 | — | ✅ 符合现行 spec | 不执行；如需 frecency/合并入口，先新建 behavior change |
 | project-map 证据选取硬编码 15 个文件名 | `projectMapGenerationWorker.ts:527-558` 上限 24 文件/52k 字符 | AI 只能看到有偏见的一小部分项目 | P1 | 未做 | 证据检索 RAG 化 |
 | project-map 引擎响应 8 层递归嗅探 | `:218-319`；JSON 修复重试把 52k 证据 prompt 完整重发 | 猜错就双倍 token 双倍钱 | P0-P1 | 未做 | 生成管线契约化（structured output、落盘节流、修复重试瘦身） |
-| `ProjectMapPanel.tsx` 1945 行 / 17 `useState` 调用 | 体量下降，但面板仍直接 import orchestration 存储跨层直写 | 不同层直接互写，耦合仍深 | P1 | 部分变化 | 按职责拆分；存储走接口 |
-| worktree 默认分支名无语义 | `useWorktreePrompt.ts:355-357` 硬编码 `codex/{date}-{random4}` | 分支名看不出意图 | P1 | 未做 | 语义分支名 / baseRef / setup script |
+| `ProjectMapPanel.tsx` 1945 行 / 17 `useState` 调用 | 体量与职责过载属实；复核未找到旧报告所称的 orchestration storage 直接 import | 架构债务存在，但不能再用未复现的跨层直写作证据 | P1 | 🔶 证据校正 | 按职责拆分；新增改造需重新追踪真实 data flow |
+| worktree 默认分支名无语义 | `openPrompt` 现将 `branch` 初始化为空，必须显式输入；旧 `codex/{date}-{random4}` 默认值已删除 | 随机分支名问题已消除，但尚无 AI 语义命名 | P1 | ✅ 缺陷已修 | 语义建议作为独立增强，不恢复隐式默认值 |
 | workspaces 错误契约靠字符串匹配 | `useWorktreePrompt.ts:109-217` | 后端改个措辞前端就瞎 | P1 | 未做 | 错误契约结构化 |
 | 文件列表 30s 全量轮询 | workspaces 文件列表刷新 | 后台定期全扫 | P2 | 未做 | fs watcher 或增量更新 |
 
@@ -179,7 +184,7 @@
 
 | 问题 | 原因 / 现状证据 | 影响（大白话） | 优先级 | 状态 | 建议 |
 |---|---|---|---|---|---|
-| `SettingsView.tsx` 已摘 `@ts-nocheck`，但仍有 2587 行 | 当前 20 个 `useState`、26 个 `useEffect`；SessionManagementSection 又有 2547 行 | 类型保护已恢复，职责聚合与副作用密度未消失 | P1 | 部分修复 | 保持 typecheck；继续按 section owner 下沉 orchestration |
+| `SettingsView.tsx` 已摘 `@ts-nocheck`，但仍有 2545 行 | SessionManagementSection 另有 2547 行；MCP / Skills 已迁入 Extensions，但 settings orchestration 仍重 | 类型保护已恢复，职责聚合与副作用密度未消失 | P1 | 部分修复 | 保持 typecheck；继续按 section owner 下沉 orchestration |
 | 5 个 `SHOW_*_ENTRY = false` 死开关 | `settingsViewConstants.ts:4-8` 连死 JSX 分支 | 藏着永远渲染不出来的入口 | P0 | ✅ 已清 | — |
 | 通知 dock 任何 info 都显示成错误态 | `useGlobalRuntimeNoticeDock.ts:535-537`；正确判定函数 `:423-437` 写好了没接线 | 普通通知也红彤彤 | P0 | ✅ 已修 | — |
 | 状态面板二元引擎假设只修主路径 | `useStatusPanelData.ts:248` 支持 `activeEngine`；`useLayoutNodes.tsx:1163-1166` 已传入，但 `Composer.tsx:674-680` sibling caller 仍只传 `isCodexEngine` | Composer 汇总中的 kimi/opencode/gemini task output 仍可能错标 Claude | P0 | 部分修复 | 所有 caller 必须传真实 `selectedEngine`；删除 legacy boolean fallback |
@@ -248,11 +253,12 @@
 
 | 问题 | 原因 / 现状证据 | 影响（大白话） | 优先级 | 状态 | 建议 |
 |---|---|---|---|---|---|
-| `openspec/project.md` 内部存在三组冲突快照 | 目录与 `changes/README.md` 是 active=6/archive=731/specs=431；`project.md` 的 Architecture 写 active=5，Current Inventory 写 active=4/archive=730，Active Changes 只列 4 项，product version 仍是 0.7.5 而代码为 0.7.9 | 同一治理入口给出互相冲突的版本、数量和 active list，无法作为 current truth | P0 | 未修复 | 从目录生成 snapshot；一次性校准版本、计数、active table 和 Updated At |
-| Skills Hub 行为绕过 OpenSpec | `b1d94a930` 新增 `skills_hub.rs`、Skills UI、安装/卸载/同步/搜索/usage 行为；`c75922dec` 再改长列表交互，但 `openspec/specs/**` 与 `openspec/changes/**` 对 `skills_hub`/Skills Hub 零命中 | 代码已形成完整产品能力，mainline behavior truth 完全缺席，无法 verify/sync/archive | P0 | 未做 | 新建独立 `skills-hub-management` change，补 typed contract、权限/path 安全、失败矩阵、性能验收和 delta spec |
+| OpenSpec current snapshot 仍漂移 | 目录实测 active=13/archive=738/specs=436；`changes/README.md` active table 已列 13 项，但 archive 摘要仍写 731；`project.md` 继续保留旧 active/archive/spec/version 快照 | 同一治理入口仍无法稳定提供 current truth | P0 | 部分更新 | 从目录生成 snapshot；一次性校准 version、counts、active table 与 Updated At，并加 CI |
+| Skills Hub 行为绕过 OpenSpec | 已新增 active change `add-skills-hub-management`，14/14 tasks 追溯 `b1d94a930` / `c75922dec` 的安装、卸载、同步、搜索、usage 与长列表行为；尚未 verify/sync/archive，main specs 仍无对应 capability | behavior debt 已从“零 artifact”降为“active 追溯 change 未闭环” | P0 | 🔶 change 已补 | 完成 verify，sync main specs 后 archive；typed query/mutation contract 另行治理 |
 | 19 个游离提案实现已落地未归档 | 代码存在但缺 verification.md | mainline spec truth 落后代码 | P0 | ✅ 已归档 | archive 强制 verification.md |
 | `add-tokentracker-usage-dashboard` 21/21 但后续 scope 漂移 | proposal/tasks 只描述 usage dashboard、CLI/server/`tt_proxy`；后续 Skills backend/UI 未补进该 change | 直接归档会让完成度看似 100%，却遗漏最新同域行为 | P0 | 需先校准 | Skills 使用独立 change 或显式扩 scope；完成 verify 后再归档 usage change |
-| 无独立 OpenSpec 索引一致性 gate | `package.json` 与 `.github/workflows/` 未发现核对 active/archive/specs 索引计数的专用脚本；现有命令主要做结构校验和 archive readiness | 手工补登后仍可能再次漂移 | P1 | 未做 | 加索引计数和链接一致性脚本并接 CI |
+| Full strict validation 仍有 2 个失败 | `openspec validate --all --strict --no-interactive` 实测 447 passed / 2 failed；失败项为 `add-tokentracker-usage-dashboard` 与 `reduce-client-polling-overhead` | main specs 与其余 active changes 可验证，但工作区不能宣称全绿 | P1 | 部分通过 | 分别修复两个 active change 的 artifact/requirement validation |
+| 无独立 OpenSpec 索引一致性 gate | `package.json` 与 `.github/workflows/` 仍未发现核对 active/archive/specs 索引计数的专用脚本；当前 738 vs 731 已再次证明手工快照会漂移 | validate 通过也不能保证导航计数是 current truth | P1 | 未做 | 加目录计数、active links 与 version 一致性脚本并接 CI |
 | 48-task 大删除提案烂尾教训 | `2026-06-24-retire-opencode-and-gemini-cli` 整体强制归档 | 大颗粒删除型提案易烂尾 | — | 已记录 | 未来删除提案按 capability 分片 |
 
 ---
@@ -275,7 +281,7 @@
 
 | 位置 | 周期 | 当前状态 | 建议方案 | 优先级 |
 |---|---|---|---|---|
-| `CuratedSkillIndicator` | 2s | 半修复：已套可见性门控，但静态设置数据仍靠轮询 | 引入跨组件 settings 变更事件，彻底去轮询 | P3 |
+| `CuratedSkillIndicator` | event + 60s | 已改 settings change event 主通道，保留 visibility-gated 60s reconcile | 保留低频 backstop；不再按 2s 轮询治理 | P3 |
 | `useGlobalRuntimeNoticeDock` | 60s | 已改为 `runtime-pool-changed` 事件 + visibility-gated 60 秒 backstop | 保留低频 reconcile；无需再按 5 秒轮询治理 | P3 |
 | `useGitLog` | 10s | 未修复 | 套 `setVisibilityGatedInterval`；长期接 git 文件变更事件 | P2 |
 | `MemoryPanel` 探活 | 10s | 未修复：no-cors HEAD `localhost:37777`，未门控 | 套 `setVisibilityGatedInterval`；URL 抽配置 | P2 |
@@ -308,17 +314,13 @@
 
 | # | 任务 | 不做会怎样 | 当前状态 |
 |---|---|---|---|
-| P0-B | 统一输入历史单一实现；砍掉 `useComposerAutocompleteState` 弃用输出 | 历史/补全/搜索口径不一致；双引擎浪费 | 未做 |
-| P0-C | 为 Git History 5 文件补 shared types 并渐进摘 `@ts-nocheck` | 9438 行高危 Git 操作无类型保护 | 未做 |
-| P0-D | 合并 `fileViewPanelShared`/`fileViewInternals` 重复纯函数 | 重复维护 | 未做 |
 | P0-E | 修 About GitHub URL | 用户点错仓库 | 未做 |
-| P0-F | 解耦 `FileMarkdownPreviewFast` 对 legacy `FileMarkdownPreview` 的生产依赖 | 当前不能安全删除 legacy 实现 | 前置关系已修正 |
-| P0-G | 修 `openspec/project.md` 三组冲突快照并加索引一致性 CI | 当前 truth 同时声称 active=4/5/6 | 未做 |
-| P0-H | 恢复 large-file gate 绿灯：核对 16 个 hard failure 与 `src-tauri/src/storage.rs` ratchet，逐项选择拆分或限期 baseline | 当前 CI 治理命令直接失败，无法区分新增回退与已知债务 | 未做 |
-| P0-I | 为 Skills Hub 补独立 OpenSpec change/main spec | 已上线能力无法 verify/sync/archive | 未做 |
+| P0-G | 校准 OpenSpec current snapshot 并加索引一致性 CI | 目录为 13/738/436，导航仍写 archive=731，治理入口继续漂移 | 部分更新 |
+| P0-H | 恢复 large-file gate 绿灯：治理 13 个 hard failure 与 `storage.rs` ratchet | 当前 CI 命令仍失败 14 项，新增回退无法与已知债务稳定区分 | 部分完成：Git/File 两目标已退出 |
+| P0-I | 完成 Skills Hub OpenSpec verify/sync/archive | active 追溯 change 已有，但 mainline behavior truth 仍未闭环 | 14/14，待 verify/archive |
 | P0-J | 补齐 Composer `activeEngine` 透传并移除二元 fallback | 非 Codex task output 仍可能错标 Claude | 部分修复 |
 
-已完成、不再占用剩余 P0 编号：`ComposerInput.tsx` / dead bridge 删除。large-file policy、baseline 文件与 CI wiring 只完成基础设施接线；当前 gate 仍为红灯，保留 P0-H。
+已完成、不再占用剩余 P0 编号：ComposerInput/dead bridge 清理、输入历史单一 store、autocomplete 死计算删除、Git History typecheck 恢复、File View helper 去重、Markdown renderer boundary。large-file policy、baseline 与 CI wiring 只完成基础设施接线；当前 gate 仍为红灯，保留 P0-H。
 
 ### P1 — 本季度
 
@@ -327,20 +329,21 @@
 | P1-1 | 统一模型元数据注册表，消灭字符串启发式 | 每加引擎改 10+ 处；伪徽章误导 | 未做 |
 | P1-2 | 事件驱动改造批次（AppSettings、通知、engine-task-output、文件外部变更、commands/skills 目录 watch） | 触碰渲染红线；后台空转 | 部分完成 |
 | P1-3 | 拆 god hook 第二波：`useEngineController`、threads 四巨石、`useLayoutNodes`、`ProjectMapPanel` | 阻塞各自领域迭代 | 未做 |
-| P1-4 | 统一搜索入口 + 语义搜索接入 | 智能化差距最大项之一 | 未做 |
+| P1-4 | 记忆/项目证据语义检索接入 | 当前 unified search 已存在，真正缺口是 embedding 与 project evidence retrieval | 需先决策 embedding |
 | P1-5 | browser 动作管线：接通或删除 | 纯负债 | **需决策** |
 | P1-6 | 语音后处理（`initial_prompt` + LLM 清洗） | 语音输入专业场景不可用 | 未做 |
 | P1-7 | AI 日志/错误分析入口 | 报错只能自己读日志 | 未做 |
 | P1-8 | 拆 kanban 执行根 hook | 误判与渲染风险持续 | 部分完成 |
 | P1-9 | checkpoint 主动摘要 + 验证 profile 探测项目脚本 | 摘要看运气；新项验证对不上 | 未做 |
-| P1-10 | AI commit 一键 + 流式 + 自动分组 | 99% 用户找不到 | 未做 |
-| P1-11 | worktree 智能创建 + workspaces 错误契约结构化 | 分支名无语义；后端改文案前端瞎 | 未做 |
+| P1-10 | AI commit 流式反馈与自动分组 | 常驻一键入口已完成；长生成与多仓选择仍可继续优化 | 基础入口已完成 |
+| P1-11 | worktree 语义建议 + workspaces 错误契约结构化 | 随机默认名已删除；错误分类仍会受后端文案变化影响 | 部分完成 |
 | P1-12 | project-map 证据 RAG 化 + 生成管线契约化 | 双倍 token；AI 只能看偏见切片 | 未做 |
 | P1-13 | 语音 VAD + 流式转写 | 长语音体验差 | 未做 |
 | P1-14 | browser `<browser_context_v2>` 改 JSON + OCR/截图确认 | 解析脆弱；截图文字无法给 AI | 未做 |
 | P1-15 | 拆 `skills_hub.rs` typed domain modules，并登记 vendored Skills 偏差 | 技能安装、网络、usage 和文件系统变更绑在一个 2995 行 owner | 未做 |
-| P1-16 | 拆 `GitDiffPanel` / `FileViewPanel` / `useAppServerEvents` / `local_usage` 巨石 | 前两者已使 gate 失败；后两者虽暂未越 hard threshold，仍有高回归半径 | 未做 |
-| P1-17 | message search 建增量索引缓存 | 当前每次查询同步遍历全部会话消息 | 未做 |
+| P1-16 | 拆 Git History / Threads / Rust runtime 当前 gate 巨石 | Git/File 两目标已退出；当前 13 个 hard failure 集中到 Git History、Threads、daemon/runtime 与 CSS | 部分完成 |
+| P1-17 | 按性能数据决定 message search 的 trigram / inverted index | snapshot build cache 已完成；只有 substring scan 超预算才需继续 | 暂不执行 |
+| P1-18 | 完成 prompt enhancer 流式 diff、skill args 与“存为 Skill” | 四批 Composer 优化已落地基础 contract，但三个用户闭环仍不完整 | 部分完成 |
 
 ### P2 — 需先决策 / 有前置依赖
 
@@ -352,17 +355,17 @@
 | P2-4 | GitHub URL / rebrand | 是否改 updater/release/bundle id | **需决策** |
 | P2-5 | 任务 AI 验收判定 | 重建 reviewer-turn 机制；依赖 P1-8 拆分 | **需决策** |
 | P2-7 | operation-facts 结构化下沉 | 依赖 engine 事件协议演进（双端改动） | 未做 |
-| P2-8 | 技能调用契约结构化 + "对话→prompt/skill"沉淀 | 牵涉 engine 双端协议与产品决策 | 未做 |
+| P2-8 | 扩展 skill args 与“对话→Skill”沉淀 | typed skill identity 与“对话→Prompt”已落地；剩余是参数和 Skill 资产化产品 contract | 部分完成 |
 
 ---
 
 ## 四、风险与注意事项
 
-1. **避免与在途规划重复投入**。OpenSpec 已立项/已完成：AI PR 标题正文生成、prompt enhancer 入口、Agent Catalog、source-aware 便签捕获、Quick Switcher 活动中心化、Kimi 引擎、记忆自动注入。Skills Hub 是例外：代码已落地，但没有对应 OpenSpec behavior artifact，必须补独立 change，不能伪装成 `add-tokentracker-usage-dashboard` 的 21/21 收尾。
+1. **避免与在途规划重复投入**。OpenSpec 已立项/已完成：AI PR 标题正文生成、prompt enhancer、Agent Catalog、source-aware 便签捕获、Quick Switcher、Kimi 引擎、记忆自动注入。Skills Hub 已补 `add-skills-hub-management` 追溯 change，但尚未 verify/sync/archive，不能伪装成 `add-tokentracker-usage-dashboard` 的 21/21 收尾。
 
 2. **大重构的前置依赖链**：
    - Spec Hub 任何改动 → 先 de-minify，否则在混淆文件上赌博；
-   - Composer 拆分 → `ComposerInput.tsx` 已清；下一步先统一历史和补全状态，再拆 adapter；
+   - Composer 拆分 → `ComposerInput.tsx`、历史双写和重复 autocomplete 已清；现在可按 adapter / orchestration owner 拆分；
    - 语义搜索/证据 RAG → 依赖记忆语义检索接线；
    - 模型智能推荐 → 依赖统一注册表；
    - operation-facts 结构化 → 依赖 engine 事件协议演进（双端改动，成本最高）。
@@ -376,10 +379,10 @@
 
 5. **轮询改造需遵守仓库红线**。AGENTS.md 明确"事件驱动 + ≥30s 兜底轮询，禁秒级轮询"；渲染风暴排查方法以 `docs/perf/render-jank-knife-experiments-2026-07-08.md` 为准。
 
-6. **baseline 不是豁免证书，当前也没有形成有效豁免**。`large-file-new-file-baseline` 只服务 new-file ratchet，不能替代 hard baseline；当前 hard baseline 的 `entries` 为空，所以 `GitDiffPanel`、`FileViewPanel` 等 16 项仍报 policy hard failure。即使后续临时登记 baseline，也必须绑定 owner、拆分目标和移除期限；拆分按 owner 与 contract 切，不按行数机械搬家。
+6. **baseline 不是豁免证书，当前也没有形成有效豁免**。`large-file-new-file-baseline` 只服务 new-file ratchet，不能替代 hard baseline；当前 hard baseline 的 `entries` 为空，13 个 policy hard failure 仍全部报 `status=new`。`GitDiffPanel`、`FileViewPanel` 已退出 failure 清单，但 Git History Impl/View 因 type-safety 修复进入清单。即使后续临时登记 baseline，也必须绑定 owner、拆分目标和移除期限；拆分按 owner 与 contract 切，不按行数机械搬家。
 
-7. **范围声明**。画布/幕布渲染管线、project-map 图形渲染性能未在本次评估范围；其余条目均核对了当前源码、生产 caller、测试或治理 artifact。行号是 `c75922dec` 快照，后续提交应优先按 symbol 搜索。
+7. **范围声明**。画布/幕布渲染管线、project-map 图形渲染性能未在本次评估范围；其余条目均核对了当前源码、生产 caller、测试或治理 artifact。保留的历史行号仅代表 `c75922dec` 快照；最新结论优先按 symbol 搜索。
 
 ---
 
-*报告完。合并自三份 2026-07-24/25 报告，并于 `c75922dec` 全量核对源码、生产 caller、测试、配置、large-file policy 与 OpenSpec artifacts；目标测试 16/16 通过，large-file gate 实测 17 项失败并已如实纳入 P0。*
+*报告完。合并自三份 2026-07-24/25 报告，并于 2026-07-26 在 `713ef5f2cd` 再次全量核对源码、生产 caller、测试、配置、large-file policy 与 OpenSpec artifacts；本轮未重跑全量测试，large-file gate 实测 14 项失败并已如实纳入 P0。*
