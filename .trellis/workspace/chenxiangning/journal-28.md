@@ -1481,3 +1481,63 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1183: Wave 2 A2 canonical fact 装配闭环
+
+**Date**: 2026-07-27
+**Task**: Wave 2 A2 canonical fact 装配闭环
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 assemble-shared-canonical-facts 实现、集成测试与 Gate 2 验证
+
+### Main Changes
+
+## 完成内容
+
+- 实现 Wave 2 / Change A2 `assemble-shared-canonical-facts`：
+  - `src-tauri/src/shared_event_log/canonical/types.rs`：Canonical Fact 类型系统（serde tag="type"）
+  - `src-tauri/src/shared_event_log/canonical/validator.rs`：字段级校验，非法 payload 拒绝落盘
+  - `src-tauri/src/shared_event_log/canonical/assembler.rs`：Run/Turn Assembler + Tool Exchange 配对
+  - `src-tauri/src/shared_event_log/canonical/sink.rs`：Critical Commit Sink，deterministic committed_at 保证幂等
+  - `src-tauri/src/shared_event_log/canonical/shadow_v0.rs`：V0 evidence → presentation-only Shadow Log
+  - `src-tauri/src/shared_event_log/writer.rs` / `error.rs`：扩展 writer 支持 canonical/presentation-only fact 写入
+- 新增集成测试 `src-tauri/tests/assemble_canonical_facts.rs`（9 场景，全部通过）
+- 更新总任务清单 Wave 2 状态与 Gate 2 勾选
+- OpenSpec Change A2 4/4 artifacts 完成，`openspec validate --strict` 通过
+
+## 验证结果
+
+```
+cargo test --test assemble_canonical_facts: 9 passed; 0 failed
+openspec validate assemble-shared-canonical-facts --strict --no-interactive: valid
+```
+
+## 已知未解决问题
+
+- `runtime::tests` 中两个 process-group 终止测试在 macOS 上环境敏感失败，与本次变更无关（clean tree 同样失败）。
+
+## 关联提交
+
+- `68fcd078b`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68fcd078b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
