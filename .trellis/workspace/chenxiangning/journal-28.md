@@ -1574,3 +1574,36 @@ openspec validate assemble-shared-canonical-facts --strict --no-interactive: val
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1185: 校准 Wave 2-3 Canonical Session
+
+**Date**: 2026-07-27
+**Task**: 校准 Wave 2-3 Canonical Session
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修正 canonical schema、真实时间戳、增量 projection/checkpoint、V0 JSONL dual-read 与 shadow comparator；补齐定向回归测试，并如实重开未接线的 Gate 2/3 项。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5c3073f71` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

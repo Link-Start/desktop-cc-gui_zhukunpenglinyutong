@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1184
+- **Total Sessions**: 1185
 - **Last Active**: 2026-07-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~1576 | Active |
+| `journal-28.md` | ~1609 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1185 | 2026-07-27 | 校准 Wave 2-3 Canonical Session | `5c3073f71` | `feature/v-0710` |
 | 1184 | 2026-07-27 | Wave 3 A3：canonical 投影、checkpoint/rebuild、dual-read 与 Gate 3 | `f403ce879` | `feature/v-0710` |
 | 1183 | 2026-07-27 | Wave 2 A2 canonical fact 装配闭环 | `68fcd078b` | `feature/v-0710` |
 | 1182 | 2026-07-27 | 校准 Session Foundation 与 Shared Event Storage | `b743c4f8a` | `feature/v-0710` |
