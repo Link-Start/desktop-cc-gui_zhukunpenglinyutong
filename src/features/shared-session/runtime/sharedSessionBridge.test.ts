@@ -4,6 +4,7 @@ import {
   registerSharedSessionNativeBinding,
   rebindSharedSessionNativeThread,
   resolvePendingSharedSessionBindingForEngine,
+  resolvePendingSharedSessionBindingForTarget,
   resolveSharedSessionBindingByNativeThread,
 } from "./sharedSessionBridge";
 
@@ -93,5 +94,63 @@ describe("sharedSessionBridge", () => {
     });
     expect(resolvePendingSharedSessionBindingForEngine("ws-5", "codex")).toBeNull();
     clearSharedSessionBindingsForSharedThread("ws-5", "shared:thread-5");
+  });
+
+  it("resolves pending bindings per execution target when dual providers run in parallel", () => {
+    registerSharedSessionNativeBinding({
+      workspaceId: "ws-6",
+      sharedThreadId: "shared:thread-6a",
+      nativeThreadId: "claude-pending-shared-6a",
+      engine: "claude",
+    });
+    registerSharedSessionNativeBinding({
+      workspaceId: "ws-6",
+      sharedThreadId: "shared:thread-6b",
+      nativeThreadId: "claude-pending-shared-6b",
+      engine: "claude",
+      providerProfileId: "openrouter",
+    });
+
+    // Target 级解析：每个 provider 各自命中自己的 pending binding。
+    expect(
+      resolvePendingSharedSessionBindingForTarget("ws-6", "claude", null)?.sharedThreadId,
+    ).toBe("shared:thread-6a");
+    expect(
+      resolvePendingSharedSessionBindingForTarget("ws-6", "claude", "openrouter")
+        ?.sharedThreadId,
+    ).toBe("shared:thread-6b");
+
+    // 旧 engine-only 解析在同 engine 双 pending 时仍 fail-closed（不跨线）。
+    expect(resolvePendingSharedSessionBindingForEngine("ws-6", "claude")).toBeNull();
+
+    clearSharedSessionBindingsForSharedThread("ws-6", "shared:thread-6a");
+    clearSharedSessionBindingsForSharedThread("ws-6", "shared:thread-6b");
+  });
+
+  it("does not cross-match default and managed provider bindings", () => {
+    registerSharedSessionNativeBinding({
+      workspaceId: "ws-7",
+      sharedThreadId: "shared:thread-7",
+      nativeThreadId: "codex-pending-shared-7",
+      engine: "codex",
+      providerProfileId: "openai",
+    });
+
+    // default 查询不命中 managed-provider binding。
+    expect(resolvePendingSharedSessionBindingForTarget("ws-7", "codex")).toBeNull();
+    expect(
+      resolvePendingSharedSessionBindingForTarget("ws-7", "codex", "  "),
+    ).toBeNull();
+    // 其他 managed provider 也不命中。
+    expect(
+      resolvePendingSharedSessionBindingForTarget("ws-7", "codex", "openrouter"),
+    ).toBeNull();
+    // 归属 provider 精确命中。
+    expect(
+      resolvePendingSharedSessionBindingForTarget("ws-7", "codex", "openai")
+        ?.nativeThreadId,
+    ).toBe("codex-pending-shared-7");
+
+    clearSharedSessionBindingsForSharedThread("ws-7", "shared:thread-7");
   });
 });

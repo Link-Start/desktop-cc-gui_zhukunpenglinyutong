@@ -2161,7 +2161,10 @@ async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             let thread_id = parse_string(&params, "threadId")?;
             let turn_id = parse_string(&params, "turnId")?;
-            state.turn_interrupt(workspace_id, thread_id, turn_id).await
+            let provider_profile_id = parse_optional_string(&params, "providerProfileId");
+            state
+                .turn_interrupt(workspace_id, thread_id, turn_id, provider_profile_id)
+                .await
         }
         "thread_compact" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
@@ -2253,8 +2256,9 @@ async fn handle_rpc_request(
                 .filter(|value| value.is_number() || value.is_string())
                 .ok_or("missing requestId")?;
             let result = map.get("result").cloned().ok_or("missing `result`")?;
+            let provider_profile_id = parse_optional_string(&params, "providerProfileId");
             state
-                .respond_to_server_request(workspace_id, request_id, result)
+                .respond_to_server_request(workspace_id, request_id, result, provider_profile_id)
                 .await
         }
         "remember_approval_rule" => {

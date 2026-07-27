@@ -59,9 +59,17 @@ vi.mock("../../../services/clientStorage", () => ({
   writeClientStoreValue: vi.fn(),
 }));
 
-vi.mock("../../shared-session/runtime/sendSharedSessionTurn", () => ({
-  sendSharedSessionTurn: vi.fn(),
-}));
+vi.mock("../../shared-session/runtime/sendSharedSessionTurn", () => {
+  const sendSharedSessionTurn = vi.fn();
+  return {
+    sendSharedSessionTurn,
+    // Wave 4 / Change B：hook 改走 routed 入口；测试默认 V2 flag 关闭，
+    // routed 直接委托 V0 mock，保持既有断言不变。
+    sendSharedSessionTurnRouted: vi.fn((input: unknown) =>
+      sendSharedSessionTurn(input),
+    ),
+  };
+});
 
 export const workspace: WorkspaceInfo = {
   id: "ws-1",

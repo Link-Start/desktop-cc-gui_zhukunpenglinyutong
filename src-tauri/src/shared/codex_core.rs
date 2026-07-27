@@ -1704,10 +1704,12 @@ pub(crate) async fn skills_list_core(
 pub(crate) async fn respond_to_server_request_core(
     sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
     workspace_id: String,
+    provider_profile_id: Option<String>,
     request_id: Value,
     result: Value,
 ) -> Result<(), String> {
-    let session = get_session_clone(sessions, &workspace_id).await?;
+    let session_key = session_key_for_provider(&workspace_id, provider_profile_id.as_deref());
+    let session = get_session_clone(sessions, &session_key).await?;
     if let Some(local_request_id) = request_id.as_str() {
         if session
             .consume_local_user_input_request(local_request_id)

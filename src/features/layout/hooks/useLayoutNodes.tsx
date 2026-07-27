@@ -122,6 +122,13 @@ import {
   type ActiveCanvasSnapshot,
 } from "./activeCanvasStore";
 import { ActiveCanvasComposer } from "./activeCanvasComposerNode";
+import { SharedSendStatusBar } from "../../shared-session/components/SharedSendStatusBar";
+import { useSharedSendState } from "../../shared-session/runtime/sharedSendStateStore";
+import { useSharedSendStateRestore } from "../../shared-session/runtime/useSharedSendStateRestore";
+import {
+  isComposerLocked,
+  isPickerLocked,
+} from "../../shared-session/target/sendStateMachine";
 import { ActiveCanvasStatusPanel } from "./activeCanvasStatusPanelNode";
 import { buildShellRuntimeSummary } from "./layoutShellSummary";
 import { buildConversationCanvasNode } from "./conversationCanvasNode";
@@ -1206,6 +1213,17 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     [],
   );
   const isSharedSession = activeThreadSummary?.threadKind === "shared";
+  // Wave 4 / B.6：Shared Send UI 状态机（§14.5）。V2 flag 关闭时状态恒为 idle，不影响现有行为。
+  const sharedSendEntry = useSharedSendState(
+    options.activeWorkspaceId ?? "",
+    options.activeThreadId ?? "",
+  );
+  useSharedSendStateRestore(
+    options.activeWorkspaceId ?? null,
+    options.activeThreadId ?? null,
+    isSharedSession,
+  );
+  const sharedSendState = isSharedSession ? sharedSendEntry.state : "idle";
   const rewindWorkspaceGitState = deriveRewindWorkspaceGitState(
     options.gitStatus,
   );
@@ -1382,6 +1400,11 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   ) =>
     options.showComposer ? (
       <Profiler id="composer" onRender={handleRuntimeProfileRender}>
+        <SharedSendStatusBar
+          workspaceId={options.activeWorkspaceId ?? null}
+          threadId={options.activeThreadId ?? null}
+          isSharedSession={isSharedSession}
+        />
         <ActiveCanvasComposer
           items={EMPTY_ACTIVE_CANVAS_ITEMS}
           activeThreadId={null}
@@ -1399,7 +1422,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           rewindDialogRequest={rewindDialogRequest}
           onRewindDialogRequestConsumed={handleRewindDialogRequestConsumed}
           canStop={options.canStop}
-          disabled={options.isReviewing}
+          disabled={options.isReviewing || isComposerLocked(sharedSendState)}
           contextUsage={null}
           contextDualViewEnabled={options.contextDualViewEnabled}
           codexAutoCompactionEnabled={options.codexAutoCompactionEnabled}
@@ -1450,6 +1473,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           selectedCollaborationModeId={options.selectedCollaborationModeId}
           onSelectCollaborationMode={options.onSelectCollaborationMode}
           isSharedSession={isSharedSession}
+          sharedTargetPickerLocked={isPickerLocked(sharedSendState)}
           engines={options.engines}
           selectedEngine={options.selectedEngine}
           onSelectEngine={options.onSelectEngine}

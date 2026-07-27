@@ -3,12 +3,15 @@ import {
   sendSharedSessionMessage,
   setSharedSessionSelectedEngine,
 } from "../services/sharedSessions";
+import type { ExecutionTarget } from "../target/types";
 import {
   registerSharedSessionNativeBinding,
   rebindSharedSessionNativeThread,
 } from "./sharedSessionBridge";
+import { sendSharedSessionTurnV2 } from "./sendSharedSessionTurnV2";
+import { isSharedV2SendEnabled } from "./sharedV2SendFlag";
 
-export async function sendSharedSessionTurn(input: {
+export type SendSharedSessionTurnInput = {
   workspaceId: string;
   threadId: string;
   engine: SharedSessionSupportedEngine;
@@ -21,7 +24,9 @@ export async function sendSharedSessionTurn(input: {
   collaborationMode?: Record<string, unknown> | null;
   preferredLanguage?: string | null;
   customSpecRoot?: string | null;
-}) {
+};
+
+export async function sendSharedSessionTurn(input: SendSharedSessionTurnInput) {
   const selection = await setSharedSessionSelectedEngine(
     input.workspaceId,
     input.threadId,
@@ -84,4 +89,25 @@ export async function sendSharedSessionTurn(input: {
     }
   }
   return response;
+}
+
+/**
+ * Wave 4 / Change B 路由入口：flag 开启走 V2（begin → send → commit），
+ * 关闭走 V0。V2 需要 `input.target`；缺省时用 engine/model/effort 构造
+ * 默认 target（providerProfileId = null，归位 default/local 语义）。
+ * V0 导出保持不变，用于回滚。
+ */
+export async function sendSharedSessionTurnRouted(
+  input: SendSharedSessionTurnInput & { target?: ExecutionTarget },
+) {
+  if (!isSharedV2SendEnabled()) {
+    return sendSharedSessionTurn(input);
+  }
+  const target: ExecutionTarget = input.target ?? {
+    engine: input.engine,
+    providerProfileId: null,
+    model: input.model,
+    reasoning: input.effort ? { effort: input.effort } : null,
+  };
+  return sendSharedSessionTurnV2({ ...input, target });
 }

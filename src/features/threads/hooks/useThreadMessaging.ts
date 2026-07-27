@@ -37,7 +37,9 @@ import {
   listGeminiSessions as listGeminiSessionsService,
   listKimiSessions as listKimiSessionsService,
 } from "../../../services/tauri";
-import { sendSharedSessionTurn } from "../../shared-session/runtime/sendSharedSessionTurn";
+import { sendSharedSessionTurnRouted } from "../../shared-session/runtime/sendSharedSessionTurn";
+import { isSharedV2SendEnabled } from "../../shared-session/runtime/sharedV2SendFlag";
+import { getSharedTargetState } from "../../shared-session/target/targetStore";
 import { projectMemoryFacade } from "../../project-memory/services/projectMemoryFacade";
 import {
   injectSelectedMemoriesContext,
@@ -1185,8 +1187,13 @@ export function useThreadMessaging({
             threadId,
             engine: sharedResolvedEngine,
           });
+          // B.6：经 flag 路由入口发送（flag 开 = V2 durable-first 编排；关 = V0，
+          // 行为与之前完全一致）。target 优先取 Picker 的 selectedNextTarget，
+          // 缺省时由 dispatcher 按 engine/model/effort 构造默认 target。
+          const sharedNextTarget = getSharedTargetState(workspace.id, threadId)
+            .selectedNextTarget;
           response =
-            (await sendSharedSessionTurn({
+            (await sendSharedSessionTurnRouted({
               workspaceId: workspace.id,
               threadId,
               engine: sharedResolvedEngine,
@@ -1201,7 +1208,21 @@ export function useThreadMessaging({
                 ? "zh"
                 : "en",
               customSpecRoot: resolveWorkspaceSpecRoot(workspace.id),
+              ...(sharedNextTarget ? { target: sharedNextTarget } : {}),
             })) as Record<string, unknown>;
+          // V2 begin 早退（recovery-required / target-unavailable）：编排层已驱动
+          // send 状态机，这里不按发送失败处理，也不抛出；复位 processing，
+          // 让 Composer 按状态机渲染恢复/不可用 UI。
+          if (
+            isSharedV2SendEnabled() &&
+            (response?.status === "recovery-required" ||
+              response?.status === "target-unavailable")
+          ) {
+            markProcessing(threadId, false);
+            setActiveTurnId(threadId, null);
+            safeMessageActivity();
+            return;
+          }
           const sharedNativeThreadId = asString(response?.nativeThreadId ?? "").trim();
           if (sharedNativeThreadId && !sharedNativeThreadId.startsWith("shared:")) {
             dispatch({
@@ -2174,11 +2195,19 @@ export function useThreadMessaging({
         }
       } else {
         // Codex: notify daemon via turn_interrupt RPC, plus engine_interrupt fallback.
+        // B.5：Shared Thread 按 active Turn 的 Execution Target provider 路由，
+        // 避免同 engine 双 Provider 并行时中断打到 default Provider 会话。
+        const sharedProviderProfileId =
+          resolveThreadKind(activeWorkspace.id, activeThreadId) === "shared"
+            ? (getSharedTargetState(activeWorkspace.id, activeThreadId)
+                .activeTurnTarget?.providerProfileId ?? null)
+            : null;
         await Promise.allSettled([
           interruptTurnService(
             activeWorkspace.id,
             activeThreadId,
             turnId,
+            sharedProviderProfileId,
           ),
           engineInterruptService(activeWorkspace.id),
         ]);
@@ -2209,6 +2238,7 @@ export function useThreadMessaging({
     onDebug,
     pendingInterruptsRef,
     resolveThreadEngine,
+    resolveThreadKind,
     setActiveTurnId,
     t,
     threadStatusById,

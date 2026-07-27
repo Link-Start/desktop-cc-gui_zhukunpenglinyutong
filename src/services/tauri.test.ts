@@ -2375,6 +2375,7 @@ describe("tauri invoke wrappers", () => {
       workspaceId: "ws-6",
       requestId: 101,
       result: { decision: "accept" },
+      providerProfileId: null,
     });
   });
 

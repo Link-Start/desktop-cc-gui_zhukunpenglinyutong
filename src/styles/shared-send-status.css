@@ -1,0 +1,52 @@
+/* Shared Send 状态条（Wave 4 / B.6，§14.5.3） */
+.shared-send-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-muted, rgba(128, 128, 128, 0.25));
+  background: var(--bg-surface-muted, rgba(128, 128, 128, 0.08));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.shared-send-status--recovery-required,
+.shared-send-status--degraded-context,
+.shared-send-status--target-unavailable {
+  border-color: var(--warning-border, rgba(214, 158, 46, 0.5));
+  background: var(--warning-surface, rgba(214, 158, 46, 0.08));
+}
+
+.shared-send-status__text {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary, inherit);
+}
+
+.shared-send-status__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.shared-send-status__button {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-muted, rgba(128, 128, 128, 0.35));
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.shared-send-status__button:hover:not(:disabled) {
+  background: var(--bg-hover, rgba(128, 128, 128, 0.12));
+}
+
+.shared-send-status__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

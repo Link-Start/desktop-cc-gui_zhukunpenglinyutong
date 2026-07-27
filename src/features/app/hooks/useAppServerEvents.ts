@@ -1770,6 +1770,8 @@ export function dispatchAppServerEvent(
               rebound.engine,
               pendingBinding.nativeThreadId,
               threadId,
+              // B.5：binding 携带 provider 时透传到 Target 级 binding。
+              rebound.providerProfileId ?? null,
             ).catch(() => {});
           }
         } else {
@@ -1800,6 +1802,8 @@ export function dispatchAppServerEvent(
               rebound.engine,
               threadId,
               finalizedNativeThreadId,
+              // B.5：binding 携带 provider 时透传到 Target 级 binding。
+              rebound.providerProfileId ?? null,
             ).catch(() => {});
           }
         }

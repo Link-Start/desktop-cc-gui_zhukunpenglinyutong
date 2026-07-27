@@ -1,0 +1,877 @@
+//! Shared Session V2 Send 写路径（Wave 4 / Change B：B.3 Send V2 + B.4 Durable Provisioning）。
+//!
+//! 事务边界：
+//! - Tx1（`shared_session_v2_begin_turn`）：runtime side effect 之前 Commit
+//!   `conversation.turnRequested` + `TurnExecutionSnapshot`，并把 durable provisioning
+//!   推进到 `creating`。
+//! - Tx2（`shared_session_v2_commit_turn`）：`run.settled` 后经既有 assembler/sink 写
+//!   `conversation.turnCommitted`（duplicate 幂等），推进 committed cursor，provisioning → ready。
+//! - ACK 不确定（`shared_session_v2_mark_recovery`）：provisioning → `recovery-required`，
+//!   禁止盲目重建；只有显式 `shared_session_v2_rebuild_binding` 能归档旧 Binding 重建。
+//!
+//! 结构：`*_core` 纯逻辑（只依赖 `SharedEventWriter`，可集成测试）+ Tauri command 薄封装。
+//! 红线：本模块只通过 `SharedEventWriter` 写库（单写者），不直接触 SQLite。
+
+use serde::Deserialize;
+use serde_json::{json, Value};
+use tauri::State;
+use uuid::Uuid;
+
+pub use crate::engine::EngineType;
+use crate::shared_event_log::canonical::assembler::{
+    RuntimeFinalSnapshot, RuntimeToolCall, RuntimeToolResult,
+};
+use crate::shared_event_log::canonical::sink;
+use crate::shared_event_log::canonical::types::{
+    CanonicalFact, CanonicalUserInput, ControlFact, OutcomeStatus, ReasoningSelection,
+    TurnAcceptedFact, TurnExecutionSnapshot, TurnRequestedFact,
+};
+use crate::shared_event_log::{
+    AppendOutcome, BindingStateUpdate, SharedEventWriter, StoreError, StoredBindingState,
+};
+use crate::shared_sessions::{
+    engine_binding_thread_id, ensure_supported_shared_session_engine, now_millis,
+    parse_shared_session_id, read_shared_session_meta, shared_target_binding_key,
+    write_shared_session_meta, SharedTargetBindingMeta,
+};
+use crate::state::AppState;
+
+// ---------------------------------------------------------------------------
+// 输入类型
+// ---------------------------------------------------------------------------
+
+/// 前端四级 Picker 固化的 Execution Target（含 provider 元信息快照）。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutionTargetInput {
+    pub engine: EngineType,
+    pub provider_profile_id: Option<String>,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
+    pub provider_profile_name_snapshot: Option<String>,
+    pub provider_profile_source: Option<String>,
+    pub runtime_capability_fingerprint: Option<String>,
+}
+
+impl ExecutionTargetInput {
+    pub(crate) fn normalized_provider(&self) -> Option<String> {
+        self.provider_profile_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    }
+
+    pub(crate) fn to_snapshot(&self) -> TurnExecutionSnapshot {
+        TurnExecutionSnapshot {
+            engine: self.engine.icon().to_string(),
+            provider_profile_id: self.normalized_provider(),
+            model: self
+                .model
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string),
+            reasoning: self
+                .reasoning_effort
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|effort| ReasoningSelection {
+                    effort: effort.to_string(),
+                    extra: Value::Object(Default::default()),
+                }),
+            provider_profile_name_snapshot: self.provider_profile_name_snapshot.clone(),
+            provider_profile_source: self.provider_profile_source.clone(),
+            runtime_capability_fingerprint: self.runtime_capability_fingerprint.clone(),
+            extra: Value::Object(Default::default()),
+        }
+    }
+}
+
+/// commit_turn 的 outcome 输入。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitOutcomeInput {
+    pub status: String,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+    pub stop_reason: Option<String>,
+}
+
+fn parse_outcome_status(raw: &str) -> Result<OutcomeStatus, String> {
+    match raw {
+        "completed" => Ok(OutcomeStatus::Completed),
+        "failed" => Ok(OutcomeStatus::Failed),
+        "cancelled" => Ok(OutcomeStatus::Cancelled),
+        "replaced" => Ok(OutcomeStatus::Replaced),
+        other => Err(format!("Unknown outcome status: {other}")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Durable provisioning（B.4）
+// ---------------------------------------------------------------------------
+
+const PROVISIONING_PREPARED: &str = "prepared";
+const PROVISIONING_CREATING: &str = "creating";
+const PROVISIONING_READY: &str = "ready";
+const PROVISIONING_RECOVERY_REQUIRED: &str = "recovery-required";
+
+fn provisioning_json(state: &str, reason: Option<&str>, attempt_id: Option<&str>) -> String {
+    json!({
+        "state": state,
+        "updatedAt": now_millis(),
+        "reason": reason,
+        "attemptId": attempt_id,
+    })
+    .to_string()
+}
+
+/// 从 durable 行解析 provisioning state；缺省视为 prepared（未开始）。
+fn provisioning_state_of(row: &StoredBindingState) -> String {
+    row.provisioning_json
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .and_then(|value| {
+            value
+                .get("state")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| PROVISIONING_PREPARED.to_string())
+}
+
+/// 全行 read-modify-write upsert（upsert SQL 是整行覆盖，必须保留 cursor 等未变字段）。
+#[allow(clippy::too_many_arguments)]
+fn upsert_binding_row(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    binding_key: &str,
+    engine: EngineType,
+    provider_profile_id: Option<String>,
+    existing: Option<&StoredBindingState>,
+    native_session_id: Option<String>,
+    committed_through_sequence: Option<i64>,
+    provisioning: String,
+    availability: &str,
+) -> Result<(), StoreError> {
+    let update = BindingStateUpdate {
+        session_id: session_id.to_string(),
+        binding_key: binding_key.to_string(),
+        engine: engine.icon().to_string(),
+        provider_profile_id,
+        native_session_id: native_session_id
+            .or_else(|| existing.and_then(|row| row.native_session_id.clone())),
+        accepted_through_sequence: existing.and_then(|row| row.accepted_through_sequence),
+        committed_through_sequence: committed_through_sequence
+            .or_else(|| existing.and_then(|row| row.committed_through_sequence)),
+        provisioning_json: Some(provisioning),
+        pending_delivery_json: existing.and_then(|row| row.pending_delivery_json.clone()),
+        availability: availability.to_string(),
+        updated_at: now_millis() as i64,
+    };
+    writer.upsert_binding_state(&update)
+}
+
+fn append_control_fact(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    control_kind: &str,
+    binding_key: Option<&str>,
+    reason: Option<&str>,
+) -> Result<(), String> {
+    let fact = CanonicalFact::Control(ControlFact {
+        control_kind: control_kind.to_string(),
+        logical_turn_id: None,
+        attempt_id: None,
+        binding_key: binding_key.map(str::to_string),
+        reason: reason.map(str::to_string),
+        details: None,
+        extra: Value::Object(Default::default()),
+    });
+    writer
+        .append_canonical_fact_at(session_id.to_string(), fact, now_millis() as i64)
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// B.3 core：Tx1 begin_turn
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BeginTurnStatus {
+    Creating,
+    RecoveryRequired,
+    TargetUnavailable,
+}
+
+#[derive(Debug)]
+pub struct BeginTurnOutcome {
+    pub status: BeginTurnStatus,
+    pub reason: Option<String>,
+    pub attempt_id: Option<String>,
+    pub logical_turn_id: Option<String>,
+    pub binding_key: String,
+    pub snapshot: Option<TurnExecutionSnapshot>,
+}
+
+pub fn begin_turn_core(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    target: &ExecutionTargetInput,
+    text: String,
+) -> Result<BeginTurnOutcome, String> {
+    let engine = match ensure_supported_shared_session_engine(target.engine) {
+        Ok(engine) => engine,
+        Err(reason) => {
+            return Ok(BeginTurnOutcome {
+                status: BeginTurnStatus::TargetUnavailable,
+                reason: Some(reason),
+                attempt_id: None,
+                logical_turn_id: None,
+                binding_key: String::new(),
+                snapshot: None,
+            });
+        }
+    };
+    let provider_profile_id = target.normalized_provider();
+    let binding_key = shared_target_binding_key(engine, provider_profile_id.as_deref());
+
+    let existing = writer
+        .binding_state(session_id, &binding_key)
+        .map_err(|error| error.to_string())?;
+    if let Some(row) = existing.as_ref() {
+        match provisioning_state_of(row).as_str() {
+            PROVISIONING_RECOVERY_REQUIRED => {
+                return Ok(BeginTurnOutcome {
+                    status: BeginTurnStatus::RecoveryRequired,
+                    reason: None,
+                    attempt_id: None,
+                    logical_turn_id: None,
+                    binding_key,
+                    snapshot: None,
+                });
+            }
+            // 上次 attempt 崩溃在 creating 窗口：fail closed，禁止盲目重建（D6）。
+            PROVISIONING_CREATING => {
+                upsert_binding_row(
+                    writer,
+                    session_id,
+                    &binding_key,
+                    engine,
+                    provider_profile_id.clone(),
+                    existing.as_ref(),
+                    None,
+                    None,
+                    provisioning_json(
+                        PROVISIONING_RECOVERY_REQUIRED,
+                        Some("provisioning-crash-window"),
+                        None,
+                    ),
+                    "recovery-required",
+                )
+                .map_err(|error| error.to_string())?;
+                append_control_fact(
+                    writer,
+                    session_id,
+                    "binding.recovery-required",
+                    Some(&binding_key),
+                    Some("provisioning-crash-window"),
+                )?;
+                return Ok(BeginTurnOutcome {
+                    status: BeginTurnStatus::RecoveryRequired,
+                    reason: Some("provisioning-crash-window".to_string()),
+                    attempt_id: None,
+                    logical_turn_id: None,
+                    binding_key,
+                    snapshot: None,
+                });
+            }
+            _ => {}
+        }
+    }
+
+    let snapshot = target.to_snapshot();
+    let attempt_id = Uuid::new_v4().to_string();
+    let logical_turn_id = Uuid::new_v4().to_string();
+
+    // Tx1：User Intent durable-first，先于任何 runtime side effect。
+    let fact = CanonicalFact::TurnRequested(TurnRequestedFact {
+        logical_turn_id: logical_turn_id.clone(),
+        attempt_id: attempt_id.clone(),
+        retry_of_attempt_id: None,
+        input: CanonicalUserInput {
+            text: Some(text),
+            image_refs: None,
+            attachment_refs: None,
+            extra: Value::Object(Default::default()),
+        },
+        target: snapshot.clone(),
+        requested_at: now_millis() as i64,
+        extra: Value::Object(Default::default()),
+    });
+    writer
+        .append_canonical_fact(session_id.to_string(), fact)
+        .map_err(|error| error.to_string())?;
+
+    upsert_binding_row(
+        writer,
+        session_id,
+        &binding_key,
+        engine,
+        provider_profile_id,
+        existing.as_ref(),
+        None,
+        None,
+        provisioning_json(PROVISIONING_CREATING, None, Some(&attempt_id)),
+        "provisioning",
+    )
+    .map_err(|error| error.to_string())?;
+
+    Ok(BeginTurnOutcome {
+        status: BeginTurnStatus::Creating,
+        reason: None,
+        attempt_id: Some(attempt_id),
+        logical_turn_id: Some(logical_turn_id),
+        binding_key,
+        snapshot: Some(snapshot),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// B.3 core：Tx2 commit_turn（settled → assembler/sink → turnCommitted，幂等）
+// ---------------------------------------------------------------------------
+
+#[derive(Debug)]
+pub struct CommitTurnOutcome {
+    pub duplicate: bool,
+    pub sequence: Option<i64>,
+    pub binding_key: String,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn commit_turn_core(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    attempt_id: &str,
+    logical_turn_id: &str,
+    target: &ExecutionTargetInput,
+    assistant_text: Option<String>,
+    outcome: &CommitOutcomeInput,
+    native_session_id: Option<String>,
+) -> Result<CommitTurnOutcome, String> {
+    let engine = ensure_supported_shared_session_engine(target.engine)?;
+    let provider_profile_id = target.normalized_provider();
+    let binding_key = shared_target_binding_key(engine, provider_profile_id.as_deref());
+    let outcome_status = parse_outcome_status(&outcome.status)?;
+
+    // duplicate settled 幂等预检：同一 attempt 已落 turnCommitted 时，
+    // 语义一致（logicalTurnId / outcome / assistant text）→ 按重放返回既有 sequence
+    // （committed_at 容差：重试方时钟不可复现）；语义不同 → 真冲突，fail loud。
+    let existing_commit = writer
+        .events_for_session(session_id)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .find(|event| {
+            event.fact_type == "conversation.turnCommitted"
+                && event.attempt_id.as_deref() == Some(attempt_id)
+        });
+    if let Some(existing) = existing_commit {
+        let payload: Value = serde_json::from_str(&existing.payload_json)
+            .map_err(|error| format!("parse existing turnCommitted payload: {error}"))?;
+        let same_turn =
+            payload.get("logicalTurnId").and_then(Value::as_str) == Some(logical_turn_id);
+        let expected_status = serde_json::to_value(outcome_status)
+            .ok()
+            .and_then(|value| value.as_str().map(str::to_string));
+        let same_outcome = payload
+            .pointer("/outcome/status")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            == expected_status;
+        let existing_text = payload
+            .get("assistant")
+            .and_then(Value::as_array)
+            .and_then(|blocks| {
+                blocks.iter().find_map(|block| {
+                    (block.get("kind").and_then(Value::as_str) == Some("text"))
+                        .then(|| block.get("text").and_then(Value::as_str))
+                        .flatten()
+                })
+            });
+        let same_text = existing_text.map(str::to_string) == assistant_text;
+        if same_turn && same_outcome && same_text {
+            return Ok(CommitTurnOutcome {
+                duplicate: true,
+                sequence: Some(existing.sequence),
+                binding_key,
+            });
+        }
+        return Err(format!(
+            "turnCommitted semantic conflict for attempt {attempt_id}: existing event does not match retry payload"
+        ));
+    }
+
+    let final_snapshot = RuntimeFinalSnapshot {
+        assistant_text,
+        tool_calls: Vec::<RuntimeToolCall>::new(),
+        tool_results: Vec::<RuntimeToolResult>::new(),
+        artifacts: vec![],
+        outcome: outcome_status,
+        error_code: outcome.error_code.clone(),
+        error_message: outcome.error_message.clone(),
+        stop_reason: outcome.stop_reason.clone(),
+    };
+
+    // 3.5：completed 表示 native runtime 明确 ACK 且跑完（V0 RPC 成功返回即显式 ACK），
+    // 先落 turnAccepted（幂等，duplicate 重放安全）再落 turnCommitted；
+    // 若两步之间失败，probe 可凭「accepted 但未 committed」定性恢复。
+    // explicit rejection（failed/cancelled）保守不补 accepted——本层无法区分是否已被接受。
+    if outcome_status == OutcomeStatus::Completed {
+        if let Some(native_session_id) = native_session_id.clone() {
+            let accepted_fact = CanonicalFact::TurnAccepted(TurnAcceptedFact {
+                logical_turn_id: logical_turn_id.to_string(),
+                attempt_id: attempt_id.to_string(),
+                client_turn_id: logical_turn_id.to_string(),
+                binding_key: binding_key.clone(),
+                native_session_id,
+                native_turn_id: None,
+                accepted_at: now_millis() as i64,
+                extra: Value::Object(Default::default()),
+            });
+            // attempt 级 UNIQUE 索引兜底：重复 commit 返回 Duplicate，不算错误。
+            writer
+                .append_canonical_fact_at(
+                    session_id.to_string(),
+                    accepted_fact,
+                    now_millis() as i64,
+                )
+                .map_err(|error| error.to_string())?;
+        }
+    }
+
+    // duplicate settled → sink 幂等（attempt 级 UNIQUE 索引），仍返回成功。
+    let append = sink::commit_turn(
+        writer,
+        session_id.to_string(),
+        logical_turn_id.to_string(),
+        attempt_id.to_string(),
+        format!("input:{attempt_id}"),
+        target.to_snapshot(),
+        final_snapshot,
+        now_millis() as i64,
+    )
+    .map_err(|error| format!("{}: {}", error.context, error.detail))?;
+
+    let (duplicate, sequence) = match append {
+        AppendOutcome::Inserted { sequence, .. } => (false, Some(sequence)),
+        AppendOutcome::Duplicate { existing_sequence } => (true, Some(existing_sequence)),
+    };
+
+    let existing = writer
+        .binding_state(session_id, &binding_key)
+        .map_err(|error| error.to_string())?;
+    upsert_binding_row(
+        writer,
+        session_id,
+        &binding_key,
+        engine,
+        provider_profile_id,
+        existing.as_ref(),
+        native_session_id,
+        sequence,
+        provisioning_json(PROVISIONING_READY, None, Some(attempt_id)),
+        "ready",
+    )
+    .map_err(|error| error.to_string())?;
+
+    Ok(CommitTurnOutcome {
+        duplicate,
+        sequence,
+        binding_key,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// B.4 core：recovery / rebuild
+// ---------------------------------------------------------------------------
+
+pub fn mark_recovery_core(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    binding_key: &str,
+    engine: EngineType,
+    provider_profile_id: Option<String>,
+    reason: Option<&str>,
+) -> Result<(), String> {
+    let provider_profile_id = provider_profile_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let existing = writer
+        .binding_state(session_id, binding_key)
+        .map_err(|error| error.to_string())?;
+    upsert_binding_row(
+        writer,
+        session_id,
+        binding_key,
+        engine,
+        provider_profile_id,
+        existing.as_ref(),
+        None,
+        None,
+        provisioning_json(PROVISIONING_RECOVERY_REQUIRED, reason, None),
+        "recovery-required",
+    )
+    .map_err(|error| error.to_string())?;
+    append_control_fact(
+        writer,
+        session_id,
+        "binding.recovery-required",
+        Some(binding_key),
+        reason,
+    )
+}
+
+/// 显式重建的 durable 部分：归档旧 native identity，provisioning 回 prepared。
+/// 返回被归档的 native session id（若有）。
+pub fn rebuild_binding_core(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    binding_key: &str,
+    engine: EngineType,
+    provider_profile_id: Option<String>,
+) -> Result<Option<String>, String> {
+    let provider_profile_id = provider_profile_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let existing = writer
+        .binding_state(session_id, binding_key)
+        .map_err(|error| error.to_string())?;
+    let archived_native_session_id = existing
+        .as_ref()
+        .and_then(|row| row.native_session_id.clone());
+
+    // 重建必须显式清空 native_session_id 与 committed cursor（新 binding 未消费任何历史），
+    // 不能走 upsert_binding_row 的“保留旧值”路径。
+    writer
+        .upsert_binding_state(&BindingStateUpdate {
+            session_id: session_id.to_string(),
+            binding_key: binding_key.to_string(),
+            engine: engine.icon().to_string(),
+            provider_profile_id,
+            native_session_id: None,
+            accepted_through_sequence: None,
+            committed_through_sequence: None,
+            provisioning_json: Some(
+                json!({
+                    "state": PROVISIONING_PREPARED,
+                    "updatedAt": now_millis(),
+                    "rebuiltAt": now_millis(),
+                    "archivedNativeSessionId": archived_native_session_id,
+                })
+                .to_string(),
+            ),
+            pending_delivery_json: None,
+            availability: "provisioning".to_string(),
+            updated_at: now_millis() as i64,
+        })
+        .map_err(|error| error.to_string())?;
+    append_control_fact(
+        writer,
+        session_id,
+        "binding.rebuilt",
+        Some(binding_key),
+        Some("explicit-user-rebuild"),
+    )?;
+    Ok(archived_native_session_id)
+}
+
+// ---------------------------------------------------------------------------
+// Probe / turn_state（只读 evidence，供 B.4.3 定性与 B.6.5 重启恢复）
+// ---------------------------------------------------------------------------
+
+fn collect_attempt_evidence(
+    events: &[crate::shared_event_log::StoredEvent],
+) -> (Vec<(String, Option<String>)>, std::collections::HashSet<String>) {
+    let mut requested: Vec<(String, Option<String>)> = Vec::new();
+    let mut seen_requested = std::collections::HashSet::new();
+    let mut committed = std::collections::HashSet::new();
+    for event in events {
+        let Some(attempt_id) = event.attempt_id.clone() else {
+            continue;
+        };
+        match event.fact_type.as_str() {
+            "conversation.turnRequested" => {
+                if seen_requested.insert(attempt_id.clone()) {
+                    requested.push((attempt_id, event.logical_turn_id.clone()));
+                }
+            }
+            "conversation.turnCommitted" => {
+                committed.insert(attempt_id);
+            }
+            _ => {}
+        }
+    }
+    let committed_set = committed;
+    requested.retain(|(attempt_id, _)| !committed_set.contains(attempt_id));
+    (requested, committed_set)
+}
+
+// ---------------------------------------------------------------------------
+// Tauri commands（薄封装）
+// ---------------------------------------------------------------------------
+
+fn require_writer(state: &AppState) -> Result<&SharedEventWriter, String> {
+    state
+        .shared_event_writer
+        .as_ref()
+        .ok_or_else(|| "shared event log unavailable".to_string())
+}
+
+#[tauri::command]
+pub async fn shared_session_v2_begin_turn(
+    workspace_id: String,
+    thread_id: String,
+    target: ExecutionTargetInput,
+    text: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let _ = workspace_id;
+    let writer = require_writer(&state)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+    let outcome = begin_turn_core(writer, &shared_session_id, &target, text)?;
+    Ok(match outcome.status {
+        BeginTurnStatus::Creating => json!({
+            "status": "creating",
+            "attemptId": outcome.attempt_id,
+            "logicalTurnId": outcome.logical_turn_id,
+            "bindingKey": outcome.binding_key,
+            "snapshot": outcome
+                .snapshot
+                .map(|value| serde_json::to_value(value).ok())
+                .flatten(),
+        }),
+        BeginTurnStatus::RecoveryRequired => json!({
+            "status": "recovery-required",
+            "bindingKey": outcome.binding_key,
+            "reason": outcome.reason,
+        }),
+        BeginTurnStatus::TargetUnavailable => json!({
+            "status": "target-unavailable",
+            "reason": outcome.reason,
+        }),
+    })
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn shared_session_v2_commit_turn(
+    workspace_id: String,
+    thread_id: String,
+    attempt_id: String,
+    logical_turn_id: String,
+    target: ExecutionTargetInput,
+    assistant_text: Option<String>,
+    outcome: CommitOutcomeInput,
+    native_session_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let _ = workspace_id;
+    let writer = require_writer(&state)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+    let result = commit_turn_core(
+        writer,
+        &shared_session_id,
+        &attempt_id,
+        &logical_turn_id,
+        &target,
+        assistant_text,
+        &outcome,
+        native_session_id,
+    )?;
+    Ok(json!({
+        "status": "committed",
+        "duplicate": result.duplicate,
+        "sequence": result.sequence,
+        "bindingKey": result.binding_key,
+    }))
+}
+
+/// ACK 不确定（超时/崩溃/未知）：provisioning → recovery-required，禁止盲目重建。
+#[tauri::command]
+pub async fn shared_session_v2_mark_recovery(
+    workspace_id: String,
+    thread_id: String,
+    binding_key: String,
+    engine: EngineType,
+    provider_profile_id: Option<String>,
+    reason: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let _ = workspace_id;
+    let engine = ensure_supported_shared_session_engine(engine)?;
+    let writer = require_writer(&state)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+    mark_recovery_core(
+        writer,
+        &shared_session_id,
+        &binding_key,
+        engine,
+        provider_profile_id,
+        reason.as_deref(),
+    )?;
+    Ok(json!({
+        "status": "recovery-required",
+        "bindingKey": binding_key,
+    }))
+}
+
+/// 用户显式重建：归档旧 Binding（durable 留痕），新 Native Session 重新 provisioning。
+/// Shared Session Identity 不变；committed cursor 清空（新 binding 未消费任何历史）。
+#[tauri::command]
+pub async fn shared_session_v2_rebuild_binding(
+    workspace_id: String,
+    thread_id: String,
+    binding_key: String,
+    engine: EngineType,
+    provider_profile_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let engine = ensure_supported_shared_session_engine(engine)?;
+    let writer = require_writer(&state)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+    let archived_native_session_id = rebuild_binding_core(
+        writer,
+        &shared_session_id,
+        &binding_key,
+        engine,
+        provider_profile_id.clone(),
+    )?;
+
+    // meta 层同步：目标 binding 回到 pending native thread id（下次 send 时建联）。
+    let mut meta = read_shared_session_meta(&workspace_id, &shared_session_id)?;
+    let now = now_millis();
+    let provider = provider_profile_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let pending_native_thread_id = engine_binding_thread_id(engine, &Uuid::new_v4().to_string());
+    meta.bindings_by_target.insert(
+        binding_key.clone(),
+        SharedTargetBindingMeta {
+            binding_key: binding_key.clone(),
+            engine,
+            provider_profile_id: provider,
+            native_thread_id: pending_native_thread_id.clone(),
+            created_at: now,
+            last_used_at: now,
+            last_synced_turn_seq: 0,
+            availability: "provisioning".to_string(),
+        },
+    );
+    meta.updated_at = now;
+    write_shared_session_meta(&meta)?;
+
+    Ok(json!({
+        "status": PROVISIONING_PREPARED,
+        "bindingKey": binding_key,
+        "nativeThreadId": pending_native_thread_id,
+        "archivedNativeSessionId": archived_native_session_id,
+    }))
+}
+
+/// Probe（B.4.3）：读取 durable evidence 供前端定性（active / terminal / not-accepted）。
+/// 不触碰 runtime，不修改任何状态。
+#[tauri::command]
+pub async fn shared_session_v2_probe_binding(
+    workspace_id: String,
+    thread_id: String,
+    binding_key: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let _ = workspace_id;
+    let writer = require_writer(&state)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+
+    let existing = writer
+        .binding_state(&shared_session_id, &binding_key)
+        .map_err(|error| error.to_string())?;
+    let events = writer
+        .events_for_session(&shared_session_id)
+        .map_err(|error| error.to_string())?;
+    let (in_flight, _) = collect_attempt_evidence(&events);
+    let accepted: std::collections::HashSet<String> = events
+        .iter()
+        .filter(|event| event.fact_type == "conversation.turnAccepted")
+        .filter_map(|event| event.attempt_id.clone())
+        .collect();
+
+    Ok(json!({
+        "status": "ok",
+        "bindingKey": binding_key,
+        "provisioningState": existing.as_ref().map(provisioning_state_of),
+        "nativeSessionId": existing.as_ref().and_then(|row| row.native_session_id.clone()),
+        "committedThroughSequence": existing.as_ref().and_then(|row| row.committed_through_sequence),
+        "inFlightAttempts": in_flight
+            .iter()
+            .map(|(attempt_id, logical_turn_id)| json!({
+                "attemptId": attempt_id,
+                "logicalTurnId": logical_turn_id,
+                "accepted": accepted.contains(attempt_id),
+            }))
+            .collect::<Vec<_>>(),
+    }))
+}
+
+/// 重启恢复（B.6.5）：返回 durable evidence，前端据此恢复 running/settling/recovery-required，
+/// 而不是落回 idle。只读。
+#[tauri::command]
+pub async fn shared_session_v2_turn_state(
+    workspace_id: String,
+    thread_id: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let _ = workspace_id;
+    let writer = require_writer(&state)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+
+    let events = writer
+        .events_for_session(&shared_session_id)
+        .map_err(|error| error.to_string())?;
+    let (in_flight, _) = collect_attempt_evidence(&events);
+    let mut binding_keys = std::collections::HashSet::new();
+    for event in &events {
+        if let Ok(payload) = serde_json::from_str::<Value>(&event.payload_json) {
+            if let Some(binding_key) = payload.get("bindingKey").and_then(Value::as_str) {
+                binding_keys.insert(binding_key.to_string());
+            }
+        }
+    }
+
+    let mut bindings = Vec::new();
+    for binding_key in binding_keys {
+        if let Some(row) = writer
+            .binding_state(&shared_session_id, &binding_key)
+            .map_err(|error| error.to_string())?
+        {
+            bindings.push(json!({
+                "bindingKey": row.binding_key,
+                "provisioningState": provisioning_state_of(&row),
+                "availability": row.availability,
+            }));
+        }
+    }
+
+    Ok(json!({
+        "status": "ok",
+        "inFlightAttempts": in_flight
+            .iter()
+            .map(|(attempt_id, logical_turn_id)| json!({
+                "attemptId": attempt_id,
+                "logicalTurnId": logical_turn_id,
+            }))
+            .collect::<Vec<_>>(),
+        "bindings": bindings,
+    }))
+}

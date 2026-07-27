@@ -7,6 +7,7 @@ import {
   matchesCommandPrefix,
 } from "../../../utils/approvalRules";
 import { respondToServerRequest } from "../../../services/tauri";
+import { resolveApprovalOwnerProviderProfileId } from "./useThreadApprovals";
 import type { ThreadAction } from "./useThreadsReducer";
 
 const FILE_APPROVAL_PATH_KEYS = [
@@ -113,6 +114,7 @@ export function useThreadApprovalEvents({
           approval.workspace_id,
           approval.request_id,
           "accept",
+          resolveApprovalOwnerProviderProfileId(approval),
         );
         return;
       }

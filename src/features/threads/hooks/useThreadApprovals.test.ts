@@ -49,8 +49,8 @@ describe("useThreadApprovals", () => {
       await result.current.handleApprovalBatchAccept([approvals[0]!, approvals[1]!]);
     });
 
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept");
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept");
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept", null);
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept", null);
     expect(respondToServerRequest).toHaveBeenCalledTimes(2);
     expect(dispatch).toHaveBeenNthCalledWith(1, {
       type: "markProcessing",
@@ -151,8 +151,8 @@ describe("useThreadApprovals", () => {
       await result.current.handleApprovalBatchAccept([approvals[0]!, approvals[1]!]);
     });
 
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept");
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept");
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept", null);
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept", null);
     expect(respondToServerRequest).toHaveBeenCalledTimes(2);
   });
 
@@ -199,7 +199,7 @@ describe("useThreadApprovals", () => {
         threadId: "claude:canonical",
       }),
     );
-    expect(respondToServerRequest).toHaveBeenCalledWith("ws-1", 1, "accept");
+    expect(respondToServerRequest).toHaveBeenCalledWith("ws-1", 1, "accept", null);
   });
 
   it("dismisses a stale approval locally without sending a backend decision", async () => {
@@ -266,8 +266,8 @@ describe("useThreadApprovals", () => {
       await result.current.handleApprovalBatchAccept([approvals[0]!, approvals[1]!]);
     });
 
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept");
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept");
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept", null);
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept", null);
     expect(respondToServerRequest).toHaveBeenCalledTimes(2);
   });
 
@@ -309,8 +309,8 @@ describe("useThreadApprovals", () => {
       ]);
     });
 
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept");
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept");
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept", null);
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept", null);
     expect(respondToServerRequest).toHaveBeenCalledTimes(2);
   });
 });

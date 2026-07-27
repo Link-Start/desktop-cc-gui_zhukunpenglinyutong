@@ -223,9 +223,7 @@ use self::start_thread_retry::{
     run_start_thread_with_hook_safe_fallback_and_recovery_probe, run_start_thread_with_retry,
     run_start_thread_with_retry_and_recovery_probe,
 };
-pub(crate) use self::start_thread_retry::{
-    start_thread_with_runtime_retry, start_thread_with_runtime_retry_for_provider,
-};
+pub(crate) use self::start_thread_retry::start_thread_with_runtime_retry_for_provider;
 
 const DELETE_ARCHIVE_TIMEOUT_MS: u64 = 2_000;
 
@@ -1409,21 +1407,28 @@ pub(crate) async fn turn_interrupt(
     workspace_id: String,
     thread_id: String,
     turn_id: String,
+    provider_profile_id: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Value, String> {
+    // B.5：Shared Thread owner 路由显式携带的 provider 优先；缺省时保持旧解析行为。
+    let provider_profile_id = provider_profile_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
     if remote_backend::is_remote_mode(&*state).await {
         return remote_backend::call_remote(
             &*state,
             app,
             "turn_interrupt",
-            json!({ "workspaceId": workspace_id, "threadId": thread_id, "turnId": turn_id }),
+            json!({ "workspaceId": workspace_id, "threadId": thread_id, "turnId": turn_id, "providerProfileId": provider_profile_id }),
         )
         .await;
     }
 
-    let provider_profile_id =
-        resolve_thread_provider_profile_id(&state, &workspace_id, &thread_id).await;
+    let provider_profile_id = match provider_profile_id {
+        Some(provider) => provider,
+        None => resolve_thread_provider_profile_id(&state, &workspace_id, &thread_id).await,
+    };
     codex_core::turn_interrupt_core(
         &state.sessions,
         workspace_id,
@@ -1742,6 +1747,7 @@ pub(crate) async fn respond_to_server_request(
     result: Value,
     thread_id: Option<String>,
     turn_id: Option<String>,
+    provider_profile_id: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
@@ -1756,6 +1762,10 @@ pub(crate) async fn respond_to_server_request(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned);
+    // B.5：Shared Thread owner 路由显式携带的 provider，仅用于 codex 兜底分支选会话。
+    let provider_profile_id = provider_profile_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
     let is_local_plan_prompt = request_id
         .as_str()
         .map(|value| value.starts_with("ccgui-plan-"))
@@ -1771,6 +1781,7 @@ pub(crate) async fn respond_to_server_request(
                 "result": result,
                 "threadId": normalized_thread_id,
                 "turnId": normalized_turn_id,
+                "providerProfileId": provider_profile_id,
             }),
         )
         .await?;
@@ -1799,6 +1810,7 @@ pub(crate) async fn respond_to_server_request(
     codex_core::respond_to_server_request_core(
         &state.sessions,
         workspace_id.clone(),
+        provider_profile_id,
         request_id,
         result,
     )

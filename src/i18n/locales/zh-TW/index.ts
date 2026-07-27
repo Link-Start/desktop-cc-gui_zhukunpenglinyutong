@@ -42,6 +42,7 @@ import rewind from "./rewind";
 import runtimeNotice from "./runtimeNotice";
 import searchPalette from "./searchPalette";
 import settings from "./settings";
+import sharedSend from "./sharedSend";
 import sidebar from "./sidebar";
 import specHub from "./specHub";
 import statusPanel from "./statusPanel";
@@ -99,6 +100,7 @@ const locale = {
   ...runtimeNotice,
   ...searchPalette,
   ...settings,
+  ...sharedSend,
   ...sidebar,
   ...specHub,
   ...statusPanel,

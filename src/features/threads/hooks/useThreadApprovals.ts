@@ -11,6 +11,7 @@ import {
   rememberApprovalRule,
   respondToServerRequest,
 } from "../../../services/tauri";
+import { resolveSharedSessionBindingByNativeThread } from "../../shared-session/runtime/sharedSessionBridge";
 import type { ThreadAction } from "./useThreadsReducer";
 
 type UseThreadApprovalsOptions = {
@@ -63,6 +64,24 @@ function isFileChangeApprovalRequest(request: ApprovalRequest): boolean {
 
 function buildApprovalRequestKey(request: ApprovalRequest): string {
   return `${request.workspace_id}:${String(request.request_id)}`;
+}
+
+/**
+ * B.5：响应时按 approval 的 native threadId 反查 Shared Binding，
+ * 把 binding 的 providerProfileId 带给 codex 兜底分支选会话；
+ * 非 Shared Thread / 查不到 binding 时返回 null（保持旧 default 路由）。
+ */
+export function resolveApprovalOwnerProviderProfileId(
+  request: ApprovalRequest,
+): string | null {
+  const nativeThreadId = getApprovalThreadId(request);
+  if (!nativeThreadId) {
+    return null;
+  }
+  return (
+    resolveSharedSessionBindingByNativeThread(request.workspace_id, nativeThreadId)
+      ?.providerProfileId ?? null
+  );
 }
 
 export function useThreadApprovals({
@@ -168,6 +187,7 @@ export function useThreadApprovals({
         request.workspace_id,
         request.request_id,
         decision,
+        resolveApprovalOwnerProviderProfileId(request),
       );
       dispatch({
         type: "removeApproval",
@@ -200,6 +220,7 @@ export function useThreadApprovals({
           approval.workspace_id,
           approval.request_id,
           "accept",
+          resolveApprovalOwnerProviderProfileId(approval),
         );
         dispatch({
           type: "removeApproval",
@@ -234,6 +255,7 @@ export function useThreadApprovals({
         request.workspace_id,
         request.request_id,
         "accept",
+        resolveApprovalOwnerProviderProfileId(request),
       );
       dispatch({
         type: "removeApproval",

@@ -3114,9 +3114,16 @@ impl DaemonState {
         workspace_id: String,
         thread_id: String,
         turn_id: String,
+        provider_profile_id: Option<String>,
     ) -> Result<Value, String> {
-        codex_core::turn_interrupt_core(&self.sessions, workspace_id, None, thread_id, turn_id)
-            .await
+        codex_core::turn_interrupt_core(
+            &self.sessions,
+            workspace_id,
+            provider_profile_id,
+            thread_id,
+            turn_id,
+        )
+        .await
     }
 
     pub(super) async fn thread_compact(
@@ -3458,6 +3465,7 @@ impl DaemonState {
         workspace_id: String,
         request_id: Value,
         result: Value,
+        provider_profile_id: Option<String>,
     ) -> Result<Value, String> {
         if request_id.is_string() {
             for session in self
@@ -3481,6 +3489,7 @@ impl DaemonState {
         codex_core::respond_to_server_request_core(
             &self.sessions,
             workspace_id,
+            provider_profile_id,
             request_id,
             result,
         )

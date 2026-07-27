@@ -56,7 +56,7 @@ describe("useThreadApprovalEvents", () => {
       result.current(approval);
     });
 
-    expect(respondToServerRequest).toHaveBeenCalledWith("ws-1", 42, "accept");
+    expect(respondToServerRequest).toHaveBeenCalledWith("ws-1", 42, "accept", null);
     expect(markProcessing).not.toHaveBeenCalled();
     expect(setActiveTurnId).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();

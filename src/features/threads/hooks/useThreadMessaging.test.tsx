@@ -1188,7 +1188,7 @@ describe("useThreadMessaging", () => {
       await result.current.interruptTurn();
     });
 
-    expect(interruptTurn).toHaveBeenCalledWith("ws-1", "thread-1", "turn-1");
+    expect(interruptTurn).toHaveBeenCalledWith("ws-1", "thread-1", "turn-1", null);
     expect(engineInterrupt).toHaveBeenCalledWith("ws-1");
   });
 

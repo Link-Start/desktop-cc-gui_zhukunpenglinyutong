@@ -129,8 +129,15 @@ OpenSpec 已归档至 `openspec/changes/archive/2026-07-27-{establish-shared-eve
 
 ## Wave 4：Change B — compose-shared-session-execution-target
 
-> **当前状态：已准入，尚未实施。** Change B 从真实 Execution Target、Binding 与
-> V0→V2 Send 写路径开始，继续保持 feature flag 可回滚。
+> **当前状态：已实施（2026-07-27），Gate 4 通过。** B.1–B.6 全部落地：
+> Target Store/四级 Picker、bindingsByTarget 迁移（schemaVersion 2）、V2 Send
+> 写路径（feature flag `VITE_MOSSX_SHARED_V2_SEND` 灰度可回滚）、Durable
+> Provisioning、Target-aware owner routing、§14.5 九状态 UI 状态机
+> （StatusBar + Picker/Composer 锁定 + 重启恢复）。
+> 已知非阻断项：`src/services/tauri.test.ts` 5 个与
+> `useThreadMessaging.test.tsx` 10 个失败属 OpenCode/Gemini retirement
+> 进行中的迁移（HEAD 基线即失败，非本 Change 引入）；cargo `runtime::tests`
+> 2 个 process-group kill 失败为 macOS 环境性问题（HEAD 同现）。
 
 | # | 任务 | 大白话说明 | 改变点 | UI 变化 | 顺序 | 前置 | 验收 | 体量 |
 |---|---|---|---|---|---|---|---|---|
@@ -142,7 +149,7 @@ OpenSpec 已归档至 `openspec/changes/archive/2026-07-27-{establish-shared-eve
 | B.6 | UI 状态机落地：9 状态 + `CancelPending` + degraded-context 用户确认 | 把准备、发送、取消、恢复、上下文降级等状态明确告诉用户。 | 从零散 loading 状态变成统一 9 状态 UI state machine。 | **有**：状态提示、CancelPending、降级确认与错误恢复交互。 | ⫽ | B.3 | §14.5.6 UX 验收全量 | M |
 
 **⛔ Gate 4（Phase 2 验收矩阵）**
-- [ ] `Claude/Official → Claude/OpenRouter → Codex/OpenAI → Claude/Official`：一个 Sidebar Row、三个 Hidden Binding、切回复用原 Binding、Turn Provenance 正确、任一 Provider 失败不重路由
+- [x] `Claude/Official → Claude/OpenRouter → Codex/OpenAI → Claude/Official`：一个 Sidebar Row、三个 Hidden Binding、切回复用原 Binding、Turn Provenance 正确、任一 Provider 失败不重路由（`shared_session_v2_target_matrix.rs::target_switch_matrix_reuses_bindings_and_keeps_provenance` 通过）
 
 ---
 

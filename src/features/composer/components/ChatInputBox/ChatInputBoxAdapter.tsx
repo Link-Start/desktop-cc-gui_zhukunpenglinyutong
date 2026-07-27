@@ -463,6 +463,8 @@ export interface ChatInputBoxAdapterProps {
   selectedModelId: string | null;
   selectedEngine?: EngineType;
   isSharedSession?: boolean;
+  /** Shared Thread id（Wave 4 / B.6：send 状态条/状态机的 store key 组成）。 */
+  threadId?: string | null;
   engines?: AdapterEngineInfo[];
   onSelectEngine?: (engine: EngineType) => void;
   models?: AdapterModelOption[];

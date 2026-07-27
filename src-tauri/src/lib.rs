@@ -167,6 +167,7 @@ mod shared;
 pub mod shared_event_log;
 pub mod shared_projection;
 mod shared_sessions;
+pub mod shared_session_v2;
 mod skills;
 mod skills_hub;
 mod snapshot_throttle;

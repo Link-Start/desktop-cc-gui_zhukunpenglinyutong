@@ -185,6 +185,8 @@ type ComposerProps = {
   selectedCollaborationModeId: string | null;
   onSelectCollaborationMode: (id: string | null) => void;
   isSharedSession?: boolean;
+  /** Wave 4 / B.6：Shared Send 状态机非 idle 时锁定四级 Picker（§14.5.3）。 */
+  sharedTargetPickerLocked?: boolean;
   // Engine props
   engines?: EngineDisplayInfo[];
   selectedEngine?: EngineType;
@@ -462,6 +464,7 @@ function ComposerImpl({
   selectedCollaborationModeId: _selectedCollaborationModeId,
   onSelectCollaborationMode: _onSelectCollaborationMode,
   isSharedSession = false,
+  sharedTargetPickerLocked = false,
   engines,
   selectedEngine,
   onSelectEngine,
@@ -2347,12 +2350,13 @@ function ComposerImpl({
               selectedModelId={selectedModelId}
               selectedEngine={selectedEngine}
               isSharedSession={isSharedSession}
+              threadId={activeThreadId}
               engines={engines}
-              onSelectEngine={onSelectEngine}
+              onSelectEngine={sharedTargetPickerLocked ? undefined : onSelectEngine}
               models={models}
               providerModelCatalogs={providerModelCatalogs}
               providerProfileId={providerProfileId}
-              onSelectModel={onSelectModel}
+              onSelectModel={sharedTargetPickerLocked ? undefined : onSelectModel}
               reasoningOptions={reasoningOptions}
               selectedEffort={selectedEffort}
               onSelectEffort={onSelectEffort}

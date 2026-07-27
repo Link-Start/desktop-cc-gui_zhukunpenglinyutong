@@ -5,6 +5,8 @@ export type SharedSessionNativeBinding = {
   sharedThreadId: string;
   nativeThreadId: string;
   engine: SharedSessionSupportedEngine;
+  /** Wave 4 / B.5：Binding 归属的 Provider Profile；缺省/null 表示 default Provider 语义。 */
+  providerProfileId?: string | null;
   registeredAtMs?: number;
 };
 
@@ -70,6 +72,49 @@ export function resolvePendingSharedSessionBindingForEngine(
   const now = Date.now();
   sharedBindingsByNativeKey.forEach((binding) => {
     if (binding.workspaceId !== workspaceId || binding.engine !== engine) {
+      return;
+    }
+    if (isPendingSharedNativeThreadId(engine, binding.nativeThreadId)) {
+      if (now - binding.registeredAtMs > PENDING_BINDING_STALE_MS) {
+        return;
+      }
+      matches.push(binding);
+    }
+  });
+  if (matches.length !== 1) {
+    return null;
+  }
+  return toPublicBinding(matches[0]);
+}
+
+/** Provider 归一化：undefined/null/空白一律视为 default Provider 语义。 */
+function normalizeBindingProviderProfileId(
+  providerProfileId: string | null | undefined,
+): string | null {
+  const trimmed = providerProfileId?.trim();
+  return trimmed ? trimmed : null;
+}
+
+/**
+ * Wave 4 / B.5：Target 级 pending 解析（engine + providerProfileId）。
+ * 与 engine-only 版本同样的「唯一匹配才返回」fail-closed 规则，
+ * 但匹配维度收窄到 Execution Target，同 engine 双 Provider 并行时互不串线。
+ */
+export function resolvePendingSharedSessionBindingForTarget(
+  workspaceId: string,
+  engine: SharedSessionSupportedEngine,
+  providerProfileId?: string | null,
+) {
+  const targetProvider = normalizeBindingProviderProfileId(providerProfileId);
+  const matches: RuntimeSharedSessionNativeBinding[] = [];
+  const now = Date.now();
+  sharedBindingsByNativeKey.forEach((binding) => {
+    if (binding.workspaceId !== workspaceId || binding.engine !== engine) {
+      return;
+    }
+    if (
+      normalizeBindingProviderProfileId(binding.providerProfileId) !== targetProvider
+    ) {
       return;
     }
     if (isPendingSharedNativeThreadId(engine, binding.nativeThreadId)) {
