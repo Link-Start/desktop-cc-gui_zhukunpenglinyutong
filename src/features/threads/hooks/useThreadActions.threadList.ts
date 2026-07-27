@@ -65,6 +65,7 @@ export type ProjectCatalogSessionSummary = {
   workspaceId?: string | null;
   matchedWorkspaceId?: string | null;
   title: string;
+  nativeTitle?: string | null;
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
@@ -213,6 +214,7 @@ export function normalizeProjectCatalogSession(
     sessionId?: unknown;
     stableSessionKey?: unknown;
     title?: unknown;
+    nativeTitle?: unknown;
     workspaceId?: unknown;
     matchedWorkspaceId?: unknown;
     updatedAt?: unknown;
@@ -244,6 +246,7 @@ export function normalizeProjectCatalogSession(
       session.matchedWorkspaceId,
     ),
     title: String(session.title ?? "").trim(),
+    nativeTitle: normalizeOptionalCatalogString(session.nativeTitle),
     updatedAt:
       typeof session.updatedAt === "number" &&
       Number.isFinite(session.updatedAt)

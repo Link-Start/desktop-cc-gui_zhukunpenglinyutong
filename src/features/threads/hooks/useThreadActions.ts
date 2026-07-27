@@ -700,16 +700,18 @@ export function useThreadActions({
           .map((thread, index) => {
             const id = String(thread?.id ?? "");
             const preview = asString(thread?.preview ?? "").trim();
+            const nativeTitle = asString(thread?.nativeTitle ?? "").trim();
             const mappedTitle = mappedTitles[id];
             const customName = getCustomName(workspace.id, id) || mappedTitle;
             const liveIdentity = resolveCodexSubagentIdentity(id, thread);
             const fallbackName = `Agent ${index + 1}`;
             const name = customName
               ? customName
-              : liveIdentity.name ??
-                (preview.length > 0
-                  ? previewThreadName(preview, fallbackName)
-                  : fallbackName);
+              : nativeTitle ||
+                (liveIdentity.name ??
+                  (preview.length > 0
+                    ? previewThreadName(preview, fallbackName)
+                    : fallbackName));
             const engineSource = engineById.get(id) ?? ("codex" as const);
             const sourceMeta = resolveThreadSourceMeta(thread);
             return {
@@ -818,6 +820,7 @@ export function useThreadActions({
             (session: {
               sessionId: string;
               firstMessage: string;
+              nativeTitle?: string | null;
               updatedAt: number;
               fileSizeBytes?: number;
               parentSessionId?: string | null;
@@ -833,11 +836,13 @@ export function useThreadActions({
               const updatedAt = session.updatedAt;
               const mappedTitle = mappedTitles[id];
               const customTitle = getCustomName(workspace.id, id);
+              const nativeTitle = asString(session.nativeTitle).trim();
               const next: ThreadSummary = {
                 id,
                 name:
                   customTitle ||
                   mappedTitle ||
+                  nativeTitle ||
                   previewThreadName(session.firstMessage, "Claude Session"),
                 updatedAt,
                 sizeBytes: extractThreadSizeBytes(
@@ -850,7 +855,11 @@ export function useThreadActions({
               if (!prev || next.updatedAt >= prev.updatedAt) {
                 mergedById.set(
                   id,
-                  mergeThreadSummaryPreservingStableIdentity(prev, next),
+                  mergeThreadSummaryPreservingStableIdentity(prev, next, {
+                    mappedTitle,
+                    customTitle,
+                    nativeTitle,
+                  }),
                 );
               }
             },

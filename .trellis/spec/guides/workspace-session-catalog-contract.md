@@ -27,6 +27,10 @@
 - `merge_unified_codex_thread_entries(...) -> Vec<Value>`
 - `dedupe_catalog_entries_and_apply_children_counts(...) -> Vec<WorkspaceSessionCatalogEntry>`
 - `LocalUsageSessionSummary.parentSessionId?: string`
+- `LocalUsageSessionSummary.nativeTitle?: string`
+- `ClaudeSessionSourceFact.nativeTitle?: string`
+- `WorkspaceSessionCatalogEntry.nativeTitle?: string`
+- `selectProjectedSessionDisplayName({ customTitle?, mappedTitle?, nativeTitle?, nextName, previous? })`
 - `resolveThreadSourceMeta(rawThread).parentThreadId?: string`
 
 ### 3. Contracts
@@ -38,6 +42,7 @@
 - Frontend MUST NOT reapply exact `entry.workspaceId === selectedWorkspaceId` membership filtering on active strict projection rows. Project aggregate rows may have child/worktree `workspaceId`, and that owner must survive to UI state.
 - `WorkspaceSessionSourceCompleteness` MUST preserve per-engine source status. `partial` / `degraded` / `uncertain_empty` cannot prove deletion; `authoritative_empty` only applies to the matching engine and requested scope.
 - Metadata overlay is organization state only. `archive`, `folder`, and custom title metadata MUST NOT prove disk existence.
+- Runtime 原生 rename MUST 通过 additive optional `nativeTitle` 保留 title source。frontend display precedence MUST 为 GUI `customTitle` → persisted `mappedTitle` → runtime `nativeTitle` → previous-vs-fallback strength heuristic；合法 native title 即使匹配 `Agent N`、generic session name 或 4–8 位 hex，也 MUST NOT 被 weak-title heuristic 丢弃。旧 backend 缺少 `nativeTitle` 时 MUST 保持现有 fallback 行为。
 - Codex catalog source discovery MUST include managed provider homes under `codex-provider-homes/*/{sessions,archived_sessions}` in addition to disk/default and workspace Codex homes. Provider-home rows still MUST prove workspace ownership through source evidence such as `cwd`; provider id alone MUST NOT prove membership.
 - Codex provider binding metadata MAY overlay `providerProfileId/source/name/availability` on an already discovered row. Metadata alone MUST NOT create an active strict catalog row. If a session is discovered from a provider home whose provider profile is no longer configured, the row MUST remain visible as managed provider history with `providerAvailability=unavailable`; it MUST NOT be rewritten to disk.
 - Codex source completeness MUST distinguish disk/default/workspace roots from managed provider-home roots via `WorkspaceSessionCatalogSourceStatus.sourceKind` values such as `disk` and `provider-home`. Provider-home source diagnostics MUST degrade the Codex `provider-home` status and surface through `sourceStatuses[].diagnostics` instead of converting omitted provider-backed rows into authoritative deletion evidence. Frontend continuity may retain last-good provider-backed Codex rows while this Codex status is partial/degraded.
@@ -67,12 +72,17 @@
 | two files share one child canonical UUID | converge by canonical identity | 按 physical path 显示两条，或按 title 合并其他 distinct child UUID |
 | duplicate rollout lies inside bounded scan window | dedupe before limit；one page slot and one usage evidence | duplicate consumes multiple slots、false end-of-page 或 usage double count |
 | visible parent id is a rollout filename alias | child link resolves canonical parent UUID to visible parent id | child remains a root because ids differ |
+| runtime native rename looks like `Agent 12` / `Claude Session` / short hex | `nativeTitle` bypasses fallback strength heuristic，仍低于 GUI custom/mapped title | 仅传普通 `title`，导致旧 first-message title 被保留 |
+| old backend omits `nativeTitle` | normalize 为 absent，继续既有 title projection | 把 optional field 当 required 而丢弃 catalog row |
 
 ### 5. Good / Base / Bad Cases
 
 - Good：child rollout 保留自己的 UUID、usage 与 transcript，同时携带 `parentSessionId`；Sidebar 显示一个 parent root 与多个 agent-labelled children。
+- Good：catalog 同时输出 display `title` 与 optional `nativeTitle`，central projection 能区分 authoritative rename 和 weak fallback。
 - Base：普通 Codex session 没有 structured subagent metadata，继续使用既有 summary/title 与顶层 projection。
+- Base：旧 backend 或未重命名 session 不提供 `nativeTitle`，frontend 继续使用现有 title-strength fallback。
 - Bad：按 title 去重、把 child UUID 改成 parent UUID、忽略 object-form `source`，或只修 authoritative catalog 而遗漏 native/daemon fallback。
+- Bad：把 runtime rename 只覆盖到 `title` / `firstMessage`，不保留来源，导致 `Agent N` 等合法名字被当成 fallback。
 
 ### 6. Tests Required
 
@@ -84,6 +94,8 @@
 - Rust local/live merge tests MUST combine canonical ids、rollout aliases 与 parent relationship，并 assert `canonicalSessionId` 和 visible `parentSessionId` 同时正确；catalog test MUST assert duplicate child 只计一次 `childrenCount`。
 - Vitest coverage for Sidebar catalog normalization preserving child owner rows, Session Management stable selection keys, native empty not clearing catalog rows, and Workspace Home not deriving session membership from `recentThreads`.
 - Vitest coverage MUST assert raw Codex `parentSessionId -> ThreadSummary.parentThreadId`，且 parent + child tree 只产生一个 root。
+- Rust tests MUST assert Codex/Claude native rename 分别写入 `nativeTitle`，同时保留 first-message fallback 与 per-home isolation；native/daemon/catalog projection 都 MUST 保留该 optional field。
+- Vitest MUST assert weak-looking `nativeTitle` 覆盖旧 first-message title，且 GUI custom/mapped title 仍有更高 precedence；catalog boundary MUST trim/narrow optional field。
 - Contract validation: `openspec validate <change-id> --strict --no-interactive`, `cargo test --manifest-path src-tauri/Cargo.toml session_management claude_history`, focused Vitest for thread/settings session paths, `npm run typecheck`, and `npm run check:runtime-contracts`.
 
 ### 7. Wrong vs Correct
@@ -104,8 +116,26 @@ WorkspaceSessionCatalogEntry {
 WorkspaceSessionCatalogEntry {
     parent_session_id: summary.parent_session_id,
     title: summary.summary.unwrap_or_else(|| "Codex Session".to_string()),
+    native_title: summary.native_title,
     // child canonical UUID remains unchanged
 }
+```
+
+#### Wrong
+
+```typescript
+selectProjectedSessionDisplayName({ previous, nextName: entry.title });
+// 合法 native rename "Agent 12" 会被当成 fallback。
+```
+
+#### Correct
+
+```typescript
+selectProjectedSessionDisplayName({
+  previous,
+  nextName: entry.title,
+  nativeTitle: entry.nativeTitle,
+});
 ```
 
 #### Wrong

@@ -54,7 +54,8 @@
                     "totalTokens": 0
                 },
                 "cost": 0.0,
-                "summary": "Aristotle"
+                "summary": "Agent 12",
+                "nativeTitle": "Agent 12"
             }),
         )
         .expect("deserialize local summary");
@@ -67,6 +68,8 @@
 
         assert_eq!(entry.session_id, "child-session");
         assert_eq!(entry.parent_session_id.as_deref(), Some("parent-session"));
+        assert_eq!(entry.native_title.as_deref(), Some("Agent 12"));
+        assert_eq!(entry.title, "Agent 12");
     }
 
     #[test]

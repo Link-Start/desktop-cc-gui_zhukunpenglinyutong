@@ -52,6 +52,8 @@ pub(crate) struct WorkspaceSessionCatalogEntry {
     pub(crate) workspace_label: Option<String>,
     pub(crate) engine: String,
     pub(crate) title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) native_title: Option<String>,
     pub(crate) updated_at: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) archived_at: Option<i64>,

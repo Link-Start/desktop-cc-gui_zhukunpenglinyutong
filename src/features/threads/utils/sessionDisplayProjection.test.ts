@@ -106,6 +106,52 @@ describe("sessionDisplayProjection", () => {
     ).toBe("Agent 103");
   });
 
+  it.each(["Agent 12", "Claude Session", "deadbeef"])(
+    "preserves weak-looking native title %s",
+    (nativeTitle) => {
+      const previous: ThreadSummary = {
+        id: "claude:session-1",
+        name: "First prompt fallback",
+        updatedAt: 100,
+        engineSource: "claude",
+        threadKind: "native",
+      };
+
+      expect(
+        mergeSessionDisplaySummary(
+          previous,
+          { ...previous, name: nativeTitle, updatedAt: 120 },
+          { nativeTitle },
+        ).name,
+      ).toBe(nativeTitle);
+    },
+  );
+
+  it("keeps GUI custom and mapped titles above native titles", () => {
+    const previous: ThreadSummary = {
+      id: "codex:session-1",
+      name: "First prompt fallback",
+      updatedAt: 100,
+      engineSource: "codex",
+      threadKind: "native",
+    };
+    const next = { ...previous, name: "Agent 12", updatedAt: 120 };
+
+    expect(
+      mergeSessionDisplaySummary(previous, next, {
+        nativeTitle: "Agent 12",
+        mappedTitle: "Mapped title",
+      }).name,
+    ).toBe("Mapped title");
+    expect(
+      mergeSessionDisplaySummary(previous, next, {
+        nativeTitle: "Agent 12",
+        mappedTitle: "Mapped title",
+        customTitle: "Custom title",
+      }).name,
+    ).toBe("Custom title");
+  });
+
   it("preserves parent relationship metadata during degraded continuity merges", () => {
     const previous: ThreadSummary = {
       id: "claude:child",

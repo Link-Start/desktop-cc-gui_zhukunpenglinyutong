@@ -17,8 +17,11 @@ fn build_claude_catalog_entry_from_fact(
         workspace_label: Some(owner_workspace.name.clone()),
         engine: "claude".to_string(),
         title: fact
-            .first_real_user_message
+            .native_title
+            .clone()
+            .or_else(|| fact.first_real_user_message.clone())
             .unwrap_or_else(|| "Claude Session".to_string()),
+        native_title: fact.native_title,
         updated_at: fact.updated_at.max(0),
         thread_kind: "native".to_string(),
         source: None,
@@ -310,6 +313,7 @@ async fn build_workspace_scope_catalog_data(
                         title: summary
                             .summary
                             .unwrap_or_else(|| "Codex Session".to_string()),
+                        native_title: summary.native_title,
                         updated_at: summary.timestamp.max(0),
                         archived_at,
                         thread_kind: "native".to_string(),
@@ -470,6 +474,7 @@ async fn build_workspace_scope_catalog_data(
                         workspace_label: Some(workspace.name.clone()),
                         engine: "gemini".to_string(),
                         title: session.first_message,
+                        native_title: None,
                         updated_at: session.updated_at.max(0),
                         thread_kind: "native".to_string(),
                         source: None,
@@ -549,6 +554,7 @@ async fn build_workspace_scope_catalog_data(
                         workspace_label: Some(workspace.name.clone()),
                         engine: "kimi".to_string(),
                         title: session.first_message,
+                        native_title: None,
                         updated_at: session.updated_at.max(0),
                         thread_kind: "native".to_string(),
                         source: None,
@@ -643,6 +649,7 @@ async fn build_workspace_scope_catalog_data(
                         workspace_label: Some(workspace.name.clone()),
                         engine: "opencode".to_string(),
                         title: session.title,
+                        native_title: None,
                         updated_at: session.updated_at.unwrap_or(0).max(0),
                         thread_kind: "native".to_string(),
                         source: None,
