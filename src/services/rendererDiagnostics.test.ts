@@ -99,6 +99,67 @@ describe("rendererDiagnostics", () => {
     expect(labels).toContain("burst/third");
   });
 
+  it("reads persisted history once and incrementally flushes later entries", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([
+      {
+        timestamp: 1,
+        label: "persisted/entry",
+        payload: { count: 1 },
+      },
+    ]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.appendRendererDiagnostic("incremental/first");
+    expect(clientStorageMocks.getClientStoreSync).toHaveBeenCalledTimes(2);
+
+    diagnostics.appendRendererDiagnostic("incremental/second");
+    vi.advanceTimersByTime(2_000);
+
+    expect(clientStorageMocks.getClientStoreSync).toHaveBeenCalledTimes(2);
+    const [, , persistedEntries] =
+      clientStorageMocks.writeClientStoreValue.mock.calls.at(-1) ?? [];
+    expect(
+      (persistedEntries as Array<{ label: string }>).map(
+        (entry) => entry.label,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        "persisted/entry",
+        "incremental/first",
+        "incremental/second",
+      ]),
+    );
+  });
+
+  it("keeps cleared diagnostics from being resurrected by the canonical cache", async () => {
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([
+      {
+        timestamp: 1,
+        label: "persisted/old",
+        payload: {},
+      },
+    ]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.appendRendererDiagnostic("before/clear");
+    diagnostics.clearRendererDiagnostics();
+    clientStorageMocks.getClientStoreSync.mockClear();
+    diagnostics.appendRendererDiagnostic("after/clear");
+    diagnostics.flushRendererDiagnosticsBuffer();
+
+    expect(clientStorageMocks.getClientStoreSync).not.toHaveBeenCalled();
+    const [, , persistedEntries] =
+      clientStorageMocks.writeClientStoreValue.mock.calls.at(-1) ?? [];
+    expect(
+      (persistedEntries as Array<{ label: string }>).map(
+        (entry) => entry.label,
+      ),
+    ).toEqual(["after/clear"]);
+  });
+
   it("merges pending throttled entries into exported diagnostics", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     clientStorageMocks.isPreloaded.mockReturnValue(true);
@@ -189,6 +250,37 @@ describe("rendererDiagnostics", () => {
     ).toBeNull();
   });
 
+  it("does not seal an incomplete canonical cache when exported before preload", async () => {
+    clientStorageMocks.isPreloaded.mockReturnValue(false);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([]);
+    const diagnostics = await import("./rendererDiagnostics");
+
+    diagnostics.appendRendererDiagnostic("bootstrap/early");
+    expect(
+      diagnostics.exportRendererDiagnostics().map((entry) => entry.label),
+    ).toContain("bootstrap/early");
+
+    clientStorageMocks.isPreloaded.mockReturnValue(true);
+    clientStorageMocks.getClientStoreSync.mockReturnValue([
+      {
+        timestamp: 1,
+        label: "persisted/from-disk",
+        payload: {},
+      },
+    ]);
+    diagnostics.flushRendererDiagnosticsBuffer();
+
+    const [, , persistedEntries] =
+      clientStorageMocks.writeClientStoreValue.mock.calls.at(-1) ?? [];
+    expect(
+      (persistedEntries as Array<{ label: string }>).map(
+        (entry) => entry.label,
+      ),
+    ).toEqual(
+      expect.arrayContaining(["persisted/from-disk", "bootstrap/early"]),
+    );
+  });
+
   it("sanitizes and bounds legacy payloads before they are retained", async () => {
     clientStorageMocks.isPreloaded.mockReturnValue(true);
     clientStorageMocks.getClientStoreSync.mockReturnValue([
@@ -256,9 +348,8 @@ describe("rendererDiagnostics", () => {
       "diagnostics",
       "diagnostics.rendererLifecycleLog",
       [
-        expect.objectContaining({
-          label: "lifecycle/pending",
-        }),
+        expect.objectContaining({ label: "lifecycle/persisted" }),
+        expect.objectContaining({ label: "lifecycle/pending" }),
       ],
       { immediate: true },
     );

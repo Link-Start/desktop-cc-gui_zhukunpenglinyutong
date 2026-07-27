@@ -22,6 +22,7 @@ import {
   type EngineDisplayInfo,
 } from "./engineControllerAvailability";
 import {
+  areEngineModelCatalogsEqual,
   engineModelToOption,
   normalizeEngineModelEntry,
   projectActiveEngineModels,
@@ -153,7 +154,11 @@ export function useEngineController({
         const nextModels = sourceModels.map((model) => normalizeEngineModelEntry(model));
         lastGoodModelsByScopeRef.current.set(catalogRequestKey, nextModels);
         if (visibleCatalogRequestKeyRef.current === catalogRequestKey) {
-          setEngineModels(nextModels);
+          setEngineModels((currentModels) =>
+            areEngineModelCatalogsEqual(currentModels, nextModels)
+              ? currentModels
+              : nextModels,
+          );
         }
         return nextModels;
       } catch (error) {
@@ -170,7 +175,11 @@ export function useEngineController({
         });
         const normalizedFallback = scopedFallbackModels.map((model) => normalizeEngineModelEntry(model));
         if (visibleCatalogRequestKeyRef.current === catalogRequestKey) {
-          setEngineModels(normalizedFallback);
+          setEngineModels((currentModels) =>
+            areEngineModelCatalogsEqual(currentModels, normalizedFallback)
+              ? currentModels
+              : normalizedFallback,
+          );
         }
         return normalizedFallback;
       }

@@ -1243,6 +1243,43 @@ describe("useEngineController", () => {
     );
   });
 
+  it("preserves model state identity when a refresh is semantically unchanged", async () => {
+    const models: EngineStatus["models"] = [
+      {
+        id: "provider-a-model",
+        displayName: "Provider A",
+        description: "provider",
+        providerProfileId: "provider-a",
+        isDefault: true,
+      },
+    ];
+    detectEnginesMock.mockResolvedValue([
+      createEngineStatus("claude", true, models),
+    ]);
+    getActiveEngineMock.mockResolvedValue("claude");
+    getEngineModelsMock.mockResolvedValue(models);
+
+    const { result } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+    await waitFor(() => expect(result.current.isInitialized).toBe(true));
+
+    await act(async () => {
+      await result.current.refreshEngineModels("claude", {
+        providerProfileId: "provider-a",
+      });
+    });
+    const firstCatalog = result.current.engineModels;
+
+    await act(async () => {
+      await result.current.refreshEngineModels("claude", {
+        providerProfileId: "provider-a",
+      });
+    });
+
+    expect(result.current.engineModels).toBe(firstCatalog);
+  });
+
   it("preserves the default flag when a custom Claude model shadows the default runtime model", async () => {
     const claudeModels: EngineStatus["models"] = [
       {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { EngineType } from "../types";
 import { useProviderModelCatalogSync } from "./useProviderModelCatalogSync";
 
 describe("useProviderModelCatalogSync", () => {
@@ -11,6 +12,7 @@ describe("useProviderModelCatalogSync", () => {
       ({ providerProfileId }) =>
         useProviderModelCatalogSync({
           activeEngine: "claude",
+          activeThreadEngineSource: "claude",
           activeThreadId: "claude-pending-1",
           activeWorkspaceId: "ws-1",
           providerProfileId,
@@ -47,6 +49,7 @@ describe("useProviderModelCatalogSync", () => {
       ({ activeEngine }: HookProps) =>
         useProviderModelCatalogSync({
           activeEngine,
+          activeThreadEngineSource: activeEngine,
           activeThreadId: "thread-1",
           activeWorkspaceId: "ws-1",
           providerProfileId: "provider-a",
@@ -70,5 +73,52 @@ describe("useProviderModelCatalogSync", () => {
     view.rerender({ activeEngine: "gemini" });
 
     expect(refreshEngineModels).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the active thread engine while the global engine is still switching", () => {
+    const refreshEngineModels = vi.fn().mockResolvedValue(undefined);
+    const addDebugEntry = vi.fn();
+    type HookProps = {
+      activeEngine: EngineType;
+    };
+    const view = renderHook(
+      ({ activeEngine }: HookProps) =>
+        useProviderModelCatalogSync({
+          activeEngine,
+          activeThreadEngineSource: "codex",
+          activeThreadId: "codex-thread-1",
+          activeWorkspaceId: "ws-1",
+          providerProfileId: "__disk__",
+          addDebugEntry,
+          refreshEngineModels,
+        }),
+      { initialProps: { activeEngine: "claude" } },
+    );
+
+    expect(refreshEngineModels).toHaveBeenCalledTimes(1);
+    expect(refreshEngineModels).toHaveBeenCalledWith("codex", {
+      providerProfileId: "__disk__",
+    });
+
+    view.rerender({ activeEngine: "codex" });
+    expect(refreshEngineModels).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the last-good catalog when a provider-bound thread has no engine scope", () => {
+    const refreshEngineModels = vi.fn().mockResolvedValue(undefined);
+
+    renderHook(() =>
+      useProviderModelCatalogSync({
+        activeEngine: "claude",
+        activeThreadEngineSource: null,
+        activeThreadId: "legacy-thread-1",
+        activeWorkspaceId: "ws-1",
+        providerProfileId: "provider-a",
+        addDebugEntry: vi.fn(),
+        refreshEngineModels,
+      }),
+    );
+
+    expect(refreshEngineModels).not.toHaveBeenCalled();
   });
 });

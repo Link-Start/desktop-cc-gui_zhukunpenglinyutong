@@ -9,7 +9,10 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildConversationItem } from "../../../utils/threadItems";
-import { resetLiveAssistantTextChannelForTests } from "../utils/liveAssistantTextChannel";
+import {
+  getLiveAssistantTextSnapshot,
+  resetLiveAssistantTextChannelForTests,
+} from "../utils/liveAssistantTextChannel";
 import { useThreadItemEvents } from "./useThreadItemEvents";
 
 vi.mock("../../../utils/threadItems", () => ({
@@ -145,5 +148,58 @@ describe("useThreadItemEvents live-text segmentation", () => {
     expect(types.indexOf("incrementAgentSegment")).toBeLessThan(
       types.lastIndexOf("appendAgentDelta"),
     );
+  });
+
+  it("keeps growing agent snapshots in the row-local channel after the shell", () => {
+    const { result, dispatch } = makeHook();
+
+    act(() => {
+      result.current.onItemUpdated(WORKSPACE_ID, THREAD_ID, {
+        type: "agentMessage",
+        id: ITEM_ID,
+        text: "第一段",
+      });
+      result.current.onItemUpdated(WORKSPACE_ID, THREAD_ID, {
+        type: "agentMessage",
+        id: ITEM_ID,
+        text: "第一段\n第二段",
+      });
+    });
+
+    expect(agentDeltaCalls(dispatch).map((action) => action.delta)).toEqual([
+      "第一段",
+    ]);
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)?.text).toBe(
+      "第一段\n第二段",
+    );
+  });
+
+  it("routes snapshot replacement and completion through durable state", () => {
+    const { result, dispatch } = makeHook();
+
+    act(() => {
+      result.current.onItemUpdated(WORKSPACE_ID, THREAD_ID, {
+        type: "agentMessage",
+        id: ITEM_ID,
+        text: "第一段",
+      });
+      result.current.onItemUpdated(WORKSPACE_ID, THREAD_ID, {
+        type: "agentMessage",
+        id: ITEM_ID,
+        text: "替换正文",
+      });
+      result.current.onItemCompleted(WORKSPACE_ID, THREAD_ID, {
+        type: "agentMessage",
+        id: ITEM_ID,
+        text: "最终正文",
+      });
+    });
+
+    expect(agentDeltaCalls(dispatch).map((action) => action.delta)).toEqual([
+      "第一段",
+      "替换正文",
+      "最终正文",
+    ]);
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)).toBeNull();
   });
 });

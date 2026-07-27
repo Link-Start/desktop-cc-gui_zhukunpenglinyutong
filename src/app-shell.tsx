@@ -845,12 +845,13 @@ export function AppShell() {
     resolveEngineDefaultComposerSelection,
     onDebug: addDebugEntry,
   });
+  const activeThreadSummary = activeWorkspaceId
+    ? threadsByWorkspace[activeWorkspaceId]?.find(
+        (thread) => thread.id === activeThreadId,
+      )
+    : null;
   const activeThreadProviderProfileId =
-    (activeWorkspaceId
-      ? threadsByWorkspace[activeWorkspaceId]?.find(
-          (thread) => thread.id === activeThreadId,
-        )?.providerProfileId
-      : null) ?? null;
+    activeThreadSummary?.providerProfileId ?? null;
   const {
     collaborationModePayload,
     effectiveModels,
@@ -913,6 +914,8 @@ export function AppShell() {
 
   useProviderModelCatalogSync({
     activeEngine,
+    activeThreadEngineSource:
+      activeThreadSummary?.engineSource ?? activeThreadSummary?.selectedEngine,
     activeThreadId,
     activeWorkspaceId,
     providerProfileId: activeThreadProviderProfileId,
