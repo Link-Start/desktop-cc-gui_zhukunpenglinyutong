@@ -1706,3 +1706,37 @@ openspec validate assemble-shared-canonical-facts --strict --no-interactive: val
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1189: 暴露 Shared Projection 动态测试入口
+
+**Date**: 2026-07-27
+**Task**: 暴露 Shared Projection 动态测试入口
+**Branch**: `feature/v-0710`
+
+### Summary
+
+在设置→其他设置新增默认关闭的 Shared Projection 测试开关，复用 mossx.sharedProjection localStorage override，状态变化后自动 reload，加载失败继续回退 V0；补齐 10 种语言文案与 15 个 focused tests。总任务清单 Wave 0–6 全部新增大白话说明、改变点、UI 变化三列，并整理远期认知说明。OpenSpec follow-up 已 verify、同步 shared-canonical-projection 主 spec 并归档。验证通过：focused Vitest 15/15、typecheck、scoped ESLint、git diff --check、Markdown table/link check、目标 spec strict；全量 OpenSpec 仍仅有既有 add-tokentracker-usage-dashboard 与 reduce-client-polling-overhead 两个 blocker。未跑全量测试，未做桌面人工 smoke。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `85f9c59a3` | (see git log) |
+| `c90c1c939` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

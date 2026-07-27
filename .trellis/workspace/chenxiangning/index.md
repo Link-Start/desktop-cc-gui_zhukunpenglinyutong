@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1188
+- **Total Sessions**: 1189
 - **Last Active**: 2026-07-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~1708 | Active |
+| `journal-28.md` | ~1742 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1189 | 2026-07-27 | 暴露 Shared Projection 动态测试入口 | `85f9c59a3`, `c90c1c939` | `feature/v-0710` |
 | 1188 | 2026-07-27 | 归档 Change A OpenSpec | `83833a540` | `feature/v-0710` |
 | 1187 | 2026-07-27 | 收口 Change A 暗发布链路 | `60d68c6e1` | `feature/v-0710` |
 | 1186 | 2026-07-27 | 明确 Change A 收口路径与 Change B 准入条件 | `e3562c9d5` | `feature/v-0710` |
