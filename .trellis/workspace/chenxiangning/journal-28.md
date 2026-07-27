@@ -1640,3 +1640,36 @@ openspec validate assemble-shared-canonical-facts --strict --no-interactive: val
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1187: 收口 Change A 暗发布链路
+
+**Date**: 2026-07-27
+**Task**: 收口 Change A 暗发布链路
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 V0 final-evidence Shadow mirror、Usage precedence、Shared Projection Tauri commands、feature-flagged Canvas read path 与 render regression gates；A2/A3 均达到 100%，Change B 正式准入。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `60d68c6e1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
