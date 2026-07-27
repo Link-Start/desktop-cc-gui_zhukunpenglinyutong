@@ -1740,3 +1740,46 @@ openspec validate assemble-shared-canonical-facts --strict --no-interactive: val
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1190: 调研 Headroom 并将压缩模式契约沉淀进会话基石设计
+
+**Date**: 2026-07-27
+**Task**: 调研 Headroom 并将压缩模式契约沉淀进会话基石设计
+**Branch**: `feature/v-0710`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 事项 | 说明 |
+|---------|-------------|
+| 调研 | Headroom（上下文压缩层）：CCR 可逆压缩、CacheAligner 前缀稳定、ContentRouter 分类型压缩；结论为只借模式不借工具 |
+| 设计文档 | §5.6 ContextPackage 新增 ContextCompressionReport；§9.2 新增前缀稳定性不变量；§9.4 检索显式发起约束；§9.5 V1 分类型确定性压缩策略表；§16 Change C 范围与 §17.3 矩阵同步；§21 参考材料 |
+| 任务清单 | Wave 5 新增 C.10（分类型压缩+前缀稳定性），更新 C.1/C.8 验收与 Gate 5 |
+| 边界 | 不引入 Headroom proxy/wrap 部署形态与 ML 压缩模型；Native CLI Session 内部压缩主权归 CLI |
+
+**Updated Files**:
+- `docs/research/mossx-multi-cli-provider-session-foundation-design.md`
+- `docs/plans/2026-07-27-multi-cli-provider-session-foundation-task-checklist.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3824f36ae` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
