@@ -53,6 +53,12 @@ const TRUNCATED_DIAGNOSTIC_VALUE = "[truncated]";
 let installed = false;
 let bufferedEntries: RendererDiagnosticEntry[] = [];
 let pendingPersistEntries: RendererDiagnosticEntry[] = [];
+let persistedDiagnosticsCache: RendererDiagnosticEntry[] | null = null;
+let persistedDiagnosticSignatures = new Set<string>();
+const diagnosticEntrySignatureCache = new WeakMap<
+  RendererDiagnosticEntry,
+  string
+>();
 let diagnosticsPersistTimer: ReturnType<typeof setTimeout> | null = null;
 let lastDiagnosticsPersistAt = Number.NEGATIVE_INFINITY;
 let diagnosticsFlushHooksInstalled = false;
@@ -190,7 +196,7 @@ function mergeDiagnostics(
   const merged: RendererDiagnosticEntry[] = [];
   for (const group of groups) {
     for (const entry of group) {
-      const signature = JSON.stringify(entry);
+      const signature = getDiagnosticEntrySignature(entry);
       if (seen.has(signature)) {
         continue;
       }
@@ -199,6 +205,16 @@ function mergeDiagnostics(
     }
   }
   return trimDiagnostics(merged);
+}
+
+function getDiagnosticEntrySignature(entry: RendererDiagnosticEntry): string {
+  const cached = diagnosticEntrySignatureCache.get(entry);
+  if (cached) {
+    return cached;
+  }
+  const signature = JSON.stringify(entry);
+  diagnosticEntrySignatureCache.set(entry, signature);
+  return signature;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -577,7 +593,7 @@ function bumpDiagnosticsRevision(): void {
   diagnosticsRevision += 1;
 }
 
-function readPersistedDiagnostics() {
+function readPersistedDiagnosticsFromStores() {
   const stored = getClientStoreSync<RendererDiagnosticEntry[] | unknown>(
     RENDERER_DIAGNOSTICS_STORE,
     RENDERER_DIAGNOSTICS_KEY,
@@ -593,6 +609,41 @@ function readPersistedDiagnostics() {
   );
 }
 
+function getPersistedDiagnosticsSnapshot(): RendererDiagnosticEntry[] {
+  if (persistedDiagnosticsCache === null) {
+    const loadedEntries = readPersistedDiagnosticsFromStores();
+    if (!isPreloaded()) {
+      return loadedEntries;
+    }
+    persistedDiagnosticsCache = loadedEntries;
+    persistedDiagnosticSignatures = new Set(
+      persistedDiagnosticsCache.map(getDiagnosticEntrySignature),
+    );
+  }
+  return persistedDiagnosticsCache;
+}
+
+function mergeIntoPersistedDiagnostics(
+  ...groups: RendererDiagnosticEntry[][]
+): RendererDiagnosticEntry[] {
+  const merged = [...getPersistedDiagnosticsSnapshot()];
+  for (const group of groups) {
+    for (const entry of group) {
+      const signature = getDiagnosticEntrySignature(entry);
+      if (persistedDiagnosticSignatures.has(signature)) {
+        continue;
+      }
+      persistedDiagnosticSignatures.add(signature);
+      merged.push(entry);
+    }
+  }
+  persistedDiagnosticsCache = trimDiagnostics(merged);
+  persistedDiagnosticSignatures = new Set(
+    persistedDiagnosticsCache.map(getDiagnosticEntrySignature),
+  );
+  return persistedDiagnosticsCache;
+}
+
 /**
  * 导出合并后的诊断条目(只读),供设置页「复制卡顿现场」等外部消费。
  * pending buffer 中尚未落盘的条目一并合入，避免节流窗口内丢失最新现场。
@@ -600,7 +651,7 @@ function readPersistedDiagnostics() {
 export function exportRendererDiagnostics(): RendererDiagnosticEntry[] {
   const startedAt = readNowMs();
   const entries = mergeDiagnostics(
-    readPersistedDiagnostics(),
+    getPersistedDiagnosticsSnapshot(),
     bufferedEntries,
     pendingPersistEntries,
   );
@@ -622,13 +673,15 @@ export function getRendererDiagnosticsRevision(): number {
 }
 
 /**
- * 清空全部诊断条目。readPersistedDiagnostics 会合并三个来源(当前 store、legacy
+ * 清空全部诊断条目。初始 snapshot 会合并三个来源(当前 store、legacy
  * store、preload 前的 early localStorage),漏掉任何一个都会让旧条目"复活",
  * 所以必须三处一起清。供设置页「最近卡顿」面板的清空按钮使用。
  */
 export function clearRendererDiagnostics(): void {
   bufferedEntries = [];
   pendingPersistEntries = [];
+  persistedDiagnosticsCache = [];
+  persistedDiagnosticSignatures = new Set();
   if (diagnosticsPersistTimer !== null) {
     clearTimeout(diagnosticsPersistTimer);
     diagnosticsPersistTimer = null;
@@ -645,8 +698,7 @@ export function clearRendererDiagnostics(): void {
 
 /**
  * 将 legacy `app` store 里的 renderer lifecycle 日志合并进当前 diagnostics store
- * 并清空 legacy key。存量死数据会一直被 readPersistedDiagnostics 反复 merge +
- * JSON.stringify 签名去重，白白消耗 CPU，迁移后即可停付这笔开销。
+ * 并清空 legacy key，避免后续 reload 重复读入已经迁移的存量。
  */
 export function migrateLegacyRendererDiagnostics(): void {
   const legacyStored = getClientStoreSync<unknown>(
@@ -656,7 +708,9 @@ export function migrateLegacyRendererDiagnostics(): void {
   if (!Array.isArray(legacyStored) || legacyStored.length === 0) {
     return;
   }
-  persistDiagnostics(readPersistedDiagnostics());
+  persistDiagnostics(
+    mergeIntoPersistedDiagnostics(normalizeDiagnosticEntries(legacyStored)),
+  );
   writeClientStoreValue(
     LEGACY_RENDERER_DIAGNOSTICS_STORE,
     RENDERER_DIAGNOSTICS_KEY,
@@ -675,9 +729,7 @@ function persistPendingDiagnostics(options: { immediate?: boolean } = {}) {
   const persistStartedAt =
     typeof performance !== "undefined" ? performance.now() : Date.now();
   lastDiagnosticsPersistAt = Date.now();
-  const existing = readPersistedDiagnostics();
-  const nextEntries = mergeDiagnostics(
-    existing,
+  const nextEntries = mergeIntoPersistedDiagnostics(
     bufferedEntries,
     pendingPersistEntries,
   );
@@ -1442,9 +1494,7 @@ export function flushRendererDiagnosticsBuffer() {
     persistEarlyDiagnostics(bufferedEntries);
     return;
   }
-  const existing = readPersistedDiagnostics();
-  const nextEntries = mergeDiagnostics(
-    existing,
+  const nextEntries = mergeIntoPersistedDiagnostics(
     bufferedEntries,
     pendingPersistEntries,
   );

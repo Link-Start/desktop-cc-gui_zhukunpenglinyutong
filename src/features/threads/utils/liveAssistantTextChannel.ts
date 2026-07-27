@@ -72,6 +72,48 @@ export function appendLiveAssistantText(
   return { isFirst: false };
 }
 
+export type LiveAssistantSnapshotUpdate =
+  | "first"
+  | "growth"
+  | "unchanged"
+  | "replacement";
+
+/**
+ * 接收 runtime 的 cumulative assistant snapshot。
+ * 只有同 item 的单调正文增长可留在通道；缩短或改写交给 durable reducer，
+ * 避免把结构性 replacement 误判成 append。
+ */
+export function updateLiveAssistantTextSnapshot(
+  threadId: string,
+  itemId: string,
+  text: string,
+): LiveAssistantSnapshotUpdate {
+  const existing = entriesByThread.get(threadId);
+  if (!existing || existing.itemId !== itemId) {
+    entriesByThread.set(threadId, {
+      itemId,
+      text,
+      version: 1,
+      shellTextLength: text.length,
+    });
+    notifyThread(threadId);
+    return "first";
+  }
+  if (text === existing.text) {
+    return "unchanged";
+  }
+  if (!text.startsWith(existing.text)) {
+    return "replacement";
+  }
+  entriesByThread.set(threadId, {
+    ...existing,
+    text,
+    version: existing.version + 1,
+  });
+  notifyThread(threadId);
+  return "growth";
+}
+
 /** 回合结束/线程删除时清除条目（订阅行随之切回读 item.text）。 */
 export function clearLiveAssistantText(threadId: string): void {
   if (entriesByThread.delete(threadId)) {

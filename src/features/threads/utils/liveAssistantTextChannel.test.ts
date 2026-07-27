@@ -7,11 +7,38 @@ import {
   renameLiveAssistantTextThread,
   resetLiveAssistantTextChannelForTests,
   subscribeLiveAssistantText,
+  updateLiveAssistantTextSnapshot,
 } from "./liveAssistantTextChannel";
 
 describe("liveAssistantTextChannel", () => {
   afterEach(() => {
     resetLiveAssistantTextChannelForTests();
+  });
+
+  it("publishes cumulative snapshot growth without treating replacements as append", () => {
+    expect(
+      updateLiveAssistantTextSnapshot("thread-1", "item-1", "第一段"),
+    ).toBe("first");
+    expect(
+      updateLiveAssistantTextSnapshot(
+        "thread-1",
+        "item-1",
+        "第一段\n第二段",
+      ),
+    ).toBe("growth");
+    expect(
+      updateLiveAssistantTextSnapshot(
+        "thread-1",
+        "item-1",
+        "第一段\n第二段",
+      ),
+    ).toBe("unchanged");
+    expect(
+      updateLiveAssistantTextSnapshot("thread-1", "item-1", "替换正文"),
+    ).toBe("replacement");
+    expect(getLiveAssistantTextSnapshot("thread-1")?.text).toBe(
+      "第一段\n第二段",
+    );
   });
 
   it("marks the first delta per item as isFirst and accumulates the rest", () => {
