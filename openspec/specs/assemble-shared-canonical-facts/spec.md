@@ -2,10 +2,11 @@
 
 ## Purpose
 
-定义 Shared Session V2 的 Canonical Fact 装配层：把 Runtime 事件流转换为符合 Wave 0 Schema 的 canonical fact，经字段级校验后通过 `SharedEventWriter` 唯一入口落盘。本 capability 是 UI Projection（A3）、Execution Target（B）与 Context Compiler（C）的 authoritative 事实源前提。
+定义 Shared Session V2 的 Canonical Fact 装配层：把 authoritative final snapshot
+转换为 Wave 0 canonical fact，经字段级校验后通过 `SharedEventWriter` 落盘，并提供
+V0 final-evidence read-only Shadow ingress。
 
-## ADDED Requirements
-
+## Requirements
 ### Requirement: Canonical Fact Payload MUST Be Validated Before Append
 
 `SharedEventWriter::append_canonical_fact` MUST validate the fact against the Wave 0 Canonical Fact Schema before computing sequence or checksum. Invalid payloads MUST be rejected with a typed error and MUST NOT be inserted into `shared_event_log`.
@@ -117,21 +118,3 @@ Legacy Shared Session V0 final evidence MAY be imported as canonical facts with 
 - **THEN** each mapped row has `fidelity = "presentation-only"`
 - **AND** the row is stored in `shared_event_log`
 - **AND** no product state is modified
-
-## MODIFIED Requirements
-
-### Requirement: Event Storage MUST Accept Canonical Facts Through a Validated Entry Point
-
-The store MUST use SQLite in WAL mode with `foreign_keys=ON`, `synchronous=FULL`, and a bounded `busy_timeout`; all canonical fact writes MUST go through `SharedEventWriter::append_canonical_fact`, which SHALL validate the fact before delegating to the single writer actor.
-
-> 修改自 `shared-event-storage` 同一条 Requirement：单写者语义不变，增加“所有 canonical fact 写入必须经过 `append_canonical_fact` 并先通过 payload 校验”。
-
-#### Scenario: direct arbitrary envelope append is discouraged
-
-- **WHEN** a caller tries to append a raw JSON envelope that does not represent a validated canonical fact
-- **THEN** the public API SHOULD reject it or mark it `presentation-only`
-- **AND** no `canonical` fidelity row is created without validation
-
-## REMOVED Requirements
-
-无。

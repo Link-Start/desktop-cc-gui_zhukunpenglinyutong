@@ -21,6 +21,8 @@ synthetic Runtime fixtures + V0 authoritative final evidence mirror
 | Wave 3 / A3 | `project-shared-canonical-conversation` | 27/27 | Gate 3 ✅ | Shadow Projection、V0 fallback 与 render gate 已闭环 |
 | **Change A 总计** | 三个 change | **56/56** | **已通过** | **Change A 完成** |
 
+OpenSpec 已归档至 `openspec/changes/archive/2026-07-27-{establish-shared-event-storage,assemble-shared-canonical-facts,project-shared-canonical-conversation}/`，主 specs 已同步。
+
 ### Change B 准入决策
 
 - **允许进入 Change B**。Phase 1 Gate 1–3 已完成，下一步可创建
