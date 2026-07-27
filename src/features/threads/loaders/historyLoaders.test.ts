@@ -4,6 +4,7 @@ import { createCodexHistoryLoader } from "./codexHistoryLoader";
 import { parseCodexSessionHistory } from "./codexSessionHistory";
 import { createGeminiHistoryLoader } from "./geminiHistoryLoader";
 import { parseGeminiHistoryMessages } from "./geminiHistoryParser";
+import { createGrokHistoryLoader } from "./grokHistoryLoader";
 import { createKimiHistoryLoader } from "./kimiHistoryLoader";
 
 describe("history loaders", () => {
@@ -761,6 +762,82 @@ describe("history loaders", () => {
     const snapshot = await loader.load("kimi:session-1");
     expect(snapshot.engine).toBe("kimi");
     expect(snapshot.threadId).toBe("kimi:session-1");
+    expect(snapshot.items).toHaveLength(0);
+  });
+
+  it("loads grok history into normalized snapshot", async () => {
+    const loader = createGrokHistoryLoader({
+      workspaceId: "ws-grok",
+      workspacePath: "/tmp/workspace",
+      loadGrokSession: vi.fn().mockResolvedValue({
+        messages: [
+          {
+            id: "grok-user-1",
+            kind: "message",
+            role: "user",
+            text: "hello",
+          },
+          {
+            id: "grok-assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "hi",
+          },
+          {
+            id: "grok-tool-1",
+            kind: "tool",
+            role: "assistant",
+            toolType: "Grep",
+            title: "Grep",
+            toolInput: { pattern: "foo" },
+          },
+          {
+            id: "grok-tool-1-result",
+            kind: "tool",
+            role: "assistant",
+            toolType: "result",
+            title: "Result",
+            text: "3 matches",
+          },
+        ],
+      }),
+    });
+
+    const snapshot = await loader.load("grok:session-1");
+    expect(snapshot.engine).toBe("grok");
+    expect(snapshot.threadId).toBe("grok:session-1");
+    expect(snapshot.items).toHaveLength(3);
+    expect(snapshot.items[0]).toEqual(
+      expect.objectContaining({
+        kind: "message",
+        role: "user",
+      }),
+    );
+    expect(snapshot.items[1]).toEqual(
+      expect.objectContaining({
+        kind: "message",
+        role: "assistant",
+      }),
+    );
+    expect(snapshot.items[2]).toEqual(
+      expect.objectContaining({
+        kind: "tool",
+        status: "completed",
+        output: "3 matches",
+      }),
+    );
+  });
+
+  it("returns an empty grok snapshot when workspace path is missing", async () => {
+    const loader = createGrokHistoryLoader({
+      workspaceId: "ws-grok",
+      workspacePath: null,
+      loadGrokSession: vi.fn(),
+    });
+
+    const snapshot = await loader.load("grok:session-1");
+    expect(snapshot.engine).toBe("grok");
+    expect(snapshot.threadId).toBe("grok:session-1");
     expect(snapshot.items).toHaveLength(0);
   });
 

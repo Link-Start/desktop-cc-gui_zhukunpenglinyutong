@@ -59,6 +59,8 @@ const sidebar = {
     "newCloneAgent": "Novo agent de clone",
     "codexProviderChoiceTitle": "Seleção de provedor",
     "codexProviderSelectedTip": "Selecionado. Clique em Codex à esquerda para iniciar uma sessão.",
+    "grokProviderChoiceTitle": "Seleção de provedor",
+    "grokProviderSelectedTip": "Selecionado. Clique em Grok CLI à esquerda para iniciar uma sessão.",
     "providerFollowsGlobalLabel": "Segue a configuração global",
     "providerIsolatedConfigLabel": "Configuração isolada",
     "sessionActionsGroup": "Nova sessão",

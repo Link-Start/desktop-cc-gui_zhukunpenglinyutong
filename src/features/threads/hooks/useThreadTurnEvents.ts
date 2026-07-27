@@ -123,7 +123,7 @@ function extractThreadProviderMetadata(thread: Record<string, unknown>) {
 }
 
 function isPendingThreadForEngine(
-  engine: "claude" | "gemini" | "kimi" | "opencode",
+  engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
   threadId: string | null | undefined,
 ): threadId is string {
   if (!threadId) {
@@ -172,11 +172,11 @@ type UseThreadTurnEventsOptions = {
   ) => Promise<void>;
   resolvePendingThreadForSession?: (
     workspaceId: string,
-    engine: "claude" | "gemini" | "kimi" | "opencode",
+    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
   ) => string | null;
   resolvePendingThreadForTurn?: (
     workspaceId: string,
-    engine: "claude" | "gemini" | "kimi" | "opencode",
+    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
     turnId: string | null | undefined,
   ) => string | null;
   getActiveTurnIdForThread?: (threadId: string) => string | null;
@@ -1060,7 +1060,7 @@ export function useThreadTurnEvents({
       workspaceId: string,
       threadId: string,
       sessionId: string,
-      engineHint?: "claude" | "opencode" | "codex" | "gemini" | "kimi" | null,
+      engineHint?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | null,
       turnId?: string | null,
     ) => {
       const explicitEnginePrefix = threadId.startsWith("claude:")
@@ -1070,6 +1070,9 @@ export function useThreadTurnEvents({
         : threadId.startsWith("gemini:")
           || threadId.startsWith("gemini-pending-")
           ? "gemini"
+        : threadId.startsWith("grok:")
+          || threadId.startsWith("grok-pending-")
+          ? "grok"
         : threadId.startsWith("kimi:")
           || threadId.startsWith("kimi-pending-")
           ? "kimi"
@@ -1078,11 +1081,12 @@ export function useThreadTurnEvents({
           ? "opencode"
           : null;
       const hintedEngine =
-        engineHint === "claude" || engineHint === "gemini" || engineHint === "kimi" || engineHint === "opencode"
+        engineHint === "claude" || engineHint === "gemini" || engineHint === "grok" || engineHint === "kimi" || engineHint === "opencode"
           ? engineHint
           : null;
       const pendingOpenCode = resolvePendingThreadForSession?.(workspaceId, "opencode") ?? null;
       const pendingGemini = resolvePendingThreadForSession?.(workspaceId, "gemini") ?? null;
+      const pendingGrok = resolvePendingThreadForSession?.(workspaceId, "grok") ?? null;
       const pendingKimi = resolvePendingThreadForSession?.(workspaceId, "kimi") ?? null;
       const pendingClaude = resolvePendingThreadForSession?.(workspaceId, "claude") ?? null;
       logSessionTrace("event", {
@@ -1094,6 +1098,7 @@ export function useThreadTurnEvents({
         explicitEnginePrefix,
         pendingOpenCode,
         pendingGemini,
+        pendingGrok,
         pendingKimi,
         pendingClaude,
       });
@@ -1101,13 +1106,15 @@ export function useThreadTurnEvents({
       const enginePrefix =
         explicitEnginePrefix
         ?? hintedEngine
-        ?? (pendingOpenCode && !pendingGemini && !pendingKimi && !pendingClaude
+        ?? (pendingOpenCode && !pendingGemini && !pendingGrok && !pendingKimi && !pendingClaude
           ? "opencode"
-          : pendingGemini && !pendingOpenCode && !pendingKimi && !pendingClaude
+          : pendingGemini && !pendingOpenCode && !pendingGrok && !pendingKimi && !pendingClaude
             ? "gemini"
-          : pendingKimi && !pendingOpenCode && !pendingGemini && !pendingClaude
+          : pendingGrok && !pendingOpenCode && !pendingGemini && !pendingKimi && !pendingClaude
+            ? "grok"
+          : pendingKimi && !pendingOpenCode && !pendingGemini && !pendingGrok && !pendingClaude
             ? "kimi"
-          : pendingClaude && !pendingOpenCode && !pendingGemini && !pendingKimi
+          : pendingClaude && !pendingOpenCode && !pendingGemini && !pendingGrok && !pendingKimi
             ? "claude"
             : null);
       if (!enginePrefix) {
@@ -1118,6 +1125,7 @@ export function useThreadTurnEvents({
           engineHint: engineHint ?? null,
           pendingOpenCode,
           pendingGemini,
+          pendingGrok,
           pendingKimi,
           pendingClaude,
         });
@@ -1135,6 +1143,8 @@ export function useThreadTurnEvents({
         || isClaudeForkThreadId(threadId)
         || threadId.startsWith("gemini:")
         || threadId.startsWith("gemini-pending-")
+        || threadId.startsWith("grok:")
+        || threadId.startsWith("grok-pending-")
         || threadId.startsWith("kimi:")
         || threadId.startsWith("kimi-pending-")
         || threadId.startsWith("opencode:")
@@ -1142,6 +1152,7 @@ export function useThreadTurnEvents({
       const hasForeignEnginePrefix = (
         (enginePrefix !== "claude" && (threadId.startsWith("claude:") || threadId.startsWith("claude-pending-")))
         || (enginePrefix !== "gemini" && (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")))
+        || (enginePrefix !== "grok" && (threadId.startsWith("grok:") || threadId.startsWith("grok-pending-")))
         || (enginePrefix !== "kimi" && (threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-")))
         || (enginePrefix !== "opencode" && (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")))
       );
@@ -1177,6 +1188,8 @@ export function useThreadTurnEvents({
           ? pendingOpenCode
           : enginePrefix === "gemini"
             ? pendingGemini
+          : enginePrefix === "grok"
+            ? pendingGrok
           : enginePrefix === "kimi"
             ? pendingKimi
             : pendingClaude;
@@ -1216,6 +1229,8 @@ export function useThreadTurnEvents({
           ? pendingOpenCode
           : enginePrefix === "gemini"
             ? pendingGemini
+          : enginePrefix === "grok"
+            ? pendingGrok
           : enginePrefix === "kimi"
             ? pendingKimi
           : pendingClaude;

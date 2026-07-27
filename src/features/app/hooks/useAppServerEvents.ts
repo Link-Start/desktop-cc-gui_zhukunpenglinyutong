@@ -91,7 +91,7 @@ export type AppServerEventHandlers = {
     workspaceId: string,
     threadId: string,
     sessionId: string,
-    engine?: "claude" | "opencode" | "codex" | "gemini" | "kimi" | null,
+    engine?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | null,
     turnId?: string | null,
   ) => void;
   onBackgroundThreadAction?: (
@@ -198,14 +198,14 @@ export type AppServerEventHandlers = {
     threadId: string,
     itemId: string,
     delta: string,
-    engineHint?: "gemini" | "kimi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | null,
     turnId?: string | null,
   ) => void;
   onReasoningSummaryBoundary?: (
     workspaceId: string,
     threadId: string,
     itemId: string,
-    engineHint?: "gemini" | "kimi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | null,
     turnId?: string | null,
   ) => void;
   onReasoningTextDelta?: (
@@ -213,7 +213,7 @@ export type AppServerEventHandlers = {
     threadId: string,
     itemId: string,
     delta: string,
-    engineHint?: "gemini" | "kimi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | null,
     turnId?: string | null,
   ) => void;
   onCommandOutputDelta?: (
@@ -536,6 +536,7 @@ function extractAgentMessageDeltaPayload(
     isTextAliasMethod &&
     !isClaudeThreadId(threadId) &&
     !isGeminiThreadId(threadId) &&
+    !isGrokThreadId(threadId) &&
     !isKimiThreadId(threadId)
   ) {
     return null;
@@ -683,11 +684,20 @@ function isKimiThreadId(threadId: string): boolean {
   );
 }
 
+function isGrokThreadId(threadId: string): boolean {
+  return (
+    threadId.startsWith("grok:") || threadId.startsWith("grok-pending-")
+  );
+}
+
 function inferGeminiReasoningHintFromThreadId(
   threadId: string,
-): "gemini" | "kimi" | null {
+): "gemini" | "grok" | "kimi" | null {
   if (!threadId) {
     return null;
+  }
+  if (isGrokThreadId(threadId)) {
+    return "grok";
   }
   if (isKimiThreadId(threadId)) {
     return "kimi";
@@ -697,7 +707,7 @@ function inferGeminiReasoningHintFromThreadId(
 
 function inferRawMethodEngine(
   method: string,
-): "claude" | "codex" | "gemini" | "kimi" | "opencode" | undefined {
+): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | undefined {
   switch (method) {
     case "claude/raw":
       return "claude";
@@ -705,6 +715,8 @@ function inferRawMethodEngine(
       return "codex";
     case "gemini/raw":
       return "gemini";
+    case "grok/raw":
+      return "grok";
     case "kimi/raw":
       return "kimi";
     case "opencode/raw":
@@ -750,7 +762,7 @@ function isCodexRawGeneratedImageEvent(
 }
 
 function shouldRebindSharedNativeThreadOnStartedEvent(
-  engine: "claude" | "opencode" | "codex" | "gemini" | "kimi",
+  engine: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi",
 ): boolean {
   return engine === "claude";
 }
@@ -931,7 +943,7 @@ function emitReasoningSummaryDelta(
   threadId: string,
   itemId: string,
   delta: string,
-  engineHint: "gemini" | "kimi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | null,
   turnId: string | null,
 ): void {
   if (turnId) {
@@ -963,7 +975,7 @@ function emitReasoningSummaryBoundary(
   workspaceId: string,
   threadId: string,
   itemId: string,
-  engineHint: "gemini" | "kimi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | null,
   turnId: string | null,
 ): void {
   if (turnId) {
@@ -994,7 +1006,7 @@ function emitReasoningTextDelta(
   threadId: string,
   itemId: string,
   delta: string,
-  engineHint: "gemini" | "kimi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | null,
   turnId: string | null,
 ): void {
   if (turnId) {
@@ -1277,7 +1289,7 @@ function routeNormalizedRealtimeEvent({
         threadId,
         itemId,
         delta,
-        event.engine === "gemini" || event.engine === "kimi" ? event.engine : null,
+        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" ? event.engine : null,
         turnId,
       );
       return true;
@@ -1292,7 +1304,7 @@ function routeNormalizedRealtimeEvent({
         workspaceId,
         threadId,
         itemId,
-        event.engine === "gemini" || event.engine === "kimi" ? event.engine : null,
+        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" ? event.engine : null,
         turnId,
       );
       return true;
@@ -1321,7 +1333,7 @@ function routeNormalizedRealtimeEvent({
         threadId,
         itemId,
         delta,
-        event.engine === "gemini" || event.engine === "kimi" ? event.engine : null,
+        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" ? event.engine : null,
         turnId,
       );
       return true;
@@ -1381,7 +1393,7 @@ function tryRouteNormalizedRealtimeEvent({
   handlers: AppServerEventHandlers;
   workspaceId: string;
   message: Record<string, unknown>;
-  engineOverride?: "claude" | "codex" | "gemini" | "kimi" | "opencode";
+  engineOverride?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
   threadIdOverride?: string;
   threadAgentDeltaSeenRef: MutableRefObject<Record<string, true>>;
   threadAgentCompletedSeenRef: MutableRefObject<ThreadAgentCompletedItemTracker>;
@@ -1740,6 +1752,7 @@ export function dispatchAppServerEvent(
       rawEngine === "claude" ||
       rawEngine === "opencode" ||
       rawEngine === "codex" ||
+      rawEngine === "grok" ||
       rawEngine === "kimi" ||
       rawEngine === "gemini"
         ? rawEngine

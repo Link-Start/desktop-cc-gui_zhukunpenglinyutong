@@ -624,15 +624,19 @@ async fn cleanup_engine_sessions_for_workspace(
         .remove_opencode_session(workspace_id)
         .await;
     let kimi_cleanup_result = state.engine_manager.remove_kimi_session(workspace_id).await;
-    match (gemini_cleanup_result, kimi_cleanup_result) {
-        (Ok(()), Ok(())) => Ok(()),
-        (gemini, kimi) => {
+    let grok_cleanup_result = state.engine_manager.remove_grok_session(workspace_id).await;
+    match (gemini_cleanup_result, kimi_cleanup_result, grok_cleanup_result) {
+        (Ok(()), Ok(()), Ok(())) => Ok(()),
+        (gemini, kimi, grok) => {
             let mut errors = Vec::new();
             if let Err(error) = gemini {
                 errors.push(format!("Gemini cleanup failed: {error}"));
             }
             if let Err(error) = kimi {
                 errors.push(format!("Kimi cleanup failed: {error}"));
+            }
+            if let Err(error) = grok {
+                errors.push(format!("Grok cleanup failed: {error}"));
             }
             Err(format!(
                 "Engine cleanup failed for workspace {workspace_id}: {}",
@@ -1280,6 +1284,7 @@ pub(crate) async fn add_workspace(
         None,
         None,
         None,
+        None,
     )
     .await;
 
@@ -1315,6 +1320,10 @@ pub(crate) async fn add_workspace(
             // Kimi follows local CLI session model (no persistent daemon session).
             add_workspace_for_cli_engine(EngineType::Kimi, path, codex_bin, &state).await
         }
+        EngineType::Grok => {
+            // Grok follows local CLI session model (no persistent daemon session).
+            add_workspace_for_cli_engine(EngineType::Grok, path, codex_bin, &state).await
+        }
     }
 }
 
@@ -1327,7 +1336,7 @@ async fn add_workspace_for_cli_engine(
     state: &AppState,
 ) -> Result<WorkspaceInfo, String> {
     use crate::engine::status::{
-        detect_claude_status, detect_kimi_status, detect_opencode_status,
+        detect_claude_status, detect_grok_status, detect_kimi_status, detect_opencode_status,
     };
     use std::path::PathBuf;
 
@@ -1340,6 +1349,7 @@ async fn add_workspace_for_cli_engine(
         EngineType::Gemini => "gemini",
         EngineType::OpenCode => "opencode",
         EngineType::Kimi => "kimi",
+        EngineType::Grok => "grok",
         _ => return Err(format!("Unsupported CLI engine: {:?}", engine_type)),
     };
 
@@ -1369,6 +1379,13 @@ async fn add_workspace_for_cli_engine(
                 settings.kimi_bin.clone()
             };
             detect_kimi_status(kimi_bin.as_deref()).await.installed
+        }
+        EngineType::Grok => {
+            let grok_bin = {
+                let settings = state.app_settings.lock().await;
+                settings.grok_bin.clone()
+            };
+            detect_grok_status(grok_bin.as_deref()).await.installed
         }
         _ => false,
     };

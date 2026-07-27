@@ -120,6 +120,13 @@ function renderCodexSection(
       handleSaveKimiSettings={vi.fn()}
       handleRunKimiDoctor={vi.fn()}
       kimiDoctorState={{ status: "idle", result: null }}
+      grokPathDraft=""
+      setGrokPathDraft={vi.fn()}
+      grokDirty={false}
+      handleBrowseGrok={vi.fn()}
+      handleSaveGrokSettings={vi.fn()}
+      handleRunGrokDoctor={vi.fn()}
+      grokDoctorState={{ status: "idle", result: null }}
       codexPathDraft=""
       setCodexPathDraft={vi.fn()}
       codexArgsDraft=""

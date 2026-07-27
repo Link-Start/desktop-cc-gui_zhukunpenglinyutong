@@ -16,6 +16,7 @@ export const THREAD_ENGINE_SOURCES: ThreadEngineSource[] = [
   "claude",
   "opencode",
   "gemini",
+  "grok",
   "kimi",
 ];
 
@@ -145,6 +146,9 @@ function resolvePartialSourceEngine(
   }
   if (normalized.includes("gemini")) {
     return "gemini";
+  }
+  if (normalized.includes("grok")) {
+    return "grok";
   }
   if (normalized.includes("kimi")) {
     return "kimi";

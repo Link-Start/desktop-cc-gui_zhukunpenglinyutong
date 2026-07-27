@@ -24,6 +24,7 @@ pub(crate) enum CliInstallEngine {
     Codex,
     Claude,
     Kimi,
+    Grok,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -131,13 +132,14 @@ struct InstallerCommandSpec {
 
 /// Resolve the strategy actually used for an engine/action.
 /// Claude Code install/update both use the official native installer; Codex / Kimi stay on npm global.
+/// Grok CLI install/update both use the official curl installer (no npm distribution, no uninstall).
 pub(crate) fn resolve_effective_strategy(
     engine: CliInstallEngine,
     action: CliInstallAction,
     requested: CliInstallStrategy,
 ) -> CliInstallStrategy {
     match engine {
-        CliInstallEngine::Claude => CliInstallStrategy::OfficialNative,
+        CliInstallEngine::Claude | CliInstallEngine::Grok => CliInstallStrategy::OfficialNative,
         CliInstallEngine::Codex | CliInstallEngine::Kimi => match requested {
             CliInstallStrategy::NpmGlobal => CliInstallStrategy::NpmGlobal,
             // Codex/Kimi self-update stays blocked; keep requested so plan can explain.
@@ -165,6 +167,8 @@ pub(crate) fn package_name_for_engine(engine: CliInstallEngine) -> &'static str 
         CliInstallEngine::Codex => "@openai/codex@latest",
         CliInstallEngine::Claude => "@anthropic-ai/claude-code@latest",
         CliInstallEngine::Kimi => "@moonshot-ai/kimi-code@latest",
+        // Grok CLI is not distributed via npm; it uses the official curl installer.
+        CliInstallEngine::Grok => unreachable!("grok is not distributed via npm"),
     }
 }
 
@@ -173,6 +177,8 @@ fn uninstall_package_name_for_engine(engine: CliInstallEngine) -> &'static str {
         CliInstallEngine::Codex => "@openai/codex",
         CliInstallEngine::Claude => "@anthropic-ai/claude-code",
         CliInstallEngine::Kimi => "@moonshot-ai/kimi-code",
+        // Grok CLI is not distributed via npm; it uses the official curl installer.
+        CliInstallEngine::Grok => unreachable!("grok is not distributed via npm"),
     }
 }
 
@@ -226,6 +232,16 @@ fn claude_native_uninstall_preview() -> Vec<String> {
     }
 }
 
+fn grok_native_install_preview() -> Vec<String> {
+    // Grok CLI ships only the official bash installer (no npm package, no
+    // PowerShell variant); Windows plans are blocked in plan build.
+    vec![
+        "bash".to_string(),
+        "-lc".to_string(),
+        "curl -fsSL https://x.ai/cli/install.sh | bash".to_string(),
+    ]
+}
+
 fn command_preview_for(engine: CliInstallEngine, action: CliInstallAction) -> Vec<String> {
     match engine {
         CliInstallEngine::Claude => match action {
@@ -233,6 +249,16 @@ fn command_preview_for(engine: CliInstallEngine, action: CliInstallAction) -> Ve
                 claude_native_install_preview()
             }
             CliInstallAction::Uninstall => claude_native_uninstall_preview(),
+        },
+        CliInstallEngine::Grok => match action {
+            CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest => {
+                grok_native_install_preview()
+            }
+            CliInstallAction::Uninstall => vec![
+                "echo".to_string(),
+                "Grok CLI uninstall is intentionally not supported (protects ~/.grok auth and sessions)."
+                    .to_string(),
+            ],
         },
         CliInstallEngine::Codex | CliInstallEngine::Kimi => match action {
             CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest => vec![
@@ -272,6 +298,7 @@ fn engine_binary_name(engine: CliInstallEngine) -> &'static str {
         CliInstallEngine::Codex => "codex",
         CliInstallEngine::Claude => "claude",
         CliInstallEngine::Kimi => "kimi",
+        CliInstallEngine::Grok => "grok",
     }
 }
 
@@ -280,6 +307,7 @@ fn engine_explicit_bin<'a>(engine: CliInstallEngine, settings: &'a AppSettings) 
         CliInstallEngine::Codex => settings.codex_bin.as_deref(),
         CliInstallEngine::Claude => settings.claude_bin.as_deref(),
         CliInstallEngine::Kimi => settings.kimi_bin.as_deref(),
+        CliInstallEngine::Grok => settings.grok_bin.as_deref(),
     }
     .filter(|value| !value.trim().is_empty())
 }
@@ -497,6 +525,35 @@ async fn resolve_installer_command(
                 })
             }
         }
+        (
+            CliInstallEngine::Grok,
+            CliInstallStrategy::OfficialNative,
+            CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest,
+        ) => {
+            if cfg!(target_os = "windows") {
+                Err(
+                    "Grok CLI installer requires a Unix shell (bash); on Windows run it inside WSL."
+                        .to_string(),
+                )
+            } else {
+                Ok(InstallerCommandSpec {
+                    program: "/bin/bash".to_string(),
+                    args: vec![
+                        "-lc".to_string(),
+                        "curl -fsSL https://x.ai/cli/install.sh | bash".to_string(),
+                    ],
+                    path_env,
+                })
+            }
+        }
+        (
+            CliInstallEngine::Grok,
+            CliInstallStrategy::OfficialNative,
+            CliInstallAction::Uninstall,
+        ) => Err(
+            "Grok CLI uninstall is intentionally not supported (protects ~/.grok auth and sessions)."
+                .to_string(),
+        ),
         (
             CliInstallEngine::Codex | CliInstallEngine::Kimi,
             CliInstallStrategy::NpmGlobal,
@@ -775,8 +832,13 @@ pub(crate) async fn resolve_cli_version_status(
     let registry_ok = node_available && npm_available;
     // `node_ok` gates lifecycle mutation buttons in the UI.
     // Claude native install does not require Node/npm; Codex/Kimi still do.
+    // Grok uses the official bash installer, so it needs a supported Unix platform.
     let node_ok = match engine {
         CliInstallEngine::Claude => !matches!(current_platform(), CliInstallPlatform::Unknown),
+        CliInstallEngine::Grok => !matches!(
+            current_platform(),
+            CliInstallPlatform::Unknown | CliInstallPlatform::Windows
+        ),
         CliInstallEngine::Codex | CliInstallEngine::Kimi => registry_ok,
     };
 
@@ -788,7 +850,7 @@ pub(crate) async fn resolve_cli_version_status(
             details = resolve_details;
             version
         }
-        CliInstallEngine::Codex | CliInstallEngine::Kimi => {
+        CliInstallEngine::Codex | CliInstallEngine::Kimi | CliInstallEngine::Grok => {
             match check_cli_binary(engine_binary_name(engine), path_env.clone()).await {
                 Ok(Some(version)) => Some(version),
                 Ok(None) => None,
@@ -798,7 +860,16 @@ pub(crate) async fn resolve_cli_version_status(
     };
     let installed = local_version.is_some();
 
-    let latest_version = if registry_ok {
+    let latest_version = if engine == CliInstallEngine::Grok {
+        // Grok CLI is not on npm; there is no registry version probe.
+        details = Some(match details {
+            Some(existing) => format!(
+                "{existing}; Grok CLI has no npm registry probe; latest version unknown."
+            ),
+            None => "Grok CLI has no npm registry probe; latest version unknown.".to_string(),
+        });
+        None
+    } else if registry_ok {
         match run_npm_view_version(registry_package_name_for_engine(engine), path_env.as_ref())
             .await
         {
@@ -878,34 +949,40 @@ pub(crate) async fn build_cli_install_plan_with_backend(
             }
         }
         CliInstallStrategy::OfficialNative => {
-            if engine != CliInstallEngine::Claude
-                || !matches!(
-                    action,
-                    CliInstallAction::InstallLatest
-                        | CliInstallAction::UpdateLatest
-                        | CliInstallAction::Uninstall
-                )
-            {
+            if engine == CliInstallEngine::Grok && action == CliInstallAction::Uninstall {
+                blockers.push(
+                    "Grok CLI uninstall is intentionally not supported (protects ~/.grok auth and sessions)."
+                        .to_string(),
+                );
+            } else if engine != CliInstallEngine::Claude && engine != CliInstallEngine::Grok {
                 blockers.push(
                     "officialNative is only supported for Claude Code installLatest/updateLatest/uninstall."
+                        .to_string(),
+                );
+            } else if engine == CliInstallEngine::Grok && cfg!(target_os = "windows") {
+                blockers.push(
+                    "Grok CLI installer requires a Unix shell (bash); on Windows run it inside WSL."
                         .to_string(),
                 );
             } else if cfg!(target_os = "windows") {
                 // PowerShell is expected on Windows; install script itself is official.
             } else if !Path::new("/bin/bash").exists() {
                 blockers
-                    .push("/bin/bash is required for Claude Code native installer.".to_string());
+                    .push("/bin/bash is required for the native installer.".to_string());
             } else if matches!(
                 action,
                 CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest
             ) && run_binary_version("curl", path_env.as_ref()).await.is_err()
             {
-                blockers.push(
+                blockers.push(if engine == CliInstallEngine::Grok {
+                    "curl is required for the Grok CLI installer (curl -fsSL https://x.ai/cli/install.sh | bash)."
+                        .to_string()
+                } else {
                     "curl is required for Claude Code native installer (curl -fsSL https://claude.ai/install.sh | bash)."
-                        .to_string(),
-                );
+                        .to_string()
+                });
             }
-            if action == CliInstallAction::Uninstall {
+            if engine == CliInstallEngine::Claude && action == CliInstallAction::Uninstall {
                 warnings.push(
                     "Uninstall removes ~/.local/bin/claude, ~/.local/share/claude, and legacy npm global @anthropic-ai/claude-code. Homebrew/WinGet installs need their own uninstall commands."
                         .to_string(),
@@ -1191,6 +1268,7 @@ async fn run_post_install_doctor(
             crate::codex::run_claude_doctor_with_settings(None, settings).await
         }
         CliInstallEngine::Kimi => crate::codex::run_kimi_doctor_with_settings(None, settings).await,
+        CliInstallEngine::Grok => crate::codex::run_grok_doctor_with_settings(None, settings).await,
     }
 }
 
@@ -1348,6 +1426,17 @@ mod tests {
                 "@moonshot-ai/kimi-code".to_string()
             ]
         );
+        assert_eq!(
+            command_preview_for(CliInstallEngine::Grok, CliInstallAction::InstallLatest),
+            grok_native_install_preview()
+        );
+        assert_eq!(
+            command_preview_for(CliInstallEngine::Grok, CliInstallAction::UpdateLatest),
+            grok_native_install_preview()
+        );
+        assert!(command_preview_for(CliInstallEngine::Grok, CliInstallAction::Uninstall)
+            .join(" ")
+            .contains("uninstall is intentionally not supported"));
     }
 
     #[test]
@@ -1392,6 +1481,57 @@ mod tests {
             ),
             CliInstallStrategy::NpmGlobal
         );
+        assert_eq!(
+            resolve_effective_strategy(
+                CliInstallEngine::Grok,
+                CliInstallAction::InstallLatest,
+                CliInstallStrategy::NpmGlobal,
+            ),
+            CliInstallStrategy::OfficialNative
+        );
+        assert_eq!(
+            resolve_effective_strategy(
+                CliInstallEngine::Grok,
+                CliInstallAction::UpdateLatest,
+                CliInstallStrategy::CliSelfUpdate,
+            ),
+            CliInstallStrategy::OfficialNative
+        );
+    }
+
+    #[tokio::test]
+    async fn grok_uninstall_plan_is_blocked() {
+        let plan = build_cli_install_plan(
+            CliInstallEngine::Grok,
+            CliInstallAction::Uninstall,
+            CliInstallStrategy::NpmGlobal,
+            &AppSettings::default(),
+        )
+        .await;
+
+        assert!(!plan.can_run);
+        assert!(plan
+            .blockers
+            .iter()
+            .any(|blocker| blocker.contains("uninstall is intentionally not supported")));
+    }
+
+    #[tokio::test]
+    async fn grok_install_plan_uses_official_native_without_npm() {
+        let plan = build_cli_install_plan(
+            CliInstallEngine::Grok,
+            CliInstallAction::InstallLatest,
+            CliInstallStrategy::NpmGlobal,
+            &AppSettings::default(),
+        )
+        .await;
+
+        assert_eq!(plan.strategy, CliInstallStrategy::OfficialNative);
+        assert!(!plan
+            .blockers
+            .iter()
+            .any(|blocker| blocker.to_ascii_lowercase().contains("npm")));
+        assert_eq!(plan.command_preview, grok_native_install_preview());
     }
 
     #[tokio::test]

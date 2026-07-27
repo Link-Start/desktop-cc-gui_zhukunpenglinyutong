@@ -7,6 +7,7 @@ import {
   getAppSettings,
   runClaudeDoctor,
   runCodexDoctor,
+  runGrokDoctor,
   runKimiDoctor,
   takeSettingsRecoveryNotice,
   updateAppSettings,
@@ -23,6 +24,7 @@ vi.mock("../../../services/tauri", () => ({
   updateAppSettings: vi.fn(),
   runClaudeDoctor: vi.fn(),
   runCodexDoctor: vi.fn(),
+  runGrokDoctor: vi.fn(),
   runKimiDoctor: vi.fn(),
   takeSettingsRecoveryNotice: vi.fn(),
 }));
@@ -34,6 +36,7 @@ vi.mock("../../../services/toasts", () => ({
 const getAppSettingsMock = vi.mocked(getAppSettings);
 const runClaudeDoctorMock = vi.mocked(runClaudeDoctor);
 const runKimiDoctorMock = vi.mocked(runKimiDoctor);
+const runGrokDoctorMock = vi.mocked(runGrokDoctor);
 const updateAppSettingsMock = vi.mocked(updateAppSettings);
 const runCodexDoctorMock = vi.mocked(runCodexDoctor);
 const takeSettingsRecoveryNoticeMock = vi.mocked(takeSettingsRecoveryNotice);
@@ -724,6 +727,30 @@ describe("useAppSettings", () => {
       response,
     );
     expect(runKimiDoctorMock).toHaveBeenCalledWith("/bin/kimi");
+  });
+
+  it("returns grok doctor results", async () => {
+    getAppSettingsMock.mockResolvedValue({} as AppSettings);
+    const response: CodexDoctorResult = {
+      ok: true,
+      codexBin: "/bin/grok",
+      version: "0.1.0",
+      appServerOk: false,
+      details: null,
+      path: null,
+      nodeOk: true,
+      nodeVersion: "20.0.0",
+      nodeDetails: null,
+    };
+    runGrokDoctorMock.mockResolvedValue(response);
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await expect(result.current.grokDoctor("/bin/grok")).resolves.toEqual(
+      response,
+    );
+    expect(runGrokDoctorMock).toHaveBeenCalledWith("/bin/grok");
   });
 
   it("uses legacy localStorage user message color when settings value is missing", async () => {

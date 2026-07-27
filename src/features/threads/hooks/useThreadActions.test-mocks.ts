@@ -5,16 +5,19 @@ import {
   deleteCodexSession,
   deleteClaudeSession,
   deleteGeminiSession,
+  deleteGrokSession,
   deleteKimiSession,
   deleteOpenCodeSession,
   getOpenCodeSessionList,
   listClaudeSessions,
   listGeminiSessions,
+  listGrokSessions,
   listKimiSessions,
   listThreadTitles,
   listWorkspaceSessionArchiveEvidence,
   listWorkspaceSessions,
   loadGeminiSession,
+  loadGrokSession,
   loadKimiSession,
   readWorkspaceFile,
   renameThreadTitleKey,
@@ -35,12 +38,14 @@ vi.mock("../../../services/tauri", () => ({
   rewindCodexThread: vi.fn(),
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
+  listGrokSessions: vi.fn(),
   listKimiSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
   listWorkspaceSessionArchiveEvidence: vi.fn(),
   loadClaudeSession: vi.fn(),
   loadGeminiSession: vi.fn(),
+  loadGrokSession: vi.fn(),
   loadKimiSession: vi.fn(),
   loadCodexSession: vi.fn(),
   listThreadTitles: vi.fn(),
@@ -53,6 +58,7 @@ vi.mock("../../../services/tauri", () => ({
   deleteCodexSession: vi.fn(),
   deleteClaudeSession: vi.fn(),
   deleteGeminiSession: vi.fn(),
+  deleteGrokSession: vi.fn(),
   deleteKimiSession: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
   trashWorkspaceItem: vi.fn(),
@@ -93,6 +99,7 @@ export function resetUseThreadActionsTestMocks() {
   vi.mocked(listThreadTitles).mockResolvedValue({});
   vi.mocked(listClaudeSessions).mockResolvedValue([]);
   vi.mocked(listGeminiSessions).mockResolvedValue([]);
+  vi.mocked(listGrokSessions).mockResolvedValue([]);
   vi.mocked(listKimiSessions).mockResolvedValue([]);
   vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
   vi.mocked(listWorkspaceSessions).mockResolvedValue({
@@ -114,6 +121,7 @@ export function resetUseThreadActionsTestMocks() {
   });
   vi.mocked(deleteClaudeSession).mockResolvedValue(undefined);
   vi.mocked(deleteGeminiSession).mockResolvedValue(undefined);
+  vi.mocked(deleteGrokSession).mockResolvedValue(undefined);
   vi.mocked(deleteKimiSession).mockResolvedValue(undefined);
   vi.mocked(deleteOpenCodeSession).mockResolvedValue({
     deleted: true,
@@ -126,6 +134,7 @@ export function resetUseThreadActionsTestMocks() {
     archivedBeforeDelete: true,
   });
   vi.mocked(loadGeminiSession).mockResolvedValue({ messages: [] });
+  vi.mocked(loadGrokSession).mockResolvedValue({ messages: [] });
   vi.mocked(loadKimiSession).mockResolvedValue({ messages: [] });
   vi.mocked(readWorkspaceFile).mockResolvedValue({
     content: "",

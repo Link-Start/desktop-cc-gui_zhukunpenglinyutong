@@ -329,9 +329,125 @@ pub(crate) async fn run_kimi_doctor_with_settings(
     }))
 }
 
+/// Run `grok doctor` (terminal/config self-check, exit 0 = healthy) best-effort.
+async fn probe_grok_cli_doctor(binary: &str, path_env: Option<&String>) -> Value {
+    let mut command = crate::utils::async_command(binary);
+    if let Some(path_env) = path_env {
+        command.env("PATH", path_env);
+    }
+    command.arg("doctor");
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
+    match timeout(Duration::from_secs(15), command.output()).await {
+        Ok(Ok(output)) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let combined = if stdout.is_empty() {
+                stderr
+            } else if stderr.is_empty() {
+                stdout
+            } else {
+                format!("{stdout}\n{stderr}")
+            };
+            let summary = if combined.chars().count() > 2_000 {
+                format!("{}…", combined.chars().take(2_000).collect::<String>())
+            } else {
+                combined
+            };
+            json!({
+                "ok": output.status.success(),
+                "exitCode": output.status.code(),
+                "output": summary,
+            })
+        }
+        Ok(Err(error)) => json!({
+            "ok": false,
+            "exitCode": Value::Null,
+            "output": format!("failed to run `grok doctor`: {error}"),
+        }),
+        Err(_) => json!({
+            "ok": false,
+            "exitCode": Value::Null,
+            "output": "`grok doctor` timed out",
+        }),
+    }
+}
+
+pub(crate) async fn run_grok_doctor_with_settings(
+    grok_bin: Option<String>,
+    settings: &AppSettings,
+) -> Result<Value, String> {
+    let default_bin = settings.grok_bin.clone();
+    let resolved = grok_bin
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .or(default_bin);
+    let requested_bin = resolved
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "grok".to_string());
+    let path_env = build_codex_path_env(Some(requested_bin.as_str()));
+    let debug_info = get_cli_debug_info(Some(requested_bin.as_str()));
+    let version_result = check_cli_binary(&requested_bin, path_env.clone()).await;
+    let (version, cli_error, fallback_retried) = match version_result {
+        Ok(Some(version)) => (Some(version), None, false),
+        Ok(None) => (Some("unknown".to_string()), None, true),
+        Err(error) => (None, Some(error), false),
+    };
+    let launch_context = resolve_codex_launch_context(Some(requested_bin.as_str()));
+
+    let (node_ok, node_version, node_details) = probe_node_runtime(path_env.as_ref()).await;
+    let cli_doctor = if version.is_some() {
+        probe_grok_cli_doctor(&requested_bin, path_env.as_ref()).await
+    } else {
+        Value::Null
+    };
+    let cli_doctor_ok = cli_doctor
+        .get("ok")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+    let environment_diagnosis =
+        build_engine_environment_diagnosis("grok", Some(requested_bin.as_str()), &debug_info);
+    let proxy_diagnosis = debug_info
+        .get("proxyDiagnosis")
+        .cloned()
+        .unwrap_or(Value::Null);
+    let network_diagnosis = if version.is_some() {
+        Value::Null
+    } else {
+        json!({
+            "category": classify_endpoint_failure(cli_error.as_deref()),
+            "proxy": proxy_diagnosis,
+        })
+    };
+
+    Ok(json!({
+        "ok": version.is_some() && (cli_doctor.is_null() || cli_doctor_ok),
+        "codexBin": resolved,
+        "version": version,
+        "appServerOk": false,
+        "details": cli_error,
+        "path": path_env,
+        "nodeOk": node_ok,
+        "nodeVersion": node_version,
+        "nodeDetails": node_details,
+        "resolvedBinaryPath": launch_context.resolved_bin,
+        "wrapperKind": launch_context.wrapper_kind,
+        "pathEnvUsed": launch_context.path_env,
+        "proxyEnvSnapshot": debug_info.get("proxyEnvSnapshot").cloned().unwrap_or(Value::Null),
+        "appServerProbeStatus": Value::Null,
+        "fallbackRetried": fallback_retried,
+        "environmentDiagnosis": environment_diagnosis,
+        "proxyDiagnosis": proxy_diagnosis,
+        "networkDiagnosis": network_diagnosis,
+        "grokDoctor": cli_doctor,
+        "debug": debug_info,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{run_claude_doctor_with_settings, run_kimi_doctor_with_settings};
+    use super::{run_claude_doctor_with_settings, run_grok_doctor_with_settings, run_kimi_doctor_with_settings};
     use crate::types::AppSettings;
 
     #[tokio::test]
@@ -363,6 +479,38 @@ mod tests {
         assert_eq!(diagnostics["codexBin"], "/definitely/missing/kimi");
         assert_eq!(diagnostics["ok"], false);
         assert!(diagnostics["kimiDoctor"].is_null());
+        assert!(diagnostics["debug"].is_object());
+    }
+
+    #[tokio::test]
+    async fn grok_doctor_failure_keeps_structured_diagnostics_fields() {
+        let diagnostics = run_grok_doctor_with_settings(
+            Some("/definitely/missing/grok".to_string()),
+            &AppSettings::default(),
+        )
+        .await
+        .expect("doctor should return structured diagnostics even on failure");
+
+        for key in [
+            "ok",
+            "codexBin",
+            "version",
+            "details",
+            "nodeOk",
+            "environmentDiagnosis",
+            "networkDiagnosis",
+            "grokDoctor",
+            "debug",
+        ] {
+            assert!(
+                diagnostics.get(key).is_some(),
+                "missing structured diagnostics field: {key}"
+            );
+        }
+
+        assert_eq!(diagnostics["codexBin"], "/definitely/missing/grok");
+        assert_eq!(diagnostics["ok"], false);
+        assert!(diagnostics["grokDoctor"].is_null());
         assert!(diagnostics["debug"].is_object());
     }
 

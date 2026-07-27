@@ -59,6 +59,8 @@ const sidebar = {
     "newCloneAgent": "新增複製 Agent",
     "codexProviderChoiceTitle": "供應商選擇",
     "codexProviderSelectedTip": "已選取。點擊左側的 Codex 以開始工作階段。",
+    "grokProviderChoiceTitle": "供應商選擇",
+    "grokProviderSelectedTip": "已選取。點擊左側的 Grok CLI 以開始工作階段。",
     "providerFollowsGlobalLabel": "跟隨全域設定",
     "providerIsolatedConfigLabel": "獨立設定",
     "sessionActionsGroup": "新工作階段",

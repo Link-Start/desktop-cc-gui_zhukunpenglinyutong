@@ -59,6 +59,9 @@ const runtimeNotice = {
     "claude": {
       "resumeCommandCopied": "Claude resume 명령이 복사되었습니다. TUI /resume 선택기에 이 GUI 세션이 표시되지 않으면 claude --resume {{sessionId}} 또는 /resume {{sessionId}}를 명시적으로 실행하세요."
     },
+    "grok": {
+      "providerSelected": "{{name}}이(가) 선택되었습니다. Grok CLI 항목을 클릭하여 세션을 생성하세요."
+    },
     "error": {
       "createSessionRecoveryRequired": "{{workspace}}: 런타임 복구가 진행 중인 동안 세션 생성에 실패했습니다",
       "threadTurnFailed": "{{engine}} 세션 실패: {{message}}",

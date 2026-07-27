@@ -5,7 +5,7 @@ import type {
   TurnPlan,
 } from "../../../types";
 
-export type ConversationEngine = "codex" | "claude" | "gemini" | "kimi" | "opencode";
+export type ConversationEngine = "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode";
 
 export const NORMALIZED_ITEM_KINDS = [
   "message",

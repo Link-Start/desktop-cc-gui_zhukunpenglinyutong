@@ -59,6 +59,8 @@ const sidebar = {
     "newCloneAgent": "Новый агент-клон",
     "codexProviderChoiceTitle": "Выбор провайдера",
     "codexProviderSelectedTip": "Выбрано. Нажмите Codex слева, чтобы начать сессию.",
+    "grokProviderChoiceTitle": "Выбор провайдера",
+    "grokProviderSelectedTip": "Выбрано. Нажмите Grok CLI слева, чтобы начать сессию.",
     "providerFollowsGlobalLabel": "Следует глобальной конфигурации",
     "providerIsolatedConfigLabel": "Изолированная конфигурация",
     "sessionActionsGroup": "Новая сессия",

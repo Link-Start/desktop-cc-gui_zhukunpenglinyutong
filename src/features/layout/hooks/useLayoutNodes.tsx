@@ -179,7 +179,7 @@ const EMPTY_PROJECT_MAP_IMPACT_INPUT: ProjectMapImpactInput = {
 function toConversationEngine(
   engine: EngineType | undefined,
 ): ConversationEngine {
-  if (engine === "claude" || engine === "gemini" || engine === "kimi" || engine === "opencode") {
+  if (engine === "claude" || engine === "gemini" || engine === "grok" || engine === "kimi" || engine === "opencode") {
     return engine;
   }
   return "codex";
@@ -204,6 +204,12 @@ function inferConversationEngineFromThreadId(
     normalizedThreadId.startsWith("gemini-pending-")
   ) {
     return "gemini";
+  }
+  if (
+    normalizedThreadId.startsWith("grok:") ||
+    normalizedThreadId.startsWith("grok-pending-")
+  ) {
+    return "grok";
   }
   if (
     normalizedThreadId.startsWith("kimi:") ||
@@ -1155,6 +1161,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     options.selectedEngine === "claude" ||
     options.selectedEngine === "codex" ||
     options.selectedEngine === "gemini" ||
+    options.selectedEngine === "grok" ||
     options.selectedEngine === "kimi" ||
     options.selectedEngine === "opencode";
   const isStatusPanelCodexEngine = options.selectedEngine === "codex";

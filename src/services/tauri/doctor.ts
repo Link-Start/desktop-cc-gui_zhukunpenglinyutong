@@ -27,6 +27,12 @@ export async function runKimiDoctor(
   return invoke<CodexDoctorResult>("kimi_doctor", { kimiBin });
 }
 
+export async function runGrokDoctor(
+  grokBin: string | null,
+): Promise<CodexDoctorResult> {
+  return invoke<CodexDoctorResult>("grok_doctor", { grokBin });
+}
+
 export async function previewCodexLaunchProfile({
   codexBin,
   codexArgs,

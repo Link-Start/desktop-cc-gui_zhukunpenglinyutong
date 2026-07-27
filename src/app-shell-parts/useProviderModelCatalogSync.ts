@@ -17,6 +17,7 @@ type ProviderModelCatalogSyncParams = {
 const PROVIDER_SCOPED_ENGINES = new Set<EngineType>([
   "claude",
   "codex",
+  "grok",
   "kimi",
 ]);
 

@@ -30,7 +30,6 @@ type UnsupportedCliEngineId =
   | "cursor"
   | "gemini"
   | "glm"
-  | "grok"
   | "trae"
   | "deveco"
   | "pi"
@@ -117,13 +116,14 @@ export function buildCliEngineNavItems(options: {
   claudeHasConfig: boolean;
   codexHasConfig: boolean;
   kimiHasConfig: boolean;
+  grokHasConfig: boolean;
 }): CliEngineNavItem[] {
   return [
     { key: "claude", label: "Claude Code CLI", hasConfig: options.claudeHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.claude },
     { key: "codex", label: "Codex CLI", hasConfig: options.codexHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.codex },
     { key: "kimi", label: "Kimi CLI", hasConfig: options.kimiHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.kimi },
     { key: "gemini", label: "Gemini CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.gemini },
-    { key: "grok", label: "Grok CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.grok },
+    { key: "grok", label: "Grok CLI", hasConfig: options.grokHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.grok },
     { key: "opencode", label: "OpenCode CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.opencode },
     { key: "glm", label: "GLM CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.glm },
     { key: "trae", label: "Trae CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.trae },

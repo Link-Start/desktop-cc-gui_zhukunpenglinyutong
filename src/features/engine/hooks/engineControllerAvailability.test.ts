@@ -6,7 +6,7 @@ import {
 
 describe("engineControllerAvailability", () => {
   it("projects labels from the canonical registry and excludes retired engines", () => {
-    expect(ENABLED_ENGINE_TYPES).toEqual(["claude", "codex", "kimi"]);
+    expect(ENABLED_ENGINE_TYPES).toEqual(["claude", "codex", "grok", "kimi"]);
     expect(buildAvailableEngines([], false)).toEqual([
       expect.objectContaining({
         type: "claude",
@@ -18,6 +18,11 @@ describe("engineControllerAvailability", () => {
         type: "codex",
         displayName: "Codex CLI",
         shortName: "Codex",
+      }),
+      expect.objectContaining({
+        type: "grok",
+        displayName: "Grok CLI",
+        shortName: "Grok",
       }),
       expect.objectContaining({
         type: "kimi",

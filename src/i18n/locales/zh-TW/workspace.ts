@@ -62,6 +62,7 @@ const workspace = {
     "engineCodex": "Codex",
     "engineGemini": "Gemini",
     "engineKimi": "Kimi CLI",
+    "engineGrok": "Grok CLI",
     "engineOpenCode": "OpenCode",
     "engineStatusLoading": "檢查中…",
     "engineStatusRequiresLogin": "需要登入",

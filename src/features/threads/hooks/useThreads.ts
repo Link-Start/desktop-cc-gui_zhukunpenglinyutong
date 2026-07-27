@@ -159,7 +159,7 @@ type UseThreadsOptions = {
   steerEnabled?: boolean;
   customPrompts?: CustomPromptOption[];
   onMessageActivity?: () => void;
-  activeEngine?: "claude" | "codex" | "gemini" | "kimi" | "opencode";
+  activeEngine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
   useNormalizedRealtimeAdapters?: boolean;
   useUnifiedHistoryLoader?: boolean;
   sessionAttributionMode?: WorkspaceSessionAttributionMode;
@@ -180,7 +180,7 @@ type UseThreadsOptions = {
   runWithCreateSessionLoading?: <T>(
     params: {
       workspace: WorkspaceInfo;
-      engine: "claude" | "codex" | "gemini" | "kimi" | "opencode";
+      engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
     },
     action: () => Promise<T>,
   ) => Promise<T>;
@@ -661,7 +661,7 @@ export function useThreads({
   );
 
   const getThreadEngine = useCallback(
-    (workspaceId: string, threadId: string): "claude" | "codex" | "gemini" | "kimi" | "opencode" | undefined => {
+    (workspaceId: string, threadId: string): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | undefined => {
       const threads = state.threadsByWorkspace[workspaceId] ?? [];
       const thread = threads.find((t) => t.id === threadId);
       return thread?.engineSource;
@@ -691,7 +691,7 @@ export function useThreads({
     (
       workspaceId: string,
       threadId: string,
-      engine: "claude" | "codex" | "gemini" | "kimi" | "opencode",
+      engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode",
     ) => {
       const sharedEngine = normalizeSharedSessionEngine(engine);
       dispatch({
@@ -723,7 +723,7 @@ export function useThreads({
   const resolvePendingThreadForSession = useCallback(
     (
       workspaceId: string,
-      engine: "claude" | "gemini" | "kimi" | "opencode",
+      engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
     ): string | null => {
       const resolved = resolvePendingThreadIdForSession({
         workspaceId,
@@ -774,7 +774,7 @@ export function useThreads({
   const resolvePendingThreadForTurn = useCallback(
     (
       workspaceId: string,
-      engine: "claude" | "gemini" | "kimi" | "opencode",
+      engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
       turnId: string | null | undefined,
     ): string | null =>
       resolvePendingThreadIdForTurn({
@@ -2866,6 +2866,7 @@ export function useThreads({
               thread.engineSource === "codex" ||
               thread.engineSource === "claude" ||
               thread.engineSource === "gemini" ||
+              thread.engineSource === "grok" ||
               thread.engineSource === "kimi" ||
               thread.engineSource === "opencode"
                 ? thread.engineSource
@@ -2874,6 +2875,7 @@ export function useThreads({
               thread.selectedEngine === "codex" ||
               thread.selectedEngine === "claude" ||
               thread.selectedEngine === "gemini" ||
+              thread.selectedEngine === "grok" ||
               thread.selectedEngine === "kimi" ||
               thread.selectedEngine === "opencode"
                 ? thread.selectedEngine
@@ -2908,7 +2910,7 @@ export function useThreads({
         payload: {
           message: string;
           willRetry: boolean;
-          engine?: "claude" | "codex" | "gemini" | "kimi" | "opencode" | null;
+          engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | null;
         },
       ) => {
         handlers.onTurnError?.(workspaceId, threadId, turnId, payload);
@@ -2924,7 +2926,7 @@ export function useThreads({
           source: string;
           startedAtMs: number | null;
           timeoutMs: number | null;
-          engine?: "claude" | "codex" | "gemini" | "kimi" | "opencode" | null;
+          engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | null;
         },
       ) => {
         handlers.onTurnStalled?.(workspaceId, threadId, turnId, payload);

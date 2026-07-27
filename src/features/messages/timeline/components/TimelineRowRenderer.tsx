@@ -342,6 +342,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
                 (activeEngine === "claude" ||
                   activeEngine === "codex" ||
                   activeEngine === "gemini" ||
+                  activeEngine === "grok" ||
                   activeEngine === "kimi") &&
                 renderItem.role === "assistant" &&
                 renderItem.recoveredFromLiveShadow !== true &&

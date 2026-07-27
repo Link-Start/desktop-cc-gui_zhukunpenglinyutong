@@ -347,7 +347,7 @@ export interface ProviderInfo {
   enabled: boolean;
 }
 
-export type ProviderId = 'claude' | 'codex' | 'gemini' | 'kimi' | 'opencode';
+export type ProviderId = 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode';
 export type ProviderModelCatalogs = Partial<Record<ProviderId, ModelInfo[]>>;
 export type CodexSpeedMode = 'standard' | 'fast' | 'unknown';
 export type StreamActivityPhase = 'idle' | 'waiting' | 'ingress';
@@ -359,6 +359,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'claude', label: 'Claude Code', icon: 'codicon-terminal', enabled: true },
   { id: 'codex', label: 'Codex CLI', icon: 'codicon-terminal', enabled: true },
   { id: 'gemini', label: 'Gemini CLI', icon: 'codicon-terminal', enabled: false },
+  { id: 'grok', label: 'Grok CLI', icon: 'codicon-terminal', enabled: false },
   { id: 'kimi', label: 'Kimi CLI', icon: 'codicon-terminal', enabled: false },
   { id: 'opencode', label: 'OpenCode', icon: 'codicon-terminal', enabled: true },
 ];

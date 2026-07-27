@@ -380,6 +380,7 @@ vi.mock("react-i18next", () => ({
         "settings.cliValidationTabGeminiCli": "Gemini CLI",
         "settings.cliValidationTabOpenCodeCli": "OpenCode CLI",
         "settings.cliValidationTabKimiCli": "Kimi CLI",
+        "settings.cliValidationTabGrokCli": "Grok CLI",
         "settings.cliEngineEnabledLabel": "Engine enabled",
         "settings.geminiCliDisableDescription":
           "Disable Gemini CLI entirely. Once disabled, startup detection and engine entry points stop immediately.",
@@ -394,6 +395,13 @@ vi.mock("react-i18next", () => ({
         "settings.runKimiDoctor": "Run Kimi Doctor",
         "settings.kimiLooksGood": "Kimi CLI looks good",
         "settings.kimiIssueDetected": "Kimi CLI issue detected",
+        "settings.grokDescription":
+          "Configure Grok CLI providers and local settings used by ccgui.",
+        "settings.defaultGrokPath": "Default Grok CLI path",
+        "settings.grokPlaceholder": "grok",
+        "settings.runGrokDoctor": "Run Grok Doctor",
+        "settings.grokLooksGood": "Grok CLI looks good",
+        "settings.grokIssueDetected": "Grok CLI issue detected",
         "settings.cliUninstall": "Uninstall",
         "settings.sidebarExperimental": "Experimental",
         "settings.basicAppearance": "Appearance",

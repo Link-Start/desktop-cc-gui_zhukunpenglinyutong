@@ -300,6 +300,15 @@ export function pickLikelyKimiSessionId(
   return pickLikelyGeminiSessionId(payload, minUpdatedAt);
 }
 
+export function pickLikelyGrokSessionId(
+  payload: unknown,
+  minUpdatedAt: number,
+): string | null {
+  // Grok session summaries share the Gemini summary shape, so the same
+  // single-candidate safety rule applies.
+  return pickLikelyGeminiSessionId(payload, minUpdatedAt);
+}
+
 export function resolveRecoverableCodexFirstPacketTimeout(
   engine: EngineType,
   rawMessage: string,

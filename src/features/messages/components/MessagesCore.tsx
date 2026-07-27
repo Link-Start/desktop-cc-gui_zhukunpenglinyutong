@@ -403,6 +403,7 @@ export const MessagesCore = memo(function MessagesCore({
       (activeEngine === "codex" ||
         activeEngine === "claude" ||
         activeEngine === "gemini" ||
+        activeEngine === "grok" ||
         activeEngine === "kimi"),
     items: deferredRenderSourceItems,
   });
@@ -1390,7 +1391,7 @@ export const MessagesCore = memo(function MessagesCore({
 
   useEffect(() => {
     if (
-      (activeEngine !== "claude" && activeEngine !== "codex" && activeEngine !== "gemini" && activeEngine !== "kimi") ||
+      (activeEngine !== "claude" && activeEngine !== "codex" && activeEngine !== "gemini" && activeEngine !== "grok" && activeEngine !== "kimi") ||
       (!isThinking && !isAssistantFinalizing) ||
       !threadId
     ) {

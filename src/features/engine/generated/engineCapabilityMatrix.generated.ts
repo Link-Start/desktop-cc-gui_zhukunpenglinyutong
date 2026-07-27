@@ -81,6 +81,23 @@ export const GENERATED_ENGINE_CAPABILITY_MATRIX: Readonly<
     "session.tree": "unknown",
     "rpc.server": "unsupported"
   },
+  "grok": {
+    "streaming.text": "supported",
+    "streaming.reasoning": "supported",
+    "streaming.tool-output": "unsupported",
+    "tool.use": "supported",
+    "tool.mcp": "unsupported",
+    "reasoning.effort": "unsupported",
+    "collaboration.mode": "unsupported",
+    "session.continuation": "supported",
+    "image.input": "unsupported",
+    "input.mid-turn": "unsupported",
+    "session.resume": "supported",
+    "session.fork": "unknown",
+    "session.switch": "unknown",
+    "session.tree": "unknown",
+    "rpc.server": "unsupported"
+  },
   "opencode": {
     "streaming.text": "supported",
     "streaming.reasoning": "supported",

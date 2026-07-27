@@ -39,6 +39,7 @@ const DEFAULT_ENGINE_LABEL_BY_TYPE: Record<EngineType, string> = {
   claude: "Claude",
   opencode: "OpenCode",
   gemini: "Gemini",
+  grok: "Grok",
   kimi: "Kimi",
 };
 
@@ -89,6 +90,7 @@ function resolveEngineType(engineSource: ThreadSummary["engineSource"] | undefin
   if (
     engineSource === "claude" ||
     engineSource === "gemini" ||
+    engineSource === "grok" ||
     engineSource === "kimi" ||
     engineSource === "opencode"
   ) {

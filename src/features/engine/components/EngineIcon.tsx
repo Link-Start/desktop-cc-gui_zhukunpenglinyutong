@@ -4,6 +4,7 @@ import type { EngineType } from "../../../types";
 // 导入官方模型图标
 import claudeIcon from "../../../assets/model-icons/claude.svg";
 import geminiIcon from "../../../assets/model-icons/gemini.svg";
+import grokIcon from "@lobehub/icons-static-svg/icons/grok.svg";
 import kimiIcon from "@lobehub/icons-static-svg/icons/kimi.svg";
 
 type EngineIconProps = {
@@ -84,6 +85,16 @@ export function EngineIcon({
         <img
           src={geminiIcon}
           alt="Gemini"
+          className={className}
+          style={iconStyle}
+          aria-hidden
+        />
+      );
+    case "grok":
+      return (
+        <img
+          src={grokIcon}
+          alt="Grok"
           className={className}
           style={iconStyle}
           aria-hidden

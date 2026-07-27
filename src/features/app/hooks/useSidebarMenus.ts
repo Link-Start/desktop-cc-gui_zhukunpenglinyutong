@@ -32,6 +32,8 @@ import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
   CODEX_DISK_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_NAME,
+  GROK_LOCAL_PROVIDER_PROFILE_ID,
+  GROK_LOCAL_PROVIDER_PROFILE_NAME,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_NAME,
   type EngineProviderProfileSelection,
@@ -42,6 +44,7 @@ const LAST_PROVIDER_PROFILE_KEYS = {
   claude: "claudeLastProviderProfileId",
   codex: "codexLastProviderProfileId",
   kimi: "kimiLastProviderProfileId",
+  grok: "grokLastProviderProfileId",
 } as const;
 type ProviderEngine = keyof typeof LAST_PROVIDER_PROFILE_KEYS;
 
@@ -71,6 +74,7 @@ export type WorkspaceMenuIconKind =
   | "engine-opencode"
   | "engine-gemini"
   | "engine-kimi"
+  | "engine-grok"
   | "new-shared"
   | "alias"
   | "activate"
@@ -134,6 +138,7 @@ type SidebarMenuHandlers = {
   claudeProviderProfiles?: EngineProviderProfileOption[];
   codexProviderProfiles?: EngineProviderProfileOption[];
   kimiProviderProfiles?: EngineProviderProfileOption[];
+  grokProviderProfiles?: EngineProviderProfileOption[];
   engineOptions?: EngineDisplayInfo[];
   onRefreshEngineOptions?: () =>
     | Promise<EngineRefreshResult | void>
@@ -236,6 +241,7 @@ export function useSidebarMenus({
   claudeProviderProfiles = [],
   codexProviderProfiles = [],
   kimiProviderProfiles = [],
+  grokProviderProfiles = [],
 }: SidebarMenuHandlers) {
   const { t } = useTranslation();
   const [workspaceMenuState, setWorkspaceMenuState] =
@@ -614,6 +620,9 @@ export function useSidebarMenus({
   const [kimiSelectedProfileId, setKimiSelectedProfileId] = useState<string | null>(
     () => readLastProviderProfileId("kimi"),
   );
+  const [grokSelectedProfileId, setGrokSelectedProfileId] = useState<string | null>(
+    () => readLastProviderProfileId("grok"),
+  );
 
   const buildSessionMenuGroup = useCallback(
     (
@@ -714,6 +723,12 @@ export function useSidebarMenus({
         kimiProviderProfiles,
         kimiSelectedProfileId,
       );
+      const grokProfiles = buildProviderProfiles(
+        GROK_LOCAL_PROVIDER_PROFILE_ID,
+        GROK_LOCAL_PROVIDER_PROFILE_NAME,
+        grokProviderProfiles,
+        grokSelectedProfileId,
+      );
       const claudeSelectedProfile =
         claudeProfiles.find((profile) => profile.id === claudeSelectedProfileId) ??
         claudeProfiles[0];
@@ -723,6 +738,9 @@ export function useSidebarMenus({
       const kimiSelectedProfile =
         kimiProfiles.find((profile) => profile.id === kimiSelectedProfileId) ??
         kimiProfiles[0];
+      const grokSelectedProfile =
+        grokProfiles.find((profile) => profile.id === grokSelectedProfileId) ??
+        grokProfiles[0];
       const actions = [
         {
           id: "new-session-shared",
@@ -895,6 +913,52 @@ export function useSidebarMenus({
             },
           })),
         },
+        {
+          id: "new-session-grok",
+          label: t("workspace.engineGrok"),
+          iconKind: "engine-grok",
+          submenuTitle: t("sidebar.grokProviderChoiceTitle"),
+          selectionHint: t("sidebar.grokProviderSelectedTip"),
+          ...withProviderAvailability(
+            resolveEngineActionMeta(workspace, "grok"),
+            grokSelectedProfile,
+          ),
+          onSelect: async () => {
+            const threadId = await runAddAgent("grok", {
+              providerProfileId: grokSelectedProfile.id,
+              providerProfile: grokSelectedProfile,
+            });
+            await handleCreatedSession(threadId);
+          },
+          children: grokProfiles.map((profile) => ({
+            id: `new-session-grok-provider-${profile.id}`,
+            label: profile.name,
+            badgeLabel:
+              profile.availability === "unavailable"
+                ? t("sidebar.providerUnavailableLabel")
+                : profile.source === "disk"
+                ? t("sidebar.providerFollowsGlobalLabel")
+                : t("sidebar.providerIsolatedConfigLabel"),
+            iconKind: "engine-grok" as const,
+            ...withProviderAvailability(
+              resolveEngineActionMeta(workspace, "grok"),
+              profile,
+            ),
+            selected: profile.id === grokSelectedProfile.id,
+            keepMenuOpen: true,
+            onSelect: () => {
+              writeLastProviderProfileId("grok", profile.id);
+              setGrokSelectedProfileId(profile.id);
+              pushGlobalRuntimeNotice({
+                severity: "info",
+                category: "runtime",
+                messageKey: "runtimeNotice.grok.providerSelected",
+                messageParams: { name: profile.name },
+                dedupeKey: `grok-provider-selected-${profile.id}`,
+              });
+            },
+          })),
+        },
       ] satisfies WorkspaceMenuAction[];
 
       const visibleActions = actions.filter((action) => {
@@ -924,6 +988,8 @@ export function useSidebarMenus({
       codexSelectedProfileId,
       kimiProviderProfiles,
       kimiSelectedProfileId,
+      grokProviderProfiles,
+      grokSelectedProfileId,
       resolveEngineActionMeta,
       isEngineSessionEntryVisible,
     ],

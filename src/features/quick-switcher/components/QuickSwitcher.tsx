@@ -104,6 +104,9 @@ function resolveRunningEngine(engine: string): EngineType {
   if (normalized === "GEMINI") {
     return "gemini";
   }
+  if (normalized === "GROK") {
+    return "grok";
+  }
   if (normalized === "KIMI") {
     return "kimi";
   }

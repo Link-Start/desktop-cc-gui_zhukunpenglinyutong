@@ -189,6 +189,7 @@ const git = {
     "generateCommitMessageEngineCodex": "Использовать движок Codex",
     "generateCommitMessageEngineClaude": "Использовать движок Claude",
     "generateCommitMessageEngineKimi": "Использовать движок Kimi",
+    "generateCommitMessageEngineGrok": "Использовать движок Grok",
     "generateCommitMessageEngineGemini": "Использовать движок Gemini",
     "generateCommitMessageEngineOpenCode": "Использовать движок OpenCode",
     "generateCommitMessageLastConfig": "Использовать последнюю конфигурацию",

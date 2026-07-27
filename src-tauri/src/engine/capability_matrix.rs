@@ -25,6 +25,7 @@ pub fn capability_state(engine_type: EngineType, capability: &str) -> &'static s
         EngineType::Claude => EngineFeatures::claude(),
         EngineType::Codex => EngineFeatures::codex(),
         EngineType::Gemini => EngineFeatures::gemini(),
+        EngineType::Grok => EngineFeatures::grok(),
         EngineType::OpenCode => EngineFeatures::opencode(),
         EngineType::Kimi => EngineFeatures::kimi(),
     };

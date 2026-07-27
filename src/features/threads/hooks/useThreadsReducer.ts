@@ -548,6 +548,8 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ? "claude"
         : action.threadId.startsWith("gemini:")
           ? "gemini"
+        : action.threadId.startsWith("grok:")
+          ? "grok"
         : action.threadId.startsWith("kimi:")
           ? "kimi"
         : action.threadId.startsWith("opencode:")

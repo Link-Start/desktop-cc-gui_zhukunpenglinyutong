@@ -23,4 +23,11 @@ describe("resolveCliInstallStrategy", () => {
     );
     expect(resolveCliInstallStrategy("kimi", "updateLatest")).toBe("npmGlobal");
   });
+
+  it("keeps npm global for Grok", () => {
+    expect(resolveCliInstallStrategy("grok", "installLatest")).toBe(
+      "npmGlobal",
+    );
+    expect(resolveCliInstallStrategy("grok", "updateLatest")).toBe("npmGlobal");
+  });
 });

@@ -59,6 +59,8 @@ const sidebar = {
     "newCloneAgent": "新しいクローン Agent",
     "codexProviderChoiceTitle": "プロバイダーの選択",
     "codexProviderSelectedTip": "選択しました。左側の Codex をクリックしてセッションを開始します。",
+    "grokProviderChoiceTitle": "プロバイダーの選択",
+    "grokProviderSelectedTip": "選択しました。左側の Grok CLI をクリックしてセッションを開始します。",
     "providerFollowsGlobalLabel": "グローバル設定に従う",
     "providerIsolatedConfigLabel": "独立設定",
     "sessionActionsGroup": "新しいセッション",

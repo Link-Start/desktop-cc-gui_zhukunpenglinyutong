@@ -26,6 +26,8 @@ const ProviderIcon = ({ providerId, size = 16 }: { providerId: string; size?: nu
       return <EngineIcon engine="codex" size={size} style={imgStyle} />;
     case 'gemini':
       return <EngineIcon engine="gemini" size={size} style={imgStyle} />;
+    case 'grok':
+      return <EngineIcon engine="grok" size={size} style={imgStyle} />;
     case 'kimi':
       return <EngineIcon engine="kimi" size={size} style={imgStyle} />;
     case 'opencode':

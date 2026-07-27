@@ -95,6 +95,17 @@
         "lifecycle": "fallback"
       }
     ],
+    "grok": [
+      {
+        "id": "grok-build",
+        "label": "Grok Build",
+        "description": "",
+        "provider": "grok",
+        "protocol": "grok",
+        "lifecycle": "fallback",
+        "default": true
+      }
+    ],
     "kimi": [
       {
         "id": "kimi-code/k3",

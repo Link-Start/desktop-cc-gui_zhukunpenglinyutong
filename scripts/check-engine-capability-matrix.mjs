@@ -22,6 +22,7 @@ const ENGINE_VARIANTS = {
   claude: "Claude",
   codex: "Codex",
   gemini: "Gemini",
+  grok: "Grok",
   opencode: "OpenCode",
   kimi: "Kimi",
 };

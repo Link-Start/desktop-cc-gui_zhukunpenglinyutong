@@ -14,6 +14,7 @@ const SUPPORTED_TASK_OUTPUT_ENGINES: readonly EngineTaskOutputEngine[] = [
   "claude",
   "codex",
   "gemini",
+  "grok",
   "kimi",
   "opencode",
 ];

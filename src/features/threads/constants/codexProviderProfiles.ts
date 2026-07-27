@@ -4,6 +4,8 @@ export const CLAUDE_LOCAL_PROVIDER_PROFILE_ID = "__local_settings_json__";
 export const CLAUDE_LOCAL_PROVIDER_PROFILE_NAME = "Local settings.json";
 export const KIMI_LOCAL_PROVIDER_PROFILE_ID = "__local_config_toml__";
 export const KIMI_LOCAL_PROVIDER_PROFILE_NAME = "Local config.toml";
+export const GROK_LOCAL_PROVIDER_PROFILE_ID = "__local_config_toml__";
+export const GROK_LOCAL_PROVIDER_PROFILE_NAME = "Local config.toml";
 
 export type EngineProviderProfileOption = {
   id: string;

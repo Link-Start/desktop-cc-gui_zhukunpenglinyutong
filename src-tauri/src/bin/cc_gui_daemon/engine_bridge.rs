@@ -27,6 +27,12 @@ pub mod gemini;
 pub mod gemini_history;
 #[path = "../../engine/gemini_proxy_guard.rs"]
 pub(crate) mod gemini_proxy_guard;
+#[path = "../../engine/grok.rs"]
+pub mod grok;
+#[path = "../../engine/grok_history.rs"]
+pub mod grok_history;
+#[path = "../../engine/grok_provider_profile.rs"]
+pub(crate) mod grok_provider_profile;
 #[path = "../../engine/kimi.rs"]
 pub mod kimi;
 #[path = "../../engine/kimi_history.rs"]
@@ -424,6 +430,7 @@ pub enum EngineType {
     Claude,
     Codex,
     Gemini,
+    Grok,
     OpenCode,
     Kimi,
 }
@@ -440,6 +447,7 @@ impl EngineType {
             EngineType::Claude => "Claude Code",
             EngineType::Codex => "Codex",
             EngineType::Gemini => "Gemini",
+            EngineType::Grok => "Grok CLI",
             EngineType::OpenCode => "OpenCode",
             EngineType::Kimi => "Kimi CLI",
         }
@@ -450,6 +458,7 @@ impl EngineType {
             EngineType::Claude => "claude",
             EngineType::Codex => "codex",
             EngineType::Gemini => "gemini",
+            EngineType::Grok => "grok",
             EngineType::OpenCode => "opencode",
             EngineType::Kimi => "kimi",
         }
@@ -472,7 +481,7 @@ pub(crate) fn engine_enabled_in_settings(
     match engine_type {
         EngineType::Gemini => crate::engine_policy::GEMINI_RUNTIME_ENABLED,
         EngineType::OpenCode => false,
-        EngineType::Claude | EngineType::Codex | EngineType::Kimi => true,
+        EngineType::Claude | EngineType::Codex | EngineType::Grok | EngineType::Kimi => true,
     }
 }
 
@@ -480,7 +489,7 @@ pub(crate) fn engine_disabled_diagnostic(engine_type: EngineType) -> Option<&'st
     match engine_type {
         EngineType::Gemini => Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC),
         EngineType::OpenCode => Some(OPENCODE_DISABLED_DIAGNOSTIC),
-        EngineType::Claude | EngineType::Codex | EngineType::Kimi => None,
+        EngineType::Claude | EngineType::Codex | EngineType::Grok | EngineType::Kimi => None,
     }
 }
 
@@ -697,6 +706,18 @@ impl EngineFeatures {
             mcp: false,
         }
     }
+
+    pub fn grok() -> Self {
+        Self {
+            reasoning_effort: false,
+            collaboration_mode: false,
+            image_input: false,
+            session_resume: true,
+            tools_control: true,
+            streaming: true,
+            mcp: false,
+        }
+    }
 }
 
 pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
@@ -705,6 +726,7 @@ pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
         EngineType::Codex => EngineFeatures::codex(),
         EngineType::Gemini => EngineFeatures::gemini(),
         EngineType::OpenCode => EngineFeatures::opencode(),
+        EngineType::Grok => EngineFeatures::grok(),
         EngineType::Kimi => EngineFeatures::kimi(),
     };
     EngineStatus {

@@ -711,7 +711,7 @@ function attachmentToGeminiImageInput(attachment: Attachment): string | null {
 
 function attachmentsToImageInputs(
   attachments: Attachment[] | undefined,
-  provider: 'claude' | 'codex' | 'gemini' | 'kimi' | 'opencode' = 'claude',
+  provider: 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode' = 'claude',
 ): string[] | undefined {
   if (!attachments || attachments.length === 0) {
     return undefined;
@@ -731,7 +731,7 @@ function attachmentsToImageInputs(
 /**
  * Maps Composer engine types to ChatInputBox provider IDs
  */
-type ChatInputProvider = 'claude' | 'codex' | 'gemini' | 'kimi' | 'opencode';
+type ChatInputProvider = 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode';
 
 function engineToProvider(engine?: EngineType): ChatInputProvider {
   switch (engine) {
@@ -741,6 +741,8 @@ function engineToProvider(engine?: EngineType): ChatInputProvider {
       return 'opencode';
     case 'gemini':
       return 'gemini';
+    case 'grok':
+      return 'grok';
     case 'kimi':
       return 'kimi';
     case 'claude':
@@ -757,6 +759,8 @@ function providerToEngine(providerId: string): EngineType {
       return 'opencode';
     case 'gemini':
       return 'gemini';
+    case 'grok':
+      return 'grok';
     case 'kimi':
       return 'kimi';
     case 'claude':
@@ -1848,6 +1852,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         codex: isEngineEnabled('codex'),
         opencode: isEngineEnabled('opencode'),
         gemini: isEngineEnabled('gemini'),
+        grok: isEngineEnabled('grok'),
         kimi: isEngineEnabled('kimi'),
       } as const;
     }, [engines, isSharedSession]);
@@ -1871,6 +1876,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         codex: resolveStatusLabel('codex'),
         opencode: resolveStatusLabel('opencode'),
         gemini: resolveStatusLabel('gemini'),
+        grok: resolveStatusLabel('grok'),
         kimi: resolveStatusLabel('kimi'),
       } as const;
     }, [engines, t]);
@@ -1884,6 +1890,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         claude: 'Claude Code',
         codex: 'Codex CLI',
         gemini: 'Gemini CLI',
+        grok: 'Grok CLI',
         kimi: 'Kimi CLI',
         opencode: 'OpenCode',
       };
@@ -1909,6 +1916,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         codex: resolveVersion('codex'),
         opencode: resolveVersion('opencode'),
         gemini: resolveVersion('gemini'),
+        grok: resolveVersion('grok'),
         kimi: resolveVersion('kimi'),
       } as const;
     }, [engines]);

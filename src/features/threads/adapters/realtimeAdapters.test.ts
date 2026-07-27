@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { claudeRealtimeAdapter } from "./claudeRealtimeAdapter";
 import { codexRealtimeAdapter } from "./codexRealtimeAdapter";
 import { geminiRealtimeAdapter } from "./geminiRealtimeAdapter";
+import { grokRealtimeAdapter } from "./grokRealtimeAdapter";
 import { kimiRealtimeAdapter } from "./kimiRealtimeAdapter";
 import { opencodeRealtimeAdapter } from "./opencodeRealtimeAdapter";
 import { getRealtimeAdapterByEngine } from "./realtimeAdapterRegistry";
@@ -9,7 +10,7 @@ import type { ConversationEngine } from "../contracts/conversationCurtainContrac
 
 describe("realtime adapters", () => {
   it("keeps unknown realtime methods non-fatal for every governance engine", () => {
-    const engines: ConversationEngine[] = ["claude", "codex", "gemini", "kimi", "opencode"];
+    const engines: ConversationEngine[] = ["claude", "codex", "gemini", "grok", "kimi", "opencode"];
 
     for (const engine of engines) {
       const event = getRealtimeAdapterByEngine(engine).mapEvent({
@@ -555,6 +556,43 @@ describe("realtime adapters", () => {
     });
     expect(event).toBeTruthy();
     expect(event?.engine).toBe("kimi");
+    expect(event?.operation).toBe("appendReasoningContentDelta");
+    expect(event?.item.kind).toBe("reasoning");
+    expect(event?.delta).toBe("checking files...");
+  });
+
+  it("maps grok text:delta alias to assistant delta", () => {
+    const event = grokRealtimeAdapter.mapEvent({
+      workspaceId: "ws-grok",
+      message: {
+        method: "text:delta",
+        params: {
+          threadId: "grok:session-1",
+          itemId: "agent-1",
+          delta: "working",
+        },
+      },
+    });
+    expect(event).toBeTruthy();
+    expect(event?.engine).toBe("grok");
+    expect(event?.operation).toBe("appendAgentMessageDelta");
+    expect(event?.item.kind).toBe("message");
+  });
+
+  it("maps grok reasoning text delta to normalized reasoning delta event", () => {
+    const event = grokRealtimeAdapter.mapEvent({
+      workspaceId: "ws-grok",
+      message: {
+        method: "item/reasoning/textDelta",
+        params: {
+          threadId: "grok:session-1",
+          itemId: "reasoning-1",
+          delta: "checking files...",
+        },
+      },
+    });
+    expect(event).toBeTruthy();
+    expect(event?.engine).toBe("grok");
     expect(event?.operation).toBe("appendReasoningContentDelta");
     expect(event?.item.kind).toBe("reasoning");
     expect(event?.delta).toBe("checking files...");

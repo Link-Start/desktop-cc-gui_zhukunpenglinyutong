@@ -691,6 +691,11 @@ describe("useSidebarMenus", () => {
       localId: "__local_config_toml__",
       storageKey: "kimiLastProviderProfileId",
     },
+    {
+      engine: "grok" as const,
+      localId: "__local_config_toml__",
+      storageKey: "grokLastProviderProfileId",
+    },
   ])(
     "selects and remembers $engine provider without creating from the submenu",
     async ({ engine, localId, storageKey }) => {
@@ -704,12 +709,19 @@ describe("useSidebarMenus", () => {
                 { id: "provider-a", name: "Provider A", source: "managed" as const },
               ],
             }
-          : {
-              kimiProviderProfiles: [
-                { id: localId, name: "Local", source: "managed" as const },
-                { id: "provider-a", name: "Provider A", source: "managed" as const },
-              ],
-            };
+          : engine === "kimi"
+            ? {
+                kimiProviderProfiles: [
+                  { id: localId, name: "Local", source: "managed" as const },
+                  { id: "provider-a", name: "Provider A", source: "managed" as const },
+                ],
+              }
+            : {
+                grokProviderProfiles: [
+                  { id: localId, name: "Local", source: "managed" as const },
+                  { id: "provider-a", name: "Provider A", source: "managed" as const },
+                ],
+              };
       const { result } = renderHook(() =>
         useSidebarMenus({ ...handlers, ...profileProp }),
       );
@@ -1295,6 +1307,7 @@ describe("useSidebarMenus", () => {
       "new-session-claude",
       "new-session-codex",
       "new-session-kimi",
+      "new-session-grok",
     ]);
   });
 });

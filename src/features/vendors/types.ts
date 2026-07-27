@@ -26,6 +26,8 @@ export const LOCAL_SETTINGS_PROVIDER_ID = "__local_settings_json__";
 
 export const LOCAL_KIMI_PROVIDER_ID = "__local_config_toml__";
 
+export const LOCAL_GROK_PROVIDER_ID = "__local_config_toml__";
+
 // ============ Validation Helpers ============
 
 export const MODEL_ID_PATTERN = COMPOSER_MODEL_ID_PATTERN;
@@ -153,6 +155,43 @@ export interface KimiProviderDeleteResult {
   warning?: string;
 }
 
+export type GrokApiBackend = "chat_completions" | "responses" | "messages";
+
+export interface GrokProviderConfig {
+  id: string;
+  name: string;
+  remark?: string;
+  websiteUrl?: string;
+  createdAt?: number;
+  sortOrder?: number;
+  isActive?: boolean;
+  isLocalProvider?: boolean;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  providerType?: string;
+  /** grok config.toml 的 api_backend 字段,默认 chat_completions */
+  apiBackend?: GrokApiBackend | string;
+  maxContextSize?: number;
+  displayName?: string;
+}
+
+export interface GrokCurrentConfig {
+  apiKey: string;
+  baseUrl: string;
+  authType?: string;
+  defaultModel: string;
+  providerId?: string;
+  providerName?: string;
+  configStatus?: "missing" | "loaded" | "malformed" | "io-error";
+  diagnostic?: string;
+}
+
+export interface GrokProviderDeleteResult {
+  status: "success" | "partial-warning";
+  warning?: string;
+}
+
 export const GEMINI_AUTH_MODES = [
   "custom",
   "login_google",
@@ -177,7 +216,7 @@ export interface GeminiVendorDraft {
   model: string;
 }
 
-export type VendorTab = "claude" | "codex" | "kimi";
+export type VendorTab = "claude" | "codex" | "kimi" | "grok";
 
 export interface ClaudeProviderPreset {
   id: string;
@@ -309,6 +348,32 @@ export const KIMI_PROVIDER_PRESETS: KimiProviderPreset[] = [
     nameKey: "settings.vendor.kimiPresets.custom",
     baseUrl: "",
     providerType: "openai",
+    model: "",
+  },
+];
+
+export interface GrokProviderPreset {
+  id: string;
+  nameKey: string;
+  baseUrl: string;
+  apiBackend: GrokApiBackend;
+  model: string;
+  maxContextSize?: number;
+}
+
+export const GROK_PROVIDER_PRESETS: GrokProviderPreset[] = [
+  {
+    id: "xai-official",
+    nameKey: "settings.vendor.grokPresets.xaiOfficial",
+    baseUrl: "https://api.x.ai/v1",
+    apiBackend: "responses",
+    model: "grok-build",
+  },
+  {
+    id: "custom",
+    nameKey: "settings.vendor.grokPresets.custom",
+    baseUrl: "",
+    apiBackend: "chat_completions",
     model: "",
   },
 ];

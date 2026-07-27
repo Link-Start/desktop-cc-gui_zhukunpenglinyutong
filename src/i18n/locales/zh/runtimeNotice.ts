@@ -64,6 +64,9 @@ const runtimeNotice = {
     kimi: {
       providerSelected: "已选择 {{name}}，点击 Kimi CLI 即可直接创建会话",
     },
+    grok: {
+      providerSelected: "已选择 {{name}}，点击 Grok CLI 即可直接创建会话",
+    },
     error: {
       createSessionRecoveryRequired:
         "{{workspace}}：会话创建失败，运行时正在恢复",

@@ -68,7 +68,7 @@ export const WorkingIndicator = memo(function WorkingIndicator({
     activityLabel,
   );
   const supportsStreamActivityPhaseFx =
-    activeEngine === "codex" || activeEngine === "claude" || activeEngine === "gemini" || activeEngine === "kimi";
+    activeEngine === "codex" || activeEngine === "claude" || activeEngine === "gemini" || activeEngine === "grok" || activeEngine === "kimi";
   const visualStreamActivityPhase =
     activeEngine === "codex" && streamActivityPhase === "ingress"
       ? "waiting"

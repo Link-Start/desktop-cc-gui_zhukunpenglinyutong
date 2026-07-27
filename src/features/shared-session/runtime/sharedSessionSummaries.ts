@@ -5,6 +5,8 @@ import { normalizeSharedSessionEngine } from "../utils/sharedSessionEngines";
 const NATIVE_OTHER_ENGINE_PREFIXES = [
   "gemini:",
   "gemini-pending-",
+  "grok:",
+  "grok-pending-",
   "kimi:",
   "kimi-pending-",
   "opencode:",

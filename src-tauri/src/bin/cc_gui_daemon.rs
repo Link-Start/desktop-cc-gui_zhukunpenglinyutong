@@ -160,7 +160,7 @@ mod codex {
     pub(crate) type WorkspaceSession = crate::backend::app_server::WorkspaceSession;
     pub(crate) use crate::codex_doctor::{
         run_claude_doctor_with_settings, run_codex_doctor_with_settings,
-        run_kimi_doctor_with_settings,
+        run_grok_doctor_with_settings, run_kimi_doctor_with_settings,
     };
     pub(crate) use crate::codex_installer::{
         build_cli_install_plan_with_backend, resolve_cli_version_status,
@@ -839,6 +839,7 @@ fn parse_engine_type_string(value: Option<&str>) -> Option<engine::EngineType> {
         "gemini" => Some(engine::EngineType::Gemini),
         "opencode" => Some(engine::EngineType::OpenCode),
         "kimi" => Some(engine::EngineType::Kimi),
+        "grok" => Some(engine::EngineType::Grok),
         _ => None,
     }
 }
@@ -1588,6 +1589,10 @@ async fn handle_rpc_request(
             let kimi_bin = parse_optional_string(&params, "kimiBin");
             state.kimi_doctor(kimi_bin).await
         }
+        "grok_doctor" => {
+            let grok_bin = parse_optional_string(&params, "grokBin");
+            state.grok_doctor(grok_bin).await
+        }
         "cli_install_plan" => {
             let engine =
                 serde_json::from_value(params.get("engine").cloned().unwrap_or(Value::Null))
@@ -1854,6 +1859,11 @@ async fn handle_rpc_request(
             let limit = parse_optional_u32(&params, "limit").map(|value| value as usize);
             state.list_kimi_sessions(workspace_path, limit).await
         }
+        "list_grok_sessions" => {
+            let workspace_path = parse_string(&params, "workspacePath")?;
+            let limit = parse_optional_u32(&params, "limit").map(|value| value as usize);
+            state.list_grok_sessions(workspace_path, limit).await
+        }
         "list_workspace_sessions" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let query = parse_optional_value(&params, "query")
@@ -2040,6 +2050,11 @@ async fn handle_rpc_request(
             let session_id = parse_string(&params, "sessionId")?;
             state.load_kimi_session(workspace_path, session_id).await
         }
+        "load_grok_session" => {
+            let workspace_path = parse_string(&params, "workspacePath")?;
+            let session_id = parse_string(&params, "sessionId")?;
+            state.load_grok_session(workspace_path, session_id).await
+        }
         "load_codex_session" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let session_id = parse_string(&params, "sessionId")?;
@@ -2058,6 +2073,14 @@ async fn handle_rpc_request(
             let session_id = parse_string(&params, "sessionId")?;
             state
                 .delete_kimi_session(workspace_path, session_id)
+                .await?;
+            Ok(json!({ "ok": true }))
+        }
+        "delete_grok_session" => {
+            let workspace_path = parse_string(&params, "workspacePath")?;
+            let session_id = parse_string(&params, "sessionId")?;
+            state
+                .delete_grok_session(workspace_path, session_id)
                 .await?;
             Ok(json!({ "ok": true }))
         }

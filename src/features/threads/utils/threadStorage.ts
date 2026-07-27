@@ -24,6 +24,7 @@ function isFinalizedNativeThreadId(threadId: string) {
   return (
     normalizedThreadId.startsWith("claude:") ||
     normalizedThreadId.startsWith("gemini:") ||
+    normalizedThreadId.startsWith("grok:") ||
     normalizedThreadId.startsWith("kimi:") ||
     normalizedThreadId.startsWith("opencode:")
   );

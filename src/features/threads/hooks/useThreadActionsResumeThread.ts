@@ -5,6 +5,7 @@ import {
   getOpenCodeSessionList as getOpenCodeSessionListService,
   loadClaudeSession as loadClaudeSessionService,
   loadGeminiSession as loadGeminiSessionService,
+  loadGrokSession as loadGrokSessionService,
   loadKimiSession as loadKimiSessionService,
   resumeThread as resumeThreadService,
 } from "../../../services/tauri";
@@ -20,6 +21,7 @@ import {
   parseClaudeHistoryMessagesWithShadowRecovery,
 } from "../loaders/claudeHistoryLoader";
 import { parseGeminiHistoryMessages } from "../loaders/geminiHistoryParser";
+import { parseGrokHistoryMessages } from "../loaders/grokHistoryParser";
 import { parseKimiHistoryMessages } from "../loaders/kimiHistoryParser";
 import { hydrateHistory } from "../assembly/conversationAssembler";
 import { asString } from "../utils/threadNormalize";
@@ -1178,6 +1180,38 @@ export function useThreadActionsResumeThreadForWorkspace(
           }
         }
         setThreadLoaded(threadId, true);
+        return threadId;
+      }
+      if (threadId.startsWith("grok:")) {
+        dispatch({
+          type: "ensureThread",
+          workspaceId,
+          threadId,
+          engine: "grok",
+        });
+        if (workspacePath && !loadedThreadsRef.current[threadId]) {
+          const realSessionId = threadId.slice("grok:".length);
+          try {
+            const result = await loadGrokSessionService(
+              workspacePath,
+              realSessionId,
+            );
+            const messagesData =
+              (result as { messages?: unknown }).messages ?? result;
+            const items = parseGrokHistoryMessages(messagesData);
+            if (items.length > 0) {
+              dispatch({ type: "setThreadItems", threadId, items });
+            }
+            dispatch({
+              type: "setThreadHistoryRestoredAt",
+              threadId,
+              timestamp: Date.now(),
+            });
+          } catch {
+            // Failed to load Grok session history — not fatal
+          }
+        }
+        loadedThreadsRef.current[threadId] = true;
         return threadId;
       }
       if (threadId.startsWith("kimi:")) {

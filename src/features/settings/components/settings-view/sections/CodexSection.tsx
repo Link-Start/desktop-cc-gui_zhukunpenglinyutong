@@ -43,6 +43,13 @@ type CodexSectionProps = {
   handleSaveKimiSettings: () => Promise<void>;
   handleRunKimiDoctor: () => Promise<void>;
   kimiDoctorState: DoctorState;
+  grokPathDraft: string;
+  setGrokPathDraft: (value: string) => void;
+  grokDirty: boolean;
+  handleBrowseGrok: () => Promise<void>;
+  handleSaveGrokSettings: () => Promise<void>;
+  handleRunGrokDoctor: () => Promise<void>;
+  grokDoctorState: DoctorState;
   codexPathDraft: string;
   setCodexPathDraft: (value: string) => void;
   codexArgsDraft: string;
@@ -81,7 +88,7 @@ type PreviewState = {
   error: string | null;
 };
 
-type CliValidationTab = "codex" | "claude" | "kimi";
+type CliValidationTab = "codex" | "claude" | "kimi" | "grok";
 
 // Deprecated: Gemini CLI and OpenCode CLI validation entries are intentionally hidden.
 const DEPRECATED_CLI_VALIDATION_ENGINES = new Set(["gemini", "opencode"]);
@@ -443,6 +450,13 @@ export function CodexSection({
   handleSaveKimiSettings,
   handleRunKimiDoctor,
   kimiDoctorState,
+  grokPathDraft,
+  setGrokPathDraft,
+  grokDirty,
+  handleBrowseGrok,
+  handleSaveGrokSettings,
+  handleRunGrokDoctor,
+  grokDoctorState,
   codexPathDraft,
   setCodexPathDraft,
   codexArgsDraft,
@@ -744,7 +758,13 @@ export function CodexSection({
             return;
           }
           setActiveTab(
-            value === "claude" ? "claude" : value === "kimi" ? "kimi" : "codex",
+            value === "claude"
+              ? "claude"
+              : value === "kimi"
+                ? "kimi"
+                : value === "grok"
+                  ? "grok"
+                  : "codex",
           );
         }}
       >
@@ -754,6 +774,7 @@ export function CodexSection({
             {t("settings.cliValidationTabClaudeCode")}
           </TabsTab>
           <TabsTab value="kimi">{t("settings.cliValidationTabKimiCli")}</TabsTab>
+          <TabsTab value="grok">{t("settings.cliValidationTabGrokCli")}</TabsTab>
         </TabsList>
 
         <TabsPanel value="codex">
@@ -1158,6 +1179,88 @@ export function CodexSection({
               state={kimiDoctorState}
               successTitleKey="settings.kimiLooksGood"
               errorTitleKey="settings.kimiIssueDetected"
+              showAppServer={false}
+            />
+          </div>
+        </TabsPanel>
+
+        <TabsPanel value="grok">
+          <div className="settings-field">
+            <label className="settings-field-label" htmlFor="grok-path">
+              {t("settings.defaultGrokPath")}
+            </label>
+            <div className="settings-field-row">
+              <input
+                id="grok-path"
+                className="settings-input"
+                value={grokPathDraft}
+                placeholder={t("settings.grokPlaceholder")}
+                onChange={(event) => setGrokPathDraft(event.target.value)}
+              />
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => void handleBrowseGrok()}
+              >
+                {t("settings.browse")}
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setGrokPathDraft("")}
+              >
+                {t("settings.usePath")}
+              </button>
+            </div>
+            <div className="settings-help">
+              {t("settings.pathResolutionDesc")}
+            </div>
+            <div className="settings-field-actions">
+              {grokDirty ? (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    void handleSaveGrokSettings();
+                  }}
+                  disabled={isSavingSettings}
+                >
+                  {isSavingSettings ? t("settings.saving") : t("common.save")}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="ghost settings-button-compact"
+                onClick={() => {
+                  void handleRunGrokDoctor();
+                }}
+                disabled={grokDoctorState.status === "running"}
+              >
+                <Stethoscope aria-hidden />
+                {grokDoctorState.status === "running"
+                  ? t("settings.running")
+                  : t("settings.runGrokDoctor")}
+              </button>
+              <button
+                type="button"
+                className="ghost settings-button-compact"
+                onClick={() => {
+                  void requestInstallPlan("grok", grokDoctorState.result);
+                }}
+                disabled={installerBusy}
+              >
+                {resolveInstallerAction(grokDoctorState.result) ===
+                "installLatest"
+                  ? t("settings.cliInstallLatest")
+                  : t("settings.cliUpdateLatest")}
+              </button>
+            </div>
+
+            <DoctorResultCard
+              t={t}
+              state={grokDoctorState}
+              successTitleKey="settings.grokLooksGood"
+              errorTitleKey="settings.grokIssueDetected"
               showAppServer={false}
             />
           </div>

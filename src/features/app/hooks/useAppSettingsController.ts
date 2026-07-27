@@ -12,6 +12,7 @@ export function useAppSettingsController() {
     doctor,
     claudeDoctor,
     kimiDoctor,
+    grokDoctor,
     isLoading: appSettingsLoading,
   } = useAppSettings();
 
@@ -52,6 +53,7 @@ export function useAppSettingsController() {
     doctor,
     claudeDoctor,
     kimiDoctor,
+    grokDoctor,
     appSettingsLoading,
     reduceTransparency,
     setReduceTransparency,

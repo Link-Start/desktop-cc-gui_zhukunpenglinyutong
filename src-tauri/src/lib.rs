@@ -449,6 +449,9 @@ pub fn run() {
                 if let Err(error) = manager.shutdown_kimi_sessions().await {
                     log::error!("[app_exit] Kimi shutdown failed: {error}");
                 }
+                if let Err(error) = manager.shutdown_grok_sessions().await {
+                    log::error!("[app_exit] Grok shutdown failed: {error}");
+                }
                 if state
                     .app_settings
                     .lock()

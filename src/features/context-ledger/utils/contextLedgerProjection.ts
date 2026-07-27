@@ -293,7 +293,7 @@ function buildRecentTurnsBlock(input: ContextLedgerProjectionInput): ContextLedg
       ? `${dualUsage.usedTokens} / ${contextWindowTokens}`
       : null;
   const supportedEngine =
-    input.engine === "codex" || input.engine === "claude" || input.engine === "gemini" || input.engine === "kimi";
+    input.engine === "codex" || input.engine === "claude" || input.engine === "gemini" || input.engine === "grok" || input.engine === "kimi";
   const participationState: ContextLedgerParticipationState = supportedEngine
     ? "shared"
     : "degraded";

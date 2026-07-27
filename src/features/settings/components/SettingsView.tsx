@@ -168,6 +168,7 @@ export type SettingsViewProps = {
   ) => Promise<CodexDoctorResult>;
   onRunClaudeDoctor?: (claudeBin: string | null) => Promise<CodexDoctorResult>;
   onRunKimiDoctor?: (kimiBin: string | null) => Promise<CodexDoctorResult>;
+  onRunGrokDoctor?: (grokBin: string | null) => Promise<CodexDoctorResult>;
   onRunDoctor?: (
     codexBin: string | null,
     codexArgs: string | null,
@@ -327,6 +328,7 @@ export function SettingsView({
   onRunCodexDoctor,
   onRunClaudeDoctor,
   onRunKimiDoctor,
+  onRunGrokDoctor,
   onRunDoctor,
   activeWorkspace,
   activeThreadId = null,
@@ -378,6 +380,9 @@ export function SettingsView({
   );
   const [kimiPathDraft, setKimiPathDraft] = useState(
     appSettings.kimiBin ?? "",
+  );
+  const [grokPathDraft, setGrokPathDraft] = useState(
+    appSettings.grokBin ?? "",
   );
   const [codexPathDraft, setCodexPathDraft] = useState(
     appSettings.codexBin ?? "",
@@ -471,6 +476,10 @@ export function SettingsView({
     result: CodexDoctorResult | null;
   }>({ status: "idle", result: null });
   const [kimiDoctorState, setKimiDoctorState] = useState<{
+    status: "idle" | "running" | "done";
+    result: CodexDoctorResult | null;
+  }>({ status: "idle", result: null });
+  const [grokDoctorState, setGrokDoctorState] = useState<{
     status: "idle" | "running" | "done";
     result: CodexDoctorResult | null;
   }>({ status: "idle", result: null });
@@ -755,6 +764,10 @@ export function SettingsView({
   }, [appSettings.kimiBin]);
 
   useEffect(() => {
+    setGrokPathDraft(appSettings.grokBin ?? "");
+  }, [appSettings.grokBin]);
+
+  useEffect(() => {
     setCodexPathDraft(appSettings.codexBin ?? "");
   }, [appSettings.codexBin]);
 
@@ -974,6 +987,7 @@ export function SettingsView({
 
   const nextClaudeBin = claudePathDraft.trim() ? claudePathDraft.trim() : null;
   const nextKimiBin = kimiPathDraft.trim() ? kimiPathDraft.trim() : null;
+  const nextGrokBin = grokPathDraft.trim() ? grokPathDraft.trim() : null;
   const nextCodexBin = codexPathDraft.trim() ? codexPathDraft.trim() : null;
   const nextCodexArgs = codexArgsDraft.trim() ? codexArgsDraft.trim() : null;
   const nextTerminalShellPath = terminalShellPathDraft.trim()
@@ -981,6 +995,7 @@ export function SettingsView({
     : null;
   const claudeDirty = nextClaudeBin !== (appSettings.claudeBin ?? null);
   const kimiDirty = nextKimiBin !== (appSettings.kimiBin ?? null);
+  const grokDirty = nextGrokBin !== (appSettings.grokBin ?? null);
   const codexDirty =
     nextCodexBin !== (appSettings.codexBin ?? null) ||
     nextCodexArgs !== (appSettings.codexArgs ?? null);
@@ -1005,6 +1020,18 @@ export function SettingsView({
       await onUpdateAppSettings({
         ...appSettings,
         kimiBin: nextKimiBin,
+      });
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleSaveGrokSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      await onUpdateAppSettings({
+        ...appSettings,
+        grokBin: nextGrokBin,
       });
     } finally {
       setIsSavingSettings(false);
@@ -1426,6 +1453,14 @@ export function SettingsView({
     setKimiPathDraft(selection);
   };
 
+  const handleBrowseGrok = async () => {
+    const selection = await open({ multiple: false, directory: false });
+    if (!selection || Array.isArray(selection)) {
+      return;
+    }
+    setGrokPathDraft(selection);
+  };
+
   const handleRunDoctor = async () => {
     setDoctorState({ status: "running", result: null });
     try {
@@ -1492,6 +1527,32 @@ export function SettingsView({
         result: {
           ok: false,
           codexBin: nextKimiBin,
+          version: null,
+          appServerOk: false,
+          details: error instanceof Error ? error.message : String(error),
+          path: null,
+          nodeOk: false,
+          nodeVersion: null,
+          nodeDetails: null,
+        },
+      });
+    }
+  };
+
+  const handleRunGrokDoctor = async () => {
+    setGrokDoctorState({ status: "running", result: null });
+    try {
+      if (!onRunGrokDoctor) {
+        throw new Error("Grok doctor is not available.");
+      }
+      const result = await onRunGrokDoctor(nextGrokBin);
+      setGrokDoctorState({ status: "done", result });
+    } catch (error) {
+      setGrokDoctorState({
+        status: "done",
+        result: {
+          ok: false,
+          codexBin: nextGrokBin,
           version: null,
           appServerOk: false,
           details: error instanceof Error ? error.message : String(error),
@@ -2395,6 +2456,13 @@ export function SettingsView({
                 handleSaveKimiSettings={handleSaveKimiSettings}
                 handleRunKimiDoctor={handleRunKimiDoctor}
                 kimiDoctorState={kimiDoctorState}
+                grokPathDraft={grokPathDraft}
+                setGrokPathDraft={setGrokPathDraft}
+                grokDirty={grokDirty}
+                handleBrowseGrok={handleBrowseGrok}
+                handleSaveGrokSettings={handleSaveGrokSettings}
+                handleRunGrokDoctor={handleRunGrokDoctor}
+                grokDoctorState={grokDoctorState}
                 codexPathDraft={codexPathDraft}
                 setCodexPathDraft={setCodexPathDraft}
                 codexArgsDraft={codexArgsDraft}
@@ -2423,6 +2491,8 @@ export function SettingsView({
                     setDoctorState({ status: "done", result });
                   } else if (engine === "kimi") {
                     setKimiDoctorState({ status: "done", result });
+                  } else if (engine === "grok") {
+                    setGrokDoctorState({ status: "done", result });
                   } else {
                     setClaudeDoctorState({ status: "done", result });
                   }

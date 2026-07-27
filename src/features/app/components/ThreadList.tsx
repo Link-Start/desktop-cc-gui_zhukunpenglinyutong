@@ -620,6 +620,8 @@ export function ThreadList({
         ? "Claude Code"
         : engineSource === "gemini"
           ? "Gemini"
+          : engineSource === "grok"
+            ? "Grok"
           : engineSource === "kimi"
             ? "Kimi"
           : engineSource === "opencode"
