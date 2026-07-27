@@ -22,6 +22,8 @@ mod recovery;
 mod schema;
 mod writer;
 
+pub mod canonical;
+
 pub use checksum::{deterministic_json_bytes, payload_checksum};
 pub use error::StoreError;
 pub use ledger::{LedgerOutcome, ProviderUsageRecord, StoredLedgerRow};

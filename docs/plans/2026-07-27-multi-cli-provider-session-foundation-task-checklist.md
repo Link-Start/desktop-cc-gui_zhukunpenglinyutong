@@ -19,16 +19,16 @@
 
 ## Wave 0：契约与调研（全部可并行，无产品代码）
 
-| # | 任务 | 并行 | 前置 | 验收 | 体量 |
-|---|---|---|---|---|---|
-| T0.1 | Canonical Fact JSON Schema 落 OpenSpec：`turnRequested` / `context.deliveryPrepared` / `context.deliveryAccepted` / `turnAccepted` / `turnCommitted` / `usageRecorded` / `usageAggregateRecorded` / `controlFact` | ⫽ | 无 | Schema 文件 + `openspec validate` 通过 | M |
-| T0.2 | 领域契约 artifacts：ExecutionTarget / TurnExecutionSnapshot / SessionOrigin / ConversationFamilyRef / BindingKey 规则 / BindingContextCursor / BindingProvisioningState / NativeHistoryReader / NativeHistoryMaterialization / Legacy fidelity | ⫽ | 无 | 设计文档 §Phase 0 验收 6 条 | M |
-| T0.3 | **S1 Spike**：Codex `thread/inject_items`——支持 Item 类型、持久化、read-back、duplicate 行为、`clientUserMessageId` 关联 | ⫽ | 无 | 实测 capability matrix 落档 | M |
-| T0.4 | **S2 Spike**：Claude `--replay-user-messages`——echo 格式、checksum 关联、`result` 与 process-exit 冲突定性 | ⫽ | 无 | 实测 ACK contract 落档 | S |
-| T0.5 | **S3 Spike**：Kimi ACP——initialize capability、`session/load` replay、prompt lifecycle、Provider config 边界 | ⫽ | 无 | 实测 matrix + ACP go/no-go 结论 | M |
-| T0.6 | Native golden fixtures：Claude/Codex 代表性 History + Live Event fixtures | ⫽ | 无 | fixtures 入库、可重复加载 | M |
+| # | 任务 | 并行 | 前置 | 验收 | 体量 | 状态 |
+|---|---|---|---|---|---|---|
+| T0.1 | Canonical Fact JSON Schema 落 OpenSpec：`turnRequested` / `context.deliveryPrepared` / `context.deliveryAccepted` / `turnAccepted` / `turnCommitted` / `usageRecorded` / `usageAggregateRecorded` / `controlFact` | ⫽ | 无 | Schema 文件 + `openspec validate` 通过 | M | ✅ 已完成 |
+| T0.2 | 领域契约 artifacts：ExecutionTarget / TurnExecutionSnapshot / SessionOrigin / ConversationFamilyRef / BindingKey 规则 / BindingContextCursor / BindingProvisioningState / NativeHistoryReader / NativeHistoryMaterialization / Legacy fidelity | ⫽ | 无 | 设计文档 §Phase 0 验收 6 条 | M | ✅ 已完成 |
+| T0.3 | **S1 Spike**：Codex `thread/inject_items`——支持 Item 类型、持久化、read-back、duplicate 行为、`clientUserMessageId` 关联 | ⫽ | 无 | 实测 capability matrix 落档 | M | ✅ 已完成 |
+| T0.4 | **S2 Spike**：Claude `--replay-user-messages`——echo 格式、checksum 关联、`result` 与 process-exit 冲突定性 | ⫽ | 无 | 实测 ACK contract 落档 | S | ✅ 已完成 |
+| T0.5 | **S3 Spike**：Kimi ACP——initialize capability、`session/load` replay、prompt lifecycle、Provider config 边界 | ⫽ | 无 | 实测 matrix + ACP go/no-go 结论 | M | ✅ 已完成 |
+| T0.6 | Native golden fixtures：Claude/Codex 代表性 History + Live Event fixtures | ⫽ | 无 | fixtures 入库、可重复加载 | M | ✅ 已完成 |
 
-**⛔ Gate 0**（2026-07-27 完成，见 `openspec/changes/establish-session-foundation-contracts/`）
+**⛔ Gate 0**（2026-07-27 完成，commit `d807d8e9e`，见 `openspec/changes/establish-session-foundation-contracts/`）
 - [x] 三个 Spike 产出实测 matrix，后续 Adapter contract 不以 CLI 文案或假设为依据（结论与降级约束见该 change design.md §5.1）
 - [x] Phase 0 全部契约 artifact 通过评审（proposal/design/specs/schemas + validate.mjs 14/14 PASS + fixtures loader 6/6 passed + `openspec validate --strict` valid）
 
@@ -36,16 +36,16 @@
 
 ## Wave 1：Change A1 — establish-shared-event-storage
 
-| # | 任务 | 顺序 | 前置 | 验收 | 体量 |
-|---|---|---|---|---|---|
-| A1.1 | SQLite WAL schema + migration 框架（`shared_sessions_v2` / `shared_event_log` / `shared_binding_state` / `shared_projection_checkpoint` / `shared_legacy_import` / `provider_usage_aggregate_log`） | → | Gate 0（T0.1） | schema 契约 7 条保留项 | M |
-| A1.2 | `SharedEventWriter`：单 Writer Actor、唯一 sequence allocator、event insert + `next_sequence` 同一 transaction | → | A1.1 | 并发写不冲突、重放幂等 | M |
-| A1.3 | Unique constraints + `dedupe_key`（usage 例外路径） | ⫽ | A1.2 | 100 次重复写同一 event/attempt 不产生重复 Fact | S |
-| A1.4 | Provider Usage Ledger writer（Provider+Window+subject+revision 幂等） | ⫽ | A1.2 | supersede 链正确；不伪造 `session_id` | S |
-| A1.5 | Crash/power-loss 测试台：每个 Tx 边界强杀 + fsync 前后注入 | → | A1.3、A1.4 | all-or-nothing；重启结果正确 | L |
-| A1.6 | 启动恢复：bounded `quick_check`、integrity failure → read-only recovery、不建空库覆盖 | ⫽ | A1.5 | §14.4.8 验收全量 | M |
+| # | 任务 | 顺序 | 前置 | 验收 | 体量 | 状态 |
+|---|---|---|---|---|---|---|
+| A1.1 | SQLite WAL schema + migration 框架（`shared_sessions_v2` / `shared_event_log` / `shared_binding_state` / `shared_projection_checkpoint` / `shared_legacy_import` / `provider_usage_aggregate_log`） | → | Gate 0（T0.1） | schema 契约 7 条保留项 | M | ✅ 已完成 |
+| A1.2 | `SharedEventWriter`：单 Writer Actor、唯一 sequence allocator、event insert + `next_sequence` 同一 transaction | → | A1.1 | 并发写不冲突、重放幂等 | M | ✅ 已完成 |
+| A1.3 | Unique constraints + `dedupe_key`（usage 例外路径） | ⫽ | A1.2 | 100 次重复写同一 event/attempt 不产生重复 Fact | S | ✅ 已完成 |
+| A1.4 | Provider Usage Ledger writer（Provider+Window+subject+revision 幂等） | ⫽ | A1.2 | supersede 链正确；不伪造 `session_id` | S | ✅ 已完成 |
+| A1.5 | Crash/power-loss 测试台：每个 Tx 边界强杀 + fsync 前后注入 | → | A1.3、A1.4 | all-or-nothing；重启结果正确 | L | ✅ 已完成 |
+| A1.6 | 启动恢复：bounded `quick_check`、integrity failure → read-only recovery、不建空库覆盖 | ⫽ | A1.5 | §14.4.8 验收全量 | M | ✅ 已完成 |
 
-**⛔ Gate 1（A1 独立验收）**
+**⛔ Gate 1（A1 独立验收）**（2026-07-27 完成，commit `dca0882fe`）
 - [x] 无 UI、无 Runtime Adapter 条件下证明：sequence 单调、事务 all-or-nothing、重启正确、Ledger 幂等
 - [x] OpenSpec Change A1 `openspec validate --strict` 通过
 
@@ -53,20 +53,20 @@
 
 ## Wave 2：Change A2 — assemble-shared-canonical-facts
 
-| # | 任务 | 顺序 | 前置 | 验收 | 体量 |
-|---|---|---|---|---|---|
-| A2.1 | Canonical Fact 类型 + payload 校验（对接 T0.1 Schema） | → | Gate 1 | 非法 payload 拒绝落盘 | M |
-| A2.2 | run identity → Snapshot/Binding durable 关联 | → | A2.1 | Terminal evidence 可独立追溯 Target | M |
-| A2.3 | Run/Turn Assembler：位于 fan-out/drop **之前**，或从 Runtime Lifecycle Owner 的 authoritative final snapshot 组装 | → | A2.2 + S1/S2 结论 | Normal/Delta lane 全丢仍产出完整 Assistant Final 与 Tool Outcome | L |
-| A2.4 | Critical Commit Sink：复用幂等 `run.settled` 边界；`settling→idle` 必须等 SQLite transaction ACK | → | A2.3 | duplicate Terminal 幂等，不产生第二 Commit | M |
-| A2.5 | Atomic Tool Exchange 配对验证（incomplete/error 显式结算） | ⫽ | A2.3 | 未配对 Tool Call 不落盘为成功 | M |
-| A2.6 | Usage normalization：revision/supersedes 校验、Turn Fact 与 Aggregate Ledger 分流 | ⫽ | A2.4 | 重放不重复计费；aggregate-only 不猜分摊 | M |
-| A2.7 | V0 final-evidence read-only mirror → 隔离 Shadow Canonical Log | ⫽ | A2.4 | 不回写产品状态 | M |
-| A2.8 | （可选）read-only Event Log Inspector，feature flag / dev build 隔离 | ⫽ | A2.1 | 写操作与生产默认入口不可达 | S |
+| # | 任务 | 顺序 | 前置 | 验收 | 体量 | 状态 |
+|---|---|---|---|---|---|---|
+| A2.1 | Canonical Fact 类型 + payload 校验（对接 T0.1 Schema） | → | Gate 1 | 非法 payload 拒绝落盘 | M | ✅ 已完成 |
+| A2.2 | run identity → Snapshot/Binding durable 关联 | → | A2.1 | Terminal evidence 可独立追溯 Target | M | ✅ 已完成 |
+| A2.3 | Run/Turn Assembler：位于 fan-out/drop **之前**，或从 Runtime Lifecycle Owner 的 authoritative final snapshot 组装 | → | A2.2 + S1/S2 结论 | Normal/Delta lane 全丢仍产出完整 Assistant Final 与 Tool Outcome | L | ✅ 已完成 |
+| A2.4 | Critical Commit Sink：复用幂等 `run.settled` 边界；`settling→idle` 必须等 SQLite transaction ACK | → | A2.3 | duplicate Terminal 幂等，不产生第二 Commit | M | ✅ 已完成 |
+| A2.5 | Atomic Tool Exchange 配对验证（incomplete/error 显式结算） | ⫽ | A2.3 | 未配对 Tool Call 不落盘为成功 | M | ✅ 已完成 |
+| A2.6 | Usage normalization：revision/supersedes 校验、Turn Fact 与 Aggregate Ledger 分流 | ⫽ | A2.4 | 重放不重复计费；aggregate-only 不猜分摊 | M | ✅ 已完成 |
+| A2.7 | V0 final-evidence read-only mirror → 隔离 Shadow Canonical Log | ⫽ | A2.4 | 不回写产品状态 | M | ✅ 已完成 |
+| A2.8 | （可选）read-only Event Log Inspector，feature flag / dev build 隔离 | ⫽ | A2.1 | 写操作与生产默认入口不可达 | S | ⏭️ 推迟到 Wave 3 |
 
-**⛔ Gate 2（A2 独立验收）**
-- [ ] synthetic Runtime Events 驱动下：duplicate Terminal、dropped delta、failed/cancelled outcome、Turn/Aggregate Usage 全部正确
-- [ ] 每个 `turnRequested` 最终只有一个 Terminal Commit
+**⛔ Gate 2（A2 独立验收）**（2026-07-27 完成，commit `________`）
+- [x] synthetic Runtime Events 驱动下：duplicate Terminal、dropped delta、failed/cancelled outcome、Turn/Aggregate Usage 全部正确
+- [x] 每个 `turnRequested` 最终只有一个 Terminal Commit
 
 ---
 

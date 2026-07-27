@@ -33,6 +33,8 @@ pub enum StoreError {
         actual_revision: i64,
         detail: String,
     },
+    /// Canonical Fact 字段级校验失败。
+    ValidationFailed { context: String, detail: String },
     /// 同一幂等 key 对应了不同 payload，拒绝把冲突伪装成成功重放。
     IdempotencyConflict { key: String, detail: String },
     /// 命中 SQLite constraint 且无法解释为幂等重放。
@@ -103,6 +105,13 @@ impl StoreError {
         }
     }
 
+    pub(crate) fn validation_failed(context: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self::ValidationFailed {
+            context: context.into(),
+            detail: detail.into(),
+        }
+    }
+
     pub(crate) fn actor_terminated(detail: impl Into<String>) -> Self {
         Self::ActorTerminated {
             detail: detail.into(),
@@ -136,6 +145,9 @@ impl fmt::Display for StoreError {
             ),
             Self::IdempotencyConflict { key, detail } => {
                 write!(formatter, "shared event idempotency conflict at {key}: {detail}")
+            }
+            Self::ValidationFailed { context, detail } => {
+                write!(formatter, "shared event validation failed ({context}): {detail}")
             }
             Self::ConstraintViolation { detail } => {
                 write!(formatter, "shared event store constraint violation: {detail}")
@@ -177,5 +189,11 @@ impl From<serde_json::Error> for StoreError {
 impl From<std::io::Error> for StoreError {
     fn from(source: std::io::Error) -> Self {
         Self::io("io operation failed", source)
+    }
+}
+
+impl From<super::canonical::validator::FactValidationError> for StoreError {
+    fn from(source: super::canonical::validator::FactValidationError) -> Self {
+        Self::validation_failed(source.context, source.detail)
     }
 }

@@ -17,6 +17,8 @@ use std::thread::JoinHandle;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
 use serde_json::Value;
 
+use super::canonical::types::CanonicalFact;
+use super::canonical::validator::validate_fact;
 use super::checksum::payload_checksum;
 use super::error::StoreError;
 use super::ledger::{self, LedgerOutcome, ProviderUsageRecord, StoredLedgerRow};
@@ -332,6 +334,28 @@ impl SharedEventStore {
         })
     }
 
+    /// 追加已校验的 canonical fact：自动生成 event_id / attempt_id / dedupe_key，
+    /// fidelity 固定为 canonical，schema_version 固定为 2。
+    pub(crate) fn append_canonical_fact(
+        &mut self,
+        session_id: String,
+        fact: &CanonicalFact,
+    ) -> Result<AppendOutcome, StoreError> {
+        validate_fact(fact)?;
+        let event = canonical_fact_to_event(session_id, fact, Fidelity::Canonical)?;
+        self.append_event(&event)
+    }
+
+    /// 追加 presentation-only shadow fact（如 V0 evidence 映射），跳过严格校验。
+    pub(crate) fn append_presentation_only_fact(
+        &mut self,
+        session_id: String,
+        fact: &CanonicalFact,
+    ) -> Result<AppendOutcome, StoreError> {
+        let event = canonical_fact_to_event(session_id, fact, Fidelity::PresentationOnly)?;
+        self.append_event(&event)
+    }
+
     /// upsert binding/cursor/pending 状态（单语句，天然原子）。
     pub(crate) fn upsert_binding_state(
         &mut self,
@@ -497,6 +521,64 @@ impl SharedEventStore {
     }
 }
 
+/// 把 canonical fact 转换为 `NewCanonicalEvent`：生成 event_id、提取 attempt_id / dedupe_key / committed_at。
+fn canonical_fact_to_event(
+    session_id: String,
+    fact: &CanonicalFact,
+    fidelity: Fidelity,
+) -> Result<NewCanonicalEvent, StoreError> {
+    let fact_type = fact.fact_type().to_string();
+    let payload = serde_json::to_value(fact)
+        .map_err(|source| StoreError::json("serialize canonical fact", source))?;
+    let payload_json = serde_json::to_string(&payload)
+        .map_err(|source| StoreError::json("stringify canonical fact payload", source))?;
+
+    let event_id = canonical_event_id(fact);
+    let attempt_id = fact.attempt_id().map(str::to_string);
+    let dedupe_key = fact.dedupe_key().map(str::to_string);
+    let logical_turn_id = fact.logical_turn_id().map(str::to_string);
+    let committed_at = canonical_committed_at(fact);
+
+    Ok(NewCanonicalEvent {
+        session_id,
+        event_id,
+        fact_type,
+        logical_turn_id,
+        attempt_id,
+        dedupe_key,
+        payload_json,
+        fidelity,
+        committed_at,
+        schema_version: 2,
+    })
+}
+
+fn canonical_event_id(fact: &CanonicalFact) -> String {
+    use super::canonical::types::CanonicalFact::*;
+    match fact {
+        TurnRequested(f) => format!("{}:turnRequested", f.attempt_id),
+        DeliveryPrepared(f) => format!("{}:deliveryPrepared:{}", f.attempt_id, f.package_id),
+        DeliveryAccepted(f) => format!("{}:deliveryAccepted:{}", f.attempt_id, f.package_id),
+        TurnAccepted(f) => format!("{}:turnAccepted", f.attempt_id),
+        TurnCommitted(f) => format!("{}:turnCommitted", f.attempt_id),
+        UsageRecorded(f) => f.usage_record_id.clone(),
+        Control(f) => format!("{}:{}", f.issued_at, f.action),
+    }
+}
+
+fn canonical_committed_at(fact: &CanonicalFact) -> i64 {
+    use super::canonical::types::CanonicalFact::*;
+    match fact {
+        TurnRequested(f) => f.requested_at,
+        DeliveryPrepared(_) => 0, // deliveryPrepared 无独立时间戳，调用方应提供；0 为占位。
+        DeliveryAccepted(f) => f.accepted_at,
+        TurnAccepted(f) => f.accepted_at,
+        TurnCommitted(f) => f.committed_at,
+        UsageRecorded(f) => f.observed_at,
+        Control(f) => f.issued_at,
+    }
+}
+
 /// 三条幂等路径预检，命中返回已有 sequence。
 fn find_existing_sequence(
     conn: &Connection,
@@ -653,6 +735,12 @@ enum WriterCommand {
         binding: BindingStateUpdate,
         respond: mpsc::Sender<Result<AppendOutcome, StoreError>>,
     },
+    AppendCanonicalFact {
+        session_id: String,
+        fact: CanonicalFact,
+        fidelity: Fidelity,
+        respond: mpsc::Sender<Result<AppendOutcome, StoreError>>,
+    },
     UpsertBinding {
         update: BindingStateUpdate,
         respond: mpsc::Sender<Result<(), StoreError>>,
@@ -718,6 +806,22 @@ impl SharedEventWriter {
                             respond,
                         } => {
                             let _ = respond.send(store.append_event_with_binding(&event, &binding));
+                        }
+                        WriterCommand::AppendCanonicalFact {
+                            session_id,
+                            fact,
+                            fidelity,
+                            respond,
+                        } => {
+                            let result = match fidelity {
+                                Fidelity::Canonical => {
+                                    store.append_canonical_fact(session_id, &fact)
+                                }
+                                Fidelity::PresentationOnly => {
+                                    store.append_presentation_only_fact(session_id, &fact)
+                                }
+                            };
+                            let _ = respond.send(result);
                         }
                         WriterCommand::UpsertBinding { update, respond } => {
                             let _ = respond.send(store.upsert_binding_state(&update));
@@ -809,6 +913,34 @@ impl SharedEventWriter {
         self.send_command(|respond| WriterCommand::AppendEventWithBinding {
             event: event.clone(),
             binding: binding.clone(),
+            respond,
+        })
+    }
+
+    /// 追加已校验的 canonical fact（fidelity = canonical）。
+    pub fn append_canonical_fact(
+        &self,
+        session_id: impl Into<String>,
+        fact: CanonicalFact,
+    ) -> Result<AppendOutcome, StoreError> {
+        self.send_command(|respond| WriterCommand::AppendCanonicalFact {
+            session_id: session_id.into(),
+            fact,
+            fidelity: Fidelity::Canonical,
+            respond,
+        })
+    }
+
+    /// 追加 presentation-only shadow fact（如 V0 evidence 映射），不做严格校验。
+    pub fn append_presentation_only_fact(
+        &self,
+        session_id: impl Into<String>,
+        fact: CanonicalFact,
+    ) -> Result<AppendOutcome, StoreError> {
+        self.send_command(|respond| WriterCommand::AppendCanonicalFact {
+            session_id: session_id.into(),
+            fact,
+            fidelity: Fidelity::PresentationOnly,
             respond,
         })
     }
