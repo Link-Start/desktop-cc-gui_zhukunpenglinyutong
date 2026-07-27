@@ -1,14 +1,14 @@
 //! Run/Turn Assembler：从 authoritative final snapshot 装配 `conversation.turnCommitted`。
 //!
-//! A2.3 / A2.5 实现占位。完整实现需要接入 Runtime final snapshot 格式；
-//! 本 change 先提供类型与最小装配函数，供测试与 Sink 调用。
+//! Phase 1 只定义并验证 authoritative final snapshot contract；真实 Runtime
+//! lifecycle adapter 在 Change B 接入，streaming delta 不进入本接口。
 
 use super::types::{
     AtomicToolExchange, CanonicalAssistantBlocks, CanonicalBlock, Outcome, OutcomeStatus, ToolCall,
     ToolResult, ToolResultStatus, TurnCommittedFact, TurnExecutionSnapshot,
 };
 
-/// 待装配的 authoritative final snapshot（简化版，后续随 Runtime 集成扩展）。
+/// Phase 1 synthetic fixture 与 Change B Runtime adapter 共用的 final snapshot contract。
 #[derive(Debug, Clone)]
 pub struct RuntimeFinalSnapshot {
     pub assistant_text: Option<String>,

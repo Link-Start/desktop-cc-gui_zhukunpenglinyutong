@@ -4,6 +4,7 @@
 //! `SharedProjector` 产出的 `ProjectionItem`（与前端 `ConversationItem` JSON 对齐）。
 
 pub mod checkpoint;
+pub mod commands;
 pub mod comparator;
 pub mod legacy_reader;
 pub mod projector;
@@ -14,3 +15,6 @@ pub use comparator::{MismatchKind, MismatchReport, ShadowComparator};
 pub use legacy_reader::LegacySharedReader;
 pub use projector::SharedProjector;
 pub use types::{ProjectionItem, ProjectionItemKind};
+
+pub const CANVAS_PROJECTION_NAME: &str = "canvas";
+pub const CANVAS_PROJECTION_VERSION: i64 = 2;

@@ -1,5 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { EngineType } from "../../../types";
+import type {
+  SharedProjectionItem,
+  SharedProjectionMismatchReport,
+} from "../../messages/presentation/sharedProjection/types";
 import { normalizeSharedSessionEngine } from "../utils/sharedSessionEngines";
 
 export async function startSharedSession(
@@ -52,6 +56,27 @@ export async function listSharedSessions(workspaceId: string) {
 
 export async function loadSharedSession(workspaceId: string, threadId: string) {
   return invoke<Record<string, unknown> | null>("load_shared_session", {
+    workspaceId,
+    threadId,
+  });
+}
+
+export async function loadSharedProjection(workspaceId: string, threadId: string) {
+  return invoke<SharedProjectionItem[]>("load_shared_projection", {
+    workspaceId,
+    threadId,
+  });
+}
+
+export async function rebuildSharedProjection(workspaceId: string, threadId: string) {
+  return invoke<SharedProjectionItem[]>("rebuild_shared_projection", {
+    workspaceId,
+    threadId,
+  });
+}
+
+export async function compareSharedProjection(workspaceId: string, threadId: string) {
+  return invoke<SharedProjectionMismatchReport>("compare_shared_projection", {
     workspaceId,
     threadId,
   });

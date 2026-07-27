@@ -12,20 +12,20 @@
 
 ## 3. Run/Turn Assembler（A2.3、A2.5）
 
-- [ ] 3.1 [P0, depends: 1.1] `shared_event_log/canonical/assembler.rs`：定义 `AssembledTurn` 与 `AssemblyError`；从 authoritative final snapshot 解析 assistant blocks、tool calls/results、artifacts、omissions。
+- [x] 3.1 [P0, depends: 1.1] `shared_event_log/canonical/assembler.rs`：定义 `AssembledTurn` 与 `AssemblyError`；从 authoritative final snapshot 解析 assistant blocks、tool calls/results、artifacts、omissions。
 - [x] 3.2 [P0, depends: 3.1] Tool Exchange 配对：按 tool call id 配对，未配对 call → `response.status = "incomplete"`，未配对 result → 丢弃并可选记 `controlFact`；单元测试覆盖成对 / 缺 result / 缺 call。
 - [x] 3.3 [P0, depends: 3.2] Outcome 映射：completed / failed / cancelled / replaced，失败时填充 `errorCode`；测试覆盖四种 outcome。
 
 ## 4. Critical Commit Sink（A2.4）
 
-- [ ] 4.1 [P0, depends: 2.1、3.3] `shared_event_log/canonical/sink.rs`：`commit_turn(session_id, run_id, final_snapshot)` → 组装 `turnCommitted` → `append_canonical_fact`；失败返回 typed error，不推进 settlement。
+- [x] 4.1 [P0, depends: 2.1、3.3] `shared_event_log/canonical/sink.rs`：`commit_turn(session_id, run_id, final_snapshot)` → 组装 `turnCommitted` → `append_canonical_fact`；失败返回 typed error，不推进 settlement。
 - [x] 4.2 [P0, depends: 4.1] 幂等测试：同一 settled snapshot 提交 100 次，只有一行 `turnCommitted`；重复返回 `Duplicate`。
 
 ## 5. Usage Normalization（A2.6）
 
 - [x] 5.1 [P0, depends: 2.1] `usageRecorded` 写入：attempt-scoped，带 `usageRecordId` 作为 dedupe_key；同 `usageRecordId` 100 次只有一行。
 - [x] 5.2 [P0, depends: A1 ledger] `provider.usageAggregateRecorded` 写入：通过 `record_provider_usage` 进入 Ledger；验证 revision/supersedes 链；aggregate-only 无 session 字段。
-- [ ] 5.3 [P0, depends: 5.1、5.2] 投影优先级测试：同一 attempt 同时存在 `runtime-final` 与 `provider-report` 时，投影选择 provider-report 且不相加。
+- [x] 5.3 [P0, depends: 5.1、5.2] 投影优先级测试：同一 attempt 同时存在 `runtime-final` 与 `provider-report` 时，投影选择 provider-report 且不相加。
 
 ## 6. V0 Shadow Log（A2.7）
 
@@ -34,6 +34,6 @@
 
 ## 7. Gate 2 验证
 
-- [ ] 7.1 [P0, depends: 4.2、5.3、6.2] `src-tauri/tests/assemble_canonical_facts.rs`：synthetic Runtime Events 驱动，覆盖 duplicate Terminal、dropped delta、failed/cancelled/replaced outcome、Tool Exchange 配对、Usage 分流。
-- [ ] 7.2 [P0, depends: 7.1] `cargo test --manifest-path src-tauri/Cargo.toml` 相关测试全绿；`openspec validate assemble-shared-canonical-facts --strict --no-interactive` 通过。
-- [ ] 7.3 [P0, depends: 7.2] 回填 `docs/plans/2026-07-27-multi-cli-provider-session-foundation-task-checklist.md` Gate 2 勾选。
+- [x] 7.1 [P0, depends: 4.2、5.3、6.2] `src-tauri/tests/assemble_canonical_facts.rs`：synthetic Runtime Events 驱动，覆盖 duplicate Terminal、dropped delta、failed/cancelled/replaced outcome、Tool Exchange 配对、Usage 分流。
+- [x] 7.2 [P0, depends: 7.1] `cargo test --manifest-path src-tauri/Cargo.toml` 相关测试全绿；`openspec validate assemble-shared-canonical-facts --strict --no-interactive` 通过。
+- [x] 7.3 [P0, depends: 7.2] 回填 `docs/plans/2026-07-27-multi-cli-provider-session-foundation-task-checklist.md` Gate 2 勾选。

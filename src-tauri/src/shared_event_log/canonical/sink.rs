@@ -1,6 +1,7 @@
 //! Critical Commit Sink：把 Runtime final snapshot 写入 Canonical Log。
 //!
-//! 挂接现有 `run.settled` 边界：SQLite transaction ACK 成功前，settlement 不推进。
+//! Phase 1 用 synthetic fixtures 验证 transaction ACK/幂等 contract；
+//! Change B 再把本 Sink 挂到真实 `run.settled` 边界。
 
 use super::assembler::{assemble_turn_committed, RuntimeFinalSnapshot};
 use super::types::{CanonicalFact, TurnExecutionSnapshot};

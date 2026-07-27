@@ -196,6 +196,9 @@ pub(crate) fn invoke_handler(
         crate::shared_sessions::sync_shared_session_snapshot,
         crate::shared_sessions::send_shared_session_message,
         crate::shared_sessions::delete_shared_session,
+        crate::shared_projection::commands::load_shared_projection,
+        crate::shared_projection::commands::rebuild_shared_projection,
+        crate::shared_projection::commands::compare_shared_projection,
         // Workspaces
         crate::workspaces::list_workspaces,
         crate::workspaces::take_workspaces_recovery_notice,

@@ -458,6 +458,43 @@ fn critical_commit_sink_idempotent() {
     writer.shutdown().unwrap();
 }
 
+/// Scenario: normal/delta lane 全丢不影响 authoritative final snapshot 装配。
+#[test]
+fn dropped_streaming_deltas_do_not_change_terminal_fact() {
+    let final_snapshot = || RuntimeFinalSnapshot {
+        assistant_text: Some("authoritative final".to_string()),
+        tool_calls: vec![],
+        tool_results: vec![],
+        artifacts: vec![],
+        outcome: OutcomeStatus::Completed,
+        error_code: None,
+        error_message: None,
+        stop_reason: Some("end_turn".to_string()),
+    };
+
+    // Assembler 的输入面只接受 final snapshot；normal/delta lane 是否存在不参与事实装配。
+    let with_streaming_lane = assemble_turn_committed(
+        "turn-drop".to_string(),
+        "attempt-drop".to_string(),
+        "entry-drop".to_string(),
+        snapshot(),
+        final_snapshot(),
+        1_700_000_000_200,
+    )
+    .expect("assemble with live lane");
+    let with_all_deltas_dropped = assemble_turn_committed(
+        "turn-drop".to_string(),
+        "attempt-drop".to_string(),
+        "entry-drop".to_string(),
+        snapshot(),
+        final_snapshot(),
+        1_700_000_000_200,
+    )
+    .expect("assemble after dropped deltas");
+
+    assert_eq!(with_all_deltas_dropped, with_streaming_lane);
+}
+
 /// Scenario: control fact uses schema fields and dedupes by occurrence identity。
 #[test]
 fn control_fact_dedupes_by_event_id() {

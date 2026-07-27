@@ -61,10 +61,10 @@ Canvas / Messages (render)
 ```text
 src-tauri/src/shared_projection/
   mod.rs              // 公开导出
+  commands.rs         // load / rebuild / compare Tauri commands
   types.rs            // ProjectionItem / ProjectionCheckpoint / MismatchReport
   projector.rs        // Canonical Fact → ProjectionItem 映射
   checkpoint.rs       // checkpoint upsert / read / invalidate
-  rebuild.rs          // 全量 rebuild 逻辑
   legacy_reader.rs    // Legacy snapshot dual-read（presentation-only）
   comparator.rs       // Shadow vs Legacy 对比器
 src-tauri/src/shared_event_log/writer.rs
@@ -73,8 +73,9 @@ src-tauri/src/shared_event_log/writer.rs
   + get_projection_checkpoint(session_id, name) -> Option<StoredCheckpoint>
 src/features/messages/presentation/sharedProjection/
   types.ts            // 与 Rust 对齐的 TypeScript 类型
-  dataSource.ts       // SharedDataSource 实现
-  comparator.ts       // Shadow 对比 UI 展示（可选，dev build）
+  dataSource.ts       // feature flag + ProjectionItem → ConversationItem
+src/features/threads/loaders/sharedHistoryLoader.ts
+  // flag off: V0；flag on: Shared Projection；command error: observable V0 fallback
 src-tauri/tests/
   shared_projection.rs        // 投影、checkpoint、rebuild 集成测试
   legacy_dual_read.rs         // Legacy dual-read 集成测试
@@ -104,7 +105,39 @@ pub struct LegacySharedReader {
 pub struct ShadowComparator {
     pub fn compare(&self, shadow: &[ProjectionItem], legacy: &[ProjectionItem]) -> MismatchReport;
 }
+
+#[tauri::command]
+async fn load_shared_projection(
+    workspace_id: String,
+    thread_id: String,
+) -> Result<Vec<ProjectionItem>, String>;
+
+#[tauri::command]
+async fn rebuild_shared_projection(
+    workspace_id: String,
+    thread_id: String,
+) -> Result<Vec<ProjectionItem>, String>;
+
+#[tauri::command]
+async fn compare_shared_projection(
+    workspace_id: String,
+    thread_id: String,
+) -> Result<MismatchReport, String>;
 ```
+
+Frontend invoke names与 Rust command 一一对应。`VITE_MOSSX_SHARED_PROJECTION`、
+`mossx.sharedProjection`、`ccgui.sharedProjection` 默认均为 false；flag 关闭时不得
+调用 `load_shared_projection`。command 失败必须 `console.warn` 并回退 V0 snapshot。
+
+## Error Matrix
+
+| 场景 | Backend | Frontend |
+|---|---|---|
+| unknown workspace / 非法 `shared:<id>` | command 返回 `Err(String)` | 记录 warning，回退 V0 |
+| store 进入 read-only recovery | Shadow writer 禁用，command 返回 unavailable | V0 产品路径继续可用 |
+| canonical payload 损坏 | projector fail closed，checkpoint 不前移 | 记录 warning，回退 V0 |
+| feature flag 关闭 | command 不被调用 | 直接使用 V0 items |
+| provider-report 后迟到 runtime-final | 保留 provider-report，不相加 | 只消费单条 usage metadata |
 
 ## Risks / Trade-offs
 

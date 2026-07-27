@@ -256,6 +256,15 @@ fn shared_session_log_path(workspace_id: &str, shared_session_id: &str) -> Resul
     Ok(shared_session_dir(workspace_id, shared_session_id)?.join("log.jsonl"))
 }
 
+pub(crate) fn shared_session_projection_source(
+    workspace_id: &str,
+    thread_id: &str,
+) -> Result<(String, PathBuf), String> {
+    let shared_session_id = parse_shared_session_id(thread_id)?;
+    let log_path = shared_session_log_path(workspace_id, &shared_session_id)?;
+    Ok((shared_session_id, log_path))
+}
+
 fn shared_thread_id(shared_session_id: &str) -> String {
     format!("shared:{shared_session_id}")
 }
@@ -821,10 +830,40 @@ pub async fn sync_shared_session_snapshot(
         items,
     };
     append_shared_session_log_entry(&workspace_id, &shared_session_id, &entry)?;
+    let shadow_mirror = if let Some(writer) = state.shared_event_writer.as_ref() {
+        let facts =
+            crate::shared_event_log::canonical::shadow_v0::map_v0_snapshot_to_presentation_only_facts(
+                &entry.items,
+                selected_engine.icon(),
+                i64::try_from(entry.created_at).unwrap_or(i64::MAX),
+            );
+        let mut mirrored_facts = 0usize;
+        let mut mirror_error = None;
+        for fact in facts {
+            match writer.append_presentation_only_fact(shared_session_id.clone(), fact) {
+                Ok(_) => mirrored_facts += 1,
+                Err(error) => {
+                    mirror_error = Some(error.to_string());
+                    break;
+                }
+            }
+        }
+        if let Some(error) = mirror_error {
+            eprintln!(
+                "[shared-event-log] V0 shadow mirror failed session={shared_session_id}: {error}"
+            );
+            json!({ "status": "error", "error": error })
+        } else {
+            json!({ "status": "ok", "factCount": mirrored_facts })
+        }
+    } else {
+        json!({ "status": "unavailable" })
+    };
     Ok(json!({
         "threadId": shared_thread_id(&meta.id),
         "updatedAt": meta.updated_at,
         "lastTurnSeq": meta.last_turn_seq,
+        "shadowMirror": shadow_mirror,
     }))
 }
 

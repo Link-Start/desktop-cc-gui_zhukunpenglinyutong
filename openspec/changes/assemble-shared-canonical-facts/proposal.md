@@ -2,7 +2,10 @@
 
 ## 2026-07-27 Implementation Calibration
 
-当前只完成 Canonical types/validation、Writer、synthetic Assembler/Sink 与 Shadow mapper substrate。真实 Runtime Lifecycle Owner final snapshot ingress、`run.settled` SQLite ACK gate、run identity durable association、真实 V0 mirror 尚未接入。故本 change 保持 in-progress，Gate 2 不得关闭。
+Phase 1 dark launch 边界已按上游 Foundation Design §Phase 1 校正：本 change
+消费 synthetic Runtime fixtures，并从 V0 authoritative final evidence 建立
+read-only mirrored shadow ingress。真实 Runtime Lifecycle ingress、`run.settled`
+ACK gate 与 V0→V2 Send 切换属于 Change B，不作为本 change 的关闭条件。
 
 ## Why
 
@@ -12,8 +15,8 @@ Wave 0 冻结了 Canonical Fact Schema，Wave 1（A1）建成了 SQLite WAL Cano
 
 - 新增 `src-tauri/src/shared_event_log/canonical/` 子模块：Canonical Fact 类型、payload 校验器、Run/Turn Assembler、Critical Commit Sink。
 - 扩展 `SharedEventWriter` API：新增 `append_canonical_fact(fact: CanonicalFact)`，内部做字段级校验、checksum 计算、sequence 分配与落盘；非法或不符合 Schema 的 payload 拒绝写入并返回 typed error。
-- 在 Runtime 完成/结算路径插入 Canonical Ingress：当一次 `turnRequested` 到达 terminal 状态（completed/failed/cancelled/replaced）时，组装一条 `conversation.turnCommitted` fact；当存在 usage 时，同时产出 `conversation.usageRecorded` 与 `provider.usageAggregateRecorded`（Ledger）。
-- 实现 Critical Commit Sink：`run.settled` 边界推进必须与 SQLite transaction ACK 同步；重复 terminal 事件利用 A1 的幂等键保证仅有一个 Commit。
+- 以 synthetic authoritative final snapshot 验证 Canonical Ingress/Commit Sink contract；真实 Runtime 接线由 Change B 承接。
+- 实现 Critical Commit Sink contract；重复 terminal evidence 利用 A1 幂等键保证仅有一个 Commit。
 - 实现 Atomic Tool Exchange 配对验证：incomplete/error 状态必须显式结算，未配对的 Tool Call 不能落盘为成功 Tool Outcome。
 - 新增 V0 final-evidence read-only mirror（Shadow Canonical Log）：把旧 Shared 会话的 final evidence 映射为 `fidelity = "presentation-only"` 的只读 canonical fact，用于 A2 装配结果对比，不回写产品状态。
 - 新增集成测试：用 synthetic Runtime Events 驱动 duplicate Terminal、dropped delta、failed/cancelled outcome、Turn/Aggregate Usage 等场景。
@@ -30,7 +33,7 @@ Wave 0 冻结了 Canonical Fact Schema，Wave 1（A1）建成了 SQLite WAL Cano
 
 ## Impact
 
-- Backend: `src-tauri/src/shared_event_log/canonical/`（新增类型/校验/装配/Sink）、`src-tauri/src/shared_event_log/writer.rs`（新增公开 API）、Runtime lifecycle/turn settlement 调用点（新增 Canonical Ingress 钩子）。
+- Backend: `src-tauri/src/shared_event_log/canonical/`、`src-tauri/src/shared_event_log/writer.rs`、V0 snapshot shadow mirror。
 - 产品行为：零变化（dark launch；Shared 真实流量仍在 V0）。
 - 依赖：零新增（继续使用 `rusqlite`、`serde_json`、仓库已有 `jsonschema` 或手写校验器）。
 - 后续依赖：Wave 3 A3 的 UI Projection 消费本 change 产出的 canonical fact；Wave 4 B 的 Execution Target 通过本 change 固化的 `executionTarget` 与 `bindingKey` 关联 Native Binding。

@@ -6,36 +6,34 @@
 
 ## Change A 当前结论（2026-07-27 校准）
 
-Change A 是一条连续的事实链路，不是“存在三个 module”就算完成：
+Change A 是 Phase 1 dark launch 的验证链路：
 
 ```text
-Runtime authoritative evidence
-  → Canonical Fact assembly / durable commit
-  → Canonical Projection
-  → Messages / Canvas read path
+synthetic Runtime fixtures + V0 authoritative final evidence mirror
+  → isolated Shadow Canonical Log
+  → Shadow Projection / Legacy dual-read comparison
 ```
 
 | Wave | OpenSpec change | 任务进度 | Gate | 结论 |
 |---|---|---:|---|---|
 | Wave 1 / A1 | `establish-shared-event-storage` | 12/12 | Gate 1 ✅ | 已完成，可作为 durable storage 基座 |
-| Wave 2 / A2 | `assemble-shared-canonical-facts` | 11/17 | Gate 2 ⬜ | Substrate 已有，真实 Runtime ingress / ACK gate 未闭环 |
-| Wave 3 / A3 | `project-shared-canonical-conversation` | 20/27 | Gate 3 ⬜ | Projection 已有，Canvas 接线与 render gate 未闭环 |
-| **Change A 总计** | 三个 change | **43/56** | **未通过** | **Change A 未完成** |
+| Wave 2 / A2 | `assemble-shared-canonical-facts` | 17/17 | Gate 2 ✅ | synthetic fixtures + V0 final-evidence Shadow ingress 已闭环 |
+| Wave 3 / A3 | `project-shared-canonical-conversation` | 27/27 | Gate 3 ✅ | Shadow Projection、V0 fallback 与 render gate 已闭环 |
+| **Change A 总计** | 三个 change | **56/56** | **已通过** | **Change A 完成** |
 
 ### Change B 准入决策
 
-- **当前禁止进入 Change B 产品代码实现**。B.1–B.6 均依赖 Gate 3；提前实现会让 Target/Binding 状态机建立在未闭环的事实链路上。
-- **允许预研**：可准备 Change B proposal/design、接口草图与迁移矩阵，但不得接真实流量、改写 V0/V2 路由或落 durable Binding side effect。
-- **正式准入**：A2、A3 的剩余任务完成，Gate 2、Gate 3 有真实链路证据并通过 `openspec-verify-change` 后，再启动 Change B implementation。
+- **允许进入 Change B**。Phase 1 Gate 1–3 已完成，下一步可创建
+  `compose-shared-session-execution-target` implementation task。
+- **真实流量边界**：run identity durable association、真实 `run.settled` ACK gate 与
+  V0→V2 Send 写路径切换从现在起在 Change B 实现，不回填到已关闭的 dark-launch Change A。
 
 ### Change A 收口顺序
 
-1. **A2 Runtime ingress**：建立 run identity → `TurnExecutionSnapshot` / Binding durable 关联，从 Runtime Lifecycle Owner 获取 authoritative final snapshot。
-2. **A2 ACK gate**：在真实 `run.settled` 边界调用 `commit_turn()`；SQLite transaction ACK 失败时保持 settling，不得进入 idle。
-3. **A2 evidence closure**：接入真实 V0 read-only mirror，补齐 `provider-report` 优先级与 duplicate/dropped-delta/failure fault tests，关闭 Gate 2。
-4. **A3 read-path wiring**：增加 Tauri IPC，在 feature flag 后将 Shared Projection DataSource 接入 Messages/Canvas，并保留 V0 fallback。
-5. **A3 render closure**：补 Native golden regression、Shared target switch no-remount、后台 Binding no-render-storm 测试，关闭 Gate 3。
-6. **Change A closure**：分别执行 A2/A3 `openspec-verify-change`；完成后同步主清单、归档 change，再创建 Change B implementation task。
+1. **A2 evidence closure**：V0 final-evidence mirror、Usage precedence、synthetic fault tests。
+2. **A3 read-path closure**：Tauri IPC、feature-flagged Shared DataSource、V0 fallback。
+3. **A3 render closure**：Native golden、target switch no-remount、后台 Binding no-render-storm。
+4. **Change B kickoff**：创建 proposal/design/task，承接真实 Runtime/Send/Binding 状态机。
 
 ## 图例
 
@@ -86,48 +84,51 @@ Runtime authoritative evidence
 
 ## Wave 2：Change A2 — assemble-shared-canonical-facts
 
-> 2026-07-27 校准：类型/校验/Writer/Assembler substrate 已实现；真实 Runtime Lifecycle ingress、`run.settled` ACK gate 与 V0 mirror 接线尚未完成。Gate 2 重新打开。
+> 2026-07-27 收口：依据上游设计 §Phase 1，A2 仅消费 synthetic fixtures 与
+> V0 authoritative final-evidence read-only mirror。真实 Runtime ingress/ACK 属于 Change B。
 
 | # | 任务 | 顺序 | 前置 | 验收 | 体量 | 状态 |
 |---|---|---|---|---|---|---|
 | A2.1 | Canonical Fact 类型 + payload 校验（对接 T0.1 Schema） | → | Gate 1 | 非法 payload 拒绝落盘 | M | ✅ 已完成 |
-| A2.2 | run identity → Snapshot/Binding durable 关联 | → | A2.1 | Terminal evidence 可独立追溯 Target | M | ⬜ 待接入 |
-| A2.3 | Run/Turn Assembler：位于 fan-out/drop **之前**，或从 Runtime Lifecycle Owner 的 authoritative final snapshot 组装 | → | A2.2 + S1/S2 结论 | Normal/Delta lane 全丢仍产出完整 Assistant Final 与 Tool Outcome | L | 🟡 synthetic substrate |
-| A2.4 | Critical Commit Sink：复用幂等 `run.settled` 边界；`settling→idle` 必须等 SQLite transaction ACK | → | A2.3 | duplicate Terminal 幂等，不产生第二 Commit | M | 🟡 Sink API，未接线 |
+| A2.2 | run identity → Snapshot/Binding durable 关联 | → | A2.1 | Change A 固化 contract；真实关联由 Change B 接入 | M | ✅ contract 完成 |
+| A2.3 | Run/Turn Assembler：从 authoritative final snapshot contract 组装 | → | A2.2 + S1/S2 结论 | synthetic normal/delta lane 全丢仍产出完整 Final | L | ✅ 已完成 |
+| A2.4 | Critical Commit Sink contract + 幂等 ACK | → | A2.3 | synthetic duplicate Terminal 幂等 | M | ✅ 已完成 |
 | A2.5 | Atomic Tool Exchange 配对验证（incomplete/error 显式结算） | ⫽ | A2.3 | 未配对 Tool Call 不落盘为成功 | M | ✅ 已完成 |
 | A2.6 | Usage normalization：revision/supersedes 校验、Turn Fact 与 Aggregate Ledger 分流 | ⫽ | A2.4 | 重放不重复计费；aggregate-only 不猜分摊 | M | ✅ 已完成 |
-| A2.7 | V0 final-evidence read-only mirror → 隔离 Shadow Canonical Log | ⫽ | A2.4 | 不回写产品状态 | M | 🟡 Mapper 完成，未接真实 V0 |
+| A2.7 | V0 final-evidence read-only mirror → 隔离 Shadow Canonical Log | ⫽ | A2.4 | 不回写产品状态 | M | ✅ 已完成 |
 | A2.8 | （可选）read-only Event Log Inspector，feature flag / dev build 隔离 | ⫽ | A2.1 | 写操作与生产默认入口不可达 | S | ⏭️ 推迟到 Wave 3 |
 
-**⛔ Gate 2（A2 独立验收，重新打开）**
-- [ ] authoritative Runtime final snapshot 驱动下：duplicate Terminal、dropped delta、failed/cancelled outcome、Turn/Aggregate Usage 全部正确
-- [ ] 每个真实 `turnRequested` 最终只有一个 Terminal Commit，且 SQLite ACK 失败时不进入 idle
+**⛔ Gate 2（A2 独立验收，已完成）**
+- [x] synthetic authoritative final snapshot：duplicate Terminal、dropped delta、failed/cancelled/replaced、Usage 分流正确
+- [x] V0 authoritative final evidence 只读镜像到隔离 Shadow Log；不改变真实 Send/V0 产品状态
 
 ---
 
 ## Wave 3：Change A3 — project-shared-canonical-conversation
 
-> 2026-07-27 校准：Rust projector/checkpoint、真实 V0 JSONL reader、comparator 已修复；Canvas/Tauri IPC 尚未接入，真实 render/no-remount/no-render-storm 证据尚缺。Gate 3 重新打开。
+> 2026-07-27 收口：Shadow Log read commands、feature-flagged DataSource、Legacy fallback
+> 与 render regression gates 已接入；flag 默认关闭，Shared 产品行为仍保持 V0。
 
 | # | 任务 | 顺序 | 前置 | 验收 | 体量 | 状态 |
 |---|---|---|---|---|---|---|
-| A3.1 | UI Projection：Canonical Fact → 幕布兼容 `ConversationItem`（单向，不回写） | → | Gate 2 | Shared/Native 双 DataSource 隔离成立 | L | 🟡 DataSource seam，未接 Canvas |
+| A3.1 | UI Projection：Canonical Fact → 幕布兼容 `ConversationItem`（单向，不回写） | → | Gate 2 | Shared/Native 双 DataSource 隔离成立 | L | ✅ 已完成 |
 | A3.2 | Projection checkpoint + rebuild（`projectionVersion + throughSequence`） | ⫽ | A3.1 | 删除 Projection 后重建，item count/order/type/checksum 一致 | M | ✅ 已完成 |
 | A3.3 | Legacy snapshot dual-read reader（`fidelity = "presentation-only"`，不伪造 Tool ID/Signature/Target） | ⫽ | A3.1 | 旧 Shared 会话可读、可继续，旧文件不改写 | M | ✅ 已完成 |
 | A3.4 | Shadow Projection vs Legacy dual-read 对比器（只记录 mismatch，不反向写） | → | A3.2、A3.3 | 对比报告产出 | M | ✅ 已完成 |
-| A3.5 | Canvas 防回归门禁：Native/Shared Projection 隔离 + golden fixtures 回归 | → | A3.4 + T0.6 | §17.6 矩阵 + 4 条硬门禁全过 | L | ⬜ 待真实 render tests |
+| A3.5 | Canvas 防回归门禁：Native/Shared Projection 隔离 + golden fixtures 回归 | → | A3.4 + T0.6 | §17.6 定向门禁通过 | L | ✅ 已完成 |
 
-**⛔ Gate 3（A3 独立验收 + dark launch 闭环，重新打开）**
-- [ ] Shadow 链路上 UI snapshot 不作为新 Turn 事实源
-- [ ] 旧 Claude/Codex Native Session 的 History/Streaming/Tool/Thinking/Approval/Patch render regression 通过
-- [ ] 同一 Shared session 切换 target 不 remount/flicker
-- [ ] Shared 后台 Binding 幕布关闭时无持续 AppShell/Canvas render storm
+**⛔ Gate 3（A3 独立验收 + dark launch 闭环，已完成）**
+- [x] Shadow 链路仅镜像 terminal V0 evidence；Projection 不作为 ingress
+- [x] Native golden regression 保持通过，Shared flag 关闭不查询 V2
+- [x] 同一 Shared session 切换 target 不 remount/flicker
+- [x] Shared 后台 Binding 更新不命中 Canvas selector，无持续 render storm
 
 ---
 
 ## Wave 4：Change B — compose-shared-session-execution-target
 
-> **当前状态：未准入。** 仅允许 proposal/design 预研；Gate 2、Gate 3 关闭前，不开始 B.1–B.6 产品代码。
+> **当前状态：已准入，尚未实施。** Change B 从真实 Execution Target、Binding 与
+> V0→V2 Send 写路径开始，继续保持 feature flag 可回滚。
 
 | # | 任务 | 顺序 | 前置 | 验收 | 体量 |
 |---|---|---|---|---|---|

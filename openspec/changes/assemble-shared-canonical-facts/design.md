@@ -14,7 +14,8 @@ Wave 1 完成后，`SharedEventWriter` 已能可靠地写入任意 JSON envelope
 - `conversation.controlFact`：用户取消、替换、重试等控制动作。
 - `provider.usageAggregateRecorded`：不进入 Shared Event Log，写入独立 Provider Usage Ledger。
 
-本 change 实现上述装配与校验，并作为唯一 Commit Sink 挂接到现有 `run.settled` 边界。
+本 change 实现上述装配、校验与 Commit Sink contract。Phase 1 只由 synthetic
+fixtures 与 V0 final-evidence mirror 驱动；真实 `run.settled` 接线属于 Change B。
 
 ## Goals / Non-Goals
 
@@ -43,7 +44,7 @@ Wave 1 完成后，`SharedEventWriter` 已能可靠地写入任意 JSON envelope
 | D1 | Canonical Fact 用 Rust enum + serde 表示，再序列化为 envelope JSON | 类型安全 + 与 Wave 0 Schema 对齐；A1 存储层仍保存 JSON TEXT，字段校验在写入前完成 |
 | D2 | 校验层混合：结构/必填/枚举走手写 Rust 校验，复杂 JSON Schema 约束（如 `oneOf`、`if/then`）在测试中用 Wave 0 `validate.mjs` 做交叉验证 | 零新增依赖；手写校验保证运行时路径轻量，schema 交叉验证保证契约一致 |
 | D3 | Assembler 只消费 Runtime Lifecycle Owner 的 authoritative final snapshot，不消费 streaming delta | Foundation §14.2.2 规则 6：delta 只进 Live Projection，Terminal Fact 才进 Canonical Log |
-| D4 | Commit Sink 挂接现有 `run.settled`；`settling→idle` 等待 SQLite transaction ACK | 复用现有幂等边界，避免引入第二条 settlement 语义 |
+| D4 | Phase 1 用 synthetic fixtures 验证 Commit Sink ACK/幂等 contract；Change B 再挂接真实 `run.settled` | 遵守 dark launch，避免提前切换真实写路径 |
 | D5 | Tool Exchange 配对在 Assembler 内完成：遇到未配对 Tool Call 时补 `incomplete` result，遇到未配对 Tool Result 时忽略或记 control fact | 保证 Canonical Log 不自相矛盾 |
 | D6 | Usage 分两条路径：`conversation.usageRecorded` 进 Shared Event Log（attempt-scoped）；`provider.usageAggregateRecorded` 进 Provider Usage Ledger（window-scoped） | Foundation §14.2.1：Aggregate 不伪造 Session ownership |
 | D7 | V0 Shadow Log 通过只读映射生成 `presentation-only` fact，不触发 A2 校验失败 | 允许旧数据形状不完全匹配新 schema，但必须在 fidelity 上诚实标记 |
@@ -103,4 +104,3 @@ impl SharedEventWriter {
 | 严格校验导致旧 V0 evidence 无法映射 | Shadow Log 失败 | D7：presentation-only 允许降级映射，不强制新 schema |
 | `run.settled` 现有路径与 Commit Sink 耦合过紧 | 阻塞 settlement | Sink 必须 fail closed：SQLite ACK 失败则 settlement 不推进；测试覆盖该失败路径 |
 | Tool Exchange 配对规则在不同 Provider 间语义差异 | 错误结算 | 先实现最小规则（call-result 按 id 配对，缺 result → incomplete），Provider 特殊行为后续通过 `providerPrivateRef` 补充 |
-

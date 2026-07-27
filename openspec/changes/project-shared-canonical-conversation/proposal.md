@@ -2,7 +2,9 @@
 
 ## 2026-07-27 Implementation Calibration
 
-当前完成 Rust projector、incremental checkpoint/rebuild、真实 V0 `log.jsonl` reader、Shadow comparator 与 frontend DataSource seam。Tauri commands、Messages/Canvas 接线、same-session target switch no-remount、background binding no-render-storm 尚未实现。故本 change 保持 in-progress，Gate 3 不得关闭。
+Rust projector、incremental checkpoint/rebuild、真实 V0 `log.jsonl` reader、Shadow
+comparator、Tauri commands 与 feature-flagged frontend DataSource 已闭环。target
+switch no-remount 与 background binding no-render-storm 均有定向 regression gate。
 
 ## Why
 

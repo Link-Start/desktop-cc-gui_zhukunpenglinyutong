@@ -1,10 +1,12 @@
 //! SharedProjector：Canonical Fact → ProjectionItem 映射。
 
+use std::collections::HashMap;
+
 use serde_json::json;
 
 use crate::shared_event_log::canonical::types::{
     CanonicalBlock, CanonicalFact, ControlFact, OutcomeStatus, ToolResultStatus, TurnCommittedFact,
-    TurnRequestedFact, UsageRecordedFact,
+    TurnRequestedFact, UsageRecordedFact, UsageSource,
 };
 use crate::shared_event_log::{
     ProjectionCheckpointRow, SharedEventWriter, StoreError, StoredEvent,
@@ -26,7 +28,8 @@ impl SharedProjector {
         &self,
         events: &[StoredEvent],
     ) -> Result<Vec<ProjectionItem>, StoreError> {
-        let mut items = Vec::new();
+        let mut decoded = Vec::with_capacity(events.len());
+        let mut preferred_usage_by_attempt: HashMap<String, (u8, i64, i64)> = HashMap::new();
         for event in events {
             let fact =
                 serde_json::from_str::<CanonicalFact>(&event.payload_json).map_err(|source| {
@@ -38,6 +41,33 @@ impl SharedProjector {
                         source,
                     )
                 })?;
+            if let CanonicalFact::UsageRecorded(usage) = &fact {
+                let priority = match usage.source {
+                    UsageSource::RuntimeFinal => 0,
+                    UsageSource::ProviderReport => 1,
+                };
+                preferred_usage_by_attempt
+                    .entry(usage.attempt_id.clone())
+                    .and_modify(|current| {
+                        if (priority, usage.revision, event.sequence) > *current {
+                            *current = (priority, usage.revision, event.sequence);
+                        }
+                    })
+                    .or_insert((priority, usage.revision, event.sequence));
+            }
+            decoded.push((event, fact));
+        }
+
+        let mut items = Vec::new();
+        for (event, fact) in decoded {
+            if let CanonicalFact::UsageRecorded(usage) = &fact {
+                let selected_sequence = preferred_usage_by_attempt
+                    .get(&usage.attempt_id)
+                    .map(|selected| selected.2);
+                if selected_sequence != Some(event.sequence) {
+                    continue;
+                }
+            }
             items.extend(self.project_fact(event, &fact));
         }
         Ok(items)
@@ -73,7 +103,7 @@ impl SharedProjector {
 
         let events = writer.read_projection_events(session_id, through_sequence)?;
         let projected = self.project_events(&events)?;
-        items.extend(projected);
+        merge_projected_items(&mut items, projected);
         let new_through_sequence = events
             .iter()
             .map(|event| event.sequence)
@@ -315,6 +345,8 @@ impl SharedProjector {
                 "inputTokens": fact.usage.input_tokens,
                 "outputTokens": fact.usage.output_tokens,
                 "totalTokens": fact.usage.total_tokens,
+                "source": fact.source,
+                "revision": fact.revision,
             }),
             fidelity: event.fidelity,
             checksum: event.payload_checksum.clone(),
@@ -336,4 +368,54 @@ impl SharedProjector {
             checksum: event.payload_checksum.clone(),
         }]
     }
+}
+
+fn merge_projected_items(items: &mut Vec<ProjectionItem>, projected: Vec<ProjectionItem>) {
+    for item in projected {
+        if let Some((attempt_id, priority, revision)) = usage_projection_precedence(&item) {
+            let existing_precedence = items
+                .iter()
+                .filter_map(usage_projection_precedence)
+                .find(|(existing_attempt, _, _)| existing_attempt == &attempt_id);
+            if existing_precedence.as_ref().is_some_and(
+                |(_, existing_priority, existing_revision)| {
+                    (*existing_priority, *existing_revision) >= (priority, revision)
+                },
+            ) {
+                continue;
+            }
+            items.retain(|existing| {
+                usage_projection_precedence(existing)
+                    .is_none_or(|(existing_attempt, _, _)| existing_attempt != attempt_id)
+            });
+        }
+        items.push(item);
+    }
+}
+
+fn usage_projection_precedence(item: &ProjectionItem) -> Option<(String, u8, i64)> {
+    if item.kind != ProjectionItemKind::Metadata
+        || item.content.get("type").and_then(serde_json::Value::as_str) != Some("usage")
+    {
+        return None;
+    }
+    let attempt_id = item
+        .content
+        .get("attemptId")
+        .and_then(serde_json::Value::as_str)?
+        .to_string();
+    let priority = match item
+        .content
+        .get("source")
+        .and_then(serde_json::Value::as_str)
+    {
+        Some("provider-report") => 1,
+        _ => 0,
+    };
+    let revision = item
+        .content
+        .get("revision")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or_default();
+    Some((attempt_id, priority, revision))
 }

@@ -4,6 +4,7 @@
 
 mod common;
 
+use cc_gui_lib::shared_event_log::canonical::shadow_v0::map_v0_snapshot_to_presentation_only_facts;
 use cc_gui_lib::shared_event_log::canonical::types::{
     CanonicalAssistantBlocks, CanonicalBlock, CanonicalFact, CanonicalUserInput, ControlFact,
     Outcome, OutcomeStatus, TurnCommittedFact, TurnExecutionSnapshot, TurnRequestedFact,
@@ -82,10 +83,26 @@ fn make_turn_committed(attempt_id: &str) -> CanonicalFact {
 }
 
 fn make_usage_recorded(usage_record_id: &str, attempt_id: &str) -> CanonicalFact {
+    make_usage_recorded_with_source(
+        usage_record_id,
+        attempt_id,
+        UsageSource::RuntimeFinal,
+        1,
+        15,
+    )
+}
+
+fn make_usage_recorded_with_source(
+    usage_record_id: &str,
+    attempt_id: &str,
+    source: UsageSource,
+    revision: i64,
+    total_tokens: i64,
+) -> CanonicalFact {
     CanonicalFact::UsageRecorded(UsageRecordedFact {
         usage_record_id: usage_record_id.to_string(),
         report_subject_id: format!("{attempt_id}:subject"),
-        revision: 1,
+        revision,
         supersedes_usage_record_id: None,
         logical_turn_id: "turn-1".to_string(),
         attempt_id: attempt_id.to_string(),
@@ -97,15 +114,133 @@ fn make_usage_recorded(usage_record_id: &str, attempt_id: &str) -> CanonicalFact
             input_tokens: Some(10),
             cached_input_tokens: None,
             output_tokens: Some(5),
-            total_tokens: Some(15),
+            total_tokens: Some(total_tokens),
             provider_reported_cost: None,
             extra: serde_json::Value::Object(Default::default()),
         },
-        source: UsageSource::RuntimeFinal,
+        source,
         verification: UsageVerification::Verified,
         observed_at: 1_700_000_000_002,
         extra: serde_json::Value::Object(Default::default()),
     })
+}
+
+/// Scenario: provider-report 覆盖同 attempt 的 runtime-final，且不相加。
+#[test]
+fn provider_report_usage_replaces_runtime_final_without_summing() {
+    let temp = TempStoreDir::new("usage-precedence");
+    let writer = open_writer(&temp);
+    writer
+        .append_canonical_fact(
+            SESSION,
+            make_usage_recorded_with_source(
+                "usage-runtime",
+                "attempt-1",
+                UsageSource::RuntimeFinal,
+                1,
+                15,
+            ),
+        )
+        .expect("append runtime usage");
+
+    let projector = SharedProjector::new();
+    let before = projector
+        .project(&writer, SESSION, "canvas", 2)
+        .expect("project runtime usage");
+    assert_eq!(before.len(), 1);
+    assert_eq!(before[0].content["totalTokens"], 15);
+
+    writer
+        .append_canonical_fact(
+            SESSION,
+            make_usage_recorded_with_source(
+                "usage-provider",
+                "attempt-1",
+                UsageSource::ProviderReport,
+                2,
+                12,
+            ),
+        )
+        .expect("append provider usage");
+
+    let after = projector
+        .project(&writer, SESSION, "canvas", 2)
+        .expect("project provider usage");
+    assert_eq!(after.len(), 1);
+    assert_eq!(after[0].content["source"], "provider-report");
+    assert_eq!(after[0].content["totalTokens"], 12);
+
+    let rebuilt = projector
+        .rebuild(&writer, SESSION, "canvas", 2)
+        .expect("rebuild usage projection");
+    assert_eq!(rebuilt, after);
+
+    writer
+        .append_canonical_fact(
+            SESSION,
+            make_usage_recorded_with_source(
+                "usage-runtime-late",
+                "attempt-1",
+                UsageSource::RuntimeFinal,
+                3,
+                99,
+            ),
+        )
+        .expect("append late runtime usage");
+    let after_late_runtime = projector
+        .project(&writer, SESSION, "canvas", 2)
+        .expect("project late runtime usage");
+    assert_eq!(after_late_runtime, after);
+
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: 真实 V0 snapshot shape 可幂等镜像并投影 user/assistant final。
+#[test]
+fn v0_final_snapshot_mirrors_idempotently_into_shadow_projection() {
+    let temp = TempStoreDir::new("v0-shadow-projection");
+    let writer = open_writer(&temp);
+    let items = vec![
+        serde_json::json!({
+            "id": "user-1",
+            "kind": "message",
+            "role": "user",
+            "text": "hello",
+            "turnId": "turn-1"
+        }),
+        serde_json::json!({
+            "id": "assistant-1",
+            "kind": "message",
+            "role": "assistant",
+            "text": "hello back",
+            "turnId": "turn-1",
+            "engineSource": "claude",
+            "isFinal": true,
+            "finalCompletedAt": 1_700_000_000_001_i64
+        }),
+    ];
+    let facts = map_v0_snapshot_to_presentation_only_facts(&items, "claude", 1_700_000_000_000);
+
+    for _ in 0..2 {
+        for fact in facts.clone() {
+            writer
+                .append_presentation_only_fact(SESSION, fact)
+                .expect("mirror fact");
+        }
+    }
+
+    let events = writer.events_for_session(SESSION).expect("shadow events");
+    assert_eq!(events.len(), 2);
+    assert!(events
+        .iter()
+        .all(|event| event.fidelity == Fidelity::PresentationOnly));
+    let projected = SharedProjector::new()
+        .project_events(&events)
+        .expect("project shadow");
+    assert_eq!(projected.len(), 2);
+    assert_eq!(projected[0].content["role"], "user");
+    assert_eq!(projected[1].content["role"], "assistant");
+    writer.shutdown().unwrap();
 }
 
 fn make_control(action: &str) -> CanonicalFact {
