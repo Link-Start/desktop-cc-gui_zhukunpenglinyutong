@@ -28,9 +28,9 @@
 | T0.5 | **S3 Spike**：Kimi ACP——initialize capability、`session/load` replay、prompt lifecycle、Provider config 边界 | ⫽ | 无 | 实测 matrix + ACP go/no-go 结论 | M |
 | T0.6 | Native golden fixtures：Claude/Codex 代表性 History + Live Event fixtures | ⫽ | 无 | fixtures 入库、可重复加载 | M |
 
-**⛔ Gate 0**
-- [ ] 三个 Spike 产出实测 matrix，后续 Adapter contract 不以 CLI 文案或假设为依据
-- [ ] Phase 0 全部契约 artifact 通过评审
+**⛔ Gate 0**（2026-07-27 完成，见 `openspec/changes/establish-session-foundation-contracts/`）
+- [x] 三个 Spike 产出实测 matrix，后续 Adapter contract 不以 CLI 文案或假设为依据（结论与降级约束见该 change design.md §5.1）
+- [x] Phase 0 全部契约 artifact 通过评审（proposal/design/specs/schemas + validate.mjs 14/14 PASS + fixtures loader 6/6 passed + `openspec validate --strict` valid）
 
 ---
 
@@ -46,8 +46,8 @@
 | A1.6 | 启动恢复：bounded `quick_check`、integrity failure → read-only recovery、不建空库覆盖 | ⫽ | A1.5 | §14.4.8 验收全量 | M |
 
 **⛔ Gate 1（A1 独立验收）**
-- [ ] 无 UI、无 Runtime Adapter 条件下证明：sequence 单调、事务 all-or-nothing、重启正确、Ledger 幂等
-- [ ] OpenSpec Change A1 `openspec validate --strict` 通过
+- [x] 无 UI、无 Runtime Adapter 条件下证明：sequence 单调、事务 all-or-nothing、重启正确、Ledger 幂等
+- [x] OpenSpec Change A1 `openspec validate --strict` 通过
 
 ---
 
