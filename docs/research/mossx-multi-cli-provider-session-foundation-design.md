@@ -675,7 +675,21 @@ interface ContextPackage {
   portableTurns: PortableTurn[];
   atomicToolExchanges: AtomicToolExchange[];
   artifactRefs: ArtifactRef[];
+  compression: ContextCompressionReport;
   projection: ProjectionManifest;
+}
+
+// 压缩可观测性：为 degraded-context UI 与编译审计提供量化依据
+//（参考 Headroom 的 before/after token 统计；只记录实测值，不引入其反事实估计模型）。
+interface ContextCompressionReport {
+  sourceTokens: number;
+  packageTokens: number;
+  perType: Array<{
+    category: string; // tool-outcome | code | log | image | portable-turn | ...
+    sourceTokens: number;
+    packageTokens: number;
+    strategy: "passthrough" | "deterministic-fold" | "artifact-ref" | "omitted";
+  }>;
 }
 
 interface ProjectionManifest {
@@ -1227,6 +1241,12 @@ Compatibility Transformer
 15. Terminal Fact 成功 Commit 后推进 `committedThroughSequence`。
 16. ACK 不确定时先探测 Native History/run identity，再决定重试，禁止盲目重复注入。
 
+编译产物还必须满足一条格式不变量（参考 Headroom CacheAligner 的 live-zone 思路）：
+
+> **Context Package 前缀稳定性**：对同一 Conversation、同一目标 Binding 的连续编译，Package 头部（checkpoint 的 Goal / Constraints / Key Decisions 与 deterministic facts）必须保持字节级稳定；新增事实只允许追加到尾部 delta 区，不得重排或改写已稳定前缀。这让目标 CLI 的 Provider Prompt Cache 能跨 Turn 命中，避免每次增量 handoff 都触发全量前缀重算。
+
+`native-delta` 排在原则链首位，除信息保真外还有这层缓存经济学原因；前缀稳定性把它从排序偏好升级为格式约束。
+
 推荐把兼容判断建模成显式结果，而不是一个 boolean：
 
 ```typescript
@@ -1309,6 +1329,7 @@ Compact Context Package
 检索结果必须标记为 reference context：
 
 - 不把历史里的 `/stop`、`/compact`、Approval 或其他 control message 当作当前命令；
+- 检索必须由目标 CLI 通过 Host Tool 显式发起（同 Headroom `headroom_retrieve` 的按需取回模型）；ContextCompiler 不得在后续 Package 中自动内联回填 omitted 内容；
 - 保留 source session、entry id、author 与 timestamp；
 - 查询结果受 Workspace/Conversation 权限边界约束；
 - 检索失败不影响 Canonical Log，也不推进 sync cursor。
@@ -1336,6 +1357,18 @@ Compatibility Handoff V0
 - Atomic tool exchange；
 - Artifact retrieval；
 - Projection manifest 与 source checksum。
+
+V1 的方向不是把 4000 字符上限放大，而是换成**分类型确定性压缩**（规则参考 Headroom ContentRouter / SmartCrusher / CodeCompressor，不引入其 ML 压缩模型）：
+
+| 内容类型 | V1 压缩策略 |
+|---|---|
+| Tool outcome（JSON / 数组） | 保留 schema、首尾样本行与 count，折叠中间重复结构 |
+| 代码块 / diff | 保留签名、路径与 hunk header，折叠函数体实现 |
+| 日志 / 命令输出 | 保留 error / warning 行与首尾行，折叠重复行 |
+| 图片 / 附件 | 不内联，只携带 `ArtifactRef` |
+| Portable turns | 保留 user / assistant 语义骨架，裁剪 provider-private block 并显式记录 |
+
+全部为确定性规则压缩，可逆路径由 §9.4 Progressive Retrieval 兜底；任何折叠都必须进入 `ProjectionManifest.omitted` 与 checkpoint 的 `## Omissions`。
 
 ---
 
@@ -2843,6 +2876,8 @@ S3: spike-kimi-acp-session-lifecycle
 - Two-phase Cursor / Pending Delivery
 - Binding Provisioning Probe
 - Checkpoint/Compaction
+- Context Package 前缀稳定性与分类型确定性压缩（§9.2 / §9.5，模式参考 Headroom，不引入其 proxy/wrap 与 ML 模型）
+- `ContextCompressionReport` 压缩实测指标（§5.6）
 
 ### 后续 Change D：add-native-provider-continuation
 
@@ -2944,6 +2979,7 @@ OpenSpec 验收不得只检查字段存在。必须同时验证：
 | Canonical Entry 原生属于目标 Binding | 从 `native-delta` 排除，不重复注入 |
 | Provider Continuation 读取 Native 来源 | `NativeHistoryReader` 只读输出 canonical-shaped entries，不写 Shared Log |
 | checkpoint ACK 后再切回目标 | omitted Entries 不自动补发；仅按 `retrievableRef` 检索 |
+| 同一 Binding 连续 handoff | Package 前缀字节级稳定，仅尾部追加 delta；分类型折叠全部计入 `omitted` |
 | 目标需要被省略细节 | 通过 retrievable ref 按需读取 |
 | Codex 支持 `thread/inject_items` | Capability probe 后使用 `native-history-import`，JSON-RPC success 才推进 Context accepted |
 | Codex 版本不支持 Import | 自动降级为 transcript/checkpoint，并在 Manifest 记录原因 |
@@ -3185,3 +3221,4 @@ User Fork / Provider Continuation
 - [LangGraph: Handoffs](https://docs.langchain.com/oss/python/langchain/multi-agent/handoffs)
 - [AutoGen: Model Context](https://microsoft.github.io/autogen/stable/reference/python/autogen_core.model_context.html)
 - [Anthropic: How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system)
+- [Headroom: context compression layer for AI agents](https://github.com/headroomlabs-ai/headroom)（CCR 可逆压缩、CacheAligner 前缀稳定、ContentRouter 分类型压缩的模式参考；不引入其 proxy/wrap 部署形态与 ML 压缩模型）

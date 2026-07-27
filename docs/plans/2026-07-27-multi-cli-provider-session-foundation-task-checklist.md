@@ -150,19 +150,21 @@ OpenSpec 已归档至 `openspec/changes/archive/2026-07-27-{establish-shared-eve
 
 | # | 任务 | 大白话说明 | 改变点 | UI 变化 | 顺序 | 前置 | 验收 | 体量 |
 |---|---|---|---|---|---|---|---|---|
-| C.1 | Versioned ContextPackage + ProjectionManifest（`cursorSemantics` / `disposition`） | 给跨 Provider 搬运的上下文做一个带清单、版本和校验码的包。 | 从临时拼文本变成可审计 ContextPackage + Manifest。 | 无直接变化；为后续上下文状态 UI 提供事实。 | → | Gate 4 | Manifest 记录全部 transformation/omission/checksum | M |
+| C.1 | Versioned ContextPackage + ProjectionManifest（`cursorSemantics` / `disposition` / `ContextCompressionReport`） | 给跨 Provider 搬运的上下文做一个带清单、版本和校验码的包。 | 从临时拼文本变成可审计 ContextPackage + Manifest。 | 无直接变化；为后续上下文状态 UI 提供事实。 | → | Gate 4 | Manifest 记录全部 transformation/omission/checksum；Package 携带实测 compression report（sourceTokens/packageTokens/perType） | M |
 | C.2 | ContextCompiler 核心：五 mode + capability predicate + 固定优先级链（native-delta > import > clone > transcript > checkpoint） | 根据目标 Provider 真正支持什么，选择最可靠的历史交付方式。 | 从按 Engine 猜策略变成 capability-driven 五模式编译。 | 间接影响：切 Provider 时上下文连续性更可靠。 | → | C.1 | 不按 Engine 名硬编码假设 | L |
 | C.3 | pi-ai 式 Compatibility Transformer（thinking / tool-id / tool-result / image / aborted 清理） | 把来源 Provider 的消息格式安全翻译成目标 Provider 能接受的格式。 | 统一清理 thinking、tool、image、aborted 等不兼容内容。 | 间接影响：减少切 Provider 后的乱码、断链和工具错误。 | → | C.2 | source×target matrix 自动化 | XL |
 | C.4 | Codex `native-history-import` Adapter（按 S1 实测） | 按实测协议把编译后的历史交给 Codex。 | 新增 Codex native import，并以 JSON-RPC success 作为接受证据。 | 状态可见：导入失败时不能伪装成功。 | ⫽ | C.3 | JSON-RPC success 才推进 context accepted | L |
 | C.5 | Claude echo ACK + transcript/checkpoint 投影（按 S2 实测） | 只有 Claude 回显的校验码对得上，才认为上下文送到了。 | 新增 echo checksum ACK 与 transcript/checkpoint 降级投影。 | 状态可见：上下文接受/失败/降级提示。 | ⫽ | C.3 | echo checksum 匹配才记 `turnAccepted` | M |
 | C.6 | Kimi ACP Adapter 或 `ackFidelity = weak` 显式标记（按 S3 实测） | Kimi 能强确认就强确认，不能就老实标成弱确认。 | 新增 ACP adapter 或 weak ACK fidelity，不假装 exactly-once。 | 状态可见：弱确认/不确定状态需要明确提示。 | ⫽ | C.3 | 不假装 exactly-once | M |
 | C.7 | Two-phase cursor + pendingDelivery recovery（accepted/committed 分离推进；native-delta 排除目标 Binding 原生 Entries） | 分开记录“目标已收到”和“本轮已完成”，崩溃后从正确位置继续。 | cursor 从单阶段升级为 accepted/committed 两阶段，并持久化 pending delivery。 | 异常时可见：恢复进度准确，不重复灌历史。 | → | C.4–C.6 至少其一 | compile/accept/commit 三类失败边界幂等 | L |
-| C.8 | Artifact Store（临时文件 + 原子 rename + GC 识别）+ Progressive Retrieval Host Tool | 大上下文先存成安全 artifact，需要时再逐步取，不全塞进 prompt。 | 新增原子 artifact store、垃圾识别和检索工具。 | **有**：可能显示可检索引用；普通短会话无变化。 | ⫽ | C.7 | 悬空引用可识别；检索结果标记 reference context | L |
+| C.8 | Artifact Store（临时文件 + 原子 rename + GC 识别）+ Progressive Retrieval Host Tool | 大上下文先存成安全 artifact，需要时再逐步取，不全塞进 prompt。 | 新增原子 artifact store、垃圾识别和检索工具。 | **有**：可能显示可检索引用；普通短会话无变化。 | ⫽ | C.7 | 悬空引用可识别；检索结果标记 reference context；检索仅由目标经 Host Tool 显式发起，不自动回填 omitted 内容 | L |
 | C.9 | Structured Checkpoint 增量编译 + Omissions 可见 + 用户确认降级 | 上下文太大时生成结构化 checkpoint，并告诉用户省略了什么。 | 新增增量 checkpoint、omission 清单和降级确认 gate。 | **有**：展示省略项；未经确认不发送降级 Context。 | ⫽ | C.7 | 未经确认不发送降级 Context | M |
+| C.10 | 分类型确定性压缩 + Context Package 前缀稳定性（模式参考 Headroom，不引入其 ML 模型） | 不再按字符数平切上下文：按内容类型折叠，且增量包不重写已稳定的头部。 | 压缩从 4000 字符平切升级为按类型确定性折叠；同一 Binding 连续 handoff 前缀字节级稳定，只尾部追加 delta。 | **有**：degraded-context 详情可展示 before/after token 与省略明细。 | → | C.1 + C.9 | 前缀稳定性有测试；折叠全部计入 `ProjectionManifest.omitted` | M |
 
 **⛔ Gate 5（Phase 3 验收）**
 - [ ] 长会话切换不依赖固定 8 Turn；Tool Call/Result 成对保留或成对省略
 - [ ] 同一 Binding 不重复注入其已有历史；checkpoint 遗漏只按 `retrievableRef` 检索，不自动补发
+- [ ] 同一 Binding 连续 handoff 的 Package 前缀字节级稳定；分类型折叠全部计入 `ProjectionManifest.omitted`
 - [ ] §17.5 source×target 验收矩阵通过
 
 ---
