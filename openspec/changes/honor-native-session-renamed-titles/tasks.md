@@ -14,4 +14,4 @@
 
 - [x] 3.1 [P1, depends: 2.1, 2.2] 运行 focused Rust tests、`cargo fmt --check`、相关 compile/typecheck 与 OpenSpec strict validation；输出为全部通过的命令记录（<2h）。
 - [x] 3.2 [P1, depends: 3.1] 使用 Codex `/review` 等价流程仅审核本 change diff，修复有效 finding 并复验；输出为无阻断 finding 的 review 结论（<2h）。
-- [ ] 3.3 [P1, depends: 3.2] 创建只包含本 change 的 commit，完成 Trellis session record，并向 upstream 提交简洁 PR；输出为 commit hash、record 与 PR URL（<2h）。
+- [x] 3.3 [P1, depends: 3.2] 创建只包含本 change 的 commit，完成 Trellis session record，并向 upstream 提交简洁 PR；输出为 commit hash、record 与 PR URL（<2h）。

@@ -32,6 +32,12 @@
 
 Codex `/review` 已在只包含本 change 的隔离 worktree 中完成跨层 diff、调用链与针对性回归审查。未发现需要阻断或优先修复的新增 correctness finding，因此无需追加代码修改。
 
+## 交付记录
+
+- Code commit：`855e25e99`（`fix(session): 显示原生重命名标题`）。
+- Trellis task archive：`8944cf3f3`；session record：`354a6615c`。
+- Upstream PR：<https://github.com/zhukunpenglinyutong/desktop-cc-gui/pull/932>。
+
 ## Repo-wide 既有阻断（非本次引入）
 
 - `npm run doctor:strict`：`check:runtime-contracts` 通过，随后既有 branding gate 命中 `mossx-host` 与 Kimi test paths；本 change 未触及命中文件。
