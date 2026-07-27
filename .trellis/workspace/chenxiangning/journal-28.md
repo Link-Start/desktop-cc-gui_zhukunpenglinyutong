@@ -1673,3 +1673,36 @@ openspec validate assemble-shared-canonical-facts --strict --no-interactive: val
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1188: 归档 Change A OpenSpec
+
+**Date**: 2026-07-27
+**Task**: 归档 Change A OpenSpec
+**Branch**: `feature/v-0710`
+
+### Summary
+
+同步 shared-event-storage、assemble-shared-canonical-facts、shared-canonical-projection 主 specs，并归档 A1/A2/A3；修正 A2 mixed-capability delta 后完成语义同步。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `83833a540` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
