@@ -221,62 +221,62 @@ function DoctorResultCard({
               }}
             >
               <div>
-                <strong>{t("settings.doctorPlatform")}:</strong>{" "}
+                <span>{t("settings.doctorPlatform")}:</span>{" "}
                 {state.result.debug.platform} ({state.result.debug.arch})
               </div>
               <div>
-                <strong>{t("settings.doctorResolvedBinary")}:</strong>{" "}
+                <span>{t("settings.doctorResolvedBinary")}:</span>{" "}
                 {state.result.debug.resolvedBinaryPath ??
                   t("settings.notFound")}
               </div>
               <div>
-                <strong>{t("settings.doctorWrapperKind")}:</strong>{" "}
+                <span>{t("settings.doctorWrapperKind")}:</span>{" "}
                 {state.result.debug.wrapperKind ?? t("settings.statusUnknown")}
               </div>
               <div>
-                <strong>{t("settings.doctorPathUsed")}:</strong>{" "}
+                <span>{t("settings.doctorPathUsed")}:</span>{" "}
                 {state.result.debug.pathEnvUsed ?? t("settings.notSet")}
               </div>
               <div>
-                <strong>{t("settings.doctorClaudeFound")}:</strong>{" "}
+                <span>{t("settings.doctorClaudeFound")}:</span>{" "}
                 {state.result.debug.claudeFound ?? t("settings.notFound")}
               </div>
               <div>
-                <strong>{t("settings.doctorCodexFound")}:</strong>{" "}
+                <span>{t("settings.doctorCodexFound")}:</span>{" "}
                 {state.result.debug.codexFound ?? t("settings.notFound")}
               </div>
               <div>
-                <strong>{t("settings.doctorClaudeStandardWhich")}:</strong>{" "}
+                <span>{t("settings.doctorClaudeStandardWhich")}:</span>{" "}
                 {state.result.debug.claudeStandardWhich ??
                   t("settings.notFound")}
               </div>
               <div>
-                <strong>{t("settings.doctorCodexStandardWhich")}:</strong>{" "}
+                <span>{t("settings.doctorCodexStandardWhich")}:</span>{" "}
                 {state.result.debug.codexStandardWhich ??
                   t("settings.notFound")}
               </div>
               {debugProxySnapshot ? (
                 <>
                   <div style={{ marginTop: "8px" }}>
-                    <strong>{t("settings.doctorProxyEnvironment")}:</strong>
+                    <span>{t("settings.doctorProxyEnvironment")}:</span>
                   </div>
                   {Object.entries(debugProxySnapshot).map(([key, value]) => (
                     <div key={key} style={{ marginLeft: "12px" }}>
-                      <strong>{key}:</strong> {value ?? t("settings.notSet")}
+                      <span>{key}:</span> {value ?? t("settings.notSet")}
                     </div>
                   ))}
                 </>
               ) : null}
               <div style={{ marginTop: "8px" }}>
-                <strong>{t("settings.doctorEnvironmentVariables")}:</strong>
+                <span>{t("settings.doctorEnvironmentVariables")}:</span>
               </div>
               {Object.entries(debugEnvVars).map(([key, value]) => (
                 <div key={key} style={{ marginLeft: "12px" }}>
-                  <strong>{key}:</strong> {value ?? t("settings.notSet")}
+                  <span>{key}:</span> {value ?? t("settings.notSet")}
                 </div>
               ))}
               <div style={{ marginTop: "8px" }}>
-                <strong>{t("settings.doctorExtraSearchPaths")}:</strong>
+                <span>{t("settings.doctorExtraSearchPaths")}:</span>
               </div>
               {debugExtraSearchPaths.map((pathEntry, index) => (
                 <div key={index} style={{ marginLeft: "12px" }}>
@@ -381,23 +381,23 @@ function LaunchPreviewCard({ t, state }: LaunchPreviewCardProps) {
       </div>
       <div className="settings-doctor-body">
         <div>
-          <strong>{t("settings.codexLaunchResolvedExecutable")}:</strong>{" "}
+          <span>{t("settings.codexLaunchResolvedExecutable")}:</span>{" "}
           {state.result.resolvedExecutable}
         </div>
         <div>
-          <strong>{t("settings.codexLaunchWrapperKind")}:</strong>{" "}
+          <span>{t("settings.codexLaunchWrapperKind")}:</span>{" "}
           {state.result.wrapperKind}
         </div>
         <div>
-          <strong>{t("settings.codexLaunchUserArguments")}:</strong>{" "}
+          <span>{t("settings.codexLaunchUserArguments")}:</span>{" "}
           {formatArgumentList(t, state.result.userArguments)}
         </div>
         <div>
-          <strong>{t("settings.codexLaunchInjectedArguments")}:</strong>{" "}
+          <span>{t("settings.codexLaunchInjectedArguments")}:</span>{" "}
           {formatArgumentList(t, state.result.injectedArguments)}
         </div>
         <div>
-          <strong>{t("settings.codexWorkspaceSourceLabel")}:</strong>{" "}
+          <span>{t("settings.codexWorkspaceSourceLabel")}:</span>{" "}
           {formatExecutableSource(t, state.result.executableSource)} /{" "}
           {formatArgumentsSource(t, state.result.argumentsSource)}
         </div>
