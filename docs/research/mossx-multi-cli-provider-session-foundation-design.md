@@ -372,6 +372,8 @@ Native Session 内不提供普通热切 Provider。
 8. 原 Session 保留，不删除、不改写、不自动归档。
 ```
 
+Provider Continuation 的来源是 Native Session，其事实源仍是 vendor history file，不是 Shared Canonical Event Log。步骤 3 必须通过 §9.1.1 的 `NativeHistoryReader` 读取来源历史，再交给 `ContextCompiler`；不得要求 Native Session 预先迁入 Shared Canonical Pipeline。
+
 这不是 Subagent，也不是普通 Fork：
 
 - Subagent 是 Agent/runtime 自动派生的执行单元。
@@ -467,7 +469,6 @@ interface TurnExecutionSnapshot {
   providerProfileSource?: ProviderProfileSource;
   model?: string;
   reasoning?: ReasoningSelection;
-  nativeSessionId?: string;
   runtimeCapabilityFingerprint?: string;
 }
 ```
@@ -477,6 +478,7 @@ interface TurnExecutionSnapshot {
 - 每个 Turn Attempt 创建一次后不可变。
 - Provider 显示名保存 Snapshot，避免 Provider 删除后历史不可解释。
 - Usage、Error、Retry、Recovery 全部绑定 Snapshot。
+- `nativeSessionId` 属于 `NativeSessionBinding` / `SharedTargetBinding`，不属于 Target Snapshot；Lazy Create 在 Tx 2b 获得 Identity 后只更新 Binding，不 backfill Snapshot。
 - UI 不能用“当前 Picker 值”解释历史 Turn。
 
 Retry/Regenerate 使用两层 Identity：
@@ -626,18 +628,36 @@ sharedSessionId
 ### 5.6 ContextPackage 与 ProjectionManifest
 
 ```typescript
+type ContextSourceRef =
+  | {
+      kind: "shared-canonical";
+      sessionId: string;
+      fromEntryId?: string;
+      throughEntryId: string;
+    }
+  | {
+      kind: "native-history";
+      sessionId: string;
+      nativeSessionId: string;
+      readerId: string;
+      fromCursor?: string;
+      throughCursor: string;
+      sourceFingerprint: string;
+    };
+
 interface ContextPackage {
   schemaVersion: 1;
   packageId: string;
-  source: {
-    sessionId: string;
+  source: ContextSourceRef & {
     target: TurnExecutionSnapshot;
-    fromEntryId?: string;
-    throughEntryId: string;
   };
   destination: {
     sessionId?: string;
     target: ExecutionTarget;
+    binding?: {
+      bindingKey: string;
+      nativeSessionId?: string;
+    };
   };
   checkpoint: {
     goal: string;
@@ -671,12 +691,19 @@ interface ProjectionManifest {
     category: string;
     reason: string;
     retrievableRef?: string;
+    disposition: "retrievable-on-demand" | "not-retrievable";
   }>;
+  cursorSemantics: {
+    advancesAcceptedCursorOnAck: true;
+    omittedEntriesWillNotAutoReplay: true;
+  };
   sourceChecksum: string;
 }
 ```
 
 `AtomicToolExchange` 必须把 tool call 与对应 result 当成不可拆分单元。`ArtifactRef` 指向文件、附件、长 Tool Result 或外部产物；优先传稳定引用，需要时再按权限读取内容。
+
+`destination.binding` 是 Compiler/Delivery identity，不是 Target Snapshot。`native-delta` 必须提供 `bindingKey + nativeSessionId`；新 Binding 或 Provider Continuation 在 Identity 尚未创建时可以省略，但不得选择 `native-delta`。系统同时维护 durable `attemptId → bindingKey → nativeSessionId` lookup，供 provenance ownership 判定与 Recovery 使用。
 
 Context 数据分成三层：
 
@@ -691,6 +718,8 @@ Context 数据分成三层：
 - `pendingDelivery`：App 在 ACK 边界崩溃时保存幂等恢复证据。
 
 一次 Run 失败并不代表 Prompt 没进入 Native History。若已经收到 acceptance ACK，必须推进 `accepted`；否则 Retry 会把同一 Context Package 再灌一次。
+
+`checkpoint` 是显式 lossy mode：目标 ACK 后仍推进 `acceptedThroughSequence`。Manifest 中被 omit 的 Entry 不会在后续普通 delta 中自动补发；消费者只能通过 `retrievableRef` 做 progressive retrieval。若内容不可检索，必须写 `disposition = "not-retrievable"` 并在用户确认降级前可见。这个 ceiling 换取 exactly-once delivery，不能用回退 Cursor 的方式补偿。
 
 ---
 
@@ -730,6 +759,8 @@ Context 数据分成三层：
 - Parent 保留。
 - Child 首次发送后迁移到 canonical identity。
 - 不显示 `子代理` 标签。
+
+第一阶段 User Fork 的 source 仅允许 Native Session。Shared Session 保持 strictly linear，不支持从历史 Turn fork；否则必须先定义 Canonical Branch、Cursor 继承、Hidden Binding clone/replay 与 Projection lineage，不能复用 Native Fork 语义暗中实现。
 
 建议增加 `Fork` Origin 标签，但不改变既有生命周期。
 
@@ -950,6 +981,7 @@ Binding B = Codex/OpenAI
 - 投递前失败：清理 `pendingDelivery`，不推进 `accepted`。
 - acceptance ACK 明确成功：推进 `accepted`；后续 Turn 失败也不回退，避免重复 Prompt。
 - acceptance ACK 不确定：保留 `pendingDelivery`，先探测 Native History/run identity，再决定 Retry。
+- acceptance ACK 不确定期间锁定整个 Shared Session Composer；不得通过切换 Target 绕过线性顺序。
 - Canonical Commit 失败：不推进 `committed`，进入可恢复状态；不得丢弃已接受的 Native Run。
 - 降级 Context：只有用户能看到 fidelity/omissions 时才允许发送，不得假装完成无损同步。
 
@@ -977,7 +1009,8 @@ Canonical Thread 应保存：
 - TurnExecutionSnapshot；
 - Handoff Reference；
 - Error/Recovery Fact；
-- Attachment Reference。
+- Attachment Reference；
+- Usage Attribution Fact。
 
 但“完整”是指完整的 Canonical Facts，不是保存每个 streaming delta，也不是复制 Native CLI 的 vendor history file。
 
@@ -1033,6 +1066,7 @@ interface SharedCanonicalEntry<TFact = unknown> {
   provenance: {
     engine?: EngineType;
     providerProfileId?: string;
+    bindingKey?: string;
     nativeSessionId?: string;
     runId?: string;
     turnId?: string;
@@ -1045,6 +1079,91 @@ interface SharedCanonicalEntry<TFact = unknown> {
 完整 Turn Fact Lifecycle 与字段 contract 见 §14.2。
 
 `UI Projection` 可以裁剪，Canonical Commit 不可以。Renderer 必须从 Canonical Fact 派生，不能反向把 UI Item 作为事实源。
+
+#### 9.1.1 NativeHistoryReader：Provider Continuation 的只读 Source Adapter
+
+Native Session 不建立 Shared Canonical Event Log，但 Provider Continuation 仍需要稳定、可审计的 source。为此增加 read-only anti-corruption layer：
+
+```typescript
+interface NativeHistoryReader {
+  readerId: string;
+  probe(source: NativeHistorySource): Promise<NativeHistoryCapability>;
+  read(request: NativeHistoryReadRequest): Promise<NativeHistoryReadResult>;
+}
+
+interface NativeHistorySource {
+  sessionId: string;
+  nativeSessionId: string;
+  engine: EngineType;
+  providerProfileId?: string;
+}
+
+interface NativeHistoryCapability {
+  readable: boolean;
+  stableCursor: boolean;
+  currentThroughCursor?: string;
+  supportedEntryTypes: string[];
+  unsupportedReason?: string;
+}
+
+interface NativeHistoryReadRequest {
+  source: NativeHistorySource;
+  fromCursor?: string;
+  throughCursor: string;
+}
+
+interface NativeHistoryReadResult {
+  sourceFingerprint: string;
+  fromCursor?: string;
+  throughCursor: string;
+  entries: ContextSourceEntry[];
+  fidelity: "native" | "semantic" | "lossy";
+  omissions: ProjectionManifest["omitted"];
+}
+
+interface ContextSourceEntry {
+  sourceEntryId: string;
+  occurredAt?: number;
+  role: "user" | "assistant" | "tool" | "control";
+  blocks: ContextFact[];
+  provenance: {
+    engine: EngineType;
+    providerProfileId?: string;
+    nativeSessionId: string;
+    nativeTurnId?: string;
+    vendorEntryType?: string;
+  };
+  fidelity: "native" | "semantic" | "lossy";
+}
+
+interface NativeHistoryMaterialization {
+  operationId: string;
+  source: NativeHistorySource;
+  readerId: string;
+  sourceFingerprint: string;
+  throughCursor: string;
+  normalizedEntriesChecksum: string;
+  normalizedEntriesArtifactRef: ArtifactRef;
+  contextPackageId: string;
+  contextPackageChecksum: string;
+  contextPackageArtifactRef: ArtifactRef;
+  preparedAt: number;
+}
+```
+
+Contract：
+
+- Claude Reader 解析 session JSONL，Codex Reader 解析 rollout，Kimi Reader 只读取其公开/稳定 History surface。
+- 输出是 canonical-shaped `ContextSourceEntry`，只用于 `ContextCompiler`；它不是 `SharedCanonicalEntry`，不分配 Shared sequence，也不写 Shared Event Log。
+- Reader 必须保持 source order、stable cursor、source fingerprint、Tool Call/Result pairing 与 provenance；无法保真的内容进入 omissions。
+- Provider Continuation 只接受 `stableCursor = true` 且存在 `currentThroughCursor` 的 Reader。缺少稳定快照边界时 typed unsupported、fail closed；第一阶段不做“边读边增长”或猜测式 materialization。
+- 系统先以 Probe 得到 `currentThroughCursor`，再按该上界读取。编译完成后、创建目标 Native Session 或发送任何 Context 前，必须先把 normalized entries 与完整 Context Package 写入 Artifact Store（temp file + atomic rename），再在同一 preparation transaction 中 Durable Commit immutable `NativeHistoryMaterialization` refs/checksums；Retry 从 Artifact Ref 重放，不重新读取漂移中的来源。
+- Materialization 后若来源 History 继续增长，不影响本次 Continuation；用户需要更新内容时创建新的 Continuation operation。
+- 来源 Session 删除、权限变化或 Reader 升级不影响已 prepared operation。Artifact 在 Continuation terminal settlement 与 retention window 结束前不得 GC；启动恢复发现 ref 缺失/checksum 不符时进入 explicit recovery error，禁止重读来源后假装是同一 operation。
+- Reader 不修改 vendor history file，不伪造 Tool ID、Reasoning Signature 或 Runtime ACK。
+- source 不存在、损坏、版本不支持、权限不足必须返回 typed error；不得静默生成“看似完整”的 transcript。
+- `ContextPackage.source.kind = "native-history"` 时，checksum 覆盖 Reader identity、source fingerprint、cursor range 与 normalized entries。
+- Reader 只解决 Provider Continuation 的源端读取，不改变 Native Conversation 的 History/Event/Projection 链路，因此不违反 §14.6.3 的 no-migration redline。
 
 ### 9.2 Native CLI Context 编译：Native History 优先，Transcript 明确降级
 
@@ -1091,20 +1210,22 @@ Compatibility Transformer
 
 每次编译遵守以下顺序：
 
-1. 从 target-scoped sync cursor 读取尚未同步的 Canonical Entries。
-2. 相同 Binding 优先 `native-delta`，不得重放其已有 Native History。
-3. 目标支持官方 History Import 时使用 `native-history-import`；调用前必须完成 capability probe 与 item validation。
-4. 目标 CLI 明确支持 fork/clone/rebind 时使用 `native-history-clone`，不得修改 vendor history file 伪造导入。
-5. 新 Binding 使用 pi-ai 式 Compatibility Transform 清理 Thinking、Tool ID、Tool Result、Image 与 Provider metadata。
-6. 目标 CLI 不支持多角色 history import 时，把转换结果序列化为 `portable-transcript`；它仍是 user-channel input，不宣称 lossless replay。
-7. Tool call/result 在 import/transcript 中成对保留或成对省略，绝不拆分。
-8. 只有目标输入能力不足、协议严重不兼容或 Context 超限时，才生成 Structured Checkpoint。
-9. 长内容写入 Artifact Store，Model Context 只携带稳定引用与必要摘要。
-10. 按目标 Capability 与 Token Budget 生成 Projection，并写明所有 lossy transformation 与 omissions。
-11. 编译成功不推进游标；写入 `pendingDelivery` 后再投递。
-12. 目标 CLI 明确接受后推进 `acceptedThroughSequence`，即使后续 Run 失败也不回退。
-13. Terminal Fact 成功 Commit 后推进 `committedThroughSequence`。
-14. ACK 不确定时先探测 Native History/run identity，再决定重试，禁止盲目重复注入。
+1. 根据 `ContextPackage.source.kind` 从 Shared Canonical Log 或 `NativeHistoryReader` 读取 source entries；Provider Continuation 不得假设存在 Shared Canonical source。
+2. source 为 `shared-canonical` 时，从 target-scoped sync cursor 读取尚未同步的 Canonical Entries；`native-history` 使用 Reader cursor，不套用 Shared sequence。
+3. 相同 Binding 编译 `native-delta` 前，必须从 `destination.binding` 取得目标 identity，并排除该 Binding 原生拥有的 Entries：`provenance.bindingKey == destination.binding.bindingKey`，或 durable attempt/binding mapping、`nativeSessionId` 能证明来源属于目标 Binding。它们已存在于该 Binding 的 Native History，不得重灌；缺少 destination Binding identity 时 fail closed。
+4. 相同 Binding 优先 `native-delta`，不得重放其已有 Native History。
+5. 目标支持官方 History Import 时使用 `native-history-import`；调用前必须完成 capability probe 与 item validation。
+6. 目标 CLI 明确支持 fork/clone/rebind 时使用 `native-history-clone`，不得修改 vendor history file 伪造导入。
+7. 新 Binding 使用 pi-ai 式 Compatibility Transform 清理 Thinking、Tool ID、Tool Result、Image 与 Provider metadata。
+8. 目标 CLI 不支持多角色 history import 时，把转换结果序列化为 `portable-transcript`；它仍是 user-channel input，不宣称 lossless replay。
+9. Tool call/result 在 import/transcript 中成对保留或成对省略，绝不拆分。
+10. 只有目标输入能力不足、协议严重不兼容或 Context 超限时，才生成 Structured Checkpoint。
+11. 长内容写入 Artifact Store，Model Context 只携带稳定引用与必要摘要。
+12. 按目标 Capability 与 Token Budget 生成 Projection，并写明所有 lossy transformation 与 omissions。
+13. 编译成功不推进游标；写入 `pendingDelivery` 后再投递。
+14. 目标 CLI 明确接受后推进 `acceptedThroughSequence`，即使 `checkpoint` omit 了部分 Entries 或后续 Run 失败也不回退；遗漏内容只允许按 Manifest progressive retrieval，不进入后续自动 delta。
+15. Terminal Fact 成功 Commit 后推进 `committedThroughSequence`。
+16. ACK 不确定时先探测 Native History/run identity，再决定重试，禁止盲目重复注入。
 
 推荐把兼容判断建模成显式结果，而不是一个 boolean：
 
@@ -1545,6 +1666,7 @@ type SharedCanonicalFact =
   | ContextDeliveryAccepted
   | ConversationTurnAccepted
   | ConversationTurnCommitted
+  | ConversationUsageRecorded
   | ConversationControlFact;
 
 interface ConversationTurnRequested {
@@ -1585,6 +1707,7 @@ interface ConversationTurnAccepted {
   logicalTurnId: string;
   attemptId: string;
   clientTurnId: string;
+  bindingKey: string;
   nativeSessionId: string;
   nativeTurnId?: string;
   acceptedAt: number;
@@ -1609,9 +1732,81 @@ interface ConversationTurnCommitted {
   };
   committedAt: number;
 }
+
+interface ConversationUsageRecorded {
+  type: "conversation.usageRecorded";
+  usageRecordId: string;
+  reportSubjectId: string;
+  revision: number;
+  supersedesUsageRecordId?: string;
+  logicalTurnId: string;
+  attemptId: string;
+  bindingKey: string;
+  nativeSessionId: string;
+  nativeTurnId?: string;
+  target: TurnExecutionSnapshot;
+  usage: {
+    inputTokens?: number;
+    cachedInputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    providerReportedCost?: {
+      amount: string;
+      currency: string;
+    };
+  };
+  source: "runtime-final" | "provider-report";
+  verification: "verified" | "unverified";
+  observedAt: number;
+}
+
+interface ProviderUsageAggregateRecorded {
+  type: "provider.usageAggregateRecorded";
+  usageRecordId: string;
+  reportSubjectId: string;
+  revision: number;
+  supersedesUsageRecordId?: string;
+  providerProfileId: string;
+  engine?: EngineType;
+  window: {
+    startedAt: number;
+    endedAt: number;
+  };
+  coveredAttemptIds?: string[];
+  usage: {
+    inputTokens?: number;
+    cachedInputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    providerReportedCost?: {
+      amount: string;
+      currency: string;
+    };
+  };
+  breakdown:
+    | {
+        kind: "provider-authoritative";
+        attempts: Array<{
+          attemptId: string;
+          usage: ConversationUsageRecorded["usage"];
+        }>;
+      }
+    | { kind: "aggregate-only" };
+  observedAt: number;
+}
 ```
 
+`ProviderUsageAggregateRecorded` 不属于 `SharedCanonicalFact`。它可能跨 Shared/Native Session，必须进入独立、append-only 的 Provider Usage Ledger；Shared Event Log 只通过 `coveredAttemptIds`/Projection 关联，不复制或伪造 Session ownership。
+
 `conversation.turnCommitted` 的 `committed` 表示 Terminal Fact 已可靠落盘，不表示 Agent 一定成功。失败、取消、替换也必须且只能 Commit 一次。
+
+Usage Attribution 是独立 Canonical Fact：`TurnExecutionSnapshot` 解释 Engine/Provider/Model，Binding 字段解释实际 Native Owner。`reportSubjectId` 必须是 attempt/native-turn scoped，不能跨多个 Attempt；优先使用 Provider native turn/meter subject id，缺失时使用 `attemptId + nativeTurnId`。`revision` 单调递增，修订必须通过 `supersedesUsageRecordId` 指向上一版；`usageRecordId = hash(source + reportSubjectId + revision)`，不得把 totals checksum 当 report identity。
+
+Usage Projection 只负责按 Session/Provider/Model 聚合展示，不得反向修改 Usage Fact。重建时每个 attempt-scoped `reportSubjectId` 只选择最高有效 revision；同一 Attempt 同时存在 cumulative `runtime-final` 与 `provider-report` 时以 `provider-report` 为 authoritative，不得把两份累计值相加。Runtime 未提供稳定 attempt-scoped subject/revision 时只能记录单版 `unverified` usage，后续修订必须显式 supersede，不能作为新费用直接累加；完全无可靠 usage 时保持 unknown，不做 Token/Cost 猜测。
+
+跨多个 Turn 的 meter/billing-window cumulative report 必须写成 `provider.usageAggregateRecorded`，其 ownership 是 `Provider + Window`，不是某个 Conversation Attempt。`coveredAttemptIds` 只表达覆盖关系，不代表可分摊；只有 Provider 返回 authoritative per-attempt breakdown 时，Projection 才能生成或校准 Turn Attribution。`aggregate-only` 只能展示 Provider 级总计，禁止按 Token、时长或 Turn 数猜测分摊。
+
+Provider Aggregate 的 `usageRecordId = hash(providerProfileId + window.startedAt + window.endedAt + reportSubjectId + revision)`；Ledger ownership、Schema PK 与 Retry 幂等键必须使用同一组字段。
 
 #### 14.2.2 Turn 状态与事务边界
 
@@ -1658,12 +1853,14 @@ Tx 5
 2. `TurnExecutionSnapshot` 与 `attemptId` 创建后不可变。
 3. 一个 `attemptId` 最多拥有一个 `turnAccepted` 和一个 `turnCommitted`。
 4. 每个 `turnRequested` 最终必须有一个 Terminal `turnCommitted`，或保持为可恢复的 Pending；用户在外部 Side Effect 前取消也要 Commit cancelled outcome。
-5. `(sharedSessionId, eventId)`、`(sharedSessionId, sequence)`、`attemptId + factType` 必须具有 Unique Constraint。
+5. `(sharedSessionId, eventId)`、`(sharedSessionId, sequence)`、非 Usage Fact 的 `attemptId + factType` 必须具有 Unique Constraint；Shared Turn Usage 使用 `factType + usageRecordId`。Provider Aggregate Usage 不进入 Shared Event Log，按规则 12 独立去重。
 6. streaming delta、heartbeat、processing text 只进入 Live Projection，不写 Canonical Event Log。
 7. Tool lifecycle 由 ingress-side Assembler 聚合；`AtomicToolExchange` 必须在 Terminal Commit 前验证配对状态。
 8. 未完成 Tool Call 不能伪装成功；以 `incomplete/error` Tool Result 或 omission 明确结算。
 9. Reasoning Signature、Encrypted Thinking 只保存 opaque private ref，不进入普通 Text Projection。
 10. UI Row 必须由 Canonical Fact 或 Live Preview 派生，不能反向写回 Fact。
+11. Turn Usage Fact 可以随 Tx 5 一起写入，也可以在 attempt-scoped Provider report 到达后独立追加；必须用 `usageRecordId` 幂等、用 `reportSubjectId + revision` 选择 authoritative version，并保持 `attemptId + bindingKey + nativeSessionId` 归属不变。
+12. Provider Aggregate Usage 写入独立 Provider Usage Ledger，并按 `Provider + Window + reportSubjectId + revision` 幂等；不得为了填充 Turn 字段把跨 Attempt report 挂到任一 `attemptId` 或 `sharedSessionId`。
 
 #### 14.2.3 Failure Semantics
 
@@ -1686,6 +1883,9 @@ Tx 5
 - Normal/Delta lane 全部丢弃时，Terminal Commit 仍包含完整 Assistant Final 与 Tool Outcome。
 - failed/cancelled Turn 可恢复、可审计，不显示为成功回复。
 - 每个 `turnRequested` 最终只有一个 Terminal Commit；不存在永久悬空的非 Pending Attempt。
+- 同一 `usageRecordId` 重放不重复计费；Provider/Model/Native Session 归属可从 Fact 独立重建。
+- 同一 `reportSubjectId` 多个 revision 重建时只选择最高有效版本，superseded totals 不重复累计。
+- 跨 Attempt aggregate-only report 只进入 Provider 级总计，不产生推测的 Turn Attribution。
 - UI Projection 删除后可以完全从 Canonical Log 重建。
 
 ### 14.3 Native CLI Capability / ACK Matrix
@@ -1699,6 +1899,7 @@ interface RuntimeDeliveryAdapter {
   probeCapabilities(runtime: RuntimeIdentity): Promise<RuntimeCapabilities>;
   importContext?(request: ContextImportRequest): Promise<ContextImportAck>;
   sendTurn(request: NativeTurnRequest): Promise<NativeTurnAck>;
+  cancelPendingDelivery?(request: PendingDeliveryCancelRequest): Promise<PendingDeliveryCancelAck>;
   probePendingDelivery(request: PendingDeliveryProbe): Promise<DeliveryProbeResult>;
 }
 
@@ -1708,6 +1909,7 @@ interface RuntimeCapabilities {
   runStarted: "explicit" | "inferred";
   terminal: "explicit" | "process-exit";
   pendingProbe: "by-client-id" | "by-native-history" | "none";
+  pendingCancel: "explicit-ack" | "terminal-evidence" | "none";
   images: boolean;
   tools: boolean;
   mcp: boolean;
@@ -1875,6 +2077,7 @@ CREATE TABLE shared_event_log (
   fact_type TEXT NOT NULL,
   logical_turn_id TEXT,
   attempt_id TEXT,
+  dedupe_key TEXT,
   payload_json TEXT NOT NULL,
   payload_checksum TEXT NOT NULL,
   fidelity TEXT NOT NULL,
@@ -1886,7 +2089,12 @@ CREATE TABLE shared_event_log (
 
 CREATE UNIQUE INDEX shared_event_attempt_fact
   ON shared_event_log(session_id, attempt_id, fact_type)
-  WHERE attempt_id IS NOT NULL;
+  WHERE attempt_id IS NOT NULL
+    AND fact_type <> 'conversation.usageRecorded';
+
+CREATE UNIQUE INDEX shared_event_dedupe_key
+  ON shared_event_log(session_id, fact_type, dedupe_key)
+  WHERE dedupe_key IS NOT NULL;
 
 CREATE TABLE shared_binding_state (
   session_id TEXT NOT NULL,
@@ -1920,13 +2128,34 @@ CREATE TABLE shared_legacy_import (
   status TEXT NOT NULL,
   imported_at INTEGER
 );
+
+CREATE TABLE provider_usage_aggregate_log (
+  provider_profile_id TEXT NOT NULL,
+  report_subject_id TEXT NOT NULL,
+  revision INTEGER NOT NULL,
+  event_id TEXT NOT NULL UNIQUE,
+  window_started_at INTEGER NOT NULL,
+  window_ended_at INTEGER NOT NULL,
+  payload_json TEXT NOT NULL,
+  payload_checksum TEXT NOT NULL,
+  observed_at INTEGER NOT NULL,
+  PRIMARY KEY (
+    provider_profile_id,
+    window_started_at,
+    window_ended_at,
+    report_subject_id,
+    revision
+  )
+);
 ```
 
 Schema 是 OpenSpec 的 Logical Contract；实现时允许调整 SQL 细节，但必须保留：
 
 - per-session monotonic sequence；
+- Event insert 与 `shared_sessions_v2.next_sequence` 分配/更新必须在同一 SQLite transaction；单 Writer Actor 是调度约束，这个事务是 crash/concurrency 下的第二道保险；
 - event idempotency；
-- attempt/fact uniqueness；
+- attempt/fact uniqueness；Turn Usage 例外使用 `dedupe_key = usageRecordId`；
+- Provider Aggregate Usage 使用独立 Ledger，以 `(provider_profile_id, window_started_at, window_ended_at, report_subject_id, revision)` 幂等，不伪造 `session_id`；
 - Binding Provisioning、Cursor 与 pending delivery；
 - rebuildable projection；
 - explicit legacy import marker。
@@ -2081,11 +2310,16 @@ stateDiagram-v2
     PreparingContext --> AwaitingAcceptance: package prepared
     PreparingContext --> DegradedContext: lossy projection requires consent
     PreparingContext --> TargetUnavailable: provider/runtime unavailable
+    PreparingContext --> Settling: cancel / commit cancelled
     DegradedContext --> AwaitingAcceptance: user confirms
-    DegradedContext --> Idle: cancel
+    DegradedContext --> Settling: cancel / commit cancelled
     AwaitingAcceptance --> Running: runtime ACK
     AwaitingAcceptance --> RecoveryRequired: ACK ambiguous
-    AwaitingAcceptance --> Idle: explicit rejection
+    AwaitingAcceptance --> CancelPending: user requests cancel
+    AwaitingAcceptance --> Settling: explicit rejection / commit cancelled
+    CancelPending --> Settling: cancel ACK or terminal evidence
+    CancelPending --> RecoveryRequired: cancel/acceptance ambiguous
+    CancelPending --> Running: cancel rejected, runtime accepted
     Running --> Settling: run.settled
     Running --> RecoveryRequired: connection lost
     Settling --> Idle: canonical commit
@@ -2093,8 +2327,12 @@ stateDiagram-v2
     TargetUnavailable --> Idle: target repaired or changed
     RecoveryRequired --> Running: probe finds active run
     RecoveryRequired --> Settling: probe finds terminal run
-    RecoveryRequired --> Idle: probe proves not accepted
+    RecoveryRequired --> Settling: probe proves not accepted / commit cancelled
 ```
+
+`PreparingContext` / `DegradedContext` 的 cancel 发生在外部 Side Effect 前，但 Tx 1 已有 `turnRequested`，因此仍经 `Settling` 写入 `turnCommitted(cancelled)` 后回到 Idle。`AwaitingAcceptance` 的 Cancel 只是 cancel request：Adapter 支持 `cancelPendingDelivery` 时进入 `CancelPending`，直到 cancel ACK、Terminal Evidence 或 Probe 定性；能力不支持时禁用 Cancel 并解释原因。ambiguous 不能直接取消为未投递。
+
+Cancel intent 不单独持久化；App 在 `CancelPending` 崩溃后由 `pendingDelivery + Probe` 恢复定性，不产生第二条 Side Effect。
 
 #### 14.5.3 UI Contract
 
@@ -2103,13 +2341,16 @@ stateDiagram-v2
 | `idle` | `Shared · Engine/Provider/Model` | 可用 | 可发送 | 选择 Next Target |
 | `preparing-context` | “正在为 Codex/OpenAI 准备上下文” + source range | V1 锁定 | 锁定 | Cancel |
 | `degraded-context` | 明确列出 omissions、mode、estimated tokens | 锁定 | 锁定 | 查看详情、继续、取消 |
-| `awaiting-acceptance` | “正在交付，尚未确认接收” | 锁定 | 锁定 | Cancel；不展示普通 Retry |
+| `awaiting-acceptance` | “正在交付，尚未确认接收” | 锁定 | 锁定 | capability 支持时 Cancel；不展示普通 Retry |
+| `cancel-pending` | “正在确认取消结果” + pending phase | 锁定 | 锁定 | Probe；不展示普通 Retry |
 | `running` | Assistant Placeholder 固定显示 Active Target | V1 锁定 | Stop/Steer 按 capability | Stop |
 | `settling` | “正在保存结果” | 锁定 | 锁定 | 无；短时状态 |
 | `recovery-required` | 恢复卡片：Pending phase、Target、last probe | 锁定 | 锁定 | Probe、查看 Native Session、显式重建 |
 | `target-unavailable` | Provider/Runtime unavailable 原因 | 可更换 | Send disabled | 修复配置、选择其他 Target |
 
 第一阶段 Picker 在非 Idle 状态锁定。后续若需要“运行中预选 Next Target”，必须增加独立 Queue contract，不能让一个 Picker 同时表示 Active 与 Next。
+
+第一阶段 `recovery-required` 锁定整个 Shared Session Composer，不只锁当前 Binding。原因是 Shared Canonical Thread 采用严格线性顺序：ambiguous Turn 可能在迟到 ACK 后成为有效历史；若先放行其他 Target，新 Turn 的 Context boundary 与最终 sequence 都会失去确定性。未来若要按 Binding 放行，必须先引入显式 Queue/Branch ordering contract。
 
 #### 14.5.4 Turn 与 Sidebar Attribution
 
@@ -2151,17 +2392,139 @@ Assistant · Claude / OpenRouter / ...  Failed
 - Picker 在 Send 后变化不会改变 Active Turn Badge。
 - Context 降级未经确认不能发送。
 - ACK ambiguous 时 UI 不出现“一键重发”。
+- ACK ambiguous 时整个 Shared Session 不接受下一 Turn，即使用户切换到其他 Target。
 - App 重启后恢复到 `running` / `settling` / `recovery-required`，而不是一律 `idle`。
 - Provider 删除后历史 Badge 仍可解释。
 - Hidden Binding 重建前后 Sidebar 始终只有一个 Shared Row。
 - Retry 到其他 Target 后，原失败 Attempt 与新 Attempt 都可审计。
 
-### 14.6 Implementation Readiness Checklist
+### 14.6 Native Conversation Canvas Compatibility Guardrails
+
+Shared Session V2 重建的是 Session/Execution/Persistence Core，不是重写 Claude Code、Codex 等现有 Native Session 的对话幕布。
+
+核心边界：
+
+```text
+User-visible Native Session
+  → existing Native History / Engine Events
+  → NativeConversationProjection
+  → existing ConversationItem / Live Channel
+  → existing Conversation Canvas
+
+Shared Session V2
+  → Canonical Event Log + Shared-owned Hidden Binding Events
+  → SharedConversationProjection
+  → compatible ConversationItem / Live Channel
+  → existing Conversation Canvas
+```
+
+产品上复用同一幕布；数据上保持两种 Source、两套 Projection。Renderer 不感知 `BindingProvisioningState`、ACK、Cursor、Recovery Tx，也不承担 Canonical Persistence。
+
+#### 14.6.1 Domain Model 与 Presentation Model 隔离
+
+```typescript
+type ConversationDataSource =
+  | "native-session"
+  | "shared-canonical";
+
+interface ConversationProjection {
+  source: ConversationDataSource;
+  items: ConversationItem[];
+  liveTurn?: LiveTurnProjection;
+  executionBadges?: TurnExecutionBadge[];
+}
+```
+
+以上是 Logical Contract，不要求第一阶段立即增加同名公共 Type。实现先复用现有 Projection/Selector 边界；只有实际调用点需要统一时才抽象。
+
+约束：
+
+- Canonical Fact 是 Shared Domain Model；`ConversationItem` 继续是 Presentation Model。
+- User-visible Native Session 沿用现有 History Loader、Engine-specific Event Reducer 与恢复语义。
+- Shared-owned Hidden Binding 的 Runtime Event 通过 owner/run identity 进入 Shared Assembler；不能投影成第二条 Native Conversation。
+- `SharedConversationProjection` 可以生成幕布兼容的 `ConversationItem`，但不能把 UI Item 反向写回 Canonical Log。
+- 幕布组件只消费 Projection 与 Live State；不得直接读取 SQLite、Binding Cursor 或 Runtime ACK 状态。
+
+#### 14.6.2 真正可能产生回归的共享位置
+
+| 共享位置 | 回归风险 | 专业策略 | 必须保留的 Native 语义 |
+|---|---|---|---|
+| `MossxAgentEvent` / Event Bus | 为 Shared 修改既有 event meaning，导致 Native reducer、approval 或 lifecycle 断链 | 采用 additive envelope/独立 Canonical Sink；按 owner/run identity 路由，不改旧 event 的含义 | Claude/Codex 既有 event order、turn lifecycle、error/interrupt behavior |
+| `ConversationItem` | 把 ACK、Cursor、Persistence 塞入 UI Type，所有 Renderer 被迫理解 Shared Domain | 保持 Presentation-only；Shared 新建 Projection/metadata sidecar | text、thinking、tool、image、patch、error item 的现有 shape |
+| `threadItems.ts` | Shared replay/normalization 逻辑污染 Native History；现有裁剪被误当 Canonical Transform | 继续只做展示适配；Canonical normalization 放在 ingress Assembler/ContextCompiler | Native History 的顺序、显示裁剪、Tool Output/Image 展示 |
+| Streaming Store / `liveAssistantTextChannel` | Shared delta 重新 dispatch 到根 reducer，引发 AppShell 渲染风暴或 terminal 后重复正文 | delta 继续外部化；Canonical Log 只写 Turn 级 Fact；Terminal Projection 与 Live Text 通过 attempt identity 去重 | 流式首字延迟、光标、Stop 后收束、Terminal 替换 |
+| Threads reducer / AppShell root hook chain | 每个 Event、Log、Polling 更新根状态；单次根渲染历史测量成本高 | 高频状态使用精细订阅；根链只接 Turn 生命周期级变化；轮询事件驱动 + ≥30s 兜底 | Native processing/unread/active turn 的既有状态转换 |
+| Tool / Thinking / Approval / Patch Renderer | 为 portable Shared History 压扁 Engine-private 信息，Native 幕布丢 fidelity | Native Projection 保留 Engine-specific block；Shared Canonical 保存 portable block + private ref；只在跨 Target Context Compile 时降级 | Tool pairing、reasoning visibility、permission ownership、patch/result 状态 |
+| Session Catalog / Sidebar | Hidden Binding、Recovery Attempt 被当作 Native Child 显示 | Catalog Projection 按 `SessionOrigin/OwnerKind` 过滤；Shared 始终一个 Row | Native Root/Subagent/Fork 的既有层级与选中行为 |
+
+#### 14.6.3 实施策略：Additive Projection，不做 Big-bang Migration
+
+推荐顺序：
+
+1. 冻结现有 Native Claude/Codex Canvas Contract，建立代表性 History 与 Live Event fixtures。
+2. 新增 Shared Canonical Sink 和 `SharedConversationProjection`，不替换 Native History Source。
+3. Shared Projection 适配现有 Renderer 所需 Presentation Shape；Engine-private UI 通过 metadata/ref 保真。
+4. 使用 Shared-only feature flag/route 开启 V2；不得用全局 flag 改写 Native Session。
+5. 对 Shared Session 运行 Shadow Projection：同一 Canonical Source 生成新 Projection，与 Legacy Shared snapshot 比较 item count/order/type/checksum；Shadow 只记录 mismatch，不反向写数据。
+6. Codex、Claude Native Session 分别跑历史加载、live streaming、tool、thinking、approval、interrupt 回归后，再扩大 Shared V2 rollout。
+
+迁移原则：
+
+```text
+Native Conversation
+  = no migration
+
+Legacy Shared Conversation
+  = dual-read / explicit import
+
+New Shared Conversation
+  = Canonical Event Log V2
+```
+
+禁止为了“统一”先把全部 Native Session 迁入 Shared Canonical Pipeline。未来若需要 Native Canonicalization，必须作为独立 Change，重新证明 fidelity、resume 和 rollback。
+
+#### 14.6.4 Render Performance Contract
+
+2026-07-08 的历史实验发现：AppShell 根渲染单次曾阻塞主线程约 100–350ms；该值需要实施时重新测量，但五条结构红线继续有效：
+
+1. streaming delta 不进入 AppShell 根 reducer；继续走 `liveAssistantTextChannel`。
+2. Shared Event/Log 不使用数组追加型 root `setState`。
+3. Canonical Commit 以 Turn/Tx 为频率，禁止逐 delta 持久化并触发 Projection rebuild。
+4. Shared background Binding 运行时，关闭其 Conversation Canvas 后不得继续驱动可见幕布重渲染。
+5. Store 同步采用 Event-driven update，轮询只作 ≥30s bounded fallback。
+
+性能验收分三种场景独立测量：
+
+```text
+idle
+background Shared Binding + canvas closed
+foreground Shared streaming
+```
+
+测量时关闭 react-scan 放大器；若发生全树重渲染，使用 React `memoizedUpdaters` 与现有归因方法定位真实 updater。
+
+#### 14.6.5 Native Canvas Compatibility Acceptance Tests
+
+- 打开旧 Claude Native Session：History item 数量、顺序、类型与主要展示内容不变。
+- Claude streaming、Thinking、Tool Call/Result、Permission、Stop/Interrupt 展示不变。
+- 打开旧 Codex Native Session：History item、Reasoning、Tool、Patch、Error 展示不变。
+- Codex live item lifecycle 与 Terminal settlement 不因 Shared Canonical Sink 重复 dispatch。
+- User-visible Native Session 不创建 Shared Hidden Binding，不读取 Shared Cursor，不经过 ContextCompiler。
+- Shared-owned Hidden Binding 不进入 Native Sidebar，不直接生成用户可见 Native Conversation。
+- Shared Terminal Commit 与 `liveAssistantTextChannel` 收束后只出现一个 Assistant Final。
+- 切换 Next Target 不清空、不 remount、不全量重建现有 Conversation Canvas。
+- 删除 Shared UI Projection 后重建，item order/type/checksum 与 Commit 前一致。
+- Shared Session 后台运行且幕布关闭时，不产生持续 Canvas/AppShell render storm。
+
+### 14.7 Implementation Readiness Checklist
 
 Canonical Log：
 
 - [ ] OpenSpec 定义全部 Canonical Fact JSON Schema。
+- [ ] `conversation.usageRecorded` 有 attempt/binding/native identity、report subject/revision/supersedes 与幂等键。
+- [ ] `provider.usageAggregateRecorded` 有独立 Provider Usage Ledger 与 Provider/Window ownership；aggregate-only 不推测分摊到 Turn/Session。
 - [ ] `SharedEventWriter` 只有一个 sequence allocator 与 write authority。
+- [ ] Event insert 与 `next_sequence` 更新在同一 transaction。
 - [ ] Tx 1–5 的输入、输出、Unique Constraint、错误码明确。
 - [ ] ingress-side Assembler 能从 final snapshot 组装完整 Tool Exchange。
 - [ ] Projection 可以删除后重建。
@@ -2181,21 +2544,38 @@ Runtime ACK：
 
 Context Compiler：
 
+- [ ] `NativeHistoryReader` 对 Claude/Codex/Kimi 定义 stable cursor、fingerprint、fidelity、typed error 与只读边界。
+- [ ] Provider Continuation 在目标 side effect 前持久化 immutable `NativeHistoryMaterialization`；unstable cursor fail closed。
 - [ ] 五种 Projection Mode 有 capability predicate。
 - [ ] source × target Compatibility Matrix 自动化。
+- [ ] `native-delta` 排除目标 Binding 原生拥有的 Entries。
+- [ ] `native-delta` 强制要求 `destination.binding` 与 durable attempt→binding lookup。
 - [ ] Tool Call/Result atomic validator。
 - [ ] Provider-private reasoning/signature redaction。
 - [ ] Artifact size/budget/ref retrieval contract。
 - [ ] `ProjectionManifest` 完整记录 transformation、omission、checksum。
+- [ ] checkpoint ACK 后推进 Cursor 的永久 omission 语义已被消费者与 UX 验收。
 
 UI：
 
 - [ ] Store 中分离 `selectedNextTarget` 与 `activeTurnTarget`。
-- [ ] 八类 UI state 有明确 persisted/recoverable mapping。
+- [ ] 九类 UI state 有明确 persisted/recoverable mapping。
 - [ ] `degraded-context` 必须用户确认。
 - [ ] `recovery-required` 没有 blind retry。
+- [ ] `cancel-pending` 仅在 Runtime cancel ACK/Terminal/Probe 定性后结算。
 - [ ] Retry/Regenerate 使用 `logicalTurnId + attemptId`。
 - [ ] Shared Binding 永不进入 Native Sidebar/Subagent Tree。
+
+Native Canvas Compatibility：
+
+- [ ] Native 与 Shared 使用独立 Data Source/Projection，最终适配同一幕布。
+- [ ] `ConversationItem` 保持 Presentation-only，不承载 Canonical/ACK/Recovery 状态。
+- [ ] `MossxAgentEvent` 采用 additive routing，不修改现有 Native event meaning。
+- [ ] `threadItems.ts` 不承担 Canonical normalization 或 Context replay。
+- [ ] streaming delta 继续走 `liveAssistantTextChannel`，不进入根 reducer/Canonical Log。
+- [ ] Claude/Codex Native golden fixtures 与 live regression tests 已建立。
+- [ ] Shared Terminal 与 Live Text 有 attempt-scoped deduplication。
+- [ ] idle/background/foreground streaming 三种场景完成重新测量。
 
 全部勾选后，文档才从 Architecture Foundation 进入 Implementation-ready；OpenSpec 可以把每个 Checkbox 转为 Requirement/Scenario/Task。
 
@@ -2214,6 +2594,7 @@ UI：
 - Binding Key 规则
 - Sidebar 标签规则
 - Hidden Binding 可见性规则
+- Native/Shared Data Source 与 Conversation Projection 隔离规则
 - Failure Matrix
 - `conversation.turnRequested`
 - `context.deliveryPrepared/Accepted`
@@ -2221,7 +2602,13 @@ UI：
 - `BindingContextCursor`
 - `BindingProvisioningState`
 - Runtime ACK Capability contract
+- NativeHistoryReader contract
+- NativeHistoryMaterialization / stable source snapshot contract
+- Turn Usage Attribution + Provider Aggregate Usage Fact / Projection contract
 - Legacy fidelity contract
+- Codex `thread/inject_items` Capability Spike
+- Claude `--replay-user-messages` ACK Spike
+- Kimi ACP Capability Spike
 
 验收：
 
@@ -2229,31 +2616,37 @@ UI：
 - Root/Fork/Continuation 的 Family 血缘可追溯，Subagent/Shared Binding 不进入 Family。
 - Provider 删除后历史仍可解释。
 - Model 不进入默认 Binding Key。
+- Provider Continuation 可从 Native History 只读编译 Context，不要求 Native Session 进入 Shared Canonical Pipeline。
+- 三个 Runtime Spike 产出实测 capability/ACK matrix，Phase 1/2 Adapter contract 不以 CLI 文案或假设为依据。
+- Turn Usage 能按 Attempt、Target、Binding 与 Native Session 稳定归属；跨 Turn report 只按 Provider/Window 归属。
 
 ### Phase 1：建立 Shared Canonical Event Log V2
 
 交付：
 
-- SQLite WAL Schema 与 `SharedEventWriter`。
+- A1 Storage：SQLite WAL Schema、`SharedEventWriter`、Provider Usage Ledger、Unique Constraints、sequence transaction 与 crash/power-loss tests。
+- A2 Canonical Ingress：run identity → Snapshot/Binding 稳定关联、fan-out/drop 前 authoritative sink、Run/Turn Assembler、`turnRequested → delivery → accepted → committed` Facts、Turn/Aggregate Usage Facts、Critical Commit Sink。
+- A3 Projection/Migration：Canonical Fact 到 UI Item 的单向 Projection、Shared/Native Projection Isolation、Projection rebuild、Legacy dual-read、Canvas regression gate。
 - Binding Provisioning、Pending Delivery 与 Cursor 的原子持久化。
-- Run/Turn Assembler。
-- `turnRequested → delivery → accepted → committed` Canonical Facts。
-- Canonical Event Log V2。
-- Canonical Fact 到 UI Item 的单向 Projection。
-- Projection checkpoint/rebuild。
-- Legacy snapshot dual-read。
 - fidelity/omission metadata。
 
 验收：
 
-- UI snapshot 不再作为新 Turn 的事实源。
+- Shadow 链路上 UI snapshot 不作为新 Turn 的事实源；真实流量切换属于 Change B 验收。
 - streaming delta 丢失不影响最终 Turn 恢复。
+- 所有启用 Engine 的 Terminal evidence 都通过稳定 run identity 进入同一 Assembler/Commit contract。
 - Tool Call/Result 以 Atomic Exchange 落盘。
 - User Intent 在调用外部 CLI 前已经 Durable。
 - Native Session 创建 Intent 在调用 Runtime 前已经 Durable。
 - Event、Sequence、Cursor、Pending Delivery 按事务 all-or-nothing。
 - App 重启后可由 Event Log 重建 UI Projection。
 - 旧 Shared Session 可读、可继续，不重写旧历史。
+- 旧 Claude/Codex Native Session 的 History、Streaming、Tool、Thinking、Approval、Patch 渲染无行为变化。
+- Shared Terminal Commit 与 Live Text 不生成重复 Assistant Final。
+- Shared 后台 Binding 在幕布关闭时不持续驱动 AppShell/Canvas 渲染。
+- A1、A2、A3 各自有独立验收，A3 不得成为存储层 crash correctness 的唯一验证入口。
+
+Phase 1 是 dark launch：交付后 Shared 产品行为与真实 Send 写路径保持 V0。Change B 接入真实 Send 前，A2 只消费 synthetic fixtures，以及从 V0 authoritative final evidence 建立的 read-only mirrored shadow ingress，并写入隔离的 Shadow Canonical Log；A3 只消费该 Shadow Log，与 Legacy dual-read Projection 对比，不作为 ingress，也不回写产品状态。不得把 Phase 1 完成误解为 Shared 产品流量已经切到 V2。
 
 ### Phase 2：Shared Session 支持 CLI × Provider
 
@@ -2296,9 +2689,7 @@ Claude/Official
 - Artifact Store/Reference 与 Progressive Retrieval。
 - Target-scoped two-phase cursor。
 - pending delivery recovery。
-- Codex `thread/inject_items` Capability Spike 与 Adapter。
-- Claude `--replay-user-messages` ACK。
-- Kimi ACP Capability Spike。
+- 基于 Phase 0 Spike 结论实现 Codex/Claude/Kimi Adapter；若实测 capability 不成立，按 Compatibility Matrix 降级，不修改既定 ACK 语义掩盖差异。
 
 验收：
 
@@ -2306,6 +2697,8 @@ Claude/Official
 - Tool Call/Result 不被错误拆散。
 - Handoff 可审计、可重放。
 - 同一 Native Binding 不重复注入其已有历史。
+- `native-delta` 不包含 provenance/attempt mapping 属于目标 Binding 自身的 Entries。
+- checkpoint 接受后遗漏内容不会在后续 delta 自动补发，只能按 Manifest progressive retrieval。
 - 每个 Runtime 根据 Capability 选择 import/clone/transcript/checkpoint，不按 Engine 名字硬编码假设。
 - source × target compatibility matrix 覆盖 Thinking、Tool ID、Image、Aborted Turn。
 - compile/accept/commit 三种失败不会错误推进对应游标。
@@ -2316,6 +2709,8 @@ Claude/Official
 交付：
 
 - “使用其他 Provider 继续”入口。
+- Claude/Codex/Kimi `NativeHistoryReader` 实现与 Contract Tests。
+- 目标 Side Effect 前持久化 immutable Native History materialization。
 - Context Package 复用。
 - 新 Native Session 创建与 Binding。
 - `provider-continuation` Origin。
@@ -2332,20 +2727,20 @@ Claude/Official
 - Provider Profile 不同。
 - `familyId` 与来源相同，`lineageParentSessionId` 指向来源。
 - 删除来源 Session 不级联删除 Continuation。
+- 来源 Native History 不写入 Shared Canonical Event Log；Reader 降级或 omission 对用户可见。
 
 ### Phase 5：Orchestration Foundation
 
 交付：
 
 - 复用现有幂等 `run.settled`
-- Run identity 到 `TurnExecutionSnapshot` 的稳定关联
-- Event Bus 的 Orchestrator Sink
+- 消费 A2 已提交 Canonical Fact 的 Orchestrator Projection
 - `steer/followUp/nextTurn`
 - Runtime Capability Matrix
 
 验收：
 
-- 所有启用 Engine 的 Terminal Fact 进入同一 Assembler/Commit contract。
+- Orchestrator 只消费 A2 Canonical Fact/Projection，不建立第二条 authoritative Event Sink。
 - Frontend Contract 不回退。
 - Shared 调度不依赖轮询。
 - Provider-scoped 并行不会串 Owner。
@@ -2369,21 +2764,59 @@ Claude/Official
 
 不要把全部能力塞进一个巨型 Change。
 
-基石只拆三个有强依赖的 Change；Provider Continuation 作为后续独立 Change，不阻塞 Shared V2：
+存储、Canonical Ingress、Projection/Migration 的失败模式与验收方式不同，原 Change A 必须拆成 A1/A2/A3。Provider Continuation 作为后续独立 Change，不阻塞 Shared V2。
 
-### Change A：establish-shared-canonical-context-log
+三个 Runtime Spike 是 Phase 0 的纯调研任务，不写产品代码；结论先于 A2/B/C 的 Runtime ACK、Provisioning 与 Delivery Adapter contract：
 
-范围：
+```text
+S1: spike-codex-thread-inject-items
+S2: spike-claude-replay-user-messages
+S3: spike-kimi-acp-session-lifecycle
+```
+
+### Change A1：establish-shared-event-storage
 
 - SQLite WAL Logical Schema / Migration
+- `SharedEventWriter` / single sequence allocator
+- Provider Usage Aggregate Ledger
+- Event insert + `next_sequence` atomic transaction
+- Unique Constraints / idempotency keys
+- Binding/Cursor/Pending transactional storage
+- crash、power-loss、corruption、backup/restore tests
+
+独立验收：无 UI、无 Runtime Adapter 时即可证明 sequence monotonicity、all-or-nothing 与 restart correctness。
+
+### Change A2：assemble-shared-canonical-facts
+
 - `conversation.turnRequested/Accepted/Committed`
+- `conversation.usageRecorded`
+- `provider.usageAggregateRecorded`
 - `context.deliveryPrepared/Accepted`
 - Run/Turn Assembler
-- Canonical Event Log V2
+- run identity → Snapshot/Binding durable association
+- fan-out/drop 前 authoritative ingress
+- Phase 1 read-only V0 final-evidence mirror → isolated Shadow Canonical Log
+- Critical Commit Sink
+- Atomic Tool Exchange validation
+- Runtime final snapshot → Canonical Fact contract
+
+`provider.usageAggregateRecorded` 进入 A1 Provider Usage Ledger，不进入 per-session `SharedCanonicalFact`；A2 只负责 normalization、revision/supersedes validation 与 Projection event。
+
+可选内部交付：read-only Event Log Inspector。它按 Session、sequence、attempt、fact type、binding 查询 Shared Event Log，也可按 Provider/window/report subject 查询 Provider Usage Ledger，并展示 checksum、provenance、fidelity、pending/cursor，用 feature flag/dev build 隔离；不得写 SQLite、修改/修复 Fact、推进 Cursor，或成为任何 Projection 的 authoritative source。
+
+独立验收：以 synthetic Runtime Events 驱动 Assembler，证明 duplicate Terminal、dropped delta、failed/cancelled outcome、Turn Usage Attribution 与 Provider Aggregate Usage 正确；Inspector 若启用，写操作与生产默认入口必须不可达。
+
+### Change A3：project-shared-canonical-conversation
+
 - UI Projection
+- Native/Shared Projection Isolation
+- Existing Canvas Compatibility Contract
+- Shadow Canonical Projection vs Legacy dual-read comparison
 - Projection Rebuild
 - Legacy snapshot dual-read
 - fidelity/omission contract
+
+独立验收：删除 Projection 后可重建；Legacy/Native Canvas golden fixtures 与 render regression gate 通过。
 
 ### Change B：compose-shared-session-execution-target
 
@@ -2405,7 +2838,7 @@ Claude/Official
 - Target-aware ContextCompiler
 - Native CLI projection modes
 - Runtime Capability / ACK Adapter
-- Codex History Import / Claude Input Echo / Kimi ACP Spike
+- 根据 S1/S2/S3 实测结果实现 Codex History Import / Claude Input ACK / Kimi ACP Adapter
 - Atomic Tool Exchange / Artifact Reference
 - Two-phase Cursor / Pending Delivery
 - Binding Provisioning Probe
@@ -2416,6 +2849,8 @@ Claude/Official
 范围：
 
 - Continuation 创建
+- NativeHistoryReader adapters / typed error / fidelity tests
+- NativeHistoryMaterialization persistence / retry reuse / unstable-cursor fail-closed
 - SessionOrigin / Conversation Family
 - Sidebar 标签与来源导航
 - 与 Subagent/User Fork 隔离
@@ -2423,12 +2858,21 @@ Claude/Official
 Change 依赖：
 
 ```text
-A: Canonical Event Log V2
+S1/S2/S3 Runtime Spikes
+        ├──────────────→ A2: Canonical Facts / Commit Sink
+        ├──────────────→ B: Shared Execution Target
+        └──────────────→ C: Shared Context Compiler
+
+A1: Event Storage
+        ↓
+A2: Canonical Facts / Commit Sink
+        ↓
+A3: Projection / Migration
         ↓
 B: Shared Execution Target
         ↓
 C: Shared Context Compiler
-        ├─→ D: Native Provider Continuation
+        ├─→ D: Native Provider Continuation + NativeHistoryReader
         └─→ Future Orchestration / Plugin Hooks / RPC
 ```
 
@@ -2447,6 +2891,9 @@ C: Shared Context Compiler
 OpenSpec 验收不得只检查字段存在。必须同时验证：
 
 - Canonical Fact 从 Engine Event 到持久化、UI Projection、ContextCompiler 的 end-to-end data flow。
+- User-visible Native Session 保持原 History/Event/Projection 链路，不进入 Shared Canonical Persistence。
+- Shared-owned Hidden Binding Event 按 owner/run identity 进入 Shared Assembler，不投影成 Native Conversation。
+- `ConversationItem`、`threadItems.ts`、`liveAssistantTextChannel` 的既有 Presentation/Streaming Contract 不被 Shared V2 改写。
 - 同一 Engine 多 Provider 的 Binding/Process/Approval/Interrupt 隔离。
 - Legacy 与 V2 dual-read。
 - compile、acceptance、commit 三个 failure boundary 的幂等恢复。
@@ -2463,6 +2910,7 @@ OpenSpec 验收不得只检查字段存在。必须同时验证：
 |---|---|
 | Runtime 创建 Subagent | 嵌套显示，带 `子代理` 标签 |
 | 用户创建 Fork | 顶层显示，带 `Fork` 标签 |
+| 用户尝试从 Shared 历史 Turn Fork | 第一阶段明确不支持；不创建 Native Fork 或 Hidden Binding |
 | 用户换 Provider 继续 | 顶层显示，带 `供应商续接` 标签 |
 | Shared 创建 Hidden Binding | Sidebar 不显示 |
 | Provider Continuation 带 sourceSessionId | 可查看来源，但不嵌套 |
@@ -2493,6 +2941,9 @@ OpenSpec 验收不得只检查字段存在。必须同时验证：
 | Tool Result 很长 | 保留结构化引用，Summary 有界 |
 | Tool call/result 超出预算 | 成对保留或成对省略 |
 | 切回同一 Hidden Binding | 只注入缺失 delta，不重放 Native History |
+| Canonical Entry 原生属于目标 Binding | 从 `native-delta` 排除，不重复注入 |
+| Provider Continuation 读取 Native 来源 | `NativeHistoryReader` 只读输出 canonical-shaped entries，不写 Shared Log |
+| checkpoint ACK 后再切回目标 | omitted Entries 不自动补发；仅按 `retrievableRef` 检索 |
 | 目标需要被省略细节 | 通过 retrievable ref 按需读取 |
 | Codex 支持 `thread/inject_items` | Capability probe 后使用 `native-history-import`，JSON-RPC success 才推进 Context accepted |
 | Codex 版本不支持 Import | 自动降级为 transcript/checkpoint，并在 Manifest 记录原因 |
@@ -2557,6 +3008,28 @@ Codex / Provider A
 - control message 只作为 reference context。
 - 重启后由 `pendingDelivery` 和 two-phase cursor 幂等恢复。
 
+### 17.6 Native Canvas 防回归矩阵
+
+| 对象 | 场景 | 预期 |
+|---|---|---|
+| Claude Native History | 打开升级前 Session | item order/type/content 保持；不读取 Shared DB |
+| Claude Native Live | text/thinking/tool/permission/interrupt | 现有事件语义与 Renderer behavior 不变 |
+| Codex Native History | reasoning/tool/patch/error 混合历史 | Engine-specific fidelity 保留 |
+| Codex Native Live | item lifecycle 到 `turn/completed` | 不因 Canonical Sink 重复 item/final |
+| Shared Live | delta → terminal commit | Live Text 平滑收束，只有一个 Assistant Final |
+| Shared Target Switch | Claude → Codex → Claude | 幕布不 remount；既有 item 不重建或闪烁 |
+| Shared Projection | 删除 cache 后 rebuild | item count/order/type/checksum 一致 |
+| Shared Background | Binding 运行、幕布关闭 | 无持续 Canvas/AppShell render storm |
+| Sidebar | Shared 创建/恢复 Hidden Binding | 始终一个 Shared Row，不出现 Native Child |
+| Legacy Shared | dual-read 后继续 | 不重写旧 snapshot；新 Turn 按 V2 边界追加 |
+
+硬门禁：
+
+- Native golden fixtures 失败：阻断 Shared V2 合并。
+- Shared 出现 duplicate Assistant Final、Tool Exchange 断裂或 Engine-private block 静默丢失：阻断 rollout。
+- foreground streaming 重新引入逐 delta 根 dispatch：阻断 rollout。
+- background Shared Binding 造成持续根渲染：阻断 rollout。
+
 ---
 
 ## 十八、Non-goals
@@ -2572,7 +3045,8 @@ Codex / Provider A
 - 自动删除旧 Provider Session；
 - 自动迁移 Tool State；
 - 完整 DAG；
-- 先开放 Plugin API 再补 Runtime Contract。
+- 先开放 Plugin API 再补 Runtime Contract；
+- 从 Shared Session 的历史 Turn 创建 Fork 或 Canonical Branch。
 
 ---
 
@@ -2608,6 +3082,16 @@ Codex / Provider A
 28. SQLite Event Log 只允许 Rust Writer 写入；Frontend、Renderer、Engine Adapter 不得直接改表或分配 sequence。
 29. Context Compaction 不得删除 Canonical Event；Retention 必须是独立、显式的数据生命周期能力。
 30. Hidden Binding Lazy Create 必须先持久化 Provisioning Intent；Identity ACK 不确定时不得盲目重复创建。
+31. `ConversationItem` 只能作为 Presentation Model；不得承载 Canonical Fact、ACK、Cursor 或 Recovery Truth。
+32. Shared V2 不得改写现有 Claude/Codex Native Event 的含义、顺序与 Terminal settlement。
+33. User-visible Native Session 不得被迫迁入 Shared Canonical Pipeline，不得经过 Shared ContextCompiler 或创建 Shared Binding。
+34. `threadItems.ts` 不得承担 Canonical normalization、跨 Target replay 或 Shared persistence。
+35. streaming delta 必须继续外部化；不得恢复逐 delta dispatch 进 AppShell 根 reducer 或逐 delta Canonical Commit。
+36. Shared-owned Hidden Binding 必须按 owner/run identity 路由；不得投影成第二条 Native Conversation 或 Subagent。
+37. Provider Continuation 读取 Native 来源必须经过只读 `NativeHistoryReader`；不得要求 Native Session 迁入 Shared Canonical Pipeline，也不得修改 vendor history file。
+38. `native-delta` 必须排除目标 Binding 原生拥有的 Entries；Cursor 不能替代 provenance/attempt-to-binding ownership 判断。
+39. checkpoint ACK 后遗漏内容不得通过回退 Cursor 自动重放；只能按 `ProjectionManifest.omitted` 的 retrieval contract 获取。
+40. Shared Session 保持 strictly linear；第一阶段不得从历史 Turn fork，也不得在 ambiguous ACK 未决时放行其他 Target。
 
 ---
 
@@ -2653,6 +3137,8 @@ User Fork / Provider Continuation
 
 ## 二十一、参考材料
 
+- [`mossx-new-cli-onboarding-guide.md`](./mossx-new-cli-onboarding-guide.md)（关联落地文档：新 CLI 接入流程）
+- [`2026-07-27-multi-cli-provider-session-foundation-task-checklist.md`](../plans/2026-07-27-multi-cli-provider-session-foundation-task-checklist.md)（实施任务清单）
 - [`mossx-plugin-market-and-cli-foundation-design.md`](./mossx-plugin-market-and-cli-foundation-design.md)
 - [`pi-architecture-plugin-marketplace-analysis.md`](./pi-architecture-plugin-marketplace-analysis.md)
 - [`pi-chat-orchestration-research.md`](./pi-chat-orchestration-research.md)
@@ -2672,6 +3158,7 @@ User Fork / Provider Continuation
 - [`kimi.rs`](../../src-tauri/src/engine/kimi.rs)
 - [`ConversationItem`](../../src/types/conversation.ts)
 - [`threadItems.ts`](../../src/utils/threadItems.ts)
+- [`render-jank-knife-experiments-2026-07-08.md`](../perf/render-jank-knife-experiments-2026-07-08.md)
 - [pi-ai: Cross-Provider Handoffs](https://github.com/earendil-works/pi/blob/main/packages/ai/README.md#cross-provider-handoffs)
 - [pi-ai: `transform-messages.ts`](https://github.com/earendil-works/pi/blob/main/packages/ai/src/api/transform-messages.ts)
 - [pi-ai: `cross-provider-handoff.test.ts`](https://github.com/earendil-works/pi/blob/main/packages/ai/test/cross-provider-handoff.test.ts)

@@ -17,6 +17,7 @@
 - [Refine Project Map API Contract Detail View Implementation Plan](2026-06-07-refine-project-map-api-contract-detail-view.md)
 - [Claude 供应商列表拖动排序与启用项置顶](2026-06-20-claude-provider-drag-reorder.md)
 - [Claude 供应商对话框拉取模型列表](2026-06-20-claude-provider-fetch-models.md)
+- [多 CLI × 多 Provider 会话基石实施任务清单](2026-07-27-multi-cli-provider-session-foundation-task-checklist.md)
 
 ## 已迁移的历史计划
 

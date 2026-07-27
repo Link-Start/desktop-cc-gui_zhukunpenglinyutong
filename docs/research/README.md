@@ -12,6 +12,13 @@
 - [项目记忆模块架构设计图](03-project-memory-architecture.md)
 - [项目记忆消费机制研究](04-project-memory-consumption-research.md)
 
+## 多 CLI × 多 Provider 会话基石
+
+- [多 CLI × 多 Provider 会话基石架构设计](mossx-multi-cli-provider-session-foundation-design.md)（Implementation-ready）
+- [新 CLI 接入指南](mossx-new-cli-onboarding-guide.md)（基石设计的关联落地文档：Spike 模板、七步接入、Contract Tests、零影响清单）
+
+实施 backlog 以 OpenSpec 为准；执行顺序见 [任务清单](../plans/2026-07-27-multi-cli-provider-session-foundation-task-checklist.md)。
+
 ## 开发运行手册
 
 - [桌面开发版快速启动 Runbook](desktop-dev-fast-start-runbook.md)
