@@ -1541,3 +1541,36 @@ openspec validate assemble-shared-canonical-facts --strict --no-interactive: val
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1184: Wave 3 A3：canonical 投影、checkpoint/rebuild、dual-read 与 Gate 3
+
+**Date**: 2026-07-27
+**Task**: Wave 3 A3：canonical 投影、checkpoint/rebuild、dual-read 与 Gate 3
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 project-shared-canonical-conversation：SharedProjector（turnRequested/turnCommitted/usageRecorded/control → ProjectionItem）、projection checkpoint + 幂等 rebuild、Legacy snapshot dual-read（presentation-only，不伪造 Tool ID/Signature/Target）、ShadowComparator mismatch 分类、前端 Shared DataSource（flag-gated seam，默认关闭）与 Canvas 四条硬门禁回归测试。Gate 3 通过：cargo 全套件 1651 通过 + 2 个已知环境性失败（沿用 Wave 2 结论）；前端 sharedProjection 8/8；openspec validate strict 通过。dark launch 纪律保持：Shared 真实流量仍走 V0，Canvas 消费端随 Wave 4 Tauri command 接入。另记录 1 个前端既有失败（CODEX_MODELS 列表测试未随 commit 34b758e33 同步）。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f403ce879` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
