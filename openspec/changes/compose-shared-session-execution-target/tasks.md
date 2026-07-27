@@ -54,4 +54,4 @@
 - [x] 7.3 `npm run test` Shared 相关套件 + `npm run typecheck`（`tauri.test.ts` 5 个与 `useThreadMessaging.test.tsx` 10 个失败属 OpenCode/Gemini retirement 进行中迁移的 HEAD 基线失败，非本 change 引入）
 - [x] 7.4 `openspec validate compose-shared-session-execution-target --strict --no-interactive`
 - [x] 7.5 更新 master checklist Wave 4 状态
-- [ ] 7.6 Commit 并记录 Trellis session
+- [x] 7.6 Commit 并记录 Trellis session
