@@ -1382,3 +1382,36 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1180: 修复运行时卡顿与模型目录竞态
+
+**Date**: 2026-07-27
+**Task**: 修复运行时卡顿与模型目录竞态
+**Branch**: `feature/v-0710`
+
+### Summary
+
+原子化 provider model catalog scope，改为增量持久化 renderer diagnostics，并隔离 live assistant text 的高频 Timeline 更新；focused tests、typecheck、增量 lint、相关 runtime contracts 与 OpenSpec strict validation 均通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `35a72b395` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
