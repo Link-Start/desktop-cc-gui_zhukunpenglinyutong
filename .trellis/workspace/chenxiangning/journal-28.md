@@ -1607,3 +1607,36 @@ openspec validate assemble-shared-canonical-facts --strict --no-interactive: val
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1186: 明确 Change A 收口路径与 Change B 准入条件
+
+**Date**: 2026-07-27
+**Task**: 明确 Change A 收口路径与 Change B 准入条件
+**Branch**: `feature/v-0710`
+
+### Summary
+
+同步多 CLI 多 Provider 总任务清单：记录 A1/A2/A3 实际进度、Change A 端到端闭环定义、A2/A3 收口顺序，并禁止 Gate 2/3 关闭前进入 Change B 产品代码。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e3562c9d5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
