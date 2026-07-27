@@ -21,6 +21,28 @@ use common::TempStoreDir;
 
 const SESSION: &str = "a2-session";
 
+#[test]
+fn rust_facts_round_trip_wave0_valid_schema_fixtures() {
+    for source in [
+        include_str!(
+            "../../openspec/changes/establish-session-foundation-contracts/schemas/examples/valid/turn-committed.json"
+        ),
+        include_str!(
+            "../../openspec/changes/establish-session-foundation-contracts/schemas/examples/valid/control-fact.json"
+        ),
+    ] {
+        let envelope: serde_json::Value = serde_json::from_str(source).expect("fixture json");
+        let expected_fact = envelope.get("fact").expect("fixture fact").clone();
+        let fact: CanonicalFact =
+            serde_json::from_value(expected_fact.clone()).expect("deserialize Rust fact");
+        cc_gui_lib::shared_event_log::canonical::validate_fact(&fact).expect("validate Rust fact");
+        assert_eq!(
+            serde_json::to_value(fact).expect("serialize Rust fact"),
+            expected_fact
+        );
+    }
+}
+
 fn snapshot() -> TurnExecutionSnapshot {
     TurnExecutionSnapshot {
         engine: "claude".to_string(),
@@ -71,7 +93,6 @@ fn make_turn_committed(attempt_id: &str, outcome: OutcomeStatus) -> CanonicalFac
             blocks: vec![CanonicalBlock::Text {
                 text: "hello back".to_string(),
             }],
-            extra: serde_json::Value::Object(Default::default()),
         },
         atomic_tool_exchanges: vec![],
         artifact_refs: vec![],
@@ -135,7 +156,10 @@ fn valid_fact_accepted_invalid_rejected() {
     let outcome = writer
         .append_canonical_fact(SESSION, valid)
         .expect("valid fact");
-    assert!(matches!(outcome, AppendOutcome::Inserted { sequence: 1, .. }));
+    assert!(matches!(
+        outcome,
+        AppendOutcome::Inserted { sequence: 1, .. }
+    ));
 
     let mut invalid = make_turn_committed("attempt-invalid", OutcomeStatus::Failed);
     if let CanonicalFact::TurnCommitted(ref mut f) = invalid {
@@ -145,7 +169,10 @@ fn valid_fact_accepted_invalid_rejected() {
         .append_canonical_fact(SESSION, invalid)
         .expect_err("invalid fact");
     assert!(
-        matches!(error, cc_gui_lib::shared_event_log::StoreError::ValidationFailed { .. }),
+        matches!(
+            error,
+            cc_gui_lib::shared_event_log::StoreError::ValidationFailed { .. }
+        ),
         "unexpected error: {error}"
     );
 
@@ -170,7 +197,12 @@ fn duplicate_terminal_commit_is_idempotent() {
         let outcome = writer
             .append_canonical_fact(SESSION, fact.clone())
             .expect("replay");
-        assert_eq!(outcome, AppendOutcome::Duplicate { existing_sequence: sequence });
+        assert_eq!(
+            outcome,
+            AppendOutcome::Duplicate {
+                existing_sequence: sequence
+            }
+        );
     }
 
     assert_eq!(writer.count_events(Some(SESSION)).expect("count"), 1);
@@ -191,7 +223,8 @@ fn failed_cancelled_replaced_outcomes_all_commit() {
     .iter()
     .enumerate()
     {
-        let fact = make_turn_committed(&format!("attempt-outcome-{index}"),
+        let fact = make_turn_committed(
+            &format!("attempt-outcome-{index}"),
             // Failed 需要 errorCode；Cancelled/Replaced 不需要。
             if matches!(status, OutcomeStatus::Failed) {
                 OutcomeStatus::Failed
@@ -283,7 +316,12 @@ fn usage_recorded_dedupes_by_usage_record_id() {
         let outcome = writer
             .append_canonical_fact(SESSION, fact.clone())
             .expect("replay");
-        assert_eq!(outcome, AppendOutcome::Duplicate { existing_sequence: sequence });
+        assert_eq!(
+            outcome,
+            AppendOutcome::Duplicate {
+                existing_sequence: sequence
+            }
+        );
     }
 
     assert_eq!(writer.count_events(Some(SESSION)).expect("count"), 1);
@@ -314,7 +352,9 @@ fn provider_aggregate_usage_goes_to_ledger() {
         LedgerOutcome::Inserted
     );
     assert_eq!(
-        writer.record_provider_usage(&record).expect("ledger replay"),
+        writer
+            .record_provider_usage(&record)
+            .expect("ledger replay"),
         LedgerOutcome::Duplicate
     );
 
@@ -343,7 +383,10 @@ fn v0_shadow_log_is_presentation_only() {
     let outcome = writer
         .append_canonical_fact(SESSION, canonical)
         .expect("canonical after shadow");
-    assert!(matches!(outcome, AppendOutcome::Inserted { sequence: 2, .. }));
+    assert!(matches!(
+        outcome,
+        AppendOutcome::Inserted { sequence: 2, .. }
+    ));
 
     writer.shutdown().unwrap();
 }
@@ -373,6 +416,7 @@ fn critical_commit_sink_idempotent() {
         "entry-sink",
         snapshot(),
         final_snapshot,
+        1_700_000_000_100,
     )
     .expect("first commit");
     let AppendOutcome::Inserted { sequence, .. } = first else {
@@ -380,7 +424,7 @@ fn critical_commit_sink_idempotent() {
     };
 
     // 模拟 run.settled 重复触发：Sink 应幂等。
-    for _ in 0..50 {
+    for _ in 0..100 {
         let final_snapshot = RuntimeFinalSnapshot {
             assistant_text: Some("sink reply".to_string()),
             tool_calls: vec![],
@@ -399,40 +443,53 @@ fn critical_commit_sink_idempotent() {
             "entry-sink",
             snapshot(),
             final_snapshot,
+            1_700_000_000_100,
         )
         .expect("replay");
-        assert_eq!(outcome, AppendOutcome::Duplicate { existing_sequence: sequence });
+        assert_eq!(
+            outcome,
+            AppendOutcome::Duplicate {
+                existing_sequence: sequence
+            }
+        );
     }
 
     assert_eq!(writer.count_events(Some(SESSION)).expect("count"), 1);
     writer.shutdown().unwrap();
 }
 
-/// Scenario: control fact has no attempt_id and dedupes by event_id。
+/// Scenario: control fact uses schema fields and dedupes by occurrence identity。
 #[test]
 fn control_fact_dedupes_by_event_id() {
     let temp = TempStoreDir::new("control");
     let writer = open_writer(&temp);
 
     let fact = CanonicalFact::Control(ControlFact {
-        action: "cancel".to_string(),
-        target_attempt_id: Some("attempt-1".to_string()),
-        target_logical_turn_id: Some("turn-1".to_string()),
-        issued_at: 1_700_000_000_000,
+        control_kind: "delivery.cancelled".to_string(),
+        logical_turn_id: Some("turn-1".to_string()),
+        attempt_id: Some("attempt-1".to_string()),
+        binding_key: None,
+        reason: Some("cancel".to_string()),
+        details: None,
         extra: serde_json::Value::Object(Default::default()),
     });
 
     let first = writer
-        .append_canonical_fact(SESSION, fact.clone())
+        .append_canonical_fact_at(SESSION, fact.clone(), 1_700_000_000_000)
         .expect("first control");
     let AppendOutcome::Inserted { sequence, .. } = first else {
         panic!("first must insert");
     };
 
     let outcome = writer
-        .append_canonical_fact(SESSION, fact)
+        .append_canonical_fact_at(SESSION, fact, 1_700_000_000_000)
         .expect("replay");
-    assert_eq!(outcome, AppendOutcome::Duplicate { existing_sequence: sequence });
+    assert_eq!(
+        outcome,
+        AppendOutcome::Duplicate {
+            existing_sequence: sequence
+        }
+    );
 
     writer.shutdown().unwrap();
 }

@@ -1,5 +1,9 @@
 # Proposal: assemble-shared-canonical-facts
 
+## 2026-07-27 Implementation Calibration
+
+当前只完成 Canonical types/validation、Writer、synthetic Assembler/Sink 与 Shadow mapper substrate。真实 Runtime Lifecycle Owner final snapshot ingress、`run.settled` SQLite ACK gate、run identity durable association、真实 V0 mirror 尚未接入。故本 change 保持 in-progress，Gate 2 不得关闭。
+
 ## Why
 
 Wave 0 冻结了 Canonical Fact Schema，Wave 1（A1）建成了 SQLite WAL Canonical Event Storage，但 Shared Session V2 仍然只是把“原始 JSON 字符串”塞进 `shared_event_log`：没有 Rust 端的 Canonical Fact 类型、没有 payload 字段级校验、没有 Run/Turn 装配逻辑、没有 Commit Sink。本 change 在 A1 存储地基之上，把 Runtime 事件流装配成符合 Wave 0 Schema 的 canonical fact，并作为唯一写入口写入 SQLite，为 Wave 3 的 UI Projection 提供可信、可审计、可重放的 authoritative source。

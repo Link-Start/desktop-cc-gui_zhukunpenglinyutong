@@ -1,5 +1,9 @@
 # Proposal: project-shared-canonical-conversation
 
+## 2026-07-27 Implementation Calibration
+
+当前完成 Rust projector、incremental checkpoint/rebuild、真实 V0 `log.jsonl` reader、Shadow comparator 与 frontend DataSource seam。Tauri commands、Messages/Canvas 接线、same-session target switch no-remount、background binding no-render-storm 尚未实现。故本 change 保持 in-progress，Gate 3 不得关闭。
+
 ## Why
 
 Wave 1（A1）与 Wave 2（A2）已经建成 SQLite WAL Canonical Event Storage 与 Canonical Fact 装配/Commit Sink，但 Shared Session V2 仍是“只进不出”：Canonical Fact 只存在于 `shared_event_log` 表中，没有从 fact 到 UI 的投影、没有 checkpoint、没有 rebuild、没有 Legacy dual-read、没有 Canvas 防回归。本 change 把 A2 产出的 canonical fact 投影为幕布兼容的 `ConversationItem`，并建立 Shared/Native 双 DataSource 隔离，为 Wave 4 真实流量切换提供可信、可重建、可回滚的 Presentation 层。

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::shared_event_log::{Fidelity, StoreError};
+use crate::shared_event_log::{payload_checksum, Fidelity, StoreError};
 
 use super::types::{ProjectionItem, ProjectionItemKind};
 
@@ -26,73 +26,78 @@ impl LegacySharedReader {
         self.parse_snapshot(&content)
     }
 
-    /// 从 JSON 字符串解析 V0 snapshot。
+    /// 从 V0 `log.jsonl` 解析最后一个 snapshot。
     pub fn parse_snapshot(&self, content: &str) -> Result<Vec<ProjectionItem>, StoreError> {
-        let root: Value = serde_json::from_str(content)
-            .map_err(|source| StoreError::json("parse legacy snapshot", source))?;
-
-        let mut items = Vec::new();
-
-        // V0 snapshot 常见结构：{ "messages": [...], "turns": [...], ... }
-        if let Some(messages) = root.get("messages").and_then(|m| m.as_array()) {
-            for (index, msg) in messages.iter().enumerate() {
-                if let Some(item) = self.map_message(index, msg) {
-                    items.push(item);
-                }
+        let mut latest_snapshot = None;
+        for (line_index, line) in content.lines().enumerate() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let entry: Value = serde_json::from_str(line).map_err(|source| {
+                StoreError::json(
+                    format!("parse legacy snapshot line {}", line_index + 1),
+                    source,
+                )
+            })?;
+            if entry.get("kind").and_then(Value::as_str) == Some("snapshot")
+                && entry.get("items").and_then(Value::as_array).is_some()
+            {
+                latest_snapshot = Some(entry);
             }
         }
 
-        if let Some(turns) = root.get("turns").and_then(|t| t.as_array()) {
-            for (index, turn) in turns.iter().enumerate() {
-                if let Some(item) = self.map_turn(index, turn) {
-                    items.push(item);
-                }
-            }
-        }
+        let snapshot = latest_snapshot.ok_or_else(|| {
+            StoreError::validation_failed(
+                "legacy shared snapshot",
+                "no valid snapshot entry with items found",
+            )
+        })?;
+        let snapshot_created_at = snapshot
+            .get("createdAt")
+            .and_then(Value::as_u64)
+            .unwrap_or_default();
+        let source_items = snapshot
+            .get("items")
+            .and_then(Value::as_array)
+            .expect("validated snapshot items");
 
-        Ok(items)
+        Ok(source_items
+            .iter()
+            .enumerate()
+            .map(|(index, item)| self.map_item(snapshot_created_at, index, item))
+            .collect())
     }
 
-    fn map_message(&self, index: usize, msg: &Value) -> Option<ProjectionItem> {
-        let role = msg.get("role")?.as_str()?;
-        let text = msg.get("text")?.as_str()?;
-        let kind = match role {
-            "user" | "assistant" => ProjectionItemKind::Message,
-            _ => return None,
+    fn map_item(&self, snapshot_created_at: u64, index: usize, item: &Value) -> ProjectionItem {
+        let kind = match item.get("kind").and_then(Value::as_str) {
+            Some("message") => ProjectionItemKind::Message,
+            Some("reasoning") => ProjectionItemKind::Reasoning,
+            Some("tool") => ProjectionItemKind::Tool,
+            Some("diff") => ProjectionItemKind::Diff,
+            Some("review") => ProjectionItemKind::Review,
+            Some("explore") => ProjectionItemKind::Explore,
+            Some("generatedImage") => ProjectionItemKind::GeneratedImage,
+            _ => ProjectionItemKind::Metadata,
         };
+        let id = item
+            .get("id")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("legacy:{snapshot_created_at}:{index}"));
+        let mut content = item.clone();
+        if let Some(object) = content.as_object_mut() {
+            object.remove("id");
+            object.remove("kind");
+        }
+        let checksum = payload_checksum(2, "legacy.snapshot.item", item)
+            .unwrap_or_else(|_| format!("legacy:{snapshot_created_at}:{index}"));
 
-        Some(ProjectionItem {
-            id: format!("legacy:message:{index}"),
+        ProjectionItem {
+            id,
             kind,
-            content: serde_json::json!({
-                "role": role,
-                "text": text,
-                "isFinal": true,
-            }),
+            content,
             fidelity: Fidelity::PresentationOnly,
-            checksum: format!("legacy:{index}"),
-        })
-    }
-
-    fn map_turn(&self, index: usize, turn: &Value) -> Option<ProjectionItem> {
-        // 保守映射：只提取已知字段，不猜测 Tool ID / Target。
-        let status = turn.get("status").and_then(|s| s.as_str())?;
-        let text = turn
-            .get("assistantText")
-            .and_then(|t| t.as_str())
-            .unwrap_or("");
-
-        Some(ProjectionItem {
-            id: format!("legacy:turn:{index}"),
-            kind: ProjectionItemKind::Message,
-            content: serde_json::json!({
-                "role": "assistant",
-                "text": text,
-                "status": status,
-                "isFinal": true,
-            }),
-            fidelity: Fidelity::PresentationOnly,
-            checksum: format!("legacy:turn:{index}"),
-        })
+            checksum,
+        }
     }
 }

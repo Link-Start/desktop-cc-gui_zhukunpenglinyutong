@@ -30,20 +30,20 @@
 
 - [x] 5.1 Create `src/features/messages/presentation/sharedProjection/types.ts`
 - [x] 5.2 Create `src/features/messages/presentation/sharedProjection/dataSource.ts`
-- [x] 5.3 Wire Shared DataSource into Messages/Canvas behind feature flag（交付为 flag-gated seam `resolveSharedConversationItems`；Canvas 消费端随 Wave 4 Tauri command 接入）
+- [ ] 5.3 Wire Shared DataSource into Messages/Canvas behind feature flag
 - [x] 5.4 Frontend unit tests for Shared DataSource isolation
 
 ## 6. Canvas Regression Gate
 
 - [x] 6.1 Add Native golden fixtures regression test
 - [x] 6.2 Add Shared projection rebuild determinism test
-- [x] 6.3 Add Shared target switch no-remount test
-- [x] 6.4 Add background binding no-render-storm test
+- [ ] 6.3 Add Shared target switch no-remount test
+- [ ] 6.4 Add background binding no-render-storm test
 
 ## 7. Gate 3 Verification
 
-- [x] 7.1 Run full `cargo test --manifest-path src-tauri/Cargo.toml`
-- [x] 7.2 Run `npm run test` for Shared Projection tests
-- [x] 7.3 Run `openspec validate project-shared-canonical-conversation --strict --no-interactive`
+- [ ] 7.1 Run full `cargo test --manifest-path src-tauri/Cargo.toml`
+- [ ] 7.2 Run `npm run test` for Shared Projection tests
+- [ ] 7.3 Run `openspec validate project-shared-canonical-conversation --strict --no-interactive`
 - [x] 7.4 Update master task checklist Wave 3 status
-- [x] 7.5 Commit and record Trellis session
+- [ ] 7.5 Commit and record Trellis session

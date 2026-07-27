@@ -63,6 +63,7 @@ fn validate_turn_requested(f: &TurnRequestedFact) -> Result<(), FactValidationEr
     let ctx = "conversation.turnRequested";
     require_non_empty(&f.logical_turn_id, "logicalTurnId", ctx)?;
     require_non_empty(&f.attempt_id, "attemptId", ctx)?;
+    validate_optional_non_empty(&f.retry_of_attempt_id, "retryOfAttemptId", ctx)?;
     validate_user_input(&f.input, ctx)?;
     validate_turn_execution_snapshot(&f.target, ctx)?;
     validate_timestamp(f.requested_at, "requestedAt", ctx)?;
@@ -75,8 +76,15 @@ fn validate_delivery_prepared(f: &DeliveryPreparedFact) -> Result<(), FactValida
     require_non_empty(&f.attempt_id, "attemptId", ctx)?;
     require_non_empty(&f.binding_key, "bindingKey", ctx)?;
     require_non_empty(&f.package_id, "packageId", ctx)?;
-    require_non_empty(&f.source_checksum, "sourceChecksum", ctx)?;
-    validate_timestamp(f.through_sequence_inclusive, "throughSequenceInclusive", ctx)?;
+    validate_payload_checksum(&f.source_checksum, "sourceChecksum", ctx)?;
+    if let Some(from_sequence) = f.from_sequence_exclusive {
+        validate_timestamp(from_sequence, "fromSequenceExclusive", ctx)?;
+    }
+    validate_timestamp(
+        f.through_sequence_inclusive,
+        "throughSequenceInclusive",
+        ctx,
+    )?;
     Ok(())
 }
 
@@ -86,6 +94,7 @@ fn validate_delivery_accepted(f: &DeliveryAcceptedFact) -> Result<(), FactValida
     require_non_empty(&f.attempt_id, "attemptId", ctx)?;
     require_non_empty(&f.binding_key, "bindingKey", ctx)?;
     require_non_empty(&f.package_id, "packageId", ctx)?;
+    validate_optional_non_empty(&f.native_request_id, "nativeRequestId", ctx)?;
     validate_timestamp(f.accepted_at, "acceptedAt", ctx)?;
     Ok(())
 }
@@ -97,6 +106,7 @@ fn validate_turn_accepted(f: &TurnAcceptedFact) -> Result<(), FactValidationErro
     require_non_empty(&f.client_turn_id, "clientTurnId", ctx)?;
     require_non_empty(&f.binding_key, "bindingKey", ctx)?;
     require_non_empty(&f.native_session_id, "nativeSessionId", ctx)?;
+    validate_optional_non_empty(&f.native_turn_id, "nativeTurnId", ctx)?;
     validate_timestamp(f.accepted_at, "acceptedAt", ctx)?;
     Ok(())
 }
@@ -112,6 +122,9 @@ fn validate_turn_committed(f: &TurnCommittedFact) -> Result<(), FactValidationEr
     validate_timestamp(f.committed_at, "committedAt", ctx)?;
     for (index, exchange) in f.atomic_tool_exchanges.iter().enumerate() {
         validate_atomic_tool_exchange(exchange, &format!("{ctx}.atomicToolExchanges[{index}]"))?;
+    }
+    for (index, artifact) in f.artifact_refs.iter().enumerate() {
+        validate_artifact_ref(artifact, &format!("{ctx}.artifactRefs[{index}]"))?;
     }
     for (index, omission) in f.omissions.iter().enumerate() {
         validate_omission(omission, &format!("{ctx}.omissions[{index}]"))?;
@@ -130,7 +143,14 @@ fn validate_usage_recorded(f: &UsageRecordedFact) -> Result<(), FactValidationEr
     require_non_empty(&f.attempt_id, "attemptId", ctx)?;
     require_non_empty(&f.binding_key, "bindingKey", ctx)?;
     require_non_empty(&f.native_session_id, "nativeSessionId", ctx)?;
+    validate_optional_non_empty(
+        &f.supersedes_usage_record_id,
+        "supersedesUsageRecordId",
+        ctx,
+    )?;
+    validate_optional_non_empty(&f.native_turn_id, "nativeTurnId", ctx)?;
     validate_turn_execution_snapshot(&f.target, ctx)?;
+    validate_usage_shape(&f.usage, ctx)?;
     validate_timestamp(f.observed_at, "observedAt", ctx)?;
     if f.revision < 1 {
         return Err(FactValidationError::new(ctx, "revision must be >= 1"));
@@ -140,15 +160,22 @@ fn validate_usage_recorded(f: &UsageRecordedFact) -> Result<(), FactValidationEr
 
 fn validate_control(f: &ControlFact) -> Result<(), FactValidationError> {
     let ctx = "conversation.controlFact";
-    require_non_empty(&f.action, "action", ctx)?;
-    validate_timestamp(f.issued_at, "issuedAt", ctx)?;
+    validate_control_kind(&f.control_kind, ctx)?;
+    validate_optional_non_empty(&f.logical_turn_id, "logicalTurnId", ctx)?;
+    validate_optional_non_empty(&f.attempt_id, "attemptId", ctx)?;
+    validate_optional_non_empty(&f.binding_key, "bindingKey", ctx)?;
+    if let Some(details) = &f.details {
+        if !details.is_object() {
+            return Err(FactValidationError::new(ctx, "details must be an object"));
+        }
+    }
     Ok(())
 }
 
 fn validate_user_input(input: &CanonicalUserInput, ctx: &str) -> Result<(), FactValidationError> {
     let has_text = input.text.is_some();
-    let has_images = input.image_refs.as_ref().map_or(false, |v| !v.is_empty());
-    let has_attachments = input.attachment_refs.as_ref().map_or(false, |v| !v.is_empty());
+    let has_images = input.image_refs.is_some();
+    let has_attachments = input.attachment_refs.is_some();
     if !has_text && !has_images && !has_attachments {
         return Err(FactValidationError::new(
             ctx,
@@ -172,7 +199,38 @@ fn validate_turn_execution_snapshot(
     snapshot: &TurnExecutionSnapshot,
     ctx: &str,
 ) -> Result<(), FactValidationError> {
-    require_non_empty(&snapshot.engine, "engine", ctx)?;
+    if !matches!(
+        snapshot.engine.as_str(),
+        "claude" | "codex" | "gemini" | "kimi" | "opencode"
+    ) {
+        return Err(FactValidationError::new(
+            ctx,
+            format!("unknown engine enum value: {}", snapshot.engine),
+        ));
+    }
+    validate_optional_non_empty(&snapshot.provider_profile_id, "providerProfileId", ctx)?;
+    validate_optional_non_empty(&snapshot.model, "model", ctx)?;
+    validate_optional_non_empty(
+        &snapshot.provider_profile_name_snapshot,
+        "providerProfileNameSnapshot",
+        ctx,
+    )?;
+    validate_optional_non_empty(
+        &snapshot.runtime_capability_fingerprint,
+        "runtimeCapabilityFingerprint",
+        ctx,
+    )?;
+    if let Some(source) = &snapshot.provider_profile_source {
+        if !matches!(source.as_str(), "local" | "managed") {
+            return Err(FactValidationError::new(
+                ctx,
+                format!("unknown providerProfileSource enum value: {source}"),
+            ));
+        }
+    }
+    if let Some(reasoning) = &snapshot.reasoning {
+        require_non_empty(&reasoning.effort, "reasoning.effort", ctx)?;
+    }
     Ok(())
 }
 
@@ -195,7 +253,11 @@ fn validate_block(block: &CanonicalBlock, ctx: &str) -> Result<(), FactValidatio
         CanonicalBlock::Reasoning { text } => {
             let _ = text;
         }
-        CanonicalBlock::RedactedReasoning => {}
+        CanonicalBlock::RedactedReasoning { artifact_ref } => {
+            if let Some(artifact_ref) = artifact_ref {
+                validate_artifact_ref(artifact_ref, ctx)?;
+            }
+        }
         CanonicalBlock::ArtifactRef { artifact_ref } => {
             validate_artifact_ref(artifact_ref, ctx)?;
         }
@@ -209,11 +271,17 @@ fn validate_atomic_tool_exchange(
 ) -> Result<(), FactValidationError> {
     require_non_empty(&exchange.tool_call_id, "toolCallId", ctx)?;
     require_non_empty(&exchange.tool_name, "toolName", ctx)?;
+    if let Some(artifact) = &exchange.call.arguments_artifact_ref {
+        validate_artifact_ref(artifact, &format!("{ctx}.call.argumentsArtifactRef"))?;
+    }
     validate_tool_result(&exchange.result, &format!("{ctx}.result"))?;
     Ok(())
 }
 
 fn validate_tool_result(result: &ToolResult, ctx: &str) -> Result<(), FactValidationError> {
+    if let Some(artifact) = &result.output_artifact_ref {
+        validate_artifact_ref(artifact, &format!("{ctx}.outputArtifactRef"))?;
+    }
     if matches!(result.status, super::types::ToolResultStatus::Error) {
         if result.error_message.as_ref().map_or(true, |s| s.is_empty()) {
             return Err(FactValidationError::new(
@@ -227,6 +295,9 @@ fn validate_tool_result(result: &ToolResult, ctx: &str) -> Result<(), FactValida
 
 fn validate_omission(omission: &CanonicalOmission, ctx: &str) -> Result<(), FactValidationError> {
     require_non_empty(&omission.category, "category", ctx)?;
+    if let Some(retrievable_ref) = &omission.retrievable_ref {
+        require_non_empty(retrievable_ref, "retrievableRef", ctx)?;
+    }
     Ok(())
 }
 
@@ -235,7 +306,21 @@ fn validate_provider_private_ref(
     ctx: &str,
 ) -> Result<(), FactValidationError> {
     require_non_empty(&pref.ref_id, "refId", ctx)?;
-    require_non_empty(&pref.engine, "engine", ctx)?;
+    if !matches!(
+        pref.engine.as_str(),
+        "claude" | "codex" | "gemini" | "kimi" | "opencode"
+    ) {
+        return Err(FactValidationError::new(
+            ctx,
+            format!("unknown engine enum value: {}", pref.engine),
+        ));
+    }
+    validate_optional_non_empty(&pref.provider_profile_id, "providerProfileId", ctx)?;
+    validate_optional_non_empty(&pref.model, "model", ctx)?;
+    validate_optional_non_empty(&pref.opaque_ref, "opaqueRef", ctx)?;
+    if let Some(artifact) = &pref.artifact_ref {
+        validate_artifact_ref(artifact, &format!("{ctx}.artifactRef"))?;
+    }
     Ok(())
 }
 
@@ -256,6 +341,112 @@ fn validate_artifact_ref(artifact: &ArtifactRef, ctx: &str) -> Result<(), FactVa
     require_non_empty(&artifact.media_type, "mediaType", ctx)?;
     require_non_empty(&artifact.sha256, "sha256", ctx)?;
     require_non_empty(&artifact.locator, "locator", ctx)?;
+    if artifact.sha256.len() != 64
+        || !artifact
+            .sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(FactValidationError::new(
+            ctx,
+            "sha256 must contain exactly 64 lowercase hex characters",
+        ));
+    }
+    if artifact.size_bytes.is_some_and(|size| size < 0) {
+        return Err(FactValidationError::new(
+            ctx,
+            "sizeBytes must be non-negative",
+        ));
+    }
+    if let Some(redaction) = &artifact.redaction {
+        let policy = redaction
+            .get("policy")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| FactValidationError::new(ctx, "redaction.policy is required"))?;
+        require_non_empty(policy, "redaction.policy", ctx)?;
+        if let Some(applied_at) = redaction.get("appliedAt") {
+            let applied_at = applied_at.as_i64().ok_or_else(|| {
+                FactValidationError::new(ctx, "redaction.appliedAt must be an integer")
+            })?;
+            validate_timestamp(applied_at, "redaction.appliedAt", ctx)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_payload_checksum(
+    value: &str,
+    name: &str,
+    ctx: &str,
+) -> Result<(), FactValidationError> {
+    let Some(hex) = value.strip_prefix("sha256:") else {
+        return Err(FactValidationError::new(
+            ctx,
+            format!("{name} must use sha256:<64 lowercase hex>"),
+        ));
+    };
+    if hex.len() != 64
+        || !hex
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(FactValidationError::new(
+            ctx,
+            format!("{name} must use sha256:<64 lowercase hex>"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_usage_shape(
+    usage: &super::types::UsageShape,
+    ctx: &str,
+) -> Result<(), FactValidationError> {
+    for (name, value) in [
+        ("inputTokens", usage.input_tokens),
+        ("cachedInputTokens", usage.cached_input_tokens),
+        ("outputTokens", usage.output_tokens),
+        ("totalTokens", usage.total_tokens),
+    ] {
+        if value.is_some_and(|tokens| tokens < 0) {
+            return Err(FactValidationError::new(
+                ctx,
+                format!("{name} must be non-negative"),
+            ));
+        }
+    }
+    if let Some(cost) = &usage.provider_reported_cost {
+        require_non_empty(&cost.amount, "providerReportedCost.amount", ctx)?;
+        require_non_empty(&cost.currency, "providerReportedCost.currency", ctx)?;
+    }
+    Ok(())
+}
+
+fn validate_optional_non_empty(
+    value: &Option<String>,
+    name: &str,
+    ctx: &str,
+) -> Result<(), FactValidationError> {
+    if let Some(value) = value {
+        require_non_empty(value, name, ctx)?;
+    }
+    Ok(())
+}
+
+fn validate_control_kind(value: &str, ctx: &str) -> Result<(), FactValidationError> {
+    let segments: Vec<&str> = value.split('.').collect();
+    let is_valid = segments.len() >= 2
+        && segments.iter().all(|segment| {
+            let mut chars = segment.chars();
+            matches!(chars.next(), Some(first) if first.is_ascii_lowercase())
+                && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+        });
+    if !is_valid {
+        return Err(FactValidationError::new(
+            ctx,
+            "controlKind must match ^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$",
+        ));
+    }
     Ok(())
 }
 
@@ -333,7 +524,7 @@ mod tests {
 
     #[test]
     fn failed_outcome_requires_error_code() {
-        let mut f = TurnCommittedFact {
+        let f = TurnCommittedFact {
             logical_turn_id: "turn-1".to_string(),
             attempt_id: "attempt-1".to_string(),
             input_entry_id: "entry-1".to_string(),
@@ -341,7 +532,6 @@ mod tests {
                 blocks: vec![CanonicalBlock::Text {
                     text: "sorry".to_string(),
                 }],
-                extra: serde_json::Value::Object(Default::default()),
             },
             atomic_tool_exchanges: vec![],
             artifact_refs: vec![],

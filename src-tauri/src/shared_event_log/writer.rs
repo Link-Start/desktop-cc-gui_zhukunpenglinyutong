@@ -353,9 +353,10 @@ impl SharedEventStore {
         &mut self,
         session_id: String,
         fact: &CanonicalFact,
+        occurred_at: i64,
     ) -> Result<AppendOutcome, StoreError> {
         validate_fact(fact)?;
-        let event = canonical_fact_to_event(session_id, fact, Fidelity::Canonical)?;
+        let event = canonical_fact_to_event(session_id, fact, Fidelity::Canonical, occurred_at)?;
         self.append_event(&event)
     }
 
@@ -364,8 +365,10 @@ impl SharedEventStore {
         &mut self,
         session_id: String,
         fact: &CanonicalFact,
+        occurred_at: i64,
     ) -> Result<AppendOutcome, StoreError> {
-        let event = canonical_fact_to_event(session_id, fact, Fidelity::PresentationOnly)?;
+        let event =
+            canonical_fact_to_event(session_id, fact, Fidelity::PresentationOnly, occurred_at)?;
         self.append_event(&event)
     }
 
@@ -413,6 +416,32 @@ impl SharedEventStore {
         let rows = stmt
             .query_map([session_id], map_event_row)
             .map_err(|source| StoreError::sqlite("query events_for_session", source))?;
+        let mut events = Vec::new();
+        for row in rows {
+            events.push(row.map_err(|source| StoreError::sqlite("map event row", source))?);
+        }
+        Ok(events)
+    }
+
+    /// 按 sequence 升序读取 checkpoint 之后的 session 事件。
+    pub(crate) fn events_for_session_after(
+        &self,
+        session_id: &str,
+        through_sequence: i64,
+    ) -> Result<Vec<StoredEvent>, StoreError> {
+        let sql = format!(
+            "SELECT {EVENT_SELECT_COLUMNS} FROM shared_event_log
+             WHERE session_id = ?1 AND sequence > ?2 ORDER BY sequence ASC"
+        );
+        let mut stmt = self.conn.prepare(&sql).map_err(|source| {
+            StoreError::sqlite("prepare events_for_session_after query", source)
+        })?;
+        let rows = stmt
+            .query_map(
+                rusqlite::params![session_id, through_sequence],
+                map_event_row,
+            )
+            .map_err(|source| StoreError::sqlite("query events_for_session_after", source))?;
         let mut events = Vec::new();
         for row in rows {
             events.push(row.map_err(|source| StoreError::sqlite("map event row", source))?);
@@ -591,19 +620,24 @@ fn canonical_fact_to_event(
     session_id: String,
     fact: &CanonicalFact,
     fidelity: Fidelity,
+    occurred_at: i64,
 ) -> Result<NewCanonicalEvent, StoreError> {
+    if occurred_at < 0 {
+        return Err(StoreError::validation_failed(
+            fact.fact_type(),
+            "occurredAt must be non-negative",
+        ));
+    }
     let fact_type = fact.fact_type().to_string();
     let payload = serde_json::to_value(fact)
         .map_err(|source| StoreError::json("serialize canonical fact", source))?;
     let payload_json = serde_json::to_string(&payload)
         .map_err(|source| StoreError::json("stringify canonical fact payload", source))?;
 
-    let event_id = canonical_event_id(fact);
+    let event_id = canonical_event_id(fact, occurred_at);
     let attempt_id = fact.attempt_id().map(str::to_string);
     let dedupe_key = fact.dedupe_key().map(str::to_string);
     let logical_turn_id = fact.logical_turn_id().map(str::to_string);
-    let committed_at = canonical_committed_at(fact);
-
     Ok(NewCanonicalEvent {
         session_id,
         event_id,
@@ -613,12 +647,12 @@ fn canonical_fact_to_event(
         dedupe_key,
         payload_json,
         fidelity,
-        committed_at,
+        committed_at: occurred_at,
         schema_version: 2,
     })
 }
 
-fn canonical_event_id(fact: &CanonicalFact) -> String {
+fn canonical_event_id(fact: &CanonicalFact, occurred_at: i64) -> String {
     use super::canonical::types::CanonicalFact::*;
     match fact {
         TurnRequested(f) => format!("{}:turnRequested", f.attempt_id),
@@ -627,20 +661,27 @@ fn canonical_event_id(fact: &CanonicalFact) -> String {
         TurnAccepted(f) => format!("{}:turnAccepted", f.attempt_id),
         TurnCommitted(f) => format!("{}:turnCommitted", f.attempt_id),
         UsageRecorded(f) => f.usage_record_id.clone(),
-        Control(f) => format!("{}:{}", f.issued_at, f.action),
+        Control(f) => format!(
+            "{}:{}:{}",
+            f.attempt_id.as_deref().unwrap_or("session"),
+            f.control_kind,
+            occurred_at
+        ),
     }
 }
 
-fn canonical_committed_at(fact: &CanonicalFact) -> i64 {
+fn canonical_fact_occurred_at(fact: &CanonicalFact) -> Result<i64, StoreError> {
     use super::canonical::types::CanonicalFact::*;
     match fact {
-        TurnRequested(f) => f.requested_at,
-        DeliveryPrepared(_) => 0, // deliveryPrepared 无独立时间戳，调用方应提供；0 为占位。
-        DeliveryAccepted(f) => f.accepted_at,
-        TurnAccepted(f) => f.accepted_at,
-        TurnCommitted(f) => f.committed_at,
-        UsageRecorded(f) => f.observed_at,
-        Control(f) => f.issued_at,
+        TurnRequested(f) => Ok(f.requested_at),
+        DeliveryPrepared(_) | Control(_) => Err(StoreError::validation_failed(
+            fact.fact_type(),
+            "fact has no embedded timestamp; use append_canonical_fact_at",
+        )),
+        DeliveryAccepted(f) => Ok(f.accepted_at),
+        TurnAccepted(f) => Ok(f.accepted_at),
+        TurnCommitted(f) => Ok(f.committed_at),
+        UsageRecorded(f) => Ok(f.observed_at),
     }
 }
 
@@ -804,6 +845,7 @@ enum WriterCommand {
         session_id: String,
         fact: CanonicalFact,
         fidelity: Fidelity,
+        occurred_at: i64,
         respond: mpsc::Sender<Result<AppendOutcome, StoreError>>,
     },
     UpsertBinding {
@@ -816,6 +858,11 @@ enum WriterCommand {
     },
     EventsForSession {
         session_id: String,
+        respond: mpsc::Sender<Result<Vec<StoredEvent>, StoreError>>,
+    },
+    EventsForSessionAfter {
+        session_id: String,
+        through_sequence: i64,
         respond: mpsc::Sender<Result<Vec<StoredEvent>, StoreError>>,
     },
     CountEvents {
@@ -885,15 +932,18 @@ impl SharedEventWriter {
                             session_id,
                             fact,
                             fidelity,
+                            occurred_at,
                             respond,
                         } => {
                             let result = match fidelity {
                                 Fidelity::Canonical => {
-                                    store.append_canonical_fact(session_id, &fact)
+                                    store.append_canonical_fact(session_id, &fact, occurred_at)
                                 }
-                                Fidelity::PresentationOnly => {
-                                    store.append_presentation_only_fact(session_id, &fact)
-                                }
+                                Fidelity::PresentationOnly => store.append_presentation_only_fact(
+                                    session_id,
+                                    &fact,
+                                    occurred_at,
+                                ),
                             };
                             let _ = respond.send(result);
                         }
@@ -908,6 +958,15 @@ impl SharedEventWriter {
                             respond,
                         } => {
                             let _ = respond.send(store.events_for_session(&session_id));
+                        }
+                        WriterCommand::EventsForSessionAfter {
+                            session_id,
+                            through_sequence,
+                            respond,
+                        } => {
+                            let _ = respond.send(
+                                store.events_for_session_after(&session_id, through_sequence),
+                            );
                         }
                         WriterCommand::CountEvents {
                             session_id,
@@ -947,8 +1006,9 @@ impl SharedEventWriter {
                             projection_name,
                             respond,
                         } => {
-                            let _ = respond
-                                .send(store.get_projection_checkpoint(&session_id, &projection_name));
+                            let _ = respond.send(
+                                store.get_projection_checkpoint(&session_id, &projection_name),
+                            );
                         }
                         WriterCommand::UpsertProjectionCheckpoint {
                             checkpoint,
@@ -1011,10 +1071,22 @@ impl SharedEventWriter {
         session_id: impl Into<String>,
         fact: CanonicalFact,
     ) -> Result<AppendOutcome, StoreError> {
+        let occurred_at = canonical_fact_occurred_at(&fact)?;
+        self.append_canonical_fact_at(session_id, fact, occurred_at)
+    }
+
+    /// 追加没有内嵌 timestamp 的 canonical fact（如 deliveryPrepared/controlFact）。
+    pub fn append_canonical_fact_at(
+        &self,
+        session_id: impl Into<String>,
+        fact: CanonicalFact,
+        occurred_at: i64,
+    ) -> Result<AppendOutcome, StoreError> {
         self.send_command(|respond| WriterCommand::AppendCanonicalFact {
             session_id: session_id.into(),
             fact,
             fidelity: Fidelity::Canonical,
+            occurred_at,
             respond,
         })
     }
@@ -1025,10 +1097,21 @@ impl SharedEventWriter {
         session_id: impl Into<String>,
         fact: CanonicalFact,
     ) -> Result<AppendOutcome, StoreError> {
+        let occurred_at = canonical_fact_occurred_at(&fact)?;
+        self.append_presentation_only_fact_at(session_id, fact, occurred_at)
+    }
+
+    pub fn append_presentation_only_fact_at(
+        &self,
+        session_id: impl Into<String>,
+        fact: CanonicalFact,
+        occurred_at: i64,
+    ) -> Result<AppendOutcome, StoreError> {
         self.send_command(|respond| WriterCommand::AppendCanonicalFact {
             session_id: session_id.into(),
             fact,
             fidelity: Fidelity::PresentationOnly,
+            occurred_at,
             respond,
         })
     }
@@ -1058,10 +1141,17 @@ impl SharedEventWriter {
         })
     }
 
-    /// 投影专用读取入口（A3）：当前等价于 `events_for_session`，
-    /// 为后续按 checkpoint 增量读取保留独立 seam。
-    pub fn read_projection_events(&self, session_id: &str) -> Result<Vec<StoredEvent>, StoreError> {
-        self.events_for_session(session_id)
+    /// 投影专用读取入口：只返回 checkpoint 之后的事件。
+    pub fn read_projection_events(
+        &self,
+        session_id: &str,
+        through_sequence: i64,
+    ) -> Result<Vec<StoredEvent>, StoreError> {
+        self.send_command(|respond| WriterCommand::EventsForSessionAfter {
+            session_id: session_id.to_string(),
+            through_sequence,
+            respond,
+        })
     }
 
     /// 只读查询：统计事件数（`None` 统计全表）。

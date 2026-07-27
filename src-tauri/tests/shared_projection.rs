@@ -10,10 +10,10 @@ use cc_gui_lib::shared_event_log::canonical::types::{
     UsageRecordedFact, UsageShape, UsageSource, UsageVerification,
 };
 use cc_gui_lib::shared_event_log::{
-    open, AppendOutcome, Fidelity, OpenOutcome, ProjectionCheckpointRow,
+    open, AppendOutcome, Fidelity, NewCanonicalEvent, OpenOutcome, ProjectionCheckpointRow,
 };
 use cc_gui_lib::shared_projection::{
-    LegacySharedReader, ProjectionItemKind, SharedProjector, ShadowComparator,
+    LegacySharedReader, ProjectionItemKind, ShadowComparator, SharedProjector,
 };
 use common::TempStoreDir;
 
@@ -63,7 +63,6 @@ fn make_turn_committed(attempt_id: &str) -> CanonicalFact {
                     text: "thinking...".to_string(),
                 },
             ],
-            extra: serde_json::Value::Object(Default::default()),
         },
         atomic_tool_exchanges: vec![],
         artifact_refs: vec![],
@@ -111,10 +110,12 @@ fn make_usage_recorded(usage_record_id: &str, attempt_id: &str) -> CanonicalFact
 
 fn make_control(action: &str) -> CanonicalFact {
     CanonicalFact::Control(ControlFact {
-        action: action.to_string(),
-        target_attempt_id: Some("attempt-1".to_string()),
-        target_logical_turn_id: Some("turn-1".to_string()),
-        issued_at: 1_700_000_000_003,
+        control_kind: format!("turn.{action}"),
+        logical_turn_id: Some("turn-1".to_string()),
+        attempt_id: Some("attempt-1".to_string()),
+        binding_key: None,
+        reason: None,
+        details: None,
         extra: serde_json::Value::Object(Default::default()),
     })
 }
@@ -141,9 +142,12 @@ fn canonical_facts_project_to_conversation_items() {
     ];
 
     for fact in facts {
-        let outcome = writer
-            .append_canonical_fact(SESSION, fact)
-            .expect("append fact");
+        let outcome = if matches!(fact, CanonicalFact::Control(_)) {
+            writer.append_canonical_fact_at(SESSION, fact, 1_700_000_000_003)
+        } else {
+            writer.append_canonical_fact(SESSION, fact)
+        }
+        .expect("append fact");
         assert!(matches!(outcome, AppendOutcome::Inserted { .. }));
     }
 
@@ -151,7 +155,7 @@ fn canonical_facts_project_to_conversation_items() {
     assert_eq!(events.len(), 4);
 
     let projector = SharedProjector::new();
-    let items = projector.project_events(&events);
+    let items = projector.project_events(&events).expect("project");
 
     // turnRequested → 1 user message
     // turnCommitted → 1 assistant text + 1 reasoning
@@ -210,10 +214,10 @@ fn rebuild_produces_identical_items() {
 
     let events = writer.events_for_session(SESSION).expect("events");
     let projector = SharedProjector::new();
-    let first = projector.project_events(&events);
+    let first = projector.project_events(&events).expect("project");
 
     // 模拟 checkpoint 删除后 rebuild
-    let second = projector.project_events(&events);
+    let second = projector.project_events(&events).expect("project");
 
     assert_eq!(first.len(), second.len());
     for (a, b) in first.iter().zip(second.iter()) {
@@ -229,15 +233,21 @@ fn rebuild_produces_identical_items() {
 #[test]
 fn legacy_snapshot_maps_to_presentation_only() {
     let reader = LegacySharedReader::new();
-    let snapshot = r#"{
-        "messages": [
-            {"role": "user", "text": "hi"},
-            {"role": "assistant", "text": "hello"}
-        ]
-    }"#;
+    let snapshot = concat!(
+        "{\"kind\":\"snapshot\",\"createdAt\":1,\"selectedEngine\":\"claude\",",
+        "\"lastTurnSeq\":1,\"items\":[{\"id\":\"old\",\"kind\":\"message\",",
+        "\"role\":\"user\",\"text\":\"stale\"}]}\n",
+        "{\"kind\":\"snapshot\",\"createdAt\":2,\"selectedEngine\":\"codex\",",
+        "\"lastTurnSeq\":1,\"items\":[",
+        "{\"id\":\"user-1\",\"kind\":\"message\",\"role\":\"user\",\"text\":\"hi\"},",
+        "{\"id\":\"assistant-1\",\"kind\":\"message\",\"role\":\"assistant\",",
+        "\"text\":\"hello\",\"isFinal\":true}]}\n"
+    );
 
     let items = reader.parse_snapshot(snapshot).expect("parse");
     assert_eq!(items.len(), 2);
+    assert_eq!(items[0].id, "user-1");
+    assert_eq!(items[1].id, "assistant-1");
     for item in items {
         assert_eq!(item.fidelity, Fidelity::PresentationOnly);
         assert_eq!(item.kind, ProjectionItemKind::Message);
@@ -251,23 +261,23 @@ fn shadow_comparator_reports_mismatches() {
 
     let shadow = vec![
         cc_gui_lib::shared_projection::ProjectionItem {
-            id: "a".to_string(),
+            id: "shadow-user".to_string(),
             kind: ProjectionItemKind::Message,
-            content: serde_json::json!({"text": "same"}),
+            content: serde_json::json!({"role": "user", "text": "same"}),
             fidelity: Fidelity::Canonical,
             checksum: "x".to_string(),
         },
         cc_gui_lib::shared_projection::ProjectionItem {
-            id: "b".to_string(),
+            id: "shadow-assistant".to_string(),
             kind: ProjectionItemKind::Message,
-            content: serde_json::json!({"text": "shadow-only"}),
+            content: serde_json::json!({"role": "assistant", "text": "v1"}),
             fidelity: Fidelity::Canonical,
             checksum: "y".to_string(),
         },
         cc_gui_lib::shared_projection::ProjectionItem {
-            id: "d".to_string(),
-            kind: ProjectionItemKind::Message,
-            content: serde_json::json!({"text": "v1"}),
+            id: "shadow-tool".to_string(),
+            kind: ProjectionItemKind::Tool,
+            content: serde_json::json!({"toolType": "Read", "status": "completed"}),
             fidelity: Fidelity::Canonical,
             checksum: "w".to_string(),
         },
@@ -275,23 +285,23 @@ fn shadow_comparator_reports_mismatches() {
 
     let legacy = vec![
         cc_gui_lib::shared_projection::ProjectionItem {
-            id: "a".to_string(),
+            id: "legacy-user".to_string(),
             kind: ProjectionItemKind::Message,
-            content: serde_json::json!({"text": "same"}),
+            content: serde_json::json!({"role": "user", "text": "same"}),
             fidelity: Fidelity::PresentationOnly,
             checksum: "x".to_string(),
         },
         cc_gui_lib::shared_projection::ProjectionItem {
-            id: "c".to_string(),
+            id: "legacy-assistant".to_string(),
             kind: ProjectionItemKind::Message,
-            content: serde_json::json!({"text": "legacy-only"}),
+            content: serde_json::json!({"role": "assistant", "text": "v2"}),
             fidelity: Fidelity::PresentationOnly,
             checksum: "z".to_string(),
         },
         cc_gui_lib::shared_projection::ProjectionItem {
-            id: "d".to_string(),
-            kind: ProjectionItemKind::Message,
-            content: serde_json::json!({"text": "v2"}),
+            id: "legacy-reasoning".to_string(),
+            kind: ProjectionItemKind::Reasoning,
+            content: serde_json::json!({"summary": "thinking", "content": "thinking"}),
             fidelity: Fidelity::PresentationOnly,
             checksum: "v".to_string(),
         },
@@ -302,18 +312,18 @@ fn shadow_comparator_reports_mismatches() {
     assert_eq!(report.total_legacy, 3);
     assert_eq!(report.matched, 1);
     assert_eq!(report.mismatches.len(), 3);
-    assert!(report
-        .mismatches
-        .iter()
-        .any(|m| matches!(m.kind, cc_gui_lib::shared_projection::MismatchKind::ShadowOnly)));
-    assert!(report
-        .mismatches
-        .iter()
-        .any(|m| matches!(m.kind, cc_gui_lib::shared_projection::MismatchKind::LegacyOnly)));
+    assert!(report.mismatches.iter().any(|m| matches!(
+        m.kind,
+        cc_gui_lib::shared_projection::MismatchKind::ShadowOnly
+    )));
+    assert!(report.mismatches.iter().any(|m| matches!(
+        m.kind,
+        cc_gui_lib::shared_projection::MismatchKind::LegacyOnly
+    )));
     assert!(report.mismatches.iter().any(|m| matches!(
         m.kind,
         cc_gui_lib::shared_projection::MismatchKind::ContentMismatch
-    ) && m.item_id == "d"));
+    )));
 }
 
 /// Scenario: rebuild 扫描全量事件并更新 checkpoint。
@@ -355,22 +365,129 @@ fn rebuild_scans_events_and_updates_checkpoint() {
     writer.shutdown().unwrap();
 }
 
-/// Scenario: legacy reader 对缺字段消息保守跳过，不伪造数据。
+/// Scenario: checkpoint 后只读取新事件，并把 cache 与增量结果合并。
 #[test]
-fn legacy_reader_skips_messages_with_missing_fields() {
+fn projection_incrementally_reads_after_checkpoint() {
+    let temp = TempStoreDir::new("projection-incremental");
+    let writer = open_writer(&temp);
+    writer
+        .append_canonical_fact(SESSION, make_turn_requested("attempt-1"))
+        .expect("append requested");
+
+    let projector = SharedProjector::new();
+    let first = projector
+        .project(&writer, SESSION, "canvas", 1)
+        .expect("initial project");
+    assert_eq!(first.len(), 1);
+
+    writer
+        .append_canonical_fact(SESSION, make_turn_committed("attempt-1"))
+        .expect("append committed");
+    assert_eq!(
+        writer
+            .read_projection_events(SESSION, 1)
+            .expect("read delta")
+            .len(),
+        1
+    );
+
+    let second = projector
+        .project(&writer, SESSION, "canvas", 1)
+        .expect("incremental project");
+    assert_eq!(second.len(), 3);
+    assert_eq!(
+        writer
+            .get_projection_checkpoint(SESSION, "canvas")
+            .expect("checkpoint")
+            .expect("checkpoint exists")
+            .through_sequence,
+        2
+    );
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: projection version 变化时忽略旧 cache 并全量 rebuild。
+#[test]
+fn projection_version_mismatch_rebuilds() {
+    let temp = TempStoreDir::new("projection-version");
+    let writer = open_writer(&temp);
+    writer
+        .append_canonical_fact(SESSION, make_turn_requested("attempt-1"))
+        .expect("append");
+    let projector = SharedProjector::new();
+    let version_one = projector
+        .project(&writer, SESSION, "canvas", 1)
+        .expect("version one");
+    let version_two = projector
+        .project(&writer, SESSION, "canvas", 2)
+        .expect("version two");
+    assert_eq!(version_one, version_two);
+    assert_eq!(
+        writer
+            .get_projection_checkpoint(SESSION, "canvas")
+            .expect("checkpoint")
+            .expect("checkpoint exists")
+            .projection_version,
+        2
+    );
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: 坏 canonical payload 必须阻断 projection，且 checkpoint 不前移。
+#[test]
+fn invalid_projection_event_does_not_advance_checkpoint() {
+    let temp = TempStoreDir::new("projection-invalid");
+    let writer = open_writer(&temp);
+    writer
+        .append_canonical_fact(SESSION, make_turn_requested("attempt-1"))
+        .expect("append valid");
+    let projector = SharedProjector::new();
+    projector
+        .project(&writer, SESSION, "canvas", 1)
+        .expect("initial project");
+
+    writer
+        .append_event(&NewCanonicalEvent {
+            session_id: SESSION.to_string(),
+            event_id: "invalid-event".to_string(),
+            fact_type: "conversation.turnCommitted".to_string(),
+            logical_turn_id: Some("turn-1".to_string()),
+            attempt_id: Some("attempt-invalid".to_string()),
+            dedupe_key: None,
+            payload_json: "{}".to_string(),
+            fidelity: Fidelity::Canonical,
+            committed_at: 1_700_000_000_010,
+            schema_version: 2,
+        })
+        .expect("append raw invalid event");
+
+    assert!(projector.project(&writer, SESSION, "canvas", 1).is_err());
+    assert_eq!(
+        writer
+            .get_projection_checkpoint(SESSION, "canvas")
+            .expect("checkpoint")
+            .expect("checkpoint exists")
+            .through_sequence,
+        1
+    );
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: legacy reader 保留 V0 item，不伪造缺失 Tool ID。
+#[test]
+fn legacy_reader_preserves_items_without_fabricating_tool_ids() {
     let reader = LegacySharedReader::new();
-    let snapshot = r#"{
-        "messages": [
-            {"role": "user", "text": "ok"},
-            {"role": "user"},
-            {"text": "no role"},
-            {"role": "tool", "text": "skipped unknown role"}
-        ]
-    }"#;
+    let snapshot = concat!(
+        "{\"kind\":\"snapshot\",\"createdAt\":2,\"selectedEngine\":\"claude\",",
+        "\"lastTurnSeq\":1,\"items\":[",
+        "{\"id\":\"message-1\",\"kind\":\"message\",\"role\":\"user\"},",
+        "{\"id\":\"tool-1\",\"kind\":\"tool\",\"title\":\"legacy tool\"}]}\n"
+    );
 
     let items = reader.parse_snapshot(snapshot).expect("parse");
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0].id, "legacy:message:0");
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[1].id, "tool-1");
+    assert!(items[1].content.get("toolCallId").is_none());
 }
 
 /// Scenario: legacy reader 对损坏 JSON 返回错误而不是 panic。
@@ -385,8 +502,12 @@ fn legacy_reader_rejects_corrupted_json() {
 #[test]
 fn legacy_reader_does_not_modify_source_file() {
     let temp = TempStoreDir::new("legacy-readonly");
-    let path = temp.dir.join("legacy-snapshot.json");
-    let content = r#"{"messages":[{"role":"user","text":"hi"}]}"#;
+    let path = temp.dir.join("log.jsonl");
+    let content = concat!(
+        "{\"kind\":\"snapshot\",\"createdAt\":1,\"selectedEngine\":\"claude\",",
+        "\"lastTurnSeq\":1,\"items\":[",
+        "{\"id\":\"message-1\",\"kind\":\"message\",\"role\":\"user\",\"text\":\"hi\"}]}\n"
+    );
     std::fs::write(&path, content).expect("write fixture");
 
     let reader = LegacySharedReader::new();

@@ -1,6 +1,9 @@
 //! Shadow Projection vs Legacy dual-read 对比器。
 
+use std::collections::{BTreeMap, HashMap};
+
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 use super::types::ProjectionItem;
 
@@ -41,29 +44,23 @@ impl ShadowComparator {
         Self
     }
 
-    /// 按 item id 对比 shadow 与 legacy 投影。
-    pub fn compare(
-        &self,
-        shadow: &[ProjectionItem],
-        legacy: &[ProjectionItem],
-    ) -> MismatchReport {
+    /// 按 item 类型/角色/出现次序对比，避免依赖两侧不同的内部 item id。
+    pub fn compare(&self, shadow: &[ProjectionItem], legacy: &[ProjectionItem]) -> MismatchReport {
         let mut mismatches = Vec::new();
         let mut matched = 0;
 
-        let shadow_by_id: std::collections::HashMap<_, _> =
-            shadow.iter().map(|i| (i.id.as_str(), i)).collect();
-        let legacy_by_id: std::collections::HashMap<_, _> =
-            legacy.iter().map(|i| (i.id.as_str(), i)).collect();
+        let shadow_by_key = correlate(shadow);
+        let legacy_by_key = correlate(legacy);
 
-        for item in shadow {
-            match legacy_by_id.get(item.id.as_str()) {
+        for (key, item) in &shadow_by_key {
+            match legacy_by_key.get(key) {
                 Some(legacy_item) => {
-                    if item.content == legacy_item.content {
+                    if comparable_content(item) == comparable_content(legacy_item) {
                         matched += 1;
                     } else {
                         mismatches.push(MismatchRecord {
                             kind: MismatchKind::ContentMismatch,
-                            item_id: item.id.clone(),
+                            item_id: key.clone(),
                             detail: "content differs".to_string(),
                         });
                     }
@@ -71,18 +68,18 @@ impl ShadowComparator {
                 None => {
                     mismatches.push(MismatchRecord {
                         kind: MismatchKind::ShadowOnly,
-                        item_id: item.id.clone(),
+                        item_id: key.clone(),
                         detail: "present only in shadow".to_string(),
                     });
                 }
             }
         }
 
-        for item in legacy {
-            if !shadow_by_id.contains_key(item.id.as_str()) {
+        for (key, _item) in &legacy_by_key {
+            if !shadow_by_key.contains_key(key) {
                 mismatches.push(MismatchRecord {
                     kind: MismatchKind::LegacyOnly,
-                    item_id: item.id.clone(),
+                    item_id: key.clone(),
                     detail: "present only in legacy".to_string(),
                 });
             }
@@ -94,5 +91,44 @@ impl ShadowComparator {
             matched,
             mismatches,
         }
+    }
+}
+
+fn correlate(items: &[ProjectionItem]) -> BTreeMap<String, &ProjectionItem> {
+    // ponytail: V0 没有稳定 canonical ID，先按 kind/role/ordinal 配对；
+    // materialization 提供 stable correlation key 后应优先替换。
+    let mut occurrence_by_base: HashMap<String, usize> = HashMap::new();
+    let mut correlated = BTreeMap::new();
+    for item in items {
+        let role = item
+            .content
+            .get("role")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let base = format!("{:?}:{role}", item.kind);
+        let occurrence = occurrence_by_base.entry(base.clone()).or_default();
+        correlated.insert(format!("{base}:{}", *occurrence), item);
+        *occurrence += 1;
+    }
+    correlated
+}
+
+fn comparable_content(item: &ProjectionItem) -> Value {
+    match item.kind {
+        super::types::ProjectionItemKind::Message => json!({
+            "role": item.content.get("role"),
+            "text": item.content.get("text"),
+        }),
+        super::types::ProjectionItemKind::Reasoning => json!({
+            "summary": item.content.get("summary"),
+            "content": item.content.get("content"),
+        }),
+        super::types::ProjectionItemKind::Tool => json!({
+            "toolType": item.content.get("toolType"),
+            "title": item.content.get("title"),
+            "status": item.content.get("status"),
+            "output": item.content.get("output"),
+        }),
+        _ => item.content.clone(),
     }
 }

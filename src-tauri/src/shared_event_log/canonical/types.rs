@@ -49,7 +49,7 @@ impl CanonicalFact {
             Self::TurnAccepted(f) => Some(&f.attempt_id),
             Self::TurnCommitted(f) => Some(&f.attempt_id),
             Self::UsageRecorded(f) => Some(&f.attempt_id),
-            Self::Control(_) => None,
+            Self::Control(f) => f.attempt_id.as_deref(),
         }
     }
 
@@ -70,7 +70,7 @@ impl CanonicalFact {
             Self::TurnAccepted(f) => Some(&f.logical_turn_id),
             Self::TurnCommitted(f) => Some(&f.logical_turn_id),
             Self::UsageRecorded(f) => Some(&f.logical_turn_id),
-            Self::Control(_) => None,
+            Self::Control(f) => f.logical_turn_id.as_deref(),
         }
     }
 }
@@ -186,12 +186,17 @@ pub struct UsageRecordedFact {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ControlFact {
-    pub action: String,
+    pub control_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub target_attempt_id: Option<String>,
+    pub logical_turn_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub target_logical_turn_id: Option<String>,
-    pub issued_at: i64,
+    pub attempt_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binding_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<Value>,
     #[serde(flatten)]
     pub extra: Value,
 }
@@ -238,20 +243,29 @@ pub struct ReasoningSelection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(transparent)]
 pub struct CanonicalAssistantBlocks {
     pub blocks: Vec<CanonicalBlock>,
-    #[serde(flatten)]
-    pub extra: Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", tag = "kind")]
 pub enum CanonicalBlock {
-    Text { text: String },
-    Reasoning { text: String },
-    RedactedReasoning,
-    ArtifactRef { artifact_ref: ArtifactRef },
+    Text {
+        text: String,
+    },
+    Reasoning {
+        text: String,
+    },
+    RedactedReasoning {
+        #[serde(rename = "artifactRef")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        artifact_ref: Option<ArtifactRef>,
+    },
+    ArtifactRef {
+        #[serde(rename = "artifactRef")]
+        artifact_ref: ArtifactRef,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -317,8 +331,7 @@ pub struct ArtifactRef {
 #[serde(rename_all = "camelCase")]
 pub struct CanonicalOmission {
     pub category: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
+    pub reason: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retrievable_ref: Option<String>,
     pub disposition: OmissionDisposition,

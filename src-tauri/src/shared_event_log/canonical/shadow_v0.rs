@@ -42,7 +42,6 @@ pub fn map_v0_to_presentation_only(evidence: V0FinalEvidence) -> CanonicalFact {
             blocks: vec![CanonicalBlock::Text {
                 text: evidence.assistant_text,
             }],
-            extra: serde_json::Value::Object(Default::default()),
         },
         atomic_tool_exchanges: vec![],
         artifact_refs: vec![],

@@ -119,6 +119,18 @@ describe("toSharedConversationItems", () => {
     expect(result[0]).toMatchObject({ kind: "message", role: "assistant" });
   });
 
+  it("drops unknown engineSource values at the projection boundary", () => {
+    const result = toSharedConversationItems([
+      makeItem({
+        id: "1:m",
+        kind: "message",
+        content: { role: "assistant", text: "x", engineSource: "future-engine" },
+      }),
+    ]);
+    expect(result[0]).toMatchObject({ kind: "message", role: "assistant" });
+    expect(result[0]?.engineSource).toBeUndefined();
+  });
+
   it("does not mutate input and preserves order", () => {
     const items: SharedProjectionItem[] = [
       makeItem({ id: "a", kind: "message", content: { role: "user", text: "1" } }),

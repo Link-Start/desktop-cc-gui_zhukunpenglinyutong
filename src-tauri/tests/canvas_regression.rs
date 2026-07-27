@@ -58,7 +58,6 @@ fn make_turn_committed(attempt_id: &str, engine: &str) -> CanonicalFact {
             blocks: vec![CanonicalBlock::Text {
                 text: "final answer".to_string(),
             }],
-            extra: serde_json::Value::Object(Default::default()),
         },
         atomic_tool_exchanges: vec![],
         artifact_refs: vec![],
@@ -146,7 +145,7 @@ fn duplicate_terminal_facts_yield_single_assistant_final() {
     assert_eq!(events.len(), 2);
 
     let projector = SharedProjector::new();
-    let items = projector.project_events(&events);
+    let items = projector.project_events(&events).expect("project");
     let assistant_finals = items
         .iter()
         .filter(|item| item.content.get("role").and_then(|r| r.as_str()) == Some("assistant"))
@@ -181,7 +180,10 @@ fn rebuild_output_is_byte_identical_across_runs() {
 
     let first_json = serde_json::to_string(&first).expect("serialize first");
     let second_json = serde_json::to_string(&second).expect("serialize second");
-    assert_eq!(first_json, second_json, "rebuild output must be byte-identical");
+    assert_eq!(
+        first_json, second_json,
+        "rebuild output must be byte-identical"
+    );
 
     writer.shutdown().unwrap();
 }
@@ -200,21 +202,35 @@ fn projections_for_different_engine_targets_do_not_cross_contaminate() {
         .expect("append codex");
 
     let projector = SharedProjector::new();
-    let claude_items = projector.project_events(
-        &writer.events_for_session("session-claude").expect("claude events"),
-    );
-    let codex_items = projector.project_events(
-        &writer.events_for_session("session-codex").expect("codex events"),
-    );
+    let claude_items = projector
+        .project_events(
+            &writer
+                .events_for_session("session-claude")
+                .expect("claude events"),
+        )
+        .expect("project claude");
+    let codex_items = projector
+        .project_events(
+            &writer
+                .events_for_session("session-codex")
+                .expect("codex events"),
+        )
+        .expect("project codex");
 
     assert_eq!(claude_items.len(), 1);
     assert_eq!(codex_items.len(), 1);
     assert_eq!(
-        claude_items[0].content.get("engineSource").and_then(|v| v.as_str()),
+        claude_items[0]
+            .content
+            .get("engineSource")
+            .and_then(|v| v.as_str()),
         Some("claude")
     );
     assert_eq!(
-        codex_items[0].content.get("engineSource").and_then(|v| v.as_str()),
+        codex_items[0]
+            .content
+            .get("engineSource")
+            .and_then(|v| v.as_str()),
         Some("codex")
     );
 

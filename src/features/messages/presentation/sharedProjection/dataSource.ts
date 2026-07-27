@@ -13,6 +13,7 @@
 
 import type { ConversationItem } from "../../../../types/conversation";
 import type { EngineType } from "../../../../types/engine";
+import { BUILTIN_ENGINE_TYPES } from "../../../engine/engineRegistry";
 import type { SharedProjectionItem } from "./types";
 
 function isEnabledFlag(value: unknown) {
@@ -46,7 +47,10 @@ function readString(content: Record<string, unknown>, key: string) {
 
 function readEngineSource(content: Record<string, unknown>): EngineType | undefined {
   const value = content.engineSource;
-  return typeof value === "string" ? (value as EngineType) : undefined;
+  return typeof value === "string" &&
+    BUILTIN_ENGINE_TYPES.includes(value as EngineType)
+    ? (value as EngineType)
+    : undefined;
 }
 
 function toConversationItem(item: SharedProjectionItem): ConversationItem | null {

@@ -10,10 +10,9 @@ pub mod types;
 pub mod validator;
 
 pub use types::{
-    ArtifactRef, AtomicToolExchange, CanonicalAssistantBlocks, CanonicalBlock,
-    CanonicalFact, CanonicalOmission, CanonicalUserInput, ControlFact, DeliveryAcceptedFact,
-    DeliveryPreparedFact, Outcome, ProviderPrivateRef, ProviderPrivateRefKind, ReasoningSelection,
-    TurnAcceptedFact, TurnCommittedFact, TurnExecutionSnapshot, TurnRequestedFact,
-    UsageRecordedFact, UsageShape,
+    ArtifactRef, AtomicToolExchange, CanonicalAssistantBlocks, CanonicalBlock, CanonicalFact,
+    CanonicalOmission, CanonicalUserInput, ControlFact, DeliveryAcceptedFact, DeliveryPreparedFact,
+    Outcome, ProviderPrivateRef, ProviderPrivateRefKind, ReasoningSelection, TurnAcceptedFact,
+    TurnCommittedFact, TurnExecutionSnapshot, TurnRequestedFact, UsageRecordedFact, UsageShape,
 };
 pub use validator::{validate_fact, FactValidationError};

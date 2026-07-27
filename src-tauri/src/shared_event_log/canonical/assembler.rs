@@ -75,7 +75,6 @@ pub fn assemble_turn_committed(
         input_entry_id,
         assistant: CanonicalAssistantBlocks {
             blocks: assistant_blocks,
-            extra: serde_json::Value::Object(Default::default()),
         },
         atomic_tool_exchanges: exchanges,
         artifact_refs: snapshot.artifacts,
@@ -136,7 +135,7 @@ fn pair_tool_exchanges(
 
 #[cfg(test)]
 mod tests {
-    use super::super::types::{TurnExecutionSnapshot, UsageShape};
+    use super::super::types::TurnExecutionSnapshot;
     use super::*;
 
     fn snapshot() -> TurnExecutionSnapshot {

@@ -6,7 +6,9 @@ use crate::shared_event_log::canonical::types::{
     CanonicalBlock, CanonicalFact, ControlFact, OutcomeStatus, ToolResultStatus, TurnCommittedFact,
     TurnRequestedFact, UsageRecordedFact,
 };
-use crate::shared_event_log::{payload_checksum, ProjectionCheckpointRow, SharedEventWriter, StoreError, StoredEvent};
+use crate::shared_event_log::{
+    ProjectionCheckpointRow, SharedEventWriter, StoreError, StoredEvent,
+};
 
 use super::types::{ProjectionItem, ProjectionItemKind};
 
@@ -20,16 +22,72 @@ impl SharedProjector {
     }
 
     /// 把一组 StoredEvent 投影为 ProjectionItem 列表。
-    pub fn project_events(&self, events: &[StoredEvent]) -> Vec<ProjectionItem> {
+    pub fn project_events(
+        &self,
+        events: &[StoredEvent],
+    ) -> Result<Vec<ProjectionItem>, StoreError> {
         let mut items = Vec::new();
         for event in events {
-            let fact = match serde_json::from_str::<CanonicalFact>(&event.payload_json) {
-                Ok(f) => f,
-                Err(_) => continue, // 无法解析的 event 跳过，不阻塞整个 session
-            };
+            let fact =
+                serde_json::from_str::<CanonicalFact>(&event.payload_json).map_err(|source| {
+                    StoreError::json(
+                        format!(
+                            "project canonical event session={} sequence={} fact_type={}",
+                            event.session_id, event.sequence, event.fact_type
+                        ),
+                        source,
+                    )
+                })?;
             items.extend(self.project_fact(event, &fact));
         }
-        items
+        Ok(items)
+    }
+
+    /// 使用持久化 checkpoint 增量投影；version 不匹配或旧 cache 不可用时全量 rebuild。
+    pub fn project(
+        &self,
+        writer: &SharedEventWriter,
+        session_id: &str,
+        projection_name: &str,
+        projection_version: i64,
+    ) -> Result<Vec<ProjectionItem>, StoreError> {
+        let checkpoint = writer.get_projection_checkpoint(session_id, projection_name)?;
+        let (mut items, through_sequence) = match checkpoint {
+            Some(checkpoint) if checkpoint.projection_version == projection_version => {
+                match serde_json::from_str::<Vec<ProjectionItem>>(&checkpoint.payload_json) {
+                    Ok(items) => (items, checkpoint.through_sequence),
+                    Err(_) => {
+                        return self.rebuild(
+                            writer,
+                            session_id,
+                            projection_name,
+                            projection_version,
+                        )
+                    }
+                }
+            }
+            _ => {
+                return self.rebuild(writer, session_id, projection_name, projection_version);
+            }
+        };
+
+        let events = writer.read_projection_events(session_id, through_sequence)?;
+        let projected = self.project_events(&events)?;
+        items.extend(projected);
+        let new_through_sequence = events
+            .iter()
+            .map(|event| event.sequence)
+            .max()
+            .unwrap_or(through_sequence);
+        self.persist_checkpoint(
+            writer,
+            session_id,
+            projection_name,
+            projection_version,
+            new_through_sequence,
+            &items,
+        )?;
+        Ok(items)
     }
 
     /// 全量 rebuild：扫描 session 全部事件，投影并更新 checkpoint。
@@ -42,17 +100,38 @@ impl SharedProjector {
         projection_name: &str,
         projection_version: i64,
     ) -> Result<Vec<ProjectionItem>, StoreError> {
-        let events = writer.read_projection_events(session_id)?;
-        let items = self.project_events(&events);
+        let events = writer.events_for_session(session_id)?;
+        let items = self.project_events(&events)?;
         let through_sequence = events.iter().map(|event| event.sequence).max().unwrap_or(0);
+        self.persist_checkpoint(
+            writer,
+            session_id,
+            projection_name,
+            projection_version,
+            through_sequence,
+            &items,
+        )?;
+        Ok(items)
+    }
+
+    fn persist_checkpoint(
+        &self,
+        writer: &SharedEventWriter,
+        session_id: &str,
+        projection_name: &str,
+        projection_version: i64,
+        through_sequence: i64,
+        items: &[ProjectionItem],
+    ) -> Result<(), StoreError> {
+        let payload_json = serde_json::to_string(items)
+            .map_err(|source| StoreError::json("serialize projection checkpoint", source))?;
         writer.upsert_projection_checkpoint(&ProjectionCheckpointRow {
             session_id: session_id.to_string(),
             projection_name: projection_name.to_string(),
             projection_version,
             through_sequence,
-            payload_json: "{}".to_string(),
-        })?;
-        Ok(items)
+            payload_json,
+        })
     }
 
     fn project_fact(&self, event: &StoredEvent, fact: &CanonicalFact) -> Vec<ProjectionItem> {
@@ -81,7 +160,7 @@ impl SharedProjector {
                 "engineSource": fact.target.engine,
             }),
             fidelity: event.fidelity,
-            checksum: payload_checksum(2, event.fact_type.as_str(), &serde_json::from_str(&event.payload_json).unwrap_or_default()).unwrap_or_default(),
+            checksum: event.payload_checksum.clone(),
         }]
     }
 
@@ -91,7 +170,7 @@ impl SharedProjector {
         fact: &TurnCommittedFact,
     ) -> Vec<ProjectionItem> {
         let mut items = Vec::new();
-        let checksum = payload_checksum(2, event.fact_type.as_str(), &serde_json::from_str(&event.payload_json).unwrap_or_default()).unwrap_or_default();
+        let checksum = event.payload_checksum.clone();
 
         // Assistant blocks → message / reasoning items
         for (index, block) in fact.assistant.blocks.iter().enumerate() {
@@ -105,7 +184,7 @@ impl SharedProjector {
                             "text": text,
                             "turnId": fact.logical_turn_id,
                             "engineSource": fact.target.engine,
-                            "isFinal": matches!(fact.outcome.status, OutcomeStatus::Completed),
+                            "isFinal": true,
                             "finalCompletedAt": fact.committed_at,
                         }),
                         fidelity: event.fidelity,
@@ -125,7 +204,7 @@ impl SharedProjector {
                         checksum: checksum.clone(),
                     });
                 }
-                CanonicalBlock::RedactedReasoning => {
+                CanonicalBlock::RedactedReasoning { .. } => {
                     items.push(ProjectionItem {
                         id: format!("{}:reasoning:{}", event.sequence, index),
                         kind: ProjectionItemKind::Reasoning,
@@ -139,18 +218,34 @@ impl SharedProjector {
                     });
                 }
                 CanonicalBlock::ArtifactRef { artifact_ref } => {
+                    let (kind, content) = if artifact_ref.media_type.starts_with("image/") {
+                        (
+                            ProjectionItemKind::GeneratedImage,
+                            json!({
+                                "status": "completed",
+                                "sourceToolName": "artifact",
+                                "promptText": artifact_ref.locator,
+                                "images": [{
+                                    "src": artifact_ref.locator,
+                                    "localPath": artifact_ref.locator,
+                                }],
+                            }),
+                        )
+                    } else {
+                        (
+                            ProjectionItemKind::Metadata,
+                            json!({
+                                "type": "artifact",
+                                "artifactId": artifact_ref.artifact_id,
+                                "mediaType": artifact_ref.media_type,
+                                "locator": artifact_ref.locator,
+                            }),
+                        )
+                    };
                     items.push(ProjectionItem {
                         id: format!("{}:artifact:{}", event.sequence, index),
-                        kind: ProjectionItemKind::GeneratedImage,
-                        content: json!({
-                            "status": "completed",
-                            "sourceToolName": "artifact",
-                            "promptText": artifact_ref.locator,
-                            "images": [{
-                                "src": artifact_ref.locator,
-                                "localPath": artifact_ref.locator,
-                            }],
-                        }),
+                        kind,
+                        content,
                         fidelity: event.fidelity,
                         checksum: checksum.clone(),
                     });
@@ -222,7 +317,7 @@ impl SharedProjector {
                 "totalTokens": fact.usage.total_tokens,
             }),
             fidelity: event.fidelity,
-            checksum: payload_checksum(2, event.fact_type.as_str(), &serde_json::from_str(&event.payload_json).unwrap_or_default()).unwrap_or_default(),
+            checksum: event.payload_checksum.clone(),
         }]
     }
 
@@ -231,12 +326,14 @@ impl SharedProjector {
             id: format!("{}:control", event.sequence),
             kind: ProjectionItemKind::SystemNotice,
             content: json!({
-                "text": format!("Control: {}", fact.action),
-                "targetAttemptId": fact.target_attempt_id,
-                "targetLogicalTurnId": fact.target_logical_turn_id,
+                "text": format!("Control: {}", fact.control_kind),
+                "attemptId": fact.attempt_id,
+                "logicalTurnId": fact.logical_turn_id,
+                "bindingKey": fact.binding_key,
+                "reason": fact.reason,
             }),
             fidelity: event.fidelity,
-            checksum: payload_checksum(2, event.fact_type.as_str(), &serde_json::from_str(&event.payload_json).unwrap_or_default()).unwrap_or_default(),
+            checksum: event.payload_checksum.clone(),
         }]
     }
 }
