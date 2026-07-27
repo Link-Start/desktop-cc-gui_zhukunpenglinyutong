@@ -6,6 +6,7 @@ type EngineControllerSection = ReturnType<typeof useEngineController>;
 
 type ProviderModelCatalogSyncParams = {
   activeEngine: EngineType;
+  activeThreadEngineSource: EngineType | null | undefined;
   activeThreadId: string | null | undefined;
   activeWorkspaceId: string | null | undefined;
   providerProfileId: string | null | undefined;
@@ -21,6 +22,7 @@ const PROVIDER_SCOPED_ENGINES = new Set<EngineType>([
 
 export function useProviderModelCatalogSync({
   activeEngine,
+  activeThreadEngineSource,
   activeThreadId,
   activeWorkspaceId,
   providerProfileId,
@@ -31,11 +33,18 @@ export function useProviderModelCatalogSync({
 
   useEffect(() => {
     const normalizedThreadId = activeThreadId?.trim();
-    if (!normalizedThreadId || !PROVIDER_SCOPED_ENGINES.has(activeEngine)) {
+    const normalizedProviderProfileId = providerProfileId?.trim() || null;
+    const catalogEngine =
+      activeThreadEngineSource ??
+      (normalizedProviderProfileId ? null : activeEngine);
+    if (
+      !normalizedThreadId ||
+      !catalogEngine ||
+      !PROVIDER_SCOPED_ENGINES.has(catalogEngine)
+    ) {
       return;
     }
-    const normalizedProviderProfileId = providerProfileId?.trim() || null;
-    const catalogKey = `${activeWorkspaceId ?? "unknown"}:${activeEngine}:${
+    const catalogKey = `${activeWorkspaceId ?? "unknown"}:${catalogEngine}:${
       normalizedProviderProfileId ?? "__global__"
     }`;
     if (activeCatalogKeyRef.current === catalogKey) {
@@ -50,15 +59,16 @@ export function useProviderModelCatalogSync({
       payload: {
         workspaceId: activeWorkspaceId,
         threadId: normalizedThreadId,
-        engine: activeEngine,
+        engine: catalogEngine,
         providerProfileId: normalizedProviderProfileId,
       },
     });
-    void refreshEngineModels(activeEngine, {
+    void refreshEngineModels(catalogEngine, {
       providerProfileId: normalizedProviderProfileId,
     });
   }, [
     activeEngine,
+    activeThreadEngineSource,
     activeThreadId,
     activeWorkspaceId,
     addDebugEntry,

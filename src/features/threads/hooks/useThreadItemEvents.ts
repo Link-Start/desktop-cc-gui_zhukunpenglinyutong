@@ -35,6 +35,7 @@ import {
   appendLiveAssistantText,
   clearLiveAssistantText,
   drainLiveAssistantTextTail,
+  updateLiveAssistantTextSnapshot,
 } from "../utils/liveAssistantTextChannel";
 import { isLiveTextExternalizationEnabled } from "../utils/realtimePerfFlags";
 import {
@@ -1258,22 +1259,39 @@ export function useThreadItemEvents({
             text: agentMessageSnapshotText,
             turnId,
           });
-          const dispatchStartedAt = readHighResolutionNowMs();
-          dispatch({
-            type: "appendAgentDelta",
-            workspaceId,
-            threadId,
-            itemId,
-            delta: agentMessageSnapshotText,
-            hasCustomName: Boolean(getCustomName(workspaceId, threadId)),
-          });
-          const dispatchCostMs = readHighResolutionNowMs() - dispatchStartedAt;
-          noteThreadReducerWorkMeasured(threadId, {
-            itemId,
-            textLength: agentMessageSnapshotText.length,
-            mergeCostMs: dispatchCostMs,
-            normalizationCostMs: dispatchCostMs,
-          });
+          const liveSnapshotUpdate =
+            LIVE_TEXT_EXTERNALIZATION_ENABLED && shouldMarkProcessing
+              ? updateLiveAssistantTextSnapshot(
+                  threadId,
+                  itemId,
+                  agentMessageSnapshotText,
+                )
+              : "replacement";
+          const shouldDispatchSnapshot =
+            liveSnapshotUpdate === "first" ||
+            liveSnapshotUpdate === "replacement";
+          if (shouldDispatchSnapshot) {
+            const dispatchStartedAt = readHighResolutionNowMs();
+            dispatch({
+              type: "appendAgentDelta",
+              workspaceId,
+              threadId,
+              itemId,
+              delta: agentMessageSnapshotText,
+              hasCustomName: Boolean(getCustomName(workspaceId, threadId)),
+            });
+            const dispatchCostMs =
+              readHighResolutionNowMs() - dispatchStartedAt;
+            noteThreadReducerWorkMeasured(threadId, {
+              itemId,
+              textLength: agentMessageSnapshotText.length,
+              mergeCostMs: dispatchCostMs,
+              normalizationCostMs: dispatchCostMs,
+            });
+          }
+          if (liveSnapshotUpdate === "replacement") {
+            clearLiveAssistantText(threadId);
+          }
           logClaudeStream("agent-snapshot-routed", {
             workspaceId,
             threadId,

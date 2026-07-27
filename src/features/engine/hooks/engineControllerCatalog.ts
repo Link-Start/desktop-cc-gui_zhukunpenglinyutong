@@ -52,6 +52,37 @@ export function normalizeEngineModelEntry(
   };
 }
 
+export function areEngineModelCatalogsEqual(
+  left: readonly EngineModelInfo[],
+  right: readonly EngineModelInfo[],
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((model, index) => {
+    const candidate = right[index];
+    return (
+      candidate !== undefined &&
+      model.id === candidate.id &&
+      model.model === candidate.model &&
+      model.displayName === candidate.displayName &&
+      model.description === candidate.description &&
+      model.source === candidate.source &&
+      model.provider === candidate.provider &&
+      model.protocol === candidate.protocol &&
+      model.provenance === candidate.provenance &&
+      model.observedAt === candidate.observedAt &&
+      model.lastVerifiedAt === candidate.lastVerifiedAt &&
+      model.lifecycle === candidate.lifecycle &&
+      model.providerProfileId === candidate.providerProfileId &&
+      model.isDefault === candidate.isDefault
+    );
+  });
+}
+
 function getEngineModelIdentity(
   model: Pick<EngineModelInfo, "id" | "model">,
 ): string {
