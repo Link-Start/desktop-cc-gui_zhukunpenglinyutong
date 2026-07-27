@@ -4,6 +4,39 @@
 > 上游设计：[`docs/research/mossx-multi-cli-provider-session-foundation-design.md`](../research/mossx-multi-cli-provider-session-foundation-design.md)（Implementation-ready）
 > 用途：照着执行的 Checklist。完成一项勾一项；每个 Wave 收尾必须过对应的 Gate，不过 Gate 不进下一 Wave。
 
+## Change A 当前结论（2026-07-27 校准）
+
+Change A 是一条连续的事实链路，不是“存在三个 module”就算完成：
+
+```text
+Runtime authoritative evidence
+  → Canonical Fact assembly / durable commit
+  → Canonical Projection
+  → Messages / Canvas read path
+```
+
+| Wave | OpenSpec change | 任务进度 | Gate | 结论 |
+|---|---|---:|---|---|
+| Wave 1 / A1 | `establish-shared-event-storage` | 12/12 | Gate 1 ✅ | 已完成，可作为 durable storage 基座 |
+| Wave 2 / A2 | `assemble-shared-canonical-facts` | 11/17 | Gate 2 ⬜ | Substrate 已有，真实 Runtime ingress / ACK gate 未闭环 |
+| Wave 3 / A3 | `project-shared-canonical-conversation` | 20/27 | Gate 3 ⬜ | Projection 已有，Canvas 接线与 render gate 未闭环 |
+| **Change A 总计** | 三个 change | **43/56** | **未通过** | **Change A 未完成** |
+
+### Change B 准入决策
+
+- **当前禁止进入 Change B 产品代码实现**。B.1–B.6 均依赖 Gate 3；提前实现会让 Target/Binding 状态机建立在未闭环的事实链路上。
+- **允许预研**：可准备 Change B proposal/design、接口草图与迁移矩阵，但不得接真实流量、改写 V0/V2 路由或落 durable Binding side effect。
+- **正式准入**：A2、A3 的剩余任务完成，Gate 2、Gate 3 有真实链路证据并通过 `openspec-verify-change` 后，再启动 Change B implementation。
+
+### Change A 收口顺序
+
+1. **A2 Runtime ingress**：建立 run identity → `TurnExecutionSnapshot` / Binding durable 关联，从 Runtime Lifecycle Owner 获取 authoritative final snapshot。
+2. **A2 ACK gate**：在真实 `run.settled` 边界调用 `commit_turn()`；SQLite transaction ACK 失败时保持 settling，不得进入 idle。
+3. **A2 evidence closure**：接入真实 V0 read-only mirror，补齐 `provider-report` 优先级与 duplicate/dropped-delta/failure fault tests，关闭 Gate 2。
+4. **A3 read-path wiring**：增加 Tauri IPC，在 feature flag 后将 Shared Projection DataSource 接入 Messages/Canvas，并保留 V0 fallback。
+5. **A3 render closure**：补 Native golden regression、Shared target switch no-remount、后台 Binding no-render-storm 测试，关闭 Gate 3。
+6. **Change A closure**：分别执行 A2/A3 `openspec-verify-change`；完成后同步主清单、归档 change，再创建 Change B implementation task。
+
 ## 图例
 
 | 标记 | 含义 |
@@ -93,6 +126,8 @@
 ---
 
 ## Wave 4：Change B — compose-shared-session-execution-target
+
+> **当前状态：未准入。** 仅允许 proposal/design 预研；Gate 2、Gate 3 关闭前，不开始 B.1–B.6 产品代码。
 
 | # | 任务 | 顺序 | 前置 | 验收 | 体量 |
 |---|---|---|---|---|---|
