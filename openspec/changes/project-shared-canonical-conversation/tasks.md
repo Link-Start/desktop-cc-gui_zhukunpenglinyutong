@@ -46,4 +46,4 @@
 - [x] 7.2 Run `npm run test` for Shared Projection tests
 - [x] 7.3 Run `openspec validate project-shared-canonical-conversation --strict --no-interactive`
 - [x] 7.4 Update master task checklist Wave 3 status
-- [ ] 7.5 Commit and record Trellis session
+- [x] 7.5 Commit and record Trellis session
