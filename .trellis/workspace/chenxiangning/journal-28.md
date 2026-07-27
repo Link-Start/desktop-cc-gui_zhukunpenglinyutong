@@ -1448,3 +1448,36 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1182: 校准 Session Foundation 与 Shared Event Storage
+
+**Date**: 2026-07-27
+**Task**: 校准 Session Foundation 与 Shared Event Storage
+**Branch**: `feature/v-0710`
+
+### Summary
+
+将最后 4 个本地提交与 review remediation 压成单一安全提交：清退 raw evidence 并脱敏 golden fixtures；ACP sandbox 改为 fail-closed；Shared Event Store 收口到 actor-only 写入，补齐 idempotency conflict、shutdown、fidelity 与 crash recovery 边界；同步 OpenSpec 契约和回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b743c4f8a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
