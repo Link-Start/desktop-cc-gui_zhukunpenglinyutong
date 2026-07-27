@@ -1415,3 +1415,36 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1181: 多 CLI 会话基石文档链落地
+
+**Date**: 2026-07-27
+**Task**: 多 CLI 会话基石文档链落地
+**Branch**: `feature/v-0710`
+
+### Summary
+
+新增新 CLI 接入指南（Spike 模板/七步接入/Contract Tests/零影响清单）与 Wave 0-6 实施任务清单，设计文档参考材料区回链，research/plans README 注册索引，三份文档互相可导航。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `189a1281c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

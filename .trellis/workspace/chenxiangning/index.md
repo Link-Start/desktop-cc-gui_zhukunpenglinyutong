@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1180
+- **Total Sessions**: 1181
 - **Last Active**: 2026-07-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~1417 | Active |
+| `journal-28.md` | ~1450 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1181 | 2026-07-27 | 多 CLI 会话基石文档链落地 | `189a1281c` | `feature/v-0710` |
 | 1180 | 2026-07-27 | 修复运行时卡顿与模型目录竞态 | `35a72b395` | `feature/v-0710` |
 | 1179 | 2026-07-27 | 完善多 CLI 与多供应商会话架构设计 | `9feb2520e` | `feature/v-0710` |
 | 1178 | 2026-07-27 | 补全 Codex 模型与本地标签 | `816d4ac06` | `feature/v-0710` |
