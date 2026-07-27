@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::canonical::types::CanonicalFact;
@@ -28,9 +29,11 @@ use super::schema;
 pub const USAGE_FACT_TYPE: &str = "conversation.usageRecorded";
 
 /// 事件保真度。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Fidelity {
+    #[serde(rename = "canonical")]
     Canonical,
+    #[serde(rename = "presentation-only")]
     PresentationOnly,
 }
 
@@ -134,6 +137,16 @@ pub struct StoredEvent {
     pub payload_checksum: String,
     pub fidelity: Fidelity,
     pub committed_at: i64,
+}
+
+/// 已落盘的 projection checkpoint 行（只读查询用）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectionCheckpointRow {
+    pub session_id: String,
+    pub projection_name: String,
+    pub projection_version: i64,
+    pub through_sequence: i64,
+    pub payload_json: String,
 }
 
 /// append 事务内的观测边界。
@@ -508,6 +521,58 @@ impl SharedEventStore {
         Ok(result)
     }
 
+    /// 读取指定 projection 的 checkpoint。
+    pub(crate) fn get_projection_checkpoint(
+        &self,
+        session_id: &str,
+        projection_name: &str,
+    ) -> Result<Option<ProjectionCheckpointRow>, StoreError> {
+        self.conn
+            .query_row(
+                "SELECT session_id, projection_name, projection_version, through_sequence, payload_json
+                 FROM shared_projection_checkpoint
+                 WHERE session_id = ?1 AND projection_name = ?2",
+                rusqlite::params![session_id, projection_name],
+                |row| {
+                    Ok(ProjectionCheckpointRow {
+                        session_id: row.get(0)?,
+                        projection_name: row.get(1)?,
+                        projection_version: row.get(2)?,
+                        through_sequence: row.get(3)?,
+                        payload_json: row.get(4)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|source| StoreError::sqlite("read projection checkpoint", source))
+    }
+
+    /// 写入/更新 projection checkpoint。
+    pub(crate) fn upsert_projection_checkpoint(
+        &mut self,
+        checkpoint: &ProjectionCheckpointRow,
+    ) -> Result<(), StoreError> {
+        self.conn
+            .execute(
+                "INSERT INTO shared_projection_checkpoint (
+                    session_id, projection_name, projection_version, through_sequence, payload_json
+                 ) VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(session_id, projection_name) DO UPDATE SET
+                    projection_version = excluded.projection_version,
+                    through_sequence = excluded.through_sequence,
+                    payload_json = excluded.payload_json",
+                rusqlite::params![
+                    checkpoint.session_id,
+                    checkpoint.projection_name,
+                    checkpoint.projection_version,
+                    checkpoint.through_sequence,
+                    checkpoint.payload_json,
+                ],
+            )
+            .map_err(|source| map_write_error("upsert projection checkpoint", source))?;
+        Ok(())
+    }
+
     /// 当前 schema user_version（诊断/测试用）。
     pub(crate) fn user_version(&self) -> Result<u32, StoreError> {
         schema::current_user_version(&self.conn)
@@ -773,6 +838,15 @@ enum WriterCommand {
         report_subject_id: String,
         respond: mpsc::Sender<Result<Vec<StoredLedgerRow>, StoreError>>,
     },
+    ProjectionCheckpoint {
+        session_id: String,
+        projection_name: String,
+        respond: mpsc::Sender<Result<Option<ProjectionCheckpointRow>, StoreError>>,
+    },
+    UpsertProjectionCheckpoint {
+        checkpoint: ProjectionCheckpointRow,
+        respond: mpsc::Sender<Result<(), StoreError>>,
+    },
     UserVersion {
         respond: mpsc::Sender<Result<u32, StoreError>>,
     },
@@ -867,6 +941,20 @@ impl SharedEventWriter {
                                 window_ended_at,
                                 &report_subject_id,
                             ));
+                        }
+                        WriterCommand::ProjectionCheckpoint {
+                            session_id,
+                            projection_name,
+                            respond,
+                        } => {
+                            let _ = respond
+                                .send(store.get_projection_checkpoint(&session_id, &projection_name));
+                        }
+                        WriterCommand::UpsertProjectionCheckpoint {
+                            checkpoint,
+                            respond,
+                        } => {
+                            let _ = respond.send(store.upsert_projection_checkpoint(&checkpoint));
                         }
                         WriterCommand::UserVersion { respond } => {
                             let _ = respond.send(store.user_version());
@@ -970,6 +1058,12 @@ impl SharedEventWriter {
         })
     }
 
+    /// 投影专用读取入口（A3）：当前等价于 `events_for_session`，
+    /// 为后续按 checkpoint 增量读取保留独立 seam。
+    pub fn read_projection_events(&self, session_id: &str) -> Result<Vec<StoredEvent>, StoreError> {
+        self.events_for_session(session_id)
+    }
+
     /// 只读查询：统计事件数（`None` 统计全表）。
     pub fn count_events(&self, session_id: Option<&str>) -> Result<i64, StoreError> {
         self.send_command(|respond| WriterCommand::CountEvents {
@@ -1009,6 +1103,28 @@ impl SharedEventWriter {
             window_started_at,
             window_ended_at,
             report_subject_id: report_subject_id.to_string(),
+            respond,
+        })
+    }
+
+    pub fn get_projection_checkpoint(
+        &self,
+        session_id: &str,
+        projection_name: &str,
+    ) -> Result<Option<ProjectionCheckpointRow>, StoreError> {
+        self.send_command(|respond| WriterCommand::ProjectionCheckpoint {
+            session_id: session_id.to_string(),
+            projection_name: projection_name.to_string(),
+            respond,
+        })
+    }
+
+    pub fn upsert_projection_checkpoint(
+        &self,
+        checkpoint: &ProjectionCheckpointRow,
+    ) -> Result<(), StoreError> {
+        self.send_command(|respond| WriterCommand::UpsertProjectionCheckpoint {
+            checkpoint: checkpoint.clone(),
             respond,
         })
     }

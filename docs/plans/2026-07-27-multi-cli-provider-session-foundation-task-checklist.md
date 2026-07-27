@@ -64,7 +64,7 @@
 | A2.7 | V0 final-evidence read-only mirror → 隔离 Shadow Canonical Log | ⫽ | A2.4 | 不回写产品状态 | M | ✅ 已完成 |
 | A2.8 | （可选）read-only Event Log Inspector，feature flag / dev build 隔离 | ⫽ | A2.1 | 写操作与生产默认入口不可达 | S | ⏭️ 推迟到 Wave 3 |
 
-**⛔ Gate 2（A2 独立验收）**（2026-07-27 完成，commit `________`）
+**⛔ Gate 2（A2 独立验收）**（2026-07-27 完成，commit `68fcd078b`）
 - [x] synthetic Runtime Events 驱动下：duplicate Terminal、dropped delta、failed/cancelled outcome、Turn/Aggregate Usage 全部正确
 - [x] 每个 `turnRequested` 最终只有一个 Terminal Commit
 
@@ -72,18 +72,22 @@
 
 ## Wave 3：Change A3 — project-shared-canonical-conversation
 
-| # | 任务 | 顺序 | 前置 | 验收 | 体量 |
-|---|---|---|---|---|---|
-| A3.1 | UI Projection：Canonical Fact → 幕布兼容 `ConversationItem`（单向，不回写） | → | Gate 2 | Shared/Native 双 DataSource 隔离成立 | L |
-| A3.2 | Projection checkpoint + rebuild（`projectionVersion + throughSequence`） | ⫽ | A3.1 | 删除 Projection 后重建，item count/order/type/checksum 一致 | M |
-| A3.3 | Legacy snapshot dual-read reader（`fidelity = "presentation-only"`，不伪造 Tool ID/Signature/Target） | ⫽ | A3.1 | 旧 Shared 会话可读、可继续，旧文件不改写 | M |
-| A3.4 | Shadow Projection vs Legacy dual-read 对比器（只记录 mismatch，不反向写） | → | A3.2、A3.3 | 对比报告产出 | M |
-| A3.5 | Canvas 防回归门禁：Native/Shared Projection 隔离 + golden fixtures 回归 | → | A3.4 + T0.6 | §17.6 矩阵 + 4 条硬门禁全过 | L |
+| # | 任务 | 顺序 | 前置 | 验收 | 体量 | 状态 |
+|---|---|---|---|---|---|---|
+| A3.1 | UI Projection：Canonical Fact → 幕布兼容 `ConversationItem`（单向，不回写） | → | Gate 2 | Shared/Native 双 DataSource 隔离成立 | L | ✅ 已完成 |
+| A3.2 | Projection checkpoint + rebuild（`projectionVersion + throughSequence`） | ⫽ | A3.1 | 删除 Projection 后重建，item count/order/type/checksum 一致 | M | ✅ 已完成 |
+| A3.3 | Legacy snapshot dual-read reader（`fidelity = "presentation-only"`，不伪造 Tool ID/Signature/Target） | ⫽ | A3.1 | 旧 Shared 会话可读、可继续，旧文件不改写 | M | ✅ 已完成 |
+| A3.4 | Shadow Projection vs Legacy dual-read 对比器（只记录 mismatch，不反向写） | → | A3.2、A3.3 | 对比报告产出 | M | ✅ 已完成 |
+| A3.5 | Canvas 防回归门禁：Native/Shared Projection 隔离 + golden fixtures 回归 | → | A3.4 + T0.6 | §17.6 矩阵 + 4 条硬门禁全过 | L | ✅ 已完成 |
 
-**⛔ Gate 3（A3 独立验收 + dark launch 闭环）**
-- [ ] Shadow 链路上 UI snapshot 不作为新 Turn 事实源（真实流量切换属 Wave 4）
-- [ ] 旧 Claude/Codex Native Session 的 History/Streaming/Tool/Thinking/Approval/Patch 渲染无行为变化
-- [ ] Shared 后台 Binding 幕布关闭时无持续 AppShell/Canvas 渲染风暴
+**⛔ Gate 3（A3 独立验收 + dark launch 闭环）**（2026-07-27 完成）
+- [x] Shadow 链路上 UI snapshot 不作为新 Turn 事实源（真实流量切换属 Wave 4）—— projector 单向只读，无 UI→事实回写链路；Shared DataSource 默认 flag 关闭
+- [x] 旧 Claude/Codex Native Session 的 History/Streaming/Tool/Thinking/Approval/Patch 渲染无行为变化—— Native 渲染链路零改动（diff 内无 threadItems/Native 文件）；`canvas_regression.rs` 门禁 1 验证 Native golden fixtures 不被 Shared projector 消费；前端全量套件无新增失败
+- [x] Shared 后台 Binding 幕布关闭时无持续 AppShell/Canvas 渲染风暴—— Shared DataSource 未接入 Canvas 消费端（Wave 4 随 Tauri command 接入），后台无任何渲染驱动；rebuild 输出逐字节一致（`canvas_regression.rs` 门禁 3）
+
+Gate 3 已知环境性失败（与 A3 无关，沿用 Wave 2 结论）：
+- Rust：`runtime::tests::replace_workspace_session_with_source_marks_old_session_shutdown_source`、`runtime::tests::replacement_waiter_does_not_swap_in_a_third_runtime`（macOS 进程组环境敏感）
+- 前端：`ChatInputBox/types.test.ts > CODEX_MODELS matches the current Codex built-in model list`（commit `34b758e33` 扩充模型列表后未同步测试期望，属该 commit 范围）
 
 ---
 

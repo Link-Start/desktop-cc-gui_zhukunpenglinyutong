@@ -165,6 +165,7 @@ mod session_management;
 mod settings;
 mod shared;
 pub mod shared_event_log;
+pub mod shared_projection;
 mod shared_sessions;
 mod skills;
 mod skills_hub;
