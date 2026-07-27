@@ -21,6 +21,10 @@ const promptEnhancer = {
     "useEnhanced": "強化版を使用",
     "keepOriginal": "元のまま保持",
     "enhanceFailed": "プロンプトの強化に失敗しました",
+    "failedTimeout": "プロンプトの強化が {{seconds}} 秒でタイムアウトしました。再試行してください",
+    "failedWorkspace": "ワークスペースの準備ができていないため、プロンプトを強化できません",
+    "failedEmpty": "エンジンが空の強化結果を返しました。再試行してください",
+    "failedGeneric": "プロンプトの強化に失敗しました",
     "emptyPrompt": "先にプロンプトを入力してください",
     "copyEnhanced": "強化版をコピー"
   }

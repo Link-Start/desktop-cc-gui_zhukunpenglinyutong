@@ -8,7 +8,7 @@ import {
 
 const FILE_TREE_ROOT_PATH = "/";
 
-type FileTreeItem =
+export type FileTreeItem =
   | {
       id: string;
       type: "dir";

@@ -100,6 +100,9 @@ const chat = {
     "loadingFailed": "Не удалось загрузить",
     "pleaseCloseAndReopen": "Пожалуйста, закройте и откройте снова",
     "loadingSlashCommands": "Загрузка слэш-команд...",
+    "commandsListUnavailableTitle": "Команды недоступны",
+    "commandsListUnavailableMessage":
+      "Не удалось загрузить слэш-команды: {{reason}}. Автодополнение команд может быть неполным; повторная попытка будет выполнена автоматически.",
     "pleaseWait": "Пожалуйста, подождите...",
     "retrying": "Повтор ({{count}}/{{max}})...",
     "removeAgent": "Удалить агента",

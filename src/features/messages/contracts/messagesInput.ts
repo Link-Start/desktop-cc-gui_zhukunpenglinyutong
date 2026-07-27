@@ -34,6 +34,7 @@ export type MessagesInteractionInput = Pick<
   | "onExitPlanModeExecute"
   | "onOpenWorkspaceFile"
   | "onCaptureNote"
+  | "onSaveAsPrompt"
   | "onRecoverThreadRuntime"
   | "onRecoverThreadRuntimeAndResend"
   | "onThreadRecoveryFork"
@@ -126,6 +127,7 @@ export function adaptLegacyMessagesProps(props: MessagesProps): MessagesCoreProp
       onExitPlanModeExecute: props.onExitPlanModeExecute,
       onOpenWorkspaceFile: props.onOpenWorkspaceFile,
       onCaptureNote: props.onCaptureNote,
+      onSaveAsPrompt: props.onSaveAsPrompt,
       onRecoverThreadRuntime: props.onRecoverThreadRuntime,
       onRecoverThreadRuntimeAndResend: props.onRecoverThreadRuntimeAndResend,
       onThreadRecoveryFork: props.onThreadRecoveryFork,

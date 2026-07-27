@@ -110,7 +110,7 @@ export function resetThreadMessagingTestMocks() {
 }
 
 export function makeThreadMessagingHook(
-  activeEngine: "claude" | "codex" | "gemini" | "opencode",
+  activeEngine: "claude" | "codex" | "gemini" | "kimi" | "opencode",
   overrides: {
     workspace?: WorkspaceInfo;
     activeThreadId?: string | null;
@@ -118,7 +118,11 @@ export function makeThreadMessagingHook(
     activeTurnIdByThread?: Record<string, string | null>;
     threadStatusById?: ThreadState["threadStatusById"];
     codexAcceptedTurnByThread?: Record<string, CodexAcceptedTurnRecord>;
-    threadEngineById?: Record<string, "claude" | "codex" | "gemini" | "opencode" | undefined>;
+    threadEngineById?: Record<
+      string,
+      "claude" | "codex" | "gemini" | "kimi" | "opencode" | undefined
+    >;
+    providerProfileByThread?: Record<string, string | null | undefined>;
     itemsByThread?: Record<string, ConversationItem[]>;
     startThreadForWorkspace?: ReturnType<typeof vi.fn>;
     refreshThread?: ReturnType<typeof vi.fn>;
@@ -191,6 +195,8 @@ export function makeThreadMessagingHook(
         overrides.threadEngineById?.[threadId] ?? undefined,
       getThreadKind: (_workspaceId, threadId) =>
         threadId.startsWith("shared:") ? "shared" : "native",
+      getThreadProviderProfileId: (_workspaceId, threadId) =>
+        overrides.providerProfileByThread?.[threadId] ?? null,
       markProcessing,
       markReviewing,
       setActiveTurnId,

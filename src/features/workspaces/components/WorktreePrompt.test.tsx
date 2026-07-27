@@ -199,4 +199,30 @@ describe("WorktreePrompt", () => {
     expect((createButton as HTMLButtonElement).disabled).toBe(true);
     expect(createButton.getAttribute("aria-busy")).toBe("true");
   });
+
+  it("keeps create disabled until the user enters a branch name", () => {
+    render(
+      <WorktreePrompt
+        workspaceName="mossx"
+        branch=""
+        baseRef="upstream/main"
+        baseRefOptions={[{ name: "upstream/main", group: "upstream", shortSha: "0c098bb3" }]}
+        publishToOrigin
+        setupScript=""
+        onChange={() => {}}
+        onBaseRefChange={() => {}}
+        onPublishToOriginChange={() => {}}
+        onSetupScriptChange={() => {}}
+        onCancel={() => {}}
+        onConfirm={() => {}}
+      />,
+    );
+
+    expect((screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect((screen.getByRole("textbox", { name: "Branch name" }) as HTMLInputElement).value).toBe(
+      "",
+    );
+  });
 });

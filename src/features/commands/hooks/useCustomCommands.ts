@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { CustomCommandOption, DebugEntry } from "../../../types";
-import { getClaudeCommandsList, getOpenCodeCommandsList } from "../../../services/tauri";
+import { getClaudeCommandsList, getOpenCodeCommandsList, startClaudeCommandsWatch, stopClaudeCommandsWatch } from "../../../services/tauri";
 import type { EngineType } from "../../../types";
 import { startupOrchestrator } from "../../startup-orchestration/utils/startupOrchestrator";
+import { subscribeClaudeCommandsChanged } from "../../../services/events";
+import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
+import { pushErrorToast } from "../../../services/toasts";
 
 type UseCustomCommandsOptions = {
   onDebug?: (entry: DebugEntry) => void;
@@ -10,7 +14,11 @@ type UseCustomCommandsOptions = {
   workspaceId?: string | null;
 };
 
-const EMPTY_CLAUDE_COMMANDS_RETRY_COOLDOWN_MS = 15_000;
+/**
+ * 事件驱动（Rust commands watcher → `claude-commands-changed`）之外的兜底
+ * 轮询周期。遵守仓库"禁秒级轮询"红线，取 60s 且 visibility-gated。
+ */
+const COMMANDS_FALLBACK_POLL_MS = 60_000;
 
 type CommandRefreshPhase = "idle-prewarm" | "on-demand";
 
@@ -60,9 +68,10 @@ export function useCustomCommands({
   activeEngine,
   workspaceId = null,
 }: UseCustomCommandsOptions) {
+  const { t } = useTranslation();
   const [commands, setCommands] = useState<CustomCommandOption[]>([]);
+  const [commandsError, setCommandsError] = useState<string | null>(null);
   const inFlight = useRef(false);
-  const lastEmptyBurstByWorkspaceRef = useRef<Map<string, number>>(new Map());
 
   const logCommandError = useCallback(
     (idSuffix: string, label: string, error: unknown) => {
@@ -78,6 +87,21 @@ export function useCustomCommands({
     [onDebug],
   );
 
+  // t 的引用在未初始化 i18n 的环境（如测试）中可能每次渲染都变；
+  // 经 ref 读取，避免 refreshCommands 链式失稳造成 effect 重入循环。
+  const tRef = useRef(t);
+  tRef.current = t;
+
+  const reportCommandsFailure = useCallback((reason: string) => {
+    setCommandsError(reason);
+    pushErrorToast({
+      id: "commands-list-unavailable",
+      title: tRef.current("chat.commandsListUnavailableTitle"),
+      message: tRef.current("chat.commandsListUnavailableMessage", { reason }),
+      variant: "error",
+    });
+  }, []);
+
   const refreshCommands = useCallback(async (phase: CommandRefreshPhase = "on-demand") => {
     if (inFlight.current) {
       return;
@@ -90,6 +114,7 @@ export function useCustomCommands({
       label: "commands/list",
       payload: {},
     });
+    let failedReason: string | null = null;
     try {
       const isOpenCode = activeEngine === "opencode";
       const commandLabel = isOpenCode ? "opencode_commands_list" : "claude_commands_list";
@@ -116,71 +141,62 @@ export function useCustomCommands({
             label: "commands/list response",
             payload: response,
           });
-          let data = normalizeCommandsPayload(response);
-          if (
-            activeEngine !== "opencode"
-            && workspaceId
-            && data.length === 0
-          ) {
-            const now = Date.now();
-            const lastBurstAt = lastEmptyBurstByWorkspaceRef.current.get(workspaceId) ?? 0;
-            const canRetryBurst =
-              now - lastBurstAt >= EMPTY_CLAUDE_COMMANDS_RETRY_COOLDOWN_MS;
-
-            if (canRetryBurst) {
-              lastEmptyBurstByWorkspaceRef.current.set(workspaceId, now);
-              const retryResponse = await getClaudeCommandsList(workspaceId);
-              onDebug?.({
-                id: `${Date.now()}-server-commands-list-retry`,
-                timestamp: Date.now(),
-                source: "server",
-                label: "commands/list retry response",
-                payload: retryResponse,
-              });
-              data = normalizeCommandsPayload(retryResponse);
-
-              if (data.length === 0) {
-                const globalFallbackResponse = await getClaudeCommandsList(null);
-                onDebug?.({
-                  id: `${Date.now()}-server-commands-list-global-fallback`,
-                  timestamp: Date.now(),
-                  source: "server",
-                  label: "commands/list global fallback response",
-                  payload: globalFallbackResponse,
-                });
-                data = normalizeCommandsPayload(globalFallbackResponse);
-              }
-            } else {
-              onDebug?.({
-                id: `${Date.now()}-server-commands-list-retry-skipped`,
-                timestamp: Date.now(),
-                source: "client",
-                label: "commands/list retry skipped by cooldown",
-                payload: {
-                  workspaceId,
-                  cooldownMs: EMPTY_CLAUDE_COMMANDS_RETRY_COOLDOWN_MS,
-                  elapsedMs: now - lastBurstAt,
-                },
-              });
-            }
-          }
-          return data;
+          return normalizeCommandsPayload(response);
         },
-        fallback: () => [],
+        fallback: (reason) => {
+          failedReason = String(reason);
+          return [];
+        },
       });
-      if (workspaceId && data.length > 0) {
-        lastEmptyBurstByWorkspaceRef.current.delete(workspaceId);
+      if (failedReason) {
+        reportCommandsFailure(failedReason);
+      } else {
+        setCommandsError(null);
       }
       setCommands(data);
     } catch (error) {
       logCommandError("client-commands-list-error", "commands/list error", error);
+      reportCommandsFailure(
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       inFlight.current = false;
     }
-  }, [activeEngine, logCommandError, onDebug, workspaceId]);
+  }, [activeEngine, logCommandError, onDebug, reportCommandsFailure, workspaceId]);
 
   useEffect(() => {
     refreshCommands("idle-prewarm");
+  }, [refreshCommands]);
+
+  // Rust commands watcher 生命周期跟随当前 workspace 作用域；
+  // 对同一作用域重复 start 在 Rust 侧幂等。opencode 走独立命令源，不挂此 watcher。
+  useEffect(() => {
+    if (activeEngine === "opencode") {
+      return;
+    }
+    const startPromise = startClaudeCommandsWatch(workspaceId);
+    void startPromise.catch((error) => {
+      logCommandError("commands-watch-start-error", "commands/watch start error", error);
+    });
+    return () => {
+      void startPromise
+        .then(() => stopClaudeCommandsWatch(workspaceId))
+        .catch(() => {});
+    };
+  }, [activeEngine, logCommandError, workspaceId]);
+
+  // 事件驱动：Rust commands watcher 在命令目录变更去抖后触发即时刷新。
+  useEffect(() => {
+    return subscribeClaudeCommandsChanged(() => {
+      void refreshCommands("on-demand");
+    });
+  }, [refreshCommands]);
+
+  // 兜底轮询：watcher 漏事件时仍能收敛；visibility-gated，60s 周期。
+  useEffect(() => {
+    return setVisibilityGatedInterval(() => {
+      void refreshCommands("on-demand");
+    }, COMMANDS_FALLBACK_POLL_MS);
   }, [refreshCommands]);
 
   const commandOptions = useMemo(
@@ -191,5 +207,6 @@ export function useCustomCommands({
   return {
     commands: commandOptions,
     refreshCommands,
+    commandsError,
   };
 }

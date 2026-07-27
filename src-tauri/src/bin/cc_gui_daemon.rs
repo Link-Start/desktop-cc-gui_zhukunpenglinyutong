@@ -187,6 +187,7 @@ mod codex {
     }
     pub(crate) mod provider_profile {
         use crate::session_management::CodexProviderBinding;
+        use crate::types::CodexCustomModel;
 
         pub(crate) const CODEX_DISK_PROVIDER_PROFILE_ID: &str = "__disk__";
         pub(crate) const CODEX_DISK_PROVIDER_PROFILE_NAME: &str = "codex-tui/default-config";
@@ -225,6 +226,59 @@ mod codex {
 
         pub(crate) fn legacy_codex_runtime_key(workspace_id: &str) -> String {
             workspace_id.to_string()
+        }
+
+        pub(crate) fn resolve_codex_provider_model_config(
+            provider_profile_id: &str,
+        ) -> Result<Option<(String, Vec<CodexCustomModel>)>, String> {
+            let provider_profile_id = provider_profile_id.trim();
+            if provider_profile_id.is_empty()
+                || provider_profile_id == CODEX_DISK_PROVIDER_PROFILE_ID
+            {
+                return Ok(None);
+            }
+            let path = crate::app_paths::config_file_path()?;
+            let content = std::fs::read_to_string(&path).map_err(|error| {
+                format!("failed to read provider config {}: {error}", path.display())
+            })?;
+            let config: serde_json::Value = serde_json::from_str(&content).map_err(|error| {
+                format!(
+                    "failed to parse provider config {}: {error}",
+                    path.display()
+                )
+            })?;
+            let provider = config
+                .get("codex")
+                .and_then(|codex| codex.get("providers"))
+                .and_then(|providers| providers.get(provider_profile_id))
+                .ok_or_else(|| format!("Codex provider {provider_profile_id} not found"))?;
+            let provider_name = provider
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or(provider_profile_id);
+            let config_toml = provider
+                .get("configToml")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if config_toml.is_empty() {
+                return Err(format!(
+                    "Codex provider {provider_name} has empty configToml"
+                ));
+            }
+            let custom_models = provider
+                .get("customModels")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|error| {
+                    format!("Codex provider {provider_name} has invalid customModels: {error}")
+                })?
+                .unwrap_or_default();
+            Ok(Some((config_toml, custom_models)))
         }
     }
     pub(crate) mod rewind {
@@ -1614,7 +1668,10 @@ async fn handle_rpc_request(
         }
         "get_engine_models" => {
             let engine_type = parse_engine_type(&params, "engineType")?;
-            let models = state.get_engine_models(engine_type).await;
+            let provider_profile_id = parse_optional_string(&params, "providerProfileId");
+            let models = state
+                .get_engine_models(engine_type, provider_profile_id.as_deref())
+                .await?;
             serde_json::to_value(models).map_err(|err| err.to_string())
         }
         "engine_send_message" => {
@@ -1634,6 +1691,7 @@ async fn handle_rpc_request(
             let fork_session_id = parse_optional_string(&params, "forkSessionId");
             let agent = parse_optional_string(&params, "agent");
             let variant = parse_optional_string(&params, "variant");
+            let provider_profile_id = parse_optional_string(&params, "providerProfileId");
             let custom_spec_root = parse_optional_string(&params, "customSpecRoot");
             let auto_session =
                 serde_json::from_value::<Option<session_management::AutoSessionMetadata>>(
@@ -1656,6 +1714,7 @@ async fn handle_rpc_request(
                     fork_session_id,
                     agent,
                     variant,
+                    provider_profile_id,
                     custom_spec_root,
                     auto_session,
                 )
@@ -2420,6 +2479,9 @@ fn main() {
         state.engine_manager.claude_manager.interrupt_all().await;
         if let Err(error) = state.engine_manager.shutdown_gemini_sessions().await {
             eprintln!("cc_gui_daemon Gemini shutdown failed: {error}");
+        }
+        if let Err(error) = state.engine_manager.shutdown_kimi_sessions().await {
+            eprintln!("cc_gui_daemon Kimi shutdown failed: {error}");
         }
         let codex_sessions = {
             let mut sessions = state.sessions.lock().await;

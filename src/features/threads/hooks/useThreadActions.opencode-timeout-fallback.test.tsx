@@ -196,6 +196,18 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
     vi.useRealTimers();
   });
 
+  it("skips retired opencode listing during normal hydration", async () => {
+    const { result } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, {
+        preserveState: true,
+      });
+    });
+
+    expect(getOpenCodeSessionList).not.toHaveBeenCalled();
+  });
+
   it(
     "case 1: opencode listing timeout still keeps last-good opencode entries when codex returns a session",
     async () => {
@@ -231,6 +243,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
       vi.useFakeTimers();
       const promise = result.current.listThreadsForWorkspace(workspace, {
         preserveState: true,
+        includeOpenCodeSessions: true,
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(30_001);
@@ -291,6 +304,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
       await act(async () => {
         await result.current.listThreadsForWorkspace(workspace, {
           preserveState: true,
+          includeOpenCodeSessions: true,
         });
       });
 
@@ -354,6 +368,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
       vi.useFakeTimers();
       const firstRun = result.current.listThreadsForWorkspace(workspace, {
         preserveState: true,
+        includeOpenCodeSessions: true,
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(30_001);
@@ -385,6 +400,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
       vi.useFakeTimers();
       const secondRun = result.current.listThreadsForWorkspace(workspace, {
         preserveState: true,
+        includeOpenCodeSessions: true,
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(30_001);
@@ -453,6 +469,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
       vi.useFakeTimers();
       const run = result.current.listThreadsForWorkspace(workspace, {
         preserveState: true,
+        includeOpenCodeSessions: true,
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(30_001);

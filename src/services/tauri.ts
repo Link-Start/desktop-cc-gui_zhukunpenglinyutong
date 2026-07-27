@@ -39,7 +39,11 @@ export {
   getOpenCodeCommandsList,
   getSkillsList,
   setCuratedSkillEnabled,
+  startClaudeCommandsWatch,
+  stopClaudeCommandsWatch,
+  claudeCommandCreate,
 } from "./tauri/skills";
+export type { CreatedClaudeCommand } from "./tauri/skills";
 export {
   connectOpenCodeProvider,
   exportOpenCodeSession,
@@ -359,6 +363,7 @@ export {
   getGeminiVendorPreflight,
   getGeminiVendorSettings,
   getKimiProviders,
+  listCcSwitchProviders,
   reorderClaudeProviders,
   saveGeminiVendorSettings,
   saveClaudeSettingsJson,
@@ -371,6 +376,9 @@ export {
   updateKimiProvider,
 } from "./tauri/vendors";
 export type {
+  CcSwitchAppType,
+  CcSwitchProvider,
+  CcSwitchProviderList,
   GeminiVendorPreflightCheck,
   GeminiVendorPreflightResult,
   GeminiVendorSettings,

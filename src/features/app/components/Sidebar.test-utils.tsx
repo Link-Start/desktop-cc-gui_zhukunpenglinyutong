@@ -7,6 +7,9 @@ import {
   assignWorkspaceSessionFolders,
   createWorkspaceSessionFolder,
   deleteWorkspaceSessionFolder,
+  getClaudeProviders,
+  getCodexProviders,
+  getKimiProviders,
   listWorkspaceSessionFolders,
   renameWorkspaceSessionFolder,
 } from "../../../services/tauri";
@@ -118,6 +121,9 @@ vi.mock("../../../services/tauri", async (importOriginal) => {
     assignWorkspaceSessionFolders: vi.fn(),
     createWorkspaceSessionFolder: vi.fn(),
     deleteWorkspaceSessionFolder: vi.fn(),
+    getClaudeProviders: vi.fn(),
+    getCodexProviders: vi.fn(),
+    getKimiProviders: vi.fn(),
     listWorkspaceSessionFolders: vi.fn(),
     renameWorkspaceSessionFolder: vi.fn(),
   };
@@ -197,6 +203,9 @@ export function resetSidebarTestMocks() {
     },
   });
   vi.mocked(deleteWorkspaceSessionFolder).mockResolvedValue(undefined);
+  vi.mocked(getClaudeProviders).mockResolvedValue([]);
+  vi.mocked(getCodexProviders).mockResolvedValue([]);
+  vi.mocked(getKimiProviders).mockResolvedValue([]);
 }
 
 export const baseProps = {

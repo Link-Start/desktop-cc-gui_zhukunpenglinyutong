@@ -14,6 +14,8 @@ interface CodexProviderListProps {
   providers: CodexProviderConfig[];
   loading: boolean;
   headerActions?: ReactNode;
+  /** 渲染在「+ 添加」按钮之后 */
+  trailingActions?: ReactNode;
   onAdd: () => void;
   onEdit: (provider: CodexProviderConfig) => void;
   onDelete: (provider: CodexProviderConfig) => void;
@@ -23,6 +25,7 @@ export function CodexProviderList({
   providers,
   loading,
   headerActions,
+  trailingActions,
   onAdd,
   onEdit,
   onDelete,
@@ -41,6 +44,7 @@ export function CodexProviderList({
           <Button size="sm" onClick={onAdd}>
             + {t("settings.vendor.add")}
           </Button>
+          {trailingActions}
         </div>
       </div>
 

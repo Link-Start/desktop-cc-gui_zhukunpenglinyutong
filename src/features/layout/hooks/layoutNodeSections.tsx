@@ -121,6 +121,8 @@ export function buildTerminalDockNode({
       status={terminalState.status}
       message={terminalState.message}
       getSelection={terminalState.getSelection}
+      findNext={terminalState.findNext}
+      findPrevious={terminalState.findPrevious}
       onInsertText={onInsertComposerText}
     />
   ) : null;

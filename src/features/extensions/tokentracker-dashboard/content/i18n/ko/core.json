@@ -62,7 +62,7 @@
   "identity_card.rank_placeholder": "—",
   "identity_card.streak_value": "{{days}}일",
   "usage.summary.total": "총 토큰",
-  "usage.summary.toggle_aria": "숫자 축약 표시 전환",
+  "usage.summary.toggle_aria": "Token 숫자 형식 전환",
   "usage.period.day": "일",
   "usage.period.week": "주",
   "usage.period.month": "월",

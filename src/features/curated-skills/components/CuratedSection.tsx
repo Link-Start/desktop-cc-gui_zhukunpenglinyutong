@@ -92,6 +92,16 @@ export function CuratedSection({
     [t],
   );
 
+  const hintLabel = useMemo(
+    () =>
+      translateOrFallback(
+        t,
+        "common.curatedDetailHint",
+        "When enabled, the selected skill is automatically injected into the system prompt for every conversation.",
+      ),
+    [t],
+  );
+
   const handleToggle = useCallback(
     async (entry: CuratedSkillOption, enabled: boolean) => {
       try {
@@ -144,6 +154,7 @@ export function CuratedSection({
         builtInLabel={builtInLabel}
         sectionTitleLabel={sectionTitleLabel}
       />
+      <div className="curated-section-hint" role="note">{hintLabel}</div>
       <div className="curated-section-subtitle">{subtitleLabel}</div>
       {toggleError ? (
         <div className="curated-section-error" role="alert">

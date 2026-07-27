@@ -51,6 +51,8 @@ const common = {
     curatedLoading: "正在加载 curated skills…",
     curatedError: "无法加载 curated skills。",
     curatedSubtitle: "客户端内置、版本固定,随桌面端一起发布。无需联网。",
+    curatedDetailHint:
+      "开启后，对应 Skill 会在每次发起对话时自动注入到系统提示词中，持续影响 AI 的回复风格与行为，无需手动引用；关闭则完全不注入。这与「拓展 → Skills」中由用户自行安装的技能不同：后者需要主动调用或按描述匹配才会生效，而此处是随桌面端内置且版本固定的精选能力。",
     curatedBundledBadge: "内置",
     curatedCategoryCodeStyle: "代码风格",
     curatedCategoryUiDesign: "界面设计",

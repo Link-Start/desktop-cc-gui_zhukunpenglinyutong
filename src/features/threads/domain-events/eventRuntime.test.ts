@@ -74,4 +74,29 @@ describe("domain event runtime", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("settles a run once when terminal evidence is duplicated or conflicts", () => {
+    const { runtime, emitInternal } = createDomainEventRuntimeController();
+    const subscriber = vi.fn();
+    runtime.subscribe(subscriber);
+    const completed = domainEventFactories.runSettled({
+      occurredAt: "2026-05-20T00:00:00.000Z",
+      workspaceId: "workspace-1",
+      sessionId: "thread-1",
+      engine: "codex",
+      runId: "run-1",
+      status: "completed",
+    });
+    const replaced = domainEventFactories.runSettled({
+      ...completed,
+      status: "replaced",
+    });
+
+    emitInternal(completed);
+    emitInternal(completed);
+    emitInternal(replaced);
+
+    expect(subscriber).toHaveBeenCalledTimes(1);
+    expect(subscriber).toHaveBeenCalledWith(completed);
+  });
 });

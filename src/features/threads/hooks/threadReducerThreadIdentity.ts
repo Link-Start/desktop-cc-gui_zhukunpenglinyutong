@@ -91,6 +91,15 @@ export function renameThreadStateIdentity({
       dedupedById.set(thread.id, {
         ...current,
         ...thread,
+        sourceLabel: thread.sourceLabel ?? current.sourceLabel,
+        providerProfileId:
+          thread.providerProfileId ?? current.providerProfileId,
+        providerProfileSource:
+          thread.providerProfileSource ?? current.providerProfileSource,
+        providerProfileName:
+          thread.providerProfileName ?? current.providerProfileName,
+        providerAvailability:
+          thread.providerAvailability ?? current.providerAvailability,
         updatedAt: Math.max(current.updatedAt, thread.updatedAt),
         nativeThreadIds: nativeThreadIds.length > 0 ? nativeThreadIds : undefined,
       });

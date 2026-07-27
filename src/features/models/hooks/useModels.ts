@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DebugEntry, ModelOption, WorkspaceInfo } from "../../../types";
 import { getConfigModel, getModelList } from "../../../services/tauri";
-import { CODEX_MODEL_CATALOG } from "../codexModelCatalog";
+import {
+  CODEX_MODEL_CATALOG,
+  CODEX_MODEL_FALLBACK_ENTRIES,
+} from "../codexModelCatalog";
+import {
+  createModelCatalogCache,
+  mergeModelCatalogSources,
+  type ModelCatalogEntry,
+} from "../modelProviderCatalog";
 import {
   STORAGE_KEYS as PROVIDER_STORAGE_KEYS,
   validateCodexCustomModels,
@@ -84,6 +92,12 @@ const mergeModelOption = (existing: ModelOption, next: ModelOption): ModelOption
   displayName: next.displayName || existing.displayName,
   description: next.description || existing.description,
   source: next.source || existing.source,
+  provider: next.provider ?? existing.provider,
+  protocol: next.protocol ?? existing.protocol,
+  provenance: next.provenance ?? existing.provenance,
+  observedAt: next.observedAt ?? existing.observedAt,
+  lastVerifiedAt: next.lastVerifiedAt ?? existing.lastVerifiedAt,
+  lifecycle: next.lifecycle ?? existing.lifecycle,
   ...mergeReasoningMetadata(existing, next),
 });
 
@@ -126,8 +140,8 @@ const readCustomCodexModelOptions = (): ModelOption[] => {
 };
 
 const getBuiltInCodexModelOptions = (): ModelOption[] =>
-  CODEX_MODEL_CATALOG.map((model) =>
-    createModelOption(
+  CODEX_MODEL_CATALOG.map((model) => ({
+    ...createModelOption(
       model.id,
       model.label,
       model.description,
@@ -135,7 +149,12 @@ const getBuiltInCodexModelOptions = (): ModelOption[] =>
       model.supportedReasoningEfforts ?? [],
       normalizeEffort(model.defaultReasoningEffort),
     ),
-  );
+    provider: model.provider,
+    protocol: model.protocol,
+    provenance: model.provenance,
+    lastVerifiedAt: model.lastVerifiedAt,
+    lifecycle: model.lifecycle,
+  }));
 
 const mergeCodexSelectableModels = (baseModels: ModelOption[]): ModelOption[] => {
   const mergedModels: ModelOption[] = [];
@@ -156,22 +175,31 @@ const mergeCodexSelectableModels = (baseModels: ModelOption[]): ModelOption[] =>
   const mergedByIdentity = new Map(
     mergedModels.map((model) => [normalizeModelIdentity(model), model]),
   );
-  const orderedModels: ModelOption[] = [];
-  const appendedIdentities = new Set<string>();
-  [...baseModels, ...customModels, ...builtInModels].forEach((model) => {
-    const identity = normalizeModelIdentity(model);
-    if (!identity || appendedIdentities.has(identity)) {
-      return;
-    }
-    const mergedModel = mergedByIdentity.get(identity);
-    if (!mergedModel) {
-      return;
-    }
-    appendedIdentities.add(identity);
-    orderedModels.push(mergedModel);
+  const toCatalogEntries = (
+    entries: readonly ModelOption[],
+    source: ModelCatalogEntry["source"],
+  ): ModelCatalogEntry[] =>
+    entries.map((model) => ({
+      engine: "codex",
+      provider: "openai",
+      protocol: "openai-responses",
+      id: normalizeModelIdentity(model),
+      label: model.displayName,
+      description: model.description,
+      source,
+      provenance: `codex:${model.source || source}`,
+      supportedReasoningEfforts: model.supportedReasoningEfforts,
+      defaultReasoningEffort: model.defaultReasoningEffort,
+    }));
+  const catalog = mergeModelCatalogSources([
+    toCatalogEntries(baseModels, "runtime"),
+    toCatalogEntries(customModels, "configured"),
+    CODEX_MODEL_FALLBACK_ENTRIES,
+  ]);
+  return catalog.flatMap((entry) => {
+    const mergedModel = mergedByIdentity.get(entry.id);
+    return mergedModel ? [mergedModel] : [];
   });
-
-  return orderedModels;
 };
 
 const normalizeEffort = (value: unknown): string | null => {
@@ -251,6 +279,9 @@ export function useModels({
   const hasUserSelectedEffort = useRef(false);
   const lastWorkspaceId = useRef<string | null>(null);
   const [catalogReadyForWorkspace, setCatalogReadyForWorkspace] = useState(false);
+  const catalogCacheByWorkspace = useRef(
+    new Map<string, ReturnType<typeof createModelCatalogCache>>(),
+  );
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
@@ -483,6 +514,26 @@ export function useModels({
         displayName: String(item.displayName ?? item.display_name ?? item.model ?? ""),
         description: String(item.description ?? ""),
         source: String(item.source ?? "unknown"),
+        provider:
+          typeof item.provider === "string" ? item.provider : null,
+        protocol:
+          typeof item.protocol === "string" ? item.protocol : null,
+        provenance:
+          typeof item.provenance === "string" ? item.provenance : null,
+        observedAt:
+          typeof item.observedAt === "number"
+            ? item.observedAt
+            : typeof item.observed_at === "number"
+              ? item.observed_at
+              : null,
+        lastVerifiedAt:
+          typeof item.lastVerifiedAt === "string"
+            ? item.lastVerifiedAt
+            : typeof item.last_verified_at === "string"
+              ? item.last_verified_at
+              : null,
+        lifecycle:
+          typeof item.lifecycle === "string" ? item.lifecycle : null,
         supportedReasoningEfforts: normalizeReasoningEfforts(
           item.supportedReasoningEfforts ?? item.supported_reasoning_efforts,
         ),
@@ -491,15 +542,71 @@ export function useModels({
         ),
         isDefault: Boolean(item.isDefault ?? item.is_default ?? false),
       }));
+      let effectiveDataFromServer = dataFromServer;
+      let catalogCache = catalogCacheByWorkspace.current.get(requestedWorkspaceId);
+      if (!catalogCache) {
+        catalogCache = createModelCatalogCache();
+        catalogCacheByWorkspace.current.set(requestedWorkspaceId, catalogCache);
+      }
+      if (dataFromServer.length > 0) {
+        catalogCache.commit(
+          dataFromServer.map((model) => ({
+            engine: "codex",
+            provider: "openai",
+            protocol: "openai-responses",
+            id: normalizeModelIdentity(model),
+            label: model.displayName,
+            description: model.description,
+            source: "runtime",
+            provenance: `codex:${model.source}`,
+            observedAt: Date.now(),
+            supportedReasoningEfforts: model.supportedReasoningEfforts,
+            defaultReasoningEffort: model.defaultReasoningEffort,
+          })),
+        );
+      } else if (modelListResult.status === "rejected" || response === null) {
+        const staleCatalog = catalogCache.fail(
+          modelListResult.status === "rejected"
+            ? modelListResult.reason
+            : new Error("model/list unavailable"),
+        );
+        effectiveDataFromServer = staleCatalog.entries.map((entry) => ({
+          ...createModelOption(
+            entry.id,
+            entry.label,
+            entry.description,
+            "cache:stale",
+            [...(entry.supportedReasoningEfforts ?? [])],
+            entry.defaultReasoningEffort ?? null,
+          ),
+          provider: entry.provider,
+          protocol: entry.protocol,
+          provenance: entry.provenance,
+          observedAt: entry.observedAt ?? null,
+          lastVerifiedAt: entry.lastVerifiedAt ?? null,
+          lifecycle: entry.lifecycle ?? null,
+        }));
+        onDebug?.({
+          id: `${Date.now()}-client-model-catalog-stale`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "model catalog stale",
+          payload: {
+            workspaceId: requestedWorkspaceId,
+            error: staleCatalog.error,
+            entryCount: staleCatalog.entries.length,
+          },
+        });
+      }
       const data = (() => {
         if (!configModelFromConfig) {
-          return dataFromServer;
+          return effectiveDataFromServer;
         }
-        const hasConfigModel = dataFromServer.some(
+        const hasConfigModel = effectiveDataFromServer.some(
           (model) => model.model === configModelFromConfig,
         );
         if (hasConfigModel) {
-          return dataFromServer;
+          return effectiveDataFromServer;
         }
         const configOption: ModelOption = {
           id: configModelFromConfig,
@@ -511,7 +618,7 @@ export function useModels({
           defaultReasoningEffort: null,
           isDefault: false,
         };
-        return [configOption, ...dataFromServer];
+        return [configOption, ...effectiveDataFromServer];
       })();
       const selectableData = mergeCodexSelectableModels(data);
       setRawModels(data);

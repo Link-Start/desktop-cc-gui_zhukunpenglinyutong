@@ -1,5 +1,5 @@
 import {
-  createElement,
+  createElement, memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -55,7 +55,7 @@ import {
   type FileRenderPressure,
 } from "../types/fileRenderPressure";
 
-export type FileMarkdownPreviewProps = {
+export type FileMarkdownPreviewRichProps = {
   value: string;
   documentKey?: string;
   className?: string;
@@ -1088,7 +1088,7 @@ function FileMarkdownMermaidBlock({
   );
 }
 
-export function FileMarkdownPreview({
+export const FileMarkdownPreviewRich = memo(function FileMarkdownPreviewRich({
   value,
   documentKey,
   className = "fvp-file-markdown",
@@ -1101,7 +1101,7 @@ export function FileMarkdownPreview({
   renderAnnotationMarker,
   annotationActionLabel = "Annotate",
   renderPressure = DEFAULT_FILE_RENDER_PRESSURE,
-}: FileMarkdownPreviewProps) {
+}: FileMarkdownPreviewRichProps) {
   const { t } = useTranslation();
   const mermaidDocumentKey = useMemo(
     () => documentKey ?? `inline:${hashStableString(value)}`,
@@ -1569,7 +1569,7 @@ export function FileMarkdownPreview({
         ))}
       </div>
     );
-  }
+});
 
 export function clearFileMarkdownPreviewRuntimeCachesForTests() {
   mermaidTabSessionCache.clear();

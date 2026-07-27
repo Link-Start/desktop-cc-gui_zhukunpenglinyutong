@@ -40,6 +40,7 @@ interface ProviderDialogProps {
     apiUrl: string;
     jsonConfig: string;
   }) => void;
+  actionError?: string | null;
 }
 
 const presetIconById = {
@@ -94,6 +95,7 @@ export function ProviderDialog({
   provider,
   onClose,
   onSave,
+  actionError = null,
 }: ProviderDialogProps) {
   const { t } = useTranslation();
   const isAdding = !provider;
@@ -550,6 +552,11 @@ export function ProviderDialog({
               />
               {jsonError && (
                 <div className="vendor-json-error">{jsonError}</div>
+              )}
+              {actionError && (
+                <div className="vendor-json-error" role="alert">
+                  {actionError}
+                </div>
               )}
             </div>
           </details>

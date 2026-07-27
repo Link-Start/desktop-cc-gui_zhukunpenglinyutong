@@ -5,6 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { engineSendMessageSync } from '../../../../../services/tauri';
 import {
   PROMPT_ENHANCER_ENGINE_OPTIONS,
+  PromptEnhancerError,
+  buildPromptEnhancerInstruction,
+  classifyPromptEnhancerError,
+  clearPromptEnhancerCacheForTests,
+  resolveEnhancerLocale,
   usePromptEnhancer,
 } from './usePromptEnhancer';
 
@@ -49,6 +54,7 @@ function renderPromptEnhancer(options?: {
   currentProvider?: string;
   selectedModel?: string;
   draft?: string;
+  workspaceId?: string | null;
 }) {
   const editableRef = { current: null };
   const setHasContent = vi.fn();
@@ -56,7 +62,7 @@ function renderPromptEnhancer(options?: {
 
   const hook = renderHook(() =>
     usePromptEnhancer({
-      workspaceId: 'ws-1',
+      workspaceId: options && 'workspaceId' in options ? options.workspaceId : 'ws-1',
       editableRef,
       getTextContent: () => options?.draft ?? '报告管理页面加载数据时，标题的获取逻辑是什么',
       currentProvider: options?.currentProvider ?? 'claude',
@@ -72,6 +78,7 @@ function renderPromptEnhancer(options?: {
 
 afterEach(() => {
   vi.clearAllMocks();
+  clearPromptEnhancerCacheForTests();
 });
 
 describe('usePromptEnhancer', () => {
@@ -311,11 +318,12 @@ describe('usePromptEnhancer', () => {
       expect(result.current.canUseEnhancedPrompt).toBe(false);
     });
 
-    expect(result.current.enhancedPrompt).toContain('Prompt enhancement failed.');
     expect(result.current.enhancedPrompt).toContain(
-      'Claude: Claude stream-json ended without a valid stream event',
+      'Prompt enhancement failed: Claude stream-json ended without a valid stream event',
     );
-    expect(result.current.enhancedPrompt).toContain('Fallback: Codex response timed out');
+    expect(result.current.enhancedPrompt).toContain(
+      'Prompt enhancement failed: Codex response timed out',
+    );
     expect(sendSync).toHaveBeenCalledTimes(2);
   });
 
@@ -347,10 +355,328 @@ describe('usePromptEnhancer', () => {
       expect(result.current.canUseEnhancedPrompt).toBe(false);
     });
 
-    expect(result.current.enhancedPrompt).toContain('Claude: Claude exited with status');
     expect(result.current.enhancedPrompt).toContain(
-      'Fallback: Codex returned an empty prompt enhancement',
+      'Prompt enhancement failed: Claude exited with status',
+    );
+    expect(result.current.enhancedPrompt).toContain(
+      'The engine returned an empty enhancement',
     );
     expect(sendSync).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows workspace failure copy when the workspace is missing', () => {
+    const sendSync = vi.mocked(engineSendMessageSync);
+    const { result } = renderPromptEnhancer({ workspaceId: null });
+
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+
+    expect(result.current.enhancedPrompt).toBe(
+      'Workspace is not ready for prompt enhancement',
+    );
+    expect(result.current.canUseEnhancedPrompt).toBe(false);
+    expect(sendSync).not.toHaveBeenCalled();
+  });
+
+  it('serves a repeated enhancement from cache without a second engine call', async () => {
+    const sendSync = vi.mocked(engineSendMessageSync);
+    sendSync.mockResolvedValue({
+      engine: 'claude',
+      text: '请说明报告管理页面标题加载逻辑。',
+    });
+
+    const { result } = renderPromptEnhancer();
+
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+
+    await waitFor(() => {
+      expect(result.current.canUseEnhancedPrompt).toBe(true);
+    });
+    expect(sendSync).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.handleCloseEnhancerDialog();
+    });
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+
+    await waitFor(() => {
+      expect(result.current.canUseEnhancedPrompt).toBe(true);
+    });
+    expect(result.current.enhancedPrompt).toBe('请说明报告管理页面标题加载逻辑。');
+    expect(result.current.isEnhancing).toBe(false);
+    expect(sendSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reuse cached enhancements across workspaces', async () => {
+    const sendSync = vi.mocked(engineSendMessageSync);
+    sendSync.mockImplementation(async (workspaceId) => ({
+      engine: 'claude',
+      text: `enhanced:${workspaceId}`,
+    }));
+    let workspaceId = 'ws-a';
+    const { result, rerender } = renderHook(() =>
+      usePromptEnhancer({
+        workspaceId,
+        editableRef: { current: null },
+        getTextContent: () => 'same draft',
+        currentProvider: 'claude',
+        selectedModel: 'claude-sonnet-4-5',
+        modelGroups: defaultModelGroups,
+        setHasContent: vi.fn(),
+        handleInput: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+    await waitFor(() => {
+      expect(result.current.enhancedPrompt).toBe('enhanced:ws-a');
+    });
+    act(() => {
+      result.current.handleCloseEnhancerDialog();
+    });
+
+    workspaceId = 'ws-b';
+    rerender();
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+    await waitFor(() => {
+      expect(result.current.enhancedPrompt).toBe('enhanced:ws-b');
+    });
+
+    expect(sendSync).toHaveBeenCalledTimes(2);
+    expect(sendSync.mock.calls.map(([scope]) => scope)).toEqual(['ws-a', 'ws-b']);
+  });
+
+  it('invalidates an in-flight enhancement when the workspace changes', async () => {
+    const sendSync = vi.mocked(engineSendMessageSync);
+    let resolveRequest!: (value: { engine: 'claude'; text: string }) => void;
+    sendSync.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+    let workspaceId = 'ws-a';
+    const { result, rerender } = renderHook(() =>
+      usePromptEnhancer({
+        workspaceId,
+        editableRef: { current: null },
+        getTextContent: () => 'same draft',
+        currentProvider: 'claude',
+        selectedModel: 'claude-sonnet-4-5',
+        modelGroups: defaultModelGroups,
+        setHasContent: vi.fn(),
+        handleInput: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+    await waitFor(() => {
+      expect(result.current.isEnhancing).toBe(true);
+    });
+
+    workspaceId = 'ws-b';
+    rerender();
+    await waitFor(() => {
+      expect(result.current.showEnhancerDialog).toBe(false);
+      expect(result.current.isEnhancing).toBe(false);
+    });
+
+    resolveRequest({ engine: 'claude', text: 'stale workspace result' });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.enhancedPrompt).toBe('');
+    expect(result.current.canUseEnhancedPrompt).toBe(false);
+  });
+
+  it('does not cache failed enhancements and retries the engine', async () => {
+    const sendSync = vi.mocked(engineSendMessageSync);
+    sendSync
+      .mockRejectedValueOnce(new Error('some unrecoverable failure'))
+      .mockResolvedValueOnce({
+        engine: 'claude',
+        text: '第二次重试后的润色结果。',
+      });
+
+    const { result } = renderPromptEnhancer();
+
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+
+    await waitFor(() => {
+      expect(result.current.canUseEnhancedPrompt).toBe(false);
+    });
+    expect(sendSync).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.handleCloseEnhancerDialog();
+    });
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+
+    await waitFor(() => {
+      expect(result.current.canUseEnhancedPrompt).toBe(true);
+    });
+    expect(result.current.enhancedPrompt).toBe('第二次重试后的润色结果。');
+    expect(sendSync).toHaveBeenCalledTimes(2);
+  });
+
+  it('evicts the oldest cache entry beyond the LRU cap', async () => {
+    const sendSync = vi.mocked(engineSendMessageSync);
+    sendSync.mockImplementation(async (_workspaceId, payload) => ({
+      engine: 'claude',
+      text: `enhanced:${payload.text.slice(-20)}`,
+    }));
+
+    let draft = 'draft-00';
+    const { result } = renderHook(() =>
+      usePromptEnhancer({
+        workspaceId: 'ws-1',
+        editableRef: { current: null },
+        getTextContent: () => draft,
+        currentProvider: 'claude',
+        selectedModel: 'claude-sonnet-4-5',
+        modelGroups: defaultModelGroups,
+        setHasContent: vi.fn(),
+        handleInput: vi.fn(),
+      }),
+    );
+
+    // 填满 20 条缓存 + 1 条触发淘汰（draft-00 出局）。
+    for (let index = 0; index <= 20; index += 1) {
+      draft = `draft-${String(index).padStart(2, '0')}`;
+      act(() => {
+        result.current.handleEnhancePrompt();
+      });
+      act(() => {
+        result.current.handleRunPromptEnhancement();
+      });
+      await waitFor(() => {
+        expect(result.current.canUseEnhancedPrompt).toBe(true);
+      });
+      act(() => {
+        result.current.handleCloseEnhancerDialog();
+      });
+    }
+    expect(sendSync).toHaveBeenCalledTimes(21);
+
+    // draft-20 仍在缓存：无新 IPC。
+    draft = 'draft-20';
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+    await waitFor(() => {
+      expect(result.current.canUseEnhancedPrompt).toBe(true);
+    });
+    expect(sendSync).toHaveBeenCalledTimes(21);
+
+    // draft-00 已被淘汰：重新调用引擎。
+    draft = 'draft-00';
+    act(() => {
+      result.current.handleEnhancePrompt();
+    });
+    act(() => {
+      result.current.handleRunPromptEnhancement();
+    });
+    await waitFor(() => {
+      expect(result.current.canUseEnhancedPrompt).toBe(true);
+    });
+    expect(sendSync).toHaveBeenCalledTimes(22);
+  });
+});
+
+describe('classifyPromptEnhancerError', () => {
+  it('passes through an already structured error', () => {
+    const typed = new PromptEnhancerError('timeout', 'prompt enhancement timed out after 60s', true);
+    expect(classifyPromptEnhancerError(typed)).toBe(typed);
+  });
+
+  it('marks retryable engine failures via the central rule set', () => {
+    const error = classifyPromptEnhancerError(new Error('Claude exited with status: exit status: 1'));
+    expect(error.kind).toBe('engine');
+    expect(error.retryable).toBe(true);
+  });
+
+  it('marks unknown engine failures as non-retryable', () => {
+    const error = classifyPromptEnhancerError(new Error('some unrecoverable failure'));
+    expect(error.kind).toBe('engine');
+    expect(error.retryable).toBe(false);
+  });
+
+  it('normalizes non-error values', () => {
+    expect(classifyPromptEnhancerError('boom').message).toBe('boom');
+    expect(classifyPromptEnhancerError(undefined).message).toBe('unknown error');
+  });
+});
+
+describe('resolveEnhancerLocale', () => {
+  it('maps Chinese UI languages to the zh instruction', () => {
+    expect(resolveEnhancerLocale('zh')).toBe('zh');
+    expect(resolveEnhancerLocale('zh-TW')).toBe('zh');
+  });
+
+  it('falls back to English for other or missing languages', () => {
+    expect(resolveEnhancerLocale('en')).toBe('en');
+    expect(resolveEnhancerLocale('ja')).toBe('en');
+    expect(resolveEnhancerLocale(undefined)).toBe('en');
+  });
+});
+
+describe('buildPromptEnhancerInstruction', () => {
+  it('builds the Chinese instruction for the zh locale', () => {
+    const instruction = buildPromptEnhancerInstruction('原始草稿', 'claude', 'zh');
+    expect(instruction).toContain('你是一名提示词改写助手。');
+    expect(instruction).toContain('最多输出 6 行短句');
+    expect(instruction).toContain('用户草稿：\n原始草稿');
+  });
+
+  it('builds the English instruction and omits Claude-only constraints for Codex', () => {
+    const claudeInstruction = buildPromptEnhancerInstruction('draft text', 'claude', 'en');
+    expect(claudeInstruction).toContain('You are a prompt rewriting assistant.');
+    expect(claudeInstruction).toContain('Output at most 6 short lines');
+    expect(claudeInstruction).toContain('User draft:\ndraft text');
+
+    const codexInstruction = buildPromptEnhancerInstruction('draft text', 'codex', 'en');
+    expect(codexInstruction).not.toContain('Output at most 6 short lines');
   });
 });

@@ -271,6 +271,7 @@ onRevertRepositoryFile(repositoryRoot: string, path: string): Promise<void>
 - single mode 继续使用 `selectedPaths?: string[]`。
 - multi mode 使用 `repositorySelections?: Array<{ repositoryRoot: string; selectedPaths: string[] }>`，每个 scope MUST 经 `resolve_git_root_for_scope` 校验后收集 diff。
 - multi repository composer MUST 显示与 single mode 相同的 `CommitMessageEngineIcon`、engine/language menu、loading/error state。
+- commit message 主按钮 MUST 始终打开可见的 last-config / engine menu；persisted last config MUST NOT 将主按钮改为静默直接生成。engine 选择后 MUST 继续提供 `zh` / `en` language 选择。
 - multiple scoped diffs MUST 合并为一次 prompt 与一次 generated message；禁止只读取第一个 repository 或 fallback 到 configured root。
 
 ## Scenario: Multi-Repository Changed-File Open And Modal Preview

@@ -21,6 +21,10 @@ const promptEnhancer = {
     "useEnhanced": "使用增強版",
     "keepOriginal": "保留原始版",
     "enhanceFailed": "增強提示詞失敗",
+    "failedTimeout": "提示詞潤飾逾時（{{seconds}} 秒），請重試",
+    "failedWorkspace": "目前工作區尚未就緒，無法潤飾提示詞",
+    "failedEmpty": "引擎回傳了空的潤飾結果，請重試",
+    "failedGeneric": "提示詞潤飾失敗",
     "emptyPrompt": "請先輸入提示詞",
     "copyEnhanced": "複製增強版"
   }

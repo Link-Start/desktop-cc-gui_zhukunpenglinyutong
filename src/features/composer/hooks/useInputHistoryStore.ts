@@ -88,6 +88,33 @@ function syncToLocalStorage(items: string[], counts: Record<string, number>) {
   }
 }
 
+// ─── Change notification ───
+
+const INPUT_HISTORY_CHANGED_EVENT = "ccgui:input-history-changed";
+
+function emitInputHistoryChanged(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent(INPUT_HISTORY_CHANGED_EVENT));
+}
+
+/**
+ * Subscribe to any input-history mutation (record/delete/clear/add/update).
+ * Used by live consumers (e.g. ChatInputBox ↑/↓ navigation) to refresh
+ * in-session without remounting.
+ */
+export function subscribeInputHistoryChanged(listener: () => void): () => void {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+  const handleEvent = () => listener();
+  window.addEventListener(INPUT_HISTORY_CHANGED_EVENT, handleEvent);
+  return () => {
+    window.removeEventListener(INPUT_HISTORY_CHANGED_EVENT, handleEvent);
+  };
+}
+
 // ─── Initialization ───
 
 export async function initInputHistoryStore(): Promise<void> {
@@ -182,6 +209,7 @@ export function recordHistory(text: string): void {
 
   // Persist to backend (async, fire-and-forget)
   invoke("input_history_record", { fragments }).catch(() => {});
+  emitInputHistoryChanged();
 }
 
 export function deleteHistoryItem(item: string): void {
@@ -190,6 +218,7 @@ export function deleteHistoryItem(item: string): void {
 
   syncToLocalStorage(cachedItems, cachedCounts);
   invoke("input_history_delete", { item }).catch(() => {});
+  emitInputHistoryChanged();
 }
 
 export function clearAllHistory(): void {
@@ -198,6 +227,7 @@ export function clearAllHistory(): void {
 
   syncToLocalStorage(cachedItems, cachedCounts);
   invoke("input_history_clear").catch(() => {});
+  emitInputHistoryChanged();
 }
 
 // ─── Settings page APIs ───
@@ -231,6 +261,7 @@ export function addHistoryItem(text: string, importance = 1): void {
 
   syncToLocalStorage(cachedItems, cachedCounts);
   invoke("input_history_record", { fragments: [sanitized] }).catch(() => {});
+  emitInputHistoryChanged();
 }
 
 export function updateHistoryItem(
@@ -273,6 +304,7 @@ export function updateHistoryItem(
       () => {},
     );
   }
+  emitInputHistoryChanged();
 }
 
 export function clearLowImportanceHistory(threshold = 1): number {
@@ -298,5 +330,6 @@ export function clearLowImportanceHistory(threshold = 1): number {
     invoke("input_history_delete", { item }).catch(() => {});
   }
 
+  emitInputHistoryChanged();
   return deletedCount;
 }

@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import LayoutList from "lucide-react/dist/esm/icons/layout-list";
 import PackagePlus from "lucide-react/dist/esm/icons/package-plus";
+import Import from "lucide-react/dist/esm/icons/import";
 import Search from "lucide-react/dist/esm/icons/search";
 import type { CodexCustomModel, CodexProviderConfig } from "../types";
 import { LOCAL_KIMI_PROVIDER_ID, STORAGE_KEYS, validateCodexCustomModels } from "../types";
@@ -20,6 +21,12 @@ import { CodexProviderDialog } from "./CodexProviderDialog";
 import { KimiProviderDialog } from "./KimiProviderDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { CustomModelDialog } from "./CustomModelDialog";
+import { CcSwitchImportDialog } from "./CcSwitchImportDialog";
+import {
+  extractCodexTomlBaseUrl,
+  type CcSwitchImportTarget,
+  type ExistingProviderKey,
+} from "../hooks/useCcSwitchImport";
 import { CurrentCodexGlobalConfigCard } from "./CurrentCodexGlobalConfigCard";
 import {
   CLI_DOCS_HREF_BY_ID,
@@ -49,10 +56,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-const LEGACY_CLAUDE_MAPPING_KEYS = [
-  "mossx-claude-model-mapping",
-  "codemoss-claude-model-mapping",
-];
 const CODEX_PLUGIN_MODELS_MIGRATION_MARKER =
   "codemoss-codex-plugin-models-migrated-v1";
 type ModelDialogTarget = "claude" | "codex";
@@ -187,12 +190,54 @@ export function VendorSettingsPanel({
   const [unifiedExecActionBusy, setUnifiedExecActionBusy] = useState(false);
   const [unifiedExecActionNotice, setUnifiedExecActionNotice] =
     useState<InlineNoticeState>(null);
-  const didRunLegacyMigrationRef = useRef(false);
   const didSeedCodexPluginModelsRef = useRef(false);
 
   const claude = useProviderManagement();
   const codex = useCodexProviderManagement();
   const kimi = useKimiProviderManagement();
+  const [ccSwitchImportTarget, setCcSwitchImportTarget] =
+    useState<CcSwitchImportTarget | null>(null);
+
+  // CC Switch 导入去重视图: 各列表现有供应商的 name + baseUrl
+  const claudeExistingProviderKeys = useMemo<ExistingProviderKey[]>(
+    () =>
+      claude.providers.map((provider) => ({
+        name: provider.name,
+        baseUrl: provider.settingsConfig?.env?.ANTHROPIC_BASE_URL ?? null,
+      })),
+    [claude.providers],
+  );
+  const codexExistingProviderKeys = useMemo<ExistingProviderKey[]>(
+    () =>
+      codex.codexProviders.map((provider) => ({
+        name: provider.name,
+        baseUrl: extractCodexTomlBaseUrl(provider.configToml),
+      })),
+    [codex.codexProviders],
+  );
+  const ccSwitchExistingProviderKeys =
+    ccSwitchImportTarget === "codex"
+      ? codexExistingProviderKeys
+      : claudeExistingProviderKeys;
+
+  const handleCcSwitchImported = useCallback(() => {
+    if (ccSwitchImportTarget === "claude") {
+      void claude.loadProviders();
+    } else if (ccSwitchImportTarget === "codex") {
+      void codex.loadCodexProviders();
+    }
+  }, [ccSwitchImportTarget, claude, codex]);
+
+  const renderCcSwitchImportButton = (target: CcSwitchImportTarget) => (
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={() => setCcSwitchImportTarget(target)}
+    >
+      <Import size={14} />
+      {t("settings.vendor.ccSwitchImport.entry")}
+    </Button>
+  );
   const claudeModels = usePluginModels(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS);
   const codexModels = usePluginModels(STORAGE_KEYS.CODEX_CUSTOM_MODELS);
   const codexModelCount = codexModels.models.length;
@@ -303,40 +348,6 @@ export function VendorSettingsPanel({
     }
     void refreshUnifiedExecExternalStatus();
   }, [activeCli, refreshUnifiedExecExternalStatus]);
-
-  useEffect(() => {
-    if (didRunLegacyMigrationRef.current) {
-      return;
-    }
-    if (typeof window === "undefined" || !window.localStorage) {
-      return;
-    }
-    const canonicalKey = STORAGE_KEYS.CLAUDE_MODEL_MAPPING;
-    const hasCanonical = Boolean(window.localStorage.getItem(canonicalKey));
-    if (hasCanonical) {
-      didRunLegacyMigrationRef.current = true;
-      return;
-    }
-
-    for (const legacyKey of LEGACY_CLAUDE_MAPPING_KEYS) {
-      const value = window.localStorage.getItem(legacyKey);
-      if (!value) {
-        continue;
-      }
-      try {
-        window.localStorage.setItem(canonicalKey, value);
-        window.dispatchEvent(
-          new CustomEvent("localStorageChange", {
-            detail: { key: canonicalKey },
-          }),
-        );
-      } catch {
-        // ignore migration write errors
-      }
-      break;
-    }
-    didRunLegacyMigrationRef.current = true;
-  }, []);
 
   useEffect(() => {
     if (didSeedCodexPluginModelsRef.current) {
@@ -592,6 +603,11 @@ export function VendorSettingsPanel({
               actions={<CliLifecycleHeaderActions />}
             />
             <CliLifecycleInstallerPanel />
+            {claude.providerError ? (
+              <div className="settings-help" role="alert">
+                {claude.providerError.message}
+              </div>
+            ) : null}
             <ProviderList
               providers={claude.providers}
               loading={claude.loading}
@@ -611,10 +627,10 @@ export function VendorSettingsPanel({
                 </Button>
               }
               onAdd={claude.handleAddProvider}
+              trailingActions={renderCcSwitchImportButton("claude")}
               onEditLocalSettings={claude.handleOpenClaudeSettingsJsonDialog}
               onEdit={claude.handleEditProvider}
               onDelete={claude.handleDeleteProvider}
-              onSwitch={claude.handleSwitchProvider}
               onReorder={claude.handleReorderProviders}
             />
             <ProviderDialog
@@ -622,6 +638,7 @@ export function VendorSettingsPanel({
               provider={claude.providerDialog.provider}
               onClose={claude.handleCloseProviderDialog}
               onSave={claude.handleSaveProvider}
+              actionError={claude.providerError?.message}
             />
             <ClaudeSettingsJsonDialog
               isOpen={claude.claudeSettingsJsonDialogOpen}
@@ -814,6 +831,7 @@ export function VendorSettingsPanel({
                 </Button>
               }
               onAdd={codex.handleAddCodexProvider}
+              trailingActions={renderCcSwitchImportButton("codex")}
               onEdit={codex.handleEditCodexProvider}
               onDelete={codex.handleDeleteCodexProvider}
             />
@@ -942,6 +960,13 @@ export function VendorSettingsPanel({
         onClose={closeModelDialog}
         initialAddMode={modelDialogAddMode}
         modelValidation={dialogTarget === "claude" ? "shape-only" : "model-id"}
+      />
+      <CcSwitchImportDialog
+        isOpen={ccSwitchImportTarget !== null}
+        target={ccSwitchImportTarget ?? "claude"}
+        existingProviders={ccSwitchExistingProviderKeys}
+        onClose={() => setCcSwitchImportTarget(null)}
+        onImported={handleCcSwitchImported}
       />
     </div>
   );

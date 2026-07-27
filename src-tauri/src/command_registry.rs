@@ -297,6 +297,9 @@ pub(crate) fn invoke_handler(
         crate::git::get_git_worktree_file_diff_against_branch,
         // Prompts
         crate::claude_commands::claude_commands_list,
+        crate::claude_commands::claude_command_create,
+        crate::claude_commands_watch::claude_commands_watch_start,
+        crate::claude_commands_watch::claude_commands_watch_stop,
         crate::prompts::prompts_list,
         crate::prompts::prompts_create,
         crate::prompts::prompts_update,
@@ -422,6 +425,7 @@ pub(crate) fn invoke_handler(
         crate::vendors::vendor_delete_kimi_provider,
         crate::vendors::vendor_switch_kimi_provider,
         crate::vendors::vendor_fetch_kimi_models,
+        crate::vendors::vendor_list_cc_switch_providers,
         // Open paths
         crate::get_pending_open_paths
     ]

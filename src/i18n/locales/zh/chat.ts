@@ -100,6 +100,9 @@ const chat = {
     loadingFailed: "加载失败",
     pleaseCloseAndReopen: "请关闭并重新打开窗口",
     loadingSlashCommands: "正在加载斜杠指令...",
+    commandsListUnavailableTitle: "命令列表不可用",
+    commandsListUnavailableMessage:
+      "加载斜杠指令失败：{{reason}}。命令补全可能不完整，稍后将自动重试。",
     pleaseWait: "请稍候...",
     retrying: "正在重试 ({{count}}/{{max}})...",
     removeAgent: "移除智能体",

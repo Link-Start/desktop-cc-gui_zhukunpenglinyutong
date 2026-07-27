@@ -421,7 +421,15 @@ export type BrowserContextSendAttachment = {
   };
 };
 
+export type SkillInvocation = {
+  /** 归一化后的 skill/common 名（无 `/` 前缀，空白转 `-`）。 */
+  name: string;
+  /** 预留的结构化参数通道；当前恒为空，引擎侧解析属后续协议演进。 */
+  args?: Record<string, string>;
+};
+
 export type MessageSendOptions = {
+  skillInvocations?: SkillInvocation[];
   selectedMemoryIds?: string[];
   selectedMemoryInjectionMode?: MemoryContextInjectionMode;
   memoryReferenceEnabled?: boolean;

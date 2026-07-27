@@ -2,6 +2,17 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::backend_budget::PayloadBudgetMetadata;
 
+/// 结构化技能调用契约（composer 选中 skill/common 发送时随消息下发）。
+/// 当前仅在 `engine_send_message` 边界接收并记录日志；引擎侧解析与参数
+/// 校验属后续协议演进。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SkillInvocation {
+    pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) args: Option<std::collections::HashMap<String, String>>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum WorkspaceSessionAttributionMode {
@@ -1989,14 +2000,13 @@ impl AppSettings {
 
     pub(crate) fn sanitize_engine_gates(&mut self) {
         self.gemini_enabled = crate::engine_policy::GEMINI_RUNTIME_ENABLED;
-        if self
-            .default_engine
-            .as_deref()
-            .is_some_and(|engine| engine.trim().eq_ignore_ascii_case("gemini"))
-        {
+        self.opencode_enabled = false;
+        if self.default_engine.as_deref().is_some_and(|engine| {
+            let engine = engine.trim();
+            engine.eq_ignore_ascii_case("gemini") || engine.eq_ignore_ascii_case("opencode")
+        }) {
             self.default_engine = None;
         }
-        self.opencode_enabled = self.opencode_enabled != false;
     }
 }
 
@@ -2580,6 +2590,20 @@ mod tests {
         settings.sanitize_engine_gates();
 
         assert!(!settings.gemini_enabled);
+        assert!(settings.default_engine.is_none());
+    }
+
+    #[test]
+    fn app_settings_sanitizer_forces_legacy_opencode_true_to_false() {
+        let mut settings: AppSettings =
+            serde_json::from_str(r#"{"opencodeEnabled":true,"defaultEngine":"opencode"}"#)
+                .expect("deserialize legacy settings");
+        assert!(settings.opencode_enabled);
+        assert_eq!(settings.default_engine.as_deref(), Some("opencode"));
+
+        settings.sanitize_engine_gates();
+
+        assert!(!settings.opencode_enabled);
         assert!(settings.default_engine.is_none());
     }
 

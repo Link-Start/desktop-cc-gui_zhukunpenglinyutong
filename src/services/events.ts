@@ -348,6 +348,7 @@ const runtimePoolChangedHub = createEventHub<RuntimePoolSnapshot>(
   "runtime-pool-changed",
 );
 const updaterCheckHub = createEventHub<void>("updater-check");
+const claudeCommandsChangedHub = createEventHub<void>("claude-commands-changed");
 const menuNewAgentHub = createEventHub<void>("menu-new-agent");
 const menuNewWorktreeAgentHub = createEventHub<void>("menu-new-worktree-agent");
 const menuNewCloneAgentHub = createEventHub<void>("menu-new-clone-agent");
@@ -570,6 +571,16 @@ export function subscribeUpdaterCheck(
   options?: SubscriptionOptions,
 ): Unsubscribe {
   return updaterCheckHub.subscribe(() => {
+    onEvent();
+  }, options);
+}
+
+/** Rust commands watcher 去抖后 emit `claude-commands-changed`，前端据此刷新命令列表。 */
+export function subscribeClaudeCommandsChanged(
+  onEvent: () => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return claudeCommandsChangedHub.subscribe(() => {
     onEvent();
   }, options);
 }

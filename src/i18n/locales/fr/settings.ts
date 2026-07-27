@@ -1104,8 +1104,8 @@ const settings = {
       "dialog": {
         "addTitle": "Ajouter un fournisseur Claude",
         "editTitle": "Modifier le fournisseur Claude",
-        "addDescription": "Configurez un nouveau fournisseur. La configuration sera écrite dans ~/.claude/settings.json.",
-        "editDescription": "Les mises à jour sont appliquées immédiatement à ~/.claude/settings.json.",
+        "addDescription": "Le fournisseur est stocké séparément dans desktop-cc-gui et réservé aux conversations qui lui sont liées. ~/.claude/settings.json n’est pas modifié.",
+        "editDescription": "Les mises à jour restent isolées dans desktop-cc-gui et s’appliquent aux conversations liées. ~/.claude/settings.json n’est pas modifié.",
         "securityNotice": "Remarque : tous les paramètres restent en local sur votre machine. Ce projet est 100 % open source.",
         "presetGroup": "Préréglages rapides",
         "providerName": "Nom du fournisseur",
@@ -1886,7 +1886,7 @@ const settings = {
       }
     },
     "sidebarProjectManagement": "Gestion des projets",
-    "sidebarMcpSkills": "Compétences",
+    "sidebarMcpSkills": "Sélection",
     "sidebarAgentPromptManagement": "Agents / Prompts",
     "sidebarRuntimeEnvironment": "Environnement d'exécution",
     "basicShortcutsTab": "Raccourcis",

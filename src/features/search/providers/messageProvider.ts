@@ -29,8 +29,7 @@ export function searchMessages({
 
   const results: SearchResult[] = [];
   for (const message of indexedMessages) {
-    const lower = message.text.toLowerCase();
-    const index = lower.indexOf(normalizedQuery);
+    const index = message.normalizedText.indexOf(normalizedQuery);
     if (index < 0) {
       continue;
     }

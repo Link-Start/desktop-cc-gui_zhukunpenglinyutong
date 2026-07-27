@@ -37,6 +37,7 @@ type UseConversationNoteCaptureMenuOptions = {
   items: ConversationItem[];
   threadId: string | null;
   onCaptureNote?: (draft: NoteCaptureDraft) => void;
+  onSaveAsPrompt?: (sourceText: string) => void;
 };
 
 export function useConversationNoteCaptureMenu({
@@ -44,6 +45,7 @@ export function useConversationNoteCaptureMenu({
   items,
   threadId,
   onCaptureNote,
+  onSaveAsPrompt,
 }: UseConversationNoteCaptureMenuOptions) {
   const { t } = useTranslation();
   const [menu, setMenu] = useState<RendererContextMenuState | null>(null);
@@ -58,7 +60,7 @@ export function useConversationNoteCaptureMenu({
 
   const openMenu = useCallback(
     (x: number, y: number) => {
-      if (!onCaptureNote || !threadId) {
+      if ((!onCaptureNote && !onSaveAsPrompt) || !threadId) {
         return false;
       }
       const selectionSnapshot = snapshotConversationSelection(
@@ -78,7 +80,11 @@ export function useConversationNoteCaptureMenu({
       const menuItems: RendererContextMenuItem[] = [];
       const captureDraft = (draft: NoteCaptureDraft) => {
         setMenu(null);
-        onCaptureNote(draft);
+        onCaptureNote?.(draft);
+      };
+      const saveAsPrompt = (sourceText: string) => {
+        setMenu(null);
+        onSaveAsPrompt?.(sourceText);
       };
 
       if (selectionSnapshot) {
@@ -108,12 +114,22 @@ export function useConversationNoteCaptureMenu({
             }
           },
         });
-        menuItems.push({
-          type: "item",
-          id: "capture-conversation-selection",
-          label: t("noteCards.captureConversationSelection"),
-          onSelect: () => captureDraft(selectionDraft),
-        });
+        if (onCaptureNote) {
+          menuItems.push({
+            type: "item",
+            id: "capture-conversation-selection",
+            label: t("noteCards.captureConversationSelection"),
+            onSelect: () => captureDraft(selectionDraft),
+          });
+        }
+        if (onSaveAsPrompt) {
+          menuItems.push({
+            type: "item",
+            id: "save-selection-as-prompt",
+            label: t("promptDistill.menuSaveAsPrompt"),
+            onSelect: () => saveAsPrompt(selectionSnapshot.text),
+          });
+        }
       }
 
       if (semanticThread.markdown) {
@@ -127,12 +143,22 @@ export function useConversationNoteCaptureMenu({
             capturedAt: Date.now(),
           },
         };
-        menuItems.push({
-          type: "item",
-          id: "capture-conversation-thread",
-          label: t("noteCards.captureConversationThread"),
-          onSelect: () => captureDraft(threadDraft),
-        });
+        if (onCaptureNote) {
+          menuItems.push({
+            type: "item",
+            id: "capture-conversation-thread",
+            label: t("noteCards.captureConversationThread"),
+            onSelect: () => captureDraft(threadDraft),
+          });
+        }
+        if (onSaveAsPrompt) {
+          menuItems.push({
+            type: "item",
+            id: "save-thread-as-prompt",
+            label: t("promptDistill.menuSaveThreadAsPrompt"),
+            onSelect: () => saveAsPrompt(semanticThread.markdown),
+          });
+        }
       }
 
       if (menuItems.length === 0) {
@@ -150,7 +176,7 @@ export function useConversationNoteCaptureMenu({
       });
       return true;
     },
-    [canvasRootRef, items, onCaptureNote, t, threadId],
+    [canvasRootRef, items, onCaptureNote, onSaveAsPrompt, t, threadId],
   );
 
   const handleContextMenu = useCallback(

@@ -1105,8 +1105,8 @@ const settings = {
       "dialog": {
         "addTitle": "新增 Claude 供應商",
         "editTitle": "編輯 Claude 供應商",
-        "addDescription": "設定新的供應商。設定將寫入 ~/.claude/settings.json。",
-        "editDescription": "更新會立即套用至 ~/.claude/settings.json。",
+        "addDescription": "供應商設定會獨立儲存在 desktop-cc-gui，僅供綁定該供應商的對話使用；不會修改 ~/.claude/settings.json。",
+        "editDescription": "更新仍會獨立儲存在 desktop-cc-gui，並套用至綁定該供應商的對話；不會修改 ~/.claude/settings.json。",
         "securityNotice": "注意：所有設定皆保留在你的機器本機上。本專案為 100% 開源。",
         "presetGroup": "快速預設",
         "providerName": "供應商名稱",
@@ -1887,7 +1887,7 @@ const settings = {
       }
     },
     "sidebarProjectManagement": "專案管理",
-    "sidebarMcpSkills": "Skills",
+    "sidebarMcpSkills": "精選",
     "sidebarAgentPromptManagement": "Agent / 提示詞",
     "sidebarRuntimeEnvironment": "執行環境",
     "basicShortcutsTab": "快速鍵",

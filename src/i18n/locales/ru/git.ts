@@ -629,7 +629,6 @@ const git = {
     "prsModeDescription": "Просмотр pull request'ов",
     "applyWorktreeChanges": "Применить изменения к родительскому рабочему пространству",
     "applyWorktreeChangesAction": "Применить изменения worktree",
-    "pushButton": "Push",
     "pushCommits": "Push {{count}} коммита",
     "pushCommits_other": "Push {{count}} коммитов",
     "revertAllTitle": "Отменить все изменения",

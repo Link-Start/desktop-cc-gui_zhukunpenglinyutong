@@ -56,8 +56,6 @@ import { useAppShellSearchAndComposerSection } from "./app-shell-parts/useAppShe
 import { useAppShellSections } from "./app-shell-parts/useAppShellSections";
 import { useAppShellLayoutNodesSection } from "./app-shell-parts/useAppShellLayoutNodesSection";
 import { renderAppShell } from "./app-shell-parts/renderAppShell";
-import { useOpenCodeSelection } from "./app-shell-parts/useOpenCodeSelection";
-import { useOpenCodeThreadBinding } from "./app-shell-parts/useOpenCodeThreadBinding";
 import { useGitStatusRefreshOnTurnSettle } from "./app-shell-parts/useGitStatusRefreshOnTurnSettle";
 import { useAppShellGitWorkspaceOpsSection } from "./app-shell-parts/useAppShellGitWorkspaceOpsSection";
 import { useSelectedAgentSession } from "./app-shell-parts/useSelectedAgentSession";
@@ -76,7 +74,7 @@ import { useModelConfigRefresh } from "./app-shell-parts/useModelConfigRefresh";
 import { useWorkspacePathsIntake } from "./app-shell-parts/useWorkspacePathsIntake";
 import { useAppShellWorktreeChromeSection } from "./app-shell-parts/useAppShellWorktreeChromeSection";
 import { useCollaborationModeThreadSync } from "./app-shell-parts/useCollaborationModeThreadSync";
-import { useClaudeModelRefreshOnNewThread } from "./app-shell-parts/useClaudeModelRefreshOnNewThread";
+import { useProviderModelCatalogSync } from "./app-shell-parts/useProviderModelCatalogSync";
 import { useAppShellComposerModelSection } from "./app-shell-parts/useAppShellComposerModelSection";
 import { useAppShellViewStateSection } from "./app-shell-parts/useAppShellViewStateSection";
 import { defineAppShellRuntimeActions } from "./app-shell-parts/appShellActionBoundaries";
@@ -85,6 +83,10 @@ import {
   reuseStableAppShellDomainContexts,
   type AppShellDomainContexts,
 } from "./app-shell-parts/appShellDomainContexts";
+
+const RETIRED_OPENCODE_AGENTS = Object.freeze([]);
+const resolveRetiredOpenCodeSelection = () => null;
+const ignoreRetiredOpenCodeSelection = () => {};
 import { useAppShellComposerPrefsPersistence } from "./app-shell-parts/useAppShellComposerPrefsPersistence";
 import { useAppShellAccessModeSection } from "./app-shell-parts/useAppShellAccessModeSection";
 import { useAppShellDesktopChrome } from "./app-shell-parts/useAppShellDesktopChrome";
@@ -544,10 +546,6 @@ export function AppShell() {
     refreshEngines,
   } = useEngineController({
     activeWorkspace,
-    enabledEngines: {
-      gemini: appSettings.geminiEnabled !== false,
-      opencode: appSettings.opencodeEnabled !== false,
-    },
     onDebug: addDebugEntry,
   });
   activeEngineRef.current = activeEngine;
@@ -562,26 +560,9 @@ export function AppShell() {
     defaultAccessMode: appSettings.defaultAccessMode,
     persistComposerEnginePref,
   });
-  const { handleRefreshModelConfig, isModelConfigRefreshing } =
-    useModelConfigRefresh({
-      activeEngine,
-      addDebugEntry,
-      refreshEngineModels,
-      refreshModels,
-    });
-  const {
-    openCodeAgents,
-    resolveOpenCodeAgentForThread,
-    resolveOpenCodeVariantForThread,
-    selectOpenCodeAgentForThread,
-    selectOpenCodeVariantForThread,
-    syncActiveOpenCodeThread,
-  } = useOpenCodeSelection({
-    activeEngine,
-    enabled: appSettings.opencodeEnabled !== false,
-    activeWorkspaceId,
-    onDebug: addDebugEntry,
-  });
+  const openCodeAgents = RETIRED_OPENCODE_AGENTS;
+  const resolveOpenCodeAgentForThread = resolveRetiredOpenCodeSelection;
+  const resolveOpenCodeVariantForThread = resolveRetiredOpenCodeSelection;
 
   const handleAppModeChange = useCallback(
     (mode: AppMode) => {
@@ -842,19 +823,10 @@ export function AppShell() {
     runWithCreateSessionLoading,
   });
 
-  const {
-    handleSelectOpenCodeAgent,
-    handleSelectOpenCodeVariant,
-    selectedOpenCodeAgent,
-    selectedOpenCodeVariant,
-  } = useOpenCodeThreadBinding({
-    activeThreadId,
-    resolveOpenCodeAgentForThread,
-    resolveOpenCodeVariantForThread,
-    selectOpenCodeAgentForThread,
-    selectOpenCodeVariantForThread,
-    syncActiveOpenCodeThread,
-  });
+  const handleSelectOpenCodeAgent = ignoreRetiredOpenCodeSelection;
+  const handleSelectOpenCodeVariant = ignoreRetiredOpenCodeSelection;
+  const selectedOpenCodeAgent = null;
+  const selectedOpenCodeVariant = null;
 
   useGitStatusRefreshOnTurnSettle({
     queueGitStatusRefresh,
@@ -873,6 +845,12 @@ export function AppShell() {
     resolveEngineDefaultComposerSelection,
     onDebug: addDebugEntry,
   });
+  const activeThreadProviderProfileId =
+    (activeWorkspaceId
+      ? threadsByWorkspace[activeWorkspaceId]?.find(
+          (thread) => thread.id === activeThreadId,
+        )?.providerProfileId
+      : null) ?? null;
   const {
     collaborationModePayload,
     effectiveModels,
@@ -893,6 +871,7 @@ export function AppShell() {
     accessMode,
     activeEngine,
     activeThreadId,
+    activeProviderProfileId: activeThreadProviderProfileId,
     activeWorkspaceId,
     appSettings,
     appSettingsLoading,
@@ -932,13 +911,22 @@ export function AppShell() {
     onDebug: addDebugEntry,
   });
 
-  useClaudeModelRefreshOnNewThread({
+  useProviderModelCatalogSync({
     activeEngine,
     activeThreadId,
     activeWorkspaceId,
+    providerProfileId: activeThreadProviderProfileId,
     addDebugEntry,
     refreshEngineModels,
   });
+  const { handleRefreshModelConfig, isModelConfigRefreshing } =
+    useModelConfigRefresh({
+      activeEngine,
+      activeProviderProfileId: activeThreadProviderProfileId,
+      addDebugEntry,
+      refreshEngineModels,
+      refreshModels,
+    });
 
   const { handleUserInputSubmitWithPlanApply, handleExitPlanModeExecute } =
     usePlanApplyHandlers({

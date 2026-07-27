@@ -2989,8 +2989,10 @@ describe("tauri invoke wrappers", () => {
       forkSessionId: null,
       agent: null,
       variant: null,
+      providerProfileId: null,
       customSpecRoot: null,
       autoSession: null,
+      skillInvocations: null,
     });
   });
 
@@ -3007,6 +3009,7 @@ describe("tauri invoke wrappers", () => {
       model: "Cxn[1m]",
       effort: "high",
       threadId: "claude:session-1",
+      providerProfileId: "claude-provider-a",
     });
 
     expect(invokeMock).toHaveBeenCalledWith("engine_send_message", {
@@ -3024,8 +3027,10 @@ describe("tauri invoke wrappers", () => {
       forkSessionId: null,
       agent: null,
       variant: null,
+      providerProfileId: "claude-provider-a",
       customSpecRoot: null,
       autoSession: null,
+      skillInvocations: null,
     });
   });
 
@@ -3055,8 +3060,42 @@ describe("tauri invoke wrappers", () => {
       forkSessionId: "parent-session-1",
       agent: null,
       variant: null,
+      providerProfileId: null,
       customSpecRoot: null,
       autoSession: null,
+      skillInvocations: null,
+    });
+  });
+
+  it("passes structured skill invocations through engine_send_message payload", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ engine: "claude" });
+
+    await engineSendMessage("ws-claude", {
+      text: "/Code-Review 请审查这段代码",
+      engine: "claude",
+      skillInvocations: [{ name: "Code-Review" }],
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("engine_send_message", {
+      workspaceId: "ws-claude",
+      text: "/Code-Review 请审查这段代码",
+      engine: "claude",
+      model: null,
+      effort: null,
+      disableThinking: false,
+      images: null,
+      continueSession: false,
+      accessMode: null,
+      threadId: null,
+      sessionId: null,
+      forkSessionId: null,
+      agent: null,
+      variant: null,
+      providerProfileId: null,
+      customSpecRoot: null,
+      autoSession: null,
+      skillInvocations: [{ name: "Code-Review" }],
     });
   });
 
@@ -3205,6 +3244,26 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("get_engine_models", {
       engineType: "claude",
       forceRefresh: true,
+    });
+  });
+
+  it("maps get_engine_models provider scope without leaking blank ids", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValue([]);
+
+    await getEngineModels("kimi", {
+      providerProfileId: "  provider-k3  ",
+      forceRefresh: true,
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith("get_engine_models", {
+      engineType: "kimi",
+      providerProfileId: "provider-k3",
+      forceRefresh: true,
+    });
+
+    await getEngineModels("kimi", { providerProfileId: "   " });
+    expect(invokeMock).toHaveBeenLastCalledWith("get_engine_models", {
+      engineType: "kimi",
     });
   });
 

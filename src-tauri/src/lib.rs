@@ -124,6 +124,7 @@ mod backend;
 mod backend_budget;
 mod browser_agent;
 mod claude_commands;
+mod claude_commands_watch;
 mod claude_home;
 mod client_error_log;
 mod client_storage;
@@ -444,6 +445,9 @@ pub fn run() {
                 manager.claude_manager.interrupt_all().await;
                 if let Err(error) = manager.shutdown_gemini_sessions().await {
                     log::error!("[app_exit] Gemini shutdown failed: {error}");
+                }
+                if let Err(error) = manager.shutdown_kimi_sessions().await {
+                    log::error!("[app_exit] Kimi shutdown failed: {error}");
                 }
                 if state
                     .app_settings

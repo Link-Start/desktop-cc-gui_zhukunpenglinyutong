@@ -864,3 +864,16 @@ pub(crate) async fn resolve_workspace_fallback_model(
         .as_ref()
         .and_then(pick_model_from_model_list_response)
 }
+
+pub(crate) async fn resolve_provider_scoped_fallback_model(
+    state: &AppState,
+    workspace_id: &str,
+    provider_profile_id: &str,
+) -> Result<Option<String>, String> {
+    let normalized_provider_profile_id =
+        codex_core::normalize_provider_profile_id(Some(provider_profile_id));
+    if normalized_provider_profile_id == super::provider_profile::CODEX_DISK_PROVIDER_PROFILE_ID {
+        return Ok(resolve_workspace_fallback_model(state, workspace_id).await);
+    }
+    super::provider_profile::resolve_codex_provider_default_model(&normalized_provider_profile_id)
+}

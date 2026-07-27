@@ -31,14 +31,13 @@ pub(crate) mod thread_mode_state;
 use self::args::resolve_workspace_codex_args;
 use self::commit_message::{build_commit_message_prompt, combine_repository_diff_sections};
 pub(crate) use self::doctor::{
-    run_claude_doctor_with_settings, run_codex_doctor_with_settings,
-    run_kimi_doctor_with_settings,
+    run_claude_doctor_with_settings, run_codex_doctor_with_settings, run_kimi_doctor_with_settings,
 };
 pub(crate) use self::home::{resolve_default_codex_home, resolve_workspace_codex_home};
 pub(crate) use self::installer::{
-    build_cli_install_plan_with_backend, resolve_cli_version_status, run_cli_installer_with_progress,
-    CliInstallAction, CliInstallBackend, CliInstallEngine, CliInstallProgressEvent,
-    CliInstallStrategy, CliVersionStatus,
+    build_cli_install_plan_with_backend, resolve_cli_version_status,
+    run_cli_installer_with_progress, CliInstallAction, CliInstallBackend, CliInstallEngine,
+    CliInstallProgressEvent, CliInstallStrategy, CliVersionStatus,
 };
 use self::mcp_config::{
     list_global_mcp_servers as list_global_mcp_servers_impl,
@@ -50,7 +49,9 @@ use self::provider_fork::{
 };
 use self::provider_profile::{resolve_codex_provider_profile, CODEX_DISK_PROVIDER_PROFILE_ID};
 use self::run_metadata::{extract_json_value, sanitize_run_worktree_name};
-use self::thread_listing::{build_unified_codex_thread_page, resolve_workspace_fallback_model};
+use self::thread_listing::{
+    build_unified_codex_thread_page, resolve_provider_scoped_fallback_model,
+};
 use crate::backend::app_server::{
     spawn_workspace_session_inner_with_settings, CodexAppServerLaunchOptions,
 };
@@ -214,7 +215,7 @@ pub(crate) use self::session_runtime::ensure_codex_session;
 pub(crate) use self::session_runtime::{
     attach_hook_safe_fallback_metadata, create_session_runtime_recovering_error,
     ensure_codex_session_for_provider, ensure_codex_session_without_session_hooks_for_provider,
-    is_hook_safe_fallback_trigger, is_stopping_runtime_race_error,
+    is_create_session_runtime_recovery_error, is_hook_safe_fallback_trigger,
 };
 #[cfg(test)]
 use self::start_thread_retry::{
@@ -267,9 +268,23 @@ async fn compact_claude_thread(
             .ok_or_else(|| "Workspace not found".to_string())?
     };
     let workspace_path = PathBuf::from(&workspace_entry.path);
+    let provider_profile_id = crate::session_management::resolve_engine_provider_profile_id(
+        state.storage_path.as_path(),
+        &workspace_id,
+        Some(&session_id),
+        "claude",
+        None,
+    )?;
+    let provider_launch_profile = crate::engine::claude::resolve_claude_provider_launch_profile(
+        provider_profile_id.as_deref(),
+    )?;
     let session = state
         .engine_manager
-        .get_claude_session(&workspace_id, &workspace_path)
+        .get_claude_session_for_provider(
+            &workspace_id,
+            &workspace_path,
+            provider_profile_id.as_deref(),
+        )
         .await;
 
     emit_manual_compaction_event(
@@ -297,7 +312,15 @@ async fn compact_claude_thread(
     // conversation and legitimately takes minutes on a large context. send_message
     // already has a 90s first-event watchdog (claude.rs) guarding a true hang, and
     // the auto-compact path (lifecycle.rs) runs uncapped too — matching it here.
-    let compact_result = session.send_message(params, &turn_id).await;
+    let app_settings = state.app_settings.lock().await.clone();
+    let compact_result = session
+        .send_message_with_app_settings_and_provider_env(
+            params,
+            &turn_id,
+            Some(&app_settings),
+            provider_launch_profile.as_ref().map(|profile| &profile.env),
+        )
+        .await;
 
     match compact_result {
         Ok(result_text) => {
@@ -639,9 +662,14 @@ pub(crate) async fn start_thread(
         .await;
     }
 
-    let resolved_model = resolve_workspace_fallback_model(&state, &workspace_id).await;
     let normalized_provider_profile_id =
         codex_core::normalize_provider_profile_id(provider_profile_id.as_deref());
+    let resolved_model = resolve_provider_scoped_fallback_model(
+        &state,
+        &workspace_id,
+        &normalized_provider_profile_id,
+    )
+    .await?;
     let response = start_thread_with_runtime_retry_for_provider(
         &workspace_id,
         resolved_model,
@@ -1234,7 +1262,7 @@ pub(crate) async fn send_user_message(
     let effective_model = if normalized_model.is_some() {
         normalized_model
     } else {
-        resolve_workspace_fallback_model(&state, &workspace_id).await
+        resolve_provider_scoped_fallback_model(&state, &workspace_id, &provider_profile_id).await?
     };
     let (mode_enforcement_enabled, extra_developer_instructions) = {
         let settings = state.app_settings.lock().await;
@@ -1752,10 +1780,10 @@ pub(crate) async fn respond_to_server_request(
     // Prefer request-id based Claude routing so AskUserQuestion responses
     // are delivered to the correct waiting Claude turn even when global
     // active-engine state is stale.
-    if let Some(session) = state
+    for session in state
         .engine_manager
         .claude_manager
-        .get_session(&workspace_id)
+        .sessions_for_workspace(&workspace_id)
         .await
     {
         if session.has_pending_user_input(&request_id) {

@@ -25,6 +25,7 @@ const common = {
     "curatedLoading": "Cargando habilidades seleccionadas…",
     "curatedError": "No se pudieron cargar las habilidades seleccionadas.",
     "curatedSubtitle": "Incluidas en el cliente, con versión fijada, distribuidas con el cliente de escritorio. Sin red.",
+    "curatedDetailHint": "Si está activada, la habilidad seleccionada se inyecta automáticamente en el prompt del sistema en cada conversación, influyendo continuamente en el tono y comportamiento de la IA sin necesidad de invocarla manualmente. Si está desactivada, no se inyecta. Esto difiere de las habilidades instaladas por el usuario en Extensiones → Skills, que solo surten efecto cuando se invocan o coinciden con su descripción.",
     "curatedBundledBadge": "Integrada",
     "curatedCategoryCodeStyle": "Estilo de código",
     "curatedCategoryUiDesign": "Diseño de UI",

@@ -56,10 +56,18 @@ const sidebar = {
     newWorktreeAgent: "New worktree agent",
     newCloneAgent: "New clone agent",
     codexProviderChoiceTitle: "Provider selection",
-    codexProviderDiskConfigLabel: "Disk config",
-    codexProviderCustomConfigLabel: "Custom config",
     codexProviderSelectedTip:
       "Selected. Click Codex on the left to start a session.",
+    claudeProviderChoiceTitle: "Provider selection",
+    claudeProviderSelectedTip:
+      "Selected. Click Claude Code on the left to start a session.",
+    kimiProviderChoiceTitle: "Provider selection",
+    kimiProviderSelectedTip:
+      "Selected. Click Kimi CLI on the left to start a session.",
+    providerFollowsGlobalLabel: "Follows global config",
+    providerIsolatedConfigLabel: "Isolated config",
+    providerUnavailableLabel: "Provider unavailable",
+    providerCatalogLoadFailed: "Failed to load {{engine}} providers",
     sessionActionsGroup: "New Session",
     newSessionInFolder: "New session in {{name}}",
     activateWorkspace: "Open in main panel",

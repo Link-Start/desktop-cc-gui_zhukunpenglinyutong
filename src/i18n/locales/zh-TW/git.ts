@@ -629,7 +629,6 @@ const git = {
     "prsModeDescription": "審查 Pull Request",
     "applyWorktreeChanges": "將變更套用至父工作區",
     "applyWorktreeChangesAction": "套用 Worktree 變更",
-    "pushButton": "推送",
     "pushCommits": "推送 {{count}} 個提交",
     "pushCommits_other": "推送 {{count}} 個提交",
     "revertAllTitle": "還原所有變更",

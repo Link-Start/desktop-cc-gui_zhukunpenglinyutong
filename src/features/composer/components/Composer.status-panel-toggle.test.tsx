@@ -23,9 +23,6 @@ vi.mock("../../engine/components/EngineSelector", () => ({
   EngineSelector: () => null,
 }));
 
-vi.mock("../../opencode/components/OpenCodeControlPanel", () => ({
-  OpenCodeControlPanel: () => null,
-}));
 
 vi.mock("../../status-panel/components/StatusPanel", () => ({
   StatusPanel: () => <div data-testid="status-panel" />,

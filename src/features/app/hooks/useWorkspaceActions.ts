@@ -15,19 +15,24 @@ import {
 import { pushErrorToast } from "../../../services/toasts";
 import type { DebugEntry, EngineType, WorkspaceInfo } from "../../../types";
 import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
-import type { CodexProviderProfileSelection } from "../../threads/constants/codexProviderProfiles";
+import type { EngineProviderProfileSelection } from "../../threads/constants/codexProviderProfiles";
 import { CODEX_DISK_PROVIDER_PROFILE_ID } from "../../threads/constants/codexProviderProfiles";
 
 type WorkspaceOpenMode = "current-window" | "new-window";
-type SessionCreationOptions = CodexProviderProfileSelection & {
+type SessionCreationOptions = EngineProviderProfileSelection & {
   folderId?: string | null;
 };
 const SESSION_CREATION_EMPTY_THREAD_ID = "SESSION_CREATION_EMPTY_THREAD_ID";
 const CREATE_SESSION_RUNTIME_RECOVERING_ERROR_PREFIX =
   "[SESSION_CREATE_RUNTIME_RECOVERING]";
+const CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX =
+  "[codex_provider_wire_api_unsupported]";
+const CODEX_PROVIDER_CONFIG_INVALID_ERROR_PREFIX =
+  "[codex_provider_config_invalid]";
 const CREATE_SESSION_RECOVERY_TOAST_ID_PREFIX = "create-session-recovery";
 const CREATE_SESSION_RECOVERY_PROGRESS_TOAST_ID_PREFIX =
   "create-session-recovery-progress";
+const CREATE_SESSION_FAILURE_TOAST_ID_PREFIX = "create-session-failure";
 
 function isDiskProviderSelection(options?: SessionCreationOptions) {
   const providerProfileId =
@@ -35,12 +40,18 @@ function isDiskProviderSelection(options?: SessionCreationOptions) {
   return !providerProfileId || providerProfileId === CODEX_DISK_PROVIDER_PROFILE_ID;
 }
 
-function isStoppingRuntimeCreateSessionError(message: string): boolean {
+function isRecoverableRuntimeCreateSessionError(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
     message.startsWith(CREATE_SESSION_RUNTIME_RECOVERING_ERROR_PREFIX) ||
     normalized.includes("manual shutdown") ||
     normalized.includes("manual_shutdown") ||
+    normalized.includes("broken pipe") ||
+    normalized.includes("the pipe is being closed") ||
+    normalized.includes("the pipe has been ended") ||
+    normalized.includes("os error 32") ||
+    normalized.includes("os error 109") ||
+    normalized.includes("os error 232") ||
     (normalized.includes("[runtime_ended]") && normalized.includes("stopped after"))
   );
 }
@@ -91,7 +102,7 @@ type Params = {
       engine?: EngineType;
       folderId?: string | null;
       providerProfileId?: string | null;
-      providerProfile?: CodexProviderProfileSelection["providerProfile"];
+      providerProfile?: EngineProviderProfileSelection["providerProfile"];
     },
   ) => Promise<string | null>;
   setActiveThreadId: (threadId: string | null, workspaceId: string) => void;
@@ -179,7 +190,13 @@ export function useWorkspaceActions({
 
   const localizeSessionCreationErrorMessage = useCallback(
     (message: string): string => {
-      if (isStoppingRuntimeCreateSessionError(message)) {
+      if (message.startsWith(CODEX_PROVIDER_CONFIG_INVALID_ERROR_PREFIX)) {
+        return t("errors.codexProviderConfigInvalid");
+      }
+      if (message.startsWith(CODEX_PROVIDER_WIRE_API_UNSUPPORTED_ERROR_PREFIX)) {
+        return t("errors.codexProviderWireApiUnsupported");
+      }
+      if (isRecoverableRuntimeCreateSessionError(message)) {
         return t("errors.failedToCreateSessionRuntimeRecovering");
       }
       return localizeErrorMessage(message);
@@ -358,6 +375,22 @@ export function useWorkspaceActions({
     ],
   );
 
+  const showSessionCreationFailure = useCallback(
+    (
+      workspace: WorkspaceInfo,
+      targetEngine: EngineType,
+      detail: string,
+    ) => {
+      pushErrorToast({
+        id: `${CREATE_SESSION_FAILURE_TOAST_ID_PREFIX}-${workspace.id}-${targetEngine}`,
+        title: t("errors.failedToCreateSession"),
+        message: detail,
+        sticky: true,
+      });
+    },
+    [t],
+  );
+
   const handleWorkspaceAdded = useCallback(
     (workspace: WorkspaceInfo) => {
       setActiveThreadId(null, workspace.id);
@@ -403,7 +436,10 @@ export function useWorkspaceActions({
           label: "workspace/open-new-window error",
           payload: message,
         });
-        alert(`${t("errors.failedToOpenNewWindow")}\n\n${localizeErrorMessage(message)}`);
+        pushErrorToast({
+          title: t("errors.failedToOpenNewWindow"),
+          message: localizeErrorMessage(message),
+        });
       }
     },
     [
@@ -443,7 +479,10 @@ export function useWorkspaceActions({
           label: "workspace/add error",
           payload: message,
         });
-        alert(`${t("errors.failedToAddWorkspace")}\n\n${localizeErrorMessage(message)}`);
+        pushErrorToast({
+          title: t("errors.failedToAddWorkspace"),
+          message: localizeErrorMessage(message),
+        });
       }
     },
     [
@@ -491,7 +530,10 @@ export function useWorkspaceActions({
         label: "workspace/add error",
         payload: message,
       });
-      alert(`${t("errors.failedToAddWorkspace")}\n\n${localizeErrorMessage(message)}`);
+      pushErrorToast({
+        title: t("errors.failedToAddWorkspace"),
+        message: localizeErrorMessage(message),
+      });
     }
   }, [
     handleAddWorkspaceFromPath,
@@ -516,7 +558,7 @@ export function useWorkspaceActions({
         const shouldAttemptDiskRecovery =
           targetEngine === "codex" &&
           isDiskProviderSelection(options) &&
-          isStoppingRuntimeCreateSessionError(message);
+          isRecoverableRuntimeCreateSessionError(message);
         const shouldShowDiskReadinessRecovery =
           targetEngine === "codex" &&
           isDiskProviderSelection(options) &&
@@ -539,7 +581,7 @@ export function useWorkspaceActions({
           } catch (retryError) {
             const retryMessage =
               retryError instanceof Error ? retryError.message : String(retryError);
-            if (isStoppingRuntimeCreateSessionError(retryMessage)) {
+            if (isRecoverableRuntimeCreateSessionError(retryMessage)) {
               onDebug({
                 id: `${Date.now()}-client-create-session-recovery-toast`,
                 timestamp: Date.now(),
@@ -566,7 +608,11 @@ export function useWorkspaceActions({
                 error: retryMessage,
               },
             });
-            alert(`${t("errors.failedToCreateSession")}\n\n${detail}`);
+            showSessionCreationFailure(
+              workspace,
+              targetEngine,
+              detail,
+            );
             return null;
           }
         }
@@ -590,7 +636,7 @@ export function useWorkspaceActions({
           );
           return null;
         }
-        if (isStoppingRuntimeCreateSessionError(message)) {
+        if (isRecoverableRuntimeCreateSessionError(message)) {
           onDebug({
             id: `${Date.now()}-client-create-session-recovery-toast`,
             timestamp: Date.now(),
@@ -617,7 +663,7 @@ export function useWorkspaceActions({
             error: message,
           },
         });
-        alert(`${t("errors.failedToCreateSession")}\n\n${detail}`);
+        showSessionCreationFailure(workspace, targetEngine, detail);
         return null;
       }
     },
@@ -627,6 +673,7 @@ export function useWorkspaceActions({
       resolveSessionCreationErrorDetail,
       runCreateSessionFlow,
       showRecoverableCreateSessionToast,
+      showSessionCreationFailure,
       t,
     ],
   );

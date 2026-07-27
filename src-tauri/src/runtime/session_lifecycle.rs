@@ -161,14 +161,32 @@ async fn stop_claude_workspace_session(state: &AppState, workspace_id: &str) -> 
         .runtime_manager
         .record_stopping("claude", workspace_id)
         .await;
-    let session = state
+    let sessions = state
         .engine_manager
         .claude_manager
-        .remove_session(workspace_id)
+        .runtime_sessions_for_workspace(workspace_id)
         .await;
-    if let Some(session) = session {
-        session.mark_disposed();
-        session.interrupt().await?;
+    let mut failures = Vec::new();
+    for (runtime_key, session) in sessions {
+        match session.interrupt().await {
+            Ok(()) => {
+                session.mark_disposed();
+                state
+                    .engine_manager
+                    .claude_manager
+                    .remove_runtime_session(&runtime_key)
+                    .await;
+            }
+            Err(error) => failures.push(format!("{runtime_key}: {error}")),
+        }
+    }
+    if !failures.is_empty() {
+        return Err(format!(
+            "Failed to stop {} Claude runtime(s) for workspace {}: {}",
+            failures.len(),
+            workspace_id,
+            failures.join("; ")
+        ));
     }
     state
         .runtime_manager

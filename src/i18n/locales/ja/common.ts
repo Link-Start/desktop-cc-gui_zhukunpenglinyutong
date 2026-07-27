@@ -25,6 +25,7 @@ const common = {
     "curatedLoading": "厳選スキルを読み込み中…",
     "curatedError": "厳選スキルを読み込めませんでした。",
     "curatedSubtitle": "クライアント同梱・バージョン固定、デスクトップクライアントに付属。ネットワーク不要。",
+    "curatedDetailHint": "有効にすると、対象スキルは会話開始時にシステムプロンプトへ自動注入され、AI の応答トーンや振る舞いに継続的に影響します。手動での呼び出しは不要です。無効にすると一切注入されません。「拡張機能 → Skills」でユーザーが自行インストールするスキルとは異なり、そちらは明示的に呼び出すか説明文と一致させることで初めて有効になります。",
     "curatedBundledBadge": "組み込み",
     "curatedCategoryCodeStyle": "コードスタイル",
     "curatedCategoryUiDesign": "UI デザイン",

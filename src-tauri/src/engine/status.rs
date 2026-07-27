@@ -2,9 +2,10 @@
 //!
 //! Detects installed CLI tools and their capabilities.
 
+use serde::Deserialize;
 use serde_json::Value;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::process::Command;
 use tokio::time::timeout;
 
@@ -17,6 +18,255 @@ use crate::backend::app_server_cli::resolve_safe_opencode_binary;
 const DETECTION_TIMEOUT: Duration = Duration::from_secs(10);
 /// OpenCode model listing can be significantly slower than version probes.
 const OPENCODE_MODELS_TIMEOUT: Duration = Duration::from_secs(30);
+const GENERATED_MODEL_CATALOG_JSON: &str =
+    include_str!("../../../src/features/models/generatedModelCatalog.json");
+
+#[derive(Deserialize)]
+struct GeneratedModelCatalog {
+    #[serde(rename = "lastVerifiedAt")]
+    last_verified_at: String,
+    engines: GeneratedModelCatalogEngines,
+}
+
+#[derive(Deserialize)]
+struct GeneratedModelCatalogEngines {
+    codex: Vec<GeneratedModelEntry>,
+    gemini: Vec<GeneratedModelEntry>,
+    kimi: Vec<GeneratedModelEntry>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GeneratedModelEntry {
+    id: String,
+    label: String,
+    #[serde(default)]
+    description: String,
+    provider: String,
+    protocol: String,
+    lifecycle: String,
+    #[serde(default)]
+    default: bool,
+}
+
+fn get_generated_fallback_models(engine: EngineType) -> Vec<ModelInfo> {
+    let Ok(catalog) = serde_json::from_str::<GeneratedModelCatalog>(GENERATED_MODEL_CATALOG_JSON)
+    else {
+        log::error!("[model-catalog] generated fallback artifact is invalid");
+        return Vec::new();
+    };
+    let last_verified_at = catalog.last_verified_at;
+    let entries = match engine {
+        EngineType::Codex => catalog.engines.codex,
+        EngineType::Gemini => catalog.engines.gemini,
+        EngineType::Kimi => catalog.engines.kimi,
+        _ => return Vec::new(),
+    };
+    entries
+        .into_iter()
+        .map(|entry| {
+            let mut model = ModelInfo::new(entry.id, entry.label)
+                .with_description(entry.description)
+                .with_provider(entry.provider)
+                .with_protocol(entry.protocol)
+                .with_provenance("generated:model-catalog")
+                .with_fallback_freshness(last_verified_at.clone(), entry.lifecycle)
+                .with_source("fallback");
+            if entry.default {
+                model = model.as_default();
+            }
+            model
+        })
+        .collect()
+}
+
+fn model_catalog_now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn merge_provider_models_with_public(
+    provider_models: Vec<ModelInfo>,
+    public_models: Vec<ModelInfo>,
+) -> Vec<ModelInfo> {
+    dedupe_models_preserve_order(provider_models.into_iter().chain(public_models).collect())
+}
+
+fn public_models_for_engine(engine_type: EngineType) -> Vec<ModelInfo> {
+    match engine_type {
+        EngineType::Claude => get_builtin_claude_models(),
+        EngineType::Codex | EngineType::Kimi => get_generated_fallback_models(engine_type),
+        EngineType::Gemini | EngineType::OpenCode => Vec::new(),
+    }
+}
+
+fn claude_provider_models_from_env(
+    provider_profile_id: &str,
+    env: &std::collections::BTreeMap<String, String>,
+) -> Vec<ModelInfo> {
+    let overrides = ClaudeModelOverrides {
+        main: normalize_non_empty(env.get("ANTHROPIC_MODEL").cloned()),
+        sonnet: normalize_non_empty(env.get("ANTHROPIC_DEFAULT_SONNET_MODEL").cloned()),
+        opus: normalize_non_empty(env.get("ANTHROPIC_DEFAULT_OPUS_MODEL").cloned()),
+        haiku: normalize_non_empty(env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL").cloned()),
+        reasoning: normalize_non_empty(env.get("ANTHROPIC_REASONING_MODEL").cloned()),
+    };
+    build_claude_settings_model_entries(&overrides)
+        .into_iter()
+        .map(|model| model.with_provider_profile_id(provider_profile_id))
+        .collect()
+}
+
+fn codex_provider_models_from_config(
+    provider_profile_id: &str,
+    config_toml: &str,
+    custom_models: Vec<crate::types::CodexCustomModel>,
+) -> Result<Vec<ModelInfo>, String> {
+    let config: toml::Value = config_toml
+        .parse()
+        .map_err(|error| format!("invalid Codex provider configToml: {error}"))?;
+    let configured_model = config
+        .get("model")
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let configured_provider = config
+        .get("model_provider")
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let mut models = custom_models
+        .into_iter()
+        .filter_map(|custom_model| {
+            let id = custom_model.id.trim().to_string();
+            if id.is_empty() {
+                return None;
+            }
+            let label = custom_model.label.trim();
+            let mut model = ModelInfo::new(
+                id.clone(),
+                if label.is_empty() { id.as_str() } else { label },
+            )
+            .with_runtime_model(id)
+            .with_source("provider-custom")
+            .with_provenance("provider:codex-custom-model")
+            .with_provider_profile_id(provider_profile_id);
+            if let Some(description) = custom_model
+                .description
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                model = model.with_description(description);
+            }
+            if let Some(provider) = configured_provider {
+                model = model.with_provider(provider);
+            }
+            Some(model)
+        })
+        .collect::<Vec<_>>();
+    if let Some(runtime_model) = configured_model {
+        if let Some(existing) = models
+            .iter_mut()
+            .find(|model| model.model.trim() == runtime_model)
+        {
+            existing.default = true;
+        } else {
+            let mut model = ModelInfo::new(runtime_model, runtime_model)
+                .with_runtime_model(runtime_model)
+                .with_source("provider-config")
+                .with_provenance("provider:codex-config-toml")
+                .with_provider_profile_id(provider_profile_id)
+                .as_default();
+            if let Some(provider) = configured_provider {
+                model = model.with_provider(provider);
+            }
+            models.insert(0, model);
+        }
+    }
+    Ok(dedupe_models_preserve_order(models))
+}
+
+fn kimi_provider_models_from_config(
+    provider_profile_id: &str,
+    provider: crate::types::KimiProviderConfig,
+) -> Vec<ModelInfo> {
+    let runtime_model = provider.model.trim();
+    if runtime_model.is_empty() {
+        return Vec::new();
+    }
+    let display_name = provider
+        .display_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(runtime_model);
+    let provider_name = provider
+        .provider_type
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("kimi");
+    vec![ModelInfo::new(runtime_model, display_name)
+        .with_runtime_model(runtime_model)
+        .with_provider(provider_name)
+        .with_protocol("kimi")
+        .with_source("provider-config")
+        .with_provenance("provider:kimi-config")
+        .with_provider_profile_id(provider_profile_id)
+        .as_default()]
+}
+
+pub(crate) fn get_provider_scoped_engine_models(
+    engine_type: EngineType,
+    provider_profile_id: Option<&str>,
+) -> Result<Option<Vec<ModelInfo>>, String> {
+    let Some(provider_profile_id) = provider_profile_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    let provider_models = match engine_type {
+        EngineType::Claude => {
+            let Some(env) =
+                crate::engine::claude::provider_profile::resolve_claude_provider_model_env(
+                    provider_profile_id,
+                )?
+            else {
+                return Ok(None);
+            };
+            claude_provider_models_from_env(provider_profile_id, &env)
+        }
+        EngineType::Codex => {
+            let Some((config_toml, custom_models)) =
+                crate::codex::provider_profile::resolve_codex_provider_model_config(
+                    provider_profile_id,
+                )?
+            else {
+                return Ok(None);
+            };
+            codex_provider_models_from_config(provider_profile_id, &config_toml, custom_models)?
+        }
+        EngineType::Kimi => {
+            let Some(provider) =
+                crate::engine::kimi_provider_profile::resolve_kimi_provider_model_config(
+                    provider_profile_id,
+                )?
+            else {
+                return Ok(None);
+            };
+            kimi_provider_models_from_config(provider_profile_id, provider)
+        }
+        EngineType::Gemini | EngineType::OpenCode => return Ok(None),
+    };
+    Ok(Some(merge_provider_models_with_public(
+        provider_models,
+        public_models_for_engine(engine_type),
+    )))
+}
 
 /// Build a tokio Command that correctly handles .cmd/.bat files on Windows.
 /// Uses CREATE_NO_WINDOW to prevent visible console windows.
@@ -335,7 +585,7 @@ pub async fn detect_kimi_status(custom_bin: Option<&str>) -> EngineStatus {
     }
 
     let home_dir = get_kimi_home_dir();
-    let models = get_kimi_models(home_dir.as_deref());
+    let (models, config_diagnostic) = get_kimi_models(home_dir.as_deref());
     let default_model = models.iter().find(|m| m.default).map(|m| m.id.clone());
 
     EngineStatus {
@@ -347,7 +597,7 @@ pub async fn detect_kimi_status(custom_bin: Option<&str>) -> EngineStatus {
         models,
         default_model,
         features: EngineFeatures::kimi(),
-        error: None,
+        error: config_diagnostic,
     }
 }
 
@@ -409,25 +659,17 @@ fn get_kimi_home_dir() -> Option<PathBuf> {
 /// Built-in fallback models used when `~/.kimi-code/config.toml` is missing
 /// or has no `[models]` table yet (e.g. fresh install before first run).
 fn get_builtin_kimi_models() -> Vec<ModelInfo> {
-    vec![
-        ModelInfo::new("kimi-code/k3", "K3")
-            .as_default()
-            .with_provider("kimi")
-            .with_source("builtin"),
-        ModelInfo::new("kimi-code/kimi-for-coding", "Kimi for Coding")
-            .with_provider("kimi")
-            .with_source("builtin"),
-        ModelInfo::new("kimi-code/kimi-for-coding-highspeed", "Kimi for Coding (Highspeed)")
-            .with_provider("kimi")
-            .with_source("builtin"),
-    ]
+    get_generated_fallback_models(EngineType::Kimi)
 }
 
 /// Get Kimi CLI available models by parsing `$KIMI_CODE_HOME/config.toml`.
 /// Falls back to the built-in catalog when the config file is missing or
 /// defines no models.
-fn get_kimi_models(home_dir: Option<&std::path::Path>) -> Vec<ModelInfo> {
-    let mut models = read_kimi_models_from_config(home_dir).unwrap_or_default();
+fn get_kimi_models(home_dir: Option<&std::path::Path>) -> (Vec<ModelInfo>, Option<String>) {
+    let (mut models, config_diagnostic) = match read_kimi_models_from_config(home_dir) {
+        Ok(models) => (models.unwrap_or_default(), None),
+        Err(error) => (Vec::new(), Some(error)),
+    };
 
     // KIMI_MODEL_NAME synthesizes a temporary model that takes priority over
     // default_model in config.toml (mirrors the CLI's own precedence).
@@ -452,6 +694,9 @@ fn get_kimi_models(home_dir: Option<&std::path::Path>) -> Vec<ModelInfo> {
                     ModelInfo::new(env_model, display)
                         .as_default()
                         .with_provider("kimi")
+                        .with_protocol("kimi")
+                        .with_provenance("env:KIMI_MODEL_NAME")
+                        .with_observed_at(model_catalog_now_ms())
                         .with_description("Configured via KIMI_MODEL_NAME")
                         .with_source("env"),
                 );
@@ -460,22 +705,45 @@ fn get_kimi_models(home_dir: Option<&std::path::Path>) -> Vec<ModelInfo> {
     }
 
     if models.is_empty() {
-        return get_builtin_kimi_models();
+        return (get_builtin_kimi_models(), config_diagnostic);
     }
-    models
+    (models, config_diagnostic)
 }
 
 /// Parse `[models.*]` entries and `default_model` from kimi's config.toml.
-fn read_kimi_models_from_config(home_dir: Option<&std::path::Path>) -> Option<Vec<ModelInfo>> {
-    let config_path = home_dir?.join("config.toml");
-    let content = std::fs::read_to_string(config_path).ok()?;
-    let root = content.parse::<toml::Value>().ok()?;
+fn read_kimi_models_from_config(
+    home_dir: Option<&std::path::Path>,
+) -> Result<Option<Vec<ModelInfo>>, String> {
+    let Some(home_dir) = home_dir else {
+        return Ok(None);
+    };
+    let config_path = home_dir.join("config.toml");
+    let content = match std::fs::read_to_string(&config_path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(format!(
+                "Kimi config io-error at {}: {}",
+                config_path.display(),
+                error
+            ))
+        }
+    };
+    let root = content.parse::<toml::Value>().map_err(|error| {
+        format!(
+            "Kimi config malformed at {}: {}",
+            config_path.display(),
+            error
+        )
+    })?;
     let default_alias = root
         .get("default_model")
         .and_then(|value| value.as_str())
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
-    let models_table = root.get("models")?.as_table()?;
+    let Some(models_table) = root.get("models").and_then(|value| value.as_table()) else {
+        return Ok(Some(Vec::new()));
+    };
 
     let mut models = Vec::new();
     for (alias, entry) in models_table {
@@ -497,7 +765,11 @@ fn read_kimi_models_from_config(home_dir: Option<&std::path::Path>) -> Option<Ve
             .and_then(|value| value.as_str())
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
-        let mut info = ModelInfo::new(alias.clone(), display_name).with_source("config");
+        let mut info = ModelInfo::new(alias.clone(), display_name)
+            .with_protocol("kimi-config")
+            .with_provenance("config:KIMI_CODE_HOME/config.toml")
+            .with_observed_at(model_catalog_now_ms())
+            .with_source("config");
         if let Some(provider) = provider {
             info = info.with_provider(provider);
         }
@@ -511,30 +783,17 @@ fn read_kimi_models_from_config(home_dir: Option<&std::path::Path>) -> Option<Ve
         let default = models.remove(index);
         models.insert(0, default);
     }
-    Some(models)
+    Ok(Some(models))
 }
 
 /// Get Codex CLI available models (hardcoded as they don't change frequently)
 fn get_codex_models() -> Vec<ModelInfo> {
-    vec![
-        ModelInfo::new("gpt-5.3-codex", "GPT-5.3 Codex")
-            .as_default()
-            .with_provider("openai"),
-        ModelInfo::new("gpt-5.2-codex", "GPT-5.2 Codex").with_provider("openai"),
-        ModelInfo::new("gpt-5.4", "GPT-5.4").with_provider("openai"),
-        ModelInfo::new("gpt-5.1-codex-max", "GPT-5.1 Codex Max").with_provider("openai"),
-        ModelInfo::new("gpt-5.1-codex-mini", "GPT-5.1 Codex Mini").with_provider("openai"),
-    ]
+    get_generated_fallback_models(EngineType::Codex)
 }
 
 /// Get Gemini CLI available models (stable defaults + preview model).
 fn get_gemini_models() -> Vec<ModelInfo> {
-    let mut models = vec![
-        ModelInfo::new("gemini-2.5-pro", "Gemini 2.5 Pro")
-            .as_default()
-            .with_provider("google"),
-        ModelInfo::new("gemini-2.5-flash", "Gemini 2.5 Flash").with_provider("google"),
-    ];
+    let mut models = get_generated_fallback_models(EngineType::Gemini);
 
     if let Some(configured_model) = read_configured_gemini_model() {
         for model in &mut models {
@@ -595,18 +854,26 @@ fn get_builtin_claude_models() -> Vec<ModelInfo> {
         ModelInfo::new("claude-opus-4-8", "Opus 4.8")
             .as_default()
             .with_provider("anthropic")
+            .with_protocol("anthropic-messages")
+            .with_provenance("curated:claude-builtin")
             .with_description("Best for everyday, complex tasks")
             .with_source("builtin"),
         ModelInfo::new("claude-fable-5", "Fable 5")
             .with_provider("anthropic")
+            .with_protocol("anthropic-messages")
+            .with_provenance("curated:claude-builtin")
             .with_description("Most capable for the hardest and longest-running tasks")
             .with_source("builtin"),
         ModelInfo::new("claude-sonnet-5", "Sonnet 5")
             .with_provider("anthropic")
+            .with_protocol("anthropic-messages")
+            .with_provenance("curated:claude-builtin")
             .with_description("Efficient for routine tasks")
             .with_source("builtin"),
         ModelInfo::new("claude-haiku-4-5-20251001", "Haiku 4.5")
             .with_provider("anthropic")
+            .with_protocol("anthropic-messages")
+            .with_provenance("curated:claude-builtin")
             .with_description("Fastest for quick answers")
             .with_source("builtin"),
     ]
@@ -775,6 +1042,9 @@ fn push_claude_settings_model_entry(
     let mut entry = ModelInfo::new(id, runtime_model)
         .with_runtime_model(runtime_model)
         .with_provider("anthropic")
+        .with_protocol("anthropic-messages")
+        .with_provenance("settings:claude-model-override")
+        .with_observed_at(model_catalog_now_ms())
         .with_description(description)
         .with_source("settings-override");
     if is_default {
@@ -1179,6 +1449,125 @@ mod tests {
     }
 
     #[test]
+    fn claude_provider_catalog_precedes_and_appends_public_models() {
+        let env = std::collections::BTreeMap::from([(
+            "ANTHROPIC_MODEL".to_string(),
+            "claude-opus-4-8".to_string(),
+        )]);
+        let models = merge_provider_models_with_public(
+            claude_provider_models_from_env("provider-a", &env),
+            public_models_for_engine(EngineType::Claude),
+        );
+
+        assert_eq!(
+            models
+                .iter()
+                .filter(|model| model.model == "claude-opus-4-8")
+                .count(),
+            1
+        );
+        assert_eq!(models[0].provider_profile_id.as_deref(), Some("provider-a"));
+        assert!(models.iter().any(|model| model.model == "claude-sonnet-5"));
+    }
+
+    #[test]
+    fn codex_provider_catalog_merges_config_custom_and_public_models() {
+        let provider_models = codex_provider_models_from_config(
+            "provider-a",
+            "model = \"gpt-5.3-codex\"\nmodel_provider = \"proxy-a\"\n",
+            vec![crate::types::CodexCustomModel {
+                id: "provider-only".to_string(),
+                label: "Provider Only".to_string(),
+                description: None,
+            }],
+        )
+        .expect("parse provider catalog");
+        let models = merge_provider_models_with_public(
+            provider_models,
+            public_models_for_engine(EngineType::Codex),
+        );
+
+        assert_eq!(
+            models
+                .iter()
+                .filter(|model| model.model == "gpt-5.3-codex")
+                .count(),
+            1
+        );
+        assert!(models.iter().any(|model| {
+            model.model == "provider-only"
+                && model.provider_profile_id.as_deref() == Some("provider-a")
+        }));
+        assert!(models
+            .iter()
+            .any(|model| { model.source == "fallback" && model.provider_profile_id.is_none() }));
+    }
+
+    #[test]
+    fn kimi_provider_catalog_precedes_duplicate_public_model() {
+        let provider = crate::types::KimiProviderConfig {
+            id: "provider-a".to_string(),
+            name: "Provider A".to_string(),
+            remark: None,
+            website_url: None,
+            created_at: None,
+            sort_order: None,
+            is_active: false,
+            is_local_provider: None,
+            base_url: "https://example.test".to_string(),
+            api_key: "secret".to_string(),
+            model: "kimi-for-coding".to_string(),
+            provider_type: Some("openai".to_string()),
+            max_context_size: None,
+            display_name: Some("Provider Kimi".to_string()),
+        };
+        let models = merge_provider_models_with_public(
+            kimi_provider_models_from_config("provider-a", provider),
+            public_models_for_engine(EngineType::Kimi),
+        );
+
+        assert_eq!(
+            models
+                .iter()
+                .filter(|model| model.model == "kimi-for-coding")
+                .count(),
+            1
+        );
+        assert_eq!(models[0].name, "Provider Kimi");
+        assert_eq!(models[0].provider_profile_id.as_deref(), Some("provider-a"));
+    }
+
+    #[test]
+    fn generated_fallback_round_trips_provider_protocol_and_provenance() {
+        let codex = get_codex_models();
+        let gemini = get_gemini_models();
+        let kimi = get_builtin_kimi_models();
+        assert!(!codex.is_empty());
+        assert!(!gemini.is_empty());
+        assert!(!kimi.is_empty());
+        assert!(codex.iter().all(|model| {
+            model.provider.as_deref() == Some("openai")
+                && model.protocol.as_deref() == Some("openai-responses")
+                && model.provenance.as_deref() == Some("generated:model-catalog")
+        }));
+        assert!(kimi.iter().all(|model| {
+            model.provider.as_deref() == Some("kimi")
+                && model.protocol.as_deref() == Some("kimi")
+                && model.provenance.as_deref() == Some("generated:model-catalog")
+        }));
+        assert!(gemini.iter().all(|model| {
+            model.provider.as_deref() == Some("google")
+                && model.protocol.as_deref() == Some("google-gemini")
+                && model.provenance.as_deref() == Some("generated:model-catalog")
+        }));
+        let serialized = serde_json::to_value(&codex[0]).expect("serialize model");
+        assert_eq!(serialized["provider"], "openai");
+        assert_eq!(serialized["protocol"], "openai-responses");
+        assert_eq!(serialized["lastVerifiedAt"], "2026-07-26");
+        assert_eq!(serialized["lifecycle"], "fallback");
+    }
+
+    #[test]
     fn home_dir_detection() {
         // These should not panic
         let _ = get_claude_home_dir();
@@ -1190,8 +1579,16 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_engine_type_supports_opencode() {
-        let resolved =
-            resolve_engine_type(Some("opencode"), Some("claude"), None, None, None, None, None).await;
+        let resolved = resolve_engine_type(
+            Some("opencode"),
+            Some("claude"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
         assert_eq!(resolved, EngineType::OpenCode);
     }
 

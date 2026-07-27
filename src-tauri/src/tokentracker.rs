@@ -127,12 +127,7 @@ async fn probe_tt_version(bin: &str) -> Option<String> {
     match result {
         Ok(Ok(output)) if output.status.success() => {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            let first_line = stdout
-                .lines()
-                .next()
-                .unwrap_or_default()
-                .trim()
-                .to_string();
+            let first_line = stdout.lines().next().unwrap_or_default().trim().to_string();
             if first_line.is_empty() {
                 None
             } else {

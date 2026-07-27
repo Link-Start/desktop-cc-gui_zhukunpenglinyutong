@@ -629,7 +629,6 @@ const git = {
     "prsModeDescription": "풀 리퀘스트 검토",
     "applyWorktreeChanges": "상위 워크스페이스에 변경 적용",
     "applyWorktreeChangesAction": "Worktree 변경 적용",
-    "pushButton": "푸시",
     "pushCommits": "커밋 {{count}}개 푸시",
     "pushCommits_other": "커밋 {{count}}개 푸시",
     "revertAllTitle": "모든 변경 되돌리기",

@@ -2,8 +2,7 @@
  * ChatInputBoxAdapter - Bridge between Composer.tsx props and ChatInputBox props
  *
  * This adapter translates the Composer's prop interface to ChatInputBox's interface,
- * enabling drop-in replacement of ComposerInput while maintaining 100% visual and
- * interaction consistency with idea-claude-code-gui's input box.
+ * keeping visual and interaction consistency with idea-claude-code-gui's input box.
  */
 import {
   forwardRef,
@@ -49,7 +48,6 @@ import {
   getClaudeProviders,
   getClaudeAlwaysThinkingEnabled,
   setClaudeAlwaysThinkingEnabled,
-  switchClaudeProvider,
   updateClaudeProvider,
   getWorkspaceFiles,
   getWorkspaceDirectoryChildren,
@@ -469,6 +467,7 @@ export interface ChatInputBoxAdapterProps {
   onSelectEngine?: (engine: EngineType) => void;
   models?: AdapterModelOption[];
   providerModelCatalogs?: Partial<Record<EngineType, AdapterModelOption[]>>;
+  providerProfileId?: string | null;
   onSelectModel?: (id: string) => void;
 
   // Reasoning
@@ -1038,6 +1037,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onSelectEngine,
       models,
       providerModelCatalogs,
+      providerProfileId,
       onSelectModel,
       reasoningOptions,
       selectedEffort,
@@ -1295,13 +1295,8 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
             },
           };
           await updateClaudeProvider(activeProvider.id, nextProvider);
-          await switchClaudeProvider(activeProvider.id);
         } catch {
-          try {
-            await setClaudeAlwaysThinkingEnabled(enabled);
-          } catch {
-            setLocalAlwaysThinkingEnabled(rollbackValue);
-          }
+          setLocalAlwaysThinkingEnabled(rollbackValue);
         }
       },
       [isCodexEngine, localAlwaysThinkingEnabled, onToggleThinking],
@@ -2112,6 +2107,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         providerModelCatalogs={normalizedProviderModelCatalogs}
         permissionMode={permissionMode}
         currentProvider={engineToProvider(selectedEngine)}
+        currentProviderProfileId={providerProfileId}
         providerAvailability={providerAvailability}
         providerVersions={providerVersions}
         providerStatusLabels={providerStatusLabels}

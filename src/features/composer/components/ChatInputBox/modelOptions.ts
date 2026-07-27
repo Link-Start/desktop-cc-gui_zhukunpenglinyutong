@@ -2,6 +2,7 @@ import type { ModelInfo, ProviderId, ProviderModelCatalogs } from './types';
 import { AVAILABLE_PROVIDERS, CODEX_MODELS } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import { readClaudeCustomModelsFromStorage } from '../../../models/claudeCustomModels';
+import { getGeneratedModelFallbacks } from '../../../models/generatedModelFallbacks';
 
 export const RELEVANT_MODEL_STORAGE_KEYS = new Set<string>([
   STORAGE_KEYS.CODEX_CUSTOM_MODELS,
@@ -24,10 +25,13 @@ export type ProviderModelGroup = {
   enabled: boolean;
 };
 
-const GEMINI_GROUP_MODELS: ModelInfo[] = [
-  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-];
+const GEMINI_GROUP_MODELS: ModelInfo[] = getGeneratedModelFallbacks('gemini').map(
+  (model) => ({
+    id: model.id,
+    label: model.label,
+    source: 'fallback',
+  }),
+);
 
 export const resolveModelConfigProvider = (provider: string) =>
   provider === 'codex' ? 'codex' : provider === 'gemini' ? 'gemini' : 'claude';
@@ -91,11 +95,9 @@ export function mergeCodexModels(
   dynamicModels: ModelInfo[],
   customModels: ModelInfo[],
   selectedModel: string,
-  options: { includeBuiltInModels?: boolean } = {},
 ): ModelInfo[] {
   const mergedModels: ModelInfo[] = [];
   const seenIdentities = new Map<string, number>();
-  const includeBuiltInModels = options.includeBuiltInModels ?? true;
 
   dynamicModels.forEach((model) => upsertModel(mergedModels, seenIdentities, model));
   customModels.forEach((model) => upsertModel(mergedModels, seenIdentities, model, true));
@@ -105,9 +107,7 @@ export function mergeCodexModels(
       label: selectedModel,
     });
   }
-  if (includeBuiltInModels) {
-    CODEX_MODELS.forEach((model) => upsertModel(mergedModels, seenIdentities, model));
-  }
+  CODEX_MODELS.forEach((model) => upsertModel(mergedModels, seenIdentities, model));
 
   return mergedModels;
 }
@@ -179,11 +179,13 @@ export function isRelevantModelStorageKey(key: string | null | undefined): boole
 
 export function resolveAvailableModels({
   currentProvider,
+  currentProviderProfileId,
   models,
   selectedModel,
   modelStorageSnapshot,
 }: {
   currentProvider: string;
+  currentProviderProfileId?: string | null;
   models?: ModelInfo[];
   selectedModel: string;
   modelStorageSnapshot: ModelStorageSnapshot;
@@ -218,11 +220,20 @@ export function resolveAvailableModels({
   }
   if (currentProvider === 'codex') {
     const dynamicModels = Array.isArray(models) ? models : [];
+    const normalizedProviderProfileId = currentProviderProfileId?.trim() || null;
+    const scopedCustomModels = normalizedProviderProfileId
+      ? modelStorageSnapshot.codexCustomModels.filter((model) => {
+          const modelProviderProfileId = model.providerProfileId?.trim() || null;
+          return (
+            modelProviderProfileId === null ||
+            modelProviderProfileId === normalizedProviderProfileId
+          );
+        })
+      : modelStorageSnapshot.codexCustomModels;
     return mergeCodexModels(
       dynamicModels,
-      modelStorageSnapshot.codexCustomModels,
+      scopedCustomModels,
       selectedModel,
-      { includeBuiltInModels: dynamicModels.length === 0 },
     );
   }
 
@@ -239,6 +250,7 @@ export function resolveAvailableModels({
 function resolveProviderModels({
   providerId,
   currentProvider,
+  currentProviderProfileId,
   models,
   selectedModel,
   modelStorageSnapshot,
@@ -246,6 +258,7 @@ function resolveProviderModels({
 }: {
   providerId: ProviderId;
   currentProvider: string;
+  currentProviderProfileId?: string | null;
   models?: ModelInfo[];
   selectedModel: string;
   modelStorageSnapshot: ModelStorageSnapshot;
@@ -261,6 +274,8 @@ function resolveProviderModels({
     (providerId === currentProvider ? models : undefined);
   const resolvedModels = resolveAvailableModels({
     currentProvider: providerId,
+    currentProviderProfileId:
+      providerId === currentProvider ? currentProviderProfileId : null,
     models: providerDynamicModels,
     selectedModel: providerSelectedModel,
     modelStorageSnapshot,
@@ -280,6 +295,7 @@ function resolveProviderModels({
 
 export function resolveProviderModelGroups({
   currentProvider,
+  currentProviderProfileId,
   models,
   selectedModel,
   modelStorageSnapshot,
@@ -288,6 +304,7 @@ export function resolveProviderModelGroups({
   resolveProviderLabel,
 }: {
   currentProvider: string;
+  currentProviderProfileId?: string | null;
   models?: ModelInfo[];
   selectedModel: string;
   modelStorageSnapshot: ModelStorageSnapshot;
@@ -300,6 +317,7 @@ export function resolveProviderModelGroups({
     const groupModels = resolveProviderModels({
       providerId: provider.id,
       currentProvider,
+      currentProviderProfileId,
       models,
       selectedModel,
       modelStorageSnapshot,

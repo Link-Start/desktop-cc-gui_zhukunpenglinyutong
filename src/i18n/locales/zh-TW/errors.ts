@@ -15,6 +15,8 @@ const errors = {
     "failedToCreateSession": "無法建立工作階段。",
     "failedToCreateSessionNoThreadId": "執行環境未傳回新的工作階段 id。",
     "failedToCreateSessionRuntimeRecovering": "建立此工作階段時執行環境正在重新啟動。應用程式已自動重試一次。請重新連線工作區後再試一次。",
+    "codexProviderWireApiUnsupported": "目前 Codex CLI 不支援 wire_api = \"chat\"。如果此供應商支援 Responses API，請改用 wire_api = \"responses\"；如果僅支援 Chat Completions，請先設定協議轉換服務或 router。",
+    "codexProviderConfigInvalid": "此 Codex 供應商設定不是有效的 TOML。請檢查語法，並使用英文半形直引號 (\")，不要使用彎引號。",
     "reconnectAndRetryCreateSession": "重新連線並重試建立",
     "reconnectingAndRetryingCreateSession": "正在重新連線並重試建立…",
     "runtimeRecovered": "執行環境已復原。",

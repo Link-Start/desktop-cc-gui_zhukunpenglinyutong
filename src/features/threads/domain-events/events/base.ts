@@ -5,6 +5,13 @@ export type DomainEventCommonFields = Readonly<{
   workspaceId: string;
   sessionId: string;
   engine: EngineType;
+  logicalSessionId?: string;
+  runId?: string;
+  engineId?: string;
+  provenance?: Readonly<{
+    source: string;
+    rawEventType: string;
+  }>;
 }>;
 
 export type DomainEventFactoryInput = DomainEventCommonFields;

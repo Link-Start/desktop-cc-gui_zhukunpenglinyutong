@@ -34,14 +34,50 @@ const sampleSkills: CuratedSkillOption[] = [
 const enabledIdsState: { current: string[] } = { current: [] };
 const skillsState: { current: typeof sampleSkills } = { current: sampleSkills };
 
-vi.mock("../../../services/tauri", () => ({
-  getEnabledCuratedSkillIds: () => Promise.resolve(enabledIdsState.current),
-  getCuratedSkills: () => Promise.resolve(skillsState.current),
+const tauriMocks = vi.hoisted(() => ({
+  getEnabledCuratedSkillIds: vi.fn<() => Promise<string[]>>(),
+  getCuratedSkills: vi.fn<() => Promise<CuratedSkillOption[]>>(),
 }));
+
+vi.mock("../../../services/tauri", () => ({
+  getEnabledCuratedSkillIds: tauriMocks.getEnabledCuratedSkillIds,
+  getCuratedSkills: tauriMocks.getCuratedSkills,
+}));
+
+const eventHandlers = new Map<string, Array<() => void>>();
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async (event: string, handler: () => void) => {
+    const handlers = eventHandlers.get(event) ?? [];
+    handlers.push(handler);
+    eventHandlers.set(event, handlers);
+    return () => {
+      eventHandlers.set(
+        event,
+        (eventHandlers.get(event) ?? []).filter((entry) => entry !== handler),
+      );
+    };
+  }),
+}));
+
+function emitCuratedSkillsChanged() {
+  for (const handler of eventHandlers.get("curated-skills-changed") ?? []) {
+    handler();
+  }
+}
 
 beforeEach(() => {
   enabledIdsState.current = [];
   skillsState.current = sampleSkills;
+  eventHandlers.clear();
+  tauriMocks.getEnabledCuratedSkillIds.mockReset();
+  tauriMocks.getCuratedSkills.mockReset();
+  tauriMocks.getEnabledCuratedSkillIds.mockImplementation(() =>
+    Promise.resolve(enabledIdsState.current),
+  );
+  tauriMocks.getCuratedSkills.mockImplementation(() =>
+    Promise.resolve(skillsState.current),
+  );
 });
 
 afterEach(() => {
@@ -133,7 +169,27 @@ describe("CuratedSkillIndicator", () => {
     );
   });
 
-  it("polls the backend so toggling on a skill in Settings is reflected", async () => {
+  it("refreshes when the backend emits curated-skills-changed", async () => {
+    enabledIdsState.current = [];
+    render(<CuratedSkillIndicator />);
+    await waitFor(() => {
+      expect(tauriMocks.getEnabledCuratedSkillIds).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByTestId("curated-indicator")).toBeNull();
+
+    // Simulate the user toggling Lazy senior dev on in Settings: the backend
+    // persists the change and emits the event; the indicator re-fetches.
+    enabledIdsState.current = ["lazy-senior-dev"];
+    act(() => {
+      emitCuratedSkillsChanged();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("curated-indicator")).toBeTruthy();
+    });
+    expect(tauriMocks.getEnabledCuratedSkillIds).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not poll per second and only falls back at the slow interval", async () => {
     vi.useFakeTimers();
     enabledIdsState.current = [];
     render(<CuratedSkillIndicator />);
@@ -141,15 +197,20 @@ describe("CuratedSkillIndicator", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(screen.queryByTestId("curated-indicator")).toBeNull();
-    // Simulate the user toggling Lazy senior dev on in Settings. The
-    // indicator should pick this up on its next poll (2s interval).
-    enabledIdsState.current = ["lazy-senior-dev"];
+    expect(tauriMocks.getEnabledCuratedSkillIds).toHaveBeenCalledTimes(1);
+
+    // 2s（历史轮询周期）处不得有新增 IPC。
     await act(async () => {
       vi.advanceTimersByTime(2000);
       await Promise.resolve();
+    });
+    expect(tauriMocks.getEnabledCuratedSkillIds).toHaveBeenCalledTimes(1);
+
+    // 60s 兜底慢轮询触发一次收敛。
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
       await Promise.resolve();
     });
-    expect(screen.getByTestId("curated-indicator")).toBeTruthy();
+    expect(tauriMocks.getEnabledCuratedSkillIds).toHaveBeenCalledTimes(2);
   });
 });

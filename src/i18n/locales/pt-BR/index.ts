@@ -34,6 +34,7 @@ import panels from "./panels";
 import plan from "./plan";
 import projectMap from "./projectMap";
 import promptEnhancer from "./promptEnhancer";
+import promptDistill from "./promptDistill";
 import prompts from "./prompts";
 import providers from "./providers";
 import reasoning from "./reasoning";
@@ -90,6 +91,7 @@ const locale = {
   ...plan,
   ...projectMap,
   ...promptEnhancer,
+  ...promptDistill,
   ...prompts,
   ...providers,
   ...reasoning,

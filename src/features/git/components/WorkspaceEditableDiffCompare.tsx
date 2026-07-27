@@ -28,13 +28,15 @@ import { resolveFileReadTarget } from "../../../utils/workspacePaths";
 import { loadFileViewStyles } from "../../../styles/featureStyleLoaders";
 import { getGitFileFullDiff } from "../../../services/tauri";
 import { reconstructPreviousVersion } from "../utils/reconstructPreviousVersion";
+import type { DiffPresentationEntry } from "../utils/diffPresentationModel";
 
-type WorkspaceEditableDiffCompareProps = {
+type WorkspaceEditableDiffCompareProps = Pick<
+  DiffPresentationEntry,
+  "filePath" | "diff"
+> & {
   workspaceId: string;
   workspacePath: string;
-  filePath: string;
   workspaceFilePath?: string;
-  diff: string;
   fullDiffLoader?: ((path: string) => Promise<string>) | null;
   contentMode?: "all" | "focused";
   onSaveSuccess: () => void;

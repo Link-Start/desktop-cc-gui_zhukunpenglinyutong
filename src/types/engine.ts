@@ -10,10 +10,18 @@ export type EngineType = "claude" | "codex" | "gemini" | "kimi" | "opencode";
  */
 export type EngineFeatures = {
   streaming: boolean;
-  reasoning: boolean;
-  toolUse: boolean;
   imageInput: boolean;
-  sessionContinuation: boolean;
+  reasoningEffort?: boolean;
+  collaborationMode?: boolean;
+  sessionResume?: boolean;
+  toolsControl?: boolean;
+  mcp?: boolean;
+  /** @deprecated 兼容旧缓存与测试 fixture；runtime DTO 使用 reasoningEffort。 */
+  reasoning?: boolean;
+  /** @deprecated 兼容旧缓存与测试 fixture；runtime DTO 使用 toolsControl。 */
+  toolUse?: boolean;
+  /** @deprecated 兼容旧缓存与测试 fixture；runtime DTO 使用 sessionResume。 */
+  sessionContinuation?: boolean;
 };
 
 /**
@@ -25,6 +33,13 @@ export type EngineModelInfo = {
   displayName: string;
   description: string;
   source?: string;
+  provider?: string | null;
+  protocol?: string | null;
+  provenance?: string | null;
+  observedAt?: number | null;
+  lastVerifiedAt?: string | null;
+  lifecycle?: string | null;
+  providerProfileId?: string | null;
   isDefault: boolean;
 };
 
@@ -141,4 +156,3 @@ export type EngineEvent =
       engine: EngineType;
       data: unknown;
     };
-

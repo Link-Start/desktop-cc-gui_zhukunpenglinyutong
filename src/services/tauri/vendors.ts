@@ -3,6 +3,7 @@ import type {
   ClaudeCurrentConfig as VendorClaudeCurrentConfig,
   CodexProviderConfig as VendorCodexProviderConfig,
   KimiCurrentConfig as VendorKimiCurrentConfig,
+  KimiProviderDeleteResult as VendorKimiProviderDeleteResult,
   KimiProviderConfig as VendorKimiProviderConfig,
   ProviderConfig as VendorProviderConfig,
 } from "../../features/vendors/types";
@@ -115,8 +116,12 @@ export async function updateKimiProvider(
   return invoke("vendor_update_kimi_provider", { id, updates });
 }
 
-export async function deleteKimiProvider(id: string): Promise<void> {
-  return invoke("vendor_delete_kimi_provider", { id });
+export async function deleteKimiProvider(
+  id: string,
+): Promise<VendorKimiProviderDeleteResult> {
+  return invoke<VendorKimiProviderDeleteResult>("vendor_delete_kimi_provider", {
+    id,
+  });
 }
 
 export async function switchKimiProvider(id: string): Promise<void> {
@@ -130,6 +135,31 @@ export async function fetchKimiProviderModels(
   return invoke<VendorModelListResult>("vendor_fetch_kimi_models", {
     baseUrl,
     apiKey,
+  });
+}
+
+export type CcSwitchAppType = "claude" | "codex";
+
+export interface CcSwitchProvider {
+  id: string;
+  name: string;
+  category: string | null;
+  websiteUrl: string | null;
+  baseUrl: string | null;
+  hasApiKey: boolean;
+  settingsConfig: Record<string, unknown>;
+}
+
+export interface CcSwitchProviderList {
+  available: boolean;
+  providers: CcSwitchProvider[];
+}
+
+export async function listCcSwitchProviders(
+  appType: CcSwitchAppType,
+): Promise<CcSwitchProviderList> {
+  return invoke<CcSwitchProviderList>("vendor_list_cc_switch_providers", {
+    appType,
   });
 }
 

@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[path = "../../engine/adapter_registry.rs"]
+pub(crate) mod adapter_registry;
+#[path = "../../engine/agent_event_bus.rs"]
+pub(crate) mod agent_event_bus;
 #[allow(dead_code)]
 #[path = "../../engine/claude.rs"]
 pub mod claude;
@@ -27,6 +31,8 @@ pub(crate) mod gemini_proxy_guard;
 pub mod kimi;
 #[path = "../../engine/kimi_history.rs"]
 pub mod kimi_history;
+#[path = "../../engine/kimi_provider_profile.rs"]
+pub(crate) mod kimi_provider_profile;
 #[allow(dead_code)]
 #[path = "../../engine/manager.rs"]
 pub mod manager;
@@ -457,15 +463,15 @@ impl std::fmt::Display for EngineType {
 }
 
 pub(crate) const OPENCODE_DISABLED_DIAGNOSTIC: &str =
-    "OpenCode CLI is disabled in CLI validation settings";
+    "OpenCode CLI is soft-retired and blocked by runtime policy";
 
 pub(crate) fn engine_enabled_in_settings(
-    settings: &crate::types::AppSettings,
+    _settings: &crate::types::AppSettings,
     engine_type: EngineType,
 ) -> bool {
     match engine_type {
         EngineType::Gemini => crate::engine_policy::GEMINI_RUNTIME_ENABLED,
-        EngineType::OpenCode => settings.opencode_enabled,
+        EngineType::OpenCode => false,
         EngineType::Claude | EngineType::Codex | EngineType::Kimi => true,
     }
 }
@@ -516,8 +522,20 @@ pub struct ModelInfo {
     pub default: bool,
     #[serde(default)]
     pub description: String,
-    #[serde(skip_serializing)]
+    #[serde(default)]
     pub provider: Option<String>,
+    #[serde(default)]
+    pub protocol: Option<String>,
+    #[serde(default)]
+    pub provenance: Option<String>,
+    #[serde(default)]
+    pub provider_profile_id: Option<String>,
+    #[serde(default)]
+    pub observed_at: Option<u64>,
+    #[serde(default)]
+    pub last_verified_at: Option<String>,
+    #[serde(default)]
+    pub lifecycle: Option<String>,
     #[serde(default = "default_model_source")]
     pub source: String,
 }
@@ -536,6 +554,12 @@ impl ModelInfo {
             default: false,
             description: String::new(),
             provider: None,
+            protocol: None,
+            provenance: None,
+            provider_profile_id: None,
+            observed_at: None,
+            last_verified_at: None,
+            lifecycle: None,
             source: default_model_source(),
         }
     }
@@ -547,6 +571,36 @@ impl ModelInfo {
 
     pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
         self.provider = Some(provider.into());
+        self
+    }
+
+    pub fn with_protocol(mut self, protocol: impl Into<String>) -> Self {
+        self.protocol = Some(protocol.into());
+        self
+    }
+
+    pub fn with_provenance(mut self, provenance: impl Into<String>) -> Self {
+        self.provenance = Some(provenance.into());
+        self
+    }
+
+    pub fn with_provider_profile_id(mut self, provider_profile_id: impl Into<String>) -> Self {
+        self.provider_profile_id = Some(provider_profile_id.into());
+        self
+    }
+
+    pub fn with_observed_at(mut self, observed_at: u64) -> Self {
+        self.observed_at = Some(observed_at);
+        self
+    }
+
+    pub fn with_fallback_freshness(
+        mut self,
+        last_verified_at: impl Into<String>,
+        lifecycle: impl Into<String>,
+    ) -> Self {
+        self.last_verified_at = Some(last_verified_at.into());
+        self.lifecycle = Some(lifecycle.into());
         self
     }
 
@@ -732,6 +786,18 @@ mod runtime_policy_tests {
         assert_eq!(
             engine_disabled_diagnostic(EngineType::Gemini),
             Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC)
+        );
+    }
+
+    #[test]
+    fn daemon_opencode_retirement_policy_ignores_legacy_enabled_setting() {
+        let mut settings = crate::types::AppSettings::default();
+        settings.opencode_enabled = true;
+
+        assert!(!engine_enabled_in_settings(&settings, EngineType::OpenCode));
+        assert_eq!(
+            ensure_engine_enabled(&settings, EngineType::OpenCode),
+            Err(super::OPENCODE_DISABLED_DIAGNOSTIC.to_string())
         );
     }
 }

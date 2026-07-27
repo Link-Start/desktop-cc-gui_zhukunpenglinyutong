@@ -49,6 +49,7 @@ const THREAD_CREATE_PENDING_SENTINEL: &str = "__thread-create-pending__";
 mod acquire_boundary;
 pub(crate) mod commands;
 mod event_sources;
+mod executable_registry;
 mod gates;
 mod identity;
 mod ledger;
@@ -59,6 +60,7 @@ mod session_lifecycle;
 use self::event_sources::{
     event_method, event_stream_source, event_thread_id, event_turn_id, event_turn_source,
 };
+use self::executable_registry::{ExecutableSessionRegistry, ExecutableSessionState};
 pub(crate) use self::gates::{RuntimeAcquireDisposition, RuntimeAcquireGate, RuntimeAcquireToken};
 use self::gates::{
     RuntimeAcquireGateEntry, RuntimeReplacementGate, RuntimeReplacementGateEntry,
@@ -73,6 +75,32 @@ fn now_millis() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
+}
+
+fn runtime_generation(pid: Option<u32>, started_at_ms: u64) -> String {
+    match pid {
+        Some(pid) => format!("pid:{pid}:startedAt:{started_at_ms}"),
+        None => format!("pid:unknown:startedAt:{started_at_ms}"),
+    }
+}
+
+fn engine_adapter_id(engine: &str) -> String {
+    format!("builtin.{}", normalize_engine(engine))
+}
+
+fn report_executable_registry_result<T>(
+    operation: &str,
+    logical_session_id: &str,
+    result: Result<T, String>,
+) {
+    if let Err(error) = result {
+        log::warn!(
+            "[executable-session-registry] operation={} logical_session_id={} error={}",
+            operation,
+            logical_session_id,
+            error
+        );
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -429,6 +457,7 @@ pub(crate) struct RuntimeManager {
     replacement_gates: Mutex<HashMap<String, RuntimeReplacementGateEntry>>,
     pinned_keys: Mutex<BTreeSet<String>>,
     pub(super) ledger_path: PathBuf,
+    executable_registry: Arc<ExecutableSessionRegistry>,
     shutting_down: AtomicBool,
 }
 
@@ -539,6 +568,7 @@ impl RuntimeManager {
             replacement_gates: Mutex::new(HashMap::new()),
             pinned_keys: Mutex::new(BTreeSet::new()),
             ledger_path: data_dir.join(LEDGER_FILE_NAME),
+            executable_registry: Arc::new(ExecutableSessionRegistry::recover(data_dir)),
             shutting_down: AtomicBool::new(false),
         }
     }
@@ -747,6 +777,23 @@ impl RuntimeManager {
         runtime.clear_active_work_protection_if_idle();
         drop(entries);
         let _ = self.persist_ledger().await;
+        let generation = runtime_generation(pid, session.started_at_ms);
+        let native_binding = pid.map(|pid| format!("pid:{pid}"));
+        report_executable_registry_result(
+            "replacement-rebind",
+            &session.entry.id,
+            self.executable_registry
+                .register_or_rebind(
+                    &session.entry.id,
+                    "codex",
+                    &engine_adapter_id("codex"),
+                    native_binding.as_deref(),
+                    &generation,
+                    ExecutableSessionState::Active,
+                    None,
+                )
+                .await,
+        );
     }
 
     pub(crate) async fn clear_stopping_predecessor(
@@ -1108,6 +1155,7 @@ impl RuntimeManager {
     }
 
     pub(crate) async fn record_starting(&self, entry: &WorkspaceEntry, engine: &str, source: &str) {
+        let acquiring_generation = format!("acquiring:{}", now_millis());
         let pinned_keys = self.pinned_keys.lock().await.clone();
         let mut entries = self.entries.lock().await;
         let runtime = Self::upsert_entry(&mut entries, entry, engine, &pinned_keys);
@@ -1137,6 +1185,21 @@ impl RuntimeManager {
         runtime.record_spawn_event();
         drop(entries);
         let _ = self.persist_ledger().await;
+        report_executable_registry_result(
+            "register-acquiring",
+            &entry.id,
+            self.executable_registry
+                .register_or_rebind(
+                    &entry.id,
+                    engine,
+                    &engine_adapter_id(engine),
+                    None,
+                    &acquiring_generation,
+                    ExecutableSessionState::Acquiring,
+                    None,
+                )
+                .await,
+        );
     }
 
     pub(crate) async fn record_ready(&self, session: &WorkspaceSession, source: &str) {
@@ -1176,6 +1239,23 @@ impl RuntimeManager {
         runtime.has_stopping_predecessor = false;
         drop(entries);
         let _ = self.persist_ledger().await;
+        let generation = runtime_generation(pid, session.started_at_ms);
+        let native_binding = pid.map(|pid| format!("pid:{pid}"));
+        report_executable_registry_result(
+            "register-ready",
+            &session.entry.id,
+            self.executable_registry
+                .register_or_rebind(
+                    &session.entry.id,
+                    "codex",
+                    &engine_adapter_id("codex"),
+                    native_binding.as_deref(),
+                    &generation,
+                    ExecutableSessionState::Active,
+                    None,
+                )
+                .await,
+        );
     }
 
     pub(crate) async fn sync_claude_runtime(
@@ -1228,8 +1308,27 @@ impl RuntimeManager {
         runtime.last_recovery_source = Some(source.to_string());
         runtime.last_guard_state = Some("ready".to_string());
         runtime.has_stopping_predecessor = false;
+        let generation = runtime.runtime_generation();
         drop(entries);
         let _ = self.persist_ledger().await;
+        if let Some(generation) = generation {
+            let native_binding = pids.first().map(|pid| format!("pid:{pid}"));
+            report_executable_registry_result(
+                "register-claude-runtime",
+                &entry.id,
+                self.executable_registry
+                    .register_or_rebind(
+                        &entry.id,
+                        "claude",
+                        &engine_adapter_id("claude"),
+                        native_binding.as_deref(),
+                        &generation,
+                        ExecutableSessionState::Active,
+                        None,
+                    )
+                    .await,
+            );
+        }
     }
 
     pub(crate) async fn sync_claude_runtime_if_source_active(
@@ -1490,6 +1589,13 @@ impl RuntimeManager {
     }
 
     pub(crate) async fn record_stopping(&self, engine: &str, workspace_id: &str) {
+        let executable_generation = self
+            .executable_registry
+            .resolve(workspace_id, None)
+            .await
+            .ok()
+            .flatten()
+            .map(|entry| entry.runtime_generation);
         let key = runtime_key(engine, workspace_id);
         let mut entries = self.entries.lock().await;
         if let Some(runtime) = entries.get_mut(&key) {
@@ -1507,6 +1613,15 @@ impl RuntimeManager {
         }
         drop(entries);
         let _ = self.persist_ledger().await;
+        if let Some(generation) = executable_generation {
+            report_executable_registry_result(
+                "transition-stopping",
+                workspace_id,
+                self.executable_registry
+                    .transition(workspace_id, &generation, ExecutableSessionState::Stopping)
+                    .await,
+            );
+        }
     }
 
     #[cfg(test)]
@@ -1550,6 +1665,13 @@ impl RuntimeManager {
         record: RuntimeEndedRecord,
     ) -> bool {
         let now = now_millis();
+        let executable_generation = self
+            .executable_registry
+            .resolve(workspace_id, None)
+            .await
+            .ok()
+            .flatten()
+            .map(|entry| entry.runtime_generation);
         {
             let mut diagnostics = self.diagnostics.lock().await;
             diagnostics.runtime_end_diagnostics_recorded = diagnostics
@@ -1608,6 +1730,17 @@ impl RuntimeManager {
         }
         drop(entries);
         let _ = self.persist_ledger().await;
+        if recorded_for_current_row {
+            if let Some(generation) = executable_generation {
+                report_executable_registry_result(
+                    "release-runtime",
+                    workspace_id,
+                    self.executable_registry
+                        .release(workspace_id, &generation)
+                        .await,
+                );
+            }
+        }
         recorded_for_current_row
     }
 
@@ -1982,6 +2115,60 @@ impl RuntimeManager {
                 let stream_source = turn_source.replacen("turn:", "stream:", 1);
                 self.release_stream_lease("codex", &entry.id, &stream_source)
                     .await;
+            }
+            let logical_session_id = thread_id.clone().unwrap_or_else(|| entry.id.clone());
+            if let Some(run_id) = turn_id {
+                let executable_registry = self.executable_registry.clone();
+                let workspace_id = entry.id.clone();
+                tokio::spawn(async move {
+                    let generation =
+                        match executable_registry.resolve(&logical_session_id, None).await {
+                            Ok(Some(entry)) => entry.runtime_generation,
+                            Ok(None) => {
+                                let Ok(Some(workspace_entry)) =
+                                    executable_registry.resolve(&workspace_id, None).await
+                                else {
+                                    return;
+                                };
+                                let generation = workspace_entry.runtime_generation.clone();
+                                if let Err(error) = executable_registry
+                                    .register_or_rebind(
+                                        &logical_session_id,
+                                        "codex",
+                                        &engine_adapter_id("codex"),
+                                        Some(&logical_session_id),
+                                        &generation,
+                                        ExecutableSessionState::Active,
+                                        None,
+                                    )
+                                    .await
+                                {
+                                    report_executable_registry_result::<()>(
+                                        "register-event-session",
+                                        &logical_session_id,
+                                        Err(error),
+                                    );
+                                    return;
+                                }
+                                generation
+                            }
+                            Err(error) => {
+                                report_executable_registry_result::<()>(
+                                    "resolve-settlement",
+                                    &logical_session_id,
+                                    Err(error),
+                                );
+                                return;
+                            }
+                        };
+                    report_executable_registry_result(
+                        "mark-settled",
+                        &logical_session_id,
+                        executable_registry
+                            .mark_settled(&logical_session_id, &generation, &run_id)
+                            .await,
+                    );
+                });
             }
         }
     }

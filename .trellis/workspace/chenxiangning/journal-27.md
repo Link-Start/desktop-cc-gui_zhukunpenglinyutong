@@ -1179,3 +1179,796 @@ docs/reports/polling-inventory-2026-07-25.md 标记 5 项轮询优化完成
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1115: 补录 skills-hub 与 mcp-inventory 追溯 OpenSpec 提案
+
+**Date**: 2026-07-25
+**Task**: 补录 skills-hub 与 mcp-inventory 追溯 OpenSpec 提案
+**Branch**: `feature/v-799`
+
+### Summary
+
+为朱昆鹏 7/25 已合入但缺提案的 skills（b1d94a930/c75922dec）与 MCP inventory（101a19abb）变更补录追溯性 OpenSpec 提案：add-skills-hub-management 与 move-mcp-inventory-to-extensions，各含 proposal/tasks/spec deltas，strict validation 通过，active 索引 6→8。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `27c47acb9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1116: 批次1: Composer 层补全死路径裁剪
+
+**Date**: 2026-07-25
+**Task**: 批次1: Composer 层补全死路径裁剪
+**Branch**: `feature/v-0710`
+
+### Summary
+
+useComposerAutocompleteState 瘦身为 trigger 检测器，删除 useComposerAutocomplete.ts 与 ComposerInput 命名残留；OpenSpec prune-composer-autocomplete-dead-paths 已立项并完成实现
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9484986c8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1117: 统一输入历史存储并事件化命令目录刷新（批次2）
+
+**Date**: 2026-07-25
+**Task**: 统一输入历史存储并事件化命令目录刷新（批次2）
+**Branch**: `feature/v-0710`
+
+### Summary
+
+OpenSpec unify-input-history-and-commands-refresh：输入历史收敛 useInputHistoryStore 单一实现（删 usePromptHistory/死 inlineCompletion，ChatInputBox 薄壳+事件刷新，发送单写）；useCustomCommands 去冷却重试/全局兜底，错误 toast 显式化+10 locale；新增 Rust claude_commands_watch（共享 resolve_commands_dirs，500ms 去抖 emit），前端事件驱动+60s visibility-gated 兜底
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `32092503c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1118: 润色器本地化缓存与 curated skills 事件化刷新（批次3）
+
+**Date**: 2026-07-26
+**Task**: 润色器本地化缓存与 curated skills 事件化刷新（批次3）
+**Branch**: `feature/v-0710`
+
+### Summary
+
+OpenSpec modernize-prompt-enhancer-and-curated-skills-refresh 9/9：prompt enhancer 结构化错误（kind 驱动 fallback）、zh/zh-TW 中文指令、LRU 缓存（20 条命中零 IPC）、10 locale 失败文案；curated skills Rust emit curated-skills-changed，indicator 删 2s 轮询改事件 + 60s 兜底
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `85bc82b7e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1119: 批次4：技能调用契约与对话提示词沉淀
+
+**Date**: 2026-07-26
+**Task**: 批次4：技能调用契约与对话提示词沉淀
+**Branch**: `feature/v-0710`
+
+### Summary
+
+SkillInvocation 全链路透传契约、claude_command_create managed 写入、prompt-distill 对话沉淀 feature（菜单+对话框+i18n×10）
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7173c9c5f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1120: 工程工具链修复批次1: files 重复符号合并与兜底轮询治理
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次1: files 重复符号合并与兜底轮询治理
+**Branch**: `feature/v-0710`
+
+### Summary
+
+合并 fileViewPanelShared/Internals 10 个重复导出符号(internals 死代码清理 658->295 行); 兜底轮询 2s->30s + visibility 门控; 修复 app-shell.startup 失效 mock (useLiveEditPreview 路径与形状)。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 3/4/12
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `04764a654` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1121: 工程工具链修复批次2: GitHistoryPanelPickers 摘除 @ts-nocheck
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次2: GitHistoryPanelPickers 摘除 @ts-nocheck
+**Branch**: `feature/v-0710`
+
+### Summary
+
+第一片 nocheck slice: Pickers 494 行补 KeyboardEvent 类型导入后零错误通过 typecheck; 共享类型 GitHistoryPanelTypes.ts 验证可用。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 1
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dbcd943eb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1122: 工程工具链修复批次3: AI commit message 一键生成
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次3: AI commit message 一键生成
+**Branch**: `feature/v-0710`
+
+### Summary
+
+GitDiffPanel 生成按钮单击按上次持久化配置直接生成, 右键开菜单; 复用既有 config 持久化; 新增 2 测试并语义合并 1 个存量测试。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 6
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `55f18aa24` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1123: 工程工具链修复批次4: worktree 面板收敛共享 AI commit 实现
+
+**Date**: 2026-07-26
+**Task**: 工程工具链修复批次4: worktree 面板收敛共享 AI commit 实现
+**Branch**: `feature/v-0710`
+
+### Summary
+
+新增 commitMessageMenuConfig 共享事实源; worktree 面板获得一键生成+last-config 菜单项; 持久化下沉到生成路径; 测试补 localStorage 清理与 2 个新用例。来源: engineering-toolchain-optimization-impact-2026-07-25.md 项 7
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9fb13076e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1124: 缓存消息搜索索引并规范 Worktree 分支命名
+
+**Date**: 2026-07-26
+**Task**: 缓存消息搜索索引并规范 Worktree 分支命名
+**Branch**: `feature/v-0710`
+
+### Summary
+
+为 Message Search 增加 immutable snapshot WeakMap 索引缓存和 normalizedText，移除 Worktree 随机默认分支名并增加 UI/hook 双层必填校验；补充 focused tests、影响报告与 OpenSpec 主规范并完成归档。验证 31 个增量测试、targeted ESLint、typecheck 和 strict OpenSpec validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d077890b8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1125: 修复 Composer 与命令并发边界并更新工具链报告
+
+**Date**: 2026-07-26
+**Task**: 修复 Composer 与命令并发边界并更新工具链报告
+**Branch**: `feature/v-0710`
+
+### Summary
+
+恢复 AI commit message 的显式 engine/language 选择；隔离 Prompt Enhancer workspace cache；修复 managed command 原子创建与 watcher lease 生命周期；补齐 OpenSpec、Trellis executable contracts 和回归测试；基于最新代码更新工程工具链现状与影响范围。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `296fad4a5` | (see git log) |
+| `c3cbbf0ad` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1126: 恢复 Git History 核心类型保护
+
+**Date**: 2026-07-26
+**Task**: 恢复 Git History 核心类型保护
+**Branch**: `feature/v-0710`
+
+### Summary
+
+移除四个 Git History 核心文件的 @ts-nocheck，建立 typed scope contract，统一 branch compare state，修复 repository action effect cleanup；62 个增量测试、TypeScript、ESLint、runtime contract 与 static import gate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `38b5134b1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1127: 模块化 Git 与 File 高频入口
+
+**Date**: 2026-07-26
+**Task**: 模块化 Git 与 File 高频入口
+**Branch**: `feature/v-0710`
+
+### Summary
+
+拆分 GitDiffPanel、FileViewPanel 及超大测试，四个目标文件退出 large-file gate；统一两套 AI commit generation menu/controller，新增 diff presentation model。增量测试 230 项及 Git History 58 项通过，typecheck、ESLint、OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `26cbce638` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1128: 增加 Terminal 搜索与安全链接
+
+**Date**: 2026-07-26
+**Task**: 增加 Terminal 搜索与安全链接
+**Branch**: `feature/v-0710`
+
+### Summary
+
+集成 xterm SearchAddon 与 WebLinksAddon，增加 Cmd/Ctrl+F 搜索栏、匹配导航和 Escape close；仅允许 http/https 交给 opener，addon 失败时保留基础 Terminal。26 个增量测试、typecheck 与 touched ESLint 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8b592095` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1129: 稳定代码标注锚点
+
+**Date**: 2026-07-26
+**Task**: 稳定代码标注锚点
+**Branch**: `feature/v-0710`
+
+### Summary
+
+为文件与 diff 标注保存 versioned exact snapshot/context fingerprint；在原位置 ±120 行内安全重定位，歧义返回 stale；Prompt 附带选中代码。44 个增量测试、typecheck、touched ESLint 与 strict OpenSpec validate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `175edc732` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1130: 收敛 Markdown 文件预览渲染边界
+
+**Date**: 2026-07-26
+**Task**: 收敛 Markdown 文件预览渲染边界
+**Branch**: `feature/v-0710`
+
+### Summary
+
+将 FileMarkdownPreview 收敛为 canonical router，rich implementation 显式拆到 FileMarkdownPreviewRich，Fast 旧入口降为 11 行兼容别名，FileViewBody 只依赖 canonical router；修复 outline state 导致 Mermaid subtree 重挂载。74 个增量测试、typecheck、touched ESLint 与 strict OpenSpec validate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dbd17d55c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1131: 消除 annotation 跨批次 large-file 回退
+
+**Date**: 2026-07-26
+**Task**: 消除 annotation 跨批次 large-file 回退
+**Branch**: `feature/v-0710`
+
+### Summary
+
+最终审计发现 annotation anchor 集成令 FileViewPanel 回升到 3016 行；将 anchor attach 与 file relocation 下沉到 code-annotation helper，FileViewPanel 回落至 2997 行。41 个增量测试、typecheck、touched ESLint 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68e5c2e3c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1132: 校正 Markdown renderer large-file baseline
+
+**Date**: 2026-07-26
+**Task**: 校正 Markdown renderer large-file baseline
+**Branch**: `feature/v-0710`
+
+### Summary
+
+最终 large-file gate 发现新 Rich path 触发 800 行 new-file ratchet；将 567 行 canonical router 固定到 FileMarkdownPreviewRouter.tsx，1581 行 feature-complete Rich 保留原 baseline-tracked path，Fast 仍为 11 行兼容入口。74 个增量测试、typecheck、touched ESLint 通过，large-file failures 从 15 回落到 14。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `380d1c016` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1133: 清理 Markdown 旧 renderer path
+
+**Date**: 2026-07-26
+**Task**: 清理 Markdown 旧 renderer path
+**Branch**: `feature/v-0710`
+
+### Summary
+
+删除迁移后残留的 FileMarkdownPreviewRich.tsx；Rich implementation 已回到 baseline-tracked FileMarkdownPreview.tsx，canonical router 位于 FileMarkdownPreviewRouter.tsx。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `35740d89a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1134: 更新工程工具链优化影响报告
+
+**Date**: 2026-07-26
+**Task**: 更新工程工具链优化影响报告
+**Branch**: `feature/v-0710`
+
+### Summary
+
+基于最新代码重写 12 项工程工具链现状，重点更新 #1/#2/#7/#8/#9/#10/#11 的代码事实、影响范围、增量测试、commit 与 residual debt。明确 large-file gate 仍 14 项失败，OpenSpec 全局 447 通过/2 个既有 active change 失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1d4834097` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1135: 修复文件读取失败加载卡死
+
+**Date**: 2026-07-26
+**Task**: 修复文件读取失败加载卡死
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修复 useFileDocumentState 在读取失败与读取期间产生本地脏改时 loading 状态不收敛；新增两条 regression tests；经 product owner 授权 waived Windows manual gate，同步 file-document-loading-error-surface main spec 并归档 OpenSpec change。验证：lint 0 errors、typecheck 通过、focused tests 12/12、目标 OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `574b056cb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1136: 统一引擎能力契约与会话身份
+
+**Date**: 2026-07-26
+**Task**: 统一引擎能力契约与会话身份
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 OpenSpec Batch 0：生成式 capability matrix、Rust/TypeScript DTO 对齐、foundation capability keys、统一 legacy thread identity parser、持久 alias tombstone 上限与 Kimi scanner 治理；增量 TypeScript/Rust/OpenSpec 门禁通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8e4e177a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1137: 建立统一引擎运行时事件总线
+
+**Date**: 2026-07-26
+**Task**: 建立统一引擎运行时事件总线
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 OpenSpec Batch 1：Rust MossxAgentEvent bus、critical/delta backpressure、run.settled 去重、daemon CLI ingress 与前端 domain event compatibility；增量 Vitest、Rust tests、daemon check、TypeScript compile 和 strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `edf325f58` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1138: 建立引擎适配器协议注册表
+
+**Date**: 2026-07-26
+**Task**: 建立引擎适配器协议注册表
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 OpenSpec Batch 2：前端/Rust Engine registry、EngineId/provenance、EngineProtocol/EngineAdapter 分层、one-shot/persistent registration、RuntimeManager generation 复用与 registry parity gate；增量测试和 strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4825b8a50` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -20,20 +20,15 @@ import type {
   CodeAnnotationDraftInput,
   CodeAnnotationSelection,
 } from "../../code-annotations/types";
+import {
+  normalizeDiffPresentationEntry,
+  type DiffPresentationEntry,
+} from "../utils/diffPresentationModel";
 
-export type EditableDiffReviewFile = {
-  filePath: string;
+export type EditableDiffReviewFile = DiffPresentationEntry & {
   workspaceRelativeFilePath?: string;
-  status: string;
   additions: number;
   deletions: number;
-  diff: string;
-  fileName?: string;
-  isImage?: boolean;
-  oldImageData?: string | null;
-  newImageData?: string | null;
-  oldImageMime?: string | null;
-  newImageMime?: string | null;
 };
 
 type NormalizedEditableDiffReviewFile = EditableDiffReviewFile & {
@@ -69,16 +64,6 @@ type WorkspaceEditableDiffReviewSurfaceProps = {
   codeAnnotations?: CodeAnnotationSelection[];
   codeAnnotationSurface?: "embedded-diff-view" | "modal-diff-view";
 };
-
-function resolveReviewFileName(file: EditableDiffReviewFile, reviewPath: string) {
-  const explicit = file.fileName?.trim();
-  if (explicit) {
-    return explicit;
-  }
-  const normalized = reviewPath.replace(/\\/g, "/");
-  const leaf = normalized.split("/").filter(Boolean).pop();
-  return leaf ?? normalized;
-}
 
 function canEditReviewFile(
   file: NormalizedEditableDiffReviewFile | null,
@@ -152,11 +137,13 @@ export function WorkspaceEditableDiffReviewSurface({
   const normalizedFiles = useMemo<NormalizedEditableDiffReviewFile[]>(
     () =>
       files.map((file) => {
-        const reviewPath = resolveWorkspaceRelativePath(workspacePath, file.filePath);
+        const normalized = normalizeDiffPresentationEntry(file, (filePath) =>
+          resolveWorkspaceRelativePath(workspacePath, filePath),
+        );
         return {
-          ...file,
-          reviewPath,
-          reviewFileName: resolveReviewFileName(file, reviewPath),
+          ...normalized,
+          reviewPath: normalized.presentationPath,
+          reviewFileName: normalized.presentationFileName,
         };
       }),
     [files, workspacePath],

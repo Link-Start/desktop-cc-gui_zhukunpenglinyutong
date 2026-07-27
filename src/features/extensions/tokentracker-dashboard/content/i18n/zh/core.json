@@ -62,7 +62,7 @@
   "identity_card.rank_placeholder": "—",
   "identity_card.streak_value": "{{days}} 天",
   "usage.summary.total": "Token 总数",
-  "usage.summary.toggle_aria": "切换紧凑数字格式",
+  "usage.summary.toggle_aria": "切换 Token 数字格式",
   "usage.period.day": "日",
   "usage.period.week": "周",
   "usage.period.month": "月",

@@ -57,8 +57,12 @@ const runtimeNotice = {
       providerSelected: "已选择 {{name}}，点击 Codex 即可直接创建会话",
     },
     claude: {
+      providerSelected: "已选择 {{name}}，点击 Claude Code 即可直接创建会话",
       resumeCommandCopied:
         "Claude 恢复命令已复制。如果 TUI 的 /resume picker 看不到这个 GUI 会话，请显式运行 claude --resume {{sessionId}} 或 /resume {{sessionId}}。",
+    },
+    kimi: {
+      providerSelected: "已选择 {{name}}，点击 Kimi CLI 即可直接创建会话",
     },
     error: {
       createSessionRecoveryRequired:

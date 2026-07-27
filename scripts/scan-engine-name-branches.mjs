@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { promises as fs } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
@@ -9,8 +10,19 @@ const DEFAULT_SCAN_DIRS = ["src"];
 const DEFAULT_EXTENSIONS = new Set([".ts", ".tsx"]);
 const IGNORED_DIRS = new Set([".git", "node_modules", "dist", "target", ".turbo", ".vite"]);
 const ALLOWLIST_MARKER = "capability-router-allow-engine-branch";
+const ENGINE_REGISTRY_PATH = new URL(
+  "../src/features/engine/engineIds.json",
+  import.meta.url,
+);
+const ENGINE_IDS = JSON.parse(readFileSync(ENGINE_REGISTRY_PATH, "utf8")).engineIds;
+const ENGINE_LITERAL_PATTERN = ENGINE_IDS.map((engine) =>
+  engine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+).join("|");
 const ENGINE_BRANCH_PATTERN =
-  /\b(?:activeEngine|engine|engineType|selectedEngine)\s*(?:={2,3}|!={1,2})\s*["'](?:claude|codex|gemini|opencode)["']/g;
+  new RegExp(
+    `\\b(?:activeEngine|engine|engineType|selectedEngine)\\s*(?:={2,3}|!={1,2})\\s*["'](?:${ENGINE_LITERAL_PATTERN})["']`,
+    "g",
+  );
 
 function normalizePathForReport(filePath) {
   return filePath.split(path.sep).join("/");
@@ -163,6 +175,7 @@ export async function scanEngineNameBranches(options = {}) {
   return {
     version: 1,
     root: ".",
+    engineIds: ENGINE_IDS,
     scannedFiles: files.length,
     findingCount: findings.length,
     findings,
@@ -193,6 +206,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 
 export const scanEngineNameBranchesInternals = {
   ALLOWLIST_MARKER,
+  ENGINE_IDS,
   collectSourceFiles,
   normalizePathForReport,
   parseArgs,

@@ -6,11 +6,10 @@ import {
   addClaudeProvider,
   updateClaudeProvider,
   deleteClaudeProvider,
-  switchClaudeProvider,
   reorderClaudeProviders,
   getCurrentClaudeConfig,
 } from "../../../services/tauri";
-import { STORAGE_KEYS } from "../../models/constants";
+import { migrateModelMappingStorage } from "../../models/constants";
 
 export interface ProviderDialogState {
   isOpen: boolean;
@@ -22,6 +21,40 @@ export interface DeleteConfirmState {
   provider: ProviderConfig | null;
 }
 
+export type ClaudeProviderAction =
+  | "load"
+  | "save"
+  | "reorder"
+  | "delete"
+  | "storage";
+
+export type ClaudeProviderActionError = Readonly<{
+  action: ClaudeProviderAction;
+  message: string;
+  cause: unknown;
+}>;
+
+export type ClaudeProviderActionResult =
+  | Readonly<{ ok: true }>
+  | Readonly<{ ok: false; error: ClaudeProviderActionError }>;
+
+function providerActionError(
+  action: ClaudeProviderAction,
+  cause: unknown,
+): ClaudeProviderActionError {
+  const detail =
+    cause instanceof Error
+      ? cause.message
+      : typeof cause === "string"
+        ? cause
+        : "Unknown error";
+  return Object.freeze({
+    action,
+    message: `Claude provider ${action} failed: ${detail}`,
+    cause,
+  });
+}
+
 export function useProviderManagement() {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,6 +62,8 @@ export function useProviderManagement() {
     null,
   );
   const [currentConfigLoading, setCurrentConfigLoading] = useState(false);
+  const [providerError, setProviderError] =
+    useState<ClaudeProviderActionError | null>(null);
 
   const [providerDialog, setProviderDialog] = useState<ProviderDialogState>({
     isOpen: false,
@@ -42,119 +77,47 @@ export function useProviderManagement() {
     provider: null,
   });
 
-  const syncActiveProviderModelMapping = useCallback(
-    (provider?: ProviderConfig | null) => {
-      if (typeof window === "undefined" || !window.localStorage) return;
-      const storageKey = STORAGE_KEYS.CLAUDE_MODEL_MAPPING;
-      const legacyStorageKeys = [
-        "mossx-claude-model-mapping",
-        "codemoss-claude-model-mapping",
-      ];
-      if (!provider?.settingsConfig?.env) {
-        try {
-          window.localStorage.removeItem(storageKey);
-          for (const key of legacyStorageKeys) {
-            window.localStorage.removeItem(key);
-          }
-          window.dispatchEvent(
-            new CustomEvent("localStorageChange", {
-              detail: { key: storageKey },
-            }),
-          );
-          for (const key of legacyStorageKeys) {
-            window.dispatchEvent(
-              new CustomEvent("localStorageChange", {
-                detail: { key },
-              }),
-            );
-          }
-        } catch {
-          // ignore
-        }
-        return;
-      }
-      const env = provider.settingsConfig.env as Record<string, any>;
-      const mapping = {
-        main: env.ANTHROPIC_MODEL ?? "",
-        haiku: env.ANTHROPIC_DEFAULT_HAIKU_MODEL ?? "",
-        sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? "",
-        opus: env.ANTHROPIC_DEFAULT_OPUS_MODEL ?? "",
-      };
-      const hasValue = Object.values(mapping).some(
-        (v) => v && String(v).trim().length > 0,
-      );
-      try {
-        if (hasValue) {
-          const serialized = JSON.stringify(mapping);
-          window.localStorage.setItem(storageKey, serialized);
-          for (const key of legacyStorageKeys) {
-            window.localStorage.setItem(key, serialized);
-          }
-          // Dispatch custom event so useModels picks it up in the same tab
-          window.dispatchEvent(
-            new CustomEvent("localStorageChange", {
-              detail: { key: storageKey },
-            }),
-          );
-          for (const key of legacyStorageKeys) {
-            window.dispatchEvent(
-              new CustomEvent("localStorageChange", {
-                detail: { key },
-              }),
-            );
-          }
-        } else {
-          window.localStorage.removeItem(storageKey);
-          for (const key of legacyStorageKeys) {
-            window.localStorage.removeItem(key);
-          }
-          window.dispatchEvent(
-            new CustomEvent("localStorageChange", {
-              detail: { key: storageKey },
-            }),
-          );
-          for (const key of legacyStorageKeys) {
-            window.dispatchEvent(
-              new CustomEvent("localStorageChange", {
-                detail: { key },
-              }),
-            );
-          }
-        }
-      } catch {
-        // ignore
-      }
-    },
-    [],
-  );
-
   const loadProviders = useCallback(async () => {
     setLoading(true);
     try {
       const list = await getClaudeProviders();
       setProviders(list);
-      const active = list.find((p: ProviderConfig) => p.isActive);
-      syncActiveProviderModelMapping(active ?? null);
-    } catch {
-      // ignore
+      return { ok: true } as const;
+    } catch (error) {
+      const actionError =
+        typeof error === "object" && error !== null && "action" in error
+          ? (error as ClaudeProviderActionError)
+          : providerActionError("load", error);
+      setProviderError(actionError);
+      return { ok: false, error: actionError } as const;
     } finally {
       setLoading(false);
     }
-  }, [syncActiveProviderModelMapping]);
+  }, []);
 
   const loadCurrentConfig = useCallback(async () => {
     setCurrentConfigLoading(true);
     try {
       const config = await getCurrentClaudeConfig();
       setCurrentConfig(config as ClaudeCurrentConfig);
-    } catch {
+      return { ok: true } as const;
+    } catch (error) {
       setCurrentConfig(null);
+      const actionError = providerActionError("load", error);
+      setProviderError(actionError);
+      return { ok: false, error: actionError } as const;
     } finally {
       setCurrentConfigLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    const migration = migrateModelMappingStorage();
+    if (migration.warnings.length > 0) {
+      setProviderError(
+        providerActionError("storage", migration.warnings.join("; ")),
+      );
+    }
     void Promise.all([loadProviders(), loadCurrentConfig()]);
   }, [loadProviders, loadCurrentConfig]);
 
@@ -190,13 +153,19 @@ export function useProviderManagement() {
       apiUrl: string;
       jsonConfig: string;
     }) => {
-      if (!data.providerName) return false;
+      if (!data.providerName) {
+        const error = providerActionError("save", "Provider name is required");
+        setProviderError(error);
+        return { ok: false, error } as const;
+      }
 
       let parsedConfig;
       try {
         parsedConfig = JSON.parse(data.jsonConfig || "{}");
-      } catch {
-        return false;
+      } catch (cause) {
+        const error = providerActionError("save", cause);
+        setProviderError(error);
+        return { ok: false, error } as const;
       }
 
       const updates = {
@@ -222,52 +191,32 @@ export function useProviderManagement() {
           const currentProvider =
             providers.find((p) => p.id === providerId) ||
             providerDialog.provider!;
-          const isActive = currentProvider.isActive;
 
           await updateClaudeProvider(providerId, {
             ...currentProvider,
             ...updates,
           });
-
-          if (isActive) {
-            syncActiveProviderModelMapping({
-              ...currentProvider,
-              settingsConfig: parsedConfig,
-            });
-          }
         }
 
         setProviderDialog({ isOpen: false, provider: null });
         await Promise.all([loadProviders(), loadCurrentConfig()]);
-        return true;
-      } catch {
-        return false;
+        setProviderError(null);
+        return { ok: true } as const;
+      } catch (cause) {
+        const error =
+          typeof cause === "object" && cause !== null && "action" in cause
+            ? (cause as ClaudeProviderActionError)
+            : providerActionError("save", cause);
+        setProviderError(error);
+        return { ok: false, error } as const;
       }
     },
     [
       providerDialog.provider,
       providers,
-      syncActiveProviderModelMapping,
       loadProviders,
       loadCurrentConfig,
     ],
-  );
-
-  const handleSwitchProvider = useCallback(
-    async (id: string) => {
-      try {
-        await switchClaudeProvider(id);
-        // Sync model mapping only after backend succeeds
-        const target = providers.find((p) => p.id === id);
-        if (target) {
-          syncActiveProviderModelMapping(target);
-        }
-        await Promise.all([loadProviders(), loadCurrentConfig()]);
-      } catch {
-        // ignore
-      }
-    },
-    [providers, syncActiveProviderModelMapping, loadProviders, loadCurrentConfig],
   );
 
   const handleReorderProviders = useCallback(
@@ -298,9 +247,14 @@ export function useProviderManagement() {
         // provider), so keep it as-is. Refetching here would toggle the loading
         // flag and replace every provider object reference right after the drop
         // settles, causing a visible flicker on each reorder.
-      } catch {
+        setProviderError(null);
+        return { ok: true } as const;
+      } catch (cause) {
         // Persistence failed: reload from backend to roll back the optimistic order.
         await loadProviders();
+        const error = providerActionError("reorder", cause);
+        setProviderError(error);
+        return { ok: false, error } as const;
       }
     },
     [providers, loadProviders],
@@ -317,10 +271,15 @@ export function useProviderManagement() {
     try {
       await deleteClaudeProvider(provider.id);
       await Promise.all([loadProviders(), loadCurrentConfig()]);
-    } catch {
-      // ignore
+      setProviderError(null);
+      setDeleteConfirm({ isOpen: false, provider: null });
+      return { ok: true } as const;
+    } catch (cause) {
+      const error = providerActionError("delete", cause);
+      setProviderError(error);
+      setDeleteConfirm({ isOpen: false, provider: null });
+      return { ok: false, error } as const;
     }
-    setDeleteConfirm({ isOpen: false, provider: null });
   }, [deleteConfirm.provider, loadProviders, loadCurrentConfig]);
 
   const cancelDeleteProvider = useCallback(() => {
@@ -332,6 +291,7 @@ export function useProviderManagement() {
     loading,
     currentConfig,
     currentConfigLoading,
+    providerError,
     providerDialog,
     claudeSettingsJsonDialogOpen,
     deleteConfirm,
@@ -344,7 +304,6 @@ export function useProviderManagement() {
     handleCloseClaudeSettingsJsonDialog,
     handleClaudeSettingsJsonSaved,
     handleSaveProvider,
-    handleSwitchProvider,
     handleReorderProviders,
     handleDeleteProvider,
     confirmDeleteProvider,

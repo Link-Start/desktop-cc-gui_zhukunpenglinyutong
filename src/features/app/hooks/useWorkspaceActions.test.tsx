@@ -25,6 +25,10 @@ vi.mock("react-i18next", () => ({
           return `open:${String(options?.project ?? "")}`;
         case "errors.failedToCreateSessionRuntimeRecovering":
           return "errors.failedToCreateSessionRuntimeRecovering";
+        case "errors.codexProviderWireApiUnsupported":
+          return "errors.codexProviderWireApiUnsupported";
+        case "errors.codexProviderConfigInvalid":
+          return "errors.codexProviderConfigInvalid";
         case "errors.reconnectAndRetryCreateSession":
           return "errors.reconnectAndRetryCreateSession";
         case "errors.reconnectingAndRetryingCreateSession":
@@ -131,20 +135,21 @@ describe("useWorkspaceActions", () => {
     expect(options.hideLoadingProgressDialog).toHaveBeenCalledWith("loading-1");
   });
 
-  it("falls back to current active engine when no explicit engine provided", async () => {
+  it("rejects a retired active engine when no explicit engine is provided", async () => {
     const options = makeOptions({ activeEngine: "opencode" });
 
     const { result } = renderHook(() => useWorkspaceActions(options));
 
+    let threadId: string | null = "unexpected";
     await act(async () => {
-      await result.current.handleAddAgent(baseWorkspace);
+      threadId = await result.current.handleAddAgent(baseWorkspace);
     });
 
+    expect(threadId).toBeNull();
     expect(options.setActiveEngine).not.toHaveBeenCalled();
-    expect(options.startThreadForWorkspace).toHaveBeenCalledWith("ws-1", {
-      engine: "opencode",
-    });
-    expect(options.hideLoadingProgressDialog).toHaveBeenCalledWith("loading-1");
+    expect(options.startThreadForWorkspace).not.toHaveBeenCalled();
+    expect(options.showLoadingProgressDialog).not.toHaveBeenCalled();
+    expect(options.hideLoadingProgressDialog).not.toHaveBeenCalled();
   });
 
   it("rejects Gemini session creation before switching or starting a thread", async () => {
@@ -328,9 +333,14 @@ describe("useWorkspaceActions", () => {
       await result.current.handleAddAgent(baseWorkspace, "claude");
     });
 
-    expect(window.alert).toHaveBeenCalledWith(
-      "errors.failedToCreateSession\n\nerrors.failedToCreateSessionNoThreadId",
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "errors.failedToCreateSession",
+        message: "errors.failedToCreateSessionNoThreadId",
+        sticky: true,
+      }),
     );
+    expect(window.alert).not.toHaveBeenCalled();
     expect(options.setActiveTab).not.toHaveBeenCalled();
     expect(options.hideLoadingProgressDialog).toHaveBeenCalledWith("loading-1");
   });
@@ -433,9 +443,14 @@ describe("useWorkspaceActions", () => {
       engine: "codex",
       providerProfileId: "__disk__",
     });
-    expect(window.alert).toHaveBeenCalledWith(
-      expect.stringContaining("thread/start ready confirmation failed"),
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "errors.failedToCreateSession",
+        message: expect.stringContaining("thread/start ready confirmation failed"),
+        sticky: true,
+      }),
     );
+    expect(window.alert).not.toHaveBeenCalled();
   });
 
   it("shows recoverable copy for disk codex post-start stale readiness failures without auto-creating another session", async () => {
@@ -497,6 +512,124 @@ describe("useWorkspaceActions", () => {
     );
   });
 
+  it("does not expose raw broken pipe for managed codex provider creation", async () => {
+    const options = makeOptions({
+      startThreadForWorkspace: vi.fn(async () => {
+        throw new Error("Broken pipe (os error 32)");
+      }),
+    });
+    const { result } = renderHook(() => useWorkspaceActions(options));
+
+    await act(async () => {
+      await result.current.handleAddAgent(baseWorkspace, "codex", {
+        providerProfileId: "provider-named-kimi",
+        providerProfile: {
+          id: "provider-named-kimi",
+          name: "Kimi",
+          source: "managed",
+        },
+      });
+    });
+
+    expect(ensureRuntimeReady).not.toHaveBeenCalled();
+    expect(options.startThreadForWorkspace).toHaveBeenCalledTimes(1);
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "create-session-recovery-ws-1-codex",
+        message: "errors.failedToCreateSessionRuntimeRecovering",
+        sticky: true,
+      }),
+    );
+    expect(window.alert).not.toHaveBeenCalled();
+  });
+
+  it("explains unsupported Codex chat wire API instead of exposing transport errors", async () => {
+    const options = makeOptions({
+      startThreadForWorkspace: vi.fn(async () => {
+        throw new Error(
+          '[codex_provider_wire_api_unsupported] Codex provider Kimi configures model provider crs with wire_api = "chat".',
+        );
+      }),
+    });
+    const { result } = renderHook(() => useWorkspaceActions(options));
+
+    await act(async () => {
+      await result.current.handleAddAgent(baseWorkspace, "codex", {
+        providerProfileId: "provider-named-kimi",
+      });
+    });
+
+    expect(ensureRuntimeReady).not.toHaveBeenCalled();
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "create-session-failure-ws-1-codex",
+        title: "errors.failedToCreateSession",
+        message: "errors.codexProviderWireApiUnsupported",
+        sticky: true,
+      }),
+    );
+    expect(
+      JSON.stringify(vi.mocked(pushErrorToast).mock.calls[0]?.[0]),
+    ).not.toMatch(/broken pipe|os error 32/i);
+    expect(window.alert).not.toHaveBeenCalled();
+  });
+
+  it("explains invalid Codex provider TOML without exposing parser details", async () => {
+    const options = makeOptions({
+      startThreadForWorkspace: vi.fn(async () => {
+        throw new Error(
+          "[codex_provider_config_invalid] Codex provider configToml is not valid TOML.",
+        );
+      }),
+    });
+    const { result } = renderHook(() => useWorkspaceActions(options));
+
+    await act(async () => {
+      await result.current.handleAddAgent(baseWorkspace, "codex", {
+        providerProfileId: "provider-named-kimi",
+      });
+    });
+
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "create-session-failure-ws-1-codex",
+        title: "errors.failedToCreateSession",
+        message: "errors.codexProviderConfigInvalid",
+        sticky: true,
+      }),
+    );
+    expect(
+      JSON.stringify(vi.mocked(pushErrorToast).mock.calls[0]?.[0]),
+    ).not.toMatch(/parse error|line 10|column|wire_api =/i);
+    expect(window.alert).not.toHaveBeenCalled();
+  });
+
+  it("redacts persistent raw broken pipe after disk codex compatibility recovery", async () => {
+    const options = makeOptions({
+      startThreadForWorkspace: vi.fn(async () => {
+        throw new Error("Broken pipe (os error 32)");
+      }),
+    });
+    const { result } = renderHook(() => useWorkspaceActions(options));
+
+    await act(async () => {
+      await result.current.handleAddAgent(baseWorkspace, "codex", {
+        providerProfileId: "__disk__",
+      });
+    });
+
+    expect(ensureRuntimeReady).toHaveBeenCalledWith("ws-1");
+    expect(options.startThreadForWorkspace).toHaveBeenCalledTimes(2);
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "create-session-recovery-ws-1-codex",
+        message: "errors.failedToCreateSessionRuntimeRecovering",
+        sticky: true,
+      }),
+    );
+    expect(window.alert).not.toHaveBeenCalled();
+  });
+
   it("does not apply disk readiness recovery copy to managed codex provider creation", async () => {
     const options = makeOptions({
       startThreadForWorkspace: vi.fn(async () => {
@@ -515,10 +648,14 @@ describe("useWorkspaceActions", () => {
 
     expect(ensureRuntimeReady).not.toHaveBeenCalled();
     expect(options.startThreadForWorkspace).toHaveBeenCalledTimes(1);
-    expect(pushErrorToast).not.toHaveBeenCalled();
-    expect(window.alert).toHaveBeenCalledWith(
-      expect.stringContaining("thread/start ready confirmation failed"),
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "errors.failedToCreateSession",
+        message: expect.stringContaining("thread/start ready confirmation failed"),
+        sticky: true,
+      }),
     );
+    expect(window.alert).not.toHaveBeenCalled();
   });
 
   it("reuses runtime-ready recovery contract when the create-session toast action runs", async () => {
@@ -604,8 +741,13 @@ describe("useWorkspaceActions", () => {
       await result.current.handleAddAgent(baseWorkspace, "codex");
     });
 
-    expect(window.alert).toHaveBeenCalledWith(
-      "errors.failedToCreateSession\n\nerrors.cliNotFound\n\nerrors.cliNotFoundHint",
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "errors.failedToCreateSession",
+        message: "errors.cliNotFound\n\nerrors.cliNotFoundHint",
+        sticky: true,
+      }),
     );
+    expect(window.alert).not.toHaveBeenCalled();
   });
 });

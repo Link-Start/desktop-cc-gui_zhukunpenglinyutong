@@ -232,6 +232,69 @@ toggle_git_graph_shortcut: None,
 - CPU/IO 重任务使用 `tokio::task::spawn_blocking`。
 - 不在锁内做重计算或外部命令调用。
 
+## Scenario: Create-Only Managed File MUST Use Exclusive Create
+
+### 1. Scope / Trigger
+
+- Trigger：command/API 语义是“目标不存在才创建，重名拒绝”，例如 `claude_command_create` 写入 workspace managed `<name>.md`。
+- 目标：并发请求不得穿透 `exists()` preflight 后互相覆盖。
+
+### 2. Signatures
+
+- Command：`claude_command_create(workspace_id, name, content) -> Result<ClaudeCommandEntry, String>`。
+- File owner：`write_managed_command(dir: &Path, name: &str, content: &str)`。
+- Filesystem primitive：`OpenOptions::new().write(true).create_new(true).open(path)`。
+
+### 3. Contracts
+
+- MUST 先确保 parent directory 存在，再在 target file 上执行 exclusive create。
+- `ErrorKind::AlreadyExists` MUST 映射为稳定 duplicate error，MUST NOT 打开并覆盖原文件。
+- create 成功后的 write failure MUST 显式返回，并 best-effort 删除本次创建的 partial file。
+- 仅“更新/替换既有文件”语义才允许 atomic temp-file + rename；不得把 replace primitive 用于 create-only API。
+
+### 4. Validation & Error Matrix
+
+| Filesystem 结果 | API 结果 | 磁盘状态 |
+|---|---|---|
+| target absent + write success | success | 完整新文件 |
+| target already exists | duplicate error | 原内容不变 |
+| concurrent same-name creates | exactly one success | winner 内容不被覆盖 |
+| exclusive create success + write failure | write error | partial file best-effort removed |
+| parent create failure | create-dir error | 不尝试 target write |
+
+### 5. Good / Base / Bad Cases
+
+- Good：duplicate safety 由 filesystem `create_new(true)` 保证，可跨 thread/process。
+- Base：不同 name 并发创建互不阻塞。
+- Bad：`if path.exists() { return Err(...) }` 后调用 `fs::write(path, ...)`；两个 caller 可同时通过 check。
+
+### 6. Tests Required
+
+- 顺序 duplicate test MUST 断言第二次失败且第一版内容不变。
+- 并发 test MUST 通过 barrier 同时创建同名文件，断言一成功、一 duplicate error、最终内容属于 winner。
+- Focused gate：`cargo test --manifest-path src-tauri/Cargo.toml claude_commands --lib`。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```rust
+if path.exists() {
+    return Err("already exists".to_string());
+}
+fs::write(path, content)?;
+```
+
+#### Correct
+
+```rust
+let mut file = OpenOptions::new()
+    .write(true)
+    .create_new(true)
+    .open(&path)?;
+file.write_all(content.as_bytes())?;
+```
+
 ## 测试建议
 
 - 覆盖并发写、锁冲突、stale lock、损坏 JSON、fallback default 场景。

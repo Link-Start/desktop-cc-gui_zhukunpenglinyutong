@@ -27,9 +27,7 @@ static LAST_RUNTIME_POOL_SIGNATURE: OnceLock<Mutex<Option<u64>>> = OnceLock::new
 /// (workspace_id, engine) 排序，与前端 Map 比对的顺序无关语义对齐。
 fn runtime_pool_rows_signature(rows: &[RuntimePoolRow]) -> u64 {
     let mut sorted: Vec<&RuntimePoolRow> = rows.iter().collect();
-    sorted.sort_by(|a, b| {
-        (&a.workspace_id, &a.engine).cmp(&(&b.workspace_id, &b.engine))
-    });
+    sorted.sort_by(|a, b| (&a.workspace_id, &a.engine).cmp(&(&b.workspace_id, &b.engine)));
     let mut hasher = DefaultHasher::new();
     for row in sorted {
         // 枚举/Option 字段未统一 derive Hash，用 Debug 串写入 hasher；

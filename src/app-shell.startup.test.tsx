@@ -638,17 +638,6 @@ vi.mock("./features/engine/hooks/useEngineController", () => ({
   }),
 }));
 
-vi.mock("./app-shell-parts/useOpenCodeSelection", () => ({
-  useOpenCodeSelection: () => ({
-    openCodeAgents: [],
-    resolveOpenCodeAgentForThread: () => null,
-    resolveOpenCodeVariantForThread: () => null,
-    selectOpenCodeAgentForThread: createNoopFunction(),
-    selectOpenCodeVariantForThread: createNoopFunction(),
-    syncActiveOpenCodeThread: createNoopFunction(),
-  }),
-}));
-
 vi.mock("./features/kanban/hooks/useKanbanStore", () => ({
   useKanbanStore: () => ({
     panels: [],
@@ -1163,9 +1152,9 @@ vi.mock("./features/app/hooks/useComposerController", () => ({
   }),
 }));
 
-vi.mock("./features/app/hooks/useLiveEditPreview", () => ({
+vi.mock("./features/live-edit-preview/hooks/useLiveEditPreview", () => ({
   useLiveEditPreview: () => ({
-    enabled: false,
+    markManualNavigation: createNoopFunction(),
   }),
 }));
 

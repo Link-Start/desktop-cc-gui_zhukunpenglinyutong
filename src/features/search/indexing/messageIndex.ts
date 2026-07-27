@@ -4,12 +4,29 @@ export type IndexedMessage = {
   messageId: string;
   threadId: string;
   text: string;
+  normalizedText: string;
 };
+
+const workspaceMessageIndexBySnapshot = new WeakMap<
+  Record<string, ConversationItem[]>,
+  Map<string, IndexedMessage[]>
+>();
+
+function makeThreadIdsCacheKey(threadIds: string[]): string {
+  return threadIds.map((threadId) => `${threadId.length}:${threadId}`).join("");
+}
 
 export function buildWorkspaceMessageIndex(
   threadIds: string[],
   itemsByThread: Record<string, ConversationItem[]>,
 ): IndexedMessage[] {
+  const cacheKey = makeThreadIdsCacheKey(threadIds);
+  const snapshotCache = workspaceMessageIndexBySnapshot.get(itemsByThread);
+  const cached = snapshotCache?.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const indexed: IndexedMessage[] = [];
   for (const threadId of threadIds) {
     const items = itemsByThread[threadId] ?? [];
@@ -25,8 +42,14 @@ export function buildWorkspaceMessageIndex(
         messageId: item.id,
         threadId,
         text,
+        normalizedText: text.toLowerCase(),
       });
     }
+  }
+  if (snapshotCache) {
+    snapshotCache.set(cacheKey, indexed);
+  } else {
+    workspaceMessageIndexBySnapshot.set(itemsByThread, new Map([[cacheKey, indexed]]));
   }
   return indexed;
 }

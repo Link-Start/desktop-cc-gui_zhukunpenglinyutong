@@ -1,0 +1,29 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildAvailableEngines,
+  ENABLED_ENGINE_TYPES,
+} from "./engineControllerAvailability";
+
+describe("engineControllerAvailability", () => {
+  it("projects labels from the canonical registry and excludes retired engines", () => {
+    expect(ENABLED_ENGINE_TYPES).toEqual(["claude", "codex", "kimi"]);
+    expect(buildAvailableEngines([], false)).toEqual([
+      expect.objectContaining({
+        type: "claude",
+        displayName: "Claude Code",
+        shortName: "Claude Code",
+        availabilityState: "loading",
+      }),
+      expect.objectContaining({
+        type: "codex",
+        displayName: "Codex CLI",
+        shortName: "Codex",
+      }),
+      expect.objectContaining({
+        type: "kimi",
+        displayName: "Kimi CLI",
+        shortName: "Kimi",
+      }),
+    ]);
+  });
+});

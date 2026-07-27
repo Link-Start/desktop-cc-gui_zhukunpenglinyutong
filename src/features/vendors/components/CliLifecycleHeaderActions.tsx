@@ -168,13 +168,13 @@ export function CliLifecycleHeaderActions() {
             </Badge>
             {updateAvailable && latestVersion ? (
               <Badge variant="warning">→ {latestVersion}</Badge>
-            ) : (
+            ) : latestVersion ? (
               <Badge variant="success">
                 {t("settings.cliVersionUpToDate", {
                   defaultValue: "Up to date",
                 })}
               </Badge>
-            )}
+            ) : null}
           </div>
         ) : (
           <Badge variant="outline">{t("settings.cliVersionNotInstalled")}</Badge>

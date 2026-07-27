@@ -721,7 +721,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onConnectWorkspace={options.onConnectWorkspace}
         onAddAgent={options.onAddAgent}
         engineOptions={options.engineOptions}
-        enabledEngines={options.enabledEngines}
         onRefreshEngineOptions={options.onRefreshEngineOptions}
         onAddSharedAgent={options.onAddSharedAgent}
         onAddWorktreeAgent={options.onAddWorktreeAgent}
@@ -1456,6 +1455,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onSelectEngine={options.onSelectEngine}
           models={options.models}
           providerModelCatalogs={options.providerModelCatalogs}
+          providerProfileId={activeThreadSummary?.providerProfileId ?? null}
           selectedModelId={options.selectedModelId}
           onSelectModel={options.onSelectModel}
           reasoningOptions={options.reasoningOptions}
@@ -1484,10 +1484,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           commands={composerCommands}
           files={options.files}
           directories={options.directories}
-          gitignoredFiles={options.gitignoredFiles}
-          gitignoredDirectories={options.gitignoredDirectories}
           textareaRef={options.textareaRef}
-          historyKey={options.activeWorkspace?.id ?? null}
           editorSettings={options.composerEditorSettings}
           sendShortcut={options.composerSendShortcut}
           textareaHeight={options.textareaHeight}

@@ -11,6 +11,19 @@ pub(super) fn is_stopping_runtime_race_error(error: &str) -> bool {
         || (normalized.contains("[runtime_ended]") && normalized.contains("stopped after"))
 }
 
+pub(super) fn is_create_session_runtime_recovery_error(error: &str) -> bool {
+    if is_stopping_runtime_race_error(error) {
+        return true;
+    }
+    let normalized = error.to_ascii_lowercase();
+    normalized.contains("broken pipe")
+        || normalized.contains("the pipe is being closed")
+        || normalized.contains("the pipe has been ended")
+        || normalized.contains("os error 32")
+        || normalized.contains("os error 109")
+        || normalized.contains("os error 232")
+}
+
 pub(super) fn create_session_runtime_recovering_error() -> String {
     format!(
         "{CREATE_SESSION_RUNTIME_RECOVERING_ERROR_PREFIX} Managed runtime was restarting while creating this session. The app retried automatically but could not acquire a healthy runtime yet. Reconnect the workspace and try again."
@@ -58,9 +71,22 @@ impl DaemonState {
                 .ok_or_else(|| "Workspace not found".to_string())?
         };
 
+        let provider_profile_id = session_management::resolve_engine_provider_profile_id(
+            self.storage_path.as_path(),
+            &workspace_id,
+            Some(&session_id),
+            "claude",
+            None,
+        )?;
+        let provider_launch_profile =
+            engine::claude::resolve_claude_provider_launch_profile(provider_profile_id.as_deref())?;
         let session = self
             .engine_manager
-            .get_claude_session(&workspace_id, &workspace_path)
+            .get_claude_session_for_provider(
+                &workspace_id,
+                &workspace_path,
+                provider_profile_id.as_deref(),
+            )
             .await;
 
         self.emit_manual_compaction_event(
@@ -87,7 +113,15 @@ impl DaemonState {
         // conversation and legitimately takes minutes on a large context. send_message
         // already has a 90s first-event watchdog (claude.rs) guarding a true hang, and
         // the auto-compact path (lifecycle.rs) runs uncapped too — matching it here.
-        let compact_result = session.send_message(params, &turn_id).await;
+        let app_settings = self.app_settings.lock().await.clone();
+        let compact_result = session
+            .send_message_with_app_settings_and_provider_env(
+                params,
+                &turn_id,
+                Some(&app_settings),
+                provider_launch_profile.as_ref().map(|profile| &profile.env),
+            )
+            .await;
 
         match compact_result {
             Ok(result_text) => {

@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GitHistoryWorktreePanel } from "./GitHistoryWorktreePanel";
+import { saveLastCommitMessageConfig } from "../../../utils/commitMessage";
 
 const mockGetGitStatus = vi.fn<(workspaceId: string, repositoryRoot?: string | null) => Promise<unknown>>();
 const mockCommitGit = vi.fn<(workspaceId: string, message: string, repositoryRoot?: string | null) => Promise<void>>();
@@ -59,6 +60,7 @@ vi.mock("react-i18next", () => ({
         "git.generateCommitMessageEngineClaude": "Use Claude engine",
         "git.generateCommitMessageEngineGemini": "Use Gemini engine",
         "git.generateCommitMessageEngineOpenCode": "Use OpenCode engine",
+        "git.generateCommitMessageLastConfig": "Use last configuration",
       };
       const template = translations[key] ?? key;
       if (!options) {
@@ -94,6 +96,8 @@ vi.mock("../../../services/tauri", () => ({
 
 describe("GitHistoryWorktreePanel", () => {
   beforeEach(() => {
+    // AI commit 生成会持久化上次 engine/language 配置, 不清理会污染后续测试的菜单路径
+    window.localStorage.clear();
     mockGetGitStatus.mockReset();
     mockCommitGit.mockReset();
     mockGenerateCommitMessage.mockReset();
@@ -542,6 +546,49 @@ describe("GitHistoryWorktreePanel", () => {
       expect(mockGenerateCommitMessage).toHaveBeenCalledWith(
         "w1",
         "en",
+        "codex",
+        ["src/staged.ts"],
+      );
+    });
+  });
+
+  it("keeps engine and language selection visible with a last saved configuration", async () => {
+    saveLastCommitMessageConfig({ engine: "codex", language: "zh" });
+    render(<GitHistoryWorktreePanel workspaceId="w1" listView="tree" />);
+
+    const generateButton = await waitFor(() => {
+      const button = screen.getByRole("button", {
+        name: "Generate commit message",
+      }) as HTMLButtonElement;
+      expect(button.disabled).toBe(false);
+      return button;
+    });
+    fireEvent.click(generateButton);
+
+    expect(await screen.findByRole("menuitem", { name: "Use Codex engine" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Use Claude engine" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Use last configuration" })).toBeTruthy();
+    expect(mockGenerateCommitMessage).not.toHaveBeenCalled();
+  });
+
+  it("generates from the visible last-configuration quick option", async () => {
+    saveLastCommitMessageConfig({ engine: "codex", language: "zh" });
+    render(<GitHistoryWorktreePanel workspaceId="w1" listView="tree" />);
+
+    const generateButton = await waitFor(() => {
+      const button = screen.getByRole("button", {
+        name: "Generate commit message",
+      }) as HTMLButtonElement;
+      expect(button.disabled).toBe(false);
+      return button;
+    });
+    fireEvent.click(generateButton);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Use last configuration" }));
+
+    await waitFor(() => {
+      expect(mockGenerateCommitMessage).toHaveBeenCalledWith(
+        "w1",
+        "zh",
         "codex",
         ["src/staged.ts"],
       );
