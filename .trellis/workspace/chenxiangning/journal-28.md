@@ -1783,3 +1783,36 @@ openspec validate assemble-shared-canonical-facts --strict --no-interactive: val
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1191: Wave 4 Change B：Execution Target + V2 Send 写路径全量落地
+
+**Date**: 2026-07-27
+**Task**: Wave 4 Change B：Execution Target + V2 Send 写路径全量落地
+**Branch**: `feature/v-0710`
+
+### Summary
+
+B.1–B.6 全部完成：Target Store/四级 Picker、bindingsByTarget 迁移、V2 Send（durable-first Tx1/Tx2 + recovery-required）、Durable Provisioning、Target-aware owner routing、§14.5 九状态 UI 状态机（StatusBar/锁定/重启恢复）。Gate 4 通过：matrix 测试、cargo 1658 passed、vitest shared 套件、typecheck、openspec validate。已知非阻断：engine retirement 迁移基线失败（tauri.test 5 + useThreadMessaging 10）、cargo 2 个 macOS 环境性失败、large-files baseline 漂移。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fe81e9212` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
