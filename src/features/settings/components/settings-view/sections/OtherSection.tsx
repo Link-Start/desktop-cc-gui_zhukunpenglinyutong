@@ -27,6 +27,10 @@ import {
 } from "../../../../threads/utils/renderSchedulingPolicy";
 import { CostBudgetSettingsSection } from "./CostBudgetSettingsSection";
 import { PerfJankLivePanel } from "./PerfJankLivePanel";
+import {
+  isSharedProjectionTestOverrideEnabled,
+  setSharedProjectionTestOverrideEnabled,
+} from "../../../../messages/presentation/sharedProjection/dataSource";
 
 type OtherSectionProps = {
   title: string | null;
@@ -53,6 +57,8 @@ export function OtherSection({
   );
   const [perfDiagnosticsEnabled, setPerfDiagnosticsEnabledState] =
     useState<boolean>(() => isPerfDiagnosticsFlagEnabled());
+  const [sharedProjectionTestEnabled, setSharedProjectionTestEnabled] =
+    useState<boolean>(() => isSharedProjectionTestOverrideEnabled());
   const [copyReportMessage, setCopyReportMessage] = useState<string | null>(
     null,
   );
@@ -65,6 +71,14 @@ export function OtherSection({
   const handlePerfDiagnosticsToggle = (checked: boolean) => {
     setPerfDiagnosticsEnabledState(checked);
     setPerfDiagnosticsEnabled(checked);
+  };
+
+  const handleSharedProjectionTestToggle = (checked: boolean) => {
+    const changed = setSharedProjectionTestOverrideEnabled(checked);
+    setSharedProjectionTestEnabled(isSharedProjectionTestOverrideEnabled());
+    if (changed) {
+      globalThis.location.reload();
+    }
   };
 
   const handleCopyPerfReport = async () => {
@@ -117,6 +131,31 @@ export function OtherSection({
         <div className="settings-section-subtitle">{description}</div>
       ) : null}
       <HistoryCompletionSettings />
+      <Separator className="my-4" />
+      <div className="settings-subsection-title">
+        {t("settings.sharedProjectionTestTitle")}
+      </div>
+      <div className="settings-subsection-subtitle">
+        {t("settings.sharedProjectionTestDescription")}
+      </div>
+      <div className="settings-toggle-row">
+        <div>
+          <div className="settings-toggle-title">
+            {t("settings.sharedProjectionTestToggleTitle")}
+          </div>
+          <div className="settings-toggle-subtitle">
+            {t("settings.sharedProjectionTestToggleDescription")}
+          </div>
+          <div className="settings-help">
+            {t("settings.sharedProjectionTestToggleDetail")}
+          </div>
+        </div>
+        <Switch
+          aria-label={t("settings.sharedProjectionTestToggleTitle")}
+          checked={sharedProjectionTestEnabled}
+          onCheckedChange={handleSharedProjectionTestToggle}
+        />
+      </div>
       <Separator className="my-4" />
       <div className="settings-subsection-title">
         {t("settings.performanceDiagnosticsTitle")}

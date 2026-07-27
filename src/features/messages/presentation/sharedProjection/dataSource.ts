@@ -16,6 +16,8 @@ import type { EngineType } from "../../../../types/engine";
 import { BUILTIN_ENGINE_TYPES } from "../../../engine/engineRegistry";
 import type { SharedProjectionItem } from "./types";
 
+export const SHARED_PROJECTION_STORAGE_KEY = "mossx.sharedProjection";
+
 function isEnabledFlag(value: unknown) {
   return typeof value === "string" && /^(1|true|yes|on)$/i.test(value.trim());
 }
@@ -31,11 +33,45 @@ function readBooleanStorageFlag(key: string) {
   }
 }
 
+/** 设置页测试开关只管理当前 canonical local override。 */
+export function isSharedProjectionTestOverrideEnabled() {
+  return readBooleanStorageFlag(SHARED_PROJECTION_STORAGE_KEY);
+}
+
+/**
+ * 写入测试 override。返回值表示 storage 是否实际变化，供调用方决定是否 reload。
+ * 关闭时删除 key，让 DataSource 回到 build flag / compatibility flag / 默认值判定。
+ */
+export function setSharedProjectionTestOverrideEnabled(enabled: boolean) {
+  try {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    const currentValue = window.localStorage.getItem(
+      SHARED_PROJECTION_STORAGE_KEY,
+    );
+    if (enabled) {
+      if (isEnabledFlag(currentValue)) {
+        return false;
+      }
+      window.localStorage.setItem(SHARED_PROJECTION_STORAGE_KEY, "1");
+      return true;
+    }
+    if (currentValue === null) {
+      return false;
+    }
+    window.localStorage.removeItem(SHARED_PROJECTION_STORAGE_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Shared Projection DataSource 开关（默认关闭）。 */
 export function isSharedProjectionDataSourceEnabled() {
   return (
     isEnabledFlag(import.meta.env.VITE_MOSSX_SHARED_PROJECTION) ||
-    readBooleanStorageFlag("mossx.sharedProjection") ||
+    isSharedProjectionTestOverrideEnabled() ||
     readBooleanStorageFlag("ccgui.sharedProjection")
   );
 }

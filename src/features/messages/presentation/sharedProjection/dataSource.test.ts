@@ -9,7 +9,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   isSharedProjectionDataSourceEnabled,
+  isSharedProjectionTestOverrideEnabled,
   resolveSharedConversationItems,
+  setSharedProjectionTestOverrideEnabled,
+  SHARED_PROJECTION_STORAGE_KEY,
   toSharedConversationItems,
 } from "./dataSource";
 import type { SharedProjectionItem } from "./types";
@@ -171,5 +174,26 @@ describe("feature flag isolation", () => {
     window.localStorage.setItem("mossx.sharedProjection", "true");
     expect(resolveSharedConversationItems(null)).toBeNull();
     expect(resolveSharedConversationItems(undefined)).toBeNull();
+  });
+
+  it("persists and removes the Settings test override", () => {
+    expect(isSharedProjectionTestOverrideEnabled()).toBe(false);
+
+    expect(setSharedProjectionTestOverrideEnabled(true)).toBe(true);
+    expect(window.localStorage.getItem(SHARED_PROJECTION_STORAGE_KEY)).toBe("1");
+    expect(isSharedProjectionTestOverrideEnabled()).toBe(true);
+    expect(setSharedProjectionTestOverrideEnabled(true)).toBe(false);
+
+    expect(setSharedProjectionTestOverrideEnabled(false)).toBe(true);
+    expect(window.localStorage.getItem(SHARED_PROJECTION_STORAGE_KEY)).toBeNull();
+    expect(isSharedProjectionTestOverrideEnabled()).toBe(false);
+    expect(setSharedProjectionTestOverrideEnabled(false)).toBe(false);
+  });
+
+  it("removes a disabled-looking stale override when switched off", () => {
+    window.localStorage.setItem(SHARED_PROJECTION_STORAGE_KEY, "0");
+
+    expect(setSharedProjectionTestOverrideEnabled(false)).toBe(true);
+    expect(window.localStorage.getItem(SHARED_PROJECTION_STORAGE_KEY)).toBeNull();
   });
 });

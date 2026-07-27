@@ -555,6 +555,14 @@ const settings = {
     },
     otherDescription:
       "History completion, model mapping, and other configurations.",
+    sharedProjectionTestTitle: "Shared Projection live test",
+    sharedProjectionTestDescription:
+      "Validates the Change A conversation read path. Off by default and does not change the real Shared Send write path.",
+    sharedProjectionTestToggleTitle: "Enable Shared Projection",
+    sharedProjectionTestToggleDescription:
+      "Shared Sessions prefer Canonical Projection while enabled and still fall back to the V0 snapshot if loading fails.",
+    sharedProjectionTestToggleDetail:
+      "For development verification only. The app reloads immediately after a change, so save any unsent draft first.",
     performanceDiagnosticsTitle: "Performance diagnostics",
     performanceDiagnosticsDescription:
       "Tune local realtime performance temporarily. If parallel conversations, tool output, or message streaming feel unusually janky, adjust the schedule tier first; reset the overrides after verification.",

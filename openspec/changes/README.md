@@ -4,7 +4,7 @@
 
 - Updated At: `2026-07-27`
 - Active proposals: `26`
-- Archived proposals: `740`
+- Archived proposals: `741`
 - Main capability specs: `438`
 
 ## Active Proposals
@@ -40,7 +40,8 @@
 
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 733 个 proposal，按月份 / 归档日期分组。
+- [完整归档提案索引](archive/README.md) — 734 个 proposal，按月份 / 归档日期分组。
+- [2026-07-27 `expose-shared-projection-test-toggle`](archive/2026-07-27-expose-shared-projection-test-toggle/proposal.md) — 已同步 `shared-canonical-projection`；设置页新增 Shared Projection 动态测试开关，总任务清单补齐大白话说明、改变点与 UI 变化。
 - [2026-07-27 `improve-codex-provider-protocol-error`](archive/2026-07-27-improve-codex-provider-protocol-error/proposal.md) — 已同步 Codex provider TOML/protocol error contract 与 renderer native Alert 禁令。
 - [2026-07-26 `fix-file-document-loading-error-stuck-state`](archive/2026-07-26-fix-file-document-loading-error-stuck-state/proposal.md) — 已同步 `file-document-loading-error-surface`；文件读取失败或读取期间产生本地脏改后，loading 状态必须收敛且错误可见。
 - [2026-07-24 `close-cleanup-review-findings`](archive/2026-07-24-close-cleanup-review-findings/proposal.md) — 已同步 composer completion、semantic review cache/fallback、settings/workspaces corruption backup uniqueness；并删除 JCEF/notice residual dead branches。
