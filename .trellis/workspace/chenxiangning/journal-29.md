@@ -71,3 +71,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1199: 完成 Change D 原生供应商续接实现
+
+**Date**: 2026-07-28
+**Task**: 完成 Change D 原生供应商续接实现
+**Branch**: `feature/v-0710`
+
+### Summary
+
+实现 Claude/Codex 原生历史跨 Provider 续接、durable recovery、Origin/Family catalog 投影与 Sidebar 入口；移除 Codex vendor rollout copy，并通过目标 Rust/Vitest/typecheck/runtime-contract 增量验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fef31ae23` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
