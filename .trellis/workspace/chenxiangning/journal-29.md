@@ -170,3 +170,36 @@ Message-tail Codex fork 仅保留当前 Provider；跨 Provider 由 Sidebar Prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1202: 补齐续接来源缺失回归测试
+
+**Date**: 2026-07-28
+**Task**: 补齐续接来源缺失回归测试
+**Branch**: `feature/v-0710`
+
+### Summary
+
+覆盖 Provider Continuation 来源被删除后目标会话仍可见且来源入口禁用的 Sidebar 契约。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e86de202` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
