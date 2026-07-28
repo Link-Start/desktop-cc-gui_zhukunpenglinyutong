@@ -1244,7 +1244,7 @@ describe("useLayoutNodes client UI visibility", () => {
   });
 
   it(
-    "passes selected codex provider when confirming message-tail fork",
+    "keeps message-tail fork on the active codex provider",
     async () => {
       vi.mocked(getCodexProviders).mockResolvedValueOnce([
         { id: "provider-a", name: "Provider A" },
@@ -1277,24 +1277,17 @@ describe("useLayoutNodes client UI visibility", () => {
 
       const selector = await screen.findByLabelText("messages.forkProviderLabel");
       expect((selector as HTMLSelectElement).value).toBe("provider-a");
-      await screen.findByRole("option", { name: "Provider B" });
-      await act(async () => {
-        fireEvent.change(selector, { target: { value: "provider-b" } });
-        await Promise.resolve();
-      });
-      await waitFor(() => {
-        expect((selector as HTMLSelectElement).value).toBe("provider-b");
-      });
+      expect(screen.queryByRole("option", { name: "Provider B" })).toBeNull();
       fireEvent.click(
         screen.getByRole("button", { name: "messages.forkConfirmAction" }),
       );
 
       await waitFor(() => {
         expect(onForkFromMessage).toHaveBeenCalledWith("user-fork-anchor", {
-          providerProfileId: "provider-b",
+          providerProfileId: "provider-a",
           providerProfile: {
-            id: "provider-b",
-            name: "Provider B",
+            id: "provider-a",
+            name: "Provider A",
             source: "managed",
           },
         });

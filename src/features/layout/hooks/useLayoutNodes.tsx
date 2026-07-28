@@ -928,18 +928,14 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const codexForkProviderProfiles = useMemo<
     CodexProviderProfileOption[]
   >(() => {
-    const profilesById = new Map<string, CodexProviderProfileOption>();
-    for (const profile of codexProviderProfiles) {
-      profilesById.set(profile.id, profile);
-    }
     const activeProviderId =
       activeThreadSummary?.providerProfileId?.trim() ||
       CODEX_DISK_PROVIDER_PROFILE_ID;
-    if (
-      activeProviderId !== CODEX_DISK_PROVIDER_PROFILE_ID &&
-      !profilesById.has(activeProviderId)
-    ) {
-      profilesById.set(activeProviderId, {
+    const activeProfile = codexProviderProfiles.find(
+      (profile) => profile.id === activeProviderId,
+    );
+    return [
+      activeProfile ?? {
         id: activeProviderId,
         name:
           activeThreadSummary?.providerProfileName?.trim() || activeProviderId,
@@ -947,9 +943,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           activeThreadSummary?.providerProfileSource === "managed"
             ? "managed"
             : "disk",
-      });
-    }
-    return Array.from(profilesById.values());
+      },
+    ];
   }, [
     activeThreadSummary?.providerProfileId,
     activeThreadSummary?.providerProfileName,
