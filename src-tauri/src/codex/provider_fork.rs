@@ -184,6 +184,20 @@ async fn resolve_codex_home_for_provider(
     }
 }
 
+pub(super) async fn resolve_codex_provider_history_path(
+    state: &AppState,
+    workspace_id: &str,
+    thread_id: &str,
+    provider_profile_id: &str,
+) -> Result<PathBuf, String> {
+    let home = resolve_codex_home_for_provider(state, workspace_id, provider_profile_id).await?;
+    find_codex_history_file(&home, thread_id).ok_or_else(|| {
+        format!(
+            "[CODEX_HISTORY_NOT_FOUND] workspaceId={workspace_id}; threadId={thread_id}; providerProfileId={provider_profile_id}"
+        )
+    })
+}
+
 pub(super) async fn copy_native_fork_history_to_selected_provider(
     state: &AppState,
     workspace_id: &str,

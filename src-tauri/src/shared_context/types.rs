@@ -95,12 +95,33 @@ pub struct PortableContextEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ContextPackageSource {
+    SharedCanonical {
+        session_id: String,
+        from_sequence_exclusive: Option<i64>,
+        through_sequence_inclusive: i64,
+    },
+    NativeHistory {
+        session_id: String,
+        native_session_id: String,
+        engine: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        provider_profile_id: Option<String>,
+        reader_id: String,
+        source_fingerprint: String,
+        through_cursor: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextPackage {
     pub schema_version: u32,
     pub package_id: String,
     pub session_id: String,
     pub binding_key: String,
+    pub source: ContextPackageSource,
     pub destination: Value,
     pub stable_prefix: String,
     pub delta: Vec<PortableContextEntry>,

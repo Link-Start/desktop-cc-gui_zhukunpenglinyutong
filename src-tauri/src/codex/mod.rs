@@ -46,7 +46,17 @@ use self::mcp_config::{
 use self::model_selection::{normalize_model_id, pick_model_from_model_list_response};
 use self::provider_fork::{
     copy_native_fork_history_to_selected_provider, enrich_native_provider_fork_response,
+    resolve_codex_provider_history_path,
 };
+
+pub(crate) async fn resolve_codex_native_history_path(
+    state: &AppState,
+    workspace_id: &str,
+    thread_id: &str,
+    provider_profile_id: &str,
+) -> Result<std::path::PathBuf, String> {
+    resolve_codex_provider_history_path(state, workspace_id, thread_id, provider_profile_id).await
+}
 use self::provider_profile::{resolve_codex_provider_profile, CODEX_DISK_PROVIDER_PROFILE_ID};
 use self::run_metadata::{extract_json_value, sanitize_run_worktree_name};
 use self::thread_listing::{
@@ -217,13 +227,13 @@ pub(crate) use self::session_runtime::{
     ensure_codex_session_for_provider, ensure_codex_session_without_session_hooks_for_provider,
     is_create_session_runtime_recovery_error, is_hook_safe_fallback_trigger,
 };
+pub(crate) use self::start_thread_retry::start_thread_with_runtime_retry_for_provider;
 #[cfg(test)]
 use self::start_thread_retry::{
     run_start_thread_with_hook_safe_fallback,
     run_start_thread_with_hook_safe_fallback_and_recovery_probe, run_start_thread_with_retry,
     run_start_thread_with_retry_and_recovery_probe,
 };
-pub(crate) use self::start_thread_retry::start_thread_with_runtime_retry_for_provider;
 
 const DELETE_ARCHIVE_TIMEOUT_MS: u64 = 2_000;
 

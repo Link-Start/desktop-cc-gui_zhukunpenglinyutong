@@ -9,9 +9,12 @@ mod delivery;
 mod types;
 
 pub use artifact_store::{
-    read_artifact, scan_orphan_artifacts, write_artifact, ArtifactReadRequest, ArtifactStoreRecord,
+    read_artifact, read_typed_artifact, scan_orphan_artifacts, write_artifact,
+    write_typed_artifact, ArtifactReadRequest, ArtifactStoreRecord, TypedArtifactStoreRecord,
 };
-pub use compiler::{compile_context, CompileContextRequest};
+pub use compiler::{
+    compile_context, compile_native_context, CompileContextRequest, CompileNativeContextRequest,
+};
 pub use delivery::{
     accept_delivery, commit_delivery, prepare_delivery, terminal_binding_update,
     AcceptDeliveryRequest, PrepareDeliveryRequest,

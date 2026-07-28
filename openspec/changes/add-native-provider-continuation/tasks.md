@@ -1,15 +1,15 @@
 ## 1. Native History Source Contract
 
-- [ ] 1.1 [P0, depends: none] 定义 NativeHistorySource/Capability/ReadResult/typed error；输入为 engine/provider/native identity，输出为 stable cursor、fingerprint、canonical-shaped entries；用 Rust serialization tests 验证。
-- [ ] 1.2 [P0, depends: 1.1] 实现 Claude JSONL Reader；只读 probe/read 到 frozen byte boundary，输出 provenance/fidelity/omissions；用 append/drift/corrupt fixtures 验证。
-- [ ] 1.3 [P0, depends: 1.1] 实现 Codex rollout Reader；复用 provider-scoped CODEX_HOME/path resolver，禁止复制 vendor file；用 Tool pair 与 stable cursor fixtures 验证。
-- [ ] 1.4 [P0, depends: 1.1] 实现 Kimi public history Reader；能力不可证明时 typed unsupported；用 state/wire fixtures 验证。
+- [x] 1.1 [P0, depends: none] 定义 NativeHistorySource/Capability/ReadResult/typed error；输入为 engine/provider/native identity，输出为 stable cursor、fingerprint、canonical-shaped entries；用 Rust serialization tests 验证。
+- [x] 1.2 [P0, depends: 1.1] 实现 Claude JSONL Reader；只读 probe/read 到 frozen byte boundary，输出 provenance/fidelity/omissions；用 append/drift/corrupt fixtures 验证。
+- [x] 1.3 [P0, depends: 1.1] 实现 Codex rollout Reader；复用 provider-scoped CODEX_HOME/path resolver，禁止复制 vendor file；用 Tool pair 与 stable cursor fixtures 验证。
+- [x] 1.4 [P0, depends: 1.1] 实现 Kimi public history Reader；能力不可证明时 typed unsupported；用 state/wire fixtures 验证。
 
 ## 2. Native Context Materialization
 
-- [ ] 2.1 [P0, depends: 1.1] 扩展 ContextPackage native-history source identity 与 native entry compile；输出 deterministic package/checksum；用相同/不同 fingerprint tests 验证。
-- [ ] 2.2 [P0, depends: 2.1] 泛化 Artifact Store typed payload 写入/读取，同时保持旧 ContextPackage API；用 ownership/checksum/atomic write tests 验证。
-- [ ] 2.3 [P0, depends: 1.2,1.3,1.4,2.2] 实现 SQLite continuation operation/materialization store；输入 operation snapshot，输出 immutable refs/phase/result identity；用 conflict/retry/integrity tests 验证。
+- [x] 2.1 [P0, depends: 1.1] 扩展 ContextPackage native-history source identity 与 native entry compile；输出 deterministic package/checksum；用相同/不同 fingerprint tests 验证。
+- [x] 2.2 [P0, depends: 2.1] 泛化 Artifact Store typed payload 写入/读取，同时保持旧 ContextPackage API；用 ownership/checksum/atomic write tests 验证。
+- [x] 2.3 [P0, depends: 1.2,1.3,1.4,2.2] 实现 SQLite continuation operation/materialization store；输入 operation snapshot，输出 immutable refs/phase/result identity；用 conflict/retry/integrity tests 验证。
 
 ## 3. Continuation Backend Flow
 

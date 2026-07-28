@@ -3,12 +3,13 @@ use std::collections::{HashMap, HashSet};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
+use crate::native_history::{NativeHistoryReadResult, NativeHistorySource};
 use crate::shared_event_log::{deterministic_json_bytes, Fidelity, StoredEvent};
 
 use super::types::{
-    CompressionCategory, ContextCompressionReport, ContextPackage, OmissionDisposition,
-    PortableContextEntry, ProjectionManifest, ProjectionMode, ProjectionOmission,
-    RuntimeContextCapabilities,
+    CompressionCategory, ContextCompressionReport, ContextPackage, ContextPackageSource,
+    OmissionDisposition, PortableContextEntry, ProjectionManifest, ProjectionMode,
+    ProjectionOmission, RuntimeContextCapabilities,
 };
 
 const COMPILER_VERSION: &str = "mossx-shared-context/1";
@@ -23,6 +24,17 @@ pub struct CompileContextRequest {
     pub from_sequence_exclusive: Option<i64>,
     pub through_sequence_inclusive: Option<i64>,
     pub exclude_attempt_id: Option<String>,
+    pub capabilities: RuntimeContextCapabilities,
+    pub budget_estimated_tokens: Option<u64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompileNativeContextRequest {
+    pub session_id: String,
+    pub binding_key: String,
+    pub destination: Value,
+    pub source: NativeHistorySource,
+    pub history: NativeHistoryReadResult,
     pub capabilities: RuntimeContextCapabilities,
     pub budget_estimated_tokens: Option<u64>,
 }
@@ -496,6 +508,11 @@ pub fn compile_context(
         package_id,
         session_id: request.session_id.clone(),
         binding_key: request.binding_key.clone(),
+        source: ContextPackageSource::SharedCanonical {
+            session_id: request.session_id.clone(),
+            from_sequence_exclusive: request.from_sequence_exclusive,
+            through_sequence_inclusive: upper,
+        },
         destination: request.destination.clone(),
         stable_prefix,
         delta: entries,
@@ -518,6 +535,135 @@ pub fn compile_context(
                 });
                 compression_categories
             },
+        },
+    })
+}
+
+pub fn compile_native_context(
+    request: &CompileNativeContextRequest,
+) -> Result<ContextPackage, String> {
+    if request.history.reader_id != request.source.engine.reader_id() {
+        return Err("native history reader identity mismatch".to_string());
+    }
+    if request.history.through_cursor.trim().is_empty()
+        || request.history.source_fingerprint.trim().is_empty()
+    {
+        return Err("native history fingerprint and cursor are required".to_string());
+    }
+    let source_identity = ContextPackageSource::NativeHistory {
+        session_id: request.source.session_id.clone(),
+        native_session_id: request.source.native_session_id.clone(),
+        engine: format!("{:?}", request.source.engine).to_ascii_lowercase(),
+        provider_profile_id: request.source.provider_profile_id.clone(),
+        reader_id: request.history.reader_id.clone(),
+        source_fingerprint: request.history.source_fingerprint.clone(),
+        through_cursor: request.history.through_cursor.clone(),
+    };
+    let source_value = json!({
+        "source": source_identity,
+        "entries": request.history.entries,
+    });
+    let source_checksum =
+        sha256(&deterministic_json_bytes(&source_value).map_err(|error| error.to_string())?);
+    let source_estimated_tokens = estimated_tokens(
+        &request
+            .history
+            .entries
+            .iter()
+            .flat_map(|entry| entry.blocks.iter())
+            .map(Value::to_string)
+            .collect::<Vec<_>>()
+            .join(""),
+    );
+    let budget = request
+        .budget_estimated_tokens
+        .unwrap_or(DEFAULT_TRANSCRIPT_BUDGET);
+    let (mode, mode_reason) = select_mode(
+        &request.capabilities,
+        false,
+        source_estimated_tokens,
+        budget,
+    );
+    let mut omissions = request.history.omissions.clone();
+    let mut entries = request
+        .history
+        .entries
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| PortableContextEntry {
+            entry_id: entry.source_entry_id.clone(),
+            sequence: (index + 1) as i64,
+            role: entry.role.clone(),
+            blocks: entry.blocks.clone(),
+            outcome: None,
+        })
+        .collect::<Vec<_>>();
+    let included_entry_ids = entries
+        .iter()
+        .map(|entry| entry.entry_id.clone())
+        .collect::<Vec<_>>();
+    let mut compression_categories = if mode == ProjectionMode::Checkpoint {
+        fold_checkpoint_entries(&mut entries, &mut omissions)
+    } else {
+        Vec::new()
+    };
+    let stable_prefix = format!(
+        "MOSSX_NATIVE_CONTEXT_V1\nsource:{}\nbinding:{}\n",
+        request.source.session_id, request.binding_key
+    );
+    let projected_text = transcript(&entries, mode == ProjectionMode::Checkpoint);
+    let package_estimated_tokens = estimated_tokens(&projected_text);
+    let manifest = ProjectionManifest {
+        compiler_version: COMPILER_VERSION.to_string(),
+        mode,
+        mode_reason,
+        included_entry_ids,
+        omitted: omissions,
+        from_sequence_exclusive: None,
+        through_sequence_inclusive: entries.len() as i64,
+        source_checksum: source_checksum.clone(),
+    };
+    let identity = json!({
+        "source": source_identity,
+        "bindingKey": request.binding_key,
+        "destination": request.destination,
+        "sourceChecksum": source_checksum,
+    });
+    let package_id =
+        sha256(&deterministic_json_bytes(&identity).map_err(|error| error.to_string())?);
+    let marker = format!("MOSSX_CONTEXT_PACKAGE:{package_id}:{source_checksum}");
+    let prompt_prefix = match mode {
+        ProjectionMode::PortableTranscript | ProjectionMode::Checkpoint => {
+            format!("{marker}\n{stable_prefix}\n{projected_text}\n{marker}\n")
+        }
+        _ => String::new(),
+    };
+    compression_categories.push(CompressionCategory {
+        category: "portable-turns".to_string(),
+        strategy: if mode == ProjectionMode::Checkpoint {
+            "bounded-checkpoint".to_string()
+        } else {
+            "portable-transcript".to_string()
+        },
+        source_estimated_tokens,
+        package_estimated_tokens,
+    });
+    Ok(ContextPackage {
+        schema_version: 1,
+        package_id,
+        session_id: request.session_id.clone(),
+        binding_key: request.binding_key.clone(),
+        source: source_identity,
+        destination: request.destination.clone(),
+        stable_prefix,
+        delta: entries,
+        prompt_prefix,
+        manifest,
+        compression: ContextCompressionReport {
+            estimator: "deterministic-char-div-4".to_string(),
+            source_estimated_tokens,
+            package_estimated_tokens,
+            per_category: compression_categories,
         },
     })
 }
@@ -567,5 +713,60 @@ mod tests {
         assert!(left.contains("ERROR durable write failed"));
         assert!(left.contains("line-0"));
         assert!(left.contains("line-199"));
+    }
+
+    #[test]
+    fn native_source_identity_changes_package_checksum() {
+        use crate::native_history::{
+            ContextSourceEntry, NativeHistoryEngine, NativeHistoryFidelity,
+        };
+        let compile = |fingerprint: &str| {
+            compile_native_context(&CompileNativeContextRequest {
+                session_id: "continuation-a".to_string(),
+                binding_key: "codex:provider-b".to_string(),
+                destination: json!({ "engine": "codex", "providerProfileId": "provider-b" }),
+                source: NativeHistorySource {
+                    session_id: "claude:source".to_string(),
+                    native_session_id: "source".to_string(),
+                    engine: NativeHistoryEngine::Claude,
+                    provider_profile_id: Some("provider-a".to_string()),
+                },
+                history: NativeHistoryReadResult {
+                    reader_id: NativeHistoryEngine::Claude.reader_id().to_string(),
+                    source_fingerprint: fingerprint.to_string(),
+                    through_cursor: "cursor-a".to_string(),
+                    entries: vec![ContextSourceEntry {
+                        source_entry_id: "entry-a".to_string(),
+                        occurred_at: None,
+                        role: "user".to_string(),
+                        blocks: vec![json!({ "kind": "text", "text": "hello" })],
+                        provenance: json!({ "engine": "claude" }),
+                        fidelity: NativeHistoryFidelity::Semantic,
+                    }],
+                    fidelity: NativeHistoryFidelity::Semantic,
+                    omissions: Vec::new(),
+                },
+                capabilities: RuntimeContextCapabilities {
+                    native_delta: false,
+                    structured_history_import: true,
+                    native_clone: false,
+                    user_channel_transcript: true,
+                    tool_history: true,
+                    image_history: true,
+                    strong_context_ack: true,
+                },
+                budget_estimated_tokens: None,
+            })
+            .expect("compile")
+        };
+        let first = compile("sha256:first");
+        let same = compile("sha256:first");
+        let changed = compile("sha256:changed");
+        assert_eq!(first.package_id, same.package_id);
+        assert_eq!(
+            first.manifest.source_checksum,
+            same.manifest.source_checksum
+        );
+        assert_ne!(first.package_id, changed.package_id);
     }
 }

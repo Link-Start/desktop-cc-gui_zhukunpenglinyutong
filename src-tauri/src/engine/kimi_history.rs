@@ -646,6 +646,15 @@ async fn find_workspace_index_entry(
         .ok_or_else(|| format!("Kimi session not found: {}", normalized_session_id))
 }
 
+pub(crate) async fn resolve_kimi_session_history_path(
+    workspace_path: &Path,
+    session_id: &str,
+    custom_home: Option<&str>,
+) -> Result<PathBuf, String> {
+    let entry = find_workspace_index_entry(workspace_path, session_id, custom_home).await?;
+    Ok(wire_log_path(Path::new(entry.session_dir.trim())))
+}
+
 /// Load full Kimi session messages by session id.
 pub async fn load_kimi_session(
     workspace_path: &Path,
