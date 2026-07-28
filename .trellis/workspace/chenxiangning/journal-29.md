@@ -402,3 +402,37 @@ Message-tail Codex fork 仅保留当前 Provider；跨 Provider 由 Sidebar Prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1209: 展示 Provider Continuation 来源最后一轮
+
+**Date**: 2026-07-28
+**Task**: 展示 Provider Continuation 来源最后一轮
+**Branch**: `feature/v-0710`
+
+### Summary
+
+在 Provider Continuation 展开卡片中显示来源会话最后一轮 user/assistant 确定性摘录；忽略 tool/reasoning 等非消息项，覆盖缺失 Assistant、空历史与来源不可用边界。focused tests 36/36、lint 0 errors、typecheck、build 与 OpenSpec strict validation 通过；未启动 App。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f610a74d7` | (see git log) |
+| `dedcc7894` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
