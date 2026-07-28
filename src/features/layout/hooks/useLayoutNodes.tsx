@@ -124,6 +124,7 @@ import {
 import { ActiveCanvasComposer } from "./activeCanvasComposerNode";
 import { SharedSendStatusBar } from "../../shared-session/components/SharedSendStatusBar";
 import { ProviderContinuationContextCard } from "../../shared-session/components/ProviderContinuationContextCard";
+import { buildProviderContinuationSourceExcerpt } from "../../shared-session/components/providerContinuationSourceExcerpt";
 import { useSharedSendState } from "../../shared-session/runtime/sharedSendStateStore";
 import { useSharedSendStateRestore } from "../../shared-session/runtime/useSharedSendStateRestore";
 import {
@@ -1030,6 +1031,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const continuationWorkspaceId = options.activeWorkspaceId ?? "";
   const continuationThreadsByWorkspace = options.threadsByWorkspace;
   const selectContinuationThread = options.onSelectThread;
+  const continuationSourceItems = activeThreadSummary?.sourceSessionId
+    ? options.threadItemsByThread[activeThreadSummary.sourceSessionId]
+    : undefined;
   const continuationContext = useMemo(() => {
     if (
       activeThreadSummary?.originKind !== "provider-continuation" ||
@@ -1045,6 +1049,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     ) ?? null;
     return {
       source,
+      sourceExcerpt: buildProviderContinuationSourceExcerpt(
+        continuationSourceItems ?? EMPTY_ACTIVE_CANVAS_ITEMS,
+      ),
       onOpenSource: source
         ? () =>
             selectContinuationThread(
@@ -1057,6 +1064,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     activeThreadSummary,
     continuationThreadsByWorkspace,
     continuationWorkspaceId,
+    continuationSourceItems,
     selectContinuationThread,
   ]);
 
@@ -1068,6 +1076,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
             <ProviderContinuationContextCard
               thread={activeThreadSummary}
               source={continuationContext?.source ?? null}
+              sourceExcerpt={continuationContext?.sourceExcerpt ?? null}
               onOpenSource={continuationContext?.onOpenSource ?? null}
             />
           ) : null,

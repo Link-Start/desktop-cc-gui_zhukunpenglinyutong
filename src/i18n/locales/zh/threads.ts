@@ -43,6 +43,7 @@ const threads = {
     providerContinuationSourceProvider: "来源 Provider",
     providerContinuationSourceLabel: "来源：{{source}}",
     providerContinuationSourceUnavailable: "来源会话已不可用",
+    providerContinuationSourceExcerptUnavailable: "来源内容暂无可用摘录",
     providerContinuationOpenSourceTitle: "查看来源会话",
     providerContinuationOpenSource: "查看来源",
     providerContinuationKimiUnavailableWithProvider:

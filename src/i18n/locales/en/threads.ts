@@ -46,6 +46,7 @@ const threads = {
     providerContinuationSourceProvider: "Source Provider",
     providerContinuationSourceLabel: "Source: {{source}}",
     providerContinuationSourceUnavailable: "Source conversation unavailable",
+    providerContinuationSourceExcerptUnavailable: "No source excerpt available",
     providerContinuationOpenSourceTitle: "Open source conversation",
     providerContinuationOpenSource: "Open source",
     providerContinuationKimiUnavailableWithProvider:

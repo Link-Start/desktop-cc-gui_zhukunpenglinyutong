@@ -176,12 +176,14 @@ vi.mock("../../messages", async (importOriginal) => {
     isHistoryLoading,
     onForkFromMessage,
     onCaptureNote,
+    timelineLeadingNode,
   }: {
     showMessageAnchors: boolean;
     activeEngine?: string;
     isHistoryLoading?: boolean;
     onForkFromMessage?: (messageId: string) => void;
     onCaptureNote?: typeof capturedMessagesNoteCapture;
+    timelineLeadingNode?: ReactNode;
     conversationState?: {
       meta?: {
         engine?: string;
@@ -201,6 +203,7 @@ vi.mock("../../messages", async (importOriginal) => {
         conversationState?.meta?.historyRestoredAtMs ?? "",
       )}
     >
+      {timelineLeadingNode}
       {onForkFromMessage ? (
         <button
           type="button"
@@ -1053,6 +1056,52 @@ describe("useLayoutNodes client UI visibility", () => {
     capturedMessagesNoteCapture = undefined;
     capturedWorkspaceNotePanelProps = null;
     vi.clearAllMocks();
+  });
+
+  it("projects the loaded source turn into Provider Continuation metadata", async () => {
+    const { result } = await renderUseLayoutNodes(
+      createLayoutOptions({
+        activeThreadId: "codex:target",
+        threadsByWorkspace: {
+          [workspace.id]: [
+            {
+              id: "claude:source",
+              name: "Source",
+              updatedAt: 1,
+              engineSource: "claude",
+            },
+            {
+              id: "codex:target",
+              name: "Target",
+              updatedAt: 2,
+              engineSource: "codex",
+              originKind: "provider-continuation",
+              sourceSessionId: "claude:source",
+            },
+          ],
+        },
+        threadItemsByThread: {
+          "claude:source": [
+            {
+              id: "source-user",
+              kind: "message",
+              role: "user",
+              text: "来源最后一个问题",
+            },
+            {
+              id: "source-assistant",
+              kind: "message",
+              role: "assistant",
+              text: "来源最后一个回答",
+            },
+          ],
+        },
+      }),
+    );
+    render(<>{result.current.messagesNode}</>);
+
+    expect(screen.getByText("来源最后一个问题")).toBeTruthy();
+    expect(screen.getByText("来源最后一个回答")).toBeTruthy();
   });
 
   it("selects the exact repository before staging from the file-tree Git menu", async () => {
