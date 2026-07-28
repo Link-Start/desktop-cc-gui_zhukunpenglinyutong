@@ -112,7 +112,12 @@ contract 缺口：Context Package identity 冲突、artifact payload 未验真�
 - Kimi 作为已知 CLI 显示为 disabled，并明确说明“目标续接尚未验证”。
 - 续接使用 mossx 自己的 Dialog；取消前不创建目标，degraded 明细在产品内二次确认。
 - `MOSSX_CONTEXT_PACKAGE/ACCEPTED` 只作为 control-plane 证据，不再作为聊天内容展示。
-- 新续接会话使用“继续：来源会话”标题，幕布顶部显示来源 → 目标卡片和“查看来源”。
+- 新续接会话使用“继续：来源会话”标题；既有消息滚动区顶部显示默认折叠的
+  来源 → 目标摘要，展开后可“查看来源”，不改变普通消息排列。
+- Claude bootstrap 不再把“模型必须逐字回 marker”误当 transport ACK；首次 CLI
+  已完成就收口，异常重试只校验同一个 target，不重复创建。
+- Shared send 以当前 Target Store 为准，逐 Turn 冻结真实 CLI/Provider/Model；
+  unsupported 历史 Target 明确阻止，不偷偷改发 Claude。
 
 ### 2.2 Change D 的真实进度
 
@@ -123,7 +128,8 @@ contract 缺口：Context Package identity 冲突、artifact payload 未验真�
 
 - Claude、Codex、Kimi 原生历史 Reader、稳定边界、来源指纹与 typed error
 - 原生历史 Context Package、typed Artifact、SQLite immutable materialization
-- Desktop Codex structured inject 与 Claude exact echo ACK
+- Desktop Codex structured inject；Claude 以 completed bootstrap + durable history evidence
+  收口，exact echo 仅保留为兼容恢复证据
 - 同 operation recovery、artifact integrity、canonical target identity、catalog retry
 - Provider Binding、Origin / Family、顶层“供应商续接”标签与来源导航
 - Claude/Codex 双向 Provider Picker、重复点击保护
@@ -305,8 +311,8 @@ Change D 不允许在原 Native Session 内热切 Provider，而是：
 | 共享会话 | 内部隐藏连接可能被误显示成新会话 | 始终只显示一个共享会话，内部连接不显示 | 反复切 Provider 也不会把 Sidebar 塞满 |
 | 原生会话右键菜单 | 跨 Provider 依赖旧 Fork 做法 | 新增“使用其他 Provider 继续”；Kimi 目标未验证时显示禁用原因 | 可以从已有对话安全换 Provider，也不会把不支持误装成可用 |
 | 新续接会话 | 没有独立类型，标题可能直接显示协议 hash | 顶层显示“续接”和“继续：来源会话”可读标题 | 能和普通会话、Fork、Subagent 区分 |
-| 来源导航 | 没有可靠来源关系 | 新会话幕布顶部显示来源 → 目标卡片和“查看来源”按钮 | 可以回到最初那条对话核对原文 |
-| 续接协议消息 | package/checksum 可能直接出现在聊天幕布 | 精确识别并隐藏已知 control marker | 用户只看正常对话；普通提到 MOSSX 的文本仍保留 |
+| 来源导航 | 没有可靠来源关系 | 新会话在既有消息滚动区顶部显示默认折叠的来源 → 目标摘要，展开后有“查看来源”按钮 | 可以回到最初那条对话核对原文，不打破消息布局 |
+| 续接协议消息 | package/checksum、bootstrap reasoning/回复可能直接进入聊天幕布 | 隐藏从 protocol user entry 到下一条真实 user message 的完整 control exchange | 用户只看正常对话；普通提到 MOSSX 的文本仍保留 |
 | 同一会话家族 | 只有零散关系 | 保存家族编号、根会话和直接来源 | 为以后按家族折叠或分组打底 |
 
 注意：A–D 第一阶段不做 Conversation Family 折叠或树形分组。Continuation 仍是顶层 Row。
@@ -600,7 +606,7 @@ Claude Provider A 的旧 Session
 1. 右键一条 Claude/Codex Native Session，选择“使用其他 Provider 继续”。
 2. 在 mossx Dialog 中检查来源、目标后先点取消，确认没有新会话。
 3. 再次进入并确认；若出现 degraded，检查 mode、token 和 omissions 后二次确认。
-4. 打开新续接会话，观察 Sidebar 标题、聊天顶部和消息内容。
+4. 打开新续接会话，观察 Sidebar 标题、消息区顶部的折叠摘要和消息内容。
 5. 点击顶部“查看来源”。
 
 预期：
@@ -608,7 +614,10 @@ Claude Provider A 的旧 Session
 - 全程不出现浏览器/系统 `alert` 或只有“确定/取消”的原生警告。
 - 首次 Dialog 明确显示“来源会话 → 目标 CLI/Provider”；取消不产生 side effect。
 - 新 Row 标题为“继续：来源标题”或明确的 Provider 续接标题，不显示 raw hash。
-- 顶部卡片显示来源与目标，按钮能回到来源；来源缺失时按钮禁用并给出解释。
+- 默认只显示一行“Provider 续接”摘要，不挤压或重排普通消息；展开后显示来源，
+  按钮能回到来源；来源缺失时按钮禁用并给出解释。
+- 若进入 recovery，主文案解释是否可能已创建；“重试校验”不产生第二个目标，
+  raw error 只在折叠的“技术详情”中展示。
 - 幕布中不显示 `MOSSX_CONTEXT_PACKAGE` / `MOSSX_CONTEXT_ACCEPTED`。
 - 普通用户主动讨论 `MOSSX_CONTEXT_PACKAGE` 的消息不会被误隐藏。
 
@@ -847,7 +856,7 @@ Claude Provider A 的旧 Session
 
 1. **Kimi target 与 remote daemon 暂未执行 Continuation。**
 
-   Desktop 已支持 Claude exact echo ACK 与 Codex structured inject。Kimi target 和 remote
+   Desktop 已支持 Claude completed bootstrap/durable recovery evidence 与 Codex structured inject。Kimi target 和 remote
    daemon 在能力无法证明时返回 typed unsupported。
 
    大白话：桌面端可以在 Claude 和 Codex 之间双向续接；Kimi 和远程后台不会假装成功。

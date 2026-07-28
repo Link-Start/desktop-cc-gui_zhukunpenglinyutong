@@ -67,7 +67,7 @@ import {
   useDeferredMessageImages,
 } from "../hooks/useDeferredMessageImages";
 import { buildMessageRowPresentation } from "../presentation/messageRowPresentation";
-import { resolveTurnBadge } from "../../../shared-session/target/turnBadge";
+import { resolveTurnBadge } from "../../../../utils/turnBadge";
 
 type MessageRowProps = MessageRowEqualityProps;
 
@@ -548,7 +548,7 @@ export const MessageRow = memo(function MessageRow({
           data-testid="message-turn-target-badge"
           title={turnBadge.unavailable ? t("sidebar.unavailableTag") : undefined}
         >
-          <span>{turnBadge.engine}</span>
+          <span>{turnBadge.engineLabel}</span>
           <span>{turnBadge.providerLabel}</span>
           {turnBadge.modelLabel ? <span>{turnBadge.modelLabel}</span> : null}
           {turnBadge.reasoningLabel ? <span>{turnBadge.reasoningLabel}</span> : null}

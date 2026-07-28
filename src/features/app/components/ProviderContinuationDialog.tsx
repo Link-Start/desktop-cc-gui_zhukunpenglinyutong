@@ -70,9 +70,19 @@ export function ProviderContinuationDialog({
               </div>
             </div>
 
-            {state.detail ? (
-              <pre
-                className={`max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border p-3 text-xs ${
+            {isRunning ? (
+              <div
+                className="rounded-lg border border-border/70 bg-muted/35 p-3 text-sm"
+                role="status"
+                aria-live="polite"
+              >
+                {t("threads.providerContinuationCreatingAndVerifying", {
+                  defaultValue: "正在创建并校验目标会话…",
+                })}
+              </div>
+            ) : state.detail ? (
+              <div
+                className={`rounded-lg border p-3 text-xs whitespace-pre-wrap ${
                   hasError
                     ? "border-destructive/40 bg-destructive/10 text-destructive"
                     : "border-amber-500/30 bg-amber-500/10 text-foreground"
@@ -81,7 +91,20 @@ export function ProviderContinuationDialog({
                 aria-live="polite"
               >
                 {state.detail}
-              </pre>
+              </div>
+            ) : null}
+
+            {hasError && state.technicalDetail ? (
+              <details className="rounded-lg border border-border/70 px-3 py-2 text-xs text-muted-foreground">
+                <summary className="cursor-pointer select-none">
+                  {t("threads.providerContinuationTechnicalDetail", {
+                    defaultValue: "技术详情",
+                  })}
+                </summary>
+                <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
+                  {state.technicalDetail}
+                </pre>
+              </details>
             ) : null}
 
             <p className="text-xs text-muted-foreground">
@@ -102,7 +125,17 @@ export function ProviderContinuationDialog({
           >
             {hasError ? t("common.close") : t("common.cancel")}
           </button>
-          {!hasError ? (
+          {hasError ? (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void onConfirm()}
+            >
+              {t("threads.providerContinuationRetry", {
+                defaultValue: "重试校验",
+              })}
+            </button>
+          ) : (
             <button
               type="button"
               className="primary"
@@ -121,7 +154,7 @@ export function ProviderContinuationDialog({
                       defaultValue: "创建续接会话",
                     })}
             </button>
-          ) : null}
+          )}
         </AlertDialogFooter>
       </AlertDialogPopup>
     </AlertDialog>

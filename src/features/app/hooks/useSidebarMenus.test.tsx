@@ -1024,6 +1024,102 @@ describe("useSidebarMenus", () => {
     expect(handlers.onSelectThread).not.toHaveBeenCalled();
   });
 
+  it("retries recovery with the accepted degraded decision", async () => {
+    createNativeProviderContinuationMock
+      .mockResolvedValueOnce({
+        status: "confirmation-required",
+        fidelity: "degraded",
+        projectionMode: "checkpoint",
+        omissions: [],
+        adapterDroppedEntries: 0,
+        operation: { phase: "prepared" },
+      })
+      .mockResolvedValueOnce({
+        status: "recovery-required",
+        fidelity: "degraded",
+        operation: {
+          phase: "recovery-required",
+          errorCode: "acceptance-ambiguous",
+        },
+      })
+      .mockResolvedValueOnce({
+        status: "ready",
+        fidelity: "degraded",
+        operation: {
+          phase: "ready",
+          resultSessionId: "codex:target-recovered",
+        },
+      });
+    const handlers = {
+      ...createHandlers(),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      result.current.showThreadMenu(
+        {
+          clientX: 1,
+          clientY: 1,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
+        "ws-1",
+        "claude:source-1",
+        true,
+      );
+    });
+    const submenu = result.current.sidebarContextMenuState?.items.find(
+      (item) => item.type === "submenu" && item.id === "continue-with-provider",
+    );
+    await act(async () => {
+      if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
+        await submenu.items[0].onSelect();
+      }
+    });
+    await act(async () => {
+      await result.current.confirmProviderContinuation();
+    });
+    expect(result.current.providerContinuationDialogState?.stage).toBe(
+      "confirm-degraded",
+    );
+    await act(async () => {
+      await result.current.confirmProviderContinuation();
+    });
+
+    expect(result.current.providerContinuationDialogState).toMatchObject({
+      stage: "error",
+      degradedAccepted: true,
+      detail: expect.stringContaining("不会重复创建"),
+      technicalDetail: "acceptance-ambiguous",
+    });
+    await act(async () => {
+      await result.current.confirmProviderContinuation();
+    });
+    expect(createNativeProviderContinuationMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ confirmDegraded: true }),
+    );
+    expect(handlers.onSelectThread).toHaveBeenCalledWith(
+      "ws-1",
+      "codex:target-recovered",
+    );
+  });
+
   it("can continue a Codex thread back to a Claude provider", async () => {
     createNativeProviderContinuationMock.mockResolvedValue({
       status: "ready",

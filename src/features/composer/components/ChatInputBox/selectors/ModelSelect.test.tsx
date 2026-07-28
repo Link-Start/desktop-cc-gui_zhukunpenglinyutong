@@ -185,6 +185,8 @@ describe("ModelSelect", () => {
       engine: "codex",
       providerProfileId: "provider-b",
       model: "same-model",
+      providerProfileNameSnapshot: "Provider B",
+      providerProfileSource: "managed",
       reasoning: null,
     });
   });
@@ -201,11 +203,15 @@ describe("ModelSelect", () => {
         "codex",
         "provider-b",
         "same-model",
+        "Provider B",
+        "managed",
       ),
     ).toEqual({
       engine: "codex",
       providerProfileId: "provider-b",
       model: "same-model",
+      providerProfileNameSnapshot: "Provider B",
+      providerProfileSource: "managed",
       reasoning: null,
     });
   });
@@ -222,11 +228,15 @@ describe("ModelSelect", () => {
         "claude",
         "__local_settings_json__",
         "claude-opus",
+        "本地配置",
+        "disk",
       ),
     ).toEqual({
       engine: "claude",
       providerProfileId: null,
       model: "claude-opus",
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk",
       reasoning: { effort: "high" },
     });
   });

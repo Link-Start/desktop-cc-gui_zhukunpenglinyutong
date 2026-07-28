@@ -29,6 +29,7 @@ import { sendSharedSessionTurn } from "../../shared-session/runtime/sendSharedSe
 import {
   beginTurn,
   resetSharedTargetStoreForTests,
+  selectNextTarget,
 } from "../../shared-session/target/targetStore";
 
 const CLAUDE_PENDING_NATIVE_SESSION_WAIT_MESSAGE =
@@ -186,6 +187,84 @@ describe("useThreadMessaging", () => {
           reasoning: { effort: "high" },
         },
       }),
+    );
+  });
+
+  it("uses the Shared Target Store instead of a stale global Composer selection", async () => {
+    selectNextTarget("ws-1", "shared:thread-provider-store", {
+      engine: "codex",
+      providerProfileId: "provider-b",
+      providerProfileNameSnapshot: "Provider B",
+      providerProfileSource: "managed",
+      model: "gpt-provider-b",
+      reasoning: { effort: "medium" },
+    });
+    const dispatch = vi.fn();
+    const { result } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-provider-store",
+      dispatch,
+      resolveComposerSelection: () => ({
+        id: "stale-claude-model",
+        model: "stale-claude-model",
+        source: "provider",
+        providerProfileId: "provider-a",
+        effort: "high",
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "shared:thread-provider-store",
+        "use selected target",
+      );
+    });
+
+    expect(sendSharedSessionTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "codex",
+        model: "gpt-provider-b",
+        effort: "medium",
+        target: expect.objectContaining({
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+        }),
+      }),
+    );
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setThreadEngine",
+        threadId: "shared:thread-provider-store",
+        engine: "codex",
+      }),
+    );
+  });
+
+  it("fails closed for a stale unsupported Shared Target", async () => {
+    selectNextTarget("ws-1", "shared:thread-1", {
+      engine: "kimi",
+      providerProfileId: "provider-kimi",
+      model: "kimi-for-coding",
+      reasoning: null,
+    });
+    const { result, pushThreadErrorMessage } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-1",
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "shared:thread-1",
+        "hello shared",
+      );
+    });
+    expect(sendSharedSessionTurn).not.toHaveBeenCalled();
+    expect(pushThreadErrorMessage).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      expect.stringContaining("当前 Shared Session 目标暂不可执行"),
     );
   });
 

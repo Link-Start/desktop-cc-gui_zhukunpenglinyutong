@@ -653,11 +653,12 @@ async fn execute_codex(
     .map_err(|error| error.to_string())
 }
 
-async fn claude_history_contains_marker(
+async fn claude_history_contains_bootstrap_evidence(
     state: &AppState,
     workspace_id: &str,
     target_session_id: &str,
-    marker: &str,
+    package_marker: &str,
+    acceptance_marker: &str,
 ) -> Result<bool, String> {
     let workspace_path = workspace_path(state, workspace_id).await?;
     let config = state
@@ -669,33 +670,60 @@ async fn claude_history_contains_marker(
         target_session_id,
         config.as_ref(),
     )?;
-    let marker = marker.to_string();
+    let package_marker = package_marker.to_string();
+    let acceptance_marker = acceptance_marker.to_string();
     tokio::task::spawn_blocking(move || {
         let content = crate::native_history::read_history_text_bounded(&path)
             .map_err(|error| error.to_string())?;
-        Ok(claude_assistant_ack_in_jsonl(&content, &marker))
+        Ok(claude_bootstrap_evidence_in_jsonl(
+            &content,
+            &package_marker,
+            &acceptance_marker,
+        ))
     })
     .await
     .map_err(|error| format!("native-history-worker: {error}"))?
 }
 
-fn claude_assistant_ack_in_jsonl(content: &str, marker: &str) -> bool {
+fn claude_bootstrap_evidence_in_jsonl(
+    content: &str,
+    package_marker: &str,
+    acceptance_marker: &str,
+) -> bool {
     content.lines().any(|line| {
         let Ok(entry) = serde_json::from_str::<Value>(line) else {
             return false;
         };
-        let is_assistant = entry.get("type").and_then(Value::as_str) == Some("assistant")
-            || entry.pointer("/message/role").and_then(Value::as_str) == Some("assistant");
-        is_assistant
-            && entry
-                .pointer("/message/content")
-                .and_then(Value::as_array)
-                .is_some_and(|blocks| {
-                    blocks.iter().any(|block| {
-                        block.get("text").and_then(Value::as_str).map(str::trim) == Some(marker)
-                    })
+        let role = entry
+            .pointer("/message/role")
+            .and_then(Value::as_str)
+            .or_else(|| entry.get("type").and_then(Value::as_str));
+        let text_blocks = entry.pointer("/message/content").and_then(Value::as_array);
+        match role {
+            Some("user") => text_blocks.is_some_and(|blocks| {
+                blocks.iter().any(|block| {
+                    block
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .is_some_and(|text| {
+                            text.contains(package_marker)
+                                && text.contains("MOSSX_NATIVE_CONTEXT_V1")
+                        })
                 })
+            }),
+            Some("assistant") => text_blocks.is_some_and(|blocks| {
+                blocks.iter().any(|block| {
+                    block.get("text").and_then(Value::as_str).map(str::trim)
+                        == Some(acceptance_marker)
+                })
+            }),
+            _ => false,
+        }
     })
+}
+
+fn claude_assistant_ack_in_jsonl(content: &str, marker: &str) -> bool {
+    claude_bootstrap_evidence_in_jsonl(content, "__no_package_marker__", marker)
 }
 
 async fn execute_claude(
@@ -711,6 +739,10 @@ async fn execute_claude(
     }
 
     let marker = context_acceptance_marker(package);
+    let package_marker = format!(
+        "MOSSX_CONTEXT_PACKAGE:{}:{}",
+        package.package_id, package.manifest.source_checksum
+    );
     if let Some(target_session_id) = operation.result_session_id.as_deref() {
         if operation.error_code.as_deref() == Some("catalog-commit-failed") {
             persist_target_metadata(
@@ -732,10 +764,11 @@ async fn execute_claude(
             .map_err(|error| error.to_string());
         }
         let accepted = if operation.phase == "recovery-required" {
-            claude_history_contains_marker(
+            claude_history_contains_bootstrap_evidence(
                 state,
                 workspace_id,
                 target_session_id.trim_start_matches("claude:"),
+                &package_marker,
                 &marker,
             )
             .await
@@ -846,16 +879,15 @@ async fn execute_claude(
             return Err(format!("acceptance-ambiguous: {error}"));
         }
     };
+    // Claude CLI 已完成该 bootstrap turn，说明 prompt transport 已被目标 Session
+    // 接收。模型是否逐字复述 marker 不是 transport ACK；把模型服从性当成 ACK
+    // 会造成“目标已创建但首次报错、二次 probe 才成功”的假失败。
     if response.trim() != marker {
-        let _ = update_operation_phase(
-            root,
-            &operation.materialization.operation_id,
-            "recovery-required",
-            Some(&canonical_target_session_id),
-            Some("acceptance-ambiguous"),
-            now_millis(),
+        log::info!(
+            "[native-continuation] operation_id={} target_session_id={} bootstrap completed without exact marker echo",
+            operation.materialization.operation_id,
+            canonical_target_session_id
         );
-        return Err("acceptance-ambiguous: Claude did not echo the context marker".to_string());
     }
     if let Err(error) = persist_target_metadata(
         state,
@@ -1012,8 +1044,8 @@ pub(crate) async fn create_native_provider_continuation(
 #[cfg(test)]
 mod tests {
     use super::{
-        claude_assistant_ack_in_jsonl, codex_context_transport, CodexContextTransport,
-        ProjectionMode,
+        claude_assistant_ack_in_jsonl, claude_bootstrap_evidence_in_jsonl, codex_context_transport,
+        CodexContextTransport, ProjectionMode,
     };
 
     #[test]
@@ -1028,6 +1060,33 @@ mod tests {
             r#"{{"type":"assistant","message":{{"role":"assistant","content":[{{"type":"text","text":"{marker}"}}]}}}}"#
         );
         assert!(claude_assistant_ack_in_jsonl(&assistant, marker));
+    }
+
+    #[test]
+    fn claude_recovery_accepts_durable_bootstrap_user_entry_without_model_echo() {
+        let package_marker = "MOSSX_CONTEXT_PACKAGE:package:checksum";
+        let acceptance_marker = "MOSSX_CONTEXT_ACCEPTED:package:checksum";
+        let bootstrap = format!(
+            r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"{package_marker}\nMOSSX_NATIVE_CONTEXT_V1\nsource:claude:source\nbinding:continuation:operation"}}]}}}}"#
+        );
+        assert!(claude_bootstrap_evidence_in_jsonl(
+            &bootstrap,
+            package_marker,
+            acceptance_marker,
+        ));
+    }
+
+    #[test]
+    fn claude_recovery_rejects_unrelated_user_marker_text() {
+        let package_marker = "MOSSX_CONTEXT_PACKAGE:package:checksum";
+        let unrelated = format!(
+            r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"please explain {package_marker}"}}]}}}}"#
+        );
+        assert!(!claude_bootstrap_evidence_in_jsonl(
+            &unrelated,
+            package_marker,
+            "MOSSX_CONTEXT_ACCEPTED:package:checksum",
+        ));
     }
 
     #[test]

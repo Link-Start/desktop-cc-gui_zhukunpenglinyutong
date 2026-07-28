@@ -80,8 +80,12 @@ export function buildConversationCanvasNode({
 }: ConversationCanvasNodeInput): ReactNode {
   return (
     <>
-      {continuationContextNode}
-      <ActiveCanvasMessages messagesProps={messagesProps} />
+      <ActiveCanvasMessages
+        messagesProps={{
+          ...messagesProps,
+          timelineLeadingNode: continuationContextNode ?? null,
+        }}
+      />
       <MessageForkConfirmDialog {...forkConfirmDialogProps} />
     </>
   );

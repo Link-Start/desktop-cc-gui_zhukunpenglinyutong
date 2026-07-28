@@ -105,12 +105,20 @@ describe("resolveSnapshotProviderLabel", () => {
     expect(resolveSnapshotProviderLabel(snapshot)).toBe("OpenRouter");
   });
 
-  it("falls back to profile id then default", () => {
+  it("falls back to profile id then honest legacy unknown", () => {
     expect(
       resolveSnapshotProviderLabel(freezeTurnSnapshot({ engine: "claude", providerProfileId: "p1" })),
     ).toBe("p1");
     expect(
       resolveSnapshotProviderLabel(freezeTurnSnapshot({ engine: "claude" })),
+    ).toBe("历史配置未知");
+    expect(
+      resolveSnapshotProviderLabel(
+        freezeTurnSnapshot({
+          engine: "claude",
+          providerProfileSource: "disk",
+        }),
+      ),
     ).toBe("本地配置");
   });
 });

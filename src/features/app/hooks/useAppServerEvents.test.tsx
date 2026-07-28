@@ -71,6 +71,39 @@ async function mount(handlers: Handlers, options?: HookOptions) {
 }
 
 describe("useAppServerEvents", () => {
+  it("quarantines provider continuation bootstrap events from conversation handlers", async () => {
+    const handlers: Handlers = {
+      onAppServerEvent: vi.fn(),
+      onTurnStarted: vi.fn(),
+      onAgentMessageDelta: vi.fn(),
+      onReasoningTextDelta: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "turn/started",
+          params: {
+            threadId: "claude:target-1",
+            turnId: "provider-continuation-operation-1",
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onAppServerEvent).not.toHaveBeenCalled();
+    expect(handlers.onTurnStarted).not.toHaveBeenCalled();
+    expect(handlers.onAgentMessageDelta).not.toHaveBeenCalled();
+    expect(handlers.onReasoningTextDelta).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("falls back to the unique processing Codex thread for reasoning events without threadId", async () => {
     const handlers: Handlers = {
       onAppServerEvent: vi.fn(),
@@ -872,6 +905,7 @@ describe("useAppServerEvents", () => {
       "codex",
       "codex-pending-shared-1",
       "550e8400-e29b-41d4-a716-446655440000",
+      null,
     );
     expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
       "ws-shared-codex-pending",
@@ -932,6 +966,7 @@ describe("useAppServerEvents", () => {
       "claude",
       "claude-pending-shared-1",
       "claude:ses_123",
+      null,
     );
     expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
       "ws-shared-claude",

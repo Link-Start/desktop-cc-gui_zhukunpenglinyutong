@@ -650,6 +650,11 @@ function ComposerImpl({
       providerProfileId: providerProfileId ?? null,
       model: selectedModelId ?? null,
       reasoning: selectedEffort ? { effort: selectedEffort } : null,
+      providerProfileNameSnapshot:
+        providerProfileId?.trim()
+          ? providerProfileId
+          : t("providers.localConfig", { defaultValue: "本地配置" }),
+      providerProfileSource: providerProfileId?.trim() ? null : "disk",
     };
   }, [
     isSharedSession,
@@ -657,6 +662,7 @@ function ComposerImpl({
     selectedEffort,
     selectedEngine,
     selectedModelId,
+    t,
   ]);
   const selectedSharedTarget =
     sharedTargetState.selectedNextTarget ?? initialSharedTarget;

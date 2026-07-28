@@ -54,7 +54,11 @@ import { parseAgentTaskNotification } from "../../engine-task-output/contracts/a
 import { usePromptDistillation } from "../../prompt-distill/hooks/usePromptDistillation";
 import { PromptDistillDialog } from "../../prompt-distill/components/PromptDistillDialog";
 import { dedupeExitPlanItemsKeepFirst } from "../utils/messagesExitPlan";
-import { isContextProtocolConversationItem } from "../../shared-session/presentation/contextProtocol";
+import {
+  filterContextProtocolConversationItems,
+  hasContextProtocolControlTail,
+  isContextProtocolConversationItem,
+} from "../../../utils/contextProtocol";
 import {
   findLastAssistantMessageIndex,
   findLastUserMessageIndex,
@@ -213,6 +217,7 @@ export const MessagesCore = memo(function MessagesCore({
     isPlanProcessing: _isPlanProcessing = false,
     presentationProfile = null,
     agentTaskScrollRequest = null,
+    timelineLeadingNode = null,
   } = presentation;
   const { t } = useTranslation();
   const isWindowsDesktop = useMemo(() => isWindowsPlatform(), []);
@@ -342,7 +347,10 @@ export const MessagesCore = memo(function MessagesCore({
       // 尾项引用未变时(如选区冻结触发的引用级重算)必须原样返回缓存:此时尾项
       // 可能是被去重掉的 exit-plan 条目,写回结果末尾会丢真尾项、复活重复项。
       const nextLast = baseItems[baseItems.length - 1];
-      if (isContextProtocolConversationItem(nextLast)) {
+      if (
+        isContextProtocolConversationItem(nextLast) ||
+        hasContextProtocolControlTail(baseItems)
+      ) {
         exitPlanDedupeCacheRef.current = {
           baseItems,
           result: cache.result,
@@ -358,7 +366,7 @@ export const MessagesCore = memo(function MessagesCore({
       return result;
     }
     const result = dedupeExitPlanItemsKeepFirst(
-      baseItems.filter((item) => !isContextProtocolConversationItem(item)),
+      filterContextProtocolConversationItems(baseItems),
     );
     exitPlanDedupeCacheRef.current = { baseItems, result };
     return result;
@@ -1788,6 +1796,7 @@ export const MessagesCore = memo(function MessagesCore({
           threadId={threadId}
           workspaceId={workspaceId}
         />
+        {timelineLeadingNode}
         <MessagesTimeline {...timelineModels} />
       </div>
       <ScrollControl

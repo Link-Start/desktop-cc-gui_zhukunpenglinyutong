@@ -71,7 +71,10 @@ import { useReviewPrompt } from "./useReviewPrompt";
 import { pushErrorToast } from "../../../services/toasts";
 import { pushThreadFailureRuntimeNotice } from "../../../services/globalRuntimeNotices";
 import { resolveAgentIconForAgent } from "../../../utils/agentIcons";
-import { normalizeSharedSessionEngine } from "../../shared-session/utils/sharedSessionEngines";
+import {
+  isSharedSessionSupportedEngine,
+  normalizeSharedSessionEngine,
+} from "../../shared-session/utils/sharedSessionEngines";
 import {
   clearPendingClaudeMcpOutputNotice,
   getClaudeMcpRuntimeSnapshot,
@@ -1183,32 +1186,48 @@ export function useThreadMessaging({
       try {
         let response: Record<string, unknown>;
         if (threadKind === "shared") {
-          const sharedResolvedEngine = normalizeSharedSessionEngine(resolvedEngine);
+          const storedSharedTarget =
+            getSharedTargetState(workspace.id, threadId).selectedNextTarget;
+          const supportedStoredSharedTarget =
+            storedSharedTarget &&
+            isSharedSessionSupportedEngine(storedSharedTarget.engine)
+              ? storedSharedTarget
+              : null;
+          if (storedSharedTarget && !supportedStoredSharedTarget) {
+            throw new Error(
+              "当前 Shared Session 目标暂不可执行，请重新选择可用的 CLI 和 Provider。",
+            );
+          }
+          const sharedResolvedEngine = normalizeSharedSessionEngine(
+            supportedStoredSharedTarget?.engine ?? resolvedEngine,
+          );
           dispatch({
             type: "setThreadEngine",
             workspaceId: workspace.id,
             threadId,
             engine: sharedResolvedEngine,
           });
-          // Composer 当前四级选择是下一轮 Target 的权威输入。发送前同步到
-          // Shared Target Store，再把同一份快照交给 V2，避免 managed Provider
-          // 因 store 尚未接线而静默退回 default/local。
-          const sharedNextTarget = {
+          // Shared Picker 写入的 selectedNextTarget 是下一轮唯一权威输入。
+          // 旧的全局 Composer selection 可能仍指向上一个 CLI/Provider，不能在
+          // send boundary 重新组装并覆盖用户刚选中的 Target。
+          const sharedNextTarget = supportedStoredSharedTarget ?? {
             engine: sharedResolvedEngine,
             providerProfileId:
               resolvedComposerSelection?.providerProfileId?.trim() || null,
             model: modelForSend ?? null,
             reasoning: resolvedEffort ? { effort: resolvedEffort } : null,
           };
-          selectNextTarget(workspace.id, threadId, sharedNextTarget);
+          if (!supportedStoredSharedTarget) {
+            selectNextTarget(workspace.id, threadId, sharedNextTarget);
+          }
           response =
             (await sendSharedSessionTurnRouted({
               workspaceId: workspace.id,
               threadId,
               engine: sharedResolvedEngine,
               text: finalText,
-              model: modelForSend ?? null,
-              effort: resolvedEffort ?? null,
+              model: sharedNextTarget.model ?? null,
+              effort: sharedNextTarget.reasoning?.effort ?? null,
               disableThinking: disableThinkingForClaude,
               collaborationMode: sanitizedCollaborationMode,
               accessMode: resolvedAccessMode,

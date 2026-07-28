@@ -62,7 +62,25 @@ export type ProviderContinuationDialogState = {
   operationKey: string;
   stage: "confirm" | "confirm-degraded" | "running" | "error";
   detail: string | null;
+  technicalDetail: string | null;
+  degradedAccepted: boolean;
 };
+
+function providerContinuationRecoveryMessage(errorCode: string | null): string {
+  if (
+    errorCode?.includes("acceptance-ambiguous") ||
+    errorCode?.includes("recovery-required")
+  ) {
+    return "目标会话可能已经创建。重试只会校验同一个会话，不会重复创建。";
+  }
+  if (errorCode?.includes("catalog-commit-failed")) {
+    return "目标会话已创建，但客户端登记尚未完成。重试会补全登记。";
+  }
+  if (errorCode?.includes("artifact-integrity")) {
+    return "续接上下文校验失败。来源会话未被修改，请重新发起续接。";
+  }
+  return "续接没有完成。来源会话保持不变，可以安全重试。";
+}
 
 const PINNABLE_WORKSPACE_ACTION_ID_SET = new Set<string>(
   PINNABLE_WORKSPACE_ACTION_IDS,
@@ -355,20 +373,25 @@ export function useSidebarMenus({
       return;
     }
     providerContinuationOperationsRef.current.add(guardKey);
+    const degradedAccepted =
+      dialog.degradedAccepted || dialog.stage === "confirm-degraded";
     setProviderContinuationDialogState({
       ...dialog,
       stage: "running",
       detail: null,
+      technicalDetail: null,
+      degradedAccepted,
     });
     try {
       const result = await createNativeProviderContinuation({
         ...dialog.request,
-        confirmDegraded: dialog.stage === "confirm-degraded",
+        confirmDegraded: degradedAccepted,
       });
       if (result.status === "confirmation-required") {
         setProviderContinuationDialogState({
           ...dialog,
           stage: "confirm-degraded",
+          degradedAccepted: false,
           detail: providerContinuationDegradedMessage(
             result,
             {
@@ -392,6 +415,7 @@ export function useSidebarMenus({
               ),
             },
           ),
+          technicalDetail: null,
         });
         return;
       }
@@ -405,26 +429,20 @@ export function useSidebarMenus({
       setProviderContinuationDialogState({
         ...dialog,
         stage: "error",
-        detail: [
-          t("threads.providerContinuationRecoveryRequired", {
-            defaultValue: "续接未完成，已进入恢复状态。请保留当前会话后重试。",
-          }),
-          result.operation.errorCode?.trim()
-            ? t("threads.providerContinuationErrorCode", {
-                defaultValue: "错误代码：{{code}}",
-                code: result.operation.errorCode.trim(),
-              })
-            : null,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
+        detail: providerContinuationRecoveryMessage(
+          result.operation.errorCode ?? null,
+        ),
+        technicalDetail: result.operation.errorCode?.trim() || null,
+        degradedAccepted,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setProviderContinuationDialogState({
         ...dialog,
         stage: "error",
-        detail: message,
+        detail: providerContinuationRecoveryMessage(message),
+        technicalDetail: message,
+        degradedAccepted,
       });
       pushGlobalRuntimeNotice({
         severity: "error",
@@ -1451,6 +1469,8 @@ export function useSidebarMenus({
                     operationKey,
                     stage: "confirm",
                     detail: null,
+                    technicalDetail: null,
+                    degradedAccepted: false,
                   });
                 },
               })),

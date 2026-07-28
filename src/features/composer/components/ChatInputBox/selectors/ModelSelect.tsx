@@ -84,6 +84,8 @@ export function buildProviderExecutionTarget(
   providerId: ProviderId,
   providerProfileId: string,
   modelId: string,
+  providerProfileNameSnapshot?: string,
+  providerProfileSource?: "disk" | "managed",
 ): ExecutionTarget {
   const normalizedProviderProfileId = normalizeExecutionProviderProfileId(
     providerId,
@@ -93,6 +95,9 @@ export function buildProviderExecutionTarget(
     engine: providerId,
     providerProfileId: normalizedProviderProfileId,
     model: modelId,
+    providerProfileNameSnapshot:
+      providerProfileNameSnapshot?.trim() || null,
+    providerProfileSource: providerProfileSource ?? null,
     reasoning:
       current?.engine === providerId &&
       current.providerProfileId === normalizedProviderProfileId
@@ -240,6 +245,8 @@ export const ModelSelect = memo(({
       providerId: ProviderId,
       providerProfileId: string,
       modelId: string,
+      providerProfileNameSnapshot: string,
+      providerProfileSource: "disk" | "managed",
     ) => {
       if (!onExecutionTargetChange) {
         return;
@@ -250,6 +257,8 @@ export const ModelSelect = memo(({
           providerId,
           providerProfileId,
           modelId,
+          providerProfileNameSnapshot,
+          providerProfileSource,
         ),
       );
       setIsOpen(false);
@@ -433,6 +442,8 @@ export const ModelSelect = memo(({
                                     group.providerId,
                                     profile.id,
                                     model.id,
+                                    profile.label,
+                                    profile.source,
                                   )
                                 }
                               >

@@ -31,8 +31,14 @@ describe("ProviderContinuationContextCard", () => {
       />,
     );
 
-    expect(screen.getByText("Claude Code · Provider A")).toBeTruthy();
-    expect(screen.getByText("Codex CLI · Provider B")).toBeTruthy();
+    const details = screen.getByRole("group", {
+      name: "Provider 续接上下文",
+    }) as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(details.textContent).toContain("Claude Code · Provider A");
+    expect(details.textContent).toContain("Codex CLI · Provider B");
+    fireEvent.click(details.querySelector("summary") as HTMLElement);
+    expect(details.open).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "查看来源" }));
     expect(onOpenSource).toHaveBeenCalledOnce();
   });
@@ -47,7 +53,9 @@ describe("ProviderContinuationContextCard", () => {
     );
 
     expect(screen.getByText(/来源会话已不可用/)).toBeTruthy();
-    expect(screen.getByText("Claude Code · 来源 Provider")).toBeTruthy();
+    expect(
+      screen.getByRole("group", { name: "Provider 续接上下文" }).textContent,
+    ).toContain("Claude Code · 来源 Provider");
     expect(
       (screen.getByRole("button", { name: "查看来源" }) as HTMLButtonElement)
         .disabled,

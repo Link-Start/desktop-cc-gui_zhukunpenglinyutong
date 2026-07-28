@@ -51,8 +51,13 @@ createNativeProviderContinuation({
 - Codex `thread/inject_items` capability MUST 由无目标副作用的 JSON-RPC method probe
   决定；`method not found` 才视为 unsupported。unsupported 时 MUST 使用已声明的
   portable prompt transport，禁止仍调用缺失 method。
-- Claude ACK 只接受 assistant exact echo
-  `MOSSX_CONTEXT_ACCEPTED:<packageId>:<sourceChecksum>`；user prompt 中的 marker 不是 ACK。
+- Claude 首次 bootstrap 以目标 session identity、冻结 artifact checksum 和 CLI
+  invocation 成功返回作为 accepted evidence；模型是否逐字复述 marker 不得决定创建成功。
+- Claude recovery 只复用既有 target identity，并检查 durable history：user entry 必须
+  同时包含 exact package marker 与 `MOSSX_NATIVE_CONTEXT_V1`，或 assistant exact echo
+  acceptance marker。仅出现 marker 字样不是证据。
+- bootstrap turn id 使用 `provider-continuation-*`；renderer event ingress MUST 在统一入口
+  隔离该 control exchange，禁止进入普通 processing/reasoning/message/title 链。
 - degraded response MUST 带 `projectionMode`、`omissions`、
   `sourceEstimatedTokens`、`packageEstimatedTokens` 与 `adapterDroppedEntries`。
 - catalog MUST 保存 Provider Binding、Origin 与 Conversation Family；MUST NOT 写
@@ -68,6 +73,8 @@ createNativeProviderContinuation({
 | prepared、无 target side effect 且 artifact checksum 失败 | 删除旧 prepared 后重新冻结 | 复用损坏 artifact |
 | 已触发 target side effect 后 artifact checksum 失败 | `recovery-required` | 重读来源或新建第二目标 |
 | target side effect 后 ACK 不确定 | `acceptance-ambiguous` | 创建第二个目标 |
+| Claude CLI 完成但模型未复述 marker | 按同一 target identity 持久化 ready | 报假失败并要求重复创建 |
+| recovery history 有完整 bootstrap user entry | 复用既有 target 并补 catalog | 只认模型输出、创建第二个 target |
 | metadata 写入失败 | `catalog-commit-failed` | 丢失 result identity |
 | remote daemon | typed unsupported | local/default fallback |
 
@@ -78,13 +85,15 @@ createNativeProviderContinuation({
 - Base：package 无 omission，直接创建；同 operation retry 返回同一 target。
 - Bad：复制 Codex rollout 到另一个 `CODEX_HOME`，或把
   `lineageParentSessionId` 填入 `parentThreadId`。
-- Bad：Claude recovery 只做 `jsonl.contains(marker)`；这会把 user prompt 误判为 ACK。
+- Bad：把模型是否严格服从“只回 marker”当 transport ACK；这会造成首次假失败、第二次才恢复。
+- Bad：Claude recovery 只做 `jsonl.contains(marker)`；普通用户文本也可能包含相同字样。
 
 ### 6. Tests Required
 
 - Rust：Reader append/drift/corrupt、operation conflict/phase/result identity、artifact checksum、
   byte limit、private/unknown omission、atomic Tool pair、Codex method probe/portable fallback、
-  Claude assistant-only ACK、catalog family/delete non-cascade。
+  Claude completed bootstrap、durable bootstrap history、assistant exact ACK compatibility、
+  unrelated marker rejection、catalog family/delete non-cascade。
 - Vitest：DTO mapping、Claude/Codex target menu、double-click guard、degraded detail、
   canonical target selection、顶层“供应商续接”标签与来源导航。
 - Contract：`cargo check --lib`、`npm run typecheck`、
@@ -105,8 +114,10 @@ if history_jsonl.contains(&marker) {
 #### Correct
 
 ```rust
-let accepted = assistant_text_blocks(history_jsonl)
-    .any(|text| text.trim() == marker);
+let accepted = bootstrap_completed
+    || history_has_exact_package_and_native_version(history_jsonl)
+    || assistant_text_blocks(history_jsonl)
+        .any(|text| text.trim() == marker);
 if accepted {
     commit_existing_target_identity();
 }
@@ -131,13 +142,18 @@ ProviderContinuationContextCard({ thread, source, onOpenSource })
 - 点击目标 Provider 只打开 application-owned Dialog；首次 confirm 前 MUST NOT 调用
   `createNativeProviderContinuation`。
 - `confirmation-required` MUST 在同一 Dialog 展示 projection mode、token estimate、
-  omissions 与 adapter drops；二次确认才发送 `confirmDegraded: true`。
+  omissions 与 adapter drops；二次确认才发送 `confirmDegraded: true`。进入 recovery 后
+  retry MUST 保留该确认，不得退回未确认状态。
+- recovery 主文案 MUST 面向用户解释“是否可能已创建、重试是否会重复”；raw backend
+  error 只能放在默认折叠的“技术详情”。
 - renderer production code MUST NOT 使用 `alert/window.alert` 或 native system confirm。
-- exact `MOSSX_CONTEXT_PACKAGE/ACCEPTED` 与完整 native context prompt MUST 作为
-  control-plane message 隐藏；普通包含 MOSSX 的用户文本 MUST 保留。
+- exact `MOSSX_CONTEXT_PACKAGE/ACCEPTED` 与完整 native context prompt 启动一个
+  control exchange；直到下一条普通 user message 之前的 reasoning/assistant/lifecycle
+  projection MUST 全部隐藏。普通包含 MOSSX 的用户文本 MUST 保留。
 - protocol title MUST 投影为“继续：来源标题”或可读 fallback。
-- continuation canvas MUST 显示 source → target snapshot，并在来源存在时提供导航；
-  来源缺失时 disabled，不猜其他 Session。
+- continuation metadata MUST 通过既有 `.messages` timeline-leading slot 接入，默认折叠，
+  不得成为 Canvas 根 sibling，也不得参与 message grouping、streaming、terminal 或
+  scroll-anchor 计算。展开后显示 source → target snapshot；来源缺失时 disabled。
 
 ### 4. Validation & Error Matrix
 
@@ -145,21 +161,22 @@ ProviderContinuationContextCard({ thread, source, onOpenSource })
 |---|---|---|
 | 首次取消 | 无 target side effect | 先创建再询问 |
 | degraded | 产品内二次确认 | native Alert / 只显示空洞警告 |
-| exact protocol marker | 幕布隐藏 | hash 作为普通聊天显示 |
+| recovery retry | 保留 degraded confirm；只校验同一 target | 创建第二个 target |
+| bootstrap control exchange | 整段幕布隐藏 | hash/reasoning/问候作为普通聊天显示 |
 | 普通用户讨论 marker | 正常显示 | 宽泛 substring 误删 |
 | 来源缺失 | 卡片解释并禁用导航 | 跳到同名/相邻 Session |
 
 ### 5. Good / Base / Bad Cases
 
 - Good：Dialog 显示 Claude A → Codex B；取消不调用 command；确认后创建。
-- Base：ready continuation 显示可读标题和来源卡片。
+- Base：ready continuation 显示可读标题和默认折叠的来源 metadata。
 - Bad：把 `MOSSX_CONTEXT_PACKAGE:sha256:...` 当 Sidebar title 和 user bubble。
 
 ### 6. Tests Required
 
-- Dialog confirm/cancel/degraded tests。
+- Dialog confirm/cancel/degraded/recovery retry tests。
 - Sidebar command-before-confirm negative assertion 与 Kimi disabled state。
-- exact marker classifier + Messages render regression。
+- complete control exchange classifier + Messages render regression。
 - readable title、source card navigation 与 missing-source tests。
 
 ### 7. Wrong vs Correct

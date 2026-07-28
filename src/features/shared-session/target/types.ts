@@ -7,6 +7,7 @@
  */
 
 import type { EngineType } from "../../../types/engine";
+export { resolveSnapshotProviderLabel } from "../../../utils/turnBadge";
 
 export type ReasoningSelection = {
   effort: string;
@@ -18,6 +19,9 @@ export type ExecutionTarget = {
   providerProfileId?: string | null;
   model?: string | null;
   reasoning?: ReasoningSelection | null;
+  /** Picker 当次选择的可读身份；send boundary 会冻结进 Turn snapshot。 */
+  providerProfileNameSnapshot?: string | null;
+  providerProfileSource?: string | null;
 };
 
 /** 一次 Turn Attempt 创建时固化的不可变目标快照。 */
@@ -53,22 +57,16 @@ export function freezeTurnSnapshot(
     providerProfileId: target.providerProfileId ?? null,
     model: target.model ?? null,
     reasoning: target.reasoning ? { ...target.reasoning } : null,
-    providerProfileNameSnapshot: providerMeta?.providerProfileNameSnapshot ?? null,
-    providerProfileSource: providerMeta?.providerProfileSource ?? null,
+    providerProfileNameSnapshot:
+      providerMeta?.providerProfileNameSnapshot ??
+      target.providerProfileNameSnapshot ??
+      null,
+    providerProfileSource:
+      providerMeta?.providerProfileSource ??
+      target.providerProfileSource ??
+      null,
     runtimeCapabilityFingerprint:
       providerMeta?.runtimeCapabilityFingerprint ?? null,
   };
   return Object.freeze(snapshot);
-}
-
-/** Provider 被删除后，Badge 仍可通过 name snapshot 解释。 */
-export function resolveSnapshotProviderLabel(
-  snapshot: TurnExecutionSnapshot,
-): string {
-  const name = snapshot.providerProfileNameSnapshot?.trim();
-  if (name) {
-    return name;
-  }
-  const id = snapshot.providerProfileId?.trim();
-  return id ? id : "本地配置";
 }

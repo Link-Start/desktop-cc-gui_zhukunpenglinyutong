@@ -11,6 +11,7 @@ import type {
   TurnPlan,
   WorkspaceInfo,
 } from "../../../types";
+import type { ReactNode } from "react";
 import type { ConversationState } from "../../threads/contracts/conversationCurtainContracts";
 import type { PresentationProfile } from "../../../conversation-presentation/presentationProfile";
 import type { RuntimeReconnectRecoveryCallbackResult } from "../../../runtime-recovery/runtimeReconnect";
@@ -104,4 +105,6 @@ export type MessagesProps = {
   onForkFromMessage?: (messageId: string) => void;
   onRewindFromMessage?: (messageId: string) => void;
   taskRuns?: TaskRunRecord[];
+  /** 稳定 metadata slot；不得承载普通 message/streaming lifecycle。 */
+  timelineLeadingNode?: ReactNode;
 };

@@ -182,6 +182,8 @@ describe("Composer file reference token", () => {
       engine: "claude",
       providerProfileId: "openrouter",
       model: "claude-sonnet-4-5",
+      providerProfileNameSnapshot: "openrouter",
+      providerProfileSource: null,
       reasoning: { effort: "high" },
     });
   });

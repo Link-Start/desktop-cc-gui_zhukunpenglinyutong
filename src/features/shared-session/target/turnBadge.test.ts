@@ -12,6 +12,7 @@ describe("resolveTurnBadge", () => {
     const badge = resolveTurnBadge(snapshot);
     expect(badge).toEqual({
       engine: "claude",
+      engineLabel: "Claude Code",
       providerLabel: "OpenRouter",
       modelLabel: "sonnet",
       reasoningLabel: null,
@@ -55,10 +56,22 @@ describe("resolveTurnBadge", () => {
     expect(badge.unavailableReason).toBe("runtime-missing");
   });
 
-  it("uses a readable local label for legacy default-provider snapshots", () => {
+  it("does not fabricate local identity for legacy snapshots", () => {
     const snapshot = freezeTurnSnapshot({ engine: "claude" });
     const badge = resolveTurnBadge(snapshot);
-    expect(badge.providerLabel).toBe("本地配置");
+    expect(badge.providerLabel).toBe("历史配置未知");
     expect(badge.unavailable).toBe(false);
+  });
+
+  it("uses a readable local label only for explicit disk-provider snapshots", () => {
+    const snapshot = freezeTurnSnapshot({
+      engine: "codex",
+      providerProfileId: null,
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk",
+    });
+    const badge = resolveTurnBadge(snapshot);
+    expect(badge.engineLabel).toBe("Codex CLI");
+    expect(badge.providerLabel).toBe("本地配置");
   });
 });

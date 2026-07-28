@@ -102,6 +102,37 @@ describe("Messages", () => {
     expect(container.textContent).not.toContain("MOSSX_CONTEXT_");
   });
 
+  it("renders continuation metadata inside the existing messages scroller only when provided", () => {
+    const { container, rerender } = render(
+      <Messages
+        items={[]}
+        threadId="claude:continuation"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="claude"
+        openTargets={[]}
+        selectedOpenAppId=""
+        timelineLeadingNode={<div data-testid="continuation-metadata">lineage</div>}
+      />,
+    );
+
+    const scroller = container.querySelector(".messages.scrollable");
+    expect(scroller?.querySelector("[data-testid='continuation-metadata']")).toBeTruthy();
+
+    rerender(
+      <Messages
+        items={[]}
+        threadId="claude:ordinary"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="claude"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    expect(container.querySelector("[data-testid='continuation-metadata']")).toBeNull();
+  });
+
   it("keeps Claude reasoning title stable while streaming", () => {
     window.localStorage.removeItem("ccgui.claude.hideReasoningModule");
 

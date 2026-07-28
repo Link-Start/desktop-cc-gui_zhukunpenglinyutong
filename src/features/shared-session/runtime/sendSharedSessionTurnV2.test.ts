@@ -88,6 +88,8 @@ const TARGET: ExecutionTarget = {
   engine: "claude",
   providerProfileId: "profile-1",
   model: "sonnet-4",
+  providerProfileNameSnapshot: "Provider A",
+  providerProfileSource: "managed",
   reasoning: { effort: "high" },
 };
 
@@ -271,6 +273,8 @@ describe("sendSharedSessionTurnV2", () => {
       target: expect.objectContaining({
         engine: "claude",
         providerProfileId: "profile-1",
+        providerProfileNameSnapshot: "Provider A",
+        providerProfileSource: "managed",
         reasoningEffort: "high",
       }),
       assistantText: "world",

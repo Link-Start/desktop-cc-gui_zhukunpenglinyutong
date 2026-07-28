@@ -1,5 +1,6 @@
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import { useTranslation } from "react-i18next";
 
@@ -67,52 +68,47 @@ export function ProviderContinuationContextCard({
     defaultValue: "本地配置",
   });
   return (
-    <section
-      className="mx-auto mt-4 w-[min(920px,calc(100%-32px))] rounded-xl border border-border/70 bg-card/75 p-4 shadow-sm backdrop-blur"
+    <details
+      className="group mx-auto mt-3 w-[min(920px,calc(100%-32px))] rounded-lg border border-border/60 bg-muted/25 text-sm"
       aria-label={t("threads.providerContinuationContextAriaLabel", {
         defaultValue: "Provider 续接上下文",
       })}
     >
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <GitBranch className="size-4" aria-hidden />
+      <summary className="flex min-w-0 cursor-pointer list-none items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+        <ChevronRight
+          className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+          aria-hidden
+        />
+        <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <GitBranch className="size-3.5" aria-hidden />
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <strong className="text-sm">
-              {t("threads.providerContinuation", {
-                defaultValue: "Provider 续接",
+        <strong className="shrink-0 text-xs">
+          {t("threads.providerContinuation", {
+            defaultValue: "Provider 续接",
+          })}
+        </strong>
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          {engineLabel(source?.engineSource ?? inferSourceEngine(thread))} ·{" "}
+          {source
+            ? providerLabel(source, localProviderLabel)
+            : thread.sourceProviderProfileId?.trim() ||
+              t("threads.providerContinuationSourceProvider", {
+                defaultValue: "来源 Provider",
               })}
-            </strong>
-            <span className="text-xs text-muted-foreground">
-              {t("threads.providerContinuationCardDescription", {
-                defaultValue: "来源保留，新会话独立继续",
-              })}
-            </span>
-          </div>
-          <div className="mt-2 flex min-w-0 items-center gap-2 text-sm">
-            <span className="min-w-0 truncate">
-              {engineLabel(source?.engineSource ?? inferSourceEngine(thread))} ·{" "}
-              {source
-                ? providerLabel(source, localProviderLabel)
-                : thread.sourceProviderProfileId?.trim() ||
-                  t("threads.providerContinuationSourceProvider", {
-                    defaultValue: "来源 Provider",
-                  })}
-            </span>
-            <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="min-w-0 truncate font-medium">
-              {engineLabel(thread.engineSource)} ·{" "}
-              {providerLabel(thread, localProviderLabel)}
-            </span>
-          </div>
-          <p className="mt-2 truncate text-xs text-muted-foreground">
-            {t("threads.providerContinuationSourceLabel", {
-              defaultValue: "来源：{{source}}",
-              source: source?.name ?? sourceUnavailableLabel,
-            })}
-          </p>
-        </div>
+          {" "}
+          <ArrowRight className="inline size-3.5 align-text-bottom" aria-hidden />
+          {" "}
+          {engineLabel(thread.engineSource)} ·{" "}
+          {providerLabel(thread, localProviderLabel)}
+        </span>
+      </summary>
+      <div className="flex min-w-0 items-center gap-3 border-t border-border/50 px-3 py-2">
+        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {t("threads.providerContinuationSourceLabel", {
+            defaultValue: "来源：{{source}}",
+            source: source?.name ?? sourceUnavailableLabel,
+          })}
+        </p>
         <button
           type="button"
           className="ghost inline-flex shrink-0 items-center gap-1.5"
@@ -132,6 +128,6 @@ export function ProviderContinuationContextCard({
           })}
         </button>
       </div>
-    </section>
+    </details>
   );
 }

@@ -457,6 +457,18 @@ function extractTurnIdFromParams(params: Record<string, unknown>): string {
   ).trim();
 }
 
+const PROVIDER_CONTINUATION_BOOTSTRAP_TURN_PREFIX =
+  "provider-continuation-";
+
+export function isProviderContinuationBootstrapEvent(
+  payload: AppServerEvent,
+): boolean {
+  const params = getAppServerEventParams(payload);
+  return extractTurnIdFromParams(params).startsWith(
+    PROVIDER_CONTINUATION_BOOTSTRAP_TURN_PREFIX,
+  );
+}
+
 function extractItemIdFromParams(params: Record<string, unknown>): string {
   const turn = (params.turn as Record<string, unknown> | undefined) ?? {};
   const itemObj = (params.item as Record<string, unknown> | undefined) ?? {};
@@ -1464,6 +1476,11 @@ export function dispatchAppServerEvent(
     threadAgentCompletedSeenRef,
     threadAgentSnapshotSeenRef,
   } = options;
+  // Provider continuation bootstrap 是 control plane，不是用户 Turn。
+  // 在统一入口隔离，避免它进入 processing/reasoning/message/title 链路。
+  if (isProviderContinuationBootstrapEvent(payload)) {
+    return;
+  }
   handlers.onAppServerEvent?.(payload);
 
   const { workspace_id, message } = payload;

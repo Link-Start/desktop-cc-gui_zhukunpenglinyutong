@@ -96,8 +96,14 @@ function toTargetPayload(
     providerProfileId: target.providerProfileId ?? null,
     model: target.model ?? null,
     reasoningEffort: target.reasoning?.effort ?? null,
-    providerProfileNameSnapshot: providerMeta?.providerProfileNameSnapshot ?? null,
-    providerProfileSource: providerMeta?.providerProfileSource ?? null,
+    providerProfileNameSnapshot:
+      providerMeta?.providerProfileNameSnapshot ??
+      target.providerProfileNameSnapshot ??
+      null,
+    providerProfileSource:
+      providerMeta?.providerProfileSource ??
+      target.providerProfileSource ??
+      null,
     runtimeCapabilityFingerprint: providerMeta?.runtimeCapabilityFingerprint ?? null,
   };
 }

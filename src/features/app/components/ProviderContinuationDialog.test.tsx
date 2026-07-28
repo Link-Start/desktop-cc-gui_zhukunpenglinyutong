@@ -33,6 +33,8 @@ const STATE = {
   operationKey: "key",
   stage: "confirm" as const,
   detail: null,
+  technicalDetail: null,
+  degradedAccepted: false,
 };
 
 describe("ProviderContinuationDialog", () => {
@@ -72,5 +74,31 @@ describe("ProviderContinuationDialog", () => {
     expect(
       screen.getByRole("button", { name: "接受降级并继续" }),
     ).toBeTruthy();
+  });
+
+  it("keeps recovery copy readable and technical detail collapsed", () => {
+    const onConfirm = vi.fn();
+    render(
+      <ProviderContinuationDialog
+        state={{
+          ...STATE,
+          stage: "error",
+          detail:
+            "目标会话可能已经创建。重试只会校验同一个会话，不会重复创建。",
+          technicalDetail:
+            "acceptance-ambiguous: Claude did not echo the context marker",
+        }}
+        onCancel={vi.fn()}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    expect(screen.getByRole("alert").textContent).toContain("不会重复创建");
+    const technicalDetails = screen
+      .getByText("技术详情")
+      .closest("details") as HTMLDetailsElement;
+    expect(technicalDetails.open).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "重试校验" }));
+    expect(onConfirm).toHaveBeenCalledOnce();
   });
 });

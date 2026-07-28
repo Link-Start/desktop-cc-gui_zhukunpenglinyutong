@@ -50,8 +50,13 @@ shared_binding_state.provisioning_json.state =
 
 ### 3. Contracts
 
-- Composer 四级选择只写 `selectedNextTarget`；不得创建 Binding 或改写
+- Composer 四级选择只写 `selectedNextTarget`；该 store 是 send boundary 的权威输入，
+  不得被旧的 global Composer selection 重组覆盖，也不得创建 Binding 或改写
   `activeTurnTarget`。
+- `selectedNextTarget` MUST 同时保存 Provider display snapshot/source；发送时将
+  CLI、Provider、Model、Reasoning 一次冻结进 immutable target snapshot。
+- unsupported historical target MUST fail closed 并要求重新选择；不得静默 fallback 到
+  Claude/default/local。
 - `begin_turn` 必须先落 `conversation.turnRequested` + immutable
   `TurnExecutionSnapshot`，再触碰 runtime。
 - managed Provider 不存在、Model 不在该 Provider catalog 时返回
@@ -64,8 +69,9 @@ shared_binding_state.provisioning_json.state =
 - Codex terminal observer 必须在 `turn/start` 前订阅，缓存快速 terminal；
   不得接管或吞掉既有 realtime consumer。
 - ACK/terminal/commit 不确定时写 `recovery-required`；同 attempt 禁止盲重发。
-- Projection/Badge 只读 canonical snapshot。Provider 删除后保留
-  `providerProfileNameSnapshot`，另算 `providerAvailable=false`。
+- Projection/Badge 只读 canonical snapshot。CLI 使用产品 display label；Provider
+  删除后保留 `providerProfileNameSnapshot`，另算 `providerAvailable=false`。
+  explicit disk/local 才显示“本地配置”；legacy identity 缺失显示“历史配置未知”。
 - Interrupt 必须携带 active snapshot 的 `providerProfileId`；Desktop 与 daemon
   都只操作该 Provider session。
 
@@ -83,6 +89,9 @@ shared_binding_state.provisioning_json.state =
 | duplicate terminal，语义冲突 | fail loud | 静默覆盖 |
 | provisioning 强杀 | restart 后 recovery-required | 新建第二个 Binding |
 | Provider 已删除 | Badge 显示 name snapshot + unavailable | 历史 Badge 消失 |
+| store target 与 global selection 不同 | 发送 store target，冻结其 display identity | 用旧 selection 覆盖 |
+| historical target 为 Kimi/Gemini 等 unsupported engine | fail closed + 可读错误 | 偷偷改发 Claude |
+| legacy snapshot 无 Provider identity | 显示“历史配置未知” | 伪装成“本地配置” |
 
 ### 5. Good / Base / Bad Cases
 
@@ -116,6 +125,8 @@ npm run check:runtime-contracts
 - process kill 后只有一条 `turnRequested`、一个 Target Binding。
 - Codex terminal 只匹配自己的 native owner，并保留 assistant final。
 - Picker 变化不改写历史 snapshot；deleted Provider Badge 可解释。
+- stale global selection 不覆盖 store target；unsupported historical target 零 send side effect。
+- explicit local 与 legacy unknown 的 Badge fallback 不同。
 - Shared Claude Interrupt payload 含 active `providerProfileId`。
 
 ### 7. Wrong vs Correct

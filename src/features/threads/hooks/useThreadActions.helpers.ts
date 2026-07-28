@@ -10,7 +10,7 @@ import {
   selectProjectedSessionDisplayName,
 } from "../utils/sessionDisplayProjection";
 import { matchesWorkspacePath } from "./useThreadActions.workspacePath";
-import { classifyContextProtocolText } from "../../shared-session/presentation/contextProtocol";
+import { classifyContextProtocolText } from "../../../utils/contextProtocol";
 
 const CLAUDE_HISTORY_MESSAGE_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

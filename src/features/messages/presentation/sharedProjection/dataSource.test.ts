@@ -146,6 +146,56 @@ describe("toSharedConversationItems", () => {
     });
   });
 
+  it("keeps distinct provider snapshots when multi-provider history is rebuilt", () => {
+    const result = toSharedConversationItems([
+      makeItem({
+        id: "2:assistant:0",
+        kind: "message",
+        content: {
+          role: "assistant",
+          text: "Claude result",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileId: "provider-a",
+            providerProfileNameSnapshot: "Provider A",
+            model: "sonnet",
+          },
+        },
+      }),
+      makeItem({
+        id: "4:assistant:0",
+        kind: "message",
+        content: {
+          role: "assistant",
+          text: "Codex result",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileId: "provider-b",
+            providerProfileNameSnapshot: "Provider B",
+            model: "gpt-5-codex",
+          },
+        },
+      }),
+    ]);
+
+    expect(
+      result.map((item) =>
+        item.kind === "message" ? item.executionTargetSnapshot : null,
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        engine: "claude",
+        providerProfileNameSnapshot: "Provider A",
+        model: "sonnet",
+      }),
+      expect.objectContaining({
+        engine: "codex",
+        providerProfileNameSnapshot: "Provider B",
+        model: "gpt-5-codex",
+      }),
+    ]);
+  });
+
   it("non-user role falls back to assistant", () => {
     const result = toSharedConversationItems([
       makeItem({ id: "1:m", kind: "message", content: { role: "system", text: "x" } }),
