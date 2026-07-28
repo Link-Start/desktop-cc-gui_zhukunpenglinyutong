@@ -2820,23 +2820,23 @@ describe("tauri invoke wrappers", () => {
     const invokeMock = vi.mocked(invoke);
 
     await expect(switchEngine("gemini")).rejects.toThrow(
-      "Gemini CLI is disabled in this client",
+      "Selected CLI engine is disabled by product policy",
     );
     await expect(getEngineModels("gemini")).rejects.toThrow(
-      "Gemini CLI is disabled in this client",
+      "Selected CLI engine is disabled by product policy",
     );
     await expect(
       engineSendMessage("ws-gemini", {
         text: "must not run",
         engine: "gemini",
       }),
-    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
     await expect(
       engineSendMessageSync("ws-gemini", {
         text: "must not run",
         engine: "gemini",
       }),
-    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
 
     expect(invokeMock).not.toHaveBeenCalled();
   });

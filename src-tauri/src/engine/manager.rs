@@ -36,8 +36,8 @@ pub struct EngineManager {
     /// MCP server can hold a shared handle for session lookup (see `askuser_mcp`).
     pub claude_manager: Arc<ClaudeSessionManager>,
 
-    /// OpenCode sessions per workspace
-    opencode_sessions: Mutex<HashMap<String, Arc<OpenCodeSession>>>,
+    /// OpenCode sessions per workspace/provider runtime.
+    opencode_sessions: Mutex<HashMap<String, OpenCodeSessionEntry>>,
 
     /// Gemini sessions per workspace
     gemini_sessions: Mutex<GeminiSessionRegistry>,
@@ -68,6 +68,11 @@ struct KimiSessionEntry {
 struct GrokSessionEntry {
     workspace_id: String,
     session: Arc<GrokSession>,
+}
+
+struct OpenCodeSessionEntry {
+    workspace_id: String,
+    session: Arc<OpenCodeSession>,
 }
 
 fn kimi_engine_config_with_home(
@@ -147,15 +152,13 @@ impl EngineManager {
 
     /// Detect a single engine's status
     async fn detect_single_engine(&self, engine_type: EngineType) -> EngineStatus {
-        self.detect_single_engine_with_gates(engine_type, true, true)
-            .await
+        self.detect_single_engine_with_gates(engine_type, true).await
     }
 
     async fn detect_single_engine_with_gates(
         &self,
         engine_type: EngineType,
         _gemini_enabled: bool,
-        opencode_enabled: bool,
     ) -> EngineStatus {
         let engine_id = EngineId::builtin(engine_type);
         let registry_entry = self
@@ -185,7 +188,6 @@ impl EngineManager {
             EngineType::Claude => detect_claude_status(bin).await,
             EngineType::Codex => detect_codex_status(bin).await,
             EngineType::Gemini => disabled_engine_status(engine_type),
-            EngineType::OpenCode if !opencode_enabled => disabled_engine_status(engine_type),
             EngineType::OpenCode => detect_opencode_status(bin).await,
             EngineType::Kimi => detect_kimi_status(bin).await,
             EngineType::Grok => detect_grok_status(bin).await,
@@ -203,17 +205,12 @@ impl EngineManager {
         &self,
         engine_type: EngineType,
         gemini_enabled: bool,
-        opencode_enabled: bool,
     ) -> EngineStatus {
-        self.detect_single_engine_with_gates(engine_type, gemini_enabled, opencode_enabled)
+        self.detect_single_engine_with_gates(engine_type, gemini_enabled)
             .await
     }
 
-    pub async fn detect_engines_with_gates(
-        &self,
-        gemini_enabled: bool,
-        opencode_enabled: bool,
-    ) -> Vec<EngineStatus> {
+    pub async fn detect_engines_with_gates(&self, gemini_enabled: bool) -> Vec<EngineStatus> {
         let gemini_enabled = gemini_enabled && crate::engine_policy::GEMINI_RUNTIME_ENABLED;
         let (claude_bin, codex_bin, gemini_bin, opencode_bin, kimi_bin, grok_bin) = {
             let configs = self.engine_configs.read().await;
@@ -247,7 +244,6 @@ impl EngineManager {
             kimi_bin.as_deref(),
             grok_bin.as_deref(),
             gemini_enabled,
-            opencode_enabled,
         )
         .await;
 
@@ -255,9 +251,6 @@ impl EngineManager {
             .into_iter()
             .map(|status| match status.engine_type {
                 EngineType::Gemini if !gemini_enabled => disabled_engine_status(EngineType::Gemini),
-                EngineType::OpenCode if !opencode_enabled => {
-                    disabled_engine_status(EngineType::OpenCode)
-                }
                 _ => status,
             })
             .collect::<Vec<_>>();
@@ -357,10 +350,27 @@ impl EngineManager {
         workspace_id: &str,
         workspace_path: &Path,
     ) -> Arc<OpenCodeSession> {
+        self.get_or_create_opencode_session_for_runtime(
+            workspace_id,
+            workspace_path,
+            workspace_id,
+            None,
+        )
+        .await
+    }
+
+    /// Get or create an OpenCode session isolated by provider runtime key.
+    pub async fn get_or_create_opencode_session_for_runtime(
+        &self,
+        workspace_id: &str,
+        workspace_path: &Path,
+        runtime_key: &str,
+        provider_config_content: Option<String>,
+    ) -> Arc<OpenCodeSession> {
         {
             let sessions = self.opencode_sessions.lock().await;
-            if let Some(session) = sessions.get(workspace_id) {
-                return session.clone();
+            if let Some(entry) = sessions.get(runtime_key) {
+                return entry.session.clone();
             }
         }
 
@@ -369,22 +379,97 @@ impl EngineManager {
             workspace_id.to_string(),
             workspace_path.to_path_buf(),
             config,
+            provider_config_content,
         ));
         let mut sessions = self.opencode_sessions.lock().await;
-        sessions.insert(workspace_id.to_string(), session.clone());
+        if let Some(entry) = sessions.get(runtime_key) {
+            return entry.session.clone();
+        }
+        sessions.insert(
+            runtime_key.to_string(),
+            OpenCodeSessionEntry {
+                workspace_id: workspace_id.to_string(),
+                session: session.clone(),
+            },
+        );
         session
     }
 
     /// Get OpenCode session by workspace
     pub async fn get_opencode_session(&self, workspace_id: &str) -> Option<Arc<OpenCodeSession>> {
         let sessions = self.opencode_sessions.lock().await;
-        sessions.get(workspace_id).cloned()
+        sessions
+            .values()
+            .find(|entry| entry.workspace_id == workspace_id)
+            .map(|entry| entry.session.clone())
     }
 
-    /// Remove an OpenCode session
+    /// Snapshot all OpenCode sessions owned by a workspace.
+    pub async fn get_opencode_sessions(&self, workspace_id: &str) -> Vec<Arc<OpenCodeSession>> {
+        let sessions = self.opencode_sessions.lock().await;
+        sessions
+            .values()
+            .filter(|entry| entry.workspace_id == workspace_id)
+            .map(|entry| entry.session.clone())
+            .collect()
+    }
+
+    /// Interrupt all provider-scoped OpenCode runtimes owned by a workspace.
+    pub async fn interrupt_opencode_sessions(
+        &self,
+        workspace_id: &str,
+        turn_id: Option<&str>,
+    ) -> Result<(), String> {
+        let sessions = self.get_opencode_sessions(workspace_id).await;
+        let mut errors = Vec::new();
+        for session in sessions {
+            let result = match turn_id {
+                Some(turn_id) => session.interrupt_turn(turn_id).await,
+                None => session.interrupt().await,
+            };
+            if let Err(error) = result {
+                errors.push(error);
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "failed to interrupt {} OpenCode runtime(s): {}",
+                errors.len(),
+                errors.join("; ")
+            ))
+        }
+    }
+
+    /// Stop and remove all OpenCode runtimes for a workspace (best effort).
     pub async fn remove_opencode_session(&self, workspace_id: &str) {
+        let candidates = {
+            let sessions = self.opencode_sessions.lock().await;
+            sessions
+                .iter()
+                .filter(|(_, entry)| entry.workspace_id == workspace_id)
+                .map(|(runtime_key, entry)| (runtime_key.clone(), entry.session.clone()))
+                .collect::<Vec<_>>()
+        };
+        let mut completed = Vec::new();
+        for (runtime_key, session) in candidates {
+            match session.interrupt().await {
+                Ok(()) => completed.push(runtime_key),
+                Err(error) => {
+                    log::warn!(
+                        "[engine_manager] failed to stop OpenCode runtime {} for workspace {}: {}",
+                        runtime_key,
+                        workspace_id,
+                        error
+                    );
+                }
+            }
+        }
         let mut sessions = self.opencode_sessions.lock().await;
-        sessions.remove(workspace_id);
+        for runtime_key in completed {
+            sessions.remove(&runtime_key);
+        }
     }
 
     // ==================== Gemini Session Management ====================
@@ -444,8 +529,8 @@ impl EngineManager {
     pub async fn list_opencode_sessions(&self) -> Vec<(String, Arc<OpenCodeSession>)> {
         let sessions = self.opencode_sessions.lock().await;
         sessions
-            .iter()
-            .map(|(workspace_id, session)| (workspace_id.clone(), session.clone()))
+            .values()
+            .map(|entry| (entry.workspace_id.clone(), entry.session.clone()))
             .collect()
     }
 
@@ -1033,7 +1118,7 @@ mod tests {
             )
             .await;
 
-        let statuses = manager.detect_engines_with_gates(true, false).await;
+        let statuses = manager.detect_engines_with_gates(true).await;
         let status = statuses
             .iter()
             .find(|status| status.engine_type == EngineType::Gemini)
@@ -1056,23 +1141,23 @@ mod tests {
         let manager = EngineManager::new();
 
         let status = manager
-            .refresh_engine_status_with_gates(EngineType::OpenCode, true, false)
+            .refresh_engine_status_with_gates(EngineType::Gemini, false)
             .await;
 
-        assert_eq!(status.engine_type, EngineType::OpenCode);
+        assert_eq!(status.engine_type, EngineType::Gemini);
         assert!(!status.installed);
         assert_eq!(
             status.error.as_deref(),
-            Some(super::super::OPENCODE_DISABLED_DIAGNOSTIC)
+            Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC)
         );
 
         let cached = manager
-            .get_engine_status(EngineType::OpenCode)
+            .get_engine_status(EngineType::Gemini)
             .await
             .expect("status should be cached");
         assert_eq!(
             cached.error.as_deref(),
-            Some(super::super::OPENCODE_DISABLED_DIAGNOSTIC)
+            Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC)
         );
     }
 

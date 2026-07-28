@@ -62,6 +62,9 @@ const runtimeNotice = {
     "grok": {
       "providerSelected": "已選擇 {{name}}。點擊 Grok CLI 項目以建立工作階段。"
     },
+    "opencode": {
+      "providerSelected": "已選擇 {{name}}。點擊 OpenCode 項目以建立工作階段。"
+    },
     "error": {
       "createSessionRecoveryRequired": "{{workspace}}：在執行階段復原進行中時建立工作階段失敗",
       "threadTurnFailed": "{{engine}} 工作階段失敗：{{message}}",

@@ -127,6 +127,13 @@ function renderCodexSection(
       handleSaveGrokSettings={vi.fn()}
       handleRunGrokDoctor={vi.fn()}
       grokDoctorState={{ status: "idle", result: null }}
+      openCodePathDraft=""
+      setOpenCodePathDraft={vi.fn()}
+      openCodeDirty={false}
+      handleBrowseOpenCode={vi.fn()}
+      handleSaveOpenCodeSettings={vi.fn()}
+      handleRunOpenCodeDoctor={vi.fn()}
+      openCodeDoctorState={{ status: "idle", result: null }}
       codexPathDraft=""
       setCodexPathDraft={vi.fn()}
       codexArgsDraft=""

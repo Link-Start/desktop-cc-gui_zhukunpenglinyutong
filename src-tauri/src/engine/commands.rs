@@ -1100,7 +1100,7 @@ pub async fn detect_engines(
     let manager = &state.engine_manager;
     let settings = read_app_settings_snapshot(&state).await;
     Ok(manager
-        .detect_engines_with_gates(settings.gemini_enabled, settings.opencode_enabled)
+        .detect_engines_with_gates(settings.gemini_enabled)
         .await)
 }
 
@@ -1458,11 +1458,7 @@ pub async fn get_engine_models(
         EngineType::Claude | EngineType::Codex => {
             if force_refresh {
                 let status = manager
-                    .refresh_engine_status_with_gates(
-                        engine_type,
-                        settings.gemini_enabled,
-                        settings.opencode_enabled,
-                    )
+                    .refresh_engine_status_with_gates(engine_type, settings.gemini_enabled)
                     .await;
                 return Ok(status.models);
             }
@@ -1474,11 +1470,7 @@ pub async fn get_engine_models(
             }
 
             let status = manager
-                .refresh_engine_status_with_gates(
-                    engine_type,
-                    settings.gemini_enabled,
-                    settings.opencode_enabled,
-                )
+                .refresh_engine_status_with_gates(engine_type, settings.gemini_enabled)
                 .await;
             Ok(status.models)
         }
@@ -1936,8 +1928,30 @@ pub async fn engine_send_message(
                     .ok_or_else(|| "Workspace not found".to_string())?
             };
 
+            let provider_binding_lookup_session_id = session_id
+                .as_deref()
+                .or(thread_id.as_deref())
+                .map(str::to_string);
+            let effective_provider_profile_id =
+                crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    provider_binding_lookup_session_id.as_deref(),
+                    "opencode",
+                    provider_profile_id.as_deref(),
+                )?;
+            let provider_launch_profile =
+                crate::engine::opencode_provider_profile::resolve_opencode_provider_launch_profile(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                )?;
             let session = manager
-                .get_or_create_opencode_session(&workspace_id, &workspace_path)
+                .get_or_create_opencode_session_for_runtime(
+                    &workspace_id,
+                    &workspace_path,
+                    &provider_launch_profile.runtime_key,
+                    provider_launch_profile.config_content.clone(),
+                )
                 .await;
 
             let resolved_session_id = if continue_session {
@@ -1968,8 +1982,18 @@ pub async fn engine_send_message(
                     model
                 );
             }
-            let model_for_send =
-                sanitized_model.or_else(|| Some("openai/gpt-5.3-codex".to_string()));
+            // Always pass an explicit --model: a broken default model in the
+            // user's opencode.json must not fail GUI turns. Managed providers
+            // resolve through the injected `ccgui/<model>` refs.
+            let model_for_send = if provider_launch_profile.binding.is_some() {
+                sanitized_model
+                    .or_else(|| provider_launch_profile.default_model.clone())
+                    .map(|value| {
+                        crate::engine::opencode_provider_profile::qualify_managed_model_ref(&value)
+                    })
+            } else {
+                sanitized_model.or_else(|| Some("opencode/big-pickle".to_string()))
+            };
 
             let params = super::SendMessageParams {
                 text,
@@ -1989,6 +2013,21 @@ pub async fn engine_send_message(
 
             let turn_id = format!("opencode-turn-{}", uuid::Uuid::new_v4());
             let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+            let binding_session_id = response_session_id
+                .as_deref()
+                .or(provider_binding_lookup_session_id.as_deref())
+                .unwrap_or(thread_id.as_str());
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "opencode".to_string(),
+                    binding.clone(),
+                )
+                .await?;
+            }
             let item_id = format!("opencode-item-{}", uuid::Uuid::new_v4());
 
             let mut receiver = session.subscribe();
@@ -2977,7 +3016,7 @@ pub async fn engine_send_message_sync(
                     }
                 });
             let model_for_send =
-                sanitized_model.or_else(|| Some("openai/gpt-5.3-codex".to_string()));
+                sanitized_model.or_else(|| Some("opencode/big-pickle".to_string()));
 
             let params = super::SendMessageParams {
                 text,
@@ -3262,12 +3301,7 @@ pub async fn engine_interrupt(
             );
             Ok(())
         }
-        EngineType::OpenCode => {
-            if let Some(session) = manager.get_opencode_session(&workspace_id).await {
-                session.interrupt().await?;
-            }
-            Ok(())
-        }
+        EngineType::OpenCode => manager.interrupt_opencode_sessions(&workspace_id, None).await,
         EngineType::Gemini => {
             if let Some(session) = manager.get_gemini_session(&workspace_id).await {
                 session.interrupt().await?;
@@ -3322,10 +3356,9 @@ pub async fn engine_interrupt_turn(
             Ok(())
         }
         EngineType::OpenCode => {
-            if let Some(session) = manager.get_opencode_session(&workspace_id).await {
-                session.interrupt_turn(&turn_id).await?;
-            }
-            Ok(())
+            manager
+                .interrupt_opencode_sessions(&workspace_id, Some(&turn_id))
+                .await
         }
         EngineType::Gemini => {
             if let Some(session) = manager.get_gemini_session(&workspace_id).await {

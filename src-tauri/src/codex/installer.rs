@@ -25,6 +25,8 @@ pub(crate) enum CliInstallEngine {
     Claude,
     Kimi,
     Grok,
+    #[serde(rename = "opencode")]
+    OpenCode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -131,7 +133,7 @@ struct InstallerCommandSpec {
 }
 
 /// Resolve the strategy actually used for an engine/action.
-/// Claude Code install/update both use the official native installer; Codex / Kimi stay on npm global.
+/// Claude Code install/update both use the official native installer; Codex / Kimi / OpenCode stay on npm global.
 /// Grok CLI install/update both use the official curl installer (no npm distribution, no uninstall).
 pub(crate) fn resolve_effective_strategy(
     engine: CliInstallEngine,
@@ -140,11 +142,13 @@ pub(crate) fn resolve_effective_strategy(
 ) -> CliInstallStrategy {
     match engine {
         CliInstallEngine::Claude | CliInstallEngine::Grok => CliInstallStrategy::OfficialNative,
-        CliInstallEngine::Codex | CliInstallEngine::Kimi => match requested {
-            CliInstallStrategy::NpmGlobal => CliInstallStrategy::NpmGlobal,
-            // Codex/Kimi self-update stays blocked; keep requested so plan can explain.
-            other => other,
-        },
+        CliInstallEngine::Codex | CliInstallEngine::Kimi | CliInstallEngine::OpenCode => {
+            match requested {
+                CliInstallStrategy::NpmGlobal => CliInstallStrategy::NpmGlobal,
+                // Codex/Kimi/OpenCode self-update stays blocked; keep requested so plan can explain.
+                other => other,
+            }
+        }
     }
 }
 
@@ -167,6 +171,7 @@ pub(crate) fn package_name_for_engine(engine: CliInstallEngine) -> &'static str 
         CliInstallEngine::Codex => "@openai/codex@latest",
         CliInstallEngine::Claude => "@anthropic-ai/claude-code@latest",
         CliInstallEngine::Kimi => "@moonshot-ai/kimi-code@latest",
+        CliInstallEngine::OpenCode => "opencode-ai@latest",
         // Grok CLI is not distributed via npm; it uses the official curl installer.
         CliInstallEngine::Grok => unreachable!("grok is not distributed via npm"),
     }
@@ -179,11 +184,19 @@ fn uninstall_package_name_for_engine(engine: CliInstallEngine) -> &'static str {
         CliInstallEngine::Kimi => "@moonshot-ai/kimi-code",
         // Grok CLI is not distributed via npm; it uses the official curl installer.
         CliInstallEngine::Grok => unreachable!("grok is not distributed via npm"),
+        // OpenCode uninstall is intentionally not supported (protects auth and session data).
+        CliInstallEngine::OpenCode => {
+            unreachable!("opencode uninstall is intentionally not supported")
+        }
     }
 }
 
 pub(crate) fn registry_package_name_for_engine(engine: CliInstallEngine) -> &'static str {
-    uninstall_package_name_for_engine(engine)
+    match engine {
+        // OpenCode has no uninstall name but is probed on the npm registry.
+        CliInstallEngine::OpenCode => "opencode-ai",
+        other => uninstall_package_name_for_engine(other),
+    }
 }
 
 fn claude_native_install_preview() -> Vec<String> {
@@ -274,6 +287,19 @@ fn command_preview_for(engine: CliInstallEngine, action: CliInstallAction) -> Ve
                 uninstall_package_name_for_engine(engine).to_string(),
             ],
         },
+        CliInstallEngine::OpenCode => match action {
+            CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest => vec![
+                "npm".to_string(),
+                "install".to_string(),
+                "-g".to_string(),
+                package_name_for_engine(engine).to_string(),
+            ],
+            CliInstallAction::Uninstall => vec![
+                "echo".to_string(),
+                "OpenCode CLI uninstall is intentionally not supported (protects opencode auth and sessions)."
+                    .to_string(),
+            ],
+        },
     }
 }
 
@@ -299,6 +325,7 @@ fn engine_binary_name(engine: CliInstallEngine) -> &'static str {
         CliInstallEngine::Claude => "claude",
         CliInstallEngine::Kimi => "kimi",
         CliInstallEngine::Grok => "grok",
+        CliInstallEngine::OpenCode => "opencode",
     }
 }
 
@@ -308,6 +335,7 @@ fn engine_explicit_bin<'a>(engine: CliInstallEngine, settings: &'a AppSettings) 
         CliInstallEngine::Claude => settings.claude_bin.as_deref(),
         CliInstallEngine::Kimi => settings.kimi_bin.as_deref(),
         CliInstallEngine::Grok => settings.grok_bin.as_deref(),
+        CliInstallEngine::OpenCode => settings.opencode_bin.as_deref(),
     }
     .filter(|value| !value.trim().is_empty())
 }
@@ -552,6 +580,32 @@ async fn resolve_installer_command(
             CliInstallAction::Uninstall,
         ) => Err(
             "Grok CLI uninstall is intentionally not supported (protects ~/.grok auth and sessions)."
+                .to_string(),
+        ),
+        (
+            CliInstallEngine::OpenCode,
+            CliInstallStrategy::NpmGlobal,
+            CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest,
+        ) => {
+            let npm_path = find_cli_binary("npm", None)
+                .map(|path| path.to_string_lossy().to_string())
+                .unwrap_or_else(|| "npm".to_string());
+            Ok(InstallerCommandSpec {
+                program: npm_path,
+                args: vec![
+                    "install".to_string(),
+                    "-g".to_string(),
+                    package_name_for_engine(engine).to_string(),
+                ],
+                path_env,
+            })
+        }
+        (
+            CliInstallEngine::OpenCode,
+            CliInstallStrategy::NpmGlobal,
+            CliInstallAction::Uninstall,
+        ) => Err(
+            "OpenCode CLI uninstall is intentionally not supported (protects opencode auth and sessions)."
                 .to_string(),
         ),
         (
@@ -831,7 +885,7 @@ pub(crate) async fn resolve_cli_version_status(
     let npm_available = run_binary_version("npm", path_env.as_ref()).await.is_ok();
     let registry_ok = node_available && npm_available;
     // `node_ok` gates lifecycle mutation buttons in the UI.
-    // Claude native install does not require Node/npm; Codex/Kimi still do.
+    // Claude native install does not require Node/npm; Codex/Kimi/OpenCode still do.
     // Grok uses the official bash installer, so it needs a supported Unix platform.
     let node_ok = match engine {
         CliInstallEngine::Claude => !matches!(current_platform(), CliInstallPlatform::Unknown),
@@ -839,7 +893,9 @@ pub(crate) async fn resolve_cli_version_status(
             current_platform(),
             CliInstallPlatform::Unknown | CliInstallPlatform::Windows
         ),
-        CliInstallEngine::Codex | CliInstallEngine::Kimi => registry_ok,
+        CliInstallEngine::Codex | CliInstallEngine::Kimi | CliInstallEngine::OpenCode => {
+            registry_ok
+        }
     };
 
     let mut details: Option<String> = None;
@@ -850,7 +906,10 @@ pub(crate) async fn resolve_cli_version_status(
             details = resolve_details;
             version
         }
-        CliInstallEngine::Codex | CliInstallEngine::Kimi | CliInstallEngine::Grok => {
+        CliInstallEngine::Codex
+        | CliInstallEngine::Kimi
+        | CliInstallEngine::Grok
+        | CliInstallEngine::OpenCode => {
             match check_cli_binary(engine_binary_name(engine), path_env.clone()).await {
                 Ok(Some(version)) => Some(version),
                 Ok(None) => None,
@@ -946,6 +1005,12 @@ pub(crate) async fn build_cli_install_plan_with_backend(
             }
             if let Some(prefix_blocker) = npm_prefix_blocker(path_env.as_ref()).await {
                 blockers.push(prefix_blocker);
+            }
+            if engine == CliInstallEngine::OpenCode && action == CliInstallAction::Uninstall {
+                blockers.push(
+                    "OpenCode CLI uninstall is intentionally not supported (protects opencode auth and sessions)."
+                        .to_string(),
+                );
             }
         }
         CliInstallStrategy::OfficialNative => {
@@ -1269,6 +1334,9 @@ async fn run_post_install_doctor(
         }
         CliInstallEngine::Kimi => crate::codex::run_kimi_doctor_with_settings(None, settings).await,
         CliInstallEngine::Grok => crate::codex::run_grok_doctor_with_settings(None, settings).await,
+        CliInstallEngine::OpenCode => {
+            crate::codex::run_opencode_doctor_with_settings(None, settings).await
+        }
     }
 }
 
@@ -1437,6 +1505,27 @@ mod tests {
         assert!(command_preview_for(CliInstallEngine::Grok, CliInstallAction::Uninstall)
             .join(" ")
             .contains("uninstall is intentionally not supported"));
+        assert_eq!(
+            command_preview_for(CliInstallEngine::OpenCode, CliInstallAction::InstallLatest),
+            vec![
+                "npm".to_string(),
+                "install".to_string(),
+                "-g".to_string(),
+                "opencode-ai@latest".to_string()
+            ]
+        );
+        assert_eq!(
+            command_preview_for(CliInstallEngine::OpenCode, CliInstallAction::UpdateLatest),
+            vec![
+                "npm".to_string(),
+                "install".to_string(),
+                "-g".to_string(),
+                "opencode-ai@latest".to_string()
+            ]
+        );
+        assert!(command_preview_for(CliInstallEngine::OpenCode, CliInstallAction::Uninstall)
+            .join(" ")
+            .contains("uninstall is intentionally not supported"));
     }
 
     #[test]
@@ -1497,6 +1586,39 @@ mod tests {
             ),
             CliInstallStrategy::OfficialNative
         );
+        assert_eq!(
+            resolve_effective_strategy(
+                CliInstallEngine::OpenCode,
+                CliInstallAction::InstallLatest,
+                CliInstallStrategy::NpmGlobal,
+            ),
+            CliInstallStrategy::NpmGlobal
+        );
+        assert_eq!(
+            resolve_effective_strategy(
+                CliInstallEngine::OpenCode,
+                CliInstallAction::UpdateLatest,
+                CliInstallStrategy::CliSelfUpdate,
+            ),
+            CliInstallStrategy::CliSelfUpdate
+        );
+    }
+
+    #[tokio::test]
+    async fn opencode_uninstall_plan_is_blocked() {
+        let plan = build_cli_install_plan(
+            CliInstallEngine::OpenCode,
+            CliInstallAction::Uninstall,
+            CliInstallStrategy::NpmGlobal,
+            &AppSettings::default(),
+        )
+        .await;
+
+        assert!(!plan.can_run);
+        assert!(plan
+            .blockers
+            .iter()
+            .any(|blocker| blocker.contains("uninstall is intentionally not supported")));
     }
 
     #[tokio::test]
@@ -1686,6 +1808,10 @@ mod tests {
         assert_eq!(
             registry_package_name_for_engine(CliInstallEngine::Kimi),
             "@moonshot-ai/kimi-code"
+        );
+        assert_eq!(
+            registry_package_name_for_engine(CliInstallEngine::OpenCode),
+            "opencode-ai"
         );
     }
 }

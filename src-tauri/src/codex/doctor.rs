@@ -8,6 +8,7 @@ use crate::backend::app_server::{
     check_codex_installation, classify_endpoint_failure, find_claude_code_binary,
     get_cli_debug_info, probe_codex_app_server, resolve_codex_launch_context,
 };
+use crate::backend::app_server_cli::resolve_safe_opencode_binary;
 use crate::codex::launch_profile::resolve_global_codex_launch_profile;
 use crate::types::AppSettings;
 
@@ -445,10 +446,217 @@ pub(crate) async fn run_grok_doctor_with_settings(
     }))
 }
 
+/// Pure decision step of the default-model check, split out for unit tests.
+///
+/// A configured default model that is missing from the `opencode models`
+/// output makes `opencode run` fail with "Model not found", so it is reported
+/// as a warning. Strict-JSON parse failures (JSONC syntax) and a missing
+/// models list degrade to `unknown` instead of a false warning; a missing
+/// config file or missing `model` key is `skipped` (OpenCode then falls back
+/// to its built-in default, which cannot be probed cheaply — actually running
+/// a turn is intentionally avoided as too expensive for a doctor check).
+fn opencode_default_model_probe_from_document(
+    status: &str,
+    config_path: Option<String>,
+    document: &Value,
+    diagnostic: Option<String>,
+    model_ids: Option<&[String]>,
+) -> Value {
+    match status {
+        "loaded" => {
+            let model = document
+                .get("model")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(String::from);
+            match model {
+                None => json!({
+                    "status": "skipped",
+                    "configPath": config_path,
+                    "diagnostic": "config has no `model` key; OpenCode falls back to its built-in default",
+                }),
+                Some(model) => match model_ids {
+                    None => json!({
+                        "status": "unknown",
+                        "model": model,
+                        "configPath": config_path,
+                        "diagnostic": "models list unavailable; cannot verify the configured default model",
+                    }),
+                    Some(ids) if ids.iter().any(|id| id == &model) => json!({
+                        "status": "pass",
+                        "model": model,
+                        "configPath": config_path,
+                    }),
+                    Some(_) => json!({
+                        "status": "warning",
+                        "model": model,
+                        "configPath": config_path,
+                        "diagnostic": format!(
+                            "configured default model `{model}` is not listed by `opencode models`; `opencode run` may fail with \"Model not found\""
+                        ),
+                    }),
+                },
+            }
+        }
+        "missing" => json!({
+            "status": "skipped",
+            "diagnostic": "no opencode config file found; OpenCode uses its built-in default model",
+        }),
+        _ => json!({
+            "status": "unknown",
+            "configPath": config_path,
+            "diagnostic": diagnostic.unwrap_or_else(|| format!("config status: {status}")),
+        }),
+    }
+}
+
+/// Check 3 (warning-level): the default model configured in the user's
+/// opencode config must resolve against the `opencode models` list.
+fn probe_opencode_default_model(model_ids: Option<&[String]>) -> Value {
+    let (status, path, document, diagnostic) =
+        crate::engine::status::read_opencode_config_document();
+    let config_path = path.map(|path| path.to_string_lossy().to_string());
+    opencode_default_model_probe_from_document(
+        status.as_str(),
+        config_path,
+        &document,
+        diagnostic,
+        model_ids,
+    )
+}
+
+pub(crate) async fn run_opencode_doctor_with_settings(
+    opencode_bin: Option<String>,
+    settings: &AppSettings,
+) -> Result<Value, String> {
+    let default_bin = settings.opencode_bin.clone();
+    let resolved = opencode_bin
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .or(default_bin);
+
+    // Check 1: binary reachability + version. Resolution mirrors
+    // detect_opencode_status (resolve_safe_opencode_binary) so custom bins and
+    // the Windows background-safety gate behave the same as engine detection.
+    let (requested_bin, resolution_error) = match resolve_safe_opencode_binary(resolved.as_deref())
+    {
+        Ok(path) => (path.to_string_lossy().to_string(), None),
+        Err(error) => (
+            resolved
+                .clone()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| "opencode".to_string()),
+            Some(error),
+        ),
+    };
+    let path_env = build_codex_path_env(Some(requested_bin.as_str()));
+    let debug_info = get_cli_debug_info(Some(requested_bin.as_str()));
+    let version_result = check_cli_binary(&requested_bin, path_env.clone()).await;
+    let (version, mut cli_error, fallback_retried) = match version_result {
+        Ok(Some(version)) => (Some(version), None, false),
+        Ok(None) => (Some("unknown".to_string()), None, true),
+        Err(error) => (None, Some(error), false),
+    };
+    if version.is_none() {
+        if let Some(error) = resolution_error {
+            cli_error = Some(error);
+        }
+    }
+    let launch_context = resolve_codex_launch_context(Some(requested_bin.as_str()));
+
+    let (node_ok, node_version, node_details) = probe_node_runtime(path_env.as_ref()).await;
+
+    // Check 2: `opencode models` must list at least one model.
+    let (models_probe, model_ids) = if version.is_some() {
+        match crate::engine::status::load_opencode_models(resolved.as_deref()).await {
+            Ok(models) => {
+                let ids: Vec<String> = models.iter().map(|model| model.id.clone()).collect();
+                (
+                    json!({
+                        "ok": !models.is_empty(),
+                        "count": models.len(),
+                        "error": if models.is_empty() {
+                            Some("`opencode models` returned an empty list".to_string())
+                        } else {
+                            None::<String>
+                        },
+                    }),
+                    Some(ids),
+                )
+            }
+            Err(error) => (
+                json!({
+                    "ok": false,
+                    "count": 0,
+                    "error": Some(error),
+                }),
+                None,
+            ),
+        }
+    } else {
+        (Value::Null, None)
+    };
+    let models_ok = models_probe
+        .get("ok")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+
+    let default_model_probe = if version.is_some() {
+        probe_opencode_default_model(model_ids.as_deref())
+    } else {
+        Value::Null
+    };
+
+    let environment_diagnosis =
+        build_engine_environment_diagnosis("opencode", Some(requested_bin.as_str()), &debug_info);
+    let proxy_diagnosis = debug_info
+        .get("proxyDiagnosis")
+        .cloned()
+        .unwrap_or(Value::Null);
+    let network_diagnosis = if version.is_some() {
+        Value::Null
+    } else {
+        json!({
+            "category": classify_endpoint_failure(cli_error.as_deref()),
+            "proxy": proxy_diagnosis,
+        })
+    };
+
+    Ok(json!({
+        "ok": version.is_some() && models_ok,
+        "codexBin": resolved,
+        "version": version,
+        "appServerOk": false,
+        "details": cli_error,
+        "path": path_env,
+        "nodeOk": node_ok,
+        "nodeVersion": node_version,
+        "nodeDetails": node_details,
+        "resolvedBinaryPath": launch_context.resolved_bin,
+        "wrapperKind": launch_context.wrapper_kind,
+        "pathEnvUsed": launch_context.path_env,
+        "proxyEnvSnapshot": debug_info.get("proxyEnvSnapshot").cloned().unwrap_or(Value::Null),
+        "appServerProbeStatus": Value::Null,
+        "fallbackRetried": fallback_retried,
+        "environmentDiagnosis": environment_diagnosis,
+        "proxyDiagnosis": proxy_diagnosis,
+        "networkDiagnosis": network_diagnosis,
+        "opencodeModels": models_probe,
+        "opencodeDefaultModel": default_model_probe,
+        "debug": debug_info,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{run_claude_doctor_with_settings, run_grok_doctor_with_settings, run_kimi_doctor_with_settings};
+    use super::{
+        opencode_default_model_probe_from_document, run_claude_doctor_with_settings,
+        run_grok_doctor_with_settings, run_kimi_doctor_with_settings,
+        run_opencode_doctor_with_settings,
+    };
     use crate::types::AppSettings;
+    use serde_json::{json, Value};
 
     #[tokio::test]
     async fn kimi_doctor_failure_keeps_structured_diagnostics_fields() {
@@ -554,5 +762,166 @@ mod tests {
         assert_eq!(diagnostics["ok"], false);
         assert!(diagnostics["details"].is_string() || diagnostics["details"].is_null());
         assert!(diagnostics["debug"].is_object());
+    }
+
+    #[cfg(unix)]
+    fn write_fake_opencode_script(body: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let unique = format!(
+            "ccgui-opencode-doctor-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        );
+        let dir = std::env::temp_dir().join(unique);
+        std::fs::create_dir_all(&dir).expect("create temp cli dir");
+        let script_path = dir.join("opencode");
+        std::fs::write(&script_path, body).expect("write temp cli script");
+        let mut permissions = std::fs::metadata(&script_path)
+            .expect("stat temp cli script")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&script_path, permissions).expect("chmod temp cli script");
+        script_path
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn opencode_doctor_failure_keeps_structured_diagnostics_fields() {
+        // A failing fake binary keeps the probe deterministic even on machines
+        // where a real `opencode` is installed (custom-bin resolution falls
+        // back to PATH search for missing paths).
+        let script_path = write_fake_opencode_script("#!/bin/sh\nexit 1\n");
+        let script_bin = script_path.to_string_lossy().to_string();
+
+        let diagnostics = run_opencode_doctor_with_settings(
+            Some(script_bin.clone()),
+            &AppSettings::default(),
+        )
+        .await
+        .expect("doctor should return structured diagnostics even on failure");
+
+        for key in [
+            "ok",
+            "codexBin",
+            "version",
+            "details",
+            "nodeOk",
+            "environmentDiagnosis",
+            "networkDiagnosis",
+            "opencodeModels",
+            "opencodeDefaultModel",
+            "debug",
+        ] {
+            assert!(
+                diagnostics.get(key).is_some(),
+                "missing structured diagnostics field: {key}"
+            );
+        }
+
+        assert_eq!(diagnostics["codexBin"], script_bin);
+        assert_eq!(diagnostics["ok"], false);
+        assert!(diagnostics["version"].is_null());
+        assert!(diagnostics["opencodeModels"].is_null());
+        assert!(diagnostics["opencodeDefaultModel"].is_null());
+        assert!(diagnostics["debug"].is_object());
+
+        let _ = std::fs::remove_file(&script_path);
+        let _ = std::fs::remove_dir_all(script_path.parent().unwrap_or(std::path::Path::new("")));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn opencode_doctor_models_check_reports_listed_models() {
+        let script_path = write_fake_opencode_script(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo '1.2.3'\n  exit 0\nfi\nif [ \"$1\" = \"models\" ]; then\n  echo 'opencode/gpt-5-nano'\n  echo 'openai/gpt-5.3-codex'\n  exit 0\nfi\nexit 0\n",
+        );
+        let script_bin = script_path.to_string_lossy().to_string();
+
+        let diagnostics =
+            run_opencode_doctor_with_settings(Some(script_bin), &AppSettings::default())
+                .await
+                .expect("doctor should succeed against the fake cli");
+
+        assert_eq!(diagnostics["ok"], true);
+        assert_eq!(diagnostics["version"], "1.2.3");
+        assert_eq!(diagnostics["opencodeModels"]["ok"], true);
+        assert_eq!(diagnostics["opencodeModels"]["count"], 2);
+        // The default-model probe reads the real user config; only its
+        // structure is deterministic across machines.
+        assert!(diagnostics["opencodeDefaultModel"]["status"].is_string());
+
+        let _ = std::fs::remove_file(&script_path);
+        let _ = std::fs::remove_dir_all(script_path.parent().unwrap_or(std::path::Path::new("")));
+    }
+
+    #[test]
+    fn opencode_default_model_probe_warns_when_configured_model_is_unlisted() {
+        let probe = opencode_default_model_probe_from_document(
+            "loaded",
+            Some("/tmp/opencode.json".to_string()),
+            &json!({ "model": "openai/gpt-5.3-codex" }),
+            None,
+            Some(&["opencode/gpt-5-nano".to_string()]),
+        );
+        assert_eq!(probe["status"], "warning");
+        assert_eq!(probe["model"], "openai/gpt-5.3-codex");
+        assert!(probe["diagnostic"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Model not found"));
+    }
+
+    #[test]
+    fn opencode_default_model_probe_passes_when_model_is_listed() {
+        let probe = opencode_default_model_probe_from_document(
+            "loaded",
+            Some("/tmp/opencode.json".to_string()),
+            &json!({ "model": "openai/gpt-5.3-codex" }),
+            None,
+            Some(&[
+                "opencode/gpt-5-nano".to_string(),
+                "openai/gpt-5.3-codex".to_string(),
+            ]),
+        );
+        assert_eq!(probe["status"], "pass");
+        assert_eq!(probe["model"], "openai/gpt-5.3-codex");
+    }
+
+    #[test]
+    fn opencode_default_model_probe_degrades_without_models_list_or_config() {
+        let unknown = opencode_default_model_probe_from_document(
+            "loaded",
+            None,
+            &json!({ "model": "a/b" }),
+            None,
+            None,
+        );
+        assert_eq!(unknown["status"], "unknown");
+
+        let missing =
+            opencode_default_model_probe_from_document("missing", None, &Value::Null, None, None);
+        assert_eq!(missing["status"], "skipped");
+
+        let no_model_key = opencode_default_model_probe_from_document(
+            "loaded",
+            None,
+            &json!({}),
+            None,
+            Some(&[]),
+        );
+        assert_eq!(no_model_key["status"], "skipped");
+
+        let malformed = opencode_default_model_probe_from_document(
+            "malformed",
+            Some("/tmp/opencode.json".to_string()),
+            &Value::Null,
+            Some("bad json".to_string()),
+            Some(&[]),
+        );
+        assert_eq!(malformed["status"], "unknown");
+        assert_eq!(malformed["diagnostic"], "bad json");
     }
 }

@@ -62,6 +62,9 @@ const runtimeNotice = {
     "grok": {
       "providerSelected": "{{name}} चुना गया। सत्र बनाने के लिए Grok CLI प्रविष्टि पर क्लिक करें।"
     },
+    "opencode": {
+      "providerSelected": "{{name}} चुना गया। सत्र बनाने के लिए OpenCode प्रविष्टि पर क्लिक करें।"
+    },
     "error": {
       "createSessionRecoveryRequired": "{{workspace}}: रनटाइम रिकवरी जारी रहने के दौरान सत्र निर्माण विफल",
       "threadTurnFailed": "{{engine}} सत्र विफल: {{message}}",

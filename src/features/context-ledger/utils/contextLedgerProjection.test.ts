@@ -302,7 +302,7 @@ describe("buildContextLedgerProjection", () => {
   it("marks unsupported-engine usage as degraded rather than pretending precise attribution", () => {
     const projection = buildContextLedgerProjection(
       makeInput({
-        engine: "opencode",
+        engine: null,
         contextUsage: {
           total: {
             totalTokens: 100,
@@ -326,6 +326,35 @@ describe("buildContextLedgerProjection", () => {
     expect(
       projection.groups.find((entry) => entry.kind === "recent_turns")?.blocks[0]?.participationState,
     ).toBe("degraded");
+  });
+
+  it("marks opencode usage as shared now that it is a supported engine", () => {
+    const projection = buildContextLedgerProjection(
+      makeInput({
+        engine: "opencode",
+        contextUsage: {
+          total: {
+            totalTokens: 100,
+            inputTokens: 60,
+            cachedInputTokens: 0,
+            outputTokens: 40,
+            reasoningOutputTokens: 0,
+          },
+          last: {
+            totalTokens: 20,
+            inputTokens: 20,
+            cachedInputTokens: 0,
+            outputTokens: 0,
+            reasoningOutputTokens: 0,
+          },
+          modelContextWindow: 1000,
+        },
+      }),
+    );
+
+    expect(
+      projection.groups.find((entry) => entry.kind === "recent_turns")?.blocks[0]?.participationState,
+    ).toBe("shared");
   });
 
   it("marks carried manual memory and helper selections as pinned for the next send", () => {

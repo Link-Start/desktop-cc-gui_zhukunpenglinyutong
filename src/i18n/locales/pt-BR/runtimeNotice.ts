@@ -62,6 +62,9 @@ const runtimeNotice = {
     "grok": {
       "providerSelected": "{{name}} selecionado. Clique na entrada do Grok CLI para criar uma sessão."
     },
+    "opencode": {
+      "providerSelected": "{{name}} selecionado. Clique na entrada do OpenCode para criar uma sessão."
+    },
     "error": {
       "createSessionRecoveryRequired": "{{workspace}}: falha na criação da sessão enquanto a recuperação do runtime está em andamento",
       "threadTurnFailed": "Falha na sessão {{engine}}: {{message}}",

@@ -200,6 +200,7 @@ const baseSettings: AppSettings = {
   claudeBin: null,
   kimiBin: null,
   grokBin: null,
+  opencodeBin: null,
   codexBin: null,
   codexArgs: null,
   terminalShellPath: null,
@@ -1091,7 +1092,7 @@ describe("SettingsView Display", () => {
     });
   });
 
-  it("hides deprecated Gemini and OpenCode entries inside CLI validation tabs", () => {
+  it("hides the deprecated Gemini entry inside CLI validation tabs", () => {
     cleanup();
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     render(
@@ -1132,8 +1133,8 @@ describe("SettingsView Display", () => {
 
     expect(screen.getByRole("tab", { name: "Codex" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Claude Code" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "OpenCode CLI" })).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "Gemini CLI" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "OpenCode CLI" })).toBeNull();
     expect(screen.queryByRole("switch", { name: "Gemini CLI" })).toBeNull();
     expect(screen.queryByRole("switch", { name: "OpenCode CLI" })).toBeNull();
     expect(onUpdateAppSettings).not.toHaveBeenCalled();

@@ -59,6 +59,9 @@ const runtimeNotice = {
     "grok": {
       "providerSelected": "{{name}} seleccionado. Haz clic en la entrada de Grok CLI para crear una sesión."
     },
+    "opencode": {
+      "providerSelected": "{{name}} seleccionado. Haz clic en la entrada de OpenCode para crear una sesión."
+    },
     "claude": {
       "resumeCommandCopied": "Comando de reanudación de Claude copiado. Si el selector /resume del TUI no muestra esta sesión de la GUI, ejecuta claude --resume {{sessionId}} o /resume {{sessionId}} explícitamente."
     },

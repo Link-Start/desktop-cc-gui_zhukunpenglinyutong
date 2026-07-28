@@ -61,6 +61,8 @@ const sidebar = {
     "codexProviderSelectedTip": "Выбрано. Нажмите Codex слева, чтобы начать сессию.",
     "grokProviderChoiceTitle": "Выбор провайдера",
     "grokProviderSelectedTip": "Выбрано. Нажмите Grok CLI слева, чтобы начать сессию.",
+    "opencodeProviderChoiceTitle": "Выбор провайдера",
+    "opencodeProviderSelectedTip": "Выбрано. Нажмите OpenCode слева, чтобы начать сессию.",
     "providerFollowsGlobalLabel": "Следует глобальной конфигурации",
     "providerIsolatedConfigLabel": "Изолированная конфигурация",
     "sessionActionsGroup": "Новая сессия",

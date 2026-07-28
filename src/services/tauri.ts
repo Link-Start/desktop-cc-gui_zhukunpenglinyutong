@@ -255,7 +255,7 @@ export type {
   BrowserSnapshotBudget,
   BrowserTextNode,
 } from "../features/browser-agent/types";
-export { previewCodexLaunchProfile, runClaudeDoctor, runCodexDoctor, runGrokDoctor, runKimiDoctor } from "./tauri/doctor";
+export { previewCodexLaunchProfile, runClaudeDoctor, runCodexDoctor, runGrokDoctor, runKimiDoctor, runOpenCodeDoctor } from "./tauri/doctor";
 export { getCliInstallPlan, getCliVersionStatus, runCliInstaller } from "./tauri/cliInstaller";
 export type {
   ComputerUseActivationFailureKind,
@@ -350,13 +350,16 @@ export {
   addCodexProvider,
   addGrokProvider,
   addKimiProvider,
+  addOpenCodeProvider,
   deleteClaudeProvider,
   deleteCodexProvider,
   deleteGrokProvider,
   deleteKimiProvider,
+  deleteOpenCodeProvider,
   fetchClaudeProviderModels,
   fetchGrokProviderModels,
   fetchKimiProviderModels,
+  fetchOpenCodeProviderModels,
   getClaudeAlwaysThinkingEnabled,
   getClaudeProviders,
   readClaudeSettingsJson,
@@ -364,10 +367,12 @@ export {
   getCurrentClaudeConfig,
   getCurrentGrokConfig,
   getCurrentKimiConfig,
+  getCurrentOpenCodeConfig,
   getGeminiVendorPreflight,
   getGeminiVendorSettings,
   getGrokProviders,
   getKimiProviders,
+  getOpenCodeProviders,
   listCcSwitchProviders,
   reorderClaudeProviders,
   saveGeminiVendorSettings,
@@ -377,10 +382,12 @@ export {
   switchCodexProvider,
   switchGrokProvider,
   switchKimiProvider,
+  switchOpenCodeProvider,
   updateClaudeProvider,
   updateCodexProvider,
   updateGrokProvider,
   updateKimiProvider,
+  updateOpenCodeProvider,
 } from "./tauri/vendors";
 export type {
   CcSwitchAppType,

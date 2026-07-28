@@ -1,9 +1,6 @@
 import type { EngineType } from "../types";
 
-export type ExecutableEngineType = Exclude<
-  EngineType,
-  "gemini" | "opencode"
->;
+export type ExecutableEngineType = Exclude<EngineType, "gemini">;
 
 export const GEMINI_EXECUTION_DISABLED_MESSAGE =
   "Selected CLI engine is disabled by product policy";
@@ -15,7 +12,8 @@ export function isEngineExecutionEnabled(
     engine === "codex" ||
     engine === "claude" ||
     engine === "grok" ||
-    engine === "kimi"
+    engine === "kimi" ||
+    engine === "opencode"
   );
 }
 

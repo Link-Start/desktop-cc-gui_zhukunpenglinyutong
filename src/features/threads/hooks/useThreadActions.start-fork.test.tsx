@@ -608,18 +608,25 @@ describe("useThreadActions start/fork", () => {
     ]);
   });
 
-  it("rejects retired opencode thread creation before any owner side effect", async () => {
+  it("allows opencode thread creation past the execution policy gate", async () => {
     const { result, dispatch, loadedThreadsRef } = renderActions();
 
-    await expect(
-      result.current.startThreadForWorkspace("ws-1", {
+    let threadId: string | null = null;
+    await act(async () => {
+      threadId = await result.current.startThreadForWorkspace("ws-1", {
         engine: "opencode",
-      }),
-    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
+      });
+    });
 
-    expect(startThread).not.toHaveBeenCalled();
-    expect(dispatch).not.toHaveBeenCalled();
-    expect(loadedThreadsRef.current).toEqual({});
+    expect(threadId).toEqual(expect.any(String));
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ensureThread",
+        workspaceId: "ws-1",
+        threadId,
+      }),
+    );
+    expect(threadId ? loadedThreadsRef.current[threadId] : false).toBe(true);
   });
 
   it("forks a thread and activates the fork", async () => {

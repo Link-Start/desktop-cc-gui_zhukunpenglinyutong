@@ -45,10 +45,15 @@ export function CommitMessageEngineIcon({
   }
   if (engine === "opencode") {
     return (
-      <svg viewBox="0 0 24 24" fill="none" className={className} style={iconStyle} aria-hidden>
-        <rect x="3.2" y="4.2" width="17.6" height="15.6" rx="2.3" stroke="#3B82F6" strokeWidth="1.6" />
-        <path d="m9.4 9.2-2.3 2.4 2.3 2.4" stroke="#3B82F6" strokeWidth="1.7" strokeLinecap="round" />
-        <path d="M12.3 14.2h4.4" stroke="#3B82F6" strokeWidth="1.7" strokeLinecap="round" />
+      <svg
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        fillRule="evenodd"
+        className={className}
+        style={iconStyle}
+        aria-hidden
+      >
+        <path d="M16 6H8v12h8V6zm4 16H4V2h16v20z" />
       </svg>
     );
   }

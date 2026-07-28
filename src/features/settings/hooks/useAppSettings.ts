@@ -8,6 +8,7 @@ import {
   runCodexDoctor,
   runGrokDoctor,
   runKimiDoctor,
+  runOpenCodeDoctor,
   takeSettingsRecoveryNotice,
   updateAppSettings,
 } from "../../../services/tauri";
@@ -192,11 +193,12 @@ const defaultSettings: AppSettings = {
   claudeBin: null,
   kimiBin: null,
   grokBin: null,
+  opencodeBin: null,
   codexBin: null,
   codexArgs: null,
   terminalShellPath: null,
   geminiEnabled: false,
-  opencodeEnabled: false,
+  opencodeEnabled: true,
   sessionAttributionMode: "related",
   backendMode: "local",
   remoteBackendHost: "127.0.0.1:4732",
@@ -384,13 +386,16 @@ function normalizeAppSettings(
     claudeBin: settings.claudeBin?.trim() ? settings.claudeBin.trim() : null,
     kimiBin: settings.kimiBin?.trim() ? settings.kimiBin.trim() : null,
     grokBin: settings.grokBin?.trim() ? settings.grokBin.trim() : null,
+    opencodeBin: settings.opencodeBin?.trim()
+      ? settings.opencodeBin.trim()
+      : null,
     codexBin: settings.codexBin?.trim() ? settings.codexBin.trim() : null,
     codexArgs: settings.codexArgs?.trim() ? settings.codexArgs.trim() : null,
     terminalShellPath: settings.terminalShellPath?.trim()
       ? settings.terminalShellPath.trim()
       : null,
     geminiEnabled: false,
-    opencodeEnabled: false,
+    opencodeEnabled: true,
     sessionAttributionMode:
       settings.sessionAttributionMode === "workspace-only"
         ? "workspace-only"
@@ -688,6 +693,10 @@ export function useAppSettings() {
     return runGrokDoctor(grokBin);
   }, []);
 
+  const opencodeDoctor = useCallback(async (opencodeBin: string | null) => {
+    return runOpenCodeDoctor(opencodeBin);
+  }, []);
+
   return {
     settings,
     setSettings,
@@ -696,6 +705,7 @@ export function useAppSettings() {
     claudeDoctor,
     kimiDoctor,
     grokDoctor,
+    opencodeDoctor,
     isLoading,
   };
 }

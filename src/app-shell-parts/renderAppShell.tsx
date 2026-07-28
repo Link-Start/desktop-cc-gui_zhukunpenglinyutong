@@ -135,6 +135,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     claudeDoctor,
     kimiDoctor,
     grokDoctor,
+    opencodeDoctor,
     editorSplitCompanion,
     editorSplitLayout,
     engineStatuses,
@@ -637,6 +638,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
                 onRunClaudeDoctor={claudeDoctor}
                 onRunKimiDoctor={kimiDoctor}
                 onRunGrokDoctor={grokDoctor}
+                onRunOpenCodeDoctor={opencodeDoctor}
                 activeWorkspace={activeWorkspace}
                 activeThreadId={activeThreadId}
                 activeEngine={activeEngine}

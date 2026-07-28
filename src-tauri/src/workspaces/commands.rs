@@ -1372,7 +1372,13 @@ async fn add_workspace_for_cli_engine(
             detect_claude_status(claude_bin.as_deref()).await.installed
         }
         EngineType::Gemini => false,
-        EngineType::OpenCode => detect_opencode_status(None).await.installed,
+        EngineType::OpenCode => {
+            let opencode_bin = {
+                let settings = state.app_settings.lock().await;
+                settings.opencode_bin.clone()
+            };
+            detect_opencode_status(opencode_bin.as_deref()).await.installed
+        }
         EngineType::Kimi => {
             let kimi_bin = {
                 let settings = state.app_settings.lock().await;

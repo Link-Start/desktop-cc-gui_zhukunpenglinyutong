@@ -484,7 +484,8 @@ function isVisibleTextDiagnosticsStream(
     snapshot.engine === "codex" ||
     snapshot.engine === "gemini" ||
     snapshot.engine === "grok" ||
-    snapshot.engine === "kimi"
+    snapshot.engine === "kimi" ||
+    snapshot.engine === "opencode"
   );
 }
 

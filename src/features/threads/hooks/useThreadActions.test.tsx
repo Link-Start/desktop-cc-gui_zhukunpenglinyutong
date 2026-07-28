@@ -2543,7 +2543,7 @@ describe("useThreadActions", () => {
     ]);
   });
 
-  it("loads active catalogs without probing retired opencode during workspace hydration", async () => {
+  it("loads active catalogs including opencode during workspace hydration", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: {
         data: [
@@ -2601,7 +2601,7 @@ describe("useThreadActions", () => {
 
     expect(listThreads).toHaveBeenCalledTimes(1);
     expect(listClaudeSessions).toHaveBeenCalled();
-    expect(getOpenCodeSessionList).not.toHaveBeenCalled();
+    expect(getOpenCodeSessionList).toHaveBeenCalledWith("ws-1");
     expect(listWorkspaceSessions).toHaveBeenCalledWith("ws-1", {
       query: { status: "active", sessionAttributionMode: "related" },
       cursor: null,
@@ -2619,6 +2619,12 @@ describe("useThreadActions", () => {
         name: "Slow Claude session",
         updatedAt: 7000,
         engineSource: "claude",
+      },
+      {
+        id: "opencode:opencode-slow",
+        name: "Slow OpenCode session",
+        updatedAt: 6900,
+        engineSource: "opencode",
       },
       {
         id: "codex:catalog-slow",

@@ -386,7 +386,6 @@ describe("useWorkspaceThreadListHydration", () => {
       expect(listThreadsForWorkspace).toHaveBeenCalledWith(
         workspaces[0],
         expect.objectContaining({
-          includeOpenCodeSessions: false,
           preserveState: true,
           startupHydrationMode: "full-catalog",
         }),

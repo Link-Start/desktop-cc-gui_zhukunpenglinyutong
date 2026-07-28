@@ -22,7 +22,6 @@ import { cn } from "@/lib/utils";
 import type { VendorTab } from "../types";
 
 type UnsupportedCliEngineId =
-  | "opencode"
   | "qoder"
   | "qwen"
   | "codebuddy"
@@ -117,6 +116,7 @@ export function buildCliEngineNavItems(options: {
   codexHasConfig: boolean;
   kimiHasConfig: boolean;
   grokHasConfig: boolean;
+  openCodeHasConfig: boolean;
 }): CliEngineNavItem[] {
   return [
     { key: "claude", label: "Claude Code CLI", hasConfig: options.claudeHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.claude },
@@ -124,7 +124,7 @@ export function buildCliEngineNavItems(options: {
     { key: "kimi", label: "Kimi CLI", hasConfig: options.kimiHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.kimi },
     { key: "gemini", label: "Gemini CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.gemini },
     { key: "grok", label: "Grok CLI", hasConfig: options.grokHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.grok },
-    { key: "opencode", label: "OpenCode CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.opencode },
+    { key: "opencode", label: "OpenCode CLI", hasConfig: options.openCodeHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.opencode },
     { key: "glm", label: "GLM CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.glm },
     { key: "trae", label: "Trae CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.trae },
     { key: "cursor", label: "Cursor CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.cursor },

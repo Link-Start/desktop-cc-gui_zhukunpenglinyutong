@@ -62,6 +62,9 @@ const runtimeNotice = {
     "grok": {
       "providerSelected": "{{name}}이(가) 선택되었습니다. Grok CLI 항목을 클릭하여 세션을 생성하세요."
     },
+    "opencode": {
+      "providerSelected": "{{name}}이(가) 선택되었습니다. OpenCode 항목을 클릭하여 세션을 생성하세요."
+    },
     "error": {
       "createSessionRecoveryRequired": "{{workspace}}: 런타임 복구가 진행 중인 동안 세션 생성에 실패했습니다",
       "threadTurnFailed": "{{engine}} 세션 실패: {{message}}",

@@ -33,6 +33,10 @@ import {
   persistEngineSelection,
   readPersistedEngineSelection,
 } from "./engineControllerSelection";
+import {
+  WEB_RUNTIME_DEFAULT_ENGINE,
+  WEB_RUNTIME_INITIAL_STATUSES,
+} from "./engineControllerWebRuntime";
 import { useEngineRuntimeNotices } from "./useEngineRuntimeNotices";
 import { useEngineCatalogRevision } from "./useEngineCatalogRevision";
 
@@ -54,24 +58,6 @@ export type EngineRefreshResult = {
   activeEngine: EngineType;
 };
 
-const WEB_RUNTIME_DEFAULT_ENGINE: EngineType = "codex";
-const WEB_RUNTIME_INITIAL_STATUSES: EngineStatus[] = [
-  {
-    engineType: "codex",
-    installed: true,
-    version: "web-service",
-    binPath: null,
-    features: {
-      streaming: true,
-      reasoning: true,
-      toolUse: true,
-      imageInput: true,
-      sessionContinuation: true,
-    },
-    models: [],
-    error: null,
-  },
-];
 /**
  * Hook for managing multi-engine state and selection
  */

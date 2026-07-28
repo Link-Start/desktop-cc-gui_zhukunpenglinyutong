@@ -28,6 +28,8 @@ export const LOCAL_KIMI_PROVIDER_ID = "__local_config_toml__";
 
 export const LOCAL_GROK_PROVIDER_ID = "__local_config_toml__";
 
+export const LOCAL_OPENCODE_PROVIDER_ID = "__local_opencode_json__";
+
 // ============ Validation Helpers ============
 
 export const MODEL_ID_PATTERN = COMPOSER_MODEL_ID_PATTERN;
@@ -192,6 +194,31 @@ export interface GrokProviderDeleteResult {
   warning?: string;
 }
 
+export interface OpenCodeProviderConfig {
+  id: string;
+  name: string;
+  remark?: string;
+  websiteUrl?: string;
+  createdAt?: number;
+  sortOrder?: number;
+  isActive?: boolean;
+  isLocalProvider?: boolean;
+  baseUrl: string;
+  apiKey: string;
+  models: string[];
+}
+
+export interface OpenCodeCurrentConfig {
+  apiKey: string;
+  baseUrl: string;
+  authType?: string;
+  defaultModel: string;
+  providerId?: string;
+  providerName?: string;
+  configStatus?: "missing" | "loaded" | "malformed" | "io-error";
+  diagnostic?: string;
+}
+
 export const GEMINI_AUTH_MODES = [
   "custom",
   "login_google",
@@ -216,7 +243,7 @@ export interface GeminiVendorDraft {
   model: string;
 }
 
-export type VendorTab = "claude" | "codex" | "kimi" | "grok";
+export type VendorTab = "claude" | "codex" | "kimi" | "grok" | "opencode";
 
 export interface ClaudeProviderPreset {
   id: string;
@@ -375,5 +402,27 @@ export const GROK_PROVIDER_PRESETS: GrokProviderPreset[] = [
     baseUrl: "",
     apiBackend: "chat_completions",
     model: "",
+  },
+];
+
+export interface OpenCodeProviderPreset {
+  id: string;
+  nameKey: string;
+  baseUrl: string;
+  models: string[];
+}
+
+export const OPENCODE_PROVIDER_PRESETS: OpenCodeProviderPreset[] = [
+  {
+    id: "opencode-zen",
+    nameKey: "settings.vendor.opencodePresets.opencodeZen",
+    baseUrl: "https://opencode.ai/zen/v1",
+    models: [],
+  },
+  {
+    id: "custom",
+    nameKey: "settings.vendor.opencodePresets.custom",
+    baseUrl: "",
+    models: [],
   },
 ];

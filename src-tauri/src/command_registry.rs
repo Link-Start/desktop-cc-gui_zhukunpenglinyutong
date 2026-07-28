@@ -149,6 +149,7 @@ pub(crate) fn invoke_handler(
         crate::codex::claude_doctor,
         crate::codex::kimi_doctor,
         crate::codex::grok_doctor,
+        crate::codex::opencode_doctor,
         crate::codex::cli_install_plan,
         crate::codex::cli_install_run,
         crate::codex::cli_version_status,
@@ -436,6 +437,13 @@ pub(crate) fn invoke_handler(
         crate::vendors::vendor_delete_grok_provider,
         crate::vendors::vendor_switch_grok_provider,
         crate::vendors::vendor_fetch_grok_models,
+        crate::vendors::vendor_get_opencode_providers,
+        crate::vendors::vendor_get_current_opencode_config,
+        crate::vendors::vendor_add_opencode_provider,
+        crate::vendors::vendor_update_opencode_provider,
+        crate::vendors::vendor_delete_opencode_provider,
+        crate::vendors::vendor_switch_opencode_provider,
+        crate::vendors::vendor_fetch_opencode_models,
         crate::vendors::vendor_list_cc_switch_providers,
         // Open paths
         crate::get_pending_open_paths

@@ -241,7 +241,7 @@ export function resolveVisibleMessageItems(options: {
       return false;
     }
     if (
-      (activeEngine === "gemini" || activeEngine === "grok" || activeEngine === "kimi") &&
+      (activeEngine === "gemini" || activeEngine === "grok" || activeEngine === "kimi" || activeEngine === "opencode") &&
       isExplicitReasoningSegmentId(item.id)
     ) {
       return true;
@@ -255,7 +255,7 @@ export function resolveVisibleMessageItems(options: {
     return keepTitleOnlyReasoning || item.id === latestTitleOnlyReasoningId;
   });
   const appendReasoningRuns =
-    activeEngine === "claude" || activeEngine === "gemini" || activeEngine === "grok" || activeEngine === "kimi";
+    activeEngine === "claude" || activeEngine === "gemini" || activeEngine === "grok" || activeEngine === "kimi" || activeEngine === "opencode";
   const deduped = dedupeAdjacentReasoningItems(
     filtered,
     reasoningMetaById,

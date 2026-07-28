@@ -197,7 +197,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
     vi.useRealTimers();
   });
 
-  it("skips retired opencode listing during normal hydration", async () => {
+  it("includes opencode listing during normal hydration", async () => {
     const { result } = renderActions();
 
     await act(async () => {
@@ -206,7 +206,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
       });
     });
 
-    expect(getOpenCodeSessionList).not.toHaveBeenCalled();
+    expect(getOpenCodeSessionList).toHaveBeenCalledWith("ws-1");
   });
 
   it(

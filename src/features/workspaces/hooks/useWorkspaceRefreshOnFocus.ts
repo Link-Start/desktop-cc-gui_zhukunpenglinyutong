@@ -72,7 +72,6 @@ export function useWorkspaceRefreshOnFocus({
         if (active) {
           await listThreadsForWorkspace(active, {
             preserveState: true,
-            includeOpenCodeSessions: false,
             recoverySource: "focus-refresh",
             allowRuntimeReconnect: false,
           });
@@ -81,7 +80,6 @@ export function useWorkspaceRefreshOnFocus({
           rest.map((workspace) =>
             listThreadsForWorkspace(workspace, {
               preserveState: true,
-              includeOpenCodeSessions: false,
               recoverySource: "focus-refresh",
               allowRuntimeReconnect: false,
             }),

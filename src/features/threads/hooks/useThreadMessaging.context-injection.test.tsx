@@ -196,7 +196,7 @@ describe("useThreadMessaging context injection", () => {
         [],
         { skipPromptExpansion: true, effort: "high" },
       ),
-    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
 
     expect(engineSendMessage).not.toHaveBeenCalled();
   });

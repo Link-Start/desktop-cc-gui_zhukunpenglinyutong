@@ -67,6 +67,9 @@ const runtimeNotice = {
     grok: {
       providerSelected: "已选择 {{name}}，点击 Grok CLI 即可直接创建会话",
     },
+    opencode: {
+      providerSelected: "已选择 {{name}}，点击 OpenCode 即可直接创建会话",
+    },
     error: {
       createSessionRecoveryRequired:
         "{{workspace}}：会话创建失败，运行时正在恢复",

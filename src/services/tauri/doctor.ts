@@ -33,6 +33,12 @@ export async function runGrokDoctor(
   return invoke<CodexDoctorResult>("grok_doctor", { grokBin });
 }
 
+export async function runOpenCodeDoctor(
+  opencodeBin: string | null,
+): Promise<CodexDoctorResult> {
+  return invoke<CodexDoctorResult>("opencode_doctor", { opencodeBin });
+}
+
 export async function previewCodexLaunchProfile({
   codexBin,
   codexArgs,

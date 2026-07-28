@@ -50,6 +50,13 @@ type CodexSectionProps = {
   handleSaveGrokSettings: () => Promise<void>;
   handleRunGrokDoctor: () => Promise<void>;
   grokDoctorState: DoctorState;
+  openCodePathDraft: string;
+  setOpenCodePathDraft: (value: string) => void;
+  openCodeDirty: boolean;
+  handleBrowseOpenCode: () => Promise<void>;
+  handleSaveOpenCodeSettings: () => Promise<void>;
+  handleRunOpenCodeDoctor: () => Promise<void>;
+  openCodeDoctorState: DoctorState;
   codexPathDraft: string;
   setCodexPathDraft: (value: string) => void;
   codexArgsDraft: string;
@@ -88,10 +95,10 @@ type PreviewState = {
   error: string | null;
 };
 
-type CliValidationTab = "codex" | "claude" | "kimi" | "grok";
+type CliValidationTab = "codex" | "claude" | "kimi" | "grok" | "opencode";
 
-// Deprecated: Gemini CLI and OpenCode CLI validation entries are intentionally hidden.
-const DEPRECATED_CLI_VALIDATION_ENGINES = new Set(["gemini", "opencode"]);
+// Deprecated: Gemini CLI validation entry is intentionally hidden.
+const DEPRECATED_CLI_VALIDATION_ENGINES = new Set(["gemini"]);
 
 type DoctorResultCardProps = {
   t: (key: string) => string;
@@ -457,6 +464,13 @@ export function CodexSection({
   handleSaveGrokSettings,
   handleRunGrokDoctor,
   grokDoctorState,
+  openCodePathDraft,
+  setOpenCodePathDraft,
+  openCodeDirty,
+  handleBrowseOpenCode,
+  handleSaveOpenCodeSettings,
+  handleRunOpenCodeDoctor,
+  openCodeDoctorState,
   codexPathDraft,
   setCodexPathDraft,
   codexArgsDraft,
@@ -764,7 +778,9 @@ export function CodexSection({
                 ? "kimi"
                 : value === "grok"
                   ? "grok"
-                  : "codex",
+                  : value === "opencode"
+                    ? "opencode"
+                    : "codex",
           );
         }}
       >
@@ -775,6 +791,9 @@ export function CodexSection({
           </TabsTab>
           <TabsTab value="kimi">{t("settings.cliValidationTabKimiCli")}</TabsTab>
           <TabsTab value="grok">{t("settings.cliValidationTabGrokCli")}</TabsTab>
+          <TabsTab value="opencode">
+            {t("settings.cliValidationTabOpenCodeCli")}
+          </TabsTab>
         </TabsList>
 
         <TabsPanel value="codex">
@@ -1261,6 +1280,88 @@ export function CodexSection({
               state={grokDoctorState}
               successTitleKey="settings.grokLooksGood"
               errorTitleKey="settings.grokIssueDetected"
+              showAppServer={false}
+            />
+          </div>
+        </TabsPanel>
+
+        <TabsPanel value="opencode">
+          <div className="settings-field">
+            <label className="settings-field-label" htmlFor="opencode-path">
+              {t("settings.defaultOpenCodePath")}
+            </label>
+            <div className="settings-field-row">
+              <input
+                id="opencode-path"
+                className="settings-input"
+                value={openCodePathDraft}
+                placeholder={t("settings.openCodePlaceholder")}
+                onChange={(event) => setOpenCodePathDraft(event.target.value)}
+              />
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => void handleBrowseOpenCode()}
+              >
+                {t("settings.browse")}
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setOpenCodePathDraft("")}
+              >
+                {t("settings.usePath")}
+              </button>
+            </div>
+            <div className="settings-help">
+              {t("settings.pathResolutionDesc")}
+            </div>
+            <div className="settings-field-actions">
+              {openCodeDirty ? (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    void handleSaveOpenCodeSettings();
+                  }}
+                  disabled={isSavingSettings}
+                >
+                  {isSavingSettings ? t("settings.saving") : t("common.save")}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="ghost settings-button-compact"
+                onClick={() => {
+                  void handleRunOpenCodeDoctor();
+                }}
+                disabled={openCodeDoctorState.status === "running"}
+              >
+                <Stethoscope aria-hidden />
+                {openCodeDoctorState.status === "running"
+                  ? t("settings.running")
+                  : t("settings.runOpenCodeDoctor")}
+              </button>
+              <button
+                type="button"
+                className="ghost settings-button-compact"
+                onClick={() => {
+                  void requestInstallPlan("opencode", openCodeDoctorState.result);
+                }}
+                disabled={installerBusy}
+              >
+                {resolveInstallerAction(openCodeDoctorState.result) ===
+                "installLatest"
+                  ? t("settings.cliInstallLatest")
+                  : t("settings.cliUpdateLatest")}
+              </button>
+            </div>
+
+            <DoctorResultCard
+              t={t}
+              state={openCodeDoctorState}
+              successTitleKey="settings.openCodeLooksGood"
+              errorTitleKey="settings.openCodeIssueDetected"
               showAppServer={false}
             />
           </div>

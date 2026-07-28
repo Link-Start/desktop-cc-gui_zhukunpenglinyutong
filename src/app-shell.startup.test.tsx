@@ -322,6 +322,7 @@ vi.mock("./features/app/hooks/useAppSettingsController", () => ({
     claudeDoctor: null,
     kimiDoctor: null,
     grokDoctor: null,
+    opencodeDoctor: null,
     appSettingsLoading: startupState.appSettingsLoading,
     reduceTransparency: false,
     setReduceTransparency: createNoopFunction(),

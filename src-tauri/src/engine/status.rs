@@ -34,6 +34,8 @@ struct GeneratedModelCatalogEngines {
     gemini: Vec<GeneratedModelEntry>,
     grok: Vec<GeneratedModelEntry>,
     kimi: Vec<GeneratedModelEntry>,
+    #[serde(default)]
+    opencode: Vec<GeneratedModelEntry>,
 }
 
 #[derive(Deserialize)]
@@ -62,6 +64,7 @@ fn get_generated_fallback_models(engine: EngineType) -> Vec<ModelInfo> {
         EngineType::Gemini => catalog.engines.gemini,
         EngineType::Grok => catalog.engines.grok,
         EngineType::Kimi => catalog.engines.kimi,
+        EngineType::OpenCode => catalog.engines.opencode,
         _ => return Vec::new(),
     };
     entries
@@ -99,10 +102,10 @@ fn merge_provider_models_with_public(
 fn public_models_for_engine(engine_type: EngineType) -> Vec<ModelInfo> {
     match engine_type {
         EngineType::Claude => get_builtin_claude_models(),
-        EngineType::Codex | EngineType::Grok | EngineType::Kimi => {
+        EngineType::Codex | EngineType::Grok | EngineType::Kimi | EngineType::OpenCode => {
             get_generated_fallback_models(engine_type)
         }
-        EngineType::Gemini | EngineType::OpenCode => Vec::new(),
+        EngineType::Gemini => Vec::new(),
     }
 }
 
@@ -262,6 +265,44 @@ fn grok_provider_models_from_config(
         .as_default()]
 }
 
+fn opencode_provider_models_from_config(
+    provider_profile_id: &str,
+    provider: &crate::types::OpenCodeProviderConfig,
+) -> Vec<ModelInfo> {
+    // Managed providers are injected via OPENCODE_CONFIG_CONTENT under the
+    // stable `ccgui` provider key, so the catalog id must be the qualified
+    // `ccgui/<model>` ref — passing the bare API model name would bypass the
+    // provider's base_url/api_key.
+    let provider_name = provider.name.trim();
+    let provider_name = if provider_name.is_empty() {
+        "opencode"
+    } else {
+        provider_name
+    };
+    let mut models = Vec::new();
+    for raw_model in &provider.models {
+        let runtime_model = raw_model.trim();
+        if runtime_model.is_empty() {
+            continue;
+        }
+        let qualified =
+            crate::engine::opencode_provider_profile::qualify_managed_model_ref(runtime_model);
+        models.push(
+            ModelInfo::new(qualified.clone(), runtime_model)
+                .with_runtime_model(qualified)
+                .with_provider(provider_name)
+                .with_protocol("opencode")
+                .with_source("provider-config")
+                .with_provenance("provider:opencode-config")
+                .with_provider_profile_id(provider_profile_id),
+        );
+    }
+    if let Some(first) = models.first_mut() {
+        *first = first.clone().as_default();
+    }
+    models
+}
+
 pub(crate) fn get_provider_scoped_engine_models(
     engine_type: EngineType,
     provider_profile_id: Option<&str>,
@@ -313,7 +354,25 @@ pub(crate) fn get_provider_scoped_engine_models(
             };
             grok_provider_models_from_config(provider_profile_id, provider)
         }
-        EngineType::Gemini | EngineType::OpenCode => return Ok(None),
+        EngineType::OpenCode => {
+            let Some(provider) =
+                crate::engine::opencode_provider_profile::resolve_opencode_provider_model_config(
+                    provider_profile_id,
+                )?
+            else {
+                return Ok(None);
+            };
+            // Unlike kimi/grok (materialized configs that keep built-in
+            // providers working), an env-injected OPENCODE_CONFIG_CONTENT
+            // disturbs the CLI's own provider auth resolution (observed: zen
+            // 401 on 1.4.6 once a custom npm provider is declared). Managed
+            // profiles therefore expose only their own models.
+            return Ok(Some(opencode_provider_models_from_config(
+                provider_profile_id,
+                &provider,
+            )));
+        }
+        EngineType::Gemini => return Ok(None),
     };
     Ok(Some(merge_provider_models_with_public(
         provider_models,
@@ -552,8 +611,16 @@ async fn detect_opencode_status_with_options(
     let home_dir = get_opencode_home_dir();
     let (models, models_error) = if include_models {
         match get_opencode_models(&bin, path_env.as_ref()).await {
-            Ok(models) => (models, None),
-            Err(err) => (Vec::new(), Some(err)),
+            Ok(models) if !models.is_empty() => (models, None),
+            Ok(_) => (public_models_for_engine(EngineType::OpenCode), None),
+            Err(err) => {
+                let fallback = public_models_for_engine(EngineType::OpenCode);
+                if fallback.is_empty() {
+                    (Vec::new(), Some(err))
+                } else {
+                    (fallback, None)
+                }
+            }
         }
     } else {
         (Vec::new(), None)
@@ -573,9 +640,12 @@ async fn detect_opencode_status_with_options(
     }
 }
 
-/// Detect OpenCode CLI installation status using lightweight startup probes only.
+/// Detect OpenCode CLI installation status. Probes the CLI model catalog
+/// (like the kimi/grok detection paths) so engine selectors can render the
+/// model list without a second round trip; falls back to the generated
+/// roster when the probe is unavailable.
 pub async fn detect_opencode_status(custom_bin: Option<&str>) -> EngineStatus {
-    detect_opencode_status_with_options(custom_bin, false).await
+    detect_opencode_status_with_options(custom_bin, true).await
 }
 
 /// Query OpenCode CLI for available models on demand.
@@ -699,6 +769,62 @@ fn get_codex_home_dir() -> Option<PathBuf> {
 /// Get OpenCode home directory
 fn get_opencode_home_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(".opencode"))
+}
+
+/// Candidate OpenCode config file paths in probe order: `$OPENCODE_CONFIG`,
+/// then `~/.config/opencode/opencode.json(c)`, then `~/.opencode/opencode.json(c)`.
+pub fn opencode_config_candidate_paths() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(config) = std::env::var_os("OPENCODE_CONFIG").filter(|value| !value.is_empty()) {
+        candidates.push(PathBuf::from(config));
+    }
+    if let Some(home) = dirs::home_dir() {
+        for file_name in ["opencode.json", "opencode.jsonc"] {
+            candidates.push(home.join(".config").join("opencode").join(file_name));
+        }
+        for file_name in ["opencode.json", "opencode.jsonc"] {
+            candidates.push(home.join(".opencode").join(file_name));
+        }
+    }
+    candidates
+}
+
+/// Read the first existing OpenCode config document best-effort.
+///
+/// Returns `(status, path, document, diagnostic)` where status is one of
+/// `loaded` / `missing` / `malformed` / `io-error`. JSONC-only syntax
+/// (comments, trailing commas) is not stripped; such files report `malformed`
+/// and callers should treat dependent checks as inconclusive rather than broken.
+pub fn read_opencode_config_document() -> (String, Option<PathBuf>, Value, Option<String>) {
+    let Some(path) = opencode_config_candidate_paths()
+        .into_iter()
+        .find(|candidate| candidate.is_file())
+    else {
+        return ("missing".to_string(), None, Value::Null, None);
+    };
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(error) => {
+            return (
+                "io-error".to_string(),
+                Some(path.clone()),
+                Value::Null,
+                Some(format!("Failed to read {}: {}", path.display(), error)),
+            )
+        }
+    };
+    if raw.trim().is_empty() {
+        return ("loaded".to_string(), Some(path), Value::Null, None);
+    }
+    match serde_json::from_str::<Value>(&raw) {
+        Ok(document) => ("loaded".to_string(), Some(path), document, None),
+        Err(error) => (
+            "malformed".to_string(),
+            Some(path.clone()),
+            Value::Null,
+            Some(format!("Failed to parse {}: {}", path.display(), error)),
+        ),
+    }
 }
 
 /// Get Gemini home directory
@@ -1399,7 +1525,6 @@ pub async fn detect_all_engines(
     kimi_bin: Option<&str>,
     grok_bin: Option<&str>,
     gemini_enabled: bool,
-    opencode_enabled: bool,
 ) -> Vec<EngineStatus> {
     // Run detections in parallel
     let (claude_status, codex_status, gemini_status, opencode_status, kimi_status, grok_status) = tokio::join!(
@@ -1412,13 +1537,7 @@ pub async fn detect_all_engines(
                 disabled_engine_status(EngineType::Gemini)
             }
         },
-        async {
-            if opencode_enabled {
-                detect_opencode_status(opencode_bin).await
-            } else {
-                disabled_engine_status(EngineType::OpenCode)
-            }
-        },
+        detect_opencode_status(opencode_bin),
         detect_kimi_status(kimi_bin),
         detect_grok_status(grok_bin),
     );
@@ -1827,7 +1946,7 @@ mod tests {
         let serialized = serde_json::to_value(&codex[0]).expect("serialize model");
         assert_eq!(serialized["provider"], "openai");
         assert_eq!(serialized["protocol"], "openai-responses");
-        assert_eq!(serialized["lastVerifiedAt"], "2026-07-26");
+        assert_eq!(serialized["lastVerifiedAt"], "2026-07-27");
         assert_eq!(serialized["lifecycle"], "fallback");
     }
 
@@ -2102,7 +2221,7 @@ opencode/gpt-5-nano
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn detect_opencode_status_lightweight_skips_models_probe() {
+    async fn detect_opencode_status_falls_back_to_generated_roster_when_models_probe_fails() {
         let unique = format!(
             "ccgui-opencode-light-{}-{}",
             std::process::id(),
@@ -2125,7 +2244,10 @@ opencode/gpt-5-nano
 
         let status = detect_opencode_status(Some(script_path.to_string_lossy().as_ref())).await;
         assert!(status.installed);
-        assert!(status.models.is_empty());
+        assert!(
+            !status.models.is_empty(),
+            "failed models probe must fall back to the generated roster"
+        );
         assert!(status.error.is_none());
 
         let _ = fs::remove_file(&script_path);

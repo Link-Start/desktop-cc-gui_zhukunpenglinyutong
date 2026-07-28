@@ -64,6 +64,8 @@ const sidebar = {
     kimiProviderSelectedTip: "已选择，点击左侧 Kimi CLI 即可直接开启会话",
     grokProviderChoiceTitle: "供应商选择",
     grokProviderSelectedTip: "已选择，点击左侧 Grok CLI 即可直接开启会话",
+    opencodeProviderChoiceTitle: "供应商选择",
+    opencodeProviderSelectedTip: "已选择，点击左侧 OpenCode 即可直接开启会话",
     providerFollowsGlobalLabel: "跟随全局配置",
     providerIsolatedConfigLabel: "独立配置",
     providerUnavailableLabel: "供应商不可用",

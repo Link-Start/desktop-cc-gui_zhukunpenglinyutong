@@ -657,6 +657,11 @@ impl DaemonState {
         crate::codex::run_grok_doctor_with_settings(grok_bin, &settings).await
     }
 
+    pub(super) async fn opencode_doctor(&self, opencode_bin: Option<String>) -> Result<Value, String> {
+        let settings = self.app_settings.lock().await.clone();
+        crate::codex::run_opencode_doctor_with_settings(opencode_bin, &settings).await
+    }
+
     pub(super) async fn cli_install_plan(
         &self,
         engine: crate::codex_installer::CliInstallEngine,
@@ -868,13 +873,24 @@ impl DaemonState {
                 },
             )
             .await;
+        self.engine_manager
+            .set_engine_config(
+                engine::EngineType::OpenCode,
+                engine::EngineConfig {
+                    bin_path: settings.opencode_bin.clone(),
+                    home_dir: None,
+                    custom_args: None,
+                    default_model: None,
+                },
+            )
+            .await;
     }
 
     pub(super) async fn detect_engines(&self) -> Vec<engine::EngineStatus> {
         self.sync_engine_configs().await;
         let settings = self.app_settings.lock().await.clone();
         self.engine_manager
-            .detect_engines_with_gates(settings.gemini_enabled, settings.opencode_enabled)
+            .detect_engines_with_gates(settings.gemini_enabled)
             .await
     }
 
@@ -895,7 +911,7 @@ impl DaemonState {
         }
         let statuses = self
             .engine_manager
-            .detect_engines_with_gates(settings.gemini_enabled, settings.opencode_enabled)
+            .detect_engines_with_gates(settings.gemini_enabled)
             .await;
         let installed = statuses
             .iter()
@@ -921,7 +937,7 @@ impl DaemonState {
         let settings = self.app_settings.lock().await.clone();
         let statuses = self
             .engine_manager
-            .detect_engines_with_gates(settings.gemini_enabled, settings.opencode_enabled)
+            .detect_engines_with_gates(settings.gemini_enabled)
             .await;
         statuses
             .into_iter()
@@ -1403,9 +1419,31 @@ impl DaemonState {
             }
             engine::EngineType::OpenCode => {
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let provider_binding_lookup_session_id = session_id
+                    .as_deref()
+                    .or(thread_id.as_deref())
+                    .map(str::to_string);
+                let effective_provider_profile_id =
+                    session_management::resolve_engine_provider_profile_id(
+                        self.storage_path.as_path(),
+                        &workspace_id,
+                        provider_binding_lookup_session_id.as_deref(),
+                        "opencode",
+                        provider_profile_id.as_deref(),
+                    )?;
+                let provider_launch_profile =
+                    engine::opencode_provider_profile::resolve_opencode_provider_launch_profile(
+                        &workspace_id,
+                        effective_provider_profile_id.as_deref(),
+                    )?;
                 let session = self
                     .engine_manager
-                    .get_or_create_opencode_session(&workspace_id, &workspace_path)
+                    .get_or_create_opencode_session_for_runtime(
+                        &workspace_id,
+                        &workspace_path,
+                        &provider_launch_profile.runtime_key,
+                        provider_launch_profile.config_content.clone(),
+                    )
                     .await;
                 let resolved_session_id = if continue_session {
                     if session_id.is_some() {
@@ -1434,8 +1472,18 @@ impl DaemonState {
                         model
                     );
                 }
-                let model_for_send =
-                    sanitized_model.or_else(|| Some("openai/gpt-5.3-codex".to_string()));
+                // Always pass an explicit --model: a broken default model in
+                // the user's opencode.json must not fail GUI turns. Managed
+                // providers resolve through the injected `ccgui/<model>` refs.
+                let model_for_send = if provider_launch_profile.binding.is_some() {
+                    sanitized_model
+                        .or_else(|| provider_launch_profile.default_model.clone())
+                        .map(|value| {
+                            engine::opencode_provider_profile::qualify_managed_model_ref(&value)
+                        })
+                } else {
+                    sanitized_model.or_else(|| Some("opencode/big-pickle".to_string()))
+                };
                 let params = engine::SendMessageParams {
                     text,
                     model: model_for_send,
@@ -1454,6 +1502,21 @@ impl DaemonState {
 
                 let turn_id = format!("opencode-turn-{}", uuid::Uuid::new_v4());
                 let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .or(provider_binding_lookup_session_id.as_deref())
+                    .unwrap_or(thread_id.as_str());
+                if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                    session_management::record_engine_provider_binding_core(
+                        &self.workspaces,
+                        self.storage_path.as_path(),
+                        workspace_id.clone(),
+                        binding_session_id.to_string(),
+                        "opencode".to_string(),
+                        binding.clone(),
+                    )
+                    .await?;
+                }
                 let item_id = format!("opencode-item-{}", uuid::Uuid::new_v4());
 
                 let mut receiver = session.subscribe();
@@ -2406,7 +2469,7 @@ impl DaemonState {
                         }
                     });
                 let model_for_send =
-                    sanitized_model.or_else(|| Some("openai/gpt-5.3-codex".to_string()));
+                    sanitized_model.or_else(|| Some("opencode/big-pickle".to_string()));
                 let params = engine::SendMessageParams {
                     text,
                     model: model_for_send,
@@ -2625,14 +2688,9 @@ impl DaemonState {
             }
             engine::EngineType::Codex => Ok(()),
             engine::EngineType::OpenCode => {
-                if let Some(session) = self
-                    .engine_manager
-                    .get_opencode_session(&workspace_id)
+                self.engine_manager
+                    .interrupt_opencode_sessions(&workspace_id, None)
                     .await
-                {
-                    session.interrupt().await?;
-                }
-                Ok(())
             }
             engine::EngineType::Gemini => {
                 if let Some(session) = self.engine_manager.get_gemini_session(&workspace_id).await {
@@ -2676,14 +2734,9 @@ impl DaemonState {
             }
             engine::EngineType::Codex => Ok(()),
             engine::EngineType::OpenCode => {
-                if let Some(session) = self
-                    .engine_manager
-                    .get_opencode_session(&workspace_id)
+                self.engine_manager
+                    .interrupt_opencode_sessions(&workspace_id, Some(&turn_id))
                     .await
-                {
-                    session.interrupt_turn(&turn_id).await?;
-                }
-                Ok(())
             }
             engine::EngineType::Gemini => {
                 if let Some(session) = self.engine_manager.get_gemini_session(&workspace_id).await {

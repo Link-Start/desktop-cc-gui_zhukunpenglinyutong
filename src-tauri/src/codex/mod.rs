@@ -33,6 +33,7 @@ use self::commit_message::{build_commit_message_prompt, combine_repository_diff_
 pub(crate) use self::doctor::{
     run_claude_doctor_with_settings, run_codex_doctor_with_settings,
     run_grok_doctor_with_settings, run_kimi_doctor_with_settings,
+    run_opencode_doctor_with_settings,
 };
 pub(crate) use self::home::{resolve_default_codex_home, resolve_workspace_codex_home};
 pub(crate) use self::installer::{
@@ -510,6 +511,30 @@ pub(crate) fn remote_grok_doctor_request(grok_bin: Option<String>) -> (&'static 
             "grokBin": grok_bin.map(remote_backend::normalize_path_for_remote),
         }),
     )
+}
+
+pub(crate) fn remote_opencode_doctor_request(opencode_bin: Option<String>) -> (&'static str, Value) {
+    (
+        "opencode_doctor",
+        json!({
+            "opencodeBin": opencode_bin.map(remote_backend::normalize_path_for_remote),
+        }),
+    )
+}
+
+#[tauri::command]
+pub(crate) async fn opencode_doctor(
+    opencode_bin: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let (method, params) = remote_opencode_doctor_request(opencode_bin);
+        return remote_backend::call_remote(&*state, app, method, params).await;
+    }
+
+    let settings = state.app_settings.lock().await.clone();
+    run_opencode_doctor_with_settings(opencode_bin, &settings).await
 }
 
 #[tauri::command]

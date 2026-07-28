@@ -61,6 +61,8 @@ const sidebar = {
     "codexProviderSelectedTip": "चुना गया। सत्र शुरू करने के लिए बाईं ओर Codex पर क्लिक करें।",
     "grokProviderChoiceTitle": "प्रोवाइडर चयन",
     "grokProviderSelectedTip": "चुना गया। सत्र शुरू करने के लिए बाईं ओर Grok CLI पर क्लिक करें।",
+    "opencodeProviderChoiceTitle": "प्रोवाइडर चयन",
+    "opencodeProviderSelectedTip": "चुना गया। सत्र शुरू करने के लिए बाईं ओर OpenCode पर क्लिक करें।",
     "providerFollowsGlobalLabel": "वैश्विक कॉन्फ़िगरेशन का अनुसरण",
     "providerIsolatedConfigLabel": "स्वतंत्र कॉन्फ़िगरेशन",
     "sessionActionsGroup": "नया सत्र",

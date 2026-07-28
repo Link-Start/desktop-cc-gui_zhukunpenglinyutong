@@ -61,6 +61,8 @@ const sidebar = {
     "codexProviderSelectedTip": "Seleccionado. Haz clic en Codex a la izquierda para iniciar una sesión.",
     "grokProviderChoiceTitle": "Selección de proveedor",
     "grokProviderSelectedTip": "Seleccionado. Haz clic en Grok CLI a la izquierda para iniciar una sesión.",
+    "opencodeProviderChoiceTitle": "Selección de proveedor",
+    "opencodeProviderSelectedTip": "Seleccionado. Haz clic en OpenCode a la izquierda para iniciar una sesión.",
     "providerFollowsGlobalLabel": "Sigue la configuración global",
     "providerIsolatedConfigLabel": "Configuración aislada",
     "sessionActionsGroup": "Nueva sesión",

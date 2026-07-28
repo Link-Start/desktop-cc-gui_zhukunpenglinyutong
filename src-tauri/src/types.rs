@@ -965,7 +965,9 @@ fn default_gemini_enabled() -> bool {
 }
 
 fn default_opencode_enabled() -> bool {
-    false
+    // Legacy field: OpenCode is always enabled at runtime (see engine::engine_enabled_in_settings);
+    // the persisted flag no longer gates anything and defaults to true.
+    true
 }
 
 fn default_email_sender_smtp_port() -> u16 {
@@ -1002,6 +1004,8 @@ pub(crate) struct AppSettings {
     pub(crate) kimi_bin: Option<String>,
     #[serde(default, rename = "grokBin")]
     pub(crate) grok_bin: Option<String>,
+    #[serde(default, rename = "opencodeBin")]
+    pub(crate) opencode_bin: Option<String>,
     #[serde(default, rename = "codexArgs")]
     pub(crate) codex_args: Option<String>,
     #[serde(default, rename = "terminalShellPath")]
@@ -2002,11 +2006,11 @@ impl AppSettings {
 
     pub(crate) fn sanitize_engine_gates(&mut self) {
         self.gemini_enabled = crate::engine_policy::GEMINI_RUNTIME_ENABLED;
-        self.opencode_enabled = false;
-        if self.default_engine.as_deref().is_some_and(|engine| {
-            let engine = engine.trim();
-            engine.eq_ignore_ascii_case("gemini") || engine.eq_ignore_ascii_case("opencode")
-        }) {
+        if self
+            .default_engine
+            .as_deref()
+            .is_some_and(|engine| engine.trim().eq_ignore_ascii_case("gemini"))
+        {
             self.default_engine = None;
         }
     }
@@ -2019,6 +2023,7 @@ impl Default for AppSettings {
             claude_bin: None,
             kimi_bin: None,
             grok_bin: None,
+            opencode_bin: None,
             codex_args: None,
             terminal_shell_path: None,
             gemini_enabled: default_gemini_enabled(),
@@ -2278,6 +2283,32 @@ pub(crate) struct GrokProviderConfig {
     pub(crate) api_backend: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct OpenCodeProviderConfig {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) remark: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) website_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) created_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) sort_order: Option<i64>,
+    #[serde(default)]
+    pub(crate) is_active: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) is_local_provider: Option<bool>,
+    #[serde(default)]
+    pub(crate) base_url: String,
+    #[serde(default)]
+    pub(crate) api_key: String,
+    /// Model ids exposed by this provider (e.g. `provider/model` slugs).
+    #[serde(default)]
+    pub(crate) models: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -2392,7 +2423,7 @@ mod tests {
         assert!(settings.custom_skill_directories.is_empty());
         assert!(!settings.system_proxy_enabled);
         assert!(!settings.gemini_enabled);
-        assert!(!settings.opencode_enabled);
+        assert!(settings.opencode_enabled);
         assert_eq!(
             settings.session_attribution_mode,
             WorkspaceSessionAttributionMode::Related
@@ -2613,7 +2644,9 @@ mod tests {
     fn app_settings_defaults_disable_retired_optional_engines() {
         let settings = AppSettings::default();
         assert!(!settings.gemini_enabled);
-        assert!(!settings.opencode_enabled);
+        // OpenCode is an always-enabled engine again; the legacy flag defaults to true
+        // and no longer gates runtime policy.
+        assert!(settings.opencode_enabled);
     }
 
     #[test]
@@ -2631,7 +2664,7 @@ mod tests {
     }
 
     #[test]
-    fn app_settings_sanitizer_forces_legacy_opencode_true_to_false() {
+    fn app_settings_sanitizer_preserves_legacy_opencode_values() {
         let mut settings: AppSettings =
             serde_json::from_str(r#"{"opencodeEnabled":true,"defaultEngine":"opencode"}"#)
                 .expect("deserialize legacy settings");
@@ -2640,8 +2673,10 @@ mod tests {
 
         settings.sanitize_engine_gates();
 
-        assert!(!settings.opencode_enabled);
-        assert!(settings.default_engine.is_none());
+        // OpenCode is always enabled at runtime; the sanitizer must not clear
+        // the legacy flag or a persisted opencode default engine.
+        assert!(settings.opencode_enabled);
+        assert_eq!(settings.default_engine.as_deref(), Some("opencode"));
     }
 
     #[test]

@@ -19,6 +19,7 @@ const PROVIDER_SCOPED_ENGINES = new Set<EngineType>([
   "codex",
   "grok",
   "kimi",
+  "opencode",
 ]);
 
 export function useProviderModelCatalogSync({

@@ -98,6 +98,16 @@ impl AppState {
                 },
             )
             .await;
+
+        self.engine_manager
+            .set_engine_config(
+                EngineType::OpenCode,
+                EngineConfig {
+                    bin_path: settings.opencode_bin.clone(),
+                    ..Default::default()
+                },
+            )
+            .await;
     }
 
     pub(crate) fn load(app: &AppHandle) -> Self {

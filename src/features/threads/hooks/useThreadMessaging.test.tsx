@@ -160,7 +160,7 @@ describe("useThreadMessaging", () => {
     });
 
     await expect(result.current.sendUserMessage("do not switch providers")).rejects.toThrow(
-      "Gemini CLI is disabled in this client",
+      "Selected CLI engine is disabled by product policy",
     );
 
     expect(startThreadForWorkspace).not.toHaveBeenCalled();
@@ -511,7 +511,7 @@ describe("useThreadMessaging", () => {
         "gemini-pending-abc",
         "hello gemini",
       ),
-    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
     await expect(
       result.current.sendUserMessageToThread(
         workspace,
@@ -520,7 +520,7 @@ describe("useThreadMessaging", () => {
         [],
         { resumeSource: "queue-fusion-cutover" },
       ),
-    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
 
     expect(engineSendMessage).not.toHaveBeenCalled();
     expect(sendUserMessage).not.toHaveBeenCalled();
