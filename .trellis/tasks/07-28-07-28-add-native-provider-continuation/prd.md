@@ -2,7 +2,8 @@
 
 ## OpenSpec
 
-- Change: `add-native-provider-continuation`
+- Archived change:
+  `openspec/changes/archive/2026-07-28-add-native-provider-continuation`
 - Source design:
   `docs/research/mossx-multi-cli-provider-session-foundation-design.md`
 - Master checklist:
@@ -33,5 +34,5 @@
 
 ## Acceptance
 
-以 `openspec/changes/add-native-provider-continuation/tasks.md` 和 specs 为准。人工 Desktop
-smoke 保留为发布前 gate，不用无法自动化的 UI 观察冒充已验证。
+以 `openspec/changes/archive/2026-07-28-add-native-provider-continuation/tasks.md`
+和主 specs 为准。人工 Desktop smoke 保留为发布前 gate，不用无法自动化的 UI 观察冒充已验证。

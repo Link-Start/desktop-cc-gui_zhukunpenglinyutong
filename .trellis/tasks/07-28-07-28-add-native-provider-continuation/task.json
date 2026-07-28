@@ -3,7 +3,7 @@
   "name": "07-28-add-native-provider-continuation",
   "title": "Implement Change D native provider continuation",
   "description": "OpenSpec: add-native-provider-continuation; implement NativeHistoryReader, immutable materialization, continuation flow, Origin/Family and Sidebar UI",
-  "status": "planning",
+  "status": "completed",
   "dev_type": null,
   "scope": "shared-session",
   "package": null,
@@ -11,11 +11,11 @@
   "creator": "chenxiangning",
   "assignee": "chenxiangning",
   "createdAt": "2026-07-28",
-  "completedAt": null,
+  "completedAt": "2026-07-28",
   "branch": null,
   "base_branch": "feature/v-0710",
   "worktree_path": null,
-  "current_phase": 0,
+  "current_phase": 6,
   "next_action": [
     {
       "phase": 1,
@@ -42,12 +42,21 @@
       "action": "record-session"
     }
   ],
-  "commit": null,
+  "commit": "17a1d9594,fef31ae23,5e2dea219,548e61c5f,1e86de202,6b5aa9d63",
   "pr_url": null,
   "subtasks": [],
   "children": [],
   "parent": null,
-  "relatedFiles": [],
-  "notes": "",
+  "relatedFiles": [
+    "src-tauri/src/native_history/",
+    "src-tauri/src/native_continuation/",
+    "src-tauri/src/session_management_provider_continuation_tests.rs",
+    "src/features/app/hooks/useSidebarMenus.ts",
+    "src/features/app/components/ThreadList.tsx",
+    ".trellis/spec/backend/native-provider-continuation-contract.md",
+    "openspec/changes/archive/2026-07-28-add-native-provider-continuation/",
+    "docs/reports/multi-cli-session-foundation-a-d-impact-and-manual-test-plan-2026-07-28.md"
+  ],
+  "notes": "Change D implementation complete and OpenSpec archived. Desktop supports Claude/Codex targets; Kimi target and remote daemon are explicit typed capability gates. Incremental Rust/Vitest/typecheck/runtime-contract and affected OpenSpec strict checks passed. Workspace-wide OpenSpec validation is 471/473 because two unrelated active changes have no deltas. Real Desktop Claude A -> Codex B -> Claude A smoke remains a release gate.",
   "meta": {}
 }

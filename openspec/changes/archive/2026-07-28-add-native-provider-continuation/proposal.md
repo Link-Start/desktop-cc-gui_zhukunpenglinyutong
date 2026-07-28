@@ -91,5 +91,7 @@ Codex 旧路径代码更少，但依赖私有文件布局，跨 Provider 时会�
   creation status。
 - Persistence：新增 app-owned continuation/materialization records 与 Artifact Store
   refs；不新增第三方依赖，不修改 vendor storage。
-- Compatibility：Desktop 与 daemon payload 保持同构；现有同 Provider Fork 行为保留，
-  跨 Provider 入口迁移为 Provider Continuation。
+- Compatibility：Desktop 执行完整 Continuation；daemon 保持同名/camelCase payload，
+  但在 remote adapter 尚未具备原生历史与 artifact owner 前返回 typed unsupported，禁止
+  静默 fallback。现有同 Provider Fork 行为保留，跨 Provider 入口迁移为 Provider
+  Continuation。

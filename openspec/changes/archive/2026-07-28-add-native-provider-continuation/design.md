@@ -7,7 +7,7 @@ Change A-C 已提供 Shared canonical storage、ExecutionTarget、ContextCompile
 JSONL 到目标 `CODEX_HOME`，并把结果写成 `parentThreadId`。该路径违反 Change D 的 ownership
 与 relationship contract，且 Claude/Kimi 没有等价安全实现。
 
-本变更同时触及 Rust source adapter、app-owned persistence、Tauri/daemon bridge、thread
+本变更同时触及 Rust source adapter、app-owned persistence、Tauri/daemon capability bridge、thread
 metadata 与 Sidebar UI。所有目标 Runtime side effect 必须晚于 immutable preparation。
 
 ## Goals / Non-Goals
@@ -160,7 +160,7 @@ navigation。来源已删除时禁用导航并显示“来源不可用”，不�
 ## Migration Plan
 
 1. 增加 Reader/compiler/materialization contract 与 fixture tests，不接 UI。
-2. 增加 backend Continuation command、Desktop/daemon parity 与 fault tests。
+2. 增加 backend Continuation command、Desktop 完整执行与 daemon typed capability gate。
 3. 扩展 metadata/ThreadSummary/Sidebar UI，接入入口和来源导航。
 4. 将 Codex 不同 Provider fork 路由到 Continuation；删除 vendor history copy。
 5. 增量验证后更新 Change D checklist；manual Desktop smoke 保留为发布 gate。

@@ -206,14 +206,15 @@ OpenSpec 已归档至 `openspec/changes/archive/2026-07-27-{establish-shared-eve
 
 | # | 任务 | 大白话说明 | 改变点 | UI 变化 | 顺序 | 前置 | 验收 | 体量 |
 |---|---|---|---|---|---|---|---|---|
-| D.1 | NativeHistoryReader × 3：Claude session JSONL / Codex rollout / Kimi 公开 surface | 安全读取三家 CLI 自己保存的原生历史。 | 为 Claude/Codex/Kimi 建统一 reader contract；游标不稳定就拒绝续接。 | 无直接变化；失败时需要可解释 unsupported。 | ⫽ | Gate 5（可与 C 后期重叠启动，只依赖 T0.2 contract） | `stableCursor=false` 时 typed unsupported、fail closed | L |
-| D.2 | NativeHistoryMaterialization 持久化：fingerprint/cursor/checksum，Retry 复用不重读漂移来源 | 第一次读取后冻结一份可校验材料，重试不再读取可能变化的源文件。 | 新增 fingerprint/cursor/checksum materialization。 | 无直接变化；提高续接重试一致性。 | → | D.1 | materialization 后可审计、可重放 | M |
-| D.3 | Continuation 创建流：入口 → package 编译 → 新 Native Session + 新 Provider Binding | 从旧 Native Session 的历史创建一个新 Provider 会话继续聊。 | 新增 Continuation 流程；来源 Session 保持不变。 | **有**：新增“用其他 Provider 续接”入口和创建反馈。 | → | D.2 + C.2 | 原 Session 不变、不改写、不自动归档 | M |
-| D.4 | `provider-continuation` Origin + Conversation Family 继承 + `供应商续接` 标签 + 查看来源导航 | 让新会话明确显示自己从哪续过来，但不要冒充子代理。 | 新会话继承 family，记录 lineage parent 和 continuation origin。 | **有**：顶层 Session 显示“供应商续接”标签和来源导航。 | → | D.3 | §17.1 矩阵；不写 `parentThreadId`、不显示 `子代理` | M |
+| D.1 | ✅ NativeHistoryReader × 3：Claude session JSONL / Codex rollout / Kimi 公开 surface | 安全读取三家 CLI 自己保存的原生历史。 | 为 Claude/Codex/Kimi 建统一 reader contract；游标不稳定就拒绝续接。 | 无直接变化；失败时需要可解释 unsupported。 | ⫽ | Gate 5（可与 C 后期重叠启动，只依赖 T0.2 contract） | `stableCursor=false` 时 typed unsupported、fail closed | L |
+| D.2 | ✅ NativeHistoryMaterialization 持久化：fingerprint/cursor/checksum，Retry 复用不重读漂移来源 | 第一次读取后冻结一份可校验材料，重试不再读取可能变化的源文件。 | 新增 fingerprint/cursor/checksum materialization。 | 无直接变化；提高续接重试一致性。 | → | D.1 | materialization 后可审计、可重放 | M |
+| D.3 | ✅ Continuation 创建流：入口 → package 编译 → 新 Native Session + 新 Provider Binding | 从旧 Native Session 的历史创建一个新 Provider 会话继续聊。 | Desktop 支持 Claude/Codex 目标；Kimi 与 remote daemon 能力不足时 typed unsupported。来源 Session 保持不变。 | **有**：新增“使用其他 Provider 继续”入口、降级明细与创建反馈。 | → | D.2 + C.2 | 原 Session 不变、不改写、不自动归档 | M |
+| D.4 | ✅ `provider-continuation` Origin + Conversation Family 继承 + `供应商续接` 标签 + 查看来源导航 | 让新会话明确显示自己从哪续过来，但不要冒充子代理。 | 新会话继承 family，记录 lineage parent 和 continuation origin。 | **有**：顶层 Session 显示“供应商续接”标签和来源导航。 | → | D.3 | §17.1 矩阵；不写 `parentThreadId`、不显示 `子代理` | M |
 
 **⛔ Gate 6（Phase 4 验收）**
-- [ ] 新 Session 顶层显示、Provider Profile 不同、`familyId` 继承、`lineageParentSessionId` 指向来源
-- [ ] 删除来源 Session 不级联删除 Continuation；来源 Native History 不写入 Shared Event Log
+- [x] 自动化：新 Session 顶层投影、Provider Binding、`familyId` / `lineageParentSessionId`、无 `parentThreadId`
+- [x] 自动化：删除来源不级联 Continuation；Reader 只读且不写 Shared Event Log
+- [ ] 发布前人工 Desktop smoke：Claude Provider A → Codex Provider B → 原 Claude Provider，观察历史连续性、degraded confirmation 与 recovery
 
 ---
 
