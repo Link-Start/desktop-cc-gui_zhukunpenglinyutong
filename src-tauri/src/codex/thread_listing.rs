@@ -246,6 +246,13 @@ fn is_codex_background_helper_text(value: &str) -> bool {
 }
 
 fn is_codex_background_helper_thread_entry(entry: &Value) -> bool {
+    if entry
+        .get("nativeTitle")
+        .and_then(Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        return false;
+    }
     ["preview", "title", "name"].iter().any(|key| {
         entry
             .get(*key)
@@ -256,6 +263,9 @@ fn is_codex_background_helper_thread_entry(entry: &Value) -> bool {
 }
 
 fn is_codex_background_helper_session(session: &LocalUsageSessionSummary) -> bool {
+    if session.native_title.is_some() {
+        return false;
+    }
     session
         .summary
         .as_deref()
@@ -356,6 +366,7 @@ fn build_local_codex_thread_entry(
         "attributionStatus": "strict-match",
         "preview": preview,
         "title": title,
+        "nativeTitle": session.native_title,
         "cwd": workspace_path,
         "createdAt": session.timestamp,
         "updatedAt": session.timestamp,
@@ -386,7 +397,8 @@ mod tests {
                 "totalTokens": 0
             },
             "cost": 0.0,
-            "summary": "Aristotle"
+            "summary": "Agent 12",
+            "nativeTitle": "Agent 12"
         }))
         .expect("deserialize local summary");
 
@@ -394,6 +406,7 @@ mod tests {
 
         assert_eq!(entry["id"], "child-session");
         assert_eq!(entry["parentSessionId"], "parent-session");
+        assert_eq!(entry["nativeTitle"], "Agent 12");
     }
 }
 
@@ -544,6 +557,11 @@ pub(crate) fn merge_unified_codex_thread_entries(
                     .filter(|value| !value.is_null())
                 {
                     existing.insert("canonicalSessionId".to_string(), value.clone());
+                }
+                if let Some(value) = local.get("nativeTitle").filter(|value| !value.is_null()) {
+                    existing.insert("nativeTitle".to_string(), value.clone());
+                    existing.insert("preview".to_string(), value.clone());
+                    existing.insert("title".to_string(), value.clone());
                 }
                 ensure_thread_entry_workspace_cwd(existing, workspace_path);
                 for key in ["source", "provider", "sourceLabel", "parentSessionId"] {

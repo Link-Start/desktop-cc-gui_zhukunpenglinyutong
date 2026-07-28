@@ -8,6 +8,7 @@ import {
   normalizeSessionDisplayTitle,
   projectSessionDisplaySummaries,
   selectProjectedSessionDisplayName,
+  type SessionDisplayTitleSources,
 } from "../utils/sessionDisplayProjection";
 import { matchesWorkspacePath } from "./useThreadActions.workspacePath";
 
@@ -65,6 +66,7 @@ export type CodexCatalogSessionSummary = {
   sessionId: string;
   workspaceId?: string | null;
   title: string;
+  nativeTitle?: string | null;
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
@@ -1179,21 +1181,22 @@ function normalizeCatalogEngine(
   }
 }
 
-function selectStableThreadSummaryName(params: {
-  previous?: ThreadSummary;
-  nextName: string;
-  mappedTitle?: string;
-  customTitle?: string;
-  engineSource: ThreadSummary["engineSource"];
-}): string {
+function selectStableThreadSummaryName(
+  params: {
+    previous?: ThreadSummary;
+    nextName: string;
+    engineSource: ThreadSummary["engineSource"];
+  } & SessionDisplayTitleSources,
+): string {
   return selectProjectedSessionDisplayName(params);
 }
 
 export function mergeThreadSummaryPreservingStableIdentity(
   previous: ThreadSummary | undefined,
   next: ThreadSummary,
+  titleSources: SessionDisplayTitleSources = {},
 ): ThreadSummary {
-  return mergeSessionDisplaySummary(previous, next);
+  return mergeSessionDisplaySummary(previous, next, titleSources);
 }
 
 export function mergeCodexCatalogSessionSummaries(
@@ -1210,11 +1213,16 @@ export function mergeCodexCatalogSessionSummaries(
   baseSummaries.forEach((entry) => mergedById.set(entry.id, entry));
   codexSessions.forEach((session) => {
     const title = normalizeSessionDisplayTitle(session.title);
+    const nativeTitle = normalizeSessionDisplayTitle(session.nativeTitle);
     const engineSource = normalizeCatalogEngine(session.engine);
-    if (!title) {
+    if (!title && !nativeTitle) {
       return;
     }
-    if (engineSource === "codex" && hasCodexBackgroundHelperPreview([title])) {
+    if (
+      engineSource === "codex" &&
+      !nativeTitle &&
+      hasCodexBackgroundHelperPreview([title])
+    ) {
       return;
     }
     const prev = mergedById.get(session.sessionId);
@@ -1236,7 +1244,7 @@ export function mergeCodexCatalogSessionSummaries(
         : getCustomName(workspaceId, session.sessionId);
     const customTitle = ownerCustomTitle || selectedWorkspaceCustomTitle;
     const fallbackTitle = previewThreadName(
-      title,
+      title || nativeTitle,
       engineSource === "claude"
         ? "Claude Session"
         : engineSource === "gemini"
@@ -1256,6 +1264,7 @@ export function mergeCodexCatalogSessionSummaries(
         nextName: fallbackTitle,
         mappedTitle,
         customTitle,
+        nativeTitle,
         engineSource,
       }),
       updatedAt,
@@ -1282,7 +1291,11 @@ export function mergeCodexCatalogSessionSummaries(
     if (!prev || next.updatedAt >= prev.updatedAt) {
       mergedById.set(
         session.sessionId,
-        mergeSessionDisplaySummary(prev, next, { mappedTitle, customTitle }),
+        mergeSessionDisplaySummary(prev, next, {
+          mappedTitle,
+          customTitle,
+          nativeTitle,
+        }),
       );
     }
   });
@@ -1711,6 +1724,9 @@ export function resolveThreadSourceMeta(
 function shouldIncludeThreadEntry(thread: Record<string, unknown>): boolean {
   if (isArchivedThread(thread)) {
     return false;
+  }
+  if (normalizeThreadMetaValue(thread.nativeTitle)) {
+    return true;
   }
   const previewCandidates = [
     asString(thread.preview).trim(),

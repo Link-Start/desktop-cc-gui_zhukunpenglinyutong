@@ -40,9 +40,9 @@ pub(crate) const CLAUDE_ATTRIBUTION_REASON_PROJECT_DIRECTORY: &str = "claude-pro
 const CLAUDE_ATTRIBUTION_REASON_TRANSCRIPT_CWD: &str = "claude-transcript-cwd";
 const CLAUDE_ATTRIBUTION_REASON_GIT_ROOT: &str = "claude-git-root";
 const CLAUDE_SOURCE_FACT_CACHE_SCHEMA_VERSION: u32 = 1;
-// v3: first_real_user_message now unwraps slash-command tags (args first)
-// and keeps up to 60 chars, so stale cached previews must be rebuilt.
-const CLAUDE_SOURCE_FACT_SCANNER_VERSION: u32 = 3;
+// v4: native custom-title records now override first-message previews, so stale cached titles
+// must be rebuilt.
+const CLAUDE_SOURCE_FACT_SCANNER_VERSION: u32 = 4;
 const CLAUDE_SESSION_TITLE_PREVIEW_MAX_CHARS: usize = 60;
 fn normalize_session_id(session_id: &str) -> Result<String, String> {
     normalize_claude_session_id(session_id)
@@ -54,6 +54,8 @@ fn normalize_session_id(session_id: &str) -> Result<String, String> {
 pub struct ClaudeSessionSummary {
     pub session_id: String,
     pub first_message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_title: Option<String>,
     pub updated_at: i64,
     pub created_at: i64,
     pub message_count: usize,
@@ -85,6 +87,8 @@ pub struct ClaudeSessionSourceFact {
     pub parent_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub first_real_user_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_title: Option<String>,
     pub updated_at: i64,
     pub created_at: i64,
     pub message_count: usize,
@@ -193,6 +197,7 @@ impl ClaudeSessionSourceFact {
         ClaudeSessionSummary {
             session_id: self.canonical_session_id.clone(),
             first_message,
+            native_title: self.native_title.clone(),
             updated_at: self.updated_at,
             created_at: self.created_at,
             message_count: self.message_count,
@@ -667,7 +672,7 @@ async fn scan_session_source_file_with_cache(
 }
 
 /// Scan a single JSONL file and extract session summary metadata.
-/// Reads the file line-by-line to find the first user message and track timestamps.
+/// Reads the file line-by-line to find the native title, first user message, and timestamps.
 async fn scan_session_source_file(
     path: &Path,
     attribution_scopes: &[ClaudeSessionAttributionScope],
@@ -700,6 +705,7 @@ async fn scan_session_source_file(
     let mut lines = reader.lines();
 
     let mut first_user_message: Option<String> = None;
+    let mut latest_native_title: Option<String> = None;
     let mut first_timestamp: Option<i64> = None;
     let mut last_timestamp: Option<i64> = None;
     let mut message_count: usize = 0;
@@ -730,6 +736,12 @@ async fn scan_session_source_file(
                 continue;
             }
         };
+
+        if entry.get("type").and_then(Value::as_str) == Some("custom-title") {
+            if let Some(title) = first_non_empty_string(entry.get("customTitle")) {
+                latest_native_title = Some(title);
+            }
+        }
 
         let classification = classify_claude_history_entry(&entry);
         if matches!(
@@ -913,6 +925,7 @@ async fn scan_session_source_file(
             cwd: transcript_cwd,
             parent_session_id: None,
             first_real_user_message: first_user_message,
+            native_title: latest_native_title,
             source_health: if malformed_line_count > 0 || read_error_count > 0 {
                 "partial".to_string()
             } else {

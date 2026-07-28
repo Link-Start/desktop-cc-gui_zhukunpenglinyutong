@@ -1387,6 +1387,7 @@ fn build_metadata_orphan_entry(
         workspace_label: Some(workspace.name.clone()),
         engine: identity.engine_name().to_string(),
         title: "Missing session".to_string(),
+        native_title: None,
         updated_at: archived_at.unwrap_or(0).max(0),
         archived_at,
         thread_kind: "native".to_string(),
@@ -2684,7 +2685,11 @@ async fn build_global_engine_catalog_entries(
                             workspace_id: workspace.id.clone(),
                             workspace_label: Some(workspace.name.clone()),
                             engine: "claude".to_string(),
-                            title: session.first_message,
+                            title: session
+                                .native_title
+                                .clone()
+                                .unwrap_or_else(|| session.first_message.clone()),
+                            native_title: session.native_title,
                             updated_at: session.updated_at.max(0),
                             archived_at,
                             thread_kind: "native".to_string(),
@@ -2767,6 +2772,7 @@ async fn build_global_engine_catalog_entries(
                             workspace_label: Some(workspace.name.clone()),
                             engine: session.engine.unwrap_or_else(|| "gemini".to_string()),
                             title: session.first_message,
+                            native_title: None,
                             updated_at: session.updated_at.max(0),
                             archived_at,
                             thread_kind: "native".to_string(),
@@ -2844,6 +2850,7 @@ async fn build_global_engine_catalog_entries(
                             workspace_label: Some(workspace.name.clone()),
                             engine: session.engine.unwrap_or_else(|| "kimi".to_string()),
                             title: session.first_message,
+                            native_title: None,
                             updated_at: session.updated_at.max(0),
                             archived_at,
                             thread_kind: "native".to_string(),
@@ -3006,6 +3013,7 @@ fn build_global_codex_catalog_entry(
             .summary
             .clone()
             .unwrap_or_else(|| "Codex Session".to_string()),
+        native_title: summary.native_title.clone(),
         updated_at: summary.timestamp.max(0),
         archived_at: None,
         thread_kind: "native".to_string(),

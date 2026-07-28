@@ -15,6 +15,7 @@ export interface WorkspaceSessionCatalogEntry {
   workspaceLabel?: string | null;
   engine: string;
   title: string;
+  nativeTitle?: string | null;
   updatedAt: number;
   archivedAt?: number | null;
   threadKind: string;

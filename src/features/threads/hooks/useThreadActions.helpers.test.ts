@@ -7,6 +7,7 @@ import {
   mergeDegradedClaudeContinuitySummaries,
   mergeDegradedCodexContinuitySummaries,
   mergeGeminiSessionSummaries,
+  mergeThreadSummaryPreservingStableIdentity,
   resolveThreadSourceMeta,
   seedLastGoodEngineIntoMerged,
   selectRecoveredNewThreadDecision,
@@ -379,6 +380,53 @@ describe("useThreadActions.helpers", () => {
     expect(merged.find((thread) => thread.id === "claude:session-1")?.name).toBe(
       "帮我审核一下这个 PR",
     );
+  });
+
+  it("lets weak-looking native catalog titles replace first-message titles", () => {
+    const merged = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: "codex:session-1",
+          name: "First prompt fallback",
+          updatedAt: 100,
+          engineSource: "codex",
+          threadKind: "native",
+        },
+      ],
+      [
+        {
+          sessionId: "codex:session-1",
+          title: "Agent 12",
+          nativeTitle: "Agent 12",
+          updatedAt: 120,
+          engine: "codex",
+        },
+      ],
+      "workspace-1",
+      {},
+      () => undefined,
+    );
+
+    expect(merged.find((thread) => thread.id === "codex:session-1")?.name).toBe(
+      "Agent 12",
+    );
+  });
+
+  it("preserves weak-looking native titles in direct native-session merges", () => {
+    const previous: ThreadSummary = {
+      id: "claude:session-1",
+      name: "First prompt fallback",
+      updatedAt: 100,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+    const next = { ...previous, name: "Claude Session", updatedAt: 120 };
+
+    expect(
+      mergeThreadSummaryPreservingStableIdentity(previous, next, {
+        nativeTitle: "Claude Session",
+      }).name,
+    ).toBe("Claude Session");
   });
 
   it("lets custom titles override mapped titles in catalog and Gemini merges", () => {

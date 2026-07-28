@@ -71,6 +71,7 @@ pub(super) fn build_codex_daemon_local_thread_entry(
         "attributionStatus": "strict-match",
         "preview": preview,
         "title": preview,
+        "nativeTitle": &session.native_title,
         "cwd": session.cwd.as_deref().unwrap_or(workspace_path),
         "createdAt": session.timestamp,
         "updatedAt": session.timestamp,

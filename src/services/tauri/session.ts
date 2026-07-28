@@ -35,6 +35,7 @@ export interface ThreadListPayload extends RpcObject {
 export interface ClaudeSessionSummaryPayload {
   sessionId: string;
   firstMessage: string;
+  nativeTitle?: string | null;
   updatedAt: number;
   fileSizeBytes?: number;
   parentSessionId?: string | null;

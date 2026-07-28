@@ -294,11 +294,12 @@ export function normalizeEngineType(engine: string): EngineType {
 }
 
 export function resolveWorkspaceSessionDisplayTitle(
-  entry: Pick<WorkspaceSessionCatalogEntry, "title">,
+  entry: Pick<WorkspaceSessionCatalogEntry, "title" | "nativeTitle">,
   fallbackTitle: string,
 ) {
   return selectProjectedSessionDisplayName({
     nextName: entry.title,
+    nativeTitle: entry.nativeTitle ?? undefined,
     mappedTitle: undefined,
     customTitle: undefined,
   }) || fallbackTitle;

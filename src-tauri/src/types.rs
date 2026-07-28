@@ -536,6 +536,8 @@ pub(crate) struct LocalUsageSessionSummary {
     pub(crate) cost: f64,
     #[serde(default)]
     pub(crate) summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) native_title: Option<String>,
     #[serde(default)]
     pub(crate) source: Option<String>,
     #[serde(default)]
