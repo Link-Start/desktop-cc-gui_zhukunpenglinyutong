@@ -1883,3 +1883,36 @@ Review Change B 后撤回 17 个虚假完成项和 Gate 4；修复 Composer mana
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1194: 收口 Change B 总任务清单
+
+**Date**: 2026-07-28
+**Task**: 收口 Change B 总任务清单
+**Branch**: `feature/v-0710`
+
+### Summary
+
+补充 Change B OpenSpec 归档位置、实现提交、增量测试证据与 Gate 4 结论，明确后续能力统一进入 Change C。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c97bcfcf6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

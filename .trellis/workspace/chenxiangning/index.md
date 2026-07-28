@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1193
+- **Total Sessions**: 1194
 - **Last Active**: 2026-07-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~1885 | Active |
+| `journal-28.md` | ~1918 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1194 | 2026-07-28 | 收口 Change B 总任务清单 | `c97bcfcf6` | `feature/v-0710` |
 | 1193 | 2026-07-28 | 完成 Change B Execution Target 闭环 | `428ae19d2`, `7974e3d41` | `feature/v-0710` |
 | 1192 | 2026-07-28 | 校准 Change B 发送与恢复语义 | `1b8aac983` | `feature/v-0710` |
 | 1191 | 2026-07-27 | Wave 4 Change B：Execution Target + V2 Send 写路径全量落地 | `fe81e9212` | `feature/v-0710` |
