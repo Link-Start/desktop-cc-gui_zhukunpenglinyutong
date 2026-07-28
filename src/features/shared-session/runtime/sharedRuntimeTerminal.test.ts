@@ -87,4 +87,32 @@ describe("captureSharedRuntimeTerminal", () => {
     await expect(pending).resolves.toMatchObject({ outcome: "failed" });
     capture.dispose();
   });
+
+  it("matches Claude replay echo by package id and checksum", async () => {
+    subscribeAppServerEvents.mockReturnValue(vi.fn());
+    const capture = captureSharedRuntimeTerminal("ws-1");
+    const onEvent = subscribeAppServerEvents.mock.calls[0][0];
+    const pending = capture.waitForContext({
+      packageId: "package-1",
+      sourceChecksum: "sha256:source",
+    });
+    onEvent({
+      workspace_id: "ws-1",
+      message: {
+        method: "claude/raw",
+        params: {
+          type: "user",
+          isReplay: true,
+          message: {
+            role: "user",
+            content:
+              "MOSSX_CONTEXT_PACKAGE:package-1:sha256:source\ncontext",
+          },
+        },
+      },
+    });
+
+    await expect(pending).resolves.toBeUndefined();
+    capture.dispose();
+  });
 });

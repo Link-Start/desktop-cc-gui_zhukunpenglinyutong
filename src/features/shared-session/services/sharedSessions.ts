@@ -32,6 +32,13 @@ export async function sendSharedSessionMessage(
     customSpecRoot?: string | null;
     /** Wave 4 / Change B：Provider Profile 归属；缺省为 null（旧 V0 行为，default/local 语义）。 */
     providerProfileId?: string | null;
+    contextDelivery?: {
+      packageId: string;
+      sourceChecksum: string;
+      operation: "context-import" | "prompt-prefix";
+      importItems: Record<string, unknown>[];
+      ackFidelity: "strong" | "weak" | "unsupported";
+    } | null;
   },
 ) {
   return invoke<SharedSessionRuntimeDelivery | null | undefined>("send_shared_session_message", {
@@ -48,6 +55,7 @@ export async function sendSharedSessionMessage(
     collaborationMode: options?.collaborationMode ?? null,
     customSpecRoot: options?.customSpecRoot ?? null,
     providerProfileId: options?.providerProfileId ?? null,
+    contextDelivery: options?.contextDelivery ?? null,
   });
 }
 
@@ -56,11 +64,32 @@ export type SharedSessionRuntimeDelivery = Record<string, unknown> & {
   assistantText?: string;
   delivery?: {
     promptAcceptance?: "accepted" | "rejected";
+    contextAcceptance?: {
+      status: "accepted" | "rejected" | "pending";
+      packageId?: string;
+      sourceChecksum?: string;
+      ackFidelity?: "strong" | "weak" | "unsupported";
+      evidence?: string;
+    };
     terminal?: {
       type: "run.settled";
       outcome: "completed" | "failed" | "cancelled";
     };
   };
+};
+
+export type SharedContextArtifactRecord = {
+  artifactId: string;
+  workspaceId: string;
+  sessionId: string;
+  checksum: string;
+  referenceOnly: boolean;
+  package: SharedV2ContextPackage;
+};
+
+export type SharedContextOrphanReport = {
+  status: "report-only";
+  paths: string[];
 };
 
 export async function listSharedSessions(workspaceId: string) {
@@ -183,6 +212,68 @@ export type SharedV2PrepareContextResult = {
   status: "ready" | "degraded";
   mode: string;
   omissions: string[];
+  manifest?: SharedContextManifest;
+  compression?: SharedContextCompression;
+};
+
+export type SharedContextManifest = {
+  mode: string;
+  omitted: {
+    entryId: string;
+    category: string;
+    reason: string;
+    disposition: "retrievable-on-demand" | "not-retrievable";
+    retrievableRef?: string | null;
+  }[];
+  fromSequenceExclusive?: number | null;
+  throughSequenceInclusive: number;
+  sourceChecksum: string;
+};
+
+export type SharedContextCompression = {
+  estimator: string;
+  sourceEstimatedTokens: number;
+  packageEstimatedTokens: number;
+  perCategory: {
+    category: string;
+    strategy: string;
+    sourceEstimatedTokens: number;
+    packageEstimatedTokens: number;
+  }[];
+};
+
+export type SharedV2ContextPackage = {
+  schemaVersion: number;
+  packageId: string;
+  sessionId: string;
+  bindingKey: string;
+  destination: Record<string, unknown>;
+  stablePrefix: string;
+  delta: {
+    entryId: string;
+    sequence: number;
+    role: string;
+    blocks: unknown[];
+    outcome?: string;
+  }[];
+  promptPrefix: string;
+  manifest: SharedContextManifest;
+  compression: SharedContextCompression;
+};
+
+export type SharedV2PrepareDeliveryResult = {
+  status: "ready" | "degraded";
+  packageId: string;
+  artifactId: string;
+  sourceChecksum: string;
+  throughSequenceInclusive: number;
+  mode: string;
+  operation: "context-import" | "prompt-prefix";
+  promptPrefix: string;
+  importItems: Record<string, unknown>[];
+  manifest: SharedContextManifest;
+  compression: SharedContextCompression;
+  ackFidelity: "strong" | "weak" | "unsupported";
 };
 
 export type SharedV2CommitOutcome = {
@@ -274,6 +365,69 @@ export async function sharedSessionV2PrepareContext(
     "shared_session_v2_prepare_context",
     { workspaceId, threadId, target },
   );
+}
+
+export async function sharedSessionV2PrepareDelivery(
+  workspaceId: string,
+  threadId: string,
+  params: {
+    attemptId: string;
+    logicalTurnId: string;
+    target: SharedV2ExecutionTargetPayload;
+  },
+) {
+  return invoke<SharedV2PrepareDeliveryResult>(
+    "shared_session_v2_prepare_delivery",
+    {
+      workspaceId,
+      threadId,
+      attemptId: params.attemptId,
+      logicalTurnId: params.logicalTurnId,
+      target: params.target,
+    },
+  );
+}
+
+export async function sharedSessionV2AcceptContext(
+  workspaceId: string,
+  threadId: string,
+  params: {
+    attemptId: string;
+    logicalTurnId: string;
+    bindingKey: string;
+    packageId: string;
+    nativeSessionId?: string | null;
+    nativeRequestId?: string | null;
+  },
+) {
+  return invoke<{ status: "accepted"; packageId: string }>(
+    "shared_session_v2_accept_context",
+    {
+      workspaceId,
+      threadId,
+      ...params,
+      nativeSessionId: params.nativeSessionId ?? null,
+      nativeRequestId: params.nativeRequestId ?? null,
+    },
+  );
+}
+
+export async function sharedContextRetrieveArtifact(
+  workspaceId: string,
+  threadId: string,
+  artifactId: string,
+  checksum: string,
+) {
+  return invoke<SharedContextArtifactRecord>("shared_context_retrieve_artifact", {
+    workspaceId,
+    threadId,
+    artifactId,
+    checksum,
+  });
+}
+
+export async function sharedContextScanOrphans() {
+  return invoke<SharedContextOrphanReport>("shared_context_scan_orphans");
 }
 
 export async function sharedSessionV2AcceptTurn(

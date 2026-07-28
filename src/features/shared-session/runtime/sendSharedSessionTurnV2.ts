@@ -19,10 +19,12 @@ import {
   sendSharedSessionMessage,
   setSharedSessionSelectedEngine,
   sharedSessionV2AcceptTurn,
+  sharedSessionV2AcceptContext,
   sharedSessionV2BeginTurn,
   sharedSessionV2CommitTurn,
   sharedSessionV2MarkRecovery,
   sharedSessionV2PrepareContext,
+  sharedSessionV2PrepareDelivery,
   type SharedSessionRuntimeDelivery,
   type SharedV2ExecutionTargetPayload,
 } from "../services/sharedSessions";
@@ -154,7 +156,17 @@ function toErrorMessage(error: unknown): string {
  * V0 发送段：与 `sendSharedSessionTurn` 同构，额外透传 providerProfileId。
  * 返回原始 V0 响应。
  */
-async function sendTurnViaV0(input: SendSharedSessionTurnV2Input) {
+async function sendTurnViaV0(
+  input: SendSharedSessionTurnV2Input,
+  outboundText = input.text,
+  contextDelivery?: {
+    packageId: string;
+    sourceChecksum: string;
+    operation: "context-import" | "prompt-prefix";
+    importItems: Record<string, unknown>[];
+    ackFidelity: "strong" | "weak" | "unsupported";
+  },
+) {
   const providerProfileId = input.target.providerProfileId ?? null;
   const selection = await setSharedSessionSelectedEngine(
     input.workspaceId,
@@ -177,7 +189,7 @@ async function sendTurnViaV0(input: SendSharedSessionTurnV2Input) {
     input.workspaceId,
     input.threadId,
     input.engine,
-    input.text,
+    outboundText,
     {
       model: input.model,
       effort: input.effort,
@@ -188,6 +200,7 @@ async function sendTurnViaV0(input: SendSharedSessionTurnV2Input) {
       preferredLanguage: input.preferredLanguage,
       customSpecRoot: input.customSpecRoot,
       providerProfileId,
+      contextDelivery: contextDelivery ?? null,
     },
   );
   const nativeThreadId =
@@ -256,6 +269,13 @@ export async function sendSharedSessionTurnV2(
         degradedInfo: {
           mode: preparedContext.mode,
           omissions: preparedContext.omissions,
+          dispositions: preparedContext.manifest?.omitted.map(
+            (omission) => omission.disposition,
+          ),
+          sourceEstimatedTokens:
+            preparedContext.compression?.sourceEstimatedTokens,
+          packageEstimatedTokens:
+            preparedContext.compression?.packageEstimatedTokens,
           reason: preparedContext.omissions.join("; "),
         },
       },
@@ -328,13 +348,44 @@ export async function sendSharedSessionTurnV2(
     freezeTurnSnapshot(input.target, input.providerMeta),
   );
   const runtimeTerminalCapture =
-    input.engine === "codex"
-      ? captureSharedRuntimeTerminal(input.workspaceId)
-      : null;
+    captureSharedRuntimeTerminal(input.workspaceId);
   try {
+    let preparedDelivery: Awaited<
+      ReturnType<typeof sharedSessionV2PrepareDelivery>
+    >;
+    try {
+      preparedDelivery = await sharedSessionV2PrepareDelivery(
+        input.workspaceId,
+        input.threadId,
+        {
+          attemptId,
+          logicalTurnId,
+          target: targetPayload,
+        },
+      );
+    } catch (deliveryPrepareError) {
+      dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
+      await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
+        bindingKey: begin.bindingKey ?? "",
+        engine: input.target.engine,
+        providerProfileId: input.target.providerProfileId ?? null,
+        reason: `context-prepare-failed: ${toErrorMessage(deliveryPrepareError)}`,
+      }).catch(() => undefined);
+      throw deliveryPrepareError;
+    }
+
     let response: SharedSessionRuntimeDelivery | null | undefined;
     try {
-      response = await sendTurnViaV0(input);
+      const outboundText = preparedDelivery.promptPrefix
+        ? `${preparedDelivery.promptPrefix}\n\n${input.text}`
+        : input.text;
+      response = await sendTurnViaV0(input, outboundText, {
+        packageId: preparedDelivery.packageId,
+        sourceChecksum: preparedDelivery.sourceChecksum,
+        operation: preparedDelivery.operation,
+        importItems: preparedDelivery.importItems,
+        ackFidelity: preparedDelivery.ackFidelity,
+      });
     } catch (sendError) {
       // 旧 RPC 的 Err(String) 无法证明 prompt 未被 runtime 接收。timeout、
       // disconnect、process exit 都可能发生在 side effect 之后，必须 fail closed。
@@ -365,7 +416,57 @@ export async function sendSharedSessionTurnV2(
       }).catch(() => undefined);
       throw new Error("Shared runtime 未返回 typed prompt ACK");
     }
+    let contextAcceptance = response.delivery.contextAcceptance;
+    if (
+      preparedDelivery.ackFidelity === "strong" &&
+      contextAcceptance?.status === "pending"
+    ) {
+      try {
+        await runtimeTerminalCapture.waitForContext({
+          packageId: preparedDelivery.packageId,
+          sourceChecksum: preparedDelivery.sourceChecksum,
+        });
+      } catch (contextAckError) {
+        dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
+        await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
+          bindingKey: begin.bindingKey ?? "",
+          engine: input.target.engine,
+          providerProfileId: input.target.providerProfileId ?? null,
+          reason: `context-ack-missing: ${toErrorMessage(contextAckError)}`,
+        }).catch(() => undefined);
+        throw contextAckError;
+      }
+      contextAcceptance = {
+        status: "accepted",
+        packageId: preparedDelivery.packageId,
+        sourceChecksum: preparedDelivery.sourceChecksum,
+        ackFidelity: "strong",
+        evidence: "claude-replay-user-message-checksum-echo",
+      };
+    }
+    if (
+      contextAcceptance?.status !== "accepted" ||
+      contextAcceptance.packageId !== preparedDelivery.packageId ||
+      contextAcceptance.sourceChecksum !== preparedDelivery.sourceChecksum
+    ) {
+      dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
+      await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
+        bindingKey: begin.bindingKey ?? "",
+        engine: input.target.engine,
+        providerProfileId: input.target.providerProfileId ?? null,
+        reason: "typed-context-ack-missing-or-mismatched",
+      }).catch(() => undefined);
+      throw new Error("Shared runtime 未返回匹配 package/checksum 的 context ACK");
+    }
 
+    await sharedSessionV2AcceptContext(input.workspaceId, input.threadId, {
+      attemptId,
+      logicalTurnId,
+      bindingKey: begin.bindingKey ?? "",
+      packageId: preparedDelivery.packageId,
+      nativeSessionId,
+      nativeRequestId: extractRuntimeTurnId(response),
+    });
     await sharedSessionV2AcceptTurn(input.workspaceId, input.threadId, {
       attemptId,
       logicalTurnId,

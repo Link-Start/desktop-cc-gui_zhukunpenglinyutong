@@ -5,7 +5,7 @@
 
 use super::assembler::{assemble_turn_committed, RuntimeFinalSnapshot};
 use super::types::{CanonicalFact, TurnExecutionSnapshot};
-use crate::shared_event_log::{AppendOutcome, SharedEventWriter};
+use crate::shared_event_log::{AppendOutcome, BindingStateUpdate, SharedEventWriter};
 
 /// Commit Sink 错误。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,4 +51,39 @@ pub fn commit_turn(
     writer
         .append_canonical_fact_at(session_id, CanonicalFact::TurnCommitted(fact), committed_at)
         .map_err(|e| CommitSinkError::new("append canonical fact", e.to_string()))
+}
+
+/// 把 terminal fact 与 Binding committed cursor/pending 作为一个 SQLite transaction 提交。
+#[allow(clippy::too_many_arguments)]
+pub fn commit_turn_with_binding(
+    writer: &SharedEventWriter,
+    session_id: impl Into<String>,
+    logical_turn_id: impl Into<String>,
+    attempt_id: impl Into<String>,
+    input_entry_id: impl Into<String>,
+    target: TurnExecutionSnapshot,
+    snapshot: RuntimeFinalSnapshot,
+    committed_at: i64,
+    binding: &BindingStateUpdate,
+) -> Result<AppendOutcome, CommitSinkError> {
+    let fact = assemble_turn_committed(
+        logical_turn_id.into(),
+        attempt_id.into(),
+        input_entry_id.into(),
+        target,
+        snapshot,
+        committed_at,
+    )
+    .map_err(|error| CommitSinkError::new("assemble turn committed", error.detail))?;
+
+    writer
+        .append_canonical_fact_with_binding_at(
+            session_id,
+            CanonicalFact::TurnCommitted(fact),
+            committed_at,
+            binding,
+        )
+        .map_err(|error| {
+            CommitSinkError::new("append canonical fact with binding", error.to_string())
+        })
 }

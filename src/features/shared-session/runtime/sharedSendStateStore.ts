@@ -25,6 +25,9 @@ export type SharedSendDegradedInfo = {
   reason?: string;
   mode?: string;
   omissions?: string[];
+  dispositions?: string[];
+  sourceEstimatedTokens?: number;
+  packageEstimatedTokens?: number;
 } | null;
 
 export type SharedSendStateEntry = {

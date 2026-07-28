@@ -1073,6 +1073,41 @@ pub(crate) async fn send_user_message_core(
     Ok(response)
 }
 
+/// Change C：向已建立的 Codex thread 注入 Responses API history items。
+///
+/// `thread/inject_items` 不去重；调用方必须先用 durable pendingDelivery 保证同一
+/// package 只调用一次。只有 JSON-RPC success 才返回 Ok，error response 显式拒绝。
+pub(crate) async fn inject_thread_items_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    workspace_id: &str,
+    provider_profile_id: Option<&str>,
+    thread_id: &str,
+    items: Vec<Value>,
+) -> Result<Value, String> {
+    if thread_id.trim().is_empty() {
+        return Err("context import missing Codex thread identity".to_string());
+    }
+    if items.is_empty() {
+        return Ok(json!({ "skipped": true, "reason": "empty-package" }));
+    }
+    let session_key = session_key_for_provider(workspace_id, provider_profile_id);
+    let session = get_session_clone(sessions, &session_key).await?;
+    let response = session
+        .send_request(
+            "thread/inject_items",
+            json!({ "threadId": thread_id, "items": items }),
+        )
+        .await?;
+    classify_context_import_response(response)
+}
+
+fn classify_context_import_response(response: Value) -> Result<Value, String> {
+    if let Some(error) = response.get("error").filter(|value| !value.is_null()) {
+        return Err(format!("context-import-rejected: {error}"));
+    }
+    Ok(response.get("result").cloned().unwrap_or(response))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1086,6 +1121,19 @@ mod tests {
         validate_thread_start_response, INVALID_THREAD_START_RESPONSE_ERROR_PREFIX,
     };
     use serde_json::{json, Value};
+
+    #[test]
+    fn context_import_requires_jsonrpc_success() {
+        assert_eq!(
+            super::classify_context_import_response(json!({"result": {}})).expect("success"),
+            json!({})
+        );
+        assert!(super::classify_context_import_response(json!({
+            "error": {"code": -32601, "message": "unsupported"}
+        }))
+        .expect_err("explicit rejection")
+        .contains("context-import-rejected"));
+    }
 
     #[test]
     fn normalize_preferred_language_maps_supported_values() {

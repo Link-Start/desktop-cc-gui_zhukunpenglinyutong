@@ -848,6 +848,13 @@ enum WriterCommand {
         occurred_at: i64,
         respond: mpsc::Sender<Result<AppendOutcome, StoreError>>,
     },
+    AppendCanonicalFactWithBinding {
+        session_id: String,
+        fact: CanonicalFact,
+        occurred_at: i64,
+        binding: BindingStateUpdate,
+        respond: mpsc::Sender<Result<AppendOutcome, StoreError>>,
+    },
     UpsertBinding {
         update: BindingStateUpdate,
         respond: mpsc::Sender<Result<(), StoreError>>,
@@ -945,6 +952,33 @@ impl SharedEventWriter {
                                     occurred_at,
                                 ),
                             };
+                            let _ = respond.send(result);
+                        }
+                        WriterCommand::AppendCanonicalFactWithBinding {
+                            session_id,
+                            fact,
+                            occurred_at,
+                            binding,
+                            respond,
+                        } => {
+                            let result = validate_fact(&fact)
+                                .map_err(|error| {
+                                    StoreError::validation_failed(
+                                        fact.fact_type(),
+                                        error.to_string(),
+                                    )
+                                })
+                                .and_then(|_| {
+                                    canonical_fact_to_event(
+                                        session_id,
+                                        &fact,
+                                        Fidelity::Canonical,
+                                        occurred_at,
+                                    )
+                                })
+                                .and_then(|event| {
+                                    store.append_event_with_binding(&event, &binding)
+                                });
                             let _ = respond.send(result);
                         }
                         WriterCommand::UpsertBinding { update, respond } => {
@@ -1087,6 +1121,23 @@ impl SharedEventWriter {
             fact,
             fidelity: Fidelity::Canonical,
             occurred_at,
+            respond,
+        })
+    }
+
+    /// 同一 transaction 追加 canonical fact 并更新 Binding cursor/pending。
+    pub fn append_canonical_fact_with_binding_at(
+        &self,
+        session_id: impl Into<String>,
+        fact: CanonicalFact,
+        occurred_at: i64,
+        binding: &BindingStateUpdate,
+    ) -> Result<AppendOutcome, StoreError> {
+        self.send_command(|respond| WriterCommand::AppendCanonicalFactWithBinding {
+            session_id: session_id.into(),
+            fact,
+            occurred_at,
+            binding: binding.clone(),
             respond,
         })
     }

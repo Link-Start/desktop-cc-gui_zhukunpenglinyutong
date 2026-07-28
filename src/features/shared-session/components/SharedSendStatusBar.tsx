@@ -208,6 +208,13 @@ export function SharedSendStatusBar({
               : degradedInfo?.reason
                 ? ` (${degradedInfo.reason})`
                 : ""}
+            {typeof degradedInfo?.sourceEstimatedTokens === "number" &&
+            typeof degradedInfo?.packageEstimatedTokens === "number"
+              ? ` · ${degradedInfo.sourceEstimatedTokens} → ${degradedInfo.packageEstimatedTokens} estimated tokens`
+              : ""}
+            {degradedInfo?.dispositions?.length
+              ? ` · ${Array.from(new Set(degradedInfo.dispositions)).join(", ")}`
+              : ""}
           </span>
           <span className="shared-send-status__actions">
             <button

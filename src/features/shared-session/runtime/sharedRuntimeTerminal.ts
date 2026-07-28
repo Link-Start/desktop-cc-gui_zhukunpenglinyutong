@@ -18,6 +18,11 @@ type BufferedTerminal = RuntimeOwner & {
   terminal: SharedRuntimeTerminal;
 };
 
+type ContextAckOwner = {
+  packageId: string;
+  sourceChecksum: string;
+};
+
 function runtimeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -99,6 +104,41 @@ function parseTerminal(event: AppServerEvent): BufferedTerminal | null {
   };
 }
 
+function parseClaudeContextEcho(event: AppServerEvent): string | null {
+  if (runtimeString(event.message.method) !== "claude/raw") {
+    return null;
+  }
+  const params =
+    event.message.params && typeof event.message.params === "object"
+      ? (event.message.params as Record<string, unknown>)
+      : {};
+  if (params.isReplay !== true && params.is_replay !== true) {
+    return null;
+  }
+  const message =
+    params.message && typeof params.message === "object"
+      ? (params.message as Record<string, unknown>)
+      : {};
+  const content = message.content;
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return null;
+  }
+  return content
+    .map((block) =>
+      block && typeof block === "object"
+        ? runtimeString((block as Record<string, unknown>).text)
+        : "",
+    )
+    .join("");
+}
+
+function contextMarker(owner: ContextAckOwner): string {
+  return `MOSSX_CONTEXT_PACKAGE:${owner.packageId}:${owner.sourceChecksum}`;
+}
+
 function isOwnedBy(terminal: BufferedTerminal, owner: RuntimeOwner): boolean {
   return (
     terminal.nativeThreadId === owner.nativeThreadId &&
@@ -114,6 +154,7 @@ function isOwnedBy(terminal: BufferedTerminal, owner: RuntimeOwner): boolean {
  */
 export function captureSharedRuntimeTerminal(workspaceId: string): {
   waitFor(owner: RuntimeOwner): Promise<SharedRuntimeTerminal>;
+  waitForContext(owner: ContextAckOwner): Promise<void>;
   dispose(): void;
 } {
   const buffered: BufferedTerminal[] = [];
@@ -126,9 +167,32 @@ export function captureSharedRuntimeTerminal(workspaceId: string): {
         timeoutId: number;
       }
     | null = null;
+  const bufferedContextEchoes: string[] = [];
+  let pendingContext:
+    | {
+        owner: ContextAckOwner;
+        resolve: () => void;
+        reject: (error: Error) => void;
+        timeoutId: number;
+      }
+    | null = null;
   const unsubscribe = subscribeAppServerEvents((event) => {
     if (event.workspace_id !== workspaceId) {
       return;
+    }
+    const contextEcho = parseClaudeContextEcho(event);
+    if (contextEcho) {
+      if (
+        pendingContext &&
+        contextEcho.includes(contextMarker(pendingContext.owner))
+      ) {
+        window.clearTimeout(pendingContext.timeoutId);
+        const resolve = pendingContext.resolve;
+        pendingContext = null;
+        resolve();
+      } else {
+        bufferedContextEchoes.push(contextEcho);
+      }
     }
     const completedAssistant = parseCompletedAssistantText(event);
     if (completedAssistant) {
@@ -173,6 +237,23 @@ export function captureSharedRuntimeTerminal(workspaceId: string): {
         pending = { owner, resolve, reject, timeoutId };
       });
     },
+    waitForContext(owner) {
+      const marker = contextMarker(owner);
+      const bufferedIndex = bufferedContextEchoes.findIndex((echo) =>
+        echo.includes(marker),
+      );
+      if (bufferedIndex >= 0) {
+        bufferedContextEchoes.splice(bufferedIndex, 1);
+        return Promise.resolve();
+      }
+      return new Promise((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+          pendingContext = null;
+          reject(new Error("Shared runtime 等待 context checksum echo 超时"));
+        }, SHARED_RUNTIME_SETTLEMENT_TIMEOUT_MS);
+        pendingContext = { owner, resolve, reject, timeoutId };
+      });
+    },
     dispose() {
       unsubscribe();
       if (pending) {
@@ -180,7 +261,13 @@ export function captureSharedRuntimeTerminal(workspaceId: string): {
         pending.reject(new Error("Shared runtime terminal 监听已关闭"));
         pending = null;
       }
+      if (pendingContext) {
+        window.clearTimeout(pendingContext.timeoutId);
+        pendingContext.reject(new Error("Shared runtime context ACK 监听已关闭"));
+        pendingContext = null;
+      }
       buffered.length = 0;
+      bufferedContextEchoes.length = 0;
       assistantTextByThread.clear();
     },
   };

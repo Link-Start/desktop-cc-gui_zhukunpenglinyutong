@@ -1038,6 +1038,11 @@ impl ClaudeSession {
             // placeholder after `-p` breaks Windows .cmd wrapper parsing.
             cmd.arg("--input-format");
             cmd.arg("stream-json");
+            if params.text.contains("MOSSX_CONTEXT_PACKAGE:") {
+                // Change C：只为 Context Package 开 echo，避免改变普通 Claude turn。
+                // 旧 CLI 不支持时显式失败，不能降格为首 token ACK。
+                cmd.arg("--replay-user-messages");
+            }
         } else {
             // Compatibility fallback only. Production sends user prompts through
             // stream-json stdin so shell wrappers never parse prompt text.

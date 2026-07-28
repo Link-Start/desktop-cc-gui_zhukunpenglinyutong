@@ -12,13 +12,18 @@
 //! 结构：`*_core` 纯逻辑（只依赖 `SharedEventWriter`，可集成测试）+ Tauri command 薄封装。
 //! 红线：本模块只通过 `SharedEventWriter` 写库（单写者），不直接触 SQLite。
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::time::Duration;
 use tauri::State;
 use uuid::Uuid;
 
 pub use crate::engine::EngineType;
+use crate::shared_context::{
+    accept_delivery, commit_delivery, compile_context, prepare_delivery, read_artifact,
+    scan_orphan_artifacts, terminal_binding_update, write_artifact, AcceptDeliveryRequest,
+    ArtifactReadRequest, CompileContextRequest, PrepareDeliveryRequest, RuntimeContextCapabilities,
+};
 use crate::shared_event_log::canonical::assembler::{
     RuntimeFinalSnapshot, RuntimeToolCall, RuntimeToolResult,
 };
@@ -31,9 +36,8 @@ use crate::shared_event_log::{
     AppendOutcome, BindingStateUpdate, SharedEventWriter, StoreError, StoredBindingState,
 };
 use crate::shared_sessions::{
-    engine_binding_thread_id, ensure_supported_shared_session_engine,
-    inspect_shared_context_projection, now_millis, parse_shared_session_id,
-    read_shared_session_meta, shared_binding_synced_sequence, shared_target_binding_key,
+    engine_binding_thread_id, ensure_supported_shared_session_engine, now_millis,
+    parse_shared_session_id, read_shared_session_meta, shared_target_binding_key,
     write_shared_session_meta, SharedTargetBindingMeta,
 };
 use crate::state::AppState;
@@ -43,7 +47,7 @@ use crate::state::AppState;
 // ---------------------------------------------------------------------------
 
 /// 前端四级 Picker 固化的 Execution Target（含 provider 元信息快照）。
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionTargetInput {
     pub engine: EngineType,
@@ -53,6 +57,107 @@ pub struct ExecutionTargetInput {
     pub provider_profile_name_snapshot: Option<String>,
     pub provider_profile_source: Option<String>,
     pub runtime_capability_fingerprint: Option<String>,
+}
+
+fn context_capabilities(target: &ExecutionTargetInput) -> RuntimeContextCapabilities {
+    // Adapter capability 在这里显式声明；compiler 只消费 capability，不按 engine 分支。
+    // 当前 runtime bridge 对 Claude/Codex 都有 user-channel prompt ACK，
+    // structured import 等待对应 CLI method probe 后再打开，禁止猜测支持。
+    match target.engine {
+        EngineType::Codex => {
+            let structured_history_import = target
+                .runtime_capability_fingerprint
+                .as_deref()
+                .is_some_and(|fingerprint| fingerprint.contains("thread/inject_items"));
+            RuntimeContextCapabilities {
+                native_delta: false,
+                structured_history_import,
+                native_clone: false,
+                user_channel_transcript: true,
+                tool_history: structured_history_import,
+                image_history: false,
+                strong_context_ack: structured_history_import,
+            }
+        }
+        EngineType::Claude => RuntimeContextCapabilities {
+            native_delta: false,
+            structured_history_import: false,
+            native_clone: false,
+            user_channel_transcript: true,
+            tool_history: false,
+            image_history: false,
+            strong_context_ack: target
+                .runtime_capability_fingerprint
+                .as_deref()
+                .is_some_and(|fingerprint| fingerprint.contains("--replay-user-messages")),
+        },
+        _ => RuntimeContextCapabilities {
+            native_delta: false,
+            structured_history_import: false,
+            native_clone: false,
+            user_channel_transcript: false,
+            tool_history: false,
+            image_history: false,
+            strong_context_ack: false,
+        },
+    }
+}
+
+fn codex_import_items(package: &crate::shared_context::ContextPackage) -> Vec<Value> {
+    package
+        .delta
+        .iter()
+        .flat_map(|entry| {
+            let text = entry
+                .blocks
+                .iter()
+                .filter_map(|block| block.get("text").and_then(Value::as_str))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let mut items = Vec::new();
+            if !text.trim().is_empty() {
+                let content_type = if entry.role == "assistant" {
+                    "output_text"
+                } else {
+                    "input_text"
+                };
+                items.push(json!({
+                    "type": "message",
+                    "role": entry.role,
+                    "content": [{ "type": content_type, "text": text }],
+                }));
+            }
+            for block in &entry.blocks {
+                if block.get("kind").and_then(Value::as_str) == Some("atomic-tool-exchange") {
+                    let exchange = &block["exchange"];
+                    if let (Some(name), Some(call_id)) = (
+                        exchange.get("toolName").and_then(Value::as_str),
+                        exchange.get("toolCallId").and_then(Value::as_str),
+                    ) {
+                        items.push(json!({
+                            "type": "function_call",
+                            "name": name,
+                            "arguments": exchange.pointer("/call/argumentsSummary").and_then(Value::as_str).unwrap_or("{}"),
+                            "call_id": call_id,
+                        }));
+                        items.push(json!({
+                            "type": "function_call_output",
+                            "call_id": call_id,
+                            "output": exchange.pointer("/result/outputSummary").and_then(Value::as_str).unwrap_or(""),
+                        }));
+                    }
+                }
+            }
+            items
+        })
+        .collect()
+}
+
+fn context_artifact_root(state: &AppState) -> Result<&std::path::Path, String> {
+    state
+        .storage_path
+        .parent()
+        .ok_or_else(|| "app data directory unavailable".to_string())
 }
 
 impl ExecutionTargetInput {
@@ -250,6 +355,62 @@ pub struct BeginTurnOutcome {
     pub snapshot: Option<TurnExecutionSnapshot>,
 }
 
+fn unresolved_session_operation(
+    writer: &SharedEventWriter,
+    session_id: &str,
+) -> Result<Option<(String, String)>, String> {
+    let events = writer
+        .events_for_session(session_id)
+        .map_err(|error| error.to_string())?;
+    let committed_attempts = events
+        .iter()
+        .filter(|event| event.fact_type == "conversation.turnCommitted")
+        .filter_map(|event| event.attempt_id.clone())
+        .collect::<std::collections::HashSet<_>>();
+    let rebuilt_bindings = events
+        .iter()
+        .filter(|event| event.fact_type == "conversation.controlFact")
+        .filter_map(|event| {
+            let payload = serde_json::from_str::<Value>(&event.payload_json).ok()?;
+            (payload.get("controlKind").and_then(Value::as_str) == Some("binding.rebuilt"))
+                .then(|| {
+                    payload
+                        .get("bindingKey")
+                        .and_then(Value::as_str)
+                        .map(|binding| (binding.to_string(), event.sequence))
+                })
+                .flatten()
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    for event in events.iter().rev() {
+        let unresolved = event
+            .attempt_id
+            .as_ref()
+            .map(|attempt| !committed_attempts.contains(attempt))
+            .unwrap_or(false);
+        if event.fact_type != "context.deliveryPrepared" || !unresolved {
+            continue;
+        }
+        let payload: Value =
+            serde_json::from_str(&event.payload_json).map_err(|error| error.to_string())?;
+        let binding_key = payload
+            .get("bindingKey")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "deliveryPrepared missing bindingKey".to_string())?;
+        if rebuilt_bindings
+            .get(binding_key)
+            .is_some_and(|rebuilt_sequence| *rebuilt_sequence > event.sequence)
+        {
+            continue;
+        }
+        return Ok(Some((
+            binding_key.to_string(),
+            event.attempt_id.clone().unwrap_or_default(),
+        )));
+    }
+    Ok(None)
+}
+
 pub fn begin_turn_core(
     writer: &SharedEventWriter,
     session_id: &str,
@@ -271,6 +432,20 @@ pub fn begin_turn_core(
     };
     let provider_profile_id = target.normalized_provider();
     let binding_key = shared_target_binding_key(engine, provider_profile_id.as_deref());
+    if let Some((pending_binding_key, pending_attempt_id)) =
+        unresolved_session_operation(writer, session_id)?
+    {
+        return Ok(BeginTurnOutcome {
+            status: BeginTurnStatus::RecoveryRequired,
+            reason: Some(format!(
+                "session has unresolved context delivery for attempt {pending_attempt_id}"
+            )),
+            attempt_id: None,
+            logical_turn_id: None,
+            binding_key: pending_binding_key,
+            snapshot: None,
+        });
+    }
 
     let existing = writer
         .binding_state(session_id, &binding_key)
@@ -546,6 +721,13 @@ pub fn commit_turn_core(
             });
         let same_text = existing_text.map(str::to_string) == assistant_text;
         if same_turn && same_outcome && same_text {
+            commit_delivery(
+                writer,
+                session_id,
+                &binding_key,
+                attempt_id,
+                now_millis() as i64,
+            )?;
             return Ok(CommitTurnOutcome {
                 duplicate: true,
                 sequence: Some(existing.sequence),
@@ -582,27 +764,73 @@ pub fn commit_turn_core(
         ));
     }
 
-    // duplicate settled → sink 幂等（attempt 级 UNIQUE 索引），仍返回成功。
-    let append = sink::commit_turn(
-        writer,
-        session_id.to_string(),
-        logical_turn_id.to_string(),
-        attempt_id.to_string(),
-        format!("input:{attempt_id}"),
-        target.to_snapshot(),
-        final_snapshot,
-        now_millis() as i64,
-    )
+    let committed_at = now_millis() as i64;
+    let existing = writer
+        .binding_state(session_id, &binding_key)
+        .map_err(|error| error.to_string())?;
+    let provisioning = provisioning_json(PROVISIONING_READY, None, Some(attempt_id));
+    let atomic_binding = existing
+        .as_ref()
+        .map(|row| {
+            terminal_binding_update(
+                row,
+                attempt_id,
+                native_session_id.clone(),
+                Some(provisioning.clone()),
+                committed_at,
+            )
+        })
+        .transpose()?
+        .flatten();
+    // Change C pending 存在时，terminal fact 与 committed cursor/pending 必须同事务提交。
+    let append = if let Some(binding) = atomic_binding.as_ref() {
+        sink::commit_turn_with_binding(
+            writer,
+            session_id.to_string(),
+            logical_turn_id.to_string(),
+            attempt_id.to_string(),
+            format!("input:{attempt_id}"),
+            target.to_snapshot(),
+            final_snapshot,
+            committed_at,
+            binding,
+        )
+    } else {
+        sink::commit_turn(
+            writer,
+            session_id.to_string(),
+            logical_turn_id.to_string(),
+            attempt_id.to_string(),
+            format!("input:{attempt_id}"),
+            target.to_snapshot(),
+            final_snapshot,
+            committed_at,
+        )
+    }
     .map_err(|error| format!("{}: {}", error.context, error.detail))?;
-
     let (duplicate, sequence) = match append {
         AppendOutcome::Inserted { sequence, .. } => (false, Some(sequence)),
         AppendOutcome::Duplicate { existing_sequence } => (true, Some(existing_sequence)),
     };
 
-    let existing = writer
-        .binding_state(session_id, &binding_key)
-        .map_err(|error| error.to_string())?;
+    if atomic_binding.is_some() {
+        return Ok(CommitTurnOutcome {
+            duplicate,
+            sequence,
+            binding_key,
+        });
+    }
+    // Change C 有 pending 时，committed cursor 必须由 commit_delivery 按 package
+    // throughSequence 推进，不能误写成 turnCommitted 自身 sequence。
+    let legacy_committed_sequence = if existing
+        .as_ref()
+        .and_then(|row| row.pending_delivery_json.as_ref())
+        .is_some()
+    {
+        None
+    } else {
+        sequence
+    };
     upsert_binding_row(
         writer,
         session_id,
@@ -611,11 +839,18 @@ pub fn commit_turn_core(
         provider_profile_id,
         existing.as_ref(),
         native_session_id,
-        sequence,
-        provisioning_json(PROVISIONING_READY, None, Some(attempt_id)),
+        legacy_committed_sequence,
+        provisioning,
         "ready",
     )
     .map_err(|error| error.to_string())?;
+    commit_delivery(
+        writer,
+        session_id,
+        &binding_key,
+        attempt_id,
+        now_millis() as i64,
+    )?;
 
     Ok(CommitTurnOutcome {
         duplicate,
@@ -811,22 +1046,215 @@ pub async fn shared_session_v2_prepare_context(
     target: ExecutionTargetInput,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let _ = state;
+    let _ = &workspace_id;
+    let writer = require_writer(&state)?;
     let engine = ensure_supported_shared_session_engine(target.engine)?;
     let shared_session_id = parse_shared_session_id(&thread_id)?;
-    let meta = read_shared_session_meta(&workspace_id, &shared_session_id)?;
-    let snapshot = crate::shared_sessions::read_latest_shared_session_snapshot(
-        &workspace_id,
-        &shared_session_id,
+    let binding_key = shared_target_binding_key(engine, target.normalized_provider().as_deref());
+    let binding = writer
+        .binding_state(&shared_session_id, &binding_key)
+        .map_err(|error| error.to_string())?;
+    let package = compile_context(
+        &writer
+            .events_for_session(&shared_session_id)
+            .map_err(|error| error.to_string())?,
+        &CompileContextRequest {
+            session_id: shared_session_id,
+            binding_key,
+            destination: serde_json::to_value(&target).map_err(|error| error.to_string())?,
+            destination_native_session_id: binding
+                .as_ref()
+                .and_then(|row| row.native_session_id.clone()),
+            from_sequence_exclusive: binding
+                .as_ref()
+                .and_then(|row| row.accepted_through_sequence),
+            through_sequence_inclusive: None,
+            exclude_attempt_id: None,
+            capabilities: context_capabilities(&target),
+            budget_estimated_tokens: None,
+        },
     )?;
-    let items = snapshot.map(|entry| entry.items).unwrap_or_default();
-    let from_sequence =
-        shared_binding_synced_sequence(&meta, engine, target.normalized_provider().as_deref());
-    let omissions = inspect_shared_context_projection(&items, from_sequence);
+    let omissions = package
+        .manifest
+        .omitted
+        .iter()
+        .map(|omission| format!("{}: {}", omission.category, omission.reason))
+        .collect::<Vec<_>>();
     Ok(json!({
         "status": if omissions.is_empty() { "ready" } else { "degraded" },
-        "mode": "delta-sync",
+        "mode": package.manifest.mode,
         "omissions": omissions,
+        "manifest": package.manifest,
+        "compression": package.compression,
+    }))
+}
+
+/// Tx3：基于 Tx1 之后的固定 source snapshot 编译 package，先原子保存 artifact，
+/// 再原子追加 deliveryPrepared + pending。当前 attempt 自身不进入历史 package。
+#[tauri::command]
+pub async fn shared_session_v2_prepare_delivery(
+    workspace_id: String,
+    thread_id: String,
+    attempt_id: String,
+    logical_turn_id: String,
+    target: ExecutionTargetInput,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let writer = require_writer(&state)?;
+    let engine = ensure_supported_shared_session_engine(target.engine)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+    let binding_key = shared_target_binding_key(engine, target.normalized_provider().as_deref());
+    let binding = writer
+        .binding_state(&shared_session_id, &binding_key)
+        .map_err(|error| error.to_string())?;
+    let events = writer
+        .events_for_session(&shared_session_id)
+        .map_err(|error| error.to_string())?;
+    let source_upper = events
+        .iter()
+        .find(|event| {
+            event.fact_type == "conversation.turnRequested"
+                && event.attempt_id.as_deref() == Some(attempt_id.as_str())
+        })
+        .map(|event| event.sequence.saturating_sub(1))
+        .ok_or_else(|| "turnRequested missing before context prepare".to_string())?;
+    let package = compile_context(
+        &events,
+        &CompileContextRequest {
+            session_id: shared_session_id.clone(),
+            binding_key: binding_key.clone(),
+            destination: serde_json::to_value(&target).map_err(|error| error.to_string())?,
+            destination_native_session_id: binding
+                .as_ref()
+                .and_then(|row| row.native_session_id.clone()),
+            from_sequence_exclusive: binding
+                .as_ref()
+                .and_then(|row| row.accepted_through_sequence),
+            through_sequence_inclusive: Some(source_upper),
+            exclude_attempt_id: Some(attempt_id.clone()),
+            capabilities: context_capabilities(&target),
+            budget_estimated_tokens: None,
+        },
+    )?;
+    let prepared_at = now_millis() as i64;
+    let artifact = write_artifact(
+        context_artifact_root(&state)?,
+        &workspace_id,
+        &shared_session_id,
+        &package,
+        prepared_at,
+    )?;
+    prepare_delivery(
+        writer,
+        &PrepareDeliveryRequest {
+            session_id: shared_session_id,
+            binding_key,
+            engine: engine.icon().to_string(),
+            provider_profile_id: target.normalized_provider(),
+            logical_turn_id,
+            attempt_id,
+            package: package.clone(),
+            prepared_at,
+        },
+    )?;
+    Ok(json!({
+        "status": if package.manifest.omitted.is_empty() { "ready" } else { "degraded" },
+        "packageId": package.package_id,
+        "artifactId": artifact.artifact_id,
+        "sourceChecksum": package.manifest.source_checksum,
+        "throughSequenceInclusive": package.manifest.through_sequence_inclusive,
+        "mode": package.manifest.mode,
+        "operation": package.manifest.mode.operation(),
+        "promptPrefix": package.prompt_prefix,
+        "importItems": codex_import_items(&package),
+        "manifest": package.manifest,
+        "compression": package.compression,
+        "ackFidelity": if context_capabilities(&target).strong_context_ack { "strong" } else { "weak" },
+    }))
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn shared_session_v2_accept_context(
+    workspace_id: String,
+    thread_id: String,
+    attempt_id: String,
+    logical_turn_id: String,
+    binding_key: String,
+    package_id: String,
+    native_session_id: Option<String>,
+    native_request_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let _ = workspace_id;
+    let writer = require_writer(&state)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+    accept_delivery(
+        writer,
+        &AcceptDeliveryRequest {
+            session_id: shared_session_id,
+            binding_key,
+            logical_turn_id,
+            attempt_id,
+            package_id: package_id.clone(),
+            native_session_id,
+            native_request_id,
+            accepted_at: now_millis() as i64,
+        },
+    )?;
+    Ok(json!({ "status": "accepted", "packageId": package_id }))
+}
+
+#[tauri::command]
+pub async fn shared_context_retrieve_artifact(
+    workspace_id: String,
+    thread_id: String,
+    artifact_id: String,
+    checksum: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+    let artifact = read_artifact(
+        context_artifact_root(&state)?,
+        &ArtifactReadRequest {
+            workspace_id,
+            session_id: shared_session_id,
+            artifact_id,
+            checksum,
+        },
+    )?;
+    serde_json::to_value(artifact).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn shared_context_scan_orphans(state: State<'_, AppState>) -> Result<Value, String> {
+    let writer = require_writer(&state)?;
+    // ponytail: report-only maintenance path，按 artifact 读取 session events；
+    // artifact 量显著增长后可升级为一次性 packageId index。
+    let paths = scan_orphan_artifacts(context_artifact_root(&state)?, |artifact| {
+        writer
+            .events_for_session(&artifact.session_id)
+            .ok()
+            .is_some_and(|events| {
+                events.iter().any(|event| {
+                    if event.fact_type != "context.deliveryPrepared" {
+                        return false;
+                    }
+                    serde_json::from_str::<Value>(&event.payload_json)
+                        .ok()
+                        .and_then(|payload| {
+                            payload
+                                .get("packageId")
+                                .and_then(Value::as_str)
+                                .map(|package_id| package_id == artifact.package.package_id)
+                        })
+                        .unwrap_or(false)
+                })
+            })
+    })?;
+    Ok(json!({
+        "status": "report-only",
+        "paths": paths,
     }))
 }
 

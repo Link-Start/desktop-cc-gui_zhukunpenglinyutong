@@ -17,6 +17,8 @@ const {
   sendSharedSessionMessage,
   sharedSessionV2BeginTurn,
   sharedSessionV2PrepareContext,
+  sharedSessionV2PrepareDelivery,
+  sharedSessionV2AcceptContext,
   sharedSessionV2AcceptTurn,
   sharedSessionV2CommitTurn,
   sharedSessionV2MarkRecovery,
@@ -28,6 +30,8 @@ const {
   sendSharedSessionMessage: vi.fn(),
   sharedSessionV2BeginTurn: vi.fn(),
   sharedSessionV2PrepareContext: vi.fn(),
+  sharedSessionV2PrepareDelivery: vi.fn(),
+  sharedSessionV2AcceptContext: vi.fn(),
   sharedSessionV2AcceptTurn: vi.fn(),
   sharedSessionV2CommitTurn: vi.fn(),
   sharedSessionV2MarkRecovery: vi.fn(),
@@ -41,6 +45,8 @@ vi.mock("../services/sharedSessions", () => ({
   sendSharedSessionMessage,
   sharedSessionV2BeginTurn,
   sharedSessionV2PrepareContext,
+  sharedSessionV2PrepareDelivery,
+  sharedSessionV2AcceptContext,
   sharedSessionV2AcceptTurn,
   sharedSessionV2CommitTurn,
   sharedSessionV2MarkRecovery,
@@ -94,6 +100,37 @@ function mockBeginCreating() {
   });
 }
 
+function mockContextDelivery() {
+  sharedSessionV2PrepareDelivery.mockResolvedValue({
+    status: "ready",
+    packageId: "package-1",
+    artifactId: "artifact-1",
+    sourceChecksum: "sha256:source",
+    throughSequenceInclusive: 0,
+    mode: "portable-transcript",
+    operation: "prompt-prefix",
+    promptPrefix: "",
+    importItems: [],
+    manifest: {
+      mode: "portable-transcript",
+      omitted: [],
+      throughSequenceInclusive: 0,
+      sourceChecksum: "sha256:source",
+    },
+    compression: {
+      estimator: "deterministic-char-div-4",
+      sourceEstimatedTokens: 0,
+      packageEstimatedTokens: 0,
+      perCategory: [],
+    },
+    ackFidelity: "weak",
+  });
+  sharedSessionV2AcceptContext.mockResolvedValue({
+    status: "accepted",
+    packageId: "package-1",
+  });
+}
+
 describe("sendSharedSessionTurnRouted（flag 路由）", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -105,10 +142,17 @@ describe("sendSharedSessionTurnRouted（flag 路由）", () => {
       mode: "delta-sync",
       omissions: [],
     });
+    mockContextDelivery();
     sendSharedSessionMessage.mockResolvedValue({
       nativeThreadId: "claude:session-1",
       delivery: {
         promptAcceptance: "accepted",
+        contextAcceptance: {
+          status: "accepted",
+          packageId: "package-1",
+          sourceChecksum: "sha256:source",
+          ackFidelity: "weak",
+        },
         terminal: { type: "run.settled", outcome: "completed" },
       },
     });
@@ -128,6 +172,7 @@ describe("sendSharedSessionTurnRouted（flag 路由）", () => {
         outcome: "completed",
         assistantText: "terminal text",
       }),
+      waitForContext: vi.fn().mockResolvedValue(undefined),
       dispose: vi.fn(),
     });
   });
@@ -176,11 +221,18 @@ describe("sendSharedSessionTurnV2", () => {
       mode: "delta-sync",
       omissions: [],
     });
+    mockContextDelivery();
     sendSharedSessionMessage.mockResolvedValue({
       nativeThreadId: "claude:session-1",
       assistantText: "world",
       delivery: {
         promptAcceptance: "accepted",
+        contextAcceptance: {
+          status: "accepted",
+          packageId: "package-1",
+          sourceChecksum: "sha256:source",
+          ackFidelity: "weak",
+        },
         terminal: { type: "run.settled", outcome: "completed" },
       },
     });
@@ -414,7 +466,19 @@ describe("sendSharedSessionTurnV2", () => {
   it("missing run.settled preserves accepted evidence and enters recovery", async () => {
     sendSharedSessionMessage.mockResolvedValue({
       nativeThreadId: "claude:session-1",
-      delivery: { promptAcceptance: "accepted" },
+      delivery: {
+        promptAcceptance: "accepted",
+        contextAcceptance: {
+          status: "accepted",
+          packageId: "package-1",
+          sourceChecksum: "sha256:source",
+        },
+      },
+    });
+    captureSharedRuntimeTerminal.mockReturnValue({
+      waitFor: vi.fn().mockRejectedValue(new Error("run.settled missing")),
+      waitForContext: vi.fn(),
+      dispose: vi.fn(),
     });
 
     await expect(
@@ -434,7 +498,14 @@ describe("sendSharedSessionTurnV2", () => {
     sendSharedSessionMessage.mockResolvedValue({
       nativeThreadId: "codex-native-1",
       turn: { id: "runtime-turn-1" },
-      delivery: { promptAcceptance: "accepted" },
+      delivery: {
+        promptAcceptance: "accepted",
+        contextAcceptance: {
+          status: "accepted",
+          packageId: "package-1",
+          sourceChecksum: "sha256:source",
+        },
+      },
     });
     const waitFor = vi.fn().mockResolvedValue({
       type: "run.settled",
@@ -443,6 +514,7 @@ describe("sendSharedSessionTurnV2", () => {
     });
     captureSharedRuntimeTerminal.mockReturnValue({
       waitFor,
+      waitForContext: vi.fn(),
       dispose: vi.fn(),
     });
 

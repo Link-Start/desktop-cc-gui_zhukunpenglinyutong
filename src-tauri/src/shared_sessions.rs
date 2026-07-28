@@ -1257,6 +1257,17 @@ pub async fn delete_shared_session(
     Ok(json!({ "deleted": true, "threadId": thread_id }))
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedContextRuntimeDelivery {
+    pub package_id: String,
+    pub source_checksum: String,
+    pub operation: String,
+    #[serde(default)]
+    pub import_items: Vec<Value>,
+    pub ack_fidelity: String,
+}
+
 #[tauri::command]
 pub async fn send_shared_session_message(
     workspace_id: String,
@@ -1272,6 +1283,7 @@ pub async fn send_shared_session_message(
     preferred_language: Option<String>,
     custom_spec_root: Option<String>,
     provider_profile_id: Option<String>,
+    context_delivery: Option<SharedContextRuntimeDelivery>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Value, String> {
@@ -1292,7 +1304,9 @@ pub async fn send_shared_session_message(
     let sync_from_turn_seq =
         shared_binding_synced_turn_seq(&mut meta, engine, provider_profile_id.as_deref(), now);
 
-    let sync_prefix = if sync_from_turn_seq < latest_turn_seq {
+    // Change C package 已由 Canonical Log 编译；存在 contextDelivery 时禁止再叠加
+    // V0 snapshot prefix，否则同一历史会被重复投递。
+    let sync_prefix = if context_delivery.is_none() && sync_from_turn_seq < latest_turn_seq {
         build_delta_sync_prefix(&latest_items, sync_from_turn_seq)
     } else {
         None
@@ -1302,6 +1316,7 @@ pub async fn send_shared_session_message(
     } else {
         text.clone()
     };
+    let mut context_acceptance = Value::Null;
 
     let response = match engine {
         EngineType::Codex => {
@@ -1321,6 +1336,25 @@ pub async fn send_shared_session_message(
             // Persist binding materialization before sending so failures don't
             // repeatedly create new native threads.
             write_shared_session_meta(&meta)?;
+            if let Some(delivery) = context_delivery.as_ref() {
+                if delivery.operation == "context-import" {
+                    codex_core::inject_thread_items_core(
+                        &state.sessions,
+                        &workspace_id,
+                        provider_profile_id.as_deref(),
+                        &native_thread_id,
+                        delivery.import_items.clone(),
+                    )
+                    .await?;
+                    context_acceptance = json!({
+                        "status": "accepted",
+                        "packageId": delivery.package_id,
+                        "sourceChecksum": delivery.source_checksum,
+                        "ackFidelity": delivery.ack_fidelity,
+                        "evidence": "thread/inject_items-jsonrpc-success",
+                    });
+                }
+            }
             let (mode_enforcement_enabled, extra_developer_instructions) = {
                 let settings = state.app_settings.lock().await;
                 (
@@ -1430,6 +1464,23 @@ pub async fn send_shared_session_message(
     } else {
         "accepted"
     };
+    if context_acceptance.is_null() {
+        if let Some(delivery) = context_delivery.as_ref() {
+            if delivery.operation == "prompt-prefix" && prompt_acceptance == "accepted" {
+                context_acceptance = json!({
+                    "status": if delivery.ack_fidelity == "strong" { "pending" } else { "accepted" },
+                    "packageId": delivery.package_id,
+                    "sourceChecksum": delivery.source_checksum,
+                    "ackFidelity": delivery.ack_fidelity,
+                    "evidence": if delivery.ack_fidelity == "strong" {
+                        "awaiting-claude-replay-echo"
+                    } else {
+                        "typed-prompt-acceptance"
+                    },
+                });
+            }
+        }
+    }
 
     Ok(json!({
         "engine": engine,
@@ -1447,19 +1498,10 @@ pub async fn send_shared_session_message(
         "result": response.get("result").cloned().unwrap_or_else(|| response.clone()),
         "turn": response.get("turn").cloned().or_else(|| response.get("result").and_then(|value| value.get("turn")).cloned()).unwrap_or(Value::Null),
         "response": response,
-        "delivery": if engine == EngineType::Claude && prompt_acceptance == "accepted" {
-            json!({
-                "promptAcceptance": prompt_acceptance,
-                "terminal": {
-                    "type": "run.settled",
-                    "outcome": "completed",
-                },
-            })
-        } else {
-            json!({
-                "promptAcceptance": prompt_acceptance,
-            })
-        },
+        "delivery": json!({
+            "promptAcceptance": prompt_acceptance,
+            "contextAcceptance": context_acceptance,
+        }),
     }))
 }
 

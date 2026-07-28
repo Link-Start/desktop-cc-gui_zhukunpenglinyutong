@@ -139,3 +139,120 @@ const terminal = await terminalCapture.waitFor({
 });
 await commitTurn({ outcome: terminal.outcome });
 ```
+
+## Scenario: Shared Context Package Delivery
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `shared_context` compiler、Context Package、Artifact Store、Context
+  ACK、Binding cursor 或 degraded-context UI。
+- 目标：跨 Provider 切换时只从 Shared Canonical Log 派生上下文；未获得 Adapter
+  证据时 fail closed，禁止重复注入或提前推进 cursor。
+- Behavior SSOT：`openspec/changes/add-shared-context-compiler/**`。
+
+### 2. Signatures
+
+```text
+shared_session_v2_prepare_delivery(workspaceId, threadId, attemptId,
+  logicalTurnId, target)
+shared_session_v2_accept_context(workspaceId, threadId, attemptId,
+  logicalTurnId, bindingKey, packageId, nativeSessionId, nativeRequestId)
+shared_context_retrieve_artifact(workspaceId, threadId, artifactId, checksum)
+shared_context_scan_orphans()
+
+ContextPackage {
+  schemaVersion, packageId, sessionId, bindingKey, destination,
+  stablePrefix, delta, promptPrefix, manifest, compression
+}
+
+Binding context cursor {
+  acceptedThroughSequence,
+  committedThroughSequence,
+  pendingDelivery
+}
+```
+
+### 3. Contracts
+
+- Compiler source 只能是 Shared Canonical Log；当前 `turnRequested` 的 sequence 是
+  exclusive upper boundary，禁止把本轮 user prompt 重复编进 Context Package。
+- mode 固定按 capability 选择：
+  `native-delta > native-history-import > native-history-clone >
+  portable-transcript > checkpoint`。缺 destination identity 时不得选
+  `native-delta`。
+- `context.deliveryPrepared` 与 pending 必须先于外部 context side effect 落盘。
+  Adapter ACK 只推进 accepted；terminal canonical commit 才推进 committed 并清
+  pending。
+- Codex `thread/inject_items` 只有 JSON-RPC success 才算 strong ACK。Claude
+  transcript/checkpoint 只有匹配 package/checksum 的 replay echo 才算 strong ACK。
+  weak fidelity 必须显式返回，禁止宣称 exactly-once。
+- tool call/result 成对保留或成对省略；private reasoning、failed/aborted assistant、
+  unsupported image 和 historical control 必须写 Manifest disposition。
+- Artifact 按 workspace/session 隔离，以 checksum 校验；读取结果永远
+  `referenceOnly=true`。orphan scan 只报告，不自动删除。
+- UI 只在 prepare/confirm/ACK/terminal 等阶段边界更新；禁止 per-entry setState
+  和新增 polling。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| compile 失败 | 无 pending、无 cursor 推进、无 runtime side effect | 先发 prompt 再补事实 |
+| 当前 turn 已写 Tx1 | package upper bound 为该 sequence 前一条 | 把当前 user prompt 重复放入 prefix |
+| Codex import timeout/disconnect | 保留 pending，进入 recovery | fallback prompt-prefix 后重复发送 |
+| Claude checksum echo 缺失/不匹配 | `ackAmbiguous` + recovery-required | 推进 accepted |
+| context 已 accepted、run failed | accepted 不回退；terminal 后 committed 前进 | 重放同一 package |
+| 另一 Target 发现 unresolved pending | 返回 recovery-required | 绕过 pending 开新线性操作 |
+| cross-workspace/session artifact | ownership error | 返回内容 |
+| degraded package 未确认 | 无 context/prompt side effect | 自动发送 |
+
+### 5. Good / Base / Bad Cases
+
+- Good：Tx1 写当前 user intent；compiler 只读上一条 sequence；Tx3 写 pending；
+  Adapter ACK 推进 accepted；terminal commit 推进 committed。
+- Base：目标只支持 transcript，UI 显示 omissions/compression，用户确认后携带
+  marker 发送。
+- Bad：把 `turnCommitted.sequence` 当 context cursor；这是 runtime terminal 的
+  sequence，不是 package 的 `throughSequenceInclusive`。
+- Bad：Claude process 写入成功就立即构造 fake terminal 或 context ACK。
+
+### 6. Tests Required
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml --lib shared_context
+cargo test --manifest-path src-tauri/Cargo.toml --test shared_context
+cargo test --manifest-path src-tauri/Cargo.toml --test shared_session_v2
+cargo test --manifest-path src-tauri/Cargo.toml --lib \
+  convert_event_preserves_replayed_user_message_as_raw_ack_evidence
+cargo test --manifest-path src-tauri/Cargo.toml --lib \
+  context_import_requires_jsonrpc_success
+pnpm vitest run \
+  src/features/shared-session/runtime/sendSharedSessionTurnV2.test.ts \
+  src/features/shared-session/runtime/sharedRuntimeTerminal.test.ts
+pnpm exec tsc --noEmit --pretty false
+```
+
+关键断言：
+
+- 相同 source range 的 package id/checksum/stable prefix 确定。
+- 当前 user prompt 不进入 prefix；accepted/committed 分阶段推进。
+- artifact cross-workspace 拒绝且读取为 reference-only。
+- strong ACK 缺失进入 recovery；弱 ACK 不伪装 exactly-once。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+await sendSharedSessionMessage(...);
+await sharedSessionV2AcceptContext(...); // 没有 Adapter 证据
+```
+
+#### Correct
+
+```ts
+const prepared = await sharedSessionV2PrepareDelivery(...); // Tx3 已落盘
+const delivery = await sendSharedSessionMessage(...);
+assertMatchingContextAck(delivery, prepared.packageId, prepared.sourceChecksum);
+await sharedSessionV2AcceptContext(...);
+```
