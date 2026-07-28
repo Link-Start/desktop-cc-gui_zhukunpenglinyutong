@@ -1949,3 +1949,36 @@ Review Change B 后撤回 17 个虚假完成项和 Gate 4；修复 Composer mana
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1196: 归档 Change C 并开放 Change D
+
+**Date**: 2026-07-28
+**Task**: 归档 Change C 并开放 Change D
+**Branch**: `feature/v-0710`
+
+### Summary
+
+同步 5 份 OpenSpec 主 specs，归档 add-shared-context-compiler 与 Trellis task，更新总任务清单 Wave 5/Gate 5 收口证据；OpenSpec specs strict validation 453/453 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c5cd28958` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
