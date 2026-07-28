@@ -186,6 +186,20 @@ OpenSpec 已归档至 `openspec/changes/archive/2026-07-27-{establish-shared-eve
 - [x] 同一 Binding 连续 handoff 的 Package 前缀字节级稳定；分类型折叠全部计入 `ProjectionManifest.omitted`
 - [x] §17.5 source×target 验收矩阵通过
 
+**Change C 收口记录（2026-07-28）**
+
+- OpenSpec 44/44 tasks、13/13 requirements、32/32 scenarios 已验证并归档至
+  `openspec/changes/archive/2026-07-28-add-shared-context-compiler/`。
+- 主实现提交：`bd5208f39 feat(shared-session): 完成 Change C 上下文交付闭环`。
+- review 共修复 8 个 correctness/data-loss 缺口，包括当前 prompt 重复注入、V0 双投递、
+  fake terminal、cursor 误推进、ACK recovery、跨 Target pending 绕过、orphan 漏报，
+  以及 terminal fact/cursor 非原子提交。
+- 增量证据：Rust compiler unit 3、Context integration 1、Shared V2 integration 11、
+  Claude/Codex ACK 定点各 1；Frontend 2 files / 18 tests、typecheck、scoped ESLint，
+  OpenSpec strict validation 均通过。
+- 结论：Gate 5 已通过，Change C 不再承载新能力；可以进入 Change D。Desktop
+  source×target 人工 smoke 保留为发布前验收，不阻塞 Change D 开工。
+
 ---
 
 ## Wave 6：Change D — add-native-provider-continuation

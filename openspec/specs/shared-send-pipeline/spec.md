@@ -5,7 +5,7 @@ TBD - created by archiving change compose-shared-session-execution-target. Updat
 ## Requirements
 ### Requirement: Send MUST Commit turnRequested Before Touching Runtime
 
-The V2 send path MUST commit `conversation.turnRequested` (with the immutable `TurnExecutionSnapshot`) in the first transaction before any runtime side effect. The send path MUST thread `providerProfileId` from the selected target through snapshot, binding lookup, and runtime dispatch.
+The V2 send path MUST commit `conversation.turnRequested` (with the immutable `TurnExecutionSnapshot`) in the first transaction before any runtime side effect. The send path MUST thread `providerProfileId` from the selected target through snapshot, binding lookup, context compilation, delivery, and runtime dispatch. After Binding provisioning, it MUST compile a Context Package and commit `context.deliveryPrepared` plus durable pending delivery before importing context or sending a prompt.
 
 #### Scenario: user intent is durable before runtime call
 
@@ -16,7 +16,7 @@ The V2 send path MUST commit `conversation.turnRequested` (with the immutable `T
 #### Scenario: provider profile id reaches runtime dispatch
 
 - **WHEN** a turn targets a managed provider profile
-- **THEN** the runtime dispatch MUST receive that `providerProfileId`
+- **THEN** context compilation and runtime dispatch MUST receive that `providerProfileId`
 - **AND** the turn MUST NOT silently fall back to the disk/default provider
 
 #### Scenario: unavailable target blocks send without rerouting
@@ -24,6 +24,12 @@ The V2 send path MUST commit `conversation.turnRequested` (with the immutable `T
 - **WHEN** the selected provider is unavailable or the model is outside the provider catalog
 - **THEN** the send MUST be blocked with a target-unavailable state
 - **AND** the system MUST NOT reroute to another provider or default model
+
+#### Scenario: context intent precedes context side effect
+
+- **WHEN** a Context Package is ready for import or prompt-prefix delivery
+- **THEN** `context.deliveryPrepared` and matching pending delivery MUST commit before the Adapter call
+- **AND** compile failure MUST produce no delivery side effect
 
 ### Requirement: Binding Provisioning MUST Be Durable and Crash-Safe
 
@@ -122,3 +128,19 @@ The V2 send path MUST be gated behind a feature flag (build-time `VITE_MOSSX_SHA
 - **WHEN** the flag is turned off after V2 turns were committed
 - **THEN** previously committed canonical facts MUST remain intact in the event log
 - **AND** the V0 read path MUST continue to work
+
+### Requirement: Shared Send MUST Respect Context Acceptance Boundary
+
+Shared V2 send MUST wait for runtime-specific context acceptance before prompt acceptance and MUST expose degraded projection details before any lossy delivery.
+
+#### Scenario: lossy package waits for confirmation
+
+- **WHEN** the Context Package Manifest contains omissions or lossy transformations
+- **THEN** the composer MUST show mode, disposition, and compression details
+- **AND** no context or prompt side effect MUST occur until the user confirms
+
+#### Scenario: accepted context survives failed run
+
+- **WHEN** context is accepted and the subsequent prompt/run fails
+- **THEN** the accepted cursor MUST remain advanced
+- **AND** a later attempt MUST compile only entries after that accepted boundary

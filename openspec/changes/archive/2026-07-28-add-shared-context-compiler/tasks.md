@@ -67,4 +67,4 @@
 - [x] 9.3 `openspec validate add-shared-context-compiler --strict --no-interactive` 通过
 - [x] 9.4 更新 master checklist Wave 5、编写 verification evidence 与 executable Trellis spec
 - [x] 9.5 完成 cross-layer review，无 correctness/data-loss/routing finding
-- [ ] 9.6 Commit、OpenSpec sync/archive、Trellis task archive 与 session record
+- [x] 9.6 Commit、OpenSpec sync/archive、Trellis task archive 与 session record
