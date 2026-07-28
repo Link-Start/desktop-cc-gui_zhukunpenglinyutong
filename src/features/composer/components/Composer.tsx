@@ -31,7 +31,11 @@ import type {
   ReviewPromptStep,
 } from "../../threads/hooks/useReviewPrompt";
 import type { EngineDisplayInfo } from "../../engine/hooks/useEngineController";
-import { selectNextTarget } from "../../shared-session/target/targetStore";
+import {
+  selectNextTarget,
+  useSharedTargetState,
+} from "../../shared-session/target/targetStore";
+import type { ExecutionTarget } from "../../shared-session/target/types";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
@@ -630,6 +634,49 @@ function ComposerImpl({
     selectedEngine === "codex" ||
     selectedEngine === "gemini" ||
     selectedEngine === "kimi";
+  const sharedTargetState = useSharedTargetState(
+    activeWorkspaceId ?? "",
+    activeThreadId ?? "",
+  );
+  const initialSharedTarget = useMemo<ExecutionTarget | null>(() => {
+    if (
+      !isSharedSession ||
+      (selectedEngine !== "claude" && selectedEngine !== "codex")
+    ) {
+      return null;
+    }
+    return {
+      engine: selectedEngine,
+      providerProfileId: providerProfileId ?? null,
+      model: selectedModelId ?? null,
+      reasoning: selectedEffort ? { effort: selectedEffort } : null,
+    };
+  }, [
+    isSharedSession,
+    providerProfileId,
+    selectedEffort,
+    selectedEngine,
+    selectedModelId,
+  ]);
+  const selectedSharedTarget =
+    sharedTargetState.selectedNextTarget ?? initialSharedTarget;
+  const handleSharedTargetChange = useCallback(
+    (target: ExecutionTarget) => {
+      if (
+        !activeWorkspaceId ||
+        !activeThreadId ||
+        sharedTargetPickerLocked
+      ) {
+        return;
+      }
+      selectNextTarget(activeWorkspaceId, activeThreadId, target);
+    },
+    [
+      activeThreadId,
+      activeWorkspaceId,
+      sharedTargetPickerLocked,
+    ],
+  );
   // 草稿值直接订阅模块级 store(而非经 app-shell 根 prop 灌入):按键写 store 时
   // 只有 Composer 自身重渲染,不再把整个 app-shell 拖下水。
   const draftText = useComposerDraft(activeThreadId);
@@ -638,24 +685,18 @@ function ComposerImpl({
       !isSharedSession ||
       !activeWorkspaceId ||
       !activeThreadId ||
-      (selectedEngine !== "claude" && selectedEngine !== "codex")
+      !initialSharedTarget ||
+      sharedTargetState.selectedNextTarget
     ) {
       return;
     }
-    selectNextTarget(activeWorkspaceId, activeThreadId, {
-      engine: selectedEngine,
-      providerProfileId: providerProfileId ?? null,
-      model: selectedModelId ?? null,
-      reasoning: selectedEffort ? { effort: selectedEffort } : null,
-    });
+    selectNextTarget(activeWorkspaceId, activeThreadId, initialSharedTarget);
   }, [
     activeThreadId,
     activeWorkspaceId,
+    initialSharedTarget,
     isSharedSession,
-    providerProfileId,
-    selectedEffort,
-    selectedEngine,
-    selectedModelId,
+    sharedTargetState.selectedNextTarget,
   ]);
   const [text, setText] = useState(draftText);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
@@ -2372,20 +2413,46 @@ function ComposerImpl({
               onSend={handleSend}
               onStop={onStop}
               onTextChange={handleTextChangeWithHistory}
-              selectedModelId={selectedModelId}
-              selectedEngine={selectedEngine}
+              selectedModelId={
+                selectedSharedTarget?.model ?? selectedModelId
+              }
+              selectedEngine={
+                selectedSharedTarget?.engine ?? selectedEngine
+              }
               isSharedSession={isSharedSession}
               threadId={activeThreadId}
               engines={engines}
               onSelectEngine={sharedTargetPickerLocked ? undefined : onSelectEngine}
               models={models}
               providerModelCatalogs={providerModelCatalogs}
-              providerProfileId={providerProfileId}
+              providerProfileId={
+                selectedSharedTarget
+                  ? selectedSharedTarget.providerProfileId ?? null
+                  : providerProfileId
+              }
+              executionTarget={selectedSharedTarget}
+              onExecutionTargetChange={
+                isSharedSession && !sharedTargetPickerLocked
+                  ? handleSharedTargetChange
+                  : undefined
+              }
               onSelectModel={sharedTargetPickerLocked ? undefined : onSelectModel}
               reasoningOptions={reasoningOptions}
-              selectedEffort={selectedEffort}
+              selectedEffort={
+                selectedSharedTarget
+                  ? selectedSharedTarget.reasoning?.effort ?? null
+                  : selectedEffort
+              }
               onSelectEffort={
-                sharedTargetPickerLocked ? undefined : onSelectEffort
+                sharedTargetPickerLocked
+                  ? undefined
+                  : isSharedSession && selectedSharedTarget
+                    ? (effort) =>
+                        handleSharedTargetChange({
+                          ...selectedSharedTarget,
+                          reasoning: effort ? { effort } : null,
+                        })
+                    : onSelectEffort
               }
               reasoningSupported={reasoningSupported}
               onResolvedAlwaysThinkingChange={onResolvedAlwaysThinkingChange}

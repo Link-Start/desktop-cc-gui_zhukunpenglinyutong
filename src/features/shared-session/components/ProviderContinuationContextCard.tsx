@@ -1,0 +1,137 @@
+import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
+import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
+import GitBranch from "lucide-react/dist/esm/icons/git-branch";
+import { useTranslation } from "react-i18next";
+
+import type { ThreadSummary } from "../../../types";
+
+function engineLabel(engine: ThreadSummary["engineSource"]): string {
+  switch (engine) {
+    case "codex":
+      return "Codex CLI";
+    case "kimi":
+      return "Kimi CLI";
+    case "gemini":
+      return "Gemini CLI";
+    case "opencode":
+      return "OpenCode";
+    case "claude":
+    default:
+      return "Claude Code";
+  }
+}
+
+function providerLabel(
+  thread: ThreadSummary | null,
+  localProviderLabel: string,
+): string {
+  return (
+    thread?.providerProfileName?.trim() ||
+    thread?.providerProfileId?.trim() ||
+    localProviderLabel
+  );
+}
+
+function inferSourceEngine(thread: ThreadSummary): ThreadSummary["engineSource"] {
+  const sourceSessionId = thread.sourceSessionId?.trim().toLowerCase() ?? "";
+  if (sourceSessionId.startsWith("codex:")) {
+    return "codex";
+  }
+  if (sourceSessionId.startsWith("kimi:")) {
+    return "kimi";
+  }
+  if (sourceSessionId.startsWith("gemini:")) {
+    return "gemini";
+  }
+  if (sourceSessionId.startsWith("opencode:")) {
+    return "opencode";
+  }
+  return "claude";
+}
+
+export function ProviderContinuationContextCard({
+  thread,
+  source,
+  onOpenSource,
+}: {
+  thread: ThreadSummary;
+  source: ThreadSummary | null;
+  onOpenSource: (() => void) | null;
+}) {
+  const { t } = useTranslation();
+  const sourceUnavailableLabel = t(
+    "threads.providerContinuationSourceUnavailable",
+    { defaultValue: "来源会话已不可用" },
+  );
+  const localProviderLabel = t("providers.localConfig", {
+    defaultValue: "本地配置",
+  });
+  return (
+    <section
+      className="mx-auto mt-4 w-[min(920px,calc(100%-32px))] rounded-xl border border-border/70 bg-card/75 p-4 shadow-sm backdrop-blur"
+      aria-label={t("threads.providerContinuationContextAriaLabel", {
+        defaultValue: "Provider 续接上下文",
+      })}
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <GitBranch className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <strong className="text-sm">
+              {t("threads.providerContinuation", {
+                defaultValue: "Provider 续接",
+              })}
+            </strong>
+            <span className="text-xs text-muted-foreground">
+              {t("threads.providerContinuationCardDescription", {
+                defaultValue: "来源保留，新会话独立继续",
+              })}
+            </span>
+          </div>
+          <div className="mt-2 flex min-w-0 items-center gap-2 text-sm">
+            <span className="min-w-0 truncate">
+              {engineLabel(source?.engineSource ?? inferSourceEngine(thread))} ·{" "}
+              {source
+                ? providerLabel(source, localProviderLabel)
+                : thread.sourceProviderProfileId?.trim() ||
+                  t("threads.providerContinuationSourceProvider", {
+                    defaultValue: "来源 Provider",
+                  })}
+            </span>
+            <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 truncate font-medium">
+              {engineLabel(thread.engineSource)} ·{" "}
+              {providerLabel(thread, localProviderLabel)}
+            </span>
+          </div>
+          <p className="mt-2 truncate text-xs text-muted-foreground">
+            {t("threads.providerContinuationSourceLabel", {
+              defaultValue: "来源：{{source}}",
+              source: source?.name ?? sourceUnavailableLabel,
+            })}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="ghost inline-flex shrink-0 items-center gap-1.5"
+          onClick={onOpenSource ?? undefined}
+          disabled={!onOpenSource}
+          title={
+            onOpenSource
+              ? t("threads.providerContinuationOpenSourceTitle", {
+                  defaultValue: "查看来源会话",
+                })
+              : sourceUnavailableLabel
+          }
+        >
+          <ArrowLeft className="size-4" aria-hidden />
+          {t("threads.providerContinuationOpenSource", {
+            defaultValue: "查看来源",
+          })}
+        </button>
+      </div>
+    </section>
+  );
+}

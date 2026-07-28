@@ -15,6 +15,7 @@ import { Composer } from "./Composer";
 import {
   getSharedTargetState,
   resetSharedTargetStoreForTests,
+  selectNextTarget,
 } from "../../shared-session/target/targetStore";
 
 afterEach(() => {
@@ -41,13 +42,19 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
     text,
     onTextChange,
     onSend,
+    providerProfileId,
+    selectedEffort,
   }: {
     text: string;
     onTextChange: (next: string, cursor: number | null) => void;
     onSend: () => void;
+    providerProfileId?: string | null;
+    selectedEffort?: string | null;
   }) => (
     <textarea
       value={text}
+      data-provider-profile-id={providerProfileId ?? "null"}
+      data-effort={selectedEffort ?? "null"}
       onChange={(event) =>
         onTextChange(event.currentTarget.value, event.currentTarget.value.length)
       }
@@ -177,6 +184,32 @@ describe("Composer file reference token", () => {
       model: "claude-sonnet-4-5",
       reasoning: { effort: "high" },
     });
+  });
+
+  it("keeps explicit local Provider and empty reasoning instead of old props", () => {
+    const view = render(
+      <ComposerHarness
+        onSend={() => {}}
+        sharedTarget={{
+          providerProfileId: "openrouter",
+          model: "claude-sonnet-4-5",
+          effort: "high",
+        }}
+      />,
+    );
+
+    act(() => {
+      selectNextTarget("ws-1", "thread-1", {
+        engine: "claude",
+        providerProfileId: null,
+        model: "claude-opus-4-1",
+        reasoning: null,
+      });
+    });
+
+    const textarea = getTextarea(view.container);
+    expect(textarea.dataset.providerProfileId).toBe("null");
+    expect(textarea.dataset.effort).toBe("null");
   });
 
   it("converts visual file tokens to absolute paths before send", async () => {

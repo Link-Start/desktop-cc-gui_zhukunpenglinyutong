@@ -61,6 +61,47 @@ describe("Messages", () => {
     }
   });
 
+  it("hides continuation protocol markers but keeps ordinary conversation", () => {
+    const packageId = `sha256:${"a".repeat(64)}`;
+    const checksum = `sha256:${"b".repeat(64)}`;
+    const marker = `MOSSX_CONTEXT_PACKAGE:${packageId}:${checksum}`;
+    const items: ConversationItem[] = [
+      {
+        id: "protocol-package",
+        kind: "message",
+        role: "user",
+        text: marker,
+      },
+      {
+        id: "visible-user",
+        kind: "message",
+        role: "user",
+        text: "继续修复登录问题",
+      },
+      {
+        id: "protocol-accepted",
+        kind: "message",
+        role: "assistant",
+        text: `MOSSX_CONTEXT_ACCEPTED:${packageId}:${checksum}`,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="claude:continuation"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="claude"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.textContent).toContain("继续修复登录问题");
+    expect(container.textContent).not.toContain("MOSSX_CONTEXT_");
+  });
+
   it("keeps Claude reasoning title stable while streaming", () => {
     window.localStorage.removeItem("ccgui.claude.hideReasoningModule");
 

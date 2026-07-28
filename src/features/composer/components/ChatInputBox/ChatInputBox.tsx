@@ -50,6 +50,7 @@ import {
   useInlineHistoryCompletion,
   useUndoRedoHistory,
 } from './hooks/index.js';
+import { useSharedProviderTargetCatalog } from './hooks/useSharedProviderTargetCatalog';
 import {
   commandToDropdownItem,
   fileReferenceProvider,
@@ -184,6 +185,9 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       permissionMode = 'bypassPermissions',
       currentProvider = 'claude',
       currentProviderProfileId,
+      executionTarget,
+      onExecutionTargetChange,
+      sharedTargetPicker = false,
       providerAvailability,
       providerVersions,
       providerStatusLabels,
@@ -361,6 +365,17 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         t,
       ],
     );
+    const sharedProviderTargetCatalog = useSharedProviderTargetCatalog({
+      enabled: sharedTargetPicker,
+      currentProvider: currentProvider as ProviderId,
+      currentProviderProfileId,
+      currentModels: availableModels,
+      resolveProviderLabel: (providerId) =>
+        t(`providers.${providerId}.label`, { defaultValue: providerId }),
+      kimiDisabledReason: t('sharedSession.kimiTargetUnavailable', {
+        defaultValue: '可作为来源；目标续接尚未验证',
+      }),
+    });
 
     // Records the exact text of the latest programmatic (external) write.
     // Programmatic innerText assignment fires no input event, so this must NOT
@@ -1459,6 +1474,14 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         selectedModel={selectedModel}
         models={availableModels}
         modelGroups={onProviderSelect ? providerModelGroups : undefined}
+        targetGroups={
+          sharedTargetPicker ? sharedProviderTargetCatalog.groups : undefined
+        }
+        executionTarget={executionTarget}
+        onExecutionTargetChange={onExecutionTargetChange}
+        onOpenTargetCatalog={sharedProviderTargetCatalog.ensureProfiles}
+        onOpenProviderProfile={sharedProviderTargetCatalog.ensureModels}
+        targetCatalogError={sharedProviderTargetCatalog.profileLoadError}
         currentProvider={currentProvider}
         onModelSelect={onModelSelect ? handleModelSelect : undefined}
         onProviderModelSelect={

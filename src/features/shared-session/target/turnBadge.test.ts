@@ -55,10 +55,10 @@ describe("resolveTurnBadge", () => {
     expect(badge.unavailableReason).toBe("runtime-missing");
   });
 
-  it("falls back to default label for legacy default-provider snapshots", () => {
+  it("uses a readable local label for legacy default-provider snapshots", () => {
     const snapshot = freezeTurnSnapshot({ engine: "claude" });
     const badge = resolveTurnBadge(snapshot);
-    expect(badge.providerLabel).toBe("default");
+    expect(badge.providerLabel).toBe("本地配置");
     expect(badge.unavailable).toBe(false);
   });
 });

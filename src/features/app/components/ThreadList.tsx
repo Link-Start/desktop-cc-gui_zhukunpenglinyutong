@@ -287,12 +287,12 @@ const ThreadRowItem = memo(function ThreadRowItem({
       {thread.originKind === "provider-continuation" && (
         <span
           className="thread-subagent-tag thread-continuation-tag"
-          title={t("threads.providerContinuation", {
-            defaultValue: "供应商续接",
+          title={t("threads.providerContinuationHint", {
+            defaultValue: "Provider 续接：可在会话顶部查看来源",
           })}
         >
-          {t("threads.providerContinuation", {
-            defaultValue: "供应商续接",
+          {t("threads.providerContinuationShort", {
+            defaultValue: "续接",
           })}
         </span>
       )}

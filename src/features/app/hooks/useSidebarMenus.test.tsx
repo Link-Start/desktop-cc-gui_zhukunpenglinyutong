@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ask } from "@tauri-apps/plugin-dialog";
 import type { EngineType, WorkspaceInfo } from "../../../types";
 import { useSidebarMenus } from "./useSidebarMenus";
 import {
@@ -82,9 +81,6 @@ vi.mock("../../../services/tauri", () => ({
   createNativeProviderContinuation: vi.fn(),
   getOpenCodeProviderHealth: vi.fn(),
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({
-  ask: vi.fn(),
-}));
 vi.mock("../../../services/globalRuntimeNotices", () => ({
   pushGlobalRuntimeNotice: vi.fn(),
 }));
@@ -98,7 +94,6 @@ const createNativeProviderContinuationMock = vi.mocked(
   createNativeProviderContinuation,
 );
 const pushGlobalRuntimeNoticeMock = vi.mocked(pushGlobalRuntimeNotice);
-const askMock = vi.mocked(ask);
 
 const workspace: WorkspaceInfo = {
   id: "ws-1",
@@ -207,8 +202,6 @@ describe("useSidebarMenus", () => {
     });
     pushGlobalRuntimeNoticeMock.mockReset();
     createNativeProviderContinuationMock.mockReset();
-    askMock.mockReset();
-    askMock.mockResolvedValue(true);
     getOpenCodeProviderHealthMock.mockReset();
     getOpenCodeProviderHealthMock.mockResolvedValue({
       provider: "openai",
@@ -931,6 +924,21 @@ describe("useSidebarMenus", () => {
       }
     });
 
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
+    expect(result.current.providerContinuationDialogState?.stage).toBe("confirm");
+    await act(async () => {
+      await result.current.confirmProviderContinuation();
+    });
+    expect(result.current.providerContinuationDialogState?.stage).toBe(
+      "confirm-degraded",
+    );
+    expect(result.current.providerContinuationDialogState?.detail).toContain(
+      "threads.providerContinuationProjectionMode: checkpoint\nthreads.providerContinuationEstimatedTokens: 1200 → 600\nthreads.providerContinuationOmissions:\n- image: unsupported",
+    );
+    await act(async () => {
+      await result.current.confirmProviderContinuation();
+    });
+
     expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "ws-1",
@@ -945,12 +953,6 @@ describe("useSidebarMenus", () => {
         }),
       }),
     );
-    expect(askMock).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "Mode: checkpoint\nEstimated tokens: 1200 → 600\nOmissions:\n- image: unsupported",
-      ),
-      expect.objectContaining({ kind: "warning" }),
-    );
     expect(createNativeProviderContinuationMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ confirmDegraded: true }),
     );
@@ -961,8 +963,7 @@ describe("useSidebarMenus", () => {
     );
   });
 
-  it("does not create a degraded continuation after Desktop dialog cancellation", async () => {
-    askMock.mockResolvedValue(false);
+  it("does not create a continuation after the product dialog is cancelled", async () => {
     createNativeProviderContinuationMock.mockResolvedValue({
       status: "confirmation-required",
       fidelity: "degraded",
@@ -1013,8 +1014,13 @@ describe("useSidebarMenus", () => {
       }
     });
 
-    expect(askMock).toHaveBeenCalledOnce();
-    expect(createNativeProviderContinuationMock).toHaveBeenCalledOnce();
+    expect(result.current.providerContinuationDialogState?.stage).toBe("confirm");
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
+    act(() => {
+      result.current.closeProviderContinuationDialog();
+    });
+    expect(result.current.providerContinuationDialogState).toBeNull();
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
     expect(handlers.onSelectThread).not.toHaveBeenCalled();
   });
 
@@ -1068,6 +1074,9 @@ describe("useSidebarMenus", () => {
       if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
         await submenu.items[0].onSelect();
       }
+    });
+    await act(async () => {
+      await result.current.confirmProviderContinuation();
     });
 
     expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(

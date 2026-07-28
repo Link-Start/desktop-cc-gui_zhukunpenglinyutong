@@ -123,6 +123,7 @@ import {
 } from "./activeCanvasStore";
 import { ActiveCanvasComposer } from "./activeCanvasComposerNode";
 import { SharedSendStatusBar } from "../../shared-session/components/SharedSendStatusBar";
+import { ProviderContinuationContextCard } from "../../shared-session/components/ProviderContinuationContextCard";
 import { useSharedSendState } from "../../shared-session/runtime/sharedSendStateStore";
 import { useSharedSendStateRestore } from "../../shared-session/runtime/useSharedSendStateRestore";
 import {
@@ -1026,9 +1027,50 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     setActiveCanvasSnapshot(activeCanvasSnapshot);
   }, [activeCanvasSnapshot]);
 
+  const continuationWorkspaceId = options.activeWorkspaceId ?? "";
+  const continuationThreadsByWorkspace = options.threadsByWorkspace;
+  const selectContinuationThread = options.onSelectThread;
+  const continuationContext = useMemo(() => {
+    if (
+      activeThreadSummary?.originKind !== "provider-continuation" ||
+      !activeThreadSummary.sourceSessionId
+    ) {
+      return null;
+    }
+    const sourceSessionId = activeThreadSummary.sourceSessionId;
+    const source = continuationThreadsByWorkspace[
+      continuationWorkspaceId
+    ]?.find(
+      (thread) => thread.id === sourceSessionId,
+    ) ?? null;
+    return {
+      source,
+      onOpenSource: source
+        ? () =>
+            selectContinuationThread(
+              continuationWorkspaceId,
+              sourceSessionId,
+            )
+        : null,
+    };
+  }, [
+    activeThreadSummary,
+    continuationThreadsByWorkspace,
+    continuationWorkspaceId,
+    selectContinuationThread,
+  ]);
+
   const messagesNode = useMemo(
     () =>
       buildConversationCanvasNode({
+        continuationContextNode:
+          activeThreadSummary?.originKind === "provider-continuation" ? (
+            <ProviderContinuationContextCard
+              thread={activeThreadSummary}
+              source={continuationContext?.source ?? null}
+              onOpenSource={continuationContext?.onOpenSource ?? null}
+            />
+          ) : null,
         messagesProps: {
           items: EMPTY_ACTIVE_CANVAS_ITEMS,
           threadId: null,
@@ -1101,6 +1143,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.systemProxyEnabled,
       options.systemProxyUrl,
       options.openAppTargets,
+      activeThreadSummary,
+      continuationContext,
       options.selectedOpenAppId,
       showMessageAnchors,
       options.codeBlockCopyUseModifier,
@@ -1116,7 +1160,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       forkConfirmUserMessageId,
       handleCancelForkConfirm,
       handleConfirmForkFromMessage,
-      activeThreadSummary?.providerProfileId,
       codexForkProviderProfiles,
       options.onRewind,
       handleOpenRewindDialogFromMessage,

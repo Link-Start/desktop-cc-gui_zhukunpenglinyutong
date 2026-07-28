@@ -950,6 +950,33 @@ selectedExecutionTarget
 
 不创建 Binding，不发送消息。
 
+#### 8.1.1 Picker 的产品可达性与加载契约
+
+四级 Target 不能只存在于 domain type，必须在 Shared Composer 中可实际操作：
+
+```text
+打开模型菜单
+  → 显示所有已知 CLI（支持 / 不支持都可解释）
+展开某个 CLI
+  → 显示该 CLI 的 Provider Profiles
+  → 按 engine + providerProfileId 懒加载各自 Model Catalog
+选择 Model
+  → 原子写入 engine + providerProfileId + model
+  → Reasoning 仅在同一 Binding 下保留，否则清空
+```
+
+硬约束：
+
+- 根菜单打开不得预取所有 Provider 的全部 Model；只允许 user-driven、binding-scoped
+  lazy load，并按 `engine + providerProfileId` cache / dedupe。
+- local/disk sentinel 只属于配置查询边界；写入 `ExecutionTarget` 前必须归一为
+  `providerProfileId = null`，避免与 canonical `engine:default` 形成双 Binding。
+- 当前按钮的 Model label 必须从完整 Target 对应 catalog 解析，不能继续读取切换前
+  Engine 的 model list。
+- 已知但未验证 target acceptance 的 CLI 必须显示 disabled reason；禁止静默隐藏，
+  也禁止点击后 fallback 到其他 CLI。
+- Provider catalog 部分失败只影响该 binding；不能清空其他 CLI/Profile 的可用目录。
+
 ### 8.2 Send
 
 ```text
@@ -1422,6 +1449,21 @@ Available Models
 - Provider Catalog 加载失败后静默显示 local/default；
 - 仅凭 Model ID 反推 Provider；
 - 把 Provider ID 与 API Protocol 混为同一个字段。
+
+### 10.4 Control-plane 信息的 UI 投影边界
+
+`MOSSX_CONTEXT_PACKAGE:*`、`MOSSX_CONTEXT_ACCEPTED:*`、package checksum 与
+native context prompt 是 ACK/recovery 证据，不是用户消息。Renderer 必须使用严格、
+版本化的 classifier 隐藏已知完整 marker；不得用 `includes("MOSSX")` 之类宽泛规则，
+否则会吞掉用户正常讨论协议的内容。
+
+Provider Continuation 的用户投影必须至少包含：
+
+- 可读标题：优先“继续：来源会话标题”，不得把 package hash 当标题。
+- 来源与目标：Engine + Provider snapshot。
+- 来源导航：来源存在时可直接打开；缺失时显示不可用，不跳错 Session。
+- 产品内确认：创建 side effect 前显示来源/目标；degraded 时在同一 domain Dialog
+  展示 mode/token/omissions 后再次确认。禁止 native `alert/window.alert`。
 
 ### 10.3 Credential Resolution
 

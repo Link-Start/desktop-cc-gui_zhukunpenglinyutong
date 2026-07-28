@@ -195,6 +195,13 @@ interface RuntimeDeliveryAdapter {
 ### Step 6：UI 注册（数据驱动，改动极小）
 
 - Engine 显示名、图标、Picker 选项：按现有 Engine registry 增加配置项；
+- Shared Target Picker：注册 Provider Profile loader 与
+  `getEngineModels(engine, { providerProfileId })` catalog；选择必须一次性产出完整
+  `engine + providerProfileId + model`，禁止按 Model ID 反推 Provider；
+- 未通过 target acceptance 的新 CLI 仍应出现在 Picker 中，但必须 disabled 并显示
+  capability reason；不能静默隐藏或 fallback；
+- local/disk profile sentinel 只用于读取配置，进入 Shared `ExecutionTarget` 前归一为
+  `providerProfileId = null`；
 - Sidebar 标签、Turn Badge：自动从新 Engine 的 `TurnExecutionSnapshot` 派生，无需专门开发；
 - i18n：新 Engine 名称加入 locale registry；
 - **不做**：不为新 CLI 加任何"特殊 UI 逻辑"。如果觉得需要，先停下来检查是不是 capability 建模错了——UI 只读 capability 和 snapshot。

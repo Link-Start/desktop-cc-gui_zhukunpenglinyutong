@@ -111,3 +111,70 @@ if accepted {
     commit_existing_target_identity();
 }
 ```
+
+## Scenario: Provider Continuation Product Projection
+
+### 1. Scope / Trigger
+
+- Trigger：修改 Continuation 入口、确认 UI、catalog title、幕布消息或来源导航。
+
+### 2. Signatures
+
+```ts
+classifyContextProtocolText(text): ContextProtocolKind | null
+ProviderContinuationDialog({ state, onCancel, onConfirm })
+ProviderContinuationContextCard({ thread, source, onOpenSource })
+```
+
+### 3. Contracts
+
+- 点击目标 Provider 只打开 application-owned Dialog；首次 confirm 前 MUST NOT 调用
+  `createNativeProviderContinuation`。
+- `confirmation-required` MUST 在同一 Dialog 展示 projection mode、token estimate、
+  omissions 与 adapter drops；二次确认才发送 `confirmDegraded: true`。
+- renderer production code MUST NOT 使用 `alert/window.alert` 或 native system confirm。
+- exact `MOSSX_CONTEXT_PACKAGE/ACCEPTED` 与完整 native context prompt MUST 作为
+  control-plane message 隐藏；普通包含 MOSSX 的用户文本 MUST 保留。
+- protocol title MUST 投影为“继续：来源标题”或可读 fallback。
+- continuation canvas MUST 显示 source → target snapshot，并在来源存在时提供导航；
+  来源缺失时 disabled，不猜其他 Session。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 结果 | 禁止行为 |
+|---|---|---|
+| 首次取消 | 无 target side effect | 先创建再询问 |
+| degraded | 产品内二次确认 | native Alert / 只显示空洞警告 |
+| exact protocol marker | 幕布隐藏 | hash 作为普通聊天显示 |
+| 普通用户讨论 marker | 正常显示 | 宽泛 substring 误删 |
+| 来源缺失 | 卡片解释并禁用导航 | 跳到同名/相邻 Session |
+
+### 5. Good / Base / Bad Cases
+
+- Good：Dialog 显示 Claude A → Codex B；取消不调用 command；确认后创建。
+- Base：ready continuation 显示可读标题和来源卡片。
+- Bad：把 `MOSSX_CONTEXT_PACKAGE:sha256:...` 当 Sidebar title 和 user bubble。
+
+### 6. Tests Required
+
+- Dialog confirm/cancel/degraded tests。
+- Sidebar command-before-confirm negative assertion 与 Kimi disabled state。
+- exact marker classifier + Messages render regression。
+- readable title、source card navigation 与 missing-source tests。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+if (window.confirm(message)) {
+  await createNativeProviderContinuation(request);
+}
+```
+
+#### Correct
+
+```ts
+setDialogState({ stage: "confirm", request });
+// command 仅由 Dialog confirm handler 调用
+```

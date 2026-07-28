@@ -54,6 +54,7 @@ import { parseAgentTaskNotification } from "../../engine-task-output/contracts/a
 import { usePromptDistillation } from "../../prompt-distill/hooks/usePromptDistillation";
 import { PromptDistillDialog } from "../../prompt-distill/components/PromptDistillDialog";
 import { dedupeExitPlanItemsKeepFirst } from "../utils/messagesExitPlan";
+import { isContextProtocolConversationItem } from "../../shared-session/presentation/contextProtocol";
 import {
   findLastAssistantMessageIndex,
   findLastUserMessageIndex,
@@ -341,6 +342,13 @@ export const MessagesCore = memo(function MessagesCore({
       // 尾项引用未变时(如选区冻结触发的引用级重算)必须原样返回缓存:此时尾项
       // 可能是被去重掉的 exit-plan 条目,写回结果末尾会丢真尾项、复活重复项。
       const nextLast = baseItems[baseItems.length - 1];
+      if (isContextProtocolConversationItem(nextLast)) {
+        exitPlanDedupeCacheRef.current = {
+          baseItems,
+          result: cache.result,
+        };
+        return cache.result;
+      }
       const result =
         cache.baseItems[cache.baseItems.length - 1] === nextLast ||
         cache.result[cache.result.length - 1] === nextLast
@@ -349,7 +357,9 @@ export const MessagesCore = memo(function MessagesCore({
       exitPlanDedupeCacheRef.current = { baseItems, result };
       return result;
     }
-    const result = dedupeExitPlanItemsKeepFirst(baseItems);
+    const result = dedupeExitPlanItemsKeepFirst(
+      baseItems.filter((item) => !isContextProtocolConversationItem(item)),
+    );
     exitPlanDedupeCacheRef.current = { baseItems, result };
     return result;
   }, [isSelectionFrozen, items]);

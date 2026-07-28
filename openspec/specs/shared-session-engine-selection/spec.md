@@ -6,13 +6,27 @@ Defines the shared-session-engine-selection behavior contract, covering Shared S
 ## Requirements
 ### Requirement: Shared Session Uses Explicit Manual Engine Selection
 
-Within a `shared session`, the system MUST let the user explicitly choose the execution target before sending a turn. The selector MUST be a four-level target picker (CLI → Provider → Model → Reasoning); the engine-only selector is superseded. The picker MUST be locked whenever the shared session composer is in any non-idle state.
+Within a `shared session`, the system MUST let the user explicitly choose the execution target before sending a turn. The selector MUST be a four-level target picker (CLI → Provider → Model → Reasoning); the engine-only selector is superseded. Provider and model items MUST preserve Provider Profile scope instead of inferring the target from model id alone. The picker MUST be locked whenever the shared session composer is in any non-idle state.
 
 #### Scenario: shared composer exposes four-level target picker
 
 - **WHEN** the user focuses the composer inside a `shared session`
 - **THEN** the system MUST show an explicit four-level execution target picker (CLI, provider profile, model, reasoning)
-- **AND** the CLI level MUST allow choosing from the currently supported `Codex` and `Claude` engines only
+- **AND** the CLI level MUST show supported and known unsupported engines with an explicit availability state
+- **AND** only engines supported by the current Shared Session runtime MAY be selected
+
+#### Scenario: provider profile scopes its model catalog
+
+- **WHEN** the user opens a Provider Profile inside the shared target picker
+- **THEN** the system MUST show models resolved for that exact Engine and Provider Profile
+- **AND** selecting a model MUST atomically preserve the Engine, Provider Profile, and Model identity
+- **AND** an equal model id in another Provider Profile MUST NOT change or satisfy the selection
+
+#### Scenario: unavailable engine remains explainable
+
+- **WHEN** a registered CLI such as Kimi is not currently accepted as a Shared Session target
+- **THEN** the picker MUST keep the CLI visible but disabled
+- **AND** MUST expose a human-readable reason rather than silently filtering it out
 
 #### Scenario: picker update is metadata-only before send
 
@@ -35,8 +49,8 @@ Within a `shared session`, the system MUST let the user explicitly choose the ex
 #### Scenario: unsupported engines stay unavailable in shared session
 
 - **WHEN** the user focuses the composer inside a `shared session`
-- **THEN** the system MUST keep `Gemini` and `OpenCode` unavailable for selection in that shared-session picker
-- **AND** the system MUST NOT route a shared-session turn through `Gemini` or `OpenCode`
+- **THEN** the system MUST keep unsupported engines unavailable for selection in that shared-session picker
+- **AND** the system MUST NOT route a shared-session turn through an unsupported engine
 
 ### Requirement: Shared Session Engine Selection Is Sticky Until User Changes It
 
@@ -91,4 +105,3 @@ In V1, `shared session` dispatch MUST remain user-controlled and MUST NOT silent
 - **WHEN** the selected engine is unavailable or the turn fails during execution
 - **THEN** the system MUST surface the error or recoverable failure state for that selected engine
 - **AND** the system MUST NOT silently reroute the same turn to another engine
-

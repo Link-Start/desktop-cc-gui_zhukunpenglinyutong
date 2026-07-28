@@ -70,5 +70,5 @@ export function resolveSnapshotProviderLabel(
     return name;
   }
   const id = snapshot.providerProfileId?.trim();
-  return id ? id : "default";
+  return id ? id : "本地配置";
 }

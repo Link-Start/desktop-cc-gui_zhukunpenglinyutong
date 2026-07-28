@@ -10,6 +10,7 @@ import {
   selectProjectedSessionDisplayName,
 } from "../utils/sessionDisplayProjection";
 import { matchesWorkspacePath } from "./useThreadActions.workspacePath";
+import { classifyContextProtocolText } from "../../shared-session/presentation/contextProtocol";
 
 const CLAUDE_HISTORY_MESSAGE_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1206,18 +1207,38 @@ export function mergeCodexCatalogSessionSummaries(
         ? undefined
         : getCustomName(workspaceId, session.sessionId);
     const customTitle = ownerCustomTitle || selectedWorkspaceCustomTitle;
-    const fallbackTitle = previewThreadName(
-      title,
-      engineSource === "claude"
-        ? "Claude Session"
-        : engineSource === "gemini"
-          ? "Gemini Session"
-          : engineSource === "kimi"
-            ? "Kimi Session"
-          : engineSource === "opencode"
-            ? "OpenCode Session"
-            : "Codex Session",
-    );
+    const continuationSourceName = session.sourceSessionId
+      ? mergedById.get(session.sourceSessionId)?.name?.trim()
+      : null;
+    const continuationFallbackTitle =
+      session.originKind === "provider-continuation"
+        ? continuationSourceName
+          ? `继续：${continuationSourceName}`
+          : `Provider 续接 · ${
+              session.providerProfileName?.trim() ||
+              (engineSource === "codex"
+                ? "Codex"
+                : engineSource === "claude"
+                  ? "Claude"
+                  : engineSource)
+            }`
+        : null;
+    const fallbackTitle =
+      continuationFallbackTitle &&
+      classifyContextProtocolText(title) !== null
+        ? continuationFallbackTitle
+        : previewThreadName(
+            title,
+            engineSource === "claude"
+              ? "Claude Session"
+              : engineSource === "gemini"
+                ? "Gemini Session"
+                : engineSource === "kimi"
+                  ? "Kimi Session"
+                  : engineSource === "opencode"
+                    ? "OpenCode Session"
+                    : "Codex Session",
+          );
     const next: ThreadSummary = {
       id: session.sessionId,
       name: selectStableThreadSummaryName({

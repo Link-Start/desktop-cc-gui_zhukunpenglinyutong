@@ -6,6 +6,7 @@
 import type { ReactNode } from 'react';
 import { CODEX_MODEL_CATALOG } from "../../../models/codexModelCatalog";
 import type { ComposerSendReadiness } from '../../utils/composerSendReadiness';
+import type { ExecutionTarget } from '../../../shared-session/target/types';
 
 // ============================================================
 // Core Entity Types
@@ -538,6 +539,12 @@ export interface ChatInputBoxProps {
   currentProvider?: string;
   /** Active thread provider profile used to scope managed model catalogs */
   currentProviderProfileId?: string | null;
+  /** Shared Session 当前完整目标；普通 Native Session 不传。 */
+  executionTarget?: ExecutionTarget | null;
+  /** Shared Session 原子更新完整目标，避免用 model id 反推 Provider。 */
+  onExecutionTargetChange?: (target: ExecutionTarget) => void;
+  /** 是否使用 Shared Session Provider-aware target picker。 */
+  sharedTargetPicker?: boolean;
   /** Provider availability override (installed state from host app) */
   providerAvailability?: Partial<Record<ProviderId, boolean>>;
   /** Provider CLI versions (from host app detection) */

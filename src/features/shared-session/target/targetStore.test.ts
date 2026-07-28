@@ -109,6 +109,8 @@ describe("resolveSnapshotProviderLabel", () => {
     expect(
       resolveSnapshotProviderLabel(freezeTurnSnapshot({ engine: "claude", providerProfileId: "p1" })),
     ).toBe("p1");
-    expect(resolveSnapshotProviderLabel(freezeTurnSnapshot({ engine: "claude" }))).toBe("default");
+    expect(
+      resolveSnapshotProviderLabel(freezeTurnSnapshot({ engine: "claude" })),
+    ).toBe("本地配置");
   });
 });

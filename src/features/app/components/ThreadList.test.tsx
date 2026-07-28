@@ -32,6 +32,8 @@ vi.mock("react-i18next", () => ({
         "threads.exitedSessionsHidden": "{{count}} exited hidden",
         "threads.subagentTag": "Subagent",
         "threads.providerContinuation": "供应商续接",
+        "threads.providerContinuationShort": "续接",
+        "threads.providerContinuationHint": "Provider 续接：可在会话顶部查看来源",
         "threads.subagentTreeExpanded": "Subagent tree expanded",
         "threads.subagentTreeExpand": "Expand subagent tree",
         "threads.subagentTreeCollapse": "Collapse subagent tree",
@@ -1024,7 +1026,7 @@ describe("ThreadList", () => {
       />,
     );
 
-    expect(screen.getByText("供应商续接")).toBeTruthy();
+    expect(screen.getByText("续接")).toBeTruthy();
     expect(screen.queryByText("Subagent")).toBeNull();
   });
 });

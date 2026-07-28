@@ -102,6 +102,18 @@ contract 缺口：Context Package identity 冲突、artifact payload 未验真�
 发布、Native History private block/Tool pairing、超大 JSONL 阻塞、Codex capability
 猜测和 macOS `window.confirm` 失效。修复没有扩大产品范围。
 
+2026-07-28 第二次 UX 反向验收补充：此前“backend contract 已完成”被错误等同为
+“用户操作闭环已完成”。截图复验确认了 Provider 模型不可选、Kimi 被静默隐藏、
+续接仍依赖系统原生确认、协议 hash 直接进入标题/幕布、来源导航不可达等缺口。
+本轮已将它们补成真实 UI：
+
+- Shared 模型菜单按 `CLI → Provider → Model` 展开，并一次性提交完整 Target。
+- Claude/Codex Provider 分别加载自己的模型；同名模型不再用于反推 Provider。
+- Kimi 作为已知 CLI 显示为 disabled，并明确说明“目标续接尚未验证”。
+- 续接使用 mossx 自己的 Dialog；取消前不创建目标，degraded 明细在产品内二次确认。
+- `MOSSX_CONTEXT_PACKAGE/ACCEPTED` 只作为 control-plane 证据，不再作为聊天内容展示。
+- 新续接会话使用“继续：来源会话”标题，幕布顶部显示来源 → 目标卡片和“查看来源”。
+
 ### 2.2 Change D 的真实进度
 
 大白话：D 的代码与自动化闭环已经完成。发布前还要用真实 Claude/Codex Provider
@@ -125,6 +137,16 @@ contract 缺口：Context Package identity 冲突、artifact payload 未验真�
 - Frontend：Sidebar continuation + Shared Session 16 个 test files、136 条通过。
 - `npm run typecheck`、scoped ESLint、`npm run check:runtime-contracts`、changed-file
   `rustfmt --check`、Markdown table/link check、当前 calibration OpenSpec strict validation 通过。
+
+第二次 UX 校准增量证据：
+
+- Frontend：26 个相关 test files，256 tests 通过、2 skipped（包含 i18n）。
+- Rust：Shared V2/Context/Projection 27 tests、Native History/Continuation 13 tests，
+  共 40 tests 通过。
+- `npm run typecheck`、scoped ESLint（0 error / 0 warning）、
+  `npm run check:runtime-contracts`、`npm run check:model-provider-catalog`、
+  Markdown table/link check 与 OpenSpec strict validation 通过。
+- `npm run check:large-files` 只报告仓库既有 baseline 超限项；本轮新增文件未触线。
 
 保留为发布前人工 gate：
 
@@ -281,9 +303,10 @@ Change D 不允许在原 Native Session 内热切 Provider，而是：
 | UI 位置 | 改动前 | 改动后 | 你能感受到什么 |
 | --- | --- | --- | --- |
 | 共享会话 | 内部隐藏连接可能被误显示成新会话 | 始终只显示一个共享会话，内部连接不显示 | 反复切 Provider 也不会把 Sidebar 塞满 |
-| 原生会话右键菜单 | 跨 Provider 依赖旧 Fork 做法 | 新增“使用其他 Provider 继续” | 可以从已有对话安全换 Provider |
-| 新续接会话 | 没有独立类型 | 顶层显示“供应商续接” | 能和普通会话、Fork、Subagent 区分 |
-| 来源导航 | 没有可靠来源关系 | 右键选择“查看来源会话” | 可以回到最初那条对话核对原文 |
+| 原生会话右键菜单 | 跨 Provider 依赖旧 Fork 做法 | 新增“使用其他 Provider 继续”；Kimi 目标未验证时显示禁用原因 | 可以从已有对话安全换 Provider，也不会把不支持误装成可用 |
+| 新续接会话 | 没有独立类型，标题可能直接显示协议 hash | 顶层显示“续接”和“继续：来源会话”可读标题 | 能和普通会话、Fork、Subagent 区分 |
+| 来源导航 | 没有可靠来源关系 | 新会话幕布顶部显示来源 → 目标卡片和“查看来源”按钮 | 可以回到最初那条对话核对原文 |
+| 续接协议消息 | package/checksum 可能直接出现在聊天幕布 | 精确识别并隐藏已知 control marker | 用户只看正常对话；普通提到 MOSSX 的文本仍保留 |
 | 同一会话家族 | 只有零散关系 | 保存家族编号、根会话和直接来源 | 为以后按家族折叠或分组打底 |
 
 注意：A–D 第一阶段不做 Conversation Family 折叠或树形分组。Continuation 仍是顶层 Row。
@@ -421,6 +444,31 @@ Claude Provider A 的旧 Session
 
 ### 7.1 共享会话切换执行目标
 
+#### MT-B00：Provider-aware 模型菜单可达性
+
+步骤：
+
+1. 打开一条 Shared Session，点击输入框底部当前模型。
+2. 展开 `Claude Code`，确认能看到本地配置和所有 managed Provider 分组及各自模型。
+3. 展开 `Codex CLI`，选择一个只属于 Codex Provider B 的模型。
+4. 重新打开菜单，切回 Claude Provider A 的另一个模型。
+5. 查看 `Kimi CLI`。
+
+预期：
+
+- 根菜单同时看到 Claude Code、Codex CLI、Kimi CLI。
+- Claude/Codex 模型按 Provider 分组；选择后按钮立刻显示新模型和新 CLI 图标。
+- 同名模型也按完整 `engine + providerProfileId + model` 命中，不串 Provider。
+- “本地配置”不会在内部产生第二个伪 Provider Binding。
+- Kimi 当前显示 disabled 原因，不被隐藏，也不能触发 silent fallback。
+- 打开根菜单不拉取全部模型；只在展开具体 CLI 后加载该 CLI 的 Provider 模型。
+
+失败判据：
+
+- 只能看到当前 CLI 的默认 Provider 模型。
+- 切换后按钮显示“选择模型”或仍显示旧 Provider/model。
+- Kimi 完全不出现，或点击后偷偷改发 Claude/Codex。
+
 #### MT-B01：同一 Shared Session 切换三个 Target
 
 步骤：
@@ -544,6 +592,25 @@ Claude Provider A 的旧 Session
 - committed cursor 等待真实 Terminal Fact。
 
 ### 7.3 从原生会话创建跨 Provider 续接
+
+#### MT-D00：续接确认、标题与来源卡片
+
+步骤：
+
+1. 右键一条 Claude/Codex Native Session，选择“使用其他 Provider 继续”。
+2. 在 mossx Dialog 中检查来源、目标后先点取消，确认没有新会话。
+3. 再次进入并确认；若出现 degraded，检查 mode、token 和 omissions 后二次确认。
+4. 打开新续接会话，观察 Sidebar 标题、聊天顶部和消息内容。
+5. 点击顶部“查看来源”。
+
+预期：
+
+- 全程不出现浏览器/系统 `alert` 或只有“确定/取消”的原生警告。
+- 首次 Dialog 明确显示“来源会话 → 目标 CLI/Provider”；取消不产生 side effect。
+- 新 Row 标题为“继续：来源标题”或明确的 Provider 续接标题，不显示 raw hash。
+- 顶部卡片显示来源与目标，按钮能回到来源；来源缺失时按钮禁用并给出解释。
+- 幕布中不显示 `MOSSX_CONTEXT_PACKAGE` / `MOSSX_CONTEXT_ACCEPTED`。
+- 普通用户主动讨论 `MOSSX_CONTEXT_PACKAGE` 的消息不会被误隐藏。
 
 #### MT-D01：Claude A → Codex B → 原 Claude A
 
@@ -757,6 +824,9 @@ Claude Provider A 的旧 Session
 - 续接会话写入 `parentThreadId`，或者被显示成 Subagent
 - 删除来源会话时，把续接会话一起删除
 - Provider 失败后偷偷切换到其他 Provider
+- Shared 模型菜单无法选择其他 Provider 的真实模型，或切换后仍显示旧 Target
+- 续接确认使用 native Alert，或取消后仍创建目标
+- Sidebar/幕布直接展示 `MOSSX_CONTEXT_*` hash，或无法从续接会话返回来源
 - 流式文字每来一小段就触发整个 AppShell 更新
 - 后台隐藏会话让 AppShell 持续重复渲染
 

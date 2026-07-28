@@ -23,6 +23,40 @@ const threads = {
     syncFromServer: "Sync from server",
     copyId: "Copy ID",
     copyClaudeResumeCommand: "Copy Claude resume command",
+    providerContinuation: "Provider continuation",
+    providerContinuationShort: "Continued",
+    providerContinuationHint:
+      "Provider continuation: open the source from the conversation header",
+    providerContinuationTitle: "Continue with another Provider",
+    providerContinuationDescription:
+      "The source conversation stays intact while a separate conversation continues the work.",
+    providerContinuationSourcePreserved:
+      "The source conversation will not be changed. You can return to it from the new conversation.",
+    providerContinuationCreating: "Creating…",
+    providerContinuationConfirm: "Create continuation",
+    providerContinuationDegradedTitle: "History must be degraded",
+    providerContinuationDegradedConfirm:
+      "Some history will be reduced or omitted. Confirm before creating the Provider continuation.",
+    providerContinuationConfirmDegraded: "Accept degradation and continue",
+    providerContinuationRecoveryRequired:
+      "Continuation did not finish and entered recovery. Keep the source conversation and retry.",
+    providerContinuationContextAriaLabel: "Provider continuation context",
+    providerContinuationCardDescription:
+      "Source preserved; continuing in a separate conversation",
+    providerContinuationSourceProvider: "Source Provider",
+    providerContinuationSourceLabel: "Source: {{source}}",
+    providerContinuationSourceUnavailable: "Source conversation unavailable",
+    providerContinuationOpenSourceTitle: "Open source conversation",
+    providerContinuationOpenSource: "Open source",
+    providerContinuationKimiUnavailableWithProvider:
+      "Kimi CLI · {{provider}} (target continuation is not verified)",
+    providerContinuationKimiUnavailable:
+      "Kimi CLI · source only; target unavailable",
+    providerContinuationProjectionMode: "History delivery mode",
+    providerContinuationEstimatedTokens: "Estimated context tokens",
+    providerContinuationOmissions: "Omitted content",
+    providerContinuationAdapterDroppedEntries: "Adapter-dropped entries",
+    providerContinuationErrorCode: "Error code: {{code}}",
     openClaudeTui: "Open in Claude TUI",
     claudeResumeCommandHelp:
       "If the Claude TUI /resume picker misses this GUI session, run claude --resume <session_id> or /resume <session_id> explicitly.",

@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { ModelSelect } from "./ModelSelect";
+import { buildProviderExecutionTarget, ModelSelect } from "./ModelSelect";
 import { STORAGE_KEYS } from "../../../types/provider";
 
 vi.mock("react-i18next", () => ({
@@ -105,6 +105,176 @@ describe("ModelSelect", () => {
 
     expect(onProviderModelChange).toHaveBeenCalledWith("claude", "claude-sonnet-4-6");
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("shows Shared CLI availability and unavailable reason", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+    const onOpenProviderProfile = vi.fn();
+
+    render(
+      <ModelSelect
+        value="same-model"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        executionTarget={{
+          engine: "claude",
+          providerProfileId: "provider-a",
+          model: "same-model",
+          reasoning: { effort: "high" },
+        }}
+        onExecutionTargetChange={onExecutionTargetChange}
+        onOpenProviderProfile={onOpenProviderProfile}
+        targetGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            profiles: [
+              {
+                id: "provider-a",
+                label: "Provider A",
+                source: "managed",
+                loading: false,
+                error: null,
+                models: [{ id: "same-model", label: "A Model" }],
+              },
+            ],
+          },
+          {
+            providerId: "codex",
+            providerLabel: "Codex CLI",
+            enabled: true,
+            profiles: [
+              {
+                id: "provider-b",
+                label: "Provider B",
+                source: "managed",
+                loading: false,
+                error: null,
+                models: [{ id: "same-model", label: "B Model" }],
+              },
+            ],
+          },
+          {
+            providerId: "kimi",
+            providerLabel: "Kimi CLI",
+            enabled: false,
+            disabledReason: "可作为来源；目标续接尚未验证",
+            profiles: [],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button"));
+    const codexItem = await screen.findByRole("menuitem", {
+      name: /Codex CLI/,
+    });
+    expect(
+      screen.getByRole("menuitem", { name: /Kimi CLI/ }).getAttribute(
+        "data-disabled",
+      ),
+    ).not.toBeNull();
+    await user.hover(codexItem);
+    fireEvent.click(await screen.findByRole("menuitem", { name: /B Model/ }));
+
+    expect(onOpenProviderProfile).toHaveBeenCalledWith("codex", "provider-b");
+    expect(onExecutionTargetChange).toHaveBeenCalledWith({
+      engine: "codex",
+      providerProfileId: "provider-b",
+      model: "same-model",
+      reasoning: null,
+    });
+  });
+
+  it("builds an atomic Shared target without inferring from model id", () => {
+    expect(
+      buildProviderExecutionTarget(
+        {
+          engine: "claude",
+          providerProfileId: "provider-a",
+          model: "same-model",
+          reasoning: { effort: "high" },
+        },
+        "codex",
+        "provider-b",
+        "same-model",
+      ),
+    ).toEqual({
+      engine: "codex",
+      providerProfileId: "provider-b",
+      model: "same-model",
+      reasoning: null,
+    });
+  });
+
+  it("normalizes local profile sentinels to the canonical default binding", () => {
+    expect(
+      buildProviderExecutionTarget(
+        {
+          engine: "claude",
+          providerProfileId: null,
+          model: "claude-sonnet",
+          reasoning: { effort: "high" },
+        },
+        "claude",
+        "__local_settings_json__",
+        "claude-opus",
+      ),
+    ).toEqual({
+      engine: "claude",
+      providerProfileId: null,
+      model: "claude-opus",
+      reasoning: { effort: "high" },
+    });
+  });
+
+  it("shows the selected target model instead of the previous engine catalog", () => {
+    render(
+      <ModelSelect
+        value="codex-target-model"
+        currentProvider="codex"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        models={[{ id: "claude-old-model", label: "Old Claude Model" }]}
+        executionTarget={{
+          engine: "codex",
+          providerProfileId: "provider-b",
+          model: "codex-target-model",
+        }}
+        targetGroups={[
+          {
+            providerId: "codex",
+            providerLabel: "Codex CLI",
+            enabled: true,
+            profiles: [
+              {
+                id: "provider-b",
+                label: "Provider B",
+                source: "managed",
+                loading: false,
+                error: null,
+                models: [
+                  {
+                    id: "codex-target-model",
+                    label: "Provider B Model",
+                  },
+                ],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("button").textContent).toContain(
+      "Provider B Model",
+    );
+    expect(screen.getByRole("button").textContent).not.toContain(
+      "models.selectModel",
+    );
   });
 
   it("does not display the first model when no model value is selected", () => {

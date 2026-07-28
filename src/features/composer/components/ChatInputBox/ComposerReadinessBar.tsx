@@ -5,6 +5,8 @@ import type { ComposerSendReadiness } from '../../utils/composerSendReadiness';
 import type { ModelInfo, ProviderId } from './types';
 import type { ProviderModelGroup } from './modelOptions';
 import { ModelSelect } from './selectors/ModelSelect';
+import type { ProviderTargetGroup } from './hooks/useSharedProviderTargetCatalog';
+import type { ExecutionTarget } from '../../../shared-session/target/types';
 
 function parseContextChipCount(chip: string, prefix: string) {
   if (!chip.startsWith(prefix)) {
@@ -22,6 +24,15 @@ type ComposerReadinessBarProps = {
   selectedModel?: string;
   models?: ModelInfo[];
   modelGroups?: ProviderModelGroup[];
+  targetGroups?: ProviderTargetGroup[];
+  executionTarget?: ExecutionTarget | null;
+  onExecutionTargetChange?: (target: ExecutionTarget) => void;
+  onOpenTargetCatalog?: () => Promise<void> | void;
+  onOpenProviderProfile?: (
+    providerId: ProviderId,
+    providerProfileId: string,
+  ) => Promise<void> | void;
+  targetCatalogError?: string | null;
   currentProvider?: string;
   onModelSelect?: (modelId: string) => void;
   onProviderModelSelect?: (providerId: ProviderId, modelId: string) => void;
@@ -39,6 +50,12 @@ export function ComposerReadinessBar({
   selectedModel,
   models,
   modelGroups,
+  targetGroups,
+  executionTarget,
+  onExecutionTargetChange,
+  onOpenTargetCatalog,
+  onOpenProviderProfile,
+  targetCatalogError,
   currentProvider,
   onModelSelect,
   onProviderModelSelect,
@@ -101,6 +118,12 @@ export function ComposerReadinessBar({
             onChange={onModelSelect}
             models={models}
             modelGroups={modelGroups}
+            targetGroups={targetGroups}
+            executionTarget={executionTarget}
+            onExecutionTargetChange={onExecutionTargetChange}
+            onOpenTargetCatalog={onOpenTargetCatalog}
+            onOpenProviderProfile={onOpenProviderProfile}
+            targetCatalogError={targetCatalogError}
             currentProvider={currentProvider ?? readiness.target.engine}
             providerLabel={readiness.target.providerLabel}
             triggerVariant="readiness"

@@ -22,6 +22,38 @@ const threads = {
     syncFromServer: "从服务器同步",
     copyId: "复制 ID",
     copyClaudeResumeCommand: "复制 Claude 恢复命令",
+    providerContinuation: "Provider 续接",
+    providerContinuationShort: "续接",
+    providerContinuationHint: "Provider 续接：可在会话顶部查看来源",
+    providerContinuationTitle: "使用其他 Provider 继续",
+    providerContinuationDescription:
+      "系统会保留来源会话，并创建一个独立的新会话承接后续工作。",
+    providerContinuationSourcePreserved:
+      "来源会话不会被修改。完成后可从新会话直接返回来源。",
+    providerContinuationCreating: "正在创建…",
+    providerContinuationConfirm: "创建续接会话",
+    providerContinuationDegradedTitle: "续接历史需要降级",
+    providerContinuationDegradedConfirm:
+      "部分历史会降级或省略。确认后才会创建新的 Provider 续接会话。",
+    providerContinuationConfirmDegraded: "接受降级并继续",
+    providerContinuationRecoveryRequired:
+      "续接未完成，已进入恢复状态。请保留当前会话后重试。",
+    providerContinuationContextAriaLabel: "Provider 续接上下文",
+    providerContinuationCardDescription: "来源保留，新会话独立继续",
+    providerContinuationSourceProvider: "来源 Provider",
+    providerContinuationSourceLabel: "来源：{{source}}",
+    providerContinuationSourceUnavailable: "来源会话已不可用",
+    providerContinuationOpenSourceTitle: "查看来源会话",
+    providerContinuationOpenSource: "查看来源",
+    providerContinuationKimiUnavailableWithProvider:
+      "Kimi CLI · {{provider}}（目标续接尚未验证）",
+    providerContinuationKimiUnavailable:
+      "Kimi CLI · 可作为来源，目标暂不可用",
+    providerContinuationProjectionMode: "历史交付方式",
+    providerContinuationEstimatedTokens: "预计上下文 Token",
+    providerContinuationOmissions: "省略内容",
+    providerContinuationAdapterDroppedEntries: "适配器未接收条目",
+    providerContinuationErrorCode: "错误代码：{{code}}",
     openClaudeTui: "在 Claude TUI 中打开",
     claudeResumeCommandHelp:
       "如果 Claude TUI 的 /resume picker 看不到这个 GUI 会话，请显式运行 claude --resume <session_id> 或 /resume <session_id>。",

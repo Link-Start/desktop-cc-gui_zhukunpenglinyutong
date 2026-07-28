@@ -33,6 +33,7 @@ import { SidebarTopbarSlot } from "./SidebarTopbarSlot";
 import { SidebarVersionTag } from "./SidebarVersionTag";
 import { SidebarWorkspaceDropOverlay } from "./SidebarWorkspaceDropOverlay";
 import { SidebarWorkspaceMenuOverlay } from "./SidebarWorkspaceMenuOverlay";
+import { ProviderContinuationDialog } from "./ProviderContinuationDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RendererContextMenu } from "../../../components/ui/RendererContextMenu";
 import { useCollapsedGroups } from "../hooks/useCollapsedGroups";
@@ -930,8 +931,11 @@ function SidebarImpl({
     showWorktreeMenu,
     workspaceMenuState,
     sidebarContextMenuState,
+    providerContinuationDialogState,
     closeWorkspaceMenu,
     closeSidebarContextMenu,
+    closeProviderContinuationDialog,
+    confirmProviderContinuation,
     onWorkspaceMenuAction,
   } =
     useSidebarMenus({
@@ -2273,6 +2277,11 @@ function SidebarImpl({
           className="renderer-context-menu sidebar-renderer-context-menu"
         />
       ) : null}
+      <ProviderContinuationDialog
+        state={providerContinuationDialogState}
+        onCancel={closeProviderContinuationDialog}
+        onConfirm={confirmProviderContinuation}
+      />
     </aside>
   );
 }

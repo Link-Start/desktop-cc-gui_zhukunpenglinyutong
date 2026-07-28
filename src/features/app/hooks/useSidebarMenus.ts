@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
 import type { EngineType, ThreadSummary, WorkspaceInfo } from "../../../types";
@@ -48,6 +47,22 @@ const LAST_PROVIDER_PROFILE_KEYS = {
   kimi: "kimiLastProviderProfileId",
 } as const;
 type ProviderEngine = keyof typeof LAST_PROVIDER_PROFILE_KEYS;
+
+type ProviderContinuationRequest = Parameters<
+  typeof createNativeProviderContinuation
+>[0];
+
+export type ProviderContinuationDialogState = {
+  workspaceId: string;
+  sourceSessionId: string;
+  sourceTitle: string;
+  sourceLabel: string;
+  destinationLabel: string;
+  request: ProviderContinuationRequest;
+  operationKey: string;
+  stage: "confirm" | "confirm-degraded" | "running" | "error";
+  detail: string | null;
+};
 
 const PINNABLE_WORKSPACE_ACTION_ID_SET = new Set<string>(
   PINNABLE_WORKSPACE_ACTION_IDS,
@@ -202,18 +217,24 @@ const INLINE_MOVE_FOLDER_TARGET_LIMIT = 12;
 
 function providerContinuationDegradedMessage(
   result: Awaited<ReturnType<typeof createNativeProviderContinuation>>,
-  fallback: string,
+  labels: {
+    summary: string;
+    mode: string;
+    estimatedTokens: string;
+    omissions: string;
+    adapterDroppedEntries: string;
+  },
 ): string {
-  const lines = [fallback];
+  const lines = [labels.summary];
   if (result.projectionMode) {
-    lines.push(`Mode: ${result.projectionMode}`);
+    lines.push(`${labels.mode}: ${result.projectionMode}`);
   }
   if (
     typeof result.sourceEstimatedTokens === "number" &&
     typeof result.packageEstimatedTokens === "number"
   ) {
     lines.push(
-      `Estimated tokens: ${result.sourceEstimatedTokens} → ${result.packageEstimatedTokens}`,
+      `${labels.estimatedTokens}: ${result.sourceEstimatedTokens} → ${result.packageEstimatedTokens}`,
     );
   }
   const omissions = (result.omissions ?? [])
@@ -222,10 +243,15 @@ function providerContinuationDegradedMessage(
     )
     .filter(Boolean);
   if (omissions.length > 0) {
-    lines.push("Omissions:", ...omissions.map((omission) => `- ${omission}`));
+    lines.push(
+      `${labels.omissions}:`,
+      ...omissions.map((omission) => `- ${omission}`),
+    );
   }
   if ((result.adapterDroppedEntries ?? 0) > 0) {
-    lines.push(`Adapter dropped entries: ${result.adapterDroppedEntries}`);
+    lines.push(
+      `${labels.adapterDroppedEntries}: ${result.adapterDroppedEntries}`,
+    );
   }
   return lines.join("\n");
 }
@@ -238,6 +264,8 @@ function resolveEngineDisplayName(engineType: EngineType): string {
       return "Gemini CLI";
     case "opencode":
       return "OpenCode";
+    case "kimi":
+      return "Kimi CLI";
     case "claude":
     default:
       return "Claude Code";
@@ -285,6 +313,10 @@ export function useSidebarMenus({
     useState<WorkspaceMenuState | null>(null);
   const [sidebarContextMenuState, setSidebarContextMenuState] =
     useState<SidebarContextMenuState | null>(null);
+  const [
+    providerContinuationDialogState,
+    setProviderContinuationDialogState,
+  ] = useState<ProviderContinuationDialogState | null>(null);
   const [workspaceOpenCodeLoginState, setWorkspaceOpenCodeLoginState] = useState<
     Record<string, "loading" | "ready" | "requires-login">
   >({});
@@ -306,6 +338,113 @@ export function useSidebarMenus({
   useEffect(() => {
     latestEngineOptionsRef.current = engineOptions;
   }, [engineOptions]);
+
+  const closeProviderContinuationDialog = useCallback(() => {
+    setProviderContinuationDialogState((current) =>
+      current?.stage === "running" ? current : null,
+    );
+  }, []);
+
+  const confirmProviderContinuation = useCallback(async () => {
+    const dialog = providerContinuationDialogState;
+    if (!dialog || dialog.stage === "running") {
+      return;
+    }
+    const guardKey = `${dialog.workspaceId}:${dialog.sourceSessionId}`;
+    if (providerContinuationOperationsRef.current.has(guardKey)) {
+      return;
+    }
+    providerContinuationOperationsRef.current.add(guardKey);
+    setProviderContinuationDialogState({
+      ...dialog,
+      stage: "running",
+      detail: null,
+    });
+    try {
+      const result = await createNativeProviderContinuation({
+        ...dialog.request,
+        confirmDegraded: dialog.stage === "confirm-degraded",
+      });
+      if (result.status === "confirmation-required") {
+        setProviderContinuationDialogState({
+          ...dialog,
+          stage: "confirm-degraded",
+          detail: providerContinuationDegradedMessage(
+            result,
+            {
+              summary: t("threads.providerContinuationDegradedConfirm", {
+                defaultValue:
+                  "部分历史会降级或省略。确认后才会创建新的 Provider 续接会话。",
+              }),
+              mode: t("threads.providerContinuationProjectionMode", {
+                defaultValue: "历史交付方式",
+              }),
+              estimatedTokens: t(
+                "threads.providerContinuationEstimatedTokens",
+                { defaultValue: "预计上下文 Token" },
+              ),
+              omissions: t("threads.providerContinuationOmissions", {
+                defaultValue: "省略内容",
+              }),
+              adapterDroppedEntries: t(
+                "threads.providerContinuationAdapterDroppedEntries",
+                { defaultValue: "适配器未接收条目" },
+              ),
+            },
+          ),
+        });
+        return;
+      }
+      if (result.status === "ready" && result.operation.resultSessionId) {
+        providerContinuationOperationIdsRef.current.delete(dialog.operationKey);
+        setProviderContinuationDialogState(null);
+        onReloadWorkspaceThreads(dialog.workspaceId);
+        onSelectThread(dialog.workspaceId, result.operation.resultSessionId);
+        return;
+      }
+      setProviderContinuationDialogState({
+        ...dialog,
+        stage: "error",
+        detail: [
+          t("threads.providerContinuationRecoveryRequired", {
+            defaultValue: "续接未完成，已进入恢复状态。请保留当前会话后重试。",
+          }),
+          result.operation.errorCode?.trim()
+            ? t("threads.providerContinuationErrorCode", {
+                defaultValue: "错误代码：{{code}}",
+                code: result.operation.errorCode.trim(),
+              })
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setProviderContinuationDialogState({
+        ...dialog,
+        stage: "error",
+        detail: message,
+      });
+      pushGlobalRuntimeNotice({
+        severity: "error",
+        category: "user-action-error",
+        messageKey: "runtimeNotice.error.threadTurnFailed",
+        messageParams: {
+          engine: dialog.destinationLabel,
+          message,
+        },
+        dedupeKey: `provider-continuation:${dialog.workspaceId}:${dialog.sourceSessionId}`,
+      });
+    } finally {
+      providerContinuationOperationsRef.current.delete(guardKey);
+    }
+  }, [
+    onReloadWorkspaceThreads,
+    onSelectThread,
+    providerContinuationDialogState,
+    t,
+  ]);
 
   useEffect(() => {
     const handlePinnedActionsChanged = (event: Event) => {
@@ -1233,98 +1372,105 @@ export function useSidebarMenus({
               provider.id === thread.providerProfileId
             ),
         );
-        if (targetProviders.length > 0) {
+        const unavailableKimiTargets = (
+          kimiProviderProfiles.length > 0
+            ? kimiProviderProfiles
+            : [
+                {
+                  id: KIMI_LOCAL_PROVIDER_PROFILE_ID,
+                  name: KIMI_LOCAL_PROVIDER_PROFILE_NAME,
+                  source: "disk" as const,
+                },
+              ]
+        ).map((provider) => ({
+          type: "item" as const,
+          id: `continue-with-kimi-${provider.id}`,
+          label: t("threads.providerContinuationKimiUnavailableWithProvider", {
+            defaultValue: "Kimi CLI · {{provider}}（目标续接尚未验证）",
+            provider: provider.name,
+          }),
+          disabled: true,
+          onSelect: () => {},
+        }));
+        if (targetProviders.length > 0 || unavailableKimiTargets.length > 0) {
           items.push({
             type: "submenu",
             id: "continue-with-provider",
             label: t("threads.continueWithProvider", {
               defaultValue: "使用其他 Provider 继续",
             }),
-            items: targetProviders.map(({ engine, engineLabel, provider }) => ({
-              type: "item" as const,
-              id: `continue-with-${engine}-${provider.id}`,
-              label: `${engineLabel} · ${provider.name}`,
-              onSelect: async () => {
-                const guardKey = `${workspaceId}:${thread.id}`;
-                const operationKey = `${guardKey}:${engine}:${provider.id}`;
-                if (providerContinuationOperationsRef.current.has(guardKey)) {
-                  return;
-                }
-                providerContinuationOperationsRef.current.add(guardKey);
-                const operationId =
-                  providerContinuationOperationIdsRef.current.get(operationKey) ??
-                  globalThis.crypto?.randomUUID?.() ??
-                  `continuation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-                providerContinuationOperationIdsRef.current.set(
-                  operationKey,
-                  operationId,
-                );
-                const request = {
-                  workspaceId,
-                  operationId,
-                  source: {
-                    sessionId: thread.id,
-                    nativeSessionId,
-                    engine: thread.engineSource as "claude" | "codex" | "kimi",
-                    providerProfileId: thread.providerProfileId ?? null,
-                  },
-                  destination: {
-                    engine,
-                    providerProfileId: provider.id,
-                    providerProfileNameSnapshot: provider.name,
-                    providerProfileSource: provider.source,
-                    runtimeCapabilityFingerprint:
-                      engine === "claude" ? "echo-checksum" : null,
-                  },
-                };
-                try {
-                  let result = await createNativeProviderContinuation(request);
-                  if (
-                    result.status === "confirmation-required" &&
-                    await ask(
-                      providerContinuationDegradedMessage(
-                        result,
-                        t("threads.providerContinuationDegradedConfirm", {
-                          defaultValue:
-                            "部分历史会降级或省略。仍要创建新的供应商续接会话吗？",
-                        }),
-                      ),
-                      {
-                        kind: "warning",
-                        title: t("threads.providerContinuationDegradedTitle", {
-                          defaultValue: "续接历史需要降级",
-                        }),
-                        okLabel: t("common.confirm"),
-                        cancelLabel: t("common.cancel"),
-                      },
-                    )
-                  ) {
-                    result = await createNativeProviderContinuation({
-                      ...request,
-                      confirmDegraded: true,
-                    });
-                  }
-                  if (result.status === "ready" && result.operation.resultSessionId) {
-                    providerContinuationOperationIdsRef.current.delete(operationKey);
-                    onReloadWorkspaceThreads(workspaceId);
-                    onSelectThread(workspaceId, result.operation.resultSessionId);
-                  }
-                } catch (error) {
-                  pushGlobalRuntimeNotice({
-                    severity: "error",
-                    category: "user-action-error",
-                    messageKey: "runtimeNotice.error.threadTurnFailed",
-                    messageParams: {
-                      engine: engineLabel,
-                      message: error instanceof Error ? error.message : String(error),
+            items: [
+              ...targetProviders.map(({ engine, engineLabel, provider }) => ({
+                type: "item" as const,
+                id: `continue-with-${engine}-${provider.id}`,
+                label: `${engineLabel} · ${provider.name}`,
+                onSelect: () => {
+                  const guardKey = `${workspaceId}:${thread.id}`;
+                  const operationKey = `${guardKey}:${engine}:${provider.id}`;
+                  const operationId =
+                    providerContinuationOperationIdsRef.current.get(operationKey) ??
+                    globalThis.crypto?.randomUUID?.() ??
+                    `continuation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                  providerContinuationOperationIdsRef.current.set(
+                    operationKey,
+                    operationId,
+                  );
+                  const request: ProviderContinuationRequest = {
+                    workspaceId,
+                    operationId,
+                    source: {
+                      sessionId: thread.id,
+                      nativeSessionId,
+                      engine: thread.engineSource as "claude" | "codex" | "kimi",
+                      providerProfileId: thread.providerProfileId ?? null,
                     },
-                    dedupeKey: `provider-continuation:${workspaceId}:${thread.id}`,
+                    destination: {
+                      engine,
+                      providerProfileId: provider.id,
+                      providerProfileNameSnapshot: provider.name,
+                      providerProfileSource: provider.source,
+                      runtimeCapabilityFingerprint:
+                        engine === "claude" ? "echo-checksum" : null,
+                    },
+                  };
+                  setProviderContinuationDialogState({
+                    workspaceId,
+                    sourceSessionId: thread.id,
+                    sourceTitle:
+                      thread.name?.trim() ||
+                      t("threads.untitled", { defaultValue: "未命名会话" }),
+                    sourceLabel: `${resolveEngineDisplayName(
+                      thread.engineSource as EngineType,
+                    )} · ${
+                      thread.providerProfileName ??
+                      thread.providerProfileId ??
+                      "本地配置"
+                    }`,
+                    destinationLabel: `${engineLabel} · ${provider.name}`,
+                    request,
+                    operationKey,
+                    stage: "confirm",
+                    detail: null,
                   });
-                } finally {
-                  providerContinuationOperationsRef.current.delete(guardKey);
-                }
-              },
-            })),
+                },
+              })),
+              ...(targetProviders.length > 0 && unavailableKimiTargets.length > 0
+                ? [
+                    {
+                      type: "separator" as const,
+                      id: "continue-with-kimi-separator",
+                    },
+                    {
+                      type: "label" as const,
+                      id: "continue-with-kimi-status",
+                      label: t("threads.providerContinuationKimiUnavailable", {
+                        defaultValue: "Kimi CLI · 可作为来源，目标暂不可用",
+                      }),
+                    },
+                  ]
+                : []),
+              ...unavailableKimiTargets,
+            ],
           });
         }
       }
@@ -1517,10 +1663,10 @@ export function useSidebarMenus({
       onRenameThread,
       onSyncThread,
       onUnpinThread,
-      onReloadWorkspaceThreads,
       onSelectThread,
       claudeProviderProfiles,
       codexProviderProfiles,
+      kimiProviderProfiles,
       isThreadAvailable,
       getThreadSummary,
     ],
@@ -1614,8 +1760,11 @@ export function useSidebarMenus({
     showWorktreeMenu,
     workspaceMenuState,
     sidebarContextMenuState,
+    providerContinuationDialogState,
     closeWorkspaceMenu,
     closeSidebarContextMenu,
+    closeProviderContinuationDialog,
+    confirmProviderContinuation,
     onWorkspaceMenuAction,
   };
 }

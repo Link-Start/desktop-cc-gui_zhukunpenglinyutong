@@ -140,6 +140,73 @@ const terminal = await terminalCapture.waitFor({
 await commitTurn({ outcome: terminal.outcome });
 ```
 
+## Scenario: Shared Provider-aware Target Picker
+
+### 1. Scope / Trigger
+
+- Trigger：修改 Shared Composer 模型菜单、Provider Profile catalog、
+  `selectedNextTarget` 或 target display。
+
+### 2. Signatures
+
+```ts
+getEngineModels(engine, { providerProfileId }): Promise<EngineModelInfo[]>
+selectNextTarget(workspaceId, threadId, {
+  engine, providerProfileId, model, reasoning
+}): void
+```
+
+### 3. Contracts
+
+- Picker hierarchy MUST be `CLI → Provider Profile → Model`，Reasoning 作为同一
+  Target 的相邻级；选择 Model MUST 原子写完整 Target。
+- catalog request/cache key MUST include `engine + providerProfileId`。
+- `__local_settings_json__`、`__disk__`、`__local_config_toml__` 只用于 catalog
+  lookup；写入 Target 前 MUST normalize 为 `providerProfileId = null`。
+- 当前按钮 MUST 从完整 Target catalog 解析 Model label，不得回读旧 Engine catalog。
+- 未验证 target acceptance 的 CLI MUST visible-disabled with reason；MUST NOT fallback。
+- root menu open MUST NOT fetch every model catalog；model fetch 只能由用户展开 CLI 触发。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 结果 | 禁止行为 |
+|---|---|---|
+| Provider A/B 有同名 Model | 按完整 Target 选择正确 Binding | 按 Model ID 猜 Provider |
+| local sentinel | Target 写 `null` | 创建 `engine:__local_*__` 重复 Binding |
+| 一个 profile catalog 失败 | 只显示该 profile error | 清空其他 CLI/Profile |
+| Kimi target 未验证 | 显示 disabled reason | 隐藏或改发其他 CLI |
+
+### 5. Good / Base / Bad Cases
+
+- Good：展开 Codex CLI 后只加载 Codex 各 Provider catalog，点击模型一次写完整 Target。
+- Base：本地 Claude catalog 使用 sentinel 查询，Target 保存 canonical `null`。
+- Bad：切到 Codex 后按钮继续从 Claude models 找 label，显示成“选择模型”。
+
+### 6. Tests Required
+
+- `ModelSelect.test.tsx`：跨 Provider 点击、同名 Model、local sentinel、Target label。
+- `useSharedProviderTargetCatalog.test.tsx`：lazy/cache、partial failure、binding error。
+- `Composer.file-reference-token.test.tsx`：明确的 `null` 不得回退旧 Provider/reasoning。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+onSelectModel(modelId);
+```
+
+#### Correct
+
+```ts
+selectNextTarget(workspaceId, threadId, {
+  engine,
+  providerProfileId: isLocalProfile ? null : providerProfileId,
+  model: modelId,
+  reasoning: sameBinding ? current.reasoning : null,
+});
+```
+
 ## Scenario: Shared Context Package Delivery
 
 ### 1. Scope / Trigger

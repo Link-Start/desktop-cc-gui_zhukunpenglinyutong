@@ -35,6 +35,7 @@ import type {
   SkillItem,
   NoteCardItem,
 } from './types';
+import type { ExecutionTarget } from '../../../shared-session/target/types';
 import type { QueuedMessage as ComposerQueuedMessage } from '../../../../types';
 import type { CustomCommandOption, CustomPromptOption } from '../../../../types';
 import type { EngineType } from '../../../../types';
@@ -470,6 +471,8 @@ export interface ChatInputBoxAdapterProps {
   models?: AdapterModelOption[];
   providerModelCatalogs?: Partial<Record<EngineType, AdapterModelOption[]>>;
   providerProfileId?: string | null;
+  executionTarget?: ExecutionTarget | null;
+  onExecutionTargetChange?: (target: ExecutionTarget) => void;
   onSelectModel?: (id: string) => void;
 
   // Reasoning
@@ -1040,6 +1043,8 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       models,
       providerModelCatalogs,
       providerProfileId,
+      executionTarget,
+      onExecutionTargetChange,
       onSelectModel,
       reasoningOptions,
       selectedEffort,
@@ -2110,6 +2115,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         permissionMode={permissionMode}
         currentProvider={engineToProvider(selectedEngine)}
         currentProviderProfileId={providerProfileId}
+        executionTarget={executionTarget}
+        onExecutionTargetChange={onExecutionTargetChange}
+        sharedTargetPicker={isSharedSession}
         providerAvailability={providerAvailability}
         providerVersions={providerVersions}
         providerStatusLabels={providerStatusLabels}

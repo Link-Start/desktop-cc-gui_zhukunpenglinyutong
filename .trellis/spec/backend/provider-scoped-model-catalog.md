@@ -59,6 +59,12 @@ type EngineModelInfo = {
 - Codex localStorage custom model 若属于其他 `providerProfileId`，Composer 必须过滤。
 - Desktop remote forwarding 与 daemon dispatch 必须原样透传 `providerProfileId`。
 - frontend cache/dedupe/request identity 必须包含 `engineType + providerProfileId`；旧 scope 晚返回不得覆盖当前模型菜单。
+- Shared Picker 根菜单只加载 Provider Profile；具体 Model catalog 必须在用户展开 CLI
+  后按 binding lazy load。一个 Profile 失败不得阻塞其他 CLI/Profile。
+- local/disk sentinel 可以传给 `getEngineModels` 解析本地配置，但写入 Shared
+  `ExecutionTarget` 前必须归一为 `providerProfileId = null`。
+- 切换 Target 后当前 Model label 必须从目标 Provider catalog 解析，禁止继续消费旧
+  Engine 的 `models` prop。
 - missing/invalid managed provider 必须返回可诊断 error；禁止静默回退 global catalog。
 - Codex managed provider 的 create-session/model-omitted send fallback 必须读取同一 profile 的 top-level `configToml.model`；仅 disk profile 可读取 workspace/default model。
 - Codex provider name 只是 display metadata；名称为 `Kimi` 不得改变 `engine=codex` routing。
@@ -74,6 +80,9 @@ type EngineModelInfo = {
 | missing/invalid provider | contextual `Err(String)` | 回退默认 provider |
 | provider A 请求晚于 provider B 返回 | UI 保持 provider B catalog | A 覆盖 B |
 | daemon mode | 与 Desktop 相同 payload/result contract | 丢失 `providerProfileId` |
+| Shared root menu open | 只读取 Profile catalog | 预取所有 Provider models |
+| local profile selected | catalog 用 sentinel；Target 用 `null` | 形成第二个 local Binding |
+| target catalog partial failure | 仅失败 binding 显示 error | 整个模型菜单不可用 |
 
 ### 5. Good/Base/Bad Cases
 
