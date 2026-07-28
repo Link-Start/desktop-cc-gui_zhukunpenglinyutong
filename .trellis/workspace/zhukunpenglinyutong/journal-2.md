@@ -599,3 +599,70 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 63: 修复浅色主题原生控件配色并优化危险确认对话框按钮布局
+
+**Date**: 2026-07-28
+**Task**: 修复浅色主题原生控件配色并优化危险确认对话框按钮布局
+**Branch**: `chore/bump-version-0.7.11`
+
+### Summary
+
+1) settings 浅色主题（含 prefers-color-scheme 回退）为 settings-section-basic/tabbed 及其 select/input 强制 color-scheme: light，修复原生控件在浅色主题下的暗色渲染，并新增 settings-basic-light-controls.test.ts 样式快照测试；2) 优化 diff 危险确认对话框与 git-history 建分支对话框的按钮区：加大 gap/min-width/min-height，增加顶部分隔线，窄屏下按钮换行并弹性占宽。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9f9ce10c6` | (see git log) |
+| `781d5cb47` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 64: 修复 CI 编译失败：grok entry 缺 native_title
+
+**Date**: 2026-07-28
+**Task**: 修复 CI 编译失败：grok entry 缺 native_title
+**Branch**: `chore/bump-version-0.7.11`
+
+### Summary
+
+线上发版 CI 报 E0063：WorkspaceSessionCatalogEntry 新增 native_title 字段后，两处 grok 会话初始化（session_management.rs list_global_codex_sessions 分支、session_management_catalog_projection.rs kimi/grok history 分支）未同步补齐。两处均补 native_title: None，与其他 grok/kimi entry 写法一致，本地 cargo check 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d5b6f42ca` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

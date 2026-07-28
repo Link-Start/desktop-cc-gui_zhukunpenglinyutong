@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 62
-- **Last Active**: 2026-07-22
+- **Total Sessions**: 64
+- **Last Active**: 2026-07-28
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~601 | Active |
+| `journal-2.md` | ~668 | Active |
 | `journal-1.md` | ~1997 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 64 | 2026-07-28 | 修复 CI 编译失败：grok entry 缺 native_title | `d5b6f42ca` | `chore/bump-version-0.7.11` |
+| 63 | 2026-07-28 | 修复浅色主题原生控件配色并优化危险确认对话框按钮布局 | `9f9ce10c6`, `781d5cb47` | `chore/bump-version-0.7.11` |
 | 62 | 2026-07-22 | 合并远端 bump-version-0.7.6 并修复 Git history 测试契约 | `0a5a68d1`, `8ff3834c` | `bump-version-0.7.6` |
 | 61 | 2026-07-21 | 归档 messages 最终模块边界契约 | `26e2e84b` | `bump-version-0.7.6` |
 | 60 | 2026-07-21 | 锁定 messages 最终模块边界 | `ecf1e80f`, `bcd2970c` | `bump-version-0.7.6` |

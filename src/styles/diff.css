@@ -2405,7 +2405,7 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .diff-danger-dialog-title {
@@ -2491,12 +2491,15 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
 .diff-danger-dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .diff-danger-dialog-confirm {
-  min-width: 110px;
-  height: 32px;
+  min-width: 128px;
+  min-height: 34px;
   border-radius: var(--diff-radius-md);
   border: 1px solid transparent;
   background: var(--destructive);
@@ -2514,4 +2517,14 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
 .diff-danger-dialog-confirm:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .diff-danger-dialog-actions {
+    flex-wrap: wrap;
+  }
+
+  .diff-danger-dialog-actions > button {
+    flex: 1 1 140px;
+  }
 }
