@@ -1849,3 +1849,37 @@ Review Change B 后撤回 17 个虚假完成项和 Gate 4；修复 Composer mana
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1193: 完成 Change B Execution Target 闭环
+
+**Date**: 2026-07-28
+**Task**: 完成 Change B Execution Target 闭环
+**Branch**: `feature/v-0710`
+
+### Summary
+
+补全 Shared Session 四级 Execution Target、schema v2 bindings、durable V2 send、typed ACK/真实 terminal、provider-scoped owner routing、degraded/recovery UI；完成增量测试、OpenSpec verify/sync/archive，并确认可进入 Change C。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `428ae19d2` | (see git log) |
+| `7974e3d41` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
