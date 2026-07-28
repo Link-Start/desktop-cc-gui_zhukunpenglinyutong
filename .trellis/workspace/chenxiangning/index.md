@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1207
+- **Total Sessions**: 1208
 - **Last Active**: 2026-07-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~370 | Active |
+| `journal-29.md` | ~404 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1208 | 2026-07-28 | 修复 Provider Continuation 幕布头部交互 | `0cb29cdc8`, `7583cadcb` | `feature/v-0710` |
 | 1207 | 2026-07-28 | 校准 Provider 续接稳定性与 Shared 身份展示 | `fa6113bf1` | `feature/v-0710` |
 | 1206 | 2026-07-28 | 补齐多 Provider 切换 UX | `687b951c0` | `feature/v-0710` |
 | 1205 | 2026-07-28 | 校准多 CLI 会话基石 A-D | `b5a2aba34` | `feature/v-0710` |

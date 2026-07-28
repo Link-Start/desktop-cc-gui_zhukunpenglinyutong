@@ -368,3 +368,37 @@ Message-tail Codex fork 仅保留当前 Provider；跨 Provider 由 Sidebar Prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1208: 修复 Provider Continuation 幕布头部交互
+
+**Date**: 2026-07-28
+**Task**: 修复 Provider Continuation 幕布头部交互
+**Branch**: `feature/v-0710`
+
+### Summary
+
+用户验收通过。修复折叠态头部被 Canvas topbar 剪裁、展开后无法折叠的问题；来源入口改为无边框无静态背景的 icon-only action，并保留 aria-label、tooltip、keyboard 与 disabled semantics。组件测试、typecheck、OpenSpec strict validation 通过；未启动 App。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0cb29cdc8` | (see git log) |
+| `7583cadcb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
