@@ -236,3 +236,36 @@ Message-tail Codex fork 仅保留当前 Provider；跨 Provider 由 Sidebar Prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1204: 完成并归档 Change D
+
+**Date**: 2026-07-28
+**Task**: 完成并归档 Change D
+**Branch**: `feature/v-0710`
+
+### Summary
+
+同步 Native History Reader 与 Provider Continuation 主 Spec，归档 19/19 OpenSpec，更新总清单、Trellis executable contract 和 A-D 人工测试手册。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c5a1eb838` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
