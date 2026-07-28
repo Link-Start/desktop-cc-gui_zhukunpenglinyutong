@@ -104,3 +104,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1200: 补齐续接降级确认信息
+
+**Date**: 2026-07-28
+**Task**: 补齐续接降级确认信息
+**Branch**: `feature/v-0710`
+
+### Summary
+
+在 Provider Continuation 确认前展示 projection mode、token estimate、omission 与 adapter drop 明细，并增加 hook 回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5e2dea219` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
