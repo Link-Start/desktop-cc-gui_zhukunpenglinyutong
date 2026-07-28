@@ -2928,6 +2928,7 @@ async fn build_global_engine_catalog_entries(
                             workspace_label: Some(workspace.name.clone()),
                             engine: session.engine.unwrap_or_else(|| "grok".to_string()),
                             title: session.first_message,
+                            native_title: None,
                             updated_at: session.updated_at.max(0),
                             archived_at,
                             thread_kind: "native".to_string(),

@@ -637,6 +637,7 @@ async fn build_workspace_scope_catalog_data(
                         workspace_label: Some(workspace.name.clone()),
                         engine: "grok".to_string(),
                         title: session.first_message,
+                        native_title: None,
                         updated_at: session.updated_at.max(0),
                         thread_kind: "native".to_string(),
                         source: None,
