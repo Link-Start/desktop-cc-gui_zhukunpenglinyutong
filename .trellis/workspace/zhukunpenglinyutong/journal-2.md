@@ -633,3 +633,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 64: 修复 CI 编译失败：grok entry 缺 native_title
+
+**Date**: 2026-07-28
+**Task**: 修复 CI 编译失败：grok entry 缺 native_title
+**Branch**: `chore/bump-version-0.7.11`
+
+### Summary
+
+线上发版 CI 报 E0063：WorkspaceSessionCatalogEntry 新增 native_title 字段后，两处 grok 会话初始化（session_management.rs list_global_codex_sessions 分支、session_management_catalog_projection.rs kimi/grok history 分支）未同步补齐。两处均补 native_title: None，与其他 grok/kimi entry 写法一致，本地 cargo check 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d5b6f42ca` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
