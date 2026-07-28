@@ -1,17 +1,10 @@
 #[tokio::test]
 async fn continuation_projects_as_top_level_family_and_source_delete_does_not_cascade() {
-    let base =
-        std::env::temp_dir().join(format!("provider-continuation-{}", Uuid::new_v4()));
+    let base = std::env::temp_dir().join(format!("provider-continuation-{}", Uuid::new_v4()));
     std::fs::create_dir_all(&base).expect("create temp dir");
     let storage_path = base.join("workspaces.json");
     std::fs::write(&storage_path, "[]").expect("seed storage path");
-    let workspace = workspace_entry(
-        "ws-1",
-        "Workspace",
-        "/tmp/ws-1",
-        WorkspaceKind::Main,
-        None,
-    );
+    let workspace = workspace_entry("ws-1", "Workspace", "/tmp/ws-1", WorkspaceKind::Main, None);
     let workspaces = Mutex::new(HashMap::from([(workspace.id.clone(), workspace)]));
 
     let recorded = record_provider_continuation_metadata_core(
