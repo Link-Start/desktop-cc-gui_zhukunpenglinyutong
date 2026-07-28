@@ -469,3 +469,43 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1211: 聚合 Provider 续接会话家族
+
+**Date**: 2026-07-29
+**Task**: 聚合 Provider 续接会话家族
+**Branch**: `feature/v-0710`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 结果 |
+|------|------|
+| Sidebar projection | 使用 authoritative Family metadata 与 exact lineage reference 连续归组 Provider Continuation 和 legacy source。 |
+| UI | 增加轻围挡、成员数 label，并修复 virtualized path 右边框裁剪。 |
+| Safety | 保持 top-level identity、Subagent subtree、pinned/workspace partition 与 unknown lineage fail-open。 |
+| OpenSpec | 同步两个 main specs，归档 `group-provider-continuation-family-in-sidebar`。 |
+| Verification | 3 个 focused test files，48 tests 通过；focused ESLint、TypeScript、strict OpenSpec validation 与 light/dark virtualized visual QA 通过。按用户要求未跑 full test suite。 |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ea73d6007` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

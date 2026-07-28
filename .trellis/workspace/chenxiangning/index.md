@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1210
-- **Last Active**: 2026-07-28
+- **Total Sessions**: 1211
+- **Last Active**: 2026-07-29
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~471 | Active |
+| `journal-29.md` | ~511 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1211 | 2026-07-29 | 聚合 Provider 续接会话家族 | `ea73d6007` | `feature/v-0710` |
 | 1210 | 2026-07-28 | 稳定供应商与模型选择 | `f0c5c5e3a` | `feature/v-0710` |
 | 1209 | 2026-07-28 | 展示 Provider Continuation 来源最后一轮 | `f610a74d7`, `dedcc7894` | `feature/v-0710` |
 | 1208 | 2026-07-28 | 修复 Provider Continuation 幕布头部交互 | `0cb29cdc8`, `7583cadcb` | `feature/v-0710` |
