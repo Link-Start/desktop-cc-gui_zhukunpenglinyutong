@@ -5,9 +5,6 @@
   font-synthesis: none;
   /* 回到浏览器默认渲染：optimizeLegibility 会强制 kerning/连字，CJK + 小字号下观感发怪/不均 */
   text-rendering: auto;
-  /* 抗锯齿：Mac 上让系统字体更清爽细腻（不换字体的核心观感优化，全主题继承） */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   color-scheme: dark;
   --ui-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --code-font-family: "SF Mono", "SFMono-Regular", Menlo, Monaco,
@@ -229,6 +226,12 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
+}
+
+:root[data-platform="macos"] {
+  /* macOS benefits from thinner subpixel smoothing; Windows ClearType looks fuzzy with it. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 

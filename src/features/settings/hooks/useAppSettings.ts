@@ -26,7 +26,7 @@ import {
   DEFAULT_UI_FONT_FAMILY,
   CODE_FONT_SIZE_DEFAULT,
   clampCodeFontSize,
-  normalizeFontFamily,
+  normalizeCodeFontFamily,
   normalizeUiFontFamily,
 } from "../../../utils/fonts";
 import {
@@ -431,10 +431,7 @@ function normalizeAppSettings(
     performanceCompatibilityModeEnabled:
       settings.performanceCompatibilityModeEnabled === true,
     uiFontFamily: normalizeUiFontFamily(settings.uiFontFamily),
-    codeFontFamily: normalizeFontFamily(
-      settings.codeFontFamily,
-      DEFAULT_CODE_FONT_FAMILY,
-    ),
+    codeFontFamily: normalizeCodeFontFamily(settings.codeFontFamily),
     runtimeRestoreThreadsOnlyOnLaunch:
       settings.runtimeRestoreThreadsOnlyOnLaunch !== false,
     runtimeForceCleanupOnExit: settings.runtimeForceCleanupOnExit !== false,
