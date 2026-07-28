@@ -203,3 +203,36 @@ Message-tail Codex fork 仅保留当前 Provider；跨 Provider 由 Sidebar Prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1203: 收口续接回归测试格式
+
+**Date**: 2026-07-28
+**Task**: 收口续接回归测试格式
+**Branch**: `feature/v-0710`
+
+### Summary
+
+按 rustfmt 收口 Provider Continuation catalog 回归测试，并复验非级联删除契约通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6b5aa9d63` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

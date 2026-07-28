@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1202
+- **Total Sessions**: 1203
 - **Last Active**: 2026-07-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~205 | Active |
+| `journal-29.md` | ~238 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1203 | 2026-07-28 | 收口续接回归测试格式 | `6b5aa9d63` | `feature/v-0710` |
 | 1202 | 2026-07-28 | 补齐续接来源缺失回归测试 | `1e86de202` | `feature/v-0710` |
 | 1201 | 2026-07-28 | 清退跨供应商原生分叉残留 | `548e61c5f` | `feature/v-0710` |
 | 1200 | 2026-07-28 | 补齐续接降级确认信息 | `5e2dea219` | `feature/v-0710` |
