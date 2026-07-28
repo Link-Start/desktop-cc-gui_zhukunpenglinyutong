@@ -153,4 +153,63 @@ describe("useSharedProviderTargetCatalog", () => {
         ?.profiles,
     ).toEqual(expect.arrayContaining([expect.objectContaining({ id: "claude-a" })]));
   });
+
+  it("projects only the current CLI in native mode", async () => {
+    const { result } = renderHook(() =>
+      useSharedProviderTargetCatalog({
+        enabled: true,
+        mode: "native",
+        currentProvider: "codex",
+        currentProviderProfileId: "codex-b",
+        currentModels: [{ id: "current-model", label: "Current model" }],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+    });
+
+    expect(result.current.groups).toHaveLength(1);
+    expect(result.current.groups[0]).toMatchObject({
+      providerId: "codex",
+      enabled: true,
+      profiles: expect.arrayContaining([
+        expect.objectContaining({
+          id: "codex-b",
+          models: [{ id: "current-model", label: "Current model" }],
+        }),
+      ]),
+    });
+  });
+
+  it("keeps only the current Kimi profile selectable in native mode", async () => {
+    const { result } = renderHook(() =>
+      useSharedProviderTargetCatalog({
+        enabled: true,
+        mode: "native",
+        currentProvider: "kimi",
+        currentProviderProfileId: "kimi-c",
+        currentModels: [{ id: "kimi-model", label: "Kimi model" }],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+    });
+
+    const kimiGroup = result.current.groups[0];
+    expect(kimiGroup).toMatchObject({ providerId: "kimi", enabled: true });
+    expect(
+      kimiGroup?.profiles.find((profile) => profile.id === "kimi-c"),
+    ).toMatchObject({ enabled: true });
+    expect(
+      kimiGroup?.profiles.find(
+        (profile) => profile.id === "__local_config_toml__",
+      ),
+    ).toMatchObject({ enabled: false, disabledReason: "source only" });
+  });
 });

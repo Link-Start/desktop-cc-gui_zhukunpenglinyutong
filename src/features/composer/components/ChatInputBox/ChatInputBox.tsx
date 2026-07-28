@@ -52,6 +52,10 @@ import {
 } from './hooks/index.js';
 import { useSharedProviderTargetCatalog } from './hooks/useSharedProviderTargetCatalog';
 import {
+  isSameProviderExecutionProfile,
+  normalizeExecutionProviderProfileId,
+} from './selectors/ModelSelect';
+import {
   commandToDropdownItem,
   fileReferenceProvider,
   fileToDropdownItem,
@@ -93,6 +97,11 @@ import './styles.css';
 const INCREMENTAL_UNDO_REDO_ENABLED = true;
 const INCREMENTAL_UNDO_REDO_MAX_TRANSACTIONS = 100;
 const INCREMENTAL_UNDO_REDO_MERGE_WINDOW_MS = 400;
+const PROVIDER_PROFILE_ENGINES = new Set<ProviderId>([
+  'claude',
+  'codex',
+  'kimi',
+]);
 
 function manualMemoryToDropdownItem(memory: ManualMemoryItem) {
   const label = memory.title?.trim() || memory.summary?.trim() || memory.id;
@@ -187,6 +196,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       currentProviderProfileId,
       executionTarget,
       onExecutionTargetChange,
+      onNativeProviderTargetChange,
       sharedTargetPicker = false,
       providerAvailability,
       providerVersions,
@@ -365,8 +375,12 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         t,
       ],
     );
-    const sharedProviderTargetCatalog = useSharedProviderTargetCatalog({
-      enabled: sharedTargetPicker,
+    const nativeProviderTargetPicker =
+      !sharedTargetPicker &&
+      PROVIDER_PROFILE_ENGINES.has(currentProvider as ProviderId);
+    const providerTargetCatalog = useSharedProviderTargetCatalog({
+      enabled: sharedTargetPicker || nativeProviderTargetPicker,
+      mode: sharedTargetPicker ? 'shared' : 'native',
       currentProvider: currentProvider as ProviderId,
       currentProviderProfileId,
       currentModels: availableModels,
@@ -376,6 +390,29 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         defaultValue: '可作为来源；目标续接尚未验证',
       }),
     });
+    const pickerExecutionTarget = useMemo(
+      () =>
+        executionTarget ??
+        (nativeProviderTargetPicker
+          ? {
+              engine: currentProvider as ProviderId,
+              providerProfileId:
+                normalizeExecutionProviderProfileId(
+                  currentProvider as ProviderId,
+                  currentProviderProfileId,
+                ),
+              model: selectedModel || null,
+              reasoning: null,
+            }
+          : null),
+      [
+        currentProvider,
+        currentProviderProfileId,
+        executionTarget,
+        nativeProviderTargetPicker,
+        selectedModel,
+      ],
+    );
 
     // Records the exact text of the latest programmatic (external) write.
     // Programmatic innerText assignment fires no input event, so this must NOT
@@ -1332,6 +1369,35 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       },
       [currentProvider, onModelSelect, onProviderSelect]
     );
+    const handleProviderTargetSelect = useCallback(
+      (target: NonNullable<typeof pickerExecutionTarget>) => {
+        if (sharedTargetPicker) {
+          onExecutionTargetChange?.(target);
+          return;
+        }
+        if (
+          isSameProviderExecutionProfile(
+            currentProvider as ProviderId,
+            currentProviderProfileId,
+            target,
+          )
+        ) {
+          if (target.model) {
+            onModelSelect?.(target.model);
+          }
+          return;
+        }
+        onNativeProviderTargetChange?.(target);
+      },
+      [
+        currentProvider,
+        currentProviderProfileId,
+        onExecutionTargetChange,
+        onModelSelect,
+        onNativeProviderTargetChange,
+        sharedTargetPicker,
+      ],
+    );
     const handleOpenCurrentProviderModelSettings = useCallback(() => {
       onOpenModelSettings?.(resolveModelConfigProvider(currentProvider));
     }, [currentProvider, onOpenModelSettings]);
@@ -1473,19 +1539,28 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         contextSourcesExpanded={contextSourcesExpanded}
         selectedModel={selectedModel}
         models={availableModels}
-        modelGroups={onProviderSelect ? providerModelGroups : undefined}
-        targetGroups={
-          sharedTargetPicker ? sharedProviderTargetCatalog.groups : undefined
+        modelGroups={
+          !sharedTargetPicker &&
+          !nativeProviderTargetPicker &&
+          onProviderSelect
+            ? providerModelGroups
+            : undefined
         }
-        executionTarget={executionTarget}
-        onExecutionTargetChange={onExecutionTargetChange}
-        onOpenTargetCatalog={sharedProviderTargetCatalog.ensureProfiles}
-        onOpenProviderProfile={sharedProviderTargetCatalog.ensureModels}
-        targetCatalogError={sharedProviderTargetCatalog.profileLoadError}
+        targetGroups={providerTargetCatalog.groups}
+        targetGroupDisplayMode={
+          nativeProviderTargetPicker ? 'profiles' : 'cli'
+        }
+        executionTarget={pickerExecutionTarget}
+        onExecutionTargetChange={handleProviderTargetSelect}
+        onOpenTargetCatalog={providerTargetCatalog.ensureProfiles}
+        onOpenProviderProfile={providerTargetCatalog.ensureModels}
+        targetCatalogError={providerTargetCatalog.profileLoadError}
         currentProvider={currentProvider}
         onModelSelect={onModelSelect ? handleModelSelect : undefined}
         onProviderModelSelect={
-          onModelSelect && onProviderSelect ? handleProviderModelSelect : undefined
+          !nativeProviderTargetPicker && onModelSelect && onProviderSelect
+            ? handleProviderModelSelect
+            : undefined
         }
         onAddModel={
           onOpenModelSettings && supportsModelConfigActions

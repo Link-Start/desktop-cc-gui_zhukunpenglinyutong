@@ -12,6 +12,7 @@ import type {
   EngineDisplayInfo,
   EngineRefreshResult,
 } from "../../engine/hooks/useEngineController";
+import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
 
 const clientStoreMock = vi.hoisted(() => ({
   data: {} as Record<string, Record<string, unknown>>,
@@ -1022,6 +1023,74 @@ describe("useSidebarMenus", () => {
     expect(result.current.providerContinuationDialogState).toBeNull();
     expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
     expect(handlers.onSelectThread).not.toHaveBeenCalled();
+  });
+
+  it("routes Composer provider requests through the existing continuation dialog", () => {
+    const handlers = {
+      ...createHandlers(),
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+        providerProfileName: "Provider A",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          model: "gpt-target",
+        },
+      });
+    });
+
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
+    expect(result.current.providerContinuationDialogState).toMatchObject({
+      sourceSessionId: "claude:source-1",
+      sourceLabel: "Claude Code · Provider A",
+      destinationLabel: "Codex CLI · Provider B · gpt-target",
+      stage: "confirm",
+      request: {
+        source: {
+          nativeSessionId: "source-1",
+          providerProfileId: "provider-a",
+        },
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          model: "gpt-target",
+        },
+      },
+    });
+    const firstOperationId =
+      result.current.providerContinuationDialogState?.request.operationId;
+    act(() => {
+      result.current.closeProviderContinuationDialog();
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          model: "gpt-other",
+        },
+      });
+    });
+    expect(
+      result.current.providerContinuationDialogState?.request.operationId,
+    ).not.toBe(firstOperationId);
   });
 
   it("retries recovery with the accepted degraded decision", async () => {

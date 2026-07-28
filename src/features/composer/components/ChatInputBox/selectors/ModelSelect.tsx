@@ -34,6 +34,7 @@ interface ModelSelectProps {
   triggerVariant?: 'default' | 'readiness';
   modelGroups?: ProviderModelGroup[];
   targetGroups?: ProviderTargetGroup[];
+  targetGroupDisplayMode?: 'cli' | 'profiles';
   executionTarget?: ExecutionTarget | null;
   onExecutionTargetChange?: (target: ExecutionTarget) => void;
   onOpenTargetCatalog?: () => Promise<void> | void;
@@ -70,13 +71,33 @@ const LOCAL_PROVIDER_PROFILE_IDS: Partial<Record<ProviderId, string>> = {
   kimi: KIMI_LOCAL_PROVIDER_PROFILE_ID,
 };
 
-function normalizeExecutionProviderProfileId(
+export function normalizeExecutionProviderProfileId(
   providerId: ProviderId,
-  providerProfileId: string,
+  providerProfileId: string | null | undefined,
 ): string | null {
-  return LOCAL_PROVIDER_PROFILE_IDS[providerId] === providerProfileId
+  const normalizedProviderProfileId = providerProfileId?.trim();
+  return !normalizedProviderProfileId ||
+    LOCAL_PROVIDER_PROFILE_IDS[providerId] === normalizedProviderProfileId
     ? null
-    : providerProfileId;
+    : normalizedProviderProfileId;
+}
+
+export function isSameProviderExecutionProfile(
+  currentProvider: ProviderId,
+  currentProviderProfileId: string | null | undefined,
+  target: Pick<ExecutionTarget, 'engine' | 'providerProfileId'>,
+): boolean {
+  return (
+    target.engine === currentProvider &&
+    normalizeExecutionProviderProfileId(
+      currentProvider,
+      target.providerProfileId,
+    ) ===
+      normalizeExecutionProviderProfileId(
+        currentProvider,
+        currentProviderProfileId,
+      )
+  );
 }
 
 export function buildProviderExecutionTarget(
@@ -86,11 +107,11 @@ export function buildProviderExecutionTarget(
   modelId: string,
   providerProfileNameSnapshot?: string,
   providerProfileSource?: "disk" | "managed",
+  normalizeProviderProfile = true,
 ): ExecutionTarget {
-  const normalizedProviderProfileId = normalizeExecutionProviderProfileId(
-    providerId,
-    providerProfileId,
-  );
+  const normalizedProviderProfileId = normalizeProviderProfile
+    ? normalizeExecutionProviderProfileId(providerId, providerProfileId)
+    : providerProfileId;
   return {
     engine: providerId,
     providerProfileId: normalizedProviderProfileId,
@@ -154,6 +175,7 @@ export const ModelSelect = memo(({
   triggerVariant = 'default',
   modelGroups,
   targetGroups,
+  targetGroupDisplayMode = 'cli',
   executionTarget,
   onExecutionTargetChange,
   onOpenTargetCatalog,
@@ -166,6 +188,10 @@ export const ModelSelect = memo(({
 }: ModelSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
+  const [activeTargetGroupId, setActiveTargetGroupId] =
+    useState<ProviderId | null>(null);
+  const [expandedProviderProfileKey, setExpandedProviderProfileKey] =
+    useState<string | null>(null);
   const [refreshConfigError, setRefreshConfigError] = useState<string | null>(null);
 
   const effectiveModels = useMemo(() => {
@@ -220,6 +246,16 @@ export const ModelSelect = memo(({
   const currentModelLabel = currentModel ? getModelLabel(currentModel) : t('models.selectModel');
   const resolvedTargetGroups = targetGroups ?? [];
   const hasTargetGroups = resolvedTargetGroups.length > 0;
+  const activeTargetGroup =
+    resolvedTargetGroups.find(
+      (group) =>
+        group.providerId === activeTargetGroupId && group.enabled,
+    ) ??
+    resolvedTargetGroups.find(
+      (group) =>
+        group.providerId === executionTarget?.engine && group.enabled,
+    ) ??
+    resolvedTargetGroups.find((group) => group.enabled);
   const hasGroupedModels = Boolean(modelGroups && modelGroups.length > 0);
   const hasConfigActions = Boolean(onAddModel || onRefreshConfig);
 
@@ -259,13 +295,54 @@ export const ModelSelect = memo(({
           modelId,
           providerProfileNameSnapshot,
           providerProfileSource,
+          targetGroupDisplayMode !== 'profiles',
         ),
       );
       setIsOpen(false);
     },
-    [executionTarget, onExecutionTargetChange],
+    [executionTarget, onExecutionTargetChange, targetGroupDisplayMode],
   );
 
+  const toggleProviderProfile = useCallback(
+    (providerId: ProviderId, providerProfileId: string) => {
+      const profileKey = `${providerId}:${providerProfileId}`;
+      setExpandedProviderProfileKey((current) =>
+        current === profileKey ? null : profileKey,
+      );
+      void onOpenProviderProfile?.(providerId, providerProfileId);
+    },
+    [onOpenProviderProfile],
+  );
+  const openDefaultProviderProfile = useCallback(
+    (group: ProviderTargetGroup) => {
+      const selectedProfile = group.profiles.find((profile) =>
+        isSelectedProviderProfile(
+          executionTarget,
+          group.providerId,
+          profile.id,
+        ),
+      );
+      const profile =
+        selectedProfile ??
+        group.profiles.find((candidate) => candidate.enabled !== false);
+      if (!profile) {
+        return;
+      }
+      setExpandedProviderProfileKey(`${group.providerId}:${profile.id}`);
+      void onOpenProviderProfile?.(group.providerId, profile.id);
+    },
+    [executionTarget, onOpenProviderProfile],
+  );
+  const activateTargetGroup = useCallback(
+    (group: ProviderTargetGroup) => {
+      if (!group.enabled || group.providerId === activeTargetGroupId) {
+        return;
+      }
+      setActiveTargetGroupId(group.providerId);
+      openDefaultProviderProfile(group);
+    },
+    [activeTargetGroupId, openDefaultProviderProfile],
+  );
   const handleAddModel = useCallback(() => {
     onAddModel?.();
     setIsOpen(false);
@@ -282,6 +359,117 @@ export const ModelSelect = memo(({
       setRefreshConfigError(message);
     });
   }, [isRefreshingConfig, onRefreshConfig]);
+
+  const renderProviderProfiles = (group: ProviderTargetGroup) =>
+    group.profiles.map((profile, profileIndex) => {
+      const profileKey = `${group.providerId}:${profile.id}`;
+      const isExpanded = expandedProviderProfileKey === profileKey;
+      const isSelectedProfile = isSelectedProviderProfile(
+        executionTarget,
+        group.providerId,
+        profile.id,
+      );
+      return (
+        <Fragment key={profileKey}>
+          {profileIndex > 0 && <DropdownMenuSeparator />}
+          <DropdownMenuItem
+            data-provider-profile-id={profile.id}
+            data-selected={isSelectedProfile ? 'true' : undefined}
+            disabled={profile.enabled === false}
+            aria-expanded={isExpanded}
+            title={profile.disabledReason}
+            className="items-start gap-2"
+            onSelect={(event) => {
+              event.preventDefault();
+              if (profile.enabled !== false) {
+                toggleProviderProfile(group.providerId, profile.id);
+              }
+            }}
+          >
+            <span
+              className="codicon codicon-server-environment mt-0.5 shrink-0"
+              aria-hidden
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{profile.label}</span>
+              {profile.disabledReason && (
+                <span className="block whitespace-normal text-xs text-muted-foreground">
+                  {profile.disabledReason}
+                </span>
+              )}
+            </span>
+            {isSelectedProfile && (
+              <CheckIcon className="size-4 shrink-0" aria-hidden />
+            )}
+            <span
+              className={`codicon codicon-chevron-${isExpanded ? 'down' : 'right'} shrink-0`}
+              aria-hidden
+            />
+          </DropdownMenuItem>
+          {isExpanded && profile.loading && (
+            <DropdownMenuItem disabled className="pl-7">
+              <span
+                className="codicon codicon-loading selector-refresh-icon-spinning"
+                aria-hidden
+              />
+              {t('models.refreshingConfig')}
+            </DropdownMenuItem>
+          )}
+          {isExpanded && !profile.loading && profile.error && (
+            <DropdownMenuItem disabled className="items-start pl-7">
+              <span className="min-w-0 whitespace-normal text-xs text-destructive">
+                {profile.error}
+              </span>
+            </DropdownMenuItem>
+          )}
+          {isExpanded &&
+            !profile.loading &&
+            !profile.error &&
+            profile.models.length === 0 && (
+              <DropdownMenuItem disabled className="pl-7">
+                {t('models.noModels', {
+                  defaultValue: '暂无可用模型',
+                })}
+              </DropdownMenuItem>
+            )}
+          {isExpanded &&
+            profile.models.map((model) => {
+              const isSelected =
+                isSelectedProfile && executionTarget?.model === model.id;
+              return (
+                <DropdownMenuItem
+                  key={`${profileKey}:${model.id}`}
+                  className="gap-2 pl-7"
+                  onSelect={() =>
+                    handleTargetSelect(
+                      group.providerId,
+                      profile.id,
+                      model.id,
+                      profile.label,
+                      profile.source,
+                    )
+                  }
+                >
+                  <ModelIcon provider={group.providerId} size={16} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">
+                      {getModelLabel(model)}
+                    </span>
+                    {getModelDescription(model) && (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {getModelDescription(model)}
+                      </span>
+                    )}
+                  </span>
+                  {isSelected && (
+                    <CheckIcon className="size-4 shrink-0" aria-hidden />
+                  )}
+                </DropdownMenuItem>
+              );
+            })}
+        </Fragment>
+      );
+    });
 
   const trigger = (
     <button
@@ -314,7 +502,31 @@ export const ModelSelect = memo(({
       onOpenChange={(nextOpen) => {
         setIsOpen(nextOpen);
         if (nextOpen) {
+          const selectedGroup =
+            resolvedTargetGroups.find(
+              (group) =>
+                group.providerId === executionTarget?.engine && group.enabled,
+            ) ?? resolvedTargetGroups.find((group) => group.enabled);
+          setActiveTargetGroupId(selectedGroup?.providerId ?? null);
+          const selectedProfile = selectedGroup?.profiles.find((profile) =>
+            isSelectedProviderProfile(
+              executionTarget,
+              selectedGroup.providerId,
+              profile.id,
+            ),
+          );
+          if (selectedGroup && selectedProfile) {
+            const profileKey = `${selectedGroup.providerId}:${selectedProfile.id}`;
+            setExpandedProviderProfileKey(profileKey);
+            void onOpenProviderProfile?.(
+              selectedGroup.providerId,
+              selectedProfile.id,
+            );
+          }
           void onOpenTargetCatalog?.();
+        } else {
+          setActiveTargetGroupId(null);
+          setExpandedProviderProfileKey(null);
         }
       }}
     >
@@ -323,155 +535,128 @@ export const ModelSelect = memo(({
         align="start"
         side="top"
         sideOffset={4}
-        className="max-h-[380px] w-64 overflow-y-auto"
+        className={
+          hasTargetGroups && targetGroupDisplayMode === 'cli'
+            ? 'max-h-[380px] w-[34rem] max-w-[calc(100vw-2rem)] overflow-hidden p-0'
+            : 'max-h-[380px] w-64 overflow-y-auto'
+        }
       >
         {hasTargetGroups ? (
           <>
-            {resolvedTargetGroups.map((group, groupIndex) => (
-              <Fragment key={group.providerId}>
-                {groupIndex > 0 && <DropdownMenuSeparator />}
-                {!group.enabled ? (
-                  <DropdownMenuItem
-                    disabled
-                    data-provider-id={group.providerId}
-                    title={group.disabledReason}
-                    className="items-start gap-2"
+            {targetGroupDisplayMode === 'profiles'
+              ? resolvedTargetGroups.flatMap((group, groupIndex) => [
+                  ...(groupIndex > 0
+                    ? [
+                        <DropdownMenuSeparator
+                          key={`${group.providerId}:separator`}
+                        />,
+                      ]
+                    : []),
+                  <DropdownMenuLabel
+                    key={`${group.providerId}:label`}
+                    className="flex items-center gap-2 text-muted-foreground"
                   >
                     <ModelIcon provider={group.providerId} size={18} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate">{group.providerLabel}</span>
-                      {group.disabledReason && (
-                        <span className="block whitespace-normal text-xs text-muted-foreground">
-                          {group.disabledReason}
-                        </span>
-                      )}
+                    <span className="min-w-0 truncate">
+                      {group.providerLabel} · Provider
                     </span>
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      data-provider-id={group.providerId}
-                      data-selected={
-                        executionTarget?.engine === group.providerId
-                          ? 'true'
-                          : undefined
-                      }
-                      className="gap-2"
-                      onMouseEnter={() => {
-                        group.profiles.forEach((profile) => {
-                          void onOpenProviderProfile?.(
-                            group.providerId,
-                            profile.id,
-                          );
-                        });
-                      }}
+                  </DropdownMenuLabel>,
+                  ...renderProviderProfiles(group),
+                ])
+              : (
+                  <div
+                    data-shared-target-picker
+                    className="flex min-h-0 max-h-[380px]"
+                  >
+                    <div
+                      data-shared-target-cli-list
+                      className="w-56 shrink-0 overflow-y-auto border-r p-1"
                     >
-                      <ModelIcon provider={group.providerId} size={18} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate">
-                          {group.providerLabel}
-                        </span>
-                      </span>
-                      {executionTarget?.engine === group.providerId && (
-                        <CheckIcon className="size-4 shrink-0" aria-hidden />
-                      )}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent
-                      sideOffset={8}
-                      alignOffset={-4}
-                      className="max-h-[380px] w-72 overflow-y-auto"
-                    >
-                      <DropdownMenuLabel className="text-muted-foreground">
-                        {group.providerLabel} · Provider
-                      </DropdownMenuLabel>
-                      {group.profiles.map((profile, profileIndex) => (
-                        <Fragment key={`${group.providerId}:${profile.id}`}>
-                          {profileIndex > 0 && <DropdownMenuSeparator />}
-                          <DropdownMenuLabel
-                            className="flex min-w-0 items-center gap-2 text-muted-foreground"
-                            data-provider-profile-id={profile.id}
+                      {resolvedTargetGroups.map((group, groupIndex) => (
+                        <Fragment key={group.providerId}>
+                          {groupIndex > 0 && <DropdownMenuSeparator />}
+                          <DropdownMenuItem
+                            disabled={!group.enabled}
+                            data-provider-id={group.providerId}
+                            data-selected={
+                              executionTarget?.engine === group.providerId
+                                ? 'true'
+                                : undefined
+                            }
+                            aria-expanded={
+                              activeTargetGroup?.providerId === group.providerId
+                            }
+                            title={group.disabledReason}
+                            className="items-start gap-2"
+                            onPointerEnter={() => activateTargetGroup(group)}
+                            onFocus={() => activateTargetGroup(group)}
+                            onSelect={(event) => {
+                              event.preventDefault();
+                              activateTargetGroup(group);
+                            }}
                           >
-                            <span className="codicon codicon-server-environment shrink-0" aria-hidden />
-                            <span className="min-w-0 flex-1 truncate">
-                              {profile.label}
-                            </span>
-                            {isSelectedProviderProfile(
-                              executionTarget,
-                              group.providerId,
-                              profile.id,
-                            ) && (
-                              <CheckIcon className="size-4 shrink-0" aria-hidden />
-                            )}
-                          </DropdownMenuLabel>
-                          {profile.loading && (
-                            <DropdownMenuItem disabled>
-                              <span className="codicon codicon-loading selector-refresh-icon-spinning" aria-hidden />
-                              {t('models.refreshingConfig')}
-                            </DropdownMenuItem>
-                          )}
-                          {!profile.loading && profile.error && (
-                            <DropdownMenuItem disabled className="items-start">
-                              <span className="min-w-0 whitespace-normal text-xs text-destructive">
-                                {profile.error}
+                            <ModelIcon provider={group.providerId} size={18} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate">
+                                {group.providerLabel}
                               </span>
-                            </DropdownMenuItem>
-                          )}
-                          {!profile.loading &&
-                            !profile.error &&
-                            profile.models.length === 0 && (
-                              <DropdownMenuItem disabled>
-                                {t('models.noModels', {
-                                  defaultValue: '暂无可用模型',
-                                })}
-                              </DropdownMenuItem>
-                            )}
-                          {profile.models.map((model) => {
-                            const isSelected =
-                              isSelectedProviderProfile(
-                                executionTarget,
-                                group.providerId,
-                                profile.id,
-                              ) &&
-                              executionTarget?.model === model.id;
-                            return (
-                              <DropdownMenuItem
-                                key={`${group.providerId}:${profile.id}:${model.id}`}
-                                className="gap-2 pl-7"
-                                onSelect={() =>
-                                  handleTargetSelect(
-                                    group.providerId,
-                                    profile.id,
-                                    model.id,
-                                    profile.label,
-                                    profile.source,
-                                  )
-                                }
-                              >
-                                <ModelIcon provider={group.providerId} size={16} />
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate">
-                                    {getModelLabel(model)}
-                                  </span>
-                                  {getModelDescription(model) && (
-                                    <span className="block truncate text-xs text-muted-foreground">
-                                      {getModelDescription(model)}
-                                    </span>
-                                  )}
+                              {group.disabledReason && (
+                                <span className="block whitespace-normal text-xs text-muted-foreground">
+                                  {group.disabledReason}
                                 </span>
-                                {isSelected && (
-                                  <CheckIcon className="size-4 shrink-0" aria-hidden />
-                                )}
-                              </DropdownMenuItem>
-                            );
-                          })}
+                              )}
+                            </span>
+                            {executionTarget?.engine === group.providerId && (
+                              <CheckIcon
+                                className="size-4 shrink-0"
+                                aria-hidden
+                              />
+                            )}
+                            {group.enabled && (
+                              <span
+                                className="codicon codicon-chevron-right shrink-0"
+                                aria-hidden
+                              />
+                            )}
+                          </DropdownMenuItem>
                         </Fragment>
                       ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
+                    </div>
+                    <div
+                      data-shared-target-provider-panel
+                      className="min-w-0 flex-1 overflow-y-auto p-1"
+                    >
+                      {activeTargetGroup ? (
+                        <>
+                          <DropdownMenuLabel className="flex items-center gap-2 text-muted-foreground">
+                            <ModelIcon
+                              provider={activeTargetGroup.providerId}
+                              size={18}
+                            />
+                            <span className="min-w-0 truncate">
+                              {activeTargetGroup.providerLabel} · Provider
+                            </span>
+                          </DropdownMenuLabel>
+                          {renderProviderProfiles(activeTargetGroup)}
+                        </>
+                      ) : null}
+                      {targetCatalogError && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            disabled
+                            className="items-start"
+                          >
+                            <span className="whitespace-normal text-xs text-destructive">
+                              {targetCatalogError}
+                            </span>
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 )}
-              </Fragment>
-            ))}
-            {targetCatalogError && (
+            {targetGroupDisplayMode === 'profiles' && targetCatalogError && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem disabled className="items-start">

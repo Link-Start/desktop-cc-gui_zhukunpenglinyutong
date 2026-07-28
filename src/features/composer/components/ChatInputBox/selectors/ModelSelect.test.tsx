@@ -3,7 +3,11 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { buildProviderExecutionTarget, ModelSelect } from "./ModelSelect";
+import {
+  buildProviderExecutionTarget,
+  isSameProviderExecutionProfile,
+  ModelSelect,
+} from "./ModelSelect";
 import { STORAGE_KEYS } from "../../../types/provider";
 
 vi.mock("react-i18next", () => ({
@@ -191,6 +195,176 @@ describe("ModelSelect", () => {
     });
   });
 
+  it("keeps Shared CLI and provider accordion in one stable menu root", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+
+    render(
+      <ModelSelect
+        value="model-a"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        executionTarget={{
+          engine: "claude",
+          providerProfileId: "provider-a",
+          model: "model-a",
+        }}
+        onExecutionTargetChange={onExecutionTargetChange}
+        targetGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            profiles: [
+              {
+                id: "provider-a",
+                label: "Provider A",
+                source: "managed",
+                loading: false,
+                error: null,
+                models: [{ id: "model-a", label: "Model A" }],
+              },
+              {
+                id: "provider-b",
+                label: "Provider B",
+                source: "managed",
+                loading: false,
+                error: null,
+                models: [{ id: "model-b", label: "Model B" }],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button"));
+    const cliItem = await screen.findByRole("menuitem", {
+      name: /Claude Code/,
+    });
+
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+    expect(document.querySelector("[data-shared-target-picker]")).toBeTruthy();
+    expect(document.querySelector("[data-shared-target-cli-list]")).toBeTruthy();
+    expect(
+      document.querySelector("[data-shared-target-provider-panel]"),
+    ).toBeTruthy();
+    expect(
+      document.querySelector('[data-slot="dropdown-menu-sub-content"]'),
+    ).toBeNull();
+
+    const providerA = await screen.findByRole("menuitem", {
+      name: /Provider A/,
+    });
+    const providerB = screen.getByRole("menuitem", { name: /Provider B/ });
+    expect(providerA.getAttribute("aria-expanded")).toBe("true");
+
+    await user.click(providerB);
+
+    expect(cliItem.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+    expect(screen.getByRole("menu").textContent).toContain("Provider B");
+    expect(providerA.getAttribute("aria-expanded")).toBe("false");
+    expect(providerB.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("menuitem", { name: /Model B/ })).toBeTruthy();
+
+    await user.click(providerA);
+    expect(providerA.getAttribute("aria-expanded")).toBe("true");
+    expect(providerB.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("menuitem", { name: /Model A/ })).toBeTruthy();
+
+    await user.click(providerB);
+    expect(providerA.getAttribute("aria-expanded")).toBe("false");
+    expect(providerB.getAttribute("aria-expanded")).toBe("true");
+
+    await user.click(providerB);
+
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+    expect(screen.getByRole("menu").textContent).toContain("Provider B");
+    expect(providerB.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("menuitem", { name: /Model B/ })).toBeNull();
+
+    await user.click(providerB);
+    await user.click(screen.getByRole("menuitem", { name: /Model B/ }));
+
+    expect(onExecutionTargetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "claude",
+        providerProfileId: "provider-b",
+        model: "model-b",
+      }),
+    );
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("renders native providers inline and expands only one model list", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+
+    render(
+      <ModelSelect
+        value="model-a"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        targetGroupDisplayMode="profiles"
+        onChange={vi.fn()}
+        executionTarget={{
+          engine: "claude",
+          providerProfileId: "provider-a",
+          model: "model-a",
+        }}
+        onExecutionTargetChange={onExecutionTargetChange}
+        targetGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            profiles: [
+              {
+                id: "provider-a",
+                label: "Provider A",
+                source: "managed",
+                loading: false,
+                error: null,
+                models: [{ id: "model-a", label: "Model A" }],
+              },
+              {
+                id: "provider-b",
+                label: "Provider B",
+                source: "managed",
+                loading: false,
+                error: null,
+                models: [{ id: "model-b", label: "Model B" }],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button"));
+    expect(screen.queryByRole("menuitem", { name: /Codex/ })).toBeNull();
+    const providerA = screen.getByRole("menuitem", { name: /Provider A/ });
+    const providerB = screen.getByRole("menuitem", { name: /Provider B/ });
+    expect(providerA.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("menuitem", { name: /Model A/ })).toBeTruthy();
+
+    await user.click(providerB);
+    expect(providerA.getAttribute("aria-expanded")).toBe("false");
+    expect(providerB.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.queryByRole("menuitem", { name: /Model A/ })).toBeNull();
+    await user.click(screen.getByRole("menuitem", { name: /Model B/ }));
+
+    expect(onExecutionTargetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "claude",
+        providerProfileId: "provider-b",
+        model: "model-b",
+      }),
+    );
+  });
+
   it("builds an atomic Shared target without inferring from model id", () => {
     expect(
       buildProviderExecutionTarget(
@@ -239,6 +413,21 @@ describe("ModelSelect", () => {
       providerProfileSource: "disk",
       reasoning: { effort: "high" },
     });
+  });
+
+  it("treats local sentinel and null as the same native provider binding", () => {
+    expect(
+      isSameProviderExecutionProfile("claude", null, {
+        engine: "claude",
+        providerProfileId: "__local_settings_json__",
+      }),
+    ).toBe(true);
+    expect(
+      isSameProviderExecutionProfile("claude", "provider-a", {
+        engine: "claude",
+        providerProfileId: "provider-b",
+      }),
+    ).toBe(false);
   });
 
   it("shows the selected target model instead of the previous engine catalog", () => {

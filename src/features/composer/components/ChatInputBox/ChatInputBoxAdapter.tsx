@@ -473,6 +473,7 @@ export interface ChatInputBoxAdapterProps {
   providerProfileId?: string | null;
   executionTarget?: ExecutionTarget | null;
   onExecutionTargetChange?: (target: ExecutionTarget) => void;
+  onNativeProviderTargetChange?: (target: ExecutionTarget) => void;
   onSelectModel?: (id: string) => void;
 
   // Reasoning
@@ -1045,6 +1046,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       providerProfileId,
       executionTarget,
       onExecutionTargetChange,
+      onNativeProviderTargetChange,
       onSelectModel,
       reasoningOptions,
       selectedEffort,
@@ -2117,6 +2119,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         currentProviderProfileId={providerProfileId}
         executionTarget={executionTarget}
         onExecutionTargetChange={onExecutionTargetChange}
+        onNativeProviderTargetChange={onNativeProviderTargetChange}
         sharedTargetPicker={isSharedSession}
         providerAvailability={providerAvailability}
         providerVersions={providerVersions}

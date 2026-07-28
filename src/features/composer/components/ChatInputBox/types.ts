@@ -543,6 +543,8 @@ export interface ChatInputBoxProps {
   executionTarget?: ExecutionTarget | null;
   /** Shared Session 原子更新完整目标，避免用 model id 反推 Provider。 */
   onExecutionTargetChange?: (target: ExecutionTarget) => void;
+  /** Native Session 选择其他 Provider Profile 时请求创建续接会话。 */
+  onNativeProviderTargetChange?: (target: ExecutionTarget) => void;
   /** 是否使用 Shared Session Provider-aware target picker。 */
   sharedTargetPicker?: boolean;
   /** Provider availability override (installed state from host app) */

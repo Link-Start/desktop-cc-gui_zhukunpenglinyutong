@@ -36,6 +36,7 @@ import {
   useSharedTargetState,
 } from "../../shared-session/target/targetStore";
 import type { ExecutionTarget } from "../../shared-session/target/types";
+import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
@@ -682,6 +683,35 @@ function ComposerImpl({
       activeWorkspaceId,
       sharedTargetPickerLocked,
     ],
+  );
+  const handleNativeProviderTargetChange = useCallback(
+    (target: ExecutionTarget) => {
+      if (
+        isSharedSession ||
+        !activeWorkspaceId ||
+        !activeThreadId ||
+        (target.engine !== "claude" && target.engine !== "codex") ||
+        !target.providerProfileId?.trim()
+      ) {
+        return;
+      }
+      requestProviderContinuationDialog({
+        workspaceId: activeWorkspaceId,
+        sourceSessionId: activeThreadId,
+        destination: {
+          engine: target.engine,
+          providerProfileId: target.providerProfileId,
+          model: target.model ?? null,
+          reasoningEffort: target.reasoning?.effort ?? null,
+          providerProfileNameSnapshot:
+            target.providerProfileNameSnapshot ?? null,
+          providerProfileSource: target.providerProfileSource ?? null,
+          runtimeCapabilityFingerprint:
+            target.engine === "claude" ? "echo-checksum" : null,
+        },
+      });
+    },
+    [activeThreadId, activeWorkspaceId, isSharedSession],
   );
   // 草稿值直接订阅模块级 store(而非经 app-shell 根 prop 灌入):按键写 store 时
   // 只有 Composer 自身重渲染,不再把整个 app-shell 拖下水。
@@ -2441,6 +2471,9 @@ function ComposerImpl({
                 isSharedSession && !sharedTargetPickerLocked
                   ? handleSharedTargetChange
                   : undefined
+              }
+              onNativeProviderTargetChange={
+                !isSharedSession ? handleNativeProviderTargetChange : undefined
               }
               onSelectModel={sharedTargetPickerLocked ? undefined : onSelectModel}
               reasoningOptions={reasoningOptions}

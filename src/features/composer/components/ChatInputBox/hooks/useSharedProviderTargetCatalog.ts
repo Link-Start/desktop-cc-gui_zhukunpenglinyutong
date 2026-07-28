@@ -22,6 +22,8 @@ export type ProviderProfileModelGroup = {
   id: string;
   label: string;
   source: "disk" | "managed";
+  enabled?: boolean;
+  disabledReason?: string;
   models: ModelInfo[];
   loading: boolean;
   error: string | null;
@@ -163,6 +165,7 @@ function toModelInfo(
 
 export function useSharedProviderTargetCatalog({
   enabled,
+  mode = "shared",
   currentProvider,
   currentProviderProfileId,
   currentModels,
@@ -170,6 +173,7 @@ export function useSharedProviderTargetCatalog({
   kimiDisabledReason,
 }: {
   enabled: boolean;
+  mode?: "shared" | "native";
   currentProvider: ProviderId;
   currentProviderProfileId?: string | null;
   currentModels: ModelInfo[];
@@ -252,16 +256,23 @@ export function useSharedProviderTargetCatalog({
     if (!enabled) {
       return [];
     }
-    const engines: Array<"claude" | "codex" | "kimi"> = [
-      "claude",
-      "codex",
-      "kimi",
+    const supportedEngines: Array<"claude" | "codex" | "kimi"> = [
+      "claude", "codex", "kimi",
     ];
+    const engines =
+      mode === "native" && supportedEngines.includes(
+        currentProvider as "claude" | "codex" | "kimi",
+      )
+        ? [currentProvider as "claude" | "codex" | "kimi"]
+        : supportedEngines;
     return engines.map((engine) => ({
       providerId: engine,
       providerLabel: resolveProviderLabel(engine),
-      enabled: engine !== "kimi",
-      disabledReason: engine === "kimi" ? kimiDisabledReason : undefined,
+      enabled: mode === "native" || engine !== "kimi",
+      disabledReason:
+        mode === "shared" && engine === "kimi"
+          ? kimiDisabledReason
+          : undefined,
       profiles: (profiles[engine] ?? []).map((profile) => {
         const key = modelCatalogKey(engine, profile.id);
         const isCurrentBinding =
@@ -275,6 +286,11 @@ export function useSharedProviderTargetCatalog({
           id: profile.id,
           label: profile.name,
           source: profile.source,
+          enabled: engine !== "kimi" || isCurrentBinding,
+          disabledReason:
+            engine === "kimi" && !isCurrentBinding
+              ? kimiDisabledReason
+              : undefined,
           models:
             loadedModels[key] ??
             modelCatalogCache.get(key) ??
@@ -293,6 +309,7 @@ export function useSharedProviderTargetCatalog({
     loadedModels,
     loadingBindings,
     modelErrors,
+    mode,
     profiles,
     resolveProviderLabel,
   ]);

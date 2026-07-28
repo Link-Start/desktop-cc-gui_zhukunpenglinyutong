@@ -222,3 +222,93 @@ The grouped Composer model selector MUST resolve each provider group from provid
 - **WHEN** a provider group is rendered in the selector
 - **THEN** add-model and refresh-config footer actions MUST remain scoped to the effective selected provider context
 - **AND** refreshing a provider group MUST NOT start, stop, or restart a conversation runtime
+
+### Requirement: Native Model Selector MUST Be Scoped To Its Current CLI Providers
+
+Native Session 的 Composer model selector MUST 只展示来源 Session 当前 CLI 下的
+Provider Profiles 与 Provider-scoped Model catalogs；它 MUST NOT 把其他 CLI 作为 model
+group 展示。
+
+#### Scenario: Claude native session lists only Claude providers
+
+- **WHEN** 用户在 Claude Native Session 打开 model selector
+- **THEN** selector MUST 展示 Claude CLI 的 local 与 managed Provider Profiles
+- **AND** MUST NOT 展示 Codex CLI 或 Kimi CLI group
+
+#### Scenario: Codex native session lists only Codex providers
+
+- **WHEN** 用户在 Codex Native Session 打开 model selector
+- **THEN** selector MUST 展示 Codex CLI 的 disk 与 managed Provider Profiles
+- **AND** MUST NOT 展示 Claude Code 或 Kimi CLI group
+
+#### Scenario: Kimi native session preserves capability boundary
+
+- **WHEN** 用户在 Kimi Native Session 打开 model selector
+- **THEN** selector MUST 展示 Kimi CLI 的 Provider Profiles
+- **AND** 未验证为 continuation target 的其他 Kimi Provider MUST 保持不可选并展示原因
+- **AND** 当前绑定 Provider 内的 Model selection MUST 继续可用
+
+### Requirement: Provider Model Lists MUST Expand Mutually Exclusively
+
+Composer Provider Profile 与 Model 列表 MUST 使用互斥折叠；同一 selector 中同一时间最多
+展开一个 Provider Profile 的 Model 列表。Shared Session 的 CLI、Provider Profile 与
+Model picker MUST 在同一 `DropdownMenuContent` focus surface 内完成交互。CLI 列表和当前
+CLI 的 Provider/Model 列表 MAY 采用双栏布局，但 Provider accordion MUST NOT 放入 nested
+`DropdownMenuSubContent`。CLI 切换、Provider 展开与折叠属于 non-terminal action，
+MUST NOT dismiss root menu；Model selection 属于 terminal action，MUST 原子提交
+`ExecutionTarget` 并关闭 picker。
+
+#### Scenario: opening another provider collapses the previous provider
+
+- **WHEN** Provider A 的 Model 列表已展开，用户展开 Provider B
+- **THEN** Provider B 的 Model 列表 MUST 展开
+- **AND** Provider A 的 Model 列表 MUST 同步折叠
+
+#### Scenario: expanded provider is keyboard operable
+
+- **WHEN** keyboard 用户聚焦 Provider Profile trigger 并激活它
+- **THEN** trigger MUST 切换该 Profile 的 expanded state
+- **AND** MUST 暴露与可见状态一致的 `aria-expanded`
+
+#### Scenario: Shared picker uses one focus surface
+
+- **WHEN** 用户打开 Shared Session model picker
+- **THEN** CLI 列表与 Provider/Model panel MUST 位于同一 root menu
+- **AND** Shared target path MUST NOT 创建 nested submenu content
+
+#### Scenario: CLI activation switches the provider panel without dismissing
+
+- **WHEN** 用户激活另一个 enabled CLI
+- **THEN** picker MUST 保持打开
+- **AND** Provider panel MUST 展示该 CLI 的 Provider Profiles
+- **AND** `ExecutionTarget` MUST NOT 在浏览阶段改变
+
+#### Scenario: Provider accordion remains mutually exclusive and responsive
+
+- **WHEN** 用户连续展开、折叠或在多个 Shared Provider Profiles 之间快速切换
+- **THEN** picker MUST 保持打开且响应每次操作
+- **AND** 同一时刻最多一个 Provider 的 Model list 展开
+
+#### Scenario: Model selection terminates the picker
+
+- **WHEN** 用户在已展开的 Shared Provider Profile 下选择具体 Model
+- **THEN** system MUST 提交一次对应 `ExecutionTarget`
+- **AND** picker MUST 关闭
+
+### Requirement: Native Provider Model Selection MUST Preserve Binding Semantics
+
+Native selector MUST 根据来源 Session 的 frozen Engine + Provider Profile identity 分流
+Model selection；当前 Provider 内选择 Model MUST 继续使用来源 Session，其他 Provider
+选择 MUST NOT 原地改写来源 binding。
+
+#### Scenario: model changes inside current provider
+
+- **WHEN** 用户选择当前 Native binding Provider Profile 下的另一个 Model
+- **THEN** Composer MUST 更新当前 Model selection
+- **AND** MUST NOT 创建 Provider Continuation 或切换 CLI
+
+#### Scenario: selecting another provider does not mutate source target
+
+- **WHEN** 用户选择其他 Provider Profile 下的 Model
+- **THEN** Composer MUST 请求 Provider Continuation confirmation
+- **AND** 在 continuation 成功前 MUST NOT 改写来源 Session 的 Provider 或 Model

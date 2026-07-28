@@ -40,6 +40,10 @@ import {
   type EngineProviderProfileSelection,
   type EngineProviderProfileOption,
 } from "../../threads/constants/codexProviderProfiles";
+import {
+  subscribeProviderContinuationDialogRequests,
+  type ProviderContinuationDialogRequest,
+} from "../../threads/services/providerContinuationRequests";
 
 const LAST_PROVIDER_PROFILE_KEYS = {
   claude: "claudeLastProviderProfileId",
@@ -356,6 +360,115 @@ export function useSidebarMenus({
   useEffect(() => {
     latestEngineOptionsRef.current = engineOptions;
   }, [engineOptions]);
+
+  const prepareProviderContinuationDialog = useCallback(
+    (
+      thread: ThreadSummary,
+      request: ProviderContinuationDialogRequest,
+    ) => {
+      if (
+        thread.threadKind === "shared" ||
+        !thread.engineSource ||
+        !["claude", "codex", "kimi"].includes(thread.engineSource)
+      ) {
+        return;
+      }
+      const sourceEngine = thread.engineSource as
+        | "claude"
+        | "codex"
+        | "kimi";
+      const nativeSessionId = thread.id.startsWith(`${sourceEngine}:`)
+        ? thread.id.slice(sourceEngine.length + 1)
+        : thread.id;
+      const destinationProviderName =
+        request.destination.providerProfileNameSnapshot?.trim() ||
+        request.destination.providerProfileId;
+      const destinationModel = request.destination.model?.trim();
+      const guardKey = `${request.workspaceId}:${thread.id}`;
+      const operationKey = [
+        guardKey,
+        request.destination.engine,
+        request.destination.providerProfileId,
+        destinationModel ?? "",
+        request.destination.reasoningEffort?.trim() ?? "",
+      ].join(":");
+      const operationId =
+        providerContinuationOperationIdsRef.current.get(operationKey) ??
+        globalThis.crypto?.randomUUID?.() ??
+        `continuation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      providerContinuationOperationIdsRef.current.set(operationKey, operationId);
+      setProviderContinuationDialogState({
+        workspaceId: request.workspaceId,
+        sourceSessionId: thread.id,
+        sourceTitle:
+          thread.name?.trim() ||
+          t("threads.untitled", { defaultValue: "未命名会话" }),
+        sourceLabel: `${resolveEngineDisplayName(sourceEngine)} · ${
+          thread.providerProfileName ??
+          thread.providerProfileId ??
+          "本地配置"
+        }`,
+        destinationLabel: [
+          resolveEngineDisplayName(request.destination.engine),
+          destinationProviderName,
+          destinationModel,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        request: {
+          workspaceId: request.workspaceId,
+          operationId,
+          source: {
+            sessionId: thread.id,
+            nativeSessionId,
+            engine: sourceEngine,
+            providerProfileId: thread.providerProfileId ?? null,
+          },
+          destination: {
+            ...request.destination,
+            runtimeCapabilityFingerprint:
+              request.destination.runtimeCapabilityFingerprint ??
+              (request.destination.engine === "claude"
+                ? "echo-checksum"
+                : null),
+          },
+        },
+        operationKey,
+        stage: "confirm",
+        detail: null,
+        technicalDetail: null,
+        degradedAccepted: false,
+      });
+    },
+    [t],
+  );
+
+  useEffect(
+    () =>
+      subscribeProviderContinuationDialogRequests((request) => {
+        const thread = getThreadSummary?.(
+          request.workspaceId,
+          request.sourceSessionId,
+        );
+        if (!thread) {
+          pushGlobalRuntimeNotice({
+            severity: "error",
+            category: "user-action-error",
+            messageKey: "runtimeNotice.error.threadTurnFailed",
+            messageParams: {
+              engine: resolveEngineDisplayName(request.destination.engine),
+              message: t("threads.providerContinuationSourceUnavailable", {
+                defaultValue: "来源会话已不可用",
+              }),
+            },
+            dedupeKey: `provider-continuation-source:${request.workspaceId}:${request.sourceSessionId}`,
+          });
+          return;
+        }
+        prepareProviderContinuationDialog(thread, request);
+      }),
+    [getThreadSummary, prepareProviderContinuationDialog, t],
+  );
 
   const closeProviderContinuationDialog = useCallback(() => {
     setProviderContinuationDialogState((current) =>
@@ -1368,9 +1481,6 @@ export function useSidebarMenus({
         thread?.engineSource &&
         ["claude", "codex", "kimi"].includes(thread.engineSource)
       ) {
-        const nativeSessionId = thread.id.startsWith(`${thread.engineSource}:`)
-          ? thread.id.slice(thread.engineSource.length + 1)
-          : thread.id;
         const targetProviders = [
           ...claudeProviderProfiles.map((provider) => ({
             engine: "claude" as const,
@@ -1423,25 +1533,9 @@ export function useSidebarMenus({
                 id: `continue-with-${engine}-${provider.id}`,
                 label: `${engineLabel} · ${provider.name}`,
                 onSelect: () => {
-                  const guardKey = `${workspaceId}:${thread.id}`;
-                  const operationKey = `${guardKey}:${engine}:${provider.id}`;
-                  const operationId =
-                    providerContinuationOperationIdsRef.current.get(operationKey) ??
-                    globalThis.crypto?.randomUUID?.() ??
-                    `continuation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-                  providerContinuationOperationIdsRef.current.set(
-                    operationKey,
-                    operationId,
-                  );
-                  const request: ProviderContinuationRequest = {
+                  prepareProviderContinuationDialog(thread, {
                     workspaceId,
-                    operationId,
-                    source: {
-                      sessionId: thread.id,
-                      nativeSessionId,
-                      engine: thread.engineSource as "claude" | "codex" | "kimi",
-                      providerProfileId: thread.providerProfileId ?? null,
-                    },
+                    sourceSessionId: thread.id,
                     destination: {
                       engine,
                       providerProfileId: provider.id,
@@ -1450,27 +1544,6 @@ export function useSidebarMenus({
                       runtimeCapabilityFingerprint:
                         engine === "claude" ? "echo-checksum" : null,
                     },
-                  };
-                  setProviderContinuationDialogState({
-                    workspaceId,
-                    sourceSessionId: thread.id,
-                    sourceTitle:
-                      thread.name?.trim() ||
-                      t("threads.untitled", { defaultValue: "未命名会话" }),
-                    sourceLabel: `${resolveEngineDisplayName(
-                      thread.engineSource as EngineType,
-                    )} · ${
-                      thread.providerProfileName ??
-                      thread.providerProfileId ??
-                      "本地配置"
-                    }`,
-                    destinationLabel: `${engineLabel} · ${provider.name}`,
-                    request,
-                    operationKey,
-                    stage: "confirm",
-                    detail: null,
-                    technicalDetail: null,
-                    degradedAccepted: false,
                   });
                 },
               })),
@@ -1689,6 +1762,7 @@ export function useSidebarMenus({
       kimiProviderProfiles,
       isThreadAvailable,
       getThreadSummary,
+      prepareProviderContinuationDialog,
     ],
   );
 

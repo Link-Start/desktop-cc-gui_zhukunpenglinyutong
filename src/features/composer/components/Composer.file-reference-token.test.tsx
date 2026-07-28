@@ -17,6 +17,7 @@ import {
   resetSharedTargetStoreForTests,
   selectNextTarget,
 } from "../../shared-session/target/targetStore";
+import { subscribeProviderContinuationDialogRequests } from "../../threads/services/providerContinuationRequests";
 
 afterEach(() => {
   cleanup();
@@ -44,26 +45,49 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
     onSend,
     providerProfileId,
     selectedEffort,
+    onNativeProviderTargetChange,
   }: {
     text: string;
     onTextChange: (next: string, cursor: number | null) => void;
     onSend: () => void;
     providerProfileId?: string | null;
     selectedEffort?: string | null;
+    onNativeProviderTargetChange?: (target: {
+      engine: "codex";
+      providerProfileId: string;
+      model: string;
+      providerProfileNameSnapshot: string;
+      providerProfileSource: "managed";
+    }) => void;
   }) => (
-    <textarea
-      value={text}
-      data-provider-profile-id={providerProfileId ?? "null"}
-      data-effort={selectedEffort ?? "null"}
-      onChange={(event) =>
-        onTextChange(event.currentTarget.value, event.currentTarget.value.length)
-      }
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          onSend();
+    <>
+      <textarea
+        value={text}
+        data-provider-profile-id={providerProfileId ?? "null"}
+        data-effort={selectedEffort ?? "null"}
+        onChange={(event) =>
+          onTextChange(event.currentTarget.value, event.currentTarget.value.length)
         }
-      }}
-    />
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            onSend();
+          }
+        }}
+      />
+      <button
+        type="button"
+        data-testid="request-provider-continuation"
+        onClick={() =>
+          onNativeProviderTargetChange?.({
+            engine: "codex",
+            providerProfileId: "provider-b",
+            model: "gpt-target",
+            providerProfileNameSnapshot: "Provider B",
+            providerProfileSource: "managed",
+          })
+        }
+      />
+    </>
   ),
 }));
 
@@ -212,6 +236,31 @@ describe("Composer file reference token", () => {
     const textarea = getTextarea(view.container);
     expect(textarea.dataset.providerProfileId).toBe("null");
     expect(textarea.dataset.effort).toBe("null");
+  });
+
+  it("publishes the selected native Provider and Model as a continuation request", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeProviderContinuationDialogRequests(listener);
+    const view = render(<ComposerHarness onSend={() => {}} />);
+
+    fireEvent.click(
+      view.getByTestId("request-provider-continuation"),
+    );
+
+    expect(listener).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      sourceSessionId: "thread-1",
+      destination: {
+        engine: "codex",
+        providerProfileId: "provider-b",
+        model: "gpt-target",
+        reasoningEffort: null,
+        providerProfileNameSnapshot: "Provider B",
+        providerProfileSource: "managed",
+        runtimeCapabilityFingerprint: null,
+      },
+    });
+    unsubscribe();
   });
 
   it("converts visual file tokens to absolute paths before send", async () => {
