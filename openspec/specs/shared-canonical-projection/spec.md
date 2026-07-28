@@ -5,7 +5,6 @@
 定义 Shared Session V2 的 Canonical Fact 到 UI 单向投影层：支持 checkpoint
 增量更新、全量 rebuild、Legacy dual-read、Shadow comparison 与 Canvas
 dark-launch regression gates。
-
 ## Requirements
 ### Requirement: Canonical Facts MUST Be Projected to ConversationItems
 
@@ -164,9 +163,9 @@ The system MUST pass the Native Canvas golden fixtures and render regression tes
 
 ### Requirement: Shared Projection Test Control MUST Be Discoverable And Reversible
 
-系统 MUST 在 `设置 → 其他设置` 提供默认关闭的 Shared Projection 测试开关。
-该开关 MUST 复用现有 localStorage feature flag，MUST 明确标注 dark-launch
-测试用途，且 MUST NOT 改变真实 Shared Send 写路径。
+系统 MUST 在 `设置 → 其他设置` 提供默认开启的 Shared Projection 控制开关。
+该开关 MUST 复用现有 localStorage feature flag，MUST 明确标注关闭仅用于
+Legacy-only rollback，且 MUST NOT 修改或删除 Canonical Event Log 与 Legacy snapshot。
 
 #### Scenario: Tester enables Shared Projection
 
@@ -177,12 +176,18 @@ The system MUST pass the Native Canvas golden fixtures and render regression tes
 #### Scenario: Tester disables Shared Projection
 
 - **WHEN** 测试者关闭 Shared Projection 测试开关
-- **THEN** 系统 MUST 删除 `mossx.sharedProjection` local override
-- **AND** 系统 MUST 刷新当前 WebView，使默认 V0 路径重新生效
+- **THEN** 系统 MUST 写入 `mossx.sharedProjection=0`
+- **AND** 系统 MUST 刷新当前 WebView，使显式 Legacy-only rollback 生效
 
-#### Scenario: Projection loading fails after enablement
+#### Scenario: Tester restores the default
 
-- **WHEN** 测试开关已开启但 Shared Projection command 失败
+- **WHEN** 测试者重新开启 Shared Projection
+- **THEN** 系统 MUST 写入 `mossx.sharedProjection=1`
+- **AND** 删除 local override 后系统 MUST 回到 build flag 或 default-on 语义
+
+#### Scenario: Canonical Projection loading fails
+
+- **WHEN** Shared Projection command 失败
 - **THEN** 系统 MUST 可观测地回退到 V0 snapshot
 - **AND** 测试入口 MUST NOT 修改或删除 Legacy snapshot
 
@@ -202,3 +207,40 @@ The system MUST pass the Native Canvas golden fixtures and render regression tes
 - **WHEN** 读者查看 Change A 与 Change B 的任务说明
 - **THEN** Change A MUST 标记为 dark launch 或默认无产品 UI 变化
 - **AND** Change B MUST 明确标出真实 Send、Provider Binding 与用户操作面的计划变化
+
+### Requirement: Canonical and Legacy dual-read MUST converge without transcript loss
+
+While Shared canonical final snapshots do not contain every presentation transcript fact, the Shared history DataSource MUST use Legacy presentation snapshot order as the transcript base and merge canonical facts through the shared Conversation assembler. Canonical frozen identity MUST remain authoritative, while presentation-only reasoning and tool facts MUST remain visible and MUST NOT be written back as fabricated canonical facts.
+
+#### Scenario: canonical assistant overlays legacy assistant identity
+- **WHEN** Legacy snapshot and canonical projection contain equivalent assistant finals with different item IDs
+- **THEN** dual-read convergence MUST render one assistant final
+- **AND** that final MUST carry the canonical `TurnExecutionSnapshot`
+
+#### Scenario: canonical projection lacks legacy reasoning
+- **WHEN** Legacy snapshot contains reasoning for a Turn and canonical projection contains only user and assistant text for that Turn
+- **THEN** the converged history MUST retain the Legacy reasoning in its original order
+- **AND** MUST retain canonical target identity on the assistant final
+
+#### Scenario: shared history remains isolated from native files
+- **WHEN** Shared canonical and Legacy sources are converged
+- **THEN** the loader MUST read only Shared storage sources
+- **AND** MUST NOT read Claude or Codex Native history files
+
+### Requirement: Shared history convergence MUST preserve transcript completeness monotonically
+
+Canonical identity is authoritative for execution metadata, but canonical text MUST NOT downgrade a more complete Legacy presentation transcript. When two assistant facts in the same Turn have a strict normalized prefix relationship, dual-read convergence MUST retain the more complete body while merging canonical identity.
+
+#### Scenario: truncated canonical prefix does not overwrite Legacy final
+- **WHEN** a Legacy assistant final contains complete text and the matching canonical assistant contains only a strict prefix
+- **THEN** history convergence MUST retain the complete Legacy body
+- **AND** the result MUST retain canonical execution target metadata
+
+#### Scenario: complete canonical final upgrades Legacy prefix
+- **WHEN** a Legacy assistant contains only a streaming prefix and canonical contains the matching complete final
+- **THEN** history convergence MUST retain the complete canonical body
+- **AND** MUST produce one assistant final
+
+#### Scenario: unrelated assistant bodies are not collapsed
+- **WHEN** canonical and Legacy assistant bodies in a Turn have no normalized prefix or equivalence relationship
+- **THEN** convergence MUST NOT discard either body merely by comparing length

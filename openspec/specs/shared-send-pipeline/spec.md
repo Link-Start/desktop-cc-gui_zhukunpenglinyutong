@@ -87,7 +87,9 @@ A turn MUST only be committed as `conversation.turnCommitted` after the runtime'
 
 ### Requirement: Shared Composer MUST Follow the Nine-State UI Machine
 
-The shared session composer MUST implement the nine-state machine: `idle`, `preparing-context`, `degraded-context`, `awaiting-acceptance`, `cancel-pending`, `running`, `settling`, `recovery-required`, `target-unavailable`. The picker MUST be locked in every non-idle state.
+The shared session composer MUST implement the nine-state machine: `idle`, `preparing-context`, `degraded-context`, `awaiting-acceptance`, `cancel-pending`, `running`, `settling`, `recovery-required`, `target-unavailable`. The picker MUST be locked in every non-idle state except `target-unavailable`, where the user MUST be able to repair the Target.
+
+The Shared Composer MUST distinguish text editing from Turn submission. During normal non-idle progress (`preparing-context`, `degraded-context`, `awaiting-acceptance`, `running`, or `settling`), the user MUST be able to edit and retain a draft while new Turn submission remains blocked. Draft editing MUST NOT be interpreted as Queue or Steer. `cancel-pending` and `recovery-required` MUST continue to lock the entire Composer because ordering is ambiguous.
 
 #### Scenario: degraded context requires explicit user confirmation
 
@@ -113,14 +115,46 @@ The shared session composer MUST implement the nine-state machine: `idle`, `prep
 - **THEN** the composer MUST enter `cancel-pending` until cancel ACK, terminal evidence, or probe resolution
 - **AND** when the capability is unsupported the cancel action MUST be disabled with an explanation
 
+#### Scenario: running turn blocks submit without disabling draft editing
+
+- **WHEN** a Shared Turn is `running` or `settling`
+- **THEN** the text editor MUST remain editable and MUST preserve the user's draft
+- **AND** Enter, the send button, quick commands, and programmatic submit MUST NOT create a second Turn
+- **AND** the draft MUST NOT enter Queue or Steer without an explicit future contract
+
+#### Scenario: terminal owner survives native thread rebind
+
+- **WHEN** a terminal carries the exact Runtime Run identity but its `nativeThreadId` differs because the Binding was materialized or rebound
+- **THEN** the terminal MUST settle that Run
+- **AND** durable commit ACK MUST transition the Shared Composer back to `idle`
+- **AND** a second Turn MUST then be submittable
+
+#### Scenario: stale restore cannot relock a completed turn
+
+- **WHEN** a restore request starts before a complete send cycle and returns stale in-flight evidence after that cycle has durably committed
+- **THEN** the stale response MUST NOT replace the current `idle` state with `running`
+- **AND** the Composer MUST remain able to submit the next Turn
+
+#### Scenario: ambiguous recovery locks the whole composer
+
+- **WHEN** the Shared Send state is `cancel-pending` or `recovery-required`
+- **THEN** text editing and Turn submission MUST both remain locked
+- **AND** another Target MUST NOT bypass the unresolved linear ordering
+
 ### Requirement: V2 Send MUST Be Feature-Flagged With V0 Rollback
 
-The V2 send path MUST be gated behind a feature flag (build-time `VITE_MOSSX_SHARED_V2_SEND` or local override). With the flag off, shared sessions MUST behave exactly as V0. Rollback MUST NOT delete already-committed V2 facts.
+The V2 send path MUST be the default Shared Session send path after Phase 2 rollout. The build-time `VITE_MOSSX_SHARED_V2_SEND` flag or local `mossx.sharedV2Send` override MUST allow an explicit negative value to select V0 rollback. An absent flag MUST NOT silently select V0. Rollback MUST NOT delete already-committed V2 facts.
 
-#### Scenario: flag off preserves V0 behavior
+#### Scenario: absent flag uses V2
 
-- **WHEN** the V2 send flag is disabled
-- **THEN** shared session sends MUST use the V0 path
+- **WHEN** neither build flag nor local override is configured
+- **THEN** Shared Session sends MUST use the V2 path
+- **AND** the full selected Execution Target MUST reach runtime dispatch
+
+#### Scenario: explicit flag off preserves V0 rollback
+
+- **WHEN** the V2 send flag is explicitly disabled
+- **THEN** Shared Session sends MUST use the V0 rollback path
 - **AND** no V2 send-path state machine UI MUST be shown
 
 #### Scenario: rollback keeps committed facts readable

@@ -62,6 +62,7 @@
       "providerProfileId": "provider-openai-main",
       "providerProfileNameSnapshot": "OpenAI 主账号",
       "providerProfileSource": "managed",
+      "modelCatalogEntryId": "gpt-5-codex",
       "model": "gpt-5-codex",
       "reasoning": { "effort": "high" }
     },

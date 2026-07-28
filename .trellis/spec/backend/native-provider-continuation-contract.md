@@ -55,7 +55,12 @@ createNativeProviderContinuation({
   invocation 成功返回作为 accepted evidence；模型是否逐字复述 marker 不得决定创建成功。
 - Claude recovery 只复用既有 target identity，并检查 durable history：user entry 必须
   同时包含 exact package marker 与 `MOSSX_NATIVE_CONTEXT_V1`，或 assistant exact echo
-  acceptance marker。仅出现 marker 字样不是证据。
+  acceptance marker。仅出现 marker 字样不是证据。当前 bootstrap user entry 之后的
+  structured `isApiErrorMessage` / `apiErrorStatus` 是强负 evidence，MUST 覆盖 user-entry
+  persistence、acceptance marker、process error 与 connector warning。
+- destination `modelCatalogEntryId` 保存 UI selection identity；destination `model` 保存
+  CLI runtime identity。Claude backend MUST 在 target side effect 前用 Provider-scoped
+  catalog 校验两者；已知 UI-only id 返回 `invalid-target-model`。
 - bootstrap turn id 使用 `provider-continuation-*`；renderer event ingress MUST 在统一入口
   隔离该 control exchange，禁止进入普通 processing/reasoning/message/title 链。
 - degraded response MUST 带 `projectionMode`、`omissions`、
@@ -73,6 +78,8 @@ createNativeProviderContinuation({
 | prepared、无 target side effect 且 artifact checksum 失败 | 删除旧 prepared 后重新冻结 | 复用损坏 artifact |
 | 已触发 target side effect 后 artifact checksum 失败 | `recovery-required` | 重读来源或新建第二目标 |
 | target side effect 后 ACK 不确定 | `acceptance-ambiguous` | 创建第二个目标 |
+| bootstrap 后 target history 有 structured API rejection | `target-provider-rejected`，保留同一 target identity | marker/user entry 将 operation 转 ready |
+| catalog entry `id != model` | runtime 使用 `model`，backend 校验 | UI `id` 进入 Claude `--model` |
 | Claude CLI 完成但模型未复述 marker | 按同一 target identity 持久化 ready | 报假失败并要求重复创建 |
 | recovery history 有完整 bootstrap user entry | 复用既有 target 并补 catalog | 只认模型输出、创建第二个 target |
 | metadata 写入失败 | `catalog-commit-failed` | 丢失 result identity |

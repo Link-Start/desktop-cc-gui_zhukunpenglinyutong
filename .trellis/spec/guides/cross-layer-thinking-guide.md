@@ -30,6 +30,24 @@ React Component
 6. retry/stale guard 必须落在 shared owner boundary；检查是否还有 selection、ensure、cache、fallback 或 timeout sibling caller 能绕过。
 7. legacy provider config 归一时，user-confirmed action MAY 选择可见 fallback；无人确认的 background automation MUST fail closed 或自动禁用，禁止静默把数据改发另一个 provider。
 8. prompt / policy enablement 发生变化时，必须区分 runtime state 与 persisted thread history：restart process 不代表 resume 的 thread 已忘记旧 instructions；deactivation 需要 authoritative replacement / tombstone 或明确的新 thread contract。
+9. realtime 文本若为性能原因绕过 canonical reducer，必须同时审计 terminal settlement -> reducer -> snapshot persistence -> history dual-read 全链路；“实时可见”不等于“durable final 已落盘”。
+10. Picker label、IPC payload equality 与模型自报都不是 Runtime routing 证据；Provider
+    切换必须观测实际 process/session key、Binding key 与 CLI request model。
+11. 一次 mutation 若已有 durable owner，后续 command shape 就不应再接收第二套 owner
+    字段。优先让类型层无法表达 `canonical=A/runtime=B`，不要依赖“传两份再比较”。
+12. Preview 与 mutation 必须分域：携带 Target 的 `prepare_context` 只能 read-only；
+    `begin_turn` freeze 后，delivery/dispatch/commit/control 全部只收 attempt identity。
+13. new entity 创建必须从第一笔持久化开始完整。不能先建 Engine-only Shared Session，
+    再依赖 global selection 或首次发送补 Provider/Model。
+14. UI selection persistence 必须定义失败语义：persist-first 或 compare-safe rollback；
+    不能让 memory state 与 disk state 在错误后各自为真。
+15. Runtime event 可能早于 start ACK。审计 owner bind、early replay、live ingress 与 UI
+    fan-out 的原子顺序；“有缓存”不等于“不会被 bind→emit race 越过”。
+16. Cancel/Interrupt 是 owner-scoped lifecycle mutation。先登记 intent 再做 Runtime
+    side effect；side effect 失败要撤销 intent，避免把后续真实 failure 误记为 cancelled。
+17. Rebuild/Retry/Regenerate 不能成为第二套 routing authority。rebuild target 应由
+    durable Binding row 派生；Retry/Regenerate 应由原 Attempt/Snapshot 派生并创建新
+    `attemptId`。
 
 ## 常见失败模式
 
@@ -43,6 +61,18 @@ React Component
 - 把 disabled provider 的 enabled background job 直接归一到另一个 provider，造成用户未确认的跨 provider 执行。
 - listener 未清理，导致重复触发。
 - 只监听 main WebView 的 drag/drop，遗漏 Browser Agent child WebView 截获的 OS drop，导致 Composer 外部文件拖入断链。
+- 逐 delta externalization 后沿用旧 `seenDelta` completion guard，导致 reducer/snapshot 只保留首个 delta；history canonical overlay 再把完整 Legacy body降级成短前缀。
+- 四级 Picker 看似已切换，但 actual-send 仍调用接受 flat
+  `engine/model/providerProfileId` 的 legacy command。
+- command 同时接收 `attemptId` 和 Target；caller 传的 Target 覆盖或旁路 durable
+  Snapshot。
+- `prepare_context(target)` 在 preview 阶段偷偷创建 Binding/推进 Cursor，导致用户只
+  打开菜单或确认降级就产生 side effect。
+- 新 Shared Session 只保存 Engine，首次发送前靠 global fallback 补 Model/Provider。
+- Picker 先改 store 后持久化，写盘失败只 toast，不恢复旧 Target。
+- early terminal 虽被缓存，但 bind 后 replay 与 live emit 之间没有 barrier，顺序仍然
+  反转或 terminal 丢失。
+- Rebuild 接受 caller 的 Engine/Provider，借恢复操作改写 durable Binding identity。
 
 ## Optional Payload Contract
 
@@ -60,6 +90,17 @@ React Component
 - 至少覆盖一次“显式空 scope 不回退”的 UI + backend 回归测试。
 - capability hard-disable 至少覆盖：fresh/legacy settings、visible selector、legacy replay、background detection/preflight、direct service/IPC、local/remote、sync/async。
 - async owner 至少覆盖：success、error、unavailable、timeout、cache hit，以及 old-id/new canonical-id 或 workspace/thread scope race。
+- streaming durability 至少覆盖：delta 可见、terminal full text 同 identity settle、snapshot 保存完整正文、dual-read 短前缀不覆盖长正文。
+- Target/Runtime 至少覆盖：new、reload、Provider A → B → A、`catalog id != runtime
+  model`、poisoned flat fields、Provider/Model rejection。
+- attempt-owned lifecycle 至少覆盖：preflight 零副作用、Tx1 durable-first、
+  dispatch attempt-only、early/live replay order、duplicate terminal、cancel intent、
+  interrupt failure、rebuild derived owner。
+- 历史/Projection 至少覆盖：rich terminal blocks、failed/cancelled、
+  reasoning/tool-only provenance、legacy dual-read、strict prompt echo filter。
+- mocked RPC 只能证明 mapping，不能代替 fake Runtime side-effect assertion。关键
+  routing change 至少留一个可观察实际 Provider process/session key 与 Runtime model 的
+  focused test。
 - contract 相关命令：
 
 ```bash

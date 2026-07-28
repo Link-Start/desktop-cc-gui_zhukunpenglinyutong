@@ -450,6 +450,8 @@ Shared Session
 interface ExecutionTarget {
   engine: EngineType;
   providerProfileId?: string;
+  modelCatalogEntryId?: string;
+  /** 传给 CLI/API 的 runtime model；不得写 UI-only catalog id。 */
   model?: string;
   reasoning?: ReasoningSelection;
 }
@@ -465,8 +467,11 @@ interface ExecutionTarget {
 interface TurnExecutionSnapshot {
   engine: EngineType;
   providerProfileId?: string;
+  /** 选择时的 catalog identity；用于 provenance 与 exact pair validation。 */
+  modelCatalogEntryId?: string;
   providerProfileNameSnapshot?: string;
   providerProfileSource?: ProviderProfileSource;
+  /** 该 Attempt 实际执行的 runtime model。 */
   model?: string;
   reasoning?: ReasoningSelection;
   runtimeCapabilityFingerprint?: string;
@@ -477,6 +482,9 @@ interface TurnExecutionSnapshot {
 
 - 每个 Turn Attempt 创建一次后不可变。
 - Provider 显示名保存 Snapshot，避免 Provider 删除后历史不可解释。
+- Model catalog entry identity 与 runtime model 必须分域；immutable Turn fact 同时冻结
+  `modelCatalogEntryId` 与 runtime `model`，用于 provenance 与 exact pair validation；
+  CLI/API actual-send 只消费 runtime `model`。
 - Usage、Error、Retry、Recovery 全部绑定 Snapshot。
 - `nativeSessionId` 属于 `NativeSessionBinding` / `SharedTargetBinding`，不属于 Target Snapshot；Lazy Create 在 Tx 2b 获得 Identity 后只更新 Binding，不 backfill Snapshot。
 - UI 不能用“当前 Picker 值”解释历史 Turn。
@@ -1021,12 +1029,17 @@ Binding B = Codex/OpenAI
 
 - Provider 不存在：阻止发送，保留 Picker 选择并显示 unavailable。
 - Model 不属于 Provider Catalog：阻止发送，不改用默认 Model。
+- Model catalog `id != model` 时，Target 必须同时冻结两种 identity，execution 只使用
+  runtime `model`；backend 在 Target side effect 前 fail closed 校验。
 - Native Binding 恢复失败：显示 recoverable error，允许显式重建 Binding。
 - Turn 失败：保留原 Target Snapshot，不自动重路由。
 - Context compile 失败：不写 `pendingDelivery`，不推进任何 Cursor；以 failed outcome Commit 当前 Attempt，Retry 创建新 Attempt。
 - 投递前失败：清理 `pendingDelivery`，不推进 `accepted`。
 - acceptance ACK 明确成功：推进 `accepted`；后续 Turn 失败也不回退，避免重复 Prompt。
 - acceptance ACK 不确定：保留 `pendingDelivery`，先探测 Native History/run identity，再决定 Retry。
+- Probe 发现与当前 delivery/bootstrapping 对应的结构化 Provider/API rejection 时，强负
+  evidence 必须覆盖 marker、已落盘 user entry、process error 与无关 stderr warning；
+  operation 不得进入 ready。
 - acceptance ACK 不确定期间锁定整个 Shared Session Composer；不得通过切换 Target 绕过线性顺序。
 - Canonical Commit 失败：不推进 `committed`，进入可恢复状态；不得丢弃已接受的 Native Run。
 - 降级 Context：只有用户能看到 fidelity/omissions 时才允许发送，不得假装完成无损同步。
@@ -1559,7 +1572,9 @@ bindingsByEngine[engine]
 → bindingsByTarget[key(engine, default-provider)]
 ```
 
-旧 Session 继续按 local/default 语义恢复，不猜测 managed Provider。
+旧 `bindingsByEngine[engine]` 仅在 Binding migration 时映射为该 Engine 的
+local/default Binding；这不构成历史 Turn 的 Provider/Model 证据。Legacy Turn 或
+`selectedTarget` 缺少完整 identity 时继续显示“历史配置未知”，不得伪造成 local。
 
 ### 12.2 Native Session Origin Metadata
 
@@ -3181,6 +3196,10 @@ Codex / Provider A
 38. `native-delta` 必须排除目标 Binding 原生拥有的 Entries；Cursor 不能替代 provenance/attempt-to-binding ownership 判断。
 39. checkpoint ACK 后遗漏内容不得通过回退 Cursor 自动重放；只能按 `ProjectionManifest.omitted` 的 retrieval contract 获取。
 40. Shared Session 保持 strictly linear；第一阶段不得从历史 Turn fork，也不得在 ambiguous ACK 未决时放行其他 Target。
+41. Model catalog entry `id` 与 CLI/API runtime `model` 必须分域；UI-only id 不得越过
+    Execution Target boundary 进入 runtime。
+42. 与当前 delivery/bootstrapping 绑定的 structured Provider/API rejection 是强负
+    evidence；不得被 prompt/marker persistence 或 warning 覆盖为 ACK success。
 
 ---
 

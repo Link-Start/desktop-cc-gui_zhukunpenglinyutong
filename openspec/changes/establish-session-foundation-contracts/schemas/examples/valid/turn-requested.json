@@ -26,6 +26,7 @@
       "providerProfileId": "provider-openai-main",
       "providerProfileNameSnapshot": "OpenAI 主账号",
       "providerProfileSource": "managed",
+      "modelCatalogEntryId": "gpt-5-codex",
       "model": "gpt-5-codex",
       "reasoning": { "effort": "high" },
       "runtimeCapabilityFingerprint": "codex-cli@0.144.6#appserver:sha256:1a2b3c"

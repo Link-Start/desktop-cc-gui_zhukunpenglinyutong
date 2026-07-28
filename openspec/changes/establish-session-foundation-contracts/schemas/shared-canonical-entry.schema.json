@@ -35,6 +35,7 @@
       "properties": {
         "engine": { "$ref": "#/definitions/engineType" },
         "providerProfileId": { "$ref": "#/definitions/nonEmptyString" },
+        "modelCatalogEntryId": { "$ref": "#/definitions/nonEmptyString" },
         "model": { "$ref": "#/definitions/nonEmptyString" },
         "reasoning": { "$ref": "#/definitions/reasoningSelection" }
       },
