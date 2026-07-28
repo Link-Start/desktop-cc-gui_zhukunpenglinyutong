@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1205
+- **Total Sessions**: 1206
 - **Last Active**: 2026-07-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~304 | Active |
+| `journal-29.md` | ~337 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1206 | 2026-07-28 | 补齐多 Provider 切换 UX | `687b951c0` | `feature/v-0710` |
 | 1205 | 2026-07-28 | 校准多 CLI 会话基石 A-D | `b5a2aba34` | `feature/v-0710` |
 | 1204 | 2026-07-28 | 完成并归档 Change D | `c5a1eb838` | `feature/v-0710` |
 | 1203 | 2026-07-28 | 收口续接回归测试格式 | `6b5aa9d63` | `feature/v-0710` |

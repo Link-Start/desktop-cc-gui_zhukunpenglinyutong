@@ -302,3 +302,36 @@ Message-tail Codex fork 仅保留当前 Provider；跨 Provider 由 Sidebar Prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1206: 补齐多 Provider 切换 UX
+
+**Date**: 2026-07-28
+**Task**: 补齐多 Provider 切换 UX
+**Branch**: `feature/v-0710`
+
+### Summary
+
+第二轮从 UX 反向校验 Change A-D：Shared Session 新增 CLI/Provider/Model 目标选择与 Kimi 能力提示；Provider 续接改为产品内确认/降级/恢复 Dialog；隐藏 MOSSX 协议标记并增加可读续接标题、来源/目标卡片和来源跳转。同步设计、任务、验收、Trellis/OpenSpec 并归档；相关前端 256 tests、Rust 40 tests、typecheck、scoped ESLint、runtime contracts、model catalog、OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `687b951c0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
