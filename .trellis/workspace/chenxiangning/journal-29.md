@@ -509,3 +509,38 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1212: 闭环共享会话多 CLI Provider 基石
+
+**Date**: 2026-07-29
+**Task**: 闭环共享会话多 CLI Provider 基石
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 Shared Session attempt-owned Runtime 路由、Provider/Model 切换、canonical 历史投影、逐轮执行标签、发送 admission 与 Recovery Probe，并同步 OpenSpec/Trellis 契约及增量验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `29bcf6c65` | (see git log) |
+| `6e08a700e` | (see git log) |
+| `94c1795ac` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
