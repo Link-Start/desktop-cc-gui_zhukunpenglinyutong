@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-28.md`
-- **Total Sessions**: 1196
+- **Active File**: `journal-29.md`
+- **Total Sessions**: 1197
 - **Last Active**: 2026-07-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~1984 | Active |
+| `journal-29.md` | ~40 | Active |
+| `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1197 | 2026-07-28 | 建立 Change D 续接契约 | `7ecfcba52` | `feature/v-0710` |
 | 1196 | 2026-07-28 | 归档 Change C 并开放 Change D | `c5cd28958` | `feature/v-0710` |
 | 1195 | 2026-07-28 | 完成 Change C Shared Context Compiler | `bd5208f39` | `feature/v-0710` |
 | 1194 | 2026-07-28 | 收口 Change B 总任务清单 | `c97bcfcf6` | `feature/v-0710` |
