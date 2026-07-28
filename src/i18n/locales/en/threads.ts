@@ -27,6 +27,7 @@ const threads = {
     providerContinuationShort: "Continued",
     providerContinuationHint:
       "Provider continuation: open the source from the conversation header",
+    providerContinuationFamilyGroup: "Continued sessions · {{count}}",
     providerContinuationTitle: "Continue with another Provider",
     providerContinuationDescription:
       "The source conversation stays intact while a separate conversation continues the work.",

@@ -25,6 +25,7 @@ const threads = {
     providerContinuation: "Provider 续接",
     providerContinuationShort: "续接",
     providerContinuationHint: "Provider 续接：可在会话顶部查看来源",
+    providerContinuationFamilyGroup: "续接会话 · {{count}} 个",
     providerContinuationTitle: "使用其他 Provider 继续",
     providerContinuationDescription:
       "系统会保留来源会话，并创建一个独立的新会话承接后续工作。",

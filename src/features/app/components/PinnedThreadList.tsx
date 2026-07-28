@@ -18,6 +18,7 @@ type PinnedThreadRowGroup = {
   key: string;
   workspaceId: string;
   workspacePath: string;
+  rootCount: number;
   rows: Array<{
     thread: ThreadSummary;
     depth: number;
@@ -63,14 +64,22 @@ function groupPinnedThreadRows(rows: PinnedThreadRow[]): PinnedThreadRowGroup[] 
   let current: PinnedThreadRowGroup | null = null;
 
   rows.forEach((row) => {
-    if (row.depth === 0 || !current || current.workspaceId !== row.workspaceId) {
+    if (
+      !current ||
+      current.workspaceId !== row.workspaceId ||
+      current.workspacePath !== row.workspacePath
+    ) {
       current = {
         key: `${row.workspaceId}:${row.thread.id}`,
         workspaceId: row.workspaceId,
         workspacePath: row.workspacePath,
+        rootCount: 0,
         rows: [],
       };
       groups.push(current);
+    }
+    if (row.depth === 0) {
+      current.rootCount += 1;
     }
     current.rows.push({
       thread: row.thread,
@@ -115,8 +124,8 @@ export function PinnedThreadList({
           workspacePath={group.workspacePath}
           pinnedRows={group.rows}
           unpinnedRows={[]}
-          totalThreadRoots={1}
-          visibleThreadRootCount={1}
+          totalThreadRoots={group.rootCount}
+          visibleThreadRootCount={group.rootCount}
           isExpanded
           nextCursor={null}
           isPaging={false}

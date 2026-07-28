@@ -34,6 +34,7 @@ vi.mock("react-i18next", () => ({
         "threads.providerContinuation": "供应商续接",
         "threads.providerContinuationShort": "续接",
         "threads.providerContinuationHint": "Provider 续接：可在会话顶部查看来源",
+        "threads.providerContinuationFamilyGroup": "续接会话 · {{count}} 个",
         "threads.subagentTreeExpanded": "Subagent tree expanded",
         "threads.subagentTreeExpand": "Expand subagent tree",
         "threads.subagentTreeCollapse": "Collapse subagent tree",
@@ -1028,6 +1029,104 @@ describe("ThreadList", () => {
 
     expect(screen.getByText("续接")).toBeTruthy();
     expect(screen.queryByText("Subagent")).toBeNull();
+  });
+
+  it("groups an authoritative continuation family with a lightweight boundary", () => {
+    const onSelectThread = vi.fn();
+    const { container } = render(
+      <ThreadList
+        {...baseProps}
+        activeThreadId="target-2"
+        onSelectThread={onSelectThread}
+        totalThreadRoots={4}
+        visibleThreadRootCount={4}
+        unpinnedRows={[
+          {
+            thread: {
+              ...thread,
+              id: "target-2",
+              name: "Newest continuation",
+              familyId: "family-1",
+              originKind: "provider-continuation",
+              lineageKind: "provider-continuation",
+              sourceSessionId: "target-1",
+              lineageParentSessionId: "target-1",
+            },
+            depth: 0,
+          },
+          {
+            thread: { ...thread, id: "unrelated", name: "Unrelated" },
+            depth: 0,
+          },
+          {
+            thread: {
+              ...thread,
+              id: "target-1",
+              name: "Earlier continuation",
+              familyId: "family-1",
+              originKind: "provider-continuation",
+              lineageKind: "provider-continuation",
+              sourceSessionId: "source",
+              lineageParentSessionId: "source",
+            },
+            depth: 0,
+          },
+          {
+            thread: { ...thread, id: "source", name: "Source session" },
+            depth: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("续接会话 · 3 个")).toBeTruthy();
+    const rows = Array.from(container.querySelectorAll(".thread-row"));
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Newest continuation"),
+      expect.stringContaining("Earlier continuation"),
+      expect.stringContaining("Source session"),
+      expect.stringContaining("Unrelated"),
+    ]);
+
+    const segments = container.querySelectorAll(
+      '[data-continuation-family-id="family-1"]',
+    );
+    expect(segments).toHaveLength(3);
+    expect(segments[0]?.getAttribute("data-continuation-family-position")).toBe(
+      "start",
+    );
+    expect(segments[2]?.getAttribute("data-continuation-family-position")).toBe(
+      "end",
+    );
+    expect(rows[0]?.classList.contains("active")).toBe(true);
+    expect(rows[0]?.hasAttribute("aria-expanded")).toBe(false);
+    expect(rows[1]?.classList.contains("is-subagent")).toBe(false);
+
+    fireEvent.click(rows[1] as HTMLElement);
+    expect(onSelectThread).toHaveBeenCalledWith("ws-1", "target-1");
+  });
+
+  it("omits family chrome when only one member is visible", () => {
+    const { container } = render(
+      <ThreadList
+        {...baseProps}
+        unpinnedRows={[
+          {
+            thread: {
+              ...thread,
+              familyId: "family-1",
+              originKind: "provider-continuation",
+            },
+            depth: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      container.querySelector(".thread-continuation-family-segment"),
+    ).toBeNull();
+    expect(screen.getByText("续接")).toBeTruthy();
   });
 });
 

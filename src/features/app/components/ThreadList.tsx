@@ -29,13 +29,14 @@ import {
   type SidebarVirtualItem,
 } from "./sidebarVirtualItems";
 import { getThreadRowProjection } from "../utils/threadRowProjection";
+import {
+  projectContinuationFamilyRows,
+  type ContinuationFamilyRow,
+  type PresentedContinuationFamilyRow,
+} from "../utils/continuationFamilyRows";
 import { ThreadDeleteConfirmPopover } from "./ThreadDeleteConfirmPopover";
 
-type ThreadRow = {
-  thread: ThreadSummary;
-  depth: number;
-  hasChildren?: boolean;
-};
+type ThreadRow = PresentedContinuationFamilyRow<ContinuationFamilyRow>;
 
 type ShowThreadMenuHandler = (
   event: MouseEvent,
@@ -494,12 +495,23 @@ export function ThreadList({
   const contextMenuMoveFolderTargets =
     moveFolderTargets.length > 0 ? moveFolderTargets : undefined;
   const displayedPinnedRows = useMemo(
-    () => filterCollapsedThreadRows(visiblePinnedRows, expandedParentThreadIds),
+    () =>
+      projectContinuationFamilyRows(
+        filterCollapsedThreadRows(
+          visiblePinnedRows,
+          expandedParentThreadIds,
+        ),
+      ),
     [expandedParentThreadIds, visiblePinnedRows],
   );
   const displayedUnpinnedRows = useMemo(
     () =>
-      filterCollapsedThreadRows(visibleUnpinnedRows, expandedParentThreadIds),
+      projectContinuationFamilyRows(
+        filterCollapsedThreadRows(
+          visibleUnpinnedRows,
+          expandedParentThreadIds,
+        ),
+      ),
     [expandedParentThreadIds, visibleUnpinnedRows],
   );
   const rowsBySidebarVirtualKey = useMemo(() => {
@@ -594,6 +606,7 @@ export function ThreadList({
     thread,
     depth,
     hasChildren = false,
+    continuationFamilySegment,
   }: ThreadRow) => {
     const relativeTime = getThreadTime(thread);
     const isActiveThread =
@@ -645,7 +658,7 @@ export function ThreadList({
       deleteConfirmWorkspaceId === workspaceId &&
       deleteConfirmThreadId === thread.id;
 
-    return (
+    const rowNode = (
       <ThreadRowItem
         key={thread.id}
         canArchive={canArchive}
@@ -685,6 +698,32 @@ export function ThreadList({
         workspacePath={workspacePath}
         onThreadRowRender={onThreadRowRender}
       />
+    );
+    if (!continuationFamilySegment) {
+      return rowNode;
+    }
+
+    const familyLabel =
+      continuationFamilySegment.position === "start"
+        ? t("threads.providerContinuationFamilyGroup", {
+            count: continuationFamilySegment.memberCount,
+          })
+        : null;
+
+    return (
+      <div
+        key={thread.id}
+        className={`thread-continuation-family-segment is-${continuationFamilySegment.position}`}
+        data-continuation-family-id={continuationFamilySegment.familyId}
+        data-continuation-family-position={continuationFamilySegment.position}
+      >
+        {familyLabel ? (
+          <span className="thread-continuation-family-label">
+            {familyLabel}
+          </span>
+        ) : null}
+        {rowNode}
+      </div>
     );
   };
 

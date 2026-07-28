@@ -8,18 +8,25 @@ import { ScrollArea } from "../../../components/ui/scroll-area";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, options?: Record<string, unknown>) => {
       const translations: Record<string, string> = {
         "threads.autoNaming": "Auto naming...",
         "threads.pin": "Pin",
         "threads.unpin": "Unpin",
         "threads.subagentTag": "Subagent",
+        "threads.providerContinuationShort": "Continued",
+        "threads.providerContinuationHint": "Provider continuation",
+        "threads.providerContinuationFamilyGroup":
+          "Continued sessions · {{count}}",
         "threads.subagentTreeExpand": "Expand subagent tree",
         "threads.subagentTreeCollapse": "Collapse subagent tree",
         "threads.runtimeProcessing": "Processing",
         "threads.runtimeReviewing": "Reviewing",
       };
-      return translations[key] ?? key;
+      const template = translations[key] ?? key;
+      return template.replace(/\{\{(\w+)\}\}/g, (_, token: string) =>
+        String(options?.[token] ?? ""),
+      );
     },
     i18n: { language: "en", changeLanguage: vi.fn() },
   }),
@@ -137,6 +144,44 @@ describe("PinnedThreadList", () => {
       true,
       "/tmp/ws-1",
     );
+  });
+
+  it("groups pinned continuation family members inside one workspace partition", () => {
+    const { container } = render(
+      <PinnedThreadList
+        {...baseProps}
+        rows={[
+          {
+            thread: {
+              ...thread,
+              id: "continuation",
+              familyId: "family-1",
+              originKind: "provider-continuation",
+              sourceSessionId: "source",
+            },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+          {
+            thread: {
+              ...otherThread,
+              id: "source",
+            },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Continued sessions · 2")).toBeTruthy();
+    expect(
+      container.querySelectorAll(
+        '[data-continuation-family-id="family-1"]',
+      ),
+    ).toHaveLength(2);
   });
 
   it("marks shared pinned rows as not archivable for the context menu", () => {
