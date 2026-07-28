@@ -21,7 +21,7 @@
   padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .git-history-worktree-danger-copy {
@@ -1688,12 +1688,15 @@
 .git-history-create-branch-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--border-default) 68%, transparent);
 }
 
 .git-history-create-branch-btn {
-  min-width: 76px;
-  height: 30px;
+  min-width: 88px;
+  min-height: 34px;
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
@@ -1743,6 +1746,14 @@
 }
 
 @media (max-width: 720px) {
+  .git-history-create-branch-actions {
+    flex-wrap: wrap;
+  }
+
+  .git-history-create-branch-actions > button {
+    flex: 1 1 140px;
+  }
+
   .git-history-push-dialog {
     width: min(100%, 98vw);
     border-radius: 12px;
