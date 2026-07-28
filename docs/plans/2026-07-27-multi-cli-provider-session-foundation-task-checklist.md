@@ -148,6 +148,16 @@ OpenSpec 已归档至 `openspec/changes/archive/2026-07-27-{establish-shared-eve
 **⛔ Gate 4（Phase 2 验收矩阵）**
 - [x] `Claude/Official → Claude/OpenRouter → Codex/OpenAI → Claude/Official`：一个 Sidebar Row、三个 Hidden Binding、切回复用原 Binding、Turn Provenance 正确、任一 Provider 失败不重路由。Rust matrix、Composer/Badge component tests、Codex realtime terminal owner test 与失败语义测试共同提供 Gate 4 证据。
 
+**Change B 收口记录（2026-07-28）**
+
+- OpenSpec 40/40 tasks、13/13 requirements、32/32 scenarios 已验证并归档至
+  `openspec/changes/archive/2026-07-28-compose-shared-session-execution-target/`。
+- 主实现提交：`428ae19d2 feat(shared-session): 补全 Change B 执行目标闭环`。
+- 增量证据：Shared/UI 18 files、146 tests；Rust Shared integration 26 tests、
+  delta-sync unit 3 tests；provider-scoped Interrupt 1 test，均通过。
+- 结论：Gate 4 已通过，Change B 不再承载新能力；后续 Context Package、Compiler、
+  Adapter ACK 与 two-phase cursor 统一进入 Change C。
+
 ---
 
 ## Wave 5：Change C — add-shared-context-compiler
