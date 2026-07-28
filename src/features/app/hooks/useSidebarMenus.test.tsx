@@ -47,6 +47,7 @@ vi.mock("react-i18next", () => ({
         "threads.pin": "Pin",
         "threads.unpin": "Unpin",
         "threads.delete": "Delete",
+        "threads.continuationSourceUnavailable": "来源不可用",
         "sidebar.sessionActionsGroup": "New session",
         "sidebar.newSharedSession": "Shared Session",
         "sidebar.codexProviderChoiceTitle": "Provider selection",
@@ -1022,6 +1023,48 @@ describe("useSidebarMenus", () => {
     expect(handlers.onSelectThread).toHaveBeenCalledWith(
       "ws-1",
       "claude:target-2",
+    );
+  });
+
+  it("keeps a continuation visible while disabling a missing source link", () => {
+    const handlers = {
+      ...createHandlers(),
+      getThreadSummary: () => ({
+        id: "codex:target-1",
+        name: "Continuation",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "codex" as const,
+        originKind: "provider-continuation",
+        sourceSessionId: "claude:deleted-source",
+      }),
+      isThreadAvailable: () => false,
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      result.current.showThreadMenu(
+        {
+          clientX: 1,
+          clientY: 1,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
+        "ws-1",
+        "codex:target-1",
+        true,
+      );
+    });
+
+    const sourceAction = result.current.sidebarContextMenuState?.items.find(
+      (item) => item.type === "item" && item.id === "open-continuation-source",
+    );
+    expect(sourceAction).toEqual(
+      expect.objectContaining({
+        type: "item",
+        label: "来源不可用",
+        disabled: true,
+      }),
     );
   });
 
