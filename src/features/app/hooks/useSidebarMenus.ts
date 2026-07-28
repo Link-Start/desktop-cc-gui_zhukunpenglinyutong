@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { EngineType, WorkspaceInfo } from "../../../types";
-import { getOpenCodeProviderHealth } from "../../../services/tauri";
+import type { EngineType, ThreadSummary, WorkspaceInfo } from "../../../types";
+import {
+  createNativeProviderContinuation,
+  getOpenCodeProviderHealth,
+} from "../../../services/tauri";
 import { pushGlobalRuntimeNotice } from "../../../services/globalRuntimeNotices";
 import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import { formatByteSize } from "../../../utils/formatting";
@@ -171,6 +174,12 @@ type SidebarMenuHandlers = {
     sessionId: string;
   }) => void;
   onReloadWorkspaceThreads: (workspaceId: string) => void;
+  onSelectThread: (workspaceId: string, threadId: string) => void;
+  isThreadAvailable?: (workspaceId: string, threadId: string) => boolean;
+  getThreadSummary?: (
+    workspaceId: string,
+    threadId: string,
+  ) => ThreadSummary | undefined;
   onActivateWorkspace?: (workspaceId: string) => void;
   onCreateSessionFolder?: (workspaceId: string) => void;
   onToggleExitedSessions?: (workspacePath: string) => void;
@@ -223,6 +232,9 @@ export function useSidebarMenus({
   onOpenThreadFolderPicker,
   onOpenClaudeTui,
   onReloadWorkspaceThreads,
+  onSelectThread,
+  isThreadAvailable,
+  getThreadSummary,
   onActivateWorkspace,
   onCreateSessionFolder,
   onToggleExitedSessions,
@@ -253,6 +265,8 @@ export function useSidebarMenus({
   >({});
   const workspaceOpenCodeLoginRequestIdRef = useRef<Record<string, number>>({});
   const workspaceEngineRefreshRequestIdRef = useRef<Record<string, number>>({});
+  const providerContinuationOperationsRef = useRef(new Set<string>());
+  const providerContinuationOperationIdsRef = useRef(new Map<string, string>());
   const latestEngineOptionsRef = useRef(engineOptions);
   const [pinnedActionIds, setPinnedActionIds] = useState<string[]>(() =>
     readSidebarWorkspacePinnedActionIds(),
@@ -1141,6 +1155,7 @@ export function useSidebarMenus({
     ) => {
       event.preventDefault();
       event.stopPropagation();
+      const thread = getThreadSummary?.(workspaceId, threadId);
       const claudeSessionId = extractClaudeNativeSessionId(threadId);
       const isClaudeSession = Boolean(claudeSessionId);
       const claudeResumeCommand = claudeSessionId
@@ -1160,6 +1175,138 @@ export function useSidebarMenus({
           onSelect: () => onRenameThread(workspaceId, threadId),
         },
       ];
+      if (
+        thread?.threadKind !== "shared" &&
+        thread?.engineSource &&
+        ["claude", "codex", "kimi"].includes(thread.engineSource)
+      ) {
+        const nativeSessionId = thread.id.startsWith(`${thread.engineSource}:`)
+          ? thread.id.slice(thread.engineSource.length + 1)
+          : thread.id;
+        const targetProviders = [
+          ...claudeProviderProfiles.map((provider) => ({
+            engine: "claude" as const,
+            engineLabel: "Claude",
+            provider,
+          })),
+          ...codexProviderProfiles.map((provider) => ({
+            engine: "codex" as const,
+            engineLabel: "Codex",
+            provider,
+          })),
+        ].filter(
+          ({ engine, provider }) =>
+            provider.availability !== "unavailable" &&
+            !(
+              thread.engineSource === engine &&
+              provider.id === thread.providerProfileId
+            ),
+        );
+        if (targetProviders.length > 0) {
+          items.push({
+            type: "submenu",
+            id: "continue-with-provider",
+            label: t("threads.continueWithProvider", {
+              defaultValue: "使用其他 Provider 继续",
+            }),
+            items: targetProviders.map(({ engine, engineLabel, provider }) => ({
+              type: "item" as const,
+              id: `continue-with-${engine}-${provider.id}`,
+              label: `${engineLabel} · ${provider.name}`,
+              onSelect: async () => {
+                const guardKey = `${workspaceId}:${thread.id}`;
+                const operationKey = `${guardKey}:${engine}:${provider.id}`;
+                if (providerContinuationOperationsRef.current.has(guardKey)) {
+                  return;
+                }
+                providerContinuationOperationsRef.current.add(guardKey);
+                const operationId =
+                  providerContinuationOperationIdsRef.current.get(operationKey) ??
+                  globalThis.crypto?.randomUUID?.() ??
+                  `continuation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                providerContinuationOperationIdsRef.current.set(
+                  operationKey,
+                  operationId,
+                );
+                const request = {
+                  workspaceId,
+                  operationId,
+                  source: {
+                    sessionId: thread.id,
+                    nativeSessionId,
+                    engine: thread.engineSource as "claude" | "codex" | "kimi",
+                    providerProfileId: thread.providerProfileId ?? null,
+                  },
+                  destination: {
+                    engine,
+                    providerProfileId: provider.id,
+                    providerProfileNameSnapshot: provider.name,
+                    providerProfileSource: provider.source,
+                    runtimeCapabilityFingerprint:
+                      engine === "codex" ? "thread/inject_items" : "echo-checksum",
+                  },
+                };
+                try {
+                  let result = await createNativeProviderContinuation(request);
+                  if (
+                    result.status === "confirmation-required" &&
+                    window.confirm(
+                      t("threads.providerContinuationDegradedConfirm", {
+                        defaultValue:
+                          "部分历史会降级或省略。仍要创建新的供应商续接会话吗？",
+                      }),
+                    )
+                  ) {
+                    result = await createNativeProviderContinuation({
+                      ...request,
+                      confirmDegraded: true,
+                    });
+                  }
+                  if (result.status === "ready" && result.operation.resultSessionId) {
+                    providerContinuationOperationIdsRef.current.delete(operationKey);
+                    onReloadWorkspaceThreads(workspaceId);
+                    onSelectThread(workspaceId, result.operation.resultSessionId);
+                  }
+                } catch (error) {
+                  pushGlobalRuntimeNotice({
+                    severity: "error",
+                    category: "user-action-error",
+                    messageKey: "runtimeNotice.error.threadTurnFailed",
+                    messageParams: {
+                      engine: engineLabel,
+                      message: error instanceof Error ? error.message : String(error),
+                    },
+                    dedupeKey: `provider-continuation:${workspaceId}:${thread.id}`,
+                  });
+                } finally {
+                  providerContinuationOperationsRef.current.delete(guardKey);
+                }
+              },
+            })),
+          });
+        }
+      }
+      if (
+        thread?.originKind === "provider-continuation" &&
+        thread.sourceSessionId
+      ) {
+        const sourceAvailable =
+          isThreadAvailable?.(workspaceId, thread.sourceSessionId) ?? true;
+        items.push({
+          type: "item",
+          id: "open-continuation-source",
+          label: sourceAvailable
+            ? t("threads.openContinuationSource", {
+                defaultValue: "查看来源会话",
+              })
+            : t("threads.continuationSourceUnavailable", {
+                defaultValue: "来源不可用",
+              }),
+          disabled: !sourceAvailable,
+          onSelect: () =>
+            onSelectThread(workspaceId, thread.sourceSessionId as string),
+        });
+      }
       const isAutoNamingNow = isThreadAutoNaming(workspaceId, threadId);
       items.push({
         type: "item",
@@ -1328,6 +1475,12 @@ export function useSidebarMenus({
       onRenameThread,
       onSyncThread,
       onUnpinThread,
+      onReloadWorkspaceThreads,
+      onSelectThread,
+      claudeProviderProfiles,
+      codexProviderProfiles,
+      isThreadAvailable,
+      getThreadSummary,
     ],
   );
 

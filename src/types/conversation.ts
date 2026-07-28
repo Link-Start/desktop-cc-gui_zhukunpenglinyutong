@@ -245,6 +245,14 @@ export type ThreadSummary = {
   autoSession?: AutoSessionMetadata | null;
   nativeThreadIds?: string[];
   parentThreadId?: string | null;
+  originKind?: "provider-continuation" | string;
+  sourceSessionId?: string;
+  sourceProviderProfileId?: string;
+  familyId?: string;
+  familyRootSessionId?: string;
+  lineageParentSessionId?: string;
+  lineageKind?: "provider-continuation" | string;
+  lineageDepth?: number;
 };
 
 export type ReviewTarget =

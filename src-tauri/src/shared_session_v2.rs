@@ -59,7 +59,7 @@ pub struct ExecutionTargetInput {
     pub runtime_capability_fingerprint: Option<String>,
 }
 
-fn context_capabilities(target: &ExecutionTargetInput) -> RuntimeContextCapabilities {
+pub(crate) fn context_capabilities(target: &ExecutionTargetInput) -> RuntimeContextCapabilities {
     // Adapter capability 在这里显式声明；compiler 只消费 capability，不按 engine 分支。
     // 当前 runtime bridge 对 Claude/Codex 都有 user-channel prompt ACK，
     // structured import 等待对应 CLI method probe 后再打开，禁止猜测支持。
@@ -89,7 +89,10 @@ fn context_capabilities(target: &ExecutionTargetInput) -> RuntimeContextCapabili
             strong_context_ack: target
                 .runtime_capability_fingerprint
                 .as_deref()
-                .is_some_and(|fingerprint| fingerprint.contains("--replay-user-messages")),
+                .is_some_and(|fingerprint| {
+                    fingerprint.contains("--replay-user-messages")
+                        || fingerprint.contains("echo-checksum")
+                }),
         },
         _ => RuntimeContextCapabilities {
             native_delta: false,
@@ -103,8 +106,15 @@ fn context_capabilities(target: &ExecutionTargetInput) -> RuntimeContextCapabili
     }
 }
 
-fn codex_import_items(package: &crate::shared_context::ContextPackage) -> Vec<Value> {
-    package
+pub(crate) fn codex_import_items(package: &crate::shared_context::ContextPackage) -> Vec<Value> {
+    codex_import_projection(package).0
+}
+
+pub(crate) fn codex_import_projection(
+    package: &crate::shared_context::ContextPackage,
+) -> (Vec<Value>, usize) {
+    let mut dropped_entries = 0;
+    let mut items: Vec<Value> = package
         .delta
         .iter()
         .flat_map(|entry| {
@@ -147,10 +157,35 @@ fn codex_import_items(package: &crate::shared_context::ContextPackage) -> Vec<Va
                         }));
                     }
                 }
+                if block.get("kind").and_then(Value::as_str) == Some("native-block") {
+                    let value = &block["value"];
+                    if matches!(
+                        value.get("type").and_then(Value::as_str),
+                        Some("function_call" | "function_call_output")
+                    ) {
+                        items.push(value.clone());
+                    }
+                }
+            }
+            if items.is_empty() {
+                dropped_entries += 1;
             }
             items
         })
-        .collect()
+        .collect();
+    let marker = format!(
+        "MOSSX_CONTEXT_PACKAGE:{}:{}",
+        package.package_id, package.manifest.source_checksum
+    );
+    items.insert(
+        0,
+        json!({
+            "type": "message",
+            "role": "user",
+            "content": [{ "type": "input_text", "text": marker }],
+        }),
+    );
+    (items, dropped_entries)
 }
 
 fn context_artifact_root(state: &AppState) -> Result<&std::path::Path, String> {
@@ -1544,4 +1579,82 @@ pub async fn shared_session_v2_turn_state(
             .collect::<Vec<_>>(),
         "bindings": bindings,
     }))
+}
+
+#[cfg(test)]
+mod native_continuation_import_tests {
+    use super::*;
+    use crate::native_history::{
+        ContextSourceEntry, NativeHistoryEngine, NativeHistoryFidelity, NativeHistoryReadResult,
+        NativeHistorySource,
+    };
+    use crate::shared_context::{compile_native_context, CompileNativeContextRequest};
+
+    #[test]
+    fn codex_projection_preserves_raw_tool_items_and_counts_unimportable_entries() {
+        let source = NativeHistorySource {
+            session_id: "codex:source".to_string(),
+            native_session_id: "source".to_string(),
+            engine: NativeHistoryEngine::Codex,
+            provider_profile_id: Some("provider-a".to_string()),
+        };
+        let package = compile_native_context(&CompileNativeContextRequest {
+            session_id: source.session_id.clone(),
+            binding_key: "continuation:op".to_string(),
+            destination: json!({"engine": "codex"}),
+            source,
+            history: NativeHistoryReadResult {
+                reader_id: "codex-rollout-jsonl/v1".to_string(),
+                source_fingerprint: "sha256:source".to_string(),
+                through_cursor: "jsonl-v1:1:sha256:source".to_string(),
+                entries: vec![
+                    ContextSourceEntry {
+                        source_entry_id: "tool".to_string(),
+                        occurred_at: None,
+                        role: "tool".to_string(),
+                        blocks: vec![json!({
+                            "kind": "native-block",
+                            "value": {
+                                "type": "function_call",
+                                "name": "shell",
+                                "arguments": "{}",
+                                "call_id": "call-1"
+                            }
+                        })],
+                        provenance: json!({}),
+                        fidelity: NativeHistoryFidelity::Semantic,
+                    },
+                    ContextSourceEntry {
+                        source_entry_id: "control".to_string(),
+                        occurred_at: None,
+                        role: "control".to_string(),
+                        blocks: vec![json!({"kind": "native-block", "value": {"type": "unknown"}})],
+                        provenance: json!({}),
+                        fidelity: NativeHistoryFidelity::Lossy,
+                    },
+                ],
+                fidelity: NativeHistoryFidelity::Semantic,
+                omissions: Vec::new(),
+            },
+            capabilities: RuntimeContextCapabilities {
+                native_delta: false,
+                structured_history_import: true,
+                native_clone: false,
+                user_channel_transcript: true,
+                tool_history: true,
+                image_history: false,
+                strong_context_ack: true,
+            },
+            budget_estimated_tokens: None,
+        })
+        .expect("compile");
+
+        let (items, dropped) = codex_import_projection(&package);
+        assert_eq!(items[0]["role"], "user");
+        assert!(items[0]["content"][0]["text"]
+            .as_str()
+            .is_some_and(|text| text.starts_with("MOSSX_CONTEXT_PACKAGE:")));
+        assert_eq!(items[1]["type"], "function_call");
+        assert_eq!(dropped, 1);
+    }
 }

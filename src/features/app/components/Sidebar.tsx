@@ -974,6 +974,15 @@ function SidebarImpl({
       },
       onOpenClaudeTui,
       onReloadWorkspaceThreads: onQuickReloadWorkspaceThreads ?? onReloadWorkspaceThreads,
+      onSelectThread,
+      isThreadAvailable: (workspaceId, threadId) =>
+        getProjectedThreads(workspaceId).some(
+          (thread) => thread.id === threadId,
+        ),
+      getThreadSummary: (workspaceId, threadId) =>
+        getProjectedThreads(workspaceId).find(
+          (thread) => thread.id === threadId,
+        ),
       onActivateWorkspace: onSelectWorkspace,
       onCreateSessionFolder: handleOpenRootSessionFolderDraft,
       onToggleExitedSessions: toggleExitedSessionsHidden,

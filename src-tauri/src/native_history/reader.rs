@@ -115,7 +115,19 @@ fn role_of(value: &Value, engine: NativeHistoryEngine) -> String {
     .to_string()
 }
 
-fn blocks_of(value: &Value) -> Vec<Value> {
+fn blocks_of(value: &Value, engine: NativeHistoryEngine) -> Vec<Value> {
+    if engine == NativeHistoryEngine::Codex
+        && value.get("type").and_then(Value::as_str) == Some("response_item")
+    {
+        if let Some(payload) = value.get("payload") {
+            if matches!(
+                payload.get("type").and_then(Value::as_str),
+                Some("function_call" | "function_call_output")
+            ) {
+                return vec![json!({ "kind": "native-block", "value": payload })];
+            }
+        }
+    }
     for path in [
         &["message", "content"][..],
         &["payload", "message", "content"][..],
@@ -214,7 +226,7 @@ fn normalize_lines(
                 source_entry_id,
                 occurred_at: timestamp_of(&value),
                 role: role_of(&value, source.engine),
-                blocks: blocks_of(&value),
+                blocks: blocks_of(&value, source.engine),
                 provenance: json!({
                     "engine": source.engine,
                     "providerProfileId": source.provider_profile_id,

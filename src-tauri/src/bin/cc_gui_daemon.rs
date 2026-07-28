@@ -881,6 +881,10 @@ async fn handle_rpc_request(
 ) -> Result<Value, String> {
     match method {
         "ping" => Ok(json!({ "ok": true })),
+        "create_native_provider_continuation" => Err(
+            "unsupported-target-acceptance: Provider Continuation currently requires the Desktop local backend"
+                .to_string(),
+        ),
         "list_workspaces" => {
             let workspaces = state.list_workspaces().await;
             serde_json::to_value(workspaces).map_err(|err| err.to_string())

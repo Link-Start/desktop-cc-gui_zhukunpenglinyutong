@@ -26,25 +26,6 @@ pub struct NativeHistoryMaterialization {
     pub prepared_at: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderContinuationOrigin {
-    pub kind: String,
-    pub source_session_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_provider_profile_id: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConversationFamilyRef {
-    pub family_id: String,
-    pub family_root_session_id: String,
-    pub lineage_parent_session_id: String,
-    pub lineage_kind: String,
-    pub lineage_depth: u32,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeProviderContinuationOperation {

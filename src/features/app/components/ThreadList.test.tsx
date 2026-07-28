@@ -31,6 +31,7 @@ vi.mock("react-i18next", () => ({
         "threads.showExitedSessions": "Show exited sessions",
         "threads.exitedSessionsHidden": "{{count}} exited hidden",
         "threads.subagentTag": "Subagent",
+        "threads.providerContinuation": "供应商续接",
         "threads.subagentTreeExpanded": "Subagent tree expanded",
         "threads.subagentTreeExpand": "Expand subagent tree",
         "threads.subagentTreeCollapse": "Collapse subagent tree",
@@ -1002,6 +1003,29 @@ describe("ThreadList", () => {
     );
 
     expect(container.querySelector(".thread-provider-label")).toBeNull();
+  });
+
+  it("shows provider continuation as a top-level origin badge", () => {
+    render(
+      <ThreadList
+        {...baseProps}
+        unpinnedRows={[
+          {
+            thread: {
+              ...thread,
+              id: "target-1",
+              parentThreadId: null,
+              originKind: "provider-continuation",
+              sourceSessionId: "claude:source-1",
+            },
+            depth: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("供应商续接")).toBeTruthy();
+    expect(screen.queryByText("Subagent")).toBeNull();
   });
 });
 

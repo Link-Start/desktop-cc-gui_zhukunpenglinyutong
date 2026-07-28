@@ -81,6 +81,14 @@ export type ProjectCatalogSessionSummary = {
   sourceStatusReason?: string | null;
   folderId?: string | null;
   autoSession?: AutoSessionMetadata | null;
+  originKind?: string | null;
+  sourceSessionId?: string | null;
+  sourceProviderProfileId?: string | null;
+  familyId?: string | null;
+  familyRootSessionId?: string | null;
+  lineageParentSessionId?: string | null;
+  lineageKind?: string | null;
+  lineageDepth?: number | null;
 };
 
 function encodeThreadListCursorState(
@@ -231,6 +239,14 @@ export function normalizeProjectCatalogSession(
     sourceStatusReason?: unknown;
     folderId?: unknown;
     autoSession?: unknown;
+    originKind?: unknown;
+    sourceSessionId?: unknown;
+    sourceProviderProfileId?: unknown;
+    familyId?: unknown;
+    familyRootSessionId?: unknown;
+    lineageParentSessionId?: unknown;
+    lineageKind?: unknown;
+    lineageDepth?: unknown;
   };
   const sessionId = String(session.sessionId ?? "").trim();
   if (!sessionId) {
@@ -279,6 +295,25 @@ export function normalizeProjectCatalogSession(
     ),
     folderId: normalizeOptionalCatalogString(session.folderId),
     autoSession: normalizeAutoSessionMetadata(session.autoSession),
+    originKind: normalizeOptionalCatalogString(session.originKind),
+    sourceSessionId: normalizeOptionalCatalogString(session.sourceSessionId),
+    sourceProviderProfileId: normalizeOptionalCatalogString(
+      session.sourceProviderProfileId,
+    ),
+    familyId: normalizeOptionalCatalogString(session.familyId),
+    familyRootSessionId: normalizeOptionalCatalogString(
+      session.familyRootSessionId,
+    ),
+    lineageParentSessionId: normalizeOptionalCatalogString(
+      session.lineageParentSessionId,
+    ),
+    lineageKind: normalizeOptionalCatalogString(session.lineageKind),
+    lineageDepth:
+      typeof session.lineageDepth === "number" &&
+      Number.isInteger(session.lineageDepth) &&
+      session.lineageDepth >= 0
+        ? session.lineageDepth
+        : null,
   };
 }
 

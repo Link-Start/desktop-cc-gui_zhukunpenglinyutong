@@ -46,7 +46,44 @@ export interface WorkspaceSessionCatalogEntry {
   deleteMode?: "physical" | "metadata-cleanup" | "unsupported" | string | null;
   physicalPath?: string | null;
   childrenCount?: number | null;
+  originKind?: string | null;
+  sourceSessionId?: string | null;
+  sourceProviderProfileId?: string | null;
+  familyId?: string | null;
+  familyRootSessionId?: string | null;
+  lineageParentSessionId?: string | null;
+  lineageKind?: string | null;
+  lineageDepth?: number | null;
 }
+
+export type NativeHistorySourceInput = {
+  sessionId: string;
+  nativeSessionId: string;
+  engine: "claude" | "codex" | "kimi";
+  providerProfileId?: string | null;
+};
+
+export type ProviderContinuationTargetInput = {
+  engine: "claude" | "codex";
+  providerProfileId: string;
+  model?: string | null;
+  reasoningEffort?: string | null;
+  providerProfileNameSnapshot?: string | null;
+  providerProfileSource?: string | null;
+  runtimeCapabilityFingerprint?: string | null;
+};
+
+export type NativeProviderContinuationResponse = {
+  status: "confirmation-required" | "ready" | "recovery-required" | string;
+  fidelity: "strong" | "degraded";
+  operation: {
+    phase: string;
+    resultSessionId?: string | null;
+    errorCode?: string | null;
+  };
+  omissions?: Array<{ category?: string; reason?: string }>;
+  adapterDroppedEntries?: number;
+};
 
 export type {
   AutoSessionCreatedBy,
@@ -375,4 +412,23 @@ export async function assignWorkspaceSessionFolders(
     sessionIds,
     folderId: folderId ?? null,
   });
+}
+
+export async function createNativeProviderContinuation(input: {
+  workspaceId: string;
+  operationId: string;
+  source: NativeHistorySourceInput;
+  destination: ProviderContinuationTargetInput;
+  confirmDegraded?: boolean;
+}): Promise<NativeProviderContinuationResponse> {
+  return invoke<NativeProviderContinuationResponse>(
+    "create_native_provider_continuation",
+    {
+      workspaceId: input.workspaceId,
+      operationId: input.operationId,
+      source: input.source,
+      destination: input.destination,
+      confirmDegraded: input.confirmDegraded ?? false,
+    },
+  );
 }

@@ -3,7 +3,10 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EngineType, WorkspaceInfo } from "../../../types";
 import { useSidebarMenus } from "./useSidebarMenus";
-import { getOpenCodeProviderHealth } from "../../../services/tauri";
+import {
+  createNativeProviderContinuation,
+  getOpenCodeProviderHealth,
+} from "../../../services/tauri";
 import { pushGlobalRuntimeNotice } from "../../../services/globalRuntimeNotices";
 import type {
   EngineDisplayInfo,
@@ -74,6 +77,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../../../services/tauri", () => ({
+  createNativeProviderContinuation: vi.fn(),
   getOpenCodeProviderHealth: vi.fn(),
 }));
 vi.mock("../../../services/globalRuntimeNotices", () => ({
@@ -85,6 +89,9 @@ vi.mock("../../../services/clientStorage", () => ({
 }));
 
 const getOpenCodeProviderHealthMock = vi.mocked(getOpenCodeProviderHealth);
+const createNativeProviderContinuationMock = vi.mocked(
+  createNativeProviderContinuation,
+);
 const pushGlobalRuntimeNoticeMock = vi.mocked(pushGlobalRuntimeNotice);
 
 const workspace: WorkspaceInfo = {
@@ -167,6 +174,7 @@ function createHandlers() {
     onOpenThreadFolderPicker: vi.fn(),
     onOpenClaudeTui: vi.fn(),
     onReloadWorkspaceThreads: vi.fn(),
+    onSelectThread: vi.fn(),
     onActivateWorkspace: vi.fn(),
     onCreateSessionFolder: vi.fn(),
     onToggleExitedSessions: vi.fn(),
@@ -192,6 +200,7 @@ describe("useSidebarMenus", () => {
       },
     });
     pushGlobalRuntimeNoticeMock.mockReset();
+    createNativeProviderContinuationMock.mockReset();
     getOpenCodeProviderHealthMock.mockReset();
     getOpenCodeProviderHealthMock.mockResolvedValue({
       provider: "openai",
@@ -848,6 +857,151 @@ describe("useSidebarMenus", () => {
       "Delete",
     ]);
     expect(items[6]?.type).toBe("label");
+  });
+
+  it("creates a top-level provider continuation from a native thread", async () => {
+    createNativeProviderContinuationMock.mockResolvedValue({
+      status: "ready",
+      fidelity: "strong",
+      operation: {
+        phase: "ready",
+        resultSessionId: "codex:target-1",
+      },
+    });
+    const handlers = {
+      ...createHandlers(),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      result.current.showThreadMenu(
+        {
+          clientX: 1,
+          clientY: 1,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
+        "ws-1",
+        "claude:source-1",
+        true,
+      );
+    });
+    const submenu = result.current.sidebarContextMenuState?.items.find(
+      (item) => item.type === "submenu" && item.id === "continue-with-provider",
+    );
+    expect(submenu?.type).toBe("submenu");
+    await act(async () => {
+      if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
+        await submenu.items[0].onSelect();
+      }
+    });
+
+    expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "ws-1",
+        source: expect.objectContaining({
+          sessionId: "claude:source-1",
+          nativeSessionId: "source-1",
+          providerProfileId: "provider-a",
+        }),
+        destination: expect.objectContaining({
+          engine: "codex",
+          providerProfileId: "provider-b",
+        }),
+      }),
+    );
+    expect(handlers.onReloadWorkspaceThreads).toHaveBeenCalledWith("ws-1");
+    expect(handlers.onSelectThread).toHaveBeenCalledWith(
+      "ws-1",
+      "codex:target-1",
+    );
+  });
+
+  it("can continue a Codex thread back to a Claude provider", async () => {
+    createNativeProviderContinuationMock.mockResolvedValue({
+      status: "ready",
+      fidelity: "strong",
+      operation: {
+        phase: "ready",
+        resultSessionId: "claude:target-2",
+      },
+    });
+    const handlers = {
+      ...createHandlers(),
+      claudeProviderProfiles: [
+        {
+          id: "provider-a",
+          name: "Provider A",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "codex:source-2",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "codex" as const,
+        providerProfileId: "provider-b",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      result.current.showThreadMenu(
+        {
+          clientX: 1,
+          clientY: 1,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
+        "ws-1",
+        "codex:source-2",
+        true,
+      );
+    });
+    const submenu = result.current.sidebarContextMenuState?.items.find(
+      (item) => item.type === "submenu" && item.id === "continue-with-provider",
+    );
+    await act(async () => {
+      if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
+        await submenu.items[0].onSelect();
+      }
+    });
+
+    expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({
+          sessionId: "codex:source-2",
+          providerProfileId: "provider-b",
+        }),
+        destination: expect.objectContaining({
+          engine: "claude",
+          providerProfileId: "provider-a",
+          runtimeCapabilityFingerprint: "echo-checksum",
+        }),
+      }),
+    );
+    expect(handlers.onSelectThread).toHaveBeenCalledWith(
+      "ws-1",
+      "claude:target-2",
+    );
   });
 
   it("archives a thread from the thread context menu", async () => {

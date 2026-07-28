@@ -148,12 +148,16 @@ export type {
   WorkspaceSessionFolderMutation,
   WorkspaceSessionAssignmentResponse,
   AutoSessionMetadata,
+  NativeHistorySourceInput,
+  ProviderContinuationTargetInput,
+  NativeProviderContinuationResponse,
 } from "./tauri/sessionManagement";
 export {
   assignWorkspaceSessionFolders,
   assignWorkspaceSessionFolder,
   archiveWorkspaceSessions,
   createWorkspaceSessionFolder,
+  createNativeProviderContinuation,
   deleteWorkspaceSessionFolder,
   deleteWorkspaceSessions,
   getWorkspaceSessionProjectionSummary,

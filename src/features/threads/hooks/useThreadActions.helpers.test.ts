@@ -17,6 +17,39 @@ import {
 } from "./useThreadActions.helpers";
 
 describe("useThreadActions.helpers", () => {
+  it("projects provider continuation at the top level without parentThreadId", () => {
+    const [continuation] = mergeCodexCatalogSessionSummaries(
+      [],
+      [
+        {
+          sessionId: "target-1",
+          workspaceId: "ws-1",
+          title: "Continued session",
+          updatedAt: 1,
+          engine: "codex",
+          originKind: "provider-continuation",
+          sourceSessionId: "claude:source-1",
+          familyId: "claude:ws-1:source-1",
+          familyRootSessionId: "claude:ws-1:source-1",
+          lineageParentSessionId: "claude:source-1",
+          lineageKind: "provider-continuation",
+          lineageDepth: 1,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+
+    expect(continuation).toMatchObject({
+      id: "target-1",
+      parentThreadId: null,
+      originKind: "provider-continuation",
+      sourceSessionId: "claude:source-1",
+      lineageParentSessionId: "claude:source-1",
+    });
+  });
+
   it("maps Codex local fallback parentSessionId into parentThreadId", () => {
     expect(
       resolveThreadSourceMeta({

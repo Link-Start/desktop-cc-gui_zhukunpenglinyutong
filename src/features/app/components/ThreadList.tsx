@@ -284,6 +284,18 @@ const ThreadRowItem = memo(function ThreadRowItem({
           <span className="thread-pin-toggle-icon" aria-hidden />
         </span>
       )}
+      {thread.originKind === "provider-continuation" && (
+        <span
+          className="thread-subagent-tag thread-continuation-tag"
+          title={t("threads.providerContinuation", {
+            defaultValue: "供应商续接",
+          })}
+        >
+          {t("threads.providerContinuation", {
+            defaultValue: "供应商续接",
+          })}
+        </span>
+      )}
       {isSubagentThread ? (
         <span className="thread-subagent-tag" title={engineTitle}>
           {t("threads.subagentTag")}

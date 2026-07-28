@@ -44,10 +44,7 @@ use self::mcp_config::{
     set_global_mcp_server_enabled as set_global_mcp_server_enabled_impl, GlobalMcpServerEntry,
 };
 use self::model_selection::{normalize_model_id, pick_model_from_model_list_response};
-use self::provider_fork::{
-    copy_native_fork_history_to_selected_provider, enrich_native_provider_fork_response,
-    resolve_codex_provider_history_path,
-};
+use self::provider_fork::resolve_codex_provider_history_path;
 
 pub(crate) async fn resolve_codex_native_history_path(
     state: &AppState,
@@ -201,7 +198,7 @@ fn codex_provider_binding_lookup_keys(workspace_id: &str, thread_id: &str) -> Ve
     unique_keys
 }
 
-async fn record_codex_provider_binding(
+pub(crate) async fn record_codex_provider_binding(
     state: &AppState,
     workspace_id: &str,
     thread_id: &str,
@@ -219,6 +216,23 @@ async fn record_codex_provider_binding(
         binding,
     )
     .await;
+}
+
+pub(crate) async fn record_codex_provider_binding_checked(
+    state: &AppState,
+    workspace_id: &str,
+    thread_id: &str,
+    provider_profile_id: &str,
+) -> Result<(), String> {
+    let binding = resolve_codex_provider_profile(Some(provider_profile_id))?.binding();
+    crate::session_management::record_codex_provider_binding_core(
+        &state.workspaces,
+        state.storage_path.as_path(),
+        workspace_id.to_string(),
+        thread_id.to_string(),
+        binding,
+    )
+    .await
 }
 
 pub(crate) use self::session_runtime::ensure_codex_session;
@@ -784,13 +798,9 @@ pub(crate) async fn fork_thread(
     let _selected_provider_profile =
         resolve_codex_provider_profile(Some(&selected_provider_profile_id))?;
     if selected_provider_profile_id != parent_provider_profile_id {
-        ensure_codex_session_for_provider(
-            &workspace_id,
-            &selected_provider_profile_id,
-            &state,
-            &app,
-        )
-        .await?;
+        return Err(
+            "cross-provider-fork-moved-to-continuation: use 使用其他 Provider 继续".to_string(),
+        );
     }
     ensure_codex_session_for_provider(&workspace_id, &parent_provider_profile_id, &state, &app)
         .await?;
@@ -817,14 +827,6 @@ pub(crate) async fn fork_thread(
     if let Some(child_thread_id) =
         crate::shared::codex_core::extract_thread_id_from_response(&response)
     {
-        copy_native_fork_history_to_selected_provider(
-            &state,
-            &workspace_id,
-            &child_thread_id,
-            &parent_provider_profile_id,
-            &selected_provider_profile_id,
-        )
-        .await?;
         record_codex_provider_binding(
             &state,
             &workspace_id,
@@ -832,13 +834,7 @@ pub(crate) async fn fork_thread(
             &selected_provider_profile_id,
         )
         .await;
-        return Ok(enrich_native_provider_fork_response(
-            response,
-            &child_thread_id,
-            &thread_id,
-            &parent_provider_profile_id,
-            &selected_provider_profile_id,
-        ));
+        return Ok(response);
     }
     Ok(response)
 }

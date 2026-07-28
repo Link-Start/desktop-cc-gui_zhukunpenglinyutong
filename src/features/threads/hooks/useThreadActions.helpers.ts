@@ -76,6 +76,14 @@ export type CodexCatalogSessionSummary = {
   providerAvailability?: string | null;
   folderId?: string | null;
   autoSession?: ThreadSummary["autoSession"];
+  originKind?: string | null;
+  sourceSessionId?: string | null;
+  sourceProviderProfileId?: string | null;
+  familyId?: string | null;
+  familyRootSessionId?: string | null;
+  lineageParentSessionId?: string | null;
+  lineageKind?: string | null;
+  lineageDepth?: number | null;
 };
 
 export function normalizeThreadListPartialSource(
@@ -1239,6 +1247,15 @@ export function mergeCodexCatalogSessionSummaries(
       folderId: session.folderId ?? null,
       autoSession: session.autoSession ?? null,
       parentThreadId,
+      originKind: session.originKind ?? undefined,
+      sourceSessionId: session.sourceSessionId ?? undefined,
+      sourceProviderProfileId: session.sourceProviderProfileId ?? undefined,
+      familyId: session.familyId ?? undefined,
+      familyRootSessionId: session.familyRootSessionId ?? undefined,
+      lineageParentSessionId:
+        session.lineageParentSessionId ?? undefined,
+      lineageKind: session.lineageKind ?? undefined,
+      lineageDepth: session.lineageDepth ?? undefined,
     };
     if (!prev || next.updatedAt >= prev.updatedAt) {
       mergedById.set(

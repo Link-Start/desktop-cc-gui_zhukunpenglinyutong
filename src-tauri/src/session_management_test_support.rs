@@ -73,6 +73,7 @@
             delete_mode: Some(SESSION_DELETE_MODE_PHYSICAL.to_string()),
             physical_path: None,
             children_count: None,
+            continuation: ProviderContinuationProjection::default(),
         }
     }
 
