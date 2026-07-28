@@ -256,7 +256,7 @@ fn build_reasoning_config(effort: Option<&str>) -> Value {
     })
 }
 
-fn extract_error_message_from_response(value: &Value) -> Option<String> {
+pub(crate) fn extract_error_message_from_response(value: &Value) -> Option<String> {
     value
         .get("error")
         .and_then(|error| {
@@ -831,6 +831,29 @@ pub(crate) async fn archive_thread_best_effort_core(
     Ok(response)
 }
 
+fn attach_codex_dispatch_receipt(
+    mut response: Value,
+    provider_profile_id: Option<&str>,
+    provider_runtime_key: &str,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> Value {
+    if let Some(root) = response.as_object_mut() {
+        root.insert(
+            "mossxDispatchReceipt".to_string(),
+            json!({
+                "engine": "codex",
+                "providerProfileId": provider_profile_id,
+                "providerProfileSource": if provider_profile_id.is_some() { "managed" } else { "local" },
+                "providerRuntimeKey": provider_runtime_key,
+                "model": model,
+                "reasoningEffort": reasoning_effort,
+            }),
+        );
+    }
+    response
+}
+
 pub(crate) async fn send_user_message_core(
     sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
     workspace_id: String,
@@ -1032,7 +1055,15 @@ pub(crate) async fn send_user_message_core(
                 )
                 .await
                 {
-                    Ok(retry_response) => return Ok(retry_response),
+                    Ok(retry_response) => {
+                        return Ok(attach_codex_dispatch_receipt(
+                            retry_response,
+                            provider_profile_id.as_deref(),
+                            &session_key,
+                            model.as_deref(),
+                            effort.as_deref(),
+                        ))
+                    }
                     Err(retry_error) => {
                         log::warn!(
                             "[turn/start][thread_resume_retry] workspace_id={} thread_id={} outcome=failed error={}",
@@ -1083,9 +1114,21 @@ pub(crate) async fn send_user_message_core(
                 .clear_codex_foreground_work(Some(&thread_id), None)
                 .await;
         }
-        return Ok(fallback_response);
+        return Ok(attach_codex_dispatch_receipt(
+            fallback_response,
+            provider_profile_id.as_deref(),
+            &session_key,
+            model.as_deref(),
+            effort.as_deref(),
+        ));
     }
-    Ok(response)
+    Ok(attach_codex_dispatch_receipt(
+        response,
+        provider_profile_id.as_deref(),
+        &session_key,
+        model.as_deref(),
+        effort.as_deref(),
+    ))
 }
 
 /// Change C：向已建立的 Codex thread 注入 Responses API history items。
@@ -1149,17 +1192,70 @@ fn classify_context_import_response(response: Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_reasoning_config, build_writable_roots, ensure_collaboration_mode_defaults,
-        extract_parent_thread_id_from_response, extract_thread_id_from_response,
-        inject_code_mode_fallback_prompt, inject_plan_mode_fallback_prompt,
-        is_collaboration_mode_capability_error, is_method_not_found_response,
-        is_thread_not_found_error_message, is_thread_not_found_response,
-        is_thread_resume_rollout_pending_error_message, normalize_custom_spec_root,
-        normalize_preferred_language, resolve_execution_policy,
+        attach_codex_dispatch_receipt, build_reasoning_config, build_writable_roots,
+        ensure_collaboration_mode_defaults, extract_parent_thread_id_from_response,
+        extract_thread_id_from_response, inject_code_mode_fallback_prompt,
+        inject_plan_mode_fallback_prompt, is_collaboration_mode_capability_error,
+        is_method_not_found_response, is_thread_not_found_error_message,
+        is_thread_not_found_response, is_thread_resume_rollout_pending_error_message,
+        normalize_custom_spec_root, normalize_preferred_language, resolve_execution_policy,
         should_soft_ready_for_not_ready_reason, validate_thread_resume_ready_response,
         validate_thread_start_response, INVALID_THREAD_START_RESPONSE_ERROR_PREFIX,
     };
     use serde_json::{json, Value};
+
+    #[test]
+    fn codex_dispatch_receipt_records_the_provider_scoped_request() {
+        let response = attach_codex_dispatch_receipt(
+            json!({ "result": { "turn": { "id": "turn-1" } } }),
+            Some("provider-kimi"),
+            "workspace::provider-kimi",
+            Some("kimi-for-coding"),
+            Some("high"),
+        );
+
+        assert_eq!(response["mossxDispatchReceipt"]["engine"], "codex");
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerProfileId"],
+            "provider-kimi"
+        );
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerRuntimeKey"],
+            "workspace::provider-kimi"
+        );
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerProfileSource"],
+            "managed"
+        );
+        assert_eq!(response["mossxDispatchReceipt"]["model"], "kimi-for-coding");
+        assert_eq!(response["mossxDispatchReceipt"]["reasoningEffort"], "high");
+    }
+
+    #[test]
+    fn codex_dispatch_receipt_records_local_runtime_identity() {
+        let response = attach_codex_dispatch_receipt(
+            json!({ "result": { "turn": { "id": "turn-local" } } }),
+            None,
+            "workspace-local",
+            Some("gpt-5.3-codex-spark"),
+            None,
+        );
+
+        assert!(response["mossxDispatchReceipt"]["providerProfileId"].is_null());
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerProfileSource"],
+            "local"
+        );
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerRuntimeKey"],
+            "workspace-local"
+        );
+        assert_eq!(
+            response["mossxDispatchReceipt"]["model"],
+            "gpt-5.3-codex-spark"
+        );
+        assert!(response["mossxDispatchReceipt"]["reasoningEffort"].is_null());
+    }
 
     #[test]
     fn context_import_requires_jsonrpc_success() {
@@ -1596,7 +1692,16 @@ pub(crate) async fn model_list_core(
     sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
     workspace_id: String,
 ) -> Result<Value, String> {
-    let session = get_session_clone(sessions, &legacy_codex_runtime_key(&workspace_id)).await?;
+    model_list_for_provider_core(sessions, workspace_id, None).await
+}
+
+pub(crate) async fn model_list_for_provider_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    workspace_id: String,
+    provider_profile_id: Option<String>,
+) -> Result<Value, String> {
+    let session_key = session_key_for_provider(&workspace_id, provider_profile_id.as_deref());
+    let session = get_session_clone(sessions, &session_key).await?;
     session.send_request("model/list", json!({})).await
 }
 
@@ -1809,7 +1914,16 @@ pub(crate) async fn respond_to_server_request_core(
     result: Value,
 ) -> Result<(), String> {
     let session_key = session_key_for_provider(&workspace_id, provider_profile_id.as_deref());
-    let session = get_session_clone(sessions, &session_key).await?;
+    respond_to_server_request_for_runtime_core(sessions, session_key, request_id, result).await
+}
+
+pub(crate) async fn respond_to_server_request_for_runtime_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    provider_runtime_key: String,
+    request_id: Value,
+    result: Value,
+) -> Result<(), String> {
+    let session = get_session_clone(sessions, provider_runtime_key.trim()).await?;
     if let Some(local_request_id) = request_id.as_str() {
         if session
             .consume_local_user_input_request(local_request_id)

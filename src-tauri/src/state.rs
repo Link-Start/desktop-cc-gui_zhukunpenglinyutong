@@ -43,6 +43,8 @@ pub(crate) struct AppState {
     pub(crate) claude_commands_watches: Mutex<crate::claude_commands_watch::CommandsWatchRegistry>,
     pub(crate) runtime_manager: Arc<crate::runtime::RuntimeManager>,
     pub(crate) shared_event_writer: Option<crate::shared_event_log::SharedEventWriter>,
+    pub(crate) shared_runtime_coordinator:
+        crate::shared_runtime_coordinator::SharedRuntimeCoordinator,
     pub(crate) renderer_heartbeats: Mutex<crate::renderer_stability::RendererHeartbeatStore>,
     pub(crate) semantic_navigation_runtime: crate::code_intel_lsp::SemanticNavigationRuntime,
     pub(crate) engine_manager: EngineManager,
@@ -200,6 +202,8 @@ impl AppState {
             ),
             runtime_manager,
             shared_event_writer,
+            shared_runtime_coordinator:
+                crate::shared_runtime_coordinator::SharedRuntimeCoordinator::default(),
             renderer_heartbeats: Mutex::new(
                 crate::renderer_stability::RendererHeartbeatStore::default(),
             ),

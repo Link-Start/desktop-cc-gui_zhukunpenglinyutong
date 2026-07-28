@@ -140,11 +140,15 @@ pub struct PendingDelivery {
     pub phase: String,
     pub client_turn_id: String,
     pub attempt_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binding_operation_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub native_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub native_request_id: Option<String>,
     pub prepared_at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sent_at: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accepted_at: Option<i64>,
     pub probe_attempts: u32,

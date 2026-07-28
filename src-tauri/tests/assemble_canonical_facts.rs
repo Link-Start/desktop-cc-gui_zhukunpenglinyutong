@@ -47,6 +47,7 @@ fn snapshot() -> TurnExecutionSnapshot {
     TurnExecutionSnapshot {
         engine: "claude".to_string(),
         provider_profile_id: Some("profile-1".to_string()),
+        model_catalog_entry_id: None,
         model: Some("claude-opus".to_string()),
         reasoning: None,
         provider_profile_name_snapshot: None,
@@ -264,6 +265,7 @@ fn unpaired_tool_call_settled_incomplete() {
         "entry-1".to_string(),
         snapshot(),
         RuntimeFinalSnapshot {
+            assistant_blocks: vec![],
             assistant_text: None,
             tool_calls: vec![RuntimeToolCall {
                 tool_call_id: "call-1".to_string(),
@@ -272,6 +274,8 @@ fn unpaired_tool_call_settled_incomplete() {
             }],
             tool_results: vec![],
             artifacts: vec![],
+            provider_private_refs: vec![],
+            omissions: vec![],
             outcome: OutcomeStatus::Completed,
             error_code: None,
             error_message: None,
@@ -398,10 +402,13 @@ fn critical_commit_sink_idempotent() {
     let writer = open_writer(&temp);
 
     let final_snapshot = RuntimeFinalSnapshot {
+        assistant_blocks: vec![],
         assistant_text: Some("sink reply".to_string()),
         tool_calls: vec![],
         tool_results: vec![],
         artifacts: vec![],
+        provider_private_refs: vec![],
+        omissions: vec![],
         outcome: OutcomeStatus::Completed,
         error_code: None,
         error_message: None,
@@ -426,10 +433,13 @@ fn critical_commit_sink_idempotent() {
     // 模拟 run.settled 重复触发：Sink 应幂等。
     for _ in 0..100 {
         let final_snapshot = RuntimeFinalSnapshot {
+            assistant_blocks: vec![],
             assistant_text: Some("sink reply".to_string()),
             tool_calls: vec![],
             tool_results: vec![],
             artifacts: vec![],
+            provider_private_refs: vec![],
+            omissions: vec![],
             outcome: OutcomeStatus::Completed,
             error_code: None,
             error_message: None,
@@ -462,10 +472,13 @@ fn critical_commit_sink_idempotent() {
 #[test]
 fn dropped_streaming_deltas_do_not_change_terminal_fact() {
     let final_snapshot = || RuntimeFinalSnapshot {
+        assistant_blocks: vec![],
         assistant_text: Some("authoritative final".to_string()),
         tool_calls: vec![],
         tool_results: vec![],
         artifacts: vec![],
+        provider_private_refs: vec![],
+        omissions: vec![],
         outcome: OutcomeStatus::Completed,
         error_code: None,
         error_message: None,

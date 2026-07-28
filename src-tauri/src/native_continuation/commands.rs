@@ -13,6 +13,7 @@ use crate::shared_context::{
     write_typed_artifact, ArtifactReadRequest, CompileNativeContextRequest, ContextPackage,
     ProjectionMode,
 };
+use crate::shared_event_log::canonical::CanonicalProviderProfileSource;
 use crate::shared_event_log::deterministic_json_bytes;
 use crate::shared_session_v2::{
     codex_import_items, codex_import_projection, context_capabilities, ExecutionTargetInput,
@@ -60,6 +61,13 @@ fn source_engine_type(engine: NativeHistoryEngine) -> EngineType {
         NativeHistoryEngine::Claude => EngineType::Claude,
         NativeHistoryEngine::Codex => EngineType::Codex,
         NativeHistoryEngine::Kimi => EngineType::Kimi,
+    }
+}
+
+fn native_provider_source(source: Option<CanonicalProviderProfileSource>) -> &'static str {
+    match source {
+        Some(CanonicalProviderProfileSource::Managed) => "managed",
+        Some(CanonicalProviderProfileSource::Local) | None => "disk",
     }
 }
 
@@ -367,10 +375,10 @@ async fn persist_target_metadata(
             .map(|profile| profile.binding)
             .unwrap_or_else(|| crate::session_management::EngineProviderBinding {
                 provider_profile_id: provider_profile_id.clone(),
-                provider_profile_source: destination
-                    .provider_profile_source
-                    .clone()
-                    .unwrap_or_else(|| "disk".to_string()),
+                provider_profile_source: native_provider_source(
+                    destination.provider_profile_source,
+                )
+                .to_string(),
                 provider_profile_name: destination
                     .provider_profile_name_snapshot
                     .clone()
@@ -653,13 +661,35 @@ async fn execute_codex(
     .map_err(|error| error.to_string())
 }
 
-async fn claude_history_contains_bootstrap_evidence(
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ClaudeBootstrapEvidence {
+    Missing,
+    BootstrapPersisted,
+    Accepted,
+    Rejected {
+        status: Option<u64>,
+        message: String,
+    },
+}
+
+fn claude_rejection_error(status: Option<u64>, message: &str) -> String {
+    let message = message.trim();
+    if !message.is_empty() {
+        return format!("target-provider-rejected: {message}");
+    }
+    match status {
+        Some(status) => format!("target-provider-rejected: API Error: {status}"),
+        None => "target-provider-rejected: target Provider rejected bootstrap".to_string(),
+    }
+}
+
+async fn claude_history_bootstrap_evidence(
     state: &AppState,
     workspace_id: &str,
     target_session_id: &str,
     package_marker: &str,
     acceptance_marker: &str,
-) -> Result<bool, String> {
+) -> Result<ClaudeBootstrapEvidence, String> {
     let workspace_path = workspace_path(state, workspace_id).await?;
     let config = state
         .engine_manager
@@ -689,10 +719,14 @@ fn claude_bootstrap_evidence_in_jsonl(
     content: &str,
     package_marker: &str,
     acceptance_marker: &str,
-) -> bool {
-    content.lines().any(|line| {
+) -> ClaudeBootstrapEvidence {
+    let mut bootstrap_persisted = false;
+    let mut assistant_ack = false;
+    let mut rejection = None;
+
+    for line in content.lines() {
         let Ok(entry) = serde_json::from_str::<Value>(line) else {
-            return false;
+            continue;
         };
         let role = entry
             .pointer("/message/role")
@@ -700,30 +734,98 @@ fn claude_bootstrap_evidence_in_jsonl(
             .or_else(|| entry.get("type").and_then(Value::as_str));
         let text_blocks = entry.pointer("/message/content").and_then(Value::as_array);
         match role {
-            Some("user") => text_blocks.is_some_and(|blocks| {
-                blocks.iter().any(|block| {
-                    block
-                        .get("text")
-                        .and_then(Value::as_str)
-                        .is_some_and(|text| {
-                            text.contains(package_marker)
-                                && text.contains("MOSSX_NATIVE_CONTEXT_V1")
-                        })
-                })
-            }),
-            Some("assistant") => text_blocks.is_some_and(|blocks| {
-                blocks.iter().any(|block| {
-                    block.get("text").and_then(Value::as_str).map(str::trim)
-                        == Some(acceptance_marker)
-                })
-            }),
-            _ => false,
+            Some("user") => {
+                let is_current_bootstrap = text_blocks.is_some_and(|blocks| {
+                    blocks.iter().any(|block| {
+                        block
+                            .get("text")
+                            .and_then(Value::as_str)
+                            .is_some_and(|text| {
+                                text.contains(package_marker)
+                                    && text.contains("MOSSX_NATIVE_CONTEXT_V1")
+                            })
+                    })
+                });
+                bootstrap_persisted |= is_current_bootstrap;
+            }
+            Some("assistant") => {
+                assistant_ack |= text_blocks.is_some_and(|blocks| {
+                    blocks.iter().any(|block| {
+                        block.get("text").and_then(Value::as_str).map(str::trim)
+                            == Some(acceptance_marker)
+                    })
+                });
+                if bootstrap_persisted
+                    && (entry.get("isApiErrorMessage").and_then(Value::as_bool) == Some(true)
+                        || entry
+                            .get("apiErrorStatus")
+                            .and_then(Value::as_u64)
+                            .is_some())
+                {
+                    let message = text_blocks
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|block| block.get("text").and_then(Value::as_str))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    rejection = Some(ClaudeBootstrapEvidence::Rejected {
+                        status: entry.get("apiErrorStatus").and_then(Value::as_u64),
+                        message,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    rejection.unwrap_or_else(|| {
+        if assistant_ack {
+            ClaudeBootstrapEvidence::Accepted
+        } else if bootstrap_persisted {
+            ClaudeBootstrapEvidence::BootstrapPersisted
+        } else {
+            ClaudeBootstrapEvidence::Missing
         }
     })
 }
 
 fn claude_assistant_ack_in_jsonl(content: &str, marker: &str) -> bool {
     claude_bootstrap_evidence_in_jsonl(content, "__no_package_marker__", marker)
+        == ClaudeBootstrapEvidence::Accepted
+}
+
+fn validate_claude_model_against_catalog(
+    model_catalog_entry_id: Option<&str>,
+    runtime_model: Option<&str>,
+    catalog: &[crate::engine::ModelInfo],
+) -> Result<(), String> {
+    crate::engine::status::validate_model_catalog_pair(
+        model_catalog_entry_id,
+        runtime_model,
+        catalog,
+        crate::engine::status::UnlistedRuntimeModelPolicy::Allow,
+    )
+}
+
+fn validate_claude_continuation_model(
+    destination: &ExecutionTargetInput,
+    provider_profile_id: &str,
+) -> Result<(), String> {
+    let catalog = crate::engine::status::get_provider_scoped_engine_models(
+        EngineType::Claude,
+        Some(provider_profile_id),
+    )?;
+    match catalog {
+        Some(catalog) => validate_claude_model_against_catalog(
+            destination.model_catalog_entry_id.as_deref(),
+            destination.model.as_deref(),
+            &catalog,
+        ),
+        None if destination.model_catalog_entry_id.is_some() => {
+            Err("invalid-target-model: Provider-scoped catalog is unavailable".to_string())
+        }
+        None => Ok(()),
+    }
 }
 
 async fn execute_claude(
@@ -763,8 +865,8 @@ async fn execute_claude(
             )
             .map_err(|error| error.to_string());
         }
-        let accepted = if operation.phase == "recovery-required" {
-            claude_history_contains_bootstrap_evidence(
+        let evidence = if operation.phase == "recovery-required" {
+            claude_history_bootstrap_evidence(
                 state,
                 workspace_id,
                 target_session_id.trim_start_matches("claude:"),
@@ -774,28 +876,42 @@ async fn execute_claude(
             .await
             .map_err(|error| format!("recovery-required: {error}"))?
         } else {
-            false
+            ClaudeBootstrapEvidence::Missing
         };
-        if accepted {
-            let canonical_target_session_id =
-                format!("claude:{}", target_session_id.trim_start_matches("claude:"));
-            persist_target_metadata(
-                state,
-                workspace_id,
-                &operation,
-                destination,
-                &canonical_target_session_id,
-            )
-            .await?;
-            return update_operation_phase(
-                root,
-                &operation.materialization.operation_id,
-                "ready",
-                Some(&canonical_target_session_id),
-                None,
-                now_millis(),
-            )
-            .map_err(|error| error.to_string());
+        match evidence {
+            ClaudeBootstrapEvidence::Accepted | ClaudeBootstrapEvidence::BootstrapPersisted => {
+                let canonical_target_session_id =
+                    format!("claude:{}", target_session_id.trim_start_matches("claude:"));
+                persist_target_metadata(
+                    state,
+                    workspace_id,
+                    &operation,
+                    destination,
+                    &canonical_target_session_id,
+                )
+                .await?;
+                return update_operation_phase(
+                    root,
+                    &operation.materialization.operation_id,
+                    "ready",
+                    Some(&canonical_target_session_id),
+                    None,
+                    now_millis(),
+                )
+                .map_err(|error| error.to_string());
+            }
+            ClaudeBootstrapEvidence::Rejected { status, message } => {
+                let _ = update_operation_phase(
+                    root,
+                    &operation.materialization.operation_id,
+                    "recovery-required",
+                    Some(target_session_id),
+                    Some("target-provider-rejected"),
+                    now_millis(),
+                );
+                return Err(claude_rejection_error(status, &message));
+            }
+            ClaudeBootstrapEvidence::Missing => {}
         }
         return Err(format!(
             "recovery-required: {}",
@@ -820,6 +936,7 @@ async fn execute_claude(
     let provider_profile_id = destination
         .normalized_provider()
         .ok_or_else(|| "destination provider identity is required".to_string())?;
+    validate_claude_continuation_model(destination, &provider_profile_id)?;
     let provider_launch_profile =
         crate::engine::claude::resolve_claude_provider_launch_profile(Some(&provider_profile_id))?;
     let workspace_path = workspace_path(state, workspace_id).await?;
@@ -868,6 +985,26 @@ async fn execute_claude(
     {
         Ok(response) => response,
         Err(error) => {
+            let evidence = claude_history_bootstrap_evidence(
+                state,
+                workspace_id,
+                canonical_target_session_id.trim_start_matches("claude:"),
+                &package_marker,
+                &marker,
+            )
+            .await
+            .unwrap_or(ClaudeBootstrapEvidence::Missing);
+            if let ClaudeBootstrapEvidence::Rejected { status, message } = evidence {
+                let _ = update_operation_phase(
+                    root,
+                    &operation.materialization.operation_id,
+                    "recovery-required",
+                    Some(&canonical_target_session_id),
+                    Some("target-provider-rejected"),
+                    now_millis(),
+                );
+                return Err(claude_rejection_error(status, &message));
+            }
             let _ = update_operation_phase(
                 root,
                 &operation.materialization.operation_id,
@@ -879,6 +1016,26 @@ async fn execute_claude(
             return Err(format!("acceptance-ambiguous: {error}"));
         }
     };
+    if let Ok(ClaudeBootstrapEvidence::Rejected { status, message }) =
+        claude_history_bootstrap_evidence(
+            state,
+            workspace_id,
+            canonical_target_session_id.trim_start_matches("claude:"),
+            &package_marker,
+            &marker,
+        )
+        .await
+    {
+        let _ = update_operation_phase(
+            root,
+            &operation.materialization.operation_id,
+            "recovery-required",
+            Some(&canonical_target_session_id),
+            Some("target-provider-rejected"),
+            now_millis(),
+        );
+        return Err(claude_rejection_error(status, &message));
+    }
     // Claude CLI 已完成该 bootstrap turn，说明 prompt transport 已被目标 Session
     // 接收。模型是否逐字复述 marker 不是 transport ACK；把模型服从性当成 ACK
     // 会造成“目标已创建但首次报错、二次 probe 才成功”的假失败。
@@ -1045,8 +1202,23 @@ pub(crate) async fn create_native_provider_continuation(
 mod tests {
     use super::{
         claude_assistant_ack_in_jsonl, claude_bootstrap_evidence_in_jsonl, codex_context_transport,
-        CodexContextTransport, ProjectionMode,
+        native_provider_source, validate_claude_model_against_catalog,
+        CanonicalProviderProfileSource, ClaudeBootstrapEvidence, CodexContextTransport,
+        ProjectionMode,
     };
+
+    #[test]
+    fn canonical_provider_source_maps_back_to_native_catalog_source_explicitly() {
+        assert_eq!(
+            native_provider_source(Some(CanonicalProviderProfileSource::Local)),
+            "disk"
+        );
+        assert_eq!(
+            native_provider_source(Some(CanonicalProviderProfileSource::Managed)),
+            "managed"
+        );
+        assert_eq!(native_provider_source(None), "disk");
+    }
 
     #[test]
     fn claude_recovery_requires_assistant_ack_not_user_prompt_marker() {
@@ -1069,11 +1241,10 @@ mod tests {
         let bootstrap = format!(
             r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"{package_marker}\nMOSSX_NATIVE_CONTEXT_V1\nsource:claude:source\nbinding:continuation:operation"}}]}}}}"#
         );
-        assert!(claude_bootstrap_evidence_in_jsonl(
-            &bootstrap,
-            package_marker,
-            acceptance_marker,
-        ));
+        assert_eq!(
+            claude_bootstrap_evidence_in_jsonl(&bootstrap, package_marker, acceptance_marker,),
+            ClaudeBootstrapEvidence::BootstrapPersisted
+        );
     }
 
     #[test]
@@ -1082,11 +1253,82 @@ mod tests {
         let unrelated = format!(
             r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"please explain {package_marker}"}}]}}}}"#
         );
-        assert!(!claude_bootstrap_evidence_in_jsonl(
-            &unrelated,
-            package_marker,
-            "MOSSX_CONTEXT_ACCEPTED:package:checksum",
-        ));
+        assert_eq!(
+            claude_bootstrap_evidence_in_jsonl(
+                &unrelated,
+                package_marker,
+                "MOSSX_CONTEXT_ACCEPTED:package:checksum",
+            ),
+            ClaudeBootstrapEvidence::Missing
+        );
+    }
+
+    #[test]
+    fn claude_recovery_prefers_structured_api_rejection_over_bootstrap_entry() {
+        let package_marker = "MOSSX_CONTEXT_PACKAGE:package:checksum";
+        let bootstrap = format!(
+            r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"{package_marker}\nMOSSX_NATIVE_CONTEXT_V1"}}]}}}}
+{{"type":"assistant","isApiErrorMessage":true,"apiErrorStatus":400,"message":{{"role":"assistant","content":[{{"type":"text","text":"API Error: 400 invalid model"}}]}}}}"#
+        );
+        assert_eq!(
+            claude_bootstrap_evidence_in_jsonl(
+                &bootstrap,
+                package_marker,
+                "MOSSX_CONTEXT_ACCEPTED:package:checksum",
+            ),
+            ClaudeBootstrapEvidence::Rejected {
+                status: Some(400),
+                message: "API Error: 400 invalid model".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn claude_recovery_ignores_api_error_text_inside_source_context() {
+        let package_marker = "MOSSX_CONTEXT_PACKAGE:package:checksum";
+        let bootstrap = format!(
+            r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"{package_marker}\nMOSSX_NATIVE_CONTEXT_V1\nold API Error: 400"}}]}}}}"#
+        );
+        assert_eq!(
+            claude_bootstrap_evidence_in_jsonl(
+                &bootstrap,
+                package_marker,
+                "MOSSX_CONTEXT_ACCEPTED:package:checksum",
+            ),
+            ClaudeBootstrapEvidence::BootstrapPersisted
+        );
+    }
+
+    #[test]
+    fn claude_model_validation_separates_catalog_id_from_runtime_model() {
+        let catalog = vec![
+            crate::engine::ModelInfo::new("settings-reasoning", "Reasoning")
+                .with_runtime_model("deepseek-v4-pro"),
+        ];
+        assert!(validate_claude_model_against_catalog(
+            Some("settings-reasoning"),
+            Some("deepseek-v4-pro"),
+            &catalog,
+        )
+        .is_ok());
+        assert!(validate_claude_model_against_catalog(
+            Some("settings-reasoning"),
+            Some("settings-reasoning"),
+            &catalog,
+        )
+        .expect_err("UI id must not reach runtime")
+        .contains("requires runtime model 'deepseek-v4-pro'"));
+        assert!(
+            validate_claude_model_against_catalog(None, Some("settings-reasoning"), &catalog,)
+                .expect_err("legacy UI id must fail closed")
+                .contains("is a catalog entry id")
+        );
+        assert!(validate_claude_model_against_catalog(
+            None,
+            Some("custom/provider-model"),
+            &catalog,
+        )
+        .is_ok());
     }
 
     #[test]

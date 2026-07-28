@@ -149,6 +149,17 @@ pub struct ProjectionCheckpointRow {
     pub payload_json: String,
 }
 
+/// Legacy V0 snapshot 的幂等导入标记。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegacyImportRow {
+    pub session_id: String,
+    pub source_path: String,
+    pub source_fingerprint: String,
+    pub imported_through_marker: Option<String>,
+    pub status: String,
+    pub imported_at: Option<i64>,
+}
+
 /// append 事务内的观测边界。
 ///
 /// 仅崩溃测试台（A1.5 victim 子进程）使用，用于在精确事务边界 SIGKILL。
@@ -245,7 +256,7 @@ impl SharedEventStore {
         &mut self,
         event: &NewCanonicalEvent,
     ) -> Result<AppendOutcome, StoreError> {
-        self.append_event_inner(event, None)
+        self.append_event_inner(event, None, false)
     }
 
     /// 同事务追加 event + 更新 binding/cursor（cursor 与 commit 原子落盘）。
@@ -254,13 +265,24 @@ impl SharedEventStore {
         event: &NewCanonicalEvent,
         binding: &BindingStateUpdate,
     ) -> Result<AppendOutcome, StoreError> {
-        self.append_event_inner(event, Some(binding))
+        self.append_event_inner(event, Some(binding), false)
+    }
+
+    /// Shared linear-thread Tx1：同一 transaction 内验证 session 没有未决 Attempt，
+    /// 再追加 turnRequested + Binding owner。防止两个并发 submit 都通过事务外预检。
+    pub(crate) fn append_event_with_binding_if_no_unresolved(
+        &mut self,
+        event: &NewCanonicalEvent,
+        binding: &BindingStateUpdate,
+    ) -> Result<AppendOutcome, StoreError> {
+        self.append_event_inner(event, Some(binding), true)
     }
 
     fn append_event_inner(
         &mut self,
         event: &NewCanonicalEvent,
         binding: Option<&BindingStateUpdate>,
+        require_no_unresolved_attempt: bool,
     ) -> Result<AppendOutcome, StoreError> {
         let payload: Value = serde_json::from_str(&event.payload_json)
             .map_err(|source| StoreError::json("parse event payload_json", source))?;
@@ -274,6 +296,35 @@ impl SharedEventStore {
         // 三条幂等路径预检（单写者下与 insert 无竞态）。
         if let Some(existing_sequence) = find_existing_sequence(&tx, event, &checksum)? {
             return Ok(AppendOutcome::Duplicate { existing_sequence });
+        }
+
+        if require_no_unresolved_attempt {
+            let unresolved_attempt: Option<String> = tx
+                .query_row(
+                    "SELECT requested.attempt_id
+                     FROM shared_event_log requested
+                     WHERE requested.session_id = ?1
+                       AND requested.fact_type = 'conversation.turnRequested'
+                       AND requested.attempt_id IS NOT NULL
+                       AND NOT EXISTS (
+                         SELECT 1 FROM shared_event_log committed
+                         WHERE committed.session_id = requested.session_id
+                           AND committed.attempt_id = requested.attempt_id
+                           AND committed.fact_type = 'conversation.turnCommitted'
+                       )
+                     ORDER BY requested.sequence ASC
+                     LIMIT 1",
+                    [&event.session_id],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(|source| StoreError::sqlite("check unresolved shared attempt", source))?;
+            if let Some(unresolved_attempt) = unresolved_attempt {
+                return Err(StoreError::validation_failed(
+                    "conversation.turnRequested",
+                    format!("session already has unresolved attempt {unresolved_attempt}"),
+                ));
+            }
         }
 
         if let Some(hook) = self.boundary_hook.as_mut() {
@@ -602,6 +653,61 @@ impl SharedEventStore {
         Ok(())
     }
 
+    pub(crate) fn legacy_import(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<LegacyImportRow>, StoreError> {
+        self.conn
+            .query_row(
+                "SELECT session_id, source_path, source_fingerprint, imported_through_marker,
+                        status, imported_at
+                 FROM shared_legacy_import
+                 WHERE session_id = ?1",
+                [session_id],
+                |row| {
+                    Ok(LegacyImportRow {
+                        session_id: row.get(0)?,
+                        source_path: row.get(1)?,
+                        source_fingerprint: row.get(2)?,
+                        imported_through_marker: row.get(3)?,
+                        status: row.get(4)?,
+                        imported_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|source| StoreError::sqlite("read legacy import marker", source))
+    }
+
+    pub(crate) fn upsert_legacy_import(
+        &mut self,
+        marker: &LegacyImportRow,
+    ) -> Result<(), StoreError> {
+        self.conn
+            .execute(
+                "INSERT INTO shared_legacy_import (
+                    session_id, source_path, source_fingerprint, imported_through_marker,
+                    status, imported_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(session_id) DO UPDATE SET
+                    source_path = excluded.source_path,
+                    source_fingerprint = excluded.source_fingerprint,
+                    imported_through_marker = excluded.imported_through_marker,
+                    status = excluded.status,
+                    imported_at = excluded.imported_at",
+                rusqlite::params![
+                    marker.session_id,
+                    marker.source_path,
+                    marker.source_fingerprint,
+                    marker.imported_through_marker,
+                    marker.status,
+                    marker.imported_at,
+                ],
+            )
+            .map_err(|source| map_write_error("upsert legacy import marker", source))?;
+        Ok(())
+    }
+
     /// 当前 schema user_version（诊断/测试用）。
     pub(crate) fn user_version(&self) -> Result<u32, StoreError> {
         schema::current_user_version(&self.conn)
@@ -855,6 +961,13 @@ enum WriterCommand {
         binding: BindingStateUpdate,
         respond: mpsc::Sender<Result<AppendOutcome, StoreError>>,
     },
+    AppendCanonicalFactWithBindingIfNoUnresolved {
+        session_id: String,
+        fact: CanonicalFact,
+        occurred_at: i64,
+        binding: BindingStateUpdate,
+        respond: mpsc::Sender<Result<AppendOutcome, StoreError>>,
+    },
     UpsertBinding {
         update: BindingStateUpdate,
         respond: mpsc::Sender<Result<(), StoreError>>,
@@ -899,6 +1012,14 @@ enum WriterCommand {
     },
     UpsertProjectionCheckpoint {
         checkpoint: ProjectionCheckpointRow,
+        respond: mpsc::Sender<Result<(), StoreError>>,
+    },
+    LegacyImport {
+        session_id: String,
+        respond: mpsc::Sender<Result<Option<LegacyImportRow>, StoreError>>,
+    },
+    UpsertLegacyImport {
+        marker: LegacyImportRow,
         respond: mpsc::Sender<Result<(), StoreError>>,
     },
     UserVersion {
@@ -981,6 +1102,42 @@ impl SharedEventWriter {
                                 });
                             let _ = respond.send(result);
                         }
+                        WriterCommand::AppendCanonicalFactWithBindingIfNoUnresolved {
+                            session_id,
+                            fact,
+                            occurred_at,
+                            binding,
+                            respond,
+                        } => {
+                            let result = validate_fact(&fact)
+                                .map_err(|error| {
+                                    StoreError::validation_failed(
+                                        fact.fact_type(),
+                                        error.to_string(),
+                                    )
+                                })
+                                .and_then(|_| {
+                                    if !matches!(&fact, CanonicalFact::TurnRequested(_)) {
+                                        return Err(StoreError::validation_failed(
+                                            fact.fact_type(),
+                                            "unresolved-attempt guard is only valid for turnRequested",
+                                        ));
+                                    }
+                                    canonical_fact_to_event(
+                                        session_id,
+                                        &fact,
+                                        Fidelity::Canonical,
+                                        occurred_at,
+                                    )
+                                })
+                                .and_then(|event| {
+                                    store.append_event_with_binding_if_no_unresolved(
+                                        &event,
+                                        &binding,
+                                    )
+                                });
+                            let _ = respond.send(result);
+                        }
                         WriterCommand::UpsertBinding { update, respond } => {
                             let _ = respond.send(store.upsert_binding_state(&update));
                         }
@@ -1049,6 +1206,15 @@ impl SharedEventWriter {
                             respond,
                         } => {
                             let _ = respond.send(store.upsert_projection_checkpoint(&checkpoint));
+                        }
+                        WriterCommand::LegacyImport {
+                            session_id,
+                            respond,
+                        } => {
+                            let _ = respond.send(store.legacy_import(&session_id));
+                        }
+                        WriterCommand::UpsertLegacyImport { marker, respond } => {
+                            let _ = respond.send(store.upsert_legacy_import(&marker));
                         }
                         WriterCommand::UserVersion { respond } => {
                             let _ = respond.send(store.user_version());
@@ -1140,6 +1306,26 @@ impl SharedEventWriter {
             binding: binding.clone(),
             respond,
         })
+    }
+
+    /// Shared linear-thread Tx1 专用：原子验证“无未决 Attempt”并追加
+    /// `turnRequested + BindingStateUpdate`。
+    pub fn append_turn_requested_with_binding_at(
+        &self,
+        session_id: impl Into<String>,
+        fact: CanonicalFact,
+        occurred_at: i64,
+        binding: &BindingStateUpdate,
+    ) -> Result<AppendOutcome, StoreError> {
+        self.send_command(
+            |respond| WriterCommand::AppendCanonicalFactWithBindingIfNoUnresolved {
+                session_id: session_id.into(),
+                fact,
+                occurred_at,
+                binding: binding.clone(),
+                respond,
+            },
+        )
     }
 
     /// 追加 presentation-only shadow fact（如 V0 evidence 映射），不做严格校验。
@@ -1266,6 +1452,20 @@ impl SharedEventWriter {
     ) -> Result<(), StoreError> {
         self.send_command(|respond| WriterCommand::UpsertProjectionCheckpoint {
             checkpoint: checkpoint.clone(),
+            respond,
+        })
+    }
+
+    pub fn legacy_import(&self, session_id: &str) -> Result<Option<LegacyImportRow>, StoreError> {
+        self.send_command(|respond| WriterCommand::LegacyImport {
+            session_id: session_id.to_string(),
+            respond,
+        })
+    }
+
+    pub fn upsert_legacy_import(&self, marker: &LegacyImportRow) -> Result<(), StoreError> {
+        self.send_command(|respond| WriterCommand::UpsertLegacyImport {
+            marker: marker.clone(),
             respond,
         })
     }

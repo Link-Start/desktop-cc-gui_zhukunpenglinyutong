@@ -64,7 +64,7 @@ use crate::backend::app_server::{
 };
 pub(crate) use crate::backend::app_server::{ResumePendingSource, WorkspaceSession};
 use crate::backend::events::AppServerEvent;
-use crate::engine::SendMessageParams;
+use crate::engine::{EngineType, SendMessageParams};
 use crate::event_sink::build_event_sink;
 use crate::local_usage;
 use crate::remote_backend;
@@ -392,12 +392,14 @@ pub(crate) async fn spawn_workspace_session(
     app_handle: AppHandle,
     codex_home: Option<PathBuf>,
 ) -> Result<Arc<WorkspaceSession>, String> {
+    let provider_runtime_key = crate::codex::provider_profile::legacy_codex_runtime_key(&entry.id);
     spawn_workspace_session_with_launch_options(
         entry,
         default_codex_bin,
         codex_args,
         app_handle,
         codex_home,
+        provider_runtime_key,
         CodexAppServerLaunchOptions::primary(),
     )
     .await
@@ -409,6 +411,7 @@ pub(crate) async fn spawn_workspace_session_with_launch_options(
     codex_args: Option<String>,
     app_handle: AppHandle,
     codex_home: Option<PathBuf>,
+    provider_runtime_key: String,
     launch_options: CodexAppServerLaunchOptions,
 ) -> Result<Arc<WorkspaceSession>, String> {
     let client_version = app_handle.package_info().version.to_string();
@@ -432,6 +435,7 @@ pub(crate) async fn spawn_workspace_session_with_launch_options(
         auto_compaction_enabled,
         event_sink,
         launch_options,
+        provider_runtime_key,
         app_settings_snapshot,
     )
     .await
@@ -1595,6 +1599,37 @@ pub(crate) async fn model_list(
 }
 
 #[tauri::command]
+pub(crate) async fn discover_codex_models(
+    workspace_id: String,
+    provider_profile_id: Option<String>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "discover_codex_models",
+            json!({
+                "workspaceId": workspace_id,
+                "providerProfileId": provider_profile_id,
+            }),
+        )
+        .await;
+    }
+
+    let provider_profile_id =
+        codex_core::normalize_provider_profile_id(provider_profile_id.as_deref());
+    ensure_codex_session_for_provider(&workspace_id, &provider_profile_id, &state, &app).await?;
+    codex_core::model_list_for_provider_core(
+        &state.sessions,
+        workspace_id,
+        Some(provider_profile_id),
+    )
+    .await
+}
+
+#[tauri::command]
 pub(crate) async fn account_rate_limits(
     workspace_id: String,
     state: State<'_, AppState>,
@@ -1746,6 +1781,167 @@ pub(crate) async fn skills_list(
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SharedControlResponseRoute {
+    workspace_id: String,
+    engine: EngineType,
+    provider_runtime_key: String,
+    provider_profile_id: Option<String>,
+    native_thread_id: String,
+    runtime_turn_id: String,
+}
+
+fn normalize_control_identity(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+pub(crate) fn resolve_shared_control_response_route(
+    coordinator: &crate::shared_runtime_coordinator::SharedRuntimeCoordinator,
+    workspace_id: &str,
+    shared_attempt_id: Option<&str>,
+    shared_thread_id: Option<&str>,
+    provider_runtime_key: Option<&str>,
+    provider_profile_id: Option<&str>,
+    native_thread_id: Option<&str>,
+    runtime_turn_id: Option<&str>,
+) -> Result<Option<SharedControlResponseRoute>, String> {
+    let has_shared_identity =
+        shared_attempt_id.is_some() || shared_thread_id.is_some() || provider_runtime_key.is_some();
+    if !has_shared_identity {
+        if normalize_control_identity(native_thread_id)
+            .as_deref()
+            .is_some_and(|thread_id| thread_id.starts_with("shared:"))
+        {
+            return Err("shared control response is missing its Runtime owner".to_string());
+        }
+        return Ok(None);
+    }
+    let attempt_id = normalize_control_identity(shared_attempt_id)
+        .ok_or_else(|| "shared control response is missing attemptId".to_string())?;
+    let shared_thread_id = normalize_control_identity(shared_thread_id)
+        .ok_or_else(|| "shared control response is missing sharedThreadId".to_string())?;
+    let provider_runtime_key = normalize_control_identity(provider_runtime_key)
+        .ok_or_else(|| "shared control response is missing providerRuntimeKey".to_string())?;
+    let native_thread_id = normalize_control_identity(native_thread_id)
+        .ok_or_else(|| "shared control response is missing nativeThreadId".to_string())?;
+    let runtime_turn_id = normalize_control_identity(runtime_turn_id)
+        .ok_or_else(|| "shared control response is missing runtimeTurnId".to_string())?;
+    let owner = coordinator
+        .owner_for_attempt(&attempt_id)
+        .ok_or_else(|| format!("shared control response attempt is not owned: {attempt_id}"))?;
+    if owner.workspace_id != workspace_id {
+        return Err("shared control response workspace owner mismatch".to_string());
+    }
+    if owner.shared_thread_id != shared_thread_id {
+        return Err("shared control response thread owner mismatch".to_string());
+    }
+    if owner.provider_runtime_key != provider_runtime_key {
+        return Err("shared control response provider Runtime owner mismatch".to_string());
+    }
+    if owner.native_session_id.as_deref().map(str::trim) != Some(native_thread_id.as_str()) {
+        return Err("shared control response native thread owner mismatch".to_string());
+    }
+    if owner.runtime_turn_id.as_deref() != Some(runtime_turn_id.as_str()) {
+        return Err("shared control response Runtime turn owner mismatch".to_string());
+    }
+    let owner_provider_profile_id = normalize_control_identity(
+        owner
+            .execution_target_snapshot
+            .provider_profile_id
+            .as_deref(),
+    );
+    let provider_profile_id = normalize_control_identity(provider_profile_id);
+    if owner_provider_profile_id != provider_profile_id {
+        return Err("shared control response Provider Profile owner mismatch".to_string());
+    }
+    let expected_engine = match owner.engine {
+        EngineType::Claude => "claude",
+        EngineType::Codex => "codex",
+        _ => {
+            return Err("shared control response owner uses an unsupported engine".to_string());
+        }
+    };
+    if owner.execution_target_snapshot.engine.trim() != expected_engine {
+        return Err("shared control response target engine owner mismatch".to_string());
+    }
+    let expected_runtime_key = match owner.engine {
+        EngineType::Claude => crate::engine::claude::provider_profile::claude_runtime_key(
+            workspace_id,
+            owner_provider_profile_id.as_deref(),
+        ),
+        EngineType::Codex => {
+            codex_core::session_key_for_provider(workspace_id, owner_provider_profile_id.as_deref())
+        }
+        _ => unreachable!("unsupported Shared engine rejected above"),
+    };
+    if expected_runtime_key != provider_runtime_key {
+        return Err("shared control response Provider Runtime key is not canonical".to_string());
+    }
+    Ok(Some(SharedControlResponseRoute {
+        workspace_id: workspace_id.to_string(),
+        engine: owner.engine,
+        provider_runtime_key,
+        provider_profile_id,
+        native_thread_id,
+        runtime_turn_id,
+    }))
+}
+
+async fn respond_to_shared_control_request(
+    state: &AppState,
+    route: &SharedControlResponseRoute,
+    request_id: Value,
+    result: Value,
+) -> Result<(), String> {
+    match route.engine {
+        EngineType::Claude => {
+            let session = state
+                .engine_manager
+                .claude_manager
+                .get_session_for_provider(&route.workspace_id, route.provider_profile_id.as_deref())
+                .await
+                .ok_or_else(|| {
+                    format!(
+                        "shared control response Runtime is not connected: {}",
+                        route.provider_runtime_key
+                    )
+                })?;
+            if result.get("answers").is_some() {
+                if !session.has_pending_user_input(&request_id) {
+                    return Err(
+                        "shared control response request is not pending on its Claude Runtime"
+                            .to_string(),
+                    );
+                }
+                session.respond_to_user_input(request_id, result).await
+            } else {
+                if !session.has_pending_approval_request(&request_id) {
+                    return Err(
+                        "shared control response request is not pending on its Claude Runtime"
+                            .to_string(),
+                    );
+                }
+                session
+                    .respond_to_approval_request(request_id, result)
+                    .await
+            }
+        }
+        EngineType::Codex => {
+            codex_core::respond_to_server_request_for_runtime_core(
+                &state.sessions,
+                route.provider_runtime_key.clone(),
+                request_id,
+                result,
+            )
+            .await
+        }
+        _ => Err("shared control response owner uses an unsupported engine".to_string()),
+    }
+}
+
 #[tauri::command]
 pub(crate) async fn respond_to_server_request(
     workspace_id: String,
@@ -1754,29 +1950,28 @@ pub(crate) async fn respond_to_server_request(
     thread_id: Option<String>,
     turn_id: Option<String>,
     provider_profile_id: Option<String>,
+    shared_attempt_id: Option<String>,
+    shared_thread_id: Option<String>,
+    provider_runtime_key: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
     let is_user_input_response = result.get("answers").is_some();
-    let normalized_thread_id = thread_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned);
-    let normalized_turn_id = turn_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned);
-    // B.5：Shared Thread owner 路由显式携带的 provider，仅用于 codex 兜底分支选会话。
-    let provider_profile_id = provider_profile_id
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
+    let normalized_thread_id = normalize_control_identity(thread_id.as_deref());
+    let normalized_turn_id = normalize_control_identity(turn_id.as_deref());
+    let provider_profile_id = normalize_control_identity(provider_profile_id.as_deref());
     let is_local_plan_prompt = request_id
         .as_str()
         .map(|value| value.starts_with("ccgui-plan-"))
         .unwrap_or(false);
+    let has_shared_identity =
+        shared_attempt_id.is_some() || shared_thread_id.is_some() || provider_runtime_key.is_some();
     if remote_backend::is_remote_mode(&*state).await {
+        if has_shared_identity {
+            return Err(
+                "Shared control responses are unavailable through the remote backend".to_string(),
+            );
+        }
         remote_backend::call_remote(
             &*state,
             app,
@@ -1794,9 +1989,38 @@ pub(crate) async fn respond_to_server_request(
         return Ok(());
     }
 
-    // Prefer request-id based Claude routing so AskUserQuestion responses
-    // are delivered to the correct waiting Claude turn even when global
-    // active-engine state is stale.
+    let shared_route = resolve_shared_control_response_route(
+        &state.shared_runtime_coordinator,
+        &workspace_id,
+        shared_attempt_id.as_deref(),
+        shared_thread_id.as_deref(),
+        provider_runtime_key.as_deref(),
+        provider_profile_id.as_deref(),
+        normalized_thread_id.as_deref(),
+        normalized_turn_id.as_deref(),
+    )?;
+    if let Some(route) = shared_route.as_ref() {
+        respond_to_shared_control_request(&state, route, request_id, result).await?;
+        if is_user_input_response && route.engine == EngineType::Codex && !is_local_plan_prompt {
+            let session = {
+                let sessions = state.sessions.lock().await;
+                sessions.get(&route.provider_runtime_key).cloned()
+            };
+            if let Some(session) = session {
+                session
+                    .start_resume_pending_watch(
+                        app,
+                        route.native_thread_id.clone(),
+                        Some(route.runtime_turn_id.clone()),
+                        ResumePendingSource::UserInputResume,
+                    )
+                    .await;
+            }
+        }
+        return Ok(());
+    }
+
+    // Native control request keeps the existing request-id routing contract.
     for session in state
         .engine_manager
         .claude_manager
@@ -1813,6 +2037,8 @@ pub(crate) async fn respond_to_server_request(
         }
     }
 
+    let codex_runtime_key =
+        codex_core::session_key_for_provider(&workspace_id, provider_profile_id.as_deref());
     codex_core::respond_to_server_request_core(
         &state.sessions,
         workspace_id.clone(),
@@ -1826,7 +2052,7 @@ pub(crate) async fn respond_to_server_request(
         if let Some(thread_id) = normalized_thread_id {
             let session = {
                 let sessions = state.sessions.lock().await;
-                sessions.get(&workspace_id).cloned()
+                sessions.get(&codex_runtime_key).cloned()
             };
             if let Some(session) = session {
                 session

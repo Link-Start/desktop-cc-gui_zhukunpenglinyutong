@@ -169,6 +169,7 @@ mod shared;
 pub mod shared_context;
 pub mod shared_event_log;
 pub mod shared_projection;
+mod shared_runtime_coordinator;
 pub mod shared_session_v2;
 mod shared_sessions;
 mod skills;

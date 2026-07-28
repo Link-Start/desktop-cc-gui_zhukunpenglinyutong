@@ -4,17 +4,23 @@
 //! lifecycle adapter 在 Change B 接入，streaming delta 不进入本接口。
 
 use super::types::{
-    AtomicToolExchange, CanonicalAssistantBlocks, CanonicalBlock, Outcome, OutcomeStatus, ToolCall,
-    ToolResult, ToolResultStatus, TurnCommittedFact, TurnExecutionSnapshot,
+    AtomicToolExchange, CanonicalAssistantBlocks, CanonicalBlock, CanonicalOmission, Outcome,
+    OutcomeStatus, ProviderPrivateRef, ToolCall, ToolResult, ToolResultStatus, TurnCommittedFact,
+    TurnExecutionSnapshot,
 };
 
 /// Phase 1 synthetic fixture 与 Change B Runtime adapter 共用的 final snapshot contract。
 #[derive(Debug, Clone)]
 pub struct RuntimeFinalSnapshot {
+    /// Runtime lifecycle owner 在 fan-out/drop 前按发生顺序组装的正文/思考块。
+    pub assistant_blocks: Vec<CanonicalBlock>,
+    /// Legacy/manual recovery 兼容字段；新 Runtime coordinator 应写 `assistant_blocks`。
     pub assistant_text: Option<String>,
     pub tool_calls: Vec<RuntimeToolCall>,
     pub tool_results: Vec<RuntimeToolResult>,
     pub artifacts: Vec<super::types::ArtifactRef>,
+    pub provider_private_refs: Vec<ProviderPrivateRef>,
+    pub omissions: Vec<CanonicalOmission>,
     pub outcome: OutcomeStatus,
     pub error_code: Option<String>,
     pub error_message: Option<String>,
@@ -52,9 +58,13 @@ pub fn assemble_turn_committed(
     snapshot: RuntimeFinalSnapshot,
     committed_at: i64,
 ) -> Result<TurnCommittedFact, AssemblyError> {
-    let mut assistant_blocks = Vec::new();
+    let mut assistant_blocks = snapshot.assistant_blocks;
     if let Some(text) = snapshot.assistant_text {
-        if !text.is_empty() {
+        if !text.is_empty()
+            && !assistant_blocks
+                .iter()
+                .any(|block| matches!(block, CanonicalBlock::Text { .. }))
+        {
             assistant_blocks.push(CanonicalBlock::Text { text });
         }
     }
@@ -79,8 +89,8 @@ pub fn assemble_turn_committed(
         atomic_tool_exchanges: exchanges,
         artifact_refs: snapshot.artifacts,
         target,
-        provider_private_refs: vec![],
-        omissions: vec![],
+        provider_private_refs: snapshot.provider_private_refs,
+        omissions: snapshot.omissions,
         outcome,
         committed_at,
         extra: serde_json::Value::Object(Default::default()),
@@ -142,6 +152,7 @@ mod tests {
         TurnExecutionSnapshot {
             engine: "claude".to_string(),
             provider_profile_id: Some("profile-1".to_string()),
+            model_catalog_entry_id: None,
             model: Some("claude-opus".to_string()),
             reasoning: None,
             provider_profile_name_snapshot: None,
@@ -154,10 +165,13 @@ mod tests {
     #[test]
     fn assemble_complete_text_turn() {
         let final_snapshot = RuntimeFinalSnapshot {
+            assistant_blocks: vec![],
             assistant_text: Some("hello back".to_string()),
             tool_calls: vec![],
             tool_results: vec![],
             artifacts: vec![],
+            provider_private_refs: vec![],
+            omissions: vec![],
             outcome: OutcomeStatus::Completed,
             error_code: None,
             error_message: None,
@@ -181,6 +195,7 @@ mod tests {
     #[test]
     fn unpaired_tool_call_is_incomplete() {
         let final_snapshot = RuntimeFinalSnapshot {
+            assistant_blocks: vec![],
             assistant_text: None,
             tool_calls: vec![RuntimeToolCall {
                 tool_call_id: "call-1".to_string(),
@@ -189,6 +204,8 @@ mod tests {
             }],
             tool_results: vec![],
             artifacts: vec![],
+            provider_private_refs: vec![],
+            omissions: vec![],
             outcome: OutcomeStatus::Completed,
             error_code: None,
             error_message: None,
@@ -215,6 +232,7 @@ mod tests {
     #[test]
     fn unpaired_tool_result_is_dropped() {
         let final_snapshot = RuntimeFinalSnapshot {
+            assistant_blocks: vec![],
             assistant_text: None,
             tool_calls: vec![],
             tool_results: vec![RuntimeToolResult {
@@ -224,6 +242,8 @@ mod tests {
                 error_message: None,
             }],
             artifacts: vec![],
+            provider_private_refs: vec![],
+            omissions: vec![],
             outcome: OutcomeStatus::Completed,
             error_code: None,
             error_message: None,

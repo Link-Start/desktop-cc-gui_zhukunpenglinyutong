@@ -209,6 +209,7 @@ fn validate_turn_execution_snapshot(
         ));
     }
     validate_optional_non_empty(&snapshot.provider_profile_id, "providerProfileId", ctx)?;
+    validate_optional_non_empty(&snapshot.model_catalog_entry_id, "modelCatalogEntryId", ctx)?;
     validate_optional_non_empty(&snapshot.model, "model", ctx)?;
     validate_optional_non_empty(
         &snapshot.provider_profile_name_snapshot,
@@ -220,14 +221,6 @@ fn validate_turn_execution_snapshot(
         "runtimeCapabilityFingerprint",
         ctx,
     )?;
-    if let Some(source) = &snapshot.provider_profile_source {
-        if !matches!(source.as_str(), "local" | "managed") {
-            return Err(FactValidationError::new(
-                ctx,
-                format!("unknown providerProfileSource enum value: {source}"),
-            ));
-        }
-    }
     if let Some(reasoning) = &snapshot.reasoning {
         require_non_empty(&reasoning.effort, "reasoning.effort", ctx)?;
     }
@@ -463,8 +456,8 @@ fn validate_timestamp(value: i64, name: &str, ctx: &str) -> Result<(), FactValid
 #[cfg(test)]
 mod tests {
     use super::super::types::{
-        CanonicalBlock, CanonicalUserInput, Outcome, OutcomeStatus, TurnExecutionSnapshot,
-        TurnRequestedFact, UsageRecordedFact, UsageShape,
+        CanonicalBlock, CanonicalProviderProfileSource, CanonicalUserInput, Outcome, OutcomeStatus,
+        TurnExecutionSnapshot, TurnRequestedFact, UsageRecordedFact, UsageShape,
     };
     use super::*;
 
@@ -472,6 +465,7 @@ mod tests {
         TurnExecutionSnapshot {
             engine: "claude".to_string(),
             provider_profile_id: Some("profile-1".to_string()),
+            model_catalog_entry_id: None,
             model: Some("claude-opus".to_string()),
             reasoning: None,
             provider_profile_name_snapshot: None,
@@ -502,6 +496,26 @@ mod tests {
     fn valid_turn_requested_passes() {
         let fact = CanonicalFact::TurnRequested(valid_turn_requested());
         assert!(validate_fact(&fact).is_ok());
+    }
+
+    #[test]
+    fn canonical_provider_source_accepts_local_and_rejects_selection_disk() {
+        let local = serde_json::from_value::<TurnExecutionSnapshot>(serde_json::json!({
+            "engine": "codex",
+            "providerProfileSource": "local"
+        }))
+        .expect("canonical local source");
+        assert_eq!(
+            local.provider_profile_source,
+            Some(CanonicalProviderProfileSource::Local)
+        );
+
+        let error = serde_json::from_value::<TurnExecutionSnapshot>(serde_json::json!({
+            "engine": "codex",
+            "providerProfileSource": "disk"
+        }))
+        .expect_err("selection-domain disk must not enter canonical snapshot");
+        assert!(error.to_string().contains("unknown variant"));
     }
 
     #[test]

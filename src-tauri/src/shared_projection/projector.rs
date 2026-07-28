@@ -1,12 +1,12 @@
 //! SharedProjector：Canonical Fact → ProjectionItem 映射。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::shared_event_log::canonical::types::{
-    CanonicalBlock, CanonicalFact, ControlFact, OutcomeStatus, ToolResultStatus, TurnCommittedFact,
-    TurnRequestedFact, UsageRecordedFact, UsageSource,
+    ArtifactRef, CanonicalBlock, CanonicalFact, ControlFact, OutcomeStatus, ToolResultStatus,
+    TurnCommittedFact, TurnRequestedFact, UsageRecordedFact, UsageSource,
 };
 use crate::shared_event_log::{
     ProjectionCheckpointRow, SharedEventWriter, StoreError, StoredEvent,
@@ -28,9 +28,25 @@ impl SharedProjector {
         &self,
         events: &[StoredEvent],
     ) -> Result<Vec<ProjectionItem>, StoreError> {
+        let canonical_turn_ids = events
+            .iter()
+            .filter(|event| event.fidelity == crate::shared_event_log::Fidelity::Canonical)
+            .filter_map(|event| event.logical_turn_id.as_deref())
+            .collect::<HashSet<_>>();
         let mut decoded = Vec::with_capacity(events.len());
         let mut preferred_usage_by_attempt: HashMap<String, (u8, i64, i64)> = HashMap::new();
         for event in events {
+            // Legacy/V0 shadow may be appended after its V2 canonical fact. It can keep richer
+            // presentation-only content for legacy-only Turns, but it must never downgrade the
+            // immutable target of a logical Turn already owned by canonical V2.
+            if event.fidelity == crate::shared_event_log::Fidelity::PresentationOnly
+                && event
+                    .logical_turn_id
+                    .as_deref()
+                    .is_some_and(|turn_id| canonical_turn_ids.contains(turn_id))
+            {
+                continue;
+            }
             let fact =
                 serde_json::from_str::<CanonicalFact>(&event.payload_json).map_err(|source| {
                     StoreError::json(
@@ -102,6 +118,35 @@ impl SharedProjector {
         };
 
         let events = writer.read_projection_events(session_id, through_sequence)?;
+        if events
+            .iter()
+            .any(|event| event.fidelity == crate::shared_event_log::Fidelity::PresentationOnly)
+        {
+            let all_events = writer.events_for_session(session_id)?;
+            if all_events
+                .iter()
+                .any(|event| event.fidelity == crate::shared_event_log::Fidelity::Canonical)
+            {
+                // ponytail: V0 rollback/shadow writes are rare and projection loads are
+                // session-scoped. Rebuild only at this compatibility boundary so canonical
+                // precedence can compare against the complete logical-Turn set.
+                let items = self.project_events(&all_events)?;
+                let new_through_sequence = all_events
+                    .iter()
+                    .map(|event| event.sequence)
+                    .max()
+                    .unwrap_or(through_sequence);
+                self.persist_checkpoint(
+                    writer,
+                    session_id,
+                    projection_name,
+                    projection_version,
+                    new_through_sequence,
+                    &items,
+                )?;
+                return Ok(items);
+            }
+        }
         let projected = self.project_events(&events)?;
         merge_projected_items(&mut items, projected);
         let new_through_sequence = events
@@ -201,12 +246,15 @@ impl SharedProjector {
         fact: &TurnCommittedFact,
     ) -> Vec<ProjectionItem> {
         let mut items = Vec::new();
+        let mut projected_artifact_ids = HashSet::new();
+        let mut has_assistant_message = false;
         let checksum = event.payload_checksum.clone();
 
         // Assistant blocks → message / reasoning items
         for (index, block) in fact.assistant.blocks.iter().enumerate() {
             match block {
                 CanonicalBlock::Text { text } => {
+                    has_assistant_message = true;
                     items.push(ProjectionItem {
                         id: format!("{}:assistant:{}", event.sequence, index),
                         kind: ProjectionItemKind::Message,
@@ -250,30 +298,12 @@ impl SharedProjector {
                     });
                 }
                 CanonicalBlock::ArtifactRef { artifact_ref } => {
-                    let (kind, content) = if artifact_ref.media_type.starts_with("image/") {
-                        (
-                            ProjectionItemKind::GeneratedImage,
-                            json!({
-                                "status": "completed",
-                                "sourceToolName": "artifact",
-                                "promptText": artifact_ref.locator,
-                                "images": [{
-                                    "src": artifact_ref.locator,
-                                    "localPath": artifact_ref.locator,
-                                }],
-                            }),
-                        )
-                    } else {
-                        (
-                            ProjectionItemKind::Metadata,
-                            json!({
-                                "type": "artifact",
-                                "artifactId": artifact_ref.artifact_id,
-                                "mediaType": artifact_ref.media_type,
-                                "locator": artifact_ref.locator,
-                            }),
-                        )
-                    };
+                    projected_artifact_ids.insert(artifact_ref.artifact_id.clone());
+                    let (kind, content) = project_artifact_ref(
+                        artifact_ref,
+                        &fact.logical_turn_id,
+                        &fact.target.engine,
+                    );
                     items.push(ProjectionItem {
                         id: format!("{}:artifact:{}", event.sequence, index),
                         kind,
@@ -283,6 +313,23 @@ impl SharedProjector {
                     });
                 }
             }
+        }
+
+        // Runtime-owned standalone artifacts are canonical facts too. Project them
+        // even when the assistant block stream did not carry an inline ArtifactRef.
+        for (index, artifact_ref) in fact.artifact_refs.iter().enumerate() {
+            if !projected_artifact_ids.insert(artifact_ref.artifact_id.clone()) {
+                continue;
+            }
+            let (kind, content) =
+                project_artifact_ref(artifact_ref, &fact.logical_turn_id, &fact.target.engine);
+            items.push(ProjectionItem {
+                id: format!("{}:artifact-ref:{}", event.sequence, index),
+                kind,
+                content,
+                fidelity: event.fidelity,
+                checksum: checksum.clone(),
+            });
         }
 
         // Tool exchanges → tool items
@@ -309,8 +356,10 @@ impl SharedProjector {
             });
         }
 
-        // Outcome → system notice if not completed
+        // 非成功 terminal 也是本轮可见的 assistant 结果。必须携带同一个 immutable
+        // target snapshot，否则 history reload 会同时丢掉错误与 CLI/Provider/Model label。
         if !matches!(fact.outcome.status, OutcomeStatus::Completed) {
+            has_assistant_message = true;
             let status_text = match fact.outcome.status {
                 OutcomeStatus::Completed => "completed",
                 OutcomeStatus::Failed => "failed",
@@ -319,13 +368,39 @@ impl SharedProjector {
             };
             items.push(ProjectionItem {
                 id: format!("{}:outcome", event.sequence),
-                kind: ProjectionItemKind::SystemNotice,
+                kind: ProjectionItemKind::Message,
                 content: json!({
+                    "role": "assistant",
                     "text": format!("Turn {}: {}", status_text, fact.outcome.error_message.clone().unwrap_or_default()),
                     "turnId": fact.logical_turn_id,
+                    "engineSource": fact.target.engine,
+                    "executionTargetSnapshot": fact.target,
+                    "isFinal": true,
+                    "finalCompletedAt": fact.committed_at,
                 }),
                 fidelity: event.fidelity,
                 checksum: checksum.clone(),
+            });
+        }
+
+        // Reasoning-only / tool-only completed Turns still need one presentation anchor
+        // carrying the immutable Target. MessageRow renders the per-turn CLI/Provider/Model
+        // badge even when the assistant body is empty; current Picker state is never consulted.
+        if !has_assistant_message {
+            items.push(ProjectionItem {
+                id: format!("{}:provenance", event.sequence),
+                kind: ProjectionItemKind::Message,
+                content: json!({
+                    "role": "assistant",
+                    "text": "",
+                    "turnId": fact.logical_turn_id,
+                    "engineSource": fact.target.engine,
+                    "executionTargetSnapshot": fact.target,
+                    "isFinal": true,
+                    "finalCompletedAt": fact.committed_at,
+                }),
+                fidelity: event.fidelity,
+                checksum,
             });
         }
 
@@ -370,6 +445,40 @@ impl SharedProjector {
             checksum: event.payload_checksum.clone(),
         }]
     }
+}
+
+fn project_artifact_ref(
+    artifact_ref: &ArtifactRef,
+    logical_turn_id: &str,
+    engine: &str,
+) -> (ProjectionItemKind, Value) {
+    if artifact_ref.media_type.starts_with("image/") {
+        return (
+            ProjectionItemKind::GeneratedImage,
+            json!({
+                "status": "completed",
+                "sourceToolName": "artifact",
+                "promptText": artifact_ref.locator,
+                "turnId": logical_turn_id,
+                "engineSource": engine,
+                "images": [{
+                    "src": artifact_ref.locator,
+                    "localPath": artifact_ref.locator,
+                }],
+            }),
+        );
+    }
+    (
+        ProjectionItemKind::Metadata,
+        json!({
+            "type": "artifact",
+            "artifactId": artifact_ref.artifact_id,
+            "mediaType": artifact_ref.media_type,
+            "locator": artifact_ref.locator,
+            "turnId": logical_turn_id,
+            "engineSource": engine,
+        }),
+    )
 }
 
 fn merge_projected_items(items: &mut Vec<ProjectionItem>, projected: Vec<ProjectionItem>) {

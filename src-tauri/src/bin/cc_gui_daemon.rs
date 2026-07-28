@@ -2193,6 +2193,13 @@ async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             state.model_list(workspace_id).await
         }
+        "discover_codex_models" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let provider_profile_id = parse_optional_string(&params, "providerProfileId");
+            state
+                .discover_codex_models(workspace_id, provider_profile_id)
+                .await
+        }
         "collaboration_mode_list" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             state.collaboration_mode_list(workspace_id).await

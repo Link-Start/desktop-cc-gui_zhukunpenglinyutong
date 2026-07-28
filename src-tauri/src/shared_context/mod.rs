@@ -16,7 +16,8 @@ pub use compiler::{
     compile_context, compile_native_context, CompileContextRequest, CompileNativeContextRequest,
 };
 pub use delivery::{
-    accept_delivery, commit_delivery, prepare_delivery, terminal_binding_update,
-    AcceptDeliveryRequest, PrepareDeliveryRequest,
+    accept_delivery, commit_delivery, mark_delivery_sent, prepare_delivery,
+    terminal_binding_update, AcceptDeliveryRequest, MarkDeliverySentRequest,
+    PrepareDeliveryRequest,
 };
 pub use types::*;

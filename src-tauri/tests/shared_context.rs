@@ -3,8 +3,12 @@
 mod common;
 
 use cc_gui_lib::shared_context::{
-    accept_delivery, compile_context, read_artifact, write_artifact, AcceptDeliveryRequest,
-    ArtifactReadRequest, CompileContextRequest, PrepareDeliveryRequest, RuntimeContextCapabilities,
+    accept_delivery, compile_context, mark_delivery_sent, read_artifact, write_artifact,
+    AcceptDeliveryRequest, ArtifactReadRequest, CompileContextRequest, MarkDeliverySentRequest,
+    PrepareDeliveryRequest, RuntimeContextCapabilities,
+};
+use cc_gui_lib::shared_event_log::canonical::shadow_v0::{
+    map_v0_turn_to_presentation_only_facts, v0_evidence,
 };
 use cc_gui_lib::shared_event_log::{open, OpenOutcome, SharedEventWriter};
 use cc_gui_lib::shared_session_v2::{
@@ -27,6 +31,7 @@ fn target(provider: Option<&str>) -> ExecutionTargetInput {
     ExecutionTargetInput {
         engine: EngineType::Claude,
         provider_profile_id: provider.map(str::to_string),
+        model_catalog_entry_id: None,
         model: Some("claude-sonnet-4-5".to_string()),
         reasoning_effort: None,
         provider_profile_name_snapshot: None,
@@ -163,6 +168,7 @@ fn package_artifact_and_two_phase_cursor_close_without_replay_gap() {
             provider_profile_id: Some("provider-b".to_string()),
             logical_turn_id: logical_turn_id.clone(),
             attempt_id: attempt_id.clone(),
+            binding_operation_id: "operation-b".to_string(),
             package: first.clone(),
             prepared_at: 101,
         },
@@ -187,6 +193,20 @@ fn package_artifact_and_two_phase_cursor_close_without_replay_gap() {
         cc_gui_lib::shared_session_v2::BeginTurnStatus::RecoveryRequired
     );
 
+    mark_delivery_sent(
+        &writer,
+        &MarkDeliverySentRequest {
+            session_id: SESSION.to_string(),
+            binding_key: "claude:provider-b".to_string(),
+            attempt_id: attempt_id.clone(),
+            binding_operation_id: "operation-b".to_string(),
+            native_session_id: "claude:destination".to_string(),
+            native_request_id: "request-1".to_string(),
+            sent_at: 102,
+        },
+    )
+    .expect("mark delivery sent");
+
     accept_delivery(
         &writer,
         &AcceptDeliveryRequest {
@@ -194,10 +214,11 @@ fn package_artifact_and_two_phase_cursor_close_without_replay_gap() {
             binding_key: "claude:provider-b".to_string(),
             logical_turn_id: logical_turn_id.clone(),
             attempt_id: attempt_id.clone(),
+            binding_operation_id: "operation-b".to_string(),
             package_id: first.package_id,
             native_session_id: Some("claude:destination".to_string()),
             native_request_id: Some("request-1".to_string()),
-            accepted_at: 102,
+            accepted_at: 103,
         },
     )
     .expect("accept delivery");
@@ -240,4 +261,174 @@ fn package_artifact_and_two_phase_cursor_close_without_replay_gap() {
         Some(requested_sequence - 1)
     );
     assert!(committed.pending_delivery_json.is_none());
+}
+
+#[test]
+fn portable_context_excludes_destination_owned_history_on_a_b_a_reuse() {
+    const SESSION_ABA: &str = "context-session-a-b-a";
+    let store = TempStoreDir::new("context-a-b-a");
+    let writer = writer(&store);
+    let target_a = target(Some("provider-a"));
+    let target_b = target(Some("provider-b"));
+
+    let begin_a =
+        begin_turn_core(&writer, SESSION_ABA, &target_a, "A 问题".to_string()).expect("begin A");
+    let attempt_a = begin_a.attempt_id.expect("attempt A");
+    let turn_a = begin_a.logical_turn_id.expect("turn A");
+    accept_turn_core(
+        &writer,
+        SESSION_ABA,
+        &attempt_a,
+        &turn_a,
+        &target_a,
+        "claude:native-a",
+    )
+    .expect("accept A");
+    commit_turn_core(
+        &writer,
+        SESSION_ABA,
+        &attempt_a,
+        &turn_a,
+        &target_a,
+        Some("A 答案".to_string()),
+        &completed(),
+        Some("claude:native-a".to_string()),
+    )
+    .expect("commit A");
+
+    let begin_b =
+        begin_turn_core(&writer, SESSION_ABA, &target_b, "B 问题".to_string()).expect("begin B");
+    let attempt_b = begin_b.attempt_id.expect("attempt B");
+    let turn_b = begin_b.logical_turn_id.expect("turn B");
+    accept_turn_core(
+        &writer,
+        SESSION_ABA,
+        &attempt_b,
+        &turn_b,
+        &target_b,
+        "claude:native-b",
+    )
+    .expect("accept B");
+    commit_turn_core(
+        &writer,
+        SESSION_ABA,
+        &attempt_b,
+        &turn_b,
+        &target_b,
+        Some("B 答案".to_string()),
+        &completed(),
+        Some("claude:native-b".to_string()),
+    )
+    .expect("commit B");
+
+    let events = writer.events_for_session(SESSION_ABA).expect("events");
+    let package = compile_context(
+        &events,
+        &CompileContextRequest {
+            session_id: SESSION_ABA.to_string(),
+            binding_key: "claude:provider-a".to_string(),
+            destination: json!({ "engine": "claude", "providerProfileId": "provider-a" }),
+            destination_native_session_id: Some("claude:native-a".to_string()),
+            from_sequence_exclusive: None,
+            through_sequence_inclusive: None,
+            exclude_attempt_id: None,
+            capabilities: capabilities(),
+            budget_estimated_tokens: None,
+        },
+    )
+    .expect("compile A reuse context");
+
+    assert!(!package.prompt_prefix.contains("A 问题"));
+    assert!(!package.prompt_prefix.contains("A 答案"));
+    assert!(package.prompt_prefix.contains("B 问题"));
+    assert!(package.prompt_prefix.contains("B 答案"));
+    assert!(package
+        .manifest
+        .omitted
+        .iter()
+        .any(|omission| omission.category == "destination-owned"));
+}
+
+#[test]
+fn portable_context_keeps_legacy_only_turns_without_shadowing_canonical_turns() {
+    const MIXED_SESSION: &str = "context-session-mixed-history";
+    let store = TempStoreDir::new("context-mixed-history");
+    let writer = writer(&store);
+    let canonical_target = target(None);
+    let begin = begin_turn_core(
+        &writer,
+        MIXED_SESSION,
+        &canonical_target,
+        "canonical question".to_string(),
+    )
+    .expect("begin canonical");
+    let attempt = begin.attempt_id.expect("attempt");
+    let logical_turn = begin.logical_turn_id.expect("logical turn");
+    accept_turn_core(
+        &writer,
+        MIXED_SESSION,
+        &attempt,
+        &logical_turn,
+        &canonical_target,
+        "claude:canonical",
+    )
+    .expect("accept canonical");
+    commit_turn_core(
+        &writer,
+        MIXED_SESSION,
+        &attempt,
+        &logical_turn,
+        &canonical_target,
+        Some("canonical answer".to_string()),
+        &completed(),
+        Some("claude:canonical".to_string()),
+    )
+    .expect("commit canonical");
+
+    for fact in map_v0_turn_to_presentation_only_facts(v0_evidence(
+        &logical_turn,
+        "v0-shadow:canonical-duplicate",
+        "canonical question",
+        "shadow duplicate must not win",
+    )) {
+        writer
+            .append_presentation_only_fact(MIXED_SESSION, fact)
+            .expect("append duplicate shadow");
+    }
+    for fact in map_v0_turn_to_presentation_only_facts(v0_evidence(
+        "legacy-only-turn",
+        "v0-shadow:legacy-only",
+        "legacy question",
+        "legacy answer",
+    )) {
+        writer
+            .append_presentation_only_fact(MIXED_SESSION, fact)
+            .expect("append legacy-only turn");
+    }
+
+    let package = compile_context(
+        &writer
+            .events_for_session(MIXED_SESSION)
+            .expect("mixed events"),
+        &CompileContextRequest {
+            session_id: MIXED_SESSION.to_string(),
+            binding_key: "claude:provider-b".to_string(),
+            destination: json!({ "engine": "claude", "providerProfileId": "provider-b" }),
+            destination_native_session_id: None,
+            from_sequence_exclusive: None,
+            through_sequence_inclusive: None,
+            exclude_attempt_id: None,
+            capabilities: capabilities(),
+            budget_estimated_tokens: None,
+        },
+    )
+    .expect("compile mixed history");
+
+    assert!(package.prompt_prefix.contains("canonical question"));
+    assert!(package.prompt_prefix.contains("canonical answer"));
+    assert!(package.prompt_prefix.contains("legacy question"));
+    assert!(package.prompt_prefix.contains("legacy answer"));
+    assert!(!package
+        .prompt_prefix
+        .contains("shadow duplicate must not win"));
 }

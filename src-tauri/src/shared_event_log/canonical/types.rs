@@ -220,6 +220,8 @@ pub struct TurnExecutionSnapshot {
     pub engine: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_catalog_entry_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -227,11 +229,18 @@ pub struct TurnExecutionSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_profile_name_snapshot: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub provider_profile_source: Option<String>,
+    pub provider_profile_source: Option<CanonicalProviderProfileSource>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime_capability_fingerprint: Option<String>,
     #[serde(flatten)]
     pub extra: Value,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CanonicalProviderProfileSource {
+    Local,
+    Managed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

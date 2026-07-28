@@ -1326,9 +1326,7 @@ async fn add_workspace_for_cli_engine(
     codex_bin: Option<String>,
     state: &AppState,
 ) -> Result<WorkspaceInfo, String> {
-    use crate::engine::status::{
-        detect_claude_status, detect_kimi_status, detect_opencode_status,
-    };
+    use crate::engine::status::{detect_claude_status, detect_kimi_status, detect_opencode_status};
     use std::path::PathBuf;
 
     if !PathBuf::from(&path).is_dir() {

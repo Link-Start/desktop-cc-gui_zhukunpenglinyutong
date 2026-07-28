@@ -177,18 +177,51 @@ fn transform_event(
                 .cloned()
                 .unwrap_or_default()
                 .into_iter()
-                .filter(|block| {
-                    let portable = block.get("kind").and_then(Value::as_str) != Some("reasoning");
-                    if !portable {
-                        omissions.push(ProjectionOmission {
-                            entry_id: event.event_id.clone(),
-                            category: "provider-private-reasoning".to_string(),
-                            reason: "private reasoning is not portable".to_string(),
-                            disposition: OmissionDisposition::NotRetrievable,
-                            retrievable_ref: None,
-                        });
+                .filter_map(|block| {
+                    let kind = block.get("kind").and_then(Value::as_str);
+                    if kind == Some("text") {
+                        return Some(block);
                     }
-                    portable
+                    let (category, reason, retrievable_ref, disposition) = match kind {
+                        Some("reasoning") | Some("redacted-reasoning") => (
+                            "provider-private-reasoning",
+                            "private reasoning is not portable",
+                            block
+                                .get("artifactRef")
+                                .and_then(|artifact_ref| artifact_ref.get("artifactId"))
+                                .and_then(Value::as_str)
+                                .map(str::to_string),
+                            if block.get("artifactRef").is_some() {
+                                OmissionDisposition::RetrievableOnDemand
+                            } else {
+                                OmissionDisposition::NotRetrievable
+                            },
+                        ),
+                        Some("artifact-ref") => (
+                            "assistant-artifact",
+                            "assistant artifact is reference-only and not injected as text",
+                            block
+                                .get("artifactRef")
+                                .and_then(|artifact_ref| artifact_ref.get("artifactId"))
+                                .and_then(Value::as_str)
+                                .map(str::to_string),
+                            OmissionDisposition::RetrievableOnDemand,
+                        ),
+                        _ => (
+                            "provider-private-block",
+                            "unknown assistant block is not on the portable allowlist",
+                            None,
+                            OmissionDisposition::NotRetrievable,
+                        ),
+                    };
+                    omissions.push(ProjectionOmission {
+                        entry_id: event.event_id.clone(),
+                        category: category.to_string(),
+                        reason: reason.to_string(),
+                        disposition,
+                        retrievable_ref,
+                    });
+                    None
                 })
                 .collect::<Vec<_>>();
             let exchanges = payload
@@ -209,6 +242,9 @@ fn transform_event(
                     disposition: OmissionDisposition::NotRetrievable,
                     retrievable_ref: None,
                 });
+            }
+            if blocks.is_empty() {
+                return None;
             }
             Some(PortableContextEntry {
                 entry_id: event.event_id.clone(),
@@ -390,6 +426,49 @@ fn fold_checkpoint_entries(
         .collect()
 }
 
+fn trim_checkpoint_entries_to_budget(
+    entries: &mut Vec<PortableContextEntry>,
+    omissions: &mut Vec<ProjectionOmission>,
+    budget: u64,
+) -> Option<CompressionCategory> {
+    let source_estimated_tokens = estimated_tokens(&transcript(entries, true));
+    if source_estimated_tokens <= budget {
+        return None;
+    }
+
+    // ponytail: checkpoint history is session-bounded. Recompute after each complete-Turn
+    // removal for deterministic output; replace with a prefix token index if histories become
+    // large enough for this low-frequency compiler path to matter.
+    while !entries.is_empty() && estimated_tokens(&transcript(entries, true)) > budget {
+        let remove_count = if entries.first().is_some_and(|entry| entry.role == "user") {
+            entries
+                .iter()
+                .skip(1)
+                .position(|entry| entry.role == "user")
+                .map(|offset| offset + 1)
+                .unwrap_or(entries.len())
+        } else {
+            1
+        };
+        for entry in entries.drain(..remove_count) {
+            omissions.push(ProjectionOmission {
+                entry_id: entry.entry_id,
+                category: "checkpoint-budget".to_string(),
+                reason: "oldest complete Turn omitted to satisfy checkpoint budget".to_string(),
+                disposition: OmissionDisposition::RetrievableOnDemand,
+                retrievable_ref: None,
+            });
+        }
+    }
+
+    Some(CompressionCategory {
+        category: "checkpoint-history".to_string(),
+        strategy: "drop-oldest-complete-turns".to_string(),
+        source_estimated_tokens,
+        package_estimated_tokens: estimated_tokens(&transcript(entries, true)),
+    })
+}
+
 pub fn compile_context(
     events: &[StoredEvent],
     request: &CompileContextRequest,
@@ -399,10 +478,20 @@ pub fn compile_context(
         .or_else(|| events.last().map(|event| event.sequence))
         .unwrap_or(0);
     let lower = request.from_sequence_exclusive.unwrap_or(0);
+    let canonical_turn_ids = events
+        .iter()
+        .filter(|event| event.fidelity == Fidelity::Canonical)
+        .filter_map(|event| event.logical_turn_id.as_deref())
+        .collect::<HashSet<_>>();
     let source = events
         .iter()
         .filter(|event| {
-            event.fidelity == Fidelity::Canonical
+            (event.fidelity == Fidelity::Canonical
+                || (event.fidelity == Fidelity::PresentationOnly
+                    && event
+                        .logical_turn_id
+                        .as_deref()
+                        .is_none_or(|turn_id| !canonical_turn_ids.contains(turn_id))))
                 && event.sequence > lower
                 && event.sequence <= upper
                 && event.attempt_id.as_deref() != request.exclude_attempt_id.as_deref()
@@ -423,28 +512,14 @@ pub fn compile_context(
     let source_bytes =
         deterministic_json_bytes(&json!(source_value)).map_err(|error| error.to_string())?;
     let source_checksum = sha256(&source_bytes);
-    let source_estimated_tokens = estimated_tokens(
-        &source
-            .iter()
-            .map(|event| event.payload_json.as_str())
-            .collect::<Vec<_>>()
-            .join(""),
-    );
     let budget = request
         .budget_estimated_tokens
         .unwrap_or(DEFAULT_TRANSCRIPT_BUDGET);
-    let (mode, mode_reason) = select_mode(
-        &request.capabilities,
-        request.destination_native_session_id.is_some(),
-        source_estimated_tokens,
-        budget,
-    );
     let owned_attempts = destination_owned_attempts(events, &request.binding_key);
     let mut omissions = Vec::new();
-    let mut included_entry_ids = Vec::new();
     let mut entries = Vec::new();
     for event in &source {
-        if mode == ProjectionMode::NativeDelta
+        if request.destination_native_session_id.is_some()
             && event
                 .attempt_id
                 .as_ref()
@@ -462,15 +537,32 @@ pub fn compile_context(
         let payload = event_payload(event)?;
         if let Some(entry) = transform_event(event, &payload, &request.capabilities, &mut omissions)
         {
-            included_entry_ids.push(entry.entry_id.clone());
             entries.push(entry);
         }
     }
+    let source_estimated_tokens = estimated_tokens(&transcript(&entries, false));
+    let (mode, mode_reason) = select_mode(
+        &request.capabilities,
+        request.destination_native_session_id.is_some(),
+        source_estimated_tokens,
+        budget,
+    );
     let mut compression_categories = if mode == ProjectionMode::Checkpoint {
         fold_checkpoint_entries(&mut entries, &mut omissions)
     } else {
         Vec::new()
     };
+    if mode == ProjectionMode::Checkpoint {
+        if let Some(category) =
+            trim_checkpoint_entries_to_budget(&mut entries, &mut omissions, budget)
+        {
+            compression_categories.push(category);
+        }
+    }
+    let included_entry_ids = entries
+        .iter()
+        .map(|entry| entry.entry_id.clone())
+        .collect::<Vec<_>>();
     let stable_prefix = format!(
         "MOSSX_SHARED_CONTEXT_V1\nsession:{}\nbinding:{}\n",
         request.session_id, request.binding_key
@@ -570,25 +662,6 @@ pub fn compile_native_context(
     });
     let source_checksum =
         sha256(&deterministic_json_bytes(&source_value).map_err(|error| error.to_string())?);
-    let source_estimated_tokens = estimated_tokens(
-        &request
-            .history
-            .entries
-            .iter()
-            .flat_map(|entry| entry.blocks.iter())
-            .map(Value::to_string)
-            .collect::<Vec<_>>()
-            .join(""),
-    );
-    let budget = request
-        .budget_estimated_tokens
-        .unwrap_or(DEFAULT_TRANSCRIPT_BUDGET);
-    let (mode, mode_reason) = select_mode(
-        &request.capabilities,
-        false,
-        source_estimated_tokens,
-        budget,
-    );
     let mut omissions = request.history.omissions.clone();
     let mut entries = request
         .history
@@ -603,15 +676,33 @@ pub fn compile_native_context(
             outcome: None,
         })
         .collect::<Vec<_>>();
-    let included_entry_ids = entries
-        .iter()
-        .map(|entry| entry.entry_id.clone())
-        .collect::<Vec<_>>();
+    let source_entry_count = entries.len();
+    let source_estimated_tokens = estimated_tokens(&transcript(&entries, false));
+    let budget = request
+        .budget_estimated_tokens
+        .unwrap_or(DEFAULT_TRANSCRIPT_BUDGET);
+    let (mode, mode_reason) = select_mode(
+        &request.capabilities,
+        false,
+        source_estimated_tokens,
+        budget,
+    );
     let mut compression_categories = if mode == ProjectionMode::Checkpoint {
         fold_checkpoint_entries(&mut entries, &mut omissions)
     } else {
         Vec::new()
     };
+    if mode == ProjectionMode::Checkpoint {
+        if let Some(category) =
+            trim_checkpoint_entries_to_budget(&mut entries, &mut omissions, budget)
+        {
+            compression_categories.push(category);
+        }
+    }
+    let included_entry_ids = entries
+        .iter()
+        .map(|entry| entry.entry_id.clone())
+        .collect::<Vec<_>>();
     let stable_prefix = format!(
         "MOSSX_NATIVE_CONTEXT_V1\nsource:{}\nbinding:{}\n",
         request.source.session_id, request.binding_key
@@ -625,7 +716,7 @@ pub fn compile_native_context(
         included_entry_ids,
         omitted: omissions,
         from_sequence_exclusive: None,
-        through_sequence_inclusive: entries.len() as i64,
+        through_sequence_inclusive: source_entry_count as i64,
         source_checksum: source_checksum.clone(),
     };
     let identity = json!({
@@ -721,6 +812,116 @@ mod tests {
         assert!(left.contains("ERROR durable write failed"));
         assert!(left.contains("line-0"));
         assert!(left.contains("line-199"));
+    }
+
+    #[test]
+    fn checkpoint_budget_drops_oldest_complete_turn_without_splitting_roles() {
+        let mut entries = vec![
+            PortableContextEntry {
+                entry_id: "u1".to_string(),
+                sequence: 1,
+                role: "user".to_string(),
+                blocks: vec![text_block("old question")],
+                outcome: None,
+            },
+            PortableContextEntry {
+                entry_id: "a1".to_string(),
+                sequence: 2,
+                role: "assistant".to_string(),
+                blocks: vec![text_block("old answer")],
+                outcome: Some("completed".to_string()),
+            },
+            PortableContextEntry {
+                entry_id: "u2".to_string(),
+                sequence: 3,
+                role: "user".to_string(),
+                blocks: vec![text_block("recent question")],
+                outcome: None,
+            },
+            PortableContextEntry {
+                entry_id: "a2".to_string(),
+                sequence: 4,
+                role: "assistant".to_string(),
+                blocks: vec![text_block("recent answer")],
+                outcome: Some("completed".to_string()),
+            },
+        ];
+        let recent_budget = estimated_tokens(&transcript(&entries[2..], true));
+        let mut omissions = Vec::new();
+
+        let category =
+            trim_checkpoint_entries_to_budget(&mut entries, &mut omissions, recent_budget)
+                .expect("budget trimming");
+
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.entry_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["u2", "a2"]
+        );
+        assert_eq!(
+            omissions
+                .iter()
+                .map(|omission| omission.entry_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["u1", "a1"]
+        );
+        assert_eq!(category.strategy, "drop-oldest-complete-turns");
+        assert!(estimated_tokens(&transcript(&entries, true)) <= recent_budget);
+    }
+
+    #[test]
+    fn portable_assistant_transform_is_allowlist_based() {
+        let event = StoredEvent {
+            session_id: "session-1".to_string(),
+            sequence: 1,
+            event_id: "event-1".to_string(),
+            fact_type: "conversation.turnCommitted".to_string(),
+            logical_turn_id: Some("turn-1".to_string()),
+            attempt_id: Some("attempt-1".to_string()),
+            dedupe_key: None,
+            payload_json: "{}".to_string(),
+            payload_checksum: "sha256:test".to_string(),
+            fidelity: Fidelity::Canonical,
+            committed_at: 1,
+        };
+        let payload = json!({
+            "outcome": { "status": "completed" },
+            "assistant": [
+                { "kind": "text", "text": "visible" },
+                { "kind": "reasoning", "text": "private" },
+                {
+                    "kind": "redacted-reasoning",
+                    "artifactRef": { "artifactId": "reasoning-1" }
+                },
+                { "kind": "future-private-block", "payload": "secret" }
+            ],
+            "atomicToolExchanges": []
+        });
+        let capabilities = RuntimeContextCapabilities {
+            native_delta: false,
+            structured_history_import: false,
+            native_clone: false,
+            user_channel_transcript: true,
+            tool_history: false,
+            image_history: false,
+            strong_context_ack: false,
+        };
+        let mut omissions = Vec::new();
+
+        let entry = transform_event(&event, &payload, &capabilities, &mut omissions)
+            .expect("visible text remains portable");
+
+        assert_eq!(entry.blocks, vec![text_block("visible")]);
+        assert_eq!(omissions.len(), 3);
+        assert!(omissions
+            .iter()
+            .any(|omission| omission.category == "provider-private-block"));
+        assert!(omissions.iter().any(|omission| {
+            omission.category == "provider-private-reasoning"
+                && omission.retrievable_ref.as_deref() == Some("reasoning-1")
+        }));
     }
 
     #[test]

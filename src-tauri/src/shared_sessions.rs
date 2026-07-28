@@ -84,14 +84,126 @@ fn default_target_binding_availability() -> String {
     "ready".to_string()
 }
 
+fn normalize_provider_selection_source(value: Option<String>) -> Option<String> {
+    value
+        .map(|source| source.trim().to_string())
+        .filter(|source| matches!(source.as_str(), "disk" | "managed"))
+}
+
 /// 当前选中的 Execution Target（Wave 4 / B.2 任务 2.3）。
 /// `provider_profile_id = None` 表示 default/local Provider 语义。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct SharedSelectedTarget {
+pub(crate) struct SharedSelectedReasoning {
+    pub(crate) effort: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedSelectedTarget {
     pub(crate) engine: EngineType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) provider_profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) model_catalog_entry_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) reasoning: Option<SharedSelectedReasoning>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) provider_profile_name_snapshot: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) provider_profile_source: Option<String>,
+}
+
+fn normalize_shared_selected_target(mut target: SharedSelectedTarget) -> SharedSelectedTarget {
+    target.provider_profile_id = target
+        .provider_profile_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    target.model_catalog_entry_id = target
+        .model_catalog_entry_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    target.model = target
+        .model
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    target.reasoning = target.reasoning.and_then(|mut reasoning| {
+        reasoning.effort = reasoning.effort.trim().to_string();
+        (!reasoning.effort.is_empty()).then_some(reasoning)
+    });
+    target.provider_profile_name_snapshot = target
+        .provider_profile_name_snapshot
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    target.provider_profile_source =
+        normalize_provider_selection_source(target.provider_profile_source);
+    target
+}
+
+fn legacy_engine_only_selected_target(engine: EngineType) -> SharedSelectedTarget {
+    SharedSelectedTarget {
+        engine,
+        provider_profile_id: None,
+        model_catalog_entry_id: None,
+        model: None,
+        reasoning: None,
+        provider_profile_name_snapshot: None,
+        provider_profile_source: None,
+    }
+}
+
+fn is_legacy_engine_only_selected_target(target: &SharedSelectedTarget) -> bool {
+    target.provider_profile_id.is_none()
+        && target.model_catalog_entry_id.is_none()
+        && target.model.is_none()
+        && target.reasoning.is_none()
+        && target.provider_profile_name_snapshot.is_none()
+        && target.provider_profile_source.is_none()
+}
+
+fn validate_resolved_shared_selected_target(target: &SharedSelectedTarget) -> Result<(), String> {
+    let engine = ensure_supported_shared_session_engine(target.engine)?;
+    let provider_profile_id = target.provider_profile_id.as_deref();
+    let expected_source = if provider_profile_id.is_some() {
+        "managed"
+    } else {
+        "disk"
+    };
+    if target.provider_profile_source.as_deref() != Some(expected_source) {
+        return Err(format!(
+            "invalid-shared-target: provider source must be '{expected_source}'"
+        ));
+    }
+    if target.provider_profile_name_snapshot.is_none() {
+        return Err("invalid-shared-target: provider name snapshot is required".to_string());
+    }
+    if target.model_catalog_entry_id.is_none() || target.model.is_none() {
+        return Err(
+            "invalid-shared-target: modelCatalogEntryId and runtime model are required".to_string(),
+        );
+    }
+    let models = match provider_profile_id {
+        Some(provider_profile_id) => crate::engine::status::get_provider_scoped_engine_models(
+            engine,
+            Some(provider_profile_id),
+        )?,
+        None => crate::engine::status::get_local_engine_models_for_validation(engine),
+    }
+    .ok_or_else(|| {
+        format!(
+            "invalid-shared-target: model catalog is unavailable for {} provider {}",
+            engine.icon(),
+            provider_profile_id.unwrap_or("default")
+        )
+    })?;
+    crate::engine::status::validate_model_catalog_pair(
+        target.model_catalog_entry_id.as_deref(),
+        target.model.as_deref(),
+        &models,
+        crate::engine::status::UnlistedRuntimeModelPolicy::Reject,
+    )
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,6 +265,7 @@ struct SharedSessionLoadPayload {
     selected_engine: EngineType,
     thread_kind: String,
     engine_source: EngineType,
+    selected_target: Option<SharedSelectedTarget>,
     items: Vec<Value>,
     updated_at: u64,
 }
@@ -398,11 +511,16 @@ fn sanitize_shared_session_meta(meta: &mut SharedSessionMeta) {
     meta.schema_version = SHARED_SESSION_SCHEMA_VERSION;
     // 任务 2.3：`selectedEngine → selectedTarget` 迁移；selectedTarget 为权威，
     // selected_engine 回落为 target.engine（V0 回滚读取兼容）。
-    let selected_target = match meta.selected_target.take() {
+    let mut selected_target = match meta.selected_target.take() {
         Some(mut target) => {
             if !is_supported_shared_session_engine(target.engine) {
                 target.engine = normalize_shared_session_engine(target.engine);
                 target.provider_profile_id = None;
+                target.model_catalog_entry_id = None;
+                target.model = None;
+                target.reasoning = None;
+                target.provider_profile_name_snapshot = None;
+                target.provider_profile_source = None;
             }
             target.provider_profile_id = target
                 .provider_profile_id
@@ -413,8 +531,31 @@ fn sanitize_shared_session_meta(meta: &mut SharedSessionMeta) {
         None => SharedSelectedTarget {
             engine: normalize_shared_session_engine(meta.selected_engine),
             provider_profile_id: None,
+            model_catalog_entry_id: None,
+            model: None,
+            reasoning: None,
+            provider_profile_name_snapshot: None,
+            provider_profile_source: None,
         },
     };
+    selected_target.model_catalog_entry_id = selected_target
+        .model_catalog_entry_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    selected_target.model = selected_target
+        .model
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    selected_target.reasoning = selected_target.reasoning.and_then(|mut reasoning| {
+        reasoning.effort = reasoning.effort.trim().to_string();
+        (!reasoning.effort.is_empty()).then_some(reasoning)
+    });
+    selected_target.provider_profile_name_snapshot = selected_target
+        .provider_profile_name_snapshot
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    selected_target.provider_profile_source =
+        normalize_provider_selection_source(selected_target.provider_profile_source);
     meta.selected_engine = selected_target.engine;
     meta.selected_target = Some(selected_target);
     meta.bindings_by_engine
@@ -476,11 +617,89 @@ pub(crate) fn select_meta_target(
     let provider_profile_id = provider_profile_id
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
+    let preserved = meta.selected_target.take().filter(|target| {
+        target.engine == engine && target.provider_profile_id == provider_profile_id
+    });
     meta.selected_engine = engine;
-    meta.selected_target = Some(SharedSelectedTarget {
+    meta.selected_target = Some(preserved.unwrap_or(SharedSelectedTarget {
         engine,
         provider_profile_id,
-    });
+        model_catalog_entry_id: None,
+        model: None,
+        reasoning: None,
+        provider_profile_name_snapshot: None,
+        provider_profile_source: None,
+    }));
+}
+
+fn apply_selected_target_selection(
+    root: &mut Value,
+    target: &SharedSelectedTarget,
+    updated_at: u64,
+) -> Result<(), String> {
+    let object = root
+        .as_object_mut()
+        .ok_or_else(|| "Shared session metadata must be a JSON object".to_string())?;
+    object.insert(
+        "selectedEngine".to_string(),
+        serde_json::to_value(target.engine).map_err(|error| error.to_string())?,
+    );
+    object.insert(
+        "selectedTarget".to_string(),
+        serde_json::to_value(target).map_err(|error| error.to_string())?,
+    );
+    object.insert("updatedAt".to_string(), json!(updated_at));
+    Ok(())
+}
+
+fn write_shared_session_selection(
+    workspace_id: &str,
+    shared_session_id: &str,
+    target: &SharedSelectedTarget,
+    updated_at: u64,
+) -> Result<SharedSelectedTarget, String> {
+    let path = shared_session_meta_path(workspace_id, shared_session_id)?;
+    with_shared_store_lock(&path, || {
+        let raw = std::fs::read_to_string(&path).map_err(|error| error.to_string())?;
+        let mut root: Value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+        let selected_target = if is_legacy_engine_only_selected_target(target) {
+            let mut meta: SharedSessionMeta =
+                serde_json::from_value(root.clone()).map_err(|error| error.to_string())?;
+            sanitize_shared_session_meta(&mut meta);
+            resolve_shared_selection_update(&mut meta, target)
+        } else {
+            target.clone()
+        };
+        apply_selected_target_selection(&mut root, &selected_target, updated_at)?;
+        let raw = serde_json::to_string_pretty(&root).map_err(|error| error.to_string())?;
+        write_string_atomically(&path, &raw)?;
+        Ok(selected_target)
+    })
+}
+
+fn select_meta_engine_compat(meta: &mut SharedSessionMeta, engine: EngineType) {
+    if meta
+        .selected_target
+        .as_ref()
+        .is_some_and(|target| target.engine == engine)
+    {
+        meta.selected_engine = engine;
+        return;
+    }
+    select_meta_target(meta, engine, None);
+}
+
+fn resolve_shared_selection_update(
+    meta: &mut SharedSessionMeta,
+    requested_target: &SharedSelectedTarget,
+) -> SharedSelectedTarget {
+    if !is_legacy_engine_only_selected_target(requested_target) {
+        return requested_target.clone();
+    }
+    select_meta_engine_compat(meta, requested_target.engine);
+    meta.selected_target
+        .clone()
+        .unwrap_or_else(|| legacy_engine_only_selected_target(requested_target.engine))
 }
 
 async fn ensure_shared_session_native_binding(
@@ -942,15 +1161,25 @@ fn load_meta_and_snapshot(
 #[tauri::command]
 pub async fn start_shared_session(
     workspace_id: String,
-    selected_engine: Option<EngineType>,
+    initial_target: Option<SharedSelectedTarget>,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     ensure_known_workspace(&state.workspaces, &workspace_id).await?;
 
-    let selected_engine = selected_engine
-        .map(ensure_supported_shared_session_engine)
-        .transpose()?
-        .unwrap_or(EngineType::Claude);
+    let selected_target = match initial_target {
+        Some(target) => {
+            let target = normalize_shared_selected_target(target);
+            validate_resolved_shared_selected_target(&target)?;
+            target
+        }
+        None => {
+            return Err(
+                "invalid-shared-target: initialTarget is required for a new Shared Session"
+                    .to_string(),
+            )
+        }
+    };
+    let selected_engine = selected_target.engine;
     let now = now_millis();
     let shared_session_id = Uuid::new_v4().to_string();
     let meta = SharedSessionMeta {
@@ -961,10 +1190,7 @@ pub async fn start_shared_session(
         created_at: now,
         updated_at: now,
         selected_engine,
-        selected_target: Some(SharedSelectedTarget {
-            engine: selected_engine,
-            provider_profile_id: None,
-        }),
+        selected_target: Some(selected_target.clone()),
         last_turn_seq: 0,
         bindings_by_engine: HashMap::new(),
         bindings_by_target: HashMap::new(),
@@ -982,6 +1208,7 @@ pub async fn start_shared_session(
                 "threadKind": "shared",
                 "engineSource": meta.selected_engine,
                 "selectedEngine": meta.selected_engine,
+                "selectedTarget": selected_target,
                 "nativeThreadIds": Vec::<String>::new(),
             }
         }
@@ -1013,6 +1240,7 @@ pub async fn load_shared_session(
         selected_engine: meta.selected_engine,
         thread_kind: "shared".to_string(),
         engine_source: meta.selected_engine,
+        selected_target: meta.selected_target.clone(),
         items: snapshot
             .as_ref()
             .map(|entry| entry.items.clone())
@@ -1028,6 +1256,11 @@ pub async fn set_shared_session_selected_engine(
     thread_id: String,
     selected_engine: EngineType,
     provider_profile_id: Option<String>,
+    model_catalog_entry_id: Option<String>,
+    model: Option<String>,
+    reasoning_effort: Option<String>,
+    provider_profile_name_snapshot: Option<String>,
+    provider_profile_source: Option<String>,
     state: State<'_, AppState>,
     _app: AppHandle,
 ) -> Result<Value, String> {
@@ -1037,63 +1270,36 @@ pub async fn set_shared_session_selected_engine(
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
     let shared_session_id = parse_shared_session_id(&thread_id)?;
-    let mut meta = read_shared_session_meta(&workspace_id, &shared_session_id)?;
     let now = now_millis();
-    let native_thread_id = match provider_profile_id.as_deref() {
-        // V2：managed provider 走 target binding（Selector update 不建联 runtime）。
-        Some(provider) => {
-            let binding_key = shared_target_binding_key(selected_engine, Some(provider));
-            let entry = meta
-                .bindings_by_target
-                .entry(binding_key.clone())
-                .or_insert_with(|| SharedTargetBindingMeta {
-                    binding_key,
-                    engine: selected_engine,
-                    provider_profile_id: Some(provider.to_string()),
-                    native_thread_id: engine_binding_thread_id(
-                        selected_engine,
-                        &Uuid::new_v4().to_string(),
-                    ),
-                    created_at: now,
-                    last_used_at: now,
-                    last_synced_turn_seq: 0,
-                    availability: default_target_binding_availability(),
-                });
-            entry.last_used_at = now;
-            entry.native_thread_id.clone()
-        }
-        None => {
-            let native_thread_id = meta
-                .bindings_by_engine
-                .entry(selected_engine)
-                .or_insert_with(|| SharedEngineBinding {
-                    engine: selected_engine,
-                    native_thread_id: engine_binding_thread_id(
-                        selected_engine,
-                        &Uuid::new_v4().to_string(),
-                    ),
-                    created_at: now,
-                    last_used_at: now,
-                    // Selector update should not create a live native session.
-                    last_synced_turn_seq: 0,
-                })
-                .native_thread_id
-                .clone();
-            if let Some(binding) = meta.bindings_by_engine.get_mut(&selected_engine) {
-                binding.last_used_at = now;
-            }
-            native_thread_id
-        }
-    };
-    select_meta_target(&mut meta, selected_engine, provider_profile_id);
-    meta.updated_at = now;
-    write_shared_session_meta(&meta)?;
+    let selected_target = normalize_shared_selected_target(SharedSelectedTarget {
+        engine: selected_engine,
+        provider_profile_id,
+        model_catalog_entry_id: model_catalog_entry_id
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        model: model
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        reasoning: reasoning_effort
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .map(|effort| SharedSelectedReasoning { effort }),
+        provider_profile_name_snapshot: provider_profile_name_snapshot
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        provider_profile_source: normalize_provider_selection_source(provider_profile_source),
+    });
+    if !is_legacy_engine_only_selected_target(&selected_target) {
+        validate_resolved_shared_selected_target(&selected_target)?;
+    }
+    let selected_target =
+        write_shared_session_selection(&workspace_id, &shared_session_id, &selected_target, now)?;
     Ok(json!({
-        "threadId": shared_thread_id(&meta.id),
-        "selectedEngine": meta.selected_engine,
-        "engineSource": meta.selected_engine,
+        "threadId": shared_thread_id(&shared_session_id),
+        "selectedEngine": selected_target.engine,
+        "engineSource": selected_target.engine,
         "threadKind": "shared",
-        "nativeThreadId": native_thread_id,
+        "selectedTarget": selected_target,
     }))
 }
 
@@ -1177,25 +1383,47 @@ pub async fn update_shared_session_native_binding(
     }))
 }
 
+fn apply_shared_snapshot_presentation_metadata(
+    meta: &mut SharedSessionMeta,
+    items: &[Value],
+    updated_at: u64,
+) {
+    meta.updated_at = updated_at;
+    meta.last_turn_seq = count_user_turns(items);
+    if let Some(title) = extract_first_user_title(items) {
+        meta.title = title;
+    }
+}
+
 #[tauri::command]
 pub async fn sync_shared_session_snapshot(
     workspace_id: String,
     thread_id: String,
     items: Vec<Value>,
     selected_engine: EngineType,
+    legacy_snapshot_enabled: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     ensure_known_workspace(&state.workspaces, &workspace_id).await?;
     let selected_engine = ensure_supported_shared_session_engine(selected_engine)?;
     let shared_session_id = parse_shared_session_id(&thread_id)?;
     let mut meta = read_shared_session_meta(&workspace_id, &shared_session_id)?;
-    select_meta_target(&mut meta, selected_engine, None);
-    meta.updated_at = now_millis();
-    meta.last_turn_seq = count_user_turns(&items);
-    if let Some(title) = extract_first_user_title(&items) {
-        meta.title = title;
-    }
+    // Snapshot sync 只拥有 presentation authority。Selection 的唯一写入口是
+    // set_shared_session_selected_engine；stale timer 禁止反向覆盖 selectedTarget。
+    apply_shared_snapshot_presentation_metadata(&mut meta, &items, now_millis());
     write_shared_session_meta(&meta)?;
+    if !legacy_snapshot_enabled.unwrap_or(true) {
+        return Ok(json!({
+            "threadId": shared_thread_id(&meta.id),
+            "updatedAt": meta.updated_at,
+            "lastTurnSeq": meta.last_turn_seq,
+            "legacySnapshot": {
+                "status": "skipped",
+                "reason": "renderer-v2-authority",
+            },
+            "shadowMirror": { "status": "skipped" },
+        }));
+    }
     let entry = SharedSessionSnapshotEntry {
         kind: "snapshot".to_string(),
         created_at: meta.updated_at,
@@ -1508,15 +1736,20 @@ pub async fn send_shared_session_message(
 #[cfg(test)]
 mod tests {
     use super::{
+        apply_selected_target_selection, apply_shared_snapshot_presentation_metadata,
         binding_uses_established_native_thread, build_delta_sync_prefix, count_user_turns,
         extract_first_user_title, inspect_shared_context_projection,
-        is_pending_shared_binding_thread_id, parse_shared_session_id, sanitize_shared_session_meta,
-        shared_target_binding_key, validate_shared_native_thread_id, SharedEngineBinding,
-        SharedSessionMeta, SharedTargetBindingMeta, MAX_DELTA_SYNC_CHARS,
+        is_legacy_engine_only_selected_target, is_pending_shared_binding_thread_id,
+        legacy_engine_only_selected_target, normalize_provider_selection_source,
+        normalize_shared_selected_target, parse_shared_session_id, resolve_shared_selection_update,
+        sanitize_shared_session_meta, select_meta_engine_compat, select_meta_target,
+        shared_target_binding_key, validate_resolved_shared_selected_target,
+        validate_shared_native_thread_id, SharedEngineBinding, SharedSelectedReasoning,
+        SharedSelectedTarget, SharedSessionMeta, SharedTargetBindingMeta, MAX_DELTA_SYNC_CHARS,
         SHARED_SESSION_SCHEMA_VERSION,
     };
     use crate::engine::EngineType;
-    use serde_json::json;
+    use serde_json::{json, Value};
     use std::collections::HashMap;
 
     #[test]
@@ -1644,7 +1877,17 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             selected_engine: EngineType::Gemini,
-            selected_target: None,
+            selected_target: Some(SharedSelectedTarget {
+                engine: EngineType::Gemini,
+                provider_profile_id: Some("legacy-provider".to_string()),
+                model_catalog_entry_id: Some("legacy-model-entry".to_string()),
+                model: Some("legacy-model".to_string()),
+                reasoning: Some(SharedSelectedReasoning {
+                    effort: "high".to_string(),
+                }),
+                provider_profile_name_snapshot: Some("Legacy Provider".to_string()),
+                provider_profile_source: Some("managed".to_string()),
+            }),
             last_turn_seq: 3,
             bindings_by_engine: HashMap::from([
                 (
@@ -1674,6 +1917,12 @@ mod tests {
         sanitize_shared_session_meta(&mut meta);
 
         assert_eq!(meta.selected_engine, EngineType::Claude);
+        let target = meta.selected_target.expect("normalized selected target");
+        assert_eq!(target.engine, EngineType::Claude);
+        assert!(target.provider_profile_id.is_none());
+        assert!(target.model_catalog_entry_id.is_none());
+        assert!(target.model.is_none());
+        assert!(target.reasoning.is_none());
         assert!(meta.bindings_by_engine.contains_key(&EngineType::Claude));
         assert!(!meta.bindings_by_engine.contains_key(&EngineType::Gemini));
     }
@@ -1737,6 +1986,233 @@ mod tests {
             shared_target_binding_key(EngineType::Codex, Some("openai")),
             "codex:openai"
         );
+    }
+
+    #[test]
+    fn selected_target_preserves_complete_identity_for_the_same_binding() {
+        let mut meta = meta_with_engine_binding(EngineType::Codex, "codex-session-1");
+        meta.selected_target = Some(SharedSelectedTarget {
+            engine: EngineType::Codex,
+            provider_profile_id: Some("provider-kimi".to_string()),
+            model_catalog_entry_id: Some("kimi-coding-entry".to_string()),
+            model: Some("kimi-for-coding".to_string()),
+            reasoning: Some(SharedSelectedReasoning {
+                effort: "high".to_string(),
+            }),
+            provider_profile_name_snapshot: Some("Kimi Coding".to_string()),
+            provider_profile_source: Some("managed".to_string()),
+        });
+
+        select_meta_target(
+            &mut meta,
+            EngineType::Codex,
+            Some("provider-kimi".to_string()),
+        );
+
+        let target = meta.selected_target.expect("selected target");
+        assert_eq!(
+            target.model_catalog_entry_id.as_deref(),
+            Some("kimi-coding-entry")
+        );
+        assert_eq!(target.model.as_deref(), Some("kimi-for-coding"));
+        assert_eq!(
+            target
+                .reasoning
+                .as_ref()
+                .map(|reasoning| reasoning.effort.as_str()),
+            Some("high")
+        );
+        assert_eq!(
+            target.provider_profile_name_snapshot.as_deref(),
+            Some("Kimi Coding")
+        );
+    }
+
+    #[test]
+    fn snapshot_sync_has_no_selection_authority_even_with_a_stale_engine() {
+        let mut meta = meta_with_engine_binding(EngineType::Codex, "codex-session-1");
+        meta.selected_target = Some(SharedSelectedTarget {
+            engine: EngineType::Codex,
+            provider_profile_id: Some("provider-kimi".to_string()),
+            model_catalog_entry_id: Some("kimi-coding-entry".to_string()),
+            model: Some("kimi-for-coding".to_string()),
+            reasoning: Some(SharedSelectedReasoning {
+                effort: "high".to_string(),
+            }),
+            provider_profile_name_snapshot: Some("Kimi Coding".to_string()),
+            provider_profile_source: Some("managed".to_string()),
+        });
+
+        apply_shared_snapshot_presentation_metadata(
+            &mut meta,
+            &[json!({
+                "kind": "message",
+                "role": "user",
+                "text": "stale Claude snapshot"
+            })],
+            42,
+        );
+
+        let target = meta.selected_target.expect("selected target");
+        assert_eq!(meta.selected_engine, EngineType::Codex);
+        assert_eq!(target.provider_profile_id.as_deref(), Some("provider-kimi"));
+        assert_eq!(target.model.as_deref(), Some("kimi-for-coding"));
+        assert_eq!(meta.updated_at, 42);
+    }
+
+    #[test]
+    fn legacy_engine_only_selection_update_does_not_downgrade_complete_target() {
+        let mut meta = meta_with_engine_binding(EngineType::Codex, "codex-session-1");
+        meta.selected_target = Some(SharedSelectedTarget {
+            engine: EngineType::Codex,
+            provider_profile_id: Some("provider-kimi".to_string()),
+            model_catalog_entry_id: Some("kimi-coding-entry".to_string()),
+            model: Some("kimi-for-coding".to_string()),
+            reasoning: Some(SharedSelectedReasoning {
+                effort: "high".to_string(),
+            }),
+            provider_profile_name_snapshot: Some("Kimi Coding".to_string()),
+            provider_profile_source: Some("managed".to_string()),
+        });
+        let legacy_update = legacy_engine_only_selected_target(EngineType::Codex);
+
+        let selected_target = resolve_shared_selection_update(&mut meta, &legacy_update);
+
+        assert_eq!(
+            selected_target.provider_profile_id.as_deref(),
+            Some("provider-kimi"),
+        );
+        assert_eq!(
+            selected_target.model_catalog_entry_id.as_deref(),
+            Some("kimi-coding-entry"),
+        );
+        assert_eq!(selected_target.model.as_deref(), Some("kimi-for-coding"));
+    }
+
+    #[test]
+    fn resolved_selected_target_validation_rejects_legacy_partial_identity() {
+        let partial = legacy_engine_only_selected_target(EngineType::Codex);
+
+        assert!(is_legacy_engine_only_selected_target(&partial));
+        assert!(validate_resolved_shared_selected_target(&partial)
+            .expect_err("legacy partial target must not become executable")
+            .contains("provider source"),);
+    }
+
+    #[test]
+    fn selected_target_normalization_preserves_missing_legacy_fields() {
+        let normalized = normalize_shared_selected_target(SharedSelectedTarget {
+            engine: EngineType::Claude,
+            provider_profile_id: Some("   ".to_string()),
+            model_catalog_entry_id: None,
+            model: None,
+            reasoning: None,
+            provider_profile_name_snapshot: None,
+            provider_profile_source: Some("unknown".to_string()),
+        });
+
+        assert!(is_legacy_engine_only_selected_target(&normalized));
+    }
+
+    #[test]
+    fn selected_target_optional_fields_round_trip_and_legacy_fields_default() {
+        let full: SharedSelectedTarget = serde_json::from_value(json!({
+            "engine": "codex",
+            "providerProfileId": "provider-kimi",
+            "modelCatalogEntryId": "kimi-coding-entry",
+            "model": "kimi-for-coding",
+            "reasoning": { "effort": "high" },
+            "providerProfileNameSnapshot": "Kimi Coding",
+            "providerProfileSource": "managed"
+        }))
+        .expect("full selected target");
+        let serialized = serde_json::to_value(&full).expect("serialize selected target");
+        assert_eq!(
+            serialized
+                .get("modelCatalogEntryId")
+                .and_then(|value| value.as_str()),
+            Some("kimi-coding-entry")
+        );
+        assert_eq!(
+            serialized.get("model").and_then(|value| value.as_str()),
+            Some("kimi-for-coding")
+        );
+
+        let legacy: SharedSelectedTarget =
+            serde_json::from_value(json!({ "engine": "claude" })).expect("legacy selected target");
+        assert!(legacy.provider_profile_id.is_none());
+        assert!(legacy.model_catalog_entry_id.is_none());
+        assert!(legacy.model.is_none());
+        assert!(legacy.reasoning.is_none());
+    }
+
+    #[test]
+    fn picker_selection_does_not_create_or_touch_same_engine_provider_bindings() {
+        let mut meta = meta_with_engine_binding(EngineType::Codex, "codex-local-session");
+        meta.bindings_by_target.insert(
+            "codex:provider-a".to_string(),
+            SharedTargetBindingMeta {
+                binding_key: "codex:provider-a".to_string(),
+                engine: EngineType::Codex,
+                provider_profile_id: Some("provider-a".to_string()),
+                native_thread_id: "codex-provider-a-session".to_string(),
+                created_at: 1,
+                last_used_at: 2,
+                last_synced_turn_seq: 3,
+                availability: "ready".to_string(),
+            },
+        );
+        let mut root = serde_json::to_value(meta).expect("serialize metadata fixture");
+        let engine_bindings_before = root.get("bindingsByEngine").cloned();
+        let target_bindings_before = root.get("bindingsByTarget").cloned();
+        let selected_target = SharedSelectedTarget {
+            engine: EngineType::Codex,
+            provider_profile_id: Some("provider-b".to_string()),
+            model_catalog_entry_id: Some("provider-b-entry".to_string()),
+            model: Some("provider-b-runtime".to_string()),
+            reasoning: None,
+            provider_profile_name_snapshot: Some("Provider B".to_string()),
+            provider_profile_source: Some("managed".to_string()),
+        };
+
+        apply_selected_target_selection(&mut root, &selected_target, 99)
+            .expect("apply selection-only patch");
+
+        assert_eq!(
+            root.get("bindingsByEngine").cloned(),
+            engine_bindings_before
+        );
+        assert_eq!(
+            root.get("bindingsByTarget").cloned(),
+            target_bindings_before
+        );
+        assert!(
+            root.pointer("/bindingsByTarget/codex:provider-b").is_none(),
+            "selection must not materialize a Provider binding"
+        );
+        assert_eq!(root.get("updatedAt").and_then(Value::as_u64), Some(99));
+        assert_eq!(
+            root.pointer("/selectedTarget/providerProfileId")
+                .and_then(Value::as_str),
+            Some("provider-b")
+        );
+    }
+
+    #[test]
+    fn selected_target_source_accepts_catalog_values_and_drops_unknown_values() {
+        assert_eq!(
+            normalize_provider_selection_source(Some(" disk ".to_string())).as_deref(),
+            Some("disk")
+        );
+        assert_eq!(
+            normalize_provider_selection_source(Some("managed".to_string())).as_deref(),
+            Some("managed")
+        );
+        assert!(
+            normalize_provider_selection_source(Some("local".to_string())).is_none(),
+            "selected target persists catalog-domain source, not canonical source"
+        );
+        assert!(normalize_provider_selection_source(Some("future-source".to_string())).is_none());
     }
 
     #[test]

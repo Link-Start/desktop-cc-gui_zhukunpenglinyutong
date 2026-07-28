@@ -4,11 +4,13 @@
 
 mod common;
 
-use cc_gui_lib::shared_event_log::canonical::shadow_v0::map_v0_snapshot_to_presentation_only_facts;
+use cc_gui_lib::shared_event_log::canonical::shadow_v0::{
+    map_v0_snapshot_to_presentation_only_facts, map_v0_turn_to_presentation_only_facts, v0_evidence,
+};
 use cc_gui_lib::shared_event_log::canonical::types::{
-    CanonicalAssistantBlocks, CanonicalBlock, CanonicalFact, CanonicalUserInput, ControlFact,
-    Outcome, OutcomeStatus, TurnCommittedFact, TurnExecutionSnapshot, TurnRequestedFact,
-    UsageRecordedFact, UsageShape, UsageSource, UsageVerification,
+    ArtifactRef, CanonicalAssistantBlocks, CanonicalBlock, CanonicalFact, CanonicalUserInput,
+    ControlFact, Outcome, OutcomeStatus, TurnCommittedFact, TurnExecutionSnapshot,
+    TurnRequestedFact, UsageRecordedFact, UsageShape, UsageSource, UsageVerification,
 };
 use cc_gui_lib::shared_event_log::{
     open, AppendOutcome, Fidelity, NewCanonicalEvent, OpenOutcome, ProjectionCheckpointRow,
@@ -24,6 +26,7 @@ fn snapshot() -> TurnExecutionSnapshot {
     TurnExecutionSnapshot {
         engine: "claude".to_string(),
         provider_profile_id: Some("profile-1".to_string()),
+        model_catalog_entry_id: None,
         model: Some("claude-opus".to_string()),
         reasoning: None,
         provider_profile_name_snapshot: None,
@@ -80,6 +83,21 @@ fn make_turn_committed(attempt_id: &str) -> CanonicalFact {
         committed_at: 1_700_000_000_001,
         extra: serde_json::Value::Object(Default::default()),
     })
+}
+
+fn make_failed_turn_committed(attempt_id: &str) -> CanonicalFact {
+    let CanonicalFact::TurnCommitted(mut fact) = make_turn_committed(attempt_id) else {
+        unreachable!("fixture is turnCommitted");
+    };
+    fact.assistant.blocks.clear();
+    fact.outcome = Outcome {
+        status: OutcomeStatus::Failed,
+        error_code: Some("provider-rejected".to_string()),
+        error_message: Some("model is unavailable".to_string()),
+        stop_reason: None,
+        extra: serde_json::Value::Object(Default::default()),
+    };
+    CanonicalFact::TurnCommitted(fact)
 }
 
 fn make_usage_recorded(usage_record_id: &str, attempt_id: &str) -> CanonicalFact {
@@ -243,6 +261,76 @@ fn v0_final_snapshot_mirrors_idempotently_into_shadow_projection() {
     writer.shutdown().unwrap();
 }
 
+/// Scenario: V0 rollback/shadow can preserve legacy-only Turns, but it cannot overwrite
+/// canonical target provenance for the same logical Turn.
+#[test]
+fn canonical_logical_turn_wins_over_later_presentation_shadow() {
+    let temp = TempStoreDir::new("canonical-shadow-precedence");
+    let writer = open_writer(&temp);
+    writer
+        .append_canonical_fact(SESSION, make_turn_requested("attempt-canonical"))
+        .expect("append canonical request");
+    writer
+        .append_canonical_fact(SESSION, make_turn_committed("attempt-canonical"))
+        .expect("append canonical commit");
+
+    let mut duplicate = v0_evidence(
+        "turn-1",
+        "v0-shadow:duplicate",
+        "hello",
+        "legacy target must not win",
+    );
+    duplicate.engine = "codex".to_string();
+    duplicate.provider_profile_id = None;
+    duplicate.model = None;
+    for fact in map_v0_turn_to_presentation_only_facts(duplicate) {
+        writer
+            .append_presentation_only_fact(SESSION, fact)
+            .expect("append duplicate shadow");
+    }
+
+    let mut legacy_only = v0_evidence(
+        "legacy-turn",
+        "v0-shadow:legacy-only",
+        "legacy question",
+        "legacy answer",
+    );
+    legacy_only.provider_profile_id = None;
+    legacy_only.model = None;
+    for fact in map_v0_turn_to_presentation_only_facts(legacy_only) {
+        writer
+            .append_presentation_only_fact(SESSION, fact)
+            .expect("append legacy-only shadow");
+    }
+
+    let items = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project");
+    let duplicate_texts = items
+        .iter()
+        .filter_map(|item| item.content.get("text").and_then(serde_json::Value::as_str))
+        .filter(|text| text.contains("legacy target must not win"))
+        .count();
+    assert_eq!(duplicate_texts, 0);
+    assert!(items.iter().any(|item| {
+        item.content.get("text").and_then(serde_json::Value::as_str) == Some("legacy answer")
+            && item.fidelity == Fidelity::PresentationOnly
+    }));
+    let canonical_assistant = items
+        .iter()
+        .find(|item| {
+            item.content.get("text").and_then(serde_json::Value::as_str) == Some("hello back")
+        })
+        .expect("canonical assistant");
+    assert_eq!(canonical_assistant.fidelity, Fidelity::Canonical);
+    assert_eq!(
+        canonical_assistant.content["executionTargetSnapshot"]["model"],
+        "claude-opus"
+    );
+
+    writer.shutdown().unwrap();
+}
+
 fn make_control(action: &str) -> CanonicalFact {
     CanonicalFact::Control(ControlFact {
         control_kind: format!("turn.{action}"),
@@ -303,6 +391,109 @@ fn canonical_facts_project_to_conversation_items() {
     assert!(kinds.contains(&ProjectionItemKind::Reasoning));
     assert!(kinds.contains(&ProjectionItemKind::Metadata));
     assert!(kinds.contains(&ProjectionItemKind::SystemNotice));
+
+    writer.shutdown().unwrap();
+}
+
+#[test]
+fn failed_terminal_reloads_as_labeled_assistant_message() {
+    let temp = TempStoreDir::new("failed-terminal-provenance");
+    let writer = open_writer(&temp);
+    writer
+        .append_canonical_fact(SESSION, make_failed_turn_committed("attempt-failed"))
+        .expect("append failed terminal");
+
+    let events = writer.events_for_session(SESSION).expect("events");
+    let items = SharedProjector::new()
+        .project_events(&events)
+        .expect("project");
+    let outcome = items
+        .iter()
+        .find(|item| item.id.ends_with(":outcome"))
+        .expect("visible failed outcome");
+
+    assert_eq!(outcome.kind, ProjectionItemKind::Message);
+    assert_eq!(outcome.content["role"], "assistant");
+    assert_eq!(outcome.content["text"], "Turn failed: model is unavailable");
+    assert_eq!(
+        outcome.content["executionTargetSnapshot"]["model"],
+        "claude-opus"
+    );
+    assert_eq!(
+        outcome.content["executionTargetSnapshot"]["providerProfileId"],
+        "profile-1"
+    );
+
+    writer.shutdown().unwrap();
+}
+
+#[test]
+fn reasoning_only_completed_turn_reloads_with_target_badge_anchor() {
+    let temp = TempStoreDir::new("reasoning-only-provenance");
+    let writer = open_writer(&temp);
+    let mut fact = make_turn_committed("attempt-reasoning-only");
+    let CanonicalFact::TurnCommitted(committed) = &mut fact else {
+        panic!("fixture must be turnCommitted");
+    };
+    committed.assistant.blocks = vec![CanonicalBlock::Reasoning {
+        text: "private analysis".to_string(),
+    }];
+    writer
+        .append_canonical_fact(SESSION, fact)
+        .expect("append reasoning-only terminal");
+
+    let items = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project");
+    let provenance = items
+        .iter()
+        .find(|item| item.id.ends_with(":provenance"))
+        .expect("target badge anchor");
+
+    assert_eq!(provenance.kind, ProjectionItemKind::Message);
+    assert_eq!(provenance.content["text"], "");
+    assert_eq!(
+        provenance.content["executionTargetSnapshot"]["providerProfileId"],
+        "profile-1"
+    );
+    assert!(items
+        .iter()
+        .any(|item| item.kind == ProjectionItemKind::Reasoning));
+
+    writer.shutdown().unwrap();
+}
+
+#[test]
+fn standalone_runtime_artifact_is_visible_after_history_reload() {
+    let temp = TempStoreDir::new("standalone-artifact");
+    let writer = open_writer(&temp);
+    let mut fact = make_turn_committed("attempt-artifact");
+    let CanonicalFact::TurnCommitted(committed) = &mut fact else {
+        panic!("fixture must be turnCommitted");
+    };
+    committed.artifact_refs.push(ArtifactRef {
+        artifact_id: "image-1".to_string(),
+        media_type: "image/png".to_string(),
+        size_bytes: Some(42),
+        sha256: "a".repeat(64),
+        locator: "/tmp/image.png".to_string(),
+        redaction: None,
+        extra: serde_json::Value::Object(Default::default()),
+    });
+    writer
+        .append_canonical_fact(SESSION, fact)
+        .expect("append committed artifact");
+
+    let items = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project");
+    let image = items
+        .iter()
+        .find(|item| item.kind == ProjectionItemKind::GeneratedImage)
+        .expect("standalone artifact projection");
+    assert_eq!(image.content["turnId"], "turn-1");
+    assert_eq!(image.content["engineSource"], "claude");
+    assert_eq!(image.content["images"][0]["src"], "/tmp/image.png");
 
     writer.shutdown().unwrap();
 }

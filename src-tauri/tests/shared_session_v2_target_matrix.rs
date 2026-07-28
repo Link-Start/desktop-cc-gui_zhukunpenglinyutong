@@ -10,6 +10,7 @@
 
 mod common;
 
+use cc_gui_lib::shared_event_log::canonical::CanonicalProviderProfileSource;
 use cc_gui_lib::shared_event_log::{open, OpenOutcome, SharedEventWriter, StoreError};
 use cc_gui_lib::shared_session_v2::{
     accept_turn_core, begin_turn_core, commit_turn_core, BeginTurnStatus, CommitOutcomeInput,
@@ -32,10 +33,11 @@ fn target(engine: EngineType, provider: Option<&str>, model: &str) -> ExecutionT
     ExecutionTargetInput {
         engine,
         provider_profile_id: provider.map(str::to_string),
+        model_catalog_entry_id: None,
         model: Some(model.to_string()),
         reasoning_effort: None,
         provider_profile_name_snapshot: None,
-        provider_profile_source: provider.map(|_| "managed".to_string()),
+        provider_profile_source: provider.map(|_| CanonicalProviderProfileSource::Managed),
         runtime_capability_fingerprint: None,
     }
 }

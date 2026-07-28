@@ -73,7 +73,9 @@ pub use askuser_mcp::{global as askuser_mcp_global, AskUserMcpServer};
 #[allow(unused_imports)]
 pub use askuser_mcp::init_global as init_askuser_mcp_global;
 pub use manager::ClaudeSessionManager;
-pub(crate) use provider_profile::resolve_claude_provider_launch_profile;
+pub(crate) use provider_profile::{
+    resolve_claude_provider_launch_profile, CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
+};
 #[cfg(test)]
 use stream_helpers::extract_text_from_content;
 #[cfg(test)]

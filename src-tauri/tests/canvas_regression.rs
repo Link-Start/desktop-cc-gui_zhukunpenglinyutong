@@ -23,6 +23,7 @@ fn snapshot(engine: &str) -> TurnExecutionSnapshot {
     TurnExecutionSnapshot {
         engine: engine.to_string(),
         provider_profile_id: Some("profile-1".to_string()),
+        model_catalog_entry_id: None,
         model: Some("model-1".to_string()),
         reasoning: None,
         provider_profile_name_snapshot: None,

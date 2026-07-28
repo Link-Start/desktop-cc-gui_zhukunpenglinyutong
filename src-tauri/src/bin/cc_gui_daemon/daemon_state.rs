@@ -3191,6 +3191,18 @@ impl DaemonState {
         }
     }
 
+    pub(super) async fn discover_codex_models(
+        &self,
+        workspace_id: String,
+        provider_profile_id: Option<String>,
+    ) -> Result<Value, String> {
+        let provider_profile_id = normalize_daemon_disk_provider_profile(provider_profile_id)?;
+        self.ensure_codex_session_for_workspace(&workspace_id)
+            .await?;
+        codex_core::model_list_for_provider_core(&self.sessions, workspace_id, provider_profile_id)
+            .await
+    }
+
     pub(super) async fn collaboration_mode_list(
         &self,
         workspace_id: String,

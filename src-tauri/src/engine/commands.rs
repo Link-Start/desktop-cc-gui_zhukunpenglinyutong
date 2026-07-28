@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::time::timeout;
@@ -570,7 +570,7 @@ fn extract_turn_result_text_internal(value: &Value, depth: usize) -> Option<Stri
     None
 }
 
-fn extract_turn_result_text(result: Option<&Value>) -> Option<String> {
+pub(crate) fn extract_turn_result_text(result: Option<&Value>) -> Option<String> {
     result.and_then(|value| extract_turn_result_text_internal(value, 0))
 }
 
@@ -609,7 +609,7 @@ fn is_likely_legacy_claude_model_id(model: &str) -> bool {
     model.trim().to_ascii_lowercase().starts_with("claude-")
 }
 
-fn is_valid_claude_model_for_passthrough(model: &str) -> bool {
+pub(crate) fn is_valid_claude_model_for_passthrough(model: &str) -> bool {
     let trimmed = model.trim();
     if trimmed.is_empty() || trimmed.len() > 128 {
         return false;
@@ -1438,6 +1438,28 @@ pub async fn get_engine_models(
     }
 }
 
+fn build_claude_dispatch_receipt(
+    workspace_id: &str,
+    effective_provider_profile_id: Option<&str>,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> Value {
+    let provider_profile_id = effective_provider_profile_id.filter(|profile_id| {
+        *profile_id != crate::engine::claude::CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+    });
+    json!({
+        "engine": "claude",
+        "providerProfileId": provider_profile_id,
+        "providerProfileSource": if provider_profile_id.is_some() { "managed" } else { "local" },
+        "providerRuntimeKey": crate::engine::claude::provider_profile::claude_runtime_key(
+            workspace_id,
+            effective_provider_profile_id,
+        ),
+        "model": model,
+        "reasoningEffort": reasoning_effort,
+    })
+}
+
 /// Send a message using the active engine
 /// For Claude: spawns async tasks for streaming events to the frontend
 /// via app-server-event, returns immediately with turn ID.
@@ -1628,6 +1650,12 @@ pub async fn engine_send_message(
                     model
                 );
             }
+            let dispatch_receipt = build_claude_dispatch_receipt(
+                &workspace_id,
+                effective_provider_profile_id.as_deref(),
+                sanitized_model.as_deref(),
+                effort.as_deref(),
+            );
             let model_resolution = json!({
                 "requestedModel": model.as_deref(),
                 "runtimeModel": sanitized_model.as_deref(),
@@ -1698,6 +1726,14 @@ pub async fn engine_send_message(
                 .map(|profile| profile.binding.clone());
             let provider_binding_storage_path = state.storage_path.clone();
             let provider_binding_workspace_id = workspace_id.clone();
+            let native_session_id_for_forwarder = response_session_id
+                .clone()
+                .or_else(|| provider_binding_lookup_session_id.clone());
+            let provider_runtime_key_for_forwarder =
+                crate::engine::claude::provider_profile::claude_runtime_key(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                );
 
             // Spawn event forwarder: reads from broadcast channel and emits Tauri events.
             tokio::spawn(async move {
@@ -1773,16 +1809,66 @@ pub async fn engine_send_message(
                         }
                     }
                     let stream_timing = turn_event.stream_timing;
+                    if crate::shared_runtime_coordinator::is_internal_shared_context_replay_event(
+                        &event,
+                    ) {
+                        // Shared context replay 是 checksum ACK transport，不是可见用户消息。
+                        // coordinator 消费后禁止继续生成 claude/raw UI/history event。
+                        if let Some(app_state) = app_clone.try_state::<AppState>() {
+                            let observation = app_state
+                                .shared_runtime_coordinator
+                                .ingest_engine_event_scoped(
+                                    &provider_runtime_key_for_forwarder,
+                                    EngineType::Claude,
+                                    Some(&turn_id_for_forwarder),
+                                    native_session_id_for_forwarder.as_deref(),
+                                    &event,
+                                );
+                            crate::event_sink::publish_shared_runtime_observation(
+                                &app_state,
+                                &observation,
+                            );
+                        }
+                        continue;
+                    }
+                    let mut app_server_events = Vec::new();
                     let did_finish = handle_claude_forwarder_event(
-                        event,
+                        event.clone(),
                         stream_timing.as_ref(),
                         &mut forwarder_state,
                         &runtime_context,
-                        &mut |payload| {
-                            let _ = app_clone.emit("app-server-event", payload);
-                        },
+                        &mut |payload| app_server_events.push(payload),
                     )
                     .await;
+                    let shared_observation = app_clone
+                        .try_state::<AppState>()
+                        .map(|app_state| {
+                            let observation = app_state
+                                .shared_runtime_coordinator
+                                .ingest_engine_event_with_replay_scoped(
+                                    &provider_runtime_key_for_forwarder,
+                                    EngineType::Claude,
+                                    Some(&turn_id_for_forwarder),
+                                    native_session_id_for_forwarder.as_deref(),
+                                    &event,
+                                    app_server_events.clone(),
+                                );
+                            crate::event_sink::publish_shared_runtime_observation(
+                                &app_state,
+                                &observation,
+                            );
+                            observation
+                        })
+                        .unwrap_or_default();
+                    if !shared_observation.ui_fanout_deferred {
+                        for mut payload in app_server_events {
+                            if let Some(owner) = shared_observation.owner.as_ref() {
+                                crate::shared_runtime_coordinator::
+                                    project_app_server_event_to_shared_owner(&mut payload, owner);
+                            }
+                            let _ = app_clone.emit("app-server-event", payload);
+                        }
+                    }
                     if did_finish {
                         if is_turn_completed {
                             post_completion_grace_deadline = Some(
@@ -1866,6 +1952,7 @@ pub async fn engine_send_message(
                     },
                 },
                 "modelResolution": model_resolution,
+                "mossxDispatchReceipt": dispatch_receipt,
                 "turn": {
                     "id": turn_id,
                     "status": "started"

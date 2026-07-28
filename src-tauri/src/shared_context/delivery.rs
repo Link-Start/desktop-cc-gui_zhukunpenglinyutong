@@ -15,8 +15,20 @@ pub struct PrepareDeliveryRequest {
     pub provider_profile_id: Option<String>,
     pub logical_turn_id: String,
     pub attempt_id: String,
+    pub binding_operation_id: String,
     pub package: ContextPackage,
     pub prepared_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct MarkDeliverySentRequest {
+    pub session_id: String,
+    pub binding_key: String,
+    pub attempt_id: String,
+    pub binding_operation_id: String,
+    pub native_session_id: String,
+    pub native_request_id: String,
+    pub sent_at: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +37,7 @@ pub struct AcceptDeliveryRequest {
     pub binding_key: String,
     pub logical_turn_id: String,
     pub attempt_id: String,
+    pub binding_operation_id: String,
     pub package_id: String,
     pub native_session_id: Option<String>,
     pub native_request_id: Option<String>,
@@ -109,9 +122,11 @@ pub fn prepare_delivery(
         phase: "prepared".to_string(),
         client_turn_id: request.logical_turn_id.clone(),
         attempt_id: request.attempt_id.clone(),
+        binding_operation_id: Some(request.binding_operation_id.clone()),
         native_session_id: None,
         native_request_id: None,
         prepared_at: request.prepared_at,
+        sent_at: None,
         accepted_at: None,
         probe_attempts: 0,
     };
@@ -167,6 +182,59 @@ pub fn prepare_delivery(
     Ok(pending)
 }
 
+/// Runtime side effect 前的 durable CAS。`prepared` 是唯一能证明“尚未发送”的
+/// phase；进入 `sent-awaiting-ack` 后，崩溃/断连都必须 Probe 或显式 replace，不能重发。
+pub fn mark_delivery_sent(
+    writer: &SharedEventWriter,
+    request: &MarkDeliverySentRequest,
+) -> Result<PendingDelivery, String> {
+    let existing = writer
+        .binding_state(&request.session_id, &request.binding_key)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "binding missing before runtime delivery".to_string())?;
+    let mut pending: PendingDelivery = serde_json::from_str(
+        existing
+            .pending_delivery_json
+            .as_deref()
+            .ok_or_else(|| "pending context delivery missing".to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    if pending.attempt_id != request.attempt_id
+        || pending.binding_operation_id.as_deref() != Some(request.binding_operation_id.as_str())
+    {
+        return Err("runtime delivery owner/generation mismatch".to_string());
+    }
+    if pending.phase != "prepared" {
+        return Err(format!(
+            "runtime delivery phase is '{}' for attempt {}",
+            pending.phase, pending.attempt_id
+        ));
+    }
+    pending.phase = "sent-awaiting-ack".to_string();
+    pending.native_session_id = Some(request.native_session_id.clone());
+    pending.native_request_id = Some(request.native_request_id.clone());
+    pending.sent_at = Some(request.sent_at);
+    let update = BindingStateUpdate {
+        session_id: existing.session_id,
+        binding_key: existing.binding_key,
+        engine: existing.engine,
+        provider_profile_id: existing.provider_profile_id,
+        native_session_id: Some(request.native_session_id.clone()),
+        accepted_through_sequence: existing.accepted_through_sequence,
+        committed_through_sequence: existing.committed_through_sequence,
+        provisioning_json: existing.provisioning_json,
+        pending_delivery_json: Some(
+            serde_json::to_string(&pending).map_err(|error| error.to_string())?,
+        ),
+        availability: existing.availability,
+        updated_at: request.sent_at,
+    };
+    writer
+        .upsert_binding_state(&update)
+        .map_err(|error| error.to_string())?;
+    Ok(pending)
+}
+
 pub fn accept_delivery(
     writer: &SharedEventWriter,
     request: &AcceptDeliveryRequest,
@@ -185,8 +253,15 @@ pub fn accept_delivery(
     if pending.package_id != request.package_id
         || pending.attempt_id != request.attempt_id
         || pending.client_turn_id != request.logical_turn_id
+        || pending.binding_operation_id.as_deref() != Some(request.binding_operation_id.as_str())
     {
         return Err("context acceptance owner mismatch".to_string());
+    }
+    if pending.phase != "sent-awaiting-ack" {
+        return Err(format!(
+            "context acceptance arrived from invalid delivery phase '{}'",
+            pending.phase
+        ));
     }
     pending.phase = "accepted-awaiting-commit".to_string();
     pending.native_session_id = request.native_session_id.clone();

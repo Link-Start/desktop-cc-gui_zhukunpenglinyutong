@@ -27,6 +27,7 @@ fn target_from_evidence(evidence: &V0FinalEvidence) -> TurnExecutionSnapshot {
     TurnExecutionSnapshot {
         engine: evidence.engine.clone(),
         provider_profile_id: evidence.provider_profile_id.clone(),
+        model_catalog_entry_id: None,
         model: evidence.model.clone(),
         reasoning: None,
         provider_profile_name_snapshot: None,

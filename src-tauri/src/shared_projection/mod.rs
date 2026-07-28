@@ -17,4 +17,5 @@ pub use projector::SharedProjector;
 pub use types::{ProjectionItem, ProjectionItemKind};
 
 pub const CANVAS_PROJECTION_NAME: &str = "canvas";
-pub const CANVAS_PROJECTION_VERSION: i64 = 2;
+// v3: canonical logical-Turn identity wins over later V0 presentation shadows.
+pub const CANVAS_PROJECTION_VERSION: i64 = 3;
