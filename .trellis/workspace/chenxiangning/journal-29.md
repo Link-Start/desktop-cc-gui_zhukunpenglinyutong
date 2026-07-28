@@ -269,3 +269,36 @@ Message-tail Codex fork 仅保留当前 Provider；跨 Provider 由 Sidebar Prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1205: 校准多 CLI 会话基石 A-D
+
+**Date**: 2026-07-28
+**Task**: 校准多 CLI 会话基石 A-D
+**Branch**: `feature/v-0710`
+
+### Summary
+
+对照设计、任务与生产代码完成 Change A-D 全链路 review；修复 Context Package identity/完整性、跨平台原子发布、Native History 隐私与资源边界、Codex capability probe 和 Desktop 降级确认；补齐 Rust/Vitest 契约测试，更新并归档 OpenSpec。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b5a2aba34` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
