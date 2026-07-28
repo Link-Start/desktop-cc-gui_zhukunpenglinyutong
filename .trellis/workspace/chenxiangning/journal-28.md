@@ -1816,3 +1816,36 @@ B.1–B.6 全部完成：Target Store/四级 Picker、bindingsByTarget 迁移、
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1192: 校准 Change B 发送与恢复语义
+
+**Date**: 2026-07-28
+**Task**: 校准 Change B 发送与恢复语义
+**Branch**: `feature/v-0710`
+
+### Summary
+
+Review Change B 后撤回 17 个虚假完成项和 Gate 4；修复 Composer managed Provider Target 透传、unknown send error fail-closed、Reasoning 锁定，以及基于 durable turnAccepted 的重启恢复。验证 41 个目标 Vitest、Rust 8 个集成测试、typecheck、scoped ESLint、cargo check、runtime contracts 与 OpenSpec strict。未跑全量测试；useThreadMessaging 全文件仍有 10 个既有 OpenCode/Gemini retirement 基线失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1b8aac983` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

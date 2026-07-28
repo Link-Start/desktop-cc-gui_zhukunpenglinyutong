@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-28.md`
-- **Total Sessions**: 1191
-- **Last Active**: 2026-07-27
+- **Total Sessions**: 1192
+- **Last Active**: 2026-07-28
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~1818 | Active |
+| `journal-28.md` | ~1851 | Active |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +56,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1192 | 2026-07-28 | 校准 Change B 发送与恢复语义 | `1b8aac983` | `feature/v-0710` |
 | 1191 | 2026-07-27 | Wave 4 Change B：Execution Target + V2 Send 写路径全量落地 | `fe81e9212` | `feature/v-0710` |
 | 1190 | 2026-07-27 | 调研 Headroom 并将压缩模式契约沉淀进会话基石设计 | `3824f36ae` | `feature/v-0710` |
 | 1189 | 2026-07-27 | 暴露 Shared Projection 动态测试入口 | `85f9c59a3`, `c90c1c939` | `feature/v-0710` |
