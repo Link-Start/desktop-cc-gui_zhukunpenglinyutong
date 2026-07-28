@@ -38,3 +38,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1198: Change D 原生历史物化基础
+
+**Date**: 2026-07-28
+**Task**: Change D 原生历史物化基础
+**Branch**: `feature/v-0710`
+
+### Summary
+
+建立 Claude/Codex/Kimi 只读 NativeHistoryReader、native ContextPackage、typed Artifact Store 与 durable continuation operation store；增量 Rust 测试通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `17a1d9594` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
