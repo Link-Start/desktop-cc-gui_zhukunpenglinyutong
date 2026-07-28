@@ -199,6 +199,36 @@ export type ThreadMoveFolderTarget = {
 
 const INLINE_MOVE_FOLDER_TARGET_LIMIT = 12;
 
+function providerContinuationDegradedMessage(
+  result: Awaited<ReturnType<typeof createNativeProviderContinuation>>,
+  fallback: string,
+): string {
+  const lines = [fallback];
+  if (result.projectionMode) {
+    lines.push(`Mode: ${result.projectionMode}`);
+  }
+  if (
+    typeof result.sourceEstimatedTokens === "number" &&
+    typeof result.packageEstimatedTokens === "number"
+  ) {
+    lines.push(
+      `Estimated tokens: ${result.sourceEstimatedTokens} → ${result.packageEstimatedTokens}`,
+    );
+  }
+  const omissions = (result.omissions ?? [])
+    .map(({ category, reason }) =>
+      [category, reason].filter(Boolean).join(": "),
+    )
+    .filter(Boolean);
+  if (omissions.length > 0) {
+    lines.push("Omissions:", ...omissions.map((omission) => `- ${omission}`));
+  }
+  if ((result.adapterDroppedEntries ?? 0) > 0) {
+    lines.push(`Adapter dropped entries: ${result.adapterDroppedEntries}`);
+  }
+  return lines.join("\n");
+}
+
 function resolveEngineDisplayName(engineType: EngineType): string {
   switch (engineType) {
     case "codex":
@@ -1251,10 +1281,13 @@ export function useSidebarMenus({
                   if (
                     result.status === "confirmation-required" &&
                     window.confirm(
-                      t("threads.providerContinuationDegradedConfirm", {
-                        defaultValue:
-                          "部分历史会降级或省略。仍要创建新的供应商续接会话吗？",
-                      }),
+                      providerContinuationDegradedMessage(
+                        result,
+                        t("threads.providerContinuationDegradedConfirm", {
+                          defaultValue:
+                            "部分历史会降级或省略。仍要创建新的供应商续接会话吗？",
+                        }),
+                      ),
                     )
                   ) {
                     result = await createNativeProviderContinuation({

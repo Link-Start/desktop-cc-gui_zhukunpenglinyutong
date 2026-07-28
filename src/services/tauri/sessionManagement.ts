@@ -83,6 +83,9 @@ export type NativeProviderContinuationResponse = {
   };
   omissions?: Array<{ category?: string; reason?: string }>;
   adapterDroppedEntries?: number;
+  projectionMode?: string;
+  sourceEstimatedTokens?: number;
+  packageEstimatedTokens?: number;
 };
 
 export type {

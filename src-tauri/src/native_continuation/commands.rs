@@ -887,8 +887,11 @@ pub(crate) async fn create_native_provider_continuation(
             "status": "confirmation-required",
             "operation": operation,
             "fidelity": "degraded",
+            "projectionMode": package.manifest.mode,
             "omissions": package.manifest.omitted,
             "adapterDroppedEntries": adapter_dropped_entries,
+            "sourceEstimatedTokens": package.compression.source_estimated_tokens,
+            "packageEstimatedTokens": package.compression.package_estimated_tokens,
         }));
     }
     let operation = match destination.engine {

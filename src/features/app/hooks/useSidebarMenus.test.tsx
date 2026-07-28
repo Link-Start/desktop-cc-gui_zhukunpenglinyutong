@@ -860,14 +860,26 @@ describe("useSidebarMenus", () => {
   });
 
   it("creates a top-level provider continuation from a native thread", async () => {
-    createNativeProviderContinuationMock.mockResolvedValue({
-      status: "ready",
-      fidelity: "strong",
-      operation: {
-        phase: "ready",
-        resultSessionId: "codex:target-1",
-      },
-    });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    createNativeProviderContinuationMock
+      .mockResolvedValueOnce({
+        status: "confirmation-required",
+        fidelity: "degraded",
+        projectionMode: "checkpoint",
+        sourceEstimatedTokens: 1200,
+        packageEstimatedTokens: 600,
+        omissions: [{ category: "image", reason: "unsupported" }],
+        adapterDroppedEntries: 1,
+        operation: { phase: "prepared" },
+      })
+      .mockResolvedValueOnce({
+        status: "ready",
+        fidelity: "degraded",
+        operation: {
+          phase: "ready",
+          resultSessionId: "codex:target-1",
+        },
+      });
     const handlers = {
       ...createHandlers(),
       codexProviderProfiles: [
@@ -926,11 +938,20 @@ describe("useSidebarMenus", () => {
         }),
       }),
     );
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Mode: checkpoint\nEstimated tokens: 1200 → 600\nOmissions:\n- image: unsupported",
+      ),
+    );
+    expect(createNativeProviderContinuationMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ confirmDegraded: true }),
+    );
     expect(handlers.onReloadWorkspaceThreads).toHaveBeenCalledWith("ws-1");
     expect(handlers.onSelectThread).toHaveBeenCalledWith(
       "ws-1",
       "codex:target-1",
     );
+    confirm.mockRestore();
   });
 
   it("can continue a Codex thread back to a Claude provider", async () => {
