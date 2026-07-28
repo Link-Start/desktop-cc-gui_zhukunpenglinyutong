@@ -335,3 +335,36 @@ Message-tail Codex fork 仅保留当前 Provider；跨 Provider 由 Sidebar Prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1207: 校准 Provider 续接稳定性与 Shared 身份展示
+
+**Date**: 2026-07-28
+**Task**: 校准 Provider 续接稳定性与 Shared 身份展示
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修复 Claude Native 续接首次假失败与幂等恢复，隔离 bootstrap control exchange；Continuation metadata 改为消息区内默认折叠的低侵入展示；Shared send 以 Target Store 为准并冻结 CLI/Provider/Model 身份；补齐 Dialog 恢复、标题、投影与跨层测试，同步并归档 OpenSpec。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fa6113bf1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
