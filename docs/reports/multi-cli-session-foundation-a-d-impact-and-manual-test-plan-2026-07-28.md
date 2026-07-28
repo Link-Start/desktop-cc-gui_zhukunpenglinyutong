@@ -97,6 +97,11 @@ Change D：从旧的原生会话创建一条跨 Provider 的新续接会话
 | Change C | 打包和转换上下文、确认目标收到、记录同步进度、保存大内容、压缩长历史 | **完成** | 44/44，第五道验收门槛已通过并归档 |
 | Change D | 只读原生历史、冻结来源材料、创建跨 Provider 续接、记录来源关系、显示 Sidebar 入口 | **实现完成，待发布前人工 smoke** | OpenSpec 19/19；Desktop Claude/Codex target、recovery、catalog/UI 与增量验证已完成 |
 
+2026-07-28 生产校准补充：A–D 代码与设计逐项对照后，修复了 7 类会影响发布的
+contract 缺口：Context Package identity 冲突、artifact payload 未验真、Windows 原子
+发布、Native History private block/Tool pairing、超大 JSONL 阻塞、Codex capability
+猜测和 macOS `window.confirm` 失效。修复没有扩大产品范围。
+
 ### 2.2 Change D 的真实进度
 
 大白话：D 的代码与自动化闭环已经完成。发布前还要用真实 Claude/Codex Provider
@@ -113,6 +118,13 @@ Change D：从旧的原生会话创建一条跨 Provider 的新续接会话
 - 展示 mode、token estimate、omission 的 degraded confirmation
 - 清退 Codex vendor rollout copy 与 `native-provider-rebind`
 - Change D 定向 Rust、Vitest、typecheck、runtime-contract checks
+
+本轮校准自动化证据：
+
+- Rust：Native History/Continuation 31 条、Shared Context unit 8 条、A–D 相关 integration 19 条通过。
+- Frontend：Sidebar continuation + Shared Session 16 个 test files、136 条通过。
+- `npm run typecheck`、scoped ESLint、`npm run check:runtime-contracts`、changed-file
+  `rustfmt --check`、Markdown table/link check、当前 calibration OpenSpec strict validation 通过。
 
 保留为发布前人工 gate：
 
@@ -774,12 +786,12 @@ Claude Provider A 的旧 Session
 
    当前没有完整的 CLI、Provider、Model、Reasoning 选择对话框，也不会在选择前解释目标支持什么、历史能保留多少、预计删减什么。
 
-3. **历史有删减时仍使用系统确认框。**
+3. **历史有删减时已改用 Desktop 原生确认框，但还不是结构化详情页。**
 
-   当前 `window.confirm` 已展示 mode、token estimate、omission 与 adapter drop，但仍不是
-   可访问、可结构化浏览的正式 Modal。
+   `window.confirm` 已替换为 Tauri Dialog，解决 macOS WKWebView 静默返回 `false`；
+   mode、token estimate、omission 与 adapter drop 仍以文本展示。
 
-   大白话：现在能看见删了什么，但信息展示还不够精致。
+   大白话：三平台现在都能确认或取消，但内容很多时还不够好读。
 
 4. **失败恢复没有正式用户入口。**
 
@@ -807,6 +819,9 @@ Claude Provider A 的旧 Session
 ### 9.2 工程闭环不足
 
 - Change D tasks 已完成 19/19；真实 Desktop smoke 仍是发布 gate。
+- A–D 生产校准的 focused automated tests 已纳入发布证据；Windows/Linux 由 native
+  release CI 继续执行平台编译。macOS 上的 Windows cross-check 因缺少 Windows SDK
+  C headers 停在第三方 `ring` build script，不记作代码通过或失败。
 - Codex vendor rollout copy 与 `native-provider-rebind` 已从可达实现清退。
 - catalog refresh、reload 后自动选中新 Row 存在真实运行时序风险，需要 Desktop smoke。
 - 当前通用 runtime notice 不能完整表达 continuation typed error matrix。
@@ -832,6 +847,10 @@ Claude Provider A 的旧 Session
 | 新会话刷新竞态 | 新会话创建后，“刷新列表”和“打开新会话”是否可能顺序颠倒？ | Desktop 操作记录和竞态测试 |
 | 明确错误界面 | 读取、冻结材料、目标确认、目录保存失败后，界面分别显示什么和允许做什么？ | 错误类型到用户操作的对照表 |
 | 功能开关和回滚 | 怎样隐藏新入口，同时保留已经创建的续接会话和来源信息？ | 发布与回滚方案 |
+
+补充操作：在旧版 Codex 或不提供 `thread/inject_items` 的测试 runtime 上执行一次
+Claude → Codex 续接。预期在创建目标 Thread 前自动选择 transcript/checkpoint，并弹出
+Desktop degraded confirmation；取消后目标列表不新增会话。
 
 ### P1：A–D 发布前查
 
@@ -1051,6 +1070,7 @@ Desktop smoke，验证失败恢复和真实 CLI 版本；Kimi target 继续保�
 - `docs/research/mossx-new-cli-onboarding-guide.md`
 - `docs/plans/2026-07-27-multi-cli-provider-session-foundation-task-checklist.md`
 - `openspec/changes/archive/2026-07-28-add-native-provider-continuation/**`
+- `openspec/changes/archive/2026-07-28-calibrate-multi-cli-session-foundation-a-d/**`
 - `openspec/changes/archive/2026-07-27-{establish-shared-event-storage,assemble-shared-canonical-facts,project-shared-canonical-conversation}/**`
 - `openspec/changes/archive/2026-07-28-{compose-shared-session-execution-target,add-shared-context-compiler}/**`
 - `src-tauri/src/shared_event_log/**`

@@ -62,3 +62,15 @@ checksum MUST 覆盖这些字段和 normalized entries。
 - **WHEN** normalized text 相同但 authoritative source fingerprint 或 cursor range 不同
 - **THEN** Context Package identity MUST 不同
 - **AND** retry MUST NOT 把它们视为同一 materialization
+
+### Requirement: Context Package Identity MUST Cover Delivery Semantics
+
+`packageId` MUST cover compiler version, destination identity, destination capabilities,
+effective budget, source range, and Binding identity. Inputs that can change projection or
+delivery semantics MUST NOT reuse an existing package identity.
+
+#### Scenario: delivery input changes package identity
+
+- **WHEN** destination, destination native identity, capabilities, effective budget, or compiler version changes
+- **THEN** the resulting package id MUST differ
+- **AND** artifact lookup MUST NOT reuse the prior package

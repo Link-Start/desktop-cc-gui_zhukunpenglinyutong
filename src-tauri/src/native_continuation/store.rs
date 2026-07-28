@@ -173,6 +173,23 @@ pub fn load_operation(
     load_from_connection(&open(root)?, operation_id)
 }
 
+pub fn delete_prepared_operation(
+    root: &Path,
+    operation_id: &str,
+    request_checksum: &str,
+) -> Result<bool, ContinuationStoreError> {
+    let connection = open(root)?;
+    let changed = connection
+        .execute(
+            "DELETE FROM native_provider_continuation
+             WHERE operation_id = ?1 AND request_checksum = ?2
+               AND phase = 'prepared' AND result_session_id IS NULL",
+            params![operation_id, request_checksum],
+        )
+        .map_err(|error| ContinuationStoreError::Sqlite(error.to_string()))?;
+    Ok(changed == 1)
+}
+
 pub fn update_operation_phase(
     root: &Path,
     operation_id: &str,
@@ -270,6 +287,22 @@ mod tests {
         assert_eq!(ready.phase, "ready");
         assert_eq!(ready.result_session_id.as_deref(), Some("codex:target"));
         assert_eq!(ready.materialization.source.session_id, "claude:source");
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn only_side_effect_free_prepared_operation_can_be_replaced() {
+        let root =
+            std::env::temp_dir().join(format!("mossx-native-continuation-{}", Uuid::new_v4()));
+        prepare_operation(&root, &operation("sha256:first")).expect("prepare");
+        assert!(!delete_prepared_operation(&root, "operation-a", "sha256:wrong").expect("guard"));
+        assert!(load_operation(&root, "operation-a")
+            .expect("load")
+            .is_some());
+        assert!(delete_prepared_operation(&root, "operation-a", "sha256:first").expect("delete"));
+        assert!(load_operation(&root, "operation-a")
+            .expect("load")
+            .is_none());
         fs::remove_dir_all(root).ok();
     }
 }

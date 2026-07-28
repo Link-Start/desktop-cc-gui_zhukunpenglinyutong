@@ -488,8 +488,13 @@ pub fn compile_context(
         source_checksum: source_checksum.clone(),
     };
     let identity = json!({
+        "compilerVersion": COMPILER_VERSION,
         "sessionId": request.session_id,
         "bindingKey": request.binding_key,
+        "destination": request.destination,
+        "destinationNativeSessionId": request.destination_native_session_id,
+        "capabilities": request.capabilities,
+        "budgetEstimatedTokens": budget,
         "fromSequenceExclusive": request.from_sequence_exclusive,
         "throughSequenceInclusive": upper,
         "sourceChecksum": source_checksum,
@@ -624,9 +629,12 @@ pub fn compile_native_context(
         source_checksum: source_checksum.clone(),
     };
     let identity = json!({
+        "compilerVersion": COMPILER_VERSION,
         "source": source_identity,
         "bindingKey": request.binding_key,
         "destination": request.destination,
+        "capabilities": request.capabilities,
+        "budgetEstimatedTokens": budget,
         "sourceChecksum": source_checksum,
     });
     let package_id =
@@ -768,5 +776,83 @@ mod tests {
             same.manifest.source_checksum
         );
         assert_ne!(first.package_id, changed.package_id);
+    }
+
+    #[test]
+    fn native_compilation_decisions_change_package_identity() {
+        use crate::native_history::{
+            ContextSourceEntry, NativeHistoryEngine, NativeHistoryFidelity,
+        };
+        let compile = |destination: Value,
+                       capabilities: RuntimeContextCapabilities,
+                       budget_estimated_tokens: Option<u64>| {
+            compile_native_context(&CompileNativeContextRequest {
+                session_id: "continuation-a".to_string(),
+                binding_key: "binding-a".to_string(),
+                destination,
+                source: NativeHistorySource {
+                    session_id: "claude:source".to_string(),
+                    native_session_id: "source".to_string(),
+                    engine: NativeHistoryEngine::Claude,
+                    provider_profile_id: Some("provider-a".to_string()),
+                },
+                history: NativeHistoryReadResult {
+                    reader_id: NativeHistoryEngine::Claude.reader_id().to_string(),
+                    source_fingerprint: "sha256:source".to_string(),
+                    through_cursor: "cursor-a".to_string(),
+                    entries: vec![ContextSourceEntry {
+                        source_entry_id: "entry-a".to_string(),
+                        occurred_at: None,
+                        role: "user".to_string(),
+                        blocks: vec![json!({ "kind": "text", "text": "hello" })],
+                        provenance: json!({ "engine": "claude" }),
+                        fidelity: NativeHistoryFidelity::Semantic,
+                    }],
+                    fidelity: NativeHistoryFidelity::Semantic,
+                    omissions: Vec::new(),
+                },
+                capabilities,
+                budget_estimated_tokens,
+            })
+            .expect("compile")
+        };
+        let transcript = RuntimeContextCapabilities {
+            native_delta: false,
+            structured_history_import: false,
+            native_clone: false,
+            user_channel_transcript: true,
+            tool_history: false,
+            image_history: false,
+            strong_context_ack: false,
+        };
+        let mut import = transcript.clone();
+        import.structured_history_import = true;
+        import.tool_history = true;
+        let first = compile(
+            json!({"engine": "codex", "model": "a"}),
+            transcript.clone(),
+            None,
+        );
+        let same = compile(
+            json!({"engine": "codex", "model": "a"}),
+            transcript.clone(),
+            None,
+        );
+        let destination_changed = compile(
+            json!({"engine": "codex", "model": "b"}),
+            transcript.clone(),
+            None,
+        );
+        let capability_changed = compile(json!({"engine": "codex", "model": "a"}), import, None);
+        let budget_changed = compile(
+            json!({"engine": "codex", "model": "a"}),
+            transcript,
+            Some(1),
+        );
+
+        assert_eq!(first.package_id, same.package_id);
+        assert_ne!(first.package_id, destination_changed.package_id);
+        assert_ne!(first.package_id, capability_changed.package_id);
+        assert_ne!(first.package_id, budget_changed.package_id);
     }
 }

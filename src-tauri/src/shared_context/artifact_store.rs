@@ -82,19 +82,65 @@ fn artifact_path(
     Ok(artifact_dir(root, workspace_id, session_id)?.join(format!("{artifact_id}.json")))
 }
 
+fn package_checksum(package: &ContextPackage) -> Result<String, String> {
+    let bytes = deterministic_json_bytes(
+        &serde_json::to_value(package).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(format!("sha256:{:x}", Sha256::digest(bytes)))
+}
+
+#[cfg(unix)]
+fn sync_parent_directory(directory: &Path) -> Result<(), String> {
+    File::open(directory)
+        .and_then(|directory_file| directory_file.sync_all())
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(unix))]
+fn sync_parent_directory(_directory: &Path) -> Result<(), String> {
+    Ok(())
+}
+
 fn write_atomic_json(path: &Path, artifact_id: &str, bytes: &[u8]) -> Result<(), String> {
     let directory = path
         .parent()
         .ok_or_else(|| "artifact directory unavailable".to_string())?;
     fs::create_dir_all(directory).map_err(|error| error.to_string())?;
     let temporary = directory.join(format!(".{artifact_id}.{}.tmp", Uuid::new_v4()));
-    let mut file = File::create(&temporary).map_err(|error| error.to_string())?;
-    file.write_all(bytes).map_err(|error| error.to_string())?;
-    file.sync_all().map_err(|error| error.to_string())?;
-    fs::rename(&temporary, path).map_err(|error| error.to_string())?;
-    File::open(directory)
-        .and_then(|directory_file| directory_file.sync_all())
-        .map_err(|error| error.to_string())
+    let publish = (|| {
+        let mut file = File::options()
+            .create_new(true)
+            .write(true)
+            .open(&temporary)
+            .map_err(|error| error.to_string())?;
+        file.write_all(bytes).map_err(|error| error.to_string())?;
+        file.sync_all().map_err(|error| error.to_string())?;
+        match fs::rename(&temporary, path) {
+            Ok(()) => sync_parent_directory(directory),
+            Err(_) if path.exists() => Ok(()),
+            Err(error) => Err(error.to_string()),
+        }
+    })();
+    if publish.is_err() || temporary.exists() {
+        let _ = fs::remove_file(&temporary);
+    }
+    publish
+}
+
+fn quarantine_invalid_artifact(path: &Path, artifact_id: &str) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let directory = path
+        .parent()
+        .ok_or_else(|| "artifact directory unavailable".to_string())?;
+    let quarantine = directory.join(format!(".{artifact_id}.{}.corrupt", Uuid::new_v4()));
+    match fs::rename(path, quarantine) {
+        Ok(()) => Ok(()),
+        Err(_) if !path.exists() => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 pub fn write_artifact(
@@ -109,7 +155,7 @@ pub fn write_artifact(
         artifact_id: artifact_id.clone(),
         workspace_id: workspace_id.to_string(),
         session_id: session_id.to_string(),
-        checksum: package.manifest.source_checksum.clone(),
+        checksum: package_checksum(package)?,
         media_type: "application/vnd.mossx.context-package+json".to_string(),
         created_at,
         reference_only: true,
@@ -121,18 +167,27 @@ pub fn write_artifact(
     .map_err(|error| error.to_string())?;
     let destination = artifact_path(root, workspace_id, session_id, &artifact_id)?;
     if destination.exists() {
-        return read_artifact(
-            root,
-            &ArtifactReadRequest {
-                workspace_id: workspace_id.to_string(),
-                session_id: session_id.to_string(),
-                artifact_id,
-                checksum: record.checksum.clone(),
-            },
-        );
+        let request = ArtifactReadRequest {
+            workspace_id: workspace_id.to_string(),
+            session_id: session_id.to_string(),
+            artifact_id: artifact_id.clone(),
+            checksum: record.checksum.clone(),
+        };
+        if let Ok(existing) = read_artifact(root, &request) {
+            return Ok(existing);
+        }
+        quarantine_invalid_artifact(&destination, &artifact_id)?;
     }
     write_atomic_json(&destination, &record.artifact_id, &bytes)?;
-    Ok(record)
+    read_artifact(
+        root,
+        &ArtifactReadRequest {
+            workspace_id: workspace_id.to_string(),
+            session_id: session_id.to_string(),
+            artifact_id,
+            checksum: record.checksum,
+        },
+    )
 }
 
 pub fn write_typed_artifact(
@@ -162,18 +217,27 @@ pub fn write_typed_artifact(
     .map_err(|error| error.to_string())?;
     let destination = artifact_path(root, workspace_id, session_id, &artifact_id)?;
     if destination.exists() {
-        return read_typed_artifact(
-            root,
-            &ArtifactReadRequest {
-                workspace_id: workspace_id.to_string(),
-                session_id: session_id.to_string(),
-                artifact_id,
-                checksum: record.checksum.clone(),
-            },
-        );
+        let request = ArtifactReadRequest {
+            workspace_id: workspace_id.to_string(),
+            session_id: session_id.to_string(),
+            artifact_id: artifact_id.clone(),
+            checksum: record.checksum.clone(),
+        };
+        if let Ok(existing) = read_typed_artifact(root, &request) {
+            return Ok(existing);
+        }
+        quarantine_invalid_artifact(&destination, &artifact_id)?;
     }
     write_atomic_json(&destination, &record.artifact_id, &bytes)?;
-    Ok(record)
+    read_typed_artifact(
+        root,
+        &ArtifactReadRequest {
+            workspace_id: workspace_id.to_string(),
+            session_id: session_id.to_string(),
+            artifact_id,
+            checksum: record.checksum,
+        },
+    )
 }
 
 pub fn read_typed_artifact(
@@ -230,6 +294,9 @@ pub fn read_artifact(
     {
         return Err("artifact ownership or checksum mismatch".to_string());
     }
+    if package_checksum(&record.package)? != record.checksum {
+        return Err("artifact payload checksum mismatch".to_string());
+    }
     Ok(record)
 }
 
@@ -251,7 +318,10 @@ pub fn scan_orphan_artifacts(
             let path = entry.map_err(|error| error.to_string())?.path();
             if path.is_dir() {
                 walk(&path, output, is_referenced)?;
-            } else if path.extension().and_then(|value| value.to_str()) == Some("tmp") {
+            } else if matches!(
+                path.extension().and_then(|value| value.to_str()),
+                Some("tmp" | "corrupt")
+            ) {
                 output.push(path.to_string_lossy().to_string());
             } else if path.extension().and_then(|value| value.to_str()) == Some("json") {
                 let bytes = fs::read(&path).ok();
@@ -280,6 +350,43 @@ pub fn scan_orphan_artifacts(
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    fn package() -> ContextPackage {
+        serde_json::from_value(json!({
+            "schemaVersion": 1,
+            "packageId": "sha256:package-a",
+            "sessionId": "session-a",
+            "bindingKey": "binding-a",
+            "source": {
+                "kind": "shared-canonical",
+                "session_id": "session-a",
+                "from_sequence_exclusive": null,
+                "through_sequence_inclusive": 1
+            },
+            "destination": {"engine": "claude"},
+            "stablePrefix": "prefix",
+            "delta": [],
+            "promptPrefix": "prompt",
+            "manifest": {
+                "compilerVersion": "test",
+                "mode": "portable-transcript",
+                "modeReason": "test",
+                "includedEntryIds": [],
+                "omitted": [],
+                "throughSequenceInclusive": 1,
+                "sourceChecksum": "sha256:source"
+            },
+            "compression": {
+                "estimator": "test",
+                "sourceEstimatedTokens": 1,
+                "packageEstimatedTokens": 1,
+                "perCategory": []
+            }
+        }))
+        .expect("package fixture")
+    }
 
     #[test]
     fn typed_artifact_round_trips_and_is_not_a_legacy_orphan() {
@@ -309,5 +416,73 @@ mod tests {
             .expect("scan")
             .is_empty());
         fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn package_artifact_rejects_tampered_payload() {
+        let root = std::env::temp_dir().join(format!("mossx-package-artifact-{}", Uuid::new_v4()));
+        let written =
+            write_artifact(&root, "workspace-a", "session-a", &package(), 1).expect("write");
+        let path =
+            artifact_path(&root, "workspace-a", "session-a", &written.artifact_id).expect("path");
+        let mut record: Value =
+            serde_json::from_slice(&fs::read(&path).expect("read raw")).expect("parse raw");
+        record["package"]["promptPrefix"] = json!("tampered");
+        fs::write(&path, serde_json::to_vec(&record).expect("serialize")).expect("tamper");
+
+        let error = read_artifact(
+            &root,
+            &ArtifactReadRequest {
+                workspace_id: "workspace-a".to_string(),
+                session_id: "session-a".to_string(),
+                artifact_id: written.artifact_id,
+                checksum: written.checksum,
+            },
+        )
+        .expect_err("tamper must fail");
+        assert!(error.contains("payload checksum mismatch"));
+        let repaired =
+            write_artifact(&root, "workspace-a", "session-a", &package(), 2).expect("repair");
+        assert_eq!(repaired.package.prompt_prefix, "prompt");
+        assert!(scan_orphan_artifacts(&root, |_| true)
+            .expect("scan")
+            .iter()
+            .any(|path| path.ends_with(".corrupt")));
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn concurrent_package_writers_observe_one_valid_artifact() {
+        let root = Arc::new(
+            std::env::temp_dir().join(format!("mossx-concurrent-artifact-{}", Uuid::new_v4())),
+        );
+        let barrier = Arc::new(Barrier::new(3));
+        let handles = (0..2)
+            .map(|created_at| {
+                let root = Arc::clone(&root);
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    barrier.wait();
+                    write_artifact(
+                        root.as_path(),
+                        "workspace-a",
+                        "session-a",
+                        &package(),
+                        created_at,
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+        barrier.wait();
+        let records = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("writer").expect("publish"))
+            .collect::<Vec<_>>();
+        assert_eq!(records[0].checksum, records[1].checksum);
+        assert_eq!(records[0].package, records[1].package);
+        assert!(scan_orphan_artifacts(root.as_path(), |_| true)
+            .expect("scan")
+            .is_empty());
+        fs::remove_dir_all(root.as_path()).ok();
     }
 }

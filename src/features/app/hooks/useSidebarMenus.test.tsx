@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ask } from "@tauri-apps/plugin-dialog";
 import type { EngineType, WorkspaceInfo } from "../../../types";
 import { useSidebarMenus } from "./useSidebarMenus";
 import {
@@ -81,6 +82,9 @@ vi.mock("../../../services/tauri", () => ({
   createNativeProviderContinuation: vi.fn(),
   getOpenCodeProviderHealth: vi.fn(),
 }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  ask: vi.fn(),
+}));
 vi.mock("../../../services/globalRuntimeNotices", () => ({
   pushGlobalRuntimeNotice: vi.fn(),
 }));
@@ -94,6 +98,7 @@ const createNativeProviderContinuationMock = vi.mocked(
   createNativeProviderContinuation,
 );
 const pushGlobalRuntimeNoticeMock = vi.mocked(pushGlobalRuntimeNotice);
+const askMock = vi.mocked(ask);
 
 const workspace: WorkspaceInfo = {
   id: "ws-1",
@@ -202,6 +207,8 @@ describe("useSidebarMenus", () => {
     });
     pushGlobalRuntimeNoticeMock.mockReset();
     createNativeProviderContinuationMock.mockReset();
+    askMock.mockReset();
+    askMock.mockResolvedValue(true);
     getOpenCodeProviderHealthMock.mockReset();
     getOpenCodeProviderHealthMock.mockResolvedValue({
       provider: "openai",
@@ -861,7 +868,6 @@ describe("useSidebarMenus", () => {
   });
 
   it("creates a top-level provider continuation from a native thread", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     createNativeProviderContinuationMock
       .mockResolvedValueOnce({
         status: "confirmation-required",
@@ -939,10 +945,11 @@ describe("useSidebarMenus", () => {
         }),
       }),
     );
-    expect(confirm).toHaveBeenCalledWith(
+    expect(askMock).toHaveBeenCalledWith(
       expect.stringContaining(
         "Mode: checkpoint\nEstimated tokens: 1200 → 600\nOmissions:\n- image: unsupported",
       ),
+      expect.objectContaining({ kind: "warning" }),
     );
     expect(createNativeProviderContinuationMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ confirmDegraded: true }),
@@ -952,7 +959,63 @@ describe("useSidebarMenus", () => {
       "ws-1",
       "codex:target-1",
     );
-    confirm.mockRestore();
+  });
+
+  it("does not create a degraded continuation after Desktop dialog cancellation", async () => {
+    askMock.mockResolvedValue(false);
+    createNativeProviderContinuationMock.mockResolvedValue({
+      status: "confirmation-required",
+      fidelity: "degraded",
+      projectionMode: "checkpoint",
+      omissions: [],
+      adapterDroppedEntries: 0,
+      operation: { phase: "prepared" },
+    });
+    const handlers = {
+      ...createHandlers(),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+    act(() => {
+      result.current.showThreadMenu(
+        {
+          clientX: 1,
+          clientY: 1,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
+        "ws-1",
+        "claude:source-1",
+        true,
+      );
+    });
+    const submenu = result.current.sidebarContextMenuState?.items.find(
+      (item) => item.type === "submenu" && item.id === "continue-with-provider",
+    );
+    await act(async () => {
+      if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
+        await submenu.items[0].onSelect();
+      }
+    });
+
+    expect(askMock).toHaveBeenCalledOnce();
+    expect(createNativeProviderContinuationMock).toHaveBeenCalledOnce();
+    expect(handlers.onSelectThread).not.toHaveBeenCalled();
   });
 
   it("can continue a Codex thread back to a Claude provider", async () => {

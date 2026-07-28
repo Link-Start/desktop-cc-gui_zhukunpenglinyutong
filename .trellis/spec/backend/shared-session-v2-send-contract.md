@@ -188,8 +188,13 @@ Binding context cursor {
   weak fidelity 必须显式返回，禁止宣称 exactly-once。
 - tool call/result 成对保留或成对省略；private reasoning、failed/aborted assistant、
   unsupported image 和 historical control 必须写 Manifest disposition。
-- Artifact 按 workspace/session 隔离，以 checksum 校验；读取结果永远
-  `referenceOnly=true`。orphan scan 只报告，不自动删除。
+- package id MUST 覆盖 compiler version、destination identity、capabilities、effective
+  budget、source range 与 Binding；上述任一输入变化 MUST 产生不同 identity。
+- Artifact 按 workspace/session 隔离；checksum MUST 覆盖序列化后的
+  `ContextPackage` payload，读取时必须重算。损坏的现有 artifact MUST 隔离并原子重写，
+  读取结果永远 `referenceOnly=true`。orphan scan 只报告，不自动删除。
+- Artifact publish MUST 使用同目录 create-new temp + file sync + atomic rename；Unix
+  额外 sync parent directory，Windows 使用 rename durability boundary，失败路径清理 temp。
 - UI 只在 prepare/confirm/ACK/terminal 等阶段边界更新；禁止 per-entry setState
   和新增 polling。
 
@@ -204,6 +209,8 @@ Binding context cursor {
 | context 已 accepted、run failed | accepted 不回退；terminal 后 committed 前进 | 重放同一 package |
 | 另一 Target 发现 unresolved pending | 返回 recovery-required | 绕过 pending 开新线性操作 |
 | cross-workspace/session artifact | ownership error | 返回内容 |
+| package destination/capability/budget 改变 | 新 package id | 复用旧 artifact |
+| artifact payload 被篡改 | integrity error；prepared 且无外部副作用时隔离重写 | 返回篡改内容 |
 | degraded package 未确认 | 无 context/prompt side effect | 自动发送 |
 
 ### 5. Good / Base / Bad Cases
@@ -235,6 +242,8 @@ pnpm exec tsc --noEmit --pretty false
 关键断言：
 
 - 相同 source range 的 package id/checksum/stable prefix 确定。
+- destination/capability/effective budget 改变时 package id 必须改变。
+- artifact payload tamper 必须被读取复核拒绝；并发 writer 只能发布完整 payload。
 - 当前 user prompt 不进入 prefix；accepted/committed 分阶段推进。
 - artifact cross-workspace 拒绝且读取为 reference-only。
 - strong ACK 缺失进入 recovery；弱 ACK 不伪装 exactly-once。

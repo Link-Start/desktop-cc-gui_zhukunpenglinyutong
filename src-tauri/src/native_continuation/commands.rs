@@ -20,8 +20,8 @@ use crate::shared_session_v2::{
 use crate::state::AppState;
 
 use super::{
-    load_operation, prepare_operation, update_operation_phase, ArtifactRef,
-    NativeHistoryMaterialization, NativeProviderContinuationOperation,
+    delete_prepared_operation, load_operation, prepare_operation, update_operation_phase,
+    ArtifactRef, NativeHistoryMaterialization, NativeProviderContinuationOperation,
 };
 
 fn now_millis() -> i64 {
@@ -68,6 +68,22 @@ fn context_acceptance_marker(package: &ContextPackage) -> String {
         "MOSSX_CONTEXT_ACCEPTED:{}:{}",
         package.package_id, package.manifest.source_checksum
     )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CodexContextTransport {
+    Import,
+    Prompt,
+}
+
+fn codex_context_transport(mode: ProjectionMode) -> Result<CodexContextTransport, String> {
+    match mode {
+        ProjectionMode::NativeHistoryImport => Ok(CodexContextTransport::Import),
+        ProjectionMode::PortableTranscript | ProjectionMode::Checkpoint => {
+            Ok(CodexContextTransport::Prompt)
+        }
+        _ => Err(format!("unsupported-target-context-mode: {mode:?}")),
+    }
 }
 
 async fn workspace_path(state: &AppState, workspace_id: &str) -> Result<PathBuf, String> {
@@ -192,6 +208,7 @@ fn validate_artifacts(
 
 async fn prepare(
     state: &AppState,
+    app: &AppHandle,
     workspace_id: &str,
     operation_id: &str,
     source: &NativeHistorySource,
@@ -203,33 +220,69 @@ async fn prepare(
         if existing.request_checksum != checksum {
             return Err("operation-conflict".to_string());
         }
-        let package = validate_artifacts(root, workspace_id, &existing).map_err(|error| {
-            let _ = update_operation_phase(
-                root,
-                operation_id,
-                "recovery-required",
-                None,
-                Some("artifact-integrity"),
-                now_millis(),
-            );
-            error
-        })?;
-        return Ok((existing, package));
+        match validate_artifacts(root, workspace_id, &existing) {
+            Ok(package) => return Ok((existing, package)),
+            Err(error)
+                if existing.phase == "prepared"
+                    && existing.result_session_id.is_none()
+                    && delete_prepared_operation(root, operation_id, &checksum)
+                        .map_err(|delete_error| delete_error.to_string())? =>
+            {
+                log::warn!(
+                    "[native-continuation] operation_id={} invalid prepared artifact replaced: {}",
+                    operation_id,
+                    error
+                );
+            }
+            Err(error) => {
+                let _ = update_operation_phase(
+                    root,
+                    operation_id,
+                    "recovery-required",
+                    existing.result_session_id.as_deref(),
+                    Some("artifact-integrity"),
+                    now_millis(),
+                );
+                return Err(error);
+            }
+        }
     }
 
     let path = resolve_source_path(state, workspace_id, source).await?;
-    let capability = probe_history_file(&path, source.engine).map_err(|error| error.to_string())?;
-    let cursor = capability
-        .stable_cursor
-        .then_some(capability.current_through_cursor)
-        .flatten()
-        .ok_or_else(|| "unsupported-stable-cursor".to_string())?;
-    let history = read_history_file(&path, source, &cursor).map_err(|error| error.to_string())?;
+    let source_for_read = source.clone();
+    let history = tokio::task::spawn_blocking(move || {
+        let capability =
+            probe_history_file(&path, source_for_read.engine).map_err(|error| error.to_string())?;
+        let cursor = capability
+            .stable_cursor
+            .then_some(capability.current_through_cursor)
+            .flatten()
+            .ok_or_else(|| "unsupported-stable-cursor".to_string())?;
+        read_history_file(&path, &source_for_read, &cursor).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| format!("native-history-worker: {error}"))??;
     let mut capabilities = context_capabilities(destination);
     if destination.engine == EngineType::Codex {
-        capabilities.structured_history_import = true;
-        capabilities.tool_history = true;
-        capabilities.strong_context_ack = true;
+        let provider_profile_id = destination
+            .normalized_provider()
+            .ok_or_else(|| "destination provider identity is required".to_string())?;
+        crate::codex::ensure_codex_session_for_provider(
+            workspace_id,
+            &provider_profile_id,
+            state,
+            app,
+        )
+        .await?;
+        let structured_history_import = crate::shared::codex_core::probe_thread_inject_items_core(
+            &state.sessions,
+            workspace_id,
+            Some(&provider_profile_id),
+        )
+        .await?;
+        capabilities.structured_history_import = structured_history_import;
+        capabilities.tool_history = structured_history_import;
+        capabilities.strong_context_ack = structured_history_import;
     }
     let package = compile_native_context(&CompileNativeContextRequest {
         session_id: source.session_id.clone(),
@@ -509,27 +562,57 @@ async fn execute_codex(
         now_millis(),
     )
     .map_err(|error| error.to_string())?;
-    let items = codex_import_items(package);
-    if items.is_empty() {
-        let _ = update_operation_phase(
-            root,
-            &operation.materialization.operation_id,
-            "recovery-required",
-            Some(&canonical_target_session_id),
-            Some("empty-context-package"),
-            now_millis(),
-        );
-        return Err("empty-context-package: no portable history items".to_string());
-    }
-    if let Err(error) = crate::shared::codex_core::inject_thread_items_core(
-        &state.sessions,
-        workspace_id,
-        Some(&provider_profile_id),
-        &target_session_id,
-        items,
-    )
-    .await
-    {
+    let acceptance = match codex_context_transport(package.manifest.mode) {
+        Ok(CodexContextTransport::Import) => {
+            let items = codex_import_items(package);
+            if items.is_empty() {
+                Err("empty-context-package: no portable history items".to_string())
+            } else {
+                crate::shared::codex_core::inject_thread_items_core(
+                    &state.sessions,
+                    workspace_id,
+                    Some(&provider_profile_id),
+                    &target_session_id,
+                    items,
+                )
+                .await
+                .map(|_| ())
+            }
+        }
+        Ok(CodexContextTransport::Prompt) => {
+            let mode_enforcement_enabled = state
+                .app_settings
+                .lock()
+                .await
+                .codex_mode_enforcement_enabled;
+            crate::shared::codex_core::send_user_message_core(
+                &state.sessions,
+                workspace_id.to_string(),
+                Some(provider_profile_id.clone()),
+                target_session_id.clone(),
+                package.prompt_prefix.clone(),
+                destination.model.clone(),
+                destination.reasoning_effort.clone(),
+                None,
+                None,
+                None,
+                None,
+                None,
+                mode_enforcement_enabled,
+                None,
+            )
+            .await
+            .and_then(|response| {
+                if response.get("error").is_some() {
+                    Err(format!("context-prompt-rejected: {response}"))
+                } else {
+                    Ok(())
+                }
+            })
+        }
+        Err(error) => Err(error),
+    };
+    if let Err(error) = acceptance {
         let _ = update_operation_phase(
             root,
             &operation.materialization.operation_id,
@@ -586,9 +669,14 @@ async fn claude_history_contains_marker(
         target_session_id,
         config.as_ref(),
     )?;
-    let content = std::fs::read_to_string(&path)
-        .map_err(|error| format!("Failed to read {}: {error}", path.display()))?;
-    Ok(claude_assistant_ack_in_jsonl(&content, marker))
+    let marker = marker.to_string();
+    tokio::task::spawn_blocking(move || {
+        let content = crate::native_history::read_history_text_bounded(&path)
+            .map_err(|error| error.to_string())?;
+        Ok(claude_assistant_ack_in_jsonl(&content, &marker))
+    })
+    .await
+    .map_err(|error| format!("native-history-worker: {error}"))?
 }
 
 fn claude_assistant_ack_in_jsonl(content: &str, marker: &str) -> bool {
@@ -867,13 +955,16 @@ pub(crate) async fn create_native_provider_continuation(
 
     let (operation, package) = prepare(
         &state,
+        &app,
         &workspace_id,
         operation_id.trim(),
         &source,
         &destination,
     )
     .await?;
-    let adapter_dropped_entries = if destination.engine == EngineType::Codex {
+    let adapter_dropped_entries = if destination.engine == EngineType::Codex
+        && package.manifest.mode == ProjectionMode::NativeHistoryImport
+    {
         codex_import_projection(&package).1
     } else {
         0
@@ -920,7 +1011,10 @@ pub(crate) async fn create_native_provider_continuation(
 
 #[cfg(test)]
 mod tests {
-    use super::claude_assistant_ack_in_jsonl;
+    use super::{
+        claude_assistant_ack_in_jsonl, codex_context_transport, CodexContextTransport,
+        ProjectionMode,
+    };
 
     #[test]
     fn claude_recovery_requires_assistant_ack_not_user_prompt_marker() {
@@ -934,5 +1028,22 @@ mod tests {
             r#"{{"type":"assistant","message":{{"role":"assistant","content":[{{"type":"text","text":"{marker}"}}]}}}}"#
         );
         assert!(claude_assistant_ack_in_jsonl(&assistant, marker));
+    }
+
+    #[test]
+    fn codex_unsupported_import_degrades_to_prompt_transport() {
+        assert_eq!(
+            codex_context_transport(ProjectionMode::NativeHistoryImport).expect("import"),
+            CodexContextTransport::Import
+        );
+        assert_eq!(
+            codex_context_transport(ProjectionMode::PortableTranscript).expect("transcript"),
+            CodexContextTransport::Prompt
+        );
+        assert_eq!(
+            codex_context_transport(ProjectionMode::Checkpoint).expect("checkpoint"),
+            CodexContextTransport::Prompt
+        );
+        assert!(codex_context_transport(ProjectionMode::NativeDelta).is_err());
     }
 }

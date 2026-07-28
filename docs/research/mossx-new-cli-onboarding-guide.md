@@ -205,6 +205,9 @@ interface RuntimeDeliveryAdapter {
 
 - 实现 §9.1.1 的只读接口：`probe` 报告 `readable / stableCursor / currentThroughCursor / supportedEntryTypes`；`read` 输出 canonical-shaped `ContextSourceEntry`；
 - 硬约束：不修改 vendor history file（红线 21/37）；无 stable cursor 时 `stableCursor = false` → Continuation 对该 CLI typed unsupported、fail closed，**这是合法终点**；
+- 在分配完整 buffer 前检查 file byte limit；blocking file read 必须移出 async runtime worker；
+- portable block 必须 allowlist。private reasoning/signature、encrypted/redacted、unknown
+  block 不透传；Tool Call/Result 必须成对保留或成对 omission；
 - Reader 输出不进 Shared Event Log，只供 ContextCompiler。
 
 ---

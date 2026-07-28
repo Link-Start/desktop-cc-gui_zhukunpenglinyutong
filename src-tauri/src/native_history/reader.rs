@@ -9,6 +9,9 @@ use super::{
     ContextSourceEntry, NativeHistoryCapability, NativeHistoryEngine, NativeHistoryError,
     NativeHistoryErrorCode, NativeHistoryFidelity, NativeHistoryReadResult, NativeHistorySource,
 };
+use crate::shared_context::{OmissionDisposition, ProjectionOmission};
+
+const MAX_NATIVE_HISTORY_BYTES: u64 = 64 * 1024 * 1024;
 
 fn sha256(bytes: &[u8]) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
@@ -57,6 +60,20 @@ fn parse_cursor(value: &str) -> Result<(u64, &str), NativeHistoryError> {
 }
 
 fn bounded_bytes(path: &Path, size: u64) -> Result<Vec<u8>, NativeHistoryError> {
+    if size > MAX_NATIVE_HISTORY_BYTES {
+        return Err(NativeHistoryError::new(
+            NativeHistoryErrorCode::SourceTooLarge,
+            format!(
+                "native history size {size} exceeds supported limit {MAX_NATIVE_HISTORY_BYTES}"
+            ),
+        ));
+    }
+    let capacity = usize::try_from(size).map_err(|_| {
+        NativeHistoryError::new(
+            NativeHistoryErrorCode::SourceTooLarge,
+            "native history size cannot be represented on this platform",
+        )
+    })?;
     let file = File::open(path).map_err(|error| map_io_error(path, error))?;
     let current_size = file
         .metadata()
@@ -68,7 +85,7 @@ fn bounded_bytes(path: &Path, size: u64) -> Result<Vec<u8>, NativeHistoryError> 
             "native history was truncated after probe",
         ));
     }
-    let mut bytes = Vec::with_capacity(size as usize);
+    let mut bytes = Vec::with_capacity(capacity);
     file.take(size)
         .read_to_end(&mut bytes)
         .map_err(|error| map_io_error(path, error))?;
@@ -79,6 +96,18 @@ fn bounded_bytes(path: &Path, size: u64) -> Result<Vec<u8>, NativeHistoryError> 
         ));
     }
     Ok(bytes)
+}
+
+pub fn read_history_text_bounded(path: &Path) -> Result<String, NativeHistoryError> {
+    let size = fs::metadata(path)
+        .map_err(|error| map_io_error(path, error))?
+        .len();
+    String::from_utf8(bounded_bytes(path, size)?).map_err(|error| {
+        NativeHistoryError::new(
+            NativeHistoryErrorCode::SourceCorrupt,
+            format!("native history is not UTF-8: {error}"),
+        )
+    })
 }
 
 fn string_at<'a>(value: &'a Value, paths: &[&[&str]]) -> Option<&'a str> {
@@ -115,16 +144,74 @@ fn role_of(value: &Value, engine: NativeHistoryEngine) -> String {
     .to_string()
 }
 
-fn blocks_of(value: &Value, engine: NativeHistoryEngine) -> Vec<Value> {
+fn private_block_type(value: &Value) -> bool {
+    let kind = value
+        .get("type")
+        .or_else(|| value.get("kind"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    kind.contains("thinking")
+        || kind.contains("reasoning")
+        || kind.contains("signature")
+        || kind.contains("encrypted")
+        || kind.contains("redacted")
+        || value.get("signature").is_some()
+        || value.get("encrypted_content").is_some()
+        || value.get("encryptedContent").is_some()
+        || value.get("redacted_content").is_some()
+        || value.get("redactedContent").is_some()
+        || value.get("thinking_signature").is_some()
+}
+
+fn tool_block(value: &Value, engine: NativeHistoryEngine) -> Option<Value> {
+    let kind = value.get("type").and_then(Value::as_str).unwrap_or("");
+    let (direction, call_id) = match (engine, kind) {
+        (NativeHistoryEngine::Claude, "tool_use") => {
+            ("call", value.get("id").and_then(Value::as_str)?)
+        }
+        (NativeHistoryEngine::Claude, "tool_result") => {
+            ("result", value.get("tool_use_id").and_then(Value::as_str)?)
+        }
+        (NativeHistoryEngine::Codex, "function_call" | "custom_tool_call") => {
+            ("call", value.get("call_id").and_then(Value::as_str)?)
+        }
+        (NativeHistoryEngine::Codex, "function_call_output" | "custom_tool_call_output") => {
+            ("result", value.get("call_id").and_then(Value::as_str)?)
+        }
+        (NativeHistoryEngine::Kimi, "tool.call") => (
+            "call",
+            value
+                .get("toolCallId")
+                .or_else(|| value.get("uuid"))
+                .and_then(Value::as_str)?,
+        ),
+        (NativeHistoryEngine::Kimi, "tool.result") => (
+            "result",
+            value
+                .get("toolCallId")
+                .or_else(|| value.get("parentUuid"))
+                .and_then(Value::as_str)?,
+        ),
+        _ => return None,
+    };
+    Some(json!({
+        "kind": format!("tool-{direction}"),
+        "callId": call_id,
+        "value": value,
+    }))
+}
+
+fn blocks_of(value: &Value, engine: NativeHistoryEngine) -> (Vec<Value>, usize, usize) {
+    if private_block_type(value) || value.get("payload").is_some_and(private_block_type) {
+        return (Vec::new(), 1, 0);
+    }
     if engine == NativeHistoryEngine::Codex
         && value.get("type").and_then(Value::as_str) == Some("response_item")
     {
         if let Some(payload) = value.get("payload") {
-            if matches!(
-                payload.get("type").and_then(Value::as_str),
-                Some("function_call" | "function_call_output")
-            ) {
-                return vec![json!({ "kind": "native-block", "value": payload })];
+            if let Some(block) = tool_block(payload, engine) {
+                return (vec![block], 0, 0);
             }
         }
     }
@@ -148,22 +235,39 @@ fn blocks_of(value: &Value, engine: NativeHistoryEngine) -> Vec<Value> {
             continue;
         }
         if let Some(text) = current.as_str() {
-            return vec![json!({ "kind": "text", "text": text })];
+            return (vec![json!({ "kind": "text", "text": text })], 0, 0);
         }
         if let Some(items) = current.as_array() {
-            return items
-                .iter()
-                .map(|item| {
-                    if let Some(text) = item.get("text").and_then(Value::as_str) {
-                        json!({ "kind": "text", "text": text })
+            let mut blocks = Vec::new();
+            let mut private_count = 0;
+            let mut unknown_count = 0;
+            for item in items {
+                if private_block_type(item) {
+                    private_count += 1;
+                } else if let Some(block) = tool_block(item, engine) {
+                    blocks.push(block);
+                } else if let Some(text) = item.get("text").and_then(Value::as_str) {
+                    let kind = item.get("type").and_then(Value::as_str).unwrap_or("text");
+                    if matches!(kind, "text" | "input_text" | "output_text") {
+                        blocks.push(json!({ "kind": "text", "text": text }));
                     } else {
-                        json!({ "kind": "native-block", "value": item })
+                        unknown_count += 1;
                     }
-                })
-                .collect();
+                } else {
+                    unknown_count += 1;
+                }
+            }
+            return (blocks, private_count, unknown_count);
         }
     }
-    vec![json!({ "kind": "native-block", "value": value })]
+    if let Some(block) = tool_block(value, engine) {
+        return (vec![block], 0, 0);
+    }
+    if private_block_type(value) {
+        (Vec::new(), 1, 0)
+    } else {
+        (Vec::new(), 0, 1)
+    }
 }
 
 fn timestamp_of(value: &Value) -> Option<i64> {
@@ -185,7 +289,7 @@ fn timestamp_of(value: &Value) -> Option<i64> {
 fn normalize_lines(
     bytes: &[u8],
     source: &NativeHistorySource,
-) -> Result<Vec<ContextSourceEntry>, NativeHistoryError> {
+) -> Result<(Vec<ContextSourceEntry>, Vec<ProjectionOmission>), NativeHistoryError> {
     let text = std::str::from_utf8(bytes).map_err(|error| {
         NativeHistoryError::new(
             NativeHistoryErrorCode::SourceCorrupt,
@@ -198,7 +302,8 @@ fn normalize_lines(
             "native history ends with an incomplete JSONL record",
         ));
     }
-    text.lines()
+    let entries = text
+        .lines()
         .enumerate()
         .filter(|(_, line)| !line.trim().is_empty())
         .map(|(index, line)| {
@@ -222,22 +327,156 @@ fn normalize_lines(
             )
             .map(str::to_string)
             .unwrap_or_else(|| sha256(line.as_bytes()));
-            Ok(ContextSourceEntry {
-                source_entry_id,
-                occurred_at: timestamp_of(&value),
-                role: role_of(&value, source.engine),
-                blocks: blocks_of(&value, source.engine),
-                provenance: json!({
-                    "engine": source.engine,
-                    "providerProfileId": source.provider_profile_id,
-                    "nativeSessionId": source.native_session_id,
-                    "vendorEntryType": vendor_entry_type,
-                    "sourceLine": index + 1,
-                }),
-                fidelity: NativeHistoryFidelity::Semantic,
-            })
+            let (blocks, private_count, unknown_count) = blocks_of(&value, source.engine);
+            Ok((
+                ContextSourceEntry {
+                    source_entry_id,
+                    occurred_at: timestamp_of(&value),
+                    role: role_of(&value, source.engine),
+                    blocks,
+                    provenance: json!({
+                        "engine": source.engine,
+                        "providerProfileId": source.provider_profile_id,
+                        "nativeSessionId": source.native_session_id,
+                        "vendorEntryType": vendor_entry_type,
+                        "sourceLine": index + 1,
+                    }),
+                    fidelity: NativeHistoryFidelity::Semantic,
+                },
+                private_count,
+                unknown_count,
+            ))
         })
-        .collect()
+        .collect::<Result<Vec<_>, NativeHistoryError>>()?;
+    let mut omissions = Vec::new();
+    let mut normalized_entries = entries
+        .into_iter()
+        .map(|(entry, private_count, unknown_count)| {
+            if private_count > 0 {
+                omissions.push(ProjectionOmission {
+                    entry_id: entry.source_entry_id.clone(),
+                    category: "provider-private-reasoning".to_string(),
+                    reason: format!("{private_count} private block(s) were not portable"),
+                    disposition: OmissionDisposition::NotRetrievable,
+                    retrievable_ref: None,
+                });
+            }
+            if unknown_count > 0 {
+                omissions.push(ProjectionOmission {
+                    entry_id: entry.source_entry_id.clone(),
+                    category: "unknown-vendor-block".to_string(),
+                    reason: format!("{unknown_count} unknown block(s) were not safely portable"),
+                    disposition: OmissionDisposition::NotRetrievable,
+                    retrievable_ref: None,
+                });
+            }
+            entry
+        })
+        .collect::<Vec<_>>();
+    pair_tool_exchanges(&mut normalized_entries, &mut omissions);
+    normalized_entries.retain(|entry| !entry.blocks.is_empty());
+    Ok((normalized_entries, omissions))
+}
+
+fn pair_tool_exchanges(
+    entries: &mut [ContextSourceEntry],
+    omissions: &mut Vec<ProjectionOmission>,
+) {
+    use std::collections::{HashMap, HashSet};
+
+    let mut calls: HashMap<String, Vec<(usize, Value)>> = HashMap::new();
+    let mut results: HashMap<String, Vec<(usize, Value)>> = HashMap::new();
+    let mut ordered_call_ids = Vec::new();
+    let mut seen_call_ids = HashSet::new();
+    let mut paired_exchanges = HashMap::new();
+    for (entry_index, entry) in entries.iter().enumerate() {
+        for block in &entry.blocks {
+            let Some(call_id) = block.get("callId").and_then(Value::as_str) else {
+                continue;
+            };
+            if seen_call_ids.insert(call_id.to_string()) {
+                ordered_call_ids.push(call_id.to_string());
+            }
+            match block.get("kind").and_then(Value::as_str) {
+                Some("tool-call") => {
+                    calls
+                        .entry(call_id.to_string())
+                        .or_default()
+                        .push((entry_index, block["value"].clone()));
+                }
+                Some("tool-result") => {
+                    results
+                        .entry(call_id.to_string())
+                        .or_default()
+                        .push((entry_index, block["value"].clone()));
+                }
+                _ => {}
+            }
+        }
+    }
+    for call_id in &ordered_call_ids {
+        let call_candidates = calls.get(call_id).map(Vec::as_slice).unwrap_or_default();
+        let result_candidates = results.get(call_id).map(Vec::as_slice).unwrap_or_default();
+        if let ([(_, call)], [(_, result)]) = (call_candidates, result_candidates) {
+            paired_exchanges.insert(
+                call_id.clone(),
+                json!({
+                "kind": "atomic-tool-exchange",
+                "exchange": {
+                    "toolCallId": call_id,
+                    "toolName": call.get("name").and_then(Value::as_str).unwrap_or("tool"),
+                    "call": {
+                        "argumentsSummary": call.get("arguments")
+                            .or_else(|| call.get("input"))
+                            .or_else(|| call.get("args"))
+                            .map(Value::to_string)
+                            .unwrap_or_else(|| "{}".to_string())
+                    },
+                    "result": {
+                        "outputSummary": result.get("output")
+                            .or_else(|| result.get("content"))
+                            .or_else(|| result.get("result"))
+                            .map(|value| value.as_str().map(str::to_string).unwrap_or_else(|| value.to_string()))
+                            .unwrap_or_default()
+                    }
+                }
+                }),
+            );
+        } else {
+            let entry_index = call_candidates
+                .first()
+                .or_else(|| result_candidates.first())
+                .map(|(entry_index, _)| *entry_index);
+            omissions.push(ProjectionOmission {
+                entry_id: entry_index
+                    .and_then(|index| entries.get(index))
+                    .map(|entry| entry.source_entry_id.clone())
+                    .unwrap_or_else(|| call_id.clone()),
+                category: "incomplete-tool-exchange".to_string(),
+                reason: format!(
+                    "tool exchange {call_id} has {} call(s) and {} result(s)",
+                    call_candidates.len(),
+                    result_candidates.len()
+                ),
+                disposition: OmissionDisposition::NotRetrievable,
+                retrievable_ref: None,
+            });
+        }
+    }
+    for entry in entries {
+        entry.blocks = std::mem::take(&mut entry.blocks)
+            .into_iter()
+            .filter_map(|block| match block.get("kind").and_then(Value::as_str) {
+                Some("tool-call") => block
+                    .get("callId")
+                    .and_then(Value::as_str)
+                    .and_then(|call_id| paired_exchanges.get(call_id))
+                    .cloned(),
+                Some("tool-result") => None,
+                _ => Some(block),
+            })
+            .collect();
+    }
 }
 
 pub fn probe_history_file(
@@ -303,14 +542,14 @@ pub fn read_history_file(
             "native history changed inside the probed boundary",
         ));
     }
-    let entries = normalize_lines(&bytes, source)?;
+    let (entries, omissions) = normalize_lines(&bytes, source)?;
     Ok(NativeHistoryReadResult {
         reader_id: source.engine.reader_id().to_string(),
         source_fingerprint: actual_checksum,
         through_cursor: through_cursor.to_string(),
         entries,
         fidelity: NativeHistoryFidelity::Semantic,
-        omissions: Vec::new(),
+        omissions,
     })
 }
 
@@ -377,6 +616,86 @@ mod tests {
         let capability = probe_history_file(&path, NativeHistoryEngine::Kimi).expect("probe");
         assert!(!capability.stable_cursor);
         assert!(capability.current_through_cursor.is_none());
+        fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn probe_rejects_oversized_source_before_reading() {
+        let path = fixture("");
+        File::options()
+            .write(true)
+            .open(&path)
+            .expect("open")
+            .set_len(MAX_NATIVE_HISTORY_BYTES + 1)
+            .expect("sparse resize");
+        let error =
+            probe_history_file(&path, NativeHistoryEngine::Claude).expect_err("oversized source");
+        assert_eq!(error.code, NativeHistoryErrorCode::SourceTooLarge);
+        fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn reader_omits_private_blocks_and_pairs_tools_atomically() {
+        let path = fixture(
+            concat!(
+                "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[",
+                "{\"type\":\"thinking\",\"thinking\":\"secret\",\"signature\":\"private\"},",
+                "{\"type\":\"text\",\"text\":\"visible\"},",
+                "{\"type\":\"tool_use\",\"id\":\"call-1\",\"name\":\"Read\",\"input\":{\"path\":\"a\"}}",
+                "]}}\n",
+                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[",
+                "{\"type\":\"tool_result\",\"tool_use_id\":\"call-1\",\"content\":\"ok\"}",
+                "]}}\n"
+            ),
+        );
+        let cursor = probe_history_file(&path, NativeHistoryEngine::Claude)
+            .expect("probe")
+            .current_through_cursor
+            .expect("cursor");
+        let result =
+            read_history_file(&path, &source(NativeHistoryEngine::Claude), &cursor).expect("read");
+        let repeated = read_history_file(&path, &source(NativeHistoryEngine::Claude), &cursor)
+            .expect("repeat");
+        let serialized = serde_json::to_string(&result.entries).expect("serialize");
+        assert_eq!(result, repeated);
+        assert_eq!(result.entries[0].blocks[0]["kind"], "text");
+        assert_eq!(result.entries[0].blocks[1]["kind"], "atomic-tool-exchange");
+        assert!(serialized.contains("visible"));
+        assert!(serialized.contains("atomic-tool-exchange"));
+        assert!(!serialized.contains("secret"));
+        assert!(!serialized.contains("private"));
+        assert!(result
+            .omissions
+            .iter()
+            .any(|omission| omission.category == "provider-private-reasoning"));
+        fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn reader_does_not_export_kimi_reasoning_or_unknown_vendor_payloads() {
+        let path = fixture(concat!(
+            "{\"type\":\"reasoning\",\"content\":\"private kimi thought\"}\n",
+            "{\"type\":\"vendor.control\",\"secret\":\"opaque\"}\n",
+            "{\"type\":\"turn.prompt\",\"content\":\"portable question\"}\n"
+        ));
+        let cursor = probe_history_file(&path, NativeHistoryEngine::Kimi)
+            .expect("probe")
+            .current_through_cursor
+            .expect("cursor");
+        let result =
+            read_history_file(&path, &source(NativeHistoryEngine::Kimi), &cursor).expect("read");
+        let serialized = serde_json::to_string(&result.entries).expect("serialize");
+        assert!(serialized.contains("portable question"));
+        assert!(!serialized.contains("private kimi thought"));
+        assert!(!serialized.contains("opaque"));
+        assert!(result
+            .omissions
+            .iter()
+            .any(|omission| omission.category == "provider-private-reasoning"));
+        assert!(result
+            .omissions
+            .iter()
+            .any(|omission| omission.category == "unknown-vendor-block"));
         fs::remove_file(path).ok();
     }
 }

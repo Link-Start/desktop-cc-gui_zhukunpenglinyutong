@@ -715,6 +715,11 @@ interface ProjectionManifest {
 }
 ```
 
+`packageId` 必须覆盖 compiler version、destination identity、runtime capabilities、
+effective budget、Binding 与 source range/checksum；任一会改变 projection/delivery 语义的
+输入变化都必须产生新 identity。Artifact checksum 绑定 deterministic serialized
+`ContextPackage` payload，读取时重算，不能复用 source checksum 代替 payload integrity。
+
 `AtomicToolExchange` 必须把 tool call 与对应 result 当成不可拆分单元。`ArtifactRef` 指向文件、附件、长 Tool Result 或外部产物；优先传稳定引用，需要时再按权限读取内容。
 
 `destination.binding` 是 Compiler/Delivery identity，不是 Target Snapshot。`native-delta` 必须提供 `bindingKey + nativeSessionId`；新 Binding 或 Provider Continuation 在 Identity 尚未创建时可以省略，但不得选择 `native-delta`。系统同时维护 durable `attemptId → bindingKey → nativeSessionId` lookup，供 provenance ownership 判定与 Recovery 使用。
@@ -1171,9 +1176,15 @@ Contract：
 - 输出是 canonical-shaped `ContextSourceEntry`，只用于 `ContextCompiler`；它不是 `SharedCanonicalEntry`，不分配 Shared sequence，也不写 Shared Event Log。
 - Reader 必须保持 source order、stable cursor、source fingerprint、Tool Call/Result pairing 与 provenance；无法保真的内容进入 omissions。
 - Provider Continuation 只接受 `stableCursor = true` 且存在 `currentThroughCursor` 的 Reader。缺少稳定快照边界时 typed unsupported、fail closed；第一阶段不做“边读边增长”或猜测式 materialization。
+- Reader 必须在分配 source-sized buffer 前检查 byte limit；当前实现单文件上限为
+  `64 MiB`，超限返回 typed `source-too-large`。probe/read 与 recovery file scan 在
+  blocking worker 执行，禁止阻塞 async runtime worker。
+- portable projection 使用 allowlist：只允许 text 与完整 Tool Call/Result pair。
+  private reasoning/signature、encrypted/redacted、unknown 与不完整 Tool exchange 进入
+  typed omissions，不得透传 vendor private payload。
 - 系统先以 Probe 得到 `currentThroughCursor`，再按该上界读取。编译完成后、创建目标 Native Session 或发送任何 Context 前，必须先把 normalized entries 与完整 Context Package 写入 Artifact Store（temp file + atomic rename），再在同一 preparation transaction 中 Durable Commit immutable `NativeHistoryMaterialization` refs/checksums；Retry 从 Artifact Ref 重放，不重新读取漂移中的来源。
 - Materialization 后若来源 History 继续增长，不影响本次 Continuation；用户需要更新内容时创建新的 Continuation operation。
-- 来源 Session 删除、权限变化或 Reader 升级不影响已 prepared operation。Artifact 在 Continuation terminal settlement 与 retention window 结束前不得 GC；启动恢复发现 ref 缺失/checksum 不符时进入 explicit recovery error，禁止重读来源后假装是同一 operation。
+- 来源 Session 删除、权限变化或 Reader 升级不影响已 prepared operation。Artifact 在 Continuation terminal settlement 与 retention window 结束前不得 GC；启动恢复发现 ref 缺失/checksum 不符时，若 operation 已触发 target side effect，进入 explicit recovery error，禁止重读来源后假装是同一 operation。仅对 `prepared` 且没有 result Session/target side effect 的旧版本 artifact，允许删除该 prepared record，并用同一 validated request 重新冻结。
 - Reader 不修改 vendor history file，不伪造 Tool ID、Reasoning Signature 或 Runtime ACK。
 - source 不存在、损坏、版本不支持、权限不足必须返回 typed error；不得静默生成“看似完整”的 transcript。
 - `ContextPackage.source.kind = "native-history"` 时，checksum 覆盖 Reader identity、source fingerprint、cursor range 与 normalized entries。

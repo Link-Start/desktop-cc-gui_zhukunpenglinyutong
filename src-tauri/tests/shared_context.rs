@@ -4,8 +4,7 @@ mod common;
 
 use cc_gui_lib::shared_context::{
     accept_delivery, compile_context, read_artifact, write_artifact, AcceptDeliveryRequest,
-    ArtifactReadRequest, CompileContextRequest, PrepareDeliveryRequest,
-    RuntimeContextCapabilities,
+    ArtifactReadRequest, CompileContextRequest, PrepareDeliveryRequest, RuntimeContextCapabilities,
 };
 use cc_gui_lib::shared_event_log::{open, OpenOutcome, SharedEventWriter};
 use cc_gui_lib::shared_session_v2::{
@@ -108,7 +107,17 @@ fn package_artifact_and_two_phase_cursor_close_without_replay_gap() {
     let events = writer.events_for_session(SESSION).expect("events");
     let first = compile_context(&events, &compile_request).expect("compile");
     let second = compile_context(&events, &compile_request).expect("recompile");
+    let mut changed_destination = compile_request.clone();
+    changed_destination.destination =
+        json!({ "engine": "claude", "providerProfileId": "provider-c" });
+    let destination_package =
+        compile_context(&events, &changed_destination).expect("destination compile");
+    let mut changed_budget = compile_request.clone();
+    changed_budget.budget_estimated_tokens = Some(1);
+    let budget_package = compile_context(&events, &changed_budget).expect("budget compile");
     assert_eq!(first.package_id, second.package_id);
+    assert_ne!(first.package_id, destination_package.package_id);
+    assert_ne!(first.package_id, budget_package.package_id);
     assert_eq!(
         first.manifest.source_checksum,
         second.manifest.source_checksum

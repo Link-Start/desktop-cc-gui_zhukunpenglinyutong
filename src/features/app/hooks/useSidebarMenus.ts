@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
 import type { EngineType, ThreadSummary, WorkspaceInfo } from "../../../types";
@@ -1273,14 +1274,14 @@ export function useSidebarMenus({
                     providerProfileNameSnapshot: provider.name,
                     providerProfileSource: provider.source,
                     runtimeCapabilityFingerprint:
-                      engine === "codex" ? "thread/inject_items" : "echo-checksum",
+                      engine === "claude" ? "echo-checksum" : null,
                   },
                 };
                 try {
                   let result = await createNativeProviderContinuation(request);
                   if (
                     result.status === "confirmation-required" &&
-                    window.confirm(
+                    await ask(
                       providerContinuationDegradedMessage(
                         result,
                         t("threads.providerContinuationDegradedConfirm", {
@@ -1288,6 +1289,14 @@ export function useSidebarMenus({
                             "部分历史会降级或省略。仍要创建新的供应商续接会话吗？",
                         }),
                       ),
+                      {
+                        kind: "warning",
+                        title: t("threads.providerContinuationDegradedTitle", {
+                          defaultValue: "续接历史需要降级",
+                        }),
+                        okLabel: t("common.confirm"),
+                        cancelLabel: t("common.cancel"),
+                      },
                     )
                   ) {
                     result = await createNativeProviderContinuation({

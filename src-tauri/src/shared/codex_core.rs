@@ -328,6 +328,21 @@ fn is_collaboration_mode_capability_error(value: &Value) -> bool {
         && message.contains("capability")
 }
 
+fn is_method_not_found_response(value: &Value) -> bool {
+    value
+        .pointer("/error/code")
+        .and_then(Value::as_i64)
+        .is_some_and(|code| code == -32601)
+        || value
+            .pointer("/error/message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| {
+                let normalized = message.to_ascii_lowercase();
+                normalized.contains("method not found")
+                    || normalized.contains("unsupported server request")
+            })
+}
+
 fn is_thread_not_found_error_message(message: &str) -> bool {
     let normalized = message.to_ascii_lowercase();
     normalized.contains("thread not found")
@@ -1101,6 +1116,29 @@ pub(crate) async fn inject_thread_items_core(
     classify_context_import_response(response)
 }
 
+/// 无副作用探测 `thread/inject_items` 是否存在。
+///
+/// 使用必然无效的 thread id 与空 items；除 method-not-found 外的 JSON-RPC
+/// response 都证明 method 已注册。调用发生在目标 Thread 创建之前。
+pub(crate) async fn probe_thread_inject_items_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    workspace_id: &str,
+    provider_profile_id: Option<&str>,
+) -> Result<bool, String> {
+    let session_key = session_key_for_provider(workspace_id, provider_profile_id);
+    let session = get_session_clone(sessions, &session_key).await?;
+    let response = session
+        .send_request(
+            "thread/inject_items",
+            json!({
+                "threadId": "mossx-capability-probe-no-thread",
+                "items": [],
+            }),
+        )
+        .await?;
+    Ok(!is_method_not_found_response(&response))
+}
+
 fn classify_context_import_response(response: Value) -> Result<Value, String> {
     if let Some(error) = response.get("error").filter(|value| !value.is_null()) {
         return Err(format!("context-import-rejected: {error}"));
@@ -1114,9 +1152,10 @@ mod tests {
         build_reasoning_config, build_writable_roots, ensure_collaboration_mode_defaults,
         extract_parent_thread_id_from_response, extract_thread_id_from_response,
         inject_code_mode_fallback_prompt, inject_plan_mode_fallback_prompt,
-        is_collaboration_mode_capability_error, is_thread_not_found_error_message,
-        is_thread_not_found_response, is_thread_resume_rollout_pending_error_message,
-        normalize_custom_spec_root, normalize_preferred_language, resolve_execution_policy,
+        is_collaboration_mode_capability_error, is_method_not_found_response,
+        is_thread_not_found_error_message, is_thread_not_found_response,
+        is_thread_resume_rollout_pending_error_message, normalize_custom_spec_root,
+        normalize_preferred_language, resolve_execution_policy,
         should_soft_ready_for_not_ready_reason, validate_thread_resume_ready_response,
         validate_thread_start_response, INVALID_THREAD_START_RESPONSE_ERROR_PREFIX,
     };
@@ -1133,6 +1172,19 @@ mod tests {
         }))
         .expect_err("explicit rejection")
         .contains("context-import-rejected"));
+    }
+
+    #[test]
+    fn import_method_probe_only_rejects_method_not_found() {
+        assert!(is_method_not_found_response(&json!({
+            "error": {"code": -32601, "message": "Method not found"}
+        })));
+        assert!(is_method_not_found_response(&json!({
+            "error": {"message": "Unsupported server request: thread/inject_items"}
+        })));
+        assert!(!is_method_not_found_response(&json!({
+            "error": {"code": -32602, "message": "invalid thread id"}
+        })));
     }
 
     #[test]

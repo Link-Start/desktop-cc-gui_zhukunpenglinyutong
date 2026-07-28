@@ -19,6 +19,24 @@ The system MUST persist large context payloads and retrievable omissions using t
 - **THEN** retrieval MUST return a typed integrity error
 - **AND** it MUST NOT return corrupted content or regenerate the same operation from drifting source
 
+#### Scenario: payload checksum is recomputed during retrieval
+
+- **WHEN** artifact metadata remains unchanged but the serialized `ContextPackage` payload is modified
+- **THEN** retrieval MUST recompute and reject the payload checksum
+- **AND** a prepared operation with no target side effect MAY quarantine and atomically rewrite the artifact
+
+#### Scenario: concurrent writers publish one complete artifact
+
+- **WHEN** multiple writers materialize the same deterministic package concurrently
+- **THEN** readers MUST observe one complete checksum-valid payload
+- **AND** failed or losing writers MUST clean their temporary files
+
+#### Scenario: platform durability uses supported primitives
+
+- **WHEN** an artifact is published on macOS, Linux, or Windows
+- **THEN** the implementation MUST use same-directory atomic rename and file sync
+- **AND** parent-directory sync MUST only run on platforms that support directory handles
+
 ### Requirement: Progressive Retrieval MUST Preserve Permission And Control Boundaries
 
 Artifact retrieval MUST require matching workspace, shared session, artifact id, and checksum. Returned content MUST be marked reference-only and MUST never execute historical control semantics.

@@ -36,9 +36,15 @@ entries artifact、ContextPackage artifact 与 `NativeHistoryMaterialization`。
 
 #### Scenario: artifact integrity fails
 
-- **WHEN** prepared operation 的 artifact 缺失或 checksum 不匹配
+- **WHEN** operation 已进入 `creating`、`ready` 或 `recovery-required` 后 artifact 缺失或 checksum 不匹配
 - **THEN** operation MUST 进入 explicit `recovery-required`
 - **AND** MUST NOT 重读来源或创建第二个目标 Session
+
+#### Scenario: stale prepared artifact is repaired before side effects
+
+- **WHEN** a legacy or corrupted artifact belongs to a `prepared` operation with no result Session
+- **THEN** the system MUST delete only that prepared operation and rebuild from the same validated request
+- **AND** operations at `creating`, `ready`, or `recovery-required` MUST NOT use this repair path
 
 ### Requirement: Provider Continuation MUST Recover Idempotently
 
@@ -61,3 +67,14 @@ Reader omissions、Context Package degraded mode、unsupported 与 recovery stat
 - **WHEN** prepared package 包含 `not-retrievable` omission 或 checkpoint degradation
 - **THEN** UI MUST 展示 mode、omissions 与 token estimate
 - **AND** 未确认前 MUST NOT 创建目标 Session 或发送 Context
+
+### Requirement: Codex Import Capability MUST Be Probed
+
+Codex continuation MUST probe `thread/inject_items` support without creating or mutating the target
+Session. Only a JSON-RPC method-not-found response proves unsupported capability.
+
+#### Scenario: Codex import is unavailable
+
+- **WHEN** the probe returns JSON-RPC method not found
+- **THEN** the continuation MUST use its declared portable prompt transport
+- **AND** it MUST NOT call `thread/inject_items` after classifying the method unsupported

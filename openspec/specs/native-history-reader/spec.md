@@ -63,3 +63,26 @@ typed error。
 - **WHEN** probe 后来源在 frozen boundary 内发生改写或截断
 - **THEN** Reader MUST 返回 `source-drifted`
 - **AND** MUST NOT 用最新 UI transcript 或重新 probe 的结果假装同一 operation
+
+### Requirement: Native History Reader MUST Bound Resource Usage
+
+Reader MUST reject native history files larger than the configured byte limit before allocating
+the full payload, and blocking filesystem reads MUST run outside the async runtime worker.
+
+#### Scenario: oversized history fails before allocation
+
+- **WHEN** a sparse or regular native history file exceeds the byte limit
+- **THEN** Reader MUST return typed `source-too-large`
+- **AND** MUST NOT allocate or parse the full file
+
+### Requirement: Native History Reader MUST Allowlist Portable Content
+
+Reader MUST export only portable text and complete Tool Call/Result pairs. Private reasoning,
+signature, encrypted/redacted payloads, unknown blocks, duplicate calls, and incomplete exchanges
+MUST be omitted with typed evidence.
+
+#### Scenario: private and unknown blocks stay out of continuation
+
+- **WHEN** Claude, Codex, or Kimi history contains private or unknown vendor blocks
+- **THEN** normalized entries MUST NOT contain their payload
+- **AND** omissions MUST identify the excluded source blocks

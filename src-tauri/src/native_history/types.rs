@@ -83,6 +83,7 @@ pub enum NativeHistoryErrorCode {
     PermissionDenied,
     SourceCorrupt,
     SourceDrifted,
+    SourceTooLarge,
     InvalidRequest,
 }
 

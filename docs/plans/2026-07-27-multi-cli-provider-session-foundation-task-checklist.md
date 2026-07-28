@@ -136,14 +136,14 @@ OpenSpec 已归档至 `openspec/changes/archive/2026-07-27-{establish-shared-eve
 > context 与 capability-driven Cancel 均已接线。Gate 4 由 UI/runtime/storage 增量测试
 > 分层闭环；Desktop 人工点击矩阵保留为发布前 smoke，不阻塞 Change C 开工。
 
-| # | 任务 | 大白话说明 | 改变点 | UI 变化 | 顺序 | 前置 | 验收 | 体量 |
-|---|---|---|---|---|---|---|---|---|
-| B.1 | `selectedNextTarget` / `activeTurnTarget` Store 分离 + 四级 Picker（CLI→Provider→Model→Reasoning） | 让用户选择“下一轮发给哪个 CLI、Provider、Model、Reasoning”。 | 复用现有 Composer 四级控件；选择只改下一轮 Target，历史/进行中 Badge 只读快照。 | **有**：消息上方显示真实执行 Target Badge。 | ⫽ | Gate 3 | Picker 变化不改写历史 Turn Badge | M |
-| B.2 | `bindingsByEngine` → `bindingsByTarget` 迁移（旧 Binding 归 default-provider，不猜 managed Provider） | 同一个 CLI 下不同 Provider 各自保存自己的隐藏会话绑定。 | 显式写入 `schemaVersion: 2`；旧 binding 只迁为 local/default，新 Provider 不靠猜。 | 间接影响：用户仍看一个 Shared Row，切 Provider 时复用对应会话。 | ⫽ | Gate 3 | 旧会话按 local/default 语义恢复 | M |
-| B.3 | Send 全链路：`providerProfileId` 贯通 + Tx1 snapshot 固化 + **V0→V2 真实写路径切换** | 真正把用户发送的消息接入 V2 事件链路。 | typed prompt ACK 后写 accepted；Claude 阻塞 settled、Codex realtime terminal 后才写 committed；失败不换 Provider。 | **有**：V2 flag 开启后状态条和 Badge 可见；仍可关 flag 回滚。 | → | B.1、B.2 | dark launch 结束；Shared 真实流量跑 V2 | L |
-| B.4 | Durable Binding Provisioning + duplicate-create recovery（ACK 不确定 → recovery-required，禁止盲建） | 创建 Provider 会话时即使崩溃，也不能偷偷多建一个。 | prepared→creating→ready/recovery 全程落盘；Probe 查询真实 Claude/Codex runtime；强杀测试守住 duplicate-create。 | 异常时可见：展示恢复中/需要处理，而不是创建重复会话。 | → | B.3 + S1/S2/S3 结论 | 强杀不产生第二个同 Target Binding | L |
-| B.5 | Target-aware owner routing：Interrupt / Approval / Pending Rebind / Recovery 携带完整 Owner | 停止、审批和恢复操作必须发给真正执行这一轮的 Provider。 | Shared Claude Interrupt 现在携带 active provider；Desktop/daemon 都按 provider session 精确路由。 | 间接影响：按钮外观不变，但不会停错 Provider。 | ⫽ | B.3 | 同 Engine 双 Provider 并行不串线 | L |
-| B.6 | UI 状态机落地：9 状态 + `CancelPending` + degraded-context 用户确认 | 把准备、发送、取消、恢复、上下文降级等状态明确告诉用户。 | 真实 bounded-delta omissions 进入确认 UI；Cancel 由 adapter capability 决定，当前不支持时明确禁用。 | **有**：降级详情、确认/取消、recovery 与 unavailable 状态可见。 | ⫽ | B.3 | §14.5.6 UX 验收全量 | M |
+| # | 任务 | 大白话说明 | 改变点 | UI 变化 | 顺序 | 前置 | 验收 | 体量 | 状态 |
+|---|---|---|---|---|---|---|---|---|---|
+| B.1 | `selectedNextTarget` / `activeTurnTarget` Store 分离 + 四级 Picker（CLI→Provider→Model→Reasoning） | 让用户选择“下一轮发给哪个 CLI、Provider、Model、Reasoning”。 | 复用现有 Composer 四级控件；选择只改下一轮 Target，历史/进行中 Badge 只读快照。 | **有**：消息上方显示真实执行 Target Badge。 | ⫽ | Gate 3 | Picker 变化不改写历史 Turn Badge | M | ✅ 已完成 |
+| B.2 | `bindingsByEngine` → `bindingsByTarget` 迁移（旧 Binding 归 default-provider，不猜 managed Provider） | 同一个 CLI 下不同 Provider 各自保存自己的隐藏会话绑定。 | 显式写入 `schemaVersion: 2`；旧 binding 只迁为 local/default，新 Provider 不靠猜。 | 间接影响：用户仍看一个 Shared Row，切 Provider 时复用对应会话。 | ⫽ | Gate 3 | 旧会话按 local/default 语义恢复 | M | ✅ 已完成 |
+| B.3 | Send 全链路：`providerProfileId` 贯通 + Tx1 snapshot 固化 + **V0→V2 真实写路径切换** | 真正把用户发送的消息接入 V2 事件链路。 | typed prompt ACK 后写 accepted；Claude 阻塞 settled、Codex realtime terminal 后才写 committed；失败不换 Provider。 | **有**：V2 flag 开启后状态条和 Badge 可见；仍可关 flag 回滚。 | → | B.1、B.2 | dark launch 结束；Shared 真实流量跑 V2 | L | ✅ 已完成 |
+| B.4 | Durable Binding Provisioning + duplicate-create recovery（ACK 不确定 → recovery-required，禁止盲建） | 创建 Provider 会话时即使崩溃，也不能偷偷多建一个。 | prepared→creating→ready/recovery 全程落盘；Probe 查询真实 Claude/Codex runtime；强杀测试守住 duplicate-create。 | 异常时可见：展示恢复中/需要处理，而不是创建重复会话。 | → | B.3 + S1/S2/S3 结论 | 强杀不产生第二个同 Target Binding | L | ✅ 已完成 |
+| B.5 | Target-aware owner routing：Interrupt / Approval / Pending Rebind / Recovery 携带完整 Owner | 停止、审批和恢复操作必须发给真正执行这一轮的 Provider。 | Shared Claude Interrupt 现在携带 active provider；Desktop/daemon 都按 provider session 精确路由。 | 间接影响：按钮外观不变，但不会停错 Provider。 | ⫽ | B.3 | 同 Engine 双 Provider 并行不串线 | L | ✅ 已完成 |
+| B.6 | UI 状态机落地：9 状态 + `CancelPending` + degraded-context 用户确认 | 把准备、发送、取消、恢复、上下文降级等状态明确告诉用户。 | 真实 bounded-delta omissions 进入确认 UI；Cancel 由 adapter capability 决定，当前不支持时明确禁用。 | **有**：降级详情、确认/取消、recovery 与 unavailable 状态可见。 | ⫽ | B.3 | §14.5.6 UX 验收全量 | M | ✅ 已完成 |
 
 **⛔ Gate 4（Phase 2 验收矩阵）**
 - [x] `Claude/Official → Claude/OpenRouter → Codex/OpenAI → Claude/Official`：一个 Sidebar Row、三个 Hidden Binding、切回复用原 Binding、Turn Provenance 正确、任一 Provider 失败不重路由。Rust matrix、Composer/Badge component tests、Codex realtime terminal owner test 与失败语义测试共同提供 Gate 4 证据。
@@ -204,17 +204,26 @@ OpenSpec 已归档至 `openspec/changes/archive/2026-07-27-{establish-shared-eve
 
 ## Wave 6：Change D — add-native-provider-continuation
 
-| # | 任务 | 大白话说明 | 改变点 | UI 变化 | 顺序 | 前置 | 验收 | 体量 |
-|---|---|---|---|---|---|---|---|---|
-| D.1 | ✅ NativeHistoryReader × 3：Claude session JSONL / Codex rollout / Kimi 公开 surface | 安全读取三家 CLI 自己保存的原生历史。 | 为 Claude/Codex/Kimi 建统一 reader contract；游标不稳定就拒绝续接。 | 无直接变化；失败时需要可解释 unsupported。 | ⫽ | Gate 5（可与 C 后期重叠启动，只依赖 T0.2 contract） | `stableCursor=false` 时 typed unsupported、fail closed | L |
-| D.2 | ✅ NativeHistoryMaterialization 持久化：fingerprint/cursor/checksum，Retry 复用不重读漂移来源 | 第一次读取后冻结一份可校验材料，重试不再读取可能变化的源文件。 | 新增 fingerprint/cursor/checksum materialization。 | 无直接变化；提高续接重试一致性。 | → | D.1 | materialization 后可审计、可重放 | M |
-| D.3 | ✅ Continuation 创建流：入口 → package 编译 → 新 Native Session + 新 Provider Binding | 从旧 Native Session 的历史创建一个新 Provider 会话继续聊。 | Desktop 支持 Claude/Codex 目标；Kimi 与 remote daemon 能力不足时 typed unsupported。来源 Session 保持不变。 | **有**：新增“使用其他 Provider 继续”入口、降级明细与创建反馈。 | → | D.2 + C.2 | 原 Session 不变、不改写、不自动归档 | M |
-| D.4 | ✅ `provider-continuation` Origin + Conversation Family 继承 + `供应商续接` 标签 + 查看来源导航 | 让新会话明确显示自己从哪续过来，但不要冒充子代理。 | 新会话继承 family，记录 lineage parent 和 continuation origin。 | **有**：顶层 Session 显示“供应商续接”标签和来源导航。 | → | D.3 | §17.1 矩阵；不写 `parentThreadId`、不显示 `子代理` | M |
+| # | 任务 | 大白话说明 | 改变点 | UI 变化 | 顺序 | 前置 | 验收 | 体量 | 状态 |
+|---|---|---|---|---|---|---|---|---|---|
+| D.1 | NativeHistoryReader × 3：Claude session JSONL / Codex rollout / Kimi 公开 surface | 安全读取三家 CLI 自己保存的原生历史。 | 为 Claude/Codex/Kimi 建统一 reader contract；游标不稳定就拒绝续接。 | 无直接变化；失败时需要可解释 unsupported。 | ⫽ | Gate 5（可与 C 后期重叠启动，只依赖 T0.2 contract） | `stableCursor=false` 时 typed unsupported、fail closed | L | ✅ 已完成 |
+| D.2 | NativeHistoryMaterialization 持久化：fingerprint/cursor/checksum，Retry 复用不重读漂移来源 | 第一次读取后冻结一份可校验材料，重试不再读取可能变化的源文件。 | 新增 fingerprint/cursor/checksum materialization。 | 无直接变化；提高续接重试一致性。 | → | D.1 | materialization 后可审计、可重放 | M | ✅ 已完成 |
+| D.3 | Continuation 创建流：入口 → package 编译 → 新 Native Session + 新 Provider Binding | 从旧 Native Session 的历史创建一个新 Provider 会话继续聊。 | Desktop 支持 Claude/Codex 目标；Kimi 与 remote daemon 能力不足时 typed unsupported。来源 Session 保持不变。 | **有**：新增“使用其他 Provider 继续”入口、降级明细与创建反馈。 | → | D.2 + C.2 | 原 Session 不变、不改写、不自动归档 | M | ✅ 已完成 |
+| D.4 | `provider-continuation` Origin + Conversation Family 继承 + `供应商续接` 标签 + 查看来源导航 | 让新会话明确显示自己从哪续过来，但不要冒充子代理。 | 新会话继承 family，记录 lineage parent 和 continuation origin。 | **有**：顶层 Session 显示“供应商续接”标签和来源导航。 | → | D.3 | §17.1 矩阵；不写 `parentThreadId`、不显示 `子代理` | M | ✅ 已完成 |
 
 **⛔ Gate 6（Phase 4 验收）**
 - [x] 自动化：新 Session 顶层投影、Provider Binding、`familyId` / `lineageParentSessionId`、无 `parentThreadId`
 - [x] 自动化：删除来源不级联 Continuation；Reader 只读且不写 Shared Event Log
 - [ ] 发布前人工 Desktop smoke：Claude Provider A → Codex Provider B → 原 Claude Provider，观察历史连续性、degraded confirmation 与 recovery
+
+**A–D 生产校准记录（2026-07-28）**
+
+| # | 任务 | 大白话说明 | 改变点 | UI 变化 | 顺序 | 前置 | 验收 | 体量 | 状态 |
+|---|---|---|---|---|---|---|---|---|---|
+| R.1 | Context Package identity 与 artifact payload integrity 校准 | 防止“包名一样但内容不同”和“文件被改了却没发现”。 | package id 纳入 destination/capability/budget/compiler；artifact checksum 改为绑定完整 package payload。 | 无；异常时 fail closed 进入 recovery。 | → | C.1、C.8 | destination/capability/budget identity tests；tamper test | M | ✅ 已完成 |
+| R.2 | Artifact 原子发布跨平台校准 | 保证 macOS、Windows、Linux 都只看到完整文件。 | Windows 不再打开目录做 `fsync`；并发 writer 读取并校验最终 winner；失败清理 temp。 | 无。 | ⫽ | R.1 | concurrent publish test、`cfg(unix)` 边界审计；Windows/Linux native release CI 继续作为平台门禁 | M | ✅ 已完成 |
+| R.3 | Native History 隐私、Tool pairing 与资源边界校准 | 不把私有思考泄漏给别家，也不让超大历史卡死 App。 | reasoning/signature/encrypted/unknown block 变成 omission；Tool Call/Result 原子配对；64 MiB 前置上限；文件读取移出 async worker。 | 间接影响：degraded 明细更准确；超限时明确失败。 | → | D.1 | Claude/Kimi fixture、oversize sparse file、determinism tests | L | ✅ 已完成 |
+| R.4 | Codex runtime probe 与 Desktop confirmation 校准 | 不再假装所有 Codex 都支持导入；macOS 也能确认降级续接。 | 删除前端 capability 常量和 backend Engine 强制；目标创建前 probe method；`window.confirm` 改为 Tauri Dialog。 | **有**：三平台使用原生 warning dialog；取消不创建目标。 | → | R.3 | method classification、confirm/cancel Vitest | M | ✅ 已完成 |
 
 ---
 
