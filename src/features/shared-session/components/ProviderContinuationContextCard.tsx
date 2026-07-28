@@ -67,9 +67,12 @@ export function ProviderContinuationContextCard({
   const localProviderLabel = t("providers.localConfig", {
     defaultValue: "本地配置",
   });
+  const openSourceLabel = t("threads.providerContinuationOpenSourceTitle", {
+    defaultValue: "查看来源会话",
+  });
   return (
     <details
-      className="group mx-auto mt-3 w-[min(920px,calc(100%-32px))] rounded-lg border border-border/60 bg-muted/25 text-sm"
+      className="provider-continuation-context-card group sticky top-[calc(var(--main-topbar-height)+12px)] z-10 mx-auto mt-3 w-[min(920px,calc(100%-32px))] rounded-lg border border-border/60 bg-muted text-sm shadow-sm"
       aria-label={t("threads.providerContinuationContextAriaLabel", {
         defaultValue: "Provider 续接上下文",
       })}
@@ -111,21 +114,13 @@ export function ProviderContinuationContextCard({
         </p>
         <button
           type="button"
-          className="ghost inline-flex shrink-0 items-center gap-1.5"
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border-0 bg-transparent p-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:pointer-events-none disabled:opacity-50"
           onClick={onOpenSource ?? undefined}
           disabled={!onOpenSource}
-          title={
-            onOpenSource
-              ? t("threads.providerContinuationOpenSourceTitle", {
-                  defaultValue: "查看来源会话",
-                })
-              : sourceUnavailableLabel
-          }
+          aria-label={openSourceLabel}
+          title={onOpenSource ? openSourceLabel : sourceUnavailableLabel}
         >
           <ArrowLeft className="size-4" aria-hidden />
-          {t("threads.providerContinuationOpenSource", {
-            defaultValue: "查看来源",
-          })}
         </button>
       </div>
     </details>

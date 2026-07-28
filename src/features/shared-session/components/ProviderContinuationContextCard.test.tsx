@@ -34,13 +34,37 @@ describe("ProviderContinuationContextCard", () => {
     const details = screen.getByRole("group", {
       name: "Provider 续接上下文",
     }) as HTMLDetailsElement;
+    const summary = details.querySelector("summary") as HTMLElement;
     expect(details.open).toBe(false);
+    expect(details.className.split(" ")).toEqual(
+      expect.arrayContaining([
+        "provider-continuation-context-card",
+        "sticky",
+        "top-[calc(var(--main-topbar-height)+12px)]",
+        "z-10",
+        "bg-muted",
+      ]),
+    );
     expect(details.textContent).toContain("Claude Code · Provider A");
     expect(details.textContent).toContain("Codex CLI · Provider B");
-    fireEvent.click(details.querySelector("summary") as HTMLElement);
+    fireEvent.click(summary);
     expect(details.open).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "查看来源" }));
+    const openSourceButton = screen.getByRole("button", {
+      name: "查看来源会话",
+    });
+    expect(openSourceButton.textContent).toBe("");
+    expect(openSourceButton.className.split(" ")).toEqual(
+      expect.arrayContaining([
+        "size-7",
+        "border-0",
+        "bg-transparent",
+        "p-0",
+      ]),
+    );
+    fireEvent.click(openSourceButton);
     expect(onOpenSource).toHaveBeenCalledOnce();
+    fireEvent.click(summary);
+    expect(details.open).toBe(false);
   });
 
   it("keeps frozen target identity when the source is missing", () => {
@@ -57,8 +81,11 @@ describe("ProviderContinuationContextCard", () => {
       screen.getByRole("group", { name: "Provider 续接上下文" }).textContent,
     ).toContain("Claude Code · 来源 Provider");
     expect(
-      (screen.getByRole("button", { name: "查看来源" }) as HTMLButtonElement)
-        .disabled,
+      (
+        screen.getByRole("button", {
+          name: "查看来源会话",
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 });

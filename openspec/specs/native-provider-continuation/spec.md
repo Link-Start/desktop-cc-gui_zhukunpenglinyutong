@@ -135,6 +135,7 @@ The destination picker MUST expose registered CLIs and Provider Profiles with th
 ### Requirement: Provider Continuation MUST Expose Readable Identity And Source Navigation
 
 A ready Provider Continuation MUST have a human-readable title and a discoverable relationship to its source Session. The relationship projection MUST be a compact, collapsible metadata row inside the existing message scroll flow and MUST NOT alter ordinary message grouping, streaming, completion, or scroll-anchor semantics.
+Its interactive header MUST remain fully visible and operable while collapsed or expanded, MUST account for the shared Canvas topbar safe offset, and MUST NOT be clipped behind Canvas chrome during the toggle interaction. Source navigation MUST use a compact icon-only action without visible button text or resting button chrome while preserving an accessible name, tooltip, keyboard interaction, and disabled semantics.
 
 #### Scenario: continuation becomes ready
 
@@ -153,3 +154,15 @@ A ready Provider Continuation MUST have a human-readable title and a discoverabl
 - **WHEN** the recorded source Session no longer exists or is inaccessible
 - **THEN** the continuation identity MUST remain readable from frozen snapshots
 - **AND** source navigation MUST be disabled with an explicit explanation
+
+#### Scenario: continuation metadata is toggled near the Canvas header
+
+- **WHEN** the compact metadata row is collapsed or the user expands it while Messages is anchored near an edge
+- **THEN** the row header MUST remain fully visible below the shared Canvas topbar and above message content
+- **AND** the user MUST be able to activate the same header again to restore the collapsed state
+
+#### Scenario: source navigation is presented in expanded metadata
+
+- **WHEN** the continuation metadata row is expanded and its source navigation is available
+- **THEN** the navigation action MUST render as an icon without visible text, border, or resting background
+- **AND** it MUST preserve an accessible name, tooltip, keyboard activation, and a visible hover or focus state
