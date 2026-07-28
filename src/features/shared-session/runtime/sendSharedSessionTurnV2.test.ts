@@ -16,24 +16,32 @@ const {
   setSharedSessionSelectedEngine,
   sendSharedSessionMessage,
   sharedSessionV2BeginTurn,
+  sharedSessionV2PrepareContext,
+  sharedSessionV2AcceptTurn,
   sharedSessionV2CommitTurn,
   sharedSessionV2MarkRecovery,
   registerSharedSessionNativeBinding,
   rebindSharedSessionNativeThread,
+  captureSharedRuntimeTerminal,
 } = vi.hoisted(() => ({
   setSharedSessionSelectedEngine: vi.fn(),
   sendSharedSessionMessage: vi.fn(),
   sharedSessionV2BeginTurn: vi.fn(),
+  sharedSessionV2PrepareContext: vi.fn(),
+  sharedSessionV2AcceptTurn: vi.fn(),
   sharedSessionV2CommitTurn: vi.fn(),
   sharedSessionV2MarkRecovery: vi.fn(),
   registerSharedSessionNativeBinding: vi.fn(),
   rebindSharedSessionNativeThread: vi.fn(),
+  captureSharedRuntimeTerminal: vi.fn(),
 }));
 
 vi.mock("../services/sharedSessions", () => ({
   setSharedSessionSelectedEngine,
   sendSharedSessionMessage,
   sharedSessionV2BeginTurn,
+  sharedSessionV2PrepareContext,
+  sharedSessionV2AcceptTurn,
   sharedSessionV2CommitTurn,
   sharedSessionV2MarkRecovery,
 }));
@@ -43,6 +51,10 @@ vi.mock("./sharedSessionBridge", () => ({
   rebindSharedSessionNativeThread,
 }));
 
+vi.mock("./sharedRuntimeTerminal", () => ({
+  captureSharedRuntimeTerminal,
+}));
+
 import {
   getSharedTargetState,
   resetSharedTargetStoreForTests,
@@ -50,7 +62,10 @@ import {
 import type { ExecutionTarget } from "../target/types";
 import { sendSharedSessionTurnRouted } from "./sendSharedSessionTurn";
 import { sendSharedSessionTurnV2 } from "./sendSharedSessionTurnV2";
-import { getSharedSendState } from "./sharedSendStateStore";
+import {
+  getSharedSendState,
+  resolveSharedDegradedContextDecision,
+} from "./sharedSendStateStore";
 import { setSharedV2SendOverride } from "./sharedV2SendFlag";
 
 const BASE_INPUT = {
@@ -85,12 +100,35 @@ describe("sendSharedSessionTurnRouted（flag 路由）", () => {
     resetSharedTargetStoreForTests();
     window.localStorage.clear();
     setSharedSessionSelectedEngine.mockResolvedValue({ nativeThreadId: "" });
-    sendSharedSessionMessage.mockResolvedValue({ nativeThreadId: "claude:session-1" });
+    sharedSessionV2PrepareContext.mockResolvedValue({
+      status: "ready",
+      mode: "delta-sync",
+      omissions: [],
+    });
+    sendSharedSessionMessage.mockResolvedValue({
+      nativeThreadId: "claude:session-1",
+      delivery: {
+        promptAcceptance: "accepted",
+        terminal: { type: "run.settled", outcome: "completed" },
+      },
+    });
     mockBeginCreating();
+    sharedSessionV2AcceptTurn.mockResolvedValue({
+      status: "accepted",
+      attemptId: "attempt-1",
+    });
     sharedSessionV2CommitTurn.mockResolvedValue({
       status: "committed",
       duplicate: false,
       bindingKey: "claude:profile-1",
+    });
+    captureSharedRuntimeTerminal.mockReturnValue({
+      waitFor: vi.fn().mockResolvedValue({
+        type: "run.settled",
+        outcome: "completed",
+        assistantText: "terminal text",
+      }),
+      dispose: vi.fn(),
     });
   });
 
@@ -104,7 +142,7 @@ describe("sendSharedSessionTurnRouted（flag 路由）", () => {
     expect(sendSharedSessionMessage).toHaveBeenCalledTimes(1);
     expect(sharedSessionV2BeginTurn).not.toHaveBeenCalled();
     expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
-    expect(response).toEqual({ nativeThreadId: "claude:session-1" });
+    expect(response).toMatchObject({ nativeThreadId: "claude:session-1" });
   });
 
   it("flag 开启且缺 target：用 engine/model/effort 构造默认 target 走 V2", async () => {
@@ -133,11 +171,24 @@ describe("sendSharedSessionTurnV2", () => {
     resetSharedTargetStoreForTests();
     window.localStorage.clear();
     setSharedSessionSelectedEngine.mockResolvedValue({ nativeThreadId: "" });
+    sharedSessionV2PrepareContext.mockResolvedValue({
+      status: "ready",
+      mode: "delta-sync",
+      omissions: [],
+    });
     sendSharedSessionMessage.mockResolvedValue({
       nativeThreadId: "claude:session-1",
       assistantText: "world",
+      delivery: {
+        promptAcceptance: "accepted",
+        terminal: { type: "run.settled", outcome: "completed" },
+      },
     });
     mockBeginCreating();
+    sharedSessionV2AcceptTurn.mockResolvedValue({
+      status: "accepted",
+      attemptId: "attempt-1",
+    });
     sharedSessionV2CommitTurn.mockResolvedValue({
       status: "committed",
       duplicate: false,
@@ -174,6 +225,18 @@ describe("sendSharedSessionTurnV2", () => {
       outcome: { status: "completed" },
       nativeSessionId: "claude:session-1",
     });
+    expect(sharedSessionV2AcceptTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      {
+        attemptId: "attempt-1",
+        logicalTurnId: "turn-1",
+        target: expect.objectContaining({
+          providerProfileId: "profile-1",
+        }),
+        nativeSessionId: "claude:session-1",
+      },
+    );
     expect(sharedSessionV2MarkRecovery).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       nativeThreadId: "claude:session-1",
@@ -187,6 +250,82 @@ describe("sendSharedSessionTurnV2", () => {
     });
     // endTurn 兜底：active 快照已清除。
     expect(getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget).toBeNull();
+  });
+
+  it("lossy context waits for explicit confirmation before Tx1 and runtime send", async () => {
+    sharedSessionV2PrepareContext.mockResolvedValue({
+      status: "degraded",
+      mode: "delta-sync",
+      omissions: ["2 older turns omitted"],
+    });
+
+    const pending = sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET });
+    await vi.waitFor(() => {
+      expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe(
+        "degraded-context",
+      );
+    });
+    expect(sharedSessionV2BeginTurn).not.toHaveBeenCalled();
+    expect(sendSharedSessionMessage).not.toHaveBeenCalled();
+
+    expect(
+      resolveSharedDegradedContextDecision(
+        "ws-1",
+        "shared:thread-1",
+        true,
+      ),
+    ).toBe(true);
+    await pending;
+    expect(sharedSessionV2BeginTurn).toHaveBeenCalledTimes(1);
+    expect(sendSharedSessionMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("prepare_context 失败时安全回 idle", async () => {
+    const prepareError = new Error("snapshot unavailable");
+    sharedSessionV2PrepareContext.mockRejectedValue(prepareError);
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).rejects.toBe(prepareError);
+
+    expect(sharedSessionV2BeginTurn).not.toHaveBeenCalled();
+    expect(sendSharedSessionMessage).not.toHaveBeenCalled();
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("idle");
+  });
+
+  it("begin_turn RPC 失败时进入 recovery-required，禁止盲目重发", async () => {
+    const beginError = new Error("Tx1 response lost");
+    sharedSessionV2BeginTurn.mockRejectedValue(beginError);
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).rejects.toBe(beginError);
+
+    expect(sendSharedSessionMessage).not.toHaveBeenCalled();
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe(
+      "recovery-required",
+    );
+  });
+
+  it("begin_turn creating 缺少 identity 时落 recovery 并锁住会话", async () => {
+    sharedSessionV2BeginTurn.mockResolvedValue({
+      status: "creating",
+      bindingKey: "claude:profile-1",
+    });
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).rejects.toThrow("缺少 attemptId/logicalTurnId");
+
+    expect(sendSharedSessionMessage).not.toHaveBeenCalled();
+    expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      expect.objectContaining({ reason: "begin-turn-contract-violation" }),
+    );
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe(
+      "recovery-required",
+    );
   });
 
   it("begin 返回 recovery-required：不发送、不 commit，直接早退", async () => {
@@ -249,6 +388,86 @@ describe("sendSharedSessionTurnV2", () => {
       "recovery-required",
     );
     expect(getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget).toBeNull();
+  });
+
+  it("missing typed prompt ACK enters recovery without accepting or committing", async () => {
+    sendSharedSessionMessage.mockResolvedValue({
+      nativeThreadId: "claude:session-1",
+      delivery: {
+        terminal: { type: "run.settled", outcome: "completed" },
+      },
+    });
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).rejects.toThrow("typed prompt ACK");
+
+    expect(sharedSessionV2AcceptTurn).not.toHaveBeenCalled();
+    expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
+    expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      expect.objectContaining({ reason: "typed-prompt-ack-missing" }),
+    );
+  });
+
+  it("missing run.settled preserves accepted evidence and enters recovery", async () => {
+    sendSharedSessionMessage.mockResolvedValue({
+      nativeThreadId: "claude:session-1",
+      delivery: { promptAcceptance: "accepted" },
+    });
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).rejects.toThrow("run.settled");
+
+    expect(sharedSessionV2AcceptTurn).toHaveBeenCalledTimes(1);
+    expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
+    expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      expect.objectContaining({ reason: "run-settled-missing" }),
+    );
+  });
+
+  it("Codex waits for the owned realtime terminal before committing", async () => {
+    sendSharedSessionMessage.mockResolvedValue({
+      nativeThreadId: "codex-native-1",
+      turn: { id: "runtime-turn-1" },
+      delivery: { promptAcceptance: "accepted" },
+    });
+    const waitFor = vi.fn().mockResolvedValue({
+      type: "run.settled",
+      outcome: "completed",
+      assistantText: "terminal text",
+    });
+    captureSharedRuntimeTerminal.mockReturnValue({
+      waitFor,
+      dispose: vi.fn(),
+    });
+
+    await sendSharedSessionTurnV2({
+      ...BASE_INPUT,
+      engine: "codex",
+      target: {
+        engine: "codex",
+        providerProfileId: "profile-1",
+        model: "gpt-5",
+      },
+    });
+
+    expect(waitFor).toHaveBeenCalledWith({
+      nativeThreadId: "codex-native-1",
+      runtimeTurnId: "runtime-turn-1",
+    });
+    expect(sharedSessionV2CommitTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      expect.objectContaining({
+        assistantText: "terminal text",
+        outcome: { status: "completed" },
+      }),
+    );
   });
 
   it("发送错误的 recovery 落盘失败时仍保留 recovery UI 并抛原错误", async () => {

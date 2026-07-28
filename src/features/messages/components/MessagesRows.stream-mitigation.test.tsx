@@ -71,6 +71,32 @@ describe("MessagesRows stream mitigation", () => {
     cleanup();
   });
 
+  it("renders the immutable Shared turn target snapshot as a badge", () => {
+    render(
+      <MessageRow
+        item={{
+          id: "shared-assistant-1",
+          kind: "message",
+          role: "assistant",
+          text: "answer",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileId: "openrouter",
+            providerProfileNameSnapshot: "OpenRouter",
+            model: "claude-sonnet-4-5",
+            reasoning: { effort: "high" },
+          },
+        }}
+      />,
+    );
+
+    const badge = screen.getByTestId("message-turn-target-badge");
+    expect(badge.textContent).toContain("claude");
+    expect(badge.textContent).toContain("OpenRouter");
+    expect(badge.textContent).toContain("claude-sonnet-4-5");
+    expect(badge.textContent).toContain("high");
+  });
+
   it("rerenders a memoized row when browser context attachment changes", () => {
     const baseItem = {
       id: "user-browser-attachment",

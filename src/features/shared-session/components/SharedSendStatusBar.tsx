@@ -23,15 +23,17 @@ import {
   sharedSessionV2RebuildBinding,
   sharedSessionV2TurnState,
 } from "../services/sharedSessions";
-import { canCancel } from "../target/sendStateMachine";
+import {
+  canCancel,
+  sharedAdapterCapabilities,
+} from "../target/sendStateMachine";
+import { useSharedTargetState } from "../target/targetStore";
 import {
   dispatchSharedSendEvent,
+  resolveSharedDegradedContextDecision,
   useSharedSendState,
 } from "../runtime/sharedSendStateStore";
 import { isSharedV2SendEnabled } from "../runtime/sharedV2SendFlag";
-
-/** 当前没有 Adapter 实现 cancelPendingDelivery；出现实现前保持 false。 */
-const SUPPORTS_CANCEL_PENDING_DELIVERY = false;
 
 type SharedSendStatusBarProps = {
   workspaceId: string | null;
@@ -65,6 +67,11 @@ export function SharedSendStatusBar({
 }: SharedSendStatusBarProps) {
   const { t } = useTranslation();
   const entry = useSharedSendState(workspaceId ?? "", threadId ?? "");
+  const targetState = useSharedTargetState(workspaceId ?? "", threadId ?? "");
+  const adapterCapabilities = sharedAdapterCapabilities(
+    targetState.activeTurnTarget?.engine ??
+      targetState.selectedNextTarget?.engine,
+  );
   const [recoveryWork, setRecoveryWork] = useState<RecoveryWorkState>("idle");
 
   const findRecoveryBindingKey = useCallback(async (): Promise<string | null> => {
@@ -107,8 +114,18 @@ export function SharedSendStatusBar({
       const hasAcceptedInFlight = (evidence.inFlightAttempts ?? []).some(
         (attempt) => attempt.accepted,
       );
-      if (hasAcceptedInFlight) {
-        // fail closed：存在已接受未落账 Attempt，保持锁定等待迟到 ACK。
+      const nativeProbeStatus = evidence.nativeProbe?.status ?? "unknown";
+      if (hasAcceptedInFlight && nativeProbeStatus === "matched") {
+        dispatchSharedSendEvent(workspaceId, threadId, { type: "probeActiveRun" });
+        setRecoveryWork("cleared");
+        return;
+      }
+      if (
+        hasAcceptedInFlight ||
+        nativeProbeStatus === "matched" ||
+        nativeProbeStatus === "runtime-unhealthy"
+      ) {
+        // runtime 仍持有 identity 或 durable ACK 已存在，不能把 Attempt 当成未投递。
         setRecoveryWork("held");
         return;
       }
@@ -185,20 +202,45 @@ export function SharedSendStatusBar({
             <strong>{t("sharedSend.degradedTitle")}</strong>
             {" · "}
             {t("sharedSend.degradedHint")}
-            {degradedInfo?.reason ? ` (${degradedInfo.reason})` : ""}
+            {degradedInfo?.mode ? ` [${degradedInfo.mode}]` : ""}
+            {degradedInfo?.omissions?.length
+              ? ` (${degradedInfo.omissions.join("; ")})`
+              : degradedInfo?.reason
+                ? ` (${degradedInfo.reason})`
+                : ""}
           </span>
           <span className="shared-send-status__actions">
             <button
               type="button"
               className="shared-send-status__button"
-              onClick={() => dispatch({ type: "degradedConfirmed" })}
+              onClick={() => {
+                if (
+                  !resolveSharedDegradedContextDecision(
+                    workspaceId,
+                    threadId,
+                    true,
+                  )
+                ) {
+                  dispatch({ type: "degradedConfirmed" });
+                }
+              }}
             >
               {t("sharedSend.degradedConfirm")}
             </button>
             <button
               type="button"
               className="shared-send-status__button"
-              onClick={() => dispatch({ type: "commitCancelled" })}
+              onClick={() => {
+                if (
+                  !resolveSharedDegradedContextDecision(
+                    workspaceId,
+                    threadId,
+                    false,
+                  )
+                ) {
+                  dispatch({ type: "commitCancelled" });
+                }
+              }}
             >
               {t("sharedSend.cancel")}
             </button>
@@ -215,7 +257,9 @@ export function SharedSendStatusBar({
             <button
               type="button"
               className="shared-send-status__button"
-              disabled={!canCancel(state, SUPPORTS_CANCEL_PENDING_DELIVERY)}
+              disabled={
+                !canCancel(state, adapterCapabilities.cancelPendingDelivery)
+              }
               title={t("sharedSend.cancelUnsupported")}
               onClick={() => dispatch({ type: "cancelRequested" })}
             >

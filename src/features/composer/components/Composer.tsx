@@ -31,6 +31,7 @@ import type {
   ReviewPromptStep,
 } from "../../threads/hooks/useReviewPrompt";
 import type { EngineDisplayInfo } from "../../engine/hooks/useEngineController";
+import { selectNextTarget } from "../../shared-session/target/targetStore";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
@@ -632,6 +633,30 @@ function ComposerImpl({
   // 草稿值直接订阅模块级 store(而非经 app-shell 根 prop 灌入):按键写 store 时
   // 只有 Composer 自身重渲染,不再把整个 app-shell 拖下水。
   const draftText = useComposerDraft(activeThreadId);
+  useEffect(() => {
+    if (
+      !isSharedSession ||
+      !activeWorkspaceId ||
+      !activeThreadId ||
+      (selectedEngine !== "claude" && selectedEngine !== "codex")
+    ) {
+      return;
+    }
+    selectNextTarget(activeWorkspaceId, activeThreadId, {
+      engine: selectedEngine,
+      providerProfileId: providerProfileId ?? null,
+      model: selectedModelId ?? null,
+      reasoning: selectedEffort ? { effort: selectedEffort } : null,
+    });
+  }, [
+    activeThreadId,
+    activeWorkspaceId,
+    isSharedSession,
+    providerProfileId,
+    selectedEffort,
+    selectedEngine,
+    selectedModelId,
+  ]);
   const [text, setText] = useState(draftText);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
   const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);

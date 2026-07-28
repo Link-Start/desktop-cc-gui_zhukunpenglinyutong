@@ -12,9 +12,14 @@ import {
   createCodeAnnotationSelection,
 } from "../../code-annotations/utils/codeAnnotations";
 import { Composer } from "./Composer";
+import {
+  getSharedTargetState,
+  resetSharedTargetStoreForTests,
+} from "../../shared-session/target/targetStore";
 
 afterEach(() => {
   cleanup();
+  resetSharedTargetStoreForTests();
 });
 
 vi.mock("../../../services/dragDrop", () => ({
@@ -59,10 +64,16 @@ function ComposerHarness({
   onSend,
   pendingCodeAnnotation = null,
   onCodeAnnotationConsumed,
+  sharedTarget,
 }: {
   onSend: (text: string) => void;
   pendingCodeAnnotation?: CodeAnnotationDraftInput | null;
   onCodeAnnotationConsumed?: (dedupeKey: string) => void;
+  sharedTarget?: {
+    providerProfileId: string;
+    model: string;
+    effort: string;
+  };
 }) {
   const [selectedCodeAnnotations, setSelectedCodeAnnotations] = useState<CodeAnnotationSelection[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -110,11 +121,13 @@ function ComposerHarness({
       selectedCollaborationModeId={null}
       onSelectCollaborationMode={() => {}}
       selectedEngine="claude"
+      isSharedSession={Boolean(sharedTarget)}
+      providerProfileId={sharedTarget?.providerProfileId ?? null}
       models={[]}
-      selectedModelId={null}
+      selectedModelId={sharedTarget?.model ?? null}
       onSelectModel={() => {}}
       reasoningOptions={[]}
-      selectedEffort={null}
+      selectedEffort={sharedTarget?.effort ?? null}
       onSelectEffort={() => {}}
       reasoningSupported={false}
       accessMode="current"
@@ -146,6 +159,26 @@ function getTextarea(container: HTMLElement) {
 }
 
 describe("Composer file reference token", () => {
+  it("writes every visible Shared picker level to selectedNextTarget", () => {
+    render(
+      <ComposerHarness
+        onSend={() => {}}
+        sharedTarget={{
+          providerProfileId: "openrouter",
+          model: "claude-sonnet-4-5",
+          effort: "high",
+        }}
+      />,
+    );
+
+    expect(getSharedTargetState("ws-1", "thread-1").selectedNextTarget).toEqual({
+      engine: "claude",
+      providerProfileId: "openrouter",
+      model: "claude-sonnet-4-5",
+      reasoning: { effort: "high" },
+    });
+  });
+
   it("converts visual file tokens to absolute paths before send", async () => {
     const onSend = vi.fn();
     const view = render(<ComposerHarness onSend={onSend} />);

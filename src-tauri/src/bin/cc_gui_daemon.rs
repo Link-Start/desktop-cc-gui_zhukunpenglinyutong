@@ -1773,8 +1773,9 @@ async fn handle_rpc_request(
             let engine = parse_optional_string(&params, "engine")
                 .as_deref()
                 .and_then(|value| parse_engine_type_string(Some(value)));
+            let provider_profile_id = parse_optional_string(&params, "providerProfileId");
             state
-                .engine_interrupt_turn(workspace_id, turn_id, engine)
+                .engine_interrupt_turn(workspace_id, turn_id, engine, provider_profile_id)
                 .await?;
             Ok(json!({ "ok": true }))
         }

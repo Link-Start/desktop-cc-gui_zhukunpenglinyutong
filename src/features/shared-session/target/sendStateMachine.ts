@@ -150,6 +150,19 @@ export function canCancel(
   return state === "awaiting-acceptance" && supportsCancelPendingDelivery;
 }
 
+export function sharedAdapterCapabilities(
+  engine: string | null | undefined,
+): { cancelPendingDelivery: boolean } {
+  switch (engine) {
+    // 当前两条 Shared adapter 都通过阻塞式 request/response bridge 投递，
+    // runtime 尚未暴露“ACK 前撤销指定 delivery”的 identity。
+    case "claude":
+    case "codex":
+    default:
+      return { cancelPendingDelivery: false };
+  }
+}
+
 /** ambiguous 期间禁止“一键重发”。 */
 export function canRetry(state: SharedSendState): boolean {
   return state === "idle" || state === "target-unavailable";

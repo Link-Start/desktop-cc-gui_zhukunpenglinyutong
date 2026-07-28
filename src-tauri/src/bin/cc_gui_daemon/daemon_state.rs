@@ -2347,18 +2347,34 @@ impl DaemonState {
         workspace_id: String,
         turn_id: String,
         engine: Option<engine::EngineType>,
+        provider_profile_id: Option<String>,
     ) -> Result<(), String> {
         self.sync_engine_configs().await;
         let active_engine = self.get_active_engine().await;
         let target_engine = engine.unwrap_or(active_engine);
         match target_engine {
             engine::EngineType::Claude => {
-                if let Some(session) = self
-                    .engine_manager
-                    .claude_manager
-                    .session_for_turn(&workspace_id, &turn_id)
-                    .await
-                {
+                let provider_profile_id = provider_profile_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty());
+                let session = if provider_profile_id.is_some() {
+                    let provider_session = self
+                        .engine_manager
+                        .claude_manager
+                        .get_session_for_provider(&workspace_id, provider_profile_id)
+                        .await;
+                    match provider_session {
+                        Some(session) if session.has_active_turn(&turn_id).await => Some(session),
+                        _ => None,
+                    }
+                } else {
+                    self.engine_manager
+                        .claude_manager
+                        .session_for_turn(&workspace_id, &turn_id)
+                        .await
+                };
+                if let Some(session) = session {
                     session.interrupt_turn(&turn_id).await?;
                 }
                 Ok(())

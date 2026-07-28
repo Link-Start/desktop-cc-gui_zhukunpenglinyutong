@@ -11,16 +11,19 @@
 
 mod common;
 
-use cc_gui_lib::shared_event_log::{
-    open, OpenOutcome, SharedEventWriter, StoreError,
-};
+use std::io::{BufRead, BufReader, Write};
+use std::process::{Command, Stdio};
+use std::time::Duration;
+
+use cc_gui_lib::shared_event_log::{open, OpenOutcome, SharedEventWriter, StoreError};
 use cc_gui_lib::shared_session_v2::{
-    begin_turn_core, commit_turn_core, rebuild_binding_core, BeginTurnStatus,
+    accept_turn_core, begin_turn_core, commit_turn_core, rebuild_binding_core, BeginTurnStatus,
     CommitOutcomeInput, EngineType, ExecutionTargetInput,
 };
 use common::TempStoreDir;
 
 const SESSION: &str = "v2-session-a";
+const V2_VICTIM_DB_ENV: &str = "MOSSX_SHARED_V2_VICTIM_DB";
 
 fn open_writer(path: &std::path::Path) -> Result<SharedEventWriter, StoreError> {
     match open(path)? {
@@ -71,6 +74,39 @@ fn fact_types(writer: &SharedEventWriter) -> Vec<String> {
         .collect()
 }
 
+#[test]
+fn v2_provisioning_victim() {
+    let Ok(db_path) = std::env::var(V2_VICTIM_DB_ENV) else {
+        return;
+    };
+    let writer = open_writer(std::path::Path::new(&db_path)).expect("victim writer");
+    begin_turn_core(&writer, SESSION, &claude_target(None), "victim".to_string())
+        .expect("victim begin");
+    println!("ready:creating");
+    std::io::stdout().flush().expect("flush victim signal");
+    loop {
+        std::thread::sleep(Duration::from_secs(3600));
+    }
+}
+
+fn accept(
+    writer: &SharedEventWriter,
+    target: &ExecutionTargetInput,
+    attempt_id: &str,
+    logical_turn_id: &str,
+    native_session_id: &str,
+) {
+    accept_turn_core(
+        writer,
+        SESSION,
+        attempt_id,
+        logical_turn_id,
+        target,
+        native_session_id,
+    )
+    .expect("accept");
+}
+
 /// 3.8(a)：begin → commit 全链路，Tx1/Tx2 fact 顺序与 cursor 推进正确。
 #[test]
 fn begin_then_commit_writes_requested_and_committed_and_advances_cursor() {
@@ -99,6 +135,13 @@ fn begin_then_commit_writes_requested_and_committed_and_advances_cursor() {
         Some("creating")
     );
 
+    accept(
+        &writer,
+        &target,
+        &attempt_id,
+        &logical_turn_id,
+        "native-thread-1",
+    );
     // Tx2：settled 后 commit，provisioning → ready，committed cursor 推进。
     let commit = commit_turn_core(
         &writer,
@@ -133,12 +176,14 @@ fn begin_then_commit_writes_requested_and_committed_and_advances_cursor() {
         Some("ready")
     );
 
-    let committed_payload: serde_json::Value = serde_json::from_str(
-        &writer.events_for_session(SESSION).expect("events")[2].payload_json,
-    )
-    .expect("committed payload");
+    let committed_payload: serde_json::Value =
+        serde_json::from_str(&writer.events_for_session(SESSION).expect("events")[2].payload_json)
+            .expect("committed payload");
     assert_eq!(committed_payload["outcome"]["status"], "completed");
-    assert_eq!(committed_payload["target"]["providerProfileId"], "openrouter");
+    assert_eq!(
+        committed_payload["target"]["providerProfileId"],
+        "openrouter"
+    );
 }
 
 /// 3.8(b)：duplicate settled → 幂等，不产生第二条 turnCommitted。
@@ -152,6 +197,7 @@ fn duplicate_commit_is_idempotent() {
     assert_eq!(begin.binding_key, "claude:default");
     let attempt_id = begin.attempt_id.clone().expect("attempt id");
     let logical_turn_id = begin.logical_turn_id.clone().expect("logical turn id");
+    accept(&writer, &target, &attempt_id, &logical_turn_id, "native-1");
 
     let first = commit_turn_core(
         &writer,
@@ -196,6 +242,31 @@ fn duplicate_commit_is_idempotent() {
     );
 }
 
+#[test]
+fn settled_before_typed_acceptance_is_rejected() {
+    let store = TempStoreDir::new("v2-settled-before-accept");
+    let writer = open_writer(&store.db_path).expect("open writer");
+    let target = claude_target(None);
+    let begin = begin_turn_core(&writer, SESSION, &target, "hello".to_string()).expect("begin");
+    let result = commit_turn_core(
+        &writer,
+        SESSION,
+        begin.attempt_id.as_deref().expect("attempt"),
+        begin.logical_turn_id.as_deref().expect("turn"),
+        &target,
+        Some("answer".to_string()),
+        &completed_outcome(),
+        Some("native-1".to_string()),
+    );
+
+    assert!(result
+        .expect_err("settled without ACK must fail")
+        .contains("before typed prompt ACK"));
+    assert!(!fact_types(&writer)
+        .iter()
+        .any(|fact_type| fact_type == "conversation.turnCommitted"));
+}
+
 /// 3.8(b')：同一 attempt 但语义不同的 retry 是真冲突，必须 fail loud（禁止伪装成重放）。
 #[test]
 fn conflicting_retry_for_same_attempt_fails_loud() {
@@ -206,6 +277,7 @@ fn conflicting_retry_for_same_attempt_fails_loud() {
     let begin = begin_turn_core(&writer, SESSION, &target, "hello".to_string()).expect("begin");
     let attempt_id = begin.attempt_id.clone().expect("attempt id");
     let logical_turn_id = begin.logical_turn_id.clone().expect("logical turn id");
+    accept(&writer, &target, &attempt_id, &logical_turn_id, "native-1");
 
     commit_turn_core(
         &writer,
@@ -235,6 +307,34 @@ fn conflicting_retry_for_same_attempt_fails_loud() {
         .contains("semantic conflict"));
 }
 
+#[test]
+fn acceptance_rejects_a_target_different_from_requested_snapshot() {
+    let store = TempStoreDir::new("v2-accept-owner-mismatch");
+    let writer = open_writer(&store.db_path).expect("open writer");
+    let requested_target = claude_target(None);
+    let begin =
+        begin_turn_core(&writer, SESSION, &requested_target, "hello".to_string()).expect("begin");
+
+    let error = accept_turn_core(
+        &writer,
+        SESSION,
+        begin.attempt_id.as_deref().expect("attempt id"),
+        begin.logical_turn_id.as_deref().expect("logical turn id"),
+        &claude_target(Some("openrouter")),
+        "native-wrong-owner",
+    )
+    .expect_err("owner mismatch must fail");
+
+    assert!(error.contains("owner mismatch"));
+    assert_eq!(
+        fact_types(&writer)
+            .iter()
+            .filter(|fact_type| fact_type.as_str() == "conversation.turnAccepted")
+            .count(),
+        0
+    );
+}
+
 /// 4.4 故障注入：attempt 停在 creating 窗口（模拟崩溃），再次 begin 必须 fail closed。
 #[test]
 fn begin_on_creating_window_fails_closed_without_blind_rebuild() {
@@ -254,11 +354,17 @@ fn begin_on_creating_window_fails_closed_without_blind_rebuild() {
     // 无第二条 turnRequested；有 recovery controlFact；provisioning 落为 recovery-required。
     let types = fact_types(&writer);
     assert_eq!(
-        types.iter().filter(|t| t.as_str() == "conversation.turnRequested").count(),
+        types
+            .iter()
+            .filter(|t| t.as_str() == "conversation.turnRequested")
+            .count(),
         1
     );
     assert_eq!(
-        types.iter().filter(|t| t.as_str() == "conversation.controlFact").count(),
+        types
+            .iter()
+            .filter(|t| t.as_str() == "conversation.controlFact")
+            .count(),
         1
     );
     assert_eq!(
@@ -267,8 +373,8 @@ fn begin_on_creating_window_fails_closed_without_blind_rebuild() {
     );
 
     // recovery-required 状态下继续 begin 仍然拒绝（禁止盲目重建）。
-    let third = begin_turn_core(&writer, SESSION, &target, "hello third".to_string())
-        .expect("third begin");
+    let third =
+        begin_turn_core(&writer, SESSION, &target, "hello third".to_string()).expect("third begin");
     assert_eq!(third.status, BeginTurnStatus::RecoveryRequired);
     assert_eq!(
         fact_types(&writer)
@@ -276,6 +382,56 @@ fn begin_on_creating_window_fails_closed_without_blind_rebuild() {
             .filter(|t| t.as_str() == "conversation.turnRequested")
             .count(),
         1
+    );
+}
+
+#[test]
+fn process_kill_in_creating_window_never_creates_a_second_binding() {
+    let store = TempStoreDir::new("v2-process-kill");
+    let mut child = Command::new(std::env::current_exe().expect("test binary"))
+        .args([
+            "v2_provisioning_victim",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(V2_VICTIM_DB_ENV, &store.db_path)
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn victim");
+    let stdout = child.stdout.take().expect("victim stdout");
+    let ready = BufReader::new(stdout)
+        .lines()
+        .map_while(Result::ok)
+        .find(|line| line.contains("ready:creating"))
+        .expect("victim creating signal");
+    assert!(ready.contains("ready:creating"));
+    child.kill().expect("kill victim");
+    child.wait().expect("reap victim");
+
+    let writer = open_writer(&store.db_path).expect("reopen after kill");
+    let result = begin_turn_core(
+        &writer,
+        SESSION,
+        &claude_target(None),
+        "must-not-redeliver".to_string(),
+    )
+    .expect("probe begin");
+    assert_eq!(result.status, BeginTurnStatus::RecoveryRequired);
+    assert_eq!(
+        fact_types(&writer)
+            .iter()
+            .filter(|fact_type| fact_type.as_str() == "conversation.turnRequested")
+            .count(),
+        1
+    );
+    assert_eq!(
+        writer
+            .binding_state(SESSION, "claude:default")
+            .expect("binding")
+            .expect("binding exists")
+            .provider_profile_id,
+        None
     );
 }
 
@@ -289,6 +445,13 @@ fn explicit_rebuild_archives_native_identity_and_allows_new_begin() {
     let begin = begin_turn_core(&writer, SESSION, &target, "hello".to_string()).expect("begin");
     let attempt_id = begin.attempt_id.clone().expect("attempt id");
     let logical_turn_id = begin.logical_turn_id.clone().expect("logical turn id");
+    accept(
+        &writer,
+        &target,
+        &attempt_id,
+        &logical_turn_id,
+        "native-old",
+    );
     commit_turn_core(
         &writer,
         SESSION,
@@ -354,7 +517,10 @@ fn unsupported_engine_returns_target_unavailable_without_side_effects() {
     let begin = begin_turn_core(&writer, SESSION, &target, "hello".to_string()).expect("begin");
     assert_eq!(begin.status, BeginTurnStatus::TargetUnavailable);
     assert!(begin.reason.is_some());
-    assert!(writer.events_for_session(SESSION).expect("events").is_empty());
+    assert!(writer
+        .events_for_session(SESSION)
+        .expect("events")
+        .is_empty());
 }
 
 /// 3.7：V0 快照路径并行保留——默认 provider binding key 与 V0 `engine` 键一致（`claude:default`），
@@ -384,7 +550,10 @@ fn default_and_managed_provider_bindings_do_not_cross_wire() {
         .expect("managed row")
         .expect("managed row exists");
     assert_eq!(default_row.provider_profile_id, None);
-    assert_eq!(managed_row.provider_profile_id.as_deref(), Some("openrouter"));
+    assert_eq!(
+        managed_row.provider_profile_id.as_deref(),
+        Some("openrouter")
+    );
 
     // 两条 binding 各有独立 provisioning 状态。
     assert_eq!(

@@ -45,9 +45,11 @@ src/features/shared-session/
   target/
     types.ts              // ExecutionTarget / TurnExecutionSnapshot TS 类型（与 Rust 对齐）
     targetStore.ts        // selectedNextTarget / activeTurnTarget 分离
-    targetPicker.tsx      // 四级 Picker（CLI→Provider→Model→Reasoning）
     bindingsByTarget.ts   // bindingsByEngine → bindingsByTarget 迁移 + 读写
     sendStateMachine.ts   // §14.5.2 九状态机（纯函数 transition + selector）
+  runtime/
+    sharedRuntimeTerminal.ts // Codex terminal 旁路观察；按 native owner 精确匹配
+src/features/composer/components/Composer.tsx // 复用现有四级 Picker，不新建重复组件
 src-tauri/src/
   shared_sessions.rs      // Send V2：Tx1 turnRequested+snapshot → provisioning → runtime → settled → turnCommitted
   shared_event_log/       // 复用 writer/assembler/sink；新增 provisioning 状态读写
@@ -62,8 +64,8 @@ src-tauri/src/
 3. Tx1：Commit conversation.turnRequested（User Intent durable）
 4. 查 bindingsByTarget；缺失 → Commit provisioning(prepared) → 创建 Native Session
 5. Identity ACK → binding ready；ACK 不确定 → recovery-required（禁盲建）
-6. bounded delta 上下文 + prompt 发送；turnAccepted 记录
-7. run.settled → assembler/sink 写 turnCommitted；推进 committed cursor
+6. bounded delta 上下文 + prompt 发送；typed prompt ACK 后记录 turnAccepted
+7. Claude 阻塞 settled / Codex realtime `turn/completed|turn/error` → assembler/sink 写 turnCommitted；推进 committed cursor
 ```
 
 ## Risks / Trade-offs

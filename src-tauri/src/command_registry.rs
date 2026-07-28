@@ -197,6 +197,8 @@ pub(crate) fn invoke_handler(
         crate::shared_sessions::send_shared_session_message,
         crate::shared_sessions::delete_shared_session,
         crate::shared_session_v2::shared_session_v2_begin_turn,
+        crate::shared_session_v2::shared_session_v2_prepare_context,
+        crate::shared_session_v2::shared_session_v2_accept_turn,
         crate::shared_session_v2::shared_session_v2_commit_turn,
         crate::shared_session_v2::shared_session_v2_mark_recovery,
         crate::shared_session_v2::shared_session_v2_rebuild_binding,

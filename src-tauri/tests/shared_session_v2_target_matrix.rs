@@ -12,8 +12,8 @@ mod common;
 
 use cc_gui_lib::shared_event_log::{open, OpenOutcome, SharedEventWriter, StoreError};
 use cc_gui_lib::shared_session_v2::{
-    begin_turn_core, commit_turn_core, BeginTurnStatus, CommitOutcomeInput, EngineType,
-    ExecutionTargetInput,
+    accept_turn_core, begin_turn_core, commit_turn_core, BeginTurnStatus, CommitOutcomeInput,
+    EngineType, ExecutionTargetInput,
 };
 use common::TempStoreDir;
 
@@ -28,11 +28,7 @@ fn open_writer(path: &std::path::Path) -> Result<SharedEventWriter, StoreError> 
     }
 }
 
-fn target(
-    engine: EngineType,
-    provider: Option<&str>,
-    model: &str,
-) -> ExecutionTargetInput {
+fn target(engine: EngineType, provider: Option<&str>, model: &str) -> ExecutionTargetInput {
     ExecutionTargetInput {
         engine,
         provider_profile_id: provider.map(str::to_string),
@@ -84,6 +80,15 @@ fn run_turn(
     assert_eq!(begin.status, BeginTurnStatus::Creating);
     let attempt_id = begin.attempt_id.clone().expect("attempt id");
     let logical_turn_id = begin.logical_turn_id.clone().expect("logical turn id");
+    accept_turn_core(
+        writer,
+        SESSION,
+        &attempt_id,
+        &logical_turn_id,
+        target,
+        native_id,
+    )
+    .expect("accept");
     let commit = commit_turn_core(
         writer,
         SESSION,
@@ -119,7 +124,13 @@ fn target_switch_matrix_reuses_bindings_and_keeps_provenance() {
     let codex_openai = target(EngineType::Codex, Some("openai"), "gpt-5-codex");
 
     // Phase 1：Claude/Official。
-    let key1 = run_turn(&writer, &claude_official, "turn-1", &completed(), "claude-native-1");
+    let key1 = run_turn(
+        &writer,
+        &claude_official,
+        "turn-1",
+        &completed(),
+        "claude-native-1",
+    );
     assert_eq!(key1, "claude:default");
 
     // Phase 2：Claude/OpenRouter（新建 Hidden Binding，不动 default）。
@@ -135,24 +146,42 @@ fn target_switch_matrix_reuses_bindings_and_keeps_provenance() {
         .binding_state(SESSION, "claude:default")
         .expect("default row")
         .expect("default row exists");
-    assert_eq!(default_row.native_session_id.as_deref(), Some("claude-native-1"));
+    assert_eq!(
+        default_row.native_session_id.as_deref(),
+        Some("claude-native-1")
+    );
     assert_eq!(
         provisioning_state(&writer, "claude:default").as_deref(),
         Some("ready")
     );
 
     // Phase 3：Codex/OpenAI（第三条 Hidden Binding）。
-    let key3 = run_turn(&writer, &codex_openai, "turn-3", &completed(), "codex-native-1");
+    let key3 = run_turn(
+        &writer,
+        &codex_openai,
+        "turn-3",
+        &completed(),
+        "codex-native-1",
+    );
     assert_eq!(key3, "codex:openai");
 
     // Phase 4：切回 Claude/Official——复用既有 binding，native identity 不丢。
-    let key4 = run_turn(&writer, &claude_official, "turn-4", &completed(), "claude-native-1");
+    let key4 = run_turn(
+        &writer,
+        &claude_official,
+        "turn-4",
+        &completed(),
+        "claude-native-1",
+    );
     assert_eq!(key4, "claude:default");
     let default_row = writer
         .binding_state(SESSION, "claude:default")
         .expect("default row")
         .expect("default row exists");
-    assert_eq!(default_row.native_session_id.as_deref(), Some("claude-native-1"));
+    assert_eq!(
+        default_row.native_session_id.as_deref(),
+        Some("claude-native-1")
+    );
     assert_eq!(
         provisioning_state(&writer, "claude:default").as_deref(),
         Some("ready")
@@ -177,7 +206,10 @@ fn target_switch_matrix_reuses_bindings_and_keeps_provenance() {
         .iter()
         .map(|payload| {
             (
-                payload["target"]["engine"].as_str().expect("engine").to_string(),
+                payload["target"]["engine"]
+                    .as_str()
+                    .expect("engine")
+                    .to_string(),
                 payload["target"]["providerProfileId"]
                     .as_str()
                     .map(str::to_string),
@@ -200,7 +232,13 @@ fn target_switch_matrix_reuses_bindings_and_keeps_provenance() {
     assert_eq!(committed[2]["target"]["engine"], "codex");
 
     // Phase 5：Codex/OpenAI 上一轮失败——只影响自己的 binding，其他 binding 不被污染。
-    let key5 = run_turn(&writer, &codex_openai, "turn-5", &failed(), "codex-native-1");
+    let key5 = run_turn(
+        &writer,
+        &codex_openai,
+        "turn-5",
+        &failed(),
+        "codex-native-1",
+    );
     assert_eq!(key5, "codex:openai");
     // 失败 outcome 同样落 turnCommitted（explicit rejection 入正史），binding 回 ready。
     assert_eq!(
@@ -215,7 +253,7 @@ fn target_switch_matrix_reuses_bindings_and_keeps_provenance() {
         provisioning_state(&writer, "claude:openrouter").as_deref(),
         Some("ready")
     );
-    // 失败轮不写 turnAccepted（保守：无法区分是否已被 native 接受）。
+    // native 已显式接受后，即使最终失败，turnAccepted 仍是不可撤销的正史事实。
     let accepted = payloads(&writer, "conversation.turnAccepted");
-    assert_eq!(accepted.len(), 4);
+    assert_eq!(accepted.len(), 5);
 }

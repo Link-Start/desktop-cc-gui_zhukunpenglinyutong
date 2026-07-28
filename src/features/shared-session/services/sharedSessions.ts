@@ -34,7 +34,7 @@ export async function sendSharedSessionMessage(
     providerProfileId?: string | null;
   },
 ) {
-  return invoke<Record<string, unknown> | null | undefined>("send_shared_session_message", {
+  return invoke<SharedSessionRuntimeDelivery | null | undefined>("send_shared_session_message", {
     workspaceId,
     threadId,
     engine,
@@ -50,6 +50,18 @@ export async function sendSharedSessionMessage(
     providerProfileId: options?.providerProfileId ?? null,
   });
 }
+
+export type SharedSessionRuntimeDelivery = Record<string, unknown> & {
+  nativeThreadId?: string;
+  assistantText?: string;
+  delivery?: {
+    promptAcceptance?: "accepted" | "rejected";
+    terminal?: {
+      type: "run.settled";
+      outcome: "completed" | "failed" | "cancelled";
+    };
+  };
+};
 
 export async function listSharedSessions(workspaceId: string) {
   return invoke<Record<string, unknown>[]>("list_shared_sessions", {
@@ -167,6 +179,12 @@ export type SharedV2BeginTurnResult = {
   reason?: string;
 };
 
+export type SharedV2PrepareContextResult = {
+  status: "ready" | "degraded";
+  mode: string;
+  omissions: string[];
+};
+
 export type SharedV2CommitOutcome = {
   status: "completed" | "failed" | "cancelled";
   errorCode?: string | null;
@@ -179,6 +197,11 @@ export type SharedV2CommitTurnResult = {
   duplicate: boolean;
   sequence?: number | null;
   bindingKey: string;
+};
+
+export type SharedV2AcceptTurnResult = {
+  status: "accepted";
+  attemptId: string;
 };
 
 export type SharedV2MarkRecoveryResult = {
@@ -205,6 +228,16 @@ export type SharedV2ProbeBindingResult = {
   provisioningState?: string | null;
   nativeSessionId?: string | null;
   committedThroughSequence?: number | null;
+  nativeProbe: {
+    status:
+      | "matched"
+      | "mismatch"
+      | "runtime-missing"
+      | "runtime-unhealthy"
+      | "binding-missing"
+      | "unsupported-engine";
+    detail?: string | null;
+  };
   inFlightAttempts: (SharedV2InFlightAttempt & { accepted: boolean })[];
 };
 
@@ -229,6 +262,37 @@ export async function sharedSessionV2BeginTurn(
     threadId,
     target,
     text,
+  });
+}
+
+export async function sharedSessionV2PrepareContext(
+  workspaceId: string,
+  threadId: string,
+  target: SharedV2ExecutionTargetPayload,
+) {
+  return invoke<SharedV2PrepareContextResult>(
+    "shared_session_v2_prepare_context",
+    { workspaceId, threadId, target },
+  );
+}
+
+export async function sharedSessionV2AcceptTurn(
+  workspaceId: string,
+  threadId: string,
+  params: {
+    attemptId: string;
+    logicalTurnId: string;
+    target: SharedV2ExecutionTargetPayload;
+    nativeSessionId: string;
+  },
+) {
+  return invoke<SharedV2AcceptTurnResult>("shared_session_v2_accept_turn", {
+    workspaceId,
+    threadId,
+    attemptId: params.attemptId,
+    logicalTurnId: params.logicalTurnId,
+    target: params.target,
+    nativeSessionId: params.nativeSessionId,
   });
 }
 

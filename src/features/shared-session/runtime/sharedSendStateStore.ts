@@ -21,7 +21,11 @@ import {
 } from "../target/sendStateMachine";
 
 /** degraded-context 的附加上下文（omissions/mode 等，Change C 接入编译层后填充）。 */
-export type SharedSendDegradedInfo = { reason?: string } | null;
+export type SharedSendDegradedInfo = {
+  reason?: string;
+  mode?: string;
+  omissions?: string[];
+} | null;
 
 export type SharedSendStateEntry = {
   state: SharedSendState;
@@ -44,6 +48,7 @@ function storeKeyOf(workspaceId: string, threadId: string): string {
 
 const entries = new Map<string, SharedSendStateEntry>();
 const listeners = new Map<string, Set<Listener>>();
+const degradedDecisions = new Map<string, (confirmed: boolean) => void>();
 
 function readEntry(key: string): SharedSendStateEntry {
   return entries.get(key) ?? IDLE_ENTRY;
@@ -90,6 +95,34 @@ export function getSharedSendState(
   threadId: string,
 ): SharedSendStateEntry {
   return readEntry(storeKeyOf(workspaceId, threadId));
+}
+
+export function waitForSharedDegradedContextDecision(
+  workspaceId: string,
+  threadId: string,
+): Promise<boolean> {
+  const key = storeKeyOf(workspaceId, threadId);
+  if (degradedDecisions.has(key)) {
+    return Promise.reject(new Error("Shared degraded-context decision already pending"));
+  }
+  return new Promise((resolve) => {
+    degradedDecisions.set(key, resolve);
+  });
+}
+
+export function resolveSharedDegradedContextDecision(
+  workspaceId: string,
+  threadId: string,
+  confirmed: boolean,
+): boolean {
+  const key = storeKeyOf(workspaceId, threadId);
+  const resolve = degradedDecisions.get(key);
+  if (!resolve) {
+    return false;
+  }
+  degradedDecisions.delete(key);
+  resolve(confirmed);
+  return true;
 }
 
 function subscribe(
@@ -165,6 +198,8 @@ export function restoreSharedSendStateFromTurnState(
 
 /** 测试专用：清空全部 store 状态。 */
 export function resetSharedSendStateStoreForTests(): void {
+  degradedDecisions.forEach((resolve) => resolve(false));
+  degradedDecisions.clear();
   entries.clear();
   listeners.clear();
 }

@@ -115,6 +115,37 @@ describe("toSharedConversationItems", () => {
     expect(result[0]).toMatchObject({ id: "1:user", kind: "message" });
   });
 
+  it("preserves the immutable execution target snapshot for Turn Badge", () => {
+    const [item] = toSharedConversationItems([
+      makeItem({
+        id: "2:assistant:0",
+        kind: "message",
+        content: {
+          role: "assistant",
+          text: "done",
+          engineSource: "claude",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileId: "openrouter",
+            providerProfileNameSnapshot: "OpenRouter",
+            model: "claude-sonnet-4-5",
+            reasoning: { effort: "high" },
+          },
+        },
+      }),
+    ]);
+
+    expect(item).toMatchObject({
+      executionTargetSnapshot: {
+        engine: "claude",
+        providerProfileId: "openrouter",
+        providerProfileNameSnapshot: "OpenRouter",
+        model: "claude-sonnet-4-5",
+        reasoning: { effort: "high" },
+      },
+    });
+  });
+
   it("non-user role falls back to assistant", () => {
     const result = toSharedConversationItems([
       makeItem({ id: "1:m", kind: "message", content: { role: "system", text: "x" } }),

@@ -25,6 +25,7 @@
 | [File History View Cross-Layer Contract](./file-history-view.md) | file-scoped history、rename-follow、snapshot identity、Desktop/daemon parity 与 stale guard | Active |
 | [Codex Provider Session UI Contract](./codex-provider-session-ui.md) | Codex provider selector、start/fork payload、thread metadata merge、sidebar/pinned/composer provider label contract | Active |
 | [Provider-Scoped Model Catalog Contract](../backend/provider-scoped-model-catalog.md) | Claude/Codex/Kimi provider-bound model lookup、public merge、dedupe 与 stale catalog guard | Active |
+| [Shared Session V2 Execution Target / Send Contract](../backend/shared-session-v2-send-contract.md) | Composer Target、状态机、terminal observation、Projection Badge 与 provider-scoped owner routing | Active |
 | [Hook Guidelines](./hook-guidelines.md) | hook 编排、async safety、bridge 调用约束 | Active |
 | [State Management](./state-management.md) | local/global/persistent/runtime state 边界 | Active |
 | [Workspace Note Context Capture](./workspace-note-context-capture.md) | code/conversation capture、workbench request 与 optional source persistence 的跨层 contract | Active |

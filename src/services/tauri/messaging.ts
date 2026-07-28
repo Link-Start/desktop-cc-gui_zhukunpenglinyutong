@@ -102,11 +102,17 @@ export async function interruptTurn(
   });
 }
 
-export async function engineInterruptTurn(workspaceId: string, turnId: string, engine?: EngineType | null): Promise<void> {
+export async function engineInterruptTurn(
+  workspaceId: string,
+  turnId: string,
+  engine?: EngineType | null,
+  providerProfileId?: string | null,
+): Promise<void> {
   return invoke("engine_interrupt_turn", {
     workspaceId,
     turnId,
     engine: engine ?? null,
+    providerProfileId: providerProfileId ?? null,
   });
 }
 

@@ -2933,6 +2933,7 @@ pub async fn engine_interrupt_turn(
     workspace_id: String,
     turn_id: String,
     engine: Option<EngineType>,
+    provider_profile_id: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
@@ -2945,6 +2946,7 @@ pub async fn engine_interrupt_turn(
                 "workspaceId": workspace_id,
                 "turnId": turn_id,
                 "engine": engine,
+                "providerProfileId": provider_profile_id,
             }),
         )
         .await?;
@@ -2956,11 +2958,26 @@ pub async fn engine_interrupt_turn(
 
     match target_engine {
         EngineType::Claude => {
-            if let Some(session) = manager
-                .claude_manager
-                .session_for_turn(&workspace_id, &turn_id)
-                .await
-            {
+            let provider_profile_id = provider_profile_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let session = if provider_profile_id.is_some() {
+                let provider_session = manager
+                    .claude_manager
+                    .get_session_for_provider(&workspace_id, provider_profile_id)
+                    .await;
+                match provider_session {
+                    Some(session) if session.has_active_turn(&turn_id).await => Some(session),
+                    _ => None,
+                }
+            } else {
+                manager
+                    .claude_manager
+                    .session_for_turn(&workspace_id, &turn_id)
+                    .await
+            };
+            if let Some(session) = session {
                 session.interrupt_turn(&turn_id).await?;
             }
             Ok(())

@@ -5,11 +5,18 @@ import {
   canRetry,
   isComposerLocked,
   isPickerLocked,
+  sharedAdapterCapabilities,
   transition,
   type SharedSendState,
 } from "./sendStateMachine";
 
 describe("SharedSendStateMachine transitions", () => {
+  it("reads cancel-pending support from the concrete adapter capability", () => {
+    expect(sharedAdapterCapabilities("claude").cancelPendingDelivery).toBe(false);
+    expect(sharedAdapterCapabilities("codex").cancelPendingDelivery).toBe(false);
+    expect(canCancel("awaiting-acceptance", false)).toBe(false);
+  });
+
   it("follows the happy path idle → preparing → awaiting → running → settling → idle", () => {
     let state: SharedSendState = "idle";
     state = transition(state, { type: "send" })!;

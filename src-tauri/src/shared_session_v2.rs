@@ -14,6 +14,7 @@
 
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::time::Duration;
 use tauri::State;
 use uuid::Uuid;
 
@@ -30,8 +31,9 @@ use crate::shared_event_log::{
     AppendOutcome, BindingStateUpdate, SharedEventWriter, StoreError, StoredBindingState,
 };
 use crate::shared_sessions::{
-    engine_binding_thread_id, ensure_supported_shared_session_engine, now_millis,
-    parse_shared_session_id, read_shared_session_meta, shared_target_binding_key,
+    engine_binding_thread_id, ensure_supported_shared_session_engine,
+    inspect_shared_context_projection, now_millis, parse_shared_session_id,
+    read_shared_session_meta, shared_binding_synced_sequence, shared_target_binding_key,
     write_shared_session_meta, SharedTargetBindingMeta,
 };
 use crate::state::AppState;
@@ -207,6 +209,37 @@ pub enum BeginTurnStatus {
     TargetUnavailable,
 }
 
+fn validate_execution_target(target: &ExecutionTargetInput) -> Result<EngineType, String> {
+    let engine = ensure_supported_shared_session_engine(target.engine)?;
+    let provider_profile_id = target.normalized_provider();
+    let Some(models) = crate::engine::status::get_provider_scoped_engine_models(
+        engine,
+        provider_profile_id.as_deref(),
+    )?
+    else {
+        return Ok(engine);
+    };
+    let Some(model) = target
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(engine);
+    };
+    if models
+        .iter()
+        .any(|candidate| candidate.id == model || candidate.model == model)
+    {
+        return Ok(engine);
+    }
+    Err(format!(
+        "Model {model} is unavailable for {} provider {}",
+        engine.icon(),
+        provider_profile_id.as_deref().unwrap_or("default")
+    ))
+}
+
 #[derive(Debug)]
 pub struct BeginTurnOutcome {
     pub status: BeginTurnStatus,
@@ -297,6 +330,22 @@ pub fn begin_turn_core(
     let attempt_id = Uuid::new_v4().to_string();
     let logical_turn_id = Uuid::new_v4().to_string();
 
+    // Durable provisioning 的第一阶段。即使进程在后续 Tx1 中间被强杀，
+    // 重启也能识别该 Target 已开始 provisioning，而不是盲建第二个 Binding。
+    upsert_binding_row(
+        writer,
+        session_id,
+        &binding_key,
+        engine,
+        provider_profile_id.clone(),
+        existing.as_ref(),
+        None,
+        None,
+        provisioning_json(PROVISIONING_PREPARED, None, Some(&attempt_id)),
+        "provisioning",
+    )
+    .map_err(|error| error.to_string())?;
+
     // Tx1：User Intent durable-first，先于任何 runtime side effect。
     let fact = CanonicalFact::TurnRequested(TurnRequestedFact {
         logical_turn_id: logical_turn_id.clone(),
@@ -341,6 +390,93 @@ pub fn begin_turn_core(
 }
 
 // ---------------------------------------------------------------------------
+// B.3 core：typed prompt ACK → turnAccepted
+// ---------------------------------------------------------------------------
+
+fn requested_fact_for_attempt(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    attempt_id: &str,
+) -> Result<TurnRequestedFact, String> {
+    let fact = writer
+        .events_for_session(session_id)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .find(|event| {
+            event.fact_type == "conversation.turnRequested"
+                && event.attempt_id.as_deref() == Some(attempt_id)
+        })
+        .ok_or_else(|| format!("no matching turnRequested for attempt {attempt_id}"))
+        .and_then(|event| {
+            serde_json::from_str::<CanonicalFact>(&event.payload_json)
+                .map_err(|error| format!("parse turnRequested payload: {error}"))
+        })?;
+    match fact {
+        CanonicalFact::TurnRequested(requested) => Ok(requested),
+        _ => Err(format!(
+            "invalid turnRequested payload for attempt {attempt_id}"
+        )),
+    }
+}
+
+pub fn accept_turn_core(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    attempt_id: &str,
+    logical_turn_id: &str,
+    target: &ExecutionTargetInput,
+    native_session_id: &str,
+) -> Result<(), String> {
+    let engine = ensure_supported_shared_session_engine(target.engine)?;
+    let provider_profile_id = target.normalized_provider();
+    let binding_key = shared_target_binding_key(engine, provider_profile_id.as_deref());
+    let native_session_id = native_session_id.trim();
+    if native_session_id.is_empty() {
+        return Err("typed prompt ACK missing native session identity".to_string());
+    }
+    let requested = requested_fact_for_attempt(writer, session_id, attempt_id)
+        .map_err(|error| format!("turnAccepted {error}"))?;
+    if requested.logical_turn_id != logical_turn_id || requested.target != target.to_snapshot() {
+        return Err(format!(
+            "turnAccepted owner mismatch for attempt {attempt_id}"
+        ));
+    }
+    writer
+        .append_canonical_fact_at(
+            session_id.to_string(),
+            CanonicalFact::TurnAccepted(TurnAcceptedFact {
+                logical_turn_id: logical_turn_id.to_string(),
+                attempt_id: attempt_id.to_string(),
+                client_turn_id: logical_turn_id.to_string(),
+                binding_key: binding_key.clone(),
+                native_session_id: native_session_id.to_string(),
+                native_turn_id: None,
+                accepted_at: now_millis() as i64,
+                extra: Value::Object(Default::default()),
+            }),
+            now_millis() as i64,
+        )
+        .map_err(|error| error.to_string())?;
+
+    let existing = writer
+        .binding_state(session_id, &binding_key)
+        .map_err(|error| error.to_string())?;
+    upsert_binding_row(
+        writer,
+        session_id,
+        &binding_key,
+        engine,
+        provider_profile_id,
+        existing.as_ref(),
+        Some(native_session_id.to_string()),
+        None,
+        provisioning_json(PROVISIONING_READY, None, Some(attempt_id)),
+        "ready",
+    )
+    .map_err(|error| error.to_string())
+}
+
+// ---------------------------------------------------------------------------
 // B.3 core：Tx2 commit_turn（settled → assembler/sink → turnCommitted，幂等）
 // ---------------------------------------------------------------------------
 
@@ -366,6 +502,13 @@ pub fn commit_turn_core(
     let provider_profile_id = target.normalized_provider();
     let binding_key = shared_target_binding_key(engine, provider_profile_id.as_deref());
     let outcome_status = parse_outcome_status(&outcome.status)?;
+    let requested = requested_fact_for_attempt(writer, session_id, attempt_id)
+        .map_err(|error| format!("run.settled {error}"))?;
+    if requested.logical_turn_id != logical_turn_id || requested.target != target.to_snapshot() {
+        return Err(format!(
+            "run.settled owner mismatch for attempt {attempt_id}"
+        ));
+    }
 
     // duplicate settled 幂等预检：同一 attempt 已落 turnCommitted 时，
     // 语义一致（logicalTurnId / outcome / assistant text）→ 按重放返回既有 sequence
@@ -425,31 +568,18 @@ pub fn commit_turn_core(
         stop_reason: outcome.stop_reason.clone(),
     };
 
-    // 3.5：completed 表示 native runtime 明确 ACK 且跑完（V0 RPC 成功返回即显式 ACK），
-    // 先落 turnAccepted（幂等，duplicate 重放安全）再落 turnCommitted；
-    // 若两步之间失败，probe 可凭「accepted 但未 committed」定性恢复。
-    // explicit rejection（failed/cancelled）保守不补 accepted——本层无法区分是否已被接受。
-    if outcome_status == OutcomeStatus::Completed {
-        if let Some(native_session_id) = native_session_id.clone() {
-            let accepted_fact = CanonicalFact::TurnAccepted(TurnAcceptedFact {
-                logical_turn_id: logical_turn_id.to_string(),
-                attempt_id: attempt_id.to_string(),
-                client_turn_id: logical_turn_id.to_string(),
-                binding_key: binding_key.clone(),
-                native_session_id,
-                native_turn_id: None,
-                accepted_at: now_millis() as i64,
-                extra: Value::Object(Default::default()),
-            });
-            // attempt 级 UNIQUE 索引兜底：重复 commit 返回 Duplicate，不算错误。
-            writer
-                .append_canonical_fact_at(
-                    session_id.to_string(),
-                    accepted_fact,
-                    now_millis() as i64,
-                )
-                .map_err(|error| error.to_string())?;
-        }
+    let accepted = writer
+        .events_for_session(session_id)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .any(|event| {
+            event.fact_type == "conversation.turnAccepted"
+                && event.attempt_id.as_deref() == Some(attempt_id)
+        });
+    if outcome_status == OutcomeStatus::Completed && !accepted {
+        return Err(format!(
+            "run.settled arrived before typed prompt ACK for attempt {attempt_id}"
+        ));
     }
 
     // duplicate settled → sink 幂等（attempt 级 UNIQUE 索引），仍返回成功。
@@ -644,6 +774,12 @@ pub async fn shared_session_v2_begin_turn(
     let _ = workspace_id;
     let writer = require_writer(&state)?;
     let shared_session_id = parse_shared_session_id(&thread_id)?;
+    if let Err(reason) = validate_execution_target(&target) {
+        return Ok(json!({
+            "status": "target-unavailable",
+            "reason": reason,
+        }));
+    }
     let outcome = begin_turn_core(writer, &shared_session_id, &target, text)?;
     Ok(match outcome.status {
         BeginTurnStatus::Creating => json!({
@@ -666,6 +802,59 @@ pub async fn shared_session_v2_begin_turn(
             "reason": outcome.reason,
         }),
     })
+}
+
+#[tauri::command]
+pub async fn shared_session_v2_prepare_context(
+    workspace_id: String,
+    thread_id: String,
+    target: ExecutionTargetInput,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let _ = state;
+    let engine = ensure_supported_shared_session_engine(target.engine)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+    let meta = read_shared_session_meta(&workspace_id, &shared_session_id)?;
+    let snapshot = crate::shared_sessions::read_latest_shared_session_snapshot(
+        &workspace_id,
+        &shared_session_id,
+    )?;
+    let items = snapshot.map(|entry| entry.items).unwrap_or_default();
+    let from_sequence =
+        shared_binding_synced_sequence(&meta, engine, target.normalized_provider().as_deref());
+    let omissions = inspect_shared_context_projection(&items, from_sequence);
+    Ok(json!({
+        "status": if omissions.is_empty() { "ready" } else { "degraded" },
+        "mode": "delta-sync",
+        "omissions": omissions,
+    }))
+}
+
+#[tauri::command]
+pub async fn shared_session_v2_accept_turn(
+    workspace_id: String,
+    thread_id: String,
+    attempt_id: String,
+    logical_turn_id: String,
+    target: ExecutionTargetInput,
+    native_session_id: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let _ = workspace_id;
+    let writer = require_writer(&state)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+    accept_turn_core(
+        writer,
+        &shared_session_id,
+        &attempt_id,
+        &logical_turn_id,
+        &target,
+        &native_session_id,
+    )?;
+    Ok(json!({
+        "status": "accepted",
+        "attemptId": attempt_id,
+    }))
 }
 
 #[tauri::command]
@@ -793,7 +982,6 @@ pub async fn shared_session_v2_probe_binding(
     binding_key: String,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let _ = workspace_id;
     let writer = require_writer(&state)?;
     let shared_session_id = parse_shared_session_id(&thread_id)?;
 
@@ -809,6 +997,50 @@ pub async fn shared_session_v2_probe_binding(
         .filter(|event| event.fact_type == "conversation.turnAccepted")
         .filter_map(|event| event.attempt_id.clone())
         .collect();
+    let native_probe = match existing.as_ref() {
+        Some(row) if row.engine == EngineType::Claude.icon() => {
+            let session = state
+                .engine_manager
+                .claude_manager
+                .get_session_for_provider(&workspace_id, row.provider_profile_id.as_deref())
+                .await;
+            match session {
+                Some(session) => {
+                    let runtime_session_id = session.get_session_id().await;
+                    let expected_session_id = row
+                        .native_session_id
+                        .as_deref()
+                        .and_then(|value| value.strip_prefix("claude:"))
+                        .or(row.native_session_id.as_deref());
+                    json!({
+                        "status": if runtime_session_id.as_deref() == expected_session_id { "matched" } else { "mismatch" },
+                        "runtimeSessionId": runtime_session_id,
+                        "activeProcessIds": session.active_process_ids().await,
+                    })
+                }
+                None => json!({ "status": "runtime-missing" }),
+            }
+        }
+        Some(row) if row.engine == EngineType::Codex.icon() => {
+            let provider = row.provider_profile_id.as_deref().unwrap_or("__disk__");
+            let runtime_key =
+                crate::codex::provider_profile::codex_runtime_key(&workspace_id, provider);
+            let session = state.sessions.lock().await.get(&runtime_key).cloned();
+            match session {
+                Some(session) => {
+                    let health = session.probe_health(Duration::from_secs(2)).await;
+                    json!({
+                        "status": if health.is_ok() { "matched" } else { "runtime-unhealthy" },
+                        "runtimeKey": runtime_key,
+                        "detail": health.err(),
+                    })
+                }
+                None => json!({ "status": "runtime-missing", "runtimeKey": runtime_key }),
+            }
+        }
+        Some(_) => json!({ "status": "unsupported-engine" }),
+        None => json!({ "status": "binding-missing" }),
+    };
 
     Ok(json!({
         "status": "ok",
@@ -816,6 +1048,7 @@ pub async fn shared_session_v2_probe_binding(
         "provisioningState": existing.as_ref().map(provisioning_state_of),
         "nativeSessionId": existing.as_ref().and_then(|row| row.native_session_id.clone()),
         "committedThroughSequence": existing.as_ref().and_then(|row| row.committed_through_sequence),
+        "nativeProbe": native_probe,
         "inFlightAttempts": in_flight
             .iter()
             .map(|(attempt_id, logical_turn_id)| json!({

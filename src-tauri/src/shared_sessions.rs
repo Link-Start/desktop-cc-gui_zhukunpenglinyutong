@@ -22,6 +22,7 @@ const SHARED_STORE_LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 const SHARED_STORE_LOCK_STALE_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_DELTA_SYNC_TURNS: usize = 8;
 const MAX_DELTA_SYNC_CHARS: usize = 4_000;
+const SHARED_SESSION_SCHEMA_VERSION: u32 = 2;
 
 fn codex_turn_developer_instructions(settings: &crate::types::AppSettings) -> Option<String> {
     crate::backend::app_server_cli::codex_generated_developer_instructions_for_turn(settings)
@@ -39,7 +40,9 @@ fn normalize_shared_session_engine(engine: EngineType) -> EngineType {
     }
 }
 
-pub(crate) fn ensure_supported_shared_session_engine(engine: EngineType) -> Result<EngineType, String> {
+pub(crate) fn ensure_supported_shared_session_engine(
+    engine: EngineType,
+) -> Result<EngineType, String> {
     if is_supported_shared_session_engine(engine) {
         Ok(engine)
     } else {
@@ -94,6 +97,8 @@ pub(crate) struct SharedSelectedTarget {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SharedSessionMeta {
+    #[serde(default = "default_shared_session_schema_version")]
+    pub(crate) schema_version: u32,
     pub(crate) id: String,
     pub(crate) workspace_id: String,
     pub(crate) title: String,
@@ -111,14 +116,18 @@ pub(crate) struct SharedSessionMeta {
     pub(crate) bindings_by_target: HashMap<String, SharedTargetBindingMeta>,
 }
 
+fn default_shared_session_schema_version() -> u32 {
+    SHARED_SESSION_SCHEMA_VERSION
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SharedSessionSnapshotEntry {
+pub(crate) struct SharedSessionSnapshotEntry {
     kind: String,
     created_at: u64,
     selected_engine: EngineType,
     last_turn_seq: u64,
-    items: Vec<Value>,
+    pub(crate) items: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -375,16 +384,18 @@ pub(crate) fn engine_binding_thread_id(engine: EngineType, seed: &str) -> String
 
 /// Binding Key = Engine + ProviderProfile（Model 不进 Key）。
 /// 与前端 `bindingKeyOf` 保持一致：`{engine}:{provider|"default"}`。
-pub(crate) fn shared_target_binding_key(engine: EngineType, provider_profile_id: Option<&str>) -> String {
-    let provider = provider_profile_id.map(str::trim).filter(|value| !value.is_empty());
-    format!(
-        "{}:{}",
-        engine.icon(),
-        provider.unwrap_or("default")
-    )
+pub(crate) fn shared_target_binding_key(
+    engine: EngineType,
+    provider_profile_id: Option<&str>,
+) -> String {
+    let provider = provider_profile_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    format!("{}:{}", engine.icon(), provider.unwrap_or("default"))
 }
 
 fn sanitize_shared_session_meta(meta: &mut SharedSessionMeta) {
+    meta.schema_version = SHARED_SESSION_SCHEMA_VERSION;
     // 任务 2.3：`selectedEngine → selectedTarget` 迁移；selectedTarget 为权威，
     // selected_engine 回落为 target.engine（V0 回滚读取兼容）。
     let selected_target = match meta.selected_target.take() {
@@ -410,12 +421,13 @@ fn sanitize_shared_session_meta(meta: &mut SharedSessionMeta) {
         .retain(|engine, _| is_supported_shared_session_engine(*engine));
     for (engine, binding) in meta.bindings_by_engine.iter_mut() {
         binding.engine = *engine;
-    }    // B.2 迁移：旧 `bindings_by_engine` 归位到 default-provider 语义。
-    // V0 仍是 default binding 身份字段的权威来源（回滚兼容），
-    // 因此 default key 的身份字段以 engine binding 为准做覆盖式同步；
-    // managed-provider 条目（provider_profile_id != None）不受此影响。
-    meta.bindings_by_target
-        .retain(|key, binding| key == &binding.binding_key && is_supported_shared_session_engine(binding.engine));
+    } // B.2 迁移：旧 `bindings_by_engine` 归位到 default-provider 语义。
+      // V0 仍是 default binding 身份字段的权威来源（回滚兼容），
+      // 因此 default key 的身份字段以 engine binding 为准做覆盖式同步；
+      // managed-provider 条目（provider_profile_id != None）不受此影响。
+    meta.bindings_by_target.retain(|key, binding| {
+        key == &binding.binding_key && is_supported_shared_session_engine(binding.engine)
+    });
     for (engine, binding) in meta.bindings_by_engine.iter() {
         let key = shared_target_binding_key(*engine, None);
         match meta.bindings_by_target.get_mut(&key) {
@@ -494,10 +506,7 @@ async fn ensure_shared_session_native_binding(
                     binding_key: binding_key.clone(),
                     engine,
                     provider_profile_id: provider_profile_id.clone(),
-                    native_thread_id: engine_binding_thread_id(
-                        engine,
-                        &Uuid::new_v4().to_string(),
-                    ),
+                    native_thread_id: engine_binding_thread_id(engine, &Uuid::new_v4().to_string()),
                     created_at: now,
                     last_used_at: now,
                     // New target binding should replay canonical shared history on first send.
@@ -598,16 +607,16 @@ fn shared_binding_synced_turn_seq(
             });
         binding.last_synced_turn_seq
     } else {
-        let binding = meta
-            .bindings_by_engine
-            .entry(engine)
-            .or_insert_with(|| SharedEngineBinding {
-                engine,
-                native_thread_id: engine_binding_thread_id(engine, &Uuid::new_v4().to_string()),
-                created_at: now,
-                last_used_at: now,
-                last_synced_turn_seq: 0,
-            });
+        let binding =
+            meta.bindings_by_engine
+                .entry(engine)
+                .or_insert_with(|| SharedEngineBinding {
+                    engine,
+                    native_thread_id: engine_binding_thread_id(engine, &Uuid::new_v4().to_string()),
+                    created_at: now,
+                    last_used_at: now,
+                    last_synced_turn_seq: 0,
+                });
         binding.last_synced_turn_seq
     }
 }
@@ -680,7 +689,7 @@ fn append_shared_session_log_entry(
     })
 }
 
-fn read_latest_shared_session_snapshot(
+pub(crate) fn read_latest_shared_session_snapshot(
     workspace_id: &str,
     shared_session_id: &str,
 ) -> Result<Option<SharedSessionSnapshotEntry>, String> {
@@ -778,7 +787,7 @@ fn count_user_turns(items: &[Value]) -> u64 {
         .count() as u64
 }
 
-fn build_delta_sync_prefix(items: &[Value], from_turn_seq: u64) -> Option<String> {
+fn build_delta_sync_projection(items: &[Value], from_turn_seq: u64) -> Option<(String, bool)> {
     if items.is_empty() {
         return None;
     }
@@ -815,9 +824,6 @@ fn build_delta_sync_prefix(items: &[Value], from_turn_seq: u64) -> Option<String
                     collected.push(format!(
                         "Turn {turn_index}\nUser: {user_text}\n{engine}: {text}"
                     ));
-                    if collected.len() >= MAX_DELTA_SYNC_TURNS {
-                        break;
-                    }
                 }
             }
         }
@@ -830,14 +836,74 @@ fn build_delta_sync_prefix(items: &[Value], from_turn_seq: u64) -> Option<String
     let mut merged = String::from(
         "Shared session context sync. Continue from these recent turns before answering the new request:\n\n",
     );
-    for block in collected {
-        if merged.len() + block.len() + 2 > MAX_DELTA_SYNC_CHARS {
+    let retained_from = collected.len().saturating_sub(MAX_DELTA_SYNC_TURNS);
+    let mut truncated = false;
+    for block in &collected[retained_from..] {
+        let remaining = MAX_DELTA_SYNC_CHARS.saturating_sub(merged.chars().count() + 2);
+        if remaining == 0 {
+            truncated = true;
             break;
         }
-        merged.push_str(&block);
+        let block_chars = block.chars().count();
+        merged.extend(block.chars().take(remaining));
         merged.push_str("\n\n");
+        if block_chars > remaining {
+            truncated = true;
+            break;
+        }
     }
-    Some(merged.trim_end().to_string())
+    Some((merged.trim_end().to_string(), truncated))
+}
+
+fn build_delta_sync_prefix(items: &[Value], from_turn_seq: u64) -> Option<String> {
+    build_delta_sync_projection(items, from_turn_seq).map(|(projection, _)| projection)
+}
+
+pub(crate) fn inspect_shared_context_projection(
+    items: &[Value],
+    from_turn_seq: u64,
+) -> Vec<String> {
+    let pending_turns = count_user_turns(items).saturating_sub(from_turn_seq);
+    let mut omissions = Vec::new();
+    if pending_turns as usize > MAX_DELTA_SYNC_TURNS {
+        omissions.push(format!(
+            "{} older turn(s) omitted by the {}-turn context limit",
+            pending_turns as usize - MAX_DELTA_SYNC_TURNS,
+            MAX_DELTA_SYNC_TURNS
+        ));
+    }
+    let projection_truncated = build_delta_sync_projection(items, from_turn_seq)
+        .map(|(_, truncated)| truncated)
+        .unwrap_or(false);
+    if projection_truncated {
+        omissions.push(format!(
+            "context truncated at the {}-character limit",
+            MAX_DELTA_SYNC_CHARS
+        ));
+    }
+    omissions
+}
+
+pub(crate) fn shared_binding_synced_sequence(
+    meta: &SharedSessionMeta,
+    engine: EngineType,
+    provider_profile_id: Option<&str>,
+) -> u64 {
+    match provider_profile_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(provider) => meta
+            .bindings_by_target
+            .get(&shared_target_binding_key(engine, Some(provider)))
+            .map(|binding| binding.last_synced_turn_seq)
+            .unwrap_or(0),
+        None => meta
+            .bindings_by_engine
+            .get(&engine)
+            .map(|binding| binding.last_synced_turn_seq)
+            .unwrap_or(0),
+    }
 }
 
 async fn resolve_workspace_path(
@@ -888,6 +954,7 @@ pub async fn start_shared_session(
     let now = now_millis();
     let shared_session_id = Uuid::new_v4().to_string();
     let meta = SharedSessionMeta {
+        schema_version: SHARED_SESSION_SCHEMA_VERSION,
         id: shared_session_id.clone(),
         workspace_id: workspace_id.clone(),
         title: "Shared Session".to_string(),
@@ -975,8 +1042,7 @@ pub async fn set_shared_session_selected_engine(
     let native_thread_id = match provider_profile_id.as_deref() {
         // V2：managed provider 走 target binding（Selector update 不建联 runtime）。
         Some(provider) => {
-            let binding_key =
-                shared_target_binding_key(selected_engine, Some(provider));
+            let binding_key = shared_target_binding_key(selected_engine, Some(provider));
             let entry = meta
                 .bindings_by_target
                 .entry(binding_key.clone())
@@ -1223,12 +1289,8 @@ pub async fn send_shared_session_message(
         .map(|entry| entry.items.clone())
         .unwrap_or_default();
     let latest_turn_seq = count_user_turns(&latest_items);
-    let sync_from_turn_seq = shared_binding_synced_turn_seq(
-        &mut meta,
-        engine,
-        provider_profile_id.as_deref(),
-        now,
-    );
+    let sync_from_turn_seq =
+        shared_binding_synced_turn_seq(&mut meta, engine, provider_profile_id.as_deref(), now);
 
     let sync_prefix = if sync_from_turn_seq < latest_turn_seq {
         build_delta_sync_prefix(&latest_items, sync_from_turn_seq)
@@ -1253,13 +1315,7 @@ pub async fn send_shared_session_message(
                 &app,
             )
             .await?;
-            touch_shared_binding(
-                &mut meta,
-                engine,
-                provider_profile_id.as_deref(),
-                now,
-                None,
-            );
+            touch_shared_binding(&mut meta, engine, provider_profile_id.as_deref(), now, None);
             select_meta_target(&mut meta, engine, provider_profile_id.clone());
             meta.updated_at = now;
             // Persist binding materialization before sending so failures don't
@@ -1322,13 +1378,7 @@ pub async fn send_shared_session_message(
             } else {
                 None
             };
-            touch_shared_binding(
-                &mut meta,
-                engine,
-                provider_profile_id.as_deref(),
-                now,
-                None,
-            );
+            touch_shared_binding(&mut meta, engine, provider_profile_id.as_deref(), now, None);
             select_meta_target(&mut meta, engine, provider_profile_id.clone());
             meta.updated_at = now;
             write_shared_session_meta(&meta)?;
@@ -1375,6 +1425,11 @@ pub async fn send_shared_session_message(
             ));
         }
     };
+    let prompt_acceptance = if response.get("error").is_some() {
+        "rejected"
+    } else {
+        "accepted"
+    };
 
     Ok(json!({
         "engine": engine,
@@ -1392,6 +1447,19 @@ pub async fn send_shared_session_message(
         "result": response.get("result").cloned().unwrap_or_else(|| response.clone()),
         "turn": response.get("turn").cloned().or_else(|| response.get("result").and_then(|value| value.get("turn")).cloned()).unwrap_or(Value::Null),
         "response": response,
+        "delivery": if engine == EngineType::Claude && prompt_acceptance == "accepted" {
+            json!({
+                "promptAcceptance": prompt_acceptance,
+                "terminal": {
+                    "type": "run.settled",
+                    "outcome": "completed",
+                },
+            })
+        } else {
+            json!({
+                "promptAcceptance": prompt_acceptance,
+            })
+        },
     }))
 }
 
@@ -1399,9 +1467,11 @@ pub async fn send_shared_session_message(
 mod tests {
     use super::{
         binding_uses_established_native_thread, build_delta_sync_prefix, count_user_turns,
-        extract_first_user_title, is_pending_shared_binding_thread_id, parse_shared_session_id,
-        sanitize_shared_session_meta, shared_target_binding_key, validate_shared_native_thread_id,
-        SharedEngineBinding, SharedSessionMeta, SharedTargetBindingMeta,
+        extract_first_user_title, inspect_shared_context_projection,
+        is_pending_shared_binding_thread_id, parse_shared_session_id, sanitize_shared_session_meta,
+        shared_target_binding_key, validate_shared_native_thread_id, SharedEngineBinding,
+        SharedSessionMeta, SharedTargetBindingMeta, MAX_DELTA_SYNC_CHARS,
+        SHARED_SESSION_SCHEMA_VERSION,
     };
     use crate::engine::EngineType;
     use serde_json::json;
@@ -1440,6 +1510,42 @@ mod tests {
         assert!(prefix.contains("second user"));
         assert!(prefix.contains("codex"));
         assert!(!prefix.contains("first assistant"));
+    }
+
+    #[test]
+    fn delta_sync_keeps_the_latest_bounded_turns() {
+        let items = (1..=10)
+            .flat_map(|turn| {
+                [
+                    json!({ "kind": "message", "role": "user", "text": format!("user-{turn}") }),
+                    json!({ "kind": "message", "role": "assistant", "text": format!("assistant-{turn}") }),
+                ]
+            })
+            .collect::<Vec<_>>();
+
+        let prefix = build_delta_sync_prefix(&items, 0).expect("prefix");
+        assert!(!prefix.contains("Turn 1\n"));
+        assert!(!prefix.contains("Turn 2\n"));
+        assert!(prefix.contains("Turn 3\n"));
+        assert!(prefix.contains("Turn 10\n"));
+    }
+
+    #[test]
+    fn delta_sync_truncates_unicode_by_characters_and_reports_it() {
+        let items = vec![
+            json!({ "kind": "message", "role": "user", "text": "问题" }),
+            json!({ "kind": "message", "role": "assistant", "text": "答".repeat(MAX_DELTA_SYNC_CHARS) }),
+        ];
+
+        let prefix = build_delta_sync_prefix(&items, 0).expect("prefix");
+        assert!(prefix.chars().count() <= MAX_DELTA_SYNC_CHARS);
+        assert_eq!(
+            inspect_shared_context_projection(&items, 0),
+            vec![format!(
+                "context truncated at the {}-character limit",
+                MAX_DELTA_SYNC_CHARS
+            )]
+        );
     }
 
     #[test]
@@ -1489,6 +1595,7 @@ mod tests {
     #[test]
     fn normalizes_legacy_shared_meta_to_supported_engines_only() {
         let mut meta = SharedSessionMeta {
+            schema_version: 1,
             id: "shared-1".to_string(),
             workspace_id: "ws-1".to_string(),
             title: "Shared Session".to_string(),
@@ -1545,11 +1652,9 @@ mod tests {
         assert!(validate_shared_native_thread_id("   ").is_err());
     }
 
-    fn meta_with_engine_binding(
-        engine: EngineType,
-        native_thread_id: &str,
-    ) -> SharedSessionMeta {
+    fn meta_with_engine_binding(engine: EngineType, native_thread_id: &str) -> SharedSessionMeta {
         SharedSessionMeta {
+            schema_version: 1,
             id: "shared-1".to_string(),
             workspace_id: "ws-1".to_string(),
             title: "Shared Session".to_string(),
@@ -1696,9 +1801,9 @@ mod tests {
             "lastTurnSeq": 0,
             "bindingsByEngine": {},
         });
-        let mut meta: SharedSessionMeta =
-            serde_json::from_value(raw).expect("legacy meta parses");
+        let mut meta: SharedSessionMeta = serde_json::from_value(raw).expect("legacy meta parses");
         sanitize_shared_session_meta(&mut meta);
+        assert_eq!(meta.schema_version, SHARED_SESSION_SCHEMA_VERSION);
         assert!(meta.bindings_by_target.is_empty());
     }
 }

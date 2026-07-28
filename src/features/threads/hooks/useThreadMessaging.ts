@@ -2181,17 +2181,31 @@ export function useThreadMessaging({
       },
     });
     try {
+      const sharedProviderProfileId =
+        resolveThreadKind(activeWorkspace.id, activeThreadId) === "shared"
+          ? (getSharedTargetState(activeWorkspace.id, activeThreadId)
+              .activeTurnTarget?.providerProfileId ?? null)
+          : null;
       if (isCliManagedEngine) {
         // Claude/OpenCode/Gemini: target only the current turn process.
         // If turn id is not known yet, keep pending interrupt and let onTurnStarted
         // execute a precise kill once the backend emits the real turn id.
         if (activeTurnId) {
           try {
-            await engineInterruptTurnService(
-              activeWorkspace.id,
-              activeTurnId,
-              resolvedThreadEngine,
-            );
+            if (resolveThreadKind(activeWorkspace.id, activeThreadId) === "shared") {
+              await engineInterruptTurnService(
+                activeWorkspace.id,
+                activeTurnId,
+                resolvedThreadEngine,
+                sharedProviderProfileId,
+              );
+            } else {
+              await engineInterruptTurnService(
+                activeWorkspace.id,
+                activeTurnId,
+                resolvedThreadEngine,
+              );
+            }
           } catch (error) {
             if (isUnknownEngineInterruptTurnMethodError(error)) {
               // Compatibility fallback for stale daemon/runtime that doesn't
@@ -2206,11 +2220,6 @@ export function useThreadMessaging({
         // Codex: notify daemon via turn_interrupt RPC, plus engine_interrupt fallback.
         // B.5：Shared Thread 按 active Turn 的 Execution Target provider 路由，
         // 避免同 engine 双 Provider 并行时中断打到 default Provider 会话。
-        const sharedProviderProfileId =
-          resolveThreadKind(activeWorkspace.id, activeThreadId) === "shared"
-            ? (getSharedTargetState(activeWorkspace.id, activeThreadId)
-                .activeTurnTarget?.providerProfileId ?? null)
-            : null;
         await Promise.allSettled([
           interruptTurnService(
             activeWorkspace.id,

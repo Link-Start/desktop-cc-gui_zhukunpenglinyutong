@@ -89,6 +89,55 @@ function readEngineSource(content: Record<string, unknown>): EngineType | undefi
     : undefined;
 }
 
+function readExecutionTargetSnapshot(
+  content: Record<string, unknown>,
+): Extract<ConversationItem, { kind: "message" }>["executionTargetSnapshot"] {
+  const value = content.executionTargetSnapshot;
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const snapshot = value as Record<string, unknown>;
+  const engine = snapshot.engine;
+  if (
+    typeof engine !== "string" ||
+    !BUILTIN_ENGINE_TYPES.includes(engine as EngineType)
+  ) {
+    return undefined;
+  }
+  const reasoning =
+    snapshot.reasoning && typeof snapshot.reasoning === "object"
+      ? (snapshot.reasoning as Record<string, unknown>)
+      : null;
+  return {
+    engine: engine as EngineType,
+    providerProfileId:
+      typeof snapshot.providerProfileId === "string"
+        ? snapshot.providerProfileId
+        : null,
+    model: typeof snapshot.model === "string" ? snapshot.model : null,
+    reasoning:
+      reasoning && typeof reasoning.effort === "string"
+        ? { effort: reasoning.effort }
+        : null,
+    providerProfileNameSnapshot:
+      typeof snapshot.providerProfileNameSnapshot === "string"
+        ? snapshot.providerProfileNameSnapshot
+        : null,
+    providerProfileSource:
+      typeof snapshot.providerProfileSource === "string"
+        ? snapshot.providerProfileSource
+        : null,
+    runtimeCapabilityFingerprint:
+      typeof snapshot.runtimeCapabilityFingerprint === "string"
+        ? snapshot.runtimeCapabilityFingerprint
+        : null,
+    providerAvailable:
+      typeof snapshot.providerAvailable === "boolean"
+        ? snapshot.providerAvailable
+        : true,
+  };
+}
+
 function toConversationItem(item: SharedProjectionItem): ConversationItem | null {
   const { id, kind, content } = item;
   const engineSource = readEngineSource(content);
@@ -96,6 +145,7 @@ function toConversationItem(item: SharedProjectionItem): ConversationItem | null
   switch (kind) {
     case "message": {
       const role = content.role === "user" ? "user" : "assistant";
+      const executionTargetSnapshot = readExecutionTargetSnapshot(content);
       return {
         id,
         kind: "message",
@@ -103,6 +153,7 @@ function toConversationItem(item: SharedProjectionItem): ConversationItem | null
         text: readString(content, "text"),
         turnId: typeof content.turnId === "string" ? content.turnId : null,
         engineSource,
+        ...(executionTargetSnapshot ? { executionTargetSnapshot } : {}),
         isFinal: content.isFinal === true,
         ...(typeof content.finalCompletedAt === "number"
           ? { finalCompletedAt: content.finalCompletedAt }

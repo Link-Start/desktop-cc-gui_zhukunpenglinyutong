@@ -26,6 +26,10 @@ import { getClientStoreSync } from "../../../services/clientStorage";
 import { pushErrorToast } from "../../../services/toasts";
 import { getGlobalRuntimeNoticesSnapshot } from "../../../services/globalRuntimeNotices";
 import { sendSharedSessionTurn } from "../../shared-session/runtime/sendSharedSessionTurn";
+import {
+  beginTurn,
+  resetSharedTargetStoreForTests,
+} from "../../shared-session/target/targetStore";
 
 const CLAUDE_PENDING_NATIVE_SESSION_WAIT_MESSAGE =
   "Claude session is still initializing. Wait for the session to finish binding, then send again.";
@@ -59,6 +63,7 @@ describe("useThreadMessaging", () => {
 
   beforeEach(() => {
     resetThreadMessagingTestMocks();
+    resetSharedTargetStoreForTests();
   });
 
   it("routes opencode thread through engineSendMessage", async () => {
@@ -1290,6 +1295,30 @@ describe("useThreadMessaging", () => {
       }),
     );
     expect(engineInterruptTurn).toHaveBeenCalledWith("ws-1", "turn-1", "claude");
+  });
+
+  it("routes a shared Claude interrupt to the active provider binding", async () => {
+    beginTurn("ws-1", "shared:thread-1", {
+      engine: "claude",
+      providerProfileId: "provider-openrouter",
+    });
+    const { result } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-1",
+      ensuredThreadId: "shared:thread-1",
+      activeTurnIdByThread: { "shared:thread-1": "turn-1" },
+      threadEngineById: { "shared:thread-1": "claude" },
+    });
+
+    await act(async () => {
+      await result.current.interruptTurn();
+    });
+
+    expect(engineInterruptTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "turn-1",
+      "claude",
+      "provider-openrouter",
+    );
   });
 
   it("interrupt routes opencode thread through engine interrupt only", async () => {

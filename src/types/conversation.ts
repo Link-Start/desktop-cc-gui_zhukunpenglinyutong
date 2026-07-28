@@ -118,6 +118,16 @@ export type ConversationItem =
       text: string;
       turnId?: string | null;
       engineSource?: EngineType;
+      executionTargetSnapshot?: {
+        engine: EngineType;
+        providerProfileId?: string | null;
+        model?: string | null;
+        reasoning?: { effort: string } | null;
+        providerProfileNameSnapshot?: string | null;
+        providerProfileSource?: string | null;
+        runtimeCapabilityFingerprint?: string | null;
+        providerAvailable?: boolean;
+      };
       isFinal?: boolean;
       finalCompletedAt?: number;
       finalDurationMs?: number;

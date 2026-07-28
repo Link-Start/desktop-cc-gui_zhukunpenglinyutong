@@ -18,20 +18,27 @@
 import {
   sendSharedSessionMessage,
   setSharedSessionSelectedEngine,
+  sharedSessionV2AcceptTurn,
   sharedSessionV2BeginTurn,
   sharedSessionV2CommitTurn,
   sharedSessionV2MarkRecovery,
+  sharedSessionV2PrepareContext,
+  type SharedSessionRuntimeDelivery,
   type SharedV2ExecutionTargetPayload,
 } from "../services/sharedSessions";
 import { beginTurn, endTurn } from "../target/targetStore";
 import { freezeTurnSnapshot, type ExecutionTarget } from "../target/types";
 import type { SharedSendEvent } from "../target/sendStateMachine";
 import type { SendSharedSessionTurnInput } from "./sendSharedSessionTurn";
-import { dispatchSharedSendEvent } from "./sharedSendStateStore";
+import {
+  dispatchSharedSendEvent,
+  waitForSharedDegradedContextDecision,
+} from "./sharedSendStateStore";
 import {
   registerSharedSessionNativeBinding,
   rebindSharedSessionNativeThread,
 } from "./sharedSessionBridge";
+import { captureSharedRuntimeTerminal } from "./sharedRuntimeTerminal";
 
 /** B.6：UI 状态机事件派发为 best-effort，状态驱动失败不得阻断发送链路。 */
 function dispatchSendEvent(
@@ -60,7 +67,7 @@ export type SendSharedSessionTurnV2Input = SendSharedSessionTurnInput & {
 
 /** begin 早退：未发生任何发送，调用方据此进入 recovery / target-unavailable UI 态。 */
 export type SharedV2SendEarlyReturn = {
-  status: "recovery-required" | "target-unavailable";
+  status: "cancelled" | "recovery-required" | "target-unavailable";
   bindingKey?: string;
   reason?: string;
 };
@@ -112,6 +119,28 @@ function extractAssistantText(
     }
   }
   return null;
+}
+
+function extractRuntimeTurnId(
+  response: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!response) {
+    return null;
+  }
+  const turn =
+    response.turn && typeof response.turn === "object"
+      ? (response.turn as Record<string, unknown>)
+      : null;
+  const result =
+    response.result && typeof response.result === "object"
+      ? (response.result as Record<string, unknown>)
+      : null;
+  const nestedTurn =
+    result?.turn && typeof result.turn === "object"
+      ? (result.turn as Record<string, unknown>)
+      : null;
+  const value = turn?.id ?? nestedTurn?.id;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function toErrorMessage(error: unknown): string {
@@ -203,14 +232,61 @@ export async function sendSharedSessionTurnV2(
 
   // B.6：进入发送流程（idle → preparing-context；非 idle 时迁移被状态机忽略）。
   dispatchSendEvent(input.workspaceId, input.threadId, { type: "send" });
+  let preparedContext: Awaited<
+    ReturnType<typeof sharedSessionV2PrepareContext>
+  >;
+  try {
+    preparedContext = await sharedSessionV2PrepareContext(
+      input.workspaceId,
+      input.threadId,
+      targetPayload,
+    );
+  } catch (prepareError) {
+    // prepare_context 是只读操作，失败时没有 runtime/durable side effect，可安全回 idle。
+    dispatchSendEvent(input.workspaceId, input.threadId, { type: "commitCancelled" });
+    dispatchSendEvent(input.workspaceId, input.threadId, { type: "canonicalCommitted" });
+    throw prepareError;
+  }
+  if (preparedContext.status === "degraded") {
+    dispatchSharedSendEvent(
+      input.workspaceId,
+      input.threadId,
+      { type: "lossyProjection" },
+      {
+        degradedInfo: {
+          mode: preparedContext.mode,
+          omissions: preparedContext.omissions,
+          reason: preparedContext.omissions.join("; "),
+        },
+      },
+    );
+    const confirmed = await waitForSharedDegradedContextDecision(
+      input.workspaceId,
+      input.threadId,
+    );
+    if (!confirmed) {
+      dispatchSendEvent(input.workspaceId, input.threadId, { type: "commitCancelled" });
+      dispatchSendEvent(input.workspaceId, input.threadId, { type: "canonicalCommitted" });
+      return { status: "cancelled" };
+    }
+    dispatchSendEvent(input.workspaceId, input.threadId, { type: "degradedConfirmed" });
+  }
 
   // Tx1：User Intent durable-first，先于任何 runtime side effect。
-  const begin = await sharedSessionV2BeginTurn(
-    input.workspaceId,
-    input.threadId,
-    targetPayload,
-    input.text,
-  );
+  let begin: Awaited<ReturnType<typeof sharedSessionV2BeginTurn>>;
+  try {
+    begin = await sharedSessionV2BeginTurn(
+      input.workspaceId,
+      input.threadId,
+      targetPayload,
+      input.text,
+    );
+  } catch (beginError) {
+    // Tx1 RPC 失败无法证明 turnRequested 未落盘；禁止回 idle 后盲目重发。
+    dispatchSendEvent(input.workspaceId, input.threadId, { type: "packagePrepared" });
+    dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
+    throw beginError;
+  }
   if (begin.status !== "creating") {
     if (begin.status === "recovery-required") {
       // 状态机无 preparing-context → recovery-required 直达边：
@@ -232,6 +308,14 @@ export async function sendSharedSessionTurnV2(
   const logicalTurnId = begin.logicalTurnId?.trim();
   if (!attemptId || !logicalTurnId) {
     // 契约违例（creating 必须带 attempt/turn id）：fail closed，不进入发送段。
+    dispatchSendEvent(input.workspaceId, input.threadId, { type: "packagePrepared" });
+    dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
+    await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
+      bindingKey: begin.bindingKey ?? "",
+      engine: input.target.engine,
+      providerProfileId: input.target.providerProfileId ?? null,
+      reason: "begin-turn-contract-violation",
+    }).catch(() => undefined);
     throw new Error("shared_session_v2_begin_turn 契约违例：creating 缺少 attemptId/logicalTurnId");
   }
 
@@ -243,8 +327,12 @@ export async function sendSharedSessionTurnV2(
     input.threadId,
     freezeTurnSnapshot(input.target, input.providerMeta),
   );
+  const runtimeTerminalCapture =
+    input.engine === "codex"
+      ? captureSharedRuntimeTerminal(input.workspaceId)
+      : null;
   try {
-    let response: Record<string, unknown> | null | undefined;
+    let response: SharedSessionRuntimeDelivery | null | undefined;
     try {
       response = await sendTurnViaV0(input);
     } catch (sendError) {
@@ -260,8 +348,53 @@ export async function sendSharedSessionTurnV2(
       throw sendError;
     }
 
-    // V0 RPC 返回 = runtime ACK + run settled 同时成立（阻塞式发送）。
+    const nativeSessionId =
+      typeof response?.nativeThreadId === "string"
+        ? response.nativeThreadId.trim()
+        : "";
+    if (
+      response?.delivery?.promptAcceptance !== "accepted" ||
+      !nativeSessionId
+    ) {
+      dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
+      await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
+        bindingKey: begin.bindingKey ?? "",
+        engine: input.target.engine,
+        providerProfileId: input.target.providerProfileId ?? null,
+        reason: "typed-prompt-ack-missing",
+      }).catch(() => undefined);
+      throw new Error("Shared runtime 未返回 typed prompt ACK");
+    }
+
+    await sharedSessionV2AcceptTurn(input.workspaceId, input.threadId, {
+      attemptId,
+      logicalTurnId,
+      target: targetPayload,
+      nativeSessionId,
+    });
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "runtimeAck" });
+    let terminal;
+    try {
+      terminal =
+        response.delivery.terminal?.type === "run.settled"
+          ? { ...response.delivery.terminal, assistantText: null }
+          : await runtimeTerminalCapture?.waitFor({
+              nativeThreadId: nativeSessionId,
+              runtimeTurnId: extractRuntimeTurnId(response),
+            });
+      if (!terminal) {
+        throw new Error("Shared runtime 未返回 typed run.settled");
+      }
+    } catch (terminalError) {
+      dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
+      await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
+        bindingKey: begin.bindingKey ?? "",
+        engine: input.target.engine,
+        providerProfileId: input.target.providerProfileId ?? null,
+        reason: "run-settled-missing",
+      }).catch(() => undefined);
+      throw terminalError;
+    }
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "runSettled" });
 
     let commit;
@@ -270,10 +403,9 @@ export async function sendSharedSessionTurnV2(
         attemptId,
         logicalTurnId,
         target: targetPayload,
-        assistantText: extractAssistantText(response),
-        outcome: { status: "completed" },
-        nativeSessionId:
-          typeof response?.nativeThreadId === "string" ? response.nativeThreadId : null,
+        assistantText: terminal.assistantText ?? extractAssistantText(response),
+        outcome: { status: terminal.outcome },
+        nativeSessionId,
       });
     } catch (commitError) {
       // 发送已成功但 commit 失败 = ambiguous ACK：禁止盲目重建，标记 recovery 后抛出。
@@ -301,6 +433,7 @@ export async function sendSharedSessionTurnV2(
       },
     };
   } finally {
+    runtimeTerminalCapture?.dispose();
     endTurn(input.workspaceId, input.threadId);
   }
 }
