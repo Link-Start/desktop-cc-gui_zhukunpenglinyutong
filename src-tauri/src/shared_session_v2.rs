@@ -594,7 +594,10 @@ pub fn rebuild_binding_core(
 
 fn collect_attempt_evidence(
     events: &[crate::shared_event_log::StoredEvent],
-) -> (Vec<(String, Option<String>)>, std::collections::HashSet<String>) {
+) -> (
+    Vec<(String, Option<String>)>,
+    std::collections::HashSet<String>,
+) {
     let mut requested: Vec<(String, Option<String>)> = Vec::new();
     let mut seen_requested = std::collections::HashSet::new();
     let mut committed = std::collections::HashSet::new();
@@ -840,6 +843,11 @@ pub async fn shared_session_v2_turn_state(
         .events_for_session(&shared_session_id)
         .map_err(|error| error.to_string())?;
     let (in_flight, _) = collect_attempt_evidence(&events);
+    let accepted: std::collections::HashSet<String> = events
+        .iter()
+        .filter(|event| event.fact_type == "conversation.turnAccepted")
+        .filter_map(|event| event.attempt_id.clone())
+        .collect();
     let mut binding_keys = std::collections::HashSet::new();
     for event in &events {
         if let Ok(payload) = serde_json::from_str::<Value>(&event.payload_json) {
@@ -870,6 +878,7 @@ pub async fn shared_session_v2_turn_state(
             .map(|(attempt_id, logical_turn_id)| json!({
                 "attemptId": attempt_id,
                 "logicalTurnId": logical_turn_id,
+                "accepted": accepted.contains(attempt_id),
             }))
             .collect::<Vec<_>>(),
         "bindings": bindings,

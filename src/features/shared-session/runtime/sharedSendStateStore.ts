@@ -124,11 +124,11 @@ export function useSharedSendState(
 /**
  * 重启恢复（6.5）：从 durable evidence（turn_state）重建 UI 状态，不落 idle。
  *
- * 映射规则（turn_state.inFlightAttempts 不带 accepted 标记，只能用 provisioning 证据）：
+ * 映射规则：
  * - 任一 Binding provisioningState === "recovery-required" → recovery-required；
- * - 否则存在 in-flight Attempt 且任一 Binding 仍 "creating"（begin 已落账、
- *   runtime ACK 已发生的证据）→ running；
- * - 否则存在 in-flight Attempt（ACK 在重启窗口丢失，无法区分）→ recovery-required
+ * - 否则存在带 durable `turnAccepted` evidence 的 in-flight Attempt → running；
+ * - 否则存在 in-flight Attempt（只有 `turnRequested`，无法证明 runtime 已接收）
+ *   → recovery-required
  *   （fail closed，禁止盲目放行）；
  * - 否则 → idle。
  */
@@ -141,14 +141,15 @@ export function restoreSharedSendStateFromTurnState(
   const hasRecoveryBinding = bindings.some(
     (binding) => binding.provisioningState === "recovery-required",
   );
-  const hasInFlight = (turnState.inFlightAttempts ?? []).length > 0;
-  const hasCreatingBinding = bindings.some(
-    (binding) => binding.provisioningState === "creating",
+  const inFlightAttempts = turnState.inFlightAttempts ?? [];
+  const hasInFlight = inFlightAttempts.length > 0;
+  const hasAcceptedInFlight = inFlightAttempts.some(
+    (attempt) => attempt.accepted === true,
   );
   let state: SharedSendState;
   if (hasRecoveryBinding) {
     state = "recovery-required";
-  } else if (hasInFlight && hasCreatingBinding) {
+  } else if (hasAcceptedInFlight) {
     state = "running";
   } else if (hasInFlight) {
     state = "recovery-required";

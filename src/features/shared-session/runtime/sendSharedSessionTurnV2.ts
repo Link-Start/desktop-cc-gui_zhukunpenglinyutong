@@ -6,7 +6,8 @@
  * 纪律：
  * - begin 返回 `recovery-required` / `target-unavailable` 时 fail closed：
  *   不发送、不改路由、不重试，直接把状态抛给调用方。
- * - 发送抛错视为 explicit rejection（本层无法区分 ambiguous）：commit failed 后原样抛出。
+ * - 发送抛错在没有 typed negative ACK 时视为 ambiguous：进入 recovery-required，
+ *   不伪造 explicit rejection，也不写 turnCommitted(failed)。
  * - 发送成功但 commit 失败才是真正的 ambiguous：mark_recovery(reason="commit-failed") 后抛出。
  * - `endTurn` 在 finally 中兜底；只有 begin 早退（未 beginTurn）时不执行。
  *
@@ -247,27 +248,15 @@ export async function sendSharedSessionTurnV2(
     try {
       response = await sendTurnViaV0(input);
     } catch (sendError) {
-      // explicit rejection：Turn 未成立，commit failed 落账后原样抛出。
-      dispatchSendEvent(input.workspaceId, input.threadId, { type: "explicitRejection" });
-      try {
-        await sharedSessionV2CommitTurn(input.workspaceId, input.threadId, {
-          attemptId,
-          logicalTurnId,
-          target: targetPayload,
-          outcome: { status: "failed", errorMessage: toErrorMessage(sendError) },
-        });
-        // failed outcome 已成功落账（settling → idle）。
-        dispatchSendEvent(input.workspaceId, input.threadId, { type: "canonicalCommitted" });
-      } catch {
-        // failed commit 本身失败属于 ambiguous；尽力标记 recovery，不掩盖原始发送错误。
-        dispatchSendEvent(input.workspaceId, input.threadId, { type: "commitFailed" });
-        await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
-          bindingKey: begin.bindingKey ?? "",
-          engine: input.target.engine,
-          providerProfileId: input.target.providerProfileId ?? null,
-          reason: "commit-failed",
-        }).catch(() => undefined);
-      }
+      // 旧 RPC 的 Err(String) 无法证明 prompt 未被 runtime 接收。timeout、
+      // disconnect、process exit 都可能发生在 side effect 之后，必须 fail closed。
+      dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
+      await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
+        bindingKey: begin.bindingKey ?? "",
+        engine: input.target.engine,
+        providerProfileId: input.target.providerProfileId ?? null,
+        reason: `runtime-delivery-ambiguous: ${toErrorMessage(sendError)}`,
+      }).catch(() => undefined);
       throw sendError;
     }
 

@@ -39,7 +39,10 @@ import {
 } from "../../../services/tauri";
 import { sendSharedSessionTurnRouted } from "../../shared-session/runtime/sendSharedSessionTurn";
 import { isSharedV2SendEnabled } from "../../shared-session/runtime/sharedV2SendFlag";
-import { getSharedTargetState } from "../../shared-session/target/targetStore";
+import {
+  getSharedTargetState,
+  selectNextTarget,
+} from "../../shared-session/target/targetStore";
 import { projectMemoryFacade } from "../../project-memory/services/projectMemoryFacade";
 import {
   injectSelectedMemoriesContext,
@@ -1187,11 +1190,17 @@ export function useThreadMessaging({
             threadId,
             engine: sharedResolvedEngine,
           });
-          // B.6：经 flag 路由入口发送（flag 开 = V2 durable-first 编排；关 = V0，
-          // 行为与之前完全一致）。target 优先取 Picker 的 selectedNextTarget，
-          // 缺省时由 dispatcher 按 engine/model/effort 构造默认 target。
-          const sharedNextTarget = getSharedTargetState(workspace.id, threadId)
-            .selectedNextTarget;
+          // Composer 当前四级选择是下一轮 Target 的权威输入。发送前同步到
+          // Shared Target Store，再把同一份快照交给 V2，避免 managed Provider
+          // 因 store 尚未接线而静默退回 default/local。
+          const sharedNextTarget = {
+            engine: sharedResolvedEngine,
+            providerProfileId:
+              resolvedComposerSelection?.providerProfileId?.trim() || null,
+            model: modelForSend ?? null,
+            reasoning: resolvedEffort ? { effort: resolvedEffort } : null,
+          };
+          selectNextTarget(workspace.id, threadId, sharedNextTarget);
           response =
             (await sendSharedSessionTurnRouted({
               workspaceId: workspace.id,
@@ -1208,7 +1217,7 @@ export function useThreadMessaging({
                 ? "zh"
                 : "en",
               customSpecRoot: resolveWorkspaceSpecRoot(workspace.id),
-              ...(sharedNextTarget ? { target: sharedNextTarget } : {}),
+              target: sharedNextTarget,
             })) as Record<string, unknown>;
           // V2 begin 早退（recovery-required / target-unavailable）：编排层已驱动
           // send 状态机，这里不按发送失败处理，也不抛出；复位 processing，

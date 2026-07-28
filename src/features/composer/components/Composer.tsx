@@ -2359,7 +2359,9 @@ function ComposerImpl({
               onSelectModel={sharedTargetPickerLocked ? undefined : onSelectModel}
               reasoningOptions={reasoningOptions}
               selectedEffort={selectedEffort}
-              onSelectEffort={onSelectEffort}
+              onSelectEffort={
+                sharedTargetPickerLocked ? undefined : onSelectEffort
+              }
               reasoningSupported={reasoningSupported}
               onResolvedAlwaysThinkingChange={onResolvedAlwaysThinkingChange}
               attachments={attachedImages}

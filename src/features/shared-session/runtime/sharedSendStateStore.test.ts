@@ -106,12 +106,14 @@ describe("restoreSharedSendStateFromTurnState (B.6.5)", () => {
     expect(getSharedSendState(WS, THREAD).state).toBe("recovery-required");
   });
 
-  it("in-flight attempt + creating binding → running", () => {
+  it("accepted in-flight attempt → running", () => {
     restoreSharedSendStateFromTurnState(
       WS,
       THREAD,
       turnState({
-        inFlightAttempts: [{ attemptId: "a1", logicalTurnId: "t1" }],
+        inFlightAttempts: [
+          { attemptId: "a1", logicalTurnId: "t1", accepted: true },
+        ],
         bindings: [
           {
             bindingKey: "claude:default",
@@ -122,6 +124,26 @@ describe("restoreSharedSendStateFromTurnState (B.6.5)", () => {
       }),
     );
     expect(getSharedSendState(WS, THREAD).state).toBe("running");
+  });
+
+  it("creating 只证明 Tx1 已落账，不能当作 runtime ACK", () => {
+    restoreSharedSendStateFromTurnState(
+      WS,
+      THREAD,
+      turnState({
+        inFlightAttempts: [
+          { attemptId: "a1", logicalTurnId: "t1", accepted: false },
+        ],
+        bindings: [
+          {
+            bindingKey: "claude:default",
+            provisioningState: "creating",
+            availability: "available",
+          },
+        ],
+      }),
+    );
+    expect(getSharedSendState(WS, THREAD).state).toBe("recovery-required");
   });
 
   it("in-flight attempt without ACK evidence → recovery-required（fail closed）", () => {

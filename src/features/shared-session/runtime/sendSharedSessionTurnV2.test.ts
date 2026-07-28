@@ -6,7 +6,7 @@
  * - flag 路由：关闭走 V0，开启走 V2（缺 target 时用 engine/model/effort 构造默认 target）。
  * - happy path：begin → send（透传 providerProfileId）→ commit completed。
  * - begin 早退（recovery-required / target-unavailable）：不发送、不 commit。
- * - 发送抛错（explicit rejection）：commit failed + 原样抛出 + endTurn。
+ * - 发送抛错且无 negative ACK 证据：recovery-required + 原样抛出 + endTurn。
  * - commit 失败（ambiguous）：mark_recovery(reason="commit-failed") + 抛出 + endTurn。
  */
 
@@ -50,6 +50,7 @@ import {
 import type { ExecutionTarget } from "../target/types";
 import { sendSharedSessionTurnRouted } from "./sendSharedSessionTurn";
 import { sendSharedSessionTurnV2 } from "./sendSharedSessionTurnV2";
+import { getSharedSendState } from "./sharedSendStateStore";
 import { setSharedV2SendOverride } from "./sharedV2SendFlag";
 
 const BASE_INPUT = {
@@ -225,21 +226,51 @@ describe("sendSharedSessionTurnV2", () => {
     expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
   });
 
-  it("发送抛错（explicit rejection）：commit failed + 原样抛出 + endTurn", async () => {
-    const sendError = new Error("runtime rejected");
+  it("发送抛错且无 negative ACK 证据：进入 recovery，不伪造 failed commit", async () => {
+    const sendError = new Error("runtime disconnected");
     sendSharedSessionMessage.mockRejectedValue(sendError);
 
     await expect(
       sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
     ).rejects.toBe(sendError);
 
-    expect(sharedSessionV2CommitTurn).toHaveBeenCalledWith("ws-1", "shared:thread-1", {
-      attemptId: "attempt-1",
-      logicalTurnId: "turn-1",
-      target: expect.objectContaining({ engine: "claude" }),
-      outcome: { status: "failed", errorMessage: "runtime rejected" },
-    });
-    expect(sharedSessionV2MarkRecovery).not.toHaveBeenCalled();
+    expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
+    expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      {
+        bindingKey: "claude:profile-1",
+        engine: "claude",
+        providerProfileId: "profile-1",
+        reason: "runtime-delivery-ambiguous: runtime disconnected",
+      },
+    );
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe(
+      "recovery-required",
+    );
+    expect(getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget).toBeNull();
+  });
+
+  it("发送错误的 recovery 落盘失败时仍保留 recovery UI 并抛原错误", async () => {
+    const sendError = new Error("runtime timeout");
+    sendSharedSessionMessage.mockRejectedValue(sendError);
+    sharedSessionV2MarkRecovery.mockRejectedValue(new Error("event log unavailable"));
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).rejects.toBe(sendError);
+
+    expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe(
+      "recovery-required",
+    );
+    expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      expect.objectContaining({
+        reason: "runtime-delivery-ambiguous: runtime timeout",
+      }),
+    );
     expect(getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget).toBeNull();
   });
 

@@ -196,6 +196,8 @@ export type SharedV2RebuildBindingResult = {
 export type SharedV2InFlightAttempt = {
   attemptId: string;
   logicalTurnId?: string | null;
+  /** durable `conversation.turnAccepted` evidence；缺省按 false 处理。 */
+  accepted?: boolean;
 };
 
 export type SharedV2ProbeBindingResult = {

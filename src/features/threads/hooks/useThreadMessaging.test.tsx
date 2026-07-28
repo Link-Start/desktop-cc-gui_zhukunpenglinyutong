@@ -148,6 +148,42 @@ describe("useThreadMessaging", () => {
     );
   });
 
+  it("passes the current Composer provider/model/reasoning as the Shared V2 target", async () => {
+    const { result } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-provider-target",
+      resolveComposerSelection: () => ({
+        id: "provider-model",
+        model: "claude-provider-model",
+        source: "provider",
+        providerProfileId: "provider-openrouter",
+        effort: "high",
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "shared:thread-provider-target",
+        "hello provider",
+      );
+    });
+
+    expect(sendSharedSessionTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "claude",
+        model: "claude-provider-model",
+        effort: "high",
+        target: {
+          engine: "claude",
+          providerProfileId: "provider-openrouter",
+          model: "claude-provider-model",
+          reasoning: { effort: "high" },
+        },
+      }),
+    );
+  });
+
   it("rejects a historical Gemini target before creating a replacement thread", async () => {
     const startThreadForWorkspace = vi.fn(async () => "claude-pending-new");
     const { result } = makeThreadMessagingHook("claude", {

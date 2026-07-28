@@ -129,27 +129,26 @@ OpenSpec 已归档至 `openspec/changes/archive/2026-07-27-{establish-shared-eve
 
 ## Wave 4：Change B — compose-shared-session-execution-target
 
-> **当前状态：已实施（2026-07-27），Gate 4 通过。** B.1–B.6 全部落地：
-> Target Store/四级 Picker、bindingsByTarget 迁移（schemaVersion 2）、V2 Send
-> 写路径（feature flag `VITE_MOSSX_SHARED_V2_SEND` 灰度可回滚）、Durable
-> Provisioning、Target-aware owner routing、§14.5 九状态 UI 状态机
-> （StatusBar + Picker/Composer 锁定 + 重启恢复）。
-> 已知非阻断项：`src/services/tauri.test.ts` 5 个与
-> `useThreadMessaging.test.tsx` 10 个失败属 OpenCode/Gemini retirement
-> 进行中的迁移（HEAD 基线即失败，非本 Change 引入）；cargo `runtime::tests`
-> 2 个 process-group kill 失败为 macOS 环境性问题（HEAD 同现）。
+> **当前状态：校准中（2026-07-28），Gate 4 撤回。** 2026-07-27 的实现已搭好
+> Target Store、bindingsByTarget、V2 begin/commit、StatusBar 和基础 owner routing，
+> 但 review 发现“测试里的 core 能跑”被误判成“真实产品链路已闭环”。
+> 已先修复两条高风险主链：Composer managed Provider 现在会进入 Shared
+> `ExecutionTarget`；未知 runtime send error 不再伪造明确失败，而是 fail closed 到
+> `recovery-required`。仍待完成真实四级 Picker 写入、Turn Badge、Provider/Model
+> availability、typed prompt ACK、真实 `run.settled`、native Probe、完整 owner
+> routing 与人工 Gate 4 矩阵。
 
 | # | 任务 | 大白话说明 | 改变点 | UI 变化 | 顺序 | 前置 | 验收 | 体量 |
 |---|---|---|---|---|---|---|---|---|
-| B.1 | `selectedNextTarget` / `activeTurnTarget` Store 分离 + 四级 Picker（CLI→Provider→Model→Reasoning） | 让用户选择“下一轮发给哪个 CLI、Provider、Model、Reasoning”。 | 把下一轮选择和正在执行的目标拆开，避免中途改选择污染当前轮。 | **有**：新增四级 Target Picker，历史 Turn Badge 不随选择变化。 | ⫽ | Gate 3 | Picker 变化不改写历史 Turn Badge | M |
-| B.2 | `bindingsByEngine` → `bindingsByTarget` 迁移（旧 Binding 归 default-provider，不猜 managed Provider） | 同一个 CLI 下不同 Provider 各自保存自己的隐藏会话绑定。 | Binding 主键从 Engine 升级为完整 Execution Target；旧数据安全归 default。 | 间接影响：用户仍看一个 Shared Row，切 Provider 时能复用对应会话。 | ⫽ | Gate 3 | 旧会话按 local/default 语义恢复 | M |
-| B.3 | Send 全链路：`providerProfileId` 贯通 + Tx1 snapshot 固化 + **V0→V2 真实写路径切换** | 真正把用户发送的消息接入 V2 事件链路。 | 结束 dark launch；真实 Shared Send 固化 target snapshot 并写 Canonical Log。 | **有**：Picker 选择开始真实生效；正常聊天外观应保持稳定。 | → | B.1、B.2 | dark launch 结束；Shared 真实流量跑 V2 | L |
-| B.4 | Durable Binding Provisioning + duplicate-create recovery（ACK 不确定 → recovery-required，禁止盲建） | 创建 Provider 会话时即使崩溃，也不能偷偷多建一个。 | Binding provisioning 持久化；ACK 不确定时进入 recovery，不盲目重试。 | 异常时可见：展示恢复中/需要处理，而不是创建重复会话。 | → | B.3 + S1/S2/S3 结论 | 强杀不产生第二个同 Target Binding | L |
-| B.5 | Target-aware owner routing：Interrupt / Approval / Pending Rebind / Recovery 携带完整 Owner | 停止、审批和恢复操作必须发给真正执行这一轮的 Provider。 | owner 从 Engine 级升级为完整 Target 级，避免同 Engine 双 Provider 串线。 | 间接影响：按钮外观可不变，但操作对象更准确。 | ⫽ | B.3 | 同 Engine 双 Provider 并行不串线 | L |
-| B.6 | UI 状态机落地：9 状态 + `CancelPending` + degraded-context 用户确认 | 把准备、发送、取消、恢复、上下文降级等状态明确告诉用户。 | 从零散 loading 状态变成统一 9 状态 UI state machine。 | **有**：状态提示、CancelPending、降级确认与错误恢复交互。 | ⫽ | B.3 | §14.5.6 UX 验收全量 | M |
+| B.1 | `selectedNextTarget` / `activeTurnTarget` Store 分离 + 四级 Picker（CLI→Provider→Model→Reasoning） | 让用户选择“下一轮发给哪个 CLI、Provider、Model、Reasoning”。 | Store 和纯逻辑已建；当前 Composer 选择已在发送前固化 Target，仍待选择时即时写 Store 与真实 Turn Badge。 | **部分有**：沿用现有 Composer 选择控件；独立 Target/历史 Badge 仍待接线。 | ⫽ | Gate 3 | Picker 变化不改写历史 Turn Badge | M |
+| B.2 | `bindingsByEngine` → `bindingsByTarget` 迁移（旧 Binding 归 default-provider，不猜 managed Provider） | 同一个 CLI 下不同 Provider 各自保存自己的隐藏会话绑定。 | Target Binding 与旧字段迁移已建；仍待补显式 `schemaVersion: 2`。 | 间接影响：用户仍看一个 Shared Row，切 Provider 时能复用对应会话。 | ⫽ | Gate 3 | 旧会话按 local/default 语义恢复 | M |
+| B.3 | Send 全链路：`providerProfileId` 贯通 + Tx1 snapshot 固化 + **V0→V2 真实写路径切换** | 真正把用户发送的消息接入 V2 事件链路。 | Tx1/commit 外壳和 Provider 透传已接；仍缺 typed prompt ACK、真实 `run.settled` 与完整 availability gate。 | **部分有**：测试 flag 开启后状态条可见；默认仍关闭。 | → | B.1、B.2 | dark launch 结束；Shared 真实流量跑 V2 | L |
+| B.4 | Durable Binding Provisioning + duplicate-create recovery（ACK 不确定 → recovery-required，禁止盲建） | 创建 Provider 会话时即使崩溃，也不能偷偷多建一个。 | durable row/recovery/rebuild 已建；仍缺 native Probe 与真实强杀 fault-injection。 | 异常时可见：展示恢复中/需要处理，而不是创建重复会话。 | → | B.3 + S1/S2/S3 结论 | 强杀不产生第二个同 Target Binding | L |
+| B.5 | Target-aware owner routing：Interrupt / Approval / Pending Rebind / Recovery 携带完整 Owner | 停止、审批和恢复操作必须发给真正执行这一轮的 Provider。 | Approval/Pending Rebind/Recovery 已带 Provider；Claude Interrupt 和完整 command test 仍待补。 | 间接影响：按钮外观可不变，但操作对象更准确。 | ⫽ | B.3 | 同 Engine 双 Provider 并行不串线 | L |
+| B.6 | UI 状态机落地：9 状态 + `CancelPending` + degraded-context 用户确认 | 把准备、发送、取消、恢复、上下文降级等状态明确告诉用户。 | 九状态和 StatusBar 已建；重启 ACK 判定已校准，仍缺真实 omissions/cancel capability 接线。 | **部分有**：状态提示和 recovery 可见；降级/取消仍未接真实能力。 | ⫽ | B.3 | §14.5.6 UX 验收全量 | M |
 
 **⛔ Gate 4（Phase 2 验收矩阵）**
-- [x] `Claude/Official → Claude/OpenRouter → Codex/OpenAI → Claude/Official`：一个 Sidebar Row、三个 Hidden Binding、切回复用原 Binding、Turn Provenance 正确、任一 Provider 失败不重路由（`shared_session_v2_target_matrix.rs::target_switch_matrix_reuses_bindings_and_keeps_provenance` 通过）
+- [ ] `Claude/Official → Claude/OpenRouter → Codex/OpenAI → Claude/Official`：一个 Sidebar Row、三个 Hidden Binding、切回复用原 Binding、Turn Provenance 正确、任一 Provider 失败不重路由。现有 `shared_session_v2_target_matrix.rs` 仅作为 storage/core 证据；需补真实 UI + runtime 人工验收后才能通过 Gate 4。
 
 ---
 
