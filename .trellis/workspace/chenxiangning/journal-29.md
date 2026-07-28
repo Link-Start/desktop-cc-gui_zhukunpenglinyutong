@@ -436,3 +436,36 @@ Message-tail Codex fork 仅保留当前 Provider；跨 Provider 由 Sidebar Prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1210: 稳定供应商与模型选择
+
+**Date**: 2026-07-28
+**Task**: 稳定供应商与模型选择
+**Branch**: `feature/v-0710`
+
+### Summary
+
+Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；Shared Session 改为单一 root 双栏，消除 Provider accordion 失焦与卡顿。用户已实机验证通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f0c5c5e3a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
