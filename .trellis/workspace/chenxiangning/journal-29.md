@@ -137,3 +137,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1201: 清退跨供应商原生分叉残留
+
+**Date**: 2026-07-28
+**Task**: 清退跨供应商原生分叉残留
+**Branch**: `feature/v-0710`
+
+### Summary
+
+Message-tail Codex fork 仅保留当前 Provider；跨 Provider 由 Sidebar Provider Continuation 承担，并删除 native-provider-rebind 测试残留。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `548e61c5f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
