@@ -125,6 +125,64 @@ describe('AskUserQuestionDialog', () => {
     expect(optionA.classList.contains('is-selected')).toBe(false);
   });
 
+  it('resets draft when the same Shared request id belongs to another Runtime attempt', () => {
+    const makeSharedOwner = (
+      attemptId: string,
+      providerRuntimeKey: string,
+    ): NonNullable<RequestUserInputRequest['shared_runtime_owner']> => ({
+      attemptId,
+      providerRuntimeKey,
+      sharedThreadId: 'shared:thread-1',
+      nativeThreadId: `native-${attemptId}`,
+      runtimeTurnId: 'turn-1',
+      engine: providerRuntimeKey.startsWith('claude') ? 'claude' : 'codex',
+      providerProfileId: `profile-${attemptId}`,
+    });
+    const firstRequest = makeRequest({
+      threadId: 'shared:thread-1',
+      shared_runtime_owner: makeSharedOwner(
+        'attempt-1',
+        'codex::profile-1',
+      ),
+    });
+    const secondRequest = makeRequest({
+      threadId: 'shared:thread-1',
+      shared_runtime_owner: makeSharedOwner(
+        'attempt-2',
+        'claude::profile-2',
+      ),
+    });
+    const onSubmit = vi.fn();
+    const { rerender } = renderDialog({
+      requests: [firstRequest],
+      activeThreadId: 'shared:thread-1',
+      onSubmit,
+    });
+
+    fireEvent.click(screen.getByText('Option A').closest('button')!);
+    expect(
+      screen
+        .getByText('Option A')
+        .closest('button')
+        ?.classList.contains('is-selected'),
+    ).toBe(true);
+
+    rerender(
+      <AskUserQuestionDialog
+        requests={[secondRequest]}
+        activeThreadId="shared:thread-1"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(
+      screen
+        .getByText('Option A')
+        .closest('button')
+        ?.classList.contains('is-selected'),
+    ).toBe(false);
+  });
+
   it('keeps duplicate option labels independently selectable', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     renderDialog({

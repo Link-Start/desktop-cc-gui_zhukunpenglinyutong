@@ -142,7 +142,11 @@ describe("ModelSelect", () => {
                 source: "managed",
                 loading: false,
                 error: null,
-                models: [{ id: "same-model", label: "A Model" }],
+                models: [{
+                  id: "same-model",
+                  model: "same-model",
+                  label: "A Model",
+                }],
               },
             ],
           },
@@ -157,7 +161,11 @@ describe("ModelSelect", () => {
                 source: "managed",
                 loading: false,
                 error: null,
-                models: [{ id: "same-model", label: "B Model" }],
+                models: [{
+                  id: "same-model",
+                  model: "same-model",
+                  label: "B Model",
+                }],
               },
             ],
           },
@@ -188,6 +196,7 @@ describe("ModelSelect", () => {
     expect(onExecutionTargetChange).toHaveBeenCalledWith({
       engine: "codex",
       providerProfileId: "provider-b",
+      modelCatalogEntryId: "same-model",
       model: "same-model",
       providerProfileNameSnapshot: "Provider B",
       providerProfileSource: "managed",
@@ -195,9 +204,63 @@ describe("ModelSelect", () => {
     });
   });
 
+  it("fails closed when a Shared catalog entry lacks runtime model identity", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+
+    render(
+      <ModelSelect
+        value="current-model"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        targetGroupDisplayMode="profiles"
+        onChange={vi.fn()}
+        executionTarget={{
+          engine: "claude",
+          providerProfileId: "provider-a",
+          modelCatalogEntryId: "current-model",
+          model: "current-model",
+          providerProfileNameSnapshot: "Provider A",
+          providerProfileSource: "managed",
+        }}
+        onExecutionTargetChange={onExecutionTargetChange}
+        targetGroups={[
+          {
+            providerId: "codex",
+            providerLabel: "Codex CLI",
+            enabled: true,
+            profiles: [
+              {
+                id: "provider-b",
+                label: "Provider B",
+                source: "managed",
+                loading: false,
+                error: null,
+                models: [{ id: "catalog-only", label: "Catalog Only" }],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button"));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Provider B/ }),
+    );
+    const catalogOnlyItem = await screen.findByRole("menuitem", {
+      name: /Catalog Only/,
+    });
+
+    expect(catalogOnlyItem.getAttribute("data-disabled")).not.toBeNull();
+    fireEvent.click(catalogOnlyItem);
+    expect(onExecutionTargetChange).not.toHaveBeenCalled();
+  });
+
   it("keeps Shared CLI and provider accordion in one stable menu root", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onExecutionTargetChange = vi.fn();
+    const onReloadProviderConfig = vi.fn();
 
     render(
       <ModelSelect
@@ -205,10 +268,14 @@ describe("ModelSelect", () => {
         currentProvider="claude"
         triggerVariant="readiness"
         onChange={vi.fn()}
+        onReloadProviderConfig={onReloadProviderConfig}
         executionTarget={{
           engine: "claude",
           providerProfileId: "provider-a",
+          modelCatalogEntryId: "model-a",
           model: "model-a",
+          providerProfileNameSnapshot: "Provider A",
+          providerProfileSource: "managed",
         }}
         onExecutionTargetChange={onExecutionTargetChange}
         targetGroups={[
@@ -231,7 +298,13 @@ describe("ModelSelect", () => {
                 source: "managed",
                 loading: false,
                 error: null,
-                models: [{ id: "model-b", label: "Model B" }],
+                models: [
+                  {
+                    id: "model-b",
+                    model: "runtime-model-b",
+                    label: "Model B",
+                  },
+                ],
               },
             ],
           },
@@ -268,6 +341,11 @@ describe("ModelSelect", () => {
     expect(providerA.getAttribute("aria-expanded")).toBe("false");
     expect(providerB.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("menuitem", { name: /Model B/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "models.reloadConfig" }));
+    expect(onReloadProviderConfig).toHaveBeenCalledWith(
+      "claude",
+      "provider-b",
+    );
 
     await user.click(providerA);
     expect(providerA.getAttribute("aria-expanded")).toBe("true");
@@ -292,7 +370,8 @@ describe("ModelSelect", () => {
       expect.objectContaining({
         engine: "claude",
         providerProfileId: "provider-b",
-        model: "model-b",
+        modelCatalogEntryId: "model-b",
+        model: "runtime-model-b",
       }),
     );
     expect(screen.queryByRole("menu")).toBeNull();
@@ -312,7 +391,10 @@ describe("ModelSelect", () => {
         executionTarget={{
           engine: "claude",
           providerProfileId: "provider-a",
+          modelCatalogEntryId: "model-a",
           model: "model-a",
+          providerProfileNameSnapshot: "Provider A",
+          providerProfileSource: "managed",
         }}
         onExecutionTargetChange={onExecutionTargetChange}
         targetGroups={[
@@ -335,7 +417,13 @@ describe("ModelSelect", () => {
                 source: "managed",
                 loading: false,
                 error: null,
-                models: [{ id: "model-b", label: "Model B" }],
+                models: [
+                  {
+                    id: "model-b",
+                    model: "runtime-model-b",
+                    label: "Model B",
+                  },
+                ],
               },
             ],
           },
@@ -360,8 +448,121 @@ describe("ModelSelect", () => {
       expect.objectContaining({
         engine: "claude",
         providerProfileId: "provider-b",
-        model: "model-b",
+        modelCatalogEntryId: "model-b",
+        model: "runtime-model-b",
       }),
+    );
+  });
+
+  it.each(["cli", "profiles"] as const)(
+    "moves reload config into the Provider header in %s mode",
+    async (targetGroupDisplayMode) => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      const onReloadProviderConfig = vi.fn();
+
+      render(
+        <ModelSelect
+          value="model-a"
+          currentProvider="claude"
+          triggerVariant="readiness"
+          targetGroupDisplayMode={targetGroupDisplayMode}
+          onChange={vi.fn()}
+          onAddModel={vi.fn()}
+          onReloadProviderConfig={onReloadProviderConfig}
+          executionTarget={{
+            engine: "claude",
+            providerProfileId: "provider-a",
+            model: "model-a",
+          }}
+          targetGroups={[
+            {
+              providerId: "claude",
+              providerLabel: "Claude Code",
+              enabled: true,
+              profiles: [
+                {
+                  id: "provider-a",
+                  label: "Provider A",
+                  source: "managed",
+                  loading: false,
+                  error: null,
+                  models: [{ id: "model-a", label: "Model A" }],
+                },
+              ],
+            },
+          ]}
+        />,
+      );
+
+      await user.click(screen.getByRole("button"));
+
+      const refreshButton = await screen.findByRole("button", {
+        name: "models.reloadConfig",
+      });
+      expect(
+        refreshButton.closest("[data-slot='dropdown-menu-label']"),
+      ).toBeTruthy();
+      expect(
+        screen.queryByRole("menuitem", { name: "models.reloadConfig" }),
+      ).toBeNull();
+      expect(
+        screen.getByRole("menuitem", { name: "models.addModel" }),
+      ).toBeTruthy();
+
+      fireEvent.click(refreshButton);
+      expect(onReloadProviderConfig).toHaveBeenCalledWith(
+        "claude",
+        "provider-a",
+      );
+    },
+  );
+
+  it("shows CLI discovery only for a supported Provider profile", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onDiscoverProviderModels = vi.fn();
+
+    render(
+      <ModelSelect
+        value="model-a"
+        currentProvider="codex"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onDiscoverProviderModels={onDiscoverProviderModels}
+        executionTarget={{
+          engine: "codex",
+          providerProfileId: "provider-a",
+          model: "model-a",
+        }}
+        targetGroups={[
+          {
+            providerId: "codex",
+            providerLabel: "Codex CLI",
+            enabled: true,
+            profiles: [
+              {
+                id: "provider-a",
+                label: "Provider A",
+                source: "managed",
+                loading: false,
+                discoverySupported: true,
+                error: null,
+                models: [{ id: "model-a", label: "Model A" }],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button"));
+    const discoverButton = await screen.findByRole("button", {
+      name: "models.discoverModels",
+    });
+    fireEvent.click(discoverButton);
+
+    expect(onDiscoverProviderModels).toHaveBeenCalledWith(
+      "codex",
+      "provider-a",
     );
   });
 
@@ -379,10 +580,13 @@ describe("ModelSelect", () => {
         "same-model",
         "Provider B",
         "managed",
+        true,
+        "same-model",
       ),
     ).toEqual({
       engine: "codex",
       providerProfileId: "provider-b",
+      modelCatalogEntryId: "same-model",
       model: "same-model",
       providerProfileNameSnapshot: "Provider B",
       providerProfileSource: "managed",
@@ -404,14 +608,53 @@ describe("ModelSelect", () => {
         "claude-opus",
         "本地配置",
         "disk",
+        true,
+        "claude-opus",
       ),
     ).toEqual({
       engine: "claude",
       providerProfileId: null,
+      modelCatalogEntryId: "claude-opus",
       model: "claude-opus",
       providerProfileNameSnapshot: "本地配置",
       providerProfileSource: "disk",
       reasoning: { effort: "high" },
+    });
+  });
+
+  it("keeps catalog identity but freezes the runtime model for execution", () => {
+    expect(
+      buildProviderExecutionTarget(
+        null,
+        "claude",
+        "provider-b",
+        "settings-reasoning",
+        "Provider B",
+        "managed",
+        false,
+        "deepseek-v4-pro",
+      ),
+    ).toMatchObject({
+      engine: "claude",
+      providerProfileId: "provider-b",
+      modelCatalogEntryId: "settings-reasoning",
+      model: "deepseek-v4-pro",
+    });
+  });
+
+  it("does not synthesize a missing runtime model from catalog identity", () => {
+    expect(
+      buildProviderExecutionTarget(
+        null,
+        "claude",
+        "provider-b",
+        "settings-reasoning",
+        "Provider B",
+        "managed",
+      ),
+    ).toMatchObject({
+      modelCatalogEntryId: "settings-reasoning",
+      model: null,
     });
   });
 
@@ -441,7 +684,10 @@ describe("ModelSelect", () => {
         executionTarget={{
           engine: "codex",
           providerProfileId: "provider-b",
+          modelCatalogEntryId: "codex-target-model",
           model: "codex-target-model",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
         }}
         targetGroups={[
           {

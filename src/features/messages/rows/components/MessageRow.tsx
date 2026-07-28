@@ -790,6 +790,7 @@ export const MessageRow = memo(function MessageRow({
     || imageItems.length > 0
     || deferredImageItems.length > 0
     || showActiveRuntimeReconnectCard
+    || Boolean(turnBadge)
     || (hasText && !suppressRuntimeReconnectText);
   const memoryPayloadDialogNode =
     memoryPayloadDialogOpen && memorySummaryRawPayload && typeof document !== "undefined"

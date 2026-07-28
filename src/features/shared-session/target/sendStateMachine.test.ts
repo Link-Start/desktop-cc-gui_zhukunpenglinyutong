@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   canCancel,
   canRetry,
-  isComposerLocked,
+  isComposerInputLocked,
+  isComposerSubmitLocked,
   isPickerLocked,
   sharedAdapterCapabilities,
   transition,
@@ -41,6 +42,13 @@ describe("SharedSendStateMachine transitions", () => {
 
     state = transition(state, { type: "degradedConfirmed" })!;
     expect(state).toBe("awaiting-acceptance");
+  });
+
+  it("returns a confirmed read-only preview to preparing before Tx1 actual package confirmation", () => {
+    let state: SharedSendState = transition("idle", { type: "send" })!;
+    state = transition(state, { type: "lossyProjection" })!;
+    state = transition(state, { type: "previewConfirmed" })!;
+    expect(state).toBe("preparing-context");
   });
 
   it("ambiguous ack in awaiting-acceptance enters recovery-required", () => {
@@ -94,7 +102,29 @@ describe("SharedSendStateMachine selectors (§14.5.6)", () => {
 
   it("picker stays changeable under target-unavailable so user can pick another target", () => {
     expect(isPickerLocked("target-unavailable")).toBe(false);
-    expect(isComposerLocked("target-unavailable")).toBe(true);
+    expect(isComposerSubmitLocked("target-unavailable")).toBe(true);
+    expect(isComposerInputLocked("target-unavailable")).toBe(false);
+  });
+
+  it("normal progress keeps draft editable while blocking another turn submission", () => {
+    const draftableStates: SharedSendState[] = [
+      "preparing-context",
+      "degraded-context",
+      "awaiting-acceptance",
+      "running",
+      "settling",
+    ];
+    for (const state of draftableStates) {
+      expect(isComposerInputLocked(state)).toBe(false);
+      expect(isComposerSubmitLocked(state)).toBe(true);
+    }
+  });
+
+  it("ambiguous ordering locks both input and submission", () => {
+    for (const state of ["cancel-pending", "recovery-required"] as const) {
+      expect(isComposerInputLocked(state)).toBe(true);
+      expect(isComposerSubmitLocked(state)).toBe(true);
+    }
   });
 
   it("ambiguous states never allow one-click retry", () => {

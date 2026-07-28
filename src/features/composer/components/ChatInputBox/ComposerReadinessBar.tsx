@@ -40,6 +40,14 @@ type ComposerReadinessBarProps = {
   onAddModel?: () => void;
   onRefreshModelConfig?: () => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
+  onReloadProviderConfig?: (
+    providerId: ProviderId,
+    providerProfileId: string,
+  ) => Promise<void> | void;
+  onDiscoverProviderModels?: (
+    providerId: ProviderId,
+    providerProfileId: string,
+  ) => Promise<void> | void;
   rightAccessory?: ReactNode;
 };
 
@@ -64,6 +72,8 @@ export function ComposerReadinessBar({
   onAddModel,
   onRefreshModelConfig,
   isModelConfigRefreshing,
+  onReloadProviderConfig,
+  onDiscoverProviderModels,
   rightAccessory,
 }: ComposerReadinessBarProps) {
   const { t } = useTranslation();
@@ -114,10 +124,10 @@ export function ComposerReadinessBar({
       })}
     >
       <div className="composer-readiness-target-group" title={readiness.activity.detailLabel}>
-        {onModelSelect ? (
+        {onModelSelect || onExecutionTargetChange ? (
           <ModelSelect
             value={selectedModel ?? ''}
-            onChange={onModelSelect}
+            onChange={onModelSelect ?? (() => {})}
             models={models}
             modelGroups={modelGroups}
             targetGroups={targetGroups}
@@ -134,6 +144,8 @@ export function ComposerReadinessBar({
             onAddModel={onAddModel}
             onRefreshConfig={onRefreshModelConfig}
             isRefreshingConfig={Boolean(isModelConfigRefreshing)}
+            onReloadProviderConfig={onReloadProviderConfig}
+            onDiscoverProviderModels={onDiscoverProviderModels}
           />
         ) : (
           <div className="composer-readiness-target">

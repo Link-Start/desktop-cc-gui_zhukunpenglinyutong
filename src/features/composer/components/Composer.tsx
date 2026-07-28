@@ -32,10 +32,17 @@ import type {
 } from "../../threads/hooks/useReviewPrompt";
 import type { EngineDisplayInfo } from "../../engine/hooks/useEngineController";
 import {
-  selectNextTarget,
+  hydrateSharedTargetState,
   useSharedTargetState,
 } from "../../shared-session/target/targetStore";
-import type { ExecutionTarget } from "../../shared-session/target/types";
+import {
+  freezeTurnSnapshot,
+  isResolvedExecutionTarget,
+  resolveBackendAuthoritativeExecutionTarget,
+  type ExecutionTarget,
+} from "../../shared-session/target/types";
+import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
+import { dispatchSharedSendEvent } from "../../shared-session/runtime/sharedSendStateStore";
 import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
@@ -184,6 +191,8 @@ type ComposerProps = {
   onStop: () => void;
   canStop: boolean;
   disabled?: boolean;
+  /** 禁止提交但保留文本编辑；Shared non-idle 用于维持 Turn 线性顺序。 */
+  submitDisabled?: boolean;
   isProcessing: boolean;
   steerEnabled: boolean;
   collaborationModes: { id: string; label: string }[];
@@ -463,6 +472,7 @@ function ComposerImpl({
   onStop,
   canStop,
   disabled = false,
+  submitDisabled = false,
   isProcessing,
   steerEnabled: _steerEnabled,
   collaborationModes: _collaborationModes,
@@ -639,34 +649,11 @@ function ComposerImpl({
     activeWorkspaceId ?? "",
     activeThreadId ?? "",
   );
-  const initialSharedTarget = useMemo<ExecutionTarget | null>(() => {
-    if (
-      !isSharedSession ||
-      (selectedEngine !== "claude" && selectedEngine !== "codex")
-    ) {
-      return null;
-    }
-    return {
-      engine: selectedEngine,
-      providerProfileId: providerProfileId ?? null,
-      model: selectedModelId ?? null,
-      reasoning: selectedEffort ? { effort: selectedEffort } : null,
-      providerProfileNameSnapshot:
-        providerProfileId?.trim()
-          ? providerProfileId
-          : t("providers.localConfig", { defaultValue: "本地配置" }),
-      providerProfileSource: providerProfileId?.trim() ? null : "disk",
-    };
-  }, [
-    isSharedSession,
-    providerProfileId,
-    selectedEffort,
-    selectedEngine,
-    selectedModelId,
-    t,
-  ]);
-  const selectedSharedTarget =
-    sharedTargetState.selectedNextTarget ?? initialSharedTarget;
+  const selectedSharedTarget = sharedTargetState.selectedNextTarget;
+  const sharedTargetResolved =
+    !isSharedSession || isResolvedExecutionTarget(selectedSharedTarget);
+  const effectiveSubmitDisabled = submitDisabled || !sharedTargetResolved;
+  const sharedTargetPersistenceRef = useRef<Promise<unknown>>(Promise.resolve());
   const handleSharedTargetChange = useCallback(
     (target: ExecutionTarget) => {
       if (
@@ -676,12 +663,37 @@ function ComposerImpl({
       ) {
         return;
       }
-      selectNextTarget(activeWorkspaceId, activeThreadId, target);
+      const workspaceId = activeWorkspaceId;
+      const threadId = activeThreadId;
+      sharedTargetPersistenceRef.current = sharedTargetPersistenceRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          const response = await persistSharedSessionSelectedTarget(
+            workspaceId,
+            threadId,
+            target,
+          );
+          const persistedTarget =
+            resolveBackendAuthoritativeExecutionTarget(response, target);
+          hydrateSharedTargetState(workspaceId, threadId, persistedTarget);
+          dispatchSharedSendEvent(workspaceId, threadId, {
+            type: "targetRepaired",
+          });
+        })
+        .catch((error) => {
+          pushErrorToast({
+            title: t("sharedSend.selectionPersistFailedTitle"),
+            message: t("sharedSend.selectionPersistFailedMessage", {
+              reason: error instanceof Error ? error.message : String(error),
+            }),
+          });
+        });
     },
     [
       activeThreadId,
       activeWorkspaceId,
       sharedTargetPickerLocked,
+      t,
     ],
   );
   const handleNativeProviderTargetChange = useCallback(
@@ -695,17 +707,19 @@ function ComposerImpl({
       ) {
         return;
       }
+      const snapshot = freezeTurnSnapshot(target);
       requestProviderContinuationDialog({
         workspaceId: activeWorkspaceId,
         sourceSessionId: activeThreadId,
         destination: {
           engine: target.engine,
           providerProfileId: target.providerProfileId,
+          modelCatalogEntryId: target.modelCatalogEntryId ?? null,
           model: target.model ?? null,
           reasoningEffort: target.reasoning?.effort ?? null,
           providerProfileNameSnapshot:
             target.providerProfileNameSnapshot ?? null,
-          providerProfileSource: target.providerProfileSource ?? null,
+          providerProfileSource: snapshot.providerProfileSource ?? null,
           runtimeCapabilityFingerprint:
             target.engine === "claude" ? "echo-checksum" : null,
         },
@@ -716,24 +730,6 @@ function ComposerImpl({
   // 草稿值直接订阅模块级 store(而非经 app-shell 根 prop 灌入):按键写 store 时
   // 只有 Composer 自身重渲染,不再把整个 app-shell 拖下水。
   const draftText = useComposerDraft(activeThreadId);
-  useEffect(() => {
-    if (
-      !isSharedSession ||
-      !activeWorkspaceId ||
-      !activeThreadId ||
-      !initialSharedTarget ||
-      sharedTargetState.selectedNextTarget
-    ) {
-      return;
-    }
-    selectNextTarget(activeWorkspaceId, activeThreadId, initialSharedTarget);
-  }, [
-    activeThreadId,
-    activeWorkspaceId,
-    initialSharedTarget,
-    isSharedSession,
-    sharedTargetState.selectedNextTarget,
-  ]);
   const [text, setText] = useState(draftText);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
   const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);
@@ -1420,7 +1416,7 @@ function ComposerImpl({
 
   const handleCodexQuickCommand = useCallback(
     (command: string) => {
-      if (disabled) {
+      if (disabled || effectiveSubmitDisabled) {
         return;
       }
       const normalized = command.trim().toLowerCase();
@@ -1437,11 +1433,17 @@ function ComposerImpl({
       }
       void onSend(command, []);
     },
-    [disabled, isReviewQuickActionEngine, onSend, selectedEngine],
+    [
+      disabled,
+      effectiveSubmitDisabled,
+      isReviewQuickActionEngine,
+      onSend,
+      selectedEngine,
+    ],
   );
 
   const handleForkQuickStart = useCallback(() => {
-    if (disabled) {
+    if (disabled || effectiveSubmitDisabled) {
       return;
     }
     if (onForkQuickStart) {
@@ -1452,11 +1454,17 @@ function ComposerImpl({
       return;
     }
     void onSend("/fork", []);
-  }, [disabled, onForkQuickStart, onSend, selectedEngine]);
+  }, [
+    disabled,
+    effectiveSubmitDisabled,
+    onForkQuickStart,
+    onSend,
+    selectedEngine,
+  ]);
 
   const handleSend = useCallback(
     (submittedText?: string, submittedImages?: string[]) => {
-      if (disabled) {
+      if (disabled || effectiveSubmitDisabled) {
         return;
       }
       if (opencodeDisconnected) {
@@ -1613,6 +1621,7 @@ function ComposerImpl({
       activeWorkspaceId,
       browserContext,
       disabled,
+      effectiveSubmitDisabled,
       intentCanvasAttachments.length,
       applyActiveFileReference,
       commands,
@@ -2443,6 +2452,7 @@ function ComposerImpl({
               ref={chatInputRef}
               text={text}
               disabled={disabled}
+              submitDisabled={effectiveSubmitDisabled}
               isProcessing={isProcessing}
               streamActivityPhase={resolvedComposerStreamActivityPhase}
               canStop={canStop}
@@ -2450,7 +2460,11 @@ function ComposerImpl({
               onStop={onStop}
               onTextChange={handleTextChangeWithHistory}
               selectedModelId={
-                selectedSharedTarget?.model ?? selectedModelId
+                isSharedSession
+                  ? selectedSharedTarget?.modelCatalogEntryId ??
+                    selectedSharedTarget?.model ??
+                    ""
+                  : selectedModelId
               }
               selectedEngine={
                 selectedSharedTarget?.engine ?? selectedEngine
@@ -2458,12 +2472,16 @@ function ComposerImpl({
               isSharedSession={isSharedSession}
               threadId={activeThreadId}
               engines={engines}
-              onSelectEngine={sharedTargetPickerLocked ? undefined : onSelectEngine}
+              onSelectEngine={
+                isSharedSession || sharedTargetPickerLocked
+                  ? undefined
+                  : onSelectEngine
+              }
               models={models}
               providerModelCatalogs={providerModelCatalogs}
               providerProfileId={
-                selectedSharedTarget
-                  ? selectedSharedTarget.providerProfileId ?? null
+                isSharedSession
+                  ? selectedSharedTarget?.providerProfileId ?? null
                   : providerProfileId
               }
               executionTarget={selectedSharedTarget}
@@ -2475,11 +2493,15 @@ function ComposerImpl({
               onNativeProviderTargetChange={
                 !isSharedSession ? handleNativeProviderTargetChange : undefined
               }
-              onSelectModel={sharedTargetPickerLocked ? undefined : onSelectModel}
+              onSelectModel={
+                isSharedSession || sharedTargetPickerLocked
+                  ? undefined
+                  : onSelectModel
+              }
               reasoningOptions={reasoningOptions}
               selectedEffort={
-                selectedSharedTarget
-                  ? selectedSharedTarget.reasoning?.effort ?? null
+                isSharedSession
+                  ? selectedSharedTarget?.reasoning?.effort ?? null
                   : selectedEffort
               }
               onSelectEffort={

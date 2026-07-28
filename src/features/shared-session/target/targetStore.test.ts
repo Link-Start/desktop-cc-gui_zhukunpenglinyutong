@@ -3,11 +3,20 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   beginTurn,
   endTurn,
+  getActiveTurnTargetForAttempt,
   getSharedTargetState,
+  hydrateSharedTargetState,
   resetSharedTargetStoreForTests,
   selectNextTarget,
 } from "./targetStore";
-import { bindingKeyOf, freezeTurnSnapshot, resolveSnapshotProviderLabel } from "./types";
+import {
+  bindingKeyOf,
+  freezeTurnSnapshot,
+  isResolvedExecutionTarget,
+  normalizePersistedExecutionTarget,
+  resolveBackendAuthoritativeExecutionTarget,
+  resolveSnapshotProviderLabel,
+} from "./types";
 
 const WS = "ws-1";
 const THREAD = "thread-1";
@@ -29,6 +38,32 @@ describe("SharedTargetStore", () => {
     const state = getSharedTargetState(WS, THREAD);
     expect(state.selectedNextTarget).toEqual({ engine: "claude", providerProfileId: "p1" });
     expect(state.activeTurnTarget).toBeNull();
+  });
+
+  it("hydrates and clears the selected target without rewriting the active turn", () => {
+    const activeSnapshot = freezeTurnSnapshot({
+      engine: "claude",
+      model: "active-runtime",
+    });
+    beginTurn(WS, THREAD, activeSnapshot, "attempt-active");
+
+    hydrateSharedTargetState(WS, THREAD, {
+      engine: "codex",
+      providerProfileId: "provider-b",
+    });
+    expect(getSharedTargetState(WS, THREAD)).toEqual({
+      selectedNextTarget: {
+        engine: "codex",
+        providerProfileId: "provider-b",
+      },
+      activeTurnTarget: activeSnapshot,
+    });
+
+    hydrateSharedTargetState(WS, THREAD, null);
+    expect(getSharedTargetState(WS, THREAD)).toEqual({
+      selectedNextTarget: null,
+      activeTurnTarget: activeSnapshot,
+    });
   });
 
   it("picker change after beginTurn does not rewrite active snapshot", () => {
@@ -57,6 +92,17 @@ describe("SharedTargetStore", () => {
     expect(state.selectedNextTarget?.engine).toBe("codex");
   });
 
+  it("allows active target fallback only for the same durable attempt", () => {
+    const snapshot = freezeTurnSnapshot({ engine: "codex", model: "runtime-a" });
+    beginTurn(WS, THREAD, snapshot, "attempt-a");
+
+    expect(getActiveTurnTargetForAttempt(WS, THREAD, "attempt-a")).toBe(snapshot);
+    expect(getActiveTurnTargetForAttempt(WS, THREAD, "attempt-b")).toBeNull();
+
+    endTurn(WS, THREAD);
+    expect(getActiveTurnTargetForAttempt(WS, THREAD, "attempt-a")).toBeNull();
+  });
+
   it("keeps state isolated per thread", () => {
     selectNextTarget(WS, THREAD, { engine: "claude" });
     selectNextTarget(WS, "thread-2", { engine: "codex" });
@@ -77,6 +123,135 @@ describe("freezeTurnSnapshot", () => {
     const snapshot = freezeTurnSnapshot({ engine: "claude", reasoning });
     expect(snapshot.reasoning).toEqual({ effort: "high" });
     expect(snapshot.reasoning).not.toBe(reasoning);
+  });
+
+  it("freezes catalog identity separately from the runtime model", () => {
+    const snapshot = freezeTurnSnapshot({
+      engine: "claude",
+      providerProfileId: "provider-b",
+      modelCatalogEntryId: "settings-reasoning",
+      model: "deepseek-v4-pro",
+    });
+
+    expect(snapshot).toMatchObject({
+      modelCatalogEntryId: "settings-reasoning",
+      model: "deepseek-v4-pro",
+    });
+  });
+});
+
+describe("resolved Execution Target contract", () => {
+  it("accepts explicit managed and local identities", () => {
+    expect(
+      isResolvedExecutionTarget({
+        engine: "codex",
+        providerProfileId: "provider-a",
+        modelCatalogEntryId: "catalog-a",
+        model: "runtime-a",
+        providerProfileNameSnapshot: "Provider A",
+        providerProfileSource: "managed",
+      }),
+    ).toBe(true);
+    expect(
+      isResolvedExecutionTarget({
+        engine: "claude",
+        providerProfileId: null,
+        modelCatalogEntryId: "catalog-local",
+        model: "runtime-local",
+        providerProfileNameSnapshot: "本地配置",
+        providerProfileSource: "disk",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps legacy partial metadata non-executable instead of guessing local", () => {
+    const target = normalizePersistedExecutionTarget({ engine: "codex" });
+
+    expect(target).toEqual({
+      engine: "codex",
+      providerProfileId: null,
+      modelCatalogEntryId: null,
+      model: null,
+      reasoning: null,
+      providerProfileNameSnapshot: null,
+      providerProfileSource: null,
+    });
+    expect(isResolvedExecutionTarget(target)).toBe(false);
+  });
+
+  it("rejects missing provider provenance even when model fields exist", () => {
+    expect(
+      isResolvedExecutionTarget({
+        engine: "codex",
+        providerProfileId: null,
+        modelCatalogEntryId: "catalog-local",
+        model: "runtime-local",
+        providerProfileNameSnapshot: "本地配置",
+      }),
+    ).toBe(false);
+  });
+
+  it("publishes only the normalized backend target that exactly matches the request", () => {
+    const requestedTarget = {
+      engine: "codex" as const,
+      providerProfileId: " provider-a ",
+      modelCatalogEntryId: " catalog-a ",
+      model: " runtime-a ",
+      reasoning: { effort: " high " },
+      providerProfileNameSnapshot: " Provider A ",
+      providerProfileSource: "managed" as const,
+    };
+
+    expect(
+      resolveBackendAuthoritativeExecutionTarget(
+        {
+          selectedTarget: {
+            engine: "codex",
+            providerProfileId: "provider-a",
+            modelCatalogEntryId: "catalog-a",
+            model: "runtime-a",
+            reasoning: { effort: "high" },
+            providerProfileNameSnapshot: "Provider A",
+            providerProfileSource: "managed",
+          },
+        },
+        requestedTarget,
+      ),
+    ).toEqual({
+      engine: "codex",
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "catalog-a",
+      model: "runtime-a",
+      reasoning: { effort: "high" },
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed",
+    });
+  });
+
+  it("fails closed when backend target is missing or mismatched", () => {
+    const requestedTarget = {
+      engine: "codex" as const,
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "catalog-a",
+      model: "runtime-a",
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed" as const,
+    };
+
+    expect(() =>
+      resolveBackendAuthoritativeExecutionTarget({}, requestedTarget),
+    ).toThrow("malformed");
+    expect(() =>
+      resolveBackendAuthoritativeExecutionTarget(
+        {
+          selectedTarget: {
+            ...requestedTarget,
+            providerProfileId: "provider-b",
+          },
+        },
+        requestedTarget,
+      ),
+    ).toThrow("mismatched");
   });
 });
 
@@ -105,13 +280,13 @@ describe("resolveSnapshotProviderLabel", () => {
     expect(resolveSnapshotProviderLabel(snapshot)).toBe("OpenRouter");
   });
 
-  it("falls back to profile id then honest legacy unknown", () => {
+  it("falls back to profile id and freezes explicit local semantics", () => {
     expect(
       resolveSnapshotProviderLabel(freezeTurnSnapshot({ engine: "claude", providerProfileId: "p1" })),
     ).toBe("p1");
     expect(
       resolveSnapshotProviderLabel(freezeTurnSnapshot({ engine: "claude" })),
-    ).toBe("历史配置未知");
+    ).toBe("本地配置");
     expect(
       resolveSnapshotProviderLabel(
         freezeTurnSnapshot({
@@ -120,5 +295,11 @@ describe("resolveSnapshotProviderLabel", () => {
         }),
       ),
     ).toBe("本地配置");
+  });
+
+  it("keeps a raw legacy snapshot without provider facts unknown", () => {
+    expect(
+      resolveSnapshotProviderLabel({ engine: "claude" }),
+    ).toBe("历史配置未知");
   });
 });

@@ -23,6 +23,7 @@ import {
   getGitFileBlame,
   getOpenAppIcon,
   getModelList,
+  discoverCodexModels,
   getPromptsList,
   getWorkspaceFiles,
   listThreadTitles,
@@ -403,6 +404,24 @@ describe("tauri invoke wrappers", () => {
           event.status === "completed",
       ),
     ).toBe(true);
+  });
+
+  it("maps provider-scoped Codex CLI model discovery", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ data: [] });
+
+    await discoverCodexModels("ws-1", "  provider-b  ");
+
+    expect(invokeMock).toHaveBeenCalledWith("discover_codex_models", {
+      workspaceId: "ws-1",
+      providerProfileId: "provider-b",
+    });
+
+    await discoverCodexModels("ws-1", "   ");
+    expect(invokeMock).toHaveBeenLastCalledWith("discover_codex_models", {
+      workspaceId: "ws-1",
+      providerProfileId: null,
+    });
   });
 
   it("traces startup-heavy wrappers without changing invoke parameters", async () => {
@@ -2379,6 +2398,34 @@ describe("tauri invoke wrappers", () => {
     });
   });
 
+  it("routes Shared approvals with the exact Runtime owner", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+    const owner = {
+      attemptId: "attempt-approval",
+      providerRuntimeKey: "codex::ws-6::provider-a",
+      sharedThreadId: "shared:thread-a",
+      nativeThreadId: "codex-native-a",
+      runtimeTurnId: "runtime-turn-a",
+      engine: "codex" as const,
+      providerProfileId: "provider-a",
+    };
+
+    await respondToServerRequest("ws-6", 102, "accept", owner);
+
+    expect(invokeMock).toHaveBeenCalledWith("respond_to_server_request", {
+      workspaceId: "ws-6",
+      requestId: 102,
+      result: { decision: "accept" },
+      providerProfileId: "provider-a",
+      threadId: "codex-native-a",
+      turnId: "runtime-turn-a",
+      sharedAttemptId: "attempt-approval",
+      sharedThreadId: "shared:thread-a",
+      providerRuntimeKey: "codex::ws-6::provider-a",
+    });
+  });
+
   it("nests answers for user input responses", async () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockResolvedValueOnce({});
@@ -2397,6 +2444,47 @@ describe("tauri invoke wrappers", () => {
       },
       threadId: null,
       turnId: null,
+    });
+  });
+
+  it("routes Shared user input with the exact Runtime owner", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+    const owner = {
+      attemptId: "attempt-input",
+      providerRuntimeKey: "claude::ws-7::provider-b",
+      sharedThreadId: "shared:thread-b",
+      nativeThreadId: "claude-native-b",
+      runtimeTurnId: "runtime-turn-b",
+      engine: "claude" as const,
+      providerProfileId: "provider-b",
+    };
+
+    await respondToUserInputRequest(
+      "ws-7",
+      203,
+      { confirm_path: { answers: ["Yes"] } },
+      {
+        threadId: "poisoned-thread",
+        turnId: "poisoned-turn",
+        sharedOwner: owner,
+      },
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith("respond_to_server_request", {
+      workspaceId: "ws-7",
+      requestId: 203,
+      result: {
+        answers: {
+          confirm_path: { answers: ["Yes"] },
+        },
+      },
+      threadId: "claude-native-b",
+      turnId: "runtime-turn-b",
+      providerProfileId: "provider-b",
+      sharedAttemptId: "attempt-input",
+      sharedThreadId: "shared:thread-b",
+      providerRuntimeKey: "claude::ws-7::provider-b",
     });
   });
 

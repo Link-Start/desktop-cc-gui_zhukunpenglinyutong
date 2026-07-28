@@ -597,6 +597,8 @@ export interface ChatInputBoxProps {
   placeholder?: string;
   /** Whether disabled */
   disabled?: boolean;
+  /** Block submission without disabling draft editing. */
+  submitDisabled?: boolean;
   /** Controlled mode: input content */
   value?: string;
   /** Current workspace id for prompt enhancer and local providers */

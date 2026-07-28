@@ -676,7 +676,8 @@ export function prepareThreadItems(
       item.kind === "message" &&
       item.role === "assistant" &&
       item.text.trim().length === 0 &&
-      (!item.images || item.images.length === 0)
+      (!item.images || item.images.length === 0) &&
+      !item.executionTargetSnapshot
     ) {
       continue;
     }

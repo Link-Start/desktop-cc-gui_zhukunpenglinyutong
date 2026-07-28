@@ -22,6 +22,7 @@ export type SharedSendEvent =
   | { type: "packagePrepared" }
   | { type: "lossyProjection" }
   | { type: "targetUnavailable" }
+  | { type: "previewConfirmed" }
   | { type: "degradedConfirmed" }
   | { type: "runtimeAck" }
   | { type: "ackAmbiguous" }
@@ -62,6 +63,8 @@ export function transition(
       }
     case "degraded-context":
       switch (event.type) {
+        case "previewConfirmed":
+          return "preparing-context";
         case "degradedConfirmed":
           return "awaiting-acceptance";
         case "commitCancelled":
@@ -134,9 +137,14 @@ export function isPickerLocked(state: SharedSendState): boolean {
   return state !== "idle" && state !== "target-unavailable";
 }
 
-/** Composer 仅在 idle 可发送。 */
-export function isComposerLocked(state: SharedSendState): boolean {
+/** 新 Turn 仅在 idle 可提交，避免破坏 Shared Canonical Thread 的线性顺序。 */
+export function isComposerSubmitLocked(state: SharedSendState): boolean {
   return state !== "idle";
+}
+
+/** 只有 ACK/ordering 不确定时才锁文本编辑；正常运行期允许提前写下一条草稿。 */
+export function isComposerInputLocked(state: SharedSendState): boolean {
+  return state === "cancel-pending" || state === "recovery-required";
 }
 
 /**

@@ -23,6 +23,21 @@ export async function getModelList(workspaceId: string) {
   );
 }
 
+export async function discoverCodexModels(
+  workspaceId: string,
+  providerProfileId?: string | null,
+) {
+  const normalizedProviderProfileId = providerProfileId?.trim();
+  return invoke<{
+    data?: Record<string, unknown>[];
+    result?: { data?: Record<string, unknown>[]; [key: string]: unknown };
+    [key: string]: unknown;
+  }>("discover_codex_models", {
+    workspaceId,
+    providerProfileId: normalizedProviderProfileId || null,
+  });
+}
+
 export async function generateRunMetadata(workspaceId: string, prompt: string) {
   return invoke<{ title: string; worktreeName: string }>("generate_run_metadata", {
     workspaceId,

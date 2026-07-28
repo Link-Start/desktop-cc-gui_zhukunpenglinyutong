@@ -8,7 +8,8 @@
  * 纪律：
  * - 仅当 V2 flag 开启且当前 store 仍为 idle 时才恢复；等待期间若已有新发送
  *   推进状态（竞态窗口），放弃本次恢复（双重检查）。
- * - best-effort：恢复失败不阻断 UI。
+ * - durable evidence 读取失败时 fail closed，进入 recovery-required；
+ *   否则回到 idle 会允许重复发送未知 Attempt。
  */
 
 import { useEffect } from "react";
@@ -16,6 +17,8 @@ import { useEffect } from "react";
 import { sharedSessionV2TurnState } from "../services/sharedSessions";
 import {
   getSharedSendState,
+  getSharedSendStateRevision,
+  markSharedSendRestoreFailure,
   restoreSharedSendStateFromTurnState,
 } from "./sharedSendStateStore";
 import { isSharedV2SendEnabled } from "./sharedV2SendFlag";
@@ -35,6 +38,7 @@ export function useSharedSendStateRestore(
     if (getSharedSendState(workspaceId, threadId).state !== "idle") {
       return;
     }
+    const restoreRevision = getSharedSendStateRevision(workspaceId, threadId);
     let cancelled = false;
     void sharedSessionV2TurnState(workspaceId, threadId)
       .then((turnState) => {
@@ -45,10 +49,23 @@ export function useSharedSendStateRestore(
         if (getSharedSendState(workspaceId, threadId).state !== "idle") {
           return;
         }
-        restoreSharedSendStateFromTurnState(workspaceId, threadId, turnState);
+        restoreSharedSendStateFromTurnState(
+          workspaceId,
+          threadId,
+          turnState,
+          restoreRevision,
+        );
       })
-      .catch(() => {
-        // 忽略：恢复失败保持 idle，不阻断发送链路。
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        markSharedSendRestoreFailure(
+          workspaceId,
+          threadId,
+          error instanceof Error ? error.message : String(error),
+          restoreRevision,
+        );
       });
     return () => {
       cancelled = true;

@@ -97,6 +97,8 @@ export function adaptLegacyMessagesProps(props: MessagesProps): MessagesCoreProp
     !hasScopeMismatch(props.threadId, canonicalState.meta.threadId)
     ? canonicalState
     : buildLegacyConversationState(props);
+  const supportsNativeHistoryMutation =
+    !state.meta.threadId.startsWith("shared:");
 
   return {
     conversation: {
@@ -132,8 +134,12 @@ export function adaptLegacyMessagesProps(props: MessagesProps): MessagesCoreProp
       onRecoverThreadRuntime: props.onRecoverThreadRuntime,
       onRecoverThreadRuntimeAndResend: props.onRecoverThreadRuntimeAndResend,
       onThreadRecoveryFork: props.onThreadRecoveryFork,
-      onForkFromMessage: props.onForkFromMessage,
-      onRewindFromMessage: props.onRewindFromMessage,
+      onForkFromMessage: supportsNativeHistoryMutation
+        ? props.onForkFromMessage
+        : undefined,
+      onRewindFromMessage: supportsNativeHistoryMutation
+        ? props.onRewindFromMessage
+        : undefined,
     },
     presentation: {
       openTargets: props.openTargets,

@@ -13,11 +13,20 @@ const NATIVE_CONTEXT_PROMPT = new RegExp(
     "source:[^\\r\\n]+\\r?\\n" +
     "binding:[^\\r\\n]+(?:\\r?\\n|$)",
 );
+const SHARED_RUNTIME_PROMPT = new RegExp(
+  `^(MOSSX_CONTEXT_PACKAGE:${SHA256}:${SHA256})\\r?\\n` +
+    "MOSSX_SHARED_CONTEXT_V1\\r?\\n" +
+    "session:[^\\r\\n]+\\r?\\n" +
+    "binding:[^\\r\\n]+\\r?\\n" +
+    "[\\s\\S]*\\r?\\n\\1\\r?\\n" +
+    "\\r?\\nCurrent user request:\\r?\\n[\\s\\S]+$",
+);
 
 export type ContextProtocolKind =
   | "context-package"
   | "context-accepted"
-  | "native-context-prompt";
+  | "native-context-prompt"
+  | "shared-runtime-prompt";
 
 export function classifyContextProtocolText(
   text: string,
@@ -31,6 +40,9 @@ export function classifyContextProtocolText(
   }
   if (NATIVE_CONTEXT_PROMPT.test(normalized)) {
     return "native-context-prompt";
+  }
+  if (SHARED_RUNTIME_PROMPT.test(normalized)) {
+    return "shared-runtime-prompt";
   }
   return null;
 }
@@ -54,7 +66,17 @@ export function filterContextProtocolConversationItems(
 ): ConversationItem[] {
   let insideControlExchange = false;
   return items.filter((item) => {
-    if (isContextProtocolConversationItem(item)) {
+    const protocolKind =
+      item.kind === "message"
+        ? classifyContextProtocolText(item.text)
+        : null;
+    if (protocolKind === "shared-runtime-prompt") {
+      // Shared V2 已有 canonical user turn；native Runtime replay 只是 transport
+      // echo。只隐藏该重复 user item，不能把随后的 reasoning/assistant 当成
+      // bootstrap ACK 一并吞掉。
+      return false;
+    }
+    if (protocolKind !== null) {
       insideControlExchange = true;
       return false;
     }
@@ -75,7 +97,8 @@ export function hasContextProtocolControlTail(
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index];
     if (item.kind === "message" && item.role === "user") {
-      return isContextProtocolConversationItem(item);
+      const kind = classifyContextProtocolText(item.text);
+      return kind !== null && kind !== "shared-runtime-prompt";
     }
   }
   return false;

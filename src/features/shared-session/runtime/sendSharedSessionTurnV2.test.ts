@@ -3,7 +3,7 @@
  * Shared V2 发送编排单元测试（Wave 4 / Change B）。
  *
  * 覆盖：
- * - flag 路由：关闭走 V0，开启走 V2（缺 target 时用 engine/model/effort 构造默认 target）。
+ * - flag 路由：关闭走 V0；开启走 V2 时完整 target 必填。
  * - happy path：begin → send（透传 providerProfileId）→ commit completed。
  * - begin 早退（recovery-required / target-unavailable）：不发送、不 commit。
  * - 发送抛错且无 negative ACK 证据：recovery-required + 原样抛出 + endTurn。
@@ -16,10 +16,10 @@ const {
   setSharedSessionSelectedEngine,
   sendSharedSessionMessage,
   sharedSessionV2BeginTurn,
+  sharedSessionV2CancelAttempt,
   sharedSessionV2PrepareContext,
   sharedSessionV2PrepareDelivery,
-  sharedSessionV2AcceptContext,
-  sharedSessionV2AcceptTurn,
+  sharedSessionV2DispatchTurn,
   sharedSessionV2CommitTurn,
   sharedSessionV2MarkRecovery,
   registerSharedSessionNativeBinding,
@@ -29,10 +29,10 @@ const {
   setSharedSessionSelectedEngine: vi.fn(),
   sendSharedSessionMessage: vi.fn(),
   sharedSessionV2BeginTurn: vi.fn(),
+  sharedSessionV2CancelAttempt: vi.fn(),
   sharedSessionV2PrepareContext: vi.fn(),
   sharedSessionV2PrepareDelivery: vi.fn(),
-  sharedSessionV2AcceptContext: vi.fn(),
-  sharedSessionV2AcceptTurn: vi.fn(),
+  sharedSessionV2DispatchTurn: vi.fn(),
   sharedSessionV2CommitTurn: vi.fn(),
   sharedSessionV2MarkRecovery: vi.fn(),
   registerSharedSessionNativeBinding: vi.fn(),
@@ -44,10 +44,10 @@ vi.mock("../services/sharedSessions", () => ({
   setSharedSessionSelectedEngine,
   sendSharedSessionMessage,
   sharedSessionV2BeginTurn,
+  sharedSessionV2CancelAttempt,
   sharedSessionV2PrepareContext,
   sharedSessionV2PrepareDelivery,
-  sharedSessionV2AcceptContext,
-  sharedSessionV2AcceptTurn,
+  sharedSessionV2DispatchTurn,
   sharedSessionV2CommitTurn,
   sharedSessionV2MarkRecovery,
 }));
@@ -69,10 +69,15 @@ import type { ExecutionTarget } from "../target/types";
 import { sendSharedSessionTurnRouted } from "./sendSharedSessionTurn";
 import { sendSharedSessionTurnV2 } from "./sendSharedSessionTurnV2";
 import {
+  dispatchSharedSendEvent,
+  getSharedSendActiveAttemptId,
   getSharedSendState,
+  resetSharedSendStateStoreForTests,
   resolveSharedDegradedContextDecision,
+  tryAcquireSharedSend,
 } from "./sharedSendStateStore";
 import { setSharedV2SendOverride } from "./sharedV2SendFlag";
+import { isComposerSubmitLocked } from "../target/sendStateMachine";
 
 const BASE_INPUT = {
   workspaceId: "ws-1",
@@ -87,6 +92,7 @@ const BASE_INPUT = {
 const TARGET: ExecutionTarget = {
   engine: "claude",
   providerProfileId: "profile-1",
+  modelCatalogEntryId: "settings-sonnet",
   model: "sonnet-4",
   providerProfileNameSnapshot: "Provider A",
   providerProfileSource: "managed",
@@ -102,11 +108,12 @@ function mockBeginCreating() {
   });
 }
 
-function mockContextDelivery() {
+function mockContextDelivery(overrides: Record<string, unknown> = {}) {
   sharedSessionV2PrepareDelivery.mockResolvedValue({
     status: "ready",
     packageId: "package-1",
     artifactId: "artifact-1",
+    artifactChecksum: "sha256:artifact",
     sourceChecksum: "sha256:source",
     throughSequenceInclusive: 0,
     mode: "portable-transcript",
@@ -126,10 +133,7 @@ function mockContextDelivery() {
       perCategory: [],
     },
     ackFidelity: "weak",
-  });
-  sharedSessionV2AcceptContext.mockResolvedValue({
-    status: "accepted",
-    packageId: "package-1",
+    ...overrides,
   });
 }
 
@@ -137,6 +141,7 @@ describe("sendSharedSessionTurnRouted（flag 路由）", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetSharedTargetStoreForTests();
+    resetSharedSendStateStoreForTests();
     window.localStorage.clear();
     setSharedSessionSelectedEngine.mockResolvedValue({ nativeThreadId: "" });
     sharedSessionV2PrepareContext.mockResolvedValue({
@@ -158,14 +163,36 @@ describe("sendSharedSessionTurnRouted（flag 路由）", () => {
         terminal: { type: "run.settled", outcome: "completed" },
       },
     });
-    mockBeginCreating();
-    sharedSessionV2AcceptTurn.mockResolvedValue({
+    sharedSessionV2DispatchTurn.mockResolvedValue({
       status: "accepted",
       attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      engine: "claude",
+      providerProfileId: "profile-1",
+      model: "sonnet-4",
+      reasoningEffort: "high",
+      bindingKey: "claude:profile-1",
+      nativeThreadId: "claude:session-1",
+      runtimeTurnId: "claude-turn-1",
+      delivery: {
+        promptAcceptance: "accepted",
+        contextAcceptance: {
+          status: "accepted",
+          packageId: "package-1",
+          sourceChecksum: "sha256:source",
+          ackFidelity: "weak",
+        },
+        terminal: { type: "run.settled", outcome: "completed" },
+      },
     });
+    mockBeginCreating();
     sharedSessionV2CommitTurn.mockResolvedValue({
       status: "committed",
       duplicate: false,
+      bindingKey: "claude:profile-1",
+    });
+    sharedSessionV2MarkRecovery.mockResolvedValue({
+      status: "recovery-required",
       bindingKey: "claude:profile-1",
     });
     captureSharedRuntimeTerminal.mockReturnValue({
@@ -183,7 +210,8 @@ describe("sendSharedSessionTurnRouted（flag 路由）", () => {
     window.localStorage.clear();
   });
 
-  it("flag 关闭：走 V0，不触碰 V2 命令", async () => {
+  it("显式关闭 flag：走 V0，不触碰 V2 命令", async () => {
+    setSharedV2SendOverride(false);
     const response = await sendSharedSessionTurnRouted({ ...BASE_INPUT, target: TARGET });
 
     expect(sendSharedSessionMessage).toHaveBeenCalledTimes(1);
@@ -192,23 +220,67 @@ describe("sendSharedSessionTurnRouted（flag 路由）", () => {
     expect(response).toMatchObject({ nativeThreadId: "claude:session-1" });
   });
 
-  it("flag 开启且缺 target：用 engine/model/effort 构造默认 target 走 V2", async () => {
-    setSharedV2SendOverride(true);
+  it("默认开启且缺 target：fail closed，不触碰 V2 RPC", async () => {
+    await expect(
+      sendSharedSessionTurnRouted({ ...BASE_INPUT }),
+    ).rejects.toThrow("shared-v2-target-incomplete");
 
-    await sendSharedSessionTurnRouted({ ...BASE_INPUT });
+    expect(sharedSessionV2BeginTurn).not.toHaveBeenCalled();
+    expect(sharedSessionV2PrepareContext).not.toHaveBeenCalled();
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
+  });
+
+  it("local selection source only converts to canonical local at the freeze boundary", async () => {
+    const localTarget: ExecutionTarget = {
+      engine: "claude",
+      providerProfileId: null,
+      modelCatalogEntryId: "settings-sonnet",
+      model: "sonnet-4",
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk",
+    };
+    sharedSessionV2BeginTurn.mockResolvedValue({
+      status: "creating",
+      attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      bindingKey: "claude:default",
+    });
+    sharedSessionV2DispatchTurn.mockResolvedValue({
+      status: "accepted",
+      attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      engine: "claude",
+      providerProfileId: null,
+      model: "sonnet-4",
+      reasoningEffort: null,
+      bindingKey: "claude:default",
+      nativeThreadId: "claude:session-1",
+      runtimeTurnId: "claude-turn-1",
+      delivery: {
+        promptAcceptance: "accepted",
+        contextAcceptance: {
+          status: "accepted",
+          packageId: "package-1",
+          sourceChecksum: "sha256:source",
+          ackFidelity: "weak",
+        },
+        terminal: { type: "run.settled", outcome: "completed" },
+      },
+    });
+
+    await sendSharedSessionTurnRouted({ ...BASE_INPUT, target: localTarget });
 
     expect(sharedSessionV2BeginTurn).toHaveBeenCalledWith(
       "ws-1",
       "shared:thread-1",
       expect.objectContaining({
-        engine: "claude",
         providerProfileId: null,
-        model: "sonnet-4",
-        reasoningEffort: "high",
+        providerProfileSource: "local",
       }),
       "hello",
     );
-    expect(sharedSessionV2CommitTurn).toHaveBeenCalledTimes(1);
+    expect(sharedSessionV2DispatchTurn).toHaveBeenCalledTimes(1);
+    expect(setSharedSessionSelectedEngine).not.toHaveBeenCalled();
   });
 });
 
@@ -216,6 +288,7 @@ describe("sendSharedSessionTurnV2", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetSharedTargetStoreForTests();
+    resetSharedSendStateStoreForTests();
     window.localStorage.clear();
     setSharedSessionSelectedEngine.mockResolvedValue({ nativeThreadId: "" });
     sharedSessionV2PrepareContext.mockResolvedValue({
@@ -226,7 +299,18 @@ describe("sendSharedSessionTurnV2", () => {
     mockContextDelivery();
     sendSharedSessionMessage.mockResolvedValue({
       nativeThreadId: "claude:session-1",
-      assistantText: "world",
+    });
+    sharedSessionV2DispatchTurn.mockResolvedValue({
+      status: "accepted",
+      attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      engine: "claude",
+      providerProfileId: "profile-1",
+      model: "sonnet-4",
+      reasoningEffort: "high",
+      bindingKey: "claude:profile-1",
+      nativeThreadId: "claude:session-1",
+      runtimeTurnId: "claude-turn-1",
       delivery: {
         promptAcceptance: "accepted",
         contextAcceptance: {
@@ -239,10 +323,6 @@ describe("sendSharedSessionTurnV2", () => {
       },
     });
     mockBeginCreating();
-    sharedSessionV2AcceptTurn.mockResolvedValue({
-      status: "accepted",
-      attemptId: "attempt-1",
-    });
     sharedSessionV2CommitTurn.mockResolvedValue({
       status: "committed",
       duplicate: false,
@@ -253,45 +333,116 @@ describe("sendSharedSessionTurnV2", () => {
       status: "recovery-required",
       bindingKey: "claude:profile-1",
     });
+    sharedSessionV2CancelAttempt.mockResolvedValue({
+      status: "cancelled",
+      attemptId: "attempt-1",
+    });
   });
 
-  it("happy path：begin → send（透传 providerProfileId）→ commit completed", async () => {
+  it("direct V2 entry rejects a partial target before state or RPC side effects", async () => {
+    await expect(
+      sendSharedSessionTurnV2({
+        ...BASE_INPUT,
+        target: { engine: "claude" },
+      }),
+    ).rejects.toThrow("shared-v2-target-incomplete");
+
+    expect(sharedSessionV2BeginTurn).not.toHaveBeenCalled();
+    expect(sharedSessionV2PrepareContext).not.toHaveBeenCalled();
+    expect(getSharedTargetState("ws-1", "shared:thread-1")).toEqual({
+      selectedNextTarget: null,
+      activeTurnTarget: null,
+    });
+  });
+
+  it("returns a typed block with zero RPC side effects when the Shared Session is non-idle", async () => {
+    dispatchSharedSendEvent("ws-1", "shared:thread-1", { type: "send" });
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).resolves.toEqual({
+      status: "blocked",
+      state: "preparing-context",
+      reason: "shared-send-not-idle",
+    });
+
+    expect(sharedSessionV2PrepareContext).not.toHaveBeenCalled();
+    expect(sharedSessionV2BeginTurn).not.toHaveBeenCalled();
+    expect(sharedSessionV2PrepareDelivery).not.toHaveBeenCalled();
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
+    expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
+  });
+
+  it("consumes a Composer admission exactly once before any V2 RPC", async () => {
+    const admission = tryAcquireSharedSend("ws-1", "shared:thread-1");
+    expect(admission.acquired).toBe(true);
+    if (!admission.acquired) {
+      throw new Error("expected Shared admission");
+    }
+
+    await expect(
+      sendSharedSessionTurnV2({
+        ...BASE_INPUT,
+        target: TARGET,
+        sharedSendAdmissionRevision: admission.revision,
+      }),
+    ).resolves.toMatchObject({
+      v2: { attemptId: "attempt-1", committed: true },
+    });
+
+    sharedSessionV2PrepareContext.mockClear();
+    sharedSessionV2BeginTurn.mockClear();
+    sharedSessionV2DispatchTurn.mockClear();
+    await expect(
+      sendSharedSessionTurnV2({
+        ...BASE_INPUT,
+        target: TARGET,
+        sharedSendAdmissionRevision: admission.revision,
+      }),
+    ).resolves.toEqual({
+      status: "blocked",
+      state: "idle",
+      reason: "shared-send-admission-stale",
+    });
+    expect(sharedSessionV2PrepareContext).not.toHaveBeenCalled();
+    expect(sharedSessionV2BeginTurn).not.toHaveBeenCalled();
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
+  });
+
+  it("happy path：begin → attempt-owned dispatch → commit confirmation", async () => {
     const result = await sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET });
 
-    // 发送段透传 providerProfileId。
-    expect(sendSharedSessionMessage).toHaveBeenCalledWith(
+    expect(setSharedSessionSelectedEngine).not.toHaveBeenCalled();
+    expect(sendSharedSessionMessage).not.toHaveBeenCalled();
+    expect(sharedSessionV2BeginTurn).toHaveBeenCalledWith(
       "ws-1",
       "shared:thread-1",
-      "claude",
-      "hello",
-      expect.objectContaining({ providerProfileId: "profile-1" }),
-    );
-    // commit 携带 attempt/turn/binding 上下文与 assistantText / nativeSessionId。
-    expect(sharedSessionV2CommitTurn).toHaveBeenCalledWith("ws-1", "shared:thread-1", {
-      attemptId: "attempt-1",
-      logicalTurnId: "turn-1",
-      target: expect.objectContaining({
-        engine: "claude",
-        providerProfileId: "profile-1",
-        providerProfileNameSnapshot: "Provider A",
-        providerProfileSource: "managed",
-        reasoningEffort: "high",
+      expect.objectContaining({
+        modelCatalogEntryId: "settings-sonnet",
+        model: "sonnet-4",
       }),
-      assistantText: "world",
-      outcome: { status: "completed" },
-      nativeSessionId: "claude:session-1",
-    });
-    expect(sharedSessionV2AcceptTurn).toHaveBeenCalledWith(
+      "hello",
+    );
+    // actual-send 只携带 durable attempt + artifact identity 与非 Target 操作参数。
+    expect(sharedSessionV2DispatchTurn).toHaveBeenCalledWith(
       "ws-1",
       "shared:thread-1",
       {
         attemptId: "attempt-1",
-        logicalTurnId: "turn-1",
-        target: expect.objectContaining({
-          providerProfileId: "profile-1",
-        }),
-        nativeSessionId: "claude:session-1",
+        artifactId: "artifact-1",
+        artifactChecksum: "sha256:artifact",
+        disableThinking: undefined,
+        accessMode: undefined,
+        images: [],
+        collaborationMode: undefined,
+        preferredLanguage: undefined,
+        customSpecRoot: undefined,
       },
+    );
+    expect(sharedSessionV2CommitTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-1",
     );
     expect(sharedSessionV2MarkRecovery).not.toHaveBeenCalled();
     expect(result).toMatchObject({
@@ -306,6 +457,144 @@ describe("sendSharedSessionTurnV2", () => {
     });
     // endTurn 兜底：active 快照已清除。
     expect(getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget).toBeNull();
+  });
+
+  it("poisoned legacy flat fields cannot cross the V2 Runtime boundary", async () => {
+    await sendSharedSessionTurnV2({
+      ...BASE_INPUT,
+      engine: "codex",
+      model: "kimi-for-coding",
+      effort: "low",
+      target: TARGET,
+    });
+
+    expect(sharedSessionV2BeginTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      expect.objectContaining({
+        engine: "claude",
+        modelCatalogEntryId: "settings-sonnet",
+        model: "sonnet-4",
+        reasoningEffort: "high",
+        providerProfileId: "profile-1",
+      }),
+      "hello",
+    );
+    const dispatchParams = sharedSessionV2DispatchTurn.mock.calls[0]?.[2];
+    expect(dispatchParams).toEqual(
+      expect.objectContaining({
+        attemptId: "attempt-1",
+        artifactId: "artifact-1",
+        artifactChecksum: "sha256:artifact",
+      }),
+    );
+    expect(dispatchParams).not.toHaveProperty("engine");
+    expect(dispatchParams).not.toHaveProperty("model");
+    expect(dispatchParams).not.toHaveProperty("effort");
+    expect(dispatchParams).not.toHaveProperty("providerProfileId");
+    expect(dispatchParams).not.toHaveProperty("text");
+    expect(sendSharedSessionMessage).not.toHaveBeenCalled();
+  });
+
+  it("freezes one target snapshot before the first async boundary", async () => {
+    const mutableTarget: ExecutionTarget = {
+      ...TARGET,
+      reasoning: { ...TARGET.reasoning! },
+    };
+    sharedSessionV2PrepareContext.mockImplementationOnce(async () => {
+      mutableTarget.engine = "codex";
+      mutableTarget.providerProfileId = "profile-mutated";
+      mutableTarget.modelCatalogEntryId = "catalog-mutated";
+      mutableTarget.model = "runtime-mutated";
+      mutableTarget.reasoning = { effort: "low" };
+      return {
+        status: "ready",
+        mode: "delta-sync",
+        omissions: [],
+      };
+    });
+
+    await sendSharedSessionTurnV2({
+      ...BASE_INPUT,
+      target: mutableTarget,
+    });
+
+    expect(sharedSessionV2BeginTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      expect.objectContaining({
+        engine: "claude",
+        providerProfileId: "profile-1",
+        modelCatalogEntryId: "settings-sonnet",
+        model: "sonnet-4",
+        reasoningEffort: "high",
+      }),
+      "hello",
+    );
+    expect(registerSharedSessionNativeBinding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "claude",
+        providerProfileId: "profile-1",
+        attemptId: "attempt-1",
+      }),
+    );
+  });
+
+  it("production-shaped terminal closes the first turn and allows a second turn", async () => {
+    sharedSessionV2DispatchTurn.mockResolvedValue({
+      status: "accepted",
+      attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      engine: "claude",
+      providerProfileId: "profile-1",
+      model: "sonnet-4",
+      reasoningEffort: "high",
+      bindingKey: "claude:profile-1",
+      nativeThreadId: "claude:session-1",
+      runtimeTurnId: "claude-turn-1",
+      delivery: {
+        promptAcceptance: "accepted",
+        contextAcceptance: {
+          status: "accepted",
+          packageId: "package-1",
+          sourceChecksum: "sha256:source",
+          ackFidelity: "weak",
+        },
+      },
+    });
+    const waitFor = vi.fn().mockResolvedValue({
+      type: "run.settled",
+      outcome: "completed",
+      assistantText: "terminal text",
+    });
+    captureSharedRuntimeTerminal.mockReturnValue({
+      waitFor,
+      waitForContext: vi.fn().mockResolvedValue(undefined),
+      dispose: vi.fn(),
+    });
+
+    await sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET });
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("idle");
+    expect(
+      isComposerSubmitLocked(
+        getSharedSendState("ws-1", "shared:thread-1").state,
+      ),
+    ).toBe(false);
+
+    await sendSharedSessionTurnV2({
+      ...BASE_INPUT,
+      text: "second turn",
+      target: TARGET,
+    });
+
+    expect(waitFor).toHaveBeenCalledTimes(2);
+    expect(waitFor).toHaveBeenCalledWith({
+      attemptId: "attempt-1",
+      nativeThreadId: "claude:session-1",
+      runtimeTurnId: "claude-turn-1",
+    });
+    expect(sharedSessionV2CommitTurn).toHaveBeenCalledTimes(2);
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("idle");
   });
 
   it("lossy context waits for explicit confirmation before Tx1 and runtime send", async () => {
@@ -323,6 +612,7 @@ describe("sendSharedSessionTurnV2", () => {
     });
     expect(sharedSessionV2BeginTurn).not.toHaveBeenCalled();
     expect(sendSharedSessionMessage).not.toHaveBeenCalled();
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
 
     expect(
       resolveSharedDegradedContextDecision(
@@ -333,7 +623,162 @@ describe("sendSharedSessionTurnV2", () => {
     ).toBe(true);
     await pending;
     expect(sharedSessionV2BeginTurn).toHaveBeenCalledTimes(1);
-    expect(sendSharedSessionMessage).toHaveBeenCalledTimes(1);
+    expect(sharedSessionV2DispatchTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks again for the Tx1-owned actual degraded package before Runtime dispatch", async () => {
+    sharedSessionV2PrepareContext.mockResolvedValue({
+      status: "degraded",
+      mode: "preview-mode",
+      omissions: ["preview omission"],
+    });
+    mockContextDelivery({
+      status: "degraded",
+      packageId: "actual-package-1",
+      sourceChecksum: "sha256:actual-source",
+      mode: "portable-transcript",
+      manifest: {
+        mode: "portable-transcript",
+        omitted: [
+          {
+            entryId: "entry-1",
+            category: "reasoning",
+            reason: "budget",
+            disposition: "retrievable-on-demand",
+          },
+        ],
+        throughSequenceInclusive: 0,
+        sourceChecksum: "sha256:actual-source",
+      },
+    });
+    sharedSessionV2DispatchTurn.mockResolvedValue({
+      status: "accepted",
+      attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      engine: "claude",
+      providerProfileId: "profile-1",
+      model: "sonnet-4",
+      reasoningEffort: "high",
+      bindingKey: "claude:profile-1",
+      nativeThreadId: "claude:session-1",
+      runtimeTurnId: "claude-turn-1",
+      delivery: {
+        promptAcceptance: "accepted",
+        contextAcceptance: {
+          status: "accepted",
+          packageId: "actual-package-1",
+          sourceChecksum: "sha256:actual-source",
+          ackFidelity: "weak",
+        },
+        terminal: { type: "run.settled", outcome: "completed" },
+      },
+    });
+
+    const pending = sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET });
+    await vi.waitFor(() => {
+      expect(getSharedSendState("ws-1", "shared:thread-1")).toMatchObject({
+        state: "degraded-context",
+        degradedInfo: {
+          mode: "preview-mode",
+          omissions: ["preview omission"],
+        },
+      });
+    });
+    expect(
+      resolveSharedDegradedContextDecision(
+        "ws-1",
+        "shared:thread-1",
+        true,
+      ),
+    ).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(getSharedSendState("ws-1", "shared:thread-1")).toMatchObject({
+        state: "degraded-context",
+        degradedInfo: {
+          packageId: "actual-package-1",
+          sourceChecksum: "sha256:actual-source",
+          mode: "portable-transcript",
+          omissions: ["reasoning: budget"],
+        },
+      });
+    });
+    expect(sharedSessionV2BeginTurn).toHaveBeenCalledTimes(1);
+    expect(sharedSessionV2PrepareDelivery).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-1",
+    );
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
+
+    expect(
+      resolveSharedDegradedContextDecision(
+        "ws-1",
+        "shared:thread-1",
+        true,
+      ),
+    ).toBe(true);
+    await pending;
+
+    expect(sharedSessionV2CancelAttempt).not.toHaveBeenCalled();
+    expect(sharedSessionV2DispatchTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it("terminalizes a declined actual degraded package before returning to idle", async () => {
+    mockContextDelivery({
+      status: "degraded",
+      packageId: "actual-package-cancel",
+      sourceChecksum: "sha256:actual-cancel",
+      mode: "checkpoint",
+      manifest: {
+        mode: "checkpoint",
+        omitted: [
+          {
+            entryId: "entry-2",
+            category: "tool-output",
+            reason: "unsupported",
+            disposition: "not-retrievable",
+          },
+        ],
+        throughSequenceInclusive: 0,
+        sourceChecksum: "sha256:actual-cancel",
+      },
+    });
+
+    const pending = sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET });
+    await vi.waitFor(() => {
+      expect(getSharedSendState("ws-1", "shared:thread-1")).toMatchObject({
+        state: "degraded-context",
+        degradedInfo: {
+          packageId: "actual-package-cancel",
+          sourceChecksum: "sha256:actual-cancel",
+          omissions: ["tool-output: unsupported"],
+        },
+      });
+    });
+    expect(
+      resolveSharedDegradedContextDecision(
+        "ws-1",
+        "shared:thread-1",
+        false,
+      ),
+    ).toBe(true);
+
+    await expect(pending).resolves.toEqual({ status: "cancelled" });
+    expect(sharedSessionV2CancelAttempt).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-1",
+      "degraded-context-declined",
+    );
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("idle");
+    expect(
+      getSharedSendActiveAttemptId("ws-1", "shared:thread-1"),
+    ).toBeNull();
+    expect(
+      getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget,
+    ).toBeNull();
   });
 
   it("prepare_context 失败时安全回 idle", async () => {
@@ -346,6 +791,7 @@ describe("sendSharedSessionTurnV2", () => {
 
     expect(sharedSessionV2BeginTurn).not.toHaveBeenCalled();
     expect(sendSharedSessionMessage).not.toHaveBeenCalled();
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
     expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("idle");
   });
 
@@ -357,13 +803,13 @@ describe("sendSharedSessionTurnV2", () => {
       sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
     ).rejects.toBe(beginError);
 
-    expect(sendSharedSessionMessage).not.toHaveBeenCalled();
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
     expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe(
       "recovery-required",
     );
   });
 
-  it("begin_turn creating 缺少 identity 时落 recovery 并锁住会话", async () => {
+  it("begin_turn creating 缺少 identity 时 fail closed 并锁住会话", async () => {
     sharedSessionV2BeginTurn.mockResolvedValue({
       status: "creating",
       bindingKey: "claude:profile-1",
@@ -373,12 +819,9 @@ describe("sendSharedSessionTurnV2", () => {
       sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
     ).rejects.toThrow("缺少 attemptId/logicalTurnId");
 
-    expect(sendSharedSessionMessage).not.toHaveBeenCalled();
-    expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
-      "ws-1",
-      "shared:thread-1",
-      expect.objectContaining({ reason: "begin-turn-contract-violation" }),
-    );
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
+    // Rust 未返回 attemptId 时不能伪造路由身份去落 recovery。
+    expect(sharedSessionV2MarkRecovery).not.toHaveBeenCalled();
     expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe(
       "recovery-required",
     );
@@ -399,6 +842,7 @@ describe("sendSharedSessionTurnV2", () => {
       reason: "provisioning-crash-window",
     });
     expect(sendSharedSessionMessage).not.toHaveBeenCalled();
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
     expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
     // 未 beginTurn，无需 endTurn；store 保持空。
     expect(getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget).toBeNull();
@@ -418,12 +862,13 @@ describe("sendSharedSessionTurnV2", () => {
       reason: "unsupported-engine",
     });
     expect(sendSharedSessionMessage).not.toHaveBeenCalled();
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
     expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
   });
 
   it("发送抛错且无 negative ACK 证据：进入 recovery，不伪造 failed commit", async () => {
     const sendError = new Error("runtime disconnected");
-    sendSharedSessionMessage.mockRejectedValue(sendError);
+    sharedSessionV2DispatchTurn.mockRejectedValue(sendError);
 
     await expect(
       sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
@@ -433,12 +878,8 @@ describe("sendSharedSessionTurnV2", () => {
     expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
       "ws-1",
       "shared:thread-1",
-      {
-        bindingKey: "claude:profile-1",
-        engine: "claude",
-        providerProfileId: "profile-1",
-        reason: "runtime-delivery-ambiguous: runtime disconnected",
-      },
+      "attempt-1",
+      "runtime-delivery-ambiguous: runtime disconnected",
     );
     expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe(
       "recovery-required",
@@ -446,8 +887,55 @@ describe("sendSharedSessionTurnV2", () => {
     expect(getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget).toBeNull();
   });
 
+  it("deterministic context prepare failure confirms failed terminal and unlocks", async () => {
+    const prepareError = new Error(
+      "context-prepare-failed: artifact checksum mismatch",
+    );
+    sharedSessionV2PrepareDelivery.mockRejectedValue(prepareError);
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).rejects.toBe(prepareError);
+
+    expect(sharedSessionV2DispatchTurn).not.toHaveBeenCalled();
+    expect(sharedSessionV2CommitTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-1",
+    );
+    expect(sharedSessionV2MarkRecovery).not.toHaveBeenCalled();
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("idle");
+  });
+
+  it("typed Provider rejection confirms failed canonical terminal without recovery", async () => {
+    const rejection = new Error(
+      "target-provider-rejected: kimi-for-coding is not supported",
+    );
+    sharedSessionV2DispatchTurn.mockRejectedValue(rejection);
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).rejects.toBe(rejection);
+
+    expect(sharedSessionV2CommitTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-1",
+    );
+    expect(sharedSessionV2MarkRecovery).not.toHaveBeenCalled();
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("idle");
+  });
+
   it("missing typed prompt ACK enters recovery without accepting or committing", async () => {
-    sendSharedSessionMessage.mockResolvedValue({
+    sharedSessionV2DispatchTurn.mockResolvedValue({
+      status: "accepted",
+      attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      engine: "claude",
+      providerProfileId: "profile-1",
+      model: "sonnet-4",
+      reasoningEffort: "high",
+      bindingKey: "claude:profile-1",
       nativeThreadId: "claude:session-1",
       delivery: {
         terminal: { type: "run.settled", outcome: "completed" },
@@ -458,18 +946,61 @@ describe("sendSharedSessionTurnV2", () => {
       sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
     ).rejects.toThrow("typed prompt ACK");
 
-    expect(sharedSessionV2AcceptTurn).not.toHaveBeenCalled();
     expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
     expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
       "ws-1",
       "shared:thread-1",
-      expect.objectContaining({ reason: "typed-prompt-ack-missing" }),
+      "attempt-1",
+      "typed-prompt-ack-missing-or-mismatched",
+    );
+  });
+
+  it("rejects a typed ACK whose Provider or Model differs from the frozen attempt", async () => {
+    sharedSessionV2DispatchTurn.mockResolvedValue({
+      status: "accepted",
+      attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      engine: "claude",
+      providerProfileId: "profile-poisoned",
+      model: "wrong-runtime-model",
+      reasoningEffort: "low",
+      bindingKey: "claude:profile-1",
+      nativeThreadId: "claude:session-1",
+      delivery: {
+        promptAcceptance: "accepted",
+        contextAcceptance: {
+          status: "accepted",
+          packageId: "package-1",
+          sourceChecksum: "sha256:source",
+        },
+      },
+    });
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).rejects.toThrow("typed prompt ACK");
+
+    expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
+    expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-1",
+      "typed-prompt-ack-missing-or-mismatched",
     );
   });
 
   it("missing run.settled preserves accepted evidence and enters recovery", async () => {
-    sendSharedSessionMessage.mockResolvedValue({
+    sharedSessionV2DispatchTurn.mockResolvedValue({
+      status: "accepted",
+      attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      engine: "claude",
+      providerProfileId: "profile-1",
+      model: "sonnet-4",
+      reasoningEffort: "high",
+      bindingKey: "claude:profile-1",
       nativeThreadId: "claude:session-1",
+      runtimeTurnId: "claude-turn-1",
       delivery: {
         promptAcceptance: "accepted",
         contextAcceptance: {
@@ -489,19 +1020,73 @@ describe("sendSharedSessionTurnV2", () => {
       sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
     ).rejects.toThrow("run.settled");
 
-    expect(sharedSessionV2AcceptTurn).toHaveBeenCalledTimes(1);
     expect(sharedSessionV2CommitTurn).not.toHaveBeenCalled();
     expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
       "ws-1",
       "shared:thread-1",
-      expect.objectContaining({ reason: "run-settled-missing" }),
+      "attempt-1",
+      "run-settled-missing",
     );
   });
 
+  it("finishes from an early terminal returned by runtime binding without waiting for UI replay", async () => {
+    const waitFor = vi.fn();
+    captureSharedRuntimeTerminal.mockReturnValue({
+      waitFor,
+      waitForContext: vi.fn(),
+      dispose: vi.fn(),
+    });
+    sharedSessionV2DispatchTurn.mockResolvedValue({
+      status: "accepted",
+      attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      engine: "claude",
+      providerProfileId: "profile-1",
+      model: "sonnet-4",
+      reasoningEffort: "high",
+      bindingKey: "claude:profile-1",
+      nativeThreadId: "claude:session-1",
+      runtimeTurnId: "claude-turn-1",
+      alreadySettled: true,
+      delivery: {
+        promptAcceptance: "accepted",
+        contextAcceptance: {
+          status: "accepted",
+          packageId: "package-1",
+          sourceChecksum: "sha256:source",
+        },
+        terminal: { type: "run.settled", outcome: "completed" },
+      },
+    });
+
+    await sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET });
+
+    expect(waitFor).not.toHaveBeenCalled();
+    expect(sharedSessionV2CommitTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-1",
+    );
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("idle");
+  });
+
   it("Codex waits for the owned realtime terminal before committing", async () => {
-    sendSharedSessionMessage.mockResolvedValue({
+    sharedSessionV2BeginTurn.mockResolvedValue({
+      status: "creating",
+      attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      bindingKey: "codex:profile-1",
+    });
+    sharedSessionV2DispatchTurn.mockResolvedValue({
+      status: "accepted",
+      attemptId: "attempt-1",
+      logicalTurnId: "turn-1",
+      engine: "codex",
+      providerProfileId: "profile-1",
+      model: "gpt-5",
+      bindingKey: "codex:profile-1",
       nativeThreadId: "codex-native-1",
-      turn: { id: "runtime-turn-1" },
+      runtimeTurnId: "runtime-turn-1",
       delivery: {
         promptAcceptance: "accepted",
         contextAcceptance: {
@@ -528,27 +1113,28 @@ describe("sendSharedSessionTurnV2", () => {
       target: {
         engine: "codex",
         providerProfileId: "profile-1",
+        modelCatalogEntryId: "settings-gpt-5",
         model: "gpt-5",
+        providerProfileNameSnapshot: "Provider A",
+        providerProfileSource: "managed",
       },
     });
 
     expect(waitFor).toHaveBeenCalledWith({
+      attemptId: "attempt-1",
       nativeThreadId: "codex-native-1",
       runtimeTurnId: "runtime-turn-1",
     });
     expect(sharedSessionV2CommitTurn).toHaveBeenCalledWith(
       "ws-1",
       "shared:thread-1",
-      expect.objectContaining({
-        assistantText: "terminal text",
-        outcome: { status: "completed" },
-      }),
+      "attempt-1",
     );
   });
 
   it("发送错误的 recovery 落盘失败时仍保留 recovery UI 并抛原错误", async () => {
     const sendError = new Error("runtime timeout");
-    sendSharedSessionMessage.mockRejectedValue(sendError);
+    sharedSessionV2DispatchTurn.mockRejectedValue(sendError);
     sharedSessionV2MarkRecovery.mockRejectedValue(new Error("event log unavailable"));
 
     await expect(
@@ -562,14 +1148,13 @@ describe("sendSharedSessionTurnV2", () => {
     expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
       "ws-1",
       "shared:thread-1",
-      expect.objectContaining({
-        reason: "runtime-delivery-ambiguous: runtime timeout",
-      }),
+      "attempt-1",
+      "runtime-delivery-ambiguous: runtime timeout",
     );
     expect(getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget).toBeNull();
   });
 
-  it("发送成功但 commit 失败（ambiguous）：mark_recovery(commit-failed) + 抛出 + endTurn", async () => {
+  it("terminal 已到但 commit confirmation 失败：进入 recovery 并保留原错误", async () => {
     const commitError = new Error("event log unavailable");
     sharedSessionV2CommitTurn.mockRejectedValue(commitError);
 
@@ -577,12 +1162,34 @@ describe("sendSharedSessionTurnV2", () => {
       sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
     ).rejects.toBe(commitError);
 
-    expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith("ws-1", "shared:thread-1", {
-      bindingKey: "claude:profile-1",
-      engine: "claude",
-      providerProfileId: "profile-1",
-      reason: "commit-failed",
-    });
+    expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-1",
+      "commit-confirmation-failed",
+    );
     expect(getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget).toBeNull();
+  });
+
+  it("terminal visible but canonical confirmation pending stays recovery-required", async () => {
+    sharedSessionV2CommitTurn.mockResolvedValue({
+      status: "pending",
+      attemptId: "attempt-1",
+      bindingKey: "claude:profile-1",
+    });
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).rejects.toThrow("尚未提交");
+
+    expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-1",
+      "commit-confirmation-failed",
+    );
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe(
+      "recovery-required",
+    );
   });
 });

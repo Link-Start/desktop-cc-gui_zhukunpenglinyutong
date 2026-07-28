@@ -21,6 +21,7 @@ vi.mock("../../../utils/approvalRules", () => ({
 describe("useThreadApprovalEvents", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(respondToServerRequest).mockResolvedValue(undefined as never);
   });
 
   it("auto-accepts allowlisted approvals", () => {
@@ -214,5 +215,111 @@ describe("useThreadApprovalEvents", () => {
         },
       },
     });
+  });
+
+  it("routes allowlisted Shared approval to its exact Runtime owner and requeues on failure", async () => {
+    const dispatch = vi.fn();
+    const approvalAllowlistRef = {
+      current: { "ws-1": [["git", "status"]] },
+    };
+    const sharedRuntimeOwner = {
+      attemptId: "attempt-1",
+      providerRuntimeKey: "codex::profile-1",
+      sharedThreadId: "shared:thread-1",
+      nativeThreadId: "native-thread-1",
+      runtimeTurnId: "runtime-turn-1",
+      engine: "codex" as const,
+      providerProfileId: "profile-1",
+    };
+    const approval: ApprovalRequest = {
+      workspace_id: "ws-1",
+      request_id: 42,
+      method: "approval/request",
+      params: {
+        threadId: sharedRuntimeOwner.sharedThreadId,
+        turnId: sharedRuntimeOwner.runtimeTurnId,
+        argv: ["git", "status"],
+      },
+      shared_runtime_owner: sharedRuntimeOwner,
+    };
+    vi.mocked(getApprovalCommandInfo).mockReturnValue({
+      tokens: ["git", "status"],
+      preview: "git status",
+    });
+    vi.mocked(matchesCommandPrefix).mockReturnValue(true);
+    vi.mocked(respondToServerRequest).mockRejectedValue(
+      new Error("Runtime unavailable"),
+    );
+    const { result } = renderHook(() =>
+      useThreadApprovalEvents({
+        dispatch,
+        approvalAllowlistRef,
+        markProcessing: vi.fn(),
+        setActiveTurnId: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      result.current(approval);
+      await Promise.resolve();
+    });
+
+    expect(respondToServerRequest).toHaveBeenCalledWith(
+      "ws-1",
+      42,
+      "accept",
+      sharedRuntimeOwner,
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "addApproval",
+      approval,
+    });
+  });
+
+  it("scopes Shared approval presentation item id to its attempt", () => {
+    const dispatch = vi.fn();
+    const sharedRuntimeOwner = {
+      attemptId: "attempt-1",
+      providerRuntimeKey: "claude::profile-1",
+      sharedThreadId: "shared:thread-1",
+      nativeThreadId: "native-thread-1",
+      runtimeTurnId: "runtime-turn-1",
+      engine: "claude" as const,
+      providerProfileId: "profile-1",
+    };
+    const approval: ApprovalRequest = {
+      workspace_id: "ws-1",
+      request_id: "request-1",
+      method: "item/fileChange/requestApproval",
+      params: {
+        threadId: sharedRuntimeOwner.sharedThreadId,
+        turnId: sharedRuntimeOwner.runtimeTurnId,
+        file_path: "/tmp/demo.txt",
+      },
+      shared_runtime_owner: sharedRuntimeOwner,
+    };
+    vi.mocked(getApprovalCommandInfo).mockReturnValue(null);
+    const { result } = renderHook(() =>
+      useThreadApprovalEvents({
+        dispatch,
+        approvalAllowlistRef: { current: {} },
+        markProcessing: vi.fn(),
+        setActiveTurnId: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      result.current(approval);
+    });
+
+    expect(dispatch).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        type: "upsertItem",
+        item: expect.objectContaining({
+          id: "shared-approval-attempt-1-request-1",
+        }),
+      }),
+    );
   });
 });

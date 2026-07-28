@@ -1,8 +1,20 @@
+export type SharedRuntimeControlOwner = {
+  attemptId: string;
+  providerRuntimeKey: string;
+  sharedThreadId: string;
+  nativeThreadId: string;
+  runtimeTurnId: string;
+  engine: "claude" | "codex";
+  providerProfileId: string | null;
+};
+
 export type ApprovalRequest = {
   workspace_id: string;
   request_id: number | string;
   method: string;
   params: Record<string, unknown>;
+  /** Shared V2 control plane authority；响应时禁止再从 threadId 推断 Provider。 */
+  shared_runtime_owner?: SharedRuntimeControlOwner;
 };
 
 export type RequestUserInputOption = {
@@ -32,6 +44,8 @@ export type RequestUserInputRequest = {
   workspace_id: string;
   request_id: number | string;
   params: RequestUserInputParams;
+  /** Shared V2 control plane authority；响应时按 exact Runtime owner 路由。 */
+  shared_runtime_owner?: SharedRuntimeControlOwner;
 };
 
 export type CollaborationModeBlockedParams = {
@@ -47,6 +61,7 @@ export type CollaborationModeBlockedParams = {
 export type CollaborationModeBlockedRequest = {
   workspace_id: string;
   params: CollaborationModeBlockedParams;
+  shared_runtime_owner?: SharedRuntimeControlOwner;
 };
 
 export type CollaborationModeResolvedParams = {
@@ -78,4 +93,3 @@ export type RequestUserInputSettlementOptions = {
 export type RequestUserInputSettlementResult = {
   settlement: "accepted" | "stale";
 };
-

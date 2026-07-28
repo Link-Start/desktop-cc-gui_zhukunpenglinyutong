@@ -1,10 +1,16 @@
 import type { SharedSessionSupportedEngine } from "../utils/sharedSessionEngines";
+import type { TurnExecutionSnapshot } from "../target/types";
+import type { SharedRuntimeControlOwner } from "../../../types/interaction";
 
 export type SharedSessionNativeBinding = {
   workspaceId: string;
   sharedThreadId: string;
   nativeThreadId: string;
   engine: SharedSessionSupportedEngine;
+  /** Runtime-owned durable attempt identity；仅用于同-attempt fallback。 */
+  attemptId?: string;
+  /** `conversation.turnRequested.target` 的 immutable runtime projection。 */
+  executionTargetSnapshot?: TurnExecutionSnapshot;
   /** Wave 4 / B.5：Binding 归属的 Provider Profile；缺省/null 表示 default Provider 语义。 */
   providerProfileId?: string | null;
   registeredAtMs?: number;
@@ -17,8 +23,32 @@ type RuntimeSharedSessionNativeBinding = SharedSessionNativeBinding & {
 const PENDING_BINDING_STALE_MS = 30_000;
 const sharedBindingsByNativeKey = new Map<string, RuntimeSharedSessionNativeBinding>();
 
-function toBindingKey(workspaceId: string, nativeThreadId: string) {
-  return `${workspaceId}::${nativeThreadId}`;
+/** Provider 归一化：undefined/null/空白一律视为 default Provider 语义。 */
+function normalizeBindingProviderProfileId(
+  providerProfileId: string | null | undefined,
+): string | null {
+  const trimmed = providerProfileId?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function toBindingKey(binding: SharedSessionNativeBinding) {
+  return JSON.stringify([
+    binding.workspaceId,
+    binding.engine,
+    normalizeBindingProviderProfileId(binding.providerProfileId) ?? "default",
+    binding.nativeThreadId,
+  ]);
+}
+
+function findBindingsByNativeThread(
+  workspaceId: string,
+  nativeThreadId: string,
+): Array<[string, RuntimeSharedSessionNativeBinding]> {
+  return Array.from(sharedBindingsByNativeKey.entries()).filter(
+    ([, binding]) =>
+      binding.workspaceId === workspaceId &&
+      binding.nativeThreadId === nativeThreadId,
+  );
 }
 
 function toPublicBinding(
@@ -36,13 +66,16 @@ export function registerSharedSessionNativeBinding(binding: SharedSessionNativeB
     typeof binding.registeredAtMs === "number" && Number.isFinite(binding.registeredAtMs)
       ? binding.registeredAtMs
       : Date.now();
-  sharedBindingsByNativeKey.set(
-    toBindingKey(binding.workspaceId, binding.nativeThreadId),
-    {
-      ...binding,
-      registeredAtMs,
-    },
-  );
+  const key = toBindingKey(binding);
+  const existing = sharedBindingsByNativeKey.get(key);
+  if (existing && existing.sharedThreadId !== binding.sharedThreadId) {
+    return false;
+  }
+  sharedBindingsByNativeKey.set(key, {
+    ...binding,
+    registeredAtMs,
+  });
+  return true;
 }
 
 function isPendingSharedNativeThreadId(
@@ -59,9 +92,194 @@ export function resolveSharedSessionBindingByNativeThread(
   workspaceId: string,
   nativeThreadId: string,
 ) {
-  return toPublicBinding(
-    sharedBindingsByNativeKey.get(toBindingKey(workspaceId, nativeThreadId)),
+  const matches = findBindingsByNativeThread(workspaceId, nativeThreadId);
+  return matches.length === 1 ? toPublicBinding(matches[0][1]) : null;
+}
+
+/**
+ * Rust Runtime owner 在普通 UI fan-out 前附加的 authoritative Shared 路由。
+ * 不依赖 frontend picker/RPC response 时序，因此首个 delta 也能直接进入 Shared 幕布。
+ */
+export function resolveSharedSessionBindingFromRuntimeOwner(
+  workspaceId: string,
+  params: Record<string, unknown>,
+): SharedSessionNativeBinding | null {
+  const rawOwner =
+    params.sharedOwner && typeof params.sharedOwner === "object"
+      ? (params.sharedOwner as Record<string, unknown>)
+      : null;
+  if (!rawOwner) {
+    return null;
+  }
+  const sharedThreadId = String(rawOwner.sharedThreadId ?? "").trim();
+  const nativeThreadId = String(
+    rawOwner.nativeThreadId ??
+      params.nativeThreadId ??
+      params.native_thread_id ??
+      "",
+  ).trim();
+  const engine = String(rawOwner.engine ?? "").trim().toLowerCase();
+  if (
+    !sharedThreadId.startsWith("shared:") ||
+    !nativeThreadId ||
+    (engine !== "claude" && engine !== "codex")
+  ) {
+    return null;
+  }
+  const attemptId = String(rawOwner.attemptId ?? "").trim();
+  const hasEmbeddedExecutionTarget =
+    rawOwner.executionTargetSnapshot !== undefined &&
+    rawOwner.executionTargetSnapshot !== null;
+  const executionTargetSnapshot = readRuntimeExecutionTargetSnapshot(
+    rawOwner.executionTargetSnapshot,
+    engine,
   );
+  if (hasEmbeddedExecutionTarget && !executionTargetSnapshot) {
+    return null;
+  }
+  const ownerProviderProfileId =
+    typeof rawOwner.providerProfileId === "string" &&
+    rawOwner.providerProfileId.trim()
+      ? rawOwner.providerProfileId.trim()
+      : null;
+  if (
+    ownerProviderProfileId &&
+    executionTargetSnapshot?.providerProfileId !== ownerProviderProfileId
+  ) {
+    return null;
+  }
+  const providerProfileId =
+    ownerProviderProfileId ?? executionTargetSnapshot?.providerProfileId ?? null;
+  return {
+    workspaceId,
+    sharedThreadId,
+    nativeThreadId,
+    engine,
+    ...(attemptId ? { attemptId } : {}),
+    ...(executionTargetSnapshot ? { executionTargetSnapshot } : {}),
+    ...(providerProfileId ? { providerProfileId } : {}),
+  };
+}
+
+/**
+ * Approval / requestUserInput 响应的 strict owner。
+ *
+ * Realtime projection 允许旧事件缺少 attempt snapshot；control response 不允许。
+ * 缺少 attemptId、providerRuntimeKey 或完整 target 时返回 null，由入口 fail closed。
+ */
+export function resolveSharedRuntimeControlOwner(
+  workspaceId: string,
+  params: Record<string, unknown>,
+): SharedRuntimeControlOwner | null {
+  const rawOwner =
+    params.sharedOwner && typeof params.sharedOwner === "object"
+      ? (params.sharedOwner as Record<string, unknown>)
+      : null;
+  if (!rawOwner) {
+    return null;
+  }
+  const binding = resolveSharedSessionBindingFromRuntimeOwner(
+    workspaceId,
+    params,
+  );
+  const attemptId = String(rawOwner.attemptId ?? "").trim();
+  const providerRuntimeKey = String(rawOwner.providerRuntimeKey ?? "").trim();
+  const runtimeTurnId = String(rawOwner.runtimeTurnId ?? "").trim();
+  const projectedSharedThreadId = String(
+    params.threadId ?? params.thread_id ?? "",
+  ).trim();
+  const projectedNativeThreadId = String(
+    params.nativeThreadId ?? params.native_thread_id ?? "",
+  ).trim();
+  const projectedRuntimeTurnId = String(
+    params.runtimeTurnId ??
+      params.runtime_turn_id ??
+      params.turnId ??
+      params.turn_id ??
+      "",
+  ).trim();
+  if (
+    !binding?.attemptId ||
+    binding.attemptId !== attemptId ||
+    !binding.executionTargetSnapshot ||
+    !providerRuntimeKey ||
+    !runtimeTurnId ||
+    projectedSharedThreadId !== binding.sharedThreadId ||
+    projectedNativeThreadId !== binding.nativeThreadId ||
+    projectedRuntimeTurnId !== runtimeTurnId
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    attemptId,
+    providerRuntimeKey,
+    sharedThreadId: binding.sharedThreadId,
+    nativeThreadId: binding.nativeThreadId,
+    runtimeTurnId,
+    engine: binding.engine,
+    providerProfileId:
+      binding.executionTargetSnapshot.providerProfileId?.trim() || null,
+  });
+}
+
+function readRuntimeExecutionTargetSnapshot(
+  rawSnapshot: unknown,
+  ownerEngine: SharedSessionSupportedEngine,
+): TurnExecutionSnapshot | null {
+  if (!rawSnapshot || typeof rawSnapshot !== "object") {
+    return null;
+  }
+  const snapshot = rawSnapshot as Record<string, unknown>;
+  if (snapshot.engine !== ownerEngine) {
+    return null;
+  }
+  const providerProfileSource =
+    snapshot.providerProfileSource === "local" ||
+    snapshot.providerProfileSource === "managed"
+      ? snapshot.providerProfileSource
+      : null;
+  const reasoningRecord =
+    snapshot.reasoning && typeof snapshot.reasoning === "object"
+      ? (snapshot.reasoning as Record<string, unknown>)
+      : null;
+  const reasoningEffort =
+    typeof reasoningRecord?.effort === "string"
+      ? reasoningRecord.effort.trim()
+      : "";
+  const optionalString = (value: unknown): string | null =>
+    typeof value === "string" && value.trim() ? value : null;
+  const providerProfileId = optionalString(snapshot.providerProfileId);
+  const modelCatalogEntryId = optionalString(snapshot.modelCatalogEntryId);
+  const model = optionalString(snapshot.model);
+  const providerProfileNameSnapshot = optionalString(
+    snapshot.providerProfileNameSnapshot,
+  );
+  if (
+    !providerProfileSource ||
+    !modelCatalogEntryId ||
+    !model ||
+    !providerProfileNameSnapshot ||
+    (providerProfileId
+      ? providerProfileSource !== "managed"
+      : providerProfileSource !== "local")
+  ) {
+    return null;
+  }
+  const immutableReasoning = reasoningEffort
+    ? Object.freeze({ effort: reasoningEffort })
+    : null;
+  return Object.freeze({
+    engine: ownerEngine,
+    providerProfileId,
+    modelCatalogEntryId,
+    model,
+    reasoning: immutableReasoning,
+    providerProfileNameSnapshot,
+    providerProfileSource,
+    runtimeCapabilityFingerprint: optionalString(
+      snapshot.runtimeCapabilityFingerprint,
+    ),
+  });
 }
 
 export function resolvePendingSharedSessionBindingForEngine(
@@ -85,14 +303,6 @@ export function resolvePendingSharedSessionBindingForEngine(
     return null;
   }
   return toPublicBinding(matches[0]);
-}
-
-/** Provider 归一化：undefined/null/空白一律视为 default Provider 语义。 */
-function normalizeBindingProviderProfileId(
-  providerProfileId: string | null | undefined,
-): string | null {
-  const trimmed = providerProfileId?.trim();
-  return trimmed ? trimmed : null;
 }
 
 /**
@@ -135,21 +345,27 @@ export function rebindSharedSessionNativeThread(params: {
   oldNativeThreadId: string;
   newNativeThreadId: string;
 }) {
-  const oldKey = toBindingKey(params.workspaceId, params.oldNativeThreadId);
-  const existing = sharedBindingsByNativeKey.get(oldKey);
-  if (!existing) {
+  const matches = findBindingsByNativeThread(
+    params.workspaceId,
+    params.oldNativeThreadId,
+  );
+  if (matches.length !== 1) {
     return null;
   }
+  const [oldKey, existing] = matches[0];
   sharedBindingsByNativeKey.delete(oldKey);
   const next = {
     ...existing,
     nativeThreadId: params.newNativeThreadId,
     registeredAtMs: Date.now(),
   };
-  sharedBindingsByNativeKey.set(
-    toBindingKey(params.workspaceId, params.newNativeThreadId),
-    next,
-  );
+  const nextKey = toBindingKey(next);
+  const conflicting = sharedBindingsByNativeKey.get(nextKey);
+  if (conflicting && conflicting.sharedThreadId !== next.sharedThreadId) {
+    sharedBindingsByNativeKey.set(oldKey, existing);
+    return null;
+  }
+  sharedBindingsByNativeKey.set(nextKey, next);
   return toPublicBinding(next);
 }
 

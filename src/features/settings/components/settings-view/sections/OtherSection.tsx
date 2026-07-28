@@ -28,7 +28,7 @@ import {
 import { CostBudgetSettingsSection } from "./CostBudgetSettingsSection";
 import { PerfJankLivePanel } from "./PerfJankLivePanel";
 import {
-  isSharedProjectionTestOverrideEnabled,
+  isSharedProjectionDataSourceEnabled,
   setSharedProjectionTestOverrideEnabled,
 } from "../../../../messages/presentation/sharedProjection/dataSource";
 
@@ -58,7 +58,7 @@ export function OtherSection({
   const [perfDiagnosticsEnabled, setPerfDiagnosticsEnabledState] =
     useState<boolean>(() => isPerfDiagnosticsFlagEnabled());
   const [sharedProjectionTestEnabled, setSharedProjectionTestEnabled] =
-    useState<boolean>(() => isSharedProjectionTestOverrideEnabled());
+    useState<boolean>(() => isSharedProjectionDataSourceEnabled());
   const [copyReportMessage, setCopyReportMessage] = useState<string | null>(
     null,
   );
@@ -75,7 +75,7 @@ export function OtherSection({
 
   const handleSharedProjectionTestToggle = (checked: boolean) => {
     const changed = setSharedProjectionTestOverrideEnabled(checked);
-    setSharedProjectionTestEnabled(isSharedProjectionTestOverrideEnabled());
+    setSharedProjectionTestEnabled(isSharedProjectionDataSourceEnabled());
     if (changed) {
       globalThis.location.reload();
     }

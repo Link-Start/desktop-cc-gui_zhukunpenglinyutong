@@ -81,6 +81,54 @@ describe("Messages user input parsing", () => {
     expect(userText?.textContent ?? "").toBe("继续分析共享会话的上下文问题");
   });
 
+  it("hides a Shared Runtime prompt echo without hiding its assistant response", () => {
+    const packageId = `sha256:${"a".repeat(64)}`;
+    const checksum = `sha256:${"b".repeat(64)}`;
+    const marker = `MOSSX_CONTEXT_PACKAGE:${packageId}:${checksum}`;
+    const items: ConversationItem[] = [
+      {
+        id: "canonical-user",
+        kind: "message",
+        role: "user",
+        text: "继续修复",
+      },
+      {
+        id: "runtime-user-echo",
+        kind: "message",
+        role: "user",
+        text:
+          `${marker}\n` +
+          "MOSSX_SHARED_CONTEXT_V1\n" +
+          "session:shared-session-1\n" +
+          "binding:codex::managed-a\n\n" +
+          "Shared Context Transcript\n\nTurn 1\nUser: 你好\n" +
+          `${marker}\n\n` +
+          "Current user request:\n继续修复",
+      },
+      {
+        id: "runtime-assistant",
+        kind: "message",
+        role: "assistant",
+        text: "已经修复。",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="shared:thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.textContent).not.toContain("MOSSX_SHARED_CONTEXT_V1");
+    expect(container.textContent).toContain("继续修复");
+    expect(container.textContent).toContain("已经修复。");
+  });
+
   it("keeps user bubble visible when memory-prefix parsing leaves empty remaining text", () => {
     const items: ConversationItem[] = [
       {

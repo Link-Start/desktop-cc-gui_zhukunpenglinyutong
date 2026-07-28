@@ -16,7 +16,12 @@ import {
   deleteSharedSession as deleteSharedSessionService,
   startSharedSession as startSharedSessionService,
 } from "../../shared-session/services/sharedSessions";
-import { normalizeSharedSessionEngine } from "../../shared-session/utils/sharedSessionEngines";
+import { hydrateSharedTargetState } from "../../shared-session/target/targetStore";
+import {
+  isResolvedExecutionTarget,
+  resolveBackendAuthoritativeExecutionTarget,
+  type ExecutionTarget,
+} from "../../shared-session/target/types";
 
 import type { ThreadAction } from "./useThreadsReducer";
 
@@ -46,18 +51,31 @@ export function createStartSharedSessionForWorkspace(params: {
     options?: {
       activate?: boolean;
       initialEngine?: "claude" | "codex" | "gemini" | "opencode";
+      initialTarget?: ExecutionTarget | null;
     },
   ) => {
     const shouldActivate = options?.activate !== false;
-    const initialEngine = normalizeSharedSessionEngine(options?.initialEngine);
+    const initialTarget = options?.initialTarget ?? null;
+    if (!isResolvedExecutionTarget(initialTarget)) {
+      throw new Error(
+        "Shared Session 初始 Execution Target 不完整，请重新选择 Provider 和 Model。",
+      );
+    }
+    const requestedInitialEngine = options?.initialEngine ?? initialTarget.engine;
+    if (requestedInitialEngine !== initialTarget.engine) {
+      throw new Error(
+        `Shared Session 初始 Engine 与 Execution Target 不一致：${requestedInitialEngine} != ${initialTarget.engine}`,
+      );
+    }
+    const initialEngine = initialTarget.engine;
     onDebug?.({
       id: `${Date.now()}-client-shared-thread-start`,
       timestamp: Date.now(),
       source: "client",
       label: "shared-session/start",
-      payload: { workspaceId, initialEngine },
+      payload: { workspaceId, initialEngine, initialTarget },
     });
-    const response = await startSharedSessionService(workspaceId, initialEngine);
+    const response = await startSharedSessionService(workspaceId, initialTarget);
     const threadId = extractThreadId(response);
     if (!threadId) {
       return null;
@@ -70,6 +88,15 @@ export function createStartSharedSessionForWorkspace(params: {
       result?.thread && typeof result.thread === "object"
         ? (result.thread as Record<string, unknown>)
         : null;
+    const persistedInitialTarget = resolveBackendAuthoritativeExecutionTarget(
+      response,
+      initialTarget,
+    );
+    hydrateSharedTargetState(
+      workspaceId,
+      threadId,
+      persistedInitialTarget,
+    );
     const summary: ThreadSummary = {
       id: threadId,
       name: asString(thread?.name).trim() || "Shared Session",

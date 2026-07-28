@@ -1,17 +1,26 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { SharedRuntimeControlOwner } from "../../types";
 
 export async function respondToServerRequest(
   workspaceId: string,
   requestId: number | string,
   decision: "accept" | "decline",
-  /** Wave 4 / B.5：Shared Thread 的 binding provider；缺省为 null（旧 default 会话路由）。 */
-  providerProfileId?: string | null,
+  sharedOwner?: SharedRuntimeControlOwner | null,
 ) {
   return invoke("respond_to_server_request", {
     workspaceId,
     requestId,
     result: { decision },
-    providerProfileId: providerProfileId ?? null,
+    providerProfileId: sharedOwner?.providerProfileId ?? null,
+    ...(sharedOwner
+      ? {
+          threadId: sharedOwner.nativeThreadId,
+          turnId: sharedOwner.runtimeTurnId,
+          sharedAttemptId: sharedOwner.attemptId,
+          sharedThreadId: sharedOwner.sharedThreadId,
+          providerRuntimeKey: sharedOwner.providerRuntimeKey,
+        }
+      : {}),
   });
 }
 
@@ -23,6 +32,7 @@ export async function respondToUserInputRequest(
     threadId?: string | null;
     turnId?: string | null;
     skippedQuestionIds?: string[];
+    sharedOwner?: SharedRuntimeControlOwner;
   },
 ) {
   const result: Record<string, unknown> = { answers };
@@ -33,8 +43,16 @@ export async function respondToUserInputRequest(
     workspaceId,
     requestId,
     result,
-    threadId: options?.threadId ?? null,
-    turnId: options?.turnId ?? null,
+    threadId: options?.sharedOwner?.nativeThreadId ?? options?.threadId ?? null,
+    turnId: options?.sharedOwner?.runtimeTurnId ?? options?.turnId ?? null,
+    ...(options?.sharedOwner
+      ? {
+          providerProfileId: options.sharedOwner.providerProfileId,
+          sharedAttemptId: options.sharedOwner.attemptId,
+          sharedThreadId: options.sharedOwner.sharedThreadId,
+          providerRuntimeKey: options.sharedOwner.providerRuntimeKey,
+        }
+      : {}),
   });
 }
 

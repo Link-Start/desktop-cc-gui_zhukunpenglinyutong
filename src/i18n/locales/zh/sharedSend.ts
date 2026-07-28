@@ -19,6 +19,9 @@ const sharedSend = {
     recoveryProbeCleared: "Probe 未发现待处理 Attempt，已解除锁定。",
     targetUnavailable: "当前 Target 不可用。",
     targetUnavailableReason: "当前 Target 不可用：{{reason}}",
+    selectionPersistFailedTitle: "Target 选择保存失败",
+    selectionPersistFailedMessage:
+      "当前内存选择已保留，但重启恢复可能使用上一次 Target：{{reason}}",
     cancel: "取消",
   },
 };

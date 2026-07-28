@@ -1,44 +1,55 @@
 /**
  * Shared V2 发送编排（Wave 4 / Change B）。
  *
- * 流程：begin_turn（Tx1 durable-first）→ V0 链路实际发送 → commit_turn（Tx2 幂等落账）。
+ * 流程：begin_turn（Tx1 durable-first）→ attempt-owned Runtime dispatch
+ * → Rust terminal owner commit（Tx2 幂等落账）→ frontend commit confirmation。
  *
  * 纪律：
  * - begin 返回 `recovery-required` / `target-unavailable` 时 fail closed：
  *   不发送、不改路由、不重试，直接把状态抛给调用方。
  * - 发送抛错在没有 typed negative ACK 时视为 ambiguous：进入 recovery-required，
  *   不伪造 explicit rejection，也不写 turnCommitted(failed)。
- * - 发送成功但 commit 失败才是真正的 ambiguous：mark_recovery(reason="commit-failed") 后抛出。
+ * - Runtime dispatch 不接收重复 Target；Rust 只读取 durable attempt snapshot。
+ * - terminal 内容由 Rust runtime lifecycle owner 持久化；frontend 只等待 UI terminal
+ *   并确认 canonical commit。
  * - `endTurn` 在 finally 中兜底；只有 begin 早退（未 beginTurn）时不执行。
  *
- * 发送段复用 V0 的 service + bridge 惯例（见 `sendSharedSessionTurn.ts`），
- * 并透传 `providerProfileId` 以归属到目标 Binding。
+ * V0 仅保留给显式 rollback；V2 不得调用 V0 actual-send。
  */
 
 import {
-  sendSharedSessionMessage,
-  setSharedSessionSelectedEngine,
-  sharedSessionV2AcceptTurn,
-  sharedSessionV2AcceptContext,
   sharedSessionV2BeginTurn,
+  sharedSessionV2CancelAttempt,
   sharedSessionV2CommitTurn,
+  sharedSessionV2DispatchTurn,
   sharedSessionV2MarkRecovery,
   sharedSessionV2PrepareContext,
   sharedSessionV2PrepareDelivery,
-  type SharedSessionRuntimeDelivery,
   type SharedV2ExecutionTargetPayload,
 } from "../services/sharedSessions";
 import { beginTurn, endTurn } from "../target/targetStore";
-import { freezeTurnSnapshot, type ExecutionTarget } from "../target/types";
-import type { SharedSendEvent } from "../target/sendStateMachine";
+import {
+  freezeTurnSnapshot,
+  isResolvedExecutionTarget,
+  type ExecutionTarget,
+  type ProviderSelectionSource,
+  type TurnExecutionSnapshot,
+} from "../target/types";
+import type {
+  SharedSendEvent,
+  SharedSendState,
+} from "../target/sendStateMachine";
 import type { SendSharedSessionTurnInput } from "./sendSharedSessionTurn";
 import {
+  consumeSharedSendAdmission,
   dispatchSharedSendEvent,
+  getSharedSendState,
+  setSharedSendActiveAttempt,
+  tryAcquireSharedSend,
   waitForSharedDegradedContextDecision,
 } from "./sharedSendStateStore";
 import {
   registerSharedSessionNativeBinding,
-  rebindSharedSessionNativeThread,
 } from "./sharedSessionBridge";
 import { captureSharedRuntimeTerminal } from "./sharedRuntimeTerminal";
 
@@ -58,7 +69,7 @@ function dispatchSendEvent(
 
 export type SharedV2ProviderMeta = {
   providerProfileNameSnapshot?: string | null;
-  providerProfileSource?: string | null;
+  providerProfileSource?: ProviderSelectionSource | null;
   runtimeCapabilityFingerprint?: string | null;
 };
 
@@ -74,6 +85,13 @@ export type SharedV2SendEarlyReturn = {
   reason?: string;
 };
 
+/** non-idle admission 拒绝：不得创建 optimistic Turn 或触发任何 RPC。 */
+export type SharedV2SendBlocked = {
+  status: "blocked";
+  state: SharedSendState;
+  reason: "shared-send-not-idle" | "shared-send-admission-stale";
+};
+
 export type SharedV2SendCommitted = Record<string, unknown> & {
   v2: {
     attemptId: string;
@@ -84,49 +102,25 @@ export type SharedV2SendCommitted = Record<string, unknown> & {
   };
 };
 
-export type SendSharedSessionTurnV2Result = SharedV2SendEarlyReturn | SharedV2SendCommitted;
+export type SendSharedSessionTurnV2Result =
+  | SharedV2SendEarlyReturn
+  | SharedV2SendBlocked
+  | SharedV2SendCommitted;
 
 /** 组装 Rust `ExecutionTargetInput`（reasoning 拍平为 reasoningEffort）。 */
 function toTargetPayload(
-  target: ExecutionTarget,
-  providerMeta?: SharedV2ProviderMeta,
+  snapshot: TurnExecutionSnapshot,
 ): SharedV2ExecutionTargetPayload {
   return {
-    engine: target.engine,
-    providerProfileId: target.providerProfileId ?? null,
-    model: target.model ?? null,
-    reasoningEffort: target.reasoning?.effort ?? null,
-    providerProfileNameSnapshot:
-      providerMeta?.providerProfileNameSnapshot ??
-      target.providerProfileNameSnapshot ??
-      null,
-    providerProfileSource:
-      providerMeta?.providerProfileSource ??
-      target.providerProfileSource ??
-      null,
-    runtimeCapabilityFingerprint: providerMeta?.runtimeCapabilityFingerprint ?? null,
+    engine: snapshot.engine,
+    providerProfileId: snapshot.providerProfileId,
+    modelCatalogEntryId: snapshot.modelCatalogEntryId,
+    model: snapshot.model,
+    reasoningEffort: snapshot.reasoning?.effort ?? null,
+    providerProfileNameSnapshot: snapshot.providerProfileNameSnapshot,
+    providerProfileSource: snapshot.providerProfileSource,
+    runtimeCapabilityFingerprint: snapshot.runtimeCapabilityFingerprint,
   };
-}
-
-/** 尽力从 V0 响应里提取 assistant 文本；拿不到就返回 null（不阻塞 commit）。 */
-function extractAssistantText(
-  response: Record<string, unknown> | null | undefined,
-): string | null {
-  if (!response) {
-    return null;
-  }
-  const direct = response.assistantText;
-  if (typeof direct === "string" && direct.trim()) {
-    return direct;
-  }
-  const result = response.result;
-  if (result && typeof result === "object") {
-    const text = (result as Record<string, unknown>).text;
-    if (typeof text === "string" && text.trim()) {
-      return text;
-    }
-  }
-  return null;
 }
 
 function extractRuntimeTurnId(
@@ -147,7 +141,7 @@ function extractRuntimeTurnId(
     result?.turn && typeof result.turn === "object"
       ? (result.turn as Record<string, unknown>)
       : null;
-  const value = turn?.id ?? nestedTurn?.id;
+  const value = response.runtimeTurnId ?? turn?.id ?? nestedTurn?.id;
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
@@ -158,99 +152,72 @@ function toErrorMessage(error: unknown): string {
   return String(error);
 }
 
-/**
- * V0 发送段：与 `sendSharedSessionTurn` 同构，额外透传 providerProfileId。
- * 返回原始 V0 响应。
- */
-async function sendTurnViaV0(
-  input: SendSharedSessionTurnV2Input,
-  outboundText = input.text,
-  contextDelivery?: {
-    packageId: string;
-    sourceChecksum: string;
-    operation: "context-import" | "prompt-prefix";
-    importItems: Record<string, unknown>[];
-    ackFidelity: "strong" | "weak" | "unsupported";
-  },
-) {
-  const providerProfileId = input.target.providerProfileId ?? null;
-  const selection = await setSharedSessionSelectedEngine(
-    input.workspaceId,
-    input.threadId,
-    input.engine,
-    providerProfileId,
+function normalizeAckIdentity(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function isKnownFailedTerminalError(error: unknown): boolean {
+  const message = toErrorMessage(error);
+  return (
+    !message.includes("canonical-failure-persistence:") &&
+    (message.startsWith("context-prepare-failed:") ||
+      message.startsWith("target-unavailable:") ||
+      message.startsWith("target-provider-rejected:"))
   );
-  const selectedNativeThreadId =
-    typeof selection?.nativeThreadId === "string" ? selection.nativeThreadId.trim() : "";
-  if (selectedNativeThreadId) {
-    registerSharedSessionNativeBinding({
-      workspaceId: input.workspaceId,
-      sharedThreadId: input.threadId,
-      nativeThreadId: selectedNativeThreadId,
-      engine: input.engine,
-      providerProfileId,
-    });
-  }
-  const response = await sendSharedSessionMessage(
-    input.workspaceId,
-    input.threadId,
-    input.engine,
-    outboundText,
-    {
-      model: input.model,
-      effort: input.effort,
-      disableThinking: input.disableThinking,
-      collaborationMode: input.collaborationMode,
-      accessMode: input.accessMode,
-      images: input.images,
-      preferredLanguage: input.preferredLanguage,
-      customSpecRoot: input.customSpecRoot,
-      providerProfileId,
-      contextDelivery: contextDelivery ?? null,
-    },
-  );
-  const nativeThreadId =
-    typeof response?.nativeThreadId === "string" ? response.nativeThreadId.trim() : "";
-  if (nativeThreadId) {
-    const shouldRebindSelectedThread =
-      selectedNativeThreadId &&
-      selectedNativeThreadId !== nativeThreadId &&
-      selectedNativeThreadId.startsWith(`${input.engine}-pending-shared-`);
-    if (shouldRebindSelectedThread) {
-      const rebound = rebindSharedSessionNativeThread({
-        workspaceId: input.workspaceId,
-        oldNativeThreadId: selectedNativeThreadId,
-        newNativeThreadId: nativeThreadId,
-      });
-      if (!rebound) {
-        registerSharedSessionNativeBinding({
-          workspaceId: input.workspaceId,
-          sharedThreadId: input.threadId,
-          nativeThreadId,
-          engine: input.engine,
-          providerProfileId,
-        });
-      }
-    } else {
-      registerSharedSessionNativeBinding({
-        workspaceId: input.workspaceId,
-        sharedThreadId: input.threadId,
-        nativeThreadId,
-        engine: input.engine,
-        providerProfileId,
-      });
-    }
-  }
-  return response;
 }
 
 export async function sendSharedSessionTurnV2(
   input: SendSharedSessionTurnV2Input,
 ): Promise<SendSharedSessionTurnV2Result> {
-  const targetPayload = toTargetPayload(input.target, input.providerMeta);
+  if (!isResolvedExecutionTarget(input.target)) {
+    throw new Error(
+      "shared-v2-target-incomplete: 请先选择完整的 CLI、Provider 和 Model。",
+    );
+  }
+  const turnSnapshot = freezeTurnSnapshot(input.target, input.providerMeta);
+  const targetPayload = toTargetPayload(turnSnapshot);
 
-  // B.6：进入发送流程（idle → preparing-context；非 idle 时迁移被状态机忽略）。
-  dispatchSendEvent(input.workspaceId, input.threadId, { type: "send" });
+  const suppliedAdmissionRevision = input.sharedSendAdmissionRevision;
+  if (suppliedAdmissionRevision !== undefined) {
+    if (
+      !Number.isSafeInteger(suppliedAdmissionRevision) ||
+      suppliedAdmissionRevision <= 0 ||
+      !consumeSharedSendAdmission(
+        input.workspaceId,
+        input.threadId,
+        suppliedAdmissionRevision,
+      )
+    ) {
+      return {
+        status: "blocked",
+        state: getSharedSendState(input.workspaceId, input.threadId).state,
+        reason: "shared-send-admission-stale",
+      };
+    }
+  } else {
+    const admission = tryAcquireSharedSend(input.workspaceId, input.threadId);
+    if (!admission.acquired) {
+      return {
+        status: "blocked",
+        state: admission.state,
+        reason: "shared-send-not-idle",
+      };
+    }
+    if (
+      !consumeSharedSendAdmission(
+        input.workspaceId,
+        input.threadId,
+        admission.revision,
+      )
+    ) {
+      return {
+        status: "blocked",
+        state: getSharedSendState(input.workspaceId, input.threadId).state,
+        reason: "shared-send-admission-stale",
+      };
+    }
+  }
   let preparedContext: Awaited<
     ReturnType<typeof sharedSessionV2PrepareContext>
   >;
@@ -295,7 +262,8 @@ export async function sendSharedSessionTurnV2(
       dispatchSendEvent(input.workspaceId, input.threadId, { type: "canonicalCommitted" });
       return { status: "cancelled" };
     }
-    dispatchSendEvent(input.workspaceId, input.threadId, { type: "degradedConfirmed" });
+    // preview 只读，不代表 Tx1 后 actual package 已确认。
+    dispatchSendEvent(input.workspaceId, input.threadId, { type: "previewConfirmed" });
   }
 
   // Tx1：User Intent durable-first，先于任何 runtime side effect。
@@ -336,22 +304,59 @@ export async function sendSharedSessionTurnV2(
     // 契约违例（creating 必须带 attempt/turn id）：fail closed，不进入发送段。
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "packagePrepared" });
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
-    await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
-      bindingKey: begin.bindingKey ?? "",
-      engine: input.target.engine,
-      providerProfileId: input.target.providerProfileId ?? null,
-      reason: "begin-turn-contract-violation",
-    }).catch(() => undefined);
     throw new Error("shared_session_v2_begin_turn 契约违例：creating 缺少 attemptId/logicalTurnId");
   }
-
-  // begin 落账成功（preparing-context → awaiting-acceptance）。
-  dispatchSendEvent(input.workspaceId, input.threadId, { type: "packagePrepared" });
+  setSharedSendActiveAttempt(input.workspaceId, input.threadId, attemptId);
+  const markAttemptRecovery = async (reason: string) => {
+    const recovery = await sharedSessionV2MarkRecovery(
+      input.workspaceId,
+      input.threadId,
+      attemptId,
+      reason,
+    ).catch(() => undefined);
+    if (recovery?.status === "terminal-committed") {
+      dispatchSendEvent(input.workspaceId, input.threadId, {
+        type: "probeTerminalRun",
+      });
+      dispatchSendEvent(input.workspaceId, input.threadId, {
+        type: "canonicalCommitted",
+      });
+    }
+    return recovery;
+  };
+  const confirmKnownFailedTerminal = async (recoveryReason: string) => {
+    dispatchSendEvent(input.workspaceId, input.threadId, {
+      type: "explicitRejection",
+    });
+    try {
+      const failedCommit = await sharedSessionV2CommitTurn(
+        input.workspaceId,
+        input.threadId,
+        attemptId,
+      );
+      if (failedCommit.status !== "committed") {
+        throw new Error(
+          `Shared failed terminal 尚未提交：attempt ${failedCommit.attemptId}`,
+        );
+      }
+      dispatchSendEvent(input.workspaceId, input.threadId, {
+        type: "canonicalCommitted",
+      });
+    } catch (commitError) {
+      dispatchSendEvent(input.workspaceId, input.threadId, {
+        type: "commitFailed",
+      });
+      await markAttemptRecovery(
+        `${recoveryReason}: ${toErrorMessage(commitError)}`,
+      );
+    }
+  };
 
   beginTurn(
     input.workspaceId,
     input.threadId,
-    freezeTurnSnapshot(input.target, input.providerMeta),
+    turnSnapshot,
+    attemptId,
   );
   const runtimeTerminalCapture =
     captureSharedRuntimeTerminal(input.workspaceId);
@@ -363,129 +368,181 @@ export async function sendSharedSessionTurnV2(
       preparedDelivery = await sharedSessionV2PrepareDelivery(
         input.workspaceId,
         input.threadId,
-        {
-          attemptId,
-          logicalTurnId,
-          target: targetPayload,
-        },
+        attemptId,
       );
     } catch (deliveryPrepareError) {
+      // Tx1 已持久化；先进入 awaiting-acceptance，后续 terminal/recovery 迁移
+      // 必须基于 durable Attempt，而不是停留在 preview 状态。
+      dispatchSendEvent(input.workspaceId, input.threadId, {
+        type: "packagePrepared",
+      });
+      if (isKnownFailedTerminalError(deliveryPrepareError)) {
+        await confirmKnownFailedTerminal(
+          "failed-context-terminal-commit-confirmation",
+        );
+        throw deliveryPrepareError;
+      }
       dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
-      await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
-        bindingKey: begin.bindingKey ?? "",
-        engine: input.target.engine,
-        providerProfileId: input.target.providerProfileId ?? null,
-        reason: `context-prepare-failed: ${toErrorMessage(deliveryPrepareError)}`,
-      }).catch(() => undefined);
+      await markAttemptRecovery(
+        `context-prepare-failed: ${toErrorMessage(deliveryPrepareError)}`,
+      );
       throw deliveryPrepareError;
     }
 
-    let response: SharedSessionRuntimeDelivery | null | undefined;
-    try {
-      const outboundText = preparedDelivery.promptPrefix
-        ? `${preparedDelivery.promptPrefix}\n\n${input.text}`
-        : input.text;
-      response = await sendTurnViaV0(input, outboundText, {
-        packageId: preparedDelivery.packageId,
-        sourceChecksum: preparedDelivery.sourceChecksum,
-        operation: preparedDelivery.operation,
-        importItems: preparedDelivery.importItems,
-        ackFidelity: preparedDelivery.ackFidelity,
+    if (preparedDelivery.status === "degraded") {
+      const actualOmissions = preparedDelivery.manifest.omitted.map(
+        (omission) => `${omission.category}: ${omission.reason}`,
+      );
+      dispatchSharedSendEvent(
+        input.workspaceId,
+        input.threadId,
+        { type: "lossyProjection" },
+        {
+          degradedInfo: {
+            packageId: preparedDelivery.packageId,
+            sourceChecksum: preparedDelivery.sourceChecksum,
+            mode: preparedDelivery.mode,
+            omissions: actualOmissions,
+            dispositions: preparedDelivery.manifest.omitted.map(
+              (omission) => omission.disposition,
+            ),
+            sourceEstimatedTokens:
+              preparedDelivery.compression.sourceEstimatedTokens,
+            packageEstimatedTokens:
+              preparedDelivery.compression.packageEstimatedTokens,
+            reason: [
+              `package=${preparedDelivery.packageId}`,
+              `source=${preparedDelivery.sourceChecksum}`,
+              ...actualOmissions,
+            ].join("; "),
+          },
+        },
+      );
+      const actualPackageConfirmed =
+        await waitForSharedDegradedContextDecision(
+          input.workspaceId,
+          input.threadId,
+        );
+      if (!actualPackageConfirmed) {
+        try {
+          await sharedSessionV2CancelAttempt(
+            input.workspaceId,
+            input.threadId,
+            attemptId,
+            "degraded-context-declined",
+          );
+        } catch (cancelError) {
+          // Tx1/Tx3 已持久化而 cancel ACK 不确定：不能伪装 idle。
+          dispatchSendEvent(input.workspaceId, input.threadId, {
+            type: "degradedConfirmed",
+          });
+          dispatchSendEvent(input.workspaceId, input.threadId, {
+            type: "ackAmbiguous",
+          });
+          throw cancelError;
+        }
+        dispatchSendEvent(input.workspaceId, input.threadId, {
+          type: "commitCancelled",
+        });
+        dispatchSendEvent(input.workspaceId, input.threadId, {
+          type: "canonicalCommitted",
+        });
+        return { status: "cancelled" };
+      }
+      dispatchSendEvent(input.workspaceId, input.threadId, {
+        type: "degradedConfirmed",
       });
+    } else {
+      dispatchSendEvent(input.workspaceId, input.threadId, {
+        type: "packagePrepared",
+      });
+    }
+
+    let response: Awaited<ReturnType<typeof sharedSessionV2DispatchTurn>>;
+    try {
+      response = await sharedSessionV2DispatchTurn(
+        input.workspaceId,
+        input.threadId,
+        {
+          attemptId,
+          artifactId: preparedDelivery.artifactId,
+          artifactChecksum: preparedDelivery.artifactChecksum,
+          disableThinking: input.disableThinking,
+          accessMode: input.accessMode,
+          images: input.images,
+          collaborationMode: input.collaborationMode,
+          preferredLanguage: input.preferredLanguage,
+          customSpecRoot: input.customSpecRoot,
+        },
+      );
     } catch (sendError) {
-      // 旧 RPC 的 Err(String) 无法证明 prompt 未被 runtime 接收。timeout、
-      // disconnect、process exit 都可能发生在 side effect 之后，必须 fail closed。
+      if (isKnownFailedTerminalError(sendError)) {
+        // Rust has authoritative negative evidence and commits a failed terminal
+        // before returning this typed error. Confirm that commit and unlock the
+        // linear Shared composer; do not misclassify a 4xx/model rejection as an
+        // ambiguous transport failure.
+        await confirmKnownFailedTerminal("failed-terminal-commit-confirmation");
+        throw sendError;
+      }
+      // Transport failure may happen after Runtime accepted the prompt. Without a
+      // typed negative ACK it is ambiguous and must not be retried blindly.
       dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
-      await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
-        bindingKey: begin.bindingKey ?? "",
-        engine: input.target.engine,
-        providerProfileId: input.target.providerProfileId ?? null,
-        reason: `runtime-delivery-ambiguous: ${toErrorMessage(sendError)}`,
-      }).catch(() => undefined);
+      await markAttemptRecovery(
+        `runtime-delivery-ambiguous: ${toErrorMessage(sendError)}`,
+      );
       throw sendError;
     }
 
-    const nativeSessionId =
-      typeof response?.nativeThreadId === "string"
-        ? response.nativeThreadId.trim()
-        : "";
+    const nativeSessionId = response.nativeThreadId?.trim() ?? "";
     if (
-      response?.delivery?.promptAcceptance !== "accepted" ||
+      response.status !== "accepted" ||
+      response.attemptId !== attemptId ||
+      response.logicalTurnId !== logicalTurnId ||
+      (response.engine !== "codex" && response.engine !== "claude") ||
+      response.engine !== targetPayload.engine ||
+      normalizeAckIdentity(response.providerProfileId) !==
+        normalizeAckIdentity(targetPayload.providerProfileId) ||
+      normalizeAckIdentity(response.model) !==
+        normalizeAckIdentity(targetPayload.model) ||
+      normalizeAckIdentity(response.reasoningEffort) !==
+        normalizeAckIdentity(targetPayload.reasoningEffort) ||
+      response.bindingKey !== begin.bindingKey ||
+      response.delivery?.promptAcceptance !== "accepted" ||
       !nativeSessionId
     ) {
       dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
-      await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
-        bindingKey: begin.bindingKey ?? "",
-        engine: input.target.engine,
-        providerProfileId: input.target.providerProfileId ?? null,
-        reason: "typed-prompt-ack-missing",
-      }).catch(() => undefined);
-      throw new Error("Shared runtime 未返回 typed prompt ACK");
+      await markAttemptRecovery("typed-prompt-ack-missing-or-mismatched");
+      throw new Error("Shared runtime 未返回匹配 attempt/binding 的 typed prompt ACK");
     }
-    let contextAcceptance = response.delivery.contextAcceptance;
-    if (
-      preparedDelivery.ackFidelity === "strong" &&
-      contextAcceptance?.status === "pending"
-    ) {
-      try {
-        await runtimeTerminalCapture.waitForContext({
-          packageId: preparedDelivery.packageId,
-          sourceChecksum: preparedDelivery.sourceChecksum,
-        });
-      } catch (contextAckError) {
-        dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
-        await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
-          bindingKey: begin.bindingKey ?? "",
-          engine: input.target.engine,
-          providerProfileId: input.target.providerProfileId ?? null,
-          reason: `context-ack-missing: ${toErrorMessage(contextAckError)}`,
-        }).catch(() => undefined);
-        throw contextAckError;
-      }
-      contextAcceptance = {
-        status: "accepted",
-        packageId: preparedDelivery.packageId,
-        sourceChecksum: preparedDelivery.sourceChecksum,
-        ackFidelity: "strong",
-        evidence: "claude-replay-user-message-checksum-echo",
-      };
-    }
+
+    registerSharedSessionNativeBinding({
+      workspaceId: input.workspaceId,
+      sharedThreadId: input.threadId,
+      nativeThreadId: nativeSessionId,
+      engine: response.engine,
+      providerProfileId: response.providerProfileId ?? null,
+      attemptId,
+    });
+
+    const contextAcceptance = response.delivery.contextAcceptance;
     if (
       contextAcceptance?.status !== "accepted" ||
       contextAcceptance.packageId !== preparedDelivery.packageId ||
       contextAcceptance.sourceChecksum !== preparedDelivery.sourceChecksum
     ) {
       dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
-      await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
-        bindingKey: begin.bindingKey ?? "",
-        engine: input.target.engine,
-        providerProfileId: input.target.providerProfileId ?? null,
-        reason: "typed-context-ack-missing-or-mismatched",
-      }).catch(() => undefined);
+      await markAttemptRecovery("typed-context-ack-missing-or-mismatched");
       throw new Error("Shared runtime 未返回匹配 package/checksum 的 context ACK");
     }
 
-    await sharedSessionV2AcceptContext(input.workspaceId, input.threadId, {
-      attemptId,
-      logicalTurnId,
-      bindingKey: begin.bindingKey ?? "",
-      packageId: preparedDelivery.packageId,
-      nativeSessionId,
-      nativeRequestId: extractRuntimeTurnId(response),
-    });
-    await sharedSessionV2AcceptTurn(input.workspaceId, input.threadId, {
-      attemptId,
-      logicalTurnId,
-      target: targetPayload,
-      nativeSessionId,
-    });
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "runtimeAck" });
     let terminal;
     try {
       terminal =
         response.delivery.terminal?.type === "run.settled"
           ? { ...response.delivery.terminal, assistantText: null }
-          : await runtimeTerminalCapture?.waitFor({
+          : await runtimeTerminalCapture.waitFor({
+              attemptId,
               nativeThreadId: nativeSessionId,
               runtimeTurnId: extractRuntimeTurnId(response),
             });
@@ -494,43 +551,36 @@ export async function sendSharedSessionTurnV2(
       }
     } catch (terminalError) {
       dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
-      await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
-        bindingKey: begin.bindingKey ?? "",
-        engine: input.target.engine,
-        providerProfileId: input.target.providerProfileId ?? null,
-        reason: "run-settled-missing",
-      }).catch(() => undefined);
+      await markAttemptRecovery("run-settled-missing");
       throw terminalError;
     }
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "runSettled" });
 
     let commit;
     try {
-      commit = await sharedSessionV2CommitTurn(input.workspaceId, input.threadId, {
+      // Rust runtime lifecycle owner has already assembled and persisted the
+      // authoritative terminal snapshot before UI fan-out. This RPC only confirms
+      // the idempotent attempt commit; it does not send assistant content back.
+      commit = await sharedSessionV2CommitTurn(
+        input.workspaceId,
+        input.threadId,
         attemptId,
-        logicalTurnId,
-        target: targetPayload,
-        assistantText: terminal.assistantText ?? extractAssistantText(response),
-        outcome: { status: terminal.outcome },
-        nativeSessionId,
-      });
+      );
+      if (commit.status !== "committed") {
+        throw new Error(
+          `Shared canonical terminal 尚未提交：attempt ${commit.attemptId}`,
+        );
+      }
     } catch (commitError) {
-      // 发送已成功但 commit 失败 = ambiguous ACK：禁止盲目重建，标记 recovery 后抛出。
       dispatchSendEvent(input.workspaceId, input.threadId, { type: "commitFailed" });
-      await sharedSessionV2MarkRecovery(input.workspaceId, input.threadId, {
-        bindingKey: begin.bindingKey ?? "",
-        engine: input.target.engine,
-        providerProfileId: input.target.providerProfileId ?? null,
-        reason: "commit-failed",
-      }).catch(() => undefined);
+      await markAttemptRecovery("commit-confirmation-failed");
       throw commitError;
     }
 
-    // commit 落账成功（settling → idle）。
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "canonicalCommitted" });
 
     return {
-      ...(response ?? {}),
+      ...response,
       v2: {
         attemptId,
         logicalTurnId,

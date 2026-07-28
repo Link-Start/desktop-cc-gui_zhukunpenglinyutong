@@ -66,10 +66,11 @@ export type NativeHistorySourceInput = {
 export type ProviderContinuationTargetInput = {
   engine: "claude" | "codex";
   providerProfileId: string;
+  modelCatalogEntryId?: string | null;
   model?: string | null;
   reasoningEffort?: string | null;
   providerProfileNameSnapshot?: string | null;
-  providerProfileSource?: string | null;
+  providerProfileSource?: "local" | "managed" | null;
   runtimeCapabilityFingerprint?: string | null;
 };
 

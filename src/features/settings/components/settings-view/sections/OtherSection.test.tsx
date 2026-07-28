@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { OtherSection } from "./OtherSection";
 
 const TRANSLATIONS: Record<string, string> = {
-  "settings.sharedProjectionTestToggleTitle": "Enable Shared Projection",
+  "settings.sharedProjectionTestToggleTitle": "Use Canonical Projection",
   "settings.streamingScheduleTierTitle": "Streaming schedule tier",
   "settings.streamingScheduleTier.baseline": "Baseline",
   "settings.streamingScheduleTier.guarded": "Guarded",
@@ -58,27 +58,27 @@ describe("OtherSection performance diagnostics", () => {
     vi.unstubAllGlobals();
   });
 
-  it("persists the Shared Projection override and reloads after each change", () => {
+  it("shows default-on and persists explicit negative/positive overrides", () => {
     const reload = vi.fn();
     vi.stubGlobal("location", { reload });
     renderOtherSection();
 
     const toggle = screen.getByRole("switch", {
-      name: "Enable Shared Projection",
+      name: "Use Canonical Projection",
     });
+    expect(toggle.getAttribute("data-state")).toBe("checked");
+
+    fireEvent.click(toggle);
+
+    expect(window.localStorage.getItem("mossx.sharedProjection")).toBe("0");
+    expect(reload).toHaveBeenCalledTimes(1);
     expect(toggle.getAttribute("data-state")).toBe("unchecked");
 
     fireEvent.click(toggle);
 
     expect(window.localStorage.getItem("mossx.sharedProjection")).toBe("1");
-    expect(reload).toHaveBeenCalledTimes(1);
-    expect(toggle.getAttribute("data-state")).toBe("checked");
-
-    fireEvent.click(toggle);
-
-    expect(window.localStorage.getItem("mossx.sharedProjection")).toBeNull();
     expect(reload).toHaveBeenCalledTimes(2);
-    expect(toggle.getAttribute("data-state")).toBe("unchecked");
+    expect(toggle.getAttribute("data-state")).toBe("checked");
   });
 
   it("clears known realtime performance overrides and asks for reload", () => {

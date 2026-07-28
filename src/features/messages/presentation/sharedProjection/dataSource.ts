@@ -6,7 +6,7 @@
  *
  * 纪律：
  * - 与 Native 路径完全隔离；本模块不 import threadItems / Native 数据流。
- * - 只在 feature flag 开启时被上层选择；默认关闭（dark launch，Shared 真实流量保持 V0）。
+ * - Phase 2 后默认开启；只允许 explicit-negative flag 回滚到 Legacy-only 读取。
  * - `systemNotice` / `metadata` 不是 `ConversationItem` kind，映射时丢弃
  *   （它们是 Shadow 观测面，不属于 Canvas 渲染面）。
  */
@@ -15,6 +15,7 @@ import type { ConversationItem } from "../../../../types/conversation";
 import type { EngineType } from "../../../../types/engine";
 import { BUILTIN_ENGINE_TYPES } from "../../../engine/engineRegistry";
 import type { SharedProjectionItem } from "./types";
+import { LOCAL_PROVIDER_LABEL } from "../../../../utils/turnBadge";
 
 export const SHARED_PROJECTION_STORAGE_KEY = "mossx.sharedProjection";
 
@@ -22,27 +23,38 @@ function isEnabledFlag(value: unknown) {
   return typeof value === "string" && /^(1|true|yes|on)$/i.test(value.trim());
 }
 
-function readBooleanStorageFlag(key: string) {
-  try {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    return isEnabledFlag(window.localStorage.getItem(key));
-  } catch {
-    return false;
-  }
+function isDisabledFlag(value: unknown) {
+  return typeof value === "string" && /^(0|false|no|off)$/i.test(value.trim());
 }
 
-/** 设置页测试开关只管理当前 canonical local override。 */
-export function isSharedProjectionTestOverrideEnabled() {
-  return readBooleanStorageFlag(SHARED_PROJECTION_STORAGE_KEY);
+function parseBooleanFlag(value: unknown): boolean | null {
+  if (isEnabledFlag(value)) {
+    return true;
+  }
+  if (isDisabledFlag(value)) {
+    return false;
+  }
+  return null;
+}
+
+function readStorageFlag(key: string): boolean | null {
+  try {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    return parseBooleanFlag(window.localStorage.getItem(key));
+  } catch {
+    return null;
+  }
 }
 
 /**
  * 写入测试 override。返回值表示 storage 是否实际变化，供调用方决定是否 reload。
- * 关闭时删除 key，让 DataSource 回到 build flag / compatibility flag / 默认值判定。
+ * `true` 开启；`false` 显式回滚 Legacy-only；`null` 回到 build/default 判定。
  */
-export function setSharedProjectionTestOverrideEnabled(enabled: boolean) {
+export function setSharedProjectionTestOverrideEnabled(
+  enabled: boolean | null,
+) {
   try {
     if (typeof window === "undefined") {
       return false;
@@ -50,11 +62,12 @@ export function setSharedProjectionTestOverrideEnabled(enabled: boolean) {
     const currentValue = window.localStorage.getItem(
       SHARED_PROJECTION_STORAGE_KEY,
     );
-    if (enabled) {
-      if (isEnabledFlag(currentValue)) {
+    if (enabled !== null) {
+      const nextValue = enabled ? "1" : "0";
+      if (currentValue === nextValue) {
         return false;
       }
-      window.localStorage.setItem(SHARED_PROJECTION_STORAGE_KEY, "1");
+      window.localStorage.setItem(SHARED_PROJECTION_STORAGE_KEY, nextValue);
       return true;
     }
     if (currentValue === null) {
@@ -67,13 +80,19 @@ export function setSharedProjectionTestOverrideEnabled(enabled: boolean) {
   }
 }
 
-/** Shared Projection DataSource 开关（默认关闭）。 */
+/** Shared Projection DataSource：local override > build > legacy override > default-on。 */
 export function isSharedProjectionDataSourceEnabled() {
-  return (
-    isEnabledFlag(import.meta.env.VITE_MOSSX_SHARED_PROJECTION) ||
-    isSharedProjectionTestOverrideEnabled() ||
-    readBooleanStorageFlag("ccgui.sharedProjection")
+  const localOverride = readStorageFlag(SHARED_PROJECTION_STORAGE_KEY);
+  if (localOverride !== null) {
+    return localOverride;
+  }
+  const buildOverride = parseBooleanFlag(
+    import.meta.env.VITE_MOSSX_SHARED_PROJECTION,
   );
+  if (buildOverride !== null) {
+    return buildOverride;
+  }
+  return readStorageFlag("ccgui.sharedProjection") ?? true;
 }
 
 function readString(content: Record<string, unknown>, key: string) {
@@ -91,6 +110,7 @@ function readEngineSource(content: Record<string, unknown>): EngineType | undefi
 
 function readExecutionTargetSnapshot(
   content: Record<string, unknown>,
+  fidelity: SharedProjectionItem["fidelity"],
 ): Extract<ConversationItem, { kind: "message" }>["executionTargetSnapshot"] {
   const value = content.executionTargetSnapshot;
   if (!value || typeof value !== "object") {
@@ -108,11 +128,27 @@ function readExecutionTargetSnapshot(
     snapshot.reasoning && typeof snapshot.reasoning === "object"
       ? (snapshot.reasoning as Record<string, unknown>)
       : null;
+  const providerProfileId =
+    typeof snapshot.providerProfileId === "string"
+      ? snapshot.providerProfileId
+      : null;
+  const isCanonicalLocalTarget =
+    fidelity === "canonical" &&
+    providerProfileId === null &&
+    snapshot.providerProfileSource === "local";
+  const providerProfileSource =
+    snapshot.providerProfileSource === "local" ||
+    snapshot.providerProfileSource === "managed"
+      ? snapshot.providerProfileSource
+      : isCanonicalLocalTarget
+        ? "local"
+        : null;
   return {
     engine: engine as EngineType,
-    providerProfileId:
-      typeof snapshot.providerProfileId === "string"
-        ? snapshot.providerProfileId
+    providerProfileId,
+    modelCatalogEntryId:
+      typeof snapshot.modelCatalogEntryId === "string"
+        ? snapshot.modelCatalogEntryId
         : null,
     model: typeof snapshot.model === "string" ? snapshot.model : null,
     reasoning:
@@ -122,11 +158,10 @@ function readExecutionTargetSnapshot(
     providerProfileNameSnapshot:
       typeof snapshot.providerProfileNameSnapshot === "string"
         ? snapshot.providerProfileNameSnapshot
-        : null,
-    providerProfileSource:
-      typeof snapshot.providerProfileSource === "string"
-        ? snapshot.providerProfileSource
-        : null,
+        : isCanonicalLocalTarget
+          ? LOCAL_PROVIDER_LABEL
+          : null,
+    providerProfileSource,
     runtimeCapabilityFingerprint:
       typeof snapshot.runtimeCapabilityFingerprint === "string"
         ? snapshot.runtimeCapabilityFingerprint
@@ -145,7 +180,10 @@ function toConversationItem(item: SharedProjectionItem): ConversationItem | null
   switch (kind) {
     case "message": {
       const role = content.role === "user" ? "user" : "assistant";
-      const executionTargetSnapshot = readExecutionTargetSnapshot(content);
+      const executionTargetSnapshot = readExecutionTargetSnapshot(
+        content,
+        item.fidelity,
+      );
       return {
         id,
         kind: "message",
@@ -263,10 +301,8 @@ export function toSharedConversationItems(
 }
 
 /**
- * DataSource 选择 seam（D6）：flag 关闭或输入为空时返回 `null`，
- * 调用方继续走 Native 路径；返回数组时调用方才切换到 Shared 渲染。
- *
- * Wave 3 仅提供 seam；Canvas 消费端随 Wave 4 Tauri command 一并接入。
+ * DataSource 选择 seam：explicit-negative rollback 或输入为空时返回 `null`；
+ * Shared loader 据此保留 Legacy-only 读取。
  */
 export function resolveSharedConversationItems(
   items: readonly SharedProjectionItem[] | null | undefined,

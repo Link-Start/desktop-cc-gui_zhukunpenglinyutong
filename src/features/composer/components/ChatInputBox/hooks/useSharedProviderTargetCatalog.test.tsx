@@ -7,6 +7,7 @@ import {
   useSharedProviderTargetCatalog,
 } from "./useSharedProviderTargetCatalog";
 import {
+  discoverCodexModels,
   getClaudeProviders,
   getCodexProviders,
   getEngineModels,
@@ -14,6 +15,7 @@ import {
 } from "../../../../../services/tauri";
 
 vi.mock("../../../../../services/tauri", () => ({
+  discoverCodexModels: vi.fn(),
   getClaudeProviders: vi.fn(),
   getCodexProviders: vi.fn(),
   getKimiProviders: vi.fn(),
@@ -24,6 +26,7 @@ const getClaudeProvidersMock = vi.mocked(getClaudeProviders);
 const getCodexProvidersMock = vi.mocked(getCodexProviders);
 const getKimiProvidersMock = vi.mocked(getKimiProviders);
 const getEngineModelsMock = vi.mocked(getEngineModels);
+const discoverCodexModelsMock = vi.mocked(discoverCodexModels);
 
 describe("useSharedProviderTargetCatalog", () => {
   beforeEach(() => {
@@ -52,6 +55,7 @@ describe("useSharedProviderTargetCatalog", () => {
         isDefault: true,
       },
     ]);
+    discoverCodexModelsMock.mockResolvedValue({ data: [] });
   });
 
   it("loads profiles once and models only for the opened binding", async () => {
@@ -98,6 +102,7 @@ describe("useSharedProviderTargetCatalog", () => {
     const { result } = renderHook(() =>
       useSharedProviderTargetCatalog({
         enabled: true,
+        mode: "shared",
         currentProvider: "claude",
         currentProviderProfileId: null,
         currentModels: [{ id: "local-model", label: "Local model" }],
@@ -117,13 +122,58 @@ describe("useSharedProviderTargetCatalog", () => {
         ?.profiles.find(
           (profile) => profile.id === "__local_settings_json__",
         )?.models,
-    ).toEqual([{ id: "local-model", label: "Local model" }]);
+    ).toEqual([]);
     expect(
       result.current.groups.find((group) => group.providerId === "kimi")
         ?.profiles,
     ).toEqual([
       expect.objectContaining({ id: "__local_config_toml__" }),
     ]);
+  });
+
+  it("does not project global engine models into a Shared Provider binding", async () => {
+    const { result } = renderHook(() =>
+      useSharedProviderTargetCatalog({
+        enabled: true,
+        mode: "shared",
+        currentProvider: "codex",
+        currentProviderProfileId: "codex-b",
+        currentModels: [
+          {
+            id: "kimi-catalog-entry",
+            model: "kimi-for-coding",
+            label: "Stale global Kimi model",
+          },
+        ],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+    });
+
+    const currentProfileBeforeLoad = result.current.groups
+      .find((group) => group.providerId === "codex")
+      ?.profiles.find((profile) => profile.id === "codex-b");
+    expect(currentProfileBeforeLoad?.models).toEqual([]);
+
+    await act(async () => {
+      await result.current.ensureModels("codex", "codex-b");
+    });
+
+    const currentProfileAfterLoad = result.current.groups
+      .find((group) => group.providerId === "codex")
+      ?.profiles.find((profile) => profile.id === "codex-b");
+    expect(currentProfileAfterLoad?.models).toEqual([
+      expect.objectContaining({ id: "same-model", label: "Scoped model" }),
+    ]);
+    expect(currentProfileAfterLoad?.models).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ model: "kimi-for-coding" }),
+      ]),
+    );
   });
 
   it("surfaces a binding-scoped model failure without replacing the catalog", async () => {
@@ -211,5 +261,125 @@ describe("useSharedProviderTargetCatalog", () => {
         (profile) => profile.id === "__local_config_toml__",
       ),
     ).toMatchObject({ enabled: false, disabledReason: "source only" });
+  });
+
+  it("reloads only the configured slice and preserves current custom models", async () => {
+    const { result } = renderHook(() =>
+      useSharedProviderTargetCatalog({
+        enabled: true,
+        mode: "native",
+        workspaceId: "ws-1",
+        currentProvider: "codex",
+        currentProviderProfileId: "codex-b",
+        currentModels: [
+          { id: "custom-model", label: "Custom", source: "custom" },
+          { id: "stale-model", label: "Stale", source: "provider-config" },
+        ],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+    getEngineModelsMock.mockResolvedValueOnce([
+      {
+        id: "configured-model",
+        displayName: "Configured",
+        description: "",
+        isDefault: true,
+      },
+    ]);
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+      await result.current.reloadConfig("codex", "codex-b");
+    });
+
+    expect(getEngineModelsMock).toHaveBeenLastCalledWith("codex", {
+      providerProfileId: "codex-b",
+      forceRefresh: true,
+    });
+    expect(result.current.groups[0]?.profiles.find(
+      (profile) => profile.id === "codex-b",
+    )?.models).toEqual([
+      expect.objectContaining({ id: "custom-model" }),
+      expect.objectContaining({ id: "configured-model" }),
+    ]);
+  });
+
+  it("keeps the last-good models when config reload fails", async () => {
+    getEngineModelsMock.mockResolvedValueOnce([
+      {
+        id: "last-good",
+        model: "last-good-runtime",
+        displayName: "Last Good",
+        description: "",
+        isDefault: true,
+      },
+    ]);
+    const { result } = renderHook(() =>
+      useSharedProviderTargetCatalog({
+        enabled: true,
+        mode: "shared",
+        workspaceId: "ws-1",
+        currentProvider: "codex",
+        currentProviderProfileId: "codex-b",
+        currentModels: [],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+      await result.current.ensureModels("codex", "codex-b");
+    });
+    getEngineModelsMock.mockRejectedValueOnce(new Error("reload failed"));
+    await act(async () => {
+      await result.current.reloadConfig("codex", "codex-b");
+    });
+
+    const profile = result.current.groups
+      .find((group) => group.providerId === "codex")
+      ?.profiles.find((candidate) => candidate.id === "codex-b");
+    expect(profile?.models).toEqual([
+      expect.objectContaining({ id: "last-good" }),
+    ]);
+    expect(profile?.error).toBe("reload failed");
+  });
+
+  it("discovers Codex models through the scoped CLI runtime and merges them", async () => {
+    discoverCodexModelsMock.mockResolvedValueOnce({
+      data: [
+        {
+          id: "runtime-model",
+          model: "runtime-model",
+          displayName: "Runtime Model",
+        },
+      ],
+    });
+    const { result } = renderHook(() =>
+      useSharedProviderTargetCatalog({
+        enabled: true,
+        mode: "native",
+        workspaceId: "ws-1",
+        currentProvider: "codex",
+        currentProviderProfileId: "codex-b",
+        currentModels: [{ id: "custom-model", label: "Custom", source: "custom" }],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+      await result.current.discoverModels("codex", "codex-b");
+    });
+
+    expect(discoverCodexModelsMock).toHaveBeenCalledWith("ws-1", "codex-b");
+    expect(result.current.groups[0]?.profiles.find(
+      (profile) => profile.id === "codex-b",
+    )?.models).toEqual([
+      expect.objectContaining({ id: "custom-model" }),
+      expect.objectContaining({ id: "runtime-model", source: "runtime" }),
+    ]);
   });
 });

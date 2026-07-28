@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { resolveTurnBadge } from "./turnBadge";
-import { freezeTurnSnapshot } from "./types";
+import {
+  freezeTurnSnapshot,
+  type TurnExecutionSnapshot,
+} from "./types";
 
 describe("resolveTurnBadge", () => {
   it("renders provider name snapshot and model from the frozen snapshot", () => {
@@ -57,21 +60,36 @@ describe("resolveTurnBadge", () => {
   });
 
   it("does not fabricate local identity for legacy snapshots", () => {
-    const snapshot = freezeTurnSnapshot({ engine: "claude" });
+    const snapshot: TurnExecutionSnapshot = {
+      engine: "claude",
+      providerProfileId: null,
+      providerProfileNameSnapshot: null,
+      providerProfileSource: null,
+    };
     const badge = resolveTurnBadge(snapshot);
     expect(badge.providerLabel).toBe("历史配置未知");
     expect(badge.unavailable).toBe(false);
   });
 
-  it("uses a readable local label only for explicit disk-provider snapshots", () => {
+  it("converts explicit disk selection to canonical local source", () => {
     const snapshot = freezeTurnSnapshot({
       engine: "codex",
       providerProfileId: null,
       providerProfileNameSnapshot: "本地配置",
       providerProfileSource: "disk",
     });
+    expect(snapshot.providerProfileSource).toBe("local");
     const badge = resolveTurnBadge(snapshot);
     expect(badge.engineLabel).toBe("Codex CLI");
     expect(badge.providerLabel).toBe("本地配置");
+  });
+
+  it("preserves managed source while freezing the snapshot", () => {
+    const snapshot = freezeTurnSnapshot({
+      engine: "codex",
+      providerProfileId: "provider-openai",
+      providerProfileSource: "managed",
+    });
+    expect(snapshot.providerProfileSource).toBe("managed");
   });
 });

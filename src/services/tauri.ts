@@ -23,6 +23,7 @@ export {
 export type { TtCliStatus, TtInstallResult, TtServerStatus } from "../types";
 export {
   cancelCodexLogin,
+  discoverCodexModels,
   generateRunMetadata,
   getAccountInfo,
   getAccountRateLimits,

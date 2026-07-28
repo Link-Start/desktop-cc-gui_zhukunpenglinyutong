@@ -29,6 +29,7 @@ function storeKeyOf(workspaceId: string, threadId: string): string {
 }
 
 const states = new Map<string, SharedTargetState>();
+const activeAttemptIds = new Map<string, string>();
 const listeners = new Map<string, Set<Listener>>();
 
 function readState(key: string): SharedTargetState {
@@ -44,14 +45,23 @@ function writeState(key: string, next: SharedTargetState): void {
   listeners.get(key)?.forEach((listener) => listener());
 }
 
-/** 更新下一次发送的目标选择（唯一允许用户修改的入口）。 */
+/** Backend/history hydration 的原子入口；null 必须清除旧选择。 */
+export function hydrateSharedTargetState(
+  workspaceId: string,
+  threadId: string,
+  target: ExecutionTarget | null,
+): void {
+  const key = storeKeyOf(workspaceId, threadId);
+  writeState(key, { ...readState(key), selectedNextTarget: target });
+}
+
+/** 更新下一次发送的目标选择（兼容调用入口）。 */
 export function selectNextTarget(
   workspaceId: string,
   threadId: string,
   target: ExecutionTarget,
 ): void {
-  const key = storeKeyOf(workspaceId, threadId);
-  writeState(key, { ...readState(key), selectedNextTarget: target });
+  hydrateSharedTargetState(workspaceId, threadId, target);
 }
 
 /** Turn 创建时固化 active 快照；此后不可变。 */
@@ -59,9 +69,34 @@ export function beginTurn(
   workspaceId: string,
   threadId: string,
   snapshot: TurnExecutionSnapshot,
+  attemptId?: string | null,
 ): void {
   const key = storeKeyOf(workspaceId, threadId);
+  const normalizedAttemptId = attemptId?.trim();
+  if (normalizedAttemptId) {
+    activeAttemptIds.set(key, normalizedAttemptId);
+  } else {
+    activeAttemptIds.delete(key);
+  }
   writeState(key, { ...readState(key), activeTurnTarget: snapshot });
+}
+
+/**
+ * Runtime owner 未携带快照时的安全 fallback。
+ *
+ * 只有 durable attempt identity 完全相同才能读取 active snapshot；禁止仅凭
+ * Shared thread 或当前 Picker 推断本轮 provenance。
+ */
+export function getActiveTurnTargetForAttempt(
+  workspaceId: string,
+  threadId: string,
+  attemptId: string,
+): TurnExecutionSnapshot | null {
+  const key = storeKeyOf(workspaceId, threadId);
+  if (activeAttemptIds.get(key) !== attemptId.trim()) {
+    return null;
+  }
+  return readState(key).activeTurnTarget;
 }
 
 /** Turn 到达终态后清除 active 快照（历史 Badge 由 turn fact 承担，不读 store）。 */
@@ -69,8 +104,10 @@ export function endTurn(workspaceId: string, threadId: string): void {
   const key = storeKeyOf(workspaceId, threadId);
   const state = readState(key);
   if (state.activeTurnTarget === null) {
+    activeAttemptIds.delete(key);
     return;
   }
+  activeAttemptIds.delete(key);
   writeState(key, { ...state, activeTurnTarget: null });
 }
 
@@ -113,5 +150,6 @@ export function useSharedTargetState(
 /** 测试专用：清空全部 store 状态。 */
 export function resetSharedTargetStoreForTests(): void {
   states.clear();
+  activeAttemptIds.clear();
   listeners.clear();
 }

@@ -47,6 +47,14 @@ interface ModelSelectProps {
   onAddModel?: () => void;  // Navigate to model management
   onRefreshConfig?: () => Promise<void> | void; // Refresh current provider config
   isRefreshingConfig?: boolean;
+  onReloadProviderConfig?: (
+    providerId: ProviderId,
+    providerProfileId: string,
+  ) => Promise<void> | void;
+  onDiscoverProviderModels?: (
+    providerId: ProviderId,
+    providerProfileId: string,
+  ) => Promise<void> | void;
 }
 
 const MODEL_LABEL_KEYS: Record<string, string> = {
@@ -104,18 +112,21 @@ export function buildProviderExecutionTarget(
   current: ExecutionTarget | null | undefined,
   providerId: ProviderId,
   providerProfileId: string,
-  modelId: string,
+  modelCatalogEntryId: string,
   providerProfileNameSnapshot?: string,
   providerProfileSource?: "disk" | "managed",
   normalizeProviderProfile = true,
+  runtimeModel?: string,
 ): ExecutionTarget {
   const normalizedProviderProfileId = normalizeProviderProfile
     ? normalizeExecutionProviderProfileId(providerId, providerProfileId)
     : providerProfileId;
+  const normalizedRuntimeModel = runtimeModel?.trim() || null;
   return {
     engine: providerId,
     providerProfileId: normalizedProviderProfileId,
-    model: modelId,
+    modelCatalogEntryId,
+    model: normalizedRuntimeModel,
     providerProfileNameSnapshot:
       providerProfileNameSnapshot?.trim() || null,
     providerProfileSource: providerProfileSource ?? null,
@@ -136,8 +147,11 @@ function isSelectedProviderProfile(
     providerId,
     providerProfileId,
   );
+  const expectedSource =
+    normalizedProviderProfileId === null ? "disk" : "managed";
   return (
     executionTarget?.engine === providerId &&
+    executionTarget.providerProfileSource === expectedSource &&
     (executionTarget.providerProfileId ?? null) ===
       normalizedProviderProfileId
   );
@@ -185,6 +199,8 @@ export const ModelSelect = memo(({
   onAddModel,
   onRefreshConfig,
   isRefreshingConfig = false,
+  onReloadProviderConfig,
+  onDiscoverProviderModels,
 }: ModelSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -257,7 +273,9 @@ export const ModelSelect = memo(({
     ) ??
     resolvedTargetGroups.find((group) => group.enabled);
   const hasGroupedModels = Boolean(modelGroups && modelGroups.length > 0);
-  const hasConfigActions = Boolean(onAddModel || onRefreshConfig);
+  const hasFooterConfigActions = Boolean(
+    onAddModel || (!hasTargetGroups && onRefreshConfig),
+  );
 
   /**
    * Select model
@@ -280,11 +298,12 @@ export const ModelSelect = memo(({
     (
       providerId: ProviderId,
       providerProfileId: string,
-      modelId: string,
+      modelCatalogEntryId: string,
       providerProfileNameSnapshot: string,
       providerProfileSource: "disk" | "managed",
+      runtimeModel?: string,
     ) => {
-      if (!onExecutionTargetChange) {
+      if (!onExecutionTargetChange || !runtimeModel?.trim()) {
         return;
       }
       onExecutionTargetChange(
@@ -292,10 +311,11 @@ export const ModelSelect = memo(({
           executionTarget,
           providerId,
           providerProfileId,
-          modelId,
+          modelCatalogEntryId,
           providerProfileNameSnapshot,
           providerProfileSource,
           targetGroupDisplayMode !== 'profiles',
+          runtimeModel,
         ),
       );
       setIsOpen(false);
@@ -359,6 +379,124 @@ export const ModelSelect = memo(({
       setRefreshConfigError(message);
     });
   }, [isRefreshingConfig, onRefreshConfig]);
+
+  const renderRefreshConfigButton = (providerId: ProviderId) =>
+    onRefreshConfig && providerId === currentProvider ? (
+      <button
+        type="button"
+        disabled={isRefreshingConfig}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          handleRefreshConfig();
+        }}
+        aria-label={t(isRefreshingConfig ? 'models.refreshingConfig' : 'models.refreshConfig')}
+        title={t(isRefreshingConfig ? 'models.refreshingConfig' : 'models.refreshConfig')}
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+      >
+        <span
+          className={`codicon codicon-refresh${isRefreshingConfig ? ' selector-refresh-icon-spinning' : ''}`}
+          aria-hidden
+        />
+      </button>
+    ) : null;
+
+  const resolveCatalogActionProfile = (group: ProviderTargetGroup) => {
+    const expandedProfileId = expandedProviderProfileKey?.startsWith(
+      `${group.providerId}:`,
+    )
+      ? expandedProviderProfileKey.slice(group.providerId.length + 1)
+      : null;
+    return (
+      group.profiles.find((profile) => profile.id === expandedProfileId) ??
+      group.profiles.find((profile) =>
+        isSelectedProviderProfile(executionTarget, group.providerId, profile.id),
+      ) ??
+      group.profiles.find((profile) => profile.enabled !== false) ??
+      null
+    );
+  };
+
+  const renderProviderCatalogActions = (group: ProviderTargetGroup) => {
+    const profile = resolveCatalogActionProfile(group);
+    if (!profile) {
+      return null;
+    }
+    const renderActionButton = ({
+      label,
+      icon,
+      loading,
+      onClick,
+    }: {
+      label: string;
+      icon: string;
+      loading: boolean;
+      onClick: () => Promise<void> | void;
+    }) => (
+      <button
+        type="button"
+        disabled={loading}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void onClick();
+        }}
+        aria-label={label}
+        title={label}
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+      >
+        <span
+          className={`codicon codicon-${icon}${loading ? ' selector-refresh-icon-spinning' : ''}`}
+          aria-hidden
+        />
+      </button>
+    );
+    return (
+      <span className="flex shrink-0 items-center gap-0.5">
+        {onReloadProviderConfig &&
+          renderActionButton({
+            label: t(
+              profile.reloadingConfig
+                ? 'models.reloadingConfig'
+                : 'models.reloadConfig',
+            ),
+            icon: 'refresh',
+            loading: Boolean(profile.reloadingConfig),
+            onClick: () =>
+              onReloadProviderConfig(group.providerId, profile.id),
+          })}
+        {onDiscoverProviderModels &&
+          profile.discoverySupported &&
+          renderActionButton({
+            label: t(
+              profile.discoveringModels
+                ? 'models.discoveringModels'
+                : 'models.discoverModels',
+            ),
+            icon: 'cloud-download',
+            loading: Boolean(profile.discoveringModels),
+            onClick: () =>
+              onDiscoverProviderModels(group.providerId, profile.id),
+          })}
+      </span>
+    );
+  };
 
   const renderProviderProfiles = (group: ProviderTargetGroup) =>
     group.profiles.map((profile, profileIndex) => {
@@ -434,11 +572,15 @@ export const ModelSelect = memo(({
             )}
           {isExpanded &&
             profile.models.map((model) => {
+              const runtimeModel = model.model?.trim();
               const isSelected =
-                isSelectedProfile && executionTarget?.model === model.id;
+                isSelectedProfile &&
+                (executionTarget?.modelCatalogEntryId ??
+                  executionTarget?.model) === model.id;
               return (
                 <DropdownMenuItem
                   key={`${profileKey}:${model.id}`}
+                  disabled={!runtimeModel}
                   className="gap-2 pl-7"
                   onSelect={() =>
                     handleTargetSelect(
@@ -447,6 +589,7 @@ export const ModelSelect = memo(({
                       model.id,
                       profile.label,
                       profile.source,
+                      runtimeModel,
                     )
                   }
                 >
@@ -554,12 +697,15 @@ export const ModelSelect = memo(({
                     : []),
                   <DropdownMenuLabel
                     key={`${group.providerId}:label`}
-                    className="flex items-center gap-2 text-muted-foreground"
+                    className="flex items-center justify-between gap-2 text-muted-foreground"
                   >
-                    <ModelIcon provider={group.providerId} size={18} />
-                    <span className="min-w-0 truncate">
-                      {group.providerLabel} · Provider
+                    <span className="flex min-w-0 items-center gap-2">
+                      <ModelIcon provider={group.providerId} size={18} />
+                      <span className="min-w-0 truncate">
+                        {group.providerLabel} · Provider
+                      </span>
                     </span>
+                    {renderProviderCatalogActions(group)}
                   </DropdownMenuLabel>,
                   ...renderProviderProfiles(group),
                 ])
@@ -628,14 +774,17 @@ export const ModelSelect = memo(({
                     >
                       {activeTargetGroup ? (
                         <>
-                          <DropdownMenuLabel className="flex items-center gap-2 text-muted-foreground">
-                            <ModelIcon
-                              provider={activeTargetGroup.providerId}
-                              size={18}
-                            />
-                            <span className="min-w-0 truncate">
-                              {activeTargetGroup.providerLabel} · Provider
+                          <DropdownMenuLabel className="flex items-center justify-between gap-2 text-muted-foreground">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <ModelIcon
+                                provider={activeTargetGroup.providerId}
+                                size={18}
+                              />
+                              <span className="min-w-0 truncate">
+                                {activeTargetGroup.providerLabel} · Provider
+                              </span>
                             </span>
+                            {renderProviderCatalogActions(activeTargetGroup)}
                           </DropdownMenuLabel>
                           {renderProviderProfiles(activeTargetGroup)}
                         </>
@@ -690,33 +839,7 @@ export const ModelSelect = memo(({
                 >
                   <DropdownMenuLabel className="flex items-center justify-between gap-2 text-muted-foreground">
                     <span className="min-w-0 truncate">{group.providerLabel}</span>
-                    {onRefreshConfig && group.providerId === currentProvider && (
-                      <button
-                        type="button"
-                        disabled={isRefreshingConfig}
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }}
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          handleRefreshConfig();
-                        }}
-                        aria-label={t(isRefreshingConfig ? 'models.refreshingConfig' : 'models.refreshConfig')}
-                        title={t(isRefreshingConfig ? 'models.refreshingConfig' : 'models.refreshConfig')}
-                        className="inline-flex size-8 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
-                      >
-                        <span
-                          className={`codicon codicon-refresh${isRefreshingConfig ? ' selector-refresh-icon-spinning' : ''}`}
-                          aria-hidden
-                        />
-                      </button>
-                    )}
+                    {renderRefreshConfigButton(group.providerId)}
                   </DropdownMenuLabel>
                   {group.models.map((model) => {
                     const isSelected = group.providerId === currentProvider && model.id === value;
@@ -789,7 +912,7 @@ export const ModelSelect = memo(({
             ))}
           </>
         )}
-        {hasConfigActions && !hasGroupedModels && (
+        {hasFooterConfigActions && !hasGroupedModels && (
           <>
             <DropdownMenuSeparator />
             {onAddModel && (
@@ -802,7 +925,7 @@ export const ModelSelect = memo(({
                 {t('models.addModel')}
               </DropdownMenuItem>
             )}
-            {onRefreshConfig && (
+            {onRefreshConfig && !hasTargetGroups && (
               <DropdownMenuItem
                 disabled={isRefreshingConfig}
                 onSelect={(event) => {

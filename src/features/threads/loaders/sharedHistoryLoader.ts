@@ -7,6 +7,12 @@ import {
   resolveSharedConversationItems,
 } from "../../messages/presentation/sharedProjection/dataSource";
 import type { SharedProjectionItem } from "../../messages/presentation/sharedProjection/types";
+import { hydrateSharedTargetState } from "../../shared-session/target/targetStore";
+import {
+  isResolvedExecutionTarget,
+  normalizePersistedExecutionTarget,
+} from "../../shared-session/target/types";
+import { mergeHistoryProjectionItems } from "../assembly/conversationAssembler";
 
 type SharedHistoryLoaderOptions = {
   workspaceId: string;
@@ -33,16 +39,43 @@ export function createSharedHistoryLoader({
     engine: "codex",
     async load(threadId: string) {
       const response = await loadSharedSession(workspaceId, threadId);
+      const persistedTarget = normalizePersistedExecutionTarget(
+        response?.selectedTarget,
+      );
+      const resolvedPersistedTarget = isResolvedExecutionTarget(persistedTarget)
+        ? persistedTarget
+        : null;
+      hydrateSharedTargetState(
+        workspaceId,
+        threadId,
+        resolvedPersistedTarget,
+      );
+      const selectedEngine = asString(response?.selectedEngine).trim().toLowerCase();
+      const normalizedSelectedEngine =
+        resolvedPersistedTarget?.engine ??
+        normalizeSharedSessionEngine(
+          selectedEngine === "codex" || selectedEngine === "claude"
+            ? selectedEngine
+            : undefined,
+        );
       const legacyItems = Array.isArray(response?.items)
         ? (response?.items as ConversationItem[])
         : [];
       let items = legacyItems;
       if (isSharedProjectionDataSourceEnabled()) {
         try {
-          items =
+          const projectedItems =
             resolveSharedConversationItems(
               await loadSharedProjection(workspaceId, threadId),
-            ) ?? legacyItems;
+            ) ?? [];
+          items =
+            legacyItems.length > 0
+              ? mergeHistoryProjectionItems(legacyItems, projectedItems, {
+                  workspaceId,
+                  threadId,
+                  engine: normalizedSelectedEngine,
+                })
+              : projectedItems;
         } catch (error) {
           console.warn(
             `[shared-projection] load failed; using V0 snapshot for ${threadId}`,
@@ -50,12 +83,6 @@ export function createSharedHistoryLoader({
           );
         }
       }
-      const selectedEngine = asString(response?.selectedEngine).trim().toLowerCase();
-      const normalizedSelectedEngine = normalizeSharedSessionEngine(
-        selectedEngine === "codex" || selectedEngine === "claude"
-          ? selectedEngine
-          : undefined,
-      );
       return normalizeHistorySnapshot({
         engine: normalizedSelectedEngine,
         workspaceId,

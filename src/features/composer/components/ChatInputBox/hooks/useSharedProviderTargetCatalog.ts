@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
+  discoverCodexModels,
   getClaudeProviders,
   getCodexProviders,
   getEngineModels,
@@ -26,6 +27,9 @@ export type ProviderProfileModelGroup = {
   disabledReason?: string;
   models: ModelInfo[];
   loading: boolean;
+  reloadingConfig?: boolean;
+  discoveringModels?: boolean;
+  discoverySupported?: boolean;
   error: string | null;
 };
 
@@ -69,6 +73,9 @@ let profileCatalogCache: ProfileCatalog | null = null;
 let profileCatalogRequest: Promise<ProfileCatalog> | null = null;
 const modelCatalogCache = new Map<string, ModelInfo[]>();
 const modelCatalogRequests = new Map<string, Promise<ModelInfo[]>>();
+const discoveredModelCatalogCache = new Map<string, ModelInfo[]>();
+
+type CatalogAction = "reload-config" | "discover-models";
 
 function isCurrentProviderProfile(
   engine: "claude" | "codex" | "kimi",
@@ -163,8 +170,73 @@ function toModelInfo(
   };
 }
 
+function modelRuntimeIdentity(model: ModelInfo): string {
+  return (model.model?.trim() || model.id.trim()).toLowerCase();
+}
+
+export function mergeProviderCatalogModels(
+  customModels: ModelInfo[],
+  configuredModels: ModelInfo[],
+  discoveredModels: ModelInfo[],
+): ModelInfo[] {
+  const merged: ModelInfo[] = [];
+  const seen = new Set<string>();
+  for (const model of [
+    ...customModels,
+    ...configuredModels,
+    ...discoveredModels,
+  ]) {
+    const identity = modelRuntimeIdentity(model);
+    if (!identity || seen.has(identity)) {
+      continue;
+    }
+    seen.add(identity);
+    merged.push(model);
+  }
+  return merged;
+}
+
+function extractCodexDiscoveredModels(response: Record<string, unknown>): ModelInfo[] {
+  const result =
+    response.result && typeof response.result === "object"
+      ? response.result as Record<string, unknown>
+      : null;
+  const rawModels = result?.data ?? response.data;
+  if (!Array.isArray(rawModels)) {
+    return [];
+  }
+  return rawModels.flatMap((rawModel) => {
+    if (!rawModel || typeof rawModel !== "object") {
+      return [];
+    }
+    const model = rawModel as Record<string, unknown>;
+    const idValue = model.id ?? model.model;
+    if (typeof idValue !== "string" || !idValue.trim()) {
+      return [];
+    }
+    const runtimeModel =
+      typeof model.model === "string" && model.model.trim()
+        ? model.model.trim()
+        : idValue.trim();
+    const labelValue =
+      model.displayName ?? model.display_name ?? model.name ?? runtimeModel;
+    return [{
+      id: idValue.trim(),
+      model: runtimeModel,
+      label:
+        typeof labelValue === "string" && labelValue.trim()
+          ? labelValue.trim()
+          : runtimeModel,
+      description:
+        typeof model.description === "string" ? model.description : undefined,
+      source: "runtime",
+    }];
+  });
+}
+
 export function useSharedProviderTargetCatalog({
   enabled,
+  workspaceId,
   mode = "shared",
   currentProvider,
   currentProviderProfileId,
@@ -173,6 +245,7 @@ export function useSharedProviderTargetCatalog({
   kimiDisabledReason,
 }: {
   enabled: boolean;
+  workspaceId?: string | null;
   mode?: "shared" | "native";
   currentProvider: ProviderId;
   currentProviderProfileId?: string | null;
@@ -188,6 +261,10 @@ export function useSharedProviderTargetCatalog({
     () => new Set(),
   );
   const [modelErrors, setModelErrors] = useState<Record<string, string>>({});
+  const [catalogActions, setCatalogActions] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const catalogActionsInFlight = useRef(new Set<string>());
   const [loadedModels, setLoadedModels] = useState<Record<string, ModelInfo[]>>(
     () => Object.fromEntries(modelCatalogCache),
   );
@@ -252,6 +329,75 @@ export function useSharedProviderTargetCatalog({
     [enabled],
   );
 
+  const runCatalogAction = useCallback(
+    async (
+      action: CatalogAction,
+      engine: EngineType,
+      providerProfileId: string,
+    ) => {
+      if (!enabled) {
+        return;
+      }
+      const key = modelCatalogKey(engine, providerProfileId);
+      const actionKey = `${action}:${key}`;
+      if (catalogActionsInFlight.current.has(actionKey)) {
+        return;
+      }
+      if (action === "discover-models" && engine !== "codex") {
+        throw new Error(`${engine} CLI does not expose a supported model-list protocol`);
+      }
+      if (action === "discover-models" && !workspaceId?.trim()) {
+        throw new Error("Codex model discovery requires an active workspace");
+      }
+
+      catalogActionsInFlight.current.add(actionKey);
+      setCatalogActions((current) => new Set(current).add(actionKey));
+      setModelErrors((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      try {
+        if (action === "reload-config") {
+          const models = (await getEngineModels(engine, {
+            providerProfileId,
+            forceRefresh: true,
+          })).map(toModelInfo);
+          modelCatalogCache.set(key, models);
+          setLoadedModels((current) => ({ ...current, [key]: models }));
+          return;
+        }
+
+        const models = extractCodexDiscoveredModels(
+          await discoverCodexModels(workspaceId!.trim(), providerProfileId),
+        );
+        discoveredModelCatalogCache.set(key, models);
+        setLoadedModels((current) => ({ ...current }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setModelErrors((current) => ({ ...current, [key]: message }));
+      } finally {
+        catalogActionsInFlight.current.delete(actionKey);
+        setCatalogActions((current) => {
+          const next = new Set(current);
+          next.delete(actionKey);
+          return next;
+        });
+      }
+    },
+    [enabled, workspaceId],
+  );
+  const reloadConfig = useCallback(
+    (engine: EngineType, providerProfileId: string) =>
+      runCatalogAction("reload-config", engine, providerProfileId),
+    [runCatalogAction],
+  );
+  const discoverModels = useCallback(
+    (engine: EngineType, providerProfileId: string) =>
+      runCatalogAction("discover-models", engine, providerProfileId),
+    [runCatalogAction],
+  );
+
   const groups = useMemo<ProviderTargetGroup[]>(() => {
     if (!enabled) {
       return [];
@@ -282,6 +428,15 @@ export function useSharedProviderTargetCatalog({
             profile.id,
             currentProviderProfileId,
           );
+        const canUseCurrentModels =
+          mode === "native" && isCurrentBinding;
+        const customModels = canUseCurrentModels
+          ? currentModels.filter((model) => model.source === "custom")
+          : [];
+        const configuredModels =
+          loadedModels[key] ??
+          modelCatalogCache.get(key) ??
+          (canUseCurrentModels ? currentModels : []);
         return {
           id: profile.id,
           label: profile.name,
@@ -291,11 +446,15 @@ export function useSharedProviderTargetCatalog({
             engine === "kimi" && !isCurrentBinding
               ? kimiDisabledReason
               : undefined,
-          models:
-            loadedModels[key] ??
-            modelCatalogCache.get(key) ??
-            (isCurrentBinding ? currentModels : []),
+          models: mergeProviderCatalogModels(
+            customModels,
+            configuredModels,
+            discoveredModelCatalogCache.get(key) ?? [],
+          ),
           loading: loadingBindings.has(key),
+          reloadingConfig: catalogActions.has(`reload-config:${key}`),
+          discoveringModels: catalogActions.has(`discover-models:${key}`),
+          discoverySupported: engine === "codex" && Boolean(workspaceId?.trim()),
           error: modelErrors[key] ?? null,
         };
       }),
@@ -304,6 +463,7 @@ export function useSharedProviderTargetCatalog({
     currentModels,
     currentProvider,
     currentProviderProfileId,
+    catalogActions,
     enabled,
     kimiDisabledReason,
     loadedModels,
@@ -312,12 +472,15 @@ export function useSharedProviderTargetCatalog({
     mode,
     profiles,
     resolveProviderLabel,
+    workspaceId,
   ]);
 
   return {
     groups,
     ensureProfiles,
     ensureModels,
+    reloadConfig,
+    discoverModels,
     profileLoadError,
   };
 }
@@ -327,4 +490,5 @@ export function resetSharedProviderTargetCatalogForTests(): void {
   profileCatalogRequest = null;
   modelCatalogCache.clear();
   modelCatalogRequests.clear();
+  discoveredModelCatalogCache.clear();
 }

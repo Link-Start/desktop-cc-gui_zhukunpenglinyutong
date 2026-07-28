@@ -2057,6 +2057,23 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     });
   });
 
+  it('does not expose legacy engine/model callbacks inside shared sessions', async () => {
+    renderAdapter({
+      isSharedSession: true,
+      onSelectEngine: vi.fn(),
+      onSelectModel: vi.fn(),
+    });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      onProviderSelect?: (providerId: string) => void;
+      onModelSelect?: (modelId: string) => void;
+    };
+    expect(latest.onProviderSelect).toBeUndefined();
+    expect(latest.onModelSelect).toBeUndefined();
+  });
+
   it('routes kimi provider selection to the kimi engine', async () => {
     const onSelectEngine = vi.fn();
     renderAdapter({ selectedEngine: 'claude', onSelectEngine });

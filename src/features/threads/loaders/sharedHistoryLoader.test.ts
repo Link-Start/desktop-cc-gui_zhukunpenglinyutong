@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  getSharedTargetState,
+  resetSharedTargetStoreForTests,
+  selectNextTarget,
+} from "../../shared-session/target/targetStore";
 import { createSharedHistoryLoader } from "./sharedHistoryLoader";
 
 afterEach(() => {
   window.localStorage.clear();
+  resetSharedTargetStoreForTests();
   vi.restoreAllMocks();
 });
 
@@ -65,7 +71,115 @@ describe("sharedHistoryLoader", () => {
     expect(snapshot.meta.engine).toBe("claude");
   });
 
-  it("does not invoke projection while the feature flag is off", async () => {
+  it("restores the complete persisted next target without guessing missing fields", async () => {
+    const loader = createSharedHistoryLoader({
+      workspaceId: "ws-1",
+      loadSharedSession: vi.fn().mockResolvedValue({
+        selectedEngine: "codex",
+        selectedTarget: {
+          engine: "codex",
+          providerProfileId: "provider-kimi",
+          modelCatalogEntryId: "settings-kimi",
+          model: "kimi-for-coding",
+          reasoning: { effort: "high" },
+          providerProfileNameSnapshot: "Kimi Coding",
+          providerProfileSource: "managed",
+        },
+        items: [],
+      }),
+      loadSharedProjection: vi.fn(),
+    });
+
+    await loader.load("shared:target-reload");
+
+    expect(
+      getSharedTargetState("ws-1", "shared:target-reload").selectedNextTarget,
+    ).toEqual({
+      engine: "codex",
+      providerProfileId: "provider-kimi",
+      modelCatalogEntryId: "settings-kimi",
+      model: "kimi-for-coding",
+      reasoning: { effort: "high" },
+      providerProfileNameSnapshot: "Kimi Coding",
+      providerProfileSource: "managed",
+    });
+  });
+
+  it("clears stale target state when persisted target is incomplete", async () => {
+    selectNextTarget("ws-1", "shared:legacy-target", {
+      engine: "codex",
+      providerProfileId: "stale-provider",
+    });
+    const loader = createSharedHistoryLoader({
+      workspaceId: "ws-1",
+      loadSharedSession: vi.fn().mockResolvedValue({
+        selectedEngine: "claude",
+        selectedTarget: { engine: "claude" },
+        items: [],
+      }),
+      loadSharedProjection: vi.fn(),
+    });
+
+    await loader.load("shared:legacy-target");
+
+    expect(
+      getSharedTargetState("ws-1", "shared:legacy-target").selectedNextTarget,
+    ).toBeNull();
+  });
+
+  it("clears stale target state when persisted selection source is unknown", async () => {
+    selectNextTarget("ws-1", "shared:invalid-source", {
+      engine: "claude",
+      providerProfileId: "stale-provider",
+    });
+    const loader = createSharedHistoryLoader({
+      workspaceId: "ws-1",
+      loadSharedSession: vi.fn().mockResolvedValue({
+        selectedEngine: "codex",
+        selectedTarget: {
+          engine: "codex",
+          providerProfileId: "provider-openai",
+          model: "gpt-5.3-codex-spark",
+          providerProfileSource: "future-source",
+        },
+        items: [],
+      }),
+      loadSharedProjection: vi.fn(),
+    });
+
+    await loader.load("shared:invalid-source");
+
+    expect(
+      getSharedTargetState("ws-1", "shared:invalid-source").selectedNextTarget,
+    ).toBeNull();
+  });
+
+  it("uses the resolved target engine as history authority", async () => {
+    const loader = createSharedHistoryLoader({
+      workspaceId: "ws-1",
+      loadSharedSession: vi.fn().mockResolvedValue({
+        selectedEngine: "claude",
+        selectedTarget: {
+          engine: "codex",
+          providerProfileId: "provider-kimi",
+          modelCatalogEntryId: "settings-kimi",
+          model: "kimi-for-coding",
+          providerProfileNameSnapshot: "Kimi Coding",
+          providerProfileSource: "managed",
+        },
+        items: [],
+      }),
+      loadSharedProjection: vi.fn(),
+    });
+
+    const snapshot = await loader.load("shared:target-engine-authority");
+
+    expect(snapshot.engine).toBe("codex");
+    expect(snapshot.meta.engine).toBe("codex");
+  });
+
+  it("keeps Legacy-only reading behind an explicit negative rollback", async () => {
+    window.localStorage.setItem("mossx.sharedProjection", "0");
     const loadSharedProjection = vi.fn();
     const loader = createSharedHistoryLoader({
       workspaceId: "ws-1",
@@ -82,33 +196,217 @@ describe("sharedHistoryLoader", () => {
     expect(snapshot.items[0]).toMatchObject({ id: "legacy", text: "legacy" });
   });
 
-  it("uses Shared Projection while the feature flag is on", async () => {
-    window.localStorage.setItem("mossx.sharedProjection", "1");
+  it("converges canonical identity by default without dropping legacy reasoning", async () => {
     const loader = createSharedHistoryLoader({
       workspaceId: "ws-1",
       loadSharedSession: vi.fn().mockResolvedValue({
         selectedEngine: "codex",
-        items: [{ id: "legacy", kind: "message", role: "user", text: "legacy" }],
+        items: [
+          { id: "legacy-user", kind: "message", role: "user", text: "1+1" },
+          {
+            id: "legacy-reasoning",
+            kind: "reasoning",
+            summary: "先做加法",
+            content: "先做加法",
+            engineSource: "codex",
+          },
+          {
+            id: "legacy-assistant",
+            kind: "message",
+            role: "assistant",
+            text: "2",
+            engineSource: "codex",
+            isFinal: true,
+          },
+        ],
       }),
       loadSharedProjection: vi.fn().mockResolvedValue([
         {
-          id: "projected",
+          id: "projected-user",
           kind: "message",
-          content: { role: "assistant", text: "projected", engineSource: "codex" },
-          fidelity: "presentation-only",
-          checksum: "checksum",
+          content: { role: "user", text: "1+1", engineSource: "codex" },
+          fidelity: "canonical",
+          checksum: "checksum-user",
+        },
+        {
+          id: "projected-reasoning",
+          kind: "reasoning",
+          content: {
+            summary: "先做加法",
+            content: "先做加法",
+            engineSource: "codex",
+          },
+          fidelity: "canonical",
+          checksum: "checksum-reasoning",
+        },
+        {
+          id: "projected-assistant",
+          kind: "message",
+          content: {
+            role: "assistant",
+            text: "2",
+            engineSource: "codex",
+            executionTargetSnapshot: {
+              engine: "codex",
+              providerProfileNameSnapshot: "MiniMax",
+              providerProfileSource: "managed",
+              model: "MiniMax-M3",
+              reasoning: { effort: "high" },
+            },
+          },
+          fidelity: "canonical",
+          checksum: "checksum-assistant",
         },
       ]),
     });
 
     const snapshot = await loader.load("shared:session-1");
 
-    expect(snapshot.items).toHaveLength(1);
-    expect(snapshot.items[0]).toMatchObject({ id: "projected", text: "projected" });
+    expect(snapshot.items).toHaveLength(3);
+    expect(snapshot.items[1]).toMatchObject({
+      kind: "reasoning",
+      content: "先做加法",
+    });
+    expect(snapshot.items.filter((item) => item.kind === "reasoning")).toHaveLength(1);
+    expect(snapshot.items[2]).toMatchObject({
+      kind: "message",
+      role: "assistant",
+      text: "2",
+      executionTargetSnapshot: {
+        engine: "codex",
+        providerProfileNameSnapshot: "MiniMax",
+        model: "MiniMax-M3",
+        reasoning: { effort: "high" },
+      },
+    });
+  });
+
+  it("does not let a canonical prefix downgrade the complete Shared snapshot", async () => {
+    const loader = createSharedHistoryLoader({
+      workspaceId: "ws-1",
+      loadSharedSession: vi.fn().mockResolvedValue({
+        selectedEngine: "claude",
+        items: [
+          { id: "legacy-user", kind: "message", role: "user", text: "model?" },
+          {
+            id: "legacy-assistant",
+            kind: "message",
+            role: "assistant",
+            text: "Claude，Anthropic 出品。这里是完整回答。",
+          },
+        ],
+      }),
+      loadSharedProjection: vi.fn().mockResolvedValue([
+        {
+          id: "canonical-user",
+          kind: "message",
+          content: { role: "user", text: "model?", engineSource: "claude" },
+          fidelity: "canonical",
+          checksum: "checksum-user",
+        },
+        {
+          id: "canonical-assistant",
+          kind: "message",
+          content: {
+            role: "assistant",
+            text: "Cl",
+            engineSource: "claude",
+            executionTargetSnapshot: {
+              engine: "claude",
+              providerProfileNameSnapshot: "Official",
+              model: "settings-main",
+            },
+          },
+          fidelity: "canonical",
+          checksum: "checksum-assistant",
+        },
+      ]),
+    });
+
+    const snapshot = await loader.load("shared:session-prefix");
+
+    expect(snapshot.items).toHaveLength(2);
+    expect(snapshot.items[1]).toMatchObject({
+      id: "canonical-assistant",
+      text: "Claude，Anthropic 出品。这里是完整回答。",
+      executionTargetSnapshot: {
+        engine: "claude",
+        providerProfileNameSnapshot: "Official",
+        model: "settings-main",
+      },
+    });
+  });
+
+  it("does not let a later presentation shadow downgrade canonical turn provenance", async () => {
+    const loader = createSharedHistoryLoader({
+      workspaceId: "ws-1",
+      loadSharedSession: vi.fn().mockResolvedValue({
+        selectedEngine: "codex",
+        items: [
+          { id: "legacy-user", kind: "message", role: "user", text: "model?" },
+          {
+            id: "legacy-assistant",
+            kind: "message",
+            role: "assistant",
+            text: "answer",
+          },
+        ],
+      }),
+      loadSharedProjection: vi.fn().mockResolvedValue([
+        {
+          id: "canonical-assistant",
+          kind: "message",
+          content: {
+            role: "assistant",
+            text: "answer",
+            engineSource: "codex",
+            executionTargetSnapshot: {
+              engine: "codex",
+              providerProfileId: "provider-openai",
+              providerProfileNameSnapshot: "OpenAI",
+              providerProfileSource: "managed",
+              modelCatalogEntryId: "settings-gpt-5",
+              model: "gpt-5",
+            },
+          },
+          fidelity: "canonical",
+          checksum: "canonical-checksum",
+        },
+        {
+          id: "presentation-assistant",
+          kind: "message",
+          content: {
+            role: "assistant",
+            text: "answer",
+            engineSource: "codex",
+            executionTargetSnapshot: {
+              engine: "codex",
+              providerProfileId: null,
+            },
+          },
+          fidelity: "presentation-only",
+          checksum: "presentation-checksum",
+        },
+      ]),
+    });
+
+    const snapshot = await loader.load("shared:session-shadow-precedence");
+
+    expect(snapshot.items).toHaveLength(2);
+    expect(snapshot.items[1]).toMatchObject({
+      kind: "message",
+      role: "assistant",
+      executionTargetSnapshot: {
+        engine: "codex",
+        providerProfileId: "provider-openai",
+        providerProfileNameSnapshot: "OpenAI",
+        providerProfileSource: "managed",
+        model: "gpt-5",
+      },
+    });
   });
 
   it("falls back observably to V0 when projection loading fails", async () => {
-    window.localStorage.setItem("mossx.sharedProjection", "1");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const loader = createSharedHistoryLoader({
       workspaceId: "ws-1",

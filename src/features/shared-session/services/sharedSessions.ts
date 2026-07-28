@@ -4,15 +4,25 @@ import type {
   SharedProjectionItem,
   SharedProjectionMismatchReport,
 } from "../../messages/presentation/sharedProjection/types";
+import type {
+  CanonicalProviderProfileSource,
+  ExecutionTarget,
+} from "../target/types";
+import { isResolvedExecutionTarget } from "../target/types";
 import { normalizeSharedSessionEngine } from "../utils/sharedSessionEngines";
 
 export async function startSharedSession(
   workspaceId: string,
-  selectedEngine?: EngineType | null,
+  initialTarget: ExecutionTarget,
 ) {
+  if (!isResolvedExecutionTarget(initialTarget)) {
+    throw new Error(
+      "Shared Session 初始 Execution Target 不完整，请重新选择 Provider 和 Model。",
+    );
+  }
   return invoke<Record<string, unknown> | null | undefined>("start_shared_session", {
     workspaceId,
-    selectedEngine: normalizeSharedSessionEngine(selectedEngine),
+    initialTarget,
   });
 }
 
@@ -131,13 +141,44 @@ export async function setSharedSessionSelectedEngine(
   threadId: string,
   selectedEngine: EngineType,
   providerProfileId?: string | null,
+  target?: ExecutionTarget | null,
 ) {
   return invoke<Record<string, unknown> | null>("set_shared_session_selected_engine", {
     workspaceId,
     threadId,
     selectedEngine: normalizeSharedSessionEngine(selectedEngine),
     providerProfileId: providerProfileId ?? null,
+    modelCatalogEntryId: target?.modelCatalogEntryId ?? null,
+    model: target?.model ?? null,
+    reasoningEffort: target?.reasoning?.effort ?? null,
+    providerProfileNameSnapshot: target?.providerProfileNameSnapshot ?? null,
+    providerProfileSource: target?.providerProfileSource ?? null,
   });
+}
+
+/**
+ * Shared V2 selection-only persistence boundary.
+ *
+ * 这里只保存“下一 Turn 的完整 Target”，不创建/恢复 Native Session，
+ * 也不写 Binding。Binding 只能由 attempt-owned Rust dispatcher 物化。
+ */
+export async function persistSharedSessionSelectedTarget(
+  workspaceId: string,
+  threadId: string,
+  target: ExecutionTarget,
+) {
+  if (!isResolvedExecutionTarget(target)) {
+    throw new Error(
+      "Shared Session Execution Target 不完整，请重新选择 Provider 和 Model。",
+    );
+  }
+  return setSharedSessionSelectedEngine(
+    workspaceId,
+    threadId,
+    target.engine,
+    target.providerProfileId,
+    target,
+  );
 }
 
 export async function updateSharedSessionNativeBinding(
@@ -164,12 +205,14 @@ export async function syncSharedSessionSnapshot(
   threadId: string,
   items: unknown[],
   selectedEngine: EngineType,
+  legacySnapshotEnabled: boolean,
 ) {
   return invoke<Record<string, unknown> | null>("sync_shared_session_snapshot", {
     workspaceId,
     threadId,
     items,
     selectedEngine: normalizeSharedSessionEngine(selectedEngine),
+    legacySnapshotEnabled,
   });
 }
 
@@ -192,10 +235,11 @@ export async function deleteSharedSession(
 export type SharedV2ExecutionTargetPayload = {
   engine: EngineType;
   providerProfileId?: string | null;
+  modelCatalogEntryId?: string | null;
   model?: string | null;
   reasoningEffort?: string | null;
   providerProfileNameSnapshot?: string | null;
-  providerProfileSource?: string | null;
+  providerProfileSource?: CanonicalProviderProfileSource | null;
   runtimeCapabilityFingerprint?: string | null;
 };
 
@@ -265,6 +309,7 @@ export type SharedV2PrepareDeliveryResult = {
   status: "ready" | "degraded";
   packageId: string;
   artifactId: string;
+  artifactChecksum: string;
   sourceChecksum: string;
   throughSequenceInclusive: number;
   mode: string;
@@ -276,42 +321,79 @@ export type SharedV2PrepareDeliveryResult = {
   ackFidelity: "strong" | "weak" | "unsupported";
 };
 
-export type SharedV2CommitOutcome = {
-  status: "completed" | "failed" | "cancelled";
-  errorCode?: string | null;
-  errorMessage?: string | null;
-  stopReason?: string | null;
-};
-
-export type SharedV2CommitTurnResult = {
-  status: "committed";
-  duplicate: boolean;
-  sequence?: number | null;
-  bindingKey: string;
-};
-
-export type SharedV2AcceptTurnResult = {
+export type SharedV2DispatchTurnResult = SharedSessionRuntimeDelivery & {
   status: "accepted";
   attemptId: string;
+  logicalTurnId: string;
+  engine: EngineType;
+  providerProfileId?: string | null;
+  model?: string | null;
+  reasoningEffort?: string | null;
+  bindingKey: string;
+  nativeThreadId: string;
+  runtimeTurnId?: string | null;
+  /** Runtime terminal 在 exact runtime identity bind 前已被 coordinator 缓存并提交。 */
+  alreadySettled?: boolean;
 };
 
+export type SharedV2CommitTurnResult =
+  | {
+      status: "committed";
+      duplicate: boolean;
+      sequence?: number | null;
+      bindingKey: string;
+    }
+  | {
+      status: "pending";
+      attemptId: string;
+      bindingKey: string;
+    };
+
 export type SharedV2MarkRecoveryResult = {
-  status: "recovery-required";
+  status: "recovery-required" | "terminal-committed";
+  attemptId: string;
   bindingKey: string;
+  sequence?: number | null;
+};
+
+export type SharedV2CancelAttemptResult = {
+  status: "cancelled" | "terminal-committed";
+  attemptId: string;
 };
 
 export type SharedV2RebuildBindingResult = {
   status: "prepared";
   bindingKey: string;
-  nativeThreadId: string;
+  nativeThreadId: string | null;
   archivedNativeSessionId?: string | null;
+  replacedAttemptIds?: string[];
+  bindingOperationId?: string | null;
 };
 
 export type SharedV2InFlightAttempt = {
   attemptId: string;
   logicalTurnId?: string | null;
+  bindingKey?: string | null;
+  bindingOperationId?: string | null;
   /** durable `conversation.turnAccepted` evidence；缺省按 false 处理。 */
   accepted?: boolean;
+  deliveryPrepared?: boolean;
+  pendingPhase?: string | null;
+  recoveryDisposition?: "active" | "terminal" | "not-accepted" | "unknown";
+  /** 当前 Rust runtime lifecycle owner 是否仍持有该 attempt。 */
+  runtimeObserverOwned?: boolean;
+};
+
+export type SharedV2RecoverAttemptResult = {
+  status:
+    | "active"
+    | "terminal-committed"
+    | "not-accepted-committed"
+    | "unknown";
+  attemptId: string;
+  bindingKey?: string | null;
+  sequence?: number | null;
+  pendingPhase?: string | null;
 };
 
 export type SharedV2ProbeBindingResult = {
@@ -370,46 +452,46 @@ export async function sharedSessionV2PrepareContext(
 export async function sharedSessionV2PrepareDelivery(
   workspaceId: string,
   threadId: string,
-  params: {
-    attemptId: string;
-    logicalTurnId: string;
-    target: SharedV2ExecutionTargetPayload;
-  },
+  attemptId: string,
 ) {
   return invoke<SharedV2PrepareDeliveryResult>(
     "shared_session_v2_prepare_delivery",
     {
       workspaceId,
       threadId,
-      attemptId: params.attemptId,
-      logicalTurnId: params.logicalTurnId,
-      target: params.target,
+      attemptId,
     },
   );
 }
 
-export async function sharedSessionV2AcceptContext(
+export async function sharedSessionV2DispatchTurn(
   workspaceId: string,
   threadId: string,
   params: {
     attemptId: string;
-    logicalTurnId: string;
-    bindingKey: string;
-    packageId: string;
-    nativeSessionId?: string | null;
-    nativeRequestId?: string | null;
+    artifactId: string;
+    artifactChecksum: string;
+    disableThinking?: boolean | null;
+    accessMode?: string | null;
+    images?: string[] | null;
+    collaborationMode?: Record<string, unknown> | null;
+    preferredLanguage?: string | null;
+    customSpecRoot?: string | null;
   },
 ) {
-  return invoke<{ status: "accepted"; packageId: string }>(
-    "shared_session_v2_accept_context",
-    {
-      workspaceId,
-      threadId,
-      ...params,
-      nativeSessionId: params.nativeSessionId ?? null,
-      nativeRequestId: params.nativeRequestId ?? null,
-    },
-  );
+  return invoke<SharedV2DispatchTurnResult>("shared_session_v2_dispatch_turn", {
+    workspaceId,
+    threadId,
+    attemptId: params.attemptId,
+    artifactId: params.artifactId,
+    artifactChecksum: params.artifactChecksum,
+    disableThinking: params.disableThinking ?? null,
+    accessMode: params.accessMode ?? null,
+    images: params.images ?? null,
+    collaborationMode: params.collaborationMode ?? null,
+    preferredLanguage: params.preferredLanguage ?? null,
+    customSpecRoot: params.customSpecRoot ?? null,
+  });
 }
 
 export async function sharedContextRetrieveArtifact(
@@ -430,85 +512,88 @@ export async function sharedContextScanOrphans() {
   return invoke<SharedContextOrphanReport>("shared_context_scan_orphans");
 }
 
-export async function sharedSessionV2AcceptTurn(
-  workspaceId: string,
-  threadId: string,
-  params: {
-    attemptId: string;
-    logicalTurnId: string;
-    target: SharedV2ExecutionTargetPayload;
-    nativeSessionId: string;
-  },
-) {
-  return invoke<SharedV2AcceptTurnResult>("shared_session_v2_accept_turn", {
-    workspaceId,
-    threadId,
-    attemptId: params.attemptId,
-    logicalTurnId: params.logicalTurnId,
-    target: params.target,
-    nativeSessionId: params.nativeSessionId,
-  });
-}
-
 export async function sharedSessionV2CommitTurn(
   workspaceId: string,
   threadId: string,
-  params: {
-    attemptId: string;
-    logicalTurnId: string;
-    target: SharedV2ExecutionTargetPayload;
-    assistantText?: string | null;
-    outcome: SharedV2CommitOutcome;
-    nativeSessionId?: string | null;
-  },
+  attemptId: string,
 ) {
   return invoke<SharedV2CommitTurnResult>("shared_session_v2_commit_turn", {
     workspaceId,
     threadId,
-    attemptId: params.attemptId,
-    logicalTurnId: params.logicalTurnId,
-    target: params.target,
-    assistantText: params.assistantText ?? null,
-    outcome: params.outcome,
-    nativeSessionId: params.nativeSessionId ?? null,
+    attemptId,
   });
 }
 
 export async function sharedSessionV2MarkRecovery(
   workspaceId: string,
   threadId: string,
-  params: {
-    bindingKey: string;
-    engine: EngineType;
-    providerProfileId?: string | null;
-    reason?: string | null;
-  },
+  attemptId: string,
+  reason?: string | null,
 ) {
   return invoke<SharedV2MarkRecoveryResult>("shared_session_v2_mark_recovery", {
     workspaceId,
     threadId,
-    bindingKey: params.bindingKey,
-    engine: params.engine,
-    providerProfileId: params.providerProfileId ?? null,
-    reason: params.reason ?? null,
+    attemptId,
+    reason: reason ?? null,
   });
+}
+
+export async function sharedSessionV2CancelAttempt(
+  workspaceId: string,
+  threadId: string,
+  attemptId: string,
+  reason: string,
+) {
+  return invoke<SharedV2CancelAttemptResult>(
+    "shared_session_v2_cancel_attempt",
+    {
+      workspaceId,
+      threadId,
+      attemptId,
+      reason,
+    },
+  );
+}
+
+export async function sharedSessionV2InterruptTurn(
+  workspaceId: string,
+  threadId: string,
+  attemptId: string,
+) {
+  return invoke<{
+    status: "interrupted";
+    attemptId: string;
+    engine: EngineType;
+    bindingKey: string;
+    nativeThreadId: string;
+    runtimeTurnId: string;
+  }>("shared_session_v2_interrupt_turn", {
+    workspaceId,
+    threadId,
+    attemptId,
+  });
+}
+
+export async function sharedSessionV2RecoverAttempt(
+  workspaceId: string,
+  threadId: string,
+  attemptId: string,
+) {
+  return invoke<SharedV2RecoverAttemptResult>(
+    "shared_session_v2_recover_attempt",
+    { workspaceId, threadId, attemptId },
+  );
 }
 
 export async function sharedSessionV2RebuildBinding(
   workspaceId: string,
   threadId: string,
-  params: {
-    bindingKey: string;
-    engine: EngineType;
-    providerProfileId?: string | null;
-  },
+  bindingKey: string,
 ) {
   return invoke<SharedV2RebuildBindingResult>("shared_session_v2_rebuild_binding", {
     workspaceId,
     threadId,
-    bindingKey: params.bindingKey,
-    engine: params.engine,
-    providerProfileId: params.providerProfileId ?? null,
+    bindingKey,
   });
 }
 

@@ -10,6 +10,7 @@ export type SharedRuntimeTerminal = {
 };
 
 type RuntimeOwner = {
+  attemptId: string | null;
   nativeThreadId: string;
   runtimeTurnId: string | null;
 };
@@ -27,9 +28,51 @@ function runtimeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function runtimeOwnerFromParams(
+  params: Record<string, unknown>,
+  turn: Record<string, unknown> = {},
+): RuntimeOwner | null {
+  const sharedOwner =
+    params.sharedOwner && typeof params.sharedOwner === "object"
+      ? (params.sharedOwner as Record<string, unknown>)
+      : {};
+  const attemptId = runtimeString(sharedOwner.attemptId) || null;
+  const explicitNativeThreadId = runtimeString(
+    params.nativeThreadId ??
+      params.native_thread_id ??
+      sharedOwner.nativeThreadId,
+  );
+  const projectedThreadId = runtimeString(
+    params.threadId ??
+      params.thread_id ??
+      turn.threadId ??
+      turn.thread_id,
+  );
+  if (
+    !explicitNativeThreadId &&
+    (attemptId || projectedThreadId.startsWith("shared:"))
+  ) {
+    return null;
+  }
+  const nativeThreadId = explicitNativeThreadId || projectedThreadId;
+  if (!nativeThreadId) {
+    return null;
+  }
+  const runtimeTurnId =
+    runtimeString(
+      params.runtimeTurnId ??
+        params.runtime_turn_id ??
+        sharedOwner.runtimeTurnId ??
+        params.turnId ??
+        params.turn_id ??
+        turn.id,
+    ) || null;
+  return { attemptId, nativeThreadId, runtimeTurnId };
+}
+
 function parseCompletedAssistantText(
   event: AppServerEvent,
-): { nativeThreadId: string; text: string } | null {
+): (RuntimeOwner & { text: string }) | null {
   if (runtimeString(event.message.method) !== "item/completed") {
     return null;
   }
@@ -49,9 +92,9 @@ function parseCompletedAssistantText(
   if (role && role !== "assistant") {
     return null;
   }
-  const nativeThreadId = runtimeString(params.threadId ?? params.thread_id);
+  const owner = runtimeOwnerFromParams(params);
   const text = runtimeString(item.text ?? item.content);
-  return nativeThreadId && text ? { nativeThreadId, text } : null;
+  return owner && text ? { ...owner, text } : null;
 }
 
 function parseTerminal(event: AppServerEvent): BufferedTerminal | null {
@@ -71,14 +114,10 @@ function parseTerminal(event: AppServerEvent): BufferedTerminal | null {
     params.result && typeof params.result === "object"
       ? (params.result as Record<string, unknown>)
       : {};
-  const nativeThreadId = runtimeString(
-    params.threadId ?? params.thread_id ?? turn.threadId ?? turn.thread_id,
-  );
-  if (!nativeThreadId) {
+  const owner = runtimeOwnerFromParams(params, turn);
+  if (!owner) {
     return null;
   }
-  const runtimeTurnId =
-    runtimeString(params.turnId ?? params.turn_id ?? turn.id) || null;
   const status = runtimeString(params.status ?? turn.status).toLowerCase();
   const assistantText =
     [
@@ -89,8 +128,7 @@ function parseTerminal(event: AppServerEvent): BufferedTerminal | null {
       result.content,
     ].find((value) => typeof value === "string" && value.trim()) ?? null;
   return {
-    nativeThreadId,
-    runtimeTurnId,
+    ...owner,
     terminal: {
       type: "run.settled",
       outcome:
@@ -140,12 +178,21 @@ function contextMarker(owner: ContextAckOwner): string {
 }
 
 function isOwnedBy(terminal: BufferedTerminal, owner: RuntimeOwner): boolean {
-  return (
-    terminal.nativeThreadId === owner.nativeThreadId &&
-    (!owner.runtimeTurnId ||
-      !terminal.runtimeTurnId ||
-      terminal.runtimeTurnId === owner.runtimeTurnId)
-  );
+  if (owner.attemptId || terminal.attemptId) {
+    if (!owner.attemptId || terminal.attemptId !== owner.attemptId) {
+      return false;
+    }
+    if (owner.runtimeTurnId && terminal.runtimeTurnId) {
+      return terminal.runtimeTurnId === owner.runtimeTurnId;
+    }
+    return terminal.nativeThreadId === owner.nativeThreadId;
+  }
+  // Run identity survives pending/native/shared thread rebinding. Requiring both
+  // identities to match strands a completed Run when only its thread projection changed.
+  if (owner.runtimeTurnId && terminal.runtimeTurnId) {
+    return terminal.runtimeTurnId === owner.runtimeTurnId;
+  }
+  return terminal.nativeThreadId === owner.nativeThreadId;
 }
 
 /**
@@ -159,6 +206,11 @@ export function captureSharedRuntimeTerminal(workspaceId: string): {
 } {
   const buffered: BufferedTerminal[] = [];
   const assistantTextByThread = new Map<string, string>();
+  const assistantOwnerKey = (owner: RuntimeOwner) =>
+    JSON.stringify([
+      owner.attemptId ?? "native",
+      owner.nativeThreadId,
+    ]);
   let pending:
     | {
         owner: RuntimeOwner;
@@ -197,7 +249,7 @@ export function captureSharedRuntimeTerminal(workspaceId: string): {
     const completedAssistant = parseCompletedAssistantText(event);
     if (completedAssistant) {
       assistantTextByThread.set(
-        completedAssistant.nativeThreadId,
+        assistantOwnerKey(completedAssistant),
         completedAssistant.text,
       );
       return;
@@ -207,9 +259,9 @@ export function captureSharedRuntimeTerminal(workspaceId: string): {
       return;
     }
     terminal.terminal.assistantText ??= assistantTextByThread.get(
-      terminal.nativeThreadId,
+      assistantOwnerKey(terminal),
     ) ?? null;
-    assistantTextByThread.delete(terminal.nativeThreadId);
+    assistantTextByThread.delete(assistantOwnerKey(terminal));
     if (pending && isOwnedBy(terminal, pending.owner)) {
       window.clearTimeout(pending.timeoutId);
       const resolve = pending.resolve;

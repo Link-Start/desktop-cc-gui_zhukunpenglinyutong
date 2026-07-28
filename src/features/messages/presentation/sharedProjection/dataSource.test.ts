@@ -2,14 +2,13 @@
 /**
  * Shared DataSource 单元测试（Wave 3 / A3，任务 5.4）。
  *
- * 验证：映射规则、flag 隔离（默认关闭）、不污染 Native 路径。
+ * 验证：映射规则、default-on + explicit-negative rollback、不污染 Native 路径。
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   isSharedProjectionDataSourceEnabled,
-  isSharedProjectionTestOverrideEnabled,
   resolveSharedConversationItems,
   setSharedProjectionTestOverrideEnabled,
   SHARED_PROJECTION_STORAGE_KEY,
@@ -31,6 +30,7 @@ function makeItem(
 
 afterEach(() => {
   window.localStorage.clear();
+  vi.unstubAllEnvs();
 });
 
 describe("toSharedConversationItems", () => {
@@ -127,6 +127,7 @@ describe("toSharedConversationItems", () => {
           executionTargetSnapshot: {
             engine: "claude",
             providerProfileId: "openrouter",
+            modelCatalogEntryId: "catalog-sonnet",
             providerProfileNameSnapshot: "OpenRouter",
             model: "claude-sonnet-4-5",
             reasoning: { effort: "high" },
@@ -139,9 +140,114 @@ describe("toSharedConversationItems", () => {
       executionTargetSnapshot: {
         engine: "claude",
         providerProfileId: "openrouter",
+        modelCatalogEntryId: "catalog-sonnet",
         providerProfileNameSnapshot: "OpenRouter",
         model: "claude-sonnet-4-5",
         reasoning: { effort: "high" },
+      },
+    });
+  });
+
+  it("restores canonical explicit local targets", () => {
+    const [item] = toSharedConversationItems([
+      makeItem({
+        id: "2:assistant:local",
+        kind: "message",
+        content: {
+          role: "assistant",
+          text: "local",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileId: null,
+            model: "MiniMax-M3",
+            providerProfileSource: "local",
+          },
+        },
+      }),
+    ]);
+
+    expect(item).toMatchObject({
+      executionTargetSnapshot: {
+        providerProfileId: null,
+        providerProfileNameSnapshot: "本地配置",
+        providerProfileSource: "local",
+      },
+    });
+  });
+
+  it("does not infer local identity from an incomplete canonical target", () => {
+    const [item] = toSharedConversationItems([
+      makeItem({
+        id: "2:assistant:incomplete",
+        kind: "message",
+        content: {
+          role: "assistant",
+          text: "legacy canonical",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileId: null,
+            model: "MiniMax-M3",
+          },
+        },
+      }),
+    ]);
+
+    expect(item).toMatchObject({
+      executionTargetSnapshot: {
+        providerProfileId: null,
+        providerProfileNameSnapshot: null,
+        providerProfileSource: null,
+      },
+    });
+  });
+
+  it("drops selection-domain and unknown sources from canonical projection", () => {
+    const [item] = toSharedConversationItems([
+      makeItem({
+        id: "2:assistant:invalid-source",
+        kind: "message",
+        content: {
+          role: "assistant",
+          text: "managed",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileId: "provider-openai",
+            providerProfileSource: "disk",
+          },
+        },
+      }),
+    ]);
+
+    expect(item).toMatchObject({
+      executionTargetSnapshot: {
+        providerProfileId: "provider-openai",
+        providerProfileSource: null,
+      },
+    });
+  });
+
+  it("does not fabricate local identity for presentation-only legacy targets", () => {
+    const [item] = toSharedConversationItems([
+      makeItem({
+        id: "legacy:assistant",
+        kind: "message",
+        fidelity: "presentation-only",
+        content: {
+          role: "assistant",
+          text: "legacy",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileId: null,
+          },
+        },
+      }),
+    ]);
+
+    expect(item).toMatchObject({
+      executionTargetSnapshot: {
+        providerProfileId: null,
+        providerProfileNameSnapshot: null,
+        providerProfileSource: null,
       },
     });
   });
@@ -228,53 +334,56 @@ describe("toSharedConversationItems", () => {
   });
 });
 
-describe("feature flag isolation", () => {
-  it("is disabled by default", () => {
-    expect(isSharedProjectionDataSourceEnabled()).toBe(false);
+describe("projection rollout flag", () => {
+  it("is enabled by default", () => {
+    expect(isSharedProjectionDataSourceEnabled()).toBe(true);
   });
 
-  it("resolveSharedConversationItems returns null when flag is off", () => {
+  it("maps canonical projection without a local override", () => {
     const items: SharedProjectionItem[] = [
       makeItem({ id: "a", kind: "message", content: { role: "user", text: "hi" } }),
     ];
+    expect(resolveSharedConversationItems(items)).toHaveLength(1);
+  });
+
+  it("returns null only for an explicit negative rollback", () => {
+    window.localStorage.setItem(SHARED_PROJECTION_STORAGE_KEY, "0");
+    const items: SharedProjectionItem[] = [
+      makeItem({ id: "a", kind: "message", content: { role: "user", text: "hi" } }),
+    ];
+    expect(isSharedProjectionDataSourceEnabled()).toBe(false);
     expect(resolveSharedConversationItems(items)).toBeNull();
   });
 
-  it("resolveSharedConversationItems maps when localStorage flag is on", () => {
-    window.localStorage.setItem("mossx.sharedProjection", "1");
+  it("lets the local override take precedence over a negative build flag", () => {
+    vi.stubEnv("VITE_MOSSX_SHARED_PROJECTION", "false");
+    window.localStorage.setItem(SHARED_PROJECTION_STORAGE_KEY, "1");
     expect(isSharedProjectionDataSourceEnabled()).toBe(true);
-
-    const items: SharedProjectionItem[] = [
-      makeItem({ id: "a", kind: "message", content: { role: "user", text: "hi" } }),
-    ];
-    const result = resolveSharedConversationItems(items);
-    expect(result).toHaveLength(1);
   });
 
-  it("resolveSharedConversationItems returns null for nullish input even when flag on", () => {
-    window.localStorage.setItem("mossx.sharedProjection", "true");
+  it("supports an explicit negative build rollback", () => {
+    vi.stubEnv("VITE_MOSSX_SHARED_PROJECTION", "off");
+    expect(isSharedProjectionDataSourceEnabled()).toBe(false);
+  });
+
+  it("returns null for nullish input while enabled", () => {
     expect(resolveSharedConversationItems(null)).toBeNull();
     expect(resolveSharedConversationItems(undefined)).toBeNull();
   });
 
-  it("persists and removes the Settings test override", () => {
-    expect(isSharedProjectionTestOverrideEnabled()).toBe(false);
-
+  it("persists positive/negative overrides and can clear them", () => {
     expect(setSharedProjectionTestOverrideEnabled(true)).toBe(true);
     expect(window.localStorage.getItem(SHARED_PROJECTION_STORAGE_KEY)).toBe("1");
-    expect(isSharedProjectionTestOverrideEnabled()).toBe(true);
+    expect(isSharedProjectionDataSourceEnabled()).toBe(true);
     expect(setSharedProjectionTestOverrideEnabled(true)).toBe(false);
 
     expect(setSharedProjectionTestOverrideEnabled(false)).toBe(true);
-    expect(window.localStorage.getItem(SHARED_PROJECTION_STORAGE_KEY)).toBeNull();
-    expect(isSharedProjectionTestOverrideEnabled()).toBe(false);
+    expect(window.localStorage.getItem(SHARED_PROJECTION_STORAGE_KEY)).toBe("0");
+    expect(isSharedProjectionDataSourceEnabled()).toBe(false);
     expect(setSharedProjectionTestOverrideEnabled(false)).toBe(false);
-  });
-
-  it("removes a disabled-looking stale override when switched off", () => {
-    window.localStorage.setItem(SHARED_PROJECTION_STORAGE_KEY, "0");
-
-    expect(setSharedProjectionTestOverrideEnabled(false)).toBe(true);
+    expect(setSharedProjectionTestOverrideEnabled(null)).toBe(true);
     expect(window.localStorage.getItem(SHARED_PROJECTION_STORAGE_KEY)).toBeNull();
+    expect(isSharedProjectionDataSourceEnabled()).toBe(true);
+    expect(setSharedProjectionTestOverrideEnabled(null)).toBe(false);
   });
 });

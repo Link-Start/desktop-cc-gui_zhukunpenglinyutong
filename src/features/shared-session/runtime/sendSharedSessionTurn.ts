@@ -3,7 +3,10 @@ import {
   sendSharedSessionMessage,
   setSharedSessionSelectedEngine,
 } from "../services/sharedSessions";
-import type { ExecutionTarget } from "../target/types";
+import {
+  isResolvedExecutionTarget,
+  type ExecutionTarget,
+} from "../target/types";
 import {
   registerSharedSessionNativeBinding,
   rebindSharedSessionNativeThread,
@@ -24,6 +27,11 @@ export type SendSharedSessionTurnInput = {
   collaborationMode?: Record<string, unknown> | null;
   preferredLanguage?: string | null;
   customSpecRoot?: string | null;
+  /**
+   * Frontend-only admission identity。只在 Shared V2 Composer 提前取得发送权时使用，
+   * 不跨 Tauri/Runtime boundary。
+   */
+  sharedSendAdmissionRevision?: number;
 };
 
 export async function sendSharedSessionTurn(input: SendSharedSessionTurnInput) {
@@ -93,8 +101,8 @@ export async function sendSharedSessionTurn(input: SendSharedSessionTurnInput) {
 
 /**
  * Wave 4 / Change B 路由入口：flag 开启走 V2（begin → send → commit），
- * 关闭走 V0。V2 需要 `input.target`；缺省时用 engine/model/effort 构造
- * 默认 target（providerProfileId = null，归位 default/local 语义）。
+ * 关闭走 V0。V2 必须收到 Picker 已解析并持久化的完整 `input.target`；
+ * 禁止用 legacy flat engine/model/effort 拼出 provider=null 的伪 Target。
  * V0 导出保持不变，用于回滚。
  */
 export async function sendSharedSessionTurnRouted(
@@ -103,11 +111,10 @@ export async function sendSharedSessionTurnRouted(
   if (!isSharedV2SendEnabled()) {
     return sendSharedSessionTurn(input);
   }
-  const target: ExecutionTarget = input.target ?? {
-    engine: input.engine,
-    providerProfileId: null,
-    model: input.model,
-    reasoning: input.effort ? { effort: input.effort } : null,
-  };
-  return sendSharedSessionTurnV2({ ...input, target });
+  if (!isResolvedExecutionTarget(input.target)) {
+    throw new Error(
+      "shared-v2-target-incomplete: 请先选择完整的 CLI、Provider 和 Model。",
+    );
+  }
+  return sendSharedSessionTurnV2({ ...input, target: input.target });
 }

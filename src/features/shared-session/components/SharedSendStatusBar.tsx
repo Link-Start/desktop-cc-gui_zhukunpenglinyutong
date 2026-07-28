@@ -17,9 +17,10 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { EngineType } from "../../../types/engine";
+import { pushErrorToast } from "../../../services/toasts";
 import {
   sharedSessionV2ProbeBinding,
+  sharedSessionV2RecoverAttempt,
   sharedSessionV2RebuildBinding,
   sharedSessionV2TurnState,
 } from "../services/sharedSessions";
@@ -43,21 +44,14 @@ type SharedSendStatusBarProps = {
 
 type RecoveryWorkState = "idle" | "working" | "held" | "cleared";
 
-/** bindingKey = `${engine}:${providerProfileId|"default"}`（与 Rust `shared_target_binding_key` 对齐）。 */
-function parseBindingKey(bindingKey: string): {
-  engine: EngineType | null;
-  providerProfileId: string | null;
-} {
-  const separator = bindingKey.indexOf(":");
-  if (separator <= 0) {
-    return { engine: null, providerProfileId: null };
-  }
-  const engine = bindingKey.slice(0, separator) as EngineType;
-  const provider = bindingKey.slice(separator + 1).trim();
-  return {
-    engine,
-    providerProfileId: provider && provider !== "default" ? provider : null,
-  };
+type RecoveryOwner =
+  | { kind: "attempt"; attemptId: string; bindingKey: string }
+  | { kind: "binding"; bindingKey: string }
+  | { kind: "clear" }
+  | { kind: "ambiguous" };
+
+function recoveryErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : String(error);
 }
 
 export function SharedSendStatusBar({
@@ -74,15 +68,33 @@ export function SharedSendStatusBar({
   );
   const [recoveryWork, setRecoveryWork] = useState<RecoveryWorkState>("idle");
 
-  const findRecoveryBindingKey = useCallback(async (): Promise<string | null> => {
+  const findRecoveryOwner = useCallback(async (): Promise<RecoveryOwner> => {
     if (!workspaceId || !threadId) {
-      return null;
+      return { kind: "ambiguous" };
     }
     const turnState = await sharedSessionV2TurnState(workspaceId, threadId);
-    const recovery = (turnState.bindings ?? []).find(
+    const inFlight = turnState.inFlightAttempts ?? [];
+    if (inFlight.length > 1) {
+      return { kind: "ambiguous" };
+    }
+    const attempt = inFlight[0];
+    if (attempt) {
+      const attemptId = attempt.attemptId?.trim();
+      const bindingKey = attempt.bindingKey?.trim();
+      return attemptId && bindingKey
+        ? { kind: "attempt", attemptId, bindingKey }
+        : { kind: "ambiguous" };
+    }
+    const recoveryBindings = (turnState.bindings ?? []).filter(
       (binding) => binding.provisioningState === "recovery-required",
     );
-    return recovery?.bindingKey ?? null;
+    if (recoveryBindings.length > 1) {
+      return { kind: "ambiguous" };
+    }
+    const bindingKey = recoveryBindings[0]?.bindingKey?.trim();
+    return bindingKey
+      ? { kind: "binding", bindingKey }
+      : { kind: "clear" };
   }, [workspaceId, threadId]);
 
   const unlockSession = useCallback(() => {
@@ -94,48 +106,91 @@ export function SharedSendStatusBar({
     dispatchSharedSendEvent(workspaceId, threadId, { type: "canonicalCommitted" });
   }, [workspaceId, threadId]);
 
+  const recoverAttemptOwner = useCallback(
+    async (attemptId: string) => {
+      if (!workspaceId || !threadId) {
+        return;
+      }
+      const recovery = await sharedSessionV2RecoverAttempt(
+        workspaceId,
+        threadId,
+        attemptId,
+      );
+      if (recovery.status === "active") {
+        dispatchSharedSendEvent(workspaceId, threadId, { type: "probeActiveRun" });
+        setRecoveryWork("cleared");
+        return;
+      }
+      if (recovery.status === "unknown") {
+        setRecoveryWork("held");
+        return;
+      }
+      dispatchSharedSendEvent(workspaceId, threadId, {
+        type:
+          recovery.status === "terminal-committed"
+            ? "probeTerminalRun"
+            : "probeNotAccepted",
+      });
+      dispatchSharedSendEvent(workspaceId, threadId, {
+        type: "canonicalCommitted",
+      });
+      setRecoveryWork("cleared");
+    },
+    [workspaceId, threadId],
+  );
+
   const handleProbe = useCallback(async () => {
     if (!workspaceId || !threadId) {
       return;
     }
     setRecoveryWork("working");
     try {
-      const bindingKey = await findRecoveryBindingKey();
-      if (!bindingKey) {
+      const owner = await findRecoveryOwner();
+      if (owner.kind === "clear") {
         unlockSession();
         setRecoveryWork("cleared");
         return;
       }
-      const evidence = await sharedSessionV2ProbeBinding(
-        workspaceId,
-        threadId,
-        bindingKey,
-      );
-      const hasAcceptedInFlight = (evidence.inFlightAttempts ?? []).some(
-        (attempt) => attempt.accepted,
-      );
-      const nativeProbeStatus = evidence.nativeProbe?.status ?? "unknown";
-      if (hasAcceptedInFlight && nativeProbeStatus === "matched") {
-        dispatchSharedSendEvent(workspaceId, threadId, { type: "probeActiveRun" });
-        setRecoveryWork("cleared");
-        return;
-      }
-      if (
-        hasAcceptedInFlight ||
-        nativeProbeStatus === "matched" ||
-        nativeProbeStatus === "runtime-unhealthy"
-      ) {
-        // runtime 仍持有 identity 或 durable ACK 已存在，不能把 Attempt 当成未投递。
+      if (owner.kind === "ambiguous") {
         setRecoveryWork("held");
         return;
       }
-      unlockSession();
-      setRecoveryWork("cleared");
-    } catch {
-      // Probe 失败保持锁定，不误导用户。
-      setRecoveryWork("idle");
+      if (owner.kind === "attempt") {
+        await recoverAttemptOwner(owner.attemptId);
+        return;
+      }
+      const bindingProbe = await sharedSessionV2ProbeBinding(
+        workspaceId,
+        threadId,
+        owner.bindingKey,
+      );
+      if (bindingProbe.inFlightAttempts.length !== 1) {
+        setRecoveryWork("held");
+        return;
+      }
+      const attemptId = bindingProbe.inFlightAttempts[0]?.attemptId?.trim();
+      if (!attemptId) {
+        setRecoveryWork("held");
+        return;
+      }
+      await recoverAttemptOwner(attemptId);
+    } catch (error) {
+      // Probe 失败保持锁定，并把真实失败暴露给用户。
+      setRecoveryWork("held");
+      pushErrorToast({
+        title: t("sharedSend.recoveryTitle"),
+        message: `${t("sharedSend.recoveryProbe")}: ${recoveryErrorMessage(error)}`,
+        durationMs: 4800,
+      });
     }
-  }, [workspaceId, threadId, findRecoveryBindingKey, unlockSession]);
+  }, [
+    workspaceId,
+    threadId,
+    findRecoveryOwner,
+    recoverAttemptOwner,
+    unlockSession,
+    t,
+  ]);
 
   const handleRebuild = useCallback(async () => {
     if (!workspaceId || !threadId) {
@@ -143,30 +198,34 @@ export function SharedSendStatusBar({
     }
     setRecoveryWork("working");
     try {
-      const bindingKey = await findRecoveryBindingKey();
-      if (!bindingKey) {
+      const owner = await findRecoveryOwner();
+      if (owner.kind === "clear") {
         unlockSession();
         setRecoveryWork("cleared");
         return;
       }
-      const { engine, providerProfileId } = parseBindingKey(bindingKey);
-      if (!engine) {
-        setRecoveryWork("idle");
+      if (owner.kind === "ambiguous") {
+        setRecoveryWork("held");
         return;
       }
-      await sharedSessionV2RebuildBinding(workspaceId, threadId, {
-        bindingKey,
-        engine,
-        providerProfileId,
-      });
+      await sharedSessionV2RebuildBinding(
+        workspaceId,
+        threadId,
+        owner.bindingKey,
+      );
       // 显式重建 = 用户取消 ambiguous Turn：recovery → settling → idle。
       dispatchSharedSendEvent(workspaceId, threadId, { type: "commitCancelled" });
       dispatchSharedSendEvent(workspaceId, threadId, { type: "canonicalCommitted" });
       setRecoveryWork("cleared");
-    } catch {
-      setRecoveryWork("idle");
+    } catch (error) {
+      setRecoveryWork("held");
+      pushErrorToast({
+        title: t("sharedSend.recoveryTitle"),
+        message: `${t("sharedSend.recoveryRebuild")}: ${recoveryErrorMessage(error)}`,
+        durationMs: 4800,
+      });
     }
-  }, [workspaceId, threadId, findRecoveryBindingKey, unlockSession]);
+  }, [workspaceId, threadId, findRecoveryOwner, unlockSession, t]);
 
   if (!isSharedSession || !workspaceId || !threadId) {
     return null;

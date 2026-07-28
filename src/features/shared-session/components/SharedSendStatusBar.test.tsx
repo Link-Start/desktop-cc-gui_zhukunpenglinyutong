@@ -10,8 +10,10 @@ import {
 import { SharedSendStatusBar } from "./SharedSendStatusBar";
 
 const mockServices = vi.hoisted(() => ({
+  pushErrorToast: vi.fn(),
   sharedSessionV2TurnState: vi.fn(),
   sharedSessionV2ProbeBinding: vi.fn(),
+  sharedSessionV2RecoverAttempt: vi.fn(),
   sharedSessionV2RebuildBinding: vi.fn(),
 }));
 
@@ -26,9 +28,14 @@ vi.mock("../runtime/sharedV2SendFlag", () => ({
   isSharedV2SendEnabled: () => true,
 }));
 
+vi.mock("../../../services/toasts", () => ({
+  pushErrorToast: mockServices.pushErrorToast,
+}));
+
 vi.mock("../services/sharedSessions", () => ({
   sharedSessionV2TurnState: mockServices.sharedSessionV2TurnState,
   sharedSessionV2ProbeBinding: mockServices.sharedSessionV2ProbeBinding,
+  sharedSessionV2RecoverAttempt: mockServices.sharedSessionV2RecoverAttempt,
   sharedSessionV2RebuildBinding: mockServices.sharedSessionV2RebuildBinding,
 }));
 
@@ -43,8 +50,10 @@ function renderBar() {
 
 beforeEach(() => {
   resetSharedSendStateStoreForTests();
+  mockServices.pushErrorToast.mockReset();
   mockServices.sharedSessionV2TurnState.mockReset();
   mockServices.sharedSessionV2ProbeBinding.mockReset();
+  mockServices.sharedSessionV2RecoverAttempt.mockReset();
   mockServices.sharedSessionV2RebuildBinding.mockReset();
 });
 
@@ -149,7 +158,13 @@ describe("SharedSendStatusBar", () => {
     mockServices.sharedSessionV2ProbeBinding.mockResolvedValue({
       status: "ok",
       provisioningState: "recovery-required",
+      nativeProbe: { status: "matched" },
       inFlightAttempts: [{ attemptId: "a1", logicalTurnId: "t1", accepted: true }],
+    });
+    mockServices.sharedSessionV2RecoverAttempt.mockResolvedValue({
+      status: "unknown",
+      attemptId: "a1",
+      bindingKey: "claude:default",
     });
     renderBar();
     fireEvent.click(screen.getByText("sharedSend.recoveryProbe"));
@@ -158,7 +173,74 @@ describe("SharedSendStatusBar", () => {
         "sharedSend.recoveryProbeHeld",
       );
     });
+    expect(mockServices.sharedSessionV2ProbeBinding).toHaveBeenCalledWith(
+      WS,
+      THREAD,
+      "claude:default",
+    );
+    expect(mockServices.sharedSessionV2RecoverAttempt).toHaveBeenCalledWith(
+      WS,
+      THREAD,
+      "a1",
+    );
     expect(getSharedSendState(WS, THREAD).state).toBe("recovery-required");
+  });
+
+  it("recovery-required：Probe 按 durable Attempt owner 恢复 active run", async () => {
+    dispatchSharedSendEvent(WS, THREAD, { type: "send" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "packagePrepared" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "ackAmbiguous" });
+    mockServices.sharedSessionV2TurnState.mockResolvedValue({
+      status: "ok",
+      inFlightAttempts: [
+        {
+          attemptId: "attempt-active",
+          bindingKey: "codex:provider-a",
+          accepted: true,
+        },
+      ],
+      bindings: [],
+    });
+    mockServices.sharedSessionV2RecoverAttempt.mockResolvedValue({
+      status: "active",
+      attemptId: "attempt-active",
+      bindingKey: "codex:provider-a",
+    });
+
+    renderBar();
+    fireEvent.click(screen.getByText("sharedSend.recoveryProbe"));
+    await waitFor(() => {
+      expect(getSharedSendState(WS, THREAD).state).toBe("running");
+    });
+    expect(mockServices.sharedSessionV2RecoverAttempt).toHaveBeenCalledWith(
+      WS,
+      THREAD,
+      "attempt-active",
+    );
+    expect(mockServices.sharedSessionV2ProbeBinding).not.toHaveBeenCalled();
+  });
+
+  it("recovery-required：Probe 失败保持锁定并显示错误", async () => {
+    dispatchSharedSendEvent(WS, THREAD, { type: "send" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "packagePrepared" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "ackAmbiguous" });
+    mockServices.sharedSessionV2TurnState.mockRejectedValue(
+      new Error("probe unavailable"),
+    );
+
+    renderBar();
+    fireEvent.click(screen.getByText("sharedSend.recoveryProbe"));
+    await waitFor(() => {
+      expect(mockServices.pushErrorToast).toHaveBeenCalledWith({
+        title: "sharedSend.recoveryTitle",
+        message: "sharedSend.recoveryProbe: probe unavailable",
+        durationMs: 4800,
+      });
+    });
+    expect(getSharedSendState(WS, THREAD).state).toBe("recovery-required");
+    expect(screen.getByTestId("shared-send-status").textContent).toContain(
+      "sharedSend.recoveryProbeHeld",
+    );
   });
 
   it("recovery-required：显式重建调用 rebuild 并解锁", async () => {
@@ -189,7 +271,38 @@ describe("SharedSendStatusBar", () => {
     expect(mockServices.sharedSessionV2RebuildBinding).toHaveBeenCalledWith(
       WS,
       THREAD,
-      { bindingKey: "codex:prov-1", engine: "codex", providerProfileId: "prov-1" },
+      "codex:prov-1",
     );
+  });
+
+  it("recovery-required：显式重建失败保持锁定并显示错误", async () => {
+    dispatchSharedSendEvent(WS, THREAD, { type: "send" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "packagePrepared" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "ackAmbiguous" });
+    mockServices.sharedSessionV2TurnState.mockResolvedValue({
+      status: "ok",
+      inFlightAttempts: [],
+      bindings: [
+        {
+          bindingKey: "codex:prov-1",
+          provisioningState: "recovery-required",
+          availability: "available",
+        },
+      ],
+    });
+    mockServices.sharedSessionV2RebuildBinding.mockRejectedValue(
+      new Error("rebuild rejected"),
+    );
+
+    renderBar();
+    fireEvent.click(screen.getByText("sharedSend.recoveryRebuild"));
+    await waitFor(() => {
+      expect(mockServices.pushErrorToast).toHaveBeenCalledWith({
+        title: "sharedSend.recoveryTitle",
+        message: "sharedSend.recoveryRebuild: rebuild rejected",
+        durationMs: 4800,
+      });
+    });
+    expect(getSharedSendState(WS, THREAD).state).toBe("recovery-required");
   });
 });

@@ -422,6 +422,48 @@ describe("Messages", () => {
     expect(handleRewindFromMessage).toHaveBeenCalledWith("user-tail-actions-2");
   });
 
+  it("hides unsupported fork and rewind actions for a strictly linear Shared Session", () => {
+    const { container } = render(
+      <Messages
+        items={[
+          {
+            id: "shared-user-1",
+            kind: "message",
+            role: "user",
+            text: "shared request",
+          },
+          {
+            id: "shared-assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "shared answer",
+            isFinal: true,
+          },
+        ]}
+        threadId="shared:linear-session"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="claude"
+        openTargets={[]}
+        selectedOpenAppId=""
+        onForkFromMessage={vi.fn()}
+        onRewindFromMessage={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "messages.forkMessage" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "messages.rewindMessage" }),
+    ).toBeNull();
+    expect(
+      container.querySelectorAll(
+        ".messages-final-boundary .message-action-bar-row button",
+      ),
+    ).toHaveLength(1);
+  });
+
   it("does not backfill historical user message badge from active mode", () => {
     const items: ConversationItem[] = [
       {

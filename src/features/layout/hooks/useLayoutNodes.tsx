@@ -128,7 +128,8 @@ import { buildProviderContinuationSourceExcerpt } from "../../shared-session/com
 import { useSharedSendState } from "../../shared-session/runtime/sharedSendStateStore";
 import { useSharedSendStateRestore } from "../../shared-session/runtime/useSharedSendStateRestore";
 import {
-  isComposerLocked,
+  isComposerInputLocked,
+  isComposerSubmitLocked,
   isPickerLocked,
 } from "../../shared-session/target/sendStateMachine";
 import { ActiveCanvasStatusPanel } from "./activeCanvasStatusPanelNode";
@@ -1469,7 +1470,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           rewindDialogRequest={rewindDialogRequest}
           onRewindDialogRequestConsumed={handleRewindDialogRequestConsumed}
           canStop={options.canStop}
-          disabled={options.isReviewing || isComposerLocked(sharedSendState)}
+          disabled={options.isReviewing || isComposerInputLocked(sharedSendState)}
+          submitDisabled={isComposerSubmitLocked(sharedSendState)}
           contextUsage={null}
           contextDualViewEnabled={options.contextDualViewEnabled}
           codexAutoCompactionEnabled={options.codexAutoCompactionEnabled}

@@ -7,7 +7,8 @@ import {
   matchesCommandPrefix,
 } from "../../../utils/approvalRules";
 import { respondToServerRequest } from "../../../services/tauri";
-import { resolveApprovalOwnerProviderProfileId } from "./useThreadApprovals";
+import { resolveApprovalSharedRuntimeOwner } from "./useThreadApprovals";
+import { approvalConversationItemId } from "./threadReducerApprovalRequests";
 import type { ThreadAction } from "./useThreadsReducer";
 
 const FILE_APPROVAL_PATH_KEYS = [
@@ -72,6 +73,7 @@ export function useThreadApprovalEvents({
       ).trim();
       const turnId = getApprovalTurnId(approval);
       const threadId =
+        approval.shared_runtime_owner?.sharedThreadId ??
         (rawThreadId
           ? resolveClaudeContinuationThreadId?.(
               approval.workspace_id,
@@ -93,7 +95,7 @@ export function useThreadApprovalEvents({
           workspaceId: approval.workspace_id,
           threadId,
           item: {
-            id: String(approval.request_id),
+            id: approvalConversationItemId(approval),
             kind: "tool",
             toolType: "fileChange",
             title: "Pending file approval",
@@ -109,15 +111,6 @@ export function useThreadApprovalEvents({
       const commandInfo = getApprovalCommandInfo(approval.params ?? {});
       const allowlist =
         approvalAllowlistRef.current[approval.workspace_id] ?? [];
-      if (commandInfo && matchesCommandPrefix(commandInfo.tokens, allowlist)) {
-        void respondToServerRequest(
-          approval.workspace_id,
-          approval.request_id,
-          "accept",
-          resolveApprovalOwnerProviderProfileId(approval),
-        );
-        return;
-      }
       const normalizedApproval =
         threadId && rawThreadId && threadId !== rawThreadId
           ? {
@@ -129,6 +122,22 @@ export function useThreadApprovalEvents({
               },
             }
           : approval;
+      if (commandInfo && matchesCommandPrefix(commandInfo.tokens, allowlist)) {
+        try {
+          const sharedOwner = resolveApprovalSharedRuntimeOwner(approval);
+          void respondToServerRequest(
+            approval.workspace_id,
+            approval.request_id,
+            "accept",
+            sharedOwner,
+          ).catch(() => {
+            dispatch({ type: "addApproval", approval: normalizedApproval });
+          });
+          return;
+        } catch {
+          // Shared control owner 不完整时保留人工审批卡，但禁止回落默认 Runtime。
+        }
+      }
       dispatch({ type: "addApproval", approval: normalizedApproval });
     },
     [

@@ -6,9 +6,145 @@ import {
   resolvePendingSharedSessionBindingForEngine,
   resolvePendingSharedSessionBindingForTarget,
   resolveSharedSessionBindingByNativeThread,
+  resolveSharedSessionBindingFromRuntimeOwner,
+  resolveSharedRuntimeControlOwner,
 } from "./sharedSessionBridge";
 
 describe("sharedSessionBridge", () => {
+  it("routes Rust runtime owner metadata before frontend binding registration", () => {
+    expect(
+      resolveSharedSessionBindingFromRuntimeOwner("ws-owner", {
+        threadId: "shared:thread-owner",
+        nativeThreadId: "claude:native-owner",
+        sharedOwner: {
+          sharedThreadId: "shared:thread-owner",
+          nativeThreadId: "claude:native-owner",
+          engine: "claude",
+          attemptId: "attempt-owner",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileId: "provider-owner",
+            modelCatalogEntryId: "catalog-sonnet",
+            model: "claude-sonnet-runtime",
+            reasoning: { effort: "high" },
+            providerProfileNameSnapshot: "Owner Provider",
+            providerProfileSource: "managed",
+            runtimeCapabilityFingerprint: "capability-owner",
+          },
+        },
+      }),
+    ).toEqual({
+      workspaceId: "ws-owner",
+      sharedThreadId: "shared:thread-owner",
+      nativeThreadId: "claude:native-owner",
+      engine: "claude",
+      attemptId: "attempt-owner",
+      providerProfileId: "provider-owner",
+      executionTargetSnapshot: {
+        engine: "claude",
+        providerProfileId: "provider-owner",
+        modelCatalogEntryId: "catalog-sonnet",
+        model: "claude-sonnet-runtime",
+        reasoning: { effort: "high" },
+        providerProfileNameSnapshot: "Owner Provider",
+        providerProfileSource: "managed",
+        runtimeCapabilityFingerprint: "capability-owner",
+      },
+    });
+  });
+
+  it("rejects a runtime owner whose embedded snapshot has a different engine", () => {
+    const binding = resolveSharedSessionBindingFromRuntimeOwner("ws-owner", {
+      threadId: "shared:thread-owner",
+      nativeThreadId: "claude:native-owner",
+      sharedOwner: {
+        sharedThreadId: "shared:thread-owner",
+        nativeThreadId: "claude:native-owner",
+        engine: "claude",
+        attemptId: "attempt-owner",
+        executionTargetSnapshot: {
+          engine: "codex",
+          model: "poisoned-current-picker-model",
+        },
+      },
+    });
+
+    expect(binding).toBeNull();
+  });
+
+  it("requires the complete Runtime owner for Shared control responses", () => {
+    const params = {
+      threadId: "shared:thread-owner",
+      nativeThreadId: "codex-native-owner",
+      turnId: "runtime-turn-owner",
+      sharedOwner: {
+        sharedThreadId: "shared:thread-owner",
+        nativeThreadId: "codex-native-owner",
+        runtimeTurnId: "runtime-turn-owner",
+        attemptId: "attempt-owner",
+        providerRuntimeKey: "codex::ws-owner::provider-owner",
+        engine: "codex",
+        executionTargetSnapshot: {
+          engine: "codex",
+          providerProfileId: "provider-owner",
+          modelCatalogEntryId: "catalog-owner",
+          model: "runtime-owner",
+          providerProfileNameSnapshot: "Owner Provider",
+          providerProfileSource: "managed",
+        },
+      },
+    };
+
+    expect(resolveSharedRuntimeControlOwner("ws-owner", params)).toEqual({
+      attemptId: "attempt-owner",
+      providerRuntimeKey: "codex::ws-owner::provider-owner",
+      sharedThreadId: "shared:thread-owner",
+      nativeThreadId: "codex-native-owner",
+      runtimeTurnId: "runtime-turn-owner",
+      engine: "codex",
+      providerProfileId: "provider-owner",
+    });
+    expect(
+      resolveSharedRuntimeControlOwner("ws-owner", {
+        ...params,
+        sharedOwner: {
+          ...params.sharedOwner,
+          providerRuntimeKey: "",
+        },
+      }),
+    ).toBeNull();
+    expect(
+      resolveSharedRuntimeControlOwner("ws-owner", {
+        ...params,
+        threadId: "shared:poisoned",
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects a runtime owner whose provider conflicts with the frozen snapshot", () => {
+    const binding = resolveSharedSessionBindingFromRuntimeOwner("ws-owner", {
+      threadId: "shared:thread-owner",
+      nativeThreadId: "claude:native-owner",
+      sharedOwner: {
+        sharedThreadId: "shared:thread-owner",
+        nativeThreadId: "claude:native-owner",
+        engine: "claude",
+        providerProfileId: "provider-poisoned",
+        attemptId: "attempt-owner",
+        executionTargetSnapshot: {
+          engine: "claude",
+          providerProfileId: "provider-owner",
+          modelCatalogEntryId: "catalog-sonnet",
+          model: "claude-sonnet-runtime",
+          providerProfileNameSnapshot: "Owner Provider",
+          providerProfileSource: "managed",
+        },
+      },
+    });
+
+    expect(binding).toBeNull();
+  });
+
   it("registers and resolves native thread bindings for shared sessions", () => {
     registerSharedSessionNativeBinding({
       workspaceId: "ws-1",
@@ -152,5 +288,36 @@ describe("sharedSessionBridge", () => {
     ).toBe("codex-pending-shared-7");
 
     clearSharedSessionBindingsForSharedThread("ws-7", "shared:thread-7");
+  });
+
+  it("fails closed when two providers expose the same native thread identity", () => {
+    registerSharedSessionNativeBinding({
+      workspaceId: "ws-8",
+      sharedThreadId: "shared:thread-8a",
+      nativeThreadId: "native-collision",
+      engine: "codex",
+      providerProfileId: "provider-a",
+    });
+    registerSharedSessionNativeBinding({
+      workspaceId: "ws-8",
+      sharedThreadId: "shared:thread-8b",
+      nativeThreadId: "native-collision",
+      engine: "codex",
+      providerProfileId: "provider-b",
+    });
+
+    expect(
+      resolveSharedSessionBindingByNativeThread("ws-8", "native-collision"),
+    ).toBeNull();
+    expect(
+      rebindSharedSessionNativeThread({
+        workspaceId: "ws-8",
+        oldNativeThreadId: "native-collision",
+        newNativeThreadId: "must-not-rebind",
+      }),
+    ).toBeNull();
+
+    clearSharedSessionBindingsForSharedThread("ws-8", "shared:thread-8a");
+    clearSharedSessionBindingsForSharedThread("ws-8", "shared:thread-8b");
   });
 });

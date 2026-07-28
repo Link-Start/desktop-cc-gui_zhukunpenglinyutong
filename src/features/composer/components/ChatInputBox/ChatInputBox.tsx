@@ -217,6 +217,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       hasContextAttachment = false,
       placeholder = '', // Will be passed from parent via t('chat.inputPlaceholder')
       disabled = false,
+      submitDisabled = false,
       value,
       onSubmit,
       onStop,
@@ -380,6 +381,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       PROVIDER_PROFILE_ENGINES.has(currentProvider as ProviderId);
     const providerTargetCatalog = useSharedProviderTargetCatalog({
       enabled: sharedTargetPicker || nativeProviderTargetPicker,
+      workspaceId,
       mode: sharedTargetPicker ? 'shared' : 'native',
       currentProvider: currentProvider as ProviderId,
       currentProviderProfileId,
@@ -1140,6 +1142,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     );
 
     const handleSubmit = useSubmitHandler({
+      submitDisabled: disabled || submitDisabled,
       getTextContent,
       invalidateCache,
       attachments,
@@ -1382,8 +1385,10 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             target,
           )
         ) {
-          if (target.model) {
-            onModelSelect?.(target.model);
+          const selectedModelId =
+            target.modelCatalogEntryId ?? target.model;
+          if (selectedModelId) {
+            onModelSelect?.(selectedModelId);
           }
           return;
         }
@@ -1554,9 +1559,13 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         onExecutionTargetChange={handleProviderTargetSelect}
         onOpenTargetCatalog={providerTargetCatalog.ensureProfiles}
         onOpenProviderProfile={providerTargetCatalog.ensureModels}
+        onReloadProviderConfig={providerTargetCatalog.reloadConfig}
+        onDiscoverProviderModels={providerTargetCatalog.discoverModels}
         targetCatalogError={providerTargetCatalog.profileLoadError}
         currentProvider={currentProvider}
-        onModelSelect={onModelSelect ? handleModelSelect : undefined}
+        onModelSelect={
+          !sharedTargetPicker && onModelSelect ? handleModelSelect : undefined
+        }
         onProviderModelSelect={
           !nativeProviderTargetPicker && onModelSelect && onProviderSelect
             ? handleProviderModelSelect
@@ -1770,7 +1779,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
           {!isInputBoxCollapsed && (
             <ChatInputBoxFooter
-              disabled={disabled}
+              disabled={disabled || submitDisabled}
               hasInputContent={hasContent || attachments.length > 0 || hasContextAttachment}
               isLoading={isLoading}
               streamActivityPhase={streamActivityPhase}
@@ -1800,8 +1809,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               onSubmit={handleSubmit}
               onStop={onStop}
               onModeSelect={handleModeSelect}
-              onModelSelect={handleModelSelect}
-              onProviderSelect={onProviderSelect}
+              onModelSelect={sharedTargetPicker ? undefined : handleModelSelect}
+              onProviderSelect={sharedTargetPicker ? undefined : onProviderSelect}
               onReasoningChange={onReasoningChange}
               onEnhancePrompt={handleEnhancePrompt}
               alwaysThinkingEnabled={alwaysThinkingEnabled}

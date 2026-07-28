@@ -36,6 +36,9 @@ const FULLY_AVAILABLE: TurnBadgeAvailability = {
   runtimeAvailable: true,
 };
 
+export const LOCAL_PROVIDER_LABEL = "本地配置";
+export const LOCAL_PROVIDER_SOURCE = "disk";
+
 function resolveEngineLabel(engine: EngineType): string {
   switch (engine) {
     case "claude":
@@ -62,8 +65,9 @@ export function resolveSnapshotProviderLabel(
   if (id) {
     return id;
   }
-  return snapshot.providerProfileSource?.trim() === "disk"
-    ? "本地配置"
+  return snapshot.providerProfileSource?.trim() === "disk" ||
+    snapshot.providerProfileSource?.trim() === "local"
+    ? LOCAL_PROVIDER_LABEL
     : "历史配置未知";
 }
 

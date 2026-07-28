@@ -44,6 +44,7 @@ import {
   subscribeProviderContinuationDialogRequests,
   type ProviderContinuationDialogRequest,
 } from "../../threads/services/providerContinuationRequests";
+import { toCanonicalProviderProfileSource } from "../../shared-session/target/types";
 
 const LAST_PROVIDER_PROFILE_KEYS = {
   claude: "claudeLastProviderProfileId",
@@ -1540,7 +1541,10 @@ export function useSidebarMenus({
                       engine,
                       providerProfileId: provider.id,
                       providerProfileNameSnapshot: provider.name,
-                      providerProfileSource: provider.source,
+                      providerProfileSource: toCanonicalProviderProfileSource(
+                        provider.source,
+                        provider.source === "disk",
+                      ),
                       runtimeCapabilityFingerprint:
                         engine === "claude" ? "echo-checksum" : null,
                     },

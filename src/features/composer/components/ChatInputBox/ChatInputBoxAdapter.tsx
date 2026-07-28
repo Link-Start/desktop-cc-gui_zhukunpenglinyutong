@@ -447,6 +447,7 @@ export interface ChatInputBoxAdapterProps {
   // Core state
   text: string;
   disabled?: boolean;
+  submitDisabled?: boolean;
   isProcessing: boolean;
   streamActivityPhase?: StreamActivityPhase;
   canStop: boolean;
@@ -1029,6 +1030,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
     const {
       text,
       disabled,
+      submitDisabled,
       isProcessing,
       streamActivityPhase = 'idle',
       onTextChange,
@@ -2107,6 +2109,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         isLoading={isProcessing}
         streamActivityPhase={streamActivityPhase}
         disabled={disabled}
+        submitDisabled={submitDisabled}
         value={text}
         workspaceId={workspaceId}
         placeholder={placeholder ?? t('chat.inputPlaceholder')}
@@ -2139,8 +2142,12 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         } : undefined}
         onRemoveAttachment={handleRemoveAttachment}
         onModeSelect={onModeSelect}
-        onModelSelect={handleModelSelect}
-        onProviderSelect={onSelectEngine ? handleProviderSelect : undefined}
+        onModelSelect={
+          !isSharedSession && onSelectModel ? handleModelSelect : undefined
+        }
+        onProviderSelect={
+          !isSharedSession && onSelectEngine ? handleProviderSelect : undefined
+        }
         reasoningEffort={effortToOptionalReasoning(selectedEffort)}
         reasoningOptions={normalizeReasoningOptions(reasoningOptions)}
         onReasoningChange={onSelectEffort ? handleReasoningChange : undefined}

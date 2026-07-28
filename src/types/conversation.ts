@@ -121,6 +121,7 @@ export type ConversationItem =
       executionTargetSnapshot?: {
         engine: EngineType;
         providerProfileId?: string | null;
+        modelCatalogEntryId?: string | null;
         model?: string | null;
         reasoning?: { effort: string } | null;
         providerProfileNameSnapshot?: string | null;

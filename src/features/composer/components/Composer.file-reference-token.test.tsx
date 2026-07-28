@@ -1,7 +1,8 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComposerEditorSettings } from "../../../types";
 import type {
   CodeAnnotationDraftInput,
@@ -17,11 +18,21 @@ import {
   resetSharedTargetStoreForTests,
   selectNextTarget,
 } from "../../shared-session/target/targetStore";
+import {
+  dispatchSharedSendEvent,
+  getSharedSendState,
+  resetSharedSendStateStoreForTests,
+} from "../../shared-session/runtime/sharedSendStateStore";
 import { subscribeProviderContinuationDialogRequests } from "../../threads/services/providerContinuationRequests";
 
 afterEach(() => {
   cleanup();
   resetSharedTargetStoreForTests();
+  resetSharedSendStateStoreForTests();
+});
+
+beforeEach(() => {
+  vi.mocked(invoke).mockReset().mockResolvedValue(null);
 });
 
 vi.mock("../../../services/dragDrop", () => ({
@@ -46,6 +57,9 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
     providerProfileId,
     selectedEffort,
     onNativeProviderTargetChange,
+    onExecutionTargetChange,
+    onSelectEngine,
+    onSelectModel,
   }: {
     text: string;
     onTextChange: (next: string, cursor: number | null) => void;
@@ -55,12 +69,30 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
     onNativeProviderTargetChange?: (target: {
       engine: "codex";
       providerProfileId: string;
+      modelCatalogEntryId: string;
       model: string;
       providerProfileNameSnapshot: string;
       providerProfileSource: "managed";
     }) => void;
+    onExecutionTargetChange?: (target: {
+      engine: "codex";
+      providerProfileId: string;
+      modelCatalogEntryId: string;
+      model: string;
+      reasoning: { effort: string };
+      providerProfileNameSnapshot: string;
+      providerProfileSource: "managed";
+    }) => void;
+    onSelectEngine?: (engine: "codex") => void;
+    onSelectModel?: (modelId: string) => void;
   }) => (
     <>
+      <div
+        data-testid="composer-target-authority"
+        data-atomic-target={String(Boolean(onExecutionTargetChange))}
+        data-engine-bypass={String(Boolean(onSelectEngine))}
+        data-model-bypass={String(Boolean(onSelectModel))}
+      />
       <textarea
         value={text}
         data-provider-profile-id={providerProfileId ?? "null"}
@@ -81,7 +113,23 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
           onNativeProviderTargetChange?.({
             engine: "codex",
             providerProfileId: "provider-b",
-            model: "gpt-target",
+            modelCatalogEntryId: "settings-reasoning",
+            model: "deepseek-v4-pro",
+            providerProfileNameSnapshot: "Provider B",
+            providerProfileSource: "managed",
+          })
+        }
+      />
+      <button
+        type="button"
+        data-testid="select-shared-target"
+        onClick={() =>
+          onExecutionTargetChange?.({
+            engine: "codex",
+            providerProfileId: "provider-b",
+            modelCatalogEntryId: "settings-reasoning",
+            model: "deepseek-v4-pro",
+            reasoning: { effort: "high" },
             providerProfileNameSnapshot: "Provider B",
             providerProfileSource: "managed",
           })
@@ -103,6 +151,7 @@ function ComposerHarness({
   sharedTarget?: {
     providerProfileId: string;
     model: string;
+    runtimeModel?: string;
     effort: string;
   };
 }) {
@@ -154,7 +203,17 @@ function ComposerHarness({
       selectedEngine="claude"
       isSharedSession={Boolean(sharedTarget)}
       providerProfileId={sharedTarget?.providerProfileId ?? null}
-      models={[]}
+      models={
+        sharedTarget
+          ? [
+              {
+                id: sharedTarget.model,
+                displayName: sharedTarget.model,
+                model: sharedTarget.runtimeModel ?? sharedTarget.model,
+              },
+            ]
+          : []
+      }
       selectedModelId={sharedTarget?.model ?? null}
       onSelectModel={() => {}}
       reasoningOptions={[]}
@@ -190,26 +249,26 @@ function getTextarea(container: HTMLElement) {
 }
 
 describe("Composer file reference token", () => {
-  it("writes every visible Shared picker level to selectedNextTarget", () => {
-    render(
+  it("does not fabricate a Shared target from global Composer props", () => {
+    const view = render(
       <ComposerHarness
         onSend={() => {}}
         sharedTarget={{
           providerProfileId: "openrouter",
           model: "claude-sonnet-4-5",
+          runtimeModel: "claude-sonnet-4-5-runtime",
           effort: "high",
         }}
       />,
     );
 
-    expect(getSharedTargetState("ws-1", "thread-1").selectedNextTarget).toEqual({
-      engine: "claude",
-      providerProfileId: "openrouter",
-      model: "claude-sonnet-4-5",
-      providerProfileNameSnapshot: "openrouter",
-      providerProfileSource: null,
-      reasoning: { effort: "high" },
-    });
+    expect(
+      getSharedTargetState("ws-1", "thread-1").selectedNextTarget,
+    ).toBeNull();
+    const authority = view.getByTestId("composer-target-authority");
+    expect(authority.dataset.atomicTarget).toBe("true");
+    expect(authority.dataset.engineBypass).toBe("false");
+    expect(authority.dataset.modelBypass).toBe("false");
   });
 
   it("keeps explicit local Provider and empty reasoning instead of old props", () => {
@@ -228,14 +287,207 @@ describe("Composer file reference token", () => {
       selectNextTarget("ws-1", "thread-1", {
         engine: "claude",
         providerProfileId: null,
+        modelCatalogEntryId: "claude-opus-4-1",
         model: "claude-opus-4-1",
         reasoning: null,
+        providerProfileNameSnapshot: "本地配置",
+        providerProfileSource: "disk",
       });
     });
 
     const textarea = getTextarea(view.container);
     expect(textarea.dataset.providerProfileId).toBe("null");
     expect(textarea.dataset.effort).toBe("null");
+  });
+
+  it("persists every Shared picker level without provisioning a binding", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      selectedTarget: {
+        engine: "codex",
+        providerProfileId: "provider-b",
+        modelCatalogEntryId: "settings-reasoning",
+        model: "deepseek-v4-pro",
+        reasoning: { effort: "high" },
+        providerProfileNameSnapshot: "Provider B",
+        providerProfileSource: "managed",
+      },
+    });
+    const view = render(
+      <ComposerHarness
+        onSend={() => {}}
+        sharedTarget={{
+          providerProfileId: "openrouter",
+          model: "claude-sonnet-4-5",
+          effort: "high",
+        }}
+      />,
+    );
+
+    fireEvent.click(view.getByTestId("select-shared-target"));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_shared_session_selected_engine", {
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        selectedEngine: "codex",
+        providerProfileId: "provider-b",
+        modelCatalogEntryId: "settings-reasoning",
+        model: "deepseek-v4-pro",
+        reasoningEffort: "high",
+        providerProfileNameSnapshot: "Provider B",
+        providerProfileSource: "managed",
+      });
+    });
+    expect(getSharedTargetState("ws-1", "thread-1").selectedNextTarget).toEqual({
+      engine: "codex",
+      providerProfileId: "provider-b",
+      modelCatalogEntryId: "settings-reasoning",
+      model: "deepseek-v4-pro",
+      reasoning: { effort: "high" },
+      providerProfileNameSnapshot: "Provider B",
+      providerProfileSource: "managed",
+    });
+  });
+
+  it("keeps the last persisted target when the next picker persistence fails", async () => {
+    const previousTarget = {
+      engine: "claude" as const,
+      providerProfileId: null,
+      modelCatalogEntryId: "claude-opus-4-1",
+      model: "claude-opus-4-1",
+      reasoning: null,
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk" as const,
+    };
+    selectNextTarget("ws-1", "thread-1", previousTarget);
+    dispatchSharedSendEvent("ws-1", "thread-1", { type: "send" });
+    dispatchSharedSendEvent(
+      "ws-1",
+      "thread-1",
+      { type: "targetUnavailable" },
+      { detail: "provider removed" },
+    );
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("disk unavailable"));
+    const view = render(
+      <ComposerHarness
+        onSend={() => {}}
+        sharedTarget={{
+          providerProfileId: "openrouter",
+          model: "claude-sonnet-4-5",
+          effort: "high",
+        }}
+      />,
+    );
+
+    fireEvent.click(view.getByTestId("select-shared-target"));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(
+        getSharedTargetState("ws-1", "thread-1").selectedNextTarget,
+      ).toEqual(previousTarget);
+    });
+    expect(getSharedSendState("ws-1", "thread-1")).toEqual({
+      state: "target-unavailable",
+      degradedInfo: null,
+      detail: "provider removed",
+    });
+  });
+
+  it("repairs target-unavailable only after backend confirms the exact target", async () => {
+    dispatchSharedSendEvent("ws-1", "thread-1", { type: "send" });
+    dispatchSharedSendEvent(
+      "ws-1",
+      "thread-1",
+      { type: "targetUnavailable" },
+      { detail: "provider removed" },
+    );
+    vi.mocked(invoke).mockResolvedValueOnce({
+      selectedTarget: {
+        engine: "codex",
+        providerProfileId: "provider-b",
+        modelCatalogEntryId: "settings-reasoning",
+        model: "deepseek-v4-pro",
+        reasoning: { effort: "high" },
+        providerProfileNameSnapshot: "Provider B",
+        providerProfileSource: "managed",
+      },
+    });
+    const view = render(
+      <ComposerHarness
+        onSend={() => {}}
+        sharedTarget={{
+          providerProfileId: "openrouter",
+          model: "claude-sonnet-4-5",
+          effort: "high",
+        }}
+      />,
+    );
+
+    fireEvent.click(view.getByTestId("select-shared-target"));
+
+    await waitFor(() => {
+      expect(getSharedSendState("ws-1", "thread-1")).toEqual({
+        state: "idle",
+        degradedInfo: null,
+        detail: null,
+      });
+    });
+  });
+
+  it("keeps target-unavailable locked when backend confirms a different target", async () => {
+    const previousTarget = {
+      engine: "claude" as const,
+      providerProfileId: null,
+      modelCatalogEntryId: "claude-opus-4-1",
+      model: "claude-opus-4-1",
+      reasoning: null,
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk" as const,
+    };
+    selectNextTarget("ws-1", "thread-1", previousTarget);
+    dispatchSharedSendEvent("ws-1", "thread-1", { type: "send" });
+    dispatchSharedSendEvent(
+      "ws-1",
+      "thread-1",
+      { type: "targetUnavailable" },
+      { detail: "provider removed" },
+    );
+    vi.mocked(invoke).mockResolvedValueOnce({
+      selectedTarget: {
+        engine: "codex",
+        providerProfileId: "provider-c",
+        modelCatalogEntryId: "settings-reasoning",
+        model: "deepseek-v4-pro",
+        reasoning: { effort: "high" },
+        providerProfileNameSnapshot: "Provider C",
+        providerProfileSource: "managed",
+      },
+    });
+    const view = render(
+      <ComposerHarness
+        onSend={() => {}}
+        sharedTarget={{
+          providerProfileId: "openrouter",
+          model: "claude-sonnet-4-5",
+          effort: "high",
+        }}
+      />,
+    );
+
+    fireEvent.click(view.getByTestId("select-shared-target"));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(
+        getSharedTargetState("ws-1", "thread-1").selectedNextTarget,
+      ).toEqual(previousTarget);
+    });
+    expect(getSharedSendState("ws-1", "thread-1")).toEqual({
+      state: "target-unavailable",
+      degradedInfo: null,
+      detail: "provider removed",
+    });
   });
 
   it("publishes the selected native Provider and Model as a continuation request", () => {
@@ -253,7 +505,8 @@ describe("Composer file reference token", () => {
       destination: {
         engine: "codex",
         providerProfileId: "provider-b",
-        model: "gpt-target",
+        modelCatalogEntryId: "settings-reasoning",
+        model: "deepseek-v4-pro",
         reasoningEffort: null,
         providerProfileNameSnapshot: "Provider B",
         providerProfileSource: "managed",

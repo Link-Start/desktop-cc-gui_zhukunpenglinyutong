@@ -22,6 +22,9 @@ const sharedSend = {
     recoveryProbeCleared: "Probe found no pending attempt. The session is unlocked.",
     targetUnavailable: "The selected target is unavailable.",
     targetUnavailableReason: "The selected target is unavailable: {{reason}}",
+    selectionPersistFailedTitle: "Target selection was not saved",
+    selectionPersistFailedMessage:
+      "The current in-memory selection is preserved, but restart recovery may use the previous target: {{reason}}",
     cancel: "Cancel",
   },
 };

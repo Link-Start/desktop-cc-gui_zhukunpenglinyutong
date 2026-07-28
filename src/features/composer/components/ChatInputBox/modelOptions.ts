@@ -128,6 +128,7 @@ function getCustomCodexModels(): ModelInfo[] {
       label: m.label || m.id,
       description: m.description,
       providerProfileId: m.providerProfileId?.trim() || undefined,
+      source: 'custom',
     }));
   } catch {
     return [];

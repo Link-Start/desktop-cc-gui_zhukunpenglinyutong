@@ -8,6 +8,7 @@ import type {
   RequestUserInputSettlementResult,
 } from "../../../types";
 import { respondToUserInputRequest } from "../../../services/tauri";
+import { requestUserInputConversationItemId } from "../../../utils/requestUserInputIdentity";
 import type { ThreadAction } from "./useThreadsReducer";
 
 type UseThreadUserInputOptions = {
@@ -190,7 +191,32 @@ export function useThreadUserInput({
       const settlementKind = options?.settlementKind ?? "submit";
       const staleSettlementHint = options?.staleSettlementHint;
       const rawThreadId = request.params.thread_id;
+      const sharedRuntimeOwner = request.shared_runtime_owner ?? null;
+      const isSharedThread =
+        typeof rawThreadId === "string" && rawThreadId.startsWith("shared:");
+      if (isSharedThread && !sharedRuntimeOwner) {
+        throw new Error(
+          "Shared user input response is missing its Runtime owner.",
+        );
+      }
+      if (
+        sharedRuntimeOwner &&
+        rawThreadId !== sharedRuntimeOwner.sharedThreadId
+      ) {
+        throw new Error(
+          "Shared user input response Runtime owner does not match the request thread.",
+        );
+      }
+      if (
+        sharedRuntimeOwner &&
+        request.params.turn_id !== sharedRuntimeOwner.runtimeTurnId
+      ) {
+        throw new Error(
+          "Shared user input response Runtime owner does not match the request turn.",
+        );
+      }
       const resolvedThreadId =
+        sharedRuntimeOwner?.sharedThreadId ??
         (rawThreadId
           ? resolveClaudeContinuationThreadId?.(
               request.workspace_id,
@@ -198,9 +224,10 @@ export function useThreadUserInput({
               request.params.turn_id,
             )
           : null) ?? rawThreadId;
-      const isSharedThread = typeof rawThreadId === "string" && rawThreadId.startsWith("shared:");
-      const stateThreadId = isSharedThread ? rawThreadId : resolvedThreadId;
-      const runtimeThreadId = isSharedThread ? resolvedThreadId : rawThreadId;
+      const stateThreadId =
+        sharedRuntimeOwner?.sharedThreadId ?? resolvedThreadId;
+      const runtimeThreadId =
+        sharedRuntimeOwner?.nativeThreadId ?? rawThreadId;
       if (stateThreadId) {
         // After user confirms AskUserQuestion, Claude may take a few seconds to resume.
         // Mark thread as processing immediately to avoid a "stopped" visual gap.
@@ -215,9 +242,13 @@ export function useThreadUserInput({
         threadId: string | null | undefined;
         turnId: string | null | undefined;
         skippedQuestionIds?: string[];
+        sharedOwner?: NonNullable<
+          RequestUserInputRequest["shared_runtime_owner"]
+        >;
       } = {
         threadId: runtimeThreadId,
-        turnId: request.params.turn_id,
+        turnId: sharedRuntimeOwner?.runtimeTurnId ?? request.params.turn_id,
+        ...(sharedRuntimeOwner ? { sharedOwner: sharedRuntimeOwner } : {}),
       };
       if (response.skippedQuestionIds?.length) {
         responseOptions.skippedQuestionIds = response.skippedQuestionIds;
@@ -243,6 +274,7 @@ export function useThreadUserInput({
             type: "removeUserInputRequest",
             requestId: request.request_id,
             workspaceId: request.workspace_id,
+            request,
           });
           return { settlement: "stale" };
         }
@@ -274,7 +306,7 @@ export function useThreadUserInput({
           workspaceId: request.workspace_id,
           threadId: stateThreadId,
           item: {
-            id: `user-input-answer-${String(request.request_id)}`,
+            id: requestUserInputConversationItemId(request),
             kind: "tool",
             toolType: "requestUserInputSubmitted",
             title: buildSubmittedTitle(payload),
@@ -290,6 +322,7 @@ export function useThreadUserInput({
         type: "removeUserInputRequest",
         requestId: request.request_id,
         workspaceId: request.workspace_id,
+        request,
       });
       return { settlement: "accepted" };
     },

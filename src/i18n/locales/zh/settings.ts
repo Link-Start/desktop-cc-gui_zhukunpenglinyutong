@@ -535,14 +535,14 @@ const settings = {
       top: "放在变更文件列表上方。",
     },
     otherDescription: "历史记录补全、模型映射等其他配置。",
-    sharedProjectionTestTitle: "Shared Projection 动态测试",
+    sharedProjectionTestTitle: "Shared Projection 回滚控制",
     sharedProjectionTestDescription:
-      "用于验证 Change A 的新会话读取链路。默认关闭，不会改变真实 Shared Send 写入方式。",
-    sharedProjectionTestToggleTitle: "启用 Shared Projection",
+      "Shared Session 默认合并 Canonical Projection 与 Legacy snapshot；关闭后显式回滚为 Legacy-only 读取。",
+    sharedProjectionTestToggleTitle: "使用 Canonical Projection",
     sharedProjectionTestToggleDescription:
-      "开启后，Shared Session 会优先从 Canonical Projection 读取；读取失败仍会回退 V0 snapshot。",
+      "开启时合并 Canonical 与 Legacy 历史；读取失败仍保留 Legacy snapshot。",
     sharedProjectionTestToggleDetail:
-      "仅供开发验证。切换后应用会立即刷新，请先保存输入框中的未发送内容。",
+      "切换后应用会立即刷新，请先保存输入框中的未发送内容。",
     performanceDiagnosticsTitle: "性能诊断",
     performanceDiagnosticsDescription:
       "用于临时调校本机 realtime performance。并行对话、工具调用输出或消息流明显卡顿时，可以先切换调度档位；验证结束后再重置覆盖项回到默认。",
