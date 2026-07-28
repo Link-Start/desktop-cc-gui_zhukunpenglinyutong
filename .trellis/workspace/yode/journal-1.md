@@ -102,3 +102,69 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: 显示 Codex 与 Claude 原生重命名标题
+
+**Date**: 2026-07-27
+**Task**: 显示 Codex 与 Claude 原生重命名标题
+**Branch**: `fix/native-session-renamed-titles`
+
+### Summary
+
+读取 Codex session_index.jsonl 与 Claude custom-title，将 optional nativeTitle 贯穿 catalog 和前端标题投影；保持 GUI custom/mapped title 优先级，补齐多 home、fallback 与弱标题回归测试。focused Rust/Vitest、lint、typecheck、runtime contracts、OpenSpec strict validation 与隔离 Codex review 均通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `855e25e99` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 5: 提交原生会话标题修复 PR
+
+**Date**: 2026-07-27
+**Task**: 提交原生会话标题修复 PR
+**Branch**: `fix/native-session-renamed-titles`
+
+### Summary
+
+通过 GitHub MCP 创建 upstream PR #932，并在 OpenSpec tasks/verification 中记录 code commit、Trellis archive/session record 与 PR URL；targeted OpenSpec strict validation 和 diff checks 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7b178823b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

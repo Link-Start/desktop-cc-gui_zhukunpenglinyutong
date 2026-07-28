@@ -718,7 +718,7 @@ export function useThreadEventHandlers({
 
   const shouldSkipCodexTurnEvent = useCallback(
     (input: {
-      engine: "claude" | "codex" | "gemini" | "kimi" | "opencode";
+      engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
       workspaceId: string;
       threadId: string;
       turnId: string;

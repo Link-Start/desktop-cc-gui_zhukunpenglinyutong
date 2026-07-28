@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "lastVerifiedAt": "2026-07-26",
+  "lastVerifiedAt": "2026-07-27",
   "engines": {
     "codex": [
       {
@@ -95,6 +95,17 @@
         "lifecycle": "fallback"
       }
     ],
+    "grok": [
+      {
+        "id": "grok-build",
+        "label": "Grok Build",
+        "description": "",
+        "provider": "grok",
+        "protocol": "grok",
+        "lifecycle": "fallback",
+        "default": true
+      }
+    ],
     "kimi": [
       {
         "id": "kimi-code/k3",
@@ -119,6 +130,145 @@
         "description": "",
         "provider": "kimi",
         "protocol": "kimi",
+        "lifecycle": "fallback"
+      }
+    ],
+    "opencode": [
+      {
+        "id": "opencode/big-pickle",
+        "label": "Big Pickle",
+        "description": "",
+        "provider": "opencode",
+        "protocol": "opencode",
+        "lifecycle": "fallback",
+        "default": true
+      },
+      {
+        "id": "opencode/deepseek-v4-flash-free",
+        "label": "DeepSeek V4 Flash Free",
+        "description": "",
+        "provider": "opencode",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "opencode/laguna-s-2.1-free",
+        "label": "Laguna S 2.1 Free",
+        "description": "",
+        "provider": "opencode",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "opencode/ling-3.0-flash-free",
+        "label": "Ling 3.0 Flash Free",
+        "description": "",
+        "provider": "opencode",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "opencode/mimo-v2.5-free",
+        "label": "MiMo V2.5 Free",
+        "description": "",
+        "provider": "opencode",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "opencode/nemotron-3-ultra-free",
+        "label": "Nemotron 3 Ultra Free",
+        "description": "",
+        "provider": "opencode",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "opencode/north-mini-code-free",
+        "label": "North Mini Code Free",
+        "description": "",
+        "provider": "opencode",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "anthropic/claude-fable-5",
+        "label": "Claude Fable 5",
+        "description": "",
+        "provider": "anthropic",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "anthropic/claude-haiku-4-5",
+        "label": "Claude Haiku 4.5",
+        "description": "",
+        "provider": "anthropic",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "anthropic/claude-opus-4-5",
+        "label": "Claude Opus 4.5",
+        "description": "",
+        "provider": "anthropic",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "anthropic/claude-opus-4-6",
+        "label": "Claude Opus 4.6",
+        "description": "",
+        "provider": "anthropic",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "anthropic/claude-opus-4-7",
+        "label": "Claude Opus 4.7",
+        "description": "",
+        "provider": "anthropic",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "anthropic/claude-opus-4-8",
+        "label": "Claude Opus 4.8",
+        "description": "",
+        "provider": "anthropic",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "anthropic/claude-opus-5",
+        "label": "Claude Opus 5",
+        "description": "",
+        "provider": "anthropic",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "anthropic/claude-sonnet-4-5",
+        "label": "Claude Sonnet 4.5",
+        "description": "",
+        "provider": "anthropic",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "anthropic/claude-sonnet-4-6",
+        "label": "Claude Sonnet 4.6",
+        "description": "",
+        "provider": "anthropic",
+        "protocol": "opencode",
+        "lifecycle": "fallback"
+      },
+      {
+        "id": "anthropic/claude-sonnet-5",
+        "label": "Claude Sonnet 5",
+        "description": "",
+        "provider": "anthropic",
+        "protocol": "opencode",
         "lifecycle": "fallback"
       }
     ]

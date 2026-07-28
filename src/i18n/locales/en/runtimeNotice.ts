@@ -74,6 +74,14 @@ const runtimeNotice = {
       providerSelected:
         "{{name}} selected. Click the Kimi CLI entry to create a session.",
     },
+    grok: {
+      providerSelected:
+        "{{name}} selected. Click the Grok CLI entry to create a session.",
+    },
+    opencode: {
+      providerSelected:
+        "{{name}} selected. Click the OpenCode entry to create a session.",
+    },
     error: {
       createSessionRecoveryRequired:
         "{{workspace}}: Session creation failed while runtime recovery is in progress",

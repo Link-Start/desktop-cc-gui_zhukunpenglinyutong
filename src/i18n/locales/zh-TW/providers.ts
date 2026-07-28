@@ -16,6 +16,9 @@ const providers = {
     "kimi": {
       "label": "Kimi CLI"
     },
+    "grok": {
+      "label": "Grok CLI"
+    },
     "opencode": {
       "label": "OpenCode"
     }

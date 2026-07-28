@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "engineIds": ["claude", "codex", "gemini", "kimi", "opencode"],
+  "engineIds": ["claude", "codex", "gemini", "grok", "kimi", "opencode"],
   "engines": [
     {
       "id": "claude",
@@ -28,6 +28,15 @@
       "protocolFamily": "stream-json-cli",
       "executionModel": "one-shot",
       "capabilityProfile": "gemini"
+    },
+    {
+      "id": "grok",
+      "displayName": "Grok CLI",
+      "shortName": "Grok",
+      "adapterId": "builtin.grok",
+      "protocolFamily": "stream-json-cli",
+      "executionModel": "one-shot",
+      "capabilityProfile": "grok"
     },
     {
       "id": "kimi",

@@ -30,7 +30,6 @@
     "check:engine-capability-matrix": "node scripts/check-engine-capability-matrix.mjs",
     "check:engine-adapter-registry": "node scripts/check-engine-adapter-registry.mjs",
     "check:model-provider-catalog": "node scripts/check-model-provider-catalog.mjs",
-    "check:opencode-retirement": "node scripts/check-opencode-retirement.mjs",
     "check:engine-controller-facade": "node scripts/check-engine-controller-facade.mjs",
     "check:capability-aware-policy-router": "node scripts/scan-engine-name-branches.mjs",
     "check:context-ledger-cost-budget": "node scripts/check-context-ledger-cost-budget.mjs",

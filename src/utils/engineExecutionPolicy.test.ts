@@ -7,11 +7,9 @@ import {
 } from "./engineExecutionPolicy";
 
 describe("engineExecutionPolicy", () => {
-  it("keeps retired engines history-compatible while rejecting new execution", () => {
+  it("keeps retired Gemini history-compatible while rejecting new execution", () => {
     expect(isEngineExecutionEnabled("gemini")).toBe(false);
-    expect(isEngineExecutionEnabled("opencode")).toBe(false);
     expect(normalizeEngineForExecution("gemini")).toBe("codex");
-    expect(normalizeEngineForExecution("opencode")).toBe("codex");
     expect(() => assertEngineExecutionEnabled("gemini")).toThrow(
       "Selected CLI engine is disabled by product policy",
     );
@@ -21,5 +19,11 @@ describe("engineExecutionPolicy", () => {
     expect(normalizeEngineForExecution("claude")).toBe("claude");
     expect(normalizeEngineForExecution("codex")).toBe("codex");
     expect(normalizeEngineForExecution("kimi")).toBe("kimi");
+    expect(normalizeEngineForExecution("opencode")).toBe("opencode");
+  });
+
+  it("treats OpenCode as an executable engine", () => {
+    expect(isEngineExecutionEnabled("opencode")).toBe(true);
+    expect(() => assertEngineExecutionEnabled("opencode")).not.toThrow();
   });
 });

@@ -54,7 +54,6 @@ describe("useWorkspaceRestore", () => {
       1,
       activeWorkspace,
       {
-        includeOpenCodeSessions: false,
         recoverySource: "workspace-restore",
         allowRuntimeReconnect: true,
       },
@@ -63,7 +62,6 @@ describe("useWorkspaceRestore", () => {
       2,
       visibleWorkspace,
       {
-        includeOpenCodeSessions: false,
         recoverySource: "workspace-restore",
         allowRuntimeReconnect: true,
       },
@@ -102,7 +100,6 @@ describe("useWorkspaceRestore", () => {
       1,
       activeWorkspace,
       {
-        includeOpenCodeSessions: false,
         recoverySource: "workspace-restore",
         allowRuntimeReconnect: false,
       },
@@ -111,7 +108,6 @@ describe("useWorkspaceRestore", () => {
       2,
       visibleWorkspace,
       {
-        includeOpenCodeSessions: false,
         recoverySource: "workspace-restore",
         allowRuntimeReconnect: false,
       },
@@ -153,13 +149,11 @@ describe("useWorkspaceRestore", () => {
 
     await waitFor(() => {
       expect(listThreadsForWorkspace).toHaveBeenCalledWith(visibleWorkspace, {
-        includeOpenCodeSessions: false,
         recoverySource: "workspace-restore",
         allowRuntimeReconnect: true,
       });
     });
     expect(listThreadsForWorkspace).toHaveBeenCalledWith(activeWorkspace, {
-      includeOpenCodeSessions: false,
       recoverySource: "workspace-restore",
       allowRuntimeReconnect: true,
     });
@@ -172,7 +166,6 @@ describe("useWorkspaceRestore", () => {
 
     await waitFor(() => {
       expect(listThreadsForWorkspace).toHaveBeenCalledWith(activeWorkspace, {
-        includeOpenCodeSessions: false,
         recoverySource: "workspace-restore",
         allowRuntimeReconnect: true,
       });

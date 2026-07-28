@@ -59,6 +59,12 @@ const runtimeNotice = {
     "claude": {
       "resumeCommandCopied": "Claude resume कमांड कॉपी किया गया। यदि TUI /resume पिकर इस GUI सत्र को नहीं दिखाता है, तो claude --resume {{sessionId}} या /resume {{sessionId}} स्पष्ट रूप से चलाएँ।"
     },
+    "grok": {
+      "providerSelected": "{{name}} चुना गया। सत्र बनाने के लिए Grok CLI प्रविष्टि पर क्लिक करें।"
+    },
+    "opencode": {
+      "providerSelected": "{{name}} चुना गया। सत्र बनाने के लिए OpenCode प्रविष्टि पर क्लिक करें।"
+    },
     "error": {
       "createSessionRecoveryRequired": "{{workspace}}: रनटाइम रिकवरी जारी रहने के दौरान सत्र निर्माण विफल",
       "threadTurnFailed": "{{engine}} सत्र विफल: {{message}}",

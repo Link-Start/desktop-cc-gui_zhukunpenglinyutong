@@ -68,6 +68,7 @@ test("loads Kimi from the canonical engine id registry", () => {
     "claude",
     "codex",
     "gemini",
+    "grok",
     "kimi",
     "opencode",
   ]);
@@ -132,7 +133,7 @@ test("cli emits deterministic JSON", async () => {
     assert.deepEqual(JSON.parse(result.stdout), {
       version: 1,
       root: ".",
-      engineIds: ["claude", "codex", "gemini", "kimi", "opencode"],
+      engineIds: ["claude", "codex", "gemini", "grok", "kimi", "opencode"],
       scannedFiles: 1,
       findingCount: 1,
       findings: [

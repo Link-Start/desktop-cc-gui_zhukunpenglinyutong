@@ -123,6 +123,7 @@ describe("useProjectMapGenerationOptions", () => {
     expect(result.current.engines.map((engine) => engine.id)).toEqual([
       "codex",
       "claude",
+      "grok",
       "kimi",
       "opencode",
     ]);

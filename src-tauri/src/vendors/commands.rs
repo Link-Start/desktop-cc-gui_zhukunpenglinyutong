@@ -252,6 +252,10 @@ pub(crate) struct CodemossConfig {
     gemini: GeminiSection,
     #[serde(default)]
     pub(crate) kimi: KimiSection,
+    #[serde(default)]
+    pub(crate) grok: GrokSection,
+    #[serde(default)]
+    pub(crate) opencode: OpenCodeSection,
     /// Preserve all other top-level fields (mcpServers, agents, ui, etc.)
     #[serde(flatten)]
     extra: HashMap<String, Value>,
@@ -285,6 +289,22 @@ struct GeminiSection {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub(crate) struct KimiSection {
+    #[serde(default)]
+    pub(crate) providers: HashMap<String, Value>,
+    #[serde(default)]
+    pub(crate) current: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub(crate) struct GrokSection {
+    #[serde(default)]
+    pub(crate) providers: HashMap<String, Value>,
+    #[serde(default)]
+    pub(crate) current: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub(crate) struct OpenCodeSection {
     #[serde(default)]
     pub(crate) providers: HashMap<String, Value>,
     #[serde(default)]

@@ -81,6 +81,8 @@ export type CodexUnifiedExecExternalStatus = {
 export type AppSettings = {
   claudeBin: string | null;
   kimiBin: string | null;
+  grokBin: string | null;
+  opencodeBin: string | null;
   codexBin: string | null;
   codexArgs: string | null;
   terminalShellPath: string | null;

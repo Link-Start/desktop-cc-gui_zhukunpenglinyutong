@@ -64,6 +64,12 @@ const sidebar = {
     kimiProviderChoiceTitle: "Provider selection",
     kimiProviderSelectedTip:
       "Selected. Click Kimi CLI on the left to start a session.",
+    grokProviderChoiceTitle: "Provider selection",
+    grokProviderSelectedTip:
+      "Selected. Click Grok CLI on the left to start a session.",
+    opencodeProviderChoiceTitle: "Provider selection",
+    opencodeProviderSelectedTip:
+      "Selected. Click OpenCode on the left to start a session.",
     providerFollowsGlobalLabel: "Follows global config",
     providerIsolatedConfigLabel: "Isolated config",
     providerUnavailableLabel: "Provider unavailable",

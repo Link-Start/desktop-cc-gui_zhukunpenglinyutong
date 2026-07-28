@@ -32,8 +32,12 @@ import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
   CODEX_DISK_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_NAME,
+  GROK_LOCAL_PROVIDER_PROFILE_ID,
+  GROK_LOCAL_PROVIDER_PROFILE_NAME,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_NAME,
+  OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  OPENCODE_LOCAL_PROVIDER_PROFILE_NAME,
   type EngineProviderProfileSelection,
   type EngineProviderProfileOption,
 } from "../../threads/constants/codexProviderProfiles";
@@ -42,6 +46,8 @@ const LAST_PROVIDER_PROFILE_KEYS = {
   claude: "claudeLastProviderProfileId",
   codex: "codexLastProviderProfileId",
   kimi: "kimiLastProviderProfileId",
+  grok: "grokLastProviderProfileId",
+  opencode: "opencodeLastProviderProfileId",
 } as const;
 type ProviderEngine = keyof typeof LAST_PROVIDER_PROFILE_KEYS;
 
@@ -71,6 +77,7 @@ export type WorkspaceMenuIconKind =
   | "engine-opencode"
   | "engine-gemini"
   | "engine-kimi"
+  | "engine-grok"
   | "new-shared"
   | "alias"
   | "activate"
@@ -134,6 +141,8 @@ type SidebarMenuHandlers = {
   claudeProviderProfiles?: EngineProviderProfileOption[];
   codexProviderProfiles?: EngineProviderProfileOption[];
   kimiProviderProfiles?: EngineProviderProfileOption[];
+  grokProviderProfiles?: EngineProviderProfileOption[];
+  opencodeProviderProfiles?: EngineProviderProfileOption[];
   engineOptions?: EngineDisplayInfo[];
   onRefreshEngineOptions?: () =>
     | Promise<EngineRefreshResult | void>
@@ -236,6 +245,8 @@ export function useSidebarMenus({
   claudeProviderProfiles = [],
   codexProviderProfiles = [],
   kimiProviderProfiles = [],
+  grokProviderProfiles = [],
+  opencodeProviderProfiles = [],
 }: SidebarMenuHandlers) {
   const { t } = useTranslation();
   const [workspaceMenuState, setWorkspaceMenuState] =
@@ -614,6 +625,12 @@ export function useSidebarMenus({
   const [kimiSelectedProfileId, setKimiSelectedProfileId] = useState<string | null>(
     () => readLastProviderProfileId("kimi"),
   );
+  const [grokSelectedProfileId, setGrokSelectedProfileId] = useState<string | null>(
+    () => readLastProviderProfileId("grok"),
+  );
+  const [opencodeSelectedProfileId, setOpencodeSelectedProfileId] = useState<string | null>(
+    () => readLastProviderProfileId("opencode"),
+  );
 
   const buildSessionMenuGroup = useCallback(
     (
@@ -714,6 +731,18 @@ export function useSidebarMenus({
         kimiProviderProfiles,
         kimiSelectedProfileId,
       );
+      const grokProfiles = buildProviderProfiles(
+        GROK_LOCAL_PROVIDER_PROFILE_ID,
+        GROK_LOCAL_PROVIDER_PROFILE_NAME,
+        grokProviderProfiles,
+        grokSelectedProfileId,
+      );
+      const opencodeProfiles = buildProviderProfiles(
+        OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+        OPENCODE_LOCAL_PROVIDER_PROFILE_NAME,
+        opencodeProviderProfiles,
+        opencodeSelectedProfileId,
+      );
       const claudeSelectedProfile =
         claudeProfiles.find((profile) => profile.id === claudeSelectedProfileId) ??
         claudeProfiles[0];
@@ -723,6 +752,12 @@ export function useSidebarMenus({
       const kimiSelectedProfile =
         kimiProfiles.find((profile) => profile.id === kimiSelectedProfileId) ??
         kimiProfiles[0];
+      const grokSelectedProfile =
+        grokProfiles.find((profile) => profile.id === grokSelectedProfileId) ??
+        grokProfiles[0];
+      const opencodeSelectedProfile =
+        opencodeProfiles.find((profile) => profile.id === opencodeSelectedProfileId) ??
+        opencodeProfiles[0];
       const actions = [
         {
           id: "new-session-shared",
@@ -833,11 +868,47 @@ export function useSidebarMenus({
           id: "new-session-opencode",
           label: t("workspace.engineOpenCode"),
           iconKind: "engine-opencode",
-          ...resolveEngineActionMeta(workspace, "opencode"),
+          submenuTitle: t("sidebar.opencodeProviderChoiceTitle"),
+          selectionHint: t("sidebar.opencodeProviderSelectedTip"),
+          ...withProviderAvailability(
+            resolveEngineActionMeta(workspace, "opencode"),
+            opencodeSelectedProfile,
+          ),
           onSelect: async () => {
-            const threadId = await runAddAgent("opencode");
+            const threadId = await runAddAgent("opencode", {
+              providerProfileId: opencodeSelectedProfile.id,
+              providerProfile: opencodeSelectedProfile,
+            });
             await handleCreatedSession(threadId);
           },
+          children: opencodeProfiles.map((profile) => ({
+            id: `new-session-opencode-provider-${profile.id}`,
+            label: profile.name,
+            badgeLabel:
+              profile.availability === "unavailable"
+                ? t("sidebar.providerUnavailableLabel")
+                : profile.source === "disk"
+                ? t("sidebar.providerFollowsGlobalLabel")
+                : t("sidebar.providerIsolatedConfigLabel"),
+            iconKind: "engine-opencode" as const,
+            ...withProviderAvailability(
+              resolveEngineActionMeta(workspace, "opencode"),
+              profile,
+            ),
+            selected: profile.id === opencodeSelectedProfile.id,
+            keepMenuOpen: true,
+            onSelect: () => {
+              writeLastProviderProfileId("opencode", profile.id);
+              setOpencodeSelectedProfileId(profile.id);
+              pushGlobalRuntimeNotice({
+                severity: "info",
+                category: "runtime",
+                messageKey: "runtimeNotice.opencode.providerSelected",
+                messageParams: { name: profile.name },
+                dedupeKey: `opencode-provider-selected-${profile.id}`,
+              });
+            },
+          })),
         },
         {
           id: "new-session-gemini",
@@ -895,6 +966,52 @@ export function useSidebarMenus({
             },
           })),
         },
+        {
+          id: "new-session-grok",
+          label: t("workspace.engineGrok"),
+          iconKind: "engine-grok",
+          submenuTitle: t("sidebar.grokProviderChoiceTitle"),
+          selectionHint: t("sidebar.grokProviderSelectedTip"),
+          ...withProviderAvailability(
+            resolveEngineActionMeta(workspace, "grok"),
+            grokSelectedProfile,
+          ),
+          onSelect: async () => {
+            const threadId = await runAddAgent("grok", {
+              providerProfileId: grokSelectedProfile.id,
+              providerProfile: grokSelectedProfile,
+            });
+            await handleCreatedSession(threadId);
+          },
+          children: grokProfiles.map((profile) => ({
+            id: `new-session-grok-provider-${profile.id}`,
+            label: profile.name,
+            badgeLabel:
+              profile.availability === "unavailable"
+                ? t("sidebar.providerUnavailableLabel")
+                : profile.source === "disk"
+                ? t("sidebar.providerFollowsGlobalLabel")
+                : t("sidebar.providerIsolatedConfigLabel"),
+            iconKind: "engine-grok" as const,
+            ...withProviderAvailability(
+              resolveEngineActionMeta(workspace, "grok"),
+              profile,
+            ),
+            selected: profile.id === grokSelectedProfile.id,
+            keepMenuOpen: true,
+            onSelect: () => {
+              writeLastProviderProfileId("grok", profile.id);
+              setGrokSelectedProfileId(profile.id);
+              pushGlobalRuntimeNotice({
+                severity: "info",
+                category: "runtime",
+                messageKey: "runtimeNotice.grok.providerSelected",
+                messageParams: { name: profile.name },
+                dedupeKey: `grok-provider-selected-${profile.id}`,
+              });
+            },
+          })),
+        },
       ] satisfies WorkspaceMenuAction[];
 
       const visibleActions = actions.filter((action) => {
@@ -924,6 +1041,10 @@ export function useSidebarMenus({
       codexSelectedProfileId,
       kimiProviderProfiles,
       kimiSelectedProfileId,
+      grokProviderProfiles,
+      grokSelectedProfileId,
+      opencodeProviderProfiles,
+      opencodeSelectedProfileId,
       resolveEngineActionMeta,
       isEngineSessionEntryVisible,
     ],

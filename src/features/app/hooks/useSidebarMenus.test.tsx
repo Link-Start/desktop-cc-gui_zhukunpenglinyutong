@@ -382,7 +382,7 @@ describe("useSidebarMenus", () => {
     },
   );
 
-  it("keeps retired OpenCode out of the session menu without probing health", async () => {
+  it("shows OpenCode in the session menu without probing health on open", async () => {
     const handlers = createHandlers();
     handlers.engineOptions = [];
 
@@ -407,7 +407,8 @@ describe("useSidebarMenus", () => {
       .find((group) => group.id === "new-session")
       ?.actions.find((action) => action.id === "new-session-opencode");
 
-    expect(opencodeAction).toBeUndefined();
+    expect(opencodeAction).toBeDefined();
+    expect(opencodeAction?.unavailable).toBe(false);
     expect(getOpenCodeProviderHealthMock).not.toHaveBeenCalled();
   });
 
@@ -436,7 +437,7 @@ describe("useSidebarMenus", () => {
     expect(geminiAction).toBeUndefined();
   });
 
-  it("hides Gemini and OpenCode session entries when they are disabled in settings", async () => {
+  it("hides Gemini while keeping OpenCode visible despite legacy settings flags", async () => {
     const handlers = createHandlers();
     handlers.enabledEngines = {
       gemini: false,
@@ -459,7 +460,7 @@ describe("useSidebarMenus", () => {
         ?.actions ?? [];
 
     expect(sessionActions.map((action) => action.id)).not.toContain("new-session-gemini");
-    expect(sessionActions.map((action) => action.id)).not.toContain("new-session-opencode");
+    expect(sessionActions.map((action) => action.id)).toContain("new-session-opencode");
   });
 
   it("moves workspace quick actions into the workspace actions menu group", async () => {
@@ -691,6 +692,16 @@ describe("useSidebarMenus", () => {
       localId: "__local_config_toml__",
       storageKey: "kimiLastProviderProfileId",
     },
+    {
+      engine: "grok" as const,
+      localId: "__local_config_toml__",
+      storageKey: "grokLastProviderProfileId",
+    },
+    {
+      engine: "opencode" as const,
+      localId: "__local_opencode_json__",
+      storageKey: "opencodeLastProviderProfileId",
+    },
   ])(
     "selects and remembers $engine provider without creating from the submenu",
     async ({ engine, localId, storageKey }) => {
@@ -704,12 +715,26 @@ describe("useSidebarMenus", () => {
                 { id: "provider-a", name: "Provider A", source: "managed" as const },
               ],
             }
-          : {
-              kimiProviderProfiles: [
-                { id: localId, name: "Local", source: "managed" as const },
-                { id: "provider-a", name: "Provider A", source: "managed" as const },
-              ],
-            };
+          : engine === "kimi"
+            ? {
+                kimiProviderProfiles: [
+                  { id: localId, name: "Local", source: "managed" as const },
+                  { id: "provider-a", name: "Provider A", source: "managed" as const },
+                ],
+              }
+            : engine === "opencode"
+              ? {
+                  opencodeProviderProfiles: [
+                    { id: localId, name: "Local", source: "managed" as const },
+                    { id: "provider-a", name: "Provider A", source: "managed" as const },
+                  ],
+                }
+            : {
+                grokProviderProfiles: [
+                  { id: localId, name: "Local", source: "managed" as const },
+                  { id: "provider-a", name: "Provider A", source: "managed" as const },
+                ],
+              };
       const { result } = renderHook(() =>
         useSidebarMenus({ ...handlers, ...profileProp }),
       );
@@ -1294,7 +1319,9 @@ describe("useSidebarMenus", () => {
       "new-session-shared",
       "new-session-claude",
       "new-session-codex",
+      "new-session-opencode",
       "new-session-kimi",
+      "new-session-grok",
     ]);
   });
 });

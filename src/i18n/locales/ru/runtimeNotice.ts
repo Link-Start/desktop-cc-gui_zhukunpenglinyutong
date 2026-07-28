@@ -56,6 +56,12 @@ const runtimeNotice = {
     "codex": {
       "providerSelected": "{{name}} выбран. Нажмите на запись Codex, чтобы создать сессию."
     },
+    "grok": {
+      "providerSelected": "{{name}} выбран. Нажмите на запись Grok CLI, чтобы создать сессию."
+    },
+    "opencode": {
+      "providerSelected": "{{name}} выбран. Нажмите на запись OpenCode, чтобы создать сессию."
+    },
     "claude": {
       "resumeCommandCopied": "Команда возобновления Claude скопирована. Если выбор /resume в TUI не показывает эту сессию GUI, выполните явно claude --resume {{sessionId}} или /resume {{sessionId}}."
     },

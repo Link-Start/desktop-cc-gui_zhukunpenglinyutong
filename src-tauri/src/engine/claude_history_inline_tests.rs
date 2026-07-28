@@ -213,6 +213,68 @@ async fn scan_session_source_file_returns_bounded_source_fact() {
 }
 
 #[tokio::test]
+async fn scan_session_source_file_prefers_latest_valid_native_custom_title() {
+    let unique = Uuid::new_v4().to_string();
+    let temp_root = std::env::temp_dir().join(format!("ccgui-claude-native-title-{unique}"));
+    let base_dir = temp_root.join("claude-projects");
+    let workspace_path = temp_root.join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace path");
+    let project_dir = create_project_dir(&base_dir, &workspace_path);
+    let session_path = project_dir.join(format!("native-title-{unique}.jsonl"));
+    write_jsonl_lines(
+        &session_path,
+        &[
+            json!({
+                "uuid": "user-1",
+                "timestamp": "2026-05-09T08:00:00.000Z",
+                "cwd": workspace_path.to_string_lossy(),
+                "message": { "role": "user", "content": "First prompt fallback" }
+            }),
+            json!({
+                "type": "custom-title",
+                "customTitle": "Earlier native title"
+            }),
+            json!({
+                "type": "custom-title",
+                "customTitle": "   "
+            }),
+            json!({
+                "type": "custom-title",
+                "customTitle": "Latest native title"
+            }),
+            json!({
+                "uuid": "assistant-1",
+                "timestamp": "2026-05-09T08:00:02.000Z",
+                "message": { "role": "assistant", "content": "Answer" }
+            }),
+        ],
+        "\n",
+    );
+
+    let outcome = scan_session_source_file(
+        &session_path,
+        &[ClaudeSessionAttributionScope::workspace_path(
+            workspace_path,
+        )],
+        true,
+    )
+    .await;
+    let fact = outcome.fact.expect("valid source fact");
+
+    assert_eq!(
+        fact.first_real_user_message.as_deref(),
+        Some("First prompt fallback")
+    );
+    assert_eq!(fact.native_title.as_deref(), Some("Latest native title"));
+    assert_eq!(fact.message_count, 2);
+    let summary = fact.to_summary();
+    assert_eq!(summary.first_message, "First prompt fallback");
+    assert_eq!(summary.native_title.as_deref(), Some("Latest native title"));
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[tokio::test]
 async fn scan_session_source_file_reports_unresolved_candidates() {
     let unique = Uuid::new_v4().to_string();
     let temp_root = std::env::temp_dir().join(format!("ccgui-claude-source-diagnostic-{}", unique));

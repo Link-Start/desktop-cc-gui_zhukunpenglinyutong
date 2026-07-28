@@ -32,7 +32,10 @@ struct GeneratedModelCatalog {
 struct GeneratedModelCatalogEngines {
     codex: Vec<GeneratedModelEntry>,
     gemini: Vec<GeneratedModelEntry>,
+    grok: Vec<GeneratedModelEntry>,
     kimi: Vec<GeneratedModelEntry>,
+    #[serde(default)]
+    opencode: Vec<GeneratedModelEntry>,
 }
 
 #[derive(Deserialize)]
@@ -59,7 +62,9 @@ fn get_generated_fallback_models(engine: EngineType) -> Vec<ModelInfo> {
     let entries = match engine {
         EngineType::Codex => catalog.engines.codex,
         EngineType::Gemini => catalog.engines.gemini,
+        EngineType::Grok => catalog.engines.grok,
         EngineType::Kimi => catalog.engines.kimi,
+        EngineType::OpenCode => catalog.engines.opencode,
         _ => return Vec::new(),
     };
     entries
@@ -97,8 +102,10 @@ fn merge_provider_models_with_public(
 fn public_models_for_engine(engine_type: EngineType) -> Vec<ModelInfo> {
     match engine_type {
         EngineType::Claude => get_builtin_claude_models(),
-        EngineType::Codex | EngineType::Kimi => get_generated_fallback_models(engine_type),
-        EngineType::Gemini | EngineType::OpenCode => Vec::new(),
+        EngineType::Codex | EngineType::Grok | EngineType::Kimi | EngineType::OpenCode => {
+            get_generated_fallback_models(engine_type)
+        }
+        EngineType::Gemini => Vec::new(),
     }
 }
 
@@ -219,6 +226,83 @@ fn kimi_provider_models_from_config(
         .as_default()]
 }
 
+fn grok_provider_models_from_config(
+    provider_profile_id: &str,
+    provider: crate::types::GrokProviderConfig,
+) -> Vec<ModelInfo> {
+    let runtime_model = provider.model.trim();
+    if runtime_model.is_empty() {
+        return Vec::new();
+    }
+    // Managed providers are materialized into the isolated GROK_HOME as
+    // `[model."ccgui/<model>"]`. Grok's `-m` resolves config section aliases
+    // (not inner `model` fields), so the catalog id must be the materialized
+    // alias — passing the bare API model name would select the built-in model
+    // and bypass the provider's base_url/api_key.
+    let alias = format!(
+        "{}{}",
+        crate::engine::grok_provider_profile::GROK_MODEL_TOML_PREFIX,
+        runtime_model
+    );
+    let display_name = provider
+        .display_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(runtime_model);
+    let provider_name = provider
+        .provider_type
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("grok");
+    vec![ModelInfo::new(alias, display_name)
+        .with_provider(provider_name)
+        .with_protocol("grok")
+        .with_source("provider-config")
+        .with_provenance("provider:grok-config")
+        .with_provider_profile_id(provider_profile_id)
+        .as_default()]
+}
+
+fn opencode_provider_models_from_config(
+    provider_profile_id: &str,
+    provider: &crate::types::OpenCodeProviderConfig,
+) -> Vec<ModelInfo> {
+    // Managed providers are injected via OPENCODE_CONFIG_CONTENT under the
+    // stable `ccgui` provider key, so the catalog id must be the qualified
+    // `ccgui/<model>` ref — passing the bare API model name would bypass the
+    // provider's base_url/api_key.
+    let provider_name = provider.name.trim();
+    let provider_name = if provider_name.is_empty() {
+        "opencode"
+    } else {
+        provider_name
+    };
+    let mut models = Vec::new();
+    for raw_model in &provider.models {
+        let runtime_model = raw_model.trim();
+        if runtime_model.is_empty() {
+            continue;
+        }
+        let qualified =
+            crate::engine::opencode_provider_profile::qualify_managed_model_ref(runtime_model);
+        models.push(
+            ModelInfo::new(qualified.clone(), runtime_model)
+                .with_runtime_model(qualified)
+                .with_provider(provider_name)
+                .with_protocol("opencode")
+                .with_source("provider-config")
+                .with_provenance("provider:opencode-config")
+                .with_provider_profile_id(provider_profile_id),
+        );
+    }
+    if let Some(first) = models.first_mut() {
+        *first = first.clone().as_default();
+    }
+    models
+}
+
 pub(crate) fn get_provider_scoped_engine_models(
     engine_type: EngineType,
     provider_profile_id: Option<&str>,
@@ -260,7 +344,35 @@ pub(crate) fn get_provider_scoped_engine_models(
             };
             kimi_provider_models_from_config(provider_profile_id, provider)
         }
-        EngineType::Gemini | EngineType::OpenCode => return Ok(None),
+        EngineType::Grok => {
+            let Some(provider) =
+                crate::engine::grok_provider_profile::resolve_grok_provider_model_config(
+                    provider_profile_id,
+                )?
+            else {
+                return Ok(None);
+            };
+            grok_provider_models_from_config(provider_profile_id, provider)
+        }
+        EngineType::OpenCode => {
+            let Some(provider) =
+                crate::engine::opencode_provider_profile::resolve_opencode_provider_model_config(
+                    provider_profile_id,
+                )?
+            else {
+                return Ok(None);
+            };
+            // Unlike kimi/grok (materialized configs that keep built-in
+            // providers working), an env-injected OPENCODE_CONFIG_CONTENT
+            // disturbs the CLI's own provider auth resolution (observed: zen
+            // 401 on 1.4.6 once a custom npm provider is declared). Managed
+            // profiles therefore expose only their own models.
+            return Ok(Some(opencode_provider_models_from_config(
+                provider_profile_id,
+                &provider,
+            )));
+        }
+        EngineType::Gemini => return Ok(None),
     };
     Ok(Some(merge_provider_models_with_public(
         provider_models,
@@ -499,8 +611,16 @@ async fn detect_opencode_status_with_options(
     let home_dir = get_opencode_home_dir();
     let (models, models_error) = if include_models {
         match get_opencode_models(&bin, path_env.as_ref()).await {
-            Ok(models) => (models, None),
-            Err(err) => (Vec::new(), Some(err)),
+            Ok(models) if !models.is_empty() => (models, None),
+            Ok(_) => (public_models_for_engine(EngineType::OpenCode), None),
+            Err(err) => {
+                let fallback = public_models_for_engine(EngineType::OpenCode);
+                if fallback.is_empty() {
+                    (Vec::new(), Some(err))
+                } else {
+                    (fallback, None)
+                }
+            }
         }
     } else {
         (Vec::new(), None)
@@ -520,9 +640,12 @@ async fn detect_opencode_status_with_options(
     }
 }
 
-/// Detect OpenCode CLI installation status using lightweight startup probes only.
+/// Detect OpenCode CLI installation status. Probes the CLI model catalog
+/// (like the kimi/grok detection paths) so engine selectors can render the
+/// model list without a second round trip; falls back to the generated
+/// roster when the probe is unavailable.
 pub async fn detect_opencode_status(custom_bin: Option<&str>) -> EngineStatus {
-    detect_opencode_status_with_options(custom_bin, false).await
+    detect_opencode_status_with_options(custom_bin, true).await
 }
 
 /// Query OpenCode CLI for available models on demand.
@@ -601,6 +724,38 @@ pub async fn detect_kimi_status(custom_bin: Option<&str>) -> EngineStatus {
     }
 }
 
+/// Detect Grok CLI installation status
+pub async fn detect_grok_status(custom_bin: Option<&str>) -> EngineStatus {
+    let bin_path = resolve_bin_path("grok", custom_bin);
+    let bin = bin_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| "grok".to_string());
+    let path_env = build_codex_path_env(custom_bin);
+
+    let (installed, version, error) = probe_cli_version(&bin, "grok", path_env.as_ref()).await;
+
+    if !installed {
+        return not_installed_status(EngineType::Grok, error);
+    }
+
+    let home_dir = get_grok_home_dir();
+    let (models, config_diagnostic) = get_grok_models(home_dir.as_deref());
+    let default_model = models.iter().find(|m| m.default).map(|m| m.id.clone());
+
+    EngineStatus {
+        engine_type: EngineType::Grok,
+        installed: true,
+        version,
+        bin_path: Some(bin.to_string()),
+        home_dir: home_dir.map(|p| p.to_string_lossy().to_string()),
+        models,
+        default_model,
+        features: EngineFeatures::grok(),
+        error: config_diagnostic,
+    }
+}
+
 /// Get Claude Code home directory
 fn get_claude_home_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(".claude"))
@@ -614,6 +769,62 @@ fn get_codex_home_dir() -> Option<PathBuf> {
 /// Get OpenCode home directory
 fn get_opencode_home_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(".opencode"))
+}
+
+/// Candidate OpenCode config file paths in probe order: `$OPENCODE_CONFIG`,
+/// then `~/.config/opencode/opencode.json(c)`, then `~/.opencode/opencode.json(c)`.
+pub fn opencode_config_candidate_paths() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(config) = std::env::var_os("OPENCODE_CONFIG").filter(|value| !value.is_empty()) {
+        candidates.push(PathBuf::from(config));
+    }
+    if let Some(home) = dirs::home_dir() {
+        for file_name in ["opencode.json", "opencode.jsonc"] {
+            candidates.push(home.join(".config").join("opencode").join(file_name));
+        }
+        for file_name in ["opencode.json", "opencode.jsonc"] {
+            candidates.push(home.join(".opencode").join(file_name));
+        }
+    }
+    candidates
+}
+
+/// Read the first existing OpenCode config document best-effort.
+///
+/// Returns `(status, path, document, diagnostic)` where status is one of
+/// `loaded` / `missing` / `malformed` / `io-error`. JSONC-only syntax
+/// (comments, trailing commas) is not stripped; such files report `malformed`
+/// and callers should treat dependent checks as inconclusive rather than broken.
+pub fn read_opencode_config_document() -> (String, Option<PathBuf>, Value, Option<String>) {
+    let Some(path) = opencode_config_candidate_paths()
+        .into_iter()
+        .find(|candidate| candidate.is_file())
+    else {
+        return ("missing".to_string(), None, Value::Null, None);
+    };
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(error) => {
+            return (
+                "io-error".to_string(),
+                Some(path.clone()),
+                Value::Null,
+                Some(format!("Failed to read {}: {}", path.display(), error)),
+            )
+        }
+    };
+    if raw.trim().is_empty() {
+        return ("loaded".to_string(), Some(path), Value::Null, None);
+    }
+    match serde_json::from_str::<Value>(&raw) {
+        Ok(document) => ("loaded".to_string(), Some(path), document, None),
+        Err(error) => (
+            "malformed".to_string(),
+            Some(path.clone()),
+            Value::Null,
+            Some(format!("Failed to parse {}: {}", path.display(), error)),
+        ),
+    }
 }
 
 /// Get Gemini home directory
@@ -654,6 +865,114 @@ fn get_kimi_home_dir() -> Option<PathBuf> {
         return Some(configured);
     }
     dirs::home_dir().map(|home| home.join(".kimi-code"))
+}
+
+/// Get Grok home directory
+fn get_grok_home_dir() -> Option<PathBuf> {
+    if let Some(home) = std::env::var_os("GROK_HOME").filter(|v| !v.is_empty()) {
+        let configured = PathBuf::from(home);
+        let configured_text = configured.to_string_lossy();
+        if configured_text == "~" {
+            return dirs::home_dir();
+        }
+        if let Some(relative) = configured_text
+            .strip_prefix("~/")
+            .or_else(|| configured_text.strip_prefix("~\\"))
+            .filter(|value| !value.is_empty())
+        {
+            return dirs::home_dir().map(|home| home.join(relative));
+        }
+        return Some(configured);
+    }
+    dirs::home_dir().map(|home| home.join(".grok"))
+}
+
+/// Built-in fallback models used when `~/.grok/config.toml` is missing
+/// or has no `[model]` tables yet (e.g. fresh install before first run).
+fn get_builtin_grok_models() -> Vec<ModelInfo> {
+    get_generated_fallback_models(EngineType::Grok)
+}
+
+/// Get Grok CLI available models by parsing `$GROK_HOME/config.toml`.
+/// Falls back to the built-in catalog when the config file is missing or
+/// defines no models.
+fn get_grok_models(home_dir: Option<&std::path::Path>) -> (Vec<ModelInfo>, Option<String>) {
+    let (models, config_diagnostic) = match read_grok_models_from_config(home_dir) {
+        Ok(models) => (models.unwrap_or_default(), None),
+        Err(error) => (Vec::new(), Some(error)),
+    };
+
+    if models.is_empty() {
+        return (get_builtin_grok_models(), config_diagnostic);
+    }
+    (models, config_diagnostic)
+}
+
+/// Parse `[model.*]` entries and `[models].default` from grok's config.toml.
+fn read_grok_models_from_config(
+    home_dir: Option<&std::path::Path>,
+) -> Result<Option<Vec<ModelInfo>>, String> {
+    let Some(home_dir) = home_dir else {
+        return Ok(None);
+    };
+    let config_path = home_dir.join("config.toml");
+    let content = match std::fs::read_to_string(&config_path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(format!(
+                "Grok config io-error at {}: {}",
+                config_path.display(),
+                error
+            ))
+        }
+    };
+    let root = content.parse::<toml::Value>().map_err(|error| {
+        format!(
+            "Grok config malformed at {}: {}",
+            config_path.display(),
+            error
+        )
+    })?;
+    let default_alias = root
+        .get("models")
+        .and_then(|value| value.get("default"))
+        .and_then(|value| value.as_str())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let Some(models_table) = root.get("model").and_then(|value| value.as_table()) else {
+        return Ok(Some(Vec::new()));
+    };
+
+    let mut models = Vec::new();
+    for (alias, entry) in models_table {
+        let display_name = entry
+            .get("name")
+            .and_then(|value| value.as_str())
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| alias.clone());
+        // Grok's `-m/--model` resolves a `[model.<alias>]` section (or a
+        // built-in model name), NOT the section's inner `model` field. Keep
+        // `ModelInfo.model` equal to the alias so the composer sends the
+        // alias and the CLI resolves base_url/api_key from the config
+        // section (same alias semantics as kimi's `--model`).
+        let mut info = ModelInfo::new(alias.clone(), display_name)
+            .with_protocol("grok-config")
+            .with_provenance("config:GROK_HOME/config.toml")
+            .with_observed_at(model_catalog_now_ms())
+            .with_source("config");
+        if default_alias.as_deref() == Some(alias.as_str()) {
+            info = info.as_default();
+        }
+        models.push(info);
+    }
+    models.sort_by(|a, b| a.id.cmp(&b.id));
+    if let Some(index) = models.iter().position(|model| model.default) {
+        let default = models.remove(index);
+        models.insert(0, default);
+    }
+    Ok(Some(models))
 }
 
 /// Built-in fallback models used when `~/.kimi-code/config.toml` is missing
@@ -1204,11 +1523,11 @@ pub async fn detect_all_engines(
     gemini_bin: Option<&str>,
     opencode_bin: Option<&str>,
     kimi_bin: Option<&str>,
+    grok_bin: Option<&str>,
     gemini_enabled: bool,
-    opencode_enabled: bool,
 ) -> Vec<EngineStatus> {
     // Run detections in parallel
-    let (claude_status, codex_status, gemini_status, opencode_status, kimi_status) = tokio::join!(
+    let (claude_status, codex_status, gemini_status, opencode_status, kimi_status, grok_status) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
         async {
@@ -1218,14 +1537,9 @@ pub async fn detect_all_engines(
                 disabled_engine_status(EngineType::Gemini)
             }
         },
-        async {
-            if opencode_enabled {
-                detect_opencode_status(opencode_bin).await
-            } else {
-                disabled_engine_status(EngineType::OpenCode)
-            }
-        },
+        detect_opencode_status(opencode_bin),
         detect_kimi_status(kimi_bin),
+        detect_grok_status(grok_bin),
     );
 
     vec![
@@ -1234,6 +1548,7 @@ pub async fn detect_all_engines(
         gemini_status,
         opencode_status,
         kimi_status,
+        grok_status,
     ]
 }
 
@@ -1245,8 +1560,9 @@ pub async fn detect_preferred_engine(
     gemini_bin: Option<&str>,
     opencode_bin: Option<&str>,
     kimi_bin: Option<&str>,
+    grok_bin: Option<&str>,
 ) -> EngineType {
-    let (claude_status, codex_status, gemini_status, opencode_status, kimi_status) = tokio::join!(
+    let (claude_status, codex_status, gemini_status, opencode_status, kimi_status, grok_status) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
         async {
@@ -1258,6 +1574,7 @@ pub async fn detect_preferred_engine(
         },
         detect_opencode_status(opencode_bin),
         detect_kimi_status(kimi_bin),
+        detect_grok_status(grok_bin),
     );
 
     // Priority: Claude first (more users have it installed)
@@ -1275,6 +1592,9 @@ pub async fn detect_preferred_engine(
     }
     if kimi_status.installed {
         return EngineType::Kimi;
+    }
+    if grok_status.installed {
+        return EngineType::Grok;
     }
 
     // Default to Claude so error message is helpful
@@ -1294,6 +1614,7 @@ pub async fn resolve_engine_type(
     gemini_bin: Option<&str>,
     opencode_bin: Option<&str>,
     kimi_bin: Option<&str>,
+    grok_bin: Option<&str>,
 ) -> EngineType {
     // 1. Check workspace-specific setting
     if let Some(engine) = workspace_engine.filter(|s| !s.is_empty()) {
@@ -1304,6 +1625,7 @@ pub async fn resolve_engine_type(
             "gemini" => {}
             "opencode" => return EngineType::OpenCode,
             "kimi" => return EngineType::Kimi,
+            "grok" => return EngineType::Grok,
             _ => {} // Invalid value, fall through
         }
     }
@@ -1317,12 +1639,13 @@ pub async fn resolve_engine_type(
             "gemini" => {}
             "opencode" => return EngineType::OpenCode,
             "kimi" => return EngineType::Kimi,
+            "grok" => return EngineType::Grok,
             _ => {} // Invalid value, fall through
         }
     }
 
     // 3. Auto-detect based on installed CLIs
-    detect_preferred_engine(claude_bin, codex_bin, gemini_bin, opencode_bin, kimi_bin).await
+    detect_preferred_engine(claude_bin, codex_bin, gemini_bin, opencode_bin, kimi_bin, grok_bin).await
 }
 
 #[cfg(test)]
@@ -1538,16 +1861,76 @@ mod tests {
     }
 
     #[test]
+    fn grok_config_models_use_alias_as_runtime_model() {
+        let home = std::env::temp_dir().join(format!("ccgui-grok-alias-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&home).expect("create temp grok home");
+        std::fs::write(
+            home.join("config.toml"),
+            "[models]\ndefault = \"grok\"\n\n[model.grok]\nmodel = \"grok-4.5\"\nname = \"Grok 4.5\"\nbase_url = \"https://relay.example.test/v1\"\napi_key = \"sk-test\"\n",
+        )
+        .expect("write config.toml");
+
+        let models = read_grok_models_from_config(Some(home.as_path()))
+            .expect("parse config")
+            .expect("models present");
+
+        assert_eq!(models.len(), 1);
+        // `-m` must receive the section alias so the CLI resolves the custom
+        // base_url/api_key; the inner `model` field would select the built-in.
+        assert_eq!(models[0].id, "grok");
+        assert_eq!(models[0].model, "grok");
+        assert_eq!(models[0].name, "Grok 4.5");
+        assert!(models[0].default);
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn grok_provider_models_use_materialized_alias() {
+        let provider = crate::types::GrokProviderConfig {
+            id: "provider-a".to_string(),
+            name: "Provider A".to_string(),
+            remark: None,
+            website_url: None,
+            created_at: None,
+            sort_order: None,
+            is_active: false,
+            is_local_provider: None,
+            base_url: "https://example.test".to_string(),
+            api_key: "secret".to_string(),
+            model: "grok-4.5".to_string(),
+            provider_type: None,
+            api_backend: Some("responses".to_string()),
+            max_context_size: None,
+            display_name: Some("Provider Grok".to_string()),
+        };
+        let models = grok_provider_models_from_config("provider-a", provider);
+
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].id, "ccgui/grok-4.5");
+        assert_eq!(models[0].model, "ccgui/grok-4.5");
+        assert_eq!(models[0].name, "Provider Grok");
+        assert!(models[0].default);
+    }
+
+    #[test]
     fn generated_fallback_round_trips_provider_protocol_and_provenance() {
         let codex = get_codex_models();
         let gemini = get_gemini_models();
+        let grok = get_builtin_grok_models();
         let kimi = get_builtin_kimi_models();
         assert!(!codex.is_empty());
         assert!(!gemini.is_empty());
+        assert!(!grok.is_empty());
         assert!(!kimi.is_empty());
         assert!(codex.iter().all(|model| {
             model.provider.as_deref() == Some("openai")
                 && model.protocol.as_deref() == Some("openai-responses")
+                && model.provenance.as_deref() == Some("generated:model-catalog")
+        }));
+        assert!(grok.iter().all(|model| {
+            model.provider.as_deref() == Some("grok")
+                && model.protocol.as_deref() == Some("grok")
                 && model.provenance.as_deref() == Some("generated:model-catalog")
         }));
         assert!(kimi.iter().all(|model| {
@@ -1563,7 +1946,7 @@ mod tests {
         let serialized = serde_json::to_value(&codex[0]).expect("serialize model");
         assert_eq!(serialized["provider"], "openai");
         assert_eq!(serialized["protocol"], "openai-responses");
-        assert_eq!(serialized["lastVerifiedAt"], "2026-07-26");
+        assert_eq!(serialized["lastVerifiedAt"], "2026-07-27");
         assert_eq!(serialized["lifecycle"], "fallback");
     }
 
@@ -1575,6 +1958,7 @@ mod tests {
         let _ = get_gemini_home_dir();
         let _ = get_opencode_home_dir();
         let _ = get_kimi_home_dir();
+        let _ = get_grok_home_dir();
     }
 
     #[tokio::test]
@@ -1582,6 +1966,7 @@ mod tests {
         let resolved = resolve_engine_type(
             Some("opencode"),
             Some("claude"),
+            None,
             None,
             None,
             None,
@@ -1595,7 +1980,8 @@ mod tests {
     #[tokio::test]
     async fn resolve_engine_type_normalizes_retired_workspace_gemini_to_allowed_default() {
         let resolved =
-            resolve_engine_type(Some("gemini"), Some("claude"), None, None, None, None, None).await;
+            resolve_engine_type(Some("gemini"), Some("claude"), None, None, None, None, None, None)
+                .await;
         assert_eq!(resolved, EngineType::Claude);
     }
 
@@ -1619,6 +2005,7 @@ mod tests {
             None,
             None,
             Some(script_path.to_string_lossy().as_ref()),
+            None,
             None,
             None,
         )
@@ -1658,6 +2045,7 @@ mod tests {
             Some(script_path.to_string_lossy().as_ref()),
             None,
             None,
+            None,
         )
         .await;
 
@@ -1674,8 +2062,17 @@ mod tests {
     #[tokio::test]
     async fn resolve_engine_type_supports_kimi() {
         let resolved =
-            resolve_engine_type(Some("kimi"), Some("claude"), None, None, None, None, None).await;
+            resolve_engine_type(Some("kimi"), Some("claude"), None, None, None, None, None, None)
+                .await;
         assert_eq!(resolved, EngineType::Kimi);
+    }
+
+    #[tokio::test]
+    async fn resolve_engine_type_supports_grok() {
+        let resolved =
+            resolve_engine_type(Some("grok"), Some("claude"), None, None, None, None, None, None)
+                .await;
+        assert_eq!(resolved, EngineType::Grok);
     }
 
     #[test]
@@ -1824,7 +2221,7 @@ opencode/gpt-5-nano
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn detect_opencode_status_lightweight_skips_models_probe() {
+    async fn detect_opencode_status_falls_back_to_generated_roster_when_models_probe_fails() {
         let unique = format!(
             "ccgui-opencode-light-{}-{}",
             std::process::id(),
@@ -1847,7 +2244,10 @@ opencode/gpt-5-nano
 
         let status = detect_opencode_status(Some(script_path.to_string_lossy().as_ref())).await;
         assert!(status.installed);
-        assert!(status.models.is_empty());
+        assert!(
+            !status.models.is_empty(),
+            "failed models probe must fall back to the generated roster"
+        );
         assert!(status.error.is_none());
 
         let _ = fs::remove_file(&script_path);

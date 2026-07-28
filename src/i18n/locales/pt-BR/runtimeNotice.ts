@@ -59,6 +59,12 @@ const runtimeNotice = {
     "claude": {
       "resumeCommandCopied": "Comando de retomada do Claude copiado. Se o seletor /resume do TUI não mostrar esta sessão da GUI, execute claude --resume {{sessionId}} ou /resume {{sessionId}} explicitamente."
     },
+    "grok": {
+      "providerSelected": "{{name}} selecionado. Clique na entrada do Grok CLI para criar uma sessão."
+    },
+    "opencode": {
+      "providerSelected": "{{name}} selecionado. Clique na entrada do OpenCode para criar uma sessão."
+    },
     "error": {
       "createSessionRecoveryRequired": "{{workspace}}: falha na criação da sessão enquanto a recuperação do runtime está em andamento",
       "threadTurnFailed": "Falha na sessão {{engine}}: {{message}}",

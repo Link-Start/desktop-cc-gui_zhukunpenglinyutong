@@ -189,6 +189,7 @@ const git = {
     "generateCommitMessageEngineCodex": "Codex 엔진 사용",
     "generateCommitMessageEngineClaude": "Claude 엔진 사용",
     "generateCommitMessageEngineKimi": "Kimi 엔진 사용",
+    "generateCommitMessageEngineGrok": "Grok 엔진 사용",
     "generateCommitMessageEngineGemini": "Gemini 엔진 사용",
     "generateCommitMessageEngineOpenCode": "OpenCode 엔진 사용",
     "generateCommitMessageLastConfig": "마지막 구성 사용",

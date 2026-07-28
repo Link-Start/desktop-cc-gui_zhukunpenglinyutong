@@ -6,7 +6,9 @@ import {
   getAppSettings,
   runClaudeDoctor,
   runCodexDoctor,
+  runGrokDoctor,
   runKimiDoctor,
+  runOpenCodeDoctor,
   takeSettingsRecoveryNotice,
   updateAppSettings,
 } from "../../../services/tauri";
@@ -24,7 +26,7 @@ import {
   DEFAULT_UI_FONT_FAMILY,
   CODE_FONT_SIZE_DEFAULT,
   clampCodeFontSize,
-  normalizeFontFamily,
+  normalizeCodeFontFamily,
   normalizeUiFontFamily,
 } from "../../../utils/fonts";
 import {
@@ -190,11 +192,13 @@ function normalizeEnabledBuiltInAgentIds(value: unknown): string[] {
 const defaultSettings: AppSettings = {
   claudeBin: null,
   kimiBin: null,
+  grokBin: null,
+  opencodeBin: null,
   codexBin: null,
   codexArgs: null,
   terminalShellPath: null,
   geminiEnabled: false,
-  opencodeEnabled: false,
+  opencodeEnabled: true,
   sessionAttributionMode: "related",
   backendMode: "local",
   remoteBackendHost: "127.0.0.1:4732",
@@ -381,13 +385,17 @@ function normalizeAppSettings(
     experimentalUnifiedExecEnabled: undefined,
     claudeBin: settings.claudeBin?.trim() ? settings.claudeBin.trim() : null,
     kimiBin: settings.kimiBin?.trim() ? settings.kimiBin.trim() : null,
+    grokBin: settings.grokBin?.trim() ? settings.grokBin.trim() : null,
+    opencodeBin: settings.opencodeBin?.trim()
+      ? settings.opencodeBin.trim()
+      : null,
     codexBin: settings.codexBin?.trim() ? settings.codexBin.trim() : null,
     codexArgs: settings.codexArgs?.trim() ? settings.codexArgs.trim() : null,
     terminalShellPath: settings.terminalShellPath?.trim()
       ? settings.terminalShellPath.trim()
       : null,
     geminiEnabled: false,
-    opencodeEnabled: false,
+    opencodeEnabled: true,
     sessionAttributionMode:
       settings.sessionAttributionMode === "workspace-only"
         ? "workspace-only"
@@ -423,10 +431,7 @@ function normalizeAppSettings(
     performanceCompatibilityModeEnabled:
       settings.performanceCompatibilityModeEnabled === true,
     uiFontFamily: normalizeUiFontFamily(settings.uiFontFamily),
-    codeFontFamily: normalizeFontFamily(
-      settings.codeFontFamily,
-      DEFAULT_CODE_FONT_FAMILY,
-    ),
+    codeFontFamily: normalizeCodeFontFamily(settings.codeFontFamily),
     runtimeRestoreThreadsOnlyOnLaunch:
       settings.runtimeRestoreThreadsOnlyOnLaunch !== false,
     runtimeForceCleanupOnExit: settings.runtimeForceCleanupOnExit !== false,
@@ -681,6 +686,14 @@ export function useAppSettings() {
     return runKimiDoctor(kimiBin);
   }, []);
 
+  const grokDoctor = useCallback(async (grokBin: string | null) => {
+    return runGrokDoctor(grokBin);
+  }, []);
+
+  const opencodeDoctor = useCallback(async (opencodeBin: string | null) => {
+    return runOpenCodeDoctor(opencodeBin);
+  }, []);
+
   return {
     settings,
     setSettings,
@@ -688,6 +701,8 @@ export function useAppSettings() {
     doctor,
     claudeDoctor,
     kimiDoctor,
+    grokDoctor,
+    opencodeDoctor,
     isLoading,
   };
 }

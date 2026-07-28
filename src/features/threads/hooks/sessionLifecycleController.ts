@@ -8,6 +8,7 @@ import {
   CODEX_DISK_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_NAME,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
+  OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
   type EngineProviderProfileOption,
 } from "../constants/codexProviderProfiles";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
@@ -177,7 +178,8 @@ export function providerBindingFromSelectedProfile(
     selectedProfileId ?? normalizeResponseString(fallbackProviderProfileId);
   if (
     providerProfileId === CLAUDE_LOCAL_PROVIDER_PROFILE_ID ||
-    providerProfileId === KIMI_LOCAL_PROVIDER_PROFILE_ID
+    providerProfileId === KIMI_LOCAL_PROVIDER_PROFILE_ID ||
+    providerProfileId === OPENCODE_LOCAL_PROVIDER_PROFILE_ID
   ) {
     return {};
   }

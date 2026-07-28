@@ -3,7 +3,9 @@ import {
   isReactScanStartupEnabled,
   startReactScanOverlay,
 } from "./services/reactScanController";
+import { installRendererPlatformAttribute } from "./utils/rendererPlatform";
 
+installRendererPlatformAttribute();
 installRendererLifecycleDiagnostics();
 
 // react-scan 必须在 React 首次 import 之前完成 instrumentation，否则生产版

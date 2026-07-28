@@ -264,10 +264,6 @@ function resolveProviderModels({
   modelStorageSnapshot: ModelStorageSnapshot;
   providerModelCatalogs?: ProviderModelCatalogs;
 }): ModelInfo[] {
-  if (providerId === 'opencode') {
-    return [];
-  }
-
   const providerSelectedModel = providerId === currentProvider ? selectedModel : '';
   const providerDynamicModels =
     providerModelCatalogs?.[providerId] ??

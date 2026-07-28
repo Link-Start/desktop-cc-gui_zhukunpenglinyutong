@@ -17,9 +17,8 @@ export type EngineDisplayInfo = {
 };
 
 export const ENABLED_ENGINE_TYPES: readonly EngineType[] = Object.freeze(
-  BUILTIN_ENGINE_TYPES.filter(
-    (engineType) =>
-      engineType !== "opencode" && isEngineExecutionEnabled(engineType),
+  BUILTIN_ENGINE_TYPES.filter((engineType) =>
+    isEngineExecutionEnabled(engineType),
   ),
 );
 

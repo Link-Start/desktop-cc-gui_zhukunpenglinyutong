@@ -189,6 +189,7 @@ const git = {
     "generateCommitMessageEngineCodex": "使用 Codex 引擎",
     "generateCommitMessageEngineClaude": "使用 Claude 引擎",
     "generateCommitMessageEngineKimi": "使用 Kimi 引擎",
+    "generateCommitMessageEngineGrok": "使用 Grok 引擎",
     "generateCommitMessageEngineGemini": "使用 Gemini 引擎",
     "generateCommitMessageEngineOpenCode": "使用 OpenCode 引擎",
     "generateCommitMessageLastConfig": "使用上次的設定",

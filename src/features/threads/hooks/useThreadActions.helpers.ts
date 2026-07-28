@@ -8,6 +8,7 @@ import {
   normalizeSessionDisplayTitle,
   projectSessionDisplaySummaries,
   selectProjectedSessionDisplayName,
+  type SessionDisplayTitleSources,
 } from "../utils/sessionDisplayProjection";
 import { matchesWorkspacePath } from "./useThreadActions.workspacePath";
 
@@ -58,10 +59,14 @@ export type GeminiSessionSummary = {
 // Kimi session summaries share the Gemini summary shape (id/message/updatedAt/size).
 export type KimiSessionSummary = GeminiSessionSummary;
 
+// Grok session summaries share the Gemini summary shape (id/message/updatedAt/size).
+export type GrokSessionSummary = GeminiSessionSummary;
+
 export type CodexCatalogSessionSummary = {
   sessionId: string;
   workspaceId?: string | null;
   title: string;
+  nativeTitle?: string | null;
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
@@ -156,6 +161,12 @@ export function inferThreadEngineSource(
     return "gemini";
   }
   if (
+    normalized.startsWith("grok:") ||
+    normalized.startsWith("grok-pending-")
+  ) {
+    return "grok";
+  }
+  if (
     normalized.startsWith("kimi:") ||
     normalized.startsWith("kimi-pending-")
   ) {
@@ -175,6 +186,7 @@ export function isPendingThreadId(threadId: string): boolean {
   return (
     normalized.startsWith("claude-pending-") ||
     normalized.startsWith("gemini-pending-") ||
+    normalized.startsWith("grok-pending-") ||
     normalized.startsWith("kimi-pending-") ||
     normalized.startsWith("opencode-pending-") ||
     normalized.startsWith("codex-pending-")
@@ -1031,11 +1043,18 @@ export function normalizeKimiSessionSummaries(
   return normalizeGeminiSessionSummaries(value);
 }
 
+export function normalizeGrokSessionSummaries(
+  value: unknown,
+): GrokSessionSummary[] {
+  // Grok session summaries share the Gemini summary shape.
+  return normalizeGeminiSessionSummaries(value);
+}
+
 function mergeNativeCliSessionSummaries(params: {
   baseSummaries: ThreadSummary[];
   sessions: GeminiSessionSummary[];
-  idPrefix: "gemini" | "kimi";
-  engineSource: "gemini" | "kimi";
+  idPrefix: "gemini" | "grok" | "kimi";
+  engineSource: "gemini" | "grok" | "kimi";
   fallbackTitle: string;
   workspaceId: string;
   mappedTitles: Record<string, string>;
@@ -1127,6 +1146,25 @@ export function mergeKimiSessionSummaries(
   });
 }
 
+export function mergeGrokSessionSummaries(
+  baseSummaries: ThreadSummary[],
+  grokSessions: GrokSessionSummary[],
+  workspaceId: string,
+  mappedTitles: Record<string, string>,
+  getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+): ThreadSummary[] {
+  return mergeNativeCliSessionSummaries({
+    baseSummaries,
+    sessions: grokSessions,
+    idPrefix: "grok",
+    engineSource: "grok",
+    fallbackTitle: "Grok Session",
+    workspaceId,
+    mappedTitles,
+    getCustomName,
+  });
+}
+
 function normalizeCatalogEngine(
   engine: CodexCatalogSessionSummary["engine"],
 ): ThreadSummary["engineSource"] {
@@ -1134,6 +1172,7 @@ function normalizeCatalogEngine(
     case "claude":
     case "codex":
     case "gemini":
+    case "grok":
     case "kimi":
     case "opencode":
       return engine;
@@ -1142,21 +1181,22 @@ function normalizeCatalogEngine(
   }
 }
 
-function selectStableThreadSummaryName(params: {
-  previous?: ThreadSummary;
-  nextName: string;
-  mappedTitle?: string;
-  customTitle?: string;
-  engineSource: ThreadSummary["engineSource"];
-}): string {
+function selectStableThreadSummaryName(
+  params: {
+    previous?: ThreadSummary;
+    nextName: string;
+    engineSource: ThreadSummary["engineSource"];
+  } & SessionDisplayTitleSources,
+): string {
   return selectProjectedSessionDisplayName(params);
 }
 
 export function mergeThreadSummaryPreservingStableIdentity(
   previous: ThreadSummary | undefined,
   next: ThreadSummary,
+  titleSources: SessionDisplayTitleSources = {},
 ): ThreadSummary {
-  return mergeSessionDisplaySummary(previous, next);
+  return mergeSessionDisplaySummary(previous, next, titleSources);
 }
 
 export function mergeCodexCatalogSessionSummaries(
@@ -1173,11 +1213,16 @@ export function mergeCodexCatalogSessionSummaries(
   baseSummaries.forEach((entry) => mergedById.set(entry.id, entry));
   codexSessions.forEach((session) => {
     const title = normalizeSessionDisplayTitle(session.title);
+    const nativeTitle = normalizeSessionDisplayTitle(session.nativeTitle);
     const engineSource = normalizeCatalogEngine(session.engine);
-    if (!title) {
+    if (!title && !nativeTitle) {
       return;
     }
-    if (engineSource === "codex" && hasCodexBackgroundHelperPreview([title])) {
+    if (
+      engineSource === "codex" &&
+      !nativeTitle &&
+      hasCodexBackgroundHelperPreview([title])
+    ) {
       return;
     }
     const prev = mergedById.get(session.sessionId);
@@ -1199,11 +1244,13 @@ export function mergeCodexCatalogSessionSummaries(
         : getCustomName(workspaceId, session.sessionId);
     const customTitle = ownerCustomTitle || selectedWorkspaceCustomTitle;
     const fallbackTitle = previewThreadName(
-      title,
+      title || nativeTitle,
       engineSource === "claude"
         ? "Claude Session"
         : engineSource === "gemini"
           ? "Gemini Session"
+          : engineSource === "grok"
+            ? "Grok Session"
           : engineSource === "kimi"
             ? "Kimi Session"
           : engineSource === "opencode"
@@ -1217,6 +1264,7 @@ export function mergeCodexCatalogSessionSummaries(
         nextName: fallbackTitle,
         mappedTitle,
         customTitle,
+        nativeTitle,
         engineSource,
       }),
       updatedAt,
@@ -1243,7 +1291,11 @@ export function mergeCodexCatalogSessionSummaries(
     if (!prev || next.updatedAt >= prev.updatedAt) {
       mergedById.set(
         session.sessionId,
-        mergeSessionDisplaySummary(prev, next, { mappedTitle, customTitle }),
+        mergeSessionDisplaySummary(prev, next, {
+          mappedTitle,
+          customTitle,
+          nativeTitle,
+        }),
       );
     }
   });
@@ -1566,6 +1618,8 @@ export function resolveRewindSupportedEngine(
     normalized.startsWith("codex-pending-") ||
     normalized.startsWith("gemini:") ||
     normalized.startsWith("gemini-pending-") ||
+    normalized.startsWith("grok:") ||
+    normalized.startsWith("grok-pending-") ||
     normalized.startsWith("kimi:") ||
     normalized.startsWith("kimi-pending-") ||
     normalized.startsWith("opencode:") ||
@@ -1670,6 +1724,9 @@ export function resolveThreadSourceMeta(
 function shouldIncludeThreadEntry(thread: Record<string, unknown>): boolean {
   if (isArchivedThread(thread)) {
     return false;
+  }
+  if (normalizeThreadMetaValue(thread.nativeTitle)) {
+    return true;
   }
   const previewCandidates = [
     asString(thread.preview).trim(),

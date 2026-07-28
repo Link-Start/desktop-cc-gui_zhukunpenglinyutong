@@ -300,7 +300,7 @@ fn is_pending_shared_binding_thread_id(engine: EngineType, thread_id: &str) -> b
         // shared placeholders as pending; otherwise every send would create a new
         // native Codex thread and lose shared-context continuity.
         EngineType::Codex => normalized.starts_with("codex-pending-shared-"),
-        EngineType::Gemini | EngineType::OpenCode | EngineType::Kimi => false,
+        EngineType::Gemini | EngineType::OpenCode | EngineType::Grok | EngineType::Kimi => false,
     }
 }
 
@@ -312,7 +312,7 @@ fn binding_uses_established_native_thread(engine: EngineType, thread_id: &str) -
     match engine {
         EngineType::Codex => true,
         EngineType::Claude => normalized.contains(':'),
-        EngineType::Gemini | EngineType::OpenCode | EngineType::Kimi => false,
+        EngineType::Gemini | EngineType::OpenCode | EngineType::Grok | EngineType::Kimi => false,
     }
 }
 
@@ -320,7 +320,7 @@ fn engine_binding_thread_id(engine: EngineType, seed: &str) -> String {
     match engine {
         EngineType::Claude => format!("claude-pending-shared-{seed}"),
         EngineType::Codex => format!("codex-pending-shared-{seed}"),
-        EngineType::Gemini | EngineType::OpenCode | EngineType::Kimi => {
+        EngineType::Gemini | EngineType::OpenCode | EngineType::Grok | EngineType::Kimi => {
             format!("claude-pending-shared-{seed}")
         }
     }
@@ -1008,7 +1008,7 @@ pub async fn send_shared_session_message(
             write_shared_session_meta(&meta)?;
             response
         }
-        EngineType::Gemini | EngineType::OpenCode | EngineType::Kimi => {
+        EngineType::Gemini | EngineType::OpenCode | EngineType::Grok | EngineType::Kimi => {
             return Err(format!(
                 "Unsupported shared session engine: {}",
                 engine.icon()

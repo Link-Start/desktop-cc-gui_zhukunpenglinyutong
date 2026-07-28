@@ -12,7 +12,7 @@ const LOCAL_PROVIDER_PROFILE_IDS = new Set([
 
 export function resolveEngineProviderLabel(thread: ThreadSummary) {
   const engine = thread.engineSource ?? "codex";
-  if (engine !== "claude" && engine !== "codex" && engine !== "kimi") {
+  if (engine !== "claude" && engine !== "codex" && engine !== "grok" && engine !== "kimi" && engine !== "opencode") {
     return null;
   }
 

@@ -27,6 +27,12 @@ pub mod gemini;
 pub mod gemini_history;
 #[path = "../../engine/gemini_proxy_guard.rs"]
 pub(crate) mod gemini_proxy_guard;
+#[path = "../../engine/grok.rs"]
+pub mod grok;
+#[path = "../../engine/grok_history.rs"]
+pub mod grok_history;
+#[path = "../../engine/grok_provider_profile.rs"]
+pub(crate) mod grok_provider_profile;
 #[path = "../../engine/kimi.rs"]
 pub mod kimi;
 #[path = "../../engine/kimi_history.rs"]
@@ -38,6 +44,8 @@ pub(crate) mod kimi_provider_profile;
 pub mod manager;
 #[path = "../../engine/opencode.rs"]
 pub mod opencode;
+#[path = "../../engine/opencode_provider_profile.rs"]
+pub(crate) mod opencode_provider_profile;
 #[allow(dead_code)]
 #[path = "../../engine/status.rs"]
 pub mod status;
@@ -424,6 +432,7 @@ pub enum EngineType {
     Claude,
     Codex,
     Gemini,
+    Grok,
     OpenCode,
     Kimi,
 }
@@ -440,6 +449,7 @@ impl EngineType {
             EngineType::Claude => "Claude Code",
             EngineType::Codex => "Codex",
             EngineType::Gemini => "Gemini",
+            EngineType::Grok => "Grok CLI",
             EngineType::OpenCode => "OpenCode",
             EngineType::Kimi => "Kimi CLI",
         }
@@ -450,6 +460,7 @@ impl EngineType {
             EngineType::Claude => "claude",
             EngineType::Codex => "codex",
             EngineType::Gemini => "gemini",
+            EngineType::Grok => "grok",
             EngineType::OpenCode => "opencode",
             EngineType::Kimi => "kimi",
         }
@@ -462,25 +473,28 @@ impl std::fmt::Display for EngineType {
     }
 }
 
-pub(crate) const OPENCODE_DISABLED_DIAGNOSTIC: &str =
-    "OpenCode CLI is soft-retired and blocked by runtime policy";
-
 pub(crate) fn engine_enabled_in_settings(
     _settings: &crate::types::AppSettings,
     engine_type: EngineType,
 ) -> bool {
     match engine_type {
         EngineType::Gemini => crate::engine_policy::GEMINI_RUNTIME_ENABLED,
-        EngineType::OpenCode => false,
-        EngineType::Claude | EngineType::Codex | EngineType::Kimi => true,
+        EngineType::OpenCode
+        | EngineType::Claude
+        | EngineType::Codex
+        | EngineType::Grok
+        | EngineType::Kimi => true,
     }
 }
 
 pub(crate) fn engine_disabled_diagnostic(engine_type: EngineType) -> Option<&'static str> {
     match engine_type {
         EngineType::Gemini => Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC),
-        EngineType::OpenCode => Some(OPENCODE_DISABLED_DIAGNOSTIC),
-        EngineType::Claude | EngineType::Codex | EngineType::Kimi => None,
+        EngineType::OpenCode
+        | EngineType::Claude
+        | EngineType::Codex
+        | EngineType::Grok
+        | EngineType::Kimi => None,
     }
 }
 
@@ -697,6 +711,18 @@ impl EngineFeatures {
             mcp: false,
         }
     }
+
+    pub fn grok() -> Self {
+        Self {
+            reasoning_effort: false,
+            collaboration_mode: false,
+            image_input: false,
+            session_resume: true,
+            tools_control: true,
+            streaming: true,
+            mcp: false,
+        }
+    }
 }
 
 pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
@@ -705,6 +731,7 @@ pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
         EngineType::Codex => EngineFeatures::codex(),
         EngineType::Gemini => EngineFeatures::gemini(),
         EngineType::OpenCode => EngineFeatures::opencode(),
+        EngineType::Grok => EngineFeatures::grok(),
         EngineType::Kimi => EngineFeatures::kimi(),
     };
     EngineStatus {
@@ -790,14 +817,12 @@ mod runtime_policy_tests {
     }
 
     #[test]
-    fn daemon_opencode_retirement_policy_ignores_legacy_enabled_setting() {
+    fn daemon_opencode_is_always_enabled_regardless_of_legacy_setting() {
         let mut settings = crate::types::AppSettings::default();
-        settings.opencode_enabled = true;
+        settings.opencode_enabled = false;
 
-        assert!(!engine_enabled_in_settings(&settings, EngineType::OpenCode));
-        assert_eq!(
-            ensure_engine_enabled(&settings, EngineType::OpenCode),
-            Err(super::OPENCODE_DISABLED_DIAGNOSTIC.to_string())
-        );
+        assert!(engine_enabled_in_settings(&settings, EngineType::OpenCode));
+        assert_eq!(ensure_engine_enabled(&settings, EngineType::OpenCode), Ok(()));
+        assert_eq!(engine_disabled_diagnostic(EngineType::OpenCode), None);
     }
 }

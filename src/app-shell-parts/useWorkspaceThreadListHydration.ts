@@ -290,7 +290,6 @@ export function useWorkspaceThreadListHydration({
         hydrationKindByWorkspaceIdRef.current.set(workspaceId, "session-radar");
         void listThreadsForWorkspaceTracked(workspace, {
           preserveState: true,
-          includeOpenCodeSessions: false,
         });
       });
       idleHydrationCleanupByWorkspaceIdRef.current.set(workspaceId, cleanup);

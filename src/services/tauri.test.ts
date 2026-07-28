@@ -122,6 +122,7 @@ import {
   engineSendMessageSync,
   deleteClaudeSession,
   deleteGeminiSession,
+  deleteGrokSession,
   deleteKimiSession,
   sendConversationCompletionEmail,
   appendClientErrorLog,
@@ -2819,23 +2820,23 @@ describe("tauri invoke wrappers", () => {
     const invokeMock = vi.mocked(invoke);
 
     await expect(switchEngine("gemini")).rejects.toThrow(
-      "Gemini CLI is disabled in this client",
+      "Selected CLI engine is disabled by product policy",
     );
     await expect(getEngineModels("gemini")).rejects.toThrow(
-      "Gemini CLI is disabled in this client",
+      "Selected CLI engine is disabled by product policy",
     );
     await expect(
       engineSendMessage("ws-gemini", {
         text: "must not run",
         engine: "gemini",
       }),
-    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
     await expect(
       engineSendMessageSync("ws-gemini", {
         text: "must not run",
         engine: "gemini",
       }),
-    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
 
     expect(invokeMock).not.toHaveBeenCalled();
   });
@@ -3311,6 +3312,18 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("delete_kimi_session", {
       workspacePath: "/tmp/workspace",
       sessionId: "kimi-session-1",
+    });
+  });
+
+  it("maps delete_grok_session params", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await deleteGrokSession("/tmp/workspace", "grok-session-1");
+
+    expect(invokeMock).toHaveBeenCalledWith("delete_grok_session", {
+      workspacePath: "/tmp/workspace",
+      sessionId: "grok-session-1",
     });
   });
 

@@ -204,6 +204,7 @@ impl EngineAdapterRegistry {
             EngineType::Claude,
             EngineType::Codex,
             EngineType::Gemini,
+            EngineType::Grok,
             EngineType::Kimi,
             EngineType::OpenCode,
         ] {
@@ -277,6 +278,7 @@ pub fn engine_id(engine: EngineType) -> &'static str {
         EngineType::Claude => "claude",
         EngineType::Codex => "codex",
         EngineType::Gemini => "gemini",
+        EngineType::Grok => "grok",
         EngineType::Kimi => "kimi",
         EngineType::OpenCode => "opencode",
     }
@@ -289,11 +291,18 @@ mod tests {
     #[test]
     fn builtins_cover_one_shot_and_persistent_protocol_models() {
         let registry = EngineAdapterRegistry::with_builtins();
-        assert_eq!(registry.len(), 5);
+        assert_eq!(registry.len(), 6);
         assert_eq!(
             registry
                 .get(&EngineId::builtin(EngineType::Kimi))
                 .expect("kimi")
+                .execution_model,
+            EngineExecutionModel::OneShot
+        );
+        assert_eq!(
+            registry
+                .get(&EngineId::builtin(EngineType::Grok))
+                .expect("grok")
                 .execution_model,
             EngineExecutionModel::OneShot
         );

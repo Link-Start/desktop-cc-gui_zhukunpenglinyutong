@@ -321,7 +321,7 @@
   overflow-wrap: break-word;
   word-break: break-word;
   min-width: 0;
-  font-family: "Geist", var(--font-sans);
+  font-family: var(--ui-font-family);
   font-size: var(--message-content-font-size);
   line-height: 1.7;
   /* 文档化观感：正文用接近纯黑的强字色（仅 .markdown 内覆盖，不动全局令牌） */

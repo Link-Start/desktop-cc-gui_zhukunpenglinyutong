@@ -31,7 +31,7 @@ export const VISIBLE_MESSAGE_WINDOW = 10000;
 // 不跳动、「显示更早」可展开；若跟随跳动，调大此值或改走「已完成行降级为占位」方案。
 export const STREAMING_VISIBLE_WINDOW = 60;
 
-export type MessagesEngine = "claude" | "codex" | "gemini" | "kimi" | "opencode";
+export type MessagesEngine = "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
 
 export function isSelectionInsideNode(selection: Selection | null, node: HTMLElement | null) {
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !node) {
@@ -147,7 +147,7 @@ export function resolveAgentTaskDisplaySummary(summary: string | null | undefine
 }
 
 export function toConversationEngine(engine: MessagesEngine): ConversationEngine {
-  if (engine === "claude" || engine === "gemini" || engine === "kimi" || engine === "opencode") {
+  if (engine === "claude" || engine === "gemini" || engine === "grok" || engine === "kimi" || engine === "opencode") {
     return engine;
   }
   return "codex";

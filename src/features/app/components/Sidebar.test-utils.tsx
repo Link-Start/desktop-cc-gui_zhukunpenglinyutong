@@ -10,6 +10,7 @@ import {
   getClaudeProviders,
   getCodexProviders,
   getKimiProviders,
+  getOpenCodeProviders,
   listWorkspaceSessionFolders,
   renameWorkspaceSessionFolder,
 } from "../../../services/tauri";
@@ -124,6 +125,7 @@ vi.mock("../../../services/tauri", async (importOriginal) => {
     getClaudeProviders: vi.fn(),
     getCodexProviders: vi.fn(),
     getKimiProviders: vi.fn(),
+    getOpenCodeProviders: vi.fn(),
     listWorkspaceSessionFolders: vi.fn(),
     renameWorkspaceSessionFolder: vi.fn(),
   };
@@ -206,6 +208,7 @@ export function resetSidebarTestMocks() {
   vi.mocked(getClaudeProviders).mockResolvedValue([]);
   vi.mocked(getCodexProviders).mockResolvedValue([]);
   vi.mocked(getKimiProviders).mockResolvedValue([]);
+  vi.mocked(getOpenCodeProviders).mockResolvedValue([]);
 }
 
 export const baseProps = {

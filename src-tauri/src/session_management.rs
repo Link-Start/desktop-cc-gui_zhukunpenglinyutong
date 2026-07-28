@@ -938,6 +938,10 @@ pub(crate) async fn delete_workspace_sessions_core(
         .get_engine_config(engine::EngineType::Kimi)
         .await
         .and_then(|item| item.home_dir);
+    let grok_home_dir = engine_manager
+        .get_engine_config(engine::EngineType::Grok)
+        .await
+        .and_then(|item| item.home_dir);
     let mut async_delete_handles: Vec<(
         WorkspaceSessionMutationTarget,
         JoinHandle<Result<(), String>>,
@@ -983,6 +987,20 @@ pub(crate) async fn delete_workspace_sessions_core(
                         &workspace_path,
                         &raw_id,
                         kimi_home_dir.as_deref(),
+                    )
+                    .await
+                });
+                async_delete_handles.push((target, handle));
+            }
+            "grok" => {
+                let workspace_path = target.owner_workspace_path.clone();
+                let grok_home_dir = grok_home_dir.clone();
+                let raw_id = target.native_session_id.clone();
+                let handle = tokio::spawn(async move {
+                    engine::grok_history::delete_grok_session(
+                        &workspace_path,
+                        &raw_id,
+                        grok_home_dir.as_deref(),
                     )
                     .await
                 });
@@ -1369,6 +1387,7 @@ fn build_metadata_orphan_entry(
         workspace_label: Some(workspace.name.clone()),
         engine: identity.engine_name().to_string(),
         title: "Missing session".to_string(),
+        native_title: None,
         updated_at: archived_at.unwrap_or(0).max(0),
         archived_at,
         thread_kind: "native".to_string(),
@@ -1755,7 +1774,7 @@ fn is_stable_catalog_metadata_key(session_id: &str) -> bool {
     let canonical_session_id = parts.next().unwrap_or_default();
     matches!(
         engine,
-        "codex" | "claude" | "gemini" | "kimi" | "opencode" | "shared"
+        "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode" | "shared"
     ) && !workspace_id.trim().is_empty()
         && !canonical_session_id.trim().is_empty()
 }
@@ -2628,6 +2647,9 @@ async fn build_global_engine_catalog_entries(
     let kimi_config = engine_manager
         .get_engine_config(engine::EngineType::Kimi)
         .await;
+    let grok_config = engine_manager
+        .get_engine_config(engine::EngineType::Grok)
+        .await;
     let claude_config = engine_manager
         .get_engine_config(engine::EngineType::Claude)
         .await;
@@ -2663,7 +2685,11 @@ async fn build_global_engine_catalog_entries(
                             workspace_id: workspace.id.clone(),
                             workspace_label: Some(workspace.name.clone()),
                             engine: "claude".to_string(),
-                            title: session.first_message,
+                            title: session
+                                .native_title
+                                .clone()
+                                .unwrap_or_else(|| session.first_message.clone()),
+                            native_title: session.native_title,
                             updated_at: session.updated_at.max(0),
                             archived_at,
                             thread_kind: "native".to_string(),
@@ -2746,6 +2772,7 @@ async fn build_global_engine_catalog_entries(
                             workspace_label: Some(workspace.name.clone()),
                             engine: session.engine.unwrap_or_else(|| "gemini".to_string()),
                             title: session.first_message,
+                            native_title: None,
                             updated_at: session.updated_at.max(0),
                             archived_at,
                             thread_kind: "native".to_string(),
@@ -2823,6 +2850,7 @@ async fn build_global_engine_catalog_entries(
                             workspace_label: Some(workspace.name.clone()),
                             engine: session.engine.unwrap_or_else(|| "kimi".to_string()),
                             title: session.first_message,
+                            native_title: None,
                             updated_at: session.updated_at.max(0),
                             archived_at,
                             thread_kind: "native".to_string(),
@@ -2871,6 +2899,83 @@ async fn build_global_engine_catalog_entries(
                 }
             }
         }
+
+        if include_engine("grok") {
+            match engine::grok_history::list_grok_sessions(
+                &workspace_path,
+                Some(scan_mode.limit()),
+                grok_config
+                    .as_ref()
+                    .and_then(|item| item.home_dir.as_deref()),
+            )
+            .await
+            {
+                Ok(sessions) => {
+                    for session in sessions {
+                        let session_id = format!("grok:{}", session.session_id);
+                        let archived_at =
+                            metadata_by_workspace_id
+                                .get(&workspace.id)
+                                .and_then(|metadata| {
+                                    archived_at_for_session(metadata, &workspace.id, &session_id)
+                                });
+                        let entry = WorkspaceSessionCatalogEntry {
+                            session_id,
+                            stable_session_key: None,
+                            canonical_session_id: session.canonical_session_id,
+                            parent_session_id: None,
+                            workspace_id: workspace.id.clone(),
+                            workspace_label: Some(workspace.name.clone()),
+                            engine: session.engine.unwrap_or_else(|| "grok".to_string()),
+                            title: session.first_message,
+                            updated_at: session.updated_at.max(0),
+                            archived_at,
+                            thread_kind: "native".to_string(),
+                            source: None,
+                            source_label: None,
+                            provider_profile_id: None,
+                            provider_profile_source: None,
+                            provider_profile_name: None,
+                            provider_availability: None,
+                            source_completeness: None,
+                            source_status_reason: None,
+                            size_bytes: session.file_size_bytes,
+                            cwd: None,
+                            attribution_status: session.attribution_status.or_else(|| {
+                                Some(
+                                    SessionCatalogAttributionStatus::StrictMatch
+                                        .as_str()
+                                        .to_string(),
+                                )
+                            }),
+                            attribution_reason: None,
+                            attribution_confidence: None,
+                            matched_workspace_id: Some(workspace.id.clone()),
+                            matched_workspace_label: Some(workspace.name.clone()),
+                            folder_id: None,
+                            auto_session: None,
+                            exists_on_disk: false,
+                            inconsistency_code: None,
+                            delete_mode: None,
+                            physical_path: None,
+                            children_count: None,
+                        };
+                        entries.push(finalize_existing_catalog_entry(
+                            entry,
+                            &metadata_by_workspace_id,
+                        ));
+                    }
+                }
+                Err(error) => {
+                    log::warn!(
+                    "[session_management.list_global_codex_sessions] grok history unavailable for workspace {}: {}",
+                    workspace.id,
+                    error
+                );
+                    partial_sources.push(SESSION_CATALOG_PARTIAL_GROK.to_string());
+                }
+            }
+        }
     }
 
     let mut deduped = HashMap::<String, WorkspaceSessionCatalogEntry>::new();
@@ -2908,6 +3013,7 @@ fn build_global_codex_catalog_entry(
             .summary
             .clone()
             .unwrap_or_else(|| "Codex Session".to_string()),
+        native_title: summary.native_title.clone(),
         updated_at: summary.timestamp.max(0),
         archived_at: None,
         thread_kind: "native".to_string(),

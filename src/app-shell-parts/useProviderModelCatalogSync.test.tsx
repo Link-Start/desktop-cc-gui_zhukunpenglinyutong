@@ -39,11 +39,11 @@ describe("useProviderModelCatalogSync", () => {
     expect(addDebugEntry).toHaveBeenCalledTimes(2);
   });
 
-  it("supports Codex and Kimi but ignores engines without provider profiles", () => {
+  it("supports Codex, Grok and Kimi but ignores engines without provider profiles", () => {
     const refreshEngineModels = vi.fn().mockResolvedValue(undefined);
     const addDebugEntry = vi.fn();
     type HookProps = {
-      activeEngine: "codex" | "kimi" | "gemini";
+      activeEngine: "codex" | "grok" | "kimi" | "gemini";
     };
     const view = renderHook(
       ({ activeEngine }: HookProps) =>
@@ -66,13 +66,17 @@ describe("useProviderModelCatalogSync", () => {
     expect(refreshEngineModels).toHaveBeenCalledWith("codex", {
       providerProfileId: "provider-a",
     });
+    view.rerender({ activeEngine: "grok" });
+    expect(refreshEngineModels).toHaveBeenLastCalledWith("grok", {
+      providerProfileId: "provider-a",
+    });
     view.rerender({ activeEngine: "kimi" });
     expect(refreshEngineModels).toHaveBeenLastCalledWith("kimi", {
       providerProfileId: "provider-a",
     });
     view.rerender({ activeEngine: "gemini" });
 
-    expect(refreshEngineModels).toHaveBeenCalledTimes(2);
+    expect(refreshEngineModels).toHaveBeenCalledTimes(3);
   });
 
   it("uses the active thread engine while the global engine is still switching", () => {

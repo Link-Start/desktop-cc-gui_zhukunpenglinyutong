@@ -3003,6 +3003,8 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                             ? "Claude"
                             : createPrContentEngine === "codex"
                               ? "Codex"
+                              : createPrContentEngine === "grok"
+                              ? "Grok"
                               : createPrContentEngine === "kimi"
                                 ? "Kimi"
                                 : createPrContentEngine === "opencode"

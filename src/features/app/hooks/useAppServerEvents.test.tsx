@@ -1146,6 +1146,87 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("does not synthesize a Grok completion after a pending delta is promoted to its canonical session", async () => {
+    const handlers: Handlers = {
+      onAgentMessageDelta: vi.fn(),
+      onAgentMessageCompleted: vi.fn(),
+      onThreadSessionIdUpdated: vi.fn(),
+      onTurnCompleted: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-grok",
+        message: {
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "grok-pending-1",
+            itemId: "grok-item-1",
+            delta: "你好！有什么可以帮你的吗？",
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-grok",
+        message: {
+          method: "thread/started",
+          params: {
+            threadId: "grok-pending-1",
+            sessionId: "session-real-1",
+            turnId: "grok-turn-1",
+            engine: "grok",
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-grok",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "grok:session-real-1",
+            turnId: "grok-turn-1",
+            result: { text: "你好！有什么可以帮你的吗？" },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onThreadSessionIdUpdated).toHaveBeenCalledWith(
+      "ws-grok",
+      "grok-pending-1",
+      "session-real-1",
+      "grok",
+      "grok-turn-1",
+    );
+    expect(handlers.onAgentMessageDelta).toHaveBeenCalledTimes(1);
+    expect(handlers.onAgentMessageDelta).toHaveBeenCalledWith({
+      workspaceId: "ws-grok",
+      threadId: "grok-pending-1",
+      itemId: "grok-item-1",
+      delta: "你好！有什么可以帮你的吗？",
+    });
+    expect(handlers.onAgentMessageCompleted).not.toHaveBeenCalled();
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-grok",
+      "grok:session-real-1",
+      "grok-turn-1",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("does not emit duplicated completion when item/completed already delivered agent text", async () => {
     const handlers: Handlers = {
       onAgentMessageCompleted: vi.fn(),

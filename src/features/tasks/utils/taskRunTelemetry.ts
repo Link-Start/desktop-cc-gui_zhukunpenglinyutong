@@ -108,6 +108,9 @@ export function inferTaskRunEngine(threadId: string | null | undefined): EngineT
   if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")) {
     return "gemini";
   }
+  if (threadId.startsWith("grok:") || threadId.startsWith("grok-pending-")) {
+    return "grok";
+  }
   if (threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-")) {
     return "kimi";
   }

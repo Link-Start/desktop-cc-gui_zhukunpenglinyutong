@@ -151,6 +151,16 @@
                 },
             )
             .await;
+        // Same isolation for the Grok source (~/.grok).
+        engine_manager
+            .set_engine_config(
+                engine::EngineType::Grok,
+                engine::EngineConfig {
+                    home_dir: Some(base.join("grok-home").to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await;
 
         let summary = get_workspace_session_projection_summary_core(
             &workspaces,

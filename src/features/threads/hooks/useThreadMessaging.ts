@@ -35,6 +35,7 @@ import {
   engineSendMessage as engineSendMessageService,
   engineInterrupt as engineInterruptService,
   listGeminiSessions as listGeminiSessionsService,
+  listGrokSessions as listGrokSessionsService,
   listKimiSessions as listKimiSessionsService,
 } from "../../../services/tauri";
 import { sendSharedSessionTurn } from "../../shared-session/runtime/sendSharedSessionTurn";
@@ -91,6 +92,7 @@ import {
   mapNetworkErrorToUserMessage,
   normalizeAccessMode,
   pickLikelyGeminiSessionId,
+  pickLikelyGrokSessionId,
   pickLikelyKimiSessionId,
   primeThreadStreamLatencyForSend,
   resolveCollaborationModeIdFromPayload,
@@ -164,7 +166,7 @@ type HandleFusionStalledOptions = {
 type RunWithCreateSessionLoading = <T>(
   params: {
     workspace: WorkspaceInfo;
-    engine: "claude" | "codex" | "gemini" | "kimi" | "opencode";
+    engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
   },
   action: () => Promise<T>,
 ) => Promise<T>;
@@ -205,7 +207,7 @@ type UseThreadMessagingOptions = {
   claudeThinkingVisible?: boolean;
   steerEnabled: boolean;
   customPrompts: CustomPromptOption[];
-  activeEngine?: "claude" | "codex" | "gemini" | "kimi" | "opencode";
+  activeEngine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
   threadStatusById: ThreadState["threadStatusById"];
   itemsByThread: ThreadState["itemsByThread"];
   activeTurnIdByThread: ThreadState["activeTurnIdByThread"];
@@ -220,7 +222,7 @@ type UseThreadMessagingOptions = {
   getThreadEngine: (
     workspaceId: string,
     threadId: string,
-  ) => "claude" | "codex" | "gemini" | "kimi" | "opencode" | undefined;
+  ) => "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | undefined;
   getThreadKind?: (
     workspaceId: string,
     threadId: string,
@@ -257,7 +259,7 @@ type UseThreadMessagingOptions = {
     workspaceId: string,
     options?: {
       activate?: boolean;
-      engine?: "claude" | "codex" | "gemini" | "kimi" | "opencode";
+      engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
       folderId?: string | null;
       autoSession?: AutoSessionMetadata | null;
       providerProfileId?: string | null;
@@ -342,6 +344,7 @@ export function useThreadMessaging({
     claudeCandidateSessionIdByPendingThreadRef,
     claudePendingThreadAwaitingNativeSessionRef,
     geminiSessionIdByPendingThreadRef,
+    grokSessionIdByPendingThreadRef,
     kimiSessionIdByPendingThreadRef,
     isClaudePendingThreadAwaitingNativeSession,
     isThreadIdCompatibleWithEngine,
@@ -1341,6 +1344,10 @@ export function useThreadMessaging({
               ? threadId.slice("gemini:".length)
             : resolvedEngine === "gemini" && threadId.startsWith("gemini-pending-")
               ? (geminiSessionIdByPendingThreadRef.current.get(threadId) ?? null)
+            : resolvedEngine === "grok" && threadId.startsWith("grok:")
+              ? threadId.slice("grok:".length)
+            : resolvedEngine === "grok" && threadId.startsWith("grok-pending-")
+              ? (grokSessionIdByPendingThreadRef.current.get(threadId) ?? null)
             : resolvedEngine === "kimi" && threadId.startsWith("kimi:")
               ? threadId.slice("kimi:".length)
             : resolvedEngine === "kimi" && threadId.startsWith("kimi-pending-")
@@ -1546,6 +1553,38 @@ export function useThreadMessaging({
                   threadId,
                   sessionId: responseSessionId,
                   source: "geminiSessionListFallback",
+                },
+              });
+            }
+          }
+          if (resolvedEngine === "grok" && threadId.startsWith("grok-pending-")) {
+            let responseSessionId = extractSessionIdFromEngineSendResponse(response);
+            if (!responseSessionId) {
+              const workspacePath = workspace.path?.trim();
+              if (workspacePath) {
+                try {
+                  const sessions = await listGrokSessionsService(workspacePath, 6);
+                  responseSessionId = pickLikelyGrokSessionId(
+                    sessions,
+                    sendRequestedAt - 120_000,
+                  );
+                } catch {
+                  responseSessionId = null;
+                }
+              }
+            }
+            if (responseSessionId) {
+              grokSessionIdByPendingThreadRef.current.set(threadId, responseSessionId);
+              onDebug?.({
+                id: `${Date.now()}-client-grok-session-cache`,
+                timestamp: Date.now(),
+                source: "client",
+                label: "thread/session cached",
+                payload: {
+                  workspaceId: workspace.id,
+                  threadId,
+                  sessionId: responseSessionId,
+                  source: "grokSessionListFallback",
                 },
               });
             }
@@ -1858,6 +1897,7 @@ export function useThreadMessaging({
       effort,
       finalizeCodexPendingThread,
       geminiSessionIdByPendingThreadRef,
+      grokSessionIdByPendingThreadRef,
       kimiSessionIdByPendingThreadRef,
       getCustomName,
       getThreadEngine,

@@ -101,6 +101,8 @@ function resolveRuntimeNoticeEngineLabel(engine: ThreadFailureRuntimeNoticeInput
       return "Claude Code";
     case "gemini":
       return "Gemini";
+    case "grok":
+      return "Grok";
     case "kimi":
       return "Kimi";
     case "opencode":

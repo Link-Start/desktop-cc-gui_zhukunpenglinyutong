@@ -76,6 +76,8 @@ export function useThreadRealtimeHistoryReconcile({
         canonicalThreadId.startsWith("claude-pending-") ||
         canonicalThreadId.startsWith("gemini:") ||
         canonicalThreadId.startsWith("gemini-pending-") ||
+        canonicalThreadId.startsWith("grok:") ||
+        canonicalThreadId.startsWith("grok-pending-") ||
         canonicalThreadId.startsWith("kimi:") ||
         canonicalThreadId.startsWith("kimi-pending-") ||
         canonicalThreadId.startsWith("opencode:") ||

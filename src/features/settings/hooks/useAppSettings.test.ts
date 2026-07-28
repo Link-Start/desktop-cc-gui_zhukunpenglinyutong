@@ -7,6 +7,7 @@ import {
   getAppSettings,
   runClaudeDoctor,
   runCodexDoctor,
+  runGrokDoctor,
   runKimiDoctor,
   takeSettingsRecoveryNotice,
   updateAppSettings,
@@ -14,8 +15,11 @@ import {
 import { pushErrorToast } from "../../../services/toasts";
 import { UI_SCALE_DEFAULT, UI_SCALE_MAX } from "../../../utils/uiScale";
 import {
+  DEFAULT_CODE_FONT_FAMILY,
   DEFAULT_UI_FONT_FAMILY,
+  LEGACY_CODE_FONT_FAMILY,
   LEGACY_MONACO_UI_FONT_FAMILY,
+  LEGACY_SYSTEM_UI_FONT_FAMILY,
 } from "../../../utils/fonts";
 
 vi.mock("../../../services/tauri", () => ({
@@ -23,6 +27,7 @@ vi.mock("../../../services/tauri", () => ({
   updateAppSettings: vi.fn(),
   runClaudeDoctor: vi.fn(),
   runCodexDoctor: vi.fn(),
+  runGrokDoctor: vi.fn(),
   runKimiDoctor: vi.fn(),
   takeSettingsRecoveryNotice: vi.fn(),
 }));
@@ -34,6 +39,7 @@ vi.mock("../../../services/toasts", () => ({
 const getAppSettingsMock = vi.mocked(getAppSettings);
 const runClaudeDoctorMock = vi.mocked(runClaudeDoctor);
 const runKimiDoctorMock = vi.mocked(runKimiDoctor);
+const runGrokDoctorMock = vi.mocked(runGrokDoctor);
 const updateAppSettingsMock = vi.mocked(updateAppSettings);
 const runCodexDoctorMock = vi.mocked(runCodexDoctor);
 const takeSettingsRecoveryNoticeMock = vi.mocked(takeSettingsRecoveryNotice);
@@ -92,13 +98,15 @@ describe("useAppSettings", () => {
     expect(result.current.settings.userMsgColor).toBe("");
     expect(result.current.settings.uiFontFamily).toBe(DEFAULT_UI_FONT_FAMILY);
     expect(result.current.settings.uiFontFamily).not.toMatch(/^Monaco,/);
-    expect(result.current.settings.codeFontFamily).toMatch(/^Monaco,/);
+    expect(result.current.settings.codeFontFamily).toBe(
+      DEFAULT_CODE_FONT_FAMILY,
+    );
     expect(result.current.settings.codeFontSize).toBe(16);
     expect(result.current.settings.codexUnifiedExecPolicy).toBe("inherit");
     expect(result.current.settings.backendMode).toBe("remote");
     expect(result.current.settings.remoteBackendHost).toBe("example:1234");
     expect(result.current.settings.geminiEnabled).toBe(false);
-    expect(result.current.settings.opencodeEnabled).toBe(false);
+    expect(result.current.settings.opencodeEnabled).toBe(true);
     expect(result.current.settings.claudeBin).toBeNull();
     expect(result.current.settings.codexAutoCompactionEnabled).toBe(true);
     expect(result.current.settings.codexAutoCompactionThresholdPercent).toBe(
@@ -258,6 +266,22 @@ describe("useAppSettings", () => {
 
     expect(result.current.settings.uiFontFamily).toBe(DEFAULT_UI_FONT_FAMILY);
     expect(result.current.settings.uiFontFamily).not.toMatch(/^Monaco,/);
+  });
+
+  it("migrates legacy default font stacks to Windows-readable defaults", async () => {
+    getAppSettingsMock.mockResolvedValue({
+      uiFontFamily: LEGACY_SYSTEM_UI_FONT_FAMILY,
+      codeFontFamily: LEGACY_CODE_FONT_FAMILY,
+    } as AppSettings);
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.settings.uiFontFamily).toBe(DEFAULT_UI_FONT_FAMILY);
+    expect(result.current.settings.codeFontFamily).toBe(
+      DEFAULT_CODE_FONT_FAMILY,
+    );
   });
 
   it("preserves workspace-only session attribution mode", async () => {
@@ -524,9 +548,11 @@ describe("useAppSettings", () => {
     expect(result.current.settings.theme).toBe("system");
     expect(result.current.settings.uiFontFamily).toBe(DEFAULT_UI_FONT_FAMILY);
     expect(result.current.settings.uiFontFamily).not.toMatch(/^Monaco,/);
-    expect(result.current.settings.codeFontFamily).toMatch(/^Monaco,/);
+    expect(result.current.settings.codeFontFamily).toBe(
+      DEFAULT_CODE_FONT_FAMILY,
+    );
     expect(result.current.settings.backendMode).toBe("local");
-    expect(result.current.settings.opencodeEnabled).toBe(false);
+    expect(result.current.settings.opencodeEnabled).toBe(true);
     expect(result.current.settings.dictationModelId).toBe("base");
     expect(result.current.settings.interruptShortcut).toBeTruthy();
     expect(result.current.settings.performanceCompatibilityModeEnabled).toBe(
@@ -534,7 +560,7 @@ describe("useAppSettings", () => {
     );
   });
 
-  it("normalizes a legacy enabled OpenCode gate to soft-retired", async () => {
+  it("preserves a legacy enabled OpenCode gate as enabled", async () => {
     getAppSettingsMock.mockResolvedValue({
       opencodeEnabled: true,
     } as AppSettings);
@@ -543,7 +569,7 @@ describe("useAppSettings", () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.settings.opencodeEnabled).toBe(false);
+    expect(result.current.settings.opencodeEnabled).toBe(true);
   });
 
   it("persists settings via updateAppSettings and updates local state", async () => {
@@ -594,7 +620,7 @@ describe("useAppSettings", () => {
         darkThemePresetId: "vscode-dark-modern",
         uiScale: 0.8,
         uiFontFamily: DEFAULT_UI_FONT_FAMILY,
-        codeFontFamily: expect.stringMatching(/^Monaco,/),
+        codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
         codeFontSize: 9,
         notificationSoundsEnabled: false,
         codexAutoCompactionEnabled: false,
@@ -724,6 +750,30 @@ describe("useAppSettings", () => {
       response,
     );
     expect(runKimiDoctorMock).toHaveBeenCalledWith("/bin/kimi");
+  });
+
+  it("returns grok doctor results", async () => {
+    getAppSettingsMock.mockResolvedValue({} as AppSettings);
+    const response: CodexDoctorResult = {
+      ok: true,
+      codexBin: "/bin/grok",
+      version: "0.1.0",
+      appServerOk: false,
+      details: null,
+      path: null,
+      nodeOk: true,
+      nodeVersion: "20.0.0",
+      nodeDetails: null,
+    };
+    runGrokDoctorMock.mockResolvedValue(response);
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await expect(result.current.grokDoctor("/bin/grok")).resolves.toEqual(
+      response,
+    );
+    expect(runGrokDoctorMock).toHaveBeenCalledWith("/bin/grok");
   });
 
   it("uses legacy localStorage user message color when settings value is missing", async () => {

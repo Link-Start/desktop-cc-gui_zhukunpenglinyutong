@@ -79,7 +79,9 @@ export function useMessagesRuntimeState({
     activeEngine === "claude" ||
     activeEngine === "codex" ||
     activeEngine === "gemini" ||
-    activeEngine === "kimi";
+    activeEngine === "grok" ||
+    activeEngine === "kimi" ||
+    activeEngine === "opencode";
   const visibleStallRecoveryActive =
     supportsStreamingReadableWindowRecovery &&
     isThinking &&

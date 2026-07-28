@@ -28,12 +28,13 @@ use crate::types::WorkspaceEntry;
 
 use super::codex_prompt_service::{normalize_custom_spec_root, run_codex_prompt_sync};
 use super::events::{engine_event_to_app_server_event_with_turn_context, EngineEvent};
+use super::grok::resolve_grok_session_id_for_engine_send;
 use super::kimi::resolve_kimi_session_id_for_engine_send;
 use super::remote_bridge::{
     call_remote_typed, remote_detect_engines_request, remote_engine_interrupt_request,
     remote_engine_send_message_sync_request,
 };
-use super::status::{detect_kimi_status, load_opencode_models};
+use super::status::{detect_grok_status, detect_kimi_status, load_opencode_models};
 use super::{
     engine_disabled_diagnostic, engine_enabled_in_settings, EngineConfig, EngineStatus, EngineType,
 };
@@ -180,7 +181,9 @@ fn collect_stale_child_candidates(
             }
             let progress_evidence = match workspace.engine {
                 EngineType::Claude => "timing-only",
-                EngineType::OpenCode | EngineType::Gemini | EngineType::Kimi => "unsupported",
+                EngineType::OpenCode | EngineType::Gemini | EngineType::Grok | EngineType::Kimi => {
+                    "unsupported"
+                }
                 // Codex is intentionally not part of this child-process parity
                 // path (it has its own wrapper runtime).
                 EngineType::Codex => "unsupported",
@@ -205,6 +208,7 @@ fn engine_type_label(engine: EngineType) -> &'static str {
         EngineType::OpenCode => "opencode",
         EngineType::Gemini => "gemini",
         EngineType::Codex => "codex",
+        EngineType::Grok => "grok",
         EngineType::Kimi => "kimi",
     }
 }
@@ -1096,7 +1100,7 @@ pub async fn detect_engines(
     let manager = &state.engine_manager;
     let settings = read_app_settings_snapshot(&state).await;
     Ok(manager
-        .detect_engines_with_gates(settings.gemini_enabled, settings.opencode_enabled)
+        .detect_engines_with_gates(settings.gemini_enabled)
         .await)
 }
 
@@ -1324,6 +1328,29 @@ pub async fn get_engine_active_process_diagnostics(
             registered_active_processes,
         });
     }
+    for (workspace_id, session) in state.engine_manager.list_grok_sessions().await {
+        let active_process_snapshots = session.active_process_snapshots(sampled_at_ms).await;
+        let active_process_ids = active_process_snapshots
+            .iter()
+            .map(|process| process.pid)
+            .collect::<Vec<_>>();
+        if active_process_ids.is_empty() {
+            continue;
+        }
+        let registered_active_processes = active_process_snapshots
+            .into_iter()
+            .map(|process| RegisteredEngineActiveProcessDiagnostic {
+                pid: process.pid,
+                registered_age_ms: process.registered_age_ms,
+            })
+            .collect();
+        workspaces.push(EngineWorkspaceActiveProcessDiagnostics {
+            workspace_id,
+            engine: EngineType::Grok,
+            active_process_ids,
+            registered_active_processes,
+        });
+    }
     let stale_child_candidates = collect_stale_child_candidates(&workspaces, sampled_at_ms);
     Ok(build_engine_active_process_diagnostics(
         sampled_at_ms,
@@ -1408,14 +1435,30 @@ pub async fn get_engine_models(
 
             Ok(fresh_status.models)
         }
+        EngineType::Grok => {
+            let config = manager.get_engine_config(EngineType::Grok).await;
+            let custom_bin = config
+                .as_ref()
+                .and_then(|cfg| cfg.bin_path.as_ref())
+                .map(|s| s.as_str());
+            let fresh_status = detect_grok_status(custom_bin).await;
+
+            if !fresh_status.models.is_empty() {
+                return Ok(fresh_status.models);
+            }
+
+            if let Some(cached) = manager.get_engine_status(EngineType::Grok).await {
+                if !cached.models.is_empty() {
+                    return Ok(cached.models);
+                }
+            }
+
+            Ok(fresh_status.models)
+        }
         EngineType::Claude | EngineType::Codex => {
             if force_refresh {
                 let status = manager
-                    .refresh_engine_status_with_gates(
-                        engine_type,
-                        settings.gemini_enabled,
-                        settings.opencode_enabled,
-                    )
+                    .refresh_engine_status_with_gates(engine_type, settings.gemini_enabled)
                     .await;
                 return Ok(status.models);
             }
@@ -1427,11 +1470,7 @@ pub async fn get_engine_models(
             }
 
             let status = manager
-                .refresh_engine_status_with_gates(
-                    engine_type,
-                    settings.gemini_enabled,
-                    settings.opencode_enabled,
-                )
+                .refresh_engine_status_with_gates(engine_type, settings.gemini_enabled)
                 .await;
             Ok(status.models)
         }
@@ -1889,8 +1928,30 @@ pub async fn engine_send_message(
                     .ok_or_else(|| "Workspace not found".to_string())?
             };
 
+            let provider_binding_lookup_session_id = session_id
+                .as_deref()
+                .or(thread_id.as_deref())
+                .map(str::to_string);
+            let effective_provider_profile_id =
+                crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    provider_binding_lookup_session_id.as_deref(),
+                    "opencode",
+                    provider_profile_id.as_deref(),
+                )?;
+            let provider_launch_profile =
+                crate::engine::opencode_provider_profile::resolve_opencode_provider_launch_profile(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                )?;
             let session = manager
-                .get_or_create_opencode_session(&workspace_id, &workspace_path)
+                .get_or_create_opencode_session_for_runtime(
+                    &workspace_id,
+                    &workspace_path,
+                    &provider_launch_profile.runtime_key,
+                    provider_launch_profile.config_content.clone(),
+                )
                 .await;
 
             let resolved_session_id = if continue_session {
@@ -1921,8 +1982,18 @@ pub async fn engine_send_message(
                     model
                 );
             }
-            let model_for_send =
-                sanitized_model.or_else(|| Some("openai/gpt-5.3-codex".to_string()));
+            // Always pass an explicit --model: a broken default model in the
+            // user's opencode.json must not fail GUI turns. Managed providers
+            // resolve through the injected `ccgui/<model>` refs.
+            let model_for_send = if provider_launch_profile.binding.is_some() {
+                sanitized_model
+                    .or_else(|| provider_launch_profile.default_model.clone())
+                    .map(|value| {
+                        crate::engine::opencode_provider_profile::qualify_managed_model_ref(&value)
+                    })
+            } else {
+                sanitized_model.or_else(|| Some("opencode/big-pickle".to_string()))
+            };
 
             let params = super::SendMessageParams {
                 text,
@@ -1942,6 +2013,21 @@ pub async fn engine_send_message(
 
             let turn_id = format!("opencode-turn-{}", uuid::Uuid::new_v4());
             let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+            let binding_session_id = response_session_id
+                .as_deref()
+                .or(provider_binding_lookup_session_id.as_deref())
+                .unwrap_or(thread_id.as_str());
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "opencode".to_string(),
+                    binding.clone(),
+                )
+                .await?;
+            }
             let item_id = format!("opencode-item-{}", uuid::Uuid::new_v4());
 
             let mut receiver = session.subscribe();
@@ -2498,6 +2584,249 @@ pub async fn engine_send_message(
                 }
             }))
         }
+        EngineType::Grok => {
+            let workspace_path = {
+                let workspaces = state.workspaces.lock().await;
+                workspaces
+                    .get(&workspace_id)
+                    .map(|w| std::path::PathBuf::from(&w.path))
+                    .ok_or_else(|| "Workspace not found".to_string())?
+            };
+            let provider_binding_lookup_session_id = session_id
+                .as_deref()
+                .or(thread_id.as_deref())
+                .map(str::to_string);
+            let effective_provider_profile_id =
+                crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    provider_binding_lookup_session_id.as_deref(),
+                    "grok",
+                    provider_profile_id.as_deref(),
+                )?;
+            let provider_launch_profile =
+                crate::engine::grok_provider_profile::resolve_grok_provider_launch_profile(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                )?;
+            let session = manager
+                .get_or_create_grok_session_for_runtime(
+                    &workspace_id,
+                    &workspace_path,
+                    &provider_launch_profile.runtime_key,
+                    provider_launch_profile.home_dir.as_deref(),
+                )
+                .await;
+
+            let resolved_session_id = resolve_grok_session_id_for_engine_send(
+                continue_session,
+                session_id,
+                session.get_session_id().await,
+            );
+            let response_session_id = resolved_session_id.clone();
+
+            let params = super::SendMessageParams {
+                text,
+                model: model
+                    .as_ref()
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                    .map(|value| value.to_string()),
+                effort,
+                disable_thinking: false,
+                access_mode,
+                images,
+                continue_session,
+                session_id: resolved_session_id,
+                fork_session_id: None,
+                agent: None,
+                variant: None,
+                collaboration_mode: None,
+                custom_spec_root: normalized_custom_spec_root.clone(),
+            };
+
+            let turn_id = format!("grok-turn-{}", uuid::Uuid::new_v4());
+            let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+            let binding_session_id = response_session_id
+                .as_deref()
+                .or(provider_binding_lookup_session_id.as_deref())
+                .unwrap_or(thread_id.as_str());
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "grok".to_string(),
+                    binding.clone(),
+                )
+                .await?;
+            }
+            let item_id = format!("grok-item-{}", uuid::Uuid::new_v4());
+
+            let mut receiver = session.subscribe();
+            let app_clone = app.clone();
+            let mut current_thread_id = thread_id.clone();
+            let item_id_clone = item_id.clone();
+            let turn_id_for_forwarder = turn_id.clone();
+            let mut accumulated_agent_text = String::new();
+            let provider_binding_for_forwarder = provider_launch_profile.binding.clone();
+            let provider_binding_storage_path = state.storage_path.clone();
+            let provider_binding_workspace_id = workspace_id.clone();
+            tokio::spawn(async move {
+                let deadline = tokio::time::Instant::now()
+                    + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
+                let mut render_state = GeminiRenderRoutingState::default();
+                loop {
+                    let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
+                    let turn_event = match recv_result {
+                        Ok(Ok(event)) => event,
+                        Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
+                        Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped))) => {
+                            log::warn!(
+                                "Grok event forwarder lagged; skipped {} events for turn {}",
+                                skipped,
+                                turn_id_for_forwarder
+                            );
+                            continue;
+                        }
+                        Err(_) => break,
+                    };
+                    if turn_event.turn_id != turn_id_for_forwarder {
+                        continue;
+                    }
+
+                    let event = turn_event.event;
+                    if let (
+                        Some(binding),
+                        EngineEvent::SessionStarted {
+                            session_id,
+                            engine: EngineType::Grok,
+                            ..
+                        },
+                    ) = (provider_binding_for_forwarder.as_ref(), &event)
+                    {
+                        if !session_id.is_empty() && session_id != "pending" {
+                            session_management::schedule_engine_provider_binding_record(
+                                provider_binding_storage_path.clone(),
+                                provider_binding_workspace_id.clone(),
+                                session_id.clone(),
+                                "grok".to_string(),
+                                binding.clone(),
+                            );
+                        }
+                    }
+                    let is_terminal = event.is_terminal();
+                    let render_lane = match &event {
+                        EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,
+                        EngineEvent::ReasoningDelta { .. } => GeminiRenderLane::Reasoning,
+                        EngineEvent::ToolStarted { .. }
+                        | EngineEvent::ToolCompleted { .. }
+                        | EngineEvent::ToolInputUpdated { .. }
+                        | EngineEvent::ToolOutputDelta { .. } => GeminiRenderLane::Tool,
+                        _ => GeminiRenderLane::Other,
+                    };
+                    let routed_item_id =
+                        next_gemini_routed_item_id(&mut render_state, render_lane, &item_id_clone);
+
+                    if let EngineEvent::TextDelta { text, .. } = &event {
+                        render_state.saw_text_delta = true;
+                        accumulated_agent_text.push_str(text);
+                    }
+
+                    if let EngineEvent::TurnCompleted { result, .. } = &event {
+                        let fallback_text =
+                            extract_turn_result_text(result.as_ref()).unwrap_or_default();
+                        let completed_text = if should_prefer_turn_result_text(result.as_ref()) {
+                            fallback_text
+                        } else if accumulated_agent_text.trim().is_empty() {
+                            fallback_text
+                        } else {
+                            accumulated_agent_text.clone()
+                        };
+                        // Grok text blocks always arrive as TextDelta, so this
+                        // synthetic completion only fires as a safety net.
+                        if !completed_text.trim().is_empty() && !render_state.saw_text_delta {
+                            let synthetic = AppServerEvent {
+                                workspace_id: event.workspace_id().to_string(),
+                                message: json!({
+                                    "method": "item/completed",
+                                    "params": {
+                                        "threadId": &current_thread_id,
+                                        "item": {
+                                            "id": &routed_item_id,
+                                            "type": "agentMessage",
+                                            "text": completed_text,
+                                            "status": "completed",
+                                        }
+                                    }
+                                }),
+                            };
+                            let _ = app_clone.emit("app-server-event", synthetic);
+                        }
+                    }
+
+                    if let Some(payload) = engine_event_to_app_server_event_with_turn_context(
+                        &event,
+                        &current_thread_id,
+                        &routed_item_id,
+                        Some(&turn_id_for_forwarder),
+                    ) {
+                        let _ = app_clone.emit("app-server-event", payload);
+                    }
+
+                    if let EngineEvent::SessionStarted {
+                        session_id, engine, ..
+                    } = &event
+                    {
+                        if !session_id.is_empty() && session_id != "pending" {
+                            if matches!(engine, EngineType::Grok) {
+                                current_thread_id = format!("grok:{}", session_id);
+                            }
+                        }
+                    }
+
+                    if is_terminal {
+                        break;
+                    }
+                }
+            });
+
+            let session_clone = session.clone();
+            let turn_id_clone = turn_id.clone();
+            tokio::spawn(async move {
+                if let Err(e) = session_clone.send_message(params, &turn_id_clone).await {
+                    log::error!("Grok send_message failed: {}", e);
+                }
+            });
+            if let (Some(session_id), Some(metadata)) =
+                (response_session_id.as_deref(), auto_session.clone())
+            {
+                record_auto_session_metadata_if_present(
+                    &state,
+                    &workspace_id,
+                    Some(session_id),
+                    Some(metadata),
+                    "grok",
+                )
+                .await;
+            }
+
+            Ok(json!({
+                "engine": "grok",
+                "sessionId": response_session_id,
+                "result": {
+                    "turn": {
+                        "id": turn_id,
+                        "status": "started"
+                    },
+                },
+                "turn": {
+                    "id": turn_id,
+                    "status": "started"
+                }
+            }))
+        }
     }
 }
 
@@ -2687,7 +3016,7 @@ pub async fn engine_send_message_sync(
                     }
                 });
             let model_for_send =
-                sanitized_model.or_else(|| Some("openai/gpt-5.3-codex".to_string()));
+                sanitized_model.or_else(|| Some("opencode/big-pickle".to_string()));
 
             let params = super::SendMessageParams {
                 text,
@@ -2877,6 +3206,67 @@ pub async fn engine_send_message_sync(
                 "text": response
             }))
         }
+        EngineType::Grok => {
+            let workspace_path = {
+                let workspaces = state.workspaces.lock().await;
+                workspaces
+                    .get(&workspace_id)
+                    .map(|w| std::path::PathBuf::from(&w.path))
+                    .ok_or_else(|| "Workspace not found".to_string())?
+            };
+
+            let session = manager
+                .get_or_create_grok_session(&workspace_id, &workspace_path)
+                .await;
+            let resolved_session_id = resolve_grok_session_id_for_engine_send(
+                continue_session,
+                session_id,
+                session.get_session_id().await,
+            );
+
+            let params = super::SendMessageParams {
+                text,
+                model: model
+                    .as_ref()
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                    .map(|value| value.to_string()),
+                effort,
+                disable_thinking: false,
+                access_mode,
+                images,
+                continue_session,
+                session_id: resolved_session_id,
+                fork_session_id: None,
+                agent: None,
+                variant: None,
+                collaboration_mode: None,
+                custom_spec_root: normalized_custom_spec_root.clone(),
+            };
+
+            let turn_id = format!("grok-sync-{}", uuid::Uuid::new_v4());
+            let response = timeout(
+                Duration::from_secs(900),
+                session.send_message(params, &turn_id),
+            )
+            .await
+            .map_err(|_| "Grok response timed out".to_string())??;
+            let response_session_id = session.get_session_id().await;
+            record_auto_session_metadata_if_present(
+                &state,
+                &workspace_id,
+                response_session_id.as_deref(),
+                auto_session,
+                "grok",
+            )
+            .await;
+
+            Ok(json!({
+                "engine": "grok",
+                "sessionId": response_session_id,
+                "text": response
+            }))
+        }
     }
 }
 
@@ -2911,12 +3301,7 @@ pub async fn engine_interrupt(
             );
             Ok(())
         }
-        EngineType::OpenCode => {
-            if let Some(session) = manager.get_opencode_session(&workspace_id).await {
-                session.interrupt().await?;
-            }
-            Ok(())
-        }
+        EngineType::OpenCode => manager.interrupt_opencode_sessions(&workspace_id, None).await,
         EngineType::Gemini => {
             if let Some(session) = manager.get_gemini_session(&workspace_id).await {
                 session.interrupt().await?;
@@ -2924,6 +3309,7 @@ pub async fn engine_interrupt(
             Ok(())
         }
         EngineType::Kimi => manager.interrupt_kimi_sessions(&workspace_id, None).await,
+        EngineType::Grok => manager.interrupt_grok_sessions(&workspace_id, None).await,
     }
 }
 
@@ -2970,10 +3356,9 @@ pub async fn engine_interrupt_turn(
             Ok(())
         }
         EngineType::OpenCode => {
-            if let Some(session) = manager.get_opencode_session(&workspace_id).await {
-                session.interrupt_turn(&turn_id).await?;
-            }
-            Ok(())
+            manager
+                .interrupt_opencode_sessions(&workspace_id, Some(&turn_id))
+                .await
         }
         EngineType::Gemini => {
             if let Some(session) = manager.get_gemini_session(&workspace_id).await {
@@ -2984,6 +3369,11 @@ pub async fn engine_interrupt_turn(
         EngineType::Kimi => {
             manager
                 .interrupt_kimi_sessions(&workspace_id, Some(&turn_id))
+                .await
+        }
+        EngineType::Grok => {
+            manager
+                .interrupt_grok_sessions(&workspace_id, Some(&turn_id))
                 .await
         }
     }

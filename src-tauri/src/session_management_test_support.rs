@@ -48,6 +48,7 @@
             workspace_label: workspace_label.map(ToString::to_string),
             engine: "codex".to_string(),
             title: "Example session".to_string(),
+            native_title: None,
             updated_at: 1,
             archived_at: None,
             thread_kind: "native".to_string(),

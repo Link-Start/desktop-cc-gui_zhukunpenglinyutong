@@ -17,8 +17,11 @@ fn build_claude_catalog_entry_from_fact(
         workspace_label: Some(owner_workspace.name.clone()),
         engine: "claude".to_string(),
         title: fact
-            .first_real_user_message
+            .native_title
+            .clone()
+            .or_else(|| fact.first_real_user_message.clone())
             .unwrap_or_else(|| "Claude Session".to_string()),
+        native_title: fact.native_title,
         updated_at: fact.updated_at.max(0),
         thread_kind: "native".to_string(),
         source: None,
@@ -221,6 +224,9 @@ async fn build_workspace_scope_catalog_data(
     let kimi_config = engine_manager
         .get_engine_config(engine::EngineType::Kimi)
         .await;
+    let grok_config = engine_manager
+        .get_engine_config(engine::EngineType::Grok)
+        .await;
     let claude_config = engine_manager
         .get_engine_config(engine::EngineType::Claude)
         .await;
@@ -310,6 +316,7 @@ async fn build_workspace_scope_catalog_data(
                         title: summary
                             .summary
                             .unwrap_or_else(|| "Codex Session".to_string()),
+                        native_title: summary.native_title,
                         updated_at: summary.timestamp.max(0),
                         archived_at,
                         thread_kind: "native".to_string(),
@@ -470,6 +477,7 @@ async fn build_workspace_scope_catalog_data(
                         workspace_label: Some(workspace.name.clone()),
                         engine: "gemini".to_string(),
                         title: session.first_message,
+                        native_title: None,
                         updated_at: session.updated_at.max(0),
                         thread_kind: "native".to_string(),
                         source: None,
@@ -549,6 +557,7 @@ async fn build_workspace_scope_catalog_data(
                         workspace_label: Some(workspace.name.clone()),
                         engine: "kimi".to_string(),
                         title: session.first_message,
+                        native_title: None,
                         updated_at: session.updated_at.max(0),
                         thread_kind: "native".to_string(),
                         source: None,
@@ -595,21 +604,83 @@ async fn build_workspace_scope_catalog_data(
             }
         }
 
-        let opencode_disabled = engine_manager
-            .get_engine_status(engine::EngineType::OpenCode)
-            .await
-            .is_some_and(|status| {
-                status.error.as_deref() == Some(engine::OPENCODE_DISABLED_DIAGNOSTIC)
-            });
-        if opencode_disabled {
-            source_statuses.push(build_success_source_status(
-                "opencode",
-                0,
-                scan_mode,
-                WorkspaceSessionSourceCompleteness::AuthoritativeEmpty,
-                None,
-            ));
-            continue;
+        match engine::grok_history::list_grok_sessions(
+            &owner_workspace_path,
+            Some(scan_mode.limit()),
+            grok_config
+                .as_ref()
+                .and_then(|item| item.home_dir.as_deref()),
+        )
+        .await
+        {
+            Ok(grok_sessions) => {
+                source_statuses.push(build_success_source_status(
+                    "grok",
+                    grok_sessions.len(),
+                    scan_mode,
+                    WorkspaceSessionSourceCompleteness::AuthoritativeEmpty,
+                    None,
+                ));
+                entries.extend(grok_sessions.into_iter().map(|session| {
+                    let session_id = format!("grok:{}", session.session_id);
+                    let entry = WorkspaceSessionCatalogEntry {
+                        archived_at: archived_at_for_session(
+                            &owner_metadata,
+                            &owner_workspace_id,
+                            &session_id,
+                        ),
+                        session_id,
+                        stable_session_key: None,
+                        canonical_session_id: Some(session.session_id.clone()),
+                        parent_session_id: None,
+                        workspace_id: owner_workspace_id.clone(),
+                        workspace_label: Some(workspace.name.clone()),
+                        engine: "grok".to_string(),
+                        title: session.first_message,
+                        updated_at: session.updated_at.max(0),
+                        thread_kind: "native".to_string(),
+                        source: None,
+                        source_label: None,
+                        provider_profile_id: None,
+                        provider_profile_source: None,
+                        provider_profile_name: None,
+                        provider_availability: None,
+                        source_completeness: None,
+                        source_status_reason: None,
+                        size_bytes: session.file_size_bytes,
+                        cwd: None,
+                        attribution_status: Some(
+                            SessionCatalogAttributionStatus::StrictMatch
+                                .as_str()
+                                .to_string(),
+                        ),
+                        attribution_reason: None,
+                        attribution_confidence: None,
+                        matched_workspace_id: Some(owner_workspace_id.clone()),
+                        matched_workspace_label: Some(workspace.name.clone()),
+                        folder_id: None,
+                        auto_session: None,
+                        exists_on_disk: false,
+                        inconsistency_code: None,
+                        delete_mode: None,
+                        physical_path: None,
+                        children_count: None,
+                    };
+                    finalize_existing_catalog_entry(entry, &metadata_by_workspace_id)
+                }));
+            }
+            Err(error) => {
+                log::warn!(
+                    "[session_management.list_workspace_sessions] grok history unavailable for workspace {}: {}",
+                    owner_workspace_id,
+                    error
+                );
+                partial_sources.push(SESSION_CATALOG_PARTIAL_GROK.to_string());
+                source_statuses.push(build_degraded_source_status(
+                    "grok",
+                    SESSION_CATALOG_PARTIAL_GROK,
+                ));
+            }
         }
 
         match engine::commands::opencode_session_list_core(
@@ -643,6 +714,7 @@ async fn build_workspace_scope_catalog_data(
                         workspace_label: Some(workspace.name.clone()),
                         engine: "opencode".to_string(),
                         title: session.title,
+                        native_title: None,
                         updated_at: session.updated_at.unwrap_or(0).max(0),
                         thread_kind: "native".to_string(),
                         source: None,
@@ -676,9 +748,7 @@ async fn build_workspace_scope_catalog_data(
                 }));
             }
             Err(error) => {
-                if error.contains("OpenCode CLI not found")
-                    || error.contains(engine::OPENCODE_DISABLED_DIAGNOSTIC)
-                {
+                if error.contains("OpenCode CLI not found") {
                     source_statuses.push(build_success_source_status(
                         "opencode",
                         0,

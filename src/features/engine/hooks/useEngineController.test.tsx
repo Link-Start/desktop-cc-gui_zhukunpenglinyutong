@@ -520,7 +520,9 @@ describe("useEngineController", () => {
     expect(result.current.availableEngines.map((engine) => engine.type)).toEqual([
       "claude",
       "codex",
+      "grok",
       "kimi",
+      "opencode",
     ]);
     expect(
       result.current.availableEngines.every(
@@ -546,7 +548,7 @@ describe("useEngineController", () => {
     expect(result.current).toBe(firstSnapshot);
   });
 
-  it("keeps detected OpenCode outside production engine surfaces", async () => {
+  it("shows detected OpenCode in production engine surfaces", async () => {
     detectEnginesMock.mockResolvedValue([
       {
         engineType: "claude",
@@ -633,10 +635,15 @@ describe("useEngineController", () => {
     const opencodeEngine = result.current.availableEngines.find(
       (engine) => engine.type === "opencode",
     );
-    expect(opencodeEngine).toBeUndefined();
+    expect(opencodeEngine).toBeDefined();
+    expect(opencodeEngine?.installed).toBe(true);
+    expect(opencodeEngine?.availabilityState).toBe("ready");
+    expect(
+      result.current.availableEngines.some((engine) => engine.type === "gemini"),
+    ).toBe(false);
   });
 
-  it("hides disabled Gemini and OpenCode engines from available engine surfaces", async () => {
+  it("hides disabled Gemini engine from available engine surfaces", async () => {
     detectEnginesMock.mockResolvedValue([
       {
         engineType: "claude",
@@ -698,9 +705,11 @@ describe("useEngineController", () => {
     expect(result.current.availableEngines.map((engine) => engine.type)).toEqual([
       "claude",
       "codex",
+      "grok",
       "kimi",
+      "opencode",
     ]);
-    expect(result.current.activeEngine).toBe("claude");
+    expect(result.current.activeEngine).toBe("opencode");
   });
 
   it("ignores a legacy persisted Gemini execution selection", async () => {

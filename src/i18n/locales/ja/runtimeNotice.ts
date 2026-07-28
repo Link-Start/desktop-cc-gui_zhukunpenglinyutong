@@ -59,6 +59,12 @@ const runtimeNotice = {
     "claude": {
       "resumeCommandCopied": "Claude の再開コマンドをコピーしました。TUI の /resume ピッカーにこの GUI セッションが表示されない場合は、claude --resume {{sessionId}} または /resume {{sessionId}} を明示的に実行してください。"
     },
+    "grok": {
+      "providerSelected": "{{name}} を選択しました。Grok CLI のエントリをクリックしてセッションを作成してください。"
+    },
+    "opencode": {
+      "providerSelected": "{{name}} を選択しました。OpenCode のエントリをクリックしてセッションを作成してください。"
+    },
     "error": {
       "createSessionRecoveryRequired": "{{workspace}}: ランタイムの復旧中にセッション作成に失敗しました",
       "threadTurnFailed": "{{engine}} セッションが失敗しました: {{message}}",

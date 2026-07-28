@@ -27,6 +27,7 @@ const KNOWN_ENGINES: readonly EngineType[] = [
   "claude",
   "codex",
   "gemini",
+  "grok",
   "kimi",
   "opencode",
 ];

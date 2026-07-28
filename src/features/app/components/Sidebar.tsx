@@ -111,7 +111,9 @@ import {
   type WorkspaceSessionFolder,
   getClaudeProviders,
   getCodexProviders,
+  getGrokProviders,
   getKimiProviders,
+  getOpenCodeProviders,
 } from "../../../services/tauri";
 import type {
   EngineProviderProfileOption,
@@ -372,6 +374,12 @@ function SidebarImpl({
   const [kimiProviderProfiles, setKimiProviderProfiles] = useState<
     EngineProviderProfileOption[]
   >([]);
+  const [grokProviderProfiles, setGrokProviderProfiles] = useState<
+    EngineProviderProfileOption[]
+  >([]);
+  const [openCodeProviderProfiles, setOpenCodeProviderProfiles] = useState<
+    EngineProviderProfileOption[]
+  >([]);
   const providerCatalogLoadErrorTitlesRef = useRef({
     claude: t("sidebar.providerCatalogLoadFailed", {
       engine: t("workspace.engineClaudeCode"),
@@ -381,6 +389,12 @@ function SidebarImpl({
     }),
     kimi: t("sidebar.providerCatalogLoadFailed", {
       engine: t("workspace.engineKimi"),
+    }),
+    grok: t("sidebar.providerCatalogLoadFailed", {
+      engine: t("workspace.engineGrok"),
+    }),
+    opencode: t("sidebar.providerCatalogLoadFailed", {
+      engine: t("workspace.engineOpenCode"),
     }),
   });
   const [localRootSessionFolderDraftRequestByWorkspaceId, setLocalRootSessionFolderDraftRequestByWorkspaceId] = useState<
@@ -785,7 +799,7 @@ function SidebarImpl({
   useEffect(() => {
     let cancelled = false;
     const loadProfiles = async (
-      engine: "claude" | "codex" | "kimi",
+      engine: "claude" | "codex" | "kimi" | "grok" | "opencode",
       load: () => Promise<Array<{ id: string; name: string }>>,
       setProfiles: Dispatch<SetStateAction<EngineProviderProfileOption[]>>,
     ) => {
@@ -830,6 +844,8 @@ function SidebarImpl({
     void loadProfiles("claude", getClaudeProviders, setClaudeProviderProfiles);
     void loadProfiles("codex", getCodexProviders, setCodexProviderProfiles);
     void loadProfiles("kimi", getKimiProviders, setKimiProviderProfiles);
+    void loadProfiles("grok", getGrokProviders, setGrokProviderProfiles);
+    void loadProfiles("opencode", getOpenCodeProviders, setOpenCodeProviderProfiles);
     return () => {
       cancelled = true;
     };
@@ -939,6 +955,8 @@ function SidebarImpl({
       claudeProviderProfiles,
       codexProviderProfiles,
       kimiProviderProfiles,
+      grokProviderProfiles,
+      opencodeProviderProfiles: openCodeProviderProfiles,
       engineOptions,
       onRefreshEngineOptions,
       onAddSharedAgent,
@@ -1007,11 +1025,13 @@ function SidebarImpl({
       case "engine-codex":
         return <EngineIcon engine="codex" size={14} />;
       case "engine-opencode":
-        return <EngineIcon engine="opencode" size={14} style={{ color: "#3b82f6" }} />;
+        return <EngineIcon engine="opencode" size={14} />;
       case "engine-gemini":
         return <EngineIcon engine="gemini" size={14} />;
       case "engine-kimi":
         return <EngineIcon engine="kimi" size={14} />;
+      case "engine-grok":
+        return <EngineIcon engine="grok" size={14} />;
       case "reload":
         return <RefreshCw size={13} />;
       case "activate":

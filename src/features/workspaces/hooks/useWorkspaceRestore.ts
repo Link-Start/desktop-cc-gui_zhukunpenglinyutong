@@ -58,7 +58,6 @@ export function useWorkspaceRestore({
       }
       try {
         await listThreadsForWorkspace(workspace, {
-          includeOpenCodeSessions: false,
           recoverySource: "workspace-restore",
           allowRuntimeReconnect: !restoreThreadsOnlyOnLaunch,
         });

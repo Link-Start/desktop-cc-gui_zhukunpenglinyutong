@@ -2,9 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   ClaudeCurrentConfig as VendorClaudeCurrentConfig,
   CodexProviderConfig as VendorCodexProviderConfig,
+  GrokCurrentConfig as VendorGrokCurrentConfig,
+  GrokProviderDeleteResult as VendorGrokProviderDeleteResult,
+  GrokProviderConfig as VendorGrokProviderConfig,
   KimiCurrentConfig as VendorKimiCurrentConfig,
   KimiProviderDeleteResult as VendorKimiProviderDeleteResult,
   KimiProviderConfig as VendorKimiProviderConfig,
+  OpenCodeCurrentConfig as VendorOpenCodeCurrentConfig,
+  OpenCodeProviderConfig as VendorOpenCodeProviderConfig,
   ProviderConfig as VendorProviderConfig,
 } from "../../features/vendors/types";
 
@@ -133,6 +138,90 @@ export async function fetchKimiProviderModels(
   apiKey: string,
 ): Promise<VendorModelListResult> {
   return invoke<VendorModelListResult>("vendor_fetch_kimi_models", {
+    baseUrl,
+    apiKey,
+  });
+}
+
+export async function getGrokProviders(): Promise<VendorGrokProviderConfig[]> {
+  return invoke<VendorGrokProviderConfig[]>("vendor_get_grok_providers");
+}
+
+export async function getCurrentGrokConfig(): Promise<VendorGrokCurrentConfig> {
+  return invoke<VendorGrokCurrentConfig>("vendor_get_current_grok_config");
+}
+
+export async function addGrokProvider(provider: unknown): Promise<void> {
+  return invoke("vendor_add_grok_provider", { provider });
+}
+
+export async function updateGrokProvider(
+  id: string,
+  updates: unknown,
+): Promise<void> {
+  return invoke("vendor_update_grok_provider", { id, updates });
+}
+
+export async function deleteGrokProvider(
+  id: string,
+): Promise<VendorGrokProviderDeleteResult> {
+  return invoke<VendorGrokProviderDeleteResult>("vendor_delete_grok_provider", {
+    id,
+  });
+}
+
+export async function switchGrokProvider(id: string): Promise<void> {
+  return invoke("vendor_switch_grok_provider", { id });
+}
+
+export async function fetchGrokProviderModels(
+  baseUrl: string,
+  apiKey: string,
+): Promise<VendorModelListResult> {
+  return invoke<VendorModelListResult>("vendor_fetch_grok_models", {
+    baseUrl,
+    apiKey,
+  });
+}
+
+export async function getOpenCodeProviders(): Promise<
+  VendorOpenCodeProviderConfig[]
+> {
+  return invoke<VendorOpenCodeProviderConfig[]>(
+    "vendor_get_opencode_providers",
+  );
+}
+
+export async function getCurrentOpenCodeConfig(): Promise<VendorOpenCodeCurrentConfig> {
+  return invoke<VendorOpenCodeCurrentConfig>(
+    "vendor_get_current_opencode_config",
+  );
+}
+
+export async function addOpenCodeProvider(provider: unknown): Promise<void> {
+  return invoke("vendor_add_opencode_provider", { provider });
+}
+
+export async function updateOpenCodeProvider(
+  id: string,
+  updates: unknown,
+): Promise<void> {
+  return invoke("vendor_update_opencode_provider", { id, updates });
+}
+
+export async function deleteOpenCodeProvider(id: string): Promise<void> {
+  return invoke("vendor_delete_opencode_provider", { id });
+}
+
+export async function switchOpenCodeProvider(id: string): Promise<void> {
+  return invoke("vendor_switch_opencode_provider", { id });
+}
+
+export async function fetchOpenCodeProviderModels(
+  baseUrl: string,
+  apiKey: string,
+): Promise<VendorModelListResult> {
+  return invoke<VendorModelListResult>("vendor_fetch_opencode_models", {
     baseUrl,
     apiKey,
   });

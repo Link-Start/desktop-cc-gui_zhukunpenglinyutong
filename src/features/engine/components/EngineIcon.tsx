@@ -4,6 +4,7 @@ import type { EngineType } from "../../../types";
 // 导入官方模型图标
 import claudeIcon from "../../../assets/model-icons/claude.svg";
 import geminiIcon from "../../../assets/model-icons/gemini.svg";
+import grokIcon from "@lobehub/icons-static-svg/icons/grok.svg";
 import kimiIcon from "@lobehub/icons-static-svg/icons/kimi.svg";
 
 type EngineIconProps = {
@@ -23,14 +24,13 @@ function OpenCodeGlyph({ size, className, style }: SvgGlyphProps) {
   return (
     <svg
       viewBox="0 0 24 24"
-      fill="none"
+      fill="currentColor"
+      fillRule="evenodd"
       className={className}
       style={{ width: size, height: size, flexShrink: 0, ...style }}
       aria-hidden
     >
-      <rect x="3.2" y="4.2" width="17.6" height="15.6" rx="2.3" stroke="currentColor" strokeWidth="1.6" />
-      <path d="m9.4 9.2-2.3 2.4 2.3 2.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="M12.3 14.2h4.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M16 6H8v12h8V6zm4 16H4V2h16v20z" />
     </svg>
   );
 }
@@ -84,6 +84,16 @@ export function EngineIcon({
         <img
           src={geminiIcon}
           alt="Gemini"
+          className={className}
+          style={iconStyle}
+          aria-hidden
+        />
+      );
+    case "grok":
+      return (
+        <img
+          src={grokIcon}
+          alt="Grok"
           className={className}
           style={iconStyle}
           aria-hidden

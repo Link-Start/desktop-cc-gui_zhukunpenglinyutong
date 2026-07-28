@@ -21,7 +21,8 @@ describe("EngineIcon", () => {
     const markup = renderToStaticMarkup(<EngineIcon engine="opencode" size={16} />);
 
     expect(markup).toContain("<svg");
-    expect(markup).toContain("stroke=\"currentColor\"");
+    expect(markup).toContain('fill="currentColor"');
+    expect(markup).toContain("M16 6H8v12h8V6zm4 16H4V2h16v20z");
     expect(markup).not.toContain("<img");
   });
 });

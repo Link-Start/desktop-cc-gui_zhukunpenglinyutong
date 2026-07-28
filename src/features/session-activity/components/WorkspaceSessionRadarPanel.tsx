@@ -235,13 +235,16 @@ export function WorkspaceSessionRadarPanel({
     });
   };
 
-  const resolveEngine = (entry: SessionRadarEntry): "codex" | "claude" | "gemini" | "kimi" | "opencode" => {
+  const resolveEngine = (entry: SessionRadarEntry): "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode" => {
     const normalizedEngine = entry.engine.toUpperCase();
     if (normalizedEngine === "CLAUDE") {
       return "claude";
     }
     if (normalizedEngine === "GEMINI") {
       return "gemini";
+    }
+    if (normalizedEngine === "GROK") {
+      return "grok";
     }
     if (normalizedEngine === "KIMI") {
       return "kimi";

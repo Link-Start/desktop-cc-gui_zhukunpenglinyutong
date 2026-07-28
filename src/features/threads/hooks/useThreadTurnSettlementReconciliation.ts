@@ -61,7 +61,7 @@ export function useThreadTurnSettlementReconciliation({
   const buildReconciliationQueryKey = useCallback(
     (input: {
       workspaceId: string;
-      engine: "claude" | "codex" | "gemini" | "kimi" | "opencode";
+      engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
       threadId: string;
       turnId: string | null;
       runtimeSessionId: string | null;
@@ -104,7 +104,7 @@ export function useThreadTurnSettlementReconciliation({
       workspaceId: string;
       threadId: string;
       turnId: string | null;
-      engine: "claude" | "codex" | "gemini" | "kimi" | "opencode";
+      engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
       lifecycle: ThreadLifecycleSnapshot;
       source: "three-evidence-query-skipped" | "three-evidence-query-resolved" | "watchdog-interrupted";
       decisionAction: string;

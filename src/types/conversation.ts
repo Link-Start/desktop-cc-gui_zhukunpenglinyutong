@@ -219,8 +219,8 @@ export type ThreadSummary = {
   archivedAt?: number;
   threadKind?: "native" | "shared";
   sizeBytes?: number;
-  engineSource?: "codex" | "claude" | "gemini" | "kimi" | "opencode";
-  selectedEngine?: "codex" | "claude" | "gemini" | "kimi" | "opencode";
+  engineSource?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode";
+  selectedEngine?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode";
   source?: string;
   provider?: string;
   sourceLabel?: string;

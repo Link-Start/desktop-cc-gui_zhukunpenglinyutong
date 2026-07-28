@@ -614,6 +614,7 @@ function ComposerImpl({
     selectedEngine === "codex" ||
     selectedEngine === "claude" ||
     selectedEngine === "gemini" ||
+    selectedEngine === "grok" ||
     selectedEngine === "kimi";
   const streamActivityPhase = useStreamActivityPhase({
     isProcessing: Boolean(isProcessing && supportsStreamActivityPhaseFx),
@@ -625,6 +626,7 @@ function ComposerImpl({
     selectedEngine === "claude" ||
     selectedEngine === "codex" ||
     selectedEngine === "gemini" ||
+    selectedEngine === "grok" ||
     selectedEngine === "kimi";
   // 草稿值直接订阅模块级 store(而非经 app-shell 根 prop 灌入):按键写 store 时
   // 只有 Composer 自身重渲染,不再把整个 app-shell 拖下水。

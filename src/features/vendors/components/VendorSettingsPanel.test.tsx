@@ -68,6 +68,38 @@ const mockState = vi.hoisted(() => ({
     cancelDeleteKimiProvider: vi.fn(),
     currentKimiConfig: null,
   },
+  grokManagement: {
+    grokProviderError: null,
+    grokProviders: [],
+    grokLoading: false,
+    handleAddGrokProvider: vi.fn(),
+    handleEditGrokProvider: vi.fn(),
+    handleDeleteGrokProvider: vi.fn(),
+    handleSwitchGrokProvider: vi.fn(),
+    grokProviderDialog: { isOpen: false, provider: null },
+    handleCloseGrokProviderDialog: vi.fn(),
+    handleSaveGrokProvider: vi.fn(),
+    deleteGrokConfirm: { isOpen: false, provider: null },
+    confirmDeleteGrokProvider: vi.fn(),
+    cancelDeleteGrokProvider: vi.fn(),
+    currentGrokConfig: null,
+  },
+  openCodeManagement: {
+    openCodeProviderError: null,
+    openCodeProviders: [],
+    openCodeLoading: false,
+    handleAddOpenCodeProvider: vi.fn(),
+    handleEditOpenCodeProvider: vi.fn(),
+    handleDeleteOpenCodeProvider: vi.fn(),
+    handleSwitchOpenCodeProvider: vi.fn(),
+    openCodeProviderDialog: { isOpen: false, provider: null },
+    handleCloseOpenCodeProviderDialog: vi.fn(),
+    handleSaveOpenCodeProvider: vi.fn(),
+    deleteOpenCodeConfirm: { isOpen: false, provider: null },
+    confirmDeleteOpenCodeProvider: vi.fn(),
+    cancelDeleteOpenCodeProvider: vi.fn(),
+    currentOpenCodeConfig: null,
+  },
   claudeModels: { models: [], updateModels: vi.fn() },
   codexModels: { models: [], updateModels: vi.fn() },
 }));
@@ -82,6 +114,14 @@ vi.mock("../hooks/useCodexProviderManagement", () => ({
 
 vi.mock("../hooks/useKimiProviderManagement", () => ({
   useKimiProviderManagement: vi.fn(() => mockState.kimiManagement),
+}));
+
+vi.mock("../hooks/useGrokProviderManagement", () => ({
+  useGrokProviderManagement: vi.fn(() => mockState.grokManagement),
+}));
+
+vi.mock("../hooks/useOpenCodeProviderManagement", () => ({
+  useOpenCodeProviderManagement: vi.fn(() => mockState.openCodeManagement),
 }));
 
 vi.mock("../hooks/usePluginModels", () => ({
@@ -110,6 +150,14 @@ vi.mock("./KimiProviderList", () => ({
   KimiProviderList: () => <div data-testid="kimi-provider-list-stub" />,
 }));
 
+vi.mock("./GrokProviderList", () => ({
+  GrokProviderList: () => <div data-testid="grok-provider-list-stub" />,
+}));
+
+vi.mock("./OpenCodeProviderList", () => ({
+  OpenCodeProviderList: () => <div data-testid="opencode-provider-list-stub" />,
+}));
+
 vi.mock("./ProviderDialog", () => ({
   ProviderDialog: () => null,
 }));
@@ -120,6 +168,14 @@ vi.mock("./CodexProviderDialog", () => ({
 
 vi.mock("./KimiProviderDialog", () => ({
   KimiProviderDialog: () => null,
+}));
+
+vi.mock("./GrokProviderDialog", () => ({
+  GrokProviderDialog: () => null,
+}));
+
+vi.mock("./OpenCodeProviderDialog", () => ({
+  OpenCodeProviderDialog: () => null,
 }));
 
 vi.mock("./DeleteConfirmDialog", () => ({
@@ -340,10 +396,28 @@ describe("VendorSettingsPanel", () => {
     expect(kimiIcon).toBeTruthy();
     expect((kimiIcon as HTMLElement).className).toContain("mono");
 
+    // Grok CLI is supported and likewise keeps the monochrome icon.
+    const grokNavButton = screen.getByRole("button", { name: /Grok CLI/ });
+    expect((grokNavButton as HTMLButtonElement).disabled).toBe(false);
+    const grokIcon = grokNavButton.querySelector(
+      ".vendor-engine-icon img, .vendor-engine-icon span",
+    );
+    expect(grokIcon).toBeTruthy();
+    expect((grokIcon as HTMLElement).className).toContain("mono");
+
+    // OpenCode CLI is supported and likewise keeps the monochrome icon.
+    const openCodeNavButton = screen.getByRole("button", {
+      name: /OpenCode CLI/,
+    });
+    expect((openCodeNavButton as HTMLButtonElement).disabled).toBe(false);
+    const openCodeIcon = openCodeNavButton.querySelector(
+      ".vendor-engine-icon img, .vendor-engine-icon span",
+    );
+    expect(openCodeIcon).toBeTruthy();
+    expect((openCodeIcon as HTMLElement).className).toContain("mono");
+
     const unsupportedButtons = [
       "Gemini CLI",
-      "Grok CLI",
-      "OpenCode CLI",
       "GLM CLI",
       "Trae CLI",
       "Cursor CLI",
@@ -420,7 +494,7 @@ describe("VendorSettingsPanel", () => {
     expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
   });
 
-  it("opens the Grok CLI placeholder below Gemini", async () => {
+  it("renders the Grok CLI tab with current config summary and provider list", async () => {
     renderPanel();
 
     await waitFor(() => {
@@ -429,11 +503,60 @@ describe("VendorSettingsPanel", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /Grok CLI/ }));
 
-    expect(screen.getByRole("heading", { name: "Grok CLI" })).toBeTruthy();
-    expect(screen.getByText("正在适配此CLI，即将开放")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open docs" }).getAttribute("href")).toBe(
-      "https://x.ai/cli",
-    );
+    const brandHeader = screen
+      .getByRole("heading", { name: "Grok CLI" })
+      .closest(".vendor-brand-header") as HTMLElement;
+    expect(brandHeader).toBeTruthy();
+    const docsLink = within(brandHeader).getByRole("link", {
+      name: "Open docs",
+    });
+    expect(docsLink.getAttribute("href")).toBe("https://x.ai/cli");
+    fireEvent.click(docsLink);
+    expect(openUrlMock).toHaveBeenCalledWith("https://x.ai/cli");
+
+    expect(screen.getByTestId("grok-provider-list-stub")).toBeTruthy();
+    expect(screen.queryByTestId("provider-list-stub")).toBeNull();
+    expect(screen.queryByTestId("codex-provider-list-stub")).toBeNull();
+    expect(screen.queryByTestId("kimi-provider-list-stub")).toBeNull();
+    expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
+    expect(screen.queryByText("正在适配此CLI，即将开放")).toBeNull();
+    expect(
+      screen.getByText("settings.vendor.grokCurrentConfig"),
+    ).toBeTruthy();
+    expect(screen.getByText("settings.vendor.grokNoConfig")).toBeTruthy();
+  });
+
+  it("renders the OpenCode CLI tab with current config summary and provider list", async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+      expect(readGlobalCodexAuthJsonMock).toHaveBeenCalled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /OpenCode CLI/ }));
+
+    const brandHeader = screen
+      .getByRole("heading", { name: "OpenCode CLI" })
+      .closest(".vendor-brand-header") as HTMLElement;
+    expect(brandHeader).toBeTruthy();
+    const docsLink = within(brandHeader).getByRole("link", {
+      name: "Open docs",
+    });
+    expect(docsLink.getAttribute("href")).toBe("https://opencode.ai/docs/");
+    fireEvent.click(docsLink);
+    expect(openUrlMock).toHaveBeenCalledWith("https://opencode.ai/docs/");
+
+    expect(screen.getByTestId("opencode-provider-list-stub")).toBeTruthy();
+    expect(screen.queryByTestId("provider-list-stub")).toBeNull();
+    expect(screen.queryByTestId("codex-provider-list-stub")).toBeNull();
+    expect(screen.queryByTestId("kimi-provider-list-stub")).toBeNull();
+    expect(screen.queryByTestId("grok-provider-list-stub")).toBeNull();
+    expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
+    expect(screen.queryByText("正在适配此CLI，即将开放")).toBeNull();
+    expect(
+      screen.getByText("settings.vendor.opencodeCurrentConfig"),
+    ).toBeTruthy();
+    expect(screen.getByText("settings.vendor.opencodeNoConfig")).toBeTruthy();
   });
 
   it("keeps the CLI engine list in its own scroll container", async () => {

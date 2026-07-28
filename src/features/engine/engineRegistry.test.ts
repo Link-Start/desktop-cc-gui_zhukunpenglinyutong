@@ -14,6 +14,7 @@ describe("engineRegistry", () => {
       "claude",
       "codex",
       "gemini",
+      "grok",
       "kimi",
       "opencode",
     ]);
@@ -22,10 +23,15 @@ describe("engineRegistry", () => {
       executionModel: "persistent",
       source: { kind: "builtin", trustOrigin: "mossx-host" },
     });
+    expect(getEngineRegistryEntry("grok")).toMatchObject({
+      protocolFamily: "stream-json-cli",
+      executionModel: "one-shot",
+    });
     expect(getEngineRegistryEntry("kimi")).toMatchObject({
       protocolFamily: "stream-json-cli",
       executionModel: "one-shot",
     });
+    expect(isSupportedEngineType("grok")).toBe(true);
     expect(isSupportedEngineType("kimi")).toBe(true);
     expect(isSupportedEngineType("other")).toBe(false);
   });

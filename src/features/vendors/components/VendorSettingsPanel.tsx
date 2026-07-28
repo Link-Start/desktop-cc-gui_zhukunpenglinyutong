@@ -6,19 +6,25 @@ import PackagePlus from "lucide-react/dist/esm/icons/package-plus";
 import Import from "lucide-react/dist/esm/icons/import";
 import Search from "lucide-react/dist/esm/icons/search";
 import type { CodexCustomModel, CodexProviderConfig } from "../types";
-import { LOCAL_KIMI_PROVIDER_ID, STORAGE_KEYS, validateCodexCustomModels } from "../types";
+import { LOCAL_GROK_PROVIDER_ID, LOCAL_KIMI_PROVIDER_ID, LOCAL_OPENCODE_PROVIDER_ID, STORAGE_KEYS, validateCodexCustomModels } from "../types";
 import type { AppSettings, CodexUnifiedExecExternalStatus } from "../../../types";
 import { useProviderManagement } from "../hooks/useProviderManagement";
 import { useCodexProviderManagement } from "../hooks/useCodexProviderManagement";
 import { useKimiProviderManagement } from "../hooks/useKimiProviderManagement";
+import { useGrokProviderManagement } from "../hooks/useGrokProviderManagement";
+import { useOpenCodeProviderManagement } from "../hooks/useOpenCodeProviderManagement";
 import { usePluginModels } from "../hooks/usePluginModels";
 import { ProviderList } from "./ProviderList";
 import { CodexProviderList } from "./CodexProviderList";
 import { KimiProviderList } from "./KimiProviderList";
+import { GrokProviderList } from "./GrokProviderList";
+import { OpenCodeProviderList } from "./OpenCodeProviderList";
 import { ClaudeSettingsJsonDialog } from "./ClaudeSettingsJsonDialog";
 import { ProviderDialog } from "./ProviderDialog";
 import { CodexProviderDialog } from "./CodexProviderDialog";
 import { KimiProviderDialog } from "./KimiProviderDialog";
+import { GrokProviderDialog } from "./GrokProviderDialog";
+import { OpenCodeProviderDialog } from "./OpenCodeProviderDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { CustomModelDialog } from "./CustomModelDialog";
 import { CcSwitchImportDialog } from "./CcSwitchImportDialog";
@@ -195,6 +201,8 @@ export function VendorSettingsPanel({
   const claude = useProviderManagement();
   const codex = useCodexProviderManagement();
   const kimi = useKimiProviderManagement();
+  const grok = useGrokProviderManagement();
+  const openCode = useOpenCodeProviderManagement();
   const [ccSwitchImportTarget, setCcSwitchImportTarget] =
     useState<CcSwitchImportTarget | null>(null);
 
@@ -508,14 +516,28 @@ export function VendorSettingsPanel({
       (provider) =>
         provider.id !== LOCAL_KIMI_PROVIDER_ID && !provider.isLocalProvider,
     );
+  const grokHasConfig =
+    Boolean(grok.currentGrokConfig?.baseUrl) ||
+    grok.grokProviders.some(
+      (provider) =>
+        provider.id !== LOCAL_GROK_PROVIDER_ID && !provider.isLocalProvider,
+    );
+  const openCodeHasConfig =
+    Boolean(openCode.currentOpenCodeConfig?.baseUrl) ||
+    openCode.openCodeProviders.some(
+      (provider) =>
+        provider.id !== LOCAL_OPENCODE_PROVIDER_ID && !provider.isLocalProvider,
+    );
   const engineNavItems: CliEngineNavItem[] = useMemo(
     () =>
       buildCliEngineNavItems({
         claudeHasConfig,
         codexHasConfig: codexGlobalConfigExists,
         kimiHasConfig,
+        grokHasConfig,
+        openCodeHasConfig,
       }),
-    [claudeHasConfig, codexGlobalConfigExists, kimiHasConfig],
+    [claudeHasConfig, codexGlobalConfigExists, kimiHasConfig, grokHasConfig, openCodeHasConfig],
   );
   const filteredEngineNavItems = useMemo(() => {
     const normalizedQuery = cliSearchQuery.trim().toLowerCase();
@@ -921,6 +943,156 @@ export function VendorSettingsPanel({
               providerName={kimi.deleteKimiConfirm.provider?.name ?? ""}
               onConfirm={kimi.confirmDeleteKimiProvider}
               onCancel={kimi.cancelDeleteKimiProvider}
+            />
+          </div>
+          </CliLifecycleProvider>
+        ) : activeCli === "grok" ? (
+          <CliLifecycleProvider engine="grok" active>
+          <div className="vendor-tab-content">
+            <CliBrandHeader
+              id="grok"
+              title="Grok CLI"
+              description={t("settings.grokDescription", {
+                defaultValue:
+                  "Configure the Grok CLI providers used by ccgui.",
+              })}
+              helpLabel={t("settings.vendor.openCliDocs", {
+                defaultValue: "Open docs",
+              })}
+              href={CLI_DOCS_HREF_BY_ID.grok}
+              actions={<CliLifecycleHeaderActions />}
+            />
+            <CliLifecycleInstallerPanel />
+            {grok.grokProviderError && (
+              <div className="settings-help">
+                {t("settings.vendor.grokProviderActionFailed")}:{" "}
+                {grok.grokProviderError}
+              </div>
+            )}
+            <div className="vendor-provider-list">
+              <div className="vendor-list-header">
+                <span className="vendor-list-title">
+                  {t("settings.vendor.grokCurrentConfig")}
+                </span>
+              </div>
+              {grok.currentGrokConfig ? (
+                <>
+                  <div className="settings-help">
+                    {t("settings.vendor.grokDefaultModel")}:{" "}
+                    {grok.currentGrokConfig.defaultModel ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                  <div className="settings-help">
+                    {t("settings.vendor.grokBaseUrl")}:{" "}
+                    {grok.currentGrokConfig.baseUrl ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                  <div className="settings-help">
+                    {t("settings.vendor.grokProvider")}:{" "}
+                    {grok.currentGrokConfig.providerName ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                </>
+              ) : (
+                <div className="settings-help">
+                  {t("settings.vendor.grokNoConfig")}
+                </div>
+              )}
+            </div>
+            <GrokProviderList
+              providers={grok.grokProviders}
+              loading={grok.grokLoading}
+              onAdd={grok.handleAddGrokProvider}
+              onEdit={grok.handleEditGrokProvider}
+              onDelete={grok.handleDeleteGrokProvider}
+              onSwitch={grok.handleSwitchGrokProvider}
+            />
+            <GrokProviderDialog
+              isOpen={grok.grokProviderDialog.isOpen}
+              provider={grok.grokProviderDialog.provider}
+              onClose={grok.handleCloseGrokProviderDialog}
+              onSave={grok.handleSaveGrokProvider}
+            />
+            <DeleteConfirmDialog
+              isOpen={grok.deleteGrokConfirm.isOpen}
+              providerName={grok.deleteGrokConfirm.provider?.name ?? ""}
+              onConfirm={grok.confirmDeleteGrokProvider}
+              onCancel={grok.cancelDeleteGrokProvider}
+            />
+          </div>
+          </CliLifecycleProvider>
+        ) : activeCli === "opencode" ? (
+          <CliLifecycleProvider engine="opencode" active>
+          <div className="vendor-tab-content">
+            <CliBrandHeader
+              id="opencode"
+              title="OpenCode CLI"
+              description={t("settings.opencodeDescription", {
+                defaultValue:
+                  "Configure the OpenCode CLI providers used by ccgui.",
+              })}
+              helpLabel={t("settings.vendor.openCliDocs", {
+                defaultValue: "Open docs",
+              })}
+              href={CLI_DOCS_HREF_BY_ID.opencode}
+              actions={<CliLifecycleHeaderActions />}
+            />
+            <CliLifecycleInstallerPanel />
+            {openCode.openCodeProviderError && (
+              <div className="settings-help">
+                {t("settings.vendor.opencodeProviderActionFailed")}:{" "}
+                {openCode.openCodeProviderError}
+              </div>
+            )}
+            <div className="vendor-provider-list">
+              <div className="vendor-list-header">
+                <span className="vendor-list-title">
+                  {t("settings.vendor.opencodeCurrentConfig")}
+                </span>
+              </div>
+              {openCode.currentOpenCodeConfig ? (
+                <>
+                  <div className="settings-help">
+                    {t("settings.vendor.opencodeDefaultModel")}:{" "}
+                    {openCode.currentOpenCodeConfig.defaultModel ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                  <div className="settings-help">
+                    {t("settings.vendor.opencodeBaseUrl")}:{" "}
+                    {openCode.currentOpenCodeConfig.baseUrl ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                  <div className="settings-help">
+                    {t("settings.vendor.opencodeProvider")}:{" "}
+                    {openCode.currentOpenCodeConfig.providerName ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                </>
+              ) : (
+                <div className="settings-help">
+                  {t("settings.vendor.opencodeNoConfig")}
+                </div>
+              )}
+            </div>
+            <OpenCodeProviderList
+              providers={openCode.openCodeProviders}
+              loading={openCode.openCodeLoading}
+              onAdd={openCode.handleAddOpenCodeProvider}
+              onEdit={openCode.handleEditOpenCodeProvider}
+              onDelete={openCode.handleDeleteOpenCodeProvider}
+              onSwitch={openCode.handleSwitchOpenCodeProvider}
+            />
+            <OpenCodeProviderDialog
+              isOpen={openCode.openCodeProviderDialog.isOpen}
+              provider={openCode.openCodeProviderDialog.provider}
+              onClose={openCode.handleCloseOpenCodeProviderDialog}
+              onSave={openCode.handleSaveOpenCodeProvider}
+            />
+            <DeleteConfirmDialog
+              isOpen={openCode.deleteOpenCodeConfirm.isOpen}
+              providerName={openCode.deleteOpenCodeConfirm.provider?.name ?? ""}
+              onConfirm={openCode.confirmDeleteOpenCodeProvider}
+              onCancel={openCode.cancelDeleteOpenCodeProvider}
             />
           </div>
           </CliLifecycleProvider>
