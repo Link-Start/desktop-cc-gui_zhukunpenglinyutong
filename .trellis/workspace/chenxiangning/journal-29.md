@@ -742,3 +742,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1219: 融合 CLI 基石与 OpenCode/Grok
+
+**Date**: 2026-07-29
+**Task**: 融合 CLI 基石与 OpenCode/Grok
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+以 Shared Session V2 与 Provider Continuation 基石为主语义完成 4 个冲突的 semantic merge，保留 OpenCode/Grok runtime、provider、catalog、history、installer 与 nativeTitle 能力；补齐 catalog continuation schema、Grok runtime token、Composer EngineType 与 turn badge 接入。验证通过：TypeScript typecheck、cargo check、runtime contracts、rustfmt、ESLint、147 个 frontend tests、40 个 Grok tests、61 个 OpenCode tests、89 个 session/catalog tests、33 个 shared runtime tests。OpenSpec 485 项通过，两个既有 change 因缺 spec delta 失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9c0075ab1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
