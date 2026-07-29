@@ -775,3 +775,37 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1220: 默认折叠工作区操作菜单
+
+**Date**: 2026-07-29
+**Task**: 默认折叠工作区操作菜单
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+为 workspace menu group 增加可折叠契约，工作区操作每次打开默认收起；补齐 overlay、Sidebar 与 session folder 回归测试。focused 105 tests、typecheck、lint、large-file 与 OpenSpec strict validation 通过；完整 suite 被无关 Shared CLI OpenCode availability 旧断言阻断。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c66bdf9c9` | (see git log) |
+| `9483fc39f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
