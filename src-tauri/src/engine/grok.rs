@@ -156,7 +156,11 @@ fn parse_grok_stream_line(value: &Value) -> GrokStreamLine {
 }
 
 impl GrokSession {
-    pub fn new(workspace_id: String, workspace_path: PathBuf, config: Option<EngineConfig>) -> Self {
+    pub fn new(
+        workspace_id: String,
+        workspace_path: PathBuf,
+        config: Option<EngineConfig>,
+    ) -> Self {
         let (event_sender, _) = broadcast::channel(1024);
         let config = config.unwrap_or_default();
         Self {
@@ -338,7 +342,8 @@ impl GrokSession {
             active.insert(turn_id.to_string(), ActiveGrokChildProcess::new(child));
         }
 
-        self.set_session_id(Some(canonical_session_id.clone())).await;
+        self.set_session_id(Some(canonical_session_id.clone()))
+            .await;
         self.emit_turn_event(
             turn_id,
             EngineEvent::SessionStarted {
@@ -470,8 +475,7 @@ impl GrokSession {
         let was_interrupted = self.interrupted_turns.lock().await.remove(turn_id);
         if let Some(status) = status {
             if !status.success() {
-                let error_msg = if was_interrupted
-                    || matches!(status.code(), Some(130) | Some(143))
+                let error_msg = if was_interrupted || matches!(status.code(), Some(130) | Some(143))
                 {
                     "Session stopped.".to_string()
                 } else if let Some(stream_error) = stream_error.clone() {

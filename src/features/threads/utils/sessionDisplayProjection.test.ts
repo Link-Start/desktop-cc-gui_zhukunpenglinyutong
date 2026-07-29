@@ -18,6 +18,25 @@ describe("sessionDisplayProjection", () => {
     expect(isWeakSessionDisplayTitle("<local-command-stdout>")).toBe(true);
   });
 
+  it("treats context protocol titles as weak and ignores mapped protocol titles", () => {
+    const protocolTitle =
+      `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +
+      `sha256:${"b".repeat(64)}`;
+    expect(isWeakSessionDisplayTitle(protocolTitle)).toBe(true);
+    expect(
+      mergeSessionDisplaySummary(
+        undefined,
+        {
+          id: "claude:target",
+          name: "继续：来源会话",
+          updatedAt: 1,
+          engineSource: "claude",
+        },
+        { mappedTitle: protocolTitle },
+      ).name,
+    ).toBe("继续：来源会话");
+  });
+
   it("keeps a meaningful title when a later candidate only has Agent N", () => {
     const previous: ThreadSummary = {
       id: "claude:session-1",

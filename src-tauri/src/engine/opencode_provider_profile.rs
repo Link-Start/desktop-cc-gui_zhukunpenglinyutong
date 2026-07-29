@@ -50,10 +50,7 @@ fn read_config() -> Result<CodemossConfig, String> {
 /// Convert a raw config.json `opencode.providers` entry into a typed provider.
 /// Kept self-contained (same pattern as kimi/grok launch profiles) so this
 /// module also compiles into the daemon crate, which has no vendors module.
-fn value_to_opencode_provider(
-    id: &str,
-    value: &Value,
-) -> Result<OpenCodeProviderConfig, String> {
+fn value_to_opencode_provider(id: &str, value: &Value) -> Result<OpenCodeProviderConfig, String> {
     let read_string = |key: &str| {
         value
             .get(key)
@@ -122,7 +119,10 @@ pub(crate) struct OpenCodeProviderLaunchProfile {
     pub(crate) runtime_key: String,
 }
 
-pub(crate) fn opencode_runtime_key(workspace_id: &str, provider_profile_id: Option<&str>) -> String {
+pub(crate) fn opencode_runtime_key(
+    workspace_id: &str,
+    provider_profile_id: Option<&str>,
+) -> String {
     let profile_id = provider_profile_id
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -159,10 +159,7 @@ pub(crate) fn render_opencode_provider_config_content(
         .filter(|model| !model.is_empty())
         .collect();
     if models.is_empty() {
-        return Err(format!(
-            "OpenCode provider {} has no models",
-            provider.name
-        ));
+        return Err(format!("OpenCode provider {} has no models", provider.name));
     }
 
     let mut options = serde_json::Map::new();

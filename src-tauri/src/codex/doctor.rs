@@ -796,12 +796,10 @@ mod tests {
         let script_path = write_fake_opencode_script("#!/bin/sh\nexit 1\n");
         let script_bin = script_path.to_string_lossy().to_string();
 
-        let diagnostics = run_opencode_doctor_with_settings(
-            Some(script_bin.clone()),
-            &AppSettings::default(),
-        )
-        .await
-        .expect("doctor should return structured diagnostics even on failure");
+        let diagnostics =
+            run_opencode_doctor_with_settings(Some(script_bin.clone()), &AppSettings::default())
+                .await
+                .expect("doctor should return structured diagnostics even on failure");
 
         for key in [
             "ok",
@@ -905,13 +903,8 @@ mod tests {
             opencode_default_model_probe_from_document("missing", None, &Value::Null, None, None);
         assert_eq!(missing["status"], "skipped");
 
-        let no_model_key = opencode_default_model_probe_from_document(
-            "loaded",
-            None,
-            &json!({}),
-            None,
-            Some(&[]),
-        );
+        let no_model_key =
+            opencode_default_model_probe_from_document("loaded", None, &json!({}), None, Some(&[]));
         assert_eq!(no_model_key["status"], "skipped");
 
         let malformed = opencode_default_model_probe_from_document(

@@ -1,4 +1,5 @@
 import type { AppShellDomainContexts } from "./appShellDomainContexts";
+import type { ThreadSummary } from "../types";
 
 export type UseAppShellSectionsInput = {
   appShellDomainContexts: AppShellDomainContexts;
@@ -26,7 +27,7 @@ export type UseAppShellSectionsContext = {
   sendUserMessageToThread: any;
   isPullRequestComposer: any;
   resetPullRequestSelection: any;
-  threadsByWorkspace: any;
+  threadsByWorkspace: Record<string, ThreadSummary[]>;
   addDebugEntry: any;
   forkSessionFromMessageForWorkspace: any;
   forkClaudeSessionFromMessageForWorkspace: any;
@@ -36,7 +37,6 @@ export type UseAppShellSectionsContext = {
   recentThreads: any;
   collapseRightPanel: any;
   setActiveEngine: any;
-  updateSharedSessionEngineSelection: any;
   removeThread: any;
   removeThreads: any;
   clearDraftForThread: any;

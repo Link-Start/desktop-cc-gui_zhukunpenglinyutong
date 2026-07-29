@@ -73,7 +73,9 @@ pub use askuser_mcp::{global as askuser_mcp_global, AskUserMcpServer};
 #[allow(unused_imports)]
 pub use askuser_mcp::init_global as init_askuser_mcp_global;
 pub use manager::ClaudeSessionManager;
-pub(crate) use provider_profile::resolve_claude_provider_launch_profile;
+pub(crate) use provider_profile::{
+    resolve_claude_provider_launch_profile, CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
+};
 #[cfg(test)]
 use stream_helpers::extract_text_from_content;
 #[cfg(test)]
@@ -295,6 +297,8 @@ const RETRYABLE_PROMPT_TOO_LONG_PREFIX: &str = "__claude_retryable_prompt_too_lo
 const AUTO_COMPACT_SIGNAL_SOURCE: &str = "auto_compact_retry";
 const CLAUDE_TEXT_DELTA_COALESCE_WINDOW_MS: u64 = 32;
 const CLAUDE_NON_INTERACTIVE_ENV: &str = "CLAUDE_NON_INTERACTIVE";
+const CLAUDE_CONTEXT_BOOTSTRAP_SYSTEM_PROMPT: &str =
+    "Import the supplied prior context into this session. Do not use tools. Follow the user's acceptance instruction exactly.";
 #[cfg(not(test))]
 const CLAUDE_STREAM_FIRST_EVENT_TIMEOUT: Duration = Duration::from_secs(90);
 #[cfg(test)]
@@ -316,6 +320,18 @@ const CLAUDE_POST_RESULT_GRACE: Duration = Duration::from_secs(5);
 // stderr handling.
 const CLAUDE_POST_RESULT_STDERR_DRAIN: Duration = Duration::from_secs(2);
 const CLAUDE_REASONING_EFFORTS: &[&str] = &["low", "medium", "high", "xhigh", "max"];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaudeCommandProfile {
+    Standard,
+    ContextBootstrap,
+}
+
+impl ClaudeCommandProfile {
+    fn is_context_bootstrap(self) -> bool {
+        self == Self::ContextBootstrap
+    }
+}
 
 #[derive(Debug, Default)]
 struct BufferedClaudeTextDelta {
@@ -1001,13 +1017,37 @@ impl ClaudeSession {
         provider_env: Option<&BTreeMap<String, String>>,
         provider_settings_path: Option<&Path>,
     ) -> Command {
+        self.build_command_with_profile(
+            params,
+            use_stream_json_input,
+            include_hook_events,
+            app_settings,
+            activation_hint_file,
+            provider_env,
+            provider_settings_path,
+            ClaudeCommandProfile::Standard,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_command_with_profile(
+        &self,
+        params: &SendMessageParams,
+        use_stream_json_input: bool,
+        include_hook_events: bool,
+        app_settings: Option<&crate::types::AppSettings>,
+        activation_hint_file: Option<&Path>,
+        provider_env: Option<&BTreeMap<String, String>>,
+        provider_settings_path: Option<&Path>,
+        profile: ClaudeCommandProfile,
+    ) -> Command {
         // Resolve the Claude CLI binary path:
         // 1. Use custom bin_path if configured
         // 2. Otherwise use find_cli_binary() to search npm global, cargo, etc.
         // 3. Fall back to bare "claude" as last resort
         let bin = self.resolve_cli_binary();
-        let skip_curated_skill_append =
-            Self::should_skip_curated_skill_append_for_binary(&bin, cfg!(windows));
+        let skip_curated_skill_append = profile.is_context_bootstrap()
+            || Self::should_skip_curated_skill_append_for_binary(&bin, cfg!(windows));
 
         // Use build_command_for_binary to properly handle .cmd/.bat files on Windows
         let mut cmd = crate::backend::app_server::build_command_for_binary(&bin);
@@ -1017,6 +1057,19 @@ impl ClaudeSession {
 
         // Print mode (non-interactive)
         cmd.arg("-p");
+
+        if profile.is_context_bootstrap() {
+            // ponytail: bootstrap 只需一次无工具 ACK。若未来 CLI 移除这些 flags，
+            // 在这里升级兼容策略，不污染普通 turn 的 command contract。
+            cmd.arg("--safe-mode");
+            cmd.arg("--tools");
+            cmd.arg("");
+            cmd.arg("--disable-slash-commands");
+            cmd.arg("--prompt-suggestions");
+            cmd.arg("false");
+            cmd.arg("--system-prompt");
+            cmd.arg(CLAUDE_CONTEXT_BOOTSTRAP_SYSTEM_PROMPT);
+        }
 
         // Append curated skills (if any) via --append-system-prompt. The
         // flag is added immediately after `-p` and **before** any other
@@ -1038,6 +1091,11 @@ impl ClaudeSession {
             // placeholder after `-p` breaks Windows .cmd wrapper parsing.
             cmd.arg("--input-format");
             cmd.arg("stream-json");
+            if params.text.contains("MOSSX_CONTEXT_PACKAGE:") {
+                // Change C：只为 Context Package 开 echo，避免改变普通 Claude turn。
+                // 旧 CLI 不支持时显式失败，不能降格为首 token ACK。
+                cmd.arg("--replay-user-messages");
+            }
         } else {
             // Compatibility fallback only. Production sends user prompts through
             // stream-json stdin so shell wrappers never parse prompt text.
@@ -1058,9 +1116,11 @@ impl ClaudeSession {
             cmd.arg("--include-hook-events");
         }
 
-        if let Some(path) = activation_hint_file {
-            cmd.arg("--append-system-prompt-file");
-            cmd.arg(path);
+        if !profile.is_context_bootstrap() {
+            if let Some(path) = activation_hint_file {
+                cmd.arg("--append-system-prompt-file");
+                cmd.arg(path);
+            }
         }
         if let Some(path) = provider_settings_path {
             cmd.arg("--settings");
@@ -1103,7 +1163,7 @@ impl ClaudeSession {
         // already covers it, but allowing it is harmless and keeps modes uniform.
         // We intentionally do NOT pass `--strict-mcp-config` so the user's own
         // MCP servers (from ~/.claude.json) keep working — this is purely additive.
-        if !is_plan_mode {
+        if !is_plan_mode && !profile.is_context_bootstrap() {
             if let Some(server) = crate::engine::claude::askuser_mcp_global() {
                 cmd.arg("--mcp-config");
                 cmd.arg(server.mcp_config_json(&self.workspace_id, &self.runtime_locator));
@@ -1169,23 +1229,25 @@ impl ClaudeSession {
             Err(_) => {}
         }
 
-        if let Some(spec_root) = params
-            .custom_spec_root
-            .as_ref()
-            .map(|value| value.trim())
-            .filter(|value| !value.is_empty())
-        {
-            let spec_path = Path::new(spec_root);
-            if spec_path.is_absolute() && spec_path != self.workspace_path.as_path() {
-                cmd.arg("--add-dir");
-                cmd.arg(spec_root);
+        if !profile.is_context_bootstrap() {
+            if let Some(spec_root) = params
+                .custom_spec_root
+                .as_ref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+            {
+                let spec_path = Path::new(spec_root);
+                if spec_path.is_absolute() && spec_path != self.workspace_path.as_path() {
+                    cmd.arg("--add-dir");
+                    cmd.arg(spec_root);
+                }
             }
-        }
 
-        // Custom arguments
-        if let Some(ref args) = self.custom_args {
-            for arg in args.split_whitespace() {
-                cmd.arg(arg);
+            // Custom arguments
+            if let Some(ref args) = self.custom_args {
+                for arg in args.split_whitespace() {
+                    cmd.arg(arg);
+                }
             }
         }
 
@@ -1241,23 +1303,74 @@ impl ClaudeSession {
         app_settings: Option<&crate::types::AppSettings>,
         provider_env: Option<&BTreeMap<String, String>>,
     ) -> Result<String, String> {
+        self.send_message_with_profile(
+            params,
+            turn_id,
+            app_settings,
+            provider_env,
+            ClaudeCommandProfile::Standard,
+        )
+        .await
+    }
+
+    pub async fn send_context_bootstrap_with_provider_env(
+        &self,
+        params: SendMessageParams,
+        turn_id: &str,
+        provider_env: Option<&BTreeMap<String, String>>,
+    ) -> Result<String, String> {
+        self.send_message_with_profile(
+            params,
+            turn_id,
+            None,
+            provider_env,
+            ClaudeCommandProfile::ContextBootstrap,
+        )
+        .await
+    }
+
+    async fn send_message_with_profile(
+        &self,
+        params: SendMessageParams,
+        turn_id: &str,
+        app_settings: Option<&crate::types::AppSettings>,
+        provider_env: Option<&BTreeMap<String, String>>,
+        profile: ClaudeCommandProfile,
+    ) -> Result<String, String> {
         self.remember_provider_env_for_turn(turn_id, provider_env);
         // Mark this as the active turn so a mid-turn MCP AskUserQuestion can find
         // the live event subscriber. Cleared on any exit path via the guard.
         self.set_active_turn(Some(turn_id));
         let _active_turn_guard = ActiveTurnGuard { session: self };
 
+        let include_hook_events = !profile.is_context_bootstrap();
         match self
-            .send_message_attempt(params.clone(), turn_id, true, app_settings, provider_env)
+            .send_message_attempt(
+                params.clone(),
+                turn_id,
+                include_hook_events,
+                app_settings,
+                provider_env,
+                profile,
+            )
             .await
         {
-            Err(error) if Self::is_unknown_include_hook_events_error(&error) => {
+            Err(error)
+                if include_hook_events && Self::is_unknown_include_hook_events_error(&error) =>
+            {
                 log::warn!(
                     "[claude] --include-hook-events unsupported, retrying without hook events: {}",
                     error
                 );
-                self.send_message_attempt(params, turn_id, false, app_settings, provider_env)
-                    .await
+                self.send_message_attempt(
+                    params,
+                    turn_id,
+                    false,
+                    app_settings,
+                    provider_env,
+                    profile,
+                )
+                .await
             }
             result => result,
         }
@@ -1309,6 +1422,7 @@ impl ClaudeSession {
         include_hook_events: bool,
         app_settings: Option<&crate::types::AppSettings>,
         provider_env: Option<&BTreeMap<String, String>>,
+        profile: ClaudeCommandProfile,
     ) -> Result<String, String> {
         if self.is_disposed() {
             let error_msg = "Claude session disposed; refusing to start new process".to_string();
@@ -1343,23 +1457,27 @@ impl ClaudeSession {
         }
 
         let use_stream_json_input = Self::should_use_stream_json_input(&params);
-        let activation_hint_file = match native_skill_mirror::sync_windows_curated_skill_mirror(
-            self.home_dir.as_deref(),
-            app_settings,
-            cfg!(windows),
-        ) {
-            Ok(path) => path,
-            Err(error_msg) => {
-                self.emit_turn_event(
-                    turn_id,
-                    EngineEvent::TurnError {
-                        workspace_id: self.workspace_id.clone(),
-                        error: error_msg.clone(),
-                        code: Some("claude_curated_skill_mirror_failed".to_string()),
-                    },
-                );
-                self.clear_turn_ephemeral_state(turn_id);
-                return Err(error_msg);
+        let activation_hint_file = if profile.is_context_bootstrap() {
+            None
+        } else {
+            match native_skill_mirror::sync_windows_curated_skill_mirror(
+                self.home_dir.as_deref(),
+                app_settings,
+                cfg!(windows),
+            ) {
+                Ok(path) => path,
+                Err(error_msg) => {
+                    self.emit_turn_event(
+                        turn_id,
+                        EngineEvent::TurnError {
+                            workspace_id: self.workspace_id.clone(),
+                            error: error_msg.clone(),
+                            code: Some("claude_curated_skill_mirror_failed".to_string()),
+                        },
+                    );
+                    self.clear_turn_ephemeral_state(turn_id);
+                    return Err(error_msg);
+                }
             }
         };
 
@@ -1382,7 +1500,7 @@ impl ClaudeSession {
         let provider_settings_path = provider_settings_override
             .as_ref()
             .map(ClaudeProviderSettingsOverride::path);
-        let mut cmd = self.build_command_with_provider_env(
+        let mut cmd = self.build_command_with_profile(
             &params,
             use_stream_json_input,
             include_hook_events,
@@ -1390,6 +1508,7 @@ impl ClaudeSession {
             activation_hint_file.as_deref(),
             provider_env,
             provider_settings_path,
+            profile,
         );
         Self::configure_spawn_command(&mut cmd);
 

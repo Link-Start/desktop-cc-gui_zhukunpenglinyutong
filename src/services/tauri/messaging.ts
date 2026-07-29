@@ -87,15 +87,32 @@ export async function sendUserMessage(
   }
 }
 
-export async function interruptTurn(workspaceId: string, threadId: string, turnId: string) {
-  return invoke("turn_interrupt", { workspaceId, threadId, turnId });
+export async function interruptTurn(
+  workspaceId: string,
+  threadId: string,
+  turnId: string,
+  /** Wave 4 / B.5：Shared Thread 的 Execution Target provider；缺省为 null（旧解析行为）。 */
+  providerProfileId?: string | null,
+) {
+  return invoke("turn_interrupt", {
+    workspaceId,
+    threadId,
+    turnId,
+    providerProfileId: providerProfileId ?? null,
+  });
 }
 
-export async function engineInterruptTurn(workspaceId: string, turnId: string, engine?: EngineType | null): Promise<void> {
+export async function engineInterruptTurn(
+  workspaceId: string,
+  turnId: string,
+  engine?: EngineType | null,
+  providerProfileId?: string | null,
+): Promise<void> {
   return invoke("engine_interrupt_turn", {
     workspaceId,
     turnId,
     engine: engine ?? null,
+    providerProfileId: providerProfileId ?? null,
   });
 }
 

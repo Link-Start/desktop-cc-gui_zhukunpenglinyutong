@@ -1835,6 +1835,34 @@ describe("useThreadTurnEvents", () => {
     expect(safeMessageActivity).toHaveBeenCalled();
   });
 
+  it("keeps the Shared attempt target on the realtime error row", () => {
+    const { result, pushThreadErrorMessage } = makeOptions();
+    const executionTargetSnapshot = {
+      engine: "claude" as const,
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "catalog-a",
+      model: "runtime-a",
+      reasoning: { effort: "medium" },
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed" as const,
+    };
+
+    act(() => {
+      result.current.onTurnError("ws-1", "shared:thread-1", "turn-1", {
+        message: "provider rejected",
+        willRetry: false,
+        executionTargetSnapshot,
+      });
+    });
+
+    expect(pushThreadErrorMessage).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "会话失败：provider rejected",
+      executionTargetSnapshot,
+    );
+  });
+
   it("does not settle pending alias thread on error when turn id is empty", () => {
     const {
       result,

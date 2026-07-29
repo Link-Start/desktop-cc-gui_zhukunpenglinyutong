@@ -5,6 +5,8 @@ import type { ComposerSendReadiness } from '../../utils/composerSendReadiness';
 import type { ModelInfo, ProviderId } from './types';
 import type { ProviderModelGroup } from './modelOptions';
 import { ModelSelect } from './selectors/ModelSelect';
+import type { ProviderTargetGroup } from './hooks/useProviderTargetCatalogOwners';
+import type { ExecutionTarget } from '../../../shared-session/target/types';
 
 function parseContextChipCount(chip: string, prefix: string) {
   if (!chip.startsWith(prefix)) {
@@ -22,12 +24,30 @@ type ComposerReadinessBarProps = {
   selectedModel?: string;
   models?: ModelInfo[];
   modelGroups?: ProviderModelGroup[];
+  targetGroups?: ProviderTargetGroup[];
+  targetGroupDisplayMode?: 'cli' | 'profiles';
+  executionTarget?: ExecutionTarget | null;
+  onExecutionTargetChange?: (target: ExecutionTarget) => void;
+  onOpenTargetCatalog?: () => Promise<void> | void;
+  onOpenProviderProfile?: (
+    providerId: ProviderId,
+    providerProfileId: string,
+  ) => Promise<void> | void;
+  targetCatalogError?: string | null;
   currentProvider?: string;
   onModelSelect?: (modelId: string) => void;
   onProviderModelSelect?: (providerId: ProviderId, modelId: string) => void;
   onAddModel?: () => void;
   onRefreshModelConfig?: () => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
+  onReloadProviderConfig?: (
+    providerId: ProviderId,
+    providerProfileId: string,
+  ) => Promise<void> | void;
+  onDiscoverProviderModels?: (
+    providerId: ProviderId,
+    providerProfileId: string,
+  ) => Promise<void> | void;
   rightAccessory?: ReactNode;
 };
 
@@ -39,12 +59,21 @@ export function ComposerReadinessBar({
   selectedModel,
   models,
   modelGroups,
+  targetGroups,
+  targetGroupDisplayMode,
+  executionTarget,
+  onExecutionTargetChange,
+  onOpenTargetCatalog,
+  onOpenProviderProfile,
+  targetCatalogError,
   currentProvider,
   onModelSelect,
   onProviderModelSelect,
   onAddModel,
   onRefreshModelConfig,
   isModelConfigRefreshing,
+  onReloadProviderConfig,
+  onDiscoverProviderModels,
   rightAccessory,
 }: ComposerReadinessBarProps) {
   const { t } = useTranslation();
@@ -95,12 +124,19 @@ export function ComposerReadinessBar({
       })}
     >
       <div className="composer-readiness-target-group" title={readiness.activity.detailLabel}>
-        {onModelSelect ? (
+        {onModelSelect || onExecutionTargetChange ? (
           <ModelSelect
             value={selectedModel ?? ''}
-            onChange={onModelSelect}
+            onChange={onModelSelect ?? (() => {})}
             models={models}
             modelGroups={modelGroups}
+            targetGroups={targetGroups}
+            targetGroupDisplayMode={targetGroupDisplayMode}
+            executionTarget={executionTarget}
+            onExecutionTargetChange={onExecutionTargetChange}
+            onOpenTargetCatalog={onOpenTargetCatalog}
+            onOpenProviderProfile={onOpenProviderProfile}
+            targetCatalogError={targetCatalogError}
             currentProvider={currentProvider ?? readiness.target.engine}
             providerLabel={readiness.target.providerLabel}
             triggerVariant="readiness"
@@ -108,6 +144,8 @@ export function ComposerReadinessBar({
             onAddModel={onAddModel}
             onRefreshConfig={onRefreshModelConfig}
             isRefreshingConfig={Boolean(isModelConfigRefreshing)}
+            onReloadProviderConfig={onReloadProviderConfig}
+            onDiscoverProviderModels={onDiscoverProviderModels}
           />
         ) : (
           <div className="composer-readiness-target">

@@ -287,6 +287,31 @@ describe("threadItems", () => {
     expectReasoningItem(prepared[0]);
   });
 
+  it("preserves an empty Shared assistant provenance anchor", () => {
+    const anchor: ConversationItem = {
+      id: "shared-provenance-anchor",
+      kind: "message",
+      role: "assistant",
+      text: "",
+      isFinal: true,
+      engineSource: "codex",
+      executionTargetSnapshot: {
+        engine: "codex",
+        providerProfileId: "provider-a",
+        modelCatalogEntryId: "catalog-a",
+        model: "runtime-a",
+        reasoning: { effort: "high" },
+        providerProfileNameSnapshot: "Provider A",
+        providerProfileSource: "managed",
+        runtimeCapabilityFingerprint: null,
+      },
+    };
+
+    const prepared = prepareThreadItems([anchor]);
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0]).toMatchObject(anchor);
+  });
+
   it("preserves tool output for fileChange and commandExecution", () => {
     const output = "x".repeat(21000);
     const item: ConversationItem = {

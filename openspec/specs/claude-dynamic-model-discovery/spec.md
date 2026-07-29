@@ -258,3 +258,37 @@ Claude builtin、settings/env and custom model merge MUST retain its existing ov
 - **THEN** cached or generated fallback MUST remain deterministic
 - **AND** failure MUST not erase user custom models
 
+### Requirement: Claude Provider Continuation MUST Resolve Runtime Model
+
+Claude Provider Continuation MUST 遵守 Claude catalog 的 UI `id` / runtime `model` 分离
+contract，并在 target-side effect 前验证已冻结的 model identity。
+
+#### Scenario: Native Composer selects a settings override
+
+- **WHEN** Native Composer 从另一 Claude Provider Profile 选择 settings override entry
+- **THEN** picker MUST 保留该 entry 的 UI id 用于 selection identity
+- **AND** continuation execution MUST 将 entry 的 runtime model 传给 Claude CLI
+
+#### Scenario: legacy entry lacks runtime model
+
+- **WHEN** legacy catalog entry 没有显式 runtime `model`
+- **THEN** frontend MAY 显式 fallback 到 entry `id`
+- **AND** backend MUST 仍执行 Provider-scoped validation
+- **AND** MUST NOT 对已知 `id != model` entry 使用 legacy fallback
+
+### Requirement: Claude Catalog Actions MUST Not Imply Unsupported CLI Discovery
+
+Claude Code 模型目录 MUST 允许重读 settings/env/provider configuration，但 MUST NOT
+声称通过 CLI model-list 获取模型。
+
+#### Scenario: Reload Claude configuration
+
+- **WHEN** 用户对 Claude local 或 managed Provider 执行 `Reload Config`
+- **THEN** backend MUST 重新读取对应 settings/env/provider model fields
+- **AND** selector MUST 合并 custom 与 builtin catalog
+
+#### Scenario: Claude discovery capability
+
+- **WHEN** 当前 Claude CLI 没有已验证的 model-list protocol
+- **THEN** `Discover Models` MUST NOT 显示为可执行 action
+- **AND** 系统 MUST NOT 调用 HTTP、解析 help 或返回 builtin entries 冒充 discovered models

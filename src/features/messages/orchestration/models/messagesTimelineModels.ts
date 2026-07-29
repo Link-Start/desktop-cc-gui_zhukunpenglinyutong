@@ -73,6 +73,7 @@ export type TimelineRuntimeModel = {
   isHistoryLoading: boolean;
   latestRetryMessage: RetryMessage | null;
   latestRuntimeReconnectItemId: string | null;
+  nativeRuntimeRecoveryEnabled: boolean;
   proxyEnabled: boolean;
   proxyUrl: string | null;
   threadId: string | null;

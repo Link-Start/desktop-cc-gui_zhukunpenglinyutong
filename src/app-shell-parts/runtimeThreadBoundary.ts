@@ -34,7 +34,6 @@ export type RuntimeThreadShellBoundary = Pick<
   | "threadsByWorkspace"
   | "tokenUsageByThread"
   | "toggleCompletionEmailIntent"
-  | "updateSharedSessionEngineSelection"
 > & {
   activeThreadId: string | null;
   activeTurnId: string | null;

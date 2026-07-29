@@ -127,7 +127,7 @@ fn extract_agent_message_collection_text(value: &Value) -> Option<String> {
     Some(text).filter(|candidate| !candidate.trim().is_empty())
 }
 
-fn extract_codex_text_delta(event: &Value) -> Option<String> {
+pub(crate) fn extract_codex_text_delta(event: &Value) -> Option<String> {
     let method = event.get("method").and_then(|value| value.as_str())?;
     let is_agent_delta = matches!(
         method,
@@ -152,6 +152,25 @@ fn extract_codex_text_delta(event: &Value) -> Option<String> {
     .or_else(|| params.get("content").and_then(text_from_content_value))
 }
 
+pub(crate) fn extract_codex_reasoning_delta(event: &Value) -> Option<String> {
+    let method = event.get("method").and_then(Value::as_str)?;
+    if !matches!(
+        method,
+        "item/reasoning/textDelta"
+            | "item/reasoning/delta"
+            | "item/reasoning/summaryTextDelta"
+            | "response.reasoning_text.delta"
+            | "response.reasoning_summary_text.delta"
+            | "response.reasoning_summary.delta"
+    ) {
+        return None;
+    }
+    let params = event.get("params")?;
+    string_field(params, &["delta", "text", "summary", "content"])
+        .or_else(|| params.get("part").and_then(text_from_content_value))
+        .or_else(|| params.get("item").and_then(text_from_content_value))
+}
+
 fn is_agent_message_item(item: &Value) -> bool {
     let item_type = item
         .get("type")
@@ -173,7 +192,7 @@ fn is_agent_message_item(item: &Value) -> bool {
     role == "assistant" && (item_type.is_empty() || item_type == "message")
 }
 
-fn extract_agent_message_snapshot_text(event: &Value) -> Option<String> {
+pub(crate) fn extract_agent_message_snapshot_text(event: &Value) -> Option<String> {
     let method = event.get("method").and_then(|value| value.as_str())?;
     if !matches!(method, "item/updated" | "item/completed") {
         return None;
@@ -186,7 +205,7 @@ fn extract_agent_message_snapshot_text(event: &Value) -> Option<String> {
     text_from_content_value(item)
 }
 
-fn extract_turn_completed_text(event: &Value) -> Option<String> {
+pub(crate) fn extract_turn_completed_text(event: &Value) -> Option<String> {
     let method = event.get("method").and_then(|value| value.as_str())?;
     if method != "turn/completed" {
         return None;

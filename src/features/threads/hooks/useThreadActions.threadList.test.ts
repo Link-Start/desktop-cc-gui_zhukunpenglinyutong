@@ -36,6 +36,32 @@ describe("useThreadActions.threadList", () => {
     });
   });
 
+  it("keeps provider continuation lineage separate from parentSessionId", () => {
+    expect(
+      normalizeProjectCatalogSession({
+        sessionId: "target-1",
+        workspaceId: "ws-1",
+        engine: "codex",
+        title: "Continued session",
+        updatedAt: 1,
+        parentSessionId: null,
+        originKind: "provider-continuation",
+        sourceSessionId: "claude:source-1",
+        familyId: "claude:ws-1:source-1",
+        familyRootSessionId: "claude:ws-1:source-1",
+        lineageParentSessionId: "claude:source-1",
+        lineageKind: "provider-continuation",
+        lineageDepth: 1,
+      }),
+    ).toMatchObject({
+      parentSessionId: null,
+      originKind: "provider-continuation",
+      sourceSessionId: "claude:source-1",
+      lineageParentSessionId: "claude:source-1",
+      lineageDepth: 1,
+    });
+  });
+
   it("keeps sidebar and Session Management keys aligned for aggregate child rows", () => {
     const catalogEntry = {
       sessionId: "claude:session-1",

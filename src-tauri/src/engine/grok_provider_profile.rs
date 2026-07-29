@@ -216,10 +216,7 @@ pub(crate) fn render_grok_provider_config(
         .or_insert_with(|| toml::Value::Table(toml::Table::new()))
         .as_table_mut()
         .ok_or_else(|| "`models` in Grok config.toml is not a table".to_string())?
-        .insert(
-            "default".to_string(),
-            toml::Value::String(model_toml_alias),
-        );
+        .insert("default".to_string(), toml::Value::String(model_toml_alias));
     toml::to_string_pretty(&doc)
         .map_err(|error| format!("failed to serialize Grok config: {error}"))
 }
@@ -478,7 +475,9 @@ name = "Official"
             Some("responses")
         );
         assert_eq!(
-            managed.get("context_window").and_then(toml::Value::as_integer),
+            managed
+                .get("context_window")
+                .and_then(toml::Value::as_integer),
             Some(128_000)
         );
     }

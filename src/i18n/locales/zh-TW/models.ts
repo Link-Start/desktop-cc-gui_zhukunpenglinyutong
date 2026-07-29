@@ -8,6 +8,10 @@ const models = {
     "addModel": "新增模型",
     "refreshConfig": "重新整理設定",
     "refreshingConfig": "重新整理中…",
+    "reloadConfig": "重新讀取設定",
+    "reloadingConfig": "正在重新讀取設定…",
+    "discoverModels": "從 CLI 探索模型",
+    "discoveringModels": "正在探索模型…",
     "refreshConfigFailed": "重新整理失敗：{{message}}",
     "claude": {},
     "codex": {

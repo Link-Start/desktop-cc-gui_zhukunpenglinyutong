@@ -49,8 +49,8 @@ describe("useThreadApprovals", () => {
       await result.current.handleApprovalBatchAccept([approvals[0]!, approvals[1]!]);
     });
 
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept");
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept");
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept", null);
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept", null);
     expect(respondToServerRequest).toHaveBeenCalledTimes(2);
     expect(dispatch).toHaveBeenNthCalledWith(1, {
       type: "markProcessing",
@@ -151,8 +151,8 @@ describe("useThreadApprovals", () => {
       await result.current.handleApprovalBatchAccept([approvals[0]!, approvals[1]!]);
     });
 
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept");
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept");
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept", null);
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept", null);
     expect(respondToServerRequest).toHaveBeenCalledTimes(2);
   });
 
@@ -199,7 +199,73 @@ describe("useThreadApprovals", () => {
         threadId: "claude:canonical",
       }),
     );
-    expect(respondToServerRequest).toHaveBeenCalledWith("ws-1", 1, "accept");
+    expect(respondToServerRequest).toHaveBeenCalledWith("ws-1", 1, "accept", null);
+  });
+
+  it("responds to a Shared approval with its exact Runtime owner", async () => {
+    const dispatch = vi.fn();
+    const owner = {
+      attemptId: "attempt-a",
+      providerRuntimeKey: "codex::ws-1::provider-a",
+      sharedThreadId: "shared:thread-a",
+      nativeThreadId: "codex-native-a",
+      runtimeTurnId: "runtime-turn-a",
+      engine: "codex" as const,
+      providerProfileId: "provider-a",
+    };
+    const approval: ApprovalRequest = {
+      workspace_id: "ws-1",
+      request_id: 7,
+      method: "item/fileChange/requestApproval",
+      params: {
+        threadId: "shared:thread-a",
+        turnId: "runtime-turn-a",
+        file_path: "aaa.txt",
+      },
+      shared_runtime_owner: owner,
+    };
+    const { result } = renderHook(() => useThreadApprovals({ dispatch }));
+
+    await act(async () => {
+      await result.current.handleApprovalDecision(approval, "accept");
+    });
+
+    expect(respondToServerRequest).toHaveBeenCalledWith(
+      "ws-1",
+      7,
+      "accept",
+      owner,
+    );
+    expect(dispatch).toHaveBeenNthCalledWith(1, {
+      type: "markProcessing",
+      threadId: "shared:thread-a",
+      isProcessing: true,
+      timestamp: expect.any(Number),
+    });
+  });
+
+  it("fails closed before applying when a Shared approval lacks its Runtime owner", async () => {
+    const dispatch = vi.fn();
+    const approval: ApprovalRequest = {
+      workspace_id: "ws-1",
+      request_id: 8,
+      method: "item/fileChange/requestApproval",
+      params: {
+        threadId: "shared:missing-owner",
+        turnId: "runtime-turn-missing",
+        file_path: "aaa.txt",
+      },
+    };
+    const { result } = renderHook(() => useThreadApprovals({ dispatch }));
+
+    await act(async () => {
+      await expect(
+        result.current.handleApprovalDecision(approval, "accept"),
+      ).rejects.toThrow("missing its Runtime owner");
+    });
+
+    expect(respondToServerRequest).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it("dismisses a stale approval locally without sending a backend decision", async () => {
@@ -266,8 +332,8 @@ describe("useThreadApprovals", () => {
       await result.current.handleApprovalBatchAccept([approvals[0]!, approvals[1]!]);
     });
 
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept");
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept");
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept", null);
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept", null);
     expect(respondToServerRequest).toHaveBeenCalledTimes(2);
   });
 
@@ -309,8 +375,8 @@ describe("useThreadApprovals", () => {
       ]);
     });
 
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept");
-    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept");
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(1, "ws-1", 1, "accept", null);
+    expect(respondToServerRequest).toHaveBeenNthCalledWith(2, "ws-1", 2, "accept", null);
     expect(respondToServerRequest).toHaveBeenCalledTimes(2);
   });
 });

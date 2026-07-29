@@ -883,6 +883,12 @@ async fn handle_rpc_request(
 ) -> Result<Value, String> {
     match method {
         "ping" => Ok(json!({ "ok": true })),
+        "prepare_native_provider_continuation"
+        | "discard_prepared_native_provider_continuation"
+        | "create_native_provider_continuation" => Err(
+            "unsupported-target-acceptance: Provider Continuation currently requires the Desktop local backend"
+                .to_string(),
+        ),
         "list_workspaces" => {
             let workspaces = state.list_workspaces().await;
             serde_json::to_value(workspaces).map_err(|err| err.to_string())
@@ -1783,8 +1789,9 @@ async fn handle_rpc_request(
             let engine = parse_optional_string(&params, "engine")
                 .as_deref()
                 .and_then(|value| parse_engine_type_string(Some(value)));
+            let provider_profile_id = parse_optional_string(&params, "providerProfileId");
             state
-                .engine_interrupt_turn(workspace_id, turn_id, engine)
+                .engine_interrupt_turn(workspace_id, turn_id, engine, provider_profile_id)
                 .await?;
             Ok(json!({ "ok": true }))
         }
@@ -2189,7 +2196,10 @@ async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             let thread_id = parse_string(&params, "threadId")?;
             let turn_id = parse_string(&params, "turnId")?;
-            state.turn_interrupt(workspace_id, thread_id, turn_id).await
+            let provider_profile_id = parse_optional_string(&params, "providerProfileId");
+            state
+                .turn_interrupt(workspace_id, thread_id, turn_id, provider_profile_id)
+                .await
         }
         "thread_compact" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
@@ -2212,6 +2222,13 @@ async fn handle_rpc_request(
         "model_list" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             state.model_list(workspace_id).await
+        }
+        "discover_codex_models" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let provider_profile_id = parse_optional_string(&params, "providerProfileId");
+            state
+                .discover_codex_models(workspace_id, provider_profile_id)
+                .await
         }
         "collaboration_mode_list" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
@@ -2281,8 +2298,9 @@ async fn handle_rpc_request(
                 .filter(|value| value.is_number() || value.is_string())
                 .ok_or("missing requestId")?;
             let result = map.get("result").cloned().ok_or("missing `result`")?;
+            let provider_profile_id = parse_optional_string(&params, "providerProfileId");
             state
-                .respond_to_server_request(workspace_id, request_id, result)
+                .respond_to_server_request(workspace_id, request_id, result, provider_profile_id)
                 .await
         }
         "remember_approval_rule" => {

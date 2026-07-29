@@ -5,6 +5,10 @@ const models = {
     addModel: "添加模型",
     refreshConfig: "刷新配置",
     refreshingConfig: "刷新中…",
+    reloadConfig: "重读配置",
+    reloadingConfig: "正在重读配置…",
+    discoverModels: "从 CLI 发现模型",
+    discoveringModels: "正在发现模型…",
     refreshConfigFailed: "刷新失败：{{message}}",
     claude: {},
     codex: {

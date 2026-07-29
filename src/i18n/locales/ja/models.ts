@@ -8,6 +8,10 @@ const models = {
     "addModel": "モデルを追加",
     "refreshConfig": "設定を更新",
     "refreshingConfig": "更新中...",
+    "reloadConfig": "設定を再読み込み",
+    "reloadingConfig": "設定を再読み込み中...",
+    "discoverModels": "CLI からモデルを検出",
+    "discoveringModels": "モデルを検出中...",
     "refreshConfigFailed": "更新に失敗しました: {{message}}",
     "claude": {},
     "codex": {

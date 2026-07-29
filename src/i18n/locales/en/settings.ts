@@ -555,6 +555,14 @@ const settings = {
     },
     otherDescription:
       "History completion, model mapping, and other configurations.",
+    sharedProjectionTestTitle: "Shared Projection rollback control",
+    sharedProjectionTestDescription:
+      "Shared Sessions merge Canonical Projection with the Legacy snapshot by default. Turning this off explicitly selects Legacy-only reading.",
+    sharedProjectionTestToggleTitle: "Use Canonical Projection",
+    sharedProjectionTestToggleDescription:
+      "When enabled, Canonical and Legacy history are merged; the Legacy snapshot remains available if loading fails.",
+    sharedProjectionTestToggleDetail:
+      "The app reloads immediately after a change, so save any unsent draft first.",
     performanceDiagnosticsTitle: "Performance diagnostics",
     performanceDiagnosticsDescription:
       "Tune local realtime performance temporarily. If parallel conversations, tool output, or message streaming feel unusually janky, adjust the schedule tier first; reset the overrides after verification.",

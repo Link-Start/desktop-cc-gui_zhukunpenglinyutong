@@ -11,6 +11,7 @@ import {
   type SessionDisplayTitleSources,
 } from "../utils/sessionDisplayProjection";
 import { matchesWorkspacePath } from "./useThreadActions.workspacePath";
+import { classifyContextProtocolText } from "../../../utils/contextProtocol";
 
 const CLAUDE_HISTORY_MESSAGE_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -81,6 +82,14 @@ export type CodexCatalogSessionSummary = {
   providerAvailability?: string | null;
   folderId?: string | null;
   autoSession?: ThreadSummary["autoSession"];
+  originKind?: string | null;
+  sourceSessionId?: string | null;
+  sourceProviderProfileId?: string | null;
+  familyId?: string | null;
+  familyRootSessionId?: string | null;
+  lineageParentSessionId?: string | null;
+  lineageKind?: string | null;
+  lineageDepth?: number | null;
 };
 
 export function normalizeThreadListPartialSource(
@@ -1243,20 +1252,35 @@ export function mergeCodexCatalogSessionSummaries(
         ? undefined
         : getCustomName(workspaceId, session.sessionId);
     const customTitle = ownerCustomTitle || selectedWorkspaceCustomTitle;
-    const fallbackTitle = previewThreadName(
-      title || nativeTitle,
+    const engineFallbackTitle =
       engineSource === "claude"
         ? "Claude Session"
         : engineSource === "gemini"
           ? "Gemini Session"
           : engineSource === "grok"
             ? "Grok Session"
-          : engineSource === "kimi"
-            ? "Kimi Session"
-          : engineSource === "opencode"
-            ? "OpenCode Session"
-            : "Codex Session",
-    );
+            : engineSource === "kimi"
+              ? "Kimi Session"
+              : engineSource === "opencode"
+                ? "OpenCode Session"
+                : "Codex Session";
+    const continuationSourceName = session.sourceSessionId
+      ? mergedById.get(session.sourceSessionId)?.name?.trim()
+      : null;
+    const continuationFallbackTitle =
+      session.originKind === "provider-continuation"
+        ? continuationSourceName
+          ? `继续：${continuationSourceName}`
+          : `Provider 续接 · ${
+              session.providerProfileName?.trim() ||
+              engineFallbackTitle.replace(/ Session$/, "")
+            }`
+        : null;
+    const fallbackTitle =
+      continuationFallbackTitle &&
+      classifyContextProtocolText(title) !== null
+        ? continuationFallbackTitle
+        : previewThreadName(title || nativeTitle, engineFallbackTitle);
     const next: ThreadSummary = {
       id: session.sessionId,
       name: selectStableThreadSummaryName({
@@ -1287,6 +1311,15 @@ export function mergeCodexCatalogSessionSummaries(
       folderId: session.folderId ?? null,
       autoSession: session.autoSession ?? null,
       parentThreadId,
+      originKind: session.originKind ?? undefined,
+      sourceSessionId: session.sourceSessionId ?? undefined,
+      sourceProviderProfileId: session.sourceProviderProfileId ?? undefined,
+      familyId: session.familyId ?? undefined,
+      familyRootSessionId: session.familyRootSessionId ?? undefined,
+      lineageParentSessionId:
+        session.lineageParentSessionId ?? undefined,
+      lineageKind: session.lineageKind ?? undefined,
+      lineageDepth: session.lineageDepth ?? undefined,
     };
     if (!prev || next.updatedAt >= prev.updatedAt) {
       mergedById.set(

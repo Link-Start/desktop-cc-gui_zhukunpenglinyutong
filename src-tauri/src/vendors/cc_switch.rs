@@ -142,8 +142,8 @@ fn list_from_db(db_path: &Path, app_type: &str) -> Result<Vec<CcSwitchProvider>,
         let (id, name, category, website_url, settings_text) =
             row.map_err(|error| format!("Failed to read CC Switch row: {error}"))?;
         // 单条 settings_config 损坏不应拖垮整批, 兜底为空对象
-        let settings_config =
-            serde_json::from_str(&settings_text).unwrap_or_else(|_| Value::Object(Default::default()));
+        let settings_config = serde_json::from_str(&settings_text)
+            .unwrap_or_else(|_| Value::Object(Default::default()));
         providers.push(build_provider(
             app_type,
             id,
@@ -158,7 +158,10 @@ fn list_from_db(db_path: &Path, app_type: &str) -> Result<Vec<CcSwitchProvider>,
 
 /// CC Switch v2 JSON: `{ "<app>": { "providers": [...] } }`,
 /// providers 兼容数组与对象(map)两种形态。
-fn list_from_legacy_json(json_path: &Path, app_type: &str) -> Result<Vec<CcSwitchProvider>, String> {
+fn list_from_legacy_json(
+    json_path: &Path,
+    app_type: &str,
+) -> Result<Vec<CcSwitchProvider>, String> {
     let text = std::fs::read_to_string(json_path)
         .map_err(|error| format!("Failed to read CC Switch config.json: {error}"))?;
     let root: Value = serde_json::from_str(&text)
@@ -270,10 +273,8 @@ mod tests {
     impl TestDir {
         fn new() -> Self {
             let seq = TEST_DIR_SEQ.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!(
-                "ccgui-cc-switch-test-{}-{seq}",
-                std::process::id()
-            ));
+            let path = std::env::temp_dir()
+                .join(format!("ccgui-cc-switch-test-{}-{seq}", std::process::id()));
             fs::create_dir_all(&path).expect("create temp dir");
             TestDir(path)
         }
@@ -304,13 +305,7 @@ mod tests {
             .expect("create providers table");
     }
 
-    fn insert_provider(
-        dir: &Path,
-        id: &str,
-        app_type: &str,
-        name: &str,
-        settings_config: &str,
-    ) {
+    fn insert_provider(dir: &Path, id: &str, app_type: &str, name: &str, settings_config: &str) {
         let connection = Connection::open(dir.join(CC_SWITCH_DB_NAME)).expect("open test db");
         connection
             .execute(

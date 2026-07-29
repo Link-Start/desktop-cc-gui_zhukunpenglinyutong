@@ -54,7 +54,7 @@ const sidebar = {
     "clearSearch": "Очистить поиск",
     "pinned": "Закреплённые",
     "newAgent": "Новый агент",
-    "newSharedSession": "Claude Code + Codex",
+    "newSharedSession": "Shared CLI",
     "newWorktreeAgent": "Новый агент Worktree",
     "newCloneAgent": "Новый агент-клон",
     "codexProviderChoiceTitle": "Выбор провайдера",

@@ -1,27 +1,28 @@
 import type { EngineType } from "../../../types";
-import { isEngineCapabilityAvailable } from "../../engine/engineCapabilityMatrix";
 
-export type SharedSessionSupportedEngine = "claude" | "codex";
+export type SharedSessionSupportedEngine =
+  | "claude"
+  | "codex"
+  | "kimi"
+  | "grok"
+  | "opencode";
 
-const SHARED_SESSION_BASE_ENGINES = new Set<EngineType>(["claude"]);
+const SHARED_SESSION_SUPPORTED_ENGINES = new Set<EngineType>([
+  "claude",
+  "codex",
+  "kimi",
+  "grok",
+  "opencode",
+]);
 
 export function isSharedSessionSupportedEngine(
   engine: EngineType | null | undefined,
 ): engine is SharedSessionSupportedEngine {
-  if (!engine) {
-    return false;
-  }
-  return (
-    SHARED_SESSION_BASE_ENGINES.has(engine) ||
-    isEngineCapabilityAvailable(engine, "collaboration.mode")
-  );
+  return Boolean(engine && SHARED_SESSION_SUPPORTED_ENGINES.has(engine));
 }
 
 export function normalizeSharedSessionEngine(
   engine: EngineType | null | undefined,
 ): SharedSessionSupportedEngine {
-  return isSharedSessionSupportedEngine(engine) &&
-    isEngineCapabilityAvailable(engine, "collaboration.mode")
-    ? "codex"
-    : "claude";
+  return isSharedSessionSupportedEngine(engine) ? engine : "claude";
 }

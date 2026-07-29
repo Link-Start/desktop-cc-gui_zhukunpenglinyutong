@@ -25,4 +25,15 @@ describe("EngineIcon", () => {
     expect(markup).toContain("M16 6H8v12h8V6zm4 16H4V2h16v20z");
     expect(markup).not.toContain("<img");
   });
+
+  it.each(["kimi", "grok"] as const)(
+    "renders the %s icon as a theme-aware monochrome svg glyph",
+    (engine) => {
+      const markup = renderToStaticMarkup(<EngineIcon engine={engine} size={16} />);
+
+      expect(markup).toContain("<svg");
+      expect(markup).toContain('fill="currentColor"');
+      expect(markup).not.toContain("<img");
+    },
+  );
 });

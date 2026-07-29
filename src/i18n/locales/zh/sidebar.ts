@@ -52,7 +52,7 @@ const sidebar = {
     clearSearch: "清除搜索",
     pinned: "已固定",
     newAgent: "新建会话",
-    newSharedSession: "Claude Code + Codex",
+    newSharedSession: "Shared CLI",
     newWorktreeAgent: "新建工作树代理",
     newCloneAgent: "新建克隆代理",
     newWindow: "新建窗口",

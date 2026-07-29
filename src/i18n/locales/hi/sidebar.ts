@@ -54,7 +54,7 @@ const sidebar = {
     "clearSearch": "खोज साफ़ करें",
     "pinned": "पिन किया गया",
     "newAgent": "नया Agent",
-    "newSharedSession": "Claude Code + Codex",
+    "newSharedSession": "Shared CLI",
     "newWorktreeAgent": "नया Worktree Agent",
     "newCloneAgent": "नया क्लोन Agent",
     "codexProviderChoiceTitle": "प्रोवाइडर चयन",

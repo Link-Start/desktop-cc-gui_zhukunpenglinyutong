@@ -6,6 +6,7 @@
 import type { ReactNode } from 'react';
 import { CODEX_MODEL_CATALOG } from "../../../models/codexModelCatalog";
 import type { ComposerSendReadiness } from '../../utils/composerSendReadiness';
+import type { ExecutionTarget } from '../../../shared-session/target/types';
 
 // ============================================================
 // Core Entity Types
@@ -349,6 +350,7 @@ export interface ProviderInfo {
 
 export type ProviderId = 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode';
 export type ProviderModelCatalogs = Partial<Record<ProviderId, ModelInfo[]>>;
+export type ProviderTargetPickerMode = 'native' | 'shared' | 'create-session';
 export type CodexSpeedMode = 'standard' | 'fast' | 'unknown';
 export type StreamActivityPhase = 'idle' | 'waiting' | 'ingress';
 
@@ -539,6 +541,14 @@ export interface ChatInputBoxProps {
   currentProvider?: string;
   /** Active thread provider profile used to scope managed model catalogs */
   currentProviderProfileId?: string | null;
+  /** Shared Session 当前完整目标；普通 Native Session 不传。 */
+  executionTarget?: ExecutionTarget | null;
+  /** Shared Session 原子更新完整目标，避免用 model id 反推 Provider。 */
+  onExecutionTargetChange?: (target: ExecutionTarget) => void;
+  /** Native Session 选择其他 Provider Profile 时请求创建续接会话。 */
+  onNativeProviderTargetChange?: (target: ExecutionTarget) => void;
+  /** Picker layout/interaction mode；不得用它推断 Session Kind。 */
+  providerTargetPickerMode?: ProviderTargetPickerMode;
   /** Provider availability override (installed state from host app) */
   providerAvailability?: Partial<Record<ProviderId, boolean>>;
   /** Provider CLI versions (from host app detection) */
@@ -589,6 +599,8 @@ export interface ChatInputBoxProps {
   placeholder?: string;
   /** Whether disabled */
   disabled?: boolean;
+  /** Block submission without disabling draft editing. */
+  submitDisabled?: boolean;
   /** Controlled mode: input content */
   value?: string;
   /** Current workspace id for prompt enhancer and local providers */

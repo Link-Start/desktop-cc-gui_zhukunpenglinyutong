@@ -7,6 +7,7 @@ interface CompletionLike {
 }
 
 export interface UseSubmitHandlerOptions {
+  submitDisabled: boolean;
   getTextContent: () => string;
   attachments: Attachment[];
   sdkStatusLoading: boolean;
@@ -42,6 +43,7 @@ export interface UseSubmitHandlerOptions {
  * - Defers onSubmit to allow UI update
  */
 export function useSubmitHandler({
+  submitDisabled,
   getTextContent,
   attachments,
   sdkStatusLoading,
@@ -66,6 +68,9 @@ export function useSubmitHandler({
   t,
 }: UseSubmitHandlerOptions) {
   return useCallback(() => {
+    if (submitDisabled) {
+      return;
+    }
     // Force fresh DOM read to avoid stale cache (e.g., after paste)
     invalidateCache();
     const content = getTextContent();
@@ -119,6 +124,7 @@ export function useSubmitHandler({
       onSubmit?.(content, attachmentsToSend);
     });
   }, [
+    submitDisabled,
     getTextContent,
     invalidateCache,
     attachments,

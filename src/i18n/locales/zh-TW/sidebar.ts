@@ -54,7 +54,7 @@ const sidebar = {
     "clearSearch": "清除搜尋",
     "pinned": "已釘選",
     "newAgent": "新增 Agent",
-    "newSharedSession": "Claude Code + Codex",
+    "newSharedSession": "Shared CLI",
     "newWorktreeAgent": "新增 Worktree Agent",
     "newCloneAgent": "新增複製 Agent",
     "codexProviderChoiceTitle": "供應商選擇",

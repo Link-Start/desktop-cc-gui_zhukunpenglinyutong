@@ -188,9 +188,7 @@ fn matches_workspace_path(work_dir: &str, workspace_variants: &[String]) -> bool
     // grok canonicalizes the session cwd (e.g. macOS `/tmp` → `/private/tmp`);
     // match canonical forms on both sides to tolerate symlink variants.
     if let Ok(canonical_work_dir) = std::fs::canonicalize(work_dir) {
-        work_dir_variants.extend(build_path_variants(
-            &canonical_work_dir.to_string_lossy(),
-        ));
+        work_dir_variants.extend(build_path_variants(&canonical_work_dir.to_string_lossy()));
         work_dir_variants.sort();
         work_dir_variants.dedup();
     }
@@ -424,17 +422,18 @@ fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
                                 counter += 1;
                                 format!("grok-tool-{}", counter)
                             });
-                        let input_value = function
-                            .and_then(|f| f.get("arguments"))
-                            .and_then(|arguments| {
-                                if let Some(raw) = arguments.as_str() {
-                                    serde_json::from_str::<Value>(raw)
-                                        .ok()
-                                        .or(Some(Value::String(raw.to_string())))
-                                } else {
-                                    Some(arguments.clone())
-                                }
-                            });
+                        let input_value =
+                            function
+                                .and_then(|f| f.get("arguments"))
+                                .and_then(|arguments| {
+                                    if let Some(raw) = arguments.as_str() {
+                                        serde_json::from_str::<Value>(raw)
+                                            .ok()
+                                            .or(Some(Value::String(raw.to_string())))
+                                    } else {
+                                        Some(arguments.clone())
+                                    }
+                                });
                         let input_text = input_value
                             .as_ref()
                             .and_then(|v| serde_json::to_string_pretty(v).ok())
@@ -514,7 +513,10 @@ fn first_user_prompt_text(raw: &str) -> Option<String> {
 /// Build a sidebar summary from one session directory. Best-effort: missing
 /// or malformed `summary.json` degrades individual fields instead of dropping
 /// the session.
-async fn build_summary_from_session_dir(session_id: &str, session_dir: &Path) -> GrokSessionSummary {
+async fn build_summary_from_session_dir(
+    session_id: &str,
+    session_dir: &Path,
+) -> GrokSessionSummary {
     let summary_path = session_dir.join("summary.json");
     let chat_history_path = session_dir.join("chat_history.jsonl");
 
@@ -629,7 +631,8 @@ async fn resolve_workspace_session_dirs(
             continue;
         };
         let decoded_cwd = url_decode_dir_name(encoded_name);
-        if decoded_cwd.trim().is_empty() || !matches_workspace_path(&decoded_cwd, &workspace_variants)
+        if decoded_cwd.trim().is_empty()
+            || !matches_workspace_path(&decoded_cwd, &workspace_variants)
         {
             continue;
         }
@@ -701,13 +704,15 @@ pub async fn load_grok_session(
 ) -> Result<GrokSessionLoadResult, String> {
     let session_dir = find_workspace_session_dir(workspace_path, session_id, custom_home).await?;
     let chat_history_path = session_dir.join("chat_history.jsonl");
-    let raw = fs::read_to_string(&chat_history_path).await.map_err(|error| {
-        format!(
-            "Failed to read Grok session chat history {}: {}",
-            chat_history_path.display(),
-            error
-        )
-    })?;
+    let raw = fs::read_to_string(&chat_history_path)
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to read Grok session chat history {}: {}",
+                chat_history_path.display(),
+                error
+            )
+        })?;
     Ok(parse_messages_from_chat_history(&raw))
 }
 
@@ -864,9 +869,7 @@ mod tests {
             let raw = canonical_workspace.to_string_lossy().to_string();
             raw.chars()
                 .map(|ch| match ch {
-                    'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => {
-                        ch.to_string()
-                    }
+                    'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => ch.to_string(),
                     _ => format!("%{:02X}", ch as u32),
                 })
                 .collect::<String>()
@@ -890,13 +893,10 @@ mod tests {
         )
         .expect("write chat history");
 
-        let listed = super::list_grok_sessions(
-            &workspace,
-            None,
-            Some(grok_home.to_string_lossy().as_ref()),
-        )
-        .await
-        .expect("list sessions");
+        let listed =
+            super::list_grok_sessions(&workspace, None, Some(grok_home.to_string_lossy().as_ref()))
+                .await
+                .expect("list sessions");
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].session_id, "019fa245-0000-4000-8000-000000000001");
         assert_eq!(listed[0].first_message, "Fixture title");
@@ -922,13 +922,10 @@ mod tests {
         .await
         .expect("delete session");
         assert!(!session_dir.exists());
-        let remaining = super::list_grok_sessions(
-            &workspace,
-            None,
-            Some(grok_home.to_string_lossy().as_ref()),
-        )
-        .await
-        .expect("list after delete");
+        let remaining =
+            super::list_grok_sessions(&workspace, None, Some(grok_home.to_string_lossy().as_ref()))
+                .await
+                .expect("list after delete");
         assert!(remaining.is_empty());
 
         let _ = std::fs::remove_dir_all(&fixture_root);

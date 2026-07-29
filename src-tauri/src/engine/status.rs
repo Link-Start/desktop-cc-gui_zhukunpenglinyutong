@@ -109,6 +109,91 @@ fn public_models_for_engine(engine_type: EngineType) -> Vec<ModelInfo> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UnlistedRuntimeModelPolicy {
+    Allow,
+    Reject,
+}
+
+pub(crate) fn validate_model_catalog_pair(
+    model_catalog_entry_id: Option<&str>,
+    runtime_model: Option<&str>,
+    catalog: &[ModelInfo],
+    unlisted_runtime_model_policy: UnlistedRuntimeModelPolicy,
+) -> Result<(), String> {
+    let model_catalog_entry_id = model_catalog_entry_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let runtime_model = runtime_model
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    if let Some(entry_id) = model_catalog_entry_id {
+        let entry = catalog
+            .iter()
+            .find(|entry| entry.id.trim() == entry_id)
+            .ok_or_else(|| {
+                format!(
+                    "invalid-target-model: catalog entry '{entry_id}' is unavailable for the selected Provider"
+                )
+            })?;
+        let expected_runtime_model = if entry.model.trim().is_empty() {
+            entry.id.trim()
+        } else {
+            entry.model.trim()
+        };
+        if runtime_model != Some(expected_runtime_model) {
+            return Err(format!(
+                "invalid-target-model: catalog entry '{entry_id}' requires runtime model '{expected_runtime_model}'"
+            ));
+        }
+        return Ok(());
+    }
+
+    let Some(runtime_model) = runtime_model else {
+        return Ok(());
+    };
+    if let Some(entry) = catalog.iter().find(|entry| {
+        entry.id.trim() == runtime_model
+            && !entry.model.trim().is_empty()
+            && entry.model.trim() != runtime_model
+    }) {
+        return Err(format!(
+            "invalid-target-model: '{}' is a catalog entry id; use runtime model '{}'",
+            entry.id.trim(),
+            entry.model.trim()
+        ));
+    }
+    if catalog
+        .iter()
+        .any(|entry| entry.model.trim() == runtime_model)
+        || unlisted_runtime_model_policy == UnlistedRuntimeModelPolicy::Allow
+    {
+        return Ok(());
+    }
+    Err(format!(
+        "invalid-target-model: runtime model '{runtime_model}' is unavailable for the selected Provider"
+    ))
+}
+
+pub(crate) fn get_local_engine_models_for_validation(
+    engine_type: EngineType,
+) -> Option<Vec<ModelInfo>> {
+    match engine_type {
+        EngineType::Claude => {
+            let mut models = get_builtin_claude_models();
+            apply_claude_model_overrides(&mut models, read_claude_model_overrides());
+            ensure_default_model(&mut models);
+            Some(dedupe_models_preserve_order(models))
+        }
+        EngineType::Codex => Some(get_codex_models()),
+        EngineType::Kimi => Some(get_kimi_models(get_kimi_home_dir().as_deref()).0),
+        EngineType::Grok => Some(get_grok_models(get_grok_home_dir().as_deref()).0),
+        EngineType::OpenCode => Some(public_models_for_engine(EngineType::OpenCode)),
+        EngineType::Gemini => None,
+    }
+}
+
 fn claude_provider_models_from_env(
     provider_profile_id: &str,
     env: &std::collections::BTreeMap<String, String>,
@@ -1645,7 +1730,15 @@ pub async fn resolve_engine_type(
     }
 
     // 3. Auto-detect based on installed CLIs
-    detect_preferred_engine(claude_bin, codex_bin, gemini_bin, opencode_bin, kimi_bin, grok_bin).await
+    detect_preferred_engine(
+        claude_bin,
+        codex_bin,
+        gemini_bin,
+        opencode_bin,
+        kimi_bin,
+        grok_bin,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -1657,6 +1750,87 @@ mod tests {
 
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn model_catalog_pair_separates_selection_id_from_runtime_model() {
+        let catalog =
+            vec![ModelInfo::new("settings-reasoning", "Reasoning")
+                .with_runtime_model("deepseek-v4-pro")];
+
+        assert!(validate_model_catalog_pair(
+            Some("settings-reasoning"),
+            Some("deepseek-v4-pro"),
+            &catalog,
+            UnlistedRuntimeModelPolicy::Reject,
+        )
+        .is_ok());
+        assert!(validate_model_catalog_pair(
+            Some("settings-reasoning"),
+            Some("settings-reasoning"),
+            &catalog,
+            UnlistedRuntimeModelPolicy::Reject,
+        )
+        .expect_err("catalog id must not become the runtime model")
+        .contains("requires runtime model 'deepseek-v4-pro'"));
+        assert!(validate_model_catalog_pair(
+            None,
+            Some("settings-reasoning"),
+            &catalog,
+            UnlistedRuntimeModelPolicy::Reject,
+        )
+        .expect_err("legacy target must not treat a catalog id as runtime")
+        .contains("is a catalog entry id"));
+    }
+
+    #[test]
+    fn unlisted_runtime_policy_keeps_native_compatibility_but_shared_fails_closed() {
+        let catalog = vec![ModelInfo::new("known", "Known")];
+
+        assert!(validate_model_catalog_pair(
+            None,
+            Some("custom/provider-model"),
+            &catalog,
+            UnlistedRuntimeModelPolicy::Allow,
+        )
+        .is_ok());
+        assert!(validate_model_catalog_pair(
+            None,
+            Some("custom/provider-model"),
+            &catalog,
+            UnlistedRuntimeModelPolicy::Reject,
+        )
+        .expect_err("Shared target requires a catalog runtime match")
+        .contains("runtime model 'custom/provider-model' is unavailable"));
+    }
+
+    #[test]
+    fn shared_local_validation_catalog_covers_all_supported_cli_engines() {
+        for engine in [
+            EngineType::Claude,
+            EngineType::Codex,
+            EngineType::Kimi,
+            EngineType::Grok,
+            EngineType::OpenCode,
+        ] {
+            let catalog = get_local_engine_models_for_validation(engine)
+                .unwrap_or_else(|| panic!("missing local validation catalog for {engine:?}"));
+            let selected = catalog
+                .first()
+                .unwrap_or_else(|| panic!("empty local validation catalog for {engine:?}"));
+
+            assert!(
+                validate_model_catalog_pair(
+                    Some(&selected.id),
+                    Some(&selected.model),
+                    &catalog,
+                    UnlistedRuntimeModelPolicy::Reject,
+                )
+                .is_ok(),
+                "{engine:?}"
+            );
+        }
+        assert!(get_local_engine_models_for_validation(EngineType::Gemini).is_none());
+    }
 
     #[test]
     fn claude_settings_overrides_are_independent_runtime_entries() {
@@ -1979,9 +2153,17 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_engine_type_normalizes_retired_workspace_gemini_to_allowed_default() {
-        let resolved =
-            resolve_engine_type(Some("gemini"), Some("claude"), None, None, None, None, None, None)
-                .await;
+        let resolved = resolve_engine_type(
+            Some("gemini"),
+            Some("claude"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
         assert_eq!(resolved, EngineType::Claude);
     }
 
@@ -2061,17 +2243,33 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_engine_type_supports_kimi() {
-        let resolved =
-            resolve_engine_type(Some("kimi"), Some("claude"), None, None, None, None, None, None)
-                .await;
+        let resolved = resolve_engine_type(
+            Some("kimi"),
+            Some("claude"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
         assert_eq!(resolved, EngineType::Kimi);
     }
 
     #[tokio::test]
     async fn resolve_engine_type_supports_grok() {
-        let resolved =
-            resolve_engine_type(Some("grok"), Some("claude"), None, None, None, None, None, None)
-                .await;
+        let resolved = resolve_engine_type(
+            Some("grok"),
+            Some("claude"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
         assert_eq!(resolved, EngineType::Grok);
     }
 

@@ -103,6 +103,58 @@ pub(crate) struct WorkspaceSessionCatalogEntry {
     pub(crate) physical_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) children_count: Option<usize>,
+    #[serde(flatten)]
+    pub(crate) continuation: ProviderContinuationProjection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ProviderContinuationProjection {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) origin_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) source_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) source_provider_profile_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) family_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) family_root_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) lineage_parent_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) lineage_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) lineage_depth: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ProviderContinuationMetadata {
+    pub(crate) origin_kind: String,
+    pub(crate) source_session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) source_provider_profile_id: Option<String>,
+    pub(crate) family_id: String,
+    pub(crate) family_root_session_id: String,
+    pub(crate) lineage_parent_session_id: String,
+    pub(crate) lineage_kind: String,
+    pub(crate) lineage_depth: u32,
+}
+
+impl From<ProviderContinuationMetadata> for ProviderContinuationProjection {
+    fn from(metadata: ProviderContinuationMetadata) -> Self {
+        Self {
+            origin_kind: Some(metadata.origin_kind),
+            source_session_id: Some(metadata.source_session_id),
+            source_provider_profile_id: metadata.source_provider_profile_id,
+            family_id: Some(metadata.family_id),
+            family_root_session_id: Some(metadata.family_root_session_id),
+            lineage_parent_session_id: Some(metadata.lineage_parent_session_id),
+            lineage_kind: Some(metadata.lineage_kind),
+            lineage_depth: Some(metadata.lineage_depth),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -342,6 +394,8 @@ pub(crate) struct WorkspaceSessionCatalogMetadata {
     pub(crate) codex_provider_binding_by_session_id: HashMap<String, CodexProviderBinding>,
     #[serde(default)]
     pub(crate) engine_provider_binding_by_session_key: HashMap<String, EngineProviderBinding>,
+    #[serde(default)]
+    pub(crate) provider_continuation_by_session_key: HashMap<String, ProviderContinuationMetadata>,
 }
 
 #[derive(Debug, Clone)]

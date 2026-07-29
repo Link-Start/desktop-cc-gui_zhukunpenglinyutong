@@ -13,7 +13,10 @@ import { createGrokHistoryLoader } from "../loaders/grokHistoryLoader";
 import { createKimiHistoryLoader } from "../loaders/kimiHistoryLoader";
 import { createOpenCodeHistoryLoader } from "../loaders/opencodeHistoryLoader";
 import { createSharedHistoryLoader } from "../loaders/sharedHistoryLoader";
-import { loadSharedSession as loadSharedSessionService } from "../../shared-session/services/sharedSessions";
+import {
+  loadSharedProjection as loadSharedProjectionService,
+  loadSharedSession as loadSharedSessionService,
+} from "../../shared-session/services/sharedSessions";
 
 export function createThreadHistoryLoaderForThread({
   targetThreadId,
@@ -30,6 +33,7 @@ export function createThreadHistoryLoaderForThread({
     return createSharedHistoryLoader({
       workspaceId,
       loadSharedSession: loadSharedSessionService,
+      loadSharedProjection: loadSharedProjectionService,
     });
   }
   if (targetThreadId.startsWith("claude:")) {

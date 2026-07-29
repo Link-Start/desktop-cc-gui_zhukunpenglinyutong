@@ -51,6 +51,14 @@ import {
   useUndoRedoHistory,
 } from './hooks/index.js';
 import {
+  useAtomicProviderTargetCatalog,
+  useNativeProviderTargetCatalog,
+} from './hooks/useProviderTargetCatalogOwners';
+import {
+  isSameProviderExecutionProfile,
+  normalizeExecutionProviderProfileId,
+} from './selectors/ModelSelect';
+import {
   commandToDropdownItem,
   fileReferenceProvider,
   fileToDropdownItem,
@@ -92,6 +100,11 @@ import './styles.css';
 const INCREMENTAL_UNDO_REDO_ENABLED = true;
 const INCREMENTAL_UNDO_REDO_MAX_TRANSACTIONS = 100;
 const INCREMENTAL_UNDO_REDO_MERGE_WINDOW_MS = 400;
+const PROVIDER_PROFILE_ENGINES = new Set<ProviderId>([
+  'claude',
+  'codex',
+  'kimi',
+]);
 
 function manualMemoryToDropdownItem(memory: ManualMemoryItem) {
   const label = memory.title?.trim() || memory.summary?.trim() || memory.id;
@@ -184,6 +197,10 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       permissionMode = 'bypassPermissions',
       currentProvider = 'claude',
       currentProviderProfileId,
+      executionTarget,
+      onExecutionTargetChange,
+      onNativeProviderTargetChange,
+      providerTargetPickerMode = 'native',
       providerAvailability,
       providerVersions,
       providerStatusLabels,
@@ -203,6 +220,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       hasContextAttachment = false,
       placeholder = '', // Will be passed from parent via t('chat.inputPlaceholder')
       disabled = false,
+      submitDisabled = false,
       value,
       onSubmit,
       onStop,
@@ -272,6 +290,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     ref: React.ForwardedRef<ChatInputBoxHandle>
   ) => {
     const { t } = useTranslation();
+    const usesAtomicProviderTargetPicker =
+      providerTargetPickerMode !== 'native';
 
     // Open source banner state (show once, dismiss permanently)
     const BANNER_DISMISSED_KEY = 'openSourceBannerDismissed';
@@ -359,6 +379,62 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         providerModelCatalogs,
         selectedModel,
         t,
+      ],
+    );
+    const nativeProviderTargetPicker =
+      !usesAtomicProviderTargetPicker &&
+      PROVIDER_PROFILE_ENGINES.has(currentProvider as ProviderId);
+    const atomicProviderTargetCatalog = useAtomicProviderTargetCatalog({
+      enabled: usesAtomicProviderTargetPicker,
+      workspaceId,
+      mode:
+        providerTargetPickerMode === 'create-session'
+          ? 'create-session'
+          : 'shared',
+      currentProvider: currentProvider as ProviderId,
+      currentProviderProfileId,
+      resolveProviderLabel: (providerId) =>
+        t(`providers.${providerId}.label`, { defaultValue: providerId }),
+      kimiDisabledReason: t('sharedSession.kimiTargetUnavailable', {
+        defaultValue: '可作为来源；目标续接尚未验证',
+      }),
+    });
+    const nativeProviderTargetCatalog = useNativeProviderTargetCatalog({
+      enabled: nativeProviderTargetPicker,
+      workspaceId,
+      currentProvider: currentProvider as ProviderId,
+      currentProviderProfileId,
+      currentModels: availableModels,
+      resolveProviderLabel: (providerId) =>
+        t(`providers.${providerId}.label`, { defaultValue: providerId }),
+      kimiDisabledReason: t('sharedSession.kimiTargetUnavailable', {
+        defaultValue: '可作为来源；目标续接尚未验证',
+      }),
+    });
+    const providerTargetCatalog = usesAtomicProviderTargetPicker
+      ? atomicProviderTargetCatalog
+      : nativeProviderTargetCatalog;
+    const pickerExecutionTarget = useMemo(
+      () =>
+        executionTarget ??
+        (nativeProviderTargetPicker
+          ? {
+              engine: currentProvider as ProviderId,
+              providerProfileId:
+                normalizeExecutionProviderProfileId(
+                  currentProvider as ProviderId,
+                  currentProviderProfileId,
+                ),
+              model: selectedModel || null,
+              reasoning: null,
+            }
+          : null),
+      [
+        currentProvider,
+        currentProviderProfileId,
+        executionTarget,
+        nativeProviderTargetPicker,
+        selectedModel,
       ],
     );
 
@@ -1088,6 +1164,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     );
 
     const handleSubmit = useSubmitHandler({
+      submitDisabled: disabled || submitDisabled,
       getTextContent,
       invalidateCache,
       attachments,
@@ -1317,6 +1394,37 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       },
       [currentProvider, onModelSelect, onProviderSelect]
     );
+    const handleProviderTargetSelect = useCallback(
+      (target: NonNullable<typeof pickerExecutionTarget>) => {
+        if (usesAtomicProviderTargetPicker) {
+          onExecutionTargetChange?.(target);
+          return;
+        }
+        if (
+          isSameProviderExecutionProfile(
+            currentProvider as ProviderId,
+            currentProviderProfileId,
+            target,
+          )
+        ) {
+          const selectedModelId =
+            target.modelCatalogEntryId ?? target.model;
+          if (selectedModelId) {
+            onModelSelect?.(selectedModelId);
+          }
+          return;
+        }
+        onNativeProviderTargetChange?.(target);
+      },
+      [
+        currentProvider,
+        currentProviderProfileId,
+        onExecutionTargetChange,
+        onModelSelect,
+        onNativeProviderTargetChange,
+        usesAtomicProviderTargetPicker,
+      ],
+    );
     const handleOpenCurrentProviderModelSettings = useCallback(() => {
       onOpenModelSettings?.(resolveModelConfigProvider(currentProvider));
     }, [currentProvider, onOpenModelSettings]);
@@ -1458,11 +1566,34 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         contextSourcesExpanded={contextSourcesExpanded}
         selectedModel={selectedModel}
         models={availableModels}
-        modelGroups={onProviderSelect ? providerModelGroups : undefined}
+        modelGroups={
+          !usesAtomicProviderTargetPicker &&
+          !nativeProviderTargetPicker &&
+          onProviderSelect
+            ? providerModelGroups
+            : undefined
+        }
+        targetGroups={providerTargetCatalog.groups}
+        targetGroupDisplayMode={
+          nativeProviderTargetPicker ? 'profiles' : 'cli'
+        }
+        executionTarget={pickerExecutionTarget}
+        onExecutionTargetChange={handleProviderTargetSelect}
+        onOpenTargetCatalog={providerTargetCatalog.ensureProfiles}
+        onOpenProviderProfile={providerTargetCatalog.ensureModels}
+        onReloadProviderConfig={providerTargetCatalog.reloadConfig}
+        onDiscoverProviderModels={providerTargetCatalog.discoverModels}
+        targetCatalogError={providerTargetCatalog.profileLoadError}
         currentProvider={currentProvider}
-        onModelSelect={onModelSelect ? handleModelSelect : undefined}
+        onModelSelect={
+          !usesAtomicProviderTargetPicker && onModelSelect
+            ? handleModelSelect
+            : undefined
+        }
         onProviderModelSelect={
-          onModelSelect && onProviderSelect ? handleProviderModelSelect : undefined
+          !nativeProviderTargetPicker && onModelSelect && onProviderSelect
+            ? handleProviderModelSelect
+            : undefined
         }
         onAddModel={
           onOpenModelSettings && supportsModelConfigActions
@@ -1672,7 +1803,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
           {!isInputBoxCollapsed && (
             <ChatInputBoxFooter
-              disabled={disabled}
+              disabled={disabled || submitDisabled}
               hasInputContent={hasContent || attachments.length > 0 || hasContextAttachment}
               isLoading={isLoading}
               streamActivityPhase={streamActivityPhase}
@@ -1702,8 +1833,12 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               onSubmit={handleSubmit}
               onStop={onStop}
               onModeSelect={handleModeSelect}
-              onModelSelect={handleModelSelect}
-              onProviderSelect={onProviderSelect}
+              onModelSelect={
+                usesAtomicProviderTargetPicker ? undefined : handleModelSelect
+              }
+              onProviderSelect={
+                usesAtomicProviderTargetPicker ? undefined : onProviderSelect
+              }
               onReasoningChange={onReasoningChange}
               onEnhancePrompt={handleEnhancePrompt}
               alwaysThinkingEnabled={alwaysThinkingEnabled}

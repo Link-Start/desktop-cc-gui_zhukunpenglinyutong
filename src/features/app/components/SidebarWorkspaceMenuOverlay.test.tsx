@@ -46,6 +46,59 @@ function createCodexAction(): WorkspaceMenuAction {
 }
 
 describe("SidebarWorkspaceMenuOverlay", () => {
+  it("defaults workspace actions to collapsed and toggles them from the group header", () => {
+    const reloadAction: WorkspaceMenuAction = {
+      id: "reload-threads",
+      label: "Reload threads",
+      iconKind: "reload",
+      onSelect: vi.fn(),
+    };
+
+    render(
+      <SidebarWorkspaceMenuOverlay
+        menu={{
+          x: 32,
+          y: 28,
+          groups: [
+            {
+              id: "new-session",
+              label: "New session",
+              actions: [createCodexAction()],
+            },
+            {
+              id: "workspace-actions",
+              label: "Workspace actions",
+              collapsible: true,
+              defaultCollapsed: true,
+              actions: [reloadAction],
+            },
+          ],
+        }}
+        t={t}
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+        renderIcon={() => null}
+      />,
+    );
+
+    const toggle = screen.getByRole("button", { name: "Workspace actions" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("menuitem", { name: "Reload threads" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Codex" })).toBeTruthy();
+
+    fireEvent.click(toggle);
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      screen.getByRole("menuitem", { name: "Reload threads" }),
+    ).toBeTruthy();
+
+    fireEvent.click(toggle);
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("menuitem", { name: "Reload threads" })).toBeNull();
+  });
+
   it("renders child options in a fixed flyout outside the root menu", () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,

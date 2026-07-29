@@ -772,7 +772,6 @@ export function AppShell() {
     startLsp,
     startShare,
     startSharedSessionForWorkspace,
-    updateSharedSessionEngineSelection,
     updateThreadParent,
     resolveCanonicalThreadId,
     reviewPrompt,
@@ -1588,7 +1587,6 @@ export function AppShell() {
     threadsByWorkspace,
     tokenUsageByThread,
     toggleCompletionEmailIntent,
-    updateSharedSessionEngineSelection,
   });
   const runtimeActions = defineAppShellRuntimeActions({
     handleToggleRuntimeConsole,
@@ -2227,7 +2225,6 @@ export function AppShell() {
       updateCloneCopyName,
       updateCustomInstructions,
       updatePrompt,
-      updateSharedSessionEngineSelection,
       updateWorkspaceCodexBin,
       updateWorkspaceSettings,
       updateWorktreeBaseRef,

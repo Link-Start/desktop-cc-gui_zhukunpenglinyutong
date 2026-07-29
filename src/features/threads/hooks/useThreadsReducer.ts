@@ -44,6 +44,7 @@ import {
 import { isOptimisticUserMessageId } from "../utils/queuedHandoffBubble";
 import { isClaudeForkThreadId } from "../utils/claudeForkThread";
 import { resolvePendingThreadIdForSession } from "../utils/threadPendingResolution";
+import { isSameRequestUserInput } from "../../../utils/requestUserInputIdentity";
 import {
   isProcessingGeneratedImageItem,
 } from "../utils/generatedImagePlaceholder";
@@ -1186,6 +1187,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         kind: "message",
         role: "assistant",
         text: action.text,
+        ...(action.executionTargetSnapshot
+          ? { executionTargetSnapshot: action.executionTargetSnapshot }
+          : {}),
       };
       return {
         ...state,
@@ -2323,9 +2327,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       };
     case "addUserInputRequest": {
       const exists = state.userInputRequests.some(
-        (item) =>
-          item.request_id === action.request.request_id &&
-          item.workspace_id === action.request.workspace_id,
+        (item) => isSameRequestUserInput(item, action.request),
       );
       if (exists) {
         return state;
@@ -2340,8 +2342,17 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...state,
         userInputRequests: state.userInputRequests.filter(
           (item) =>
-            item.request_id !== action.requestId ||
-            item.workspace_id !== action.workspaceId,
+            action.request
+              ? !isSameRequestUserInput(item, action.request)
+              : action.sharedRuntimeOwner
+                ? item.request_id !== action.requestId ||
+                  item.workspace_id !== action.workspaceId ||
+                  item.shared_runtime_owner?.providerRuntimeKey !==
+                    action.sharedRuntimeOwner.providerRuntimeKey ||
+                  item.shared_runtime_owner?.attemptId !==
+                    action.sharedRuntimeOwner.attemptId
+              : item.request_id !== action.requestId ||
+                item.workspace_id !== action.workspaceId,
         ),
       };
     case "clearUserInputRequestsForThread":

@@ -8,6 +8,10 @@ const models = {
     "addModel": "모델 추가",
     "refreshConfig": "설정 새로고침",
     "refreshingConfig": "새로고침 중...",
+    "reloadConfig": "설정 다시 불러오기",
+    "reloadingConfig": "설정 다시 불러오는 중...",
+    "discoverModels": "CLI에서 모델 검색",
+    "discoveringModels": "모델 검색 중...",
     "refreshConfigFailed": "새로고침 실패: {{message}}",
     "claude": {},
     "codex": {

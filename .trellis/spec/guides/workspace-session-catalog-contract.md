@@ -32,6 +32,8 @@
 - `WorkspaceSessionCatalogEntry.nativeTitle?: string`
 - `selectProjectedSessionDisplayName({ customTitle?, mappedTitle?, nativeTitle?, nextName, previous? })`
 - `resolveThreadSourceMeta(rawThread).parentThreadId?: string`
+- `list_shared_sessions(workspaceId) -> SharedSessionSummary.nativeThreadIds`
+- `SharedEventWriter.binding_states_for_session(sharedSessionId)`
 
 ### 3. Contracts
 
@@ -39,6 +41,12 @@
 - Session Management may use a larger first-page catalog window than Sidebar. Current Settings catalog hook uses page size `9999` and does not expose user-visible pagination; Sidebar keeps its own startup/load-older catalog page size to avoid broadening startup pressure.
 - Workspace Home MUST NOT derive an independent session membership set from `recentThreads`; if it later displays sessions, it MUST consume the same catalog projection or document an explicit display-window difference.
 - Native engine list APIs such as `listClaudeSessions` MAY provide transcript restore, diagnostics, or continuity seed, but MUST NOT widen or shrink complete catalog membership.
+- Shared Hidden Native Binding MUST be excluded from ordinary Native catalog projection. The
+  exclusion identity MUST come from the union of legacy Shared metadata and canonical V2
+  `shared_binding_state.native_session_id`; frontend dispatch memory alone is not durable evidence.
+- `list_shared_sessions` MUST expose every non-empty V2 Hidden Binding native identity through
+  `SharedSessionSummary.nativeThreadIds`, sorted and deduplicated. V0 `bindings_by_engine` is
+  compatibility input only and MUST NOT be the sole authority after V2 activation.
 - Frontend MUST NOT reapply exact `entry.workspaceId === selectedWorkspaceId` membership filtering on active strict projection rows. Project aggregate rows may have child/worktree `workspaceId`, and that owner must survive to UI state.
 - `WorkspaceSessionSourceCompleteness` MUST preserve per-engine source status. `partial` / `degraded` / `uncertain_empty` cannot prove deletion; `authoritative_empty` only applies to the matching engine and requested scope.
 - Metadata overlay is organization state only. `archive`, `folder`, and custom title metadata MUST NOT prove disk existence.
@@ -74,6 +82,8 @@
 | visible parent id is a rollout filename alias | child link resolves canonical parent UUID to visible parent id | child remains a root because ids differ |
 | runtime native rename looks like `Agent 12` / `Claude Session` / short hex | `nativeTitle` bypasses fallback strength heuristic，仍低于 GUI custom/mapped title | 仅传普通 `title`，导致旧 first-message title 被保留 |
 | old backend omits `nativeTitle` | normalize 为 absent，继续既有 title projection | 把 optional field 当 required 而丢弃 catalog row |
+| Shared V2 Codex Binding exists only in event store | exclude its Native row before/after refresh | show a duplicate ordinary Session |
+| Shared summary contains V0 and V2 copy of one identity | sort/dedupe once | duplicate exclusion state or duplicate UI row |
 
 ### 5. Good / Base / Bad Cases
 
@@ -91,6 +101,9 @@
 - Rust cache tests for hit/miss/stale/schema mismatch/corrupt/deleted rebuild, plus cache exclusion of transcript body and organization overlay.
 - Rust parser/source tests for snake_case/camelCase subagent metadata、agent path basename fallback、later parent metadata sticky behavior，以及 canonical child UUID 在 aggregation/limit 前 dedupe（assert aliases、relationship/title、non-additive usage）。
 - Rust catalog/native/daemon mapping tests MUST assert `parentSessionId` survives every local projection。
+- Rust event-store test MUST assert all Binding rows for one Shared Session are queryable; frontend
+  catalog test MUST assert a V2-only Native identity is removed from ordinary rows while the Shared
+  row remains.
 - Rust local/live merge tests MUST combine canonical ids、rollout aliases 与 parent relationship，并 assert `canonicalSessionId` 和 visible `parentSessionId` 同时正确；catalog test MUST assert duplicate child 只计一次 `childrenCount`。
 - Vitest coverage for Sidebar catalog normalization preserving child owner rows, Session Management stable selection keys, native empty not clearing catalog rows, and Workspace Home not deriving session membership from `recentThreads`.
 - Vitest coverage MUST assert raw Codex `parentSessionId -> ThreadSummary.parentThreadId`，且 parent + child tree 只产生一个 root。
@@ -150,6 +163,21 @@ const visible = response.data.filter(
 
 ```ts
 const visible = response.data.map(normalizeProjectCatalogSession).filter(Boolean);
+```
+
+#### Wrong
+
+```ts
+const hiddenIds = new Set(sharedSessions.flatMap(readLegacyBindingsByEngine));
+```
+
+#### Correct
+
+```ts
+const hiddenIds = new Set(
+  sharedSessions.flatMap((session) => session.nativeThreadIds),
+);
+// nativeThreadIds 已由 backend 合并 V0 compatibility + V2 binding state。
 ```
 
 #### Wrong

@@ -38,7 +38,22 @@ import {
   listGrokSessions as listGrokSessionsService,
   listKimiSessions as listKimiSessionsService,
 } from "../../../services/tauri";
-import { sendSharedSessionTurn } from "../../shared-session/runtime/sendSharedSessionTurn";
+import { sendSharedSessionTurnRouted } from "../../shared-session/runtime/sendSharedSessionTurn";
+import { isSharedV2SendEnabled } from "../../shared-session/runtime/sharedV2SendFlag";
+import { sharedSessionV2InterruptTurn as sharedSessionV2InterruptTurnService } from "../../shared-session/services/sharedSessions";
+import {
+  dispatchSharedSendEvent,
+  getSharedSendActiveAttemptId,
+  getSharedSendState,
+  releaseSharedSendAdmission,
+  setSharedSendActiveAttempt,
+  tryAcquireSharedSend,
+} from "../../shared-session/runtime/sharedSendStateStore";
+import {
+  getSharedTargetState,
+  selectNextTarget,
+} from "../../shared-session/target/targetStore";
+import { isResolvedExecutionTarget } from "../../shared-session/target/types";
 import { projectMemoryFacade } from "../../project-memory/services/projectMemoryFacade";
 import {
   injectSelectedMemoriesContext,
@@ -67,7 +82,10 @@ import { useReviewPrompt } from "./useReviewPrompt";
 import { pushErrorToast } from "../../../services/toasts";
 import { pushThreadFailureRuntimeNotice } from "../../../services/globalRuntimeNotices";
 import { resolveAgentIconForAgent } from "../../../utils/agentIcons";
-import { normalizeSharedSessionEngine } from "../../shared-session/utils/sharedSessionEngines";
+import {
+  isSharedSessionSupportedEngine,
+  normalizeSharedSessionEngine,
+} from "../../shared-session/utils/sharedSessionEngines";
 import {
   clearPendingClaudeMcpOutputNotice,
   getClaudeMcpRuntimeSnapshot,
@@ -435,9 +453,60 @@ export function useThreadMessaging({
           return;
         }
       }
+      const sharedV2SendEnabled =
+        threadKind === "shared" && isSharedV2SendEnabled();
+      const storedSharedTarget =
+        threadKind === "shared"
+          ? getSharedTargetState(workspace.id, threadId).selectedNextTarget
+          : null;
+      const supportedStoredSharedTarget =
+        storedSharedTarget &&
+        isSharedSessionSupportedEngine(storedSharedTarget.engine)
+          ? storedSharedTarget
+          : null;
+      const sharedSendState = sharedV2SendEnabled
+        ? getSharedSendState(workspace.id, threadId)
+        : null;
+      if (sharedSendState && sharedSendState.state !== "idle") {
+        onDebug?.({
+          id: `${Date.now()}-client-shared-turn-submit-blocked`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "shared-session/turn blocked",
+          payload: {
+            workspaceId: workspace.id,
+            threadId,
+            state: sharedSendState.state,
+          },
+        });
+        return;
+      }
+      if (storedSharedTarget && !supportedStoredSharedTarget) {
+        pushThreadErrorMessage(
+          workspace.id,
+          threadId,
+          "当前 Shared Session 目标暂不可执行，请重新选择可用的 CLI 和 Provider。",
+        );
+        safeMessageActivity();
+        return;
+      }
+      if (
+        sharedV2SendEnabled &&
+        !isResolvedExecutionTarget(supportedStoredSharedTarget)
+      ) {
+        pushThreadErrorMessage(
+          workspace.id,
+          threadId,
+          "当前 Shared Session 目标不完整，请重新选择 CLI、Provider 和 Model。",
+        );
+        safeMessageActivity();
+        return;
+      }
       const resolvedEngine =
         threadKind === "shared"
-          ? normalizeSharedSessionEngine(activeEngine)
+          ? normalizeSharedSessionEngine(
+              supportedStoredSharedTarget?.engine ?? activeEngine,
+            )
           : resolvedThreadEngine;
       dispatch({
         type: "ensureThread",
@@ -767,12 +836,24 @@ export function useThreadMessaging({
       const modelFromOptions =
         options?.model !== undefined ? options.model : undefined;
       const modelFromHook = resolvedComposerSelection?.model ?? model;
-      const selectedModelId = resolvedComposerSelection?.id ?? null;
-      const selectedModelSource = resolvedComposerSelection?.source ?? "unknown";
+      const selectedModelId =
+        threadKind === "shared"
+          ? supportedStoredSharedTarget?.modelCatalogEntryId ?? null
+          : resolvedComposerSelection?.id ?? null;
+      const selectedModelSource =
+        threadKind === "shared"
+          ? supportedStoredSharedTarget?.providerProfileSource ?? "unknown"
+          : resolvedComposerSelection?.source ?? "unknown";
       const resolvedModel =
-        modelFromOptions !== undefined ? modelFromOptions : modelFromHook;
+        threadKind === "shared" && supportedStoredSharedTarget
+          ? supportedStoredSharedTarget.model ?? null
+          : modelFromOptions !== undefined
+            ? modelFromOptions
+            : modelFromHook;
       const rawResolvedEffort =
-        options?.effort !== undefined
+        threadKind === "shared" && supportedStoredSharedTarget
+          ? supportedStoredSharedTarget.reasoning?.effort ?? null
+          : options?.effort !== undefined
           ? options.effort
           : (resolvedComposerSelection?.effort ?? effort);
       const resolvedEffort = normalizeEngineScopedEffort(resolvedEngine, rawResolvedEffort);
@@ -894,6 +975,35 @@ export function useThreadMessaging({
           modelForSend: modelForSend ?? null,
         },
       });
+      let sharedSendAdmissionRevision: number | undefined;
+      if (sharedV2SendEnabled) {
+        const admission = tryAcquireSharedSend(workspace.id, threadId);
+        if (!admission.acquired) {
+          onDebug?.({
+            id: `${Date.now()}-client-shared-turn-admission-blocked`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "shared-session/turn blocked",
+            payload: {
+              workspaceId: workspace.id,
+              threadId,
+              state: admission.state,
+              phase: "atomic-admission",
+            },
+          });
+          return;
+        }
+        sharedSendAdmissionRevision = admission.revision;
+        // handoff 前若同步 UI mutation 抛错/早退，精确释放本 caller 的 admission。
+        // 正常路径中 V2 在第一个 await 前消费 revision，此 microtask 不会误解锁。
+        queueMicrotask(() => {
+          releaseSharedSendAdmission(
+            workspace.id,
+            threadId,
+            admission.revision,
+          );
+        });
+      }
       const wasProcessing =
         (threadStatusById[threadId]?.isProcessing ?? false) && steerEnabled;
       const shouldAddOptimisticUserBubble =
@@ -1003,6 +1113,10 @@ export function useThreadMessaging({
           threadId,
           engine: effectiveResolvedEngine,
           selectedEngine: activeEngine,
+          providerProfileId:
+            supportedStoredSharedTarget?.providerProfileId ?? null,
+          modelCatalogEntryId:
+            supportedStoredSharedTarget?.modelCatalogEntryId ?? null,
           text: finalText,
           images: finalImages,
           model: modelForSend,
@@ -1181,21 +1295,36 @@ export function useThreadMessaging({
       try {
         let response: Record<string, unknown>;
         if (threadKind === "shared") {
-          const sharedResolvedEngine = normalizeSharedSessionEngine(resolvedEngine);
+          const sharedResolvedEngine = normalizeSharedSessionEngine(
+            supportedStoredSharedTarget?.engine ?? resolvedEngine,
+          );
           dispatch({
             type: "setThreadEngine",
             workspaceId: workspace.id,
             threadId,
             engine: sharedResolvedEngine,
           });
+          // Shared Picker 写入的 selectedNextTarget 是下一轮唯一权威输入。
+          // 旧的全局 Composer selection 可能仍指向上一个 CLI/Provider，不能在
+          // send boundary 重新组装并覆盖用户刚选中的 Target。
+          const sharedNextTarget = supportedStoredSharedTarget ?? {
+            engine: sharedResolvedEngine,
+            providerProfileId:
+              resolvedComposerSelection?.providerProfileId?.trim() || null,
+            model: modelForSend ?? null,
+            reasoning: resolvedEffort ? { effort: resolvedEffort } : null,
+          };
+          if (!sharedV2SendEnabled && !supportedStoredSharedTarget) {
+            selectNextTarget(workspace.id, threadId, sharedNextTarget);
+          }
           response =
-            (await sendSharedSessionTurn({
+            (await sendSharedSessionTurnRouted({
               workspaceId: workspace.id,
               threadId,
               engine: sharedResolvedEngine,
               text: finalText,
-              model: modelForSend ?? null,
-              effort: resolvedEffort ?? null,
+              model: sharedNextTarget.model ?? null,
+              effort: sharedNextTarget.reasoning?.effort ?? null,
               disableThinking: disableThinkingForClaude,
               collaborationMode: sanitizedCollaborationMode,
               accessMode: resolvedAccessMode,
@@ -1204,7 +1333,23 @@ export function useThreadMessaging({
                 ? "zh"
                 : "en",
               customSpecRoot: resolveWorkspaceSpecRoot(workspace.id),
+              sharedSendAdmissionRevision,
+              target: sharedNextTarget,
             })) as Record<string, unknown>;
+          // V2 begin 早退（recovery-required / target-unavailable）：编排层已驱动
+          // send 状态机，这里不按发送失败处理，也不抛出；复位 processing，
+          // 让 Composer 按状态机渲染恢复/不可用 UI。
+          if (
+            sharedV2SendEnabled &&
+            (response?.status === "blocked" ||
+              response?.status === "recovery-required" ||
+              response?.status === "target-unavailable")
+          ) {
+            markProcessing(threadId, false);
+            setActiveTurnId(threadId, null);
+            safeMessageActivity();
+            return;
+          }
           const sharedNativeThreadId = asString(response?.nativeThreadId ?? "").trim();
           if (sharedNativeThreadId && !sharedNativeThreadId.startsWith("shared:")) {
             dispatch({
@@ -1221,6 +1366,18 @@ export function useThreadMessaging({
             label: "shared-session/turn/start response",
             payload: response,
           });
+          const sharedV2Result =
+            response.v2 && typeof response.v2 === "object"
+              ? (response.v2 as Record<string, unknown>)
+              : null;
+          if (sharedV2SendEnabled && sharedV2Result?.committed === true) {
+            // Shared V2 command 直到 Runtime terminal 被 canonical commit 后才返回。
+            // 此处只收敛 Shared UI projection；不得落入 Native turn-start lifecycle。
+            markProcessing(threadId, false);
+            setActiveTurnId(threadId, null);
+            safeMessageActivity();
+            return;
+          }
         } else {
 
         const isClaudeSession = threadId.startsWith("claude:");
@@ -2114,10 +2271,16 @@ export function useThreadMessaging({
       return;
     }
     const reason = options?.reason ?? "user-stop";
+    const activeThreadKind = resolveThreadKind(activeWorkspace.id, activeThreadId);
+    const usesSharedV2Control =
+      activeThreadKind === "shared" && isSharedV2SendEnabled();
+    const sharedAttemptId = usesSharedV2Control
+      ? getSharedSendActiveAttemptId(activeWorkspace.id, activeThreadId)
+      : null;
     const activeTurnId = activeTurnIdByThread[activeThreadId] ?? null;
     const activeThreadIsProcessing =
       threadStatusById[activeThreadId]?.isProcessing ?? false;
-    if (!activeTurnId && !activeThreadIsProcessing) {
+    if (!activeTurnId && !activeThreadIsProcessing && !usesSharedV2Control) {
       onDebug?.({
         id: `${Date.now()}-client-turn-interrupt-skipped`,
         timestamp: Date.now(),
@@ -2131,6 +2294,75 @@ export function useThreadMessaging({
         },
       });
       return;
+    }
+    if (usesSharedV2Control && !sharedAttemptId) {
+      const sharedSendState = getSharedSendState(
+        activeWorkspace.id,
+        activeThreadId,
+      ).state;
+      if (
+        sharedSendState === "idle" &&
+        (activeTurnId || activeThreadIsProcessing)
+      ) {
+        // canonical commit 已把 Shared send state 收口并释放 Attempt；此时只剩
+        // frontend lifecycle residue。它不再需要、也不允许触发 Runtime interrupt。
+        markProcessing(activeThreadId, false);
+        setActiveTurnId(activeThreadId, null);
+        onDebug?.({
+          id: `${Date.now()}-client-shared-turn-residue-converged`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "shared-session/turn residue converged",
+          payload: {
+            workspaceId: activeWorkspace.id,
+            threadId: activeThreadId,
+            reason,
+            sharedSendState,
+          },
+        });
+        return;
+      }
+      onDebug?.({
+        id: `${Date.now()}-client-turn-interrupt-skipped`,
+        timestamp: Date.now(),
+        source: "client",
+        label: "turn/interrupt skipped",
+        payload: {
+          workspaceId: activeWorkspace.id,
+          threadId: activeThreadId,
+          reason,
+          cause: "shared-attempt-owner-missing",
+          sharedSendState,
+        },
+      });
+      return;
+    }
+    if (sharedAttemptId) {
+      try {
+        const interruptResult = await sharedSessionV2InterruptTurnService(
+          activeWorkspace.id,
+          activeThreadId,
+          sharedAttemptId,
+        );
+        if (interruptResult.status === "terminal-committed") {
+          dispatchSharedSendEvent(activeWorkspace.id, activeThreadId, {
+            type: "terminalCommitted",
+          });
+          setSharedSendActiveAttempt(activeWorkspace.id, activeThreadId, null);
+          markProcessing(activeThreadId, false);
+          setActiveTurnId(activeThreadId, null);
+          return;
+        }
+      } catch (error) {
+        onDebug?.({
+          id: `${Date.now()}-client-turn-interrupt-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "turn/interrupt error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
     }
     const turnId = activeTurnId ?? "pending";
     const shouldGuardInterruptedThread = reason !== "queue-fusion";
@@ -2191,17 +2423,43 @@ export function useThreadMessaging({
       },
     });
     try {
+      const sharedProviderProfileId =
+        activeThreadKind === "shared"
+          ? (getSharedTargetState(activeWorkspace.id, activeThreadId)
+              .activeTurnTarget?.providerProfileId ?? null)
+          : null;
+      if (usesSharedV2Control) {
+        // Shared V2 已由 durable attempt owner 精确中断；禁止再走 mutable
+        // target / workspace-wide fallback 产生第二次 control side effect。
+        onDebug?.({
+          id: `${Date.now()}-server-turn-interrupt`,
+          timestamp: Date.now(),
+          source: "server",
+          label: "turn/interrupt response",
+          payload: { success: true },
+        });
+        return;
+      }
       if (isCliManagedEngine) {
         // Claude/OpenCode/Gemini: target only the current turn process.
         // If turn id is not known yet, keep pending interrupt and let onTurnStarted
         // execute a precise kill once the backend emits the real turn id.
         if (activeTurnId) {
           try {
-            await engineInterruptTurnService(
-              activeWorkspace.id,
-              activeTurnId,
-              resolvedThreadEngine,
-            );
+            if (activeThreadKind === "shared") {
+              await engineInterruptTurnService(
+                activeWorkspace.id,
+                activeTurnId,
+                resolvedThreadEngine,
+                sharedProviderProfileId,
+              );
+            } else {
+              await engineInterruptTurnService(
+                activeWorkspace.id,
+                activeTurnId,
+                resolvedThreadEngine,
+              );
+            }
           } catch (error) {
             if (isUnknownEngineInterruptTurnMethodError(error)) {
               // Compatibility fallback for stale daemon/runtime that doesn't
@@ -2214,11 +2472,14 @@ export function useThreadMessaging({
         }
       } else {
         // Codex: notify daemon via turn_interrupt RPC, plus engine_interrupt fallback.
+        // B.5：Shared Thread 按 active Turn 的 Execution Target provider 路由，
+        // 避免同 engine 双 Provider 并行时中断打到 default Provider 会话。
         await Promise.allSettled([
           interruptTurnService(
             activeWorkspace.id,
             activeThreadId,
             turnId,
+            sharedProviderProfileId,
           ),
           engineInterruptService(activeWorkspace.id),
         ]);
@@ -2249,6 +2510,7 @@ export function useThreadMessaging({
     onDebug,
     pendingInterruptsRef,
     resolveThreadEngine,
+    resolveThreadKind,
     setActiveTurnId,
     t,
     threadStatusById,
