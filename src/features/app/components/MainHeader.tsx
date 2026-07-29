@@ -12,11 +12,13 @@ import { useTranslation } from "react-i18next";
 import ClipboardCopy from "lucide-react/dist/esm/icons/clipboard-copy";
 import Folder from "lucide-react/dist/esm/icons/folder";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
+import Keyboard from "lucide-react/dist/esm/icons/keyboard";
 import Play from "lucide-react/dist/esm/icons/play";
 import Search from "lucide-react/dist/esm/icons/search";
 import type { OpenAppTarget, WorkspaceInfo } from "../../../types";
 import type { ReactElement, ReactNode } from "react";
 import { OpenAppMenu, type OpenAppMenuExtraAction } from "./OpenAppMenu";
+import { ShortcutsGuideModal } from "./ShortcutsGuideModal";
 import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
 import { LaunchScriptButton } from "./LaunchScriptButton";
 import { LaunchScriptEntryButton } from "./LaunchScriptEntryButton";
@@ -68,6 +70,7 @@ type MainHeaderProps = {
   groupedWorkspaces?: WorkspaceGroupSection[];
   activeWorkspaceId?: string | null;
   onSelectWorkspace?: (workspaceId: string) => void;
+  onOpenShortcutsSettings?: () => void;
 };
 
 const EMPTY_OPEN_APP_EXTRA_ACTIONS: OpenAppMenuExtraAction[] = [];
@@ -125,10 +128,12 @@ function MainHeaderImpl({
   groupedWorkspaces,
   activeWorkspaceId,
   onSelectWorkspace,
+  onOpenShortcutsSettings,
 }: MainHeaderProps) {
   const { t } = useTranslation();
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState("");
+  const [shortcutsGuideOpen, setShortcutsGuideOpen] = useState(false);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
 
   // 判断是否显示项目选择菜单
@@ -531,6 +536,14 @@ function MainHeaderImpl({
           />
         ) : null}
         {extraActionsNode}
+        <TooltipIconButton
+          className="ghost main-header-action"
+          onClick={() => setShortcutsGuideOpen(true)}
+          data-tauri-drag-region="false"
+          label={t("shortcutsGuide.title")}
+        >
+          <Keyboard size={14} aria-hidden />
+        </TooltipIconButton>
         {rightPanelAction ? (
           <TooltipIconButton
             className="ghost main-header-action"
@@ -557,6 +570,11 @@ function MainHeaderImpl({
           </TooltipIconButton>
         ) : null}
       </div>
+      <ShortcutsGuideModal
+        open={shortcutsGuideOpen}
+        onOpenChange={setShortcutsGuideOpen}
+        onOpenShortcutsSettings={onOpenShortcutsSettings}
+      />
     </header>
   );
 }

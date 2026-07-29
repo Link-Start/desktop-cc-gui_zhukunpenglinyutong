@@ -1,47 +1,10 @@
-import { useState, type KeyboardEvent } from "react";
-import type { LucideIcon } from "lucide-react";
-import Archive from "lucide-react/dist/esm/icons/archive";
-import Bug from "lucide-react/dist/esm/icons/bug";
-import BrainCircuit from "lucide-react/dist/esm/icons/brain-circuit";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
-import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
-import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
-import CopyPlus from "lucide-react/dist/esm/icons/copy-plus";
-import Cpu from "lucide-react/dist/esm/icons/cpu";
-import FolderTree from "lucide-react/dist/esm/icons/folder-tree";
-import GitBranch from "lucide-react/dist/esm/icons/git-branch";
-import GitBranchPlus from "lucide-react/dist/esm/icons/git-branch-plus";
-import KanbanSquare from "lucide-react/dist/esm/icons/kanban-square";
-import MessageSquare from "lucide-react/dist/esm/icons/message-square";
-import MessageSquarePlus from "lucide-react/dist/esm/icons/message-square-plus";
-import OctagonX from "lucide-react/dist/esm/icons/octagon-x";
-import PanelLeftOpen from "lucide-react/dist/esm/icons/panel-left-open";
-import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
-import Save from "lucide-react/dist/esm/icons/save";
 import Search from "lucide-react/dist/esm/icons/search";
-import SearchCode from "lucide-react/dist/esm/icons/search-code";
-import Settings from "lucide-react/dist/esm/icons/settings";
-import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
-import SquarePlus from "lucide-react/dist/esm/icons/square-plus";
-import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
-import UsersRound from "lucide-react/dist/esm/icons/users-round";
-import X from "lucide-react/dist/esm/icons/x";
-import ZoomIn from "lucide-react/dist/esm/icons/zoom-in";
-import ZoomOut from "lucide-react/dist/esm/icons/zoom-out";
-import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
-import MonitorCog from "lucide-react/dist/esm/icons/monitor-cog";
-import Columns3 from "lucide-react/dist/esm/icons/columns-3";
-import GitFork from "lucide-react/dist/esm/icons/git-fork";
-import Globe from "lucide-react/dist/esm/icons/globe";
-import Map from "lucide-react/dist/esm/icons/map";
-import Radar from "lucide-react/dist/esm/icons/radar";
-import StickyNote from "lucide-react/dist/esm/icons/sticky-note";
-import Waypoints from "lucide-react/dist/esm/icons/waypoints";
 import {
   formatShortcutForPlatform,
   getDefaultInterruptShortcut,
+  splitShortcutForPlatform,
 } from "@/utils/shortcuts";
 import type {
   ShortcutActionMetadata,
@@ -53,51 +16,6 @@ import {
   shortcutCategoryDefinitions,
 } from "../settingsViewShortcuts";
 
-const shortcutIconByActionId: Record<string, LucideIcon> = {
-  "open-settings": Settings,
-  "new-window": SquarePlus,
-  "open-chat-mode": MessageSquare,
-  "open-kanban-mode": KanbanSquare,
-  "new-agent": MessageSquarePlus,
-  "new-worktree-agent": GitBranchPlus,
-  "new-clone-agent": CopyPlus,
-  "archive-active-thread": Archive,
-  "close-current-session": X,
-  "cycle-open-session-prev": ChevronLeft,
-  "cycle-open-session-next": ChevronRight,
-  "toggle-left-conversation-sidebar": PanelLeftOpen,
-  "toggle-right-conversation-sidebar": PanelRightOpen,
-  "toggle-projects-sidebar": PanelLeftOpen,
-  "toggle-git-sidebar": GitBranch,
-  "toggle-global-search": Search,
-  "toggle-debug-panel": Bug,
-  "toggle-terminal": TerminalSquare,
-  "toggle-runtime-console": MonitorCog,
-  "toggle-files-surface": FolderOpen,
-  "toggle-git-graph": GitFork,
-  "open-notes": StickyNote,
-  "open-intent-canvas": Waypoints,
-  "open-radar": Radar,
-  "open-project-map": Map,
-  "open-browser-dock": Globe,
-  "open-file-compare": Columns3,
-  "composer-cycle-model": Cpu,
-  "composer-cycle-access": ShieldCheck,
-  "composer-cycle-reasoning": BrainCircuit,
-  "composer-cycle-collaboration": UsersRound,
-  "interrupt-active-run": OctagonX,
-  "save-file": Save,
-  "find-in-file": SearchCode,
-  "toggle-git-diff-list-view": FolderTree,
-  "increase-ui-scale": ZoomIn,
-  "decrease-ui-scale": ZoomOut,
-  "reset-ui-scale": RotateCcw,
-  "cycle-agent-next": ChevronDown,
-  "cycle-agent-prev": ChevronUp,
-  "cycle-workspace-next": ChevronRight,
-  "cycle-workspace-prev": ChevronLeft,
-};
-
 function resolveDefaultShortcut(action: ShortcutActionMetadata): string | null {
   if (action.setting === "interruptShortcut") {
     return getDefaultInterruptShortcut();
@@ -105,12 +23,63 @@ function resolveDefaultShortcut(action: ShortcutActionMetadata): string | null {
   return action.defaultShortcut;
 }
 
+function resolveActionLabel(
+  action: ShortcutActionMetadata,
+  groupId: string,
+  t: (key: string) => string,
+): string {
+  return t(
+    groupId === "common"
+      ? (action.featuredLabelKey ?? action.labelKey)
+      : action.labelKey,
+  );
+}
+
+function ShortcutKeys({
+  value,
+  notSetLabel,
+  large,
+}: {
+  value: string | null;
+  notSetLabel: string;
+  large?: boolean;
+}) {
+  if (!value) {
+    return (
+      <span
+        className={`settings-shortcuts-kbd-empty${large ? " settings-shortcuts-kbd-empty--large" : ""}`}
+      >
+        {notSetLabel}
+      </span>
+    );
+  }
+  const keys = splitShortcutForPlatform(value);
+  if (!keys) {
+    return (
+      <span className="settings-shortcuts-kbd-raw">
+        {formatShortcutForPlatform(value)}
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`settings-shortcuts-kbd-group${large ? " settings-shortcuts-kbd-group--large" : ""}`}
+    >
+      {keys.map((key, index) => (
+        <kbd className="settings-shortcuts-kbd" key={`${key}-${index}`}>
+          {key}
+        </kbd>
+      ))}
+    </span>
+  );
+}
+
 type ShortcutsSectionProps = {
   active: boolean;
   t: (key: string) => string;
   shortcutDrafts: ShortcutDrafts;
   handleShortcutKeyDown: (
-    event: KeyboardEvent<HTMLInputElement>,
+    event: KeyboardEvent<HTMLElement>,
     setting: ShortcutSettingKey,
   ) => void;
   updateShortcut: (
@@ -126,128 +95,214 @@ export function ShortcutsSection({
   handleShortcutKeyDown,
   updateShortcut,
 }: ShortcutsSectionProps) {
-  const [focusedSetting, setFocusedSetting] =
+  const [query, setQuery] = useState("");
+  const [selectedSetting, setSelectedSetting] =
     useState<ShortcutSettingKey | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [resettingAll, setResettingAll] = useState(false);
+
+  // Switching the selected action always exits recording mode.
+  useEffect(() => {
+    setRecording(false);
+  }, [selectedSetting]);
+
+  const shortcutGroups = useMemo(
+    () =>
+      shortcutCategoryDefinitions
+        .map((category) => ({
+          id: category.id,
+          title: t(category.titleKey),
+          items: shortcutActions
+            .filter((action) =>
+              category.id === "common"
+                ? action.featured
+                : action.category === category.id,
+            )
+            .sort((left, right) =>
+              category.id === "common"
+                ? (left.featuredOrder ?? 0) - (right.featuredOrder ?? 0)
+                : 0,
+            ),
+        }))
+        .filter((group) => group.items.length > 0),
+    [t],
+  );
 
   if (!active) {
     return null;
   }
 
-  const shortcutGroups = shortcutCategoryDefinitions
-    .map((category) => ({
-      id: category.id,
-      title: t(category.titleKey),
-      description: t(category.descriptionKey),
-      items: shortcutActions
-        .filter((action) =>
-          category.id === "common"
-            ? action.featured
-            : action.category === category.id,
-        )
-        .sort((left, right) =>
-          category.id === "common"
-            ? (left.featuredOrder ?? 0) - (right.featuredOrder ?? 0)
-            : 0,
-        ),
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleGroups = shortcutGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((action) => {
+        if (!normalizedQuery) {
+          return true;
+        }
+        return (
+          resolveActionLabel(action, group.id, t)
+            .toLowerCase()
+            .includes(normalizedQuery) ||
+          t(action.labelKey).toLowerCase().includes(normalizedQuery)
+        );
+      }),
     }))
     .filter((group) => group.items.length > 0);
 
-  return (
-    <section className="settings-section settings-shortcuts-section">
-      <div className="settings-section-title">
-        {t("settings.shortcutsTitle")}
-      </div>
-      <div className="settings-section-subtitle">
-        {t("settings.shortcutsDescription")}
-      </div>
-      <div className="settings-shortcuts-groups">
-        {shortcutGroups.map((group) => (
-          <div className="settings-shortcuts-group" key={group.id}>
-            <div className="settings-shortcuts-group-header">
-              <div className="settings-subsection-title">{group.title}</div>
-              <div className="settings-subsection-subtitle">
-                {group.description}
-              </div>
-            </div>
-            <div className="settings-shortcuts-grid">
-              {group.items.map((item) => {
-                const Icon = shortcutIconByActionId[item.id] ?? Settings;
-                const defaultShortcut = resolveDefaultShortcut(item);
-                const label = t(
-                  group.id === "common"
-                    ? (item.featuredLabelKey ?? item.labelKey)
-                    : item.labelKey,
-                );
-                const isFocused = focusedSetting === item.setting;
-                const currentValue = formatShortcutForPlatform(
-                  shortcutDrafts[item.draftKey],
-                );
-                const isDefault =
-                  (shortcutDrafts[item.draftKey] ?? "") ===
-                  (defaultShortcut ?? "");
-                return (
-                  <div className="settings-shortcuts-item" key={item.setting}>
-                    <div className="settings-shortcuts-item-main">
-                      <span
-                        className="settings-shortcuts-item-icon"
-                        aria-hidden="true"
-                      >
-                        <Icon size={15} strokeWidth={2.1} />
-                      </span>
-                      <div className="settings-shortcuts-item-text">
-                        <div className="settings-shortcuts-item-title">
-                          {label}
-                        </div>
-                        <div className="settings-shortcuts-item-default">
-                          {t(item.defaultLabelKey ?? "settings.defaultColon")}{" "}
-                          {formatShortcutForPlatform(defaultShortcut)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="settings-shortcuts-item-control">
-                      <input
-                        className="settings-input settings-input--shortcut settings-shortcuts-item-input"
-                        value={isFocused ? "" : currentValue}
-                        onKeyDown={(event) =>
-                          handleShortcutKeyDown(event, item.setting)
-                        }
-                        onFocus={() => setFocusedSetting(item.setting)}
-                        onBlur={() =>
-                          setFocusedSetting((prev) =>
-                            prev === item.setting ? null : prev,
-                          )
-                        }
-                        placeholder={
-                          isFocused
-                            ? t("settings.pressShortcutPrompt")
-                            : t("settings.typeShortcut")
-                        }
-                        aria-label={`${label} ${t("settings.typeShortcut")}`}
-                        readOnly
-                      />
-                      <button
-                        type="button"
-                        className="settings-shortcuts-item-reset"
-                        onClick={() =>
-                          void updateShortcut(item.setting, defaultShortcut)
-                        }
-                        title={t("settings.resetToDefault")}
-                        aria-label={`${t("settings.resetToDefault")} ${label}`}
-                        disabled={isDefault}
-                      >
-                        <RotateCcw
-                          size={13}
-                          strokeWidth={2.2}
-                          aria-hidden="true"
-                        />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+  const visibleActions = visibleGroups.flatMap((group) => group.items);
+  const selectedAction =
+    visibleActions.find((action) => action.setting === selectedSetting) ??
+    visibleActions[0] ??
+    null;
+
+  const handleResetAll = async () => {
+    if (resettingAll) {
+      return;
+    }
+    setResettingAll(true);
+    try {
+      for (const action of shortcutActions) {
+        const defaultShortcut = resolveDefaultShortcut(action) ?? "";
+        const currentValue = shortcutDrafts[action.draftKey] ?? "";
+        if (currentValue !== defaultShortcut) {
+          await updateShortcut(action.setting, defaultShortcut || null);
+        }
+      }
+    } finally {
+      setResettingAll(false);
+    }
+  };
+
+  const renderDetail = () => {
+    if (!selectedAction) {
+      return (
+        <div className="settings-shortcuts-detail-empty">
+          {t("settings.noShortcutsFound")}
+        </div>
+      );
+    }
+    const defaultShortcut = resolveDefaultShortcut(selectedAction);
+    const currentValue = shortcutDrafts[selectedAction.draftKey] ?? "";
+    const isDefault = currentValue === (defaultShortcut ?? "");
+    const label = t(selectedAction.labelKey);
+    return (
+      <div className="settings-shortcuts-detail-body">
+        <div className="settings-shortcuts-detail-title">{label}</div>
+        <div
+          key={selectedAction.setting}
+          className={`settings-shortcuts-recorder${recording ? " settings-shortcuts-recorder--recording" : ""}`}
+          role="button"
+          tabIndex={0}
+          aria-label={`${label} ${t("settings.typeShortcut")}`}
+          onFocus={() => setRecording(true)}
+          onBlur={() => setRecording(false)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              // Cancel recording without closing the whole settings view
+              // (the window-level close handler skips defaultPrevented events).
+              event.preventDefault();
+              event.currentTarget.blur();
+              return;
+            }
+            handleShortcutKeyDown(event, selectedAction.setting);
+          }}
+        >
+          {recording ? (
+            <span className="settings-shortcuts-recorder-prompt">
+              {t("settings.pressShortcutPrompt")}
+            </span>
+          ) : (
+            <ShortcutKeys
+              value={currentValue || null}
+              notSetLabel={t("settings.notSet")}
+              large
+            />
+          )}
+        </div>
+        {recording || !isDefault ? (
+          <button
+            type="button"
+            className="settings-shortcuts-detail-reset"
+            disabled={isDefault}
+            onClick={() =>
+              void updateShortcut(selectedAction.setting, defaultShortcut)
+            }
+          >
+            <RotateCcw size={13} strokeWidth={2.2} aria-hidden="true" />
+            <span>{t("settings.resetToShortcut")}</span>
+            <ShortcutKeys
+              value={defaultShortcut}
+              notSetLabel={t("settings.notSet")}
+            />
+          </button>
+        ) : (
+          <div className="settings-shortcuts-detail-hint">
+            {t("settings.clickToRecordShortcut")}
           </div>
-        ))}
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <section className="settings-section settings-section-tabbed settings-shortcuts-section">
+      <div className="settings-shortcuts-layout">
+        <div className="settings-shortcuts-list">
+          <div className="settings-shortcuts-search">
+            <Search size={14} strokeWidth={2.1} aria-hidden="true" />
+            <input
+              className="settings-input settings-shortcuts-search-input"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t("settings.searchShortcuts")}
+              aria-label={t("settings.searchShortcuts")}
+            />
+          </div>
+          <div className="settings-shortcuts-groups">
+            {visibleGroups.map((group) => (
+              <div className="settings-shortcuts-group" key={group.id}>
+                <div className="settings-shortcuts-group-title">
+                  {group.title}
+                </div>
+                {group.items.map((item) => {
+                  const isSelected = selectedAction?.setting === item.setting;
+                  return (
+                    <button
+                      type="button"
+                      className={`settings-shortcuts-row${isSelected ? " settings-shortcuts-row--selected" : ""}`}
+                      key={`${group.id}-${item.setting}`}
+                      onClick={() => setSelectedSetting(item.setting)}
+                    >
+                      <span className="settings-shortcuts-row-label">
+                        {resolveActionLabel(item, group.id, t)}
+                      </span>
+                      <ShortcutKeys
+                        value={shortcutDrafts[item.draftKey] || null}
+                        notSetLabel={t("settings.notSet")}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+            {visibleGroups.length === 0 && (
+              <div className="settings-shortcuts-empty">
+                {t("settings.noShortcutsFound")}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="settings-shortcuts-reset-all"
+            disabled={resettingAll}
+            onClick={() => void handleResetAll()}
+          >
+            <RotateCcw size={12} strokeWidth={2.2} aria-hidden="true" />
+            <span>{t("settings.resetAllShortcuts")}</span>
+          </button>
+        </div>
+        <div className="settings-shortcuts-detail">{renderDetail()}</div>
       </div>
     </section>
   );

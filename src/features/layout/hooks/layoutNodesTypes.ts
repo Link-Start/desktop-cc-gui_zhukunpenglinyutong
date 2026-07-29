@@ -210,6 +210,7 @@ export type LayoutNodesFlatOptions = {
     mode: Extract<AccessMode, "default" | "full-access">,
   ) => Promise<void> | void;
   onOpenSettings: () => void;
+  onOpenShortcutsSettings?: () => void;
   onOpenExperimentalSettings: () => void;
   onOpenDictationSettings?: () => void;
   onOpenSkillsSettings?: () => void;
@@ -815,6 +816,7 @@ export type RuntimeLayoutNodesOptions = Pick<
 export type ChromeLayoutNodesOptions = Pick<
   LayoutNodesFlatOptions,
   | "onOpenSettings"
+  | "onOpenShortcutsSettings"
   | "onOpenAgentSettings"
   | "onOpenPromptSettings"
   | "onOpenModelSettings"

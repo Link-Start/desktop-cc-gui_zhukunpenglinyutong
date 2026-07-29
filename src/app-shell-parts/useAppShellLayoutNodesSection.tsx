@@ -1158,6 +1158,9 @@ export function useAppShellLayoutNodesSection(
     await startFork("/fork");
   });
   const handleOpenSettings = useEventCallback(() => openSettings());
+  const handleOpenShortcutsSettings = useEventCallback(() =>
+    openSettings("shortcuts"),
+  );
   const handleOpenAgentSettings = useEventCallback(() =>
     openSettings("agent-prompt-management", "agent-management"),
   );
@@ -1862,6 +1865,7 @@ export function useAppShellLayoutNodesSection(
     },
     chrome: {
       onOpenSettings: handleOpenSettings,
+      onOpenShortcutsSettings: handleOpenShortcutsSettings,
       onOpenAgentSettings: handleOpenAgentSettings,
       onOpenPromptSettings: handleOpenPromptSettings,
       onOpenModelSettings: handleOpenModelSettings,

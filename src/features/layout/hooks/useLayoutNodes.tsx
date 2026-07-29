@@ -1759,6 +1759,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       groupedWorkspaces={groupedWorkspacesForHeader}
       activeWorkspaceId={options.activeWorkspaceId}
       onSelectWorkspace={options.onSelectWorkspace}
+      onOpenShortcutsSettings={options.onOpenShortcutsSettings}
     />
   ) : null;
 

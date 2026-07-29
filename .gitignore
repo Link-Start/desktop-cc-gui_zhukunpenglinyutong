@@ -52,3 +52,6 @@ scripts/i18n/.work/
 
 .specstory/
 .superpowers/
+
+# Playwright MCP scratch output
+.playwright-mcp/

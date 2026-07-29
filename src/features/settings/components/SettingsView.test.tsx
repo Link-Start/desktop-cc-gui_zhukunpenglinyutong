@@ -696,9 +696,6 @@ describe("SettingsView Display", () => {
       sidebarQueries.queryByRole("button", { name: "Prompts" }),
     ).toBeNull();
     expect(
-      sidebarQueries.queryByRole("button", { name: "Shortcuts" }),
-    ).toBeNull();
-    expect(
       sidebarQueries.queryByRole("button", { name: "Open in" }),
     ).toBeNull();
     expect(sidebarQueries.queryByRole("button", { name: "Usage" })).toBeNull();
@@ -730,6 +727,21 @@ describe("SettingsView Display", () => {
     expect(
       sidebarQueries.getByRole("button", { name: "Project Management" }),
     ).toBeTruthy();
+    const shortcutsEntry = sidebarQueries.getByRole("button", {
+      name: "Shortcuts",
+    });
+    const projectManagementEntry = sidebarQueries.getByRole("button", {
+      name: "Project Management",
+    });
+    expect(
+      Array.from(sidebar.querySelectorAll(".settings-nav")).indexOf(
+        shortcutsEntry,
+      ),
+    ).toBeLessThan(
+      Array.from(sidebar.querySelectorAll(".settings-nav")).indexOf(
+        projectManagementEntry,
+      ),
+    );
     expect(
       sidebarQueries.getByRole("button", { name: "Skills" }),
     ).toBeTruthy();
@@ -2227,7 +2239,6 @@ describe("SettingsView Shortcuts", () => {
 
     expectTabButtonHasIcon("Appearance");
     expectTabButtonHasIcon("Behavior");
-    expectTabButtonHasIcon("Shortcuts");
     expectTabButtonHasIcon("Open in");
     expectTabButtonHasIcon("Web Service");
     expectTabButtonHasIcon("Email");
@@ -2236,11 +2247,13 @@ describe("SettingsView Shortcuts", () => {
     await flushSettingsViewEffects();
     expect(screen.getAllByText("Shortcuts").length).toBeGreaterThanOrEqual(2);
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "Customize keyboard shortcuts for file actions, composer, panels, and navigation.",
-      ),
-    ).toBeTruthy();
+      ).length,
+    ).toBeGreaterThanOrEqual(1);
 
+    fireEvent.click(screen.getByRole("button", { name: "Basic Settings" }));
+    await flushSettingsViewEffects();
     fireEvent.click(screen.getByRole("button", { name: "Open in" }));
     await flushSettingsViewEffects();
     expect(screen.getAllByText("Open in").length).toBeGreaterThanOrEqual(2);
