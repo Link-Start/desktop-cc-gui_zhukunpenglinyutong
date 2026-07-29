@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1223
+- **Total Sessions**: 1224
 - **Last Active**: 2026-07-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~926 | Active |
+| `journal-29.md` | ~959 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1224 | 2026-07-29 | 补齐 Shared Session 三种 CLI 创建校验 | `f951796da` | `bump-version-0.7.12` |
 | 1223 | 2026-07-29 | 修复 Grok 与 OpenCode 双栏模型切换 | `d5dec54a2` | `bump-version-0.7.12` |
 | 1222 | 2026-07-29 | Shared Session 接入 Kimi、Grok 与 OpenCode CLI | `7bde1c4a0` | `bump-version-0.7.12` |
 | 1221 | 2026-07-29 | 精准优化 Shared CLI 菜单显示 | `e6556d9d9` | `bump-version-0.7.12` |

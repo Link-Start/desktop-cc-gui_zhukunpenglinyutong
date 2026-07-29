@@ -924,3 +924,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1224: 补齐 Shared Session 三种 CLI 创建校验
+
+**Date**: 2026-07-29
+**Task**: 补齐 Shared Session 三种 CLI 创建校验
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+为 Kimi、Grok、OpenCode 补齐 Shared local Model catalog authority，覆盖创建、selection persistence 与 V2 turn strict pair validation；Shared projection 改为复用五 CLI allowlist，并将 missing managed catalog 投影为 unavailable。增量验证通过：engine status 29 tests、三组 create/V2 focused tests、projection 2 tests、cargo check --lib、OpenSpec strict validate、git diff check；按用户要求未运行全量测试。并行 Native picker 工作区改动未纳入本次提交。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f951796da` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
