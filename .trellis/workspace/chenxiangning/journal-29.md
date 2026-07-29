@@ -1223,3 +1223,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1233: 修复 Shared 长时回合超时与恢复断链
+
+**Date**: 2026-07-30
+**Task**: 修复 Shared 长时回合超时与恢复断链
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+移除 Shared accepted Turn、desktop/daemon Provider forwarder 的 full-Turn wall-clock timeout；补齐 exact Attempt active recovery、restart reattachment、多 observer broadcast、durable terminal barrier 与 stale owner guard。增量验证 183 个 Vitest、5 个 Rust tests、TypeScript、lint、runtime contracts、desktop/daemon cargo check 全部通过；OpenSpec 已同步并归档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0447a18a7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
