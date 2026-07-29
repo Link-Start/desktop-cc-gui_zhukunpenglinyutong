@@ -869,6 +869,17 @@
     0 1px 4px rgba(0, 0, 0, 0.1);
 }
 
+.sidebar-workspace-menu {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.sidebar-workspace-menu::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .renderer-context-menu-flyout {
   z-index: 1601;
   width: min(260px, calc(100vw - 24px));
