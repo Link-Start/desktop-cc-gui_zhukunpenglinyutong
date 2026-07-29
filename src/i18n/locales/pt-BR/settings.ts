@@ -395,6 +395,7 @@ const settings = {
     "projectsSubsectionDescription": "Atribua projetos a grupos e ajuste sua ordem.",
     "ungroupedTitle": "SEM GRUPO",
     "sidebarBasic": "Configurações Básicas",
+    "sidebarShortcuts": "Atalhos",
     "sidebarProviders": "Provedores",
     "sidebarUsage": "Uso",
     "sidebarMcp": "Servidores MCP",

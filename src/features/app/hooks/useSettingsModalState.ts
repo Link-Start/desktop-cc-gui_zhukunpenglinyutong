@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 export type SettingsSection =
   | "basic"
   | "providers"
+  | "shortcuts"
   | "project-management"
   | "mcp"
   | "permissions"
@@ -20,7 +21,6 @@ export type SettingsSection =
 
 export type SettingsHighlightTarget =
   | "experimental-collaboration-modes"
-  | "basic-shortcuts"
   | "basic-open-apps"
   | "basic-web-service"
   | "basic-email"

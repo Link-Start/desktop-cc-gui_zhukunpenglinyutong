@@ -395,6 +395,7 @@ const settings = {
     "projectsSubsectionDescription": "प्रोजेक्ट को समूहों में असाइन करें और उनका क्रम समायोजित करें।",
     "ungroupedTitle": "असमूहित",
     "sidebarBasic": "बुनियादी सेटिंग्स",
+    "sidebarShortcuts": "शॉर्टकट",
     "sidebarProviders": "प्रदाता",
     "sidebarUsage": "उपयोग",
     "sidebarMcp": "MCP सर्वर",

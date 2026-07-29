@@ -395,6 +395,7 @@ const settings = {
     "projectsSubsectionDescription": "프로젝트를 그룹에 지정하고 순서를 조정합니다.",
     "ungroupedTitle": "그룹 없음",
     "sidebarBasic": "기본 설정",
+    "sidebarShortcuts": "단축키",
     "sidebarProviders": "제공자",
     "sidebarUsage": "사용량",
     "sidebarMcp": "MCP 서버",

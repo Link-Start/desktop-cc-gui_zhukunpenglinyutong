@@ -456,6 +456,7 @@ const settings = {
     projectsSubsectionDescription: "将项目分配到分组并调整顺序。",
     ungroupedTitle: "未分组",
     sidebarBasic: "基础设置",
+    sidebarShortcuts: "快捷键",
     sidebarProviders: "CLI配置管理",
     sidebarUsage: "使用情况",
     sidebarMcp: "MCP 服务器",

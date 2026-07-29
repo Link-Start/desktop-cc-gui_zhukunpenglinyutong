@@ -395,6 +395,7 @@ const settings = {
     "projectsSubsectionDescription": "Назначайте проекты в группы и настраивайте их порядок.",
     "ungroupedTitle": "БЕЗ ГРУППЫ",
     "sidebarBasic": "Основные настройки",
+    "sidebarShortcuts": "Горячие клавиши",
     "sidebarProviders": "Провайдеры",
     "sidebarUsage": "Использование",
     "sidebarMcp": "Серверы MCP",

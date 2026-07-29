@@ -395,6 +395,7 @@ const settings = {
     "projectsSubsectionDescription": "將專案指派至群組並調整其順序。",
     "ungroupedTitle": "未分組",
     "sidebarBasic": "基本設定",
+    "sidebarShortcuts": "快速鍵",
     "sidebarProviders": "供應商",
     "sidebarUsage": "用量",
     "sidebarMcp": "MCP 伺服器",

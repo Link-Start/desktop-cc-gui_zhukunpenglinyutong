@@ -466,6 +466,7 @@ const settings = {
       "Assign projects to groups and adjust their order.",
     ungroupedTitle: "UNGROUPED",
     sidebarBasic: "Basic Settings",
+    sidebarShortcuts: "Shortcuts",
     sidebarProviders: "Providers",
     sidebarUsage: "Usage",
     sidebarMcp: "MCP Servers",

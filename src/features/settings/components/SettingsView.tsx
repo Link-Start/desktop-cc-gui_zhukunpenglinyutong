@@ -203,7 +203,6 @@ export type SettingsViewProps = {
   initialSection?: SettingsViewSection;
   initialHighlightTarget?:
     | "experimental-collaboration-modes"
-    | "basic-shortcuts"
     | "basic-open-apps"
     | "basic-web-service"
     | "basic-email"
@@ -362,7 +361,6 @@ export function SettingsView({
   const [basicSubTab, setBasicSubTab] = useState<
     | "appearance"
     | "behavior"
-    | "shortcuts"
     | "open-apps"
     | "web-service"
     | "email"
@@ -889,10 +887,6 @@ export function SettingsView({
 
   useEffect(() => {
     switch (initialHighlightTarget) {
-      case "basic-shortcuts":
-        setActiveSection("basic");
-        setBasicSubTab("shortcuts");
-        return;
       case "basic-open-apps":
         setActiveSection("basic");
         setBasicSubTab("open-apps");
@@ -1863,6 +1857,11 @@ export function SettingsView({
           title: t("settings.sidebarBasic"),
           description: t("settings.basicDescription"),
         };
+      case "shortcuts":
+        return {
+          title: t("settings.sidebarShortcuts"),
+          description: t("settings.shortcutsDescription"),
+        };
       case "project-management":
         return {
           title: t("settings.sidebarProjectManagement"),
@@ -1975,6 +1974,15 @@ export function SettingsView({
           >
             <span className="codicon codicon-vm-connect" />
             {!sidebarCollapsed && t("settings.sidebarProviders")}
+          </button>
+          <button
+            type="button"
+            className={`settings-nav ${activeSection === "shortcuts" ? "active" : ""}`}
+            onClick={() => setActiveSection("shortcuts")}
+            title={sidebarCollapsed ? t("settings.sidebarShortcuts") : ""}
+          >
+            <Keyboard aria-hidden />
+            {!sidebarCollapsed && t("settings.sidebarShortcuts")}
           </button>
           <button
             type="button"
@@ -2134,14 +2142,6 @@ export function SettingsView({
                 </button>
                 <button
                   type="button"
-                  className={`settings-basic-tab ${basicSubTab === "shortcuts" ? "active" : ""}`}
-                  onClick={() => setBasicSubTab("shortcuts")}
-                >
-                  <Keyboard className="settings-basic-tab-icon" aria-hidden />
-                  {t("settings.basicShortcutsTab")}
-                </button>
-                <button
-                  type="button"
                   className={`settings-basic-tab ${basicSubTab === "open-apps" ? "active" : ""}`}
                   onClick={() => setBasicSubTab("open-apps")}
                 >
@@ -2258,13 +2258,6 @@ export function SettingsView({
                   handleCommitCodeFontSize={handleCommitCodeFontSize}
                 />
               )}
-              <ShortcutsSection
-                active={basicSubTab === "shortcuts"}
-                t={t}
-                shortcutDrafts={shortcutDrafts}
-                handleShortcutKeyDown={handleShortcutKeyDown}
-                updateShortcut={updateShortcut}
-              />
               <OpenAppsSection
                 active={basicSubTab === "open-apps"}
                 t={t}
@@ -2295,6 +2288,15 @@ export function SettingsView({
                 />
               )}
             </section>
+          )}
+          {activeSection === "shortcuts" && (
+            <ShortcutsSection
+              active
+              t={t}
+              shortcutDrafts={shortcutDrafts}
+              handleShortcutKeyDown={handleShortcutKeyDown}
+              updateShortcut={updateShortcut}
+            />
           )}
           {activeSection === "project-management" && (
             <section

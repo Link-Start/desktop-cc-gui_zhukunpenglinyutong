@@ -395,6 +395,7 @@ const settings = {
     "projectsSubsectionDescription": "プロジェクトをグループに割り当て、順序を調整します。",
     "ungroupedTitle": "未グループ化",
     "sidebarBasic": "基本設定",
+    "sidebarShortcuts": "ショートカット",
     "sidebarProviders": "プロバイダー",
     "sidebarUsage": "使用状況",
     "sidebarMcp": "MCP サーバー",
