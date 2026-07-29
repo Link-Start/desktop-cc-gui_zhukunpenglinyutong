@@ -55,6 +55,22 @@ type ProfileCatalog = Partial<
   >
 >;
 
+type ProviderProfileEngine = Exclude<ProviderId, "gemini">;
+
+const PROVIDER_PROFILE_ENGINES: readonly ProviderProfileEngine[] = [
+  "claude",
+  "codex",
+  "grok",
+  "kimi",
+  "opencode",
+];
+
+export function isProviderProfileEngine(
+  provider: string,
+): provider is ProviderProfileEngine {
+  return PROVIDER_PROFILE_ENGINES.some((engine) => engine === provider);
+}
+
 const DEFAULT_PROFILES: ProfileCatalog = {
   claude: [
     {
@@ -567,22 +583,12 @@ function useProviderTargetCatalogOwner({
     if (!enabled) {
       return [];
     }
-    const atomicSupportedEngines: Array<
-      "claude" | "codex" | "grok" | "kimi" | "opencode"
-    > = ["claude", "codex", "grok", "kimi", "opencode"];
-    const nativeSupportedEngines: Array<"claude" | "codex" | "kimi"> = [
-      "claude",
-      "codex",
-      "kimi",
-    ];
     const engines =
       mode === "native"
-        ? nativeSupportedEngines.includes(
-            currentProvider as "claude" | "codex" | "kimi",
-          )
-          ? [currentProvider as "claude" | "codex" | "kimi"]
-          : nativeSupportedEngines
-        : atomicSupportedEngines;
+        ? isProviderProfileEngine(currentProvider)
+          ? [currentProvider]
+          : []
+        : PROVIDER_PROFILE_ENGINES;
     return engines.map((engine) => ({
       providerId: engine,
       providerLabel: resolveProviderLabel(engine),
