@@ -475,8 +475,6 @@ const settings = {
     sidebarExperimental: "实验性功能",
     sidebarAbout: "关于",
     sidebarCommunity: "社区与反馈",
-    sidebarExpand: "展开侧边栏",
-    sidebarCollapse: "折叠侧边栏",
     workspacePickerLabel: "工作区",
     workspacePickerEmpty: "暂无可用工作区",
     basicDescription: "外观、行为和环境的基础配置。",

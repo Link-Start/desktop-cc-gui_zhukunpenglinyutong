@@ -60,56 +60,6 @@
   object-fit: contain;
 }
 
-/* Sidebar collapse support */
-.settings-sidebar.is-collapsed {
-  width: 50px;
-  min-width: 50px;
-  padding: 12px 6px;
-  align-items: center;
-}
-
-.settings-body.is-sidebar-collapsed {
-  grid-template-columns: 50px minmax(0, 1fr);
-}
-
-.settings-sidebar.is-collapsed .settings-nav {
-  justify-content: center;
-  padding: 8px;
-  gap: 0;
-}
-
-.settings-sidebar.is-collapsed .settings-nav svg,
-.settings-sidebar.is-collapsed .settings-nav .codicon {
-  margin: 0;
-}
-
-.settings-sidebar-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  align-self: center;
-  width: 28px;
-  height: 28px;
-  margin-top: auto;
-  padding: 0;
-  border-radius: 999px;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
-}
-
-.settings-sidebar-toggle:hover {
-  background: var(--surface-hover);
-  color: var(--text-strong);
-}
-
-.settings-sidebar-toggle:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
 /* Basic settings sub-tabs */
 .settings-basic-tabs {
   display: flex;
@@ -1492,16 +1442,16 @@
   overflow: auto;
 }
 
-/* Responsive sidebar collapse threshold */
+/* Responsive sidebar threshold */
 @media (max-width: 900px) {
-  .settings-sidebar:not(.is-collapsed) {
+  .settings-sidebar {
     width: 50px;
     min-width: 50px;
     padding: 12px 6px;
     align-items: center;
   }
 
-  .settings-sidebar:not(.is-collapsed) .settings-nav {
+  .settings-sidebar .settings-nav {
     justify-content: center;
     padding: 8px;
     gap: 0;
@@ -1521,6 +1471,13 @@
   --settings-content-pad-top: 0px;
   --settings-content-pad-right: 0px;
   --settings-content-pad-bottom: 0px;
+}
+
+.settings-content.settings-content--shortcuts {
+  /* The shortcuts panes fill the viewport height, so pull the layout closer
+   * to the header and the bottom edge: the freed space goes to the panes. */
+  --settings-content-pad-top: 8px;
+  --settings-content-pad-bottom: 16px;
 }
 
 .settings-content.settings-content--providers
@@ -1746,10 +1703,20 @@
  * the rest of the Basic panel, and the row/reset buttons fully override the
  * global `button` defaults (radius/padding/weight).
  */
+.settings-shortcuts-section {
+  /* The scroll-area viewport wrapper is already height:100%; pin the section
+   * to it so the panes below track the window height instead of a fixed cap. */
+  height: 100%;
+}
+
 .settings-shortcuts-layout {
   display: grid;
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
   gap: 24px;
+  /* The section is a flex column pinned to the viewport height; take all of
+   * it so both panes stretch with the window. */
+  flex: 1 1 auto;
+  min-height: 0;
   /* Both panes stretch to the same row height so the detail card always
    * matches the list column. */
   align-items: stretch;
@@ -1757,8 +1724,8 @@
 
 .settings-shortcuts-list {
   min-width: 0;
-  /* Cap the column and let the groups area scroll past it. */
-  max-height: 520px;
+  /* Height comes from the viewport chain above; the groups area scrolls. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1772,7 +1739,6 @@
   padding: 0 12px;
   border: 1px solid var(--settings-basic-control-border);
   border-radius: 10px;
-  background: var(--settings-basic-control);
   color: var(--settings-basic-text-muted);
 }
 
@@ -1840,6 +1806,19 @@
   background: var(--settings-basic-control-hover);
 }
 
+/* Light theme: flattened fills per design request (#f9f9f9). */
+:root[data-theme="light"] .settings-shortcuts-row--selected,
+:root[data-theme="light"] .settings-shortcuts-row--selected:hover {
+  background: #f9f9f9;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .settings-shortcuts-row--selected,
+  :root:not([data-theme]) .settings-shortcuts-row--selected:hover {
+    background: #f9f9f9;
+  }
+}
+
 .settings-shortcuts-row-label {
   min-width: 0;
   overflow: hidden;
@@ -1905,6 +1884,16 @@
   border: 1px solid color-mix(in srgb, var(--settings-basic-control-border) 55%, transparent);
   border-radius: 16px;
   background: color-mix(in srgb, var(--settings-basic-control) 60%, transparent);
+}
+
+:root[data-theme="light"] .settings-shortcuts-detail {
+  background: #f9f9f9;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .settings-shortcuts-detail {
+    background: #f9f9f9;
+  }
 }
 
 .settings-shortcuts-detail-body {
@@ -2025,6 +2014,11 @@
 @media (max-width: 860px) {
   .settings-shortcuts-layout {
     grid-template-columns: 1fr;
+  }
+
+  /* Stacked: the panes flow in the page scroll again, so re-cap the list. */
+  .settings-shortcuts-list {
+    max-height: 520px;
   }
 }
 

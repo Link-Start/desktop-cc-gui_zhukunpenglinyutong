@@ -414,8 +414,6 @@ const settings = {
     "sidebarExperimental": "प्रायोगिक",
     "sidebarAbout": "परिचय",
     "sidebarCommunity": "समुदाय",
-    "sidebarExpand": "साइडबार विस्तृत करें",
-    "sidebarCollapse": "साइडबार संकुचित करें",
     "workspacePickerLabel": "वर्कस्पेस",
     "workspacePickerEmpty": "कोई वर्कस्पेस उपलब्ध नहीं",
     "basicDescription": "रूप-रंग, व्यवहार और परिवेश के लिए बुनियादी कॉन्फ़िगरेशन।",

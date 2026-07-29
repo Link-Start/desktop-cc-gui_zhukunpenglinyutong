@@ -99,4 +99,32 @@ describe("settings scroll area contract", () => {
     expect(viewportWrapperRule).toContain("width: 100% !important;");
     expect(viewportWrapperRule).toContain("max-width: 100% !important;");
   });
+
+  it("pins the shortcuts panes to the viewport height instead of a fixed cap", () => {
+    const shortcutsPaddingRule = getCssRuleBlock(
+      settingsCss,
+      ".settings-content.settings-content--shortcuts",
+    );
+    const shortcutsSectionRule = getCssRuleBlock(
+      settingsCss,
+      ".settings-shortcuts-section",
+    );
+    const shortcutsLayoutRule = getCssRuleBlock(
+      settingsCss,
+      ".settings-shortcuts-layout",
+    );
+    const shortcutsListRule = getCssRuleBlock(
+      settingsCss,
+      ".settings-shortcuts-list",
+    );
+
+    expect(shortcutsPaddingRule).toContain("--settings-content-pad-top: 8px;");
+    expect(shortcutsPaddingRule).toContain(
+      "--settings-content-pad-bottom: 16px;",
+    );
+    expect(shortcutsSectionRule).toContain("height: 100%;");
+    expect(shortcutsLayoutRule).toContain("flex: 1 1 auto;");
+    expect(shortcutsLayoutRule).toContain("min-height: 0;");
+    expect(shortcutsListRule).not.toContain("max-height");
+  });
 });

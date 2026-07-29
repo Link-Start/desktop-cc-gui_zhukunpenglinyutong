@@ -414,8 +414,6 @@ const settings = {
     "sidebarExperimental": "実験的機能",
     "sidebarAbout": "情報",
     "sidebarCommunity": "コミュニティ",
-    "sidebarExpand": "サイドバーを展開",
-    "sidebarCollapse": "サイドバーを折りたたむ",
     "workspacePickerLabel": "ワークスペース",
     "workspacePickerEmpty": "利用可能なワークスペースがありません",
     "basicDescription": "外観、動作、環境の基本設定です。",

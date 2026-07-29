@@ -414,8 +414,6 @@ const settings = {
     "sidebarExperimental": "Экспериментальное",
     "sidebarAbout": "О программе",
     "sidebarCommunity": "Сообщество",
-    "sidebarExpand": "Развернуть боковую панель",
-    "sidebarCollapse": "Свернуть боковую панель",
     "workspacePickerLabel": "Рабочее пространство",
     "workspacePickerEmpty": "Нет доступных рабочих пространств",
     "basicDescription": "Базовая конфигурация внешнего вида, поведения и окружения.",

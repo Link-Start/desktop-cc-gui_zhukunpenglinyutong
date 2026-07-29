@@ -375,7 +375,6 @@ export function SettingsView({
     "runtime-pool" | "cli-validation"
   >("runtime-pool");
   const [commitPrompt, setCommitPrompt] = useState("");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [claudePathDraft, setClaudePathDraft] = useState(
     appSettings.claudeBin ?? "",
@@ -1941,59 +1940,48 @@ export function SettingsView({
           </p>
         </div>
       </div>
-      <div
-        className={`settings-body${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
-      >
-        <aside
-          className={`settings-sidebar${sidebarCollapsed ? " is-collapsed" : ""}`}
-        >
+      <div className="settings-body">
+        <aside className="settings-sidebar">
           <button
             type="button"
             className="settings-nav settings-nav-return"
             onClick={onClose}
             aria-label={t("settings.backToApp")}
-            title={sidebarCollapsed ? t("settings.backToApp") : ""}
           >
             <ArrowLeft aria-hidden />
-            {!sidebarCollapsed && t("settings.backToApp")}
+            {t("settings.backToApp")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "basic" ? "active" : ""}`}
             onClick={() => setActiveSection("basic")}
-            title={sidebarCollapsed ? t("settings.sidebarBasic") : ""}
           >
             <Settings aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarBasic")}
+            {t("settings.sidebarBasic")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "providers" || activeSection === "vendors" ? "active" : ""}`}
             onClick={() => setActiveSection("providers")}
-            title={sidebarCollapsed ? t("settings.sidebarProviders") : ""}
           >
             <span className="codicon codicon-vm-connect" />
-            {!sidebarCollapsed && t("settings.sidebarProviders")}
+            {t("settings.sidebarProviders")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "shortcuts" ? "active" : ""}`}
             onClick={() => setActiveSection("shortcuts")}
-            title={sidebarCollapsed ? t("settings.sidebarShortcuts") : ""}
           >
             <Keyboard aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarShortcuts")}
+            {t("settings.sidebarShortcuts")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "project-management" ? "active" : ""}`}
             onClick={() => setActiveSection("project-management")}
-            title={
-              sidebarCollapsed ? t("settings.sidebarProjectManagement") : ""
-            }
           >
             <LayoutGrid aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarProjectManagement")}
+            {t("settings.sidebarProjectManagement")}
           </button>
           <button
             type="button"
@@ -2004,10 +1992,9 @@ export function SettingsView({
               }
             }}
             disabled={mcpSectionDisabled}
-            title={sidebarCollapsed ? t("settings.sidebarMcpSkills") : ""}
           >
             <Server aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarMcpSkills")}
+            {t("settings.sidebarMcpSkills")}
           </button>
           <button
             type="button"
@@ -2018,69 +2005,41 @@ export function SettingsView({
               }
             }}
             disabled={permissionsSectionDisabled}
-            title={sidebarCollapsed ? t("settings.sidebarPermissions") : ""}
           >
             <Shield aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarPermissions")}
+            {t("settings.sidebarPermissions")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "agent-prompt-management" ? "active" : ""}`}
             onClick={() => setActiveSection("agent-prompt-management")}
-            title={
-              sidebarCollapsed ? t("settings.sidebarAgentPromptManagement") : ""
-            }
           >
             <span className="codicon codicon-robot" />
-            {!sidebarCollapsed && t("settings.sidebarAgentPromptManagement")}
+            {t("settings.sidebarAgentPromptManagement")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "runtime-environment" ? "active" : ""}`}
             onClick={() => setActiveSection("runtime-environment")}
-            title={
-              sidebarCollapsed ? t("settings.sidebarRuntimeEnvironment") : ""
-            }
           >
             <TerminalSquare aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarRuntimeEnvironment")}
+            {t("settings.sidebarRuntimeEnvironment")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "other" ? "active" : ""}`}
             onClick={() => setActiveSection("other")}
-            title={sidebarCollapsed ? t("settings.sidebarOther") : ""}
           >
             <MoreHorizontalIcon aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarOther")}
+            {t("settings.sidebarOther")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "community" ? "active" : ""}`}
             onClick={() => setActiveSection("community")}
-            title={sidebarCollapsed ? t("settings.sidebarCommunity") : ""}
           >
             <Users aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarCommunity")}
-          </button>
-          <button
-            type="button"
-            className="settings-sidebar-toggle"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            aria-label={
-              sidebarCollapsed
-                ? t("settings.sidebarExpand")
-                : t("settings.sidebarCollapse")
-            }
-            title={
-              sidebarCollapsed
-                ? t("settings.sidebarExpand")
-                : t("settings.sidebarCollapse")
-            }
-          >
-            <span
-              className={`codicon ${sidebarCollapsed ? "codicon-chevron-right" : "codicon-chevron-left"}`}
-            />
+            {t("settings.sidebarCommunity")}
           </button>
         </aside>
         <ScrollArea
@@ -2088,7 +2047,7 @@ export function SettingsView({
             activeSection === "providers" || activeSection === "vendors"
               ? "settings-content--providers"
               : ""
-          }`}
+          }${activeSection === "shortcuts" ? " settings-content--shortcuts" : ""}`}
         >
           {shouldShowWorkspaceSelector && (
             <div className="settings-workspace-picker">

@@ -414,8 +414,6 @@ const settings = {
     "sidebarExperimental": "Experimental",
     "sidebarAbout": "Sobre",
     "sidebarCommunity": "Comunidade",
-    "sidebarExpand": "Expandir barra lateral",
-    "sidebarCollapse": "Recolher barra lateral",
     "workspacePickerLabel": "Workspace",
     "workspacePickerEmpty": "Nenhum workspace disponível",
     "basicDescription": "Configuração básica de aparência, comportamento e ambiente.",

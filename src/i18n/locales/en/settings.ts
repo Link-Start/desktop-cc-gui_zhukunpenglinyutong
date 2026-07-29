@@ -485,8 +485,6 @@ const settings = {
     sidebarExperimental: "Experimental",
     sidebarAbout: "About",
     sidebarCommunity: "Community",
-    sidebarExpand: "Expand sidebar",
-    sidebarCollapse: "Collapse sidebar",
     workspacePickerLabel: "Workspace",
     workspacePickerEmpty: "No workspace available",
     basicDescription:

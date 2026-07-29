@@ -414,8 +414,6 @@ const settings = {
     "sidebarExperimental": "실험적 기능",
     "sidebarAbout": "정보",
     "sidebarCommunity": "커뮤니티",
-    "sidebarExpand": "사이드바 펼치기",
-    "sidebarCollapse": "사이드바 접기",
     "workspacePickerLabel": "워크스페이스",
     "workspacePickerEmpty": "사용 가능한 워크스페이스가 없습니다",
     "basicDescription": "모양, 동작, 환경에 대한 기본 구성입니다.",

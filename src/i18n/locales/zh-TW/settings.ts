@@ -414,8 +414,6 @@ const settings = {
     "sidebarExperimental": "實驗功能",
     "sidebarAbout": "關於",
     "sidebarCommunity": "社群",
-    "sidebarExpand": "展開側邊欄",
-    "sidebarCollapse": "收合側邊欄",
     "workspacePickerLabel": "工作區",
     "workspacePickerEmpty": "無可用工作區",
     "basicDescription": "外觀、行為與環境的基本設定。",
