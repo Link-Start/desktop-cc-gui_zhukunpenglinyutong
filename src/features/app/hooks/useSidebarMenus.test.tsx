@@ -77,6 +77,7 @@ vi.mock("react-i18next", () => ({
         "workspace.engineOpenCode": "OpenCode",
         "workspace.engineGemini": "Gemini",
         "workspace.engineKimi": "Kimi CLI",
+        "workspace.engineGrok": "Grok CLI",
         "workspace.engineStatusLoading": "Checking...",
         "workspace.engineStatusRequiresLogin": "Sign in required",
         "threads.reloadThreads": "Reload threads",
@@ -181,6 +182,26 @@ function createHandlers() {
       shortName: "OpenCode",
       installed: true,
       version: "1.4.4",
+      error: null,
+      availabilityState: "ready",
+      availabilityLabelKey: null,
+    },
+    {
+      type: "kimi",
+      displayName: "Kimi CLI",
+      shortName: "Kimi CLI",
+      installed: true,
+      version: "1.0.0",
+      error: null,
+      availabilityState: "ready",
+      availabilityLabelKey: null,
+    },
+    {
+      type: "grok",
+      displayName: "Grok CLI",
+      shortName: "Grok CLI",
+      installed: true,
+      version: "1.0.0",
       error: null,
       availabilityState: "ready",
       availabilityLabelKey: null,
@@ -1939,7 +1960,7 @@ describe("useSidebarMenus", () => {
     );
   });
 
-  it("triggers create action when Shared Session entry is clicked", async () => {
+  it("exposes Shared Session CLI children and passes the selected engine", async () => {
     const handlers = createHandlers();
     const { result } = renderHook(() => useSidebarMenus(handlers));
 
@@ -1958,12 +1979,26 @@ describe("useSidebarMenus", () => {
       ?.actions.find((action) => action.id === "new-session-shared");
 
     expect(sharedAction).toBeTruthy();
-    act(() => {
-      result.current.onWorkspaceMenuAction(sharedAction!);
+    expect(sharedAction?.submenuOnly).toBe(true);
+    expect(sharedAction?.children?.map((action) => action.id)).toEqual([
+      "new-session-shared-claude",
+      "new-session-shared-codex",
+      "new-session-shared-opencode",
+      "new-session-shared-kimi",
+      "new-session-shared-grok",
+    ]);
+
+    const grokAction = sharedAction?.children?.find(
+      (action) => action.id === "new-session-shared-grok",
+    );
+    expect(grokAction).toBeTruthy();
+
+    await act(async () => {
+      result.current.onWorkspaceMenuAction(grokAction!);
     });
 
     expect(handlers.onAddSharedAgent).toHaveBeenCalledTimes(1);
-    expect(handlers.onAddSharedAgent).toHaveBeenCalledWith(workspace);
+    expect(handlers.onAddSharedAgent).toHaveBeenCalledWith(workspace, "grok");
   });
 
   it("triggers workspace alias action from the workspace menu", async () => {

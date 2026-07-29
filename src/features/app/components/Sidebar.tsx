@@ -7,6 +7,7 @@ import type {
   ThreadSummary,
   WorkspaceInfo,
 } from "../../../types";
+import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   Dispatch,
@@ -173,7 +174,10 @@ type SidebarProps = {
     | Promise<EngineRefreshResult | void>
     | EngineRefreshResult
     | void;
-  onAddSharedAgent?: (workspace: WorkspaceInfo) => Promise<string | null> | string | null | void;
+  onAddSharedAgent?: (
+    workspace: WorkspaceInfo,
+    engine: SharedSessionSupportedEngine,
+  ) => Promise<string | null> | string | null | void;
   onAddWorktreeAgent: (workspace: WorkspaceInfo) => void;
   onAddCloneAgent: (workspace: WorkspaceInfo) => void;
   onOpenClaudeTui?: (input: {

@@ -23,6 +23,7 @@ import {
   resolveBackendAuthoritativeExecutionTarget,
   type ExecutionTarget,
 } from "../../shared-session/target/types";
+import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
 
 import type { ThreadAction } from "./useThreadsReducer";
 
@@ -51,7 +52,7 @@ export function createStartSharedSessionForWorkspace(params: {
     workspaceId: string,
     options?: {
       activate?: boolean;
-      initialEngine?: "claude" | "codex" | "gemini" | "opencode";
+      initialEngine?: SharedSessionSupportedEngine;
       initialTarget?: ExecutionTarget | null;
     },
   ) => {

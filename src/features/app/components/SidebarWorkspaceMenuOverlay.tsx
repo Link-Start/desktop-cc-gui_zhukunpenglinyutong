@@ -127,17 +127,19 @@ export function SidebarWorkspaceMenuOverlay({
     setOpenSubmenuId(action.id);
   }, [closeSubmenu, openSubmenuId]);
 
-  // Clicking a parent with children runs its default action directly;
-  // the submenu stays reachable via hover (onMouseEnter).
   const handleAction = useCallback(
-    (action: WorkspaceMenuAction) => {
+    (action: WorkspaceMenuAction, trigger: HTMLElement) => {
       if (action.unavailable) {
+        return;
+      }
+      if (action.submenuOnly && action.children?.length) {
+        openSubmenu(action, trigger);
         return;
       }
       closeSubmenu();
       onAction(action);
     },
-    [closeSubmenu, onAction],
+    [closeSubmenu, onAction, openSubmenu],
   );
 
   const toggleGroup = useCallback(
@@ -256,7 +258,9 @@ export function SidebarWorkspaceMenuOverlay({
                             openSubmenu(action, event.currentTarget);
                           }
                         }}
-                        onClick={() => handleAction(action)}
+                        onClick={(event) =>
+                          handleAction(action, event.currentTarget)
+                        }
                       >
                         <span
                           className={`sidebar-workspace-menu-item-icon sidebar-workspace-menu-item-icon-${action.iconKind}${

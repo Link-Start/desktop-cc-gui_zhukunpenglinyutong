@@ -45,7 +45,58 @@ function createCodexAction(): WorkspaceMenuAction {
   };
 }
 
+function createSharedAction(): WorkspaceMenuAction {
+  return {
+    id: "new-session-shared",
+    label: "Shared CLI",
+    iconKind: "new-shared",
+    submenuOnly: true,
+    onSelect: vi.fn(),
+    children: [
+      {
+        id: "new-session-shared-grok",
+        label: "Grok CLI",
+        iconKind: "engine-grok",
+        onSelect: vi.fn(),
+      },
+    ],
+  };
+}
+
 describe("SidebarWorkspaceMenuOverlay", () => {
+  it("opens submenu-only actions on click without running their default action", () => {
+    const sharedAction = createSharedAction();
+    const onAction = vi.fn();
+
+    render(
+      <SidebarWorkspaceMenuOverlay
+        menu={{
+          x: 32,
+          y: 28,
+          groups: [
+            {
+              id: "new-session",
+              label: "New session",
+              actions: [sharedAction],
+            },
+          ],
+        }}
+        t={t}
+        onClose={vi.fn()}
+        onAction={onAction}
+        renderIcon={() => null}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Shared CLI" }));
+
+    expect(
+      screen.getByRole("menuitemradio", { name: "Grok CLI" }),
+    ).toBeTruthy();
+    expect(onAction).not.toHaveBeenCalled();
+    expect(sharedAction.onSelect).not.toHaveBeenCalled();
+  });
+
   it("defaults workspace actions to collapsed and toggles them from the group header", () => {
     const reloadAction: WorkspaceMenuAction = {
       id: "reload-threads",

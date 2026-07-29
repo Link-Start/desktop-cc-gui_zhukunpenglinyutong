@@ -2760,6 +2760,18 @@ describe("Sidebar", () => {
         }}
         hydratedThreadListWorkspaceIds={new Set(["ws-1"])}
         onAddSharedAgent={onAddSharedAgent}
+        engineOptions={[
+          {
+            type: "claude",
+            displayName: "Claude Code",
+            shortName: "Claude Code",
+            installed: true,
+            version: "1.0.0",
+            error: null,
+            availabilityState: "ready",
+            availabilityLabelKey: null,
+          },
+        ]}
       />,
     );
 
@@ -2770,9 +2782,14 @@ describe("Sidebar", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: "sidebar.newSharedSession" }));
     });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("menuitemradio", { name: "Claude Code" }),
+      );
+    });
 
     await vi.waitFor(() => {
-      expect(onAddSharedAgent).toHaveBeenCalledWith(workspace);
+      expect(onAddSharedAgent).toHaveBeenCalledWith(workspace, "claude");
     });
     expect(assignWorkspaceSessionFolder).not.toHaveBeenCalled();
     expect(pushErrorToast).not.toHaveBeenCalledWith(

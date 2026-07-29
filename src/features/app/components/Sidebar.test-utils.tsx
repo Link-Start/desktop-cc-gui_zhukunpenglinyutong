@@ -101,6 +101,7 @@ vi.mock("react-i18next", () => ({
         "workspace.engineOpenCode": "OpenCode",
         "workspace.engineGemini": "Gemini",
         "workspace.engineKimi": "Kimi CLI",
+        "workspace.engineGrok": "Grok CLI",
         "sidebar.cliNotInstalled": "CLI not installed",
         "settings.title": "Settings",
         "tabbar.primaryNavigation": "Primary navigation",

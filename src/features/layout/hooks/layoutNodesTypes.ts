@@ -22,6 +22,7 @@ import type {
   ReviewPromptStep,
 } from "../../threads/hooks/useReviewPrompt";
 import type { WorkspaceLaunchScriptsState } from "../../app/hooks/useWorkspaceLaunchScripts";
+import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
 import type { OpenAppMenuExtraAction } from "../../app/components/OpenAppMenu";
 import type {
   AccessMode,
@@ -231,7 +232,10 @@ export type LayoutNodesFlatOptions = {
       >
     | import("../../engine/hooks/useEngineController").EngineRefreshResult
     | void;
-  onAddSharedAgent: (workspace: WorkspaceInfo) => Promise<string | null>;
+  onAddSharedAgent: (
+    workspace: WorkspaceInfo,
+    engine: SharedSessionSupportedEngine,
+  ) => Promise<string | null>;
   onAddWorktreeAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onAddCloneAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
