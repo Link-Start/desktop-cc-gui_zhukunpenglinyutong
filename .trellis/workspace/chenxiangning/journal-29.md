@@ -891,3 +891,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1223: 修复 Grok 与 OpenCode 双栏模型切换
+
+**Date**: 2026-07-29
+**Task**: 修复 Grok 与 OpenCode 双栏模型切换
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+修复 Atomic Shared/Home 双栏未归一化 Grok/OpenCode local Provider sentinel，避免 providerProfileId sentinel + source=disk 被 resolved target gate 丢弃；新增真实模型点击回归，133 个 focused tests、TypeScript、targeted ESLint、runtime/catalog contracts 与 OpenSpec strict 通过；按用户授权未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d5dec54a2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
