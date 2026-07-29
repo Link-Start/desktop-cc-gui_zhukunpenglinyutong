@@ -625,18 +625,18 @@ describe("SettingsView projects display", () => {
 });
 
 describe("SettingsView Display", () => {
-  it("uses the titlebar for the active settings section title and description", async () => {
+  it("uses the in-content page head for the active settings section title and description", async () => {
     renderDisplaySection({ initialSection: null });
     await flushSettingsViewEffects();
 
-    const header = document.querySelector(".settings-header") as HTMLElement | null;
-    if (!header) {
-      throw new Error("Expected settings header");
+    const pageHead = document.querySelector(".settings-page-head") as HTMLElement | null;
+    if (!pageHead) {
+      throw new Error("Expected settings page head");
     }
 
-    const headerQueries = within(header);
-    expect(headerQueries.getByText("Basic Settings")).toBeTruthy();
-    expect(headerQueries.getByText("settings.basicDescription")).toBeTruthy();
+    const pageHeadQueries = within(pageHead);
+    expect(pageHeadQueries.getByText("Basic Settings")).toBeTruthy();
+    expect(pageHeadQueries.getByText("settings.basicDescription")).toBeTruthy();
     expect(
       document.querySelector(".settings-content .settings-section-title"),
     ).toBeNull();
@@ -645,8 +645,9 @@ describe("SettingsView Display", () => {
       screen.getByRole("button", { name: "settings.sidebarProviders" }),
     );
 
-    expect(headerQueries.getByText("settings.sidebarProviders")).toBeTruthy();
-    expect(headerQueries.getByText("settings.vendorsDescription")).toBeTruthy();
+    // The providers panel is full-bleed with its own brand header, so the
+    // shared page head is hidden for it.
+    expect(document.querySelector(".settings-page-head")).toBeNull();
   });
 
   it("opens basic settings by default when no external section is provided", async () => {

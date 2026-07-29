@@ -1459,23 +1459,25 @@
 }
 
 /* === Settings UI refresh (fixed-width centered content) === */
-.settings-content {
-  --settings-content-fixed-width: 1080px;
-  --settings-content-pad-top: 18px;
+/* The variables live on the wrap so both the fixed page head and the scrolling
+ * content share the same centered column metrics. */
+.settings-content-wrap {
+  --settings-content-fixed-width: 860px;
+  --settings-content-pad-top: 12px;
   --settings-content-pad-x: 30px;
   --settings-content-pad-right: 12px;
   --settings-content-pad-bottom: 44px;
 }
 
-.settings-content.settings-content--providers {
+.settings-content-wrap:has(> .settings-content--providers) {
   --settings-content-pad-top: 0px;
   --settings-content-pad-right: 0px;
   --settings-content-pad-bottom: 0px;
 }
 
-.settings-content.settings-content--shortcuts {
+.settings-content-wrap:has(> .settings-content--shortcuts) {
   /* The shortcuts panes fill the viewport height, so pull the layout closer
-   * to the header and the bottom edge: the freed space goes to the panes. */
+   * to the page head and the bottom edge: the freed space goes to the panes. */
   --settings-content-pad-top: 8px;
   --settings-content-pad-bottom: 16px;
 }
@@ -1738,7 +1740,7 @@
   gap: 8px;
   padding: 0 12px;
   border: 1px solid var(--settings-basic-control-border);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--settings-basic-text-muted);
 }
 
@@ -1771,7 +1773,7 @@
 }
 
 .settings-shortcuts-group-title {
-  padding: 0 8px 6px;
+  padding: 0 10px 6px;
   color: var(--settings-basic-text-muted);
   font-size: 11px;
   font-weight: 600;
@@ -1784,13 +1786,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 7px 8px;
+  padding: 8px 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--settings-basic-text);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -1806,16 +1808,16 @@
   background: var(--settings-basic-control-hover);
 }
 
-/* Light theme: flattened fills per design request (#f9f9f9). */
+/* Light theme: flattened fills per design request (#f2f2f2). */
 :root[data-theme="light"] .settings-shortcuts-row--selected,
 :root[data-theme="light"] .settings-shortcuts-row--selected:hover {
-  background: #f9f9f9;
+  background: #f2f2f2;
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) .settings-shortcuts-row--selected,
   :root:not([data-theme]) .settings-shortcuts-row--selected:hover {
-    background: #f9f9f9;
+    background: #f2f2f2;
   }
 }
 
@@ -1835,13 +1837,13 @@
 }
 
 .settings-shortcuts-kbd {
-  min-width: 22px;
-  padding: 3px 6px;
+  min-width: 24px;
+  padding: 3px 7px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--settings-basic-control-border);
-  border-radius: 6px;
+  border: none;
+  border-radius: 5px;
   background: var(--settings-basic-control);
   color: var(--settings-basic-text);
   font-family: inherit;
@@ -1853,7 +1855,7 @@
 .settings-shortcuts-kbd-group--large .settings-shortcuts-kbd {
   min-width: 44px;
   padding: 10px 12px;
-  border-radius: 9px;
+  border-radius: 8px;
   font-size: 17px;
 }
 

@@ -27,7 +27,7 @@ describe("settings scroll area contract", () => {
     );
     const providersPaddingRule = getCssRuleBlock(
       settingsCss,
-      ".settings-content.settings-content--providers",
+      ".settings-content-wrap:has(> .settings-content--providers)",
     );
     const nativeScrollbarRule = getCssRuleBlock(
       scrollbarsCss,
@@ -103,7 +103,7 @@ describe("settings scroll area contract", () => {
   it("pins the shortcuts panes to the viewport height instead of a fixed cap", () => {
     const shortcutsPaddingRule = getCssRuleBlock(
       settingsCss,
-      ".settings-content.settings-content--shortcuts",
+      ".settings-content-wrap:has(> .settings-content--shortcuts)",
     );
     const shortcutsSectionRule = getCssRuleBlock(
       settingsCss,
