@@ -676,3 +676,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1217: 修复 Shared Session canonical 历史恢复
+
+**Date**: 2026-07-29
+**Task**: 修复 Shared Session canonical 历史恢复
+**Branch**: `feature/v-0710`
+
+### Summary
+
+统一 Shared delivery canonical envelope，兼容旧 type-less SQLite events；隔离 Shared 与 Native history recovery，移除 Shared 恢复卡片并固定 shared:<UUID> 历史身份。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5ec8dc0de` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
