@@ -990,3 +990,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1226: 补全 Shared CLI 创建入口
+
+**Date**: 2026-07-30
+**Task**: 补全 Shared CLI 创建入口
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+Shared CLI 改为五类本机 CLI 二级选择，创建时按所选 CLI 的本地模型目录生成初始 Execution Target；focused frontend tests 108/108、targeted ESLint 与 runtime contracts 通过。按用户要求未运行全量测试；最终 typecheck 复跑受并行 durable-terminal 改动中的既有测试类型错误阻断，本批改动在并行文件出现前已通过 typecheck。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a8fb1c45c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
