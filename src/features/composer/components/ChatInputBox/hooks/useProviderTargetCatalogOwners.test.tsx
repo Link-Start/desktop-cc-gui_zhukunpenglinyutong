@@ -3,6 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  isProviderProfileEngine,
   resetProviderTargetCatalogForTests,
   useAtomicProviderTargetCatalog,
   useNativeProviderTargetCatalog,
@@ -84,6 +85,17 @@ describe("Provider target catalog owners", () => {
       },
     ]);
     discoverCodexModelsMock.mockResolvedValue({ data: [] });
+  });
+
+  it.each(["claude", "codex", "grok", "kimi", "opencode"])(
+    "recognizes %s as a Provider Profile engine",
+    (engine) => {
+      expect(isProviderProfileEngine(engine)).toBe(true);
+    },
+  );
+
+  it("keeps Gemini outside the Provider Profile picker", () => {
+    expect(isProviderProfileEngine("gemini")).toBe(false);
   });
 
   it("loads profiles once and models only for the opened binding", async () => {
@@ -807,6 +819,42 @@ describe("Provider target catalog owners", () => {
       ),
     ).toMatchObject({ enabled: false, disabledReason: "source only" });
   });
+
+  it.each([
+    ["grok", "grok-d"],
+    ["opencode", "opencode-e"],
+  ] as const)(
+    "scopes a native %s session to its current CLI provider group",
+    async (engine, providerProfileId) => {
+      const currentModel = {
+        id: `${engine}-current`,
+        label: `${engine} current`,
+      };
+      const { result } = renderHook(() =>
+        useNativeProviderTargetCatalog({
+          enabled: true,
+          currentProvider: engine,
+          currentProviderProfileId: providerProfileId,
+          currentModels: [currentModel],
+          resolveProviderLabel: (provider) => provider,
+          kimiDisabledReason: "source only",
+        }),
+      );
+
+      await act(async () => {
+        await result.current.ensureProfiles();
+      });
+
+      expect(result.current.groups.map((group) => group.providerId)).toEqual([
+        engine,
+      ]);
+      expect(
+        result.current.groups[0]?.profiles.find(
+          (profile) => profile.id === providerProfileId,
+        )?.models,
+      ).toEqual([currentModel]);
+    },
+  );
 
   it("reloads only the configured slice and preserves current custom models", async () => {
     const { result } = renderHook(() =>

@@ -51,6 +51,7 @@ import {
   useUndoRedoHistory,
 } from './hooks/index.js';
 import {
+  isProviderProfileEngine,
   useAtomicProviderTargetCatalog,
   useNativeProviderTargetCatalog,
 } from './hooks/useProviderTargetCatalogOwners';
@@ -100,11 +101,6 @@ import './styles.css';
 const INCREMENTAL_UNDO_REDO_ENABLED = true;
 const INCREMENTAL_UNDO_REDO_MAX_TRANSACTIONS = 100;
 const INCREMENTAL_UNDO_REDO_MERGE_WINDOW_MS = 400;
-const PROVIDER_PROFILE_ENGINES = new Set<ProviderId>([
-  'claude',
-  'codex',
-  'kimi',
-]);
 
 function manualMemoryToDropdownItem(memory: ManualMemoryItem) {
   const label = memory.title?.trim() || memory.summary?.trim() || memory.id;
@@ -383,7 +379,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     );
     const nativeProviderTargetPicker =
       !usesAtomicProviderTargetPicker &&
-      PROVIDER_PROFILE_ENGINES.has(currentProvider as ProviderId);
+      isProviderProfileEngine(currentProvider);
     const atomicProviderTargetCatalog = useAtomicProviderTargetCatalog({
       enabled: usesAtomicProviderTargetPicker,
       workspaceId,
