@@ -15,6 +15,8 @@ import reactComponentName from "react-scan/react-component-name/vite";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+const rawDevPort = Number.parseInt(process.env.MOSS_DEV_PORT ?? "", 10);
+const devPort = Number.isInteger(rawDevPort) && rawDevPort > 0 ? rawDevPort : 1420;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nodeRequire = createRequire(import.meta.url);
 const workerSafeConditionalEntries = new Map([
@@ -126,14 +128,14 @@ export default defineConfig(({ command }) => ({
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    port: 1420,
+    port: devPort,
     strictPort: true,
     host: host || false,
     hmr: host
       ? {
           protocol: "ws",
           host,
-          port: 1421,
+          port: devPort + 1,
         }
       : undefined,
     watch: {
