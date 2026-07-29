@@ -14,6 +14,41 @@ use crate::shared_event_log::{
 
 use super::types::{ProjectionItem, ProjectionItemKind};
 
+fn decode_canonical_fact(event: &StoredEvent) -> Result<CanonicalFact, StoreError> {
+    let context = format!(
+        "project canonical event session={} sequence={} fact_type={}",
+        event.session_id, event.sequence, event.fact_type
+    );
+    let mut payload = serde_json::from_str::<Value>(&event.payload_json)
+        .map_err(|source| StoreError::json(context.clone(), source))?;
+    let object = payload.as_object_mut().ok_or_else(|| {
+        StoreError::validation_failed(context.clone(), "canonical payload must be a JSON object")
+    })?;
+    match object.get("type") {
+        Some(Value::String(payload_type)) if payload_type == &event.fact_type => {}
+        Some(Value::String(payload_type)) => {
+            return Err(StoreError::validation_failed(
+                context,
+                format!(
+                    "payload type '{}' conflicts with durable fact_type '{}'",
+                    payload_type, event.fact_type
+                ),
+            ));
+        }
+        Some(_) => {
+            return Err(StoreError::validation_failed(
+                context,
+                "canonical payload type must be a string",
+            ));
+        }
+        None => {
+            object.insert("type".to_string(), Value::String(event.fact_type.clone()));
+        }
+    }
+    serde_json::from_value::<CanonicalFact>(payload)
+        .map_err(|source| StoreError::json(context, source))
+}
+
 /// Canonical Fact 到 UI 的单向投影器。
 #[derive(Debug, Default)]
 pub struct SharedProjector;
@@ -47,16 +82,7 @@ impl SharedProjector {
             {
                 continue;
             }
-            let fact =
-                serde_json::from_str::<CanonicalFact>(&event.payload_json).map_err(|source| {
-                    StoreError::json(
-                        format!(
-                            "project canonical event session={} sequence={} fact_type={}",
-                            event.session_id, event.sequence, event.fact_type
-                        ),
-                        source,
-                    )
-                })?;
+            let fact = decode_canonical_fact(event)?;
             if let CanonicalFact::UsageRecorded(usage) = &fact {
                 let priority = match usage.source {
                     UsageSource::RuntimeFinal => 0,

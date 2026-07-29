@@ -422,4 +422,51 @@ describe("sharedHistoryLoader", () => {
     expect(snapshot.items[0]).toMatchObject({ id: "legacy" });
     expect(warn).toHaveBeenCalledOnce();
   });
+
+  it("propagates projection failure when no legacy snapshot can preserve history", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const projectionError = new Error("canonical projection unavailable");
+    const loader = createSharedHistoryLoader({
+      workspaceId: "ws-1",
+      loadSharedSession: vi.fn().mockResolvedValue({
+        selectedEngine: "claude",
+        items: [],
+      }),
+      loadSharedProjection: vi.fn().mockRejectedValue(projectionError),
+    });
+
+    await expect(loader.load("shared:session-without-legacy")).rejects.toBe(
+      projectionError,
+    );
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the stable Shared thread id after the display title changes", async () => {
+    const loadSharedSession = vi.fn().mockResolvedValue({
+      id: "stable-session-id",
+      threadId: "shared:stable-session-id",
+      title: "更新后的会话标题",
+      selectedEngine: "claude",
+      items: [],
+    });
+    const loadSharedProjection = vi.fn().mockResolvedValue([]);
+    const loader = createSharedHistoryLoader({
+      workspaceId: "ws-1",
+      loadSharedSession,
+      loadSharedProjection,
+    });
+
+    const snapshot = await loader.load("shared:stable-session-id");
+
+    expect(loadSharedSession).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:stable-session-id",
+    );
+    expect(loadSharedProjection).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:stable-session-id",
+    );
+    expect(snapshot.threadId).toBe("shared:stable-session-id");
+    expect(snapshot.meta.threadId).toBe("shared:stable-session-id");
+  });
 });

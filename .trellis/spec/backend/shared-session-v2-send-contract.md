@@ -702,3 +702,159 @@ await sharedSessionV2DispatchTurn(workspaceId, threadId, {
   artifactChecksum: prepared.artifactChecksum,
 }); // dispatcher 内部验证真实 ACK 并按 durable owner accept
 ```
+
+## Scenario: Shared Canonical History Envelope And Recovery Ownership
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `src-tauri/src/shared_context/delivery.rs`、
+  `src-tauri/src/shared_projection/projector.rs`、Shared history loader、统一 thread resume
+  或 history recovery UI。
+- 目标：canonical event 的 storage envelope 与 projector decode contract 永远一致；
+  Shared history 故障不得被伪装为空历史，也不得掉入 Native recovery。
+
+### 2. Signatures
+
+```text
+SharedEventWriter.append_canonical_fact_with_binding_at(
+  sessionId,
+  CanonicalFact,
+  occurredAt,
+  BindingStateUpdate,
+)
+
+StoredEvent {
+  sessionId,
+  sequence,
+  factType,
+  payloadJson,
+  payloadChecksum,
+  ...
+}
+
+SharedProjector.project_events(events)
+createSharedHistoryLoader(...).load(threadId: "shared:<UUID>")
+resumeThreadForWorkspace(workspaceId, threadId, ...)
+```
+
+Canonical payload 必须包含与 durable row 一致的 tagged discriminator：
+
+```json
+{
+  "type": "context.deliveryPrepared",
+  "attemptId": "attempt-...",
+  "logicalTurnId": "turn-...",
+  "packageId": "package-..."
+}
+```
+
+### 3. Contracts
+
+- 所有 future canonical facts MUST 通过 canonical writer serialization 写入；禁止业务模块
+  手工构造 `NewCanonicalEvent` 后删除 `CanonicalFact.type`。
+- event 与 `BindingStateUpdate` 必须继续在同一 SQLite transaction 提交；统一 envelope
+  不能以牺牲 Binding 原子性为代价。
+- projector decode 时，payload 已含 `type` 则必须与 row `fact_type` 完全相等；冲突、
+  非 string tag 或非 object payload 必须 fail closed。
+- 兼容既有 type-less object payload 时，projector MAY 在内存副本中注入同一 immutable
+  row 的 `fact_type`，再走完整 `CanonicalFact` strong deserialize；禁止改写旧 row、
+  checksum 或 schema。
+- `sharedHistoryLoader` 只有在 Legacy snapshot 含可读 items 时才能对 projection error
+  降级；Legacy 为空时必须传播原 projection error，禁止返回伪成功空快照。
+- successful canonical `[]` 表示合法的新建空 Shared Session，必须标记 loaded；projection
+  error 则保持 `loaded=false` 且下次 selection 可重试。
+- Shared history lookup identity 永远是稳定 `shared:<UUID>`。`meta.title` 只作 presentation
+  metadata，不得参与 storage key、retry scope 或 alias。
+- Shared loader error MUST NOT 调用 Native Codex `resumeThread`、Claude JSONL history 或
+  replacement-thread recovery；也不得写入 Native one-shot
+  `automaticRecoveryFailedByScopeRef`。
+- Messages MUST 以 `shared:` identity 屏蔽 Native history recovery card；Native Session
+  原卡片与显式 retry 行为保持不变。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| future delivery fact | payload `type == fact_type`，event + Binding 原子提交 | 手工删 tag |
+| old type-less delivery row | 以内存注入 row `fact_type` 后继续 projection/checkpoint | 修改 SQLite row/checksum |
+| payload tag 与 row 冲突 | typed projection error，checkpoint 不前进 | 信任任一方继续投影 |
+| projection error + readable Legacy | 可观测 V0 fallback | 丢弃 last-good history |
+| projection error + empty Legacy | 向 resume boundary 传播 error | 返回正常空 snapshot |
+| successful empty projection | Shared loaded empty | 标记 Native recovery failed |
+| title 从默认值变为首条消息 | 继续用原 `shared:<UUID>` 恢复全部历史 | 按 title 新建/查找 session |
+| Shared projection 暂时失败 | selection 可重试、无 Native RPC/card | 永久自动恢复锁、Native fallback |
+| Native history 失败 | 保留既有 recovery card/action | 被 Shared gate 一并隐藏 |
+
+### 5. Good / Base / Bad Cases
+
+- Good：`prepare_delivery` / `accept_delivery` 直接提交 `CanonicalFact` 与 Binding；旧
+  type-less row 由 projector tolerant decode，后续 `turnCommitted` 正常重建幕布。
+- Base：V2 新会话没有任何 Turn，projection 返回 `[]`，Canvas 显示正常空态。
+- Bad：catch projection error 后无条件使用空 Legacy items，统一 resume 把 Shared 写成
+  Native `failed`，标题切换后再打开不再请求。
+- Bad：只用 CSS 隐藏 recovery card，底层仍写
+  `automaticRecoveryFailedByScopeRef`，导致会话永久不可自动恢复。
+
+### 6. Tests Required
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml --test shared_context
+cargo test --manifest-path src-tauri/Cargo.toml --test shared_projection
+cargo test --manifest-path src-tauri/Cargo.toml --test shared_session_v2
+
+npm exec vitest run -- \
+  src/features/threads/loaders/sharedHistoryLoader.test.ts \
+  src/features/threads/hooks/useThreadActions.shared-history.test.tsx \
+  src/features/messages/components/Messages.history-loading.test.tsx
+
+npm run typecheck
+```
+
+关键 assertion：
+
+- prepared/accepted payload 的 `type` 与 row `fact_type` 相等，重复 delivery 不新增 fact。
+- type-less delivery 前后存在 requested/committed facts 时，rebuild 仍恢复完整 items 并推进
+  checkpoint；embedded type conflict 必须失败。
+- title 更新前后 service 与 projection 均收到同一个 `shared:<UUID>`。
+- projection failure + empty Legacy 可再次调用；Native `resumeThread` 调用次数为零。
+- Shared 不渲染 Native recovery alert；Native 对照测试仍渲染并可点击 retry。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```rust
+let mut payload = serde_json::to_value(&fact)?;
+payload.as_object_mut().map(|object| object.remove("type"));
+writer.append_event_with_binding(&manual_event, &binding)?;
+```
+
+```ts
+try {
+  return await loadSharedProjection(workspaceId, threadId);
+} catch {
+  return legacyItems; // empty 也伪装成正常历史
+}
+```
+
+#### Correct
+
+```rust
+writer.append_canonical_fact_with_binding_at(
+    session_id,
+    fact,
+    occurred_at,
+    &binding,
+)?;
+```
+
+```ts
+try {
+  return await loadSharedProjection(workspaceId, threadId);
+} catch (error) {
+  if (legacyItems.length === 0) {
+    throw error;
+  }
+  return legacyItems;
+}
+```

@@ -1741,7 +1741,9 @@ export const MessagesCore = memo(function MessagesCore({
       activeUserInputRequestId,
       claudeHistoryTranscriptFallbackActive,
       hasVisibleUserInputRequest,
-      historyRecoveryFailureReason,
+      historyRecoveryFailureReason: nativeRuntimeRecoveryEnabled
+        ? historyRecoveryFailureReason
+        : null,
       isHistoryLoading,
       latestRetryMessage,
       latestRuntimeReconnectItemId,

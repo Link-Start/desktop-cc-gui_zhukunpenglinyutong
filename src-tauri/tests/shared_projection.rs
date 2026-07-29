@@ -799,6 +799,99 @@ fn invalid_projection_event_does_not_advance_checkpoint() {
     writer.shutdown().unwrap();
 }
 
+/// Scenario: 旧版 delivery payload 缺少 tagged `type` 时，projector 使用同一 durable row
+/// 的 `fact_type` 解码，并继续恢复后续 conversation facts。
+#[test]
+fn legacy_type_less_delivery_fact_does_not_block_history_rebuild() {
+    let temp = TempStoreDir::new("projection-type-less-delivery");
+    let writer = open_writer(&temp);
+    writer
+        .append_canonical_fact(SESSION, make_turn_requested("attempt-1"))
+        .expect("append requested");
+    writer
+        .append_event(&NewCanonicalEvent {
+            session_id: SESSION.to_string(),
+            event_id: "legacy-delivery-prepared".to_string(),
+            fact_type: "context.deliveryPrepared".to_string(),
+            logical_turn_id: Some("turn-1".to_string()),
+            attempt_id: Some("attempt-1".to_string()),
+            dedupe_key: None,
+            payload_json: serde_json::json!({
+                "logicalTurnId": "turn-1",
+                "attemptId": "attempt-1",
+                "bindingKey": "claude:profile-1",
+                "packageId": "package-1",
+                "sourceChecksum": "checksum-1",
+                "throughSequenceInclusive": 1,
+                "mode": "portable-transcript",
+                "operation": "prompt-prefix"
+            })
+            .to_string(),
+            fidelity: Fidelity::Canonical,
+            committed_at: 1_700_000_000_000,
+            schema_version: 1,
+        })
+        .expect("append legacy delivery");
+    writer
+        .append_canonical_fact(SESSION, make_turn_committed("attempt-1"))
+        .expect("append committed");
+
+    let projector = SharedProjector::new();
+    let items = projector
+        .rebuild(&writer, SESSION, "canvas", 3)
+        .expect("rebuild legacy stream");
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[0].content["role"], "user");
+    assert_eq!(items[1].content["role"], "assistant");
+    assert_eq!(
+        writer
+            .get_projection_checkpoint(SESSION, "canvas")
+            .expect("checkpoint")
+            .expect("checkpoint exists")
+            .through_sequence,
+        3
+    );
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: payload 自带的 type 与 durable `fact_type` 冲突时必须 fail closed。
+#[test]
+fn conflicting_projection_payload_type_fails_closed() {
+    let temp = TempStoreDir::new("projection-conflicting-type");
+    let writer = open_writer(&temp);
+    writer
+        .append_event(&NewCanonicalEvent {
+            session_id: SESSION.to_string(),
+            event_id: "conflicting-delivery".to_string(),
+            fact_type: "context.deliveryPrepared".to_string(),
+            logical_turn_id: Some("turn-1".to_string()),
+            attempt_id: Some("attempt-conflict".to_string()),
+            dedupe_key: None,
+            payload_json: serde_json::json!({
+                "type": "context.deliveryAccepted",
+                "logicalTurnId": "turn-1",
+                "attemptId": "attempt-conflict",
+                "bindingKey": "claude:profile-1",
+                "packageId": "package-1",
+                "nativeRequestId": "request-1",
+                "acceptedAt": 1_700_000_000_000_i64
+            })
+            .to_string(),
+            fidelity: Fidelity::Canonical,
+            committed_at: 1_700_000_000_000,
+            schema_version: 2,
+        })
+        .expect("append conflicting event");
+
+    let error = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect_err("conflicting type must fail");
+    assert!(error
+        .to_string()
+        .contains("conflicts with durable fact_type"));
+    writer.shutdown().unwrap();
+}
+
 /// Scenario: legacy reader 保留 V0 item，不伪造缺失 Tool ID。
 #[test]
 fn legacy_reader_preserves_items_without_fabricating_tool_ids() {

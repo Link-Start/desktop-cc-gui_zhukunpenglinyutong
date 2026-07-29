@@ -142,28 +142,6 @@ pub fn prepare_delivery(
         operation: canonical_operation(&pending.operation),
         extra: Value::Object(Default::default()),
     });
-    let payload = serde_json::to_value(&fact).map_err(|error| error.to_string())?;
-    let fact_type = fact.fact_type().to_string();
-    let payload = payload
-        .as_object()
-        .map(|object| {
-            let mut object = object.clone();
-            object.remove("type");
-            Value::Object(object)
-        })
-        .unwrap_or(payload);
-    let event = crate::shared_event_log::NewCanonicalEvent {
-        session_id: request.session_id.clone(),
-        event_id: format!("delivery-prepared:{}", request.package.package_id),
-        fact_type,
-        logical_turn_id: Some(request.logical_turn_id.clone()),
-        attempt_id: Some(request.attempt_id.clone()),
-        dedupe_key: None,
-        payload_json: serde_json::to_string(&payload).map_err(|error| error.to_string())?,
-        fidelity: crate::shared_event_log::Fidelity::Canonical,
-        committed_at: request.prepared_at,
-        schema_version: 1,
-    };
     let binding = binding_update(
         existing.as_ref(),
         &request.session_id,
@@ -177,7 +155,12 @@ pub fn prepare_delivery(
         request.prepared_at,
     )?;
     writer
-        .append_event_with_binding(&event, &binding)
+        .append_canonical_fact_with_binding_at(
+            request.session_id.clone(),
+            fact,
+            request.prepared_at,
+            &binding,
+        )
         .map_err(|error| error.to_string())?;
     Ok(pending)
 }
@@ -276,27 +259,6 @@ pub fn accept_delivery(
         accepted_at: request.accepted_at,
         extra: Value::Object(Default::default()),
     });
-    let payload = serde_json::to_value(&fact).map_err(|error| error.to_string())?;
-    let payload = payload
-        .as_object()
-        .map(|object| {
-            let mut object = object.clone();
-            object.remove("type");
-            Value::Object(object)
-        })
-        .unwrap_or(payload);
-    let event = crate::shared_event_log::NewCanonicalEvent {
-        session_id: request.session_id.clone(),
-        event_id: format!("delivery-accepted:{}", request.package_id),
-        fact_type: fact.fact_type().to_string(),
-        logical_turn_id: Some(request.logical_turn_id.clone()),
-        attempt_id: Some(request.attempt_id.clone()),
-        dedupe_key: None,
-        payload_json: serde_json::to_string(&payload).map_err(|error| error.to_string())?,
-        fidelity: crate::shared_event_log::Fidelity::Canonical,
-        committed_at: request.accepted_at,
-        schema_version: 1,
-    };
     let binding = binding_update(
         Some(&existing),
         &request.session_id,
@@ -310,7 +272,12 @@ pub fn accept_delivery(
         request.accepted_at,
     )?;
     writer
-        .append_event_with_binding(&event, &binding)
+        .append_canonical_fact_with_binding_at(
+            request.session_id.clone(),
+            fact,
+            request.accepted_at,
+            &binding,
+        )
         .map_err(|error| error.to_string())?;
     Ok(())
 }

@@ -181,6 +181,42 @@ fn package_artifact_and_two_phase_cursor_close_without_replay_gap() {
     assert_eq!(prepared.accepted_through_sequence, None);
     assert_eq!(prepared.committed_through_sequence, None);
     assert!(prepared.pending_delivery_json.is_some());
+    let prepared_event = writer
+        .events_for_session(SESSION)
+        .expect("prepared events")
+        .into_iter()
+        .find(|event| {
+            event.attempt_id.as_deref() == Some(attempt_id.as_str())
+                && event.fact_type == "context.deliveryPrepared"
+        })
+        .expect("delivery prepared fact");
+    let prepared_payload: serde_json::Value =
+        serde_json::from_str(&prepared_event.payload_json).expect("prepared payload");
+    assert_eq!(prepared_payload["type"], prepared_event.fact_type);
+    let duplicate_prepare = cc_gui_lib::shared_context::prepare_delivery(
+        &writer,
+        &PrepareDeliveryRequest {
+            session_id: SESSION.to_string(),
+            binding_key: "claude:provider-b".to_string(),
+            engine: "claude".to_string(),
+            provider_profile_id: Some("provider-b".to_string()),
+            logical_turn_id: logical_turn_id.clone(),
+            attempt_id: attempt_id.clone(),
+            binding_operation_id: "operation-b".to_string(),
+            package: first.clone(),
+            prepared_at: 101,
+        },
+    );
+    assert!(duplicate_prepare.is_err());
+    assert_eq!(
+        writer
+            .events_for_session(SESSION)
+            .expect("events after duplicate prepare")
+            .iter()
+            .filter(|event| event.fact_type == "context.deliveryPrepared")
+            .count(),
+        1
+    );
     let blocked_other_target = begin_turn_core(
         &writer,
         SESSION,
@@ -215,7 +251,7 @@ fn package_artifact_and_two_phase_cursor_close_without_replay_gap() {
             logical_turn_id: logical_turn_id.clone(),
             attempt_id: attempt_id.clone(),
             binding_operation_id: "operation-b".to_string(),
-            package_id: first.package_id,
+            package_id: first.package_id.clone(),
             native_session_id: Some("claude:destination".to_string()),
             native_request_id: Some("request-1".to_string()),
             accepted_at: 103,
@@ -231,6 +267,42 @@ fn package_artifact_and_two_phase_cursor_close_without_replay_gap() {
         Some(requested_sequence - 1)
     );
     assert_eq!(accepted.committed_through_sequence, None);
+    let accepted_event = writer
+        .events_for_session(SESSION)
+        .expect("accepted events")
+        .into_iter()
+        .find(|event| {
+            event.attempt_id.as_deref() == Some(attempt_id.as_str())
+                && event.fact_type == "context.deliveryAccepted"
+        })
+        .expect("delivery accepted fact");
+    let accepted_payload: serde_json::Value =
+        serde_json::from_str(&accepted_event.payload_json).expect("accepted payload");
+    assert_eq!(accepted_payload["type"], accepted_event.fact_type);
+    let duplicate_accept = accept_delivery(
+        &writer,
+        &AcceptDeliveryRequest {
+            session_id: SESSION.to_string(),
+            binding_key: "claude:provider-b".to_string(),
+            logical_turn_id: logical_turn_id.clone(),
+            attempt_id: attempt_id.clone(),
+            binding_operation_id: "operation-b".to_string(),
+            package_id: first.package_id.clone(),
+            native_session_id: Some("claude:destination".to_string()),
+            native_request_id: Some("request-1".to_string()),
+            accepted_at: 103,
+        },
+    );
+    assert!(duplicate_accept.is_err());
+    assert_eq!(
+        writer
+            .events_for_session(SESSION)
+            .expect("events after duplicate accept")
+            .iter()
+            .filter(|event| event.fact_type == "context.deliveryAccepted")
+            .count(),
+        1
+    );
 
     accept_turn_core(
         &writer,

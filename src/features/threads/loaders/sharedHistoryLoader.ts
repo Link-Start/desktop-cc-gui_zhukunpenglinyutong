@@ -78,9 +78,14 @@ export function createSharedHistoryLoader({
               : projectedItems;
         } catch (error) {
           console.warn(
-            `[shared-projection] load failed; using V0 snapshot for ${threadId}`,
+            legacyItems.length > 0
+              ? `[shared-projection] load failed; using V0 snapshot for ${threadId}`
+              : `[shared-projection] load failed; no V0 snapshot available for ${threadId}`,
             error,
           );
+          if (legacyItems.length === 0) {
+            throw error;
+          }
         }
       }
       return normalizeHistorySnapshot({
