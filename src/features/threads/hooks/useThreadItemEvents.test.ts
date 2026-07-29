@@ -66,27 +66,34 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const onExitPlanModeToolCompleted =
     overrides.onExitPlanModeToolCompleted ?? undefined;
 
-  const { result, unmount } = renderHook(() =>
-    useThreadItemEvents({
-      activeThreadId: overrides.activeThreadId ?? null,
-      dispatch,
-      resolveCanonicalThreadId: overrides.resolveCanonicalThreadId,
-      getCustomName,
-      resolveCollaborationUiMode,
-      markProcessing,
-      markReviewing,
-      safeMessageActivity,
-      recordThreadActivity,
-      applyCollabThreadLinks,
-      interruptedThreadsRef,
-      onAgentMessageCompletedExternal,
-      onExitPlanModeToolCompleted,
-      scheduleRealtimeDispatch: overrides.scheduleRealtimeDispatch,
-    }),
+  const { result, rerender, unmount } = renderHook(
+    ({ activeThreadId }: { activeThreadId: string | null }) =>
+      useThreadItemEvents({
+        activeThreadId,
+        dispatch,
+        resolveCanonicalThreadId: overrides.resolveCanonicalThreadId,
+        getCustomName,
+        resolveCollaborationUiMode,
+        markProcessing,
+        markReviewing,
+        safeMessageActivity,
+        recordThreadActivity,
+        applyCollabThreadLinks,
+        interruptedThreadsRef,
+        onAgentMessageCompletedExternal,
+        onExitPlanModeToolCompleted,
+        scheduleRealtimeDispatch: overrides.scheduleRealtimeDispatch,
+      }),
+    {
+      initialProps: {
+        activeThreadId: overrides.activeThreadId ?? null,
+      },
+    },
   );
 
   return {
     result,
+    rerender,
     unmount,
     dispatch,
     markProcessing,
@@ -911,6 +918,32 @@ describe("useThreadItemEvents", () => {
     expect(safeMessageActivity).toHaveBeenCalledTimes(1);
 
     vi.useRealTimers();
+  });
+
+  it("preserves the terminal ledger across ordinary hook rerenders", () => {
+    const { result, rerender } = makeOptions({
+      activeThreadId: "shared:thread-1",
+    });
+
+    act(() => {
+      result.current.noteRealtimeTurnStarted(
+        "shared:thread-1",
+        "runtime-turn-1",
+      );
+      result.current.markRealtimeTurnTerminal(
+        "shared:thread-1",
+        "runtime-turn-1",
+      );
+    });
+
+    rerender({ activeThreadId: "shared:thread-2" });
+
+    expect(
+      result.current.isRealtimeTurnTerminalExact(
+        "shared:thread-1",
+        "runtime-turn-1",
+      ),
+    ).toBe(true);
   });
 
   it("drops queued transitioned normalized events after the turn is marked terminal", () => {

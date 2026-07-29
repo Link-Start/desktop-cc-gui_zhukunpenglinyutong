@@ -101,6 +101,9 @@ export type ThreadEventHandlersOptions = {
   onThreadTransientCleanupReady?: (
     cleanup: (workspaceId: string | null | undefined, threadId: string) => number,
   ) => () => void;
+  onDurableRealtimeTurnSettlementReady?: (
+    settle: (threadId: string, runtimeTurnId: string) => void,
+  ) => () => void;
   onCollaborationModeResolved?: (
     event: CollaborationModeResolvedRequest,
   ) => void;

@@ -1051,10 +1051,20 @@ export function useThreadItemEvents({
     ],
   );
 
+  const flushRealtimeDeltaOpsForUnmountRef = useRef(flushRealtimeDeltaOps);
+  const flushNormalizedRealtimeOpsForUnmountRef = useRef(
+    flushNormalizedRealtimeOps,
+  );
+  useEffect(() => {
+    flushRealtimeDeltaOpsForUnmountRef.current = flushRealtimeDeltaOps;
+    flushNormalizedRealtimeOpsForUnmountRef.current =
+      flushNormalizedRealtimeOps;
+  }, [flushNormalizedRealtimeOps, flushRealtimeDeltaOps]);
+
   useEffect(
     () => () => {
-      flushRealtimeDeltaOps();
-      flushNormalizedRealtimeOps();
+      flushRealtimeDeltaOpsForUnmountRef.current();
+      flushNormalizedRealtimeOpsForUnmountRef.current();
       if (realtimeFlushTimerRef.current !== null) {
         window.clearTimeout(realtimeFlushTimerRef.current);
         realtimeFlushTimerRef.current = null;
@@ -1069,7 +1079,7 @@ export function useThreadItemEvents({
       terminalRealtimeTurnIdsRef.current.clear();
       settledRealtimeThreadsRef.current.clear();
     },
-    [flushNormalizedRealtimeOps, flushRealtimeDeltaOps],
+    [],
   );
 
   const flushPendingRealtimeEvents = useCallback(() => {

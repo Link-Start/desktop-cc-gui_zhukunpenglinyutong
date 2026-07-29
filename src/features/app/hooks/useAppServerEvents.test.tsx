@@ -1597,6 +1597,7 @@ describe("useAppServerEvents", () => {
   it("does not restart generic Native lifecycle for a Shared V2 projected turn", async () => {
     const handlers: Handlers = {
       onTurnStarted: vi.fn(),
+      onSharedRuntimeTurnStarted: vi.fn(),
       onAgentMessageDelta: vi.fn(),
     };
     const { root } = await mount(handlers);
@@ -1650,6 +1651,10 @@ describe("useAppServerEvents", () => {
     });
 
     expect(handlers.onTurnStarted).not.toHaveBeenCalled();
+    expect(handlers.onSharedRuntimeTurnStarted).toHaveBeenCalledWith(
+      "shared:owner-session-start",
+      "run-owner-start",
+    );
     expect(handlers.onAgentMessageDelta).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "ws-runtime-owner-start",

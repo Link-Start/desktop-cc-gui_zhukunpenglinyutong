@@ -163,6 +163,7 @@ export function makeThreadMessagingHook(
       collaborationMode: Record<string, unknown> | null;
     };
     claudeThinkingVisible?: boolean;
+    onSharedDurableTurnCommitted?: ReturnType<typeof vi.fn>;
   } = {},
 ) {
   const activeThreadId =
@@ -236,6 +237,8 @@ export function makeThreadMessagingHook(
       startThreadForWorkspace,
       onDebug,
       runWithCreateSessionLoading: overrides.runWithCreateSessionLoading,
+      onSharedDurableTurnCommitted:
+        overrides.onSharedDurableTurnCommitted,
     }),
   );
 

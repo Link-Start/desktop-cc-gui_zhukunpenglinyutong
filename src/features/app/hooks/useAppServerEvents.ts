@@ -118,6 +118,10 @@ export type AppServerEventHandlers = {
     threadId: string,
     turnId: string,
   ) => void;
+  onSharedRuntimeTurnStarted?: (
+    threadId: string,
+    runtimeTurnId: string,
+  ) => void;
   onTurnCompleted?: (
     workspaceId: string,
     threadId: string,
@@ -1839,7 +1843,11 @@ export function dispatchAppServerEvent(
       // Native handler，会在 canonical commit 后复活 activeTurnId / Stop。
       const isOwnedSharedV2Projection =
         Boolean(sharedBridge) && params.sharedOwner !== undefined;
-      if (!isOwnedSharedV2Projection) {
+      if (isOwnedSharedV2Projection) {
+        // Shared projection 不进入 generic Native lifecycle，但 exact Runtime identity
+        // 仍需更新 realtime ledger，解除上一 Turn 的 thread-level terminal fallback。
+        handlers.onSharedRuntimeTurnStarted?.(threadId, turnId);
+      } else {
         handlers.onTurnStarted?.(workspace_id, threadId, turnId);
       }
     }
