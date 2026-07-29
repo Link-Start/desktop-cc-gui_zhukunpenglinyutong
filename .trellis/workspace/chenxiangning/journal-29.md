@@ -709,3 +709,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1218: 完善多 CLI 会话目标选择
+
+**Date**: 2026-07-29
+**Task**: 完善多 CLI 会话目标选择
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修复 Shared Session 跨 CLI 与 Provider 目标切换链路，统一 Home 双栏点击式 target picker，恢复 Claude Local settings 模型可选能力与 Codex fallback，补齐首页 Engine 图标联动、规范文档及增量回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e582d1819` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

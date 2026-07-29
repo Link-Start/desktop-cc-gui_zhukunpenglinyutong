@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1217
+- **Total Sessions**: 1218
 - **Last Active**: 2026-07-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~711 | Active |
+| `journal-29.md` | ~744 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1218 | 2026-07-29 | 完善多 CLI 会话目标选择 | `e582d1819` | `feature/v-0710` |
 | 1217 | 2026-07-29 | 修复 Shared Session canonical 历史恢复 | `5ec8dc0de` | `feature/v-0710` |
 | 1216 | 2026-07-29 | 修复 Shared Session 跨 CLI 切换与终态收口 | `994007b31` | `feature/v-0710` |
 | 1215 | 2026-07-29 | 续接会话围挡默认折叠 | `53759006f` | `feature/v-0710` |
