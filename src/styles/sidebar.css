@@ -2169,22 +2169,55 @@
   border-radius: 0 0 9px 9px;
 }
 
+.thread-continuation-family-segment.is-start.is-collapsed {
+  padding-bottom: 2px;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--text-muted) 32%, transparent);
+  border-radius: 9px;
+}
+
 .thread-continuation-family-label {
   position: absolute;
   z-index: 1;
   top: -9px;
   left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   max-width: calc(100% - 16px);
   padding: 0 6px;
+  border: 0;
   overflow: hidden;
   color: var(--text-faint, var(--text-muted));
   background: var(--desktop-sidebar-background, var(--surface-sidebar));
   font-size: var(--sidebar-caption-font-size);
   font-weight: 560;
   line-height: 17px;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  pointer-events: none;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.thread-continuation-family-label > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thread-continuation-family-label svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.thread-continuation-family-label:hover {
+  color: var(--text-emphasis);
+}
+
+.thread-continuation-family-label:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
 }
 
 .thread-list-virtual-row > .thread-continuation-family-segment {

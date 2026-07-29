@@ -168,7 +168,8 @@ createNativeProviderContinuation({
 - Vitest：prepare/discard/create DTO mapping、Claude/Codex target menu、double-click guard、
   cancellation late-completion race、single confirmation、operation progress 过滤、Token 摘要、
   omission negative assertion、canonical target selection、顶层“供应商续接”标签与来源导航、
-  Codex Provider Continuation leading host bootstrap 隐藏与普通 Codex Session 隔离。
+  Codex Provider Continuation leading host bootstrap 隐藏与普通 Codex Session 隔离、
+  普通与 pinned Continuation Family 默认折叠及 disclosure 展开/收起。
 - Rust：额外覆盖 `ContextBootstrap` command args、普通 command wrapper、progress milestone
   单调性与 prepared guarded discard。
 - Contract：`cargo check --lib`、`npm run typecheck`、
@@ -247,6 +248,11 @@ ProviderContinuationContextCard({ thread, source, onOpenSource })
 - continuation metadata MUST 通过既有 `.messages` timeline-leading slot 接入，默认折叠，
   不得成为 Canvas 根 sibling，也不得参与 message grouping、streaming、terminal 或
   scroll-anchor 计算。展开后显示 source → target snapshot；来源缺失时 disabled。
+- Sidebar 中含两个及以上可见 top-level member 的 Continuation Family MUST 默认折叠，
+  仅保留当前排序最前的代表 Session 与完整成员数。`续接会话 · {{count}} 个` MUST 是带
+  `aria-expanded` 的 disclosure control；展开后恢复全部既有 member 顺序，再次触发恢复
+  折叠。该状态只属于当前 `ThreadList` local UI state，MUST NOT 新增 backend、catalog 或
+  persistent preference。
 - operation ready 后 frontend MUST await 既有 workspace catalog reload Promise，再关闭
   Dialog 并选择 exact target id。Refresh settle 前 target MUST NOT 进入 Canvas；禁止用
   fixed delay、polling、provisional Session row 或第二份 continuation registry 规避

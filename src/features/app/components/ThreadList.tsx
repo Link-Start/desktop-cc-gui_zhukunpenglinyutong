@@ -1,4 +1,6 @@
 import { FloatingTooltipButton } from "@/components/ui/floating-tooltip-button";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type {
@@ -139,6 +141,29 @@ function filterCollapsedThreadRows(
   });
 
   return visibleRows;
+}
+
+function filterCollapsedContinuationFamilyRows(
+  rows: ThreadRow[],
+  expandedFamilyIds: ReadonlySet<string>,
+) {
+  const visibleRows: ThreadRow[] = [];
+  let didCollapseFamily = false;
+
+  rows.forEach((row) => {
+    const segment = row.continuationFamilySegment;
+    const isVisible =
+      !segment ||
+      expandedFamilyIds.has(segment.familyId) ||
+      segment.position === "start";
+    if (isVisible) {
+      visibleRows.push(row);
+      return;
+    }
+    didCollapseFamily = true;
+  });
+
+  return didCollapseFamily ? visibleRows : rows;
 }
 
 const ThreadRowItem = memo(function ThreadRowItem({
@@ -450,6 +475,8 @@ export function ThreadList({
   const [expandedParentThreadIds, setExpandedParentThreadIds] = useState<
     Set<string>
   >(() => new Set());
+  const [expandedContinuationFamilyIds, setExpandedContinuationFamilyIds] =
+    useState<Set<string>>(() => new Set());
   const isExitedThread = useCallback(
     (thread: ThreadSummary) => {
       if (isPendingSubagentThread(thread)) {
@@ -496,23 +523,30 @@ export function ThreadList({
     moveFolderTargets.length > 0 ? moveFolderTargets : undefined;
   const displayedPinnedRows = useMemo(
     () =>
-      projectContinuationFamilyRows(
-        filterCollapsedThreadRows(
-          visiblePinnedRows,
-          expandedParentThreadIds,
+      filterCollapsedContinuationFamilyRows(
+        projectContinuationFamilyRows(
+          filterCollapsedThreadRows(visiblePinnedRows, expandedParentThreadIds),
         ),
+        expandedContinuationFamilyIds,
       ),
-    [expandedParentThreadIds, visiblePinnedRows],
+    [expandedContinuationFamilyIds, expandedParentThreadIds, visiblePinnedRows],
   );
   const displayedUnpinnedRows = useMemo(
     () =>
-      projectContinuationFamilyRows(
-        filterCollapsedThreadRows(
-          visibleUnpinnedRows,
-          expandedParentThreadIds,
+      filterCollapsedContinuationFamilyRows(
+        projectContinuationFamilyRows(
+          filterCollapsedThreadRows(
+            visibleUnpinnedRows,
+            expandedParentThreadIds,
+          ),
         ),
+        expandedContinuationFamilyIds,
       ),
-    [expandedParentThreadIds, visibleUnpinnedRows],
+    [
+      expandedContinuationFamilyIds,
+      expandedParentThreadIds,
+      visibleUnpinnedRows,
+    ],
   );
   const rowsBySidebarVirtualKey = useMemo(() => {
     const next = new Map<string, ThreadRow>();
@@ -596,6 +630,22 @@ export function ThreadList({
           next.delete(threadId);
         } else {
           next.add(threadId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
+  const toggleContinuationFamily = useCallback(
+    (event: MouseEvent, familyId: string) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setExpandedContinuationFamilyIds((current) => {
+        const next = new Set(current);
+        if (next.has(familyId)) {
+          next.delete(familyId);
+        } else {
+          next.add(familyId);
         }
         return next;
       });
@@ -709,18 +759,42 @@ export function ThreadList({
             count: continuationFamilySegment.memberCount,
           })
         : null;
+    const isContinuationFamilyExpanded = expandedContinuationFamilyIds.has(
+      continuationFamilySegment.familyId,
+    );
+    const isCollapsedContinuationFamily =
+      continuationFamilySegment.position === "start" &&
+      !isContinuationFamilyExpanded;
 
     return (
       <div
         key={thread.id}
-        className={`thread-continuation-family-segment is-${continuationFamilySegment.position}`}
+        className={`thread-continuation-family-segment is-${continuationFamilySegment.position}${
+          isCollapsedContinuationFamily ? " is-collapsed" : ""
+        }`}
         data-continuation-family-id={continuationFamilySegment.familyId}
         data-continuation-family-position={continuationFamilySegment.position}
+        data-continuation-family-expanded={String(isContinuationFamilyExpanded)}
       >
         {familyLabel ? (
-          <span className="thread-continuation-family-label">
-            {familyLabel}
-          </span>
+          <button
+            type="button"
+            className="thread-continuation-family-label"
+            aria-expanded={isContinuationFamilyExpanded}
+            onClick={(event) =>
+              toggleContinuationFamily(
+                event,
+                continuationFamilySegment.familyId,
+              )
+            }
+          >
+            <span>{familyLabel}</span>
+            {isContinuationFamilyExpanded ? (
+              <ChevronUp aria-hidden="true" />
+            ) : (
+              <ChevronDown aria-hidden="true" />
+            )}
+          </button>
         ) : null}
         {rowNode}
       </div>

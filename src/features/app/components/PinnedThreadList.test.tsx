@@ -146,10 +146,12 @@ describe("PinnedThreadList", () => {
     );
   });
 
-  it("groups pinned continuation family members inside one workspace partition", () => {
+  it("defaults pinned continuation family members to collapsed", () => {
+    const onSelectThread = vi.fn();
     const { container } = render(
       <PinnedThreadList
         {...baseProps}
+        onSelectThread={onSelectThread}
         rows={[
           {
             thread: {
@@ -176,11 +178,19 @@ describe("PinnedThreadList", () => {
       />,
     );
 
-    expect(screen.getByText("Continued sessions · 2")).toBeTruthy();
+    const familyToggle = screen.getByRole("button", {
+      name: "Continued sessions · 2",
+    });
+    expect(familyToggle.getAttribute("aria-expanded")).toBe("false");
     expect(
-      container.querySelectorAll(
-        '[data-continuation-family-id="family-1"]',
-      ),
+      container.querySelectorAll('[data-continuation-family-id="family-1"]'),
+    ).toHaveLength(1);
+
+    fireEvent.click(familyToggle);
+    expect(onSelectThread).not.toHaveBeenCalled();
+    expect(familyToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      container.querySelectorAll('[data-continuation-family-id="family-1"]'),
     ).toHaveLength(2);
   });
 
