@@ -10,6 +10,7 @@ import {
   subscribeMenuCycleCollaborationMode,
   subscribeMenuCycleModel,
   subscribeMenuNewAgent,
+  subscribeNativeProviderContinuationProgress,
   subscribeRuntimeLogStatus,
   subscribeTerminalOutput,
 } from "./events";
@@ -211,6 +212,34 @@ describe("events subscriptions", () => {
 
     listener({
       event: "cli-installer-event",
+      id: 1,
+      payload,
+    });
+    expect(onEvent).toHaveBeenCalledWith(payload);
+
+    cleanup();
+  });
+
+  it("delivers native Provider continuation progress events", () => {
+    let listener: EventCallback<any> = () => {};
+    const unlisten = vi.fn();
+
+    vi.mocked(listen).mockImplementation((_event, handler) => {
+      listener = handler as EventCallback<any>;
+      return Promise.resolve(unlisten);
+    });
+
+    const onEvent = vi.fn();
+    const cleanup = subscribeNativeProviderContinuationProgress(onEvent);
+    const payload = {
+      workspaceId: "ws-1",
+      operationId: "operation-1",
+      phase: "delivering-context",
+      percent: 68,
+    };
+
+    listener({
+      event: "native-provider-continuation-progress",
       id: 1,
       payload,
     });

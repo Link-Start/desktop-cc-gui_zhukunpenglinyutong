@@ -12,6 +12,20 @@
 ### 2. Signatures
 
 ```rust
+prepare_native_provider_continuation(
+    workspace_id,
+    operation_id,
+    source: NativeHistorySource,
+    destination: ExecutionTargetInput,
+) -> Result<Value, String>
+
+discard_prepared_native_provider_continuation(
+    workspace_id,
+    operation_id,
+    source: NativeHistorySource,
+    destination: ExecutionTargetInput,
+) -> Result<bool, String>
+
 create_native_provider_continuation(
     workspace_id,
     operation_id,
@@ -22,6 +36,8 @@ create_native_provider_continuation(
 ```
 
 ```typescript
+prepareNativeProviderContinuation(request): Promise<NativeProviderContinuationResponse>
+discardPreparedNativeProviderContinuation(request): Promise<boolean>
 createNativeProviderContinuation({
   workspaceId,
   operationId,
@@ -40,6 +56,12 @@ createNativeProviderContinuation({
 - phase 顺序：`prepared -> creating -> ready`；不确定 ACK 进入
   `recovery-required`。相同 `operationId` + 相同 request 复用 artifact/target identity；
   request 不同返回 `operation-conflict`。
+- `prepare_native_provider_continuation` MUST 只冻结 source artifacts、编译 Context
+  Package 并返回真实 source/package token estimate；MUST NOT 创建 target Session、发送
+  Context 或写 target catalog identity。
+- `discard_prepared_native_provider_continuation` MUST 重新计算 request checksum，且只删除
+  checksum 匹配、phase=`prepared`、`result_session_id IS NULL` 的 operation。Content-addressed
+  artifacts MAY 保留复用；`creating/ready/recovery-required` MUST 不受影响。
 - `prepared` 且尚无 target side effect 时，旧版本 checksum 或损坏 artifact MAY 删除旧
   prepared operation 后按同一 request 重新 materialize；`creating/ready/recovery-required`
   MUST 保留 durable identity 并 fail closed。
@@ -53,6 +75,11 @@ createNativeProviderContinuation({
   portable prompt transport，禁止仍调用缺失 method。
 - Claude 首次 bootstrap 以目标 session identity、冻结 artifact checksum 和 CLI
   invocation 成功返回作为 accepted evidence；模型是否逐字复述 marker 不得决定创建成功。
+- Claude continuation bootstrap MUST 使用 engine-private `ContextBootstrap` command
+  profile：`--safe-mode`、`--tools ""`、`--disable-slash-commands`、
+  `--prompt-suggestions false`、minimal `--system-prompt`、disable thinking，并跳过
+  curated skill、activation hint、AskUser MCP 与 hook events。普通 send path MUST 固定使用
+  `Standard` profile，不得改变 tools/skills/MCP/permission contract。
 - Claude recovery 只复用既有 target identity，并检查 durable history：user entry 必须
   同时包含 exact package marker 与 `MOSSX_NATIVE_CONTEXT_V1`，或 assistant exact echo
   acceptance marker。仅出现 marker 字样不是证据。当前 bootstrap user entry 之后的
@@ -63,8 +90,13 @@ createNativeProviderContinuation({
   catalog 校验两者；已知 UI-only id 返回 `invalid-target-model`。
 - bootstrap turn id 使用 `provider-continuation-*`；renderer event ingress MUST 在统一入口
   隔离该 control exchange，禁止进入普通 processing/reasoning/message/title 链。
-- degraded response MUST 带 `projectionMode`、`omissions`、
-  `sourceEstimatedTokens`、`packageEstimatedTokens` 与 `adapterDroppedEntries`。
+- legacy degraded response MUST 保留 `projectionMode`、`omissions`、
+  `sourceEstimatedTokens`、`packageEstimatedTokens` 与 `adapterDroppedEntries` 供诊断；
+  prepare preview MUST 至少返回 fidelity 与 source/package token estimate。
+- Backend MUST 只在真实 boundary emit operation-scoped
+  `native-provider-continuation-progress`：`reading-source / compiling-context / prepared /
+  starting-target / delivering-context / verifying-target / finalizing / ready`。Frontend
+  MUST 按 workspace + operation 过滤，禁止 timer、polling 或 elapsed-time interpolation。
 - catalog MUST 保存 Provider Binding、Origin 与 Conversation Family；MUST NOT 写
   `parentThreadId`。删除来源 MUST NOT 级联删除 Continuation。
 
@@ -75,6 +107,7 @@ createNativeProviderContinuation({
 | stable cursor 不可证明 | `unsupported-stable-cursor` | 写 materialization / 创建目标 |
 | source identity 或 Provider 漂移 | typed validation error | 从其他 Provider 猜来源 |
 | operation 参数变化 | `operation-conflict` | 复用旧 artifact |
+| preview 取消 | guarded delete prepared operation | 删除共享 artifact / target identity |
 | prepared、无 target side effect 且 artifact checksum 失败 | 删除旧 prepared 后重新冻结 | 复用损坏 artifact |
 | 已触发 target side effect 后 artifact checksum 失败 | `recovery-required` | 重读来源或新建第二目标 |
 | target side effect 后 ACK 不确定 | `acceptance-ambiguous` | 创建第二个目标 |
@@ -101,12 +134,15 @@ createNativeProviderContinuation({
   byte limit、private/unknown omission、atomic Tool pair、Codex method probe/portable fallback、
   Claude completed bootstrap、durable bootstrap history、assistant exact ACK compatibility、
   unrelated marker rejection、catalog family/delete non-cascade。
-- Vitest：DTO mapping、Claude/Codex target menu、double-click guard、degraded detail、
-  canonical target selection、顶层“供应商续接”标签与来源导航。
+- Vitest：prepare/discard/create DTO mapping、Claude/Codex target menu、double-click guard、
+  cancellation late-completion race、single confirmation、operation progress 过滤、Token 摘要、
+  omission negative assertion、canonical target selection、顶层“供应商续接”标签与来源导航。
+- Rust：额外覆盖 `ContextBootstrap` command args、普通 command wrapper、progress milestone
+  单调性与 prepared guarded discard。
 - Contract：`cargo check --lib`、`npm run typecheck`、
   `npm run check:runtime-contracts`、OpenSpec strict validation。
 - Release gate：真实 Desktop 执行 Claude A → Codex B → Claude A，人工观察历史连续性、
-  degraded confirmation 与 recovery；自动化不可替代。
+  single confirmation、阶段 progress、bootstrap elapsed time 与 recovery；自动化不可替代。
 
 ### 7. Wrong vs Correct
 
@@ -146,11 +182,16 @@ ProviderContinuationContextCard({ thread, source, onOpenSource })
 
 ### 3. Contracts
 
-- 点击目标 Provider 只打开 application-owned Dialog；首次 confirm 前 MUST NOT 调用
+- 点击目标 Provider 后 MUST 打开 application-owned Dialog 并调用 prepare-only command；
+  prepare 完成前 primary button disabled，首次 confirm 前 MUST NOT 调用
   `createNativeProviderContinuation`。
-- `confirmation-required` MUST 在同一 Dialog 展示 projection mode、token estimate、
-  omissions 与 adapter drops；二次确认才发送 `confirmDegraded: true`。进入 recovery 后
-  retry MUST 保留该确认，不得退回未确认状态。
+- Dialog MUST 展示可读 title、完整 source → destination、真实 source/package token、
+  三阶段 strip 与底部 progress；MUST NOT 展示 protocol marker、projection mode、
+  omissions 或 adapter drops。
+- prepared package 即使 degraded，也 MUST 由同一次“继续”以
+  `confirmDegraded: true` 执行；MUST NOT 进入第二个 degradation confirmation。
+- prepare 期间取消 MUST 立即关闭并 guarded discard；late completion MUST 再次幂等
+  discard，且 MUST NOT 重开 stale Dialog。
 - recovery 主文案 MUST 面向用户解释“是否可能已创建、重试是否会重复”；raw backend
   error 只能放在默认折叠的“技术详情”。
 - renderer production code MUST NOT 使用 `alert/window.alert` 或 native system confirm。
@@ -166,16 +207,17 @@ ProviderContinuationContextCard({ thread, source, onOpenSource })
 
 | 场景 | 结果 | 禁止行为 |
 |---|---|---|
-| 首次取消 | 无 target side effect | 先创建再询问 |
-| degraded | 产品内二次确认 | native Alert / 只显示空洞警告 |
-| recovery retry | 保留 degraded confirm；只校验同一 target | 创建第二个 target |
+| preview 取消 | 无 target side effect；prepared operation guarded discard | 先创建再询问 / stale completion 重开 |
+| degraded | Token 摘要内一次产品确认 | native Alert / omissions 明细 / 二次确认 |
+| recovery retry | 复用同一 operation；只校验同一 target | 创建第二个 target |
 | bootstrap control exchange | 整段幕布隐藏 | hash/reasoning/问候作为普通聊天显示 |
 | 普通用户讨论 marker | 正常显示 | 宽泛 substring 误删 |
 | 来源缺失 | 卡片解释并禁用导航 | 跳到同名/相邻 Session |
 
 ### 5. Good / Base / Bad Cases
 
-- Good：Dialog 显示 Claude A → Codex B；取消不调用 command；确认后创建。
+- Good：Dialog 自动 prepare，显示 Claude A → Codex B 与 Token；取消只调用 discard；
+  一次确认后创建。
 - Base：ready continuation 显示可读标题和默认折叠的来源 metadata。
 - Bad：把 `MOSSX_CONTEXT_PACKAGE:sha256:...` 当 Sidebar title 和 user bubble。
 
@@ -199,6 +241,7 @@ if (window.confirm(message)) {
 #### Correct
 
 ```ts
-setDialogState({ stage: "confirm", request });
-// command 仅由 Dialog confirm handler 调用
+setDialogState({ stage: "preparing", request });
+void prepareNativeProviderContinuation(request);
+// create command 仅由 Dialog 的一次 confirm handler 调用
 ```

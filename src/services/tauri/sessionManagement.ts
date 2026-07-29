@@ -74,8 +74,20 @@ export type ProviderContinuationTargetInput = {
   runtimeCapabilityFingerprint?: string | null;
 };
 
+export type NativeProviderContinuationInput = {
+  workspaceId: string;
+  operationId: string;
+  source: NativeHistorySourceInput;
+  destination: ProviderContinuationTargetInput;
+};
+
 export type NativeProviderContinuationResponse = {
-  status: "confirmation-required" | "ready" | "recovery-required" | string;
+  status:
+    | "prepared"
+    | "confirmation-required"
+    | "ready"
+    | "recovery-required"
+    | string;
   fidelity: "strong" | "degraded";
   operation: {
     phase: string;
@@ -418,11 +430,7 @@ export async function assignWorkspaceSessionFolders(
   });
 }
 
-export async function createNativeProviderContinuation(input: {
-  workspaceId: string;
-  operationId: string;
-  source: NativeHistorySourceInput;
-  destination: ProviderContinuationTargetInput;
+export async function createNativeProviderContinuation(input: NativeProviderContinuationInput & {
   confirmDegraded?: boolean;
 }): Promise<NativeProviderContinuationResponse> {
   return invoke<NativeProviderContinuationResponse>(
@@ -433,6 +441,34 @@ export async function createNativeProviderContinuation(input: {
       source: input.source,
       destination: input.destination,
       confirmDegraded: input.confirmDegraded ?? false,
+    },
+  );
+}
+
+export async function prepareNativeProviderContinuation(
+  input: NativeProviderContinuationInput,
+): Promise<NativeProviderContinuationResponse> {
+  return invoke<NativeProviderContinuationResponse>(
+    "prepare_native_provider_continuation",
+    {
+      workspaceId: input.workspaceId,
+      operationId: input.operationId,
+      source: input.source,
+      destination: input.destination,
+    },
+  );
+}
+
+export async function discardPreparedNativeProviderContinuation(
+  input: NativeProviderContinuationInput,
+): Promise<boolean> {
+  return invoke<boolean>(
+    "discard_prepared_native_provider_continuation",
+    {
+      workspaceId: input.workspaceId,
+      operationId: input.operationId,
+      source: input.source,
+      destination: input.destination,
     },
   );
 }

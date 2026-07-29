@@ -881,7 +881,9 @@ async fn handle_rpc_request(
 ) -> Result<Value, String> {
     match method {
         "ping" => Ok(json!({ "ok": true })),
-        "create_native_provider_continuation" => Err(
+        "prepare_native_provider_continuation"
+        | "discard_prepared_native_provider_continuation"
+        | "create_native_provider_continuation" => Err(
             "unsupported-target-acceptance: Provider Continuation currently requires the Desktop local backend"
                 .to_string(),
         ),

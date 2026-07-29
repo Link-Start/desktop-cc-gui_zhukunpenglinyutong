@@ -151,6 +151,7 @@ export type {
   AutoSessionMetadata,
   NativeHistorySourceInput,
   ProviderContinuationTargetInput,
+  NativeProviderContinuationInput,
   NativeProviderContinuationResponse,
 } from "./tauri/sessionManagement";
 export {
@@ -159,6 +160,8 @@ export {
   archiveWorkspaceSessions,
   createWorkspaceSessionFolder,
   createNativeProviderContinuation,
+  prepareNativeProviderContinuation,
+  discardPreparedNativeProviderContinuation,
   deleteWorkspaceSessionFolder,
   deleteWorkspaceSessions,
   getWorkspaceSessionProjectionSummary,

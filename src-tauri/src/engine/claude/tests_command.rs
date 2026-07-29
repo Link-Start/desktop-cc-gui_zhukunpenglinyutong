@@ -324,6 +324,56 @@ fn build_command_can_omit_hook_events_for_legacy_retry() {
 }
 
 #[test]
+fn context_bootstrap_profile_disables_expensive_claude_customizations() {
+    let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
+    let mut params = SendMessageParams::default();
+    params.text = "MOSSX_CONTEXT_PACKAGE:package:checksum".to_string();
+    params.custom_spec_root = Some("/tmp/external-spec".to_string());
+    let activation_hint = Path::new("/tmp/activation-hint.md");
+
+    let command = session.build_command_with_profile(
+        &params,
+        true,
+        false,
+        None,
+        Some(activation_hint),
+        None,
+        None,
+        ClaudeCommandProfile::ContextBootstrap,
+    );
+    let args = command
+        .as_std()
+        .get_args()
+        .map(|arg| arg.to_string_lossy().to_string())
+        .collect::<Vec<_>>();
+
+    assert!(args.iter().any(|arg| arg == "--safe-mode"));
+    assert!(args
+        .windows(2)
+        .any(|window| window[0] == "--tools" && window[1].is_empty()));
+    assert!(args.iter().any(|arg| arg == "--disable-slash-commands"));
+    assert!(args
+        .windows(2)
+        .any(|window| window[0] == "--prompt-suggestions" && window[1] == "false"));
+    assert!(args.windows(2).any(|window| {
+        window[0] == "--system-prompt" && window[1] == CLAUDE_CONTEXT_BOOTSTRAP_SYSTEM_PROMPT
+    }));
+    assert!(args.iter().any(|arg| arg == "--replay-user-messages"));
+    for excluded in [
+        "--append-system-prompt",
+        "--append-system-prompt-file",
+        "--mcp-config",
+        "--include-hook-events",
+        "--add-dir",
+    ] {
+        assert!(
+            !args.iter().any(|arg| arg == excluded),
+            "bootstrap command must omit {excluded}: {args:?}"
+        );
+    }
+}
+
+#[test]
 fn detects_unknown_include_hook_events_errors_for_legacy_retry() {
     assert!(ClaudeSession::is_unknown_include_hook_events_error(
         "error: unknown option '--include-hook-events'",

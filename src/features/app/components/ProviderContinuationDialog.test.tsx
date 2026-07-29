@@ -8,6 +8,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (_key: string, options?: { defaultValue?: string }) =>
       options?.defaultValue ?? _key,
+    i18n: { language: "zh-CN" },
   }),
 }));
 
@@ -32,9 +33,13 @@ const STATE = {
   },
   operationKey: "key",
   stage: "confirm" as const,
+  retryAction: null,
   detail: null,
   technicalDetail: null,
-  degradedAccepted: false,
+  sourceEstimatedTokens: 1200,
+  packageEstimatedTokens: 600,
+  progressPhase: "prepared" as const,
+  progressPercent: 32,
 };
 
 describe("ProviderContinuationDialog", () => {
@@ -51,17 +56,39 @@ describe("ProviderContinuationDialog", () => {
     expect(screen.getByText("修复登录问题")).toBeTruthy();
     expect(screen.getByText("Claude Code · Provider A")).toBeTruthy();
     expect(screen.getByText("Codex CLI · Provider B")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "创建续接会话" }));
+    fireEvent.click(screen.getByRole("button", { name: "继续" }));
     expect(onConfirm).toHaveBeenCalledOnce();
   });
 
-  it("renders degraded evidence in-product", () => {
+  it("shows only the token summary instead of omission details", () => {
+    render(
+      <ProviderContinuationDialog
+        state={STATE}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        (_content, node) =>
+          node?.textContent?.replace(/\s/g, "") === "1,200→600",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Omissions|省略内容|unsupported/)).toBeNull();
+    expect(screen.getByText("准备上下文")).toBeTruthy();
+    expect(screen.getByText("传递上下文")).toBeTruthy();
+    expect(screen.getByText("校验目标")).toBeTruthy();
+  });
+
+  it("shows preparing progress before confirmation", () => {
     render(
       <ProviderContinuationDialog
         state={{
           ...STATE,
-          stage: "confirm-degraded",
-          detail: "Mode: checkpoint\nOmissions:\n- image",
+          stage: "preparing",
+          progressPhase: "compiling-context",
+          progressPercent: 22,
         }}
         onCancel={vi.fn()}
         onConfirm={vi.fn()}
@@ -69,11 +96,16 @@ describe("ProviderContinuationDialog", () => {
     );
 
     expect(screen.getByRole("status").textContent).toContain(
-      "Mode: checkpoint",
+      "正在整理可续接上下文",
+    );
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
+      "22",
     );
     expect(
-      screen.getByRole("button", { name: "接受降级并继续" }),
-    ).toBeTruthy();
+      (screen.getByRole("button", {
+        name: "正在准备…",
+      }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it("keeps recovery copy readable and technical detail collapsed", () => {
@@ -83,6 +115,7 @@ describe("ProviderContinuationDialog", () => {
         state={{
           ...STATE,
           stage: "error",
+          retryAction: "execute",
           detail:
             "目标会话可能已经创建。重试只会校验同一个会话，不会重复创建。",
           technicalDetail:

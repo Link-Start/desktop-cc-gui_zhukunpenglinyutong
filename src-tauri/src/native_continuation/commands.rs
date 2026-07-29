@@ -1,8 +1,10 @@
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
+use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 use crate::engine::{EngineConfig, EngineType};
 use crate::native_history::{
@@ -24,6 +26,67 @@ use super::{
     delete_prepared_operation, load_operation, prepare_operation, update_operation_phase,
     ArtifactRef, NativeHistoryMaterialization, NativeProviderContinuationOperation,
 };
+
+const NATIVE_PROVIDER_CONTINUATION_PROGRESS_EVENT: &str = "native-provider-continuation-progress";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum ProviderContinuationProgressPhase {
+    ReadingSource,
+    CompilingContext,
+    Prepared,
+    StartingTarget,
+    DeliveringContext,
+    VerifyingTarget,
+    Finalizing,
+    Ready,
+}
+
+impl ProviderContinuationProgressPhase {
+    const fn percent(self) -> u8 {
+        match self {
+            Self::ReadingSource => 8,
+            Self::CompilingContext => 22,
+            Self::Prepared => 32,
+            Self::StartingTarget => 45,
+            Self::DeliveringContext => 68,
+            Self::VerifyingTarget => 86,
+            Self::Finalizing => 96,
+            Self::Ready => 100,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProviderContinuationProgressEvent {
+    workspace_id: String,
+    operation_id: String,
+    phase: ProviderContinuationProgressPhase,
+    percent: u8,
+}
+
+fn emit_progress(
+    app: &AppHandle,
+    workspace_id: &str,
+    operation_id: &str,
+    phase: ProviderContinuationProgressPhase,
+) {
+    let event = ProviderContinuationProgressEvent {
+        workspace_id: workspace_id.to_string(),
+        operation_id: operation_id.to_string(),
+        phase,
+        percent: phase.percent(),
+    };
+    if let Err(error) = app.emit(NATIVE_PROVIDER_CONTINUATION_PROGRESS_EVENT, event) {
+        log::warn!(
+            "[native-continuation] operation_id={} progress_emit_failed phase={:?} error={}",
+            operation_id,
+            phase,
+            error
+        );
+    }
+}
 
 fn now_millis() -> i64 {
     chrono::Utc::now().timestamp_millis()
@@ -62,6 +125,80 @@ fn source_engine_type(engine: NativeHistoryEngine) -> EngineType {
         NativeHistoryEngine::Codex => EngineType::Codex,
         NativeHistoryEngine::Kimi => EngineType::Kimi,
     }
+}
+
+fn validate_provider_continuation_shape(
+    operation_id: &str,
+    source: &NativeHistorySource,
+    destination: &ExecutionTargetInput,
+) -> Result<(), String> {
+    if operation_id.trim().is_empty() {
+        return Err("operation_id is required".to_string());
+    }
+    if source.session_id.trim().is_empty() || source.native_session_id.trim().is_empty() {
+        return Err("source session identity is required".to_string());
+    }
+    let expected_source_session_id = format!(
+        "{}:{}",
+        engine_name(source.engine),
+        source.native_session_id.trim()
+    );
+    if source.session_id.trim() != expected_source_session_id {
+        return Err("source session identity does not match native session identity".to_string());
+    }
+    if destination.normalized_provider().is_none() {
+        return Err("destination provider identity is required".to_string());
+    }
+    if !matches!(destination.engine, EngineType::Codex | EngineType::Claude) {
+        return Err(
+            "unsupported-target-acceptance: target adapter cannot prove context acceptance"
+                .to_string(),
+        );
+    }
+    if source_engine_type(source.engine) == destination.engine
+        && source.provider_profile_id.as_deref() == destination.normalized_provider().as_deref()
+    {
+        return Err("destination provider must differ from the source provider".to_string());
+    }
+    Ok(())
+}
+
+fn validate_provider_continuation_request(
+    state: &AppState,
+    workspace_id: &str,
+    operation_id: &str,
+    source: &NativeHistorySource,
+    destination: &ExecutionTargetInput,
+) -> Result<(), String> {
+    validate_provider_continuation_shape(operation_id, source, destination)?;
+    let authoritative_provider =
+        crate::session_management::provider_profile_id_for_session_at_path(
+            state.storage_path.as_path(),
+            workspace_id,
+            &source.session_id,
+            engine_name(source.engine),
+        )?;
+    if authoritative_provider.is_some()
+        && authoritative_provider.as_deref() != source.provider_profile_id.as_deref()
+    {
+        return Err("source provider identity changed; reload the session catalog".to_string());
+    }
+    Ok(())
+}
+
+fn context_fidelity(destination: &ExecutionTargetInput, package: &ContextPackage) -> (usize, bool) {
+    let adapter_dropped_entries = if destination.engine == EngineType::Codex
+        && package.manifest.mode == ProjectionMode::NativeHistoryImport
+    {
+        codex_import_projection(package).1
+    } else {
+        0
+    };
+    let degraded = !package.manifest.omitted.is_empty()
+        || (destination.engine == EngineType::Codex
+            && package.manifest.mode != ProjectionMode::NativeHistoryImport)
+        || adapter_dropped_entries > 0;
+    (adapter_dropped_entries, degraded)
 }
 
 fn native_provider_source(source: Option<CanonicalProviderProfileSource>) -> &'static str {
@@ -270,6 +407,12 @@ async fn prepare(
     })
     .await
     .map_err(|error| format!("native-history-worker: {error}"))??;
+    emit_progress(
+        app,
+        workspace_id,
+        operation_id,
+        ProviderContinuationProgressPhase::CompilingContext,
+    );
     let mut capabilities = context_capabilities(destination);
     if destination.engine == EngineType::Codex {
         let provider_profile_id = destination
@@ -434,6 +577,12 @@ async fn execute_codex(
                 app,
             )
             .await?;
+            emit_progress(
+                app,
+                workspace_id,
+                &operation.materialization.operation_id,
+                ProviderContinuationProgressPhase::VerifyingTarget,
+            );
             let response = crate::shared::codex_core::resume_thread_core(
                 &state.sessions,
                 workspace_id.to_string(),
@@ -446,6 +595,12 @@ async fn execute_codex(
                 package.package_id, package.manifest.source_checksum
             );
             if response.to_string().contains(&marker) {
+                emit_progress(
+                    app,
+                    workspace_id,
+                    &operation.materialization.operation_id,
+                    ProviderContinuationProgressPhase::Finalizing,
+                );
                 persist_target_metadata(
                     state,
                     workspace_id,
@@ -483,6 +638,12 @@ async fn execute_codex(
     }
     if let Some(canonical_target_session_id) = operation.result_session_id.as_deref() {
         if operation.error_code.as_deref() == Some("catalog-commit-failed") {
+            emit_progress(
+                app,
+                workspace_id,
+                &operation.materialization.operation_id,
+                ProviderContinuationProgressPhase::Finalizing,
+            );
             persist_target_metadata(
                 state,
                 workspace_id,
@@ -570,6 +731,12 @@ async fn execute_codex(
         now_millis(),
     )
     .map_err(|error| error.to_string())?;
+    emit_progress(
+        app,
+        workspace_id,
+        &operation.materialization.operation_id,
+        ProviderContinuationProgressPhase::DeliveringContext,
+    );
     let acceptance = match codex_context_transport(package.manifest.mode) {
         Ok(CodexContextTransport::Import) => {
             let items = codex_import_items(package);
@@ -631,6 +798,18 @@ async fn execute_codex(
         );
         return Err(format!("acceptance-ambiguous: {error}"));
     }
+    emit_progress(
+        app,
+        workspace_id,
+        &operation.materialization.operation_id,
+        ProviderContinuationProgressPhase::VerifyingTarget,
+    );
+    emit_progress(
+        app,
+        workspace_id,
+        &operation.materialization.operation_id,
+        ProviderContinuationProgressPhase::Finalizing,
+    );
     if let Err(error) = persist_target_metadata(
         state,
         workspace_id,
@@ -830,6 +1009,7 @@ fn validate_claude_continuation_model(
 
 async fn execute_claude(
     state: &AppState,
+    app: &AppHandle,
     workspace_id: &str,
     operation: NativeProviderContinuationOperation,
     destination: &ExecutionTargetInput,
@@ -847,6 +1027,12 @@ async fn execute_claude(
     );
     if let Some(target_session_id) = operation.result_session_id.as_deref() {
         if operation.error_code.as_deref() == Some("catalog-commit-failed") {
+            emit_progress(
+                app,
+                workspace_id,
+                &operation.materialization.operation_id,
+                ProviderContinuationProgressPhase::Finalizing,
+            );
             persist_target_metadata(
                 state,
                 workspace_id,
@@ -866,6 +1052,12 @@ async fn execute_claude(
             .map_err(|error| error.to_string());
         }
         let evidence = if operation.phase == "recovery-required" {
+            emit_progress(
+                app,
+                workspace_id,
+                &operation.materialization.operation_id,
+                ProviderContinuationProgressPhase::VerifyingTarget,
+            );
             claude_history_bootstrap_evidence(
                 state,
                 workspace_id,
@@ -882,6 +1074,12 @@ async fn execute_claude(
             ClaudeBootstrapEvidence::Accepted | ClaudeBootstrapEvidence::BootstrapPersisted => {
                 let canonical_target_session_id =
                     format!("claude:{}", target_session_id.trim_start_matches("claude:"));
+                emit_progress(
+                    app,
+                    workspace_id,
+                    &operation.materialization.operation_id,
+                    ProviderContinuationProgressPhase::Finalizing,
+                );
                 persist_target_metadata(
                     state,
                     workspace_id,
@@ -967,18 +1165,23 @@ async fn execute_claude(
         model: destination.model.clone(),
         session_id: Some(target_native_session_id),
         continue_session: false,
+        disable_thinking: true,
         ..Default::default()
     };
     let turn_id = format!(
         "provider-continuation-{}",
         operation.materialization.operation_id
     );
-    let app_settings = state.app_settings.lock().await.clone();
+    emit_progress(
+        app,
+        workspace_id,
+        &operation.materialization.operation_id,
+        ProviderContinuationProgressPhase::DeliveringContext,
+    );
     let response = match session
-        .send_message_with_app_settings_and_provider_env(
+        .send_context_bootstrap_with_provider_env(
             params,
             &turn_id,
-            Some(&app_settings),
             provider_launch_profile.as_ref().map(|profile| &profile.env),
         )
         .await
@@ -1016,6 +1219,12 @@ async fn execute_claude(
             return Err(format!("acceptance-ambiguous: {error}"));
         }
     };
+    emit_progress(
+        app,
+        workspace_id,
+        &operation.materialization.operation_id,
+        ProviderContinuationProgressPhase::VerifyingTarget,
+    );
     if let Ok(ClaudeBootstrapEvidence::Rejected { status, message }) =
         claude_history_bootstrap_evidence(
             state,
@@ -1046,6 +1255,12 @@ async fn execute_claude(
             canonical_target_session_id
         );
     }
+    emit_progress(
+        app,
+        workspace_id,
+        &operation.materialization.operation_id,
+        ProviderContinuationProgressPhase::Finalizing,
+    );
     if let Err(error) = persist_target_metadata(
         state,
         workspace_id,
@@ -1077,6 +1292,118 @@ async fn execute_claude(
 }
 
 #[tauri::command]
+pub(crate) async fn prepare_native_provider_continuation(
+    workspace_id: String,
+    operation_id: String,
+    source: NativeHistorySource,
+    destination: ExecutionTargetInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    if crate::remote_backend::is_remote_mode(&*state).await {
+        return crate::remote_backend::call_remote(
+            &*state,
+            app,
+            "prepare_native_provider_continuation",
+            json!({
+                "workspaceId": workspace_id,
+                "operationId": operation_id,
+                "source": source,
+                "destination": destination,
+            }),
+        )
+        .await;
+    }
+    let started_at = Instant::now();
+    validate_provider_continuation_request(
+        &state,
+        &workspace_id,
+        &operation_id,
+        &source,
+        &destination,
+    )?;
+    let operation_id = operation_id.trim();
+    emit_progress(
+        &app,
+        &workspace_id,
+        operation_id,
+        ProviderContinuationProgressPhase::ReadingSource,
+    );
+
+    let (operation, package) = prepare(
+        &state,
+        &app,
+        &workspace_id,
+        operation_id,
+        &source,
+        &destination,
+    )
+    .await?;
+    let (_, degraded) = context_fidelity(&destination, &package);
+    emit_progress(
+        &app,
+        &workspace_id,
+        operation_id,
+        ProviderContinuationProgressPhase::Prepared,
+    );
+    log::info!(
+        "[native-continuation] operation_id={} action=prepare completed elapsed_ms={}",
+        operation_id,
+        started_at.elapsed().as_millis()
+    );
+    Ok(json!({
+        "status": "prepared",
+        "operation": operation,
+        "fidelity": if degraded { "degraded" } else { "strong" },
+        "sourceEstimatedTokens": package.compression.source_estimated_tokens,
+        "packageEstimatedTokens": package.compression.package_estimated_tokens,
+    }))
+}
+
+#[tauri::command]
+pub(crate) async fn discard_prepared_native_provider_continuation(
+    workspace_id: String,
+    operation_id: String,
+    source: NativeHistorySource,
+    destination: ExecutionTargetInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    if crate::remote_backend::is_remote_mode(&*state).await {
+        let response = crate::remote_backend::call_remote(
+            &*state,
+            app,
+            "discard_prepared_native_provider_continuation",
+            json!({
+                "workspaceId": workspace_id,
+                "operationId": operation_id,
+                "source": source,
+                "destination": destination,
+            }),
+        )
+        .await?;
+        return serde_json::from_value(response).map_err(|error| error.to_string());
+    }
+    validate_provider_continuation_request(
+        &state,
+        &workspace_id,
+        &operation_id,
+        &source,
+        &destination,
+    )?;
+    let operation_id = operation_id.trim();
+    let checksum = request_checksum(&source, &destination)?;
+    let discarded = delete_prepared_operation(app_data_root(&state)?, operation_id, &checksum)
+        .map_err(|error| error.to_string())?;
+    log::info!(
+        "[native-continuation] operation_id={} action=discard_prepared discarded={}",
+        operation_id,
+        discarded
+    );
+    Ok(discarded)
+}
+
+#[tauri::command]
 pub(crate) async fn create_native_provider_continuation(
     workspace_id: String,
     operation_id: String,
@@ -1101,67 +1428,38 @@ pub(crate) async fn create_native_provider_continuation(
         )
         .await;
     }
-    if operation_id.trim().is_empty() {
-        return Err("operation_id is required".to_string());
-    }
-    if source.session_id.trim().is_empty() || source.native_session_id.trim().is_empty() {
-        return Err("source session identity is required".to_string());
-    }
-    let expected_source_session_id = format!(
-        "{}:{}",
-        engine_name(source.engine),
-        source.native_session_id.trim()
+    let started_at = Instant::now();
+    validate_provider_continuation_request(
+        &state,
+        &workspace_id,
+        &operation_id,
+        &source,
+        &destination,
+    )?;
+    let operation_id = operation_id.trim();
+    emit_progress(
+        &app,
+        &workspace_id,
+        operation_id,
+        ProviderContinuationProgressPhase::ReadingSource,
     );
-    if source.session_id.trim() != expected_source_session_id {
-        return Err("source session identity does not match native session identity".to_string());
-    }
-    if destination.normalized_provider().is_none() {
-        return Err("destination provider identity is required".to_string());
-    }
-    let authoritative_provider =
-        crate::session_management::provider_profile_id_for_session_at_path(
-            state.storage_path.as_path(),
-            &workspace_id,
-            &source.session_id,
-            engine_name(source.engine),
-        )?;
-    if authoritative_provider.is_some()
-        && authoritative_provider.as_deref() != source.provider_profile_id.as_deref()
-    {
-        return Err("source provider identity changed; reload the session catalog".to_string());
-    }
-    if !matches!(destination.engine, EngineType::Codex | EngineType::Claude) {
-        return Err(
-            "unsupported-target-acceptance: target adapter cannot prove context acceptance"
-                .to_string(),
-        );
-    }
-    if source_engine_type(source.engine) == destination.engine
-        && source.provider_profile_id.as_deref() == destination.normalized_provider().as_deref()
-    {
-        return Err("destination provider must differ from the source provider".to_string());
-    }
 
     let (operation, package) = prepare(
         &state,
         &app,
         &workspace_id,
-        operation_id.trim(),
+        operation_id,
         &source,
         &destination,
     )
     .await?;
-    let adapter_dropped_entries = if destination.engine == EngineType::Codex
-        && package.manifest.mode == ProjectionMode::NativeHistoryImport
-    {
-        codex_import_projection(&package).1
-    } else {
-        0
-    };
-    let degraded = !package.manifest.omitted.is_empty()
-        || (destination.engine == EngineType::Codex
-            && package.manifest.mode != ProjectionMode::NativeHistoryImport)
-        || adapter_dropped_entries > 0;
+    let (adapter_dropped_entries, degraded) = context_fidelity(&destination, &package);
+    emit_progress(
+        &app,
+        &workspace_id,
+        operation_id,
+        ProviderContinuationProgressPhase::Prepared,
+    );
     if degraded && confirm_degraded != Some(true) {
         return Ok(json!({
             "status": "confirmation-required",
@@ -1174,6 +1472,12 @@ pub(crate) async fn create_native_provider_continuation(
             "packageEstimatedTokens": package.compression.package_estimated_tokens,
         }));
     }
+    emit_progress(
+        &app,
+        &workspace_id,
+        operation_id,
+        ProviderContinuationProgressPhase::StartingTarget,
+    );
     let operation = match destination.engine {
         EngineType::Codex => {
             execute_codex(
@@ -1187,10 +1491,29 @@ pub(crate) async fn create_native_provider_continuation(
             .await?
         }
         EngineType::Claude => {
-            execute_claude(&state, &workspace_id, operation, &destination, &package).await?
+            execute_claude(
+                &state,
+                &app,
+                &workspace_id,
+                operation,
+                &destination,
+                &package,
+            )
+            .await?
         }
         _ => unreachable!("target engine validated above"),
     };
+    emit_progress(
+        &app,
+        &workspace_id,
+        operation_id,
+        ProviderContinuationProgressPhase::Ready,
+    );
+    log::info!(
+        "[native-continuation] operation_id={} action=create completed elapsed_ms={}",
+        operation_id,
+        started_at.elapsed().as_millis()
+    );
     Ok(json!({
         "status": operation.phase,
         "operation": operation,
@@ -1204,7 +1527,7 @@ mod tests {
         claude_assistant_ack_in_jsonl, claude_bootstrap_evidence_in_jsonl, codex_context_transport,
         native_provider_source, validate_claude_model_against_catalog,
         CanonicalProviderProfileSource, ClaudeBootstrapEvidence, CodexContextTransport,
-        ProjectionMode,
+        ProjectionMode, ProviderContinuationProgressPhase,
     };
 
     #[test]
@@ -1218,6 +1541,24 @@ mod tests {
             "managed"
         );
         assert_eq!(native_provider_source(None), "disk");
+    }
+
+    #[test]
+    fn continuation_progress_milestones_are_monotonic_and_finish_at_one_hundred() {
+        let milestones = [
+            ProviderContinuationProgressPhase::ReadingSource,
+            ProviderContinuationProgressPhase::CompilingContext,
+            ProviderContinuationProgressPhase::Prepared,
+            ProviderContinuationProgressPhase::StartingTarget,
+            ProviderContinuationProgressPhase::DeliveringContext,
+            ProviderContinuationProgressPhase::VerifyingTarget,
+            ProviderContinuationProgressPhase::Finalizing,
+            ProviderContinuationProgressPhase::Ready,
+        ]
+        .map(ProviderContinuationProgressPhase::percent);
+
+        assert!(milestones.windows(2).all(|window| window[0] < window[1]));
+        assert_eq!(milestones.last(), Some(&100));
     }
 
     #[test]

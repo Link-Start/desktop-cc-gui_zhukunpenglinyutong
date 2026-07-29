@@ -211,6 +211,8 @@ pub(crate) fn invoke_handler(
         crate::shared_session_v2::shared_session_v2_turn_state,
         crate::shared_session_v2::shared_context_retrieve_artifact,
         crate::shared_session_v2::shared_context_scan_orphans,
+        crate::native_continuation::commands::prepare_native_provider_continuation,
+        crate::native_continuation::commands::discard_prepared_native_provider_continuation,
         crate::native_continuation::commands::create_native_provider_continuation,
         crate::shared_projection::commands::load_shared_projection,
         crate::shared_projection::commands::rebuild_shared_projection,

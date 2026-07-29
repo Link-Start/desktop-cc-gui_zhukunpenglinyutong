@@ -22,6 +22,23 @@ export type TerminalOutputEvent = {
 
 export type RuntimeLogLineEvent = TerminalOutputEvent;
 
+export type NativeProviderContinuationProgressPhase =
+  | "reading-source"
+  | "compiling-context"
+  | "prepared"
+  | "starting-target"
+  | "delivering-context"
+  | "verifying-target"
+  | "finalizing"
+  | "ready";
+
+export type NativeProviderContinuationProgressEvent = {
+  workspaceId: string;
+  operationId: string;
+  phase: NativeProviderContinuationProgressPhase;
+  percent: number;
+};
+
 export type DetachedExternalFileChangeEvent = {
   workspaceId: string;
   normalizedPath: string;
@@ -325,6 +342,10 @@ const runtimeLogExitedHub = createEventHub<RuntimeLogSessionSnapshot>(
 const cliInstallerHub = createEventHub<CliInstallProgressEvent>(
   "cli-installer-event",
 );
+const nativeProviderContinuationProgressHub =
+  createEventHub<NativeProviderContinuationProgressEvent>(
+    "native-provider-continuation-progress",
+  );
 const detachedExternalFileChangeHub =
   createEventHub<DetachedExternalFileChangeEvent>(
     "detached-external-file-change",
@@ -526,6 +547,13 @@ export function subscribeCliInstallerEvents(
   options?: SubscriptionOptions,
 ): Unsubscribe {
   return cliInstallerHub.subscribe(onEvent, options);
+}
+
+export function subscribeNativeProviderContinuationProgress(
+  onEvent: (event: NativeProviderContinuationProgressEvent) => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return nativeProviderContinuationProgressHub.subscribe(onEvent, options);
 }
 
 export function subscribeRuntimeLogExited(

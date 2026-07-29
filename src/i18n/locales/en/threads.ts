@@ -30,15 +30,30 @@ const threads = {
     providerContinuationFamilyGroup: "Continued sessions · {{count}}",
     providerContinuationTitle: "Continue with another Provider",
     providerContinuationDescription:
-      "The source conversation stays intact while a separate conversation continues the work.",
+      "The source stays intact while a new conversation continues the work.",
     providerContinuationSourcePreserved:
       "The source conversation will not be changed. You can return to it from the new conversation.",
-    providerContinuationCreating: "Creating…",
-    providerContinuationConfirm: "Create continuation",
-    providerContinuationDegradedTitle: "History must be degraded",
-    providerContinuationDegradedConfirm:
-      "Some history will be reduced or omitted. Confirm before creating the Provider continuation.",
-    providerContinuationConfirmDegraded: "Accept degradation and continue",
+    providerContinuationStagePrepare: "Prepare context",
+    providerContinuationStageDeliver: "Deliver context",
+    providerContinuationStageVerify: "Verify target",
+    providerContinuationStagesAriaLabel: "Continuation progress stages",
+    providerContinuationProgressAriaLabel: "Provider continuation progress",
+    providerContinuationProgressWaiting: "Waiting to prepare context",
+    providerContinuationProgressReading: "Reading the source conversation…",
+    providerContinuationProgressCompiling: "Preparing portable context…",
+    providerContinuationProgressPrepared:
+      "Context is ready. Continue to start the target.",
+    providerContinuationProgressStarting: "Starting the target Provider…",
+    providerContinuationProgressDelivering: "Delivering context…",
+    providerContinuationProgressVerifying: "Verifying the target conversation…",
+    providerContinuationProgressFinalizing: "Finalizing conversation metadata…",
+    providerContinuationProgressReady: "Continuation complete",
+    providerContinuationPreparing: "Preparing…",
+    providerContinuationContinuing: "Continuing…",
+    providerContinuationContinue: "Continue",
+    providerContinuationRetryPrepare: "Prepare again",
+    providerContinuationRetry: "Retry verification",
+    providerContinuationTechnicalDetail: "Technical details",
     providerContinuationRecoveryRequired:
       "Continuation did not finish and entered recovery. Keep the source conversation and retry.",
     providerContinuationContextAriaLabel: "Provider continuation context",
@@ -54,10 +69,7 @@ const threads = {
       "Kimi CLI · {{provider}} (target continuation is not verified)",
     providerContinuationKimiUnavailable:
       "Kimi CLI · source only; target unavailable",
-    providerContinuationProjectionMode: "History delivery mode",
     providerContinuationEstimatedTokens: "Estimated context tokens",
-    providerContinuationOmissions: "Omitted content",
-    providerContinuationAdapterDroppedEntries: "Adapter-dropped entries",
     providerContinuationErrorCode: "Error code: {{code}}",
     openClaudeTui: "Open in Claude TUI",
     claudeResumeCommandHelp:

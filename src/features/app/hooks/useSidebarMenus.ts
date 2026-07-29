@@ -4,8 +4,15 @@ import { useTranslation } from "react-i18next";
 import type { EngineType, ThreadSummary, WorkspaceInfo } from "../../../types";
 import {
   createNativeProviderContinuation,
+  discardPreparedNativeProviderContinuation,
   getOpenCodeProviderHealth,
+  prepareNativeProviderContinuation,
+  type NativeProviderContinuationInput,
 } from "../../../services/tauri";
+import {
+  subscribeNativeProviderContinuationProgress,
+  type NativeProviderContinuationProgressPhase,
+} from "../../../services/events";
 import { pushGlobalRuntimeNotice } from "../../../services/globalRuntimeNotices";
 import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import { formatByteSize } from "../../../utils/formatting";
@@ -44,6 +51,7 @@ import {
   subscribeProviderContinuationDialogRequests,
   type ProviderContinuationDialogRequest,
 } from "../../threads/services/providerContinuationRequests";
+import { isWeakSessionDisplayTitle } from "../../threads/utils/sessionDisplayProjection";
 import { toCanonicalProviderProfileSource } from "../../shared-session/target/types";
 
 const LAST_PROVIDER_PROFILE_KEYS = {
@@ -53,22 +61,22 @@ const LAST_PROVIDER_PROFILE_KEYS = {
 } as const;
 type ProviderEngine = keyof typeof LAST_PROVIDER_PROFILE_KEYS;
 
-type ProviderContinuationRequest = Parameters<
-  typeof createNativeProviderContinuation
->[0];
-
 export type ProviderContinuationDialogState = {
   workspaceId: string;
   sourceSessionId: string;
   sourceTitle: string;
   sourceLabel: string;
   destinationLabel: string;
-  request: ProviderContinuationRequest;
+  request: NativeProviderContinuationInput;
   operationKey: string;
-  stage: "confirm" | "confirm-degraded" | "running" | "error";
+  stage: "preparing" | "confirm" | "running" | "error";
+  retryAction: "prepare" | "execute" | null;
   detail: string | null;
   technicalDetail: string | null;
-  degradedAccepted: boolean;
+  sourceEstimatedTokens: number | null;
+  packageEstimatedTokens: number | null;
+  progressPhase: NativeProviderContinuationProgressPhase | null;
+  progressPercent: number;
 };
 
 function providerContinuationRecoveryMessage(errorCode: string | null): string {
@@ -238,47 +246,6 @@ export type ThreadMoveFolderTarget = {
 
 const INLINE_MOVE_FOLDER_TARGET_LIMIT = 12;
 
-function providerContinuationDegradedMessage(
-  result: Awaited<ReturnType<typeof createNativeProviderContinuation>>,
-  labels: {
-    summary: string;
-    mode: string;
-    estimatedTokens: string;
-    omissions: string;
-    adapterDroppedEntries: string;
-  },
-): string {
-  const lines = [labels.summary];
-  if (result.projectionMode) {
-    lines.push(`${labels.mode}: ${result.projectionMode}`);
-  }
-  if (
-    typeof result.sourceEstimatedTokens === "number" &&
-    typeof result.packageEstimatedTokens === "number"
-  ) {
-    lines.push(
-      `${labels.estimatedTokens}: ${result.sourceEstimatedTokens} → ${result.packageEstimatedTokens}`,
-    );
-  }
-  const omissions = (result.omissions ?? [])
-    .map(({ category, reason }) =>
-      [category, reason].filter(Boolean).join(": "),
-    )
-    .filter(Boolean);
-  if (omissions.length > 0) {
-    lines.push(
-      `${labels.omissions}:`,
-      ...omissions.map((omission) => `- ${omission}`),
-    );
-  }
-  if ((result.adapterDroppedEntries ?? 0) > 0) {
-    lines.push(
-      `${labels.adapterDroppedEntries}: ${result.adapterDroppedEntries}`,
-    );
-  }
-  return lines.join("\n");
-}
-
 function resolveEngineDisplayName(engineType: EngineType): string {
   switch (engineType) {
     case "codex":
@@ -352,7 +319,11 @@ export function useSidebarMenus({
   const workspaceOpenCodeLoginRequestIdRef = useRef<Record<string, number>>({});
   const workspaceEngineRefreshRequestIdRef = useRef<Record<string, number>>({});
   const providerContinuationOperationsRef = useRef(new Set<string>());
+  const providerContinuationPreviewOperationsRef = useRef(new Set<string>());
+  const canceledProviderContinuationOperationsRef = useRef(new Set<string>());
   const providerContinuationOperationIdsRef = useRef(new Map<string, string>());
+  const providerContinuationDialogStateRef =
+    useRef<ProviderContinuationDialogState | null>(null);
   const latestEngineOptionsRef = useRef(engineOptions);
   const [pinnedActionIds, setPinnedActionIds] = useState<string[]>(() =>
     readSidebarWorkspacePinnedActionIds(),
@@ -361,6 +332,155 @@ export function useSidebarMenus({
   useEffect(() => {
     latestEngineOptionsRef.current = engineOptions;
   }, [engineOptions]);
+
+  const replaceProviderContinuationDialog = useCallback(
+    (next: ProviderContinuationDialogState | null) => {
+      providerContinuationDialogStateRef.current = next;
+      setProviderContinuationDialogState(next);
+    },
+    [],
+  );
+
+  const discardPreparedProviderContinuation = useCallback(
+    async (dialog: ProviderContinuationDialogState) => {
+      try {
+        await discardPreparedNativeProviderContinuation(dialog.request);
+      } catch (error) {
+        console.warn(
+          `[provider-continuation] failed to discard prepared operation ${dialog.request.operationId}`,
+          error,
+        );
+      }
+    },
+    [],
+  );
+
+  useEffect(
+    () =>
+      subscribeNativeProviderContinuationProgress((event) => {
+        const current = providerContinuationDialogStateRef.current;
+        if (
+          !current ||
+          current.workspaceId !== event.workspaceId ||
+          current.request.operationId !== event.operationId
+        ) {
+          return;
+        }
+        if (!Number.isFinite(event.percent)) {
+          return;
+        }
+        const progressPercent = Math.min(
+          100,
+          Math.max(0, Math.round(event.percent)),
+        );
+        if (
+          progressPercent < current.progressPercent ||
+          (progressPercent === current.progressPercent &&
+            event.phase === current.progressPhase)
+        ) {
+          return;
+        }
+        replaceProviderContinuationDialog({
+          ...current,
+          progressPhase: event.phase,
+          progressPercent,
+        });
+      }),
+    [replaceProviderContinuationDialog],
+  );
+
+  const beginProviderContinuationPreview = useCallback(
+    async (dialog: ProviderContinuationDialogState) => {
+      const operationId = dialog.request.operationId;
+      if (
+        providerContinuationPreviewOperationsRef.current.has(operationId)
+      ) {
+        return;
+      }
+      providerContinuationPreviewOperationsRef.current.add(operationId);
+      const current = providerContinuationDialogStateRef.current;
+      if (current?.request.operationId === operationId) {
+        replaceProviderContinuationDialog({
+          ...current,
+          stage: "preparing",
+          retryAction: null,
+          detail: null,
+          technicalDetail: null,
+          progressPhase: "reading-source",
+          progressPercent: 0,
+        });
+      }
+      try {
+        const result = await prepareNativeProviderContinuation(dialog.request);
+        const latest = providerContinuationDialogStateRef.current;
+        if (
+          canceledProviderContinuationOperationsRef.current.has(operationId) ||
+          latest?.request.operationId !== operationId
+        ) {
+          await discardPreparedProviderContinuation(dialog);
+          canceledProviderContinuationOperationsRef.current.delete(operationId);
+          return;
+        }
+        if (result.status !== "prepared") {
+          throw new Error(
+            `unexpected provider continuation preview status: ${result.status}`,
+          );
+        }
+        replaceProviderContinuationDialog({
+          ...latest,
+          stage: "confirm",
+          retryAction: null,
+          detail: null,
+          technicalDetail: null,
+          sourceEstimatedTokens:
+            typeof result.sourceEstimatedTokens === "number"
+              ? result.sourceEstimatedTokens
+              : null,
+          packageEstimatedTokens:
+            typeof result.packageEstimatedTokens === "number"
+              ? result.packageEstimatedTokens
+              : null,
+          progressPhase: "prepared",
+          progressPercent: Math.max(latest.progressPercent, 32),
+        });
+      } catch (error) {
+        if (
+          canceledProviderContinuationOperationsRef.current.has(operationId)
+        ) {
+          canceledProviderContinuationOperationsRef.current.delete(operationId);
+          return;
+        }
+        const latest = providerContinuationDialogStateRef.current;
+        if (latest?.request.operationId !== operationId) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        replaceProviderContinuationDialog({
+          ...latest,
+          stage: "error",
+          retryAction: "prepare",
+          detail: providerContinuationRecoveryMessage(message),
+          technicalDetail: message,
+        });
+        pushGlobalRuntimeNotice({
+          severity: "error",
+          category: "user-action-error",
+          messageKey: "runtimeNotice.error.threadTurnFailed",
+          messageParams: {
+            engine: dialog.destinationLabel,
+            message,
+          },
+          dedupeKey: `provider-continuation-preview:${dialog.workspaceId}:${dialog.sourceSessionId}`,
+        });
+      } finally {
+        providerContinuationPreviewOperationsRef.current.delete(operationId);
+      }
+    },
+    [
+      discardPreparedProviderContinuation,
+      replaceProviderContinuationDialog,
+    ],
+  );
 
   const prepareProviderContinuationDialog = useCallback(
     (
@@ -398,12 +518,35 @@ export function useSidebarMenus({
         globalThis.crypto?.randomUUID?.() ??
         `continuation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       providerContinuationOperationIdsRef.current.set(operationKey, operationId);
-      setProviderContinuationDialogState({
+      const previous = providerContinuationDialogStateRef.current;
+      if (previous?.stage === "running") {
+        return;
+      }
+      if (previous) {
+        const previousOperationId = previous.request.operationId;
+        canceledProviderContinuationOperationsRef.current.add(previousOperationId);
+        providerContinuationOperationIdsRef.current.delete(
+          previous.operationKey,
+        );
+        void discardPreparedProviderContinuation(previous).finally(() => {
+          if (
+            !providerContinuationPreviewOperationsRef.current.has(
+              previousOperationId,
+            )
+          ) {
+            canceledProviderContinuationOperationsRef.current.delete(
+              previousOperationId,
+            );
+          }
+        });
+      }
+      const dialog: ProviderContinuationDialogState = {
         workspaceId: request.workspaceId,
         sourceSessionId: thread.id,
         sourceTitle:
-          thread.name?.trim() ||
-          t("threads.untitled", { defaultValue: "未命名会话" }),
+          !isWeakSessionDisplayTitle(thread.name)
+            ? (thread.name ?? "").trim()
+            : t("threads.untitled", { defaultValue: "未命名会话" }),
         sourceLabel: `${resolveEngineDisplayName(sourceEngine)} · ${
           thread.providerProfileName ??
           thread.providerProfileId ??
@@ -435,13 +578,24 @@ export function useSidebarMenus({
           },
         },
         operationKey,
-        stage: "confirm",
+        stage: "preparing",
+        retryAction: null,
         detail: null,
         technicalDetail: null,
-        degradedAccepted: false,
-      });
+        sourceEstimatedTokens: null,
+        packageEstimatedTokens: null,
+        progressPhase: "reading-source",
+        progressPercent: 0,
+      };
+      replaceProviderContinuationDialog(dialog);
+      void beginProviderContinuationPreview(dialog);
     },
-    [t],
+    [
+      beginProviderContinuationPreview,
+      discardPreparedProviderContinuation,
+      replaceProviderContinuationDialog,
+      t,
+    ],
   );
 
   useEffect(
@@ -472,14 +626,45 @@ export function useSidebarMenus({
   );
 
   const closeProviderContinuationDialog = useCallback(() => {
-    setProviderContinuationDialogState((current) =>
-      current?.stage === "running" ? current : null,
-    );
-  }, []);
+    const current = providerContinuationDialogStateRef.current;
+    if (!current || current.stage === "running") {
+      return;
+    }
+    replaceProviderContinuationDialog(null);
+    if (
+      current.stage === "preparing" ||
+      current.stage === "confirm" ||
+      current.retryAction === "prepare"
+    ) {
+      const operationId = current.request.operationId;
+      canceledProviderContinuationOperationsRef.current.add(operationId);
+      providerContinuationOperationIdsRef.current.delete(current.operationKey);
+      void discardPreparedProviderContinuation(current).finally(() => {
+        if (
+          !providerContinuationPreviewOperationsRef.current.has(operationId)
+        ) {
+          canceledProviderContinuationOperationsRef.current.delete(operationId);
+        }
+      });
+    }
+  }, [
+    discardPreparedProviderContinuation,
+    replaceProviderContinuationDialog,
+  ]);
 
   const confirmProviderContinuation = useCallback(async () => {
-    const dialog = providerContinuationDialogState;
-    if (!dialog || dialog.stage === "running") {
+    const dialog = providerContinuationDialogStateRef.current;
+    if (!dialog || dialog.stage === "running" || dialog.stage === "preparing") {
+      return;
+    }
+    if (dialog.stage === "error" && dialog.retryAction === "prepare") {
+      await beginProviderContinuationPreview(dialog);
+      return;
+    }
+    if (
+      dialog.stage !== "confirm" &&
+      !(dialog.stage === "error" && dialog.retryAction === "execute")
+    ) {
       return;
     }
     const guardKey = `${dialog.workspaceId}:${dialog.sourceSessionId}`;
@@ -487,77 +672,54 @@ export function useSidebarMenus({
       return;
     }
     providerContinuationOperationsRef.current.add(guardKey);
-    const degradedAccepted =
-      dialog.degradedAccepted || dialog.stage === "confirm-degraded";
-    setProviderContinuationDialogState({
+    replaceProviderContinuationDialog({
       ...dialog,
       stage: "running",
+      retryAction: null,
       detail: null,
       technicalDetail: null,
-      degradedAccepted,
+      progressPhase: "starting-target",
+      progressPercent: Math.max(dialog.progressPercent, 45),
     });
     try {
       const result = await createNativeProviderContinuation({
         ...dialog.request,
-        confirmDegraded: degradedAccepted,
+        confirmDegraded: true,
       });
-      if (result.status === "confirmation-required") {
-        setProviderContinuationDialogState({
-          ...dialog,
-          stage: "confirm-degraded",
-          degradedAccepted: false,
-          detail: providerContinuationDegradedMessage(
-            result,
-            {
-              summary: t("threads.providerContinuationDegradedConfirm", {
-                defaultValue:
-                  "部分历史会降级或省略。确认后才会创建新的 Provider 续接会话。",
-              }),
-              mode: t("threads.providerContinuationProjectionMode", {
-                defaultValue: "历史交付方式",
-              }),
-              estimatedTokens: t(
-                "threads.providerContinuationEstimatedTokens",
-                { defaultValue: "预计上下文 Token" },
-              ),
-              omissions: t("threads.providerContinuationOmissions", {
-                defaultValue: "省略内容",
-              }),
-              adapterDroppedEntries: t(
-                "threads.providerContinuationAdapterDroppedEntries",
-                { defaultValue: "适配器未接收条目" },
-              ),
-            },
-          ),
-          technicalDetail: null,
-        });
-        return;
-      }
       if (result.status === "ready" && result.operation.resultSessionId) {
         providerContinuationOperationIdsRef.current.delete(dialog.operationKey);
-        setProviderContinuationDialogState(null);
+        replaceProviderContinuationDialog(null);
         onReloadWorkspaceThreads(dialog.workspaceId);
         onSelectThread(dialog.workspaceId, result.operation.resultSessionId);
         return;
       }
-      setProviderContinuationDialogState({
-        ...dialog,
+      const latest = providerContinuationDialogStateRef.current;
+      if (latest?.request.operationId !== dialog.request.operationId) {
+        return;
+      }
+      const errorCode =
+        result.status === "confirmation-required"
+          ? "unexpected-confirmation-required"
+          : result.operation.errorCode ?? result.status;
+      replaceProviderContinuationDialog({
+        ...latest,
         stage: "error",
-        detail: providerContinuationRecoveryMessage(
-          result.operation.errorCode ?? null,
-        ),
-        technicalDetail: result.operation.errorCode?.trim() || null,
-        degradedAccepted,
+        retryAction: "execute",
+        detail: providerContinuationRecoveryMessage(errorCode),
+        technicalDetail: errorCode.trim() || null,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setProviderContinuationDialogState({
-        ...dialog,
-        stage: "error",
-        detail: providerContinuationRecoveryMessage(message),
-        technicalDetail: message,
-        degradedAccepted,
-      });
+      const latest = providerContinuationDialogStateRef.current;
+      if (latest?.request.operationId === dialog.request.operationId) {
+        replaceProviderContinuationDialog({
+          ...latest,
+          stage: "error",
+          retryAction: "execute",
+          detail: providerContinuationRecoveryMessage(message),
+          technicalDetail: message,
+        });
+      }
       pushGlobalRuntimeNotice({
         severity: "error",
         category: "user-action-error",
@@ -572,10 +734,10 @@ export function useSidebarMenus({
       providerContinuationOperationsRef.current.delete(guardKey);
     }
   }, [
+    beginProviderContinuationPreview,
     onReloadWorkspaceThreads,
     onSelectThread,
-    providerContinuationDialogState,
-    t,
+    replaceProviderContinuationDialog,
   ]);
 
   useEffect(() => {

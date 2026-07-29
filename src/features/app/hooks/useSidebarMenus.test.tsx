@@ -5,7 +5,9 @@ import type { EngineType, WorkspaceInfo } from "../../../types";
 import { useSidebarMenus } from "./useSidebarMenus";
 import {
   createNativeProviderContinuation,
+  discardPreparedNativeProviderContinuation,
   getOpenCodeProviderHealth,
+  prepareNativeProviderContinuation,
 } from "../../../services/tauri";
 import { pushGlobalRuntimeNotice } from "../../../services/globalRuntimeNotices";
 import type {
@@ -25,6 +27,17 @@ const clientStoreMock = vi.hoisted(() => ({
       [key]: value,
     };
   }),
+}));
+
+const providerContinuationEventsMock = vi.hoisted(() => ({
+  progressListener: null as
+    | ((event: {
+        workspaceId: string;
+        operationId: string;
+        phase: string;
+        percent: number;
+      }) => void)
+    | null,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -80,7 +93,25 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("../../../services/tauri", () => ({
   createNativeProviderContinuation: vi.fn(),
+  discardPreparedNativeProviderContinuation: vi.fn(),
   getOpenCodeProviderHealth: vi.fn(),
+  prepareNativeProviderContinuation: vi.fn(),
+}));
+vi.mock("../../../services/events", () => ({
+  subscribeNativeProviderContinuationProgress: vi.fn(
+    (
+      listener: NonNullable<
+        typeof providerContinuationEventsMock.progressListener
+      >,
+    ) => {
+      providerContinuationEventsMock.progressListener = listener;
+      return () => {
+        if (providerContinuationEventsMock.progressListener === listener) {
+          providerContinuationEventsMock.progressListener = null;
+        }
+      };
+    },
+  ),
 }));
 vi.mock("../../../services/globalRuntimeNotices", () => ({
   pushGlobalRuntimeNotice: vi.fn(),
@@ -93,6 +124,12 @@ vi.mock("../../../services/clientStorage", () => ({
 const getOpenCodeProviderHealthMock = vi.mocked(getOpenCodeProviderHealth);
 const createNativeProviderContinuationMock = vi.mocked(
   createNativeProviderContinuation,
+);
+const prepareNativeProviderContinuationMock = vi.mocked(
+  prepareNativeProviderContinuation,
+);
+const discardPreparedNativeProviderContinuationMock = vi.mocked(
+  discardPreparedNativeProviderContinuation,
 );
 const pushGlobalRuntimeNoticeMock = vi.mocked(pushGlobalRuntimeNotice);
 
@@ -203,6 +240,17 @@ describe("useSidebarMenus", () => {
     });
     pushGlobalRuntimeNoticeMock.mockReset();
     createNativeProviderContinuationMock.mockReset();
+    prepareNativeProviderContinuationMock.mockReset();
+    discardPreparedNativeProviderContinuationMock.mockReset();
+    prepareNativeProviderContinuationMock.mockResolvedValue({
+      status: "prepared",
+      fidelity: "strong",
+      sourceEstimatedTokens: 1200,
+      packageEstimatedTokens: 600,
+      operation: { phase: "prepared" },
+    });
+    discardPreparedNativeProviderContinuationMock.mockResolvedValue(true);
+    providerContinuationEventsMock.progressListener = null;
     getOpenCodeProviderHealthMock.mockReset();
     getOpenCodeProviderHealthMock.mockResolvedValue({
       provider: "openai",
@@ -862,25 +910,21 @@ describe("useSidebarMenus", () => {
   });
 
   it("creates a top-level provider continuation from a native thread", async () => {
-    createNativeProviderContinuationMock
-      .mockResolvedValueOnce({
-        status: "confirmation-required",
-        fidelity: "degraded",
-        projectionMode: "checkpoint",
-        sourceEstimatedTokens: 1200,
-        packageEstimatedTokens: 600,
-        omissions: [{ category: "image", reason: "unsupported" }],
-        adapterDroppedEntries: 1,
-        operation: { phase: "prepared" },
-      })
-      .mockResolvedValueOnce({
-        status: "ready",
-        fidelity: "degraded",
-        operation: {
-          phase: "ready",
-          resultSessionId: "codex:target-1",
-        },
-      });
+    prepareNativeProviderContinuationMock.mockResolvedValueOnce({
+      status: "prepared",
+      fidelity: "degraded",
+      sourceEstimatedTokens: 1200,
+      packageEstimatedTokens: 600,
+      operation: { phase: "prepared" },
+    });
+    createNativeProviderContinuationMock.mockResolvedValueOnce({
+      status: "ready",
+      fidelity: "degraded",
+      operation: {
+        phase: "ready",
+        resultSessionId: "codex:target-1",
+      },
+    });
     const handlers = {
       ...createHandlers(),
       codexProviderProfiles: [
@@ -925,21 +969,25 @@ describe("useSidebarMenus", () => {
       }
     });
 
-    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
-    expect(result.current.providerContinuationDialogState?.stage).toBe("confirm");
-    await act(async () => {
-      await result.current.confirmProviderContinuation();
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
     });
-    expect(result.current.providerContinuationDialogState?.stage).toBe(
-      "confirm-degraded",
-    );
-    expect(result.current.providerContinuationDialogState?.detail).toContain(
-      "threads.providerContinuationProjectionMode: checkpoint\nthreads.providerContinuationEstimatedTokens: 1200 → 600\nthreads.providerContinuationOmissions:\n- image: unsupported",
-    );
+    expect(prepareNativeProviderContinuationMock).toHaveBeenCalledOnce();
+    expect(result.current.providerContinuationDialogState).toMatchObject({
+      sourceEstimatedTokens: 1200,
+      packageEstimatedTokens: 600,
+      detail: null,
+      progressPhase: "prepared",
+      progressPercent: 32,
+    });
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
     await act(async () => {
       await result.current.confirmProviderContinuation();
     });
 
+    expect(createNativeProviderContinuationMock).toHaveBeenCalledOnce();
     expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "ws-1",
@@ -954,7 +1002,7 @@ describe("useSidebarMenus", () => {
         }),
       }),
     );
-    expect(createNativeProviderContinuationMock).toHaveBeenLastCalledWith(
+    expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(
       expect.objectContaining({ confirmDegraded: true }),
     );
     expect(handlers.onReloadWorkspaceThreads).toHaveBeenCalledWith("ws-1");
@@ -965,14 +1013,6 @@ describe("useSidebarMenus", () => {
   });
 
   it("does not create a continuation after the product dialog is cancelled", async () => {
-    createNativeProviderContinuationMock.mockResolvedValue({
-      status: "confirmation-required",
-      fidelity: "degraded",
-      projectionMode: "checkpoint",
-      omissions: [],
-      adapterDroppedEntries: 0,
-      operation: { phase: "prepared" },
-    });
     const handlers = {
       ...createHandlers(),
       codexProviderProfiles: [
@@ -1015,22 +1055,174 @@ describe("useSidebarMenus", () => {
       }
     });
 
-    expect(result.current.providerContinuationDialogState?.stage).toBe("confirm");
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
+    });
     expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
     act(() => {
       result.current.closeProviderContinuationDialog();
     });
     expect(result.current.providerContinuationDialogState).toBeNull();
     expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(
+        discardPreparedNativeProviderContinuationMock,
+      ).toHaveBeenCalledOnce();
+    });
     expect(handlers.onSelectThread).not.toHaveBeenCalled();
   });
 
-  it("routes Composer provider requests through the existing continuation dialog", () => {
+  it("does not reopen when a cancelled preview finishes late", async () => {
+    let resolvePreview:
+      | ((
+          value: Awaited<
+            ReturnType<typeof prepareNativeProviderContinuation>
+          >,
+        ) => void)
+      | null = null;
+    prepareNativeProviderContinuationMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvePreview = resolve;
+        }),
+    );
+    const handlers = {
+      ...createHandlers(),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      result.current.showThreadMenu(
+        {
+          clientX: 1,
+          clientY: 1,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
+        "ws-1",
+        "claude:source-1",
+        true,
+      );
+    });
+    const submenu = result.current.sidebarContextMenuState?.items.find(
+      (item) =>
+        item.type === "submenu" && item.id === "continue-with-provider",
+    );
+    act(() => {
+      if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
+        void submenu.items[0].onSelect();
+      }
+    });
+    expect(result.current.providerContinuationDialogState?.stage).toBe(
+      "preparing",
+    );
+    act(() => {
+      result.current.closeProviderContinuationDialog();
+    });
+    expect(result.current.providerContinuationDialogState).toBeNull();
+
+    await act(async () => {
+      resolvePreview?.({
+        status: "prepared",
+        fidelity: "strong",
+        sourceEstimatedTokens: 100,
+        packageEstimatedTokens: 80,
+        operation: { phase: "prepared" },
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.providerContinuationDialogState).toBeNull();
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
+    expect(
+      discardPreparedNativeProviderContinuationMock.mock.calls.length,
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("applies only progress events for the active operation", async () => {
     const handlers = {
       ...createHandlers(),
       getThreadSummary: () => ({
         id: "claude:source-1",
         name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
+    });
+    const operationId =
+      result.current.providerContinuationDialogState?.request.operationId;
+
+    act(() => {
+      providerContinuationEventsMock.progressListener?.({
+        workspaceId: "ws-1",
+        operationId: "other-operation",
+        phase: "delivering-context",
+        percent: 68,
+      });
+    });
+    expect(
+      result.current.providerContinuationDialogState?.progressPercent,
+    ).toBe(32);
+
+    act(() => {
+      providerContinuationEventsMock.progressListener?.({
+        workspaceId: "ws-1",
+        operationId: operationId ?? "",
+        phase: "delivering-context",
+        percent: 68,
+      });
+    });
+    expect(result.current.providerContinuationDialogState).toMatchObject({
+      progressPhase: "delivering-context",
+      progressPercent: 68,
+    });
+  });
+
+  it("routes Composer provider requests through the existing continuation dialog", async () => {
+    const handlers = {
+      ...createHandlers(),
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name:
+          `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +
+          `sha256:${"b".repeat(64)}`,
         updatedAt: 1,
         threadKind: "native" as const,
         engineSource: "claude" as const,
@@ -1054,24 +1246,27 @@ describe("useSidebarMenus", () => {
       });
     });
 
-    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
-    expect(result.current.providerContinuationDialogState).toMatchObject({
-      sourceSessionId: "claude:source-1",
-      sourceLabel: "Claude Code · Provider A",
-      destinationLabel: "Codex CLI · Provider B · gpt-target",
-      stage: "confirm",
-      request: {
-        source: {
-          nativeSessionId: "source-1",
-          providerProfileId: "provider-a",
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState).toMatchObject({
+        sourceSessionId: "claude:source-1",
+        sourceTitle: "threads.untitled",
+        sourceLabel: "Claude Code · Provider A",
+        destinationLabel: "Codex CLI · Provider B · gpt-target",
+        stage: "confirm",
+        request: {
+          source: {
+            nativeSessionId: "source-1",
+            providerProfileId: "provider-a",
+          },
+          destination: {
+            engine: "codex",
+            providerProfileId: "provider-b",
+            model: "gpt-target",
+          },
         },
-        destination: {
-          engine: "codex",
-          providerProfileId: "provider-b",
-          model: "gpt-target",
-        },
-      },
+      });
     });
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
     const firstOperationId =
       result.current.providerContinuationDialogState?.request.operationId;
     act(() => {
@@ -1088,21 +1283,18 @@ describe("useSidebarMenus", () => {
         },
       });
     });
-    expect(
-      result.current.providerContinuationDialogState?.request.operationId,
-    ).not.toBe(firstOperationId);
+    await waitFor(() => {
+      expect(
+        result.current.providerContinuationDialogState?.request.operationId,
+      ).not.toBe(firstOperationId);
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
+    });
   });
 
-  it("retries recovery with the accepted degraded decision", async () => {
+  it("retries recovery without a second confirmation", async () => {
     createNativeProviderContinuationMock
-      .mockResolvedValueOnce({
-        status: "confirmation-required",
-        fidelity: "degraded",
-        projectionMode: "checkpoint",
-        omissions: [],
-        adapterDroppedEntries: 0,
-        operation: { phase: "prepared" },
-      })
       .mockResolvedValueOnce({
         status: "recovery-required",
         fidelity: "degraded",
@@ -1161,19 +1353,18 @@ describe("useSidebarMenus", () => {
         await submenu.items[0].onSelect();
       }
     });
-    await act(async () => {
-      await result.current.confirmProviderContinuation();
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
     });
-    expect(result.current.providerContinuationDialogState?.stage).toBe(
-      "confirm-degraded",
-    );
     await act(async () => {
       await result.current.confirmProviderContinuation();
     });
 
     expect(result.current.providerContinuationDialogState).toMatchObject({
       stage: "error",
-      degradedAccepted: true,
+      retryAction: "execute",
       detail: expect.stringContaining("不会重复创建"),
       technicalDetail: "acceptance-ambiguous",
     });
@@ -1239,6 +1430,11 @@ describe("useSidebarMenus", () => {
       if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
         await submenu.items[0].onSelect();
       }
+    });
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
     });
     await act(async () => {
       await result.current.confirmProviderContinuation();
