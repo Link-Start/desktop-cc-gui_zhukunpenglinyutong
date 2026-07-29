@@ -29,7 +29,13 @@ function openWorkspaceActionsMenu(workspaceCard: HTMLElement) {
   act(() => {
     fireEvent.click(within(workspaceCard).getByRole("button", { name: "New Session" }));
   });
-  return screen.getByRole("menu", { name: "Workspace actions" });
+  const menu = screen.getByRole("menu", { name: "Workspace actions" });
+  act(() => {
+    fireEvent.click(
+      within(menu).getByRole("button", { name: "Workspace actions" }),
+    );
+  });
+  return menu;
 }
 
 describe("sidebarInternals", () => {
@@ -952,7 +958,11 @@ describe("Sidebar", () => {
       fireEvent.click(screen.getByRole("button", { name: "New Session" }));
       await Promise.resolve();
     });
-    fireEvent.click(screen.getByRole("menuitem", { name: "Set alias" }));
+    const menu = screen.getByRole("menu", { name: "Workspace actions" });
+    fireEvent.click(
+      within(menu).getByRole("button", { name: "Workspace actions" }),
+    );
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Set alias" }));
 
     expect(onRenameWorkspaceAlias).toHaveBeenCalledTimes(1);
     expect(onRenameWorkspaceAlias).toHaveBeenCalledWith(workspace);

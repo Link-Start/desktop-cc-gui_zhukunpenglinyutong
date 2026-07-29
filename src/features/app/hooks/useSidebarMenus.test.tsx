@@ -545,10 +545,15 @@ describe("useSidebarMenus", () => {
     });
 
     const workspaceActions =
-      result.current.workspaceMenuState?.groups.find((group) => group.id === "workspace-actions")
-        ?.actions ?? [];
+      result.current.workspaceMenuState?.groups.find(
+        (group) => group.id === "workspace-actions",
+      );
 
-    expect(workspaceActions.map((action) => action.id)).toEqual([
+    expect(workspaceActions).toMatchObject({
+      collapsible: true,
+      defaultCollapsed: true,
+    });
+    expect(workspaceActions?.actions.map((action) => action.id)).toEqual([
       "activate-workspace",
       "reload-threads",
       "toggle-exited-sessions",
@@ -560,10 +565,18 @@ describe("useSidebarMenus", () => {
     ]);
 
     act(() => {
-      workspaceActions.find((action) => action.id === "activate-workspace")?.onSelect();
-      workspaceActions.find((action) => action.id === "reload-threads")?.onSelect();
-      workspaceActions.find((action) => action.id === "toggle-exited-sessions")?.onSelect();
-      workspaceActions.find((action) => action.id === "create-session-folder")?.onSelect();
+      workspaceActions?.actions
+        .find((action) => action.id === "activate-workspace")
+        ?.onSelect();
+      workspaceActions?.actions
+        .find((action) => action.id === "reload-threads")
+        ?.onSelect();
+      workspaceActions?.actions
+        .find((action) => action.id === "toggle-exited-sessions")
+        ?.onSelect();
+      workspaceActions?.actions
+        .find((action) => action.id === "create-session-folder")
+        ?.onSelect();
     });
 
     expect(handlers.onActivateWorkspace).toHaveBeenCalledWith("ws-1");

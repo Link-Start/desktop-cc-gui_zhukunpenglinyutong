@@ -167,6 +167,8 @@ export type WorkspaceMenuGroup = {
   id: string;
   label: string;
   actions: WorkspaceMenuAction[];
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
 };
 
 export type WorkspaceMenuState = {
@@ -1560,6 +1562,8 @@ export function useSidebarMenus({
       return {
         id: "workspace-actions",
         label: t("sidebar.workspaceActionsGroup"),
+        collapsible: true,
+        defaultCollapsed: true,
         actions: [
           ...(onActivateWorkspace
             ? [

@@ -148,7 +148,11 @@ vi.mock("../../../services/toasts", () => ({
 
 function openWorkspaceActionsMenu() {
   fireEvent.click(screen.getByRole("button", { name: "New Session" }));
-  return screen.getByRole("menu", { name: "Workspace actions" });
+  const menu = screen.getByRole("menu", { name: "Workspace actions" });
+  fireEvent.click(
+    within(menu).getByRole("button", { name: "Workspace actions" }),
+  );
+  return menu;
 }
 
 vi.mock("@tauri-apps/api/window", () => ({

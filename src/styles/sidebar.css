@@ -895,6 +895,39 @@
   padding: 3px 8px 6px;
 }
 
+.sidebar-workspace-menu-group-toggle {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-workspace-menu-group-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+.sidebar-workspace-menu-group-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.sidebar-workspace-menu-group-chevron {
+  flex: 0 0 auto;
+  transition: transform 0.16s ease;
+}
+
+.sidebar-workspace-menu-group-chevron.is-expanded {
+  transform: rotate(90deg);
+}
+
 .sidebar-workspace-menu-divider,
 .renderer-context-menu-separator {
   margin: 8px 4px 2px;
