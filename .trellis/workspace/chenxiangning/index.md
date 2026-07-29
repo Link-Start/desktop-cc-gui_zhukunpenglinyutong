@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1228
+- **Total Sessions**: 1229
 - **Last Active**: 2026-07-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~1092 | Active |
+| `journal-29.md` | ~1125 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1229 | 2026-07-30 | 修复 Shared Session 终态偶发复燃 | `80b764a74` | `bump-version-0.7.12` |
 | 1228 | 2026-07-30 | Shared CLI 接入人工验收通过 | `a8fb1c45c`, `800bc2466` | `bump-version-0.7.12` |
 | 1227 | 2026-07-30 | 统一 Shared CLI 模型与运行时契约 | `800bc2466` | `bump-version-0.7.12` |
 | 1226 | 2026-07-30 | 补全 Shared CLI 创建入口 | `a8fb1c45c` | `bump-version-0.7.12` |

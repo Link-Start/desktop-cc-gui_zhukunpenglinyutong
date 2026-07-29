@@ -1090,3 +1090,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1229: 修复 Shared Session 终态偶发复燃
+
+**Date**: 2026-07-30
+**Task**: 修复 Shared Session 终态偶发复燃
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+修复 Shared durable commit 后 terminal ledger 被普通 rerender cleanup 清空的问题；用 exact runtimeTurnId 安装 frontend terminal barrier，阻止 Kimi/MiniMax 迟到事件复燃 processing，并补齐回归测试与 OpenSpec/Trellis 契约。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `80b764a74` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
