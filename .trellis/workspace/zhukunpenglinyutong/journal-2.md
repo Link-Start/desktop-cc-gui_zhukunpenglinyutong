@@ -732,3 +732,40 @@
 ### Next Steps
 
 - None - task complete
+
+---
+
+## Session 67: 快捷键面板随视口伸缩并移除侧边栏手动折叠
+
+**Date**: 2026-07-30
+**Task**: 快捷键面板随视口伸缩并移除侧边栏手动折叠
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+延续快捷键设置页改造：双栏面板从固定 `max-height: 520px` 改为随视口高度伸缩(`.settings-shortcuts-section` `height:100%` 承接 scroll-area viewport,布局 `flex: 1 1 auto` + `min-height: 0`,堆叠断点下恢复 520px 上限);内容区 padding 收紧(top 8px / bottom 16px);light 主题选中行与详情卡扁平化为 `#f9f9f9`(含 `data-theme` 与 `prefers-color-scheme` 双通道)。同时移除设置侧边栏手动折叠功能(`sidebarCollapsed` 状态、底部 toggle 按钮、`.is-collapsed` 样式),收窄改为纯响应式 ≤900px 媒体查询;10 个 locale 清理失效的 `sidebarExpand`/`sidebarCollapse` key。
+
+### Main Changes
+
+- `SettingsView.tsx`: 删除 sidebarCollapsed 状态与 toggle 按钮,导航按钮恢复常驻文案;ScrollArea 增加 `settings-content--shortcuts` 修饰类
+- `settings.part2.css`: 快捷键面板视口高度链 + light 主题扁平化填充 + 折叠样式删除
+- `settings.part2.scroll-area.test.ts`: 新增视口高度钉住的 CSS 契约断言
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5931b5cfc` | feat(settings): 快捷键面板随视口伸缩并移除侧边栏手动折叠 |
+
+### Testing
+
+- [OK] `npx vitest run src/styles/settings.part2.scroll-area.test.ts` 4/4 通过
+- [OK] `npx tsc --noEmit` 无错误
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
