@@ -1056,3 +1056,37 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1228: Shared CLI 接入人工验收通过
+
+**Date**: 2026-07-30
+**Task**: Shared CLI 接入人工验收通过
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+用户已人工验收 Shared CLI 二级创建入口，以及 Kimi、Grok、OpenCode Shared Session 接入与对话链路，并确认通过。功能代码保持为两批独立提交；当前 durable-terminal 并行改动未暂存、未混入。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a8fb1c45c` | (see git log) |
+| `800bc2466` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
