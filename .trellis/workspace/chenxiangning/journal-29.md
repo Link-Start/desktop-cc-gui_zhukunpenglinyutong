@@ -643,3 +643,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1216: 修复 Shared Session 跨 CLI 切换与终态收口
+
+**Date**: 2026-07-29
+**Task**: 修复 Shared Session 跨 CLI 切换与终态收口
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 Shared Session Claude/Codex Provider 与 Model 切换、durable terminal convergence、Claude logical result settlement、重复终态幂等、恢复与本地化收口；人工验证 Claude CLI 与 Codex CLI 交叉切换正常。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `994007b31` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
