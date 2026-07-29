@@ -5,6 +5,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 use std::path::PathBuf;
+use std::sync::{OnceLock, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::process::Command;
 use tokio::time::timeout;
@@ -20,6 +21,7 @@ const DETECTION_TIMEOUT: Duration = Duration::from_secs(10);
 const OPENCODE_MODELS_TIMEOUT: Duration = Duration::from_secs(30);
 const GENERATED_MODEL_CATALOG_JSON: &str =
     include_str!("../../../src/features/models/generatedModelCatalog.json");
+static OPENCODE_RUNTIME_MODEL_CATALOG: OnceLock<RwLock<Vec<ModelInfo>>> = OnceLock::new();
 
 #[derive(Deserialize)]
 struct GeneratedModelCatalog {
@@ -189,7 +191,10 @@ pub(crate) fn get_local_engine_models_for_validation(
         EngineType::Codex => Some(get_codex_models()),
         EngineType::Kimi => Some(get_kimi_models(get_kimi_home_dir().as_deref()).0),
         EngineType::Grok => Some(get_grok_models(get_grok_home_dir().as_deref()).0),
-        EngineType::OpenCode => Some(public_models_for_engine(EngineType::OpenCode)),
+        EngineType::OpenCode => Some(resolve_opencode_validation_catalog(
+            cached_opencode_runtime_models(),
+            public_models_for_engine(EngineType::OpenCode),
+        )),
         EngineType::Gemini => None,
     }
 }
@@ -696,7 +701,10 @@ async fn detect_opencode_status_with_options(
     let home_dir = get_opencode_home_dir();
     let (models, models_error) = if include_models {
         match get_opencode_models(&bin, path_env.as_ref()).await {
-            Ok(models) if !models.is_empty() => (models, None),
+            Ok(models) if !models.is_empty() => {
+                remember_opencode_runtime_models(&models);
+                (models, None)
+            }
             Ok(_) => (public_models_for_engine(EngineType::OpenCode), None),
             Err(err) => {
                 let fallback = public_models_for_engine(EngineType::OpenCode);
@@ -738,7 +746,9 @@ pub async fn load_opencode_models(custom_bin: Option<&str>) -> Result<Vec<ModelI
     let safe_bin = resolve_safe_opencode_binary(custom_bin)?;
     let bin = safe_bin.to_string_lossy().to_string();
     let path_env = build_codex_path_env(custom_bin);
-    get_opencode_models(&bin, path_env.as_ref()).await
+    let models = get_opencode_models(&bin, path_env.as_ref()).await?;
+    remember_opencode_runtime_models(&models);
+    Ok(models)
 }
 
 /// Detect Gemini CLI installation status
@@ -1483,6 +1493,36 @@ fn dedupe_models_preserve_order(models: Vec<ModelInfo>) -> Vec<ModelInfo> {
         }
     }
     deduped
+}
+
+fn opencode_runtime_model_catalog() -> &'static RwLock<Vec<ModelInfo>> {
+    OPENCODE_RUNTIME_MODEL_CATALOG.get_or_init(|| RwLock::new(Vec::new()))
+}
+
+fn remember_opencode_runtime_models(models: &[ModelInfo]) {
+    if models.is_empty() {
+        return;
+    }
+    let mut cached = opencode_runtime_model_catalog()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *cached = models.to_vec();
+}
+
+fn cached_opencode_runtime_models() -> Option<Vec<ModelInfo>> {
+    let cached = opencode_runtime_model_catalog()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    (!cached.is_empty()).then(|| cached.clone())
+}
+
+fn resolve_opencode_validation_catalog(
+    runtime_snapshot: Option<Vec<ModelInfo>>,
+    generated_fallback: Vec<ModelInfo>,
+) -> Vec<ModelInfo> {
+    runtime_snapshot
+        .filter(|models| !models.is_empty())
+        .unwrap_or(generated_fallback)
 }
 
 /// Query OpenCode CLI for available models.
@@ -2302,6 +2342,20 @@ opencode/gpt-5-nano
         assert!(models
             .iter()
             .any(|m| m.id == "minimax-cn-coding-plan/MiniMax-M2.5"));
+    }
+
+    #[test]
+    fn opencode_validation_prefers_runtime_snapshot_over_generated_fallback() {
+        let runtime_models =
+            parse_opencode_models_output("minimax-cn-coding-plan/MiniMax-M2.5 available\n");
+        let selected = resolve_opencode_validation_catalog(
+            Some(runtime_models),
+            public_models_for_engine(EngineType::OpenCode),
+        );
+
+        assert!(selected
+            .iter()
+            .any(|model| model.id == "minimax-cn-coding-plan/MiniMax-M2.5"));
     }
 
     #[test]
