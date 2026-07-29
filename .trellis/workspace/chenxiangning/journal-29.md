@@ -544,3 +544,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1213: 优化普通 CLI 供应商续接
+
+**Date**: 2026-07-29
+**Task**: 优化普通 CLI 供应商续接
+**Branch**: `feature/v-0710`
+
+### Summary
+
+融合 Provider 续接单次确认弹窗，增加真实阶段进度，前移上下文准备，并为 Claude continuation 启用轻量 bootstrap profile。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `93ce0a709` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

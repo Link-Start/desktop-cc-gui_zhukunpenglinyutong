@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1212
+- **Total Sessions**: 1213
 - **Last Active**: 2026-07-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~546 | Active |
+| `journal-29.md` | ~579 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1213 | 2026-07-29 | 优化普通 CLI 供应商续接 | `93ce0a709` | `feature/v-0710` |
 | 1212 | 2026-07-29 | 闭环共享会话多 CLI Provider 基石 | `29bcf6c65`, `6e08a700e`, `94c1795ac` | `feature/v-0710` |
 | 1211 | 2026-07-29 | 聚合 Provider 续接会话家族 | `ea73d6007` | `feature/v-0710` |
 | 1210 | 2026-07-28 | 稳定供应商与模型选择 | `f0c5c5e3a` | `feature/v-0710` |
