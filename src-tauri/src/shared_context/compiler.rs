@@ -273,6 +273,9 @@ fn transform_event(
 }
 
 fn transcript(entries: &[PortableContextEntry], checkpoint: bool) -> String {
+    if entries.is_empty() {
+        return String::new();
+    }
     let mut output = if checkpoint {
         "Shared Context Checkpoint\n\n".to_string()
     } else {
@@ -737,6 +740,11 @@ pub fn compile_context(
         sha256(&deterministic_json_bytes(&identity).map_err(|error| error.to_string())?);
     let marker = format!("MOSSX_CONTEXT_PACKAGE:{package_id}:{source_checksum}");
     let prompt_prefix = match mode {
+        ProjectionMode::PortableTranscript | ProjectionMode::Checkpoint
+            if projected_text.is_empty() =>
+        {
+            String::new()
+        }
         ProjectionMode::PortableTranscript | ProjectionMode::Checkpoint => {
             format!("{marker}\n{stable_prefix}\n{projected_text}\n{marker}\n")
         }
@@ -1256,6 +1264,71 @@ mod tests {
             omission.category == "provider-private-reasoning"
                 && omission.retrievable_ref.as_deref() == Some("reasoning-1")
         }));
+    }
+
+    #[test]
+    fn destination_owned_only_package_has_no_transfer_payload() {
+        let stored = |sequence: i64, event_id: &str, fact_type: &str, payload: Value| StoredEvent {
+            session_id: "session-1".to_string(),
+            sequence,
+            event_id: event_id.to_string(),
+            fact_type: fact_type.to_string(),
+            logical_turn_id: Some("turn-1".to_string()),
+            attempt_id: Some("attempt-1".to_string()),
+            dedupe_key: None,
+            payload_json: payload.to_string(),
+            payload_checksum: format!("sha256:{event_id}"),
+            fidelity: Fidelity::Canonical,
+            committed_at: sequence,
+        };
+        let events = vec![
+            stored(
+                1,
+                "requested-1",
+                "conversation.turnRequested",
+                json!({"input": {"text": "already native"}}),
+            ),
+            stored(
+                2,
+                "accepted-1",
+                "conversation.turnAccepted",
+                json!({"bindingKey": "claude::provider-a"}),
+            ),
+        ];
+        let package = compile_context(
+            &events,
+            &CompileContextRequest {
+                session_id: "session-1".to_string(),
+                binding_key: "claude::provider-a".to_string(),
+                destination: json!({"engine": "claude"}),
+                destination_native_session_id: Some("claude:native-1".to_string()),
+                from_sequence_exclusive: None,
+                through_sequence_inclusive: None,
+                exclude_attempt_id: None,
+                capabilities: RuntimeContextCapabilities {
+                    native_delta: false,
+                    structured_history_import: false,
+                    native_clone: false,
+                    user_channel_transcript: true,
+                    tool_history: false,
+                    image_history: false,
+                    strong_context_ack: true,
+                },
+                budget_estimated_tokens: None,
+            },
+        )
+        .expect("compile destination-owned package");
+
+        assert!(package.delta.is_empty());
+        assert!(package.prompt_prefix.is_empty());
+        assert_eq!(package.compression.source_estimated_tokens, 0);
+        assert_eq!(package.compression.package_estimated_tokens, 0);
+        assert!(!package.manifest.omitted.is_empty());
+        assert!(package
+            .manifest
+            .omitted
+            .iter()
+            .all(|omission| !omission.requires_confirmation()));
     }
 
     #[test]

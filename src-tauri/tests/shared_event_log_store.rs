@@ -13,7 +13,8 @@ mod common;
 
 use cc_gui_lib::shared_event_log::{
     open, AppendOutcome, BindingStateUpdate, Fidelity, LedgerOutcome, NewCanonicalEvent,
-    OpenOutcome, ProviderUsageRecord, SharedEventWriter, StoreError, USAGE_FACT_TYPE,
+    OpenOutcome, ProviderUsageRecord, SessionTargetUpdate, SharedEventWriter, StoreError,
+    USAGE_FACT_TYPE,
 };
 use common::TempStoreDir;
 
@@ -193,6 +194,35 @@ fn transaction_rolls_back_event_and_sequence_on_binding_failure() {
         .expect("binding read")
         .expect("binding exists");
     assert_eq!(binding.engine, "claude");
+}
+
+#[test]
+fn lists_all_hidden_bindings_for_one_shared_session() {
+    let temp = TempStoreDir::new("binding-list");
+    let store = open_writer(&temp.db_path).expect("open");
+
+    let first = make_binding(SESSION, "claude:provider-a");
+    let mut second = make_binding(SESSION, "codex:provider-b");
+    second.engine = "codex".to_string();
+    second.provider_profile_id = Some("provider-b".to_string());
+    second.native_session_id = Some("codex-native-b".to_string());
+    let other_session = make_binding("session-b", "claude:provider-a");
+    store.upsert_binding_state(&first).expect("first binding");
+    store.upsert_binding_state(&second).expect("second binding");
+    store
+        .upsert_binding_state(&other_session)
+        .expect("other session binding");
+
+    let bindings = store
+        .binding_states_for_session(SESSION)
+        .expect("binding list");
+    assert_eq!(bindings.len(), 2);
+    assert_eq!(bindings[0].binding_key, "claude:provider-a");
+    assert_eq!(bindings[1].binding_key, "codex:provider-b");
+    assert_eq!(
+        bindings[1].native_session_id.as_deref(),
+        Some("codex-native-b")
+    );
 }
 
 /// Scenario: repeated append returns duplicate outcome（路径 1：event_id ×100）。
@@ -578,6 +608,58 @@ fn writer_actor_serializes_concurrent_appends() {
         .binding_state(SESSION, "target-main")
         .expect("binding read")
         .is_some());
+}
+
+#[test]
+fn session_target_upsert_creates_and_updates_v2_session_row_without_advancing_sequence() {
+    let temp = TempStoreDir::new("session-target");
+    let writer = open_writer(&temp.db_path).expect("open writer");
+    writer
+        .upsert_session_target(&SessionTargetUpdate {
+            session_id: SESSION.to_string(),
+            schema_version: 2,
+            selected_target_json:
+                r#"{"engine":"codex","model":"gpt-runtime","providerProfileSource":"local"}"#
+                    .to_string(),
+            updated_at: 100,
+        })
+        .expect("create session target");
+
+    let created = writer
+        .session_target(SESSION)
+        .expect("read created target")
+        .expect("created target row");
+    assert!(created.selected_target_json.contains("\"gpt-runtime\""));
+    assert_eq!(created.updated_at, 100);
+    assert_eq!(
+        writer.next_sequence(SESSION).expect("next sequence"),
+        Some(1)
+    );
+
+    writer
+        .upsert_session_target(&SessionTargetUpdate {
+            session_id: SESSION.to_string(),
+            schema_version: 2,
+            selected_target_json:
+                r#"{"engine":"claude","model":"claude-sonnet-4-5","providerProfileSource":"local"}"#
+                    .to_string(),
+            updated_at: 200,
+        })
+        .expect("update session target");
+    let updated = writer
+        .session_target(SESSION)
+        .expect("read updated target")
+        .expect("updated target row");
+    assert!(updated
+        .selected_target_json
+        .contains("\"claude-sonnet-4-5\""));
+    assert_eq!(updated.updated_at, 200);
+    assert_eq!(
+        writer.next_sequence(SESSION).expect("next sequence"),
+        Some(1)
+    );
+
+    writer.shutdown().expect("shutdown writer");
 }
 
 #[test]

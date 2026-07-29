@@ -26,6 +26,21 @@
   color: var(--text-secondary, inherit);
 }
 
+.shared-send-status__details {
+  margin-top: 4px;
+}
+
+.shared-send-status__details summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--text-primary, inherit);
+}
+
+.shared-send-status__details ul {
+  margin: 4px 0;
+  padding-inline-start: 20px;
+}
+
 .shared-send-status__actions {
   display: flex;
   gap: 8px;

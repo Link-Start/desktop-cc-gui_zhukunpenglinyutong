@@ -32,6 +32,21 @@ describe("SharedSendStateMachine transitions", () => {
     expect(state).toBe("idle");
   });
 
+  it.each([
+    "preparing-context",
+    "degraded-context",
+    "awaiting-acceptance",
+    "cancel-pending",
+    "running",
+    "settling",
+    "recovery-required",
+  ] as const)(
+    "converges stale %s projection from durable terminal evidence",
+    (state) => {
+      expect(transition(state, { type: "terminalCommitted" })).toBe("idle");
+    },
+  );
+
   it("routes lossy projection through degraded-context with explicit confirmation", () => {
     let state: SharedSendState = transition("idle", { type: "send" })!;
     state = transition(state, { type: "lossyProjection" })!;
@@ -64,6 +79,18 @@ describe("SharedSendStateMachine transitions", () => {
 
   it("commit failure in settling enters recovery-required", () => {
     expect(transition("settling", { type: "commitFailed" })).toBe("recovery-required");
+  });
+
+  it("definitive stale Binding enters recovery from every accepted lifecycle state", () => {
+    for (const state of [
+      "awaiting-acceptance",
+      "running",
+      "settling",
+    ] as const) {
+      expect(transition(state, { type: "bindingRecoveryRequired" })).toBe(
+        "recovery-required",
+      );
+    }
   });
 
   it("recovery-required resolves through probe outcomes", () => {

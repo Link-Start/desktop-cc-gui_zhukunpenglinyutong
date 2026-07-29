@@ -73,6 +73,7 @@ shared_session_v2_dispatch_turn(
   disableThinking?, accessMode?, images?, collaborationMode?,
   preferredLanguage?, customSpecRoot?
 )
+shared_session_v2_await_turn_terminal(workspaceId, threadId, attemptId)
 shared_session_v2_commit_turn(workspaceId, threadId, attemptId)
 shared_session_v2_mark_recovery(workspaceId, threadId, attemptId, reason?)
 shared_session_v2_interrupt_turn(workspaceId, threadId, attemptId)
@@ -96,8 +97,13 @@ SharedRuntimeCoordinator.bind_runtime_turn(
 )
 SharedRuntimeCoordinator.ingest_*_event(...)
 SharedRuntimeCoordinator.drain_replay_barrier(attemptId)
+SharedRuntimeCoordinator.wait_for_settlement(attemptId, timeout)
 SharedRuntimeCoordinator.mark_cancel_intent(attemptId)
 SharedRuntimeCoordinator.clear_cancel_intent(attemptId)
+
+SharedEventWriter.binding_states_for_session(sessionId)
+list_shared_sessions(workspaceId)
+  -> SharedSessionSummary.nativeThreadIds
 ```
 
 Domain / Storage：
@@ -193,6 +199,13 @@ shared_binding_state.provisioning_json.state =
 - Claude replay user-message 中的 exact context marker 是 transport ACK。它必须在
   barrier 内立即应用并唤醒 ACK waiter；不得因等待 visible drain 形成死锁。其余
   assistant/reasoning/tool/terminal 仍保持原顺序排队。
+- Logical settlement 与 Runtime cleanup 必须分域。Claude CLI `type=result` 等 Provider
+  typed final 在 owner 已解析为 exact Shared Attempt 时，必须立即归一为 terminal
+  evidence；stdout/stderr drain、process reap、Stop hook/MCP child 退出与 post-turn
+  usage 只能作为 cleanup/补充 usage，不能延迟 Shared `run.settled`。
+- 同一 Attempt 后续迟到的 cleanup `TurnCompleted` 必须幂等吸收，不得生成第二个
+  settlement、第二个 `conversation.turnCommitted` 或重复 Assistant Final。该提升只在
+  Shared coordinator 内生效，Native Claude lifecycle 保持不变。
 - assembler 在 ordinary fan-out/drop 前收集 assistant、Reasoning、Tool
   call/result、Artifact、private refs/omissions 与 structured outcome。terminal
   exactly-once 生成 immutable settlement；canonical commit 成功后才清 Runtime owner
@@ -220,6 +233,32 @@ shared_binding_state.provisioning_json.state =
   必须可见。
 - canonical projection 默认用于新 V2 Turn；legacy Shared snapshot 使用 dual-read，
   不读取或拼接 Native CLI session files。
+- Shared dispatch terminal 收敛必须 Engine-neutral：任意 CLI 可以先返回 accepted start
+  ACK，再由 backend exact-Attempt waiter 等待 Runtime settlement 并以 durable
+  `conversation.turnCommitted` 收口。response/projected event 已携带 typed
+  `run.settled` 时只作为 presentation/fast wakeup。缺少 inline/frontend terminal event
+  本身不是 ambiguous delivery，禁止为 Claude、Codex 或未来 CLI 建立不同的 terminal
+  completion contract。
+- 带 `sharedOwner` 的 Shared V2 `turn/started` 只作为 Runtime projection evidence，
+  不得进入 generic Native lifecycle 重新设置 `activeTurnId` / processing；后续
+  assistant/reasoning/tool/error/terminal projection 仍按 Shared owner 路由。
+- Claude Shared coordinator 必须对等价 cumulative/full assistant、reasoning observation
+  与 terminal fallback 做 canonical exactly-once merge；该兼容只位于 Shared
+  accumulator，禁止改动 Native Claude event conversion 或 Codex accumulation。
+- `destination-owned` 是目标 Native history 已持有事实的去重审计，不是 lossy omission。
+  prepare status、确认 gate 与用户详情只计算 actionable omissions；零 portable delta
+  必须生成空 `promptPrefix`，不得发送空 marker 或等待不存在的 checksum echo。
+- Claude Native identity 在 coordinator boundary 必须归一为 `claude:<uuid>`；raw UUID
+  只允许作为 Adapter ingress/CLI 参数。Runtime owner key 必须包含
+  `workspace + engine + providerRuntimeKey + identity`，相同 UUID 不得跨 Provider 串线。
+- 新 Codex Binding 在 `thread/start` 前必须登记 provider-scoped provisioning hold；
+  exact thread id 已知后转为 native-session hold，最终只按 Shared owner fan-out。
+- `list_shared_sessions` 必须把 V2 `shared_binding_state.native_session_id` 与 legacy
+  `bindings_by_engine` 合并、去重后投影到 `nativeThreadIds`。Sidebar catalog exclusion
+  必须使用该 durable projection，不能依赖首次 dispatch 的 frontend memory。
+- Claude 明确返回 `No conversation found with session ID` 时，当前 Attempt 必须 exactly-once
+  failed commit，Binding 标记 `recovery-required(native-session-not-found)`，UI 只进入
+  typed Shared recovery；不得显示 raw Provider prose、自动重试或静默重建。
 - 每轮 Badge 只读 `TurnExecutionSnapshot`。Reasoning-only/tool-only completed Turn
   必须投影空正文 provenance anchor，仍显示 CLI/Provider/Model；不得伪造 assistant
   content。
@@ -260,6 +299,11 @@ shared_binding_state.provisioning_json.state =
 | 两个 caller 同时通过 idle preflight | exact 一个 admission；loser 零 optimistic/processing/RPC | read-check 当锁 |
 | Recovery Binding 无 direct Attempt | 真实 probe binding；唯一 Attempt 再 recover | 只改 UI 文案假 Probe |
 | Probe/Rebuild RPC 失败 | 保持 recovery-required + 可见错误 | 吞异常后伪装可恢复 |
+| 同 Binding 只有 `destination-owned` facts | ready + zero-delta no-op | 弹迁移确认或发送空 marker |
+| Claude raw UUID event + canonical Binding | 归一为 `claude:<uuid>` 并按 Provider scope 认领 | 新建 identity 或跨 Provider settle |
+| Codex 首发 `thread/started` 早于 start ACK | provisioning hold；exact bind 后投影 Shared | 普通 Session row 闪现 |
+| Sidebar refresh 只发现 V2 Binding | summary 从 `shared_binding_state` 输出 Native id 并排除 | 只读 V0 meta 后重新泄漏 |
+| Claude Native session 明确不存在 | failed terminal + typed Binding recovery | raw `target-provider-rejected` 或自动重发 |
 
 ### 5. Good / Base / Bad Cases
 
@@ -321,6 +365,12 @@ cargo check --manifest-path src-tauri/Cargo.toml --lib
 - Recovery Attempt/Binding Probe 均真实调用 owner API；unknown/error 不解锁。
 - context echo 不被 barrier 阻塞，assistant/reasoning/tool 不被 prompt filter 吞掉。
 - cancel intent/clear intent 分别产生 cancelled/failed。
+- destination-owned-only package 为 `ready`、`promptPrefix=""`、`0 → 0`，Runtime 只收到
+  当前用户请求。
+- Claude raw/prefixed identity、Provider A/B 隔离、早到/正常 terminal 都 exactly-once
+  settle；missing Native session 只产生 typed Binding recovery。
+- Codex 首发 provisioning event 不进入 Native fan-out；V2 Binding identity 经
+  `list_shared_sessions` 后仍从 Sidebar catalog 排除。
 - canonical reload 保留 rich blocks、outcome、per-turn provenance；legacy dual-read 不丢
   历史且不导入 Native session history。
 
@@ -387,6 +437,21 @@ coordinator.ingest(event);
 let observation = coordinator.ingest(event);
 publish_shared_runtime_observation(&observation);
 emit_projected_ui_event(event);
+```
+
+#### Wrong
+
+```rust
+let native_thread_ids = meta.bindings_by_engine.values();
+// V2 binding 只在 shared_binding_state，刷新后会泄漏普通 Session。
+```
+
+#### Correct
+
+```rust
+let native_thread_ids = legacy_native_ids
+    .chain(writer.binding_states_for_session(session_id)?.native_session_ids())
+    .dedup();
 ```
 
 ## Scenario: Shared Provider-aware Target Picker
@@ -498,6 +563,7 @@ shared_session_v2_prepare_delivery(workspaceId, threadId, attemptId)
 shared_session_v2_dispatch_turn(
   workspaceId, threadId, attemptId, artifactId, artifactChecksum, ...
 )
+shared_session_v2_await_turn_terminal(workspaceId, threadId, attemptId)
 accept_context_for_attempt_core(
   writer, sessionId, durableAttemptOwner,
   packageId, nativeSessionId, nativeRequestId?
@@ -545,6 +611,13 @@ Binding context cursor {
   额外 sync parent directory，Windows 使用 rename durability boundary，失败路径清理 temp。
 - UI 只在 prepare/confirm/ACK/terminal 等阶段边界更新；禁止 per-entry setState
   和新增 polling。
+- Shared Send 的 control completion MUST 调用 backend exact-Attempt await command，并以
+  durable `conversation.turnCommitted` 为最终成功判据。projected UI event、Agent Event
+  Bus 与 inline terminal 只能用于 rendering、notification 或 fast path，不得单独把
+  Composer 置为 idle，也不得因 listener 漏事件把已 commit Attempt 标为 recovery。
+- await command MUST 在等待前、收到 settlement signal 后、以及 coordinator owner 被
+  critical sink 清理后复查 durable fact；terminal commit/remove race 必须幂等收敛。
+  command shape 只接收 Workspace/Shared Thread/Attempt，不接收 Target 或 Runtime owner。
 
 ### 4. Validation & Error Matrix
 
@@ -560,17 +633,25 @@ Binding context cursor {
 | cross-workspace/session artifact | ownership error | 返回内容 |
 | package destination/capability/budget 改变 | 新 package id | 复用旧 artifact |
 | artifact payload 被篡改 | integrity error；prepared 且无外部副作用时隔离重写 | 返回篡改内容 |
-| degraded package 未确认 | 无 context/prompt side effect | 自动发送 |
+| valid degraded package | 记录 omissions 后自动 best-effort 发送 | 阻塞等待继续/取消确认 |
+| frontend terminal event 丢失、SQL 已 commit | durable await 返回 committed 并释放 Composer | 永久 running / 误进 recovery |
+| event sink commit 后先清 coordinator owner | await 复查 SQL 并幂等成功 | 报 attempt missing |
 
 ### 5. Good / Base / Bad Cases
 
 - Good：Tx1 写当前 user intent；compiler 只读上一条 sequence；Tx3 写 pending；
   Adapter ACK 推进 accepted；terminal commit 推进 committed。
+- Good：frontend 即使完全没收到 terminal event，backend waiter 仍被 settlement signal
+  唤醒并从 SQL 确认 commit，Shared Composer 正常回 idle。
+- Good：Claude typed `result` 到达即结算 Shared Attempt；进程和 stdio 随后独立清理，
+  迟到 `TurnCompleted` 只作为 duplicate cleanup 被忽略。
 - Base：目标只支持 transcript，UI 显示 omissions/compression，用户确认后携带
   marker 发送。
 - Bad：把 `turnCommitted.sequence` 当 context cursor；这是 runtime terminal 的
   sequence，不是 package 的 `throughSequenceInclusive`。
-- Bad：Claude process 写入成功就立即构造 fake terminal 或 context ACK。
+- Bad：把 Claude process spawn/stdin write 当 terminal 或 context ACK。
+- Bad：已经收到 Claude typed `result`，仍等待 process exit/stdout EOF/stderr drain
+  才允许 Shared Composer 结束。
 
 ### 6. Tests Required
 
@@ -583,8 +664,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib \
 cargo test --manifest-path src-tauri/Cargo.toml --lib \
   context_import_requires_jsonrpc_success
 pnpm vitest run \
-  src/features/shared-session/runtime/sendSharedSessionTurnV2.test.ts \
-  src/features/shared-session/runtime/sharedRuntimeTerminal.test.ts
+  src/features/shared-session/runtime/sendSharedSessionTurnV2.test.ts
 pnpm exec tsc --noEmit --pretty false
 ```
 
@@ -596,6 +676,8 @@ pnpm exec tsc --noEmit --pretty false
 - 当前 user prompt 不进入 prefix；accepted/committed 分阶段推进。
 - artifact cross-workspace 拒绝且读取为 reference-only。
 - strong ACK 缺失进入 recovery；弱 ACK 不伪装 exactly-once。
+- frontend terminal event 缺失时，durable commit 仍结束 Shared send；Native Session
+  tests 保持原行为。
 
 ### 7. Wrong vs Correct
 

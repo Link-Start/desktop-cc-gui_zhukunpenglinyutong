@@ -201,6 +201,7 @@ pub(crate) fn invoke_handler(
         crate::shared_session_v2::shared_session_v2_prepare_context,
         crate::shared_session_v2::shared_session_v2_prepare_delivery,
         crate::shared_session_v2::shared_session_v2_dispatch_turn,
+        crate::shared_session_v2::shared_session_v2_await_turn_terminal,
         crate::shared_session_v2::shared_session_v2_commit_turn,
         crate::shared_session_v2::shared_session_v2_mark_recovery,
         crate::shared_session_v2::shared_session_v2_cancel_attempt,

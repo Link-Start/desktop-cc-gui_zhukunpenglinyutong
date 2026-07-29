@@ -62,6 +62,10 @@ canonical projection 却 default-off，导致实时与重载后的逐轮 CLI/Pro
   显示错误。
 - 只改变 Shared Session 行为；Native Provider Continuation 仅增加 canonical/native source
   显式 adapter，不改变 History、Send 或 Runtime ownership 语义。
+- Shared Runtime terminal completion 使用 Engine-neutral contract；新增 CLI 不需要复制
+  Claude/Codex completion 特判。
+- valid degraded Context Package 自动 best-effort 发送并保留 omission diagnostics，不再
+  阻塞用户确认。
 
 ## 非目标
 
@@ -105,6 +109,11 @@ canonical projection 却 default-off，导致实时与重载后的逐轮 CLI/Pro
 - 严格隐藏 Shared Runtime prompt echo，同时保留 assistant/reasoning/tool 与
   reasoning/tool-only provenance anchor。
 - 补齐 Composer atomic admission race 与 Recovery Attempt/Binding Probe 真调用。
+- 统一 Shared CLI 的 accepted ACK + asynchronous terminal 收敛，并移除 Claude inline
+  terminal 强制条件。
+- 将 Shared degraded-context 从人工确认 gate 改为自动 best-effort delivery。
+- 将 Shared Send 的结束 authority 从 frontend transient terminal event 收回 backend：
+  exact Attempt settlement 负责唤醒，`conversation.turnCommitted` 负责最终确认。
 
 ## 技术方案取舍
 
@@ -155,6 +164,11 @@ canonical projection 却 default-off，导致实时与重载后的逐轮 CLI/Pro
 - restore RPC 跨越完整 send cycle 返回时不得用 stale evidence 把 `idle` 改回
   `running`。
 - 生产响应不依赖 synthetic `delivery.terminal`，连续两轮发送增量测试通过。
+- Claude、Codex 及未来 CLI 在 dispatch response 无 inline terminal 时均等待 exact
+  Attempt 的 backend durable terminal；frontend realtime event 即使完全缺失也不得让
+  已 commit Turn 进入虚假 recovery 或永久 running。
+- Context Package 存在可行动 omissions 时直接发送，底部不出现继续/取消确认；Manifest
+  仍保留迁移损失详情。
 - Provider/Model 不匹配在 Runtime 调用前返回 `target-unavailable`。
 - 构造 durable Snapshot=`Codex/default/gpt-*`、legacy flat fields=`kimi-for-coding`
   的 poisoned request 时，fake Runtime MUST 只收到 durable Snapshot，或在 side effect

@@ -30,6 +30,8 @@ import { sharedSessionV2InterruptTurn } from "../../shared-session/services/shar
 import {
   consumeSharedSendAdmission,
   dispatchSharedSendEvent,
+  getSharedSendActiveAttemptId,
+  getSharedSendState,
   resetSharedSendStateStoreForTests,
   setSharedSendActiveAttempt,
 } from "../../shared-session/runtime/sharedSendStateStore";
@@ -534,6 +536,51 @@ describe("useThreadMessaging", () => {
         threadId: "550e8400-e29b-41d4-a716-446655440000",
       }),
     );
+  });
+
+  it("does not revive a canonically committed Shared V2 turn from its response", async () => {
+    const sharedThreadId = "shared:thread-committed-response";
+    selectNextTarget("ws-1", sharedThreadId, {
+      engine: "claude",
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "settings-main",
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed",
+      model: "claude-provider-model",
+      reasoning: { effort: "high" },
+    });
+    vi.mocked(sendSharedSessionTurnRouted).mockResolvedValueOnce({
+      result: { turn: { id: "runtime-turn-already-completed" } },
+      nativeThreadId: "claude:native-session-1",
+      v2: {
+        attemptId: "attempt-committed",
+        logicalTurnId: "logical-turn-committed",
+        committed: true,
+        duplicate: false,
+      },
+    });
+    const { result, markProcessing, setActiveTurnId } =
+      makeThreadMessagingHook("claude", {
+        activeThreadId: sharedThreadId,
+        threadEngineById: { [sharedThreadId]: "claude" },
+      });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        sharedThreadId,
+        "finish without revival",
+      );
+    });
+
+    expect(markProcessing).toHaveBeenCalledWith(sharedThreadId, false);
+    expect(setActiveTurnId).toHaveBeenCalledWith(sharedThreadId, null);
+    expect(setActiveTurnId).not.toHaveBeenCalledWith(
+      sharedThreadId,
+      "runtime-turn-already-completed",
+    );
+    expect(engineSendMessage).not.toHaveBeenCalled();
+    expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
   it("passes custom spec root through cli engine send when configured", async () => {
@@ -1644,11 +1691,51 @@ describe("useThreadMessaging", () => {
     expect(interruptTurn).not.toHaveBeenCalled();
   });
 
-  it("fails closed when a shared V2 interrupt has no attempt owner", async () => {
+  it("converges a canonically committed Shared attempt without adding a stop notice", async () => {
+    setSharedSendActiveAttempt("ws-1", "shared:thread-1", "attempt-committed");
+    vi.mocked(sharedSessionV2InterruptTurn).mockResolvedValueOnce({
+      status: "terminal-committed",
+      attemptId: "attempt-committed",
+      sequence: 12,
+    });
+    const { result, dispatch, markProcessing, setActiveTurnId } =
+      makeThreadMessagingHook("claude", {
+        activeThreadId: "shared:thread-1",
+        ensuredThreadId: "shared:thread-1",
+        activeTurnIdByThread: { "shared:thread-1": "stale-ui-turn" },
+        threadEngineById: { "shared:thread-1": "claude" },
+      });
+
+    await act(async () => {
+      await result.current.interruptTurn();
+    });
+
+    expect(getSharedSendActiveAttemptId("ws-1", "shared:thread-1")).toBeNull();
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("idle");
+    expect(markProcessing).toHaveBeenCalledWith("shared:thread-1", false);
+    expect(setActiveTurnId).toHaveBeenCalledWith("shared:thread-1", null);
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "addAssistantMessage",
+        threadId: "shared:thread-1",
+      }),
+    );
+  });
+
+  it("clears an idle Shared V2 UI residue when the attempt owner is already released", async () => {
     const { result, markProcessing, setActiveTurnId } = makeThreadMessagingHook("claude", {
       activeThreadId: "shared:thread-1",
       ensuredThreadId: "shared:thread-1",
       activeTurnIdByThread: { "shared:thread-1": "ui-turn-1" },
+      threadStatusById: {
+        "shared:thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          processingStartedAt: 1,
+          lastDurationMs: null,
+        },
+      },
       threadEngineById: { "shared:thread-1": "claude" },
     });
 
@@ -1656,6 +1743,35 @@ describe("useThreadMessaging", () => {
       await result.current.interruptTurn();
     });
 
+    expect(sharedSessionV2InterruptTurn).not.toHaveBeenCalled();
+    expect(engineInterruptTurn).not.toHaveBeenCalled();
+    expect(engineInterrupt).not.toHaveBeenCalled();
+    expect(interruptTurn).not.toHaveBeenCalled();
+    expect(markProcessing).toHaveBeenCalledWith("shared:thread-1", false);
+    expect(setActiveTurnId).toHaveBeenCalledWith("shared:thread-1", null);
+  });
+
+  it("fails closed when a non-idle Shared V2 interrupt has no attempt owner", async () => {
+    dispatchSharedSendEvent("ws-1", "shared:thread-1", { type: "send" });
+    dispatchSharedSendEvent("ws-1", "shared:thread-1", {
+      type: "packagePrepared",
+    });
+    dispatchSharedSendEvent("ws-1", "shared:thread-1", {
+      type: "runtimeAck",
+    });
+    const { result, markProcessing, setActiveTurnId } =
+      makeThreadMessagingHook("claude", {
+        activeThreadId: "shared:thread-1",
+        ensuredThreadId: "shared:thread-1",
+        activeTurnIdByThread: { "shared:thread-1": "ui-turn-1" },
+        threadEngineById: { "shared:thread-1": "claude" },
+      });
+
+    await act(async () => {
+      await result.current.interruptTurn();
+    });
+
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("running");
     expect(sharedSessionV2InterruptTurn).not.toHaveBeenCalled();
     expect(engineInterruptTurn).not.toHaveBeenCalled();
     expect(engineInterrupt).not.toHaveBeenCalled();

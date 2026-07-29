@@ -2,9 +2,10 @@
 //!
 //! V2 dispatch 在产生 Runtime side effect 前注册 durable attempt。Runtime event 先进入本
 //! coordinator，再进入普通 UI fan-out / throttle。这里按 attempt owner 组装 terminal
-//! snapshot；frontend 只能等待 settlement，不能提供 canonical assistant content。
+//! snapshot；frontend 只能通过 backend durable await 等待 settlement，不能提供
+//! canonical assistant content，也不能把 transient UI event 当成 control authority。
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
@@ -25,6 +26,10 @@ use crate::shared_event_log::canonical::types::{
 };
 
 const MAX_UNOWNED_EVENTS: usize = 512;
+const UNCLASSIFIED_RUNTIME_FAILURE_CODE: &str = "runtime_failure_unclassified";
+/// Claude CLI 的同一完整 observation 可能同时从 streaming 与 result surface 到达。
+/// 只对足够长的 full observation 判重，避免吞掉正常的短 token/fragment。
+const CLAUDE_FULL_OBSERVATION_MIN_CHARS: usize = 24;
 #[cfg(test)]
 const TEST_PROVIDER_RUNTIME_KEY: &str = "test-provider-runtime";
 
@@ -111,6 +116,7 @@ struct CoordinatorState {
     settled_by_attempt: HashMap<String, SettledSharedRuntimeAttempt>,
     replay_barriers: HashMap<String, ReplayBarrier>,
     held_attempt_by_native_session: HashMap<RuntimeIdentityKey, String>,
+    held_provisioning_attempts_by_runtime: HashMap<RuntimeScopeKey, HashSet<String>>,
     unowned_events: VecDeque<RuntimeIngress>,
 }
 
@@ -143,6 +149,13 @@ struct RuntimeIdentityKey {
     identity: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct RuntimeScopeKey {
+    workspace_id: String,
+    engine: EngineType,
+    provider_runtime_key: String,
+}
+
 #[derive(Debug)]
 struct AttemptAccumulator {
     owner: SharedRuntimeAttemptOwner,
@@ -155,6 +168,7 @@ struct AttemptAccumulator {
     omissions: Vec<CanonicalOmission>,
     context_ack: Option<SharedRuntimeContextAck>,
     context_ack_notify: Arc<tokio::sync::Notify>,
+    settlement_notify: Arc<tokio::sync::Notify>,
     cancel_intent: bool,
     settled: bool,
 }
@@ -166,6 +180,7 @@ struct RuntimeIngress {
     provider_runtime_key: String,
     runtime_turn_id: Option<String>,
     native_session_id: Option<String>,
+    is_session_started: bool,
     actions: Vec<AccumulatorAction>,
     agent_event: Option<EngineEvent>,
     replay_app_server_events: Vec<AppServerEvent>,
@@ -226,6 +241,7 @@ impl AttemptAccumulator {
             omissions: Vec::new(),
             context_ack: None,
             context_ack_notify: Arc::new(tokio::sync::Notify::new()),
+            settlement_notify: Arc::new(tokio::sync::Notify::new()),
             cancel_intent: false,
             settled: false,
         }
@@ -237,16 +253,13 @@ impl AttemptAccumulator {
         }
         match action {
             AccumulatorAction::AssistantDelta(text) => {
-                push_assistant_block(&mut self.assistant_blocks, CanonicalBlock::Text { text });
+                self.merge_runtime_observation(CanonicalBlock::Text { text });
             }
             AccumulatorAction::AssistantSnapshot(text) => {
-                merge_complete_assistant_text(&mut self.assistant_blocks, text);
+                self.merge_complete_assistant_text(text);
             }
             AccumulatorAction::ReasoningDelta(text) => {
-                push_assistant_block(
-                    &mut self.assistant_blocks,
-                    CanonicalBlock::Reasoning { text },
-                );
+                self.merge_runtime_observation(CanonicalBlock::Reasoning { text });
             }
             AccumulatorAction::ToolStarted {
                 tool_id,
@@ -324,11 +337,22 @@ impl AttemptAccumulator {
                         .stop_reason
                         .get_or_insert_with(|| "interrupted".to_string());
                 }
+                // Canonical failed outcome 强制要求 errorCode。部分 Runtime 只返回
+                // status/message；在 lifecycle owner 的唯一收敛点补齐稳定 fallback，
+                // 同时保留 Provider 提供的真实 code。
+                if evidence.outcome == OutcomeStatus::Failed
+                    && evidence
+                        .error_code
+                        .as_ref()
+                        .is_none_or(|code| code.trim().is_empty())
+                {
+                    evidence.error_code = Some(UNCLASSIFIED_RUNTIME_FAILURE_CODE.to_string());
+                }
                 if let Some(text) = evidence
                     .fallback_text
                     .filter(|text| !text.trim().is_empty())
                 {
-                    merge_complete_assistant_text(&mut self.assistant_blocks, text);
+                    self.merge_complete_assistant_text(text);
                 }
                 extend_unique_artifacts(&mut self.artifacts, evidence.artifacts);
                 extend_unique_private_refs(
@@ -337,7 +361,7 @@ impl AttemptAccumulator {
                 );
                 extend_unique_omissions(&mut self.omissions, evidence.omissions);
                 self.settled = true;
-                return Some(SettledSharedRuntimeAttempt {
+                let settled = SettledSharedRuntimeAttempt {
                     owner: self.owner.clone(),
                     final_snapshot: RuntimeFinalSnapshot {
                         assistant_blocks: std::mem::take(&mut self.assistant_blocks),
@@ -352,10 +376,30 @@ impl AttemptAccumulator {
                         error_message: evidence.error_message,
                         stop_reason: evidence.stop_reason,
                     },
-                });
+                };
+                // backend durable waiter 与 UI event fan-out 解耦。`notify_one`
+                // 会保留 permit，覆盖 terminal 恰好发生在 waiter 注册窗口的 race。
+                self.settlement_notify.notify_one();
+                return Some(settled);
             }
         }
         None
+    }
+
+    fn merge_runtime_observation(&mut self, next: CanonicalBlock) {
+        if self.owner.engine == EngineType::Claude {
+            merge_claude_full_observation(&mut self.assistant_blocks, next);
+        } else {
+            push_assistant_block(&mut self.assistant_blocks, next);
+        }
+    }
+
+    fn merge_complete_assistant_text(&mut self, complete_text: String) {
+        if self.owner.engine == EngineType::Claude {
+            merge_claude_complete_assistant_text(&mut self.assistant_blocks, complete_text);
+        } else {
+            merge_complete_assistant_text(&mut self.assistant_blocks, complete_text);
+        }
     }
 
     fn upsert_tool_call(
@@ -394,8 +438,15 @@ impl AttemptAccumulator {
 impl SharedRuntimeCoordinator {
     pub(crate) fn register_attempt(
         &self,
-        owner: SharedRuntimeAttemptOwner,
+        mut owner: SharedRuntimeAttemptOwner,
     ) -> Result<Option<SettledSharedRuntimeAttempt>, String> {
+        if owner.native_session_id.is_some() {
+            owner.native_session_id =
+                normalize_native_session_identity(owner.engine, owner.native_session_id.as_deref());
+            if owner.native_session_id.is_none() {
+                return Err("shared runtime native session identity is empty".to_string());
+            }
+        }
         validate_owner(&owner)?;
         let mut state = self.lock();
         if let Some(existing) = state.attempts.get(&owner.attempt_id) {
@@ -443,8 +494,10 @@ impl SharedRuntimeCoordinator {
                     attempt.owner.runtime_turn_id = Some(runtime_turn_id.to_string());
                 }
             }
-            if let Some(native_session_id) = normalize_identity(native_session_id) {
-                attempt.owner.native_session_id = Some(native_session_id.to_string());
+            if let Some(native_session_id) =
+                normalize_native_session_identity(attempt.owner.engine, native_session_id)
+            {
+                attempt.owner.native_session_id = Some(native_session_id);
             }
             attempt.owner.clone()
         };
@@ -467,13 +520,14 @@ impl SharedRuntimeCoordinator {
             .attempts
             .get(attempt_id)
             .ok_or_else(|| format!("shared runtime attempt not registered: {attempt_id}"))?;
-        let native_session_id = normalize_identity(Some(native_session_id))
-            .ok_or_else(|| "shared runtime native session identity is empty".to_string())?;
+        let native_session_id =
+            normalize_native_session_identity(attempt.owner.engine, Some(native_session_id))
+                .ok_or_else(|| "shared runtime native session identity is empty".to_string())?;
         let key = RuntimeIdentityKey {
             workspace_id: attempt.owner.workspace_id.clone(),
             engine: attempt.owner.engine,
             provider_runtime_key: attempt.owner.provider_runtime_key.clone(),
-            identity: native_session_id.to_string(),
+            identity: native_session_id.clone(),
         };
         if let Some(existing) = state.held_attempt_by_native_session.get(&key) {
             if existing != attempt_id {
@@ -486,6 +540,59 @@ impl SharedRuntimeCoordinator {
             .held_attempt_by_native_session
             .insert(key, attempt_id.to_string());
         Ok(())
+    }
+
+    /// Codex `thread/start` 在 response 返回 exact thread id 前可能先发
+    /// `thread/started`。仅在同 workspace/engine/provider scope 暂存该启动事件，
+    /// 防止隐藏 Shared Binding 先进入普通 Session catalog。
+    pub(crate) fn hold_native_provisioning(&self, attempt_id: &str) -> Result<(), String> {
+        let mut state = self.lock();
+        let attempt = state
+            .attempts
+            .get(attempt_id)
+            .ok_or_else(|| format!("shared runtime attempt not registered: {attempt_id}"))?;
+        if attempt.owner.engine != EngineType::Codex {
+            return Err("native provisioning hold is only valid for Codex".to_string());
+        }
+        let scope = runtime_scope_key(&attempt.owner);
+        state
+            .held_provisioning_attempts_by_runtime
+            .entry(scope)
+            .or_default()
+            .insert(attempt_id.to_string());
+        Ok(())
+    }
+
+    /// exact native identity 已知后撤销 provider-scoped hold。当前 Attempt 的
+    /// `thread/started` 仍由 native-session hold 保护；同 scope 的非目标启动事件
+    /// 返回调用方，按原 Native 路径继续 fan-out。
+    pub(crate) fn finish_native_provisioning(
+        &self,
+        attempt_id: &str,
+    ) -> Result<Vec<AppServerEvent>, String> {
+        let mut state = self.lock();
+        let attempt = state
+            .attempts
+            .get(attempt_id)
+            .ok_or_else(|| format!("shared runtime attempt not registered: {attempt_id}"))?;
+        let scope = runtime_scope_key(&attempt.owner);
+        state.remove_provisioning_hold(attempt_id);
+
+        let mut remaining = VecDeque::new();
+        let mut native_releases = Vec::new();
+        while let Some(ingress) = state.unowned_events.pop_front() {
+            let is_unheld_start_in_scope = ingress.is_session_started
+                && runtime_scope_key_for_ingress(&ingress) == scope
+                && !state.is_exact_native_held_ingress(&ingress)
+                && !state.is_provisioning_held_ingress(&ingress);
+            if is_unheld_start_in_scope {
+                native_releases.extend(ingress.replay_app_server_events);
+            } else {
+                remaining.push_back(ingress);
+            }
+        }
+        state.unowned_events = remaining;
+        Ok(native_releases)
     }
 
     pub(crate) fn ingest_codex_event_scoped(
@@ -614,6 +721,37 @@ impl SharedRuntimeCoordinator {
             .map(|attempt| attempt.owner.clone())
     }
 
+    /// 等待 exact Attempt 的 authoritative Runtime settlement。
+    ///
+    /// 返回 `None` 表示 coordinator owner 已被其他 critical sink 清理；调用方必须
+    /// 立即复查 durable `conversation.turnCommitted`，不能把 owner removal 当失败。
+    pub(crate) async fn wait_for_settlement(
+        &self,
+        attempt_id: &str,
+        timeout: std::time::Duration,
+    ) -> Result<Option<SettledSharedRuntimeAttempt>, String> {
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            let notify = {
+                let state = self.lock();
+                if let Some(settled) = state.settled_by_attempt.get(attempt_id) {
+                    return Ok(Some(settled.clone()));
+                }
+                let Some(attempt) = state.attempts.get(attempt_id) else {
+                    return Ok(None);
+                };
+                Arc::clone(&attempt.settlement_notify)
+            };
+            tokio::time::timeout_at(deadline, notify.notified())
+                .await
+                .map_err(|_| {
+                    format!(
+                        "ambiguous-runtime: timed out waiting for terminal settlement for attempt {attempt_id}"
+                    )
+                })?;
+        }
+    }
+
     pub(crate) async fn wait_for_context_ack(
         &self,
         attempt_id: &str,
@@ -693,6 +831,22 @@ impl SharedRuntimeCoordinator {
 
     pub(crate) fn remove_attempt(&self, attempt_id: &str) {
         let mut state = self.lock();
+        if let Some(attempt) = state.attempts.get(attempt_id) {
+            // critical sink 可能先 commit SQL 再清理 coordinator。唤醒 backend
+            // waiter，让它从 durable fact 完成收敛。
+            attempt.settlement_notify.notify_one();
+        }
+        let removed_scope = state
+            .attempts
+            .get(attempt_id)
+            .map(|attempt| runtime_scope_key(&attempt.owner));
+        let removed_native_keys = state
+            .held_attempt_by_native_session
+            .iter()
+            .filter_map(|(key, mapped_attempt_id)| {
+                (mapped_attempt_id == attempt_id).then_some(key.clone())
+            })
+            .collect::<HashSet<_>>();
         state.attempts.remove(attempt_id);
         state.settled_by_attempt.remove(attempt_id);
         state.replay_barriers.remove(attempt_id);
@@ -705,6 +859,22 @@ impl SharedRuntimeCoordinator {
         state
             .attempt_by_native_session
             .retain(|_, mapped_attempt_id| mapped_attempt_id != attempt_id);
+        state.remove_provisioning_hold(attempt_id);
+        let remaining_provisioning_scopes = state
+            .held_provisioning_attempts_by_runtime
+            .keys()
+            .cloned()
+            .collect::<HashSet<_>>();
+        state.unowned_events.retain(|ingress| {
+            let removed_exact_event = native_identity_key_for_ingress(ingress)
+                .is_some_and(|key| removed_native_keys.contains(&key));
+            let removed_orphan_start = ingress.is_session_started
+                && removed_scope.as_ref().is_some_and(|scope| {
+                    runtime_scope_key_for_ingress(ingress) == scope.clone()
+                        && !remaining_provisioning_scopes.contains(scope)
+                });
+            !removed_exact_event && !removed_orphan_start
+        });
     }
 
     fn ingest(&self, ingress: RuntimeIngress) -> SharedRuntimeObservation {
@@ -720,6 +890,14 @@ impl SharedRuntimeCoordinator {
 }
 
 impl CoordinatorState {
+    fn remove_provisioning_hold(&mut self, attempt_id: &str) {
+        self.held_provisioning_attempts_by_runtime
+            .retain(|_, attempt_ids| {
+                attempt_ids.remove(attempt_id);
+                !attempt_ids.is_empty()
+            });
+    }
+
     fn update_owner_identities(
         &mut self,
         attempt_id: &str,
@@ -767,19 +945,29 @@ impl CoordinatorState {
         self.apply_ingress(&attempt_id, ingress)
     }
 
-    fn is_held_shared_ingress(&self, ingress: &RuntimeIngress) -> bool {
-        let Some(native_session_id) = ingress.native_session_id.as_deref() else {
+    fn is_exact_native_held_ingress(&self, ingress: &RuntimeIngress) -> bool {
+        let Some(key) = native_identity_key_for_ingress(ingress) else {
             return false;
-        };
-        let key = RuntimeIdentityKey {
-            workspace_id: ingress.workspace_id.clone(),
-            engine: ingress.engine,
-            provider_runtime_key: ingress.provider_runtime_key.clone(),
-            identity: native_session_id.to_string(),
         };
         self.held_attempt_by_native_session
             .get(&key)
             .is_some_and(|attempt_id| self.attempts.contains_key(attempt_id))
+    }
+
+    fn is_provisioning_held_ingress(&self, ingress: &RuntimeIngress) -> bool {
+        ingress.is_session_started
+            && self
+                .held_provisioning_attempts_by_runtime
+                .get(&runtime_scope_key_for_ingress(ingress))
+                .is_some_and(|attempt_ids| {
+                    attempt_ids
+                        .iter()
+                        .any(|attempt_id| self.attempts.contains_key(attempt_id))
+                })
+    }
+
+    fn is_held_shared_ingress(&self, ingress: &RuntimeIngress) -> bool {
+        self.is_exact_native_held_ingress(ingress) || self.is_provisioning_held_ingress(ingress)
     }
 
     fn resolve_attempt_id(&self, ingress: &RuntimeIngress) -> Option<String> {
@@ -863,6 +1051,7 @@ impl CoordinatorState {
         self.replay_barriers
             .entry(attempt_id.to_string())
             .or_default();
+        self.remove_provisioning_hold(attempt_id);
 
         let mut remaining = VecDeque::new();
         let mut owned = VecDeque::new();
@@ -872,7 +1061,10 @@ impl CoordinatorState {
                 Some(ref resolved_attempt_id) if resolved_attempt_id == attempt_id => {
                     owned.push_back(ingress);
                 }
-                _ if self.is_held_shared_ingress(&ingress) => {
+                _ if self.is_provisioning_held_ingress(&ingress) => {
+                    remaining.push_back(ingress);
+                }
+                _ if self.is_exact_native_held_ingress(&ingress) || ingress.is_session_started => {
                     native_releases.extend(ingress.replay_app_server_events);
                 }
                 _ => remaining.push_back(ingress),
@@ -1000,6 +1192,8 @@ pub(crate) fn project_app_server_event_to_shared_owner(
     event: &mut AppServerEvent,
     owner: &SharedRuntimeAttemptOwner,
 ) {
+    let requires_binding_recovery = owner.engine == EngineType::Claude
+        && is_missing_native_session_error(&event.message.to_string());
     let native_thread_id = crate::backend::app_server::extract_thread_id(&event.message)
         .filter(|thread_id| !thread_id.starts_with("shared:"))
         .or_else(|| owner.native_session_id.clone());
@@ -1060,6 +1254,12 @@ pub(crate) fn project_app_server_event_to_shared_owner(
             ),
         }),
     );
+    if requires_binding_recovery {
+        params.insert(
+            "sharedRecoveryReason".to_string(),
+            Value::String("native-session-not-found".to_string()),
+        );
+    }
 }
 
 fn execution_target_snapshot_wire(snapshot: &TurnExecutionSnapshot) -> Value {
@@ -1105,9 +1305,12 @@ fn normalize_engine_ingress(
                 engine,
                 provider_runtime_key: provider_runtime_key.to_string(),
                 runtime_turn_id: normalize_identity(runtime_turn_id).map(str::to_string),
-                native_session_id: normalize_identity(Some(session_id.as_str()))
-                    .or_else(|| normalize_identity(native_session_id))
-                    .map(str::to_string),
+                native_session_id: normalize_native_session_identity(
+                    engine,
+                    Some(session_id.as_str()),
+                )
+                .or_else(|| normalize_native_session_identity(engine, native_session_id)),
+                is_session_started: true,
                 actions,
                 agent_event: Some(event.clone()),
                 replay_app_server_events: Vec::new(),
@@ -1121,7 +1324,8 @@ fn normalize_engine_ingress(
                 runtime_turn_id: normalize_identity(Some(turn_id.as_str()))
                     .or_else(|| normalize_identity(runtime_turn_id))
                     .map(str::to_string),
-                native_session_id: normalize_identity(native_session_id).map(str::to_string),
+                native_session_id: normalize_native_session_identity(engine, native_session_id),
+                is_session_started: false,
                 actions,
                 agent_event: Some(event.clone()),
                 replay_app_server_events: Vec::new(),
@@ -1215,6 +1419,13 @@ fn normalize_engine_ingress(
                     // content。禁止进入 AgentEventBus/history/UI raw fan-out。
                     suppress_agent_event = true;
                 }
+                if let Some(terminal) = claude_result_terminal_evidence(data) {
+                    // Claude CLI 的 `result` packet 是业务回合已经结束的 typed
+                    // evidence；后续 stdout/stderr drain 与 process reap 只是 Runtime
+                    // cleanup。Native Claude 仍等待 canonical TurnCompleted，Shared
+                    // attempt 则必须在这里先收口，不能让清理延迟继续占用 Stop/UI lock。
+                    actions.push(AccumulatorAction::Terminal(terminal));
+                }
             }
             let artifacts = extract_explicit_artifact_refs(data);
             if !artifacts.is_empty() {
@@ -1228,11 +1439,91 @@ fn normalize_engine_ingress(
         engine,
         provider_runtime_key: provider_runtime_key.to_string(),
         runtime_turn_id: normalize_identity(runtime_turn_id).map(str::to_string),
-        native_session_id: normalize_identity(native_session_id).map(str::to_string),
+        native_session_id: normalize_native_session_identity(engine, native_session_id),
+        is_session_started: false,
         actions,
         agent_event: (!suppress_agent_event).then(|| event.clone()),
         replay_app_server_events: Vec::new(),
     }
+}
+
+fn claude_result_terminal_evidence(data: &Value) -> Option<TerminalEvidence> {
+    let event_type = data
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim();
+    if !event_type.eq_ignore_ascii_case("result") {
+        return None;
+    }
+
+    let subtype = data
+        .get("subtype")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    let terminal_reason = value_string_by_aliases(
+        Some(data),
+        &[
+            "terminalReason",
+            "terminal_reason",
+            "stopReason",
+            "stop_reason",
+        ],
+    );
+    let is_failed = data
+        .get("is_error")
+        .or_else(|| data.get("isError"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        || matches!(
+            subtype.as_str(),
+            "error" | "failed" | "failure" | "error_during_execution"
+        )
+        || subtype.starts_with("error_");
+
+    let fallback_text = (!is_failed)
+        .then(|| crate::engine::commands::extract_turn_result_text(Some(data)))
+        .flatten();
+    let result_text = crate::engine::commands::extract_turn_result_text(Some(data));
+    let error_message = if is_failed {
+        value_string_by_aliases(Some(data), &["errorMessage", "error_message", "message"])
+            .or_else(|| {
+                data.get("error")
+                    .and_then(|error| value_string_by_aliases(Some(error), &["message"]))
+            })
+            .or(result_text)
+    } else {
+        None
+    };
+
+    Some(TerminalEvidence {
+        outcome: if is_failed {
+            OutcomeStatus::Failed
+        } else {
+            OutcomeStatus::Completed
+        },
+        error_code: value_string_by_aliases(
+            Some(data),
+            &[
+                "apiErrorStatus",
+                "api_error_status",
+                "errorCode",
+                "error_code",
+                "code",
+            ],
+        ),
+        error_message,
+        stop_reason: terminal_reason,
+        fallback_text,
+        artifacts: extract_explicit_artifact_refs(data),
+        provider_private_refs: deserialize_vec_by_aliases(
+            Some(data),
+            &["providerPrivateRefs", "provider_private_refs"],
+        ),
+        omissions: deserialize_vec_by_aliases(Some(data), &["omissions"]),
+    })
 }
 
 /// Claude `--replay-user-messages` 回显的 Shared context marker 仅用于强 ACK。
@@ -1296,6 +1587,7 @@ fn normalize_codex_ingress(
         provider_runtime_key: provider_runtime_key.to_string(),
         runtime_turn_id,
         native_session_id,
+        is_session_started: method == "thread/started",
         actions,
         agent_event,
         replay_app_server_events: vec![AppServerEvent {
@@ -1388,6 +1680,26 @@ fn normalize_codex_structured_event(
                 .error_message
                 .clone()
                 .unwrap_or_else(|| "Codex runtime turn failed".to_string());
+            let code = evidence.error_code.clone();
+            actions.push(AccumulatorAction::Terminal(evidence));
+            Some(EngineEvent::TurnError {
+                workspace_id: workspace_id.to_string(),
+                error,
+                code,
+            })
+        }
+        "error"
+            if !params
+                .get("willRetry")
+                .or_else(|| params.get("will_retry"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false) =>
+        {
+            let evidence = terminal_evidence_from_value(params, None, true);
+            let error = evidence
+                .error_message
+                .clone()
+                .unwrap_or_else(|| "Codex runtime request failed".to_string());
             let code = evidence.error_code.clone();
             actions.push(AccumulatorAction::Terminal(evidence));
             Some(EngineEvent::TurnError {
@@ -1499,7 +1811,21 @@ fn terminal_evidence_from_value(
                 "reasonCode",
                 "reason_code",
             ],
-        ),
+        )
+        .or_else(|| {
+            value.get("error").and_then(|error| {
+                value_string_by_aliases(
+                    Some(error),
+                    &[
+                        "errorCode",
+                        "error_code",
+                        "code",
+                        "reasonCode",
+                        "reason_code",
+                    ],
+                )
+            })
+        }),
         error_message: value_string_by_aliases(
             Some(value),
             &["errorMessage", "error_message", "message"],
@@ -1530,6 +1856,99 @@ fn push_assistant_block(blocks: &mut Vec<CanonicalBlock>, next: CanonicalBlock) 
         }
         (_, next) => blocks.push(next),
     }
+}
+
+fn canonical_block_text(block: &CanonicalBlock) -> (&'static str, &str) {
+    match block {
+        CanonicalBlock::Text { text } => ("text", text),
+        CanonicalBlock::Reasoning { text } => ("reasoning", text),
+        _ => ("other", ""),
+    }
+}
+
+fn matching_block_text(blocks: &[CanonicalBlock], kind: &str) -> String {
+    blocks
+        .iter()
+        .filter_map(|block| {
+            let (block_kind, text) = canonical_block_text(block);
+            (block_kind == kind).then_some(text)
+        })
+        .collect()
+}
+
+fn is_full_claude_observation(text: &str) -> bool {
+    text.chars()
+        .filter(|character| !character.is_whitespace())
+        .count()
+        >= CLAUDE_FULL_OBSERVATION_MIN_CHARS
+}
+
+/// Claude provider adapters may expose a growing full snapshot on more than one protocol
+/// surface. This merge is intentionally scoped to the Shared accumulator: Native Claude keeps
+/// its existing reducer normalization and Codex keeps delta append semantics.
+fn merge_claude_full_observation(blocks: &mut Vec<CanonicalBlock>, next: CanonicalBlock) {
+    let (kind, incoming) = canonical_block_text(&next);
+    if kind == "other" || incoming.trim().is_empty() {
+        push_assistant_block(blocks, next);
+        return;
+    }
+
+    let existing = matching_block_text(blocks, kind);
+    if existing.is_empty() || !is_full_claude_observation(&existing) {
+        push_assistant_block(blocks, next);
+        return;
+    }
+    if incoming == existing || existing.starts_with(incoming) {
+        return;
+    }
+    if let Some(suffix) = incoming.strip_prefix(&existing) {
+        let replay_trimmed = suffix.trim_start();
+        if let Some(after_replay) = replay_trimmed.strip_prefix(&existing) {
+            if !after_replay.is_empty() {
+                let replay_free = match kind {
+                    "text" => CanonicalBlock::Text {
+                        text: after_replay.to_string(),
+                    },
+                    "reasoning" => CanonicalBlock::Reasoning {
+                        text: after_replay.to_string(),
+                    },
+                    _ => unreachable!("canonical block kind checked above"),
+                };
+                push_assistant_block(blocks, replay_free);
+            }
+            return;
+        }
+        if !suffix.is_empty() {
+            let incremental_suffix = match kind {
+                "text" => CanonicalBlock::Text {
+                    text: suffix.to_string(),
+                },
+                "reasoning" => CanonicalBlock::Reasoning {
+                    text: suffix.to_string(),
+                },
+                _ => unreachable!("canonical block kind checked above"),
+            };
+            push_assistant_block(blocks, incremental_suffix);
+        }
+        return;
+    }
+
+    push_assistant_block(blocks, next);
+}
+
+fn merge_claude_complete_assistant_text(blocks: &mut Vec<CanonicalBlock>, complete_text: String) {
+    let existing_text = matching_block_text(blocks, "text");
+    if is_full_claude_observation(&existing_text) {
+        if complete_text == existing_text || existing_text.starts_with(&complete_text) {
+            return;
+        }
+        if let Some(suffix) = complete_text.strip_prefix(&existing_text) {
+            if suffix.trim_start().starts_with(&existing_text) {
+                return;
+            }
+        }
+    }
+    merge_complete_assistant_text(blocks, complete_text);
 }
 
 /// Snapshot/terminal text 是累计完成证据。只做单调补全；无前缀关系时保留独立
@@ -1849,8 +2268,54 @@ fn identity_key(owner: &SharedRuntimeAttemptOwner, identity: &str) -> RuntimeIde
     }
 }
 
+fn runtime_scope_key(owner: &SharedRuntimeAttemptOwner) -> RuntimeScopeKey {
+    RuntimeScopeKey {
+        workspace_id: owner.workspace_id.clone(),
+        engine: owner.engine,
+        provider_runtime_key: owner.provider_runtime_key.clone(),
+    }
+}
+
+fn runtime_scope_key_for_ingress(ingress: &RuntimeIngress) -> RuntimeScopeKey {
+    RuntimeScopeKey {
+        workspace_id: ingress.workspace_id.clone(),
+        engine: ingress.engine,
+        provider_runtime_key: ingress.provider_runtime_key.clone(),
+    }
+}
+
+fn native_identity_key_for_ingress(ingress: &RuntimeIngress) -> Option<RuntimeIdentityKey> {
+    ingress
+        .native_session_id
+        .as_deref()
+        .map(|native_session_id| RuntimeIdentityKey {
+            workspace_id: ingress.workspace_id.clone(),
+            engine: ingress.engine,
+            provider_runtime_key: ingress.provider_runtime_key.clone(),
+            identity: native_session_id.to_string(),
+        })
+}
+
 fn normalize_identity(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn normalize_native_session_identity(engine: EngineType, value: Option<&str>) -> Option<String> {
+    let normalized = normalize_identity(value)?;
+    if engine != EngineType::Claude {
+        return Some(normalized.to_string());
+    }
+    let raw = normalized
+        .strip_prefix("claude:")
+        .unwrap_or(normalized)
+        .trim();
+    (!raw.is_empty()).then(|| format!("claude:{raw}"))
+}
+
+pub(crate) fn is_missing_native_session_error(error: &str) -> bool {
+    let normalized = error.to_ascii_lowercase();
+    normalized.contains("no conversation found with session id")
+        || normalized.contains("conversation not found for session id")
 }
 
 fn engine_token(engine: EngineType) -> &'static str {
@@ -1899,6 +2364,161 @@ mod tests {
             runtime_turn_id: runtime_turn_id.map(str::to_string),
             context_marker: None,
         }
+    }
+
+    fn claude_owner(
+        attempt_id: &str,
+        runtime_turn_id: Option<&str>,
+        native_session_id: Option<&str>,
+    ) -> SharedRuntimeAttemptOwner {
+        let mut owner = owner(attempt_id, runtime_turn_id, native_session_id);
+        owner.engine = EngineType::Claude;
+        owner.execution_target_snapshot.engine = "claude".to_string();
+        owner.binding_key = "claude::managed-a".to_string();
+        owner
+    }
+
+    #[test]
+    fn claude_raw_result_settles_shared_attempt_before_process_cleanup() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(claude_owner(
+                "attempt-claude-result",
+                Some("run-claude-result"),
+                Some("claude:native-claude-result"),
+            ))
+            .expect("register");
+
+        coordinator.ingest_engine_event(
+            EngineType::Claude,
+            Some("run-claude-result"),
+            Some("claude:native-claude-result"),
+            &EngineEvent::TextDelta {
+                workspace_id: "ws-1".to_string(),
+                text: "你好".to_string(),
+            },
+        );
+        let result_observation = coordinator.ingest_engine_event(
+            EngineType::Claude,
+            Some("run-claude-result"),
+            Some("claude:native-claude-result"),
+            &EngineEvent::Raw {
+                workspace_id: "ws-1".to_string(),
+                engine: EngineType::Claude,
+                data: json!({
+                    "type": "result",
+                    "subtype": "success",
+                    "is_error": false,
+                    "terminal_reason": "completed",
+                    "stop_reason": "end_turn",
+                    "result": "你好"
+                }),
+            },
+        );
+        let settled = result_observation
+            .settled
+            .expect("Claude result must settle the Shared attempt immediately");
+
+        assert_eq!(settled.final_snapshot.outcome, OutcomeStatus::Completed);
+        assert_eq!(
+            settled.final_snapshot.stop_reason.as_deref(),
+            Some("completed")
+        );
+        assert_eq!(
+            settled.final_snapshot.assistant_blocks,
+            vec![CanonicalBlock::Text {
+                text: "你好".to_string(),
+            }]
+        );
+
+        let cleanup_completion = coordinator.ingest_engine_event(
+            EngineType::Claude,
+            Some("run-claude-result"),
+            Some("claude:native-claude-result"),
+            &EngineEvent::TurnCompleted {
+                workspace_id: "ws-1".to_string(),
+                result: Some(json!({ "text": "你好" })),
+            },
+        );
+        assert!(
+            cleanup_completion.settled.is_none(),
+            "late cleanup completion must not settle or duplicate the Shared turn again"
+        );
+    }
+
+    #[test]
+    fn claude_raw_error_result_settles_shared_attempt_as_failed() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(claude_owner(
+                "attempt-claude-error-result",
+                Some("run-claude-error-result"),
+                Some("claude:native-claude-error-result"),
+            ))
+            .expect("register");
+
+        let settled = coordinator
+            .ingest_engine_event(
+                EngineType::Claude,
+                Some("run-claude-error-result"),
+                Some("claude:native-claude-error-result"),
+                &EngineEvent::Raw {
+                    workspace_id: "ws-1".to_string(),
+                    engine: EngineType::Claude,
+                    data: json!({
+                        "type": "result",
+                        "subtype": "error_during_execution",
+                        "is_error": true,
+                        "api_error_status": "rate_limited",
+                        "result": "provider request failed"
+                    }),
+                },
+            )
+            .settled
+            .expect("failed Claude result must settle the Shared attempt");
+
+        assert_eq!(settled.final_snapshot.outcome, OutcomeStatus::Failed);
+        assert_eq!(
+            settled.final_snapshot.error_code.as_deref(),
+            Some("rate_limited")
+        );
+        assert_eq!(
+            settled.final_snapshot.error_message.as_deref(),
+            Some("provider request failed")
+        );
+        assert!(settled.final_snapshot.assistant_blocks.is_empty());
+    }
+
+    #[test]
+    fn claude_non_result_raw_event_does_not_settle_shared_attempt() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(claude_owner(
+                "attempt-claude-raw-progress",
+                Some("run-claude-raw-progress"),
+                Some("claude:native-claude-raw-progress"),
+            ))
+            .expect("register");
+
+        let observation = coordinator.ingest_engine_event(
+            EngineType::Claude,
+            Some("run-claude-raw-progress"),
+            Some("claude:native-claude-raw-progress"),
+            &EngineEvent::Raw {
+                workspace_id: "ws-1".to_string(),
+                engine: EngineType::Claude,
+                data: json!({
+                    "type": "system",
+                    "subtype": "thinking_tokens",
+                    "estimated_tokens": 3
+                }),
+            },
+        );
+
+        assert!(observation.settled.is_none());
+        assert!(coordinator
+            .settled_for_attempt("attempt-claude-raw-progress")
+            .is_none());
     }
 
     #[test]
@@ -1987,6 +2607,183 @@ mod tests {
         assert_eq!(
             settled.final_snapshot.error_message.as_deref(),
             Some("provider rejected request")
+        );
+    }
+
+    #[test]
+    fn codex_non_retry_error_settles_failed_before_transport_completion() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner(
+                "attempt-provider-rejected",
+                Some("run-provider-rejected"),
+                Some("native-provider-rejected"),
+            ))
+            .expect("register");
+
+        let failed = coordinator.ingest_codex_event(
+            "ws-1",
+            &json!({
+                "method": "error",
+                "params": {
+                    "threadId": "native-provider-rejected",
+                    "turnId": "run-provider-rejected",
+                    "willRetry": false,
+                    "error": {
+                        "code": "invalid_prompt",
+                        "message": "unknown model 'gpt-5.6-sol'"
+                    }
+                }
+            }),
+        );
+        let settled = failed.settled.expect("non-retry error must settle");
+        assert_eq!(settled.final_snapshot.outcome, OutcomeStatus::Failed);
+        assert_eq!(
+            settled.final_snapshot.error_code.as_deref(),
+            Some("invalid_prompt")
+        );
+        assert_eq!(
+            settled.final_snapshot.error_message.as_deref(),
+            Some("unknown model 'gpt-5.6-sol'")
+        );
+
+        let duplicate_completion = coordinator.ingest_codex_event(
+            "ws-1",
+            &json!({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "native-provider-rejected",
+                    "turnId": "run-provider-rejected"
+                }
+            }),
+        );
+        assert!(duplicate_completion.settled.is_none());
+        assert_eq!(
+            coordinator
+                .settled_for_attempt("attempt-provider-rejected")
+                .expect("settlement retained")
+                .final_snapshot
+                .outcome,
+            OutcomeStatus::Failed
+        );
+    }
+
+    #[test]
+    fn codex_retrying_error_remains_non_terminal() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner(
+                "attempt-provider-retry",
+                Some("run-provider-retry"),
+                Some("native-provider-retry"),
+            ))
+            .expect("register");
+
+        let observation = coordinator.ingest_codex_event(
+            "ws-1",
+            &json!({
+                "method": "error",
+                "params": {
+                    "threadId": "native-provider-retry",
+                    "turnId": "run-provider-retry",
+                    "willRetry": true,
+                    "error": {
+                        "code": "rate_limited",
+                        "message": "retrying"
+                    }
+                }
+            }),
+        );
+
+        assert!(observation.settled.is_none());
+        assert!(coordinator
+            .settled_for_attempt("attempt-provider-retry")
+            .is_none());
+    }
+
+    #[test]
+    fn codex_failed_terminal_without_code_gets_canonical_fallback() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner(
+                "attempt-codex-no-code",
+                Some("run-codex-no-code"),
+                Some("native-codex-no-code"),
+            ))
+            .expect("register");
+
+        let settled = coordinator
+            .ingest_codex_event(
+                "ws-1",
+                &json!({
+                    "method": "turn/completed",
+                    "params": {
+                        "threadId": "native-codex-no-code",
+                        "turnId": "run-codex-no-code",
+                        "status": "failed",
+                        "message": "provider returned no error code"
+                    }
+                }),
+            )
+            .settled
+            .expect("settled");
+
+        assert_eq!(settled.final_snapshot.outcome, OutcomeStatus::Failed);
+        assert_eq!(
+            settled.final_snapshot.error_code.as_deref(),
+            Some(UNCLASSIFIED_RUNTIME_FAILURE_CODE)
+        );
+
+        let fact = crate::shared_event_log::canonical::assembler::assemble_turn_committed(
+            settled.owner.logical_turn_id,
+            settled.owner.attempt_id,
+            "input-codex-no-code".to_string(),
+            settled.owner.execution_target_snapshot,
+            settled.final_snapshot,
+            1,
+        )
+        .expect("assemble terminal fact");
+        crate::shared_event_log::canonical::validator::validate_fact(
+            &crate::shared_event_log::canonical::types::CanonicalFact::TurnCommitted(fact),
+        )
+        .expect("fallback terminal must satisfy canonical contract");
+    }
+
+    #[test]
+    fn engine_failed_terminal_without_code_gets_canonical_fallback() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        let mut claude_owner = owner(
+            "attempt-engine-no-code",
+            Some("run-engine-no-code"),
+            Some("native-engine-no-code"),
+        );
+        claude_owner.engine = EngineType::Claude;
+        claude_owner.execution_target_snapshot.engine = "claude".to_string();
+        claude_owner.binding_key = "claude::managed-a".to_string();
+        coordinator
+            .register_attempt(claude_owner)
+            .expect("register");
+
+        let settled = coordinator
+            .ingest_engine_event(
+                EngineType::Claude,
+                Some("run-engine-no-code"),
+                Some("native-engine-no-code"),
+                &EngineEvent::TurnCompleted {
+                    workspace_id: "ws-1".to_string(),
+                    result: Some(json!({
+                        "status": "failed",
+                        "message": "runtime returned no error code"
+                    })),
+                },
+            )
+            .settled
+            .expect("settled");
+
+        assert_eq!(settled.final_snapshot.outcome, OutcomeStatus::Failed);
+        assert_eq!(
+            settled.final_snapshot.error_code.as_deref(),
+            Some(UNCLASSIFIED_RUNTIME_FAILURE_CODE)
         );
     }
 
@@ -2341,6 +3138,107 @@ mod tests {
     }
 
     #[test]
+    fn claude_equivalent_full_observations_and_terminal_fallback_are_canonicalized_once() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        let mut claude_owner = owner("attempt-claude-dedup", Some("run-1"), Some("native-1"));
+        claude_owner.engine = EngineType::Claude;
+        claude_owner.execution_target_snapshot.engine = "claude".to_string();
+        claude_owner.binding_key = "claude::managed-a".to_string();
+        coordinator
+            .register_attempt(claude_owner)
+            .expect("register");
+
+        let reasoning =
+            "This is one complete reasoning observation that must only be persisted once.";
+        let answer =
+            "这是一个足够长的完整回答，用来验证 Claude Shared 的重复 observation 只会持久化一次。";
+        for text in [reasoning, reasoning] {
+            coordinator.ingest_engine_event(
+                EngineType::Claude,
+                Some("run-1"),
+                Some("native-1"),
+                &EngineEvent::ReasoningDelta {
+                    workspace_id: "ws-1".to_string(),
+                    text: text.to_string(),
+                },
+            );
+        }
+        for text in [answer, answer] {
+            coordinator.ingest_engine_event(
+                EngineType::Claude,
+                Some("run-1"),
+                Some("native-1"),
+                &EngineEvent::TextDelta {
+                    workspace_id: "ws-1".to_string(),
+                    text: text.to_string(),
+                },
+            );
+        }
+
+        let settled = coordinator
+            .ingest_engine_event(
+                EngineType::Claude,
+                Some("run-1"),
+                Some("native-1"),
+                &EngineEvent::TurnCompleted {
+                    workspace_id: "ws-1".to_string(),
+                    result: Some(json!({"text": format!("{answer}{answer}")})),
+                },
+            )
+            .settled
+            .expect("settled");
+
+        assert_eq!(
+            settled.final_snapshot.assistant_blocks,
+            vec![
+                CanonicalBlock::Reasoning {
+                    text: reasoning.to_string(),
+                },
+                CanonicalBlock::Text {
+                    text: answer.to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn codex_equivalent_deltas_keep_existing_append_semantics() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner(
+                "attempt-codex-append",
+                Some("run-1"),
+                Some("native-1"),
+            ))
+            .expect("register");
+        let answer = "This long Codex delta is intentionally sent twice to preserve its semantics.";
+        for _ in 0..2 {
+            coordinator.ingest_codex_event(
+                "ws-1",
+                &json!({
+                    "method": "item/agentMessage/delta",
+                    "params": {"threadId": "native-1", "turnId": "run-1", "delta": answer}
+                }),
+            );
+        }
+        let settled = coordinator
+            .ingest_codex_event(
+                "ws-1",
+                &json!({
+                    "method": "turn/completed",
+                    "params": {"threadId": "native-1", "turnId": "run-1"}
+                }),
+            )
+            .settled
+            .expect("settled");
+
+        assert!(matches!(
+            settled.final_snapshot.assistant_blocks.as_slice(),
+            [CanonicalBlock::Text { text }] if text == &format!("{answer}{answer}")
+        ));
+    }
+
+    #[test]
     fn partial_delta_is_monotonically_completed_by_full_terminal_text() {
         let coordinator = SharedRuntimeCoordinator::default();
         let mut claude_owner = owner("attempt-1", Some("run-1"), Some("native-1"));
@@ -2454,6 +3352,69 @@ mod tests {
 
         let restarted = SharedRuntimeCoordinator::default();
         assert!(!restarted.owns_attempt("attempt-1"));
+    }
+
+    #[tokio::test]
+    async fn settlement_wait_is_exact_attempt_scoped_and_survives_early_terminal() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner("attempt-a", Some("run-a"), Some("native-a")))
+            .expect("register attempt a");
+        coordinator
+            .register_attempt(owner("attempt-b", Some("run-b"), Some("native-b")))
+            .expect("register attempt b");
+
+        coordinator.ingest_codex_event(
+            "ws-1",
+            &json!({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "native-b",
+                    "turnId": "run-b"
+                }
+            }),
+        );
+        let unrelated = coordinator
+            .wait_for_settlement("attempt-a", std::time::Duration::from_millis(5))
+            .await
+            .expect_err("attempt b terminal must not settle attempt a");
+        assert!(unrelated.contains("timed out waiting for terminal settlement"));
+
+        coordinator.ingest_codex_event(
+            "ws-1",
+            &json!({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "native-a",
+                    "turnId": "run-a"
+                }
+            }),
+        );
+        let settled = coordinator
+            .wait_for_settlement("attempt-a", std::time::Duration::from_millis(5))
+            .await
+            .expect("early terminal must leave a waiter permit")
+            .expect("settlement retained");
+        assert_eq!(settled.owner.attempt_id, "attempt-a");
+    }
+
+    #[tokio::test]
+    async fn settlement_wait_returns_none_after_critical_sink_removes_owner() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner(
+                "attempt-removed",
+                Some("run-removed"),
+                Some("native-removed"),
+            ))
+            .expect("register");
+        coordinator.remove_attempt("attempt-removed");
+
+        assert!(coordinator
+            .wait_for_settlement("attempt-removed", std::time::Duration::from_millis(5),)
+            .await
+            .expect("owner removal is a durable recheck signal")
+            .is_none());
     }
 
     #[tokio::test]
@@ -2580,7 +3541,7 @@ mod tests {
                 &EngineEvent::TurnError {
                     workspace_id: "ws-1".to_string(),
                     error: "interrupted by user".to_string(),
-                    code: Some("turn_aborted".to_string()),
+                    code: None,
                 },
             )
             .settled
@@ -2590,6 +3551,7 @@ mod tests {
             settled.final_snapshot.stop_reason.as_deref(),
             Some("interrupted")
         );
+        assert_eq!(settled.final_snapshot.error_code, None);
     }
 
     #[test]
@@ -2621,6 +3583,10 @@ mod tests {
             .settled
             .expect("settled");
         assert_eq!(settled.final_snapshot.outcome, OutcomeStatus::Failed);
+        assert_eq!(
+            settled.final_snapshot.error_code.as_deref(),
+            Some("provider_error")
+        );
     }
 
     #[test]
@@ -2707,6 +3673,161 @@ mod tests {
             vec![CanonicalBlock::Text {
                 text: "answer-b".to_string(),
             }]
+        );
+    }
+
+    #[test]
+    fn claude_raw_native_identity_is_canonical_and_provider_scoped() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        let claude_owner = |attempt_id: &str, provider: &str| {
+            let mut value = owner(attempt_id, Some("turn-1"), Some("claude:session-1"));
+            value.engine = EngineType::Claude;
+            value.provider_runtime_key = format!("claude::ws-1::{provider}");
+            value.binding_key = format!("claude::{provider}");
+            value.execution_target_snapshot.engine = "claude".to_string();
+            value.execution_target_snapshot.provider_profile_id = Some(provider.to_string());
+            value
+        };
+        coordinator
+            .register_attempt(claude_owner("attempt-claude-a", "provider-a"))
+            .expect("provider A owner");
+        coordinator
+            .register_attempt(claude_owner("attempt-claude-b", "provider-b"))
+            .expect("provider B owner");
+
+        for (provider, text) in [("provider-a", "answer-a"), ("provider-b", "answer-b")] {
+            let observation = coordinator.ingest_engine_event_scoped(
+                &format!("claude::ws-1::{provider}"),
+                EngineType::Claude,
+                Some("turn-1"),
+                Some("session-1"),
+                &EngineEvent::TextDelta {
+                    workspace_id: "ws-1".to_string(),
+                    text: text.to_string(),
+                },
+            );
+            assert_eq!(
+                observation
+                    .owner
+                    .as_ref()
+                    .and_then(|owner| owner.native_session_id.as_deref()),
+                Some("claude:session-1")
+            );
+        }
+
+        let settled_a = coordinator
+            .ingest_engine_event_scoped(
+                "claude::ws-1::provider-a",
+                EngineType::Claude,
+                Some("turn-1"),
+                Some("session-1"),
+                &EngineEvent::TurnCompleted {
+                    workspace_id: "ws-1".to_string(),
+                    result: Some(json!({"status": "completed"})),
+                },
+            )
+            .settled
+            .expect("provider A settled");
+        let settled_b = coordinator
+            .ingest_engine_event_scoped(
+                "claude::ws-1::provider-b",
+                EngineType::Claude,
+                Some("turn-1"),
+                Some("session-1"),
+                &EngineEvent::TurnCompleted {
+                    workspace_id: "ws-1".to_string(),
+                    result: Some(json!({"status": "completed"})),
+                },
+            )
+            .settled
+            .expect("provider B settled");
+
+        assert_eq!(settled_a.owner.attempt_id, "attempt-claude-a");
+        assert_eq!(settled_b.owner.attempt_id, "attempt-claude-b");
+        assert_eq!(
+            settled_a.owner.native_session_id.as_deref(),
+            Some("claude:session-1")
+        );
+        assert_eq!(
+            settled_b.owner.native_session_id.as_deref(),
+            Some("claude:session-1")
+        );
+    }
+
+    #[test]
+    fn codex_provisioning_holds_first_thread_until_shared_binding() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner("attempt-provision", None, None))
+            .expect("register");
+        coordinator
+            .hold_native_provisioning("attempt-provision")
+            .expect("hold provisioning");
+
+        let early = coordinator.ingest_codex_event(
+            "ws-1",
+            &json!({
+                "method": "thread/started",
+                "params": {"thread": {"id": "native-provision"}}
+            }),
+        );
+        assert!(early.ui_fanout_deferred);
+
+        coordinator
+            .hold_native_session("attempt-provision", "native-provision")
+            .expect("hold exact native session");
+        assert!(coordinator
+            .finish_native_provisioning("attempt-provision")
+            .expect("finish provisioning")
+            .is_empty());
+        coordinator
+            .bind_runtime_turn(
+                "attempt-provision",
+                Some("run-provision"),
+                Some("native-provision"),
+            )
+            .expect("bind exact runtime");
+        let batch = coordinator
+            .drain_replay_barrier("attempt-provision")
+            .expect("drain");
+        let projected = batch
+            .deliveries
+            .iter()
+            .flat_map(|delivery| delivery.app_server_events.iter())
+            .find(|event| event.message["method"] == "thread/started")
+            .expect("projected thread/started");
+        assert_eq!(projected.message["params"]["threadId"], "shared:session-1");
+        assert_eq!(
+            projected.message["params"]["nativeThreadId"],
+            "native-provision"
+        );
+    }
+
+    #[test]
+    fn projected_missing_claude_session_has_typed_recovery_reason() {
+        let mut claude_owner = owner(
+            "attempt-missing-session",
+            Some("run-missing-session"),
+            Some("claude:missing-session"),
+        );
+        claude_owner.engine = EngineType::Claude;
+        claude_owner.execution_target_snapshot.engine = "claude".to_string();
+        let mut event = AppServerEvent {
+            workspace_id: "ws-1".to_string(),
+            message: json!({
+                "method": "turn/error",
+                "params": {
+                    "threadId": "missing-session",
+                    "error": "No conversation found with session ID: missing-session"
+                }
+            }),
+        };
+
+        project_app_server_event_to_shared_owner(&mut event, &claude_owner);
+
+        assert_eq!(
+            event.message["params"]["sharedRecoveryReason"],
+            "native-session-not-found"
         );
     }
 

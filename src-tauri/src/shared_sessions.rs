@@ -14,6 +14,7 @@ use crate::app_paths;
 use crate::codex;
 use crate::engine::{self, EngineType};
 use crate::shared::codex_core;
+use crate::shared_event_log::{SessionTargetUpdate, SharedEventWriter};
 use crate::state::AppState;
 
 const SHARED_SESSIONS_DIRNAME: &str = "shared-sessions";
@@ -657,6 +658,7 @@ fn write_shared_session_selection(
     shared_session_id: &str,
     target: &SharedSelectedTarget,
     updated_at: u64,
+    writer: &SharedEventWriter,
 ) -> Result<SharedSelectedTarget, String> {
     let path = shared_session_meta_path(workspace_id, shared_session_id)?;
     with_shared_store_lock(&path, || {
@@ -671,10 +673,38 @@ fn write_shared_session_selection(
             target.clone()
         };
         apply_selected_target_selection(&mut root, &selected_target, updated_at)?;
-        let raw = serde_json::to_string_pretty(&root).map_err(|error| error.to_string())?;
-        write_string_atomically(&path, &raw)?;
+        let updated_raw = serde_json::to_string_pretty(&root).map_err(|error| error.to_string())?;
+        write_string_atomically(&path, &updated_raw)?;
+        if let Err(error) =
+            upsert_v2_selected_target(writer, shared_session_id, &selected_target, updated_at)
+        {
+            let rollback = write_string_atomically(&path, &raw);
+            return Err(match rollback {
+                Ok(()) => error,
+                Err(rollback_error) => {
+                    format!("{error}; legacy metadata rollback also failed: {rollback_error}")
+                }
+            });
+        }
         Ok(selected_target)
     })
+}
+
+fn upsert_v2_selected_target(
+    writer: &SharedEventWriter,
+    shared_session_id: &str,
+    target: &SharedSelectedTarget,
+    updated_at: u64,
+) -> Result<(), String> {
+    let selected_target_json = serde_json::to_string(target).map_err(|error| error.to_string())?;
+    writer
+        .upsert_session_target(&SessionTargetUpdate {
+            session_id: shared_session_id.to_string(),
+            schema_version: SHARED_SESSION_SCHEMA_VERSION,
+            selected_target_json,
+            updated_at: updated_at as i64,
+        })
+        .map_err(|error| error.to_string())
 }
 
 fn select_meta_engine_compat(meta: &mut SharedSessionMeta, engine: EngineType) {
@@ -925,7 +955,10 @@ pub(crate) fn read_latest_shared_session_snapshot(
     Ok(latest)
 }
 
-fn list_workspace_shared_sessions(workspace_id: &str) -> Result<Vec<SharedSessionSummary>, String> {
+fn list_workspace_shared_sessions(
+    workspace_id: &str,
+    event_writer: Option<&crate::shared_event_log::SharedEventWriter>,
+) -> Result<Vec<SharedSessionSummary>, String> {
     let directory = workspace_shared_sessions_dir(workspace_id)?;
     if !directory.exists() {
         return Ok(Vec::new());
@@ -942,11 +975,23 @@ fn list_workspace_shared_sessions(workspace_id: &str) -> Result<Vec<SharedSessio
             Ok(meta) => meta,
             Err(_) => continue,
         };
-        let native_thread_ids = meta
+        let mut native_thread_ids = meta
             .bindings_by_engine
             .values()
             .map(|binding| binding.native_thread_id.clone())
             .collect::<Vec<_>>();
+        if let Some(writer) = event_writer {
+            native_thread_ids.extend(
+                writer
+                    .binding_states_for_session(&meta.id)
+                    .map_err(|error| error.to_string())?
+                    .into_iter()
+                    .filter_map(|binding| binding.native_session_id)
+                    .filter(|native_session_id| !native_session_id.trim().is_empty()),
+            );
+        }
+        native_thread_ids.sort();
+        native_thread_ids.dedup();
         summaries.push(SharedSessionSummary {
             id: meta.id.clone(),
             thread_id: shared_thread_id(&meta.id),
@@ -1165,6 +1210,9 @@ pub async fn start_shared_session(
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     ensure_known_workspace(&state.workspaces, &workspace_id).await?;
+    let writer = state.shared_event_writer.as_ref().ok_or_else(|| {
+        "shared event writer unavailable; cannot create a durable Shared Session".to_string()
+    })?;
 
     let selected_target = match initial_target {
         Some(target) => {
@@ -1197,7 +1245,17 @@ pub async fn start_shared_session(
     };
     let session_dir = shared_session_dir(&workspace_id, &shared_session_id)?;
     std::fs::create_dir_all(&session_dir).map_err(|error| error.to_string())?;
-    write_shared_session_meta(&meta)?;
+    if let Err(error) = write_shared_session_meta(&meta)
+        .and_then(|_| upsert_v2_selected_target(writer, &shared_session_id, &selected_target, now))
+    {
+        let rollback = std::fs::remove_dir_all(&session_dir);
+        return Err(match rollback {
+            Ok(()) => error,
+            Err(rollback_error) => {
+                format!("{error}; new Shared Session rollback failed: {rollback_error}")
+            }
+        });
+    }
 
     Ok(json!({
         "result": {
@@ -1221,7 +1279,10 @@ pub async fn list_shared_sessions(
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     ensure_known_workspace(&state.workspaces, &workspace_id).await?;
-    Ok(json!(list_workspace_shared_sessions(&workspace_id)?))
+    Ok(json!(list_workspace_shared_sessions(
+        &workspace_id,
+        state.shared_event_writer.as_ref(),
+    )?))
 }
 
 #[tauri::command]
@@ -1292,8 +1353,15 @@ pub async fn set_shared_session_selected_engine(
     if !is_legacy_engine_only_selected_target(&selected_target) {
         validate_resolved_shared_selected_target(&selected_target)?;
     }
-    let selected_target =
-        write_shared_session_selection(&workspace_id, &shared_session_id, &selected_target, now)?;
+    let selected_target = write_shared_session_selection(
+        &workspace_id,
+        &shared_session_id,
+        &selected_target,
+        now,
+        state.shared_event_writer.as_ref().ok_or_else(|| {
+            "shared event writer unavailable; cannot persist Shared Session Target".to_string()
+        })?,
+    )?;
     Ok(json!({
         "threadId": shared_thread_id(&shared_session_id),
         "selectedEngine": selected_target.engine,

@@ -227,6 +227,7 @@ export const MessagesCore = memo(function MessagesCore({
   const userInputRequests = conversationState.userInputQueue;
   const workspaceId = conversationState.meta.workspaceId || null;
   const threadId = conversationState.meta.threadId || null;
+  const nativeRuntimeRecoveryEnabled = !threadId?.startsWith("shared:");
   const activeTurnId = conversationState.meta.activeTurnId ?? null;
   const activeEngine = conversationState.meta.engine;
   const hideLeadingContinuationBootstrap =
@@ -480,6 +481,7 @@ export const MessagesCore = memo(function MessagesCore({
       codexWaitingForFirstText: t("messages.codexWaitingForFirstText"),
       contextCompacting: t("chat.contextDualViewCompacting"),
     },
+    nativeRuntimeRecoveryEnabled,
     renderScopeKey,
     reportVisibleTextRendered: noteThreadVisibleTextRendered,
     renderSourceItems,
@@ -1743,6 +1745,7 @@ export const MessagesCore = memo(function MessagesCore({
       isHistoryLoading,
       latestRetryMessage,
       latestRuntimeReconnectItemId,
+      nativeRuntimeRecoveryEnabled,
       proxyEnabled,
       proxyUrl,
       threadId,

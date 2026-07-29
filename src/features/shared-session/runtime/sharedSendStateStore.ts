@@ -14,7 +14,10 @@
 
 import { useSyncExternalStore } from "react";
 
-import type { SharedV2TurnStateResult } from "../services/sharedSessions";
+import type {
+  SharedContextOmission,
+  SharedV2TurnStateResult,
+} from "../services/sharedSessions";
 import {
   transition,
   type SharedSendEvent,
@@ -28,6 +31,8 @@ export type SharedSendDegradedInfo = {
   packageId?: string;
   sourceChecksum?: string;
   mode?: string;
+  structuredOmissions?: SharedContextOmission[];
+  /** 旧版/未知后端响应的展示 fallback。 */
   omissions?: string[];
   dispositions?: string[];
   sourceEstimatedTokens?: number;
@@ -70,7 +75,6 @@ const revisions = new Map<string, number>();
 const pendingAdmissionRevisions = new Map<string, number>();
 const activeAttemptIds = new Map<string, string>();
 const listeners = new Map<string, Set<Listener>>();
-const degradedDecisions = new Map<string, (confirmed: boolean) => void>();
 
 function readEntry(key: string): SharedSendStateEntry {
   return entries.get(key) ?? IDLE_ENTRY;
@@ -254,34 +258,6 @@ export function markSharedSendRestoreFailure(
   return true;
 }
 
-export function waitForSharedDegradedContextDecision(
-  workspaceId: string,
-  threadId: string,
-): Promise<boolean> {
-  const key = storeKeyOf(workspaceId, threadId);
-  if (degradedDecisions.has(key)) {
-    return Promise.reject(new Error("Shared degraded-context decision already pending"));
-  }
-  return new Promise((resolve) => {
-    degradedDecisions.set(key, resolve);
-  });
-}
-
-export function resolveSharedDegradedContextDecision(
-  workspaceId: string,
-  threadId: string,
-  confirmed: boolean,
-): boolean {
-  const key = storeKeyOf(workspaceId, threadId);
-  const resolve = degradedDecisions.get(key);
-  if (!resolve) {
-    return false;
-  }
-  degradedDecisions.delete(key);
-  resolve(confirmed);
-  return true;
-}
-
 function subscribe(
   workspaceId: string,
   threadId: string,
@@ -379,8 +355,6 @@ export function restoreSharedSendStateFromTurnState(
 
 /** 测试专用：清空全部 store 状态。 */
 export function resetSharedSendStateStoreForTests(): void {
-  degradedDecisions.forEach((resolve) => resolve(false));
-  degradedDecisions.clear();
   entries.clear();
   revisions.clear();
   pendingAdmissionRevisions.clear();

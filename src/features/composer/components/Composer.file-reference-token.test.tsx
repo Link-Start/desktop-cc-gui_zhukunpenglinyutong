@@ -24,6 +24,7 @@ import {
   resetSharedSendStateStoreForTests,
 } from "../../shared-session/runtime/sharedSendStateStore";
 import { subscribeProviderContinuationDialogRequests } from "../../threads/services/providerContinuationRequests";
+import { pushErrorToast } from "../../../services/toasts";
 
 afterEach(() => {
   cleanup();
@@ -44,6 +45,10 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(async () => null),
 }));
 
+vi.mock("../../../services/toasts", () => ({
+  pushErrorToast: vi.fn(),
+}));
+
 vi.mock("../../engine/components/EngineSelector", () => ({
   EngineSelector: () => null,
 }));
@@ -60,6 +65,7 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
     onExecutionTargetChange,
     onSelectEngine,
     onSelectModel,
+    onSelectEffort,
   }: {
     text: string;
     onTextChange: (next: string, cursor: number | null) => void;
@@ -75,16 +81,17 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
       providerProfileSource: "managed";
     }) => void;
     onExecutionTargetChange?: (target: {
-      engine: "codex";
-      providerProfileId: string;
-      modelCatalogEntryId: string;
-      model: string;
-      reasoning: { effort: string };
-      providerProfileNameSnapshot: string;
-      providerProfileSource: "managed";
+      engine: "claude" | "codex";
+      providerProfileId?: string | null;
+      modelCatalogEntryId?: string | null;
+      model?: string | null;
+      reasoning?: { effort: string } | null;
+      providerProfileNameSnapshot?: string | null;
+      providerProfileSource?: "disk" | "managed" | null;
     }) => void;
     onSelectEngine?: (engine: "codex") => void;
     onSelectModel?: (modelId: string) => void;
+    onSelectEffort?: (effort: string | null) => void;
   }) => (
     <>
       <div
@@ -135,6 +142,25 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
           })
         }
       />
+      <button
+        type="button"
+        data-testid="navigate-shared-cli"
+        onClick={() =>
+          onExecutionTargetChange?.({
+            engine: "claude",
+            providerProfileId: null,
+            modelCatalogEntryId: null,
+            model: null,
+            providerProfileNameSnapshot: null,
+            providerProfileSource: "disk",
+          })
+        }
+      />
+      <button
+        type="button"
+        data-testid="select-shared-effort"
+        onClick={() => onSelectEffort?.("high")}
+      />
     </>
   ),
 }));
@@ -144,6 +170,7 @@ function ComposerHarness({
   pendingCodeAnnotation = null,
   onCodeAnnotationConsumed,
   sharedTarget,
+  activeThreadId = "thread-1",
 }: {
   onSend: (text: string) => void;
   pendingCodeAnnotation?: CodeAnnotationDraftInput | null;
@@ -154,6 +181,7 @@ function ComposerHarness({
     runtimeModel?: string;
     effort: string;
   };
+  activeThreadId?: string;
 }) {
   const [selectedCodeAnnotations, setSelectedCodeAnnotations] = useState<CodeAnnotationSelection[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -230,7 +258,7 @@ function ComposerHarness({
       dictationEnabled={false}
       editorSettings={editorSettings}
       activeWorkspaceId="ws-1"
-      activeThreadId="thread-1"
+      activeThreadId={activeThreadId}
       pendingCodeAnnotation={pendingCodeAnnotation}
       onCodeAnnotationConsumed={onCodeAnnotationConsumed}
       selectedCodeAnnotations={selectedCodeAnnotations}
@@ -347,6 +375,90 @@ describe("Composer file reference token", () => {
       providerProfileNameSnapshot: "Provider B",
       providerProfileSource: "managed",
     });
+  });
+
+  it("keeps Shared CLI navigation transitional until a complete Model target exists", () => {
+    const view = render(
+      <ComposerHarness
+        onSend={() => {}}
+        sharedTarget={{
+          providerProfileId: "openrouter",
+          model: "claude-sonnet-4-5",
+          effort: "high",
+        }}
+      />,
+    );
+
+    fireEvent.click(view.getByTestId("navigate-shared-cli"));
+
+    expect(invoke).not.toHaveBeenCalled();
+    expect(pushErrorToast).not.toHaveBeenCalled();
+  });
+
+  it("does not serialize target persistence across parallel Shared sessions", async () => {
+    let releaseFirstPersistence: (() => void) | undefined;
+    const firstPersistence = new Promise<null>((resolve) => {
+      releaseFirstPersistence = () => resolve(null);
+    });
+    vi.mocked(invoke)
+      .mockImplementationOnce(() => firstPersistence)
+      .mockResolvedValueOnce(null);
+    const sharedTarget = {
+      providerProfileId: "openrouter",
+      model: "claude-sonnet-4-5",
+      effort: "high",
+    };
+    const view = render(
+      <ComposerHarness
+        onSend={() => {}}
+        activeThreadId="shared-a"
+        sharedTarget={sharedTarget}
+      />,
+    );
+
+    fireEvent.click(view.getByTestId("select-shared-target"));
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <ComposerHarness
+        onSend={() => {}}
+        activeThreadId="shared-b"
+        sharedTarget={sharedTarget}
+      />,
+    );
+    fireEvent.click(view.getByTestId("select-shared-target"));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(invoke).mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({ threadId: "shared-b" }),
+    );
+    releaseFirstPersistence?.();
+  });
+
+  it("does not persist reasoning changes from a legacy partial Shared target", () => {
+    selectNextTarget("ws-1", "thread-1", {
+      engine: "codex",
+      providerProfileId: "legacy-provider",
+      modelCatalogEntryId: null,
+      model: null,
+      reasoning: null,
+      providerProfileNameSnapshot: null,
+      providerProfileSource: null,
+    });
+    const view = render(
+      <ComposerHarness
+        onSend={() => {}}
+        sharedTarget={{
+          providerProfileId: "legacy-provider",
+          model: "legacy-model",
+          effort: "low",
+        }}
+      />,
+    );
+
+    fireEvent.click(view.getByTestId("select-shared-effort"));
+
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("keeps the last persisted target when the next picker persistence fails", async () => {

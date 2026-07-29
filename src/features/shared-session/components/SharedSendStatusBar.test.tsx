@@ -19,8 +19,10 @@ const mockServices = vi.hoisted(() => ({
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, params?: Record<string, unknown>) =>
-      params?.reason ? `${key}:${String(params.reason)}` : key,
+    t: (key: string, params?: Record<string, unknown>) => {
+      const values = Object.values(params ?? {});
+      return values.length ? `${key}:${values.join(":")}` : key;
+    },
   }),
 }));
 
@@ -76,30 +78,16 @@ describe("SharedSendStatusBar", () => {
     spy.mockRestore();
   });
 
-  it("degraded-context 未经确认保持锁定，确认后推进", () => {
+  it("degraded-context 不渲染继续或取消确认", () => {
     dispatchSharedSendEvent(WS, THREAD, { type: "send" });
     dispatchSharedSendEvent(WS, THREAD, { type: "lossyProjection" }, {
       degradedInfo: { reason: "omissions: 2 files" },
     });
-    renderBar();
-    expect(screen.getByTestId("shared-send-status").textContent).toContain(
-      "sharedSend.degradedTitle",
-    );
-    expect(screen.getByTestId("shared-send-status").textContent).toContain(
-      "omissions: 2 files",
-    );
-    // 未确认：状态保持 degraded-context（不会发送）。
-    expect(getSharedSendState(WS, THREAD).state).toBe("degraded-context");
-    fireEvent.click(screen.getByText("sharedSend.degradedConfirm"));
-    expect(getSharedSendState(WS, THREAD).state).toBe("awaiting-acceptance");
-  });
+    const { container } = renderBar();
 
-  it("degraded-context 取消进入 settling", () => {
-    dispatchSharedSendEvent(WS, THREAD, { type: "send" });
-    dispatchSharedSendEvent(WS, THREAD, { type: "lossyProjection" });
-    renderBar();
-    fireEvent.click(screen.getByText("sharedSend.cancel"));
-    expect(getSharedSendState(WS, THREAD).state).toBe("settling");
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText("sharedSend.degradedConfirm")).toBeNull();
+    expect(screen.queryByText("sharedSend.cancel")).toBeNull();
   });
 
   it("awaiting-acceptance 的 Cancel 在 capability 不支持时禁用", () => {

@@ -1513,6 +1513,75 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("does not restart generic Native lifecycle for a Shared V2 projected turn", async () => {
+    const handlers: Handlers = {
+      onTurnStarted: vi.fn(),
+      onAgentMessageDelta: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+    const sharedOwner = {
+      sharedSessionId: "owner-session-start",
+      sharedThreadId: "shared:owner-session-start",
+      nativeThreadId: "claude:native-owner-start",
+      runtimeTurnId: "run-owner-start",
+      attemptId: "attempt-owner-start",
+      engine: "claude",
+      executionTargetSnapshot: {
+        engine: "claude",
+        providerProfileId: "provider-owner-start",
+        modelCatalogEntryId: "catalog-owner-start",
+        model: "claude-owner-start",
+        reasoning: null,
+        providerProfileNameSnapshot: "Provider Owner Start",
+        providerProfileSource: "managed",
+        runtimeCapabilityFingerprint: null,
+      },
+    };
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-runtime-owner-start",
+        message: {
+          method: "turn/started",
+          params: {
+            threadId: "shared:owner-session-start",
+            nativeThreadId: "claude:native-owner-start",
+            turnId: "run-owner-start",
+            sharedOwner,
+          },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-runtime-owner-start",
+        message: {
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "shared:owner-session-start",
+            nativeThreadId: "claude:native-owner-start",
+            turnId: "run-owner-start",
+            itemId: "assistant-owner-start",
+            delta: "content remains projected",
+            sharedOwner,
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onTurnStarted).not.toHaveBeenCalled();
+    expect(handlers.onAgentMessageDelta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "ws-runtime-owner-start",
+        threadId: "shared:owner-session-start",
+        delta: "content remains projected",
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("forces a durable Shared owner through normalized routing when the global flag is off", async () => {
     const handlers: Handlers = {
       onNormalizedRealtimeEvent: vi.fn(),
@@ -3637,6 +3706,55 @@ describe("useAppServerEvents", () => {
         engine: "codex",
         executionTargetSnapshot,
       },
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("settles a stale Shared Binding without projecting its raw provider error row", async () => {
+    const handlers: Handlers = {
+      onTurnError: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-shared-stale",
+        message: {
+          method: "turn/error",
+          params: {
+            threadId: "shared:thread-stale",
+            nativeThreadId: "claude:session-stale",
+            turnId: "runtime-turn-stale",
+            sharedRecoveryReason: "native-session-not-found",
+            error: {
+              message: "No conversation found with session ID: session-stale",
+            },
+            sharedOwner: {
+              sharedSessionId: "thread-stale",
+              sharedThreadId: "shared:thread-stale",
+              nativeThreadId: "claude:session-stale",
+              runtimeTurnId: "runtime-turn-stale",
+              attemptId: "attempt-stale",
+              bindingKey: "claude:provider-stale",
+              engine: "claude",
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onTurnError).toHaveBeenCalledWith(
+      "ws-shared-stale",
+      "shared:thread-stale",
+      "runtime-turn-stale",
+      expect.objectContaining({
+        suppressMessage: true,
+        engine: "claude",
+      }),
     );
 
     await act(async () => {

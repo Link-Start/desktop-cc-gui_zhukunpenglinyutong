@@ -157,6 +157,42 @@ function modelCatalogKey(engine: EngineType, providerProfileId: string): string 
   return `${engine}:${providerProfileId}`;
 }
 
+function isLocalProviderProfile(
+  engine: EngineType,
+  providerProfileId: string,
+): boolean {
+  switch (engine) {
+    case "claude":
+      return providerProfileId === CLAUDE_LOCAL_PROVIDER_PROFILE_ID;
+    case "codex":
+      return providerProfileId === CODEX_DISK_PROVIDER_PROFILE_ID;
+    case "kimi":
+      return providerProfileId === KIMI_LOCAL_PROVIDER_PROFILE_ID;
+    default:
+      return false;
+  }
+}
+
+function initialLoadedModels(
+  mode: "shared" | "native",
+): Record<string, ModelInfo[]> {
+  if (mode === "native") {
+    return Object.fromEntries(modelCatalogCache);
+  }
+  return Object.fromEntries(
+    [...modelCatalogCache].filter(([key]) => {
+      const separatorIndex = key.indexOf(":");
+      if (separatorIndex < 0) {
+        return true;
+      }
+      return !isLocalProviderProfile(
+        key.slice(0, separatorIndex) as EngineType,
+        key.slice(separatorIndex + 1),
+      );
+    }),
+  );
+}
+
 function toModelInfo(
   model: Awaited<ReturnType<typeof getEngineModels>>[number],
 ): ModelInfo {
@@ -265,8 +301,9 @@ export function useSharedProviderTargetCatalog({
     () => new Set(),
   );
   const catalogActionsInFlight = useRef(new Set<string>());
+  const authoritativeRefreshCompletedBindingsRef = useRef(new Set<string>());
   const [loadedModels, setLoadedModels] = useState<Record<string, ModelInfo[]>>(
-    () => Object.fromEntries(modelCatalogCache),
+    () => initialLoadedModels(mode),
   );
 
   const ensureProfiles = useCallback(async () => {
@@ -287,12 +324,26 @@ export function useSharedProviderTargetCatalog({
         return;
       }
       const key = modelCatalogKey(engine, providerProfileId);
+      const requiresAuthoritativeRefresh =
+        mode === "shared" &&
+        isLocalProviderProfile(engine, providerProfileId) &&
+        !authoritativeRefreshCompletedBindingsRef.current.has(key);
       const cachedModels = modelCatalogCache.get(key);
-      if (cachedModels) {
+      if (!requiresAuthoritativeRefresh && cachedModels) {
         setLoadedModels((current) =>
           current[key] ? current : { ...current, [key]: cachedModels },
         );
         return;
+      }
+      if (requiresAuthoritativeRefresh) {
+        setLoadedModels((current) => {
+          if (!(key in current)) {
+            return current;
+          }
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
       }
       setLoadingBindings((current) => new Set(current).add(key));
       setModelErrors((current) => {
@@ -301,17 +352,28 @@ export function useSharedProviderTargetCatalog({
         return next;
       });
       try {
-        let request = modelCatalogRequests.get(key);
+        const requestKey = requiresAuthoritativeRefresh
+          ? `force-refresh:${key}`
+          : key;
+        let request = modelCatalogRequests.get(requestKey);
         if (!request) {
-          request = getEngineModels(engine, { providerProfileId })
+          request = getEngineModels(engine, {
+            providerProfileId,
+            ...(requiresAuthoritativeRefresh
+              ? { forceRefresh: true }
+              : {}),
+          })
             .then((models) => models.map(toModelInfo))
             .finally(() => {
-              modelCatalogRequests.delete(key);
+              modelCatalogRequests.delete(requestKey);
             });
-          modelCatalogRequests.set(key, request);
+          modelCatalogRequests.set(requestKey, request);
         }
         const models = await request;
         modelCatalogCache.set(key, models);
+        if (requiresAuthoritativeRefresh) {
+          authoritativeRefreshCompletedBindingsRef.current.add(key);
+        }
         setLoadedModels((current) => ({ ...current, [key]: models }));
       } catch (error) {
         setModelErrors((current) => ({
@@ -326,7 +388,7 @@ export function useSharedProviderTargetCatalog({
         });
       }
     },
-    [enabled],
+    [enabled, mode],
   );
 
   const runCatalogAction = useCallback(
@@ -364,6 +426,12 @@ export function useSharedProviderTargetCatalog({
             forceRefresh: true,
           })).map(toModelInfo);
           modelCatalogCache.set(key, models);
+          if (
+            mode === "shared" &&
+            isLocalProviderProfile(engine, providerProfileId)
+          ) {
+            authoritativeRefreshCompletedBindingsRef.current.add(key);
+          }
           setLoadedModels((current) => ({ ...current, [key]: models }));
           return;
         }
@@ -385,7 +453,7 @@ export function useSharedProviderTargetCatalog({
         });
       }
     },
-    [enabled, workspaceId],
+    [enabled, mode, workspaceId],
   );
   const reloadConfig = useCallback(
     (engine: EngineType, providerProfileId: string) =>
@@ -435,7 +503,10 @@ export function useSharedProviderTargetCatalog({
           : [];
         const configuredModels =
           loadedModels[key] ??
-          modelCatalogCache.get(key) ??
+          (mode === "shared" &&
+          isLocalProviderProfile(engine, profile.id)
+            ? undefined
+            : modelCatalogCache.get(key)) ??
           (canUseCurrentModels ? currentModels : []);
         return {
           id: profile.id,

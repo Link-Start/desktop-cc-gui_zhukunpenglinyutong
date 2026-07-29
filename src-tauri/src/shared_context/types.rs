@@ -52,6 +52,14 @@ pub struct ProjectionOmission {
     pub retrievable_ref: Option<String>,
 }
 
+impl ProjectionOmission {
+    /// `destination-owned` 只是去重审计：目标 Native history 已持有该事实，
+    /// 不代表跨 Binding 投影发生信息损失。
+    pub fn requires_confirmation(&self) -> bool {
+        self.category != "destination-owned"
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectionManifest {

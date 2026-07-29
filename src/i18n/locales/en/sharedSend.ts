@@ -2,11 +2,50 @@
 const sharedSend = {
   sharedSend: {
     preparingContext: "Preparing context for the shared session…",
-    degradedTitle: "Degraded context",
+    degradedTitle: "Some context will be omitted",
     degradedHint:
-      "The context projection has omissions. The turn will not be sent without your confirmation.",
-    degradedConfirm: "Send anyway",
-    awaitingAcceptance: "Delivering… waiting for the runtime to confirm receipt.",
+      "Some history cannot be transferred safely. Confirm to continue.",
+    degradedConfirm: "Continue sending",
+    degradedDetails: "View details",
+    degradedMode: "Transfer mode: {{mode}}",
+    degradedTokenEstimate:
+      "Estimated context size: {{source}} → {{package}} tokens",
+    unknownDetail: "Unrecognized protocol value: {{value}}",
+    modeNativeDelta: "Native incremental context",
+    modeNativeHistoryImport: "Native history import",
+    modeNativeHistoryClone: "Native session clone",
+    modePortableTranscript: "Portable transcript",
+    modeCheckpoint: "Compressed checkpoint",
+    dispositionRetrievable: "Retrievable on demand",
+    dispositionNotRetrievable: "Not retrievable",
+    omissionImageHistory:
+      "Images are not supported by the destination history.",
+    omissionAssistantOutcome:
+      "The assistant turn ended as {{outcome}} and will not be replayed as successful.",
+    omissionPrivateReasoning:
+      "Provider-private reasoning cannot be transferred.",
+    omissionAssistantArtifact:
+      "Assistant artifacts remain references and are not injected as text.",
+    omissionPrivateBlock:
+      "An unsupported private assistant block was omitted.",
+    omissionToolHistory:
+      "Tool calls and results were omitted together because the destination does not support tool history.",
+    omissionHistoricalControl:
+      "Historical control actions are reference-only and will not run again.",
+    omissionDeterministicFold:
+      "Long content was folded to fit the context budget.",
+    omissionCheckpointBudget:
+      "The oldest complete turn was omitted to fit the context budget.",
+    omissionDestinationOwned:
+      "Content already present in the destination's native history was not duplicated.",
+    omissionUnknown: "Unrecognized omission ({{category}}): {{reason}}",
+    outcomeCompleted: "completed",
+    outcomeFailed: "failed",
+    outcomeCancelled: "cancelled",
+    outcomeReplaced: "replaced",
+    outcomeUnknown: "unknown",
+    awaitingAcceptance:
+      "Request sent. Waiting for the CLI to confirm it started processing…",
     cancelUnsupported:
       "This adapter cannot cancel a pending delivery; wait for the runtime verdict.",
     cancelPending: "Confirming the cancel outcome…",

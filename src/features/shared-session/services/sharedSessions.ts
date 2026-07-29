@@ -84,6 +84,7 @@ export type SharedSessionRuntimeDelivery = Record<string, unknown> & {
     terminal?: {
       type: "run.settled";
       outcome: "completed" | "failed" | "cancelled";
+      recoveryReason?: "native-session-not-found" | null;
     };
   };
 };
@@ -262,16 +263,18 @@ export type SharedV2PrepareContextResult = {
 
 export type SharedContextManifest = {
   mode: string;
-  omitted: {
-    entryId: string;
-    category: string;
-    reason: string;
-    disposition: "retrievable-on-demand" | "not-retrievable";
-    retrievableRef?: string | null;
-  }[];
+  omitted: SharedContextOmission[];
   fromSequenceExclusive?: number | null;
   throughSequenceInclusive: number;
   sourceChecksum: string;
+};
+
+export type SharedContextOmission = {
+  entryId: string;
+  category: string;
+  reason: string;
+  disposition: "retrievable-on-demand" | "not-retrievable";
+  retrievableRef?: string | null;
 };
 
 export type SharedContextCompression = {
@@ -348,6 +351,18 @@ export type SharedV2CommitTurnResult =
       attemptId: string;
       bindingKey: string;
     };
+
+export type SharedV2AwaitTurnTerminalResult = {
+  status: "committed";
+  duplicate: boolean;
+  sequence: number;
+  bindingKey: string;
+  terminal: {
+    type: "run.settled";
+    outcome: "completed" | "failed" | "cancelled";
+    recoveryReason?: "native-session-not-found" | null;
+  };
+};
 
 export type SharedV2MarkRecoveryResult = {
   status: "recovery-required" | "terminal-committed";
@@ -512,6 +527,21 @@ export async function sharedContextScanOrphans() {
   return invoke<SharedContextOrphanReport>("shared_context_scan_orphans");
 }
 
+export async function sharedSessionV2AwaitTurnTerminal(
+  workspaceId: string,
+  threadId: string,
+  attemptId: string,
+) {
+  return invoke<SharedV2AwaitTurnTerminalResult>(
+    "shared_session_v2_await_turn_terminal",
+    {
+      workspaceId,
+      threadId,
+      attemptId,
+    },
+  );
+}
+
 export async function sharedSessionV2CommitTurn(
   workspaceId: string,
   threadId: string,
@@ -560,14 +590,21 @@ export async function sharedSessionV2InterruptTurn(
   threadId: string,
   attemptId: string,
 ) {
-  return invoke<{
-    status: "interrupted";
-    attemptId: string;
-    engine: EngineType;
-    bindingKey: string;
-    nativeThreadId: string;
-    runtimeTurnId: string;
-  }>("shared_session_v2_interrupt_turn", {
+  return invoke<
+    | {
+        status: "interrupted";
+        attemptId: string;
+        engine: EngineType;
+        bindingKey: string;
+        nativeThreadId: string;
+        runtimeTurnId: string;
+      }
+    | {
+        status: "terminal-committed";
+        attemptId: string;
+        sequence: number;
+      }
+  >("shared_session_v2_interrupt_turn", {
     workspaceId,
     threadId,
     attemptId,

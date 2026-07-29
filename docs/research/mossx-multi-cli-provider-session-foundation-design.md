@@ -1948,6 +1948,40 @@ Tx 5
   clear pendingDelivery
 ```
 
+#### 14.2.2.1 Logical Settlement 与 Runtime Cleanup 必须分离
+
+`run.settled` 表达的是 Agent 业务回合已经产生最终结果，不等于 CLI process、hook、
+MCP child、stdout/stderr pipe 或 usage probe 已清理完成。Adapter 必须把两类时刻分开：
+
+```text
+provider typed final/result
+  → logical run.settled
+  → Shared Attempt assembler + canonical commit
+  → Composer idle
+
+process exit / pipe EOF / stderr drain / post-turn usage
+  → runtime cleanup / supplemental usage
+  → 不得重新打开或延迟已 settled 的 Shared Attempt
+```
+
+硬约束：
+
+1. Shared-owned Runtime 收到 Provider 明确的 typed final/result 后，必须立即形成
+   Attempt-owned terminal evidence；不得等待仅用于清理的 process exit、stdio EOF、
+   hook/MCP descendant 退出或 usage grace。
+2. 同一个 Adapter 可以为 Native Session 保留既有 cleanup 后 `TurnCompleted` 行为；
+   Shared coordinator 对 typed final 的提升只作用于已验证 owner 的 Shared Attempt，
+   禁止改写普通单一 Session 的生命周期。
+3. cleanup 后迟到的 `TurnCompleted`、usage 或 duplicate final 必须按
+   `attemptId + runtimeTurnId` 幂等吸收，不能生成第二个 `run.settled`、第二次
+   `conversation.turnCommitted` 或重复 Assistant Final。
+4. 只有 Provider typed final/result 才能提前 settlement。正文 delta、reasoning、
+   process spawn、stdin write、first token、提示音或“进程仍存活/已退出”都不是
+   terminal authority。
+5. 新增 CLI Adapter 时必须在 capability contract 中分别声明
+   `logicalTerminalEvidence` 与 `cleanupCompletionEvidence`；若二者来自同一事件可以合并，
+   若不同则 Shared 控制流只等待前者，cleanup 独立收尾。
+
 事务规则：
 
 1. 外部 CLI Side Effect 之前，`turnRequested` 与该 Side Effect 对应的 Intent 必须已经 Durable：创建 Session 对应 `BindingProvisioningState(prepared)`，投递 Context/Prompt 对应 `deliveryPrepared`。
@@ -3200,6 +3234,8 @@ Codex / Provider A
     Execution Target boundary 进入 runtime。
 42. 与当前 delivery/bootstrapping 绑定的 structured Provider/API rejection 是强负
     evidence；不得被 prompt/marker persistence 或 warning 覆盖为 ACK success。
+43. Provider typed final/result 与 CLI process cleanup 必须分域；Shared Attempt 必须由
+    前者立即 settle，后者只能补充 cleanup/usage，不能延迟或复活 Composer。
 
 ---
 

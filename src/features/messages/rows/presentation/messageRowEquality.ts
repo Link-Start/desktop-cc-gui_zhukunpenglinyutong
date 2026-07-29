@@ -26,6 +26,7 @@ export type MessageRowEqualityProps = {
   activeCollaborationModeId?: string | null;
   enableCollaborationBadge?: boolean;
   presentationProfile?: PresentationProfile | null;
+  nativeRuntimeRecoveryEnabled?: boolean;
   showRuntimeReconnectCard?: boolean;
   onRecoverThreadRuntime?: (
     workspaceId: string,
@@ -154,6 +155,7 @@ export function areMessageRowPropsEqual(
     previous.activeCollaborationModeId === next.activeCollaborationModeId &&
     previous.enableCollaborationBadge === next.enableCollaborationBadge &&
     previous.presentationProfile === next.presentationProfile &&
+    previous.nativeRuntimeRecoveryEnabled === next.nativeRuntimeRecoveryEnabled &&
     previous.showRuntimeReconnectCard === next.showRuntimeReconnectCard &&
     previous.userActionNode === next.userActionNode &&
     (

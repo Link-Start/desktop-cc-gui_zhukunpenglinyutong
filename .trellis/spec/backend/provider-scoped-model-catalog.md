@@ -69,6 +69,17 @@ type EngineModelInfo = {
 - frontend cache/dedupe/request identity 必须包含 `engineType + providerProfileId`；旧 scope 晚返回不得覆盖当前模型菜单。
 - Shared Picker 根菜单只加载 Provider Profile；具体 Model catalog 必须在用户展开 CLI
   后按 binding lazy load。一个 Profile 失败不得阻塞其他 CLI/Profile。
+- Shared Picker 展开 local/disk Profile 时必须绕过 completed module cache，并以
+  `forceRefresh: true` 重读当前 binding 的 configured catalog；同 scope 的 concurrent
+  request 仍必须合并。同一 picker catalog owner 首次成功刷新后，pointer / focus /
+  accordion 的重复 activation 必须复用已完成结果，不得反复进入 loading。加载期间禁止
+  暴露旧 Shared local model row 供点击；Native 单栏的 last-good rows 不受此策略影响。
+- Provider selected state 以 `engine + normalized providerProfileId` 为 identity；
+  `providerProfileSource` 是 metadata，Native synthesized target 未携带 source 时不得丢失
+  Provider / Model 勾选态。
+- catalog row 的 runtime `model` 为空时，frontend MUST 与 backend validation 一致，
+  使用非空 catalog `id` 作为 compatibility runtime model；已知 `id != model` 时仍 MUST
+  使用明确 runtime `model`，不得把 UI id 误发给 runtime。
 - local/disk sentinel 可以传给 `getEngineModels` 解析本地配置，但写入 Shared
   `ExecutionTarget` 前必须归一为 `providerProfileId = null`。
 - 切换 Target 后当前 Model label 必须从目标 Provider catalog 解析，禁止继续消费旧
@@ -100,6 +111,7 @@ type EngineModelInfo = {
 | provider A 请求晚于 provider B 返回 | UI 保持 provider B catalog | A 覆盖 B |
 | daemon mode | 与 Desktop 相同 payload/result contract | 丢失 `providerProfileId` |
 | Shared root menu open | 只读取 Profile catalog | 预取所有 Provider models |
+| Shared local profile expand | forced binding-scoped config refresh；并发请求合并 | 展示或提交 completed stale cache |
 | local profile selected | catalog 用 sentinel；Target 用 `null` | 形成第二个 local Binding |
 | target catalog partial failure | 仅失败 binding 显示 error | 整个模型菜单不可用 |
 | catalog `id=settings-reasoning`, `model=deepseek-v4-pro` | Picker 保留 id，runtime 只收到 `deepseek-v4-pro` | 把 `settings-reasoning` 传给 CLI |
@@ -126,7 +138,8 @@ type EngineModelInfo = {
 - `ModelSelect.test.tsx` + Native continuation Rust tests：覆盖 `id != model`、backend
   UI-only id fail closed 与 custom runtime passthrough。
 - `useSharedProviderTargetCatalog.test.tsx`：覆盖 config reload、Codex CLI discovery、
-  custom/configured/discovered runtime identity merge 与失败保留 last-good。
+  custom/configured/discovered runtime identity merge、Shared local stale cache bypass、
+  concurrent refresh coalescing 与失败保留 last-good。
 - `src-tauri/src/backend/app_server_tests.rs`：覆盖 managed Provider session 的
   `model/list` 路由，不回退 disk/global session。
 - 必跑：`npm run typecheck`、`npm run lint`、`npm run check:runtime-contracts`、`cargo test --manifest-path src-tauri/Cargo.toml engine::status::tests --lib`、`cargo check --manifest-path src-tauri/Cargo.toml --bins`。

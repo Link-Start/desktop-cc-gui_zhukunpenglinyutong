@@ -99,6 +99,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     claudeHistoryTranscriptFallbackActive,
     latestRetryMessage,
     latestRuntimeReconnectItemId,
+    nativeRuntimeRecoveryEnabled,
     proxyEnabled,
     proxyUrl,
     threadId,
@@ -351,6 +352,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
               activeCollaborationModeId={activeCollaborationModeId}
               enableCollaborationBadge={activeEngine === "codex"}
               presentationProfile={presentationProfile}
+              nativeRuntimeRecoveryEnabled={nativeRuntimeRecoveryEnabled}
               showRuntimeReconnectCard={renderItem.id === latestRuntimeReconnectItemId}
               onRecoverThreadRuntime={onRecoverThreadRuntime}
               onRecoverThreadRuntimeAndResend={onRecoverThreadRuntimeAndResend}

@@ -31,6 +31,7 @@ function buildRuntimeInput(
       codexWaitingForFirstText: "waiting",
       contextCompacting: "compacting",
     },
+    nativeRuntimeRecoveryEnabled: true,
     renderScopeKey: "workspace-a\u0000shared-thread",
     reportVisibleTextRendered: vi.fn(),
     renderSourceItems: [assistantItem],
@@ -42,6 +43,25 @@ function buildRuntimeInput(
 }
 
 describe("useMessagesRuntimeState", () => {
+  it("does not select a Native recovery diagnostic when the thread disables that capability", () => {
+    const reconnectDiagnostic: ConversationItem = {
+      id: "shared-runtime-diagnostic",
+      kind: "message",
+      role: "assistant",
+      text: "Broken pipe (os error 32)",
+    };
+    const { result } = renderHook(() =>
+      useMessagesRuntimeState(
+        buildRuntimeInput({
+          items: [reconnectDiagnostic],
+          nativeRuntimeRecoveryEnabled: false,
+        }),
+      ),
+    );
+
+    expect(result.current.latestRuntimeReconnectItemId).toBeNull();
+  });
+
   it("does not carry assistant completion state across workspaces with matching thread ids", () => {
     const { result, rerender } = renderHook(
       (props: { renderScopeKey: string; isThinking: boolean }) =>

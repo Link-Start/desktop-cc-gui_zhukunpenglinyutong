@@ -2883,6 +2883,7 @@ export function useThreads({
         payload: {
           message: string;
           willRetry: boolean;
+          suppressMessage?: boolean;
           engine?: "claude" | "codex" | "gemini" | "kimi" | "opencode" | null;
           executionTargetSnapshot?: TurnExecutionSnapshot;
         },

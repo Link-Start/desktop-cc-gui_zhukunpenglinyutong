@@ -7,6 +7,7 @@
  */
 
 import type { EngineType } from "../../../types/engine";
+import type { SharedSessionSupportedEngine } from "../utils/sharedSessionEngines";
 import {
   LOCAL_PROVIDER_LABEL,
   LOCAL_PROVIDER_SOURCE,
@@ -49,7 +50,8 @@ export type ExecutionTarget = {
   providerProfileSource?: ProviderSelectionSource | null;
 };
 
-export type ResolvedExecutionTarget = ExecutionTarget & {
+export type ResolvedExecutionTarget = Omit<ExecutionTarget, "engine"> & {
+  engine: SharedSessionSupportedEngine;
   modelCatalogEntryId: string;
   model: string;
   providerProfileNameSnapshot: string;

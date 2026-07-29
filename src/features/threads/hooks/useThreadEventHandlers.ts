@@ -2381,6 +2381,7 @@ export function useThreadEventHandlers({
       payload: {
         message: string;
         willRetry: boolean;
+        suppressMessage?: boolean;
         engine?: ConversationEngine | null;
         executionTargetSnapshot?: TurnExecutionSnapshot;
       },

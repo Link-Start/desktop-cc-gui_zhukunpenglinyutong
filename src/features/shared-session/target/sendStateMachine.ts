@@ -32,7 +32,9 @@ export type SharedSendEvent =
   | { type: "cancelRejected" }
   | { type: "runSettled" }
   | { type: "connectionLost" }
+  | { type: "bindingRecoveryRequired" }
   | { type: "canonicalCommitted" }
+  | { type: "terminalCommitted" }
   | { type: "commitFailed" }
   | { type: "commitCancelled" }
   | { type: "targetRepaired" }
@@ -45,6 +47,11 @@ export function transition(
   state: SharedSendState,
   event: SharedSendEvent,
 ): SharedSendState | null {
+  // durable canonical commit 是最高等级的终态证据。它可以安全收口任何本地
+  // in-flight 投影，包括 runtime terminal 已到但 UI 仍停在 running/cancel-pending。
+  if (event.type === "terminalCommitted") {
+    return "idle";
+  }
   switch (state) {
     case "idle":
       return event.type === "send" ? "preparing-context" : null;
@@ -77,6 +84,7 @@ export function transition(
         case "runtimeAck":
           return "running";
         case "ackAmbiguous":
+        case "bindingRecoveryRequired":
           return "recovery-required";
         case "cancelRequested":
           return "cancel-pending";
@@ -102,6 +110,7 @@ export function transition(
         case "runSettled":
           return "settling";
         case "connectionLost":
+        case "bindingRecoveryRequired":
           return "recovery-required";
         default:
           return null;
@@ -111,6 +120,7 @@ export function transition(
         case "canonicalCommitted":
           return "idle";
         case "commitFailed":
+        case "bindingRecoveryRequired":
           return "recovery-required";
         default:
           return null;

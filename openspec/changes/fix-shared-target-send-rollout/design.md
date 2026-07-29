@@ -313,6 +313,89 @@ Recovery UI 不能把“显示 Probe 按钮”当成已经定性。存在 durabl
 Attempt、`unknown` 或 Probe/Rebuild RPC 失败都保持锁定；失败必须可见。只有明确
 terminal/not-accepted evidence 或无任何 recovery owner 时才能回到 `idle`。
 
+### D17：Shared terminal 与 degraded context 使用 Engine-neutral 默认行为
+
+Shared Runtime dispatch 的同步返回只证明本次 Attempt 已被 Adapter 接受，不证明 Run
+已经结束。所有 CLI 统一采用：
+
+```text
+dispatch returns accepted start ACK
+  → await backend exact-Attempt settlement
+  → confirm durable conversation.turnCommitted
+  → idle
+```
+
+禁止根据 `engine` 要求某个 Adapter 必须同步返回 terminal。新增 CLI 只需提供 typed
+dispatch ACK 与 Attempt-owned terminal ingress，即可复用同一 durable 收敛流程。
+
+Context Package 的 `degraded` 表示“可发送但存在 fidelity loss”，不再表示需要人工审批。
+Shared Send 自动携带可迁移内容和当前 user request，Manifest 继续持久化 omissions、
+dispositions、compression 与 mode 供历史/诊断使用。compile failure、ownership mismatch、
+ambiguous ACK 与 Provider rejection 仍 fail closed，不能借自动发送绕过。
+
+### D18：Shared Send 的控制终态必须由 backend durable await 收敛
+
+D17 仍遗漏了一条关键 trust boundary：frontend `app-server-event` 能证明“UI 看到了某个
+terminal”，却不能作为“一次 Shared Send 已完成”的 authority。Claude 的 detached
+forwarder、Tauri emit、WebView listener 或订阅安装时序任一处丢失 transient event，都可能
+出现 canonical SQL 已完成、通知音已播放，但 Composer 仍永久 `running`。
+
+统一 contract：
+
+```text
+Runtime terminal
+  → SharedRuntimeCoordinator settlement signal
+  → Rust critical sink idempotently commits conversation.turnCommitted
+  → shared_session_v2_await_turn_terminal(attemptId)
+       1. check durable turnCommitted
+       2. consume cached exact-Attempt settlement when present
+       3. await exact-Attempt settlement notification
+       4. re-check durable turnCommitted after every wake/removal race
+  → frontend runSettled + canonicalCommitted
+  → idle
+```
+
+- `conversation.turnCommitted` 是成功结束 control flow 的最终证据。
+- coordinator notification 只负责无 polling 地唤醒 backend waiter；不是第二份 durable
+  truth。settlement 被 event sink 先 commit 并 remove 时，waiter 必须通过 SQL re-check
+  正常返回。
+- projected `app-server-event`、Agent Event Bus 与 inline terminal 继续服务 rendering、
+  notification sound 和 diagnostics，但不得决定 Composer 是否结束。
+- command 只接受 Workspace/Shared Thread/Attempt identity；Target、Engine、Provider、
+  Runtime identity 均从 durable Attempt 派生。
+- timeout 只表示终态仍无法定性，才进入 recovery；不得因 frontend listener 漏事件把已
+  commit Attempt 标成 recovery。
+- Claude、Codex 与未来 CLI 共享同一 command；Native Session lifecycle 完全不变。
+
+### D19：Provider Logical Terminal 与 CLI Cleanup 分离
+
+`EngineEvent::TurnCompleted` 不能同时隐含“业务结果已确定”和“CLI process 已清理”两种
+语义。Claude CLI 会先发 typed `result`，随后才等待 stdout/stderr、Stop hook、MCP child
+与 usage probe 收尾；若 Shared coordinator 只承认后者，正文已完整显示后 Composer 仍会
+无意义地保持 Stop。
+
+统一规则：
+
+```text
+typed Provider final/result
+  → exact Shared owner validation
+  → terminal evidence / run.settled
+  → durable commit / frontend idle
+
+late TurnCompleted / process exit / pipe drain / usage
+  → cleanup-only duplicate
+  → exactly-once absorb
+```
+
+- Claude `Raw result` 只在 `engine=Claude` 且 ingress 已归属 exact Shared Attempt 时提升为
+  terminal；Native Claude 继续沿原 cleanup 后 `TurnCompleted` 路径。
+- `is_error/subtype/api_error_status/terminal_reason/result` 必须归一为 typed outcome、
+  error、stop reason 与 fallback final text，不能把失败 result 误判 Completed。
+- 后到的 `TurnCompleted` 由 Attempt accumulator 的 exactly-once gate 吸收；不得重复
+  commit、重复正文或复活 processing。
+- 新 CLI adapter 必须明确区分 logical terminal evidence 与 cleanup completion
+  evidence；只有前者拥有 Shared 控制终态。
+
 ## Risks / Trade-offs
 
 - [V2 默认启用暴露残余缺陷] → 保留显式 negative rollback；只修改 Shared router。
@@ -345,6 +428,18 @@ terminal/not-accepted evidence 或无任何 recovery owner 时才能回到 `idle
   前保留 legacy source；新 V2 Turn 只以 canonical facts 为真相。
 - [terminal event 高频回灌 React root] → assembler 位于 Rust lifecycle owner，
   `liveAssistantTextChannel` 继续承载 streaming 文本，不恢复逐 delta reducer dispatch。
+- [未来 CLI 复制 Engine 特判] → terminal completion contract 只按 ACK/terminal capability
+  判断，不按 Engine enum 分支；inline terminal 仅是可选 fast path。
+- [terminal 已 commit 但 transient event 丢失] → backend await 每次先查并在 wake 后复查
+  `conversation.turnCommitted`；frontend event 只作 presentation，不作 control authority。
+- [frontend polling 放大 root render] → await command 由 Rust exact-Attempt notifier 驱动，
+  不新增 timer、root store polling 或 per-event React state。
+- [typed final 被误当普通 Raw] → Shared coordinator 在 exact owner scope 内提升为 logical
+  terminal；Native adapter 与 Native Session lifecycle 不变。
+- [cleanup completion 再次到达] → Attempt accumulator exactly-once，后续 terminal 只作
+  duplicate cleanup，不产生第二次 commit/回复。
+- [自动 degraded context 隐藏迁移损失] → Manifest/Canonical Log 保留完整 omission
+  diagnostics，但不再用底部确认条阻塞用户当前发送。
 
 ## Migration Plan
 
@@ -363,6 +458,10 @@ terminal/not-accepted evidence 或无任何 recovery owner 时才能回到 `idle
     跑增量回归。
 11. 补 Composer atomic admission race 与 Attempt/Binding Recovery Probe 回归。
 12. 用户手工验证 CLI/Provider/Model 切换、Reasoning、控制操作与重开恢复。
+13. 以 backend durable await 替换 frontend transient terminal control wait；补“UI event
+    完全缺失但 SQL 已 commit”回归。
+14. 将 Provider typed final 与 CLI process cleanup 分域；Shared-owned Claude `result`
+    立即进入 Attempt terminal，迟到 cleanup terminal 幂等吸收。
 
 Rollback：写入 `mossx.sharedV2Send = "0"` 或 build flag `VITE_MOSSX_SHARED_V2_SEND=false`。V2 Canonical facts 与完整 meta 不删除。
 

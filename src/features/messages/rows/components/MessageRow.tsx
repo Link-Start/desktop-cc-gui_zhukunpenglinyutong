@@ -185,6 +185,7 @@ export const MessageRow = memo(function MessageRow({
   activeEngine = "claude",
   enableCollaborationBadge = false,
   presentationProfile = null,
+  nativeRuntimeRecoveryEnabled = true,
   showRuntimeReconnectCard = false,
   onRecoverThreadRuntime,
   onRecoverThreadRuntimeAndResend,
@@ -526,6 +527,7 @@ export const MessageRow = memo(function MessageRow({
     [agentTaskNotification, item],
   );
   const showActiveRuntimeReconnectCard =
+    nativeRuntimeRecoveryEnabled &&
     Boolean(runtimeReconnectHint) &&
     showRuntimeReconnectCard;
   const suppressRuntimeReconnectText = Boolean(runtimeReconnectHint);

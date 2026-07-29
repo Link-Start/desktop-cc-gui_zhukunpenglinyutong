@@ -10,17 +10,16 @@
  * - 发送抛错在没有 typed negative ACK 时视为 ambiguous：进入 recovery-required，
  *   不伪造 explicit rejection，也不写 turnCommitted(failed)。
  * - Runtime dispatch 不接收重复 Target；Rust 只读取 durable attempt snapshot。
- * - terminal 内容由 Rust runtime lifecycle owner 持久化；frontend 只等待 UI terminal
- *   并确认 canonical commit。
+ * - terminal 内容由 Rust runtime lifecycle owner 持久化；frontend 通过 backend durable
+ *   await 等待 exact Attempt commit，不以 UI event 作为控制终态。
  * - `endTurn` 在 finally 中兜底；只有 begin 早退（未 beginTurn）时不执行。
  *
  * V0 仅保留给显式 rollback；V2 不得调用 V0 actual-send。
  */
 
 import {
+  sharedSessionV2AwaitTurnTerminal,
   sharedSessionV2BeginTurn,
-  sharedSessionV2CancelAttempt,
-  sharedSessionV2CommitTurn,
   sharedSessionV2DispatchTurn,
   sharedSessionV2MarkRecovery,
   sharedSessionV2PrepareContext,
@@ -46,12 +45,8 @@ import {
   getSharedSendState,
   setSharedSendActiveAttempt,
   tryAcquireSharedSend,
-  waitForSharedDegradedContextDecision,
 } from "./sharedSendStateStore";
-import {
-  registerSharedSessionNativeBinding,
-} from "./sharedSessionBridge";
-import { captureSharedRuntimeTerminal } from "./sharedRuntimeTerminal";
+import { registerSharedSessionNativeBinding } from "./sharedSessionBridge";
 
 /** B.6：UI 状态机事件派发为 best-effort，状态驱动失败不得阻断发送链路。 */
 function dispatchSendEvent(
@@ -123,28 +118,6 @@ function toTargetPayload(
   };
 }
 
-function extractRuntimeTurnId(
-  response: Record<string, unknown> | null | undefined,
-): string | null {
-  if (!response) {
-    return null;
-  }
-  const turn =
-    response.turn && typeof response.turn === "object"
-      ? (response.turn as Record<string, unknown>)
-      : null;
-  const result =
-    response.result && typeof response.result === "object"
-      ? (response.result as Record<string, unknown>)
-      : null;
-  const nestedTurn =
-    result?.turn && typeof result.turn === "object"
-      ? (result.turn as Record<string, unknown>)
-      : null;
-  const value = response.runtimeTurnId ?? turn?.id ?? nestedTurn?.id;
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -167,6 +140,10 @@ function isKnownFailedTerminalError(error: unknown): boolean {
   );
 }
 
+function isBindingRecoveryRequiredError(error: unknown): boolean {
+  return toErrorMessage(error).startsWith("binding-recovery-required:");
+}
+
 export async function sendSharedSessionTurnV2(
   input: SendSharedSessionTurnV2Input,
 ): Promise<SendSharedSessionTurnV2Result> {
@@ -175,6 +152,7 @@ export async function sendSharedSessionTurnV2(
       "shared-v2-target-incomplete: 请先选择完整的 CLI、Provider 和 Model。",
     );
   }
+  const sharedEngine = input.target.engine;
   const turnSnapshot = freezeTurnSnapshot(input.target, input.providerMeta);
   const targetPayload = toTargetPayload(turnSnapshot);
 
@@ -218,11 +196,8 @@ export async function sendSharedSessionTurnV2(
       };
     }
   }
-  let preparedContext: Awaited<
-    ReturnType<typeof sharedSessionV2PrepareContext>
-  >;
   try {
-    preparedContext = await sharedSessionV2PrepareContext(
+    await sharedSessionV2PrepareContext(
       input.workspaceId,
       input.threadId,
       targetPayload,
@@ -232,38 +207,6 @@ export async function sendSharedSessionTurnV2(
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "commitCancelled" });
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "canonicalCommitted" });
     throw prepareError;
-  }
-  if (preparedContext.status === "degraded") {
-    dispatchSharedSendEvent(
-      input.workspaceId,
-      input.threadId,
-      { type: "lossyProjection" },
-      {
-        degradedInfo: {
-          mode: preparedContext.mode,
-          omissions: preparedContext.omissions,
-          dispositions: preparedContext.manifest?.omitted.map(
-            (omission) => omission.disposition,
-          ),
-          sourceEstimatedTokens:
-            preparedContext.compression?.sourceEstimatedTokens,
-          packageEstimatedTokens:
-            preparedContext.compression?.packageEstimatedTokens,
-          reason: preparedContext.omissions.join("; "),
-        },
-      },
-    );
-    const confirmed = await waitForSharedDegradedContextDecision(
-      input.workspaceId,
-      input.threadId,
-    );
-    if (!confirmed) {
-      dispatchSendEvent(input.workspaceId, input.threadId, { type: "commitCancelled" });
-      dispatchSendEvent(input.workspaceId, input.threadId, { type: "canonicalCommitted" });
-      return { status: "cancelled" };
-    }
-    // preview 只读，不代表 Tx1 后 actual package 已确认。
-    dispatchSendEvent(input.workspaceId, input.threadId, { type: "previewConfirmed" });
   }
 
   // Tx1：User Intent durable-first，先于任何 runtime side effect。
@@ -329,16 +272,11 @@ export async function sendSharedSessionTurnV2(
       type: "explicitRejection",
     });
     try {
-      const failedCommit = await sharedSessionV2CommitTurn(
+      await sharedSessionV2AwaitTurnTerminal(
         input.workspaceId,
         input.threadId,
         attemptId,
       );
-      if (failedCommit.status !== "committed") {
-        throw new Error(
-          `Shared failed terminal 尚未提交：attempt ${failedCommit.attemptId}`,
-        );
-      }
       dispatchSendEvent(input.workspaceId, input.threadId, {
         type: "canonicalCommitted",
       });
@@ -358,8 +296,6 @@ export async function sendSharedSessionTurnV2(
     turnSnapshot,
     attemptId,
   );
-  const runtimeTerminalCapture =
-    captureSharedRuntimeTerminal(input.workspaceId);
   try {
     let preparedDelivery: Awaited<
       ReturnType<typeof sharedSessionV2PrepareDelivery>
@@ -389,74 +325,12 @@ export async function sendSharedSessionTurnV2(
       throw deliveryPrepareError;
     }
 
-    if (preparedDelivery.status === "degraded") {
-      const actualOmissions = preparedDelivery.manifest.omitted.map(
-        (omission) => `${omission.category}: ${omission.reason}`,
-      );
-      dispatchSharedSendEvent(
-        input.workspaceId,
-        input.threadId,
-        { type: "lossyProjection" },
-        {
-          degradedInfo: {
-            packageId: preparedDelivery.packageId,
-            sourceChecksum: preparedDelivery.sourceChecksum,
-            mode: preparedDelivery.mode,
-            omissions: actualOmissions,
-            dispositions: preparedDelivery.manifest.omitted.map(
-              (omission) => omission.disposition,
-            ),
-            sourceEstimatedTokens:
-              preparedDelivery.compression.sourceEstimatedTokens,
-            packageEstimatedTokens:
-              preparedDelivery.compression.packageEstimatedTokens,
-            reason: [
-              `package=${preparedDelivery.packageId}`,
-              `source=${preparedDelivery.sourceChecksum}`,
-              ...actualOmissions,
-            ].join("; "),
-          },
-        },
-      );
-      const actualPackageConfirmed =
-        await waitForSharedDegradedContextDecision(
-          input.workspaceId,
-          input.threadId,
-        );
-      if (!actualPackageConfirmed) {
-        try {
-          await sharedSessionV2CancelAttempt(
-            input.workspaceId,
-            input.threadId,
-            attemptId,
-            "degraded-context-declined",
-          );
-        } catch (cancelError) {
-          // Tx1/Tx3 已持久化而 cancel ACK 不确定：不能伪装 idle。
-          dispatchSendEvent(input.workspaceId, input.threadId, {
-            type: "degradedConfirmed",
-          });
-          dispatchSendEvent(input.workspaceId, input.threadId, {
-            type: "ackAmbiguous",
-          });
-          throw cancelError;
-        }
-        dispatchSendEvent(input.workspaceId, input.threadId, {
-          type: "commitCancelled",
-        });
-        dispatchSendEvent(input.workspaceId, input.threadId, {
-          type: "canonicalCommitted",
-        });
-        return { status: "cancelled" };
-      }
-      dispatchSendEvent(input.workspaceId, input.threadId, {
-        type: "degradedConfirmed",
-      });
-    } else {
-      dispatchSendEvent(input.workspaceId, input.threadId, {
-        type: "packagePrepared",
-      });
-    }
+    // `degraded` 是可发送的 fidelity 诊断，不是人工审批 gate。完整 omission
+    // manifest 已由 Rust durable-first 保存；Shared orchestration 继续 best-effort
+    // dispatch，真实 prepare/ACK failure 仍走下方 fail-closed 分支。
+    dispatchSendEvent(input.workspaceId, input.threadId, {
+      type: "packagePrepared",
+    });
 
     let response: Awaited<ReturnType<typeof sharedSessionV2DispatchTurn>>;
     try {
@@ -476,6 +350,17 @@ export async function sendSharedSessionTurnV2(
         },
       );
     } catch (sendError) {
+      if (isBindingRecoveryRequiredError(sendError)) {
+        dispatchSendEvent(input.workspaceId, input.threadId, {
+          type: "bindingRecoveryRequired",
+        });
+        setSharedSendActiveAttempt(input.workspaceId, input.threadId, null);
+        return {
+          status: "recovery-required",
+          bindingKey: begin.bindingKey,
+          reason: "native-session-not-found",
+        };
+      }
       if (isKnownFailedTerminalError(sendError)) {
         // Rust has authoritative negative evidence and commits a failed terminal
         // before returning this typed error. Confirm that commit and unlock the
@@ -498,7 +383,6 @@ export async function sendSharedSessionTurnV2(
       response.status !== "accepted" ||
       response.attemptId !== attemptId ||
       response.logicalTurnId !== logicalTurnId ||
-      (response.engine !== "codex" && response.engine !== "claude") ||
       response.engine !== targetPayload.engine ||
       normalizeAckIdentity(response.providerProfileId) !==
         normalizeAckIdentity(targetPayload.providerProfileId) ||
@@ -519,7 +403,7 @@ export async function sendSharedSessionTurnV2(
       workspaceId: input.workspaceId,
       sharedThreadId: input.threadId,
       nativeThreadId: nativeSessionId,
-      engine: response.engine,
+      engine: sharedEngine,
       providerProfileId: response.providerProfileId ?? null,
       attemptId,
     });
@@ -536,45 +420,36 @@ export async function sendSharedSessionTurnV2(
     }
 
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "runtimeAck" });
-    let terminal;
-    try {
-      terminal =
-        response.delivery.terminal?.type === "run.settled"
-          ? { ...response.delivery.terminal, assistantText: null }
-          : await runtimeTerminalCapture.waitFor({
-              attemptId,
-              nativeThreadId: nativeSessionId,
-              runtimeTurnId: extractRuntimeTurnId(response),
-            });
-      if (!terminal) {
-        throw new Error("Shared runtime 未返回 typed run.settled");
-      }
-    } catch (terminalError) {
-      dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
-      await markAttemptRecovery("run-settled-missing");
-      throw terminalError;
-    }
-    dispatchSendEvent(input.workspaceId, input.threadId, { type: "runSettled" });
-
     let commit;
     try {
-      // Rust runtime lifecycle owner has already assembled and persisted the
-      // authoritative terminal snapshot before UI fan-out. This RPC only confirms
-      // the idempotent attempt commit; it does not send assistant content back.
-      commit = await sharedSessionV2CommitTurn(
+      // Backend waiter 以 durable `conversation.turnCommitted` 为最终证据。
+      // projected/inline terminal 继续用于展示，但不再拥有 Composer control flow。
+      commit = await sharedSessionV2AwaitTurnTerminal(
         input.workspaceId,
         input.threadId,
         attemptId,
       );
-      if (commit.status !== "committed") {
-        throw new Error(
-          `Shared canonical terminal 尚未提交：attempt ${commit.attemptId}`,
-        );
-      }
-    } catch (commitError) {
-      dispatchSendEvent(input.workspaceId, input.threadId, { type: "commitFailed" });
-      await markAttemptRecovery("commit-confirmation-failed");
-      throw commitError;
+    } catch (terminalError) {
+      dispatchSendEvent(input.workspaceId, input.threadId, {
+        type: "connectionLost",
+      });
+      await markAttemptRecovery(
+        `terminal-await-failed: ${toErrorMessage(terminalError)}`,
+      );
+      throw terminalError;
+    }
+    dispatchSendEvent(input.workspaceId, input.threadId, { type: "runSettled" });
+
+    if (commit.terminal.recoveryReason === "native-session-not-found") {
+      dispatchSendEvent(input.workspaceId, input.threadId, {
+        type: "bindingRecoveryRequired",
+      });
+      setSharedSendActiveAttempt(input.workspaceId, input.threadId, null);
+      return {
+        status: "recovery-required",
+        bindingKey: commit.bindingKey ?? begin.bindingKey,
+        reason: "native-session-not-found",
+      };
     }
 
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "canonicalCommitted" });
@@ -590,7 +465,6 @@ export async function sendSharedSessionTurnV2(
       },
     };
   } finally {
-    runtimeTerminalCapture?.dispose();
     endTurn(input.workspaceId, input.threadId);
   }
 }

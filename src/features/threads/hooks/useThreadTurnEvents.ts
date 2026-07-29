@@ -602,6 +602,7 @@ export function useThreadTurnEvents({
       payload: {
         message: string;
         willRetry: boolean;
+        suppressMessage?: boolean;
         executionTargetSnapshot?: TurnExecutionSnapshot;
       },
     ) => {
@@ -694,7 +695,7 @@ export function useThreadTurnEvents({
         workspaceScopedDelete(interruptedThreadsRef.current, workspaceId, aliasThreadId);
       }
 
-      if (!wasInterrupted) {
+      if (!wasInterrupted && !payload.suppressMessage) {
         const stabilityDiagnostic = payload.message
           ? resolveThreadStabilityDiagnostic(payload.message)
           : null;

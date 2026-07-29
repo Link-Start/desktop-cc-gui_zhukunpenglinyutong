@@ -48,6 +48,16 @@ React Component
 17. Rebuild/Retry/Regenerate 不能成为第二套 routing authority。rebuild target 应由
     durable Binding row 派生；Retry/Regenerate 应由原 Attempt/Snapshot 派生并创建新
     `attemptId`。
+18. Shared Runtime ACK 与 terminal 必须按 protocol phase 解耦。`accepted` 只证明
+    Runtime 接受执行；Runtime terminal 由 exact Attempt owner 收集，但 UI control flow
+    必须通过 backend durable await，以 `conversation.turnCommitted` 作为最终完成证据。
+    projected event / Agent Event Bus / inline terminal 只服务 rendering、notification 与
+    fast wakeup，不能成为 Composer 结束 authority。禁止按 CLI 名称要求某个 Engine 同步
+    返回 terminal；新增 CLI 只需适配同一 ACK/terminal + durable commit contract。
+19. Context fidelity diagnostic 与 send authorization 必须分离。成功生成的 degraded
+    context 应记录 manifest/diagnostic 并自动 best-effort delivery；只有 package
+    preparation、Runtime ACK、Provider rejection 等真实执行错误才阻断发送。禁止把
+    “历史无法完整迁移”升级为每次切换 Target 都要人工确认的发送 gate。
 
 ## 常见失败模式
 
@@ -73,6 +83,13 @@ React Component
 - early terminal 虽被缓存，但 bind 后 replay 与 live emit 之间没有 barrier，顺序仍然
   反转或 terminal 丢失。
 - Rebuild 接受 caller 的 Engine/Provider，借恢复操作改写 durable Binding identity。
+- 按 CLI 名称推断 terminal timing：Codex 等 event、Claude 强制 inline terminal，导致
+  Claude 已正常回复却被前端提前标记为 ambiguous/recovery，真实 terminal 随后无人收口。
+- 把 frontend terminal listener 当作 send completion owner：SQL 已存在
+  `conversation.turnCommitted`，但 event 在 Tauri/WebView 边界丢失后 Composer 永久
+  `running`，Stop 也只能处理 UI residue。
+- context package 已成功生成，仅 fidelity 降级，却弹出 Continue/Cancel 并阻塞发送；
+  Target 切换因此退化成重复审批。
 
 ## Optional Payload Contract
 
@@ -96,6 +113,12 @@ React Component
 - attempt-owned lifecycle 至少覆盖：preflight 零副作用、Tx1 durable-first、
   dispatch attempt-only、early/live replay order、duplicate terminal、cancel intent、
   interrupt failure、rebuild derived owner。
+- engine-neutral terminal 至少覆盖：每个 Shared CLI 的 accepted-only ACK、inline
+  terminal fast path、late typed terminal、duplicate terminal、frontend terminal event
+  完全缺失但 SQL 已 commit；断言所有 CLI 都走同一 Attempt durable await 与 settle
+  逻辑，不出现 engine-name branch。
+- degraded context 至少覆盖：preview/actual package 均可直发、diagnostic/manifest
+  仍持久化、真正 prepare/ACK/rejection 失败仍 fail closed，且 UI 不进入确认 gate。
 - 历史/Projection 至少覆盖：rich terminal blocks、failed/cancelled、
   reasoning/tool-only provenance、legacy dual-read、strict prompt echo filter。
 - mocked RPC 只能证明 mapping，不能代替 fake Runtime side-effect assertion。关键

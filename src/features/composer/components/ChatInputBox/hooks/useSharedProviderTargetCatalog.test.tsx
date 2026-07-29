@@ -97,6 +97,215 @@ describe("useSharedProviderTargetCatalog", () => {
     ]);
   });
 
+  it("bypasses a completed cache entry when Shared reopens a local Provider", async () => {
+    getEngineModelsMock.mockResolvedValueOnce([
+      {
+        id: "settings-main",
+        model: "stale-runtime-model",
+        displayName: "Stale Local Model",
+        description: "",
+        isDefault: true,
+      },
+    ]);
+    const firstHook = renderHook(() =>
+      useSharedProviderTargetCatalog({
+        enabled: true,
+        mode: "shared",
+        currentProvider: "codex",
+        currentProviderProfileId: "codex-b",
+        currentModels: [],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await firstHook.result.current.ensureModels(
+        "claude",
+        "__local_settings_json__",
+      );
+    });
+    firstHook.unmount();
+
+    getEngineModelsMock.mockResolvedValueOnce([
+      {
+        id: "settings-main",
+        model: "kimi-for-coding",
+        displayName: "kimi-for-coding",
+        description: "",
+        isDefault: true,
+      },
+    ]);
+    const secondHook = renderHook(() =>
+      useSharedProviderTargetCatalog({
+        enabled: true,
+        mode: "shared",
+        currentProvider: "codex",
+        currentProviderProfileId: "codex-b",
+        currentModels: [],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    expect(
+      secondHook.result.current.groups
+        .find((group) => group.providerId === "claude")
+        ?.profiles.find(
+          (profile) => profile.id === "__local_settings_json__",
+        )?.models,
+    ).toEqual([]);
+
+    await act(async () => {
+      await secondHook.result.current.ensureModels(
+        "claude",
+        "__local_settings_json__",
+      );
+    });
+
+    expect(getEngineModelsMock).toHaveBeenCalledTimes(2);
+    expect(getEngineModelsMock).toHaveBeenLastCalledWith("claude", {
+      providerProfileId: "__local_settings_json__",
+      forceRefresh: true,
+    });
+    expect(
+      secondHook.result.current.groups
+        .find((group) => group.providerId === "claude")
+        ?.profiles.find(
+          (profile) => profile.id === "__local_settings_json__",
+        )?.models,
+    ).toEqual([
+      expect.objectContaining({
+        id: "settings-main",
+        model: "kimi-for-coding",
+      }),
+    ]);
+  });
+
+  it("coalesces concurrent Shared local Provider refreshes", async () => {
+    let resolveModels:
+      | ((models: Awaited<ReturnType<typeof getEngineModels>>) => void)
+      | undefined;
+    getEngineModelsMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveModels = resolve;
+        }),
+    );
+    const { result } = renderHook(() =>
+      useSharedProviderTargetCatalog({
+        enabled: true,
+        mode: "shared",
+        currentProvider: "codex",
+        currentProviderProfileId: "codex-b",
+        currentModels: [],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      const firstRequest = result.current.ensureModels(
+        "claude",
+        "__local_settings_json__",
+      );
+      const secondRequest = result.current.ensureModels(
+        "claude",
+        "__local_settings_json__",
+      );
+
+      expect(getEngineModelsMock).toHaveBeenCalledOnce();
+      resolveModels?.([
+        {
+          id: "settings-main",
+          model: "kimi-for-coding",
+          displayName: "kimi-for-coding",
+          description: "",
+          isDefault: true,
+        },
+      ]);
+      await Promise.all([firstRequest, secondRequest]);
+    });
+
+    expect(getEngineModelsMock).toHaveBeenCalledWith("claude", {
+      providerProfileId: "__local_settings_json__",
+      forceRefresh: true,
+    });
+
+    await act(async () => {
+      await result.current.ensureModels(
+        "claude",
+        "__local_settings_json__",
+      );
+    });
+
+    expect(getEngineModelsMock).toHaveBeenCalledOnce();
+  });
+
+  it("does not reuse a Native local request for a Shared authoritative refresh", async () => {
+    type EngineModels = Awaited<ReturnType<typeof getEngineModels>>;
+    let resolveNative: ((models: EngineModels) => void) | undefined;
+    let resolveShared: ((models: EngineModels) => void) | undefined;
+    getEngineModelsMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveNative = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveShared = resolve;
+          }),
+      );
+    const nativeHook = renderHook(() =>
+      useSharedProviderTargetCatalog({
+        enabled: true,
+        mode: "native",
+        currentProvider: "claude",
+        currentProviderProfileId: null,
+        currentModels: [],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+    const sharedHook = renderHook(() =>
+      useSharedProviderTargetCatalog({
+        enabled: true,
+        mode: "shared",
+        currentProvider: "codex",
+        currentProviderProfileId: "codex-b",
+        currentModels: [],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      const nativeRequest = nativeHook.result.current.ensureModels(
+        "claude",
+        "__local_settings_json__",
+      );
+      const sharedRequest = sharedHook.result.current.ensureModels(
+        "claude",
+        "__local_settings_json__",
+      );
+
+      expect(getEngineModelsMock).toHaveBeenCalledTimes(2);
+      expect(getEngineModelsMock).toHaveBeenNthCalledWith(1, "claude", {
+        providerProfileId: "__local_settings_json__",
+      });
+      expect(getEngineModelsMock).toHaveBeenNthCalledWith(2, "claude", {
+        providerProfileId: "__local_settings_json__",
+        forceRefresh: true,
+      });
+      resolveNative?.([]);
+      resolveShared?.([]);
+      await Promise.all([nativeRequest, sharedRequest]);
+    });
+  });
+
   it("keeps other CLIs usable when one Provider catalog fails", async () => {
     getKimiProvidersMock.mockRejectedValueOnce(new Error("kimi unavailable"));
     const { result } = renderHook(() =>

@@ -3,7 +3,7 @@
  *
  * 按 `sendStateMachine` 九状态渲染 Composer 上方的提示条：
  * - `preparing-context` / `awaiting-acceptance` / `cancel-pending` / `settling`：只读提示；
- * - `degraded-context`：列出降级原因，未经确认不发送（继续 / 取消）；
+ * - `degraded-context`：legacy transient state，不渲染阻塞确认；
  * - `recovery-required`：恢复卡片（Probe 定性 / 显式重建 Binding），锁定整个 Shared Session；
  * - `target-unavailable`：展示不可用原因，Picker 保持可更换。
  *
@@ -31,7 +31,6 @@ import {
 import { useSharedTargetState } from "../target/targetStore";
 import {
   dispatchSharedSendEvent,
-  resolveSharedDegradedContextDecision,
   useSharedSendState,
 } from "../runtime/sharedSendStateStore";
 import { isSharedV2SendEnabled } from "../runtime/sharedV2SendFlag";
@@ -233,16 +232,20 @@ export function SharedSendStatusBar({
   if (!isSharedV2SendEnabled()) {
     return null;
   }
-  const { state, degradedInfo, detail } = entry;
-  if (state === "idle" || state === "running") {
+  const { state, detail } = entry;
+  if (
+    state === "idle" ||
+    state === "running" ||
+    state === "degraded-context"
+  ) {
     // running 由既有 isProcessing UI 承担（§14.5.3 Active Target Badge 走 turnBadge）。
+    // degraded-context 仅兼容旧内存状态；新发送不会进入该阻塞态。
     return null;
   }
 
   const dispatch = (event: Parameters<typeof dispatchSharedSendEvent>[2]) => {
     dispatchSharedSendEvent(workspaceId, threadId, event);
   };
-
   return (
     <div
       className={`shared-send-status shared-send-status--${state}`}
@@ -253,65 +256,6 @@ export function SharedSendStatusBar({
         <span className="shared-send-status__text">
           {t("sharedSend.preparingContext")}
         </span>
-      )}
-
-      {state === "degraded-context" && (
-        <>
-          <span className="shared-send-status__text">
-            <strong>{t("sharedSend.degradedTitle")}</strong>
-            {" · "}
-            {t("sharedSend.degradedHint")}
-            {degradedInfo?.mode ? ` [${degradedInfo.mode}]` : ""}
-            {degradedInfo?.omissions?.length
-              ? ` (${degradedInfo.omissions.join("; ")})`
-              : degradedInfo?.reason
-                ? ` (${degradedInfo.reason})`
-                : ""}
-            {typeof degradedInfo?.sourceEstimatedTokens === "number" &&
-            typeof degradedInfo?.packageEstimatedTokens === "number"
-              ? ` · ${degradedInfo.sourceEstimatedTokens} → ${degradedInfo.packageEstimatedTokens} estimated tokens`
-              : ""}
-            {degradedInfo?.dispositions?.length
-              ? ` · ${Array.from(new Set(degradedInfo.dispositions)).join(", ")}`
-              : ""}
-          </span>
-          <span className="shared-send-status__actions">
-            <button
-              type="button"
-              className="shared-send-status__button"
-              onClick={() => {
-                if (
-                  !resolveSharedDegradedContextDecision(
-                    workspaceId,
-                    threadId,
-                    true,
-                  )
-                ) {
-                  dispatch({ type: "degradedConfirmed" });
-                }
-              }}
-            >
-              {t("sharedSend.degradedConfirm")}
-            </button>
-            <button
-              type="button"
-              className="shared-send-status__button"
-              onClick={() => {
-                if (
-                  !resolveSharedDegradedContextDecision(
-                    workspaceId,
-                    threadId,
-                    false,
-                  )
-                ) {
-                  dispatch({ type: "commitCancelled" });
-                }
-              }}
-            >
-              {t("sharedSend.cancel")}
-            </button>
-          </span>
-        </>
       )}
 
       {state === "awaiting-acceptance" && (

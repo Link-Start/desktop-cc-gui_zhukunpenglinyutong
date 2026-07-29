@@ -190,9 +190,11 @@ describe("ModelSelect", () => {
       ),
     ).not.toBeNull();
     await user.hover(codexItem);
+    expect(onExecutionTargetChange).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole("menuitem", { name: /B Model/ }));
 
     expect(onOpenProviderProfile).toHaveBeenCalledWith("codex", "provider-b");
+    expect(onExecutionTargetChange).toHaveBeenCalledTimes(1);
     expect(onExecutionTargetChange).toHaveBeenCalledWith({
       engine: "codex",
       providerProfileId: "provider-b",
@@ -204,7 +206,101 @@ describe("ModelSelect", () => {
     });
   });
 
-  it("fails closed when a Shared catalog entry lacks runtime model identity", async () => {
+  it("switches from Codex to the first Claude local model with explicit runtime identity", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+    const onOpenProviderProfile = vi.fn();
+
+    render(
+      <ModelSelect
+        value="gpt-5.6-sol"
+        currentProvider="codex"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        executionTarget={{
+          engine: "codex",
+          providerProfileId: "codex-provider",
+          modelCatalogEntryId: "gpt-5.6-sol",
+          model: "gpt-5.6-sol",
+          providerProfileNameSnapshot: "Codex Provider",
+          providerProfileSource: "managed",
+          reasoning: { effort: "high" },
+        }}
+        onExecutionTargetChange={onExecutionTargetChange}
+        onOpenProviderProfile={onOpenProviderProfile}
+        targetGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            profiles: [
+              {
+                id: "__local_settings_json__",
+                label: "Local Settings.json",
+                source: "disk",
+                loading: false,
+                error: null,
+                models: [
+                  {
+                    id: "settings-main",
+                    model: "kimi-for-coding",
+                    label: "kimi-for-coding",
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            providerId: "codex",
+            providerLabel: "Codex CLI",
+            enabled: true,
+            profiles: [
+              {
+                id: "codex-provider",
+                label: "Codex Provider",
+                source: "managed",
+                loading: false,
+                error: null,
+                models: [
+                  {
+                    id: "gpt-5.6-sol",
+                    model: "gpt-5.6-sol",
+                    label: "GPT-5.6 Sol",
+                  },
+                ],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button"));
+    await user.hover(
+      await screen.findByRole("menuitem", { name: /Claude Code/ }),
+    );
+    await user.click(
+      await screen.findByRole("menuitem", { name: /kimi-for-coding/ }),
+    );
+
+    expect(onOpenProviderProfile).toHaveBeenCalledWith(
+      "claude",
+      "__local_settings_json__",
+    );
+    expect(onExecutionTargetChange).toHaveBeenCalledOnce();
+    expect(onExecutionTargetChange).toHaveBeenCalledWith({
+      engine: "claude",
+      providerProfileId: null,
+      modelCatalogEntryId: "settings-main",
+      model: "kimi-for-coding",
+      providerProfileNameSnapshot: "Local Settings.json",
+      providerProfileSource: "disk",
+      reasoning: null,
+    });
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("uses the catalog id as the runtime fallback for a legacy model row", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onExecutionTargetChange = vi.fn();
 
@@ -252,9 +348,133 @@ describe("ModelSelect", () => {
       name: /Catalog Only/,
     });
 
-    expect(catalogOnlyItem.getAttribute("data-disabled")).not.toBeNull();
-    fireEvent.click(catalogOnlyItem);
-    expect(onExecutionTargetChange).not.toHaveBeenCalled();
+    expect(catalogOnlyItem.getAttribute("data-disabled")).toBeNull();
+    await user.click(catalogOnlyItem);
+    expect(onExecutionTargetChange).toHaveBeenCalledWith({
+      engine: "codex",
+      providerProfileId: "provider-b",
+      modelCatalogEntryId: "catalog-only",
+      model: "catalog-only",
+      providerProfileNameSnapshot: "Provider B",
+      providerProfileSource: "managed",
+      reasoning: null,
+    });
+  });
+
+  it("keeps Native last-good model rows interactive while refreshing", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+
+    render(
+      <ModelSelect
+        value="current-model"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        targetGroupDisplayMode="profiles"
+        onChange={vi.fn()}
+        executionTarget={{
+          engine: "claude",
+          providerProfileId: null,
+          model: "current-model",
+          providerProfileSource: "disk",
+        }}
+        onExecutionTargetChange={onExecutionTargetChange}
+        targetGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            profiles: [
+              {
+                id: "__local_settings_json__",
+                label: "Local Settings.json",
+                source: "disk",
+                loading: true,
+                error: null,
+                models: [
+                  {
+                    id: "settings-main",
+                    model: "stale-runtime-model",
+                    label: "Stale Local Model",
+                  },
+                ],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button"));
+
+    expect(screen.getByText("models.refreshingConfig")).toBeTruthy();
+    await user.click(
+      screen.getByRole("menuitem", { name: /Stale Local Model/ }),
+    );
+    expect(onExecutionTargetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "claude",
+        providerProfileId: "__local_settings_json__",
+        modelCatalogEntryId: "settings-main",
+        model: "stale-runtime-model",
+      }),
+    );
+  });
+
+  it("marks a Native Provider and model selected without source metadata", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    render(
+      <ModelSelect
+        value="MiniMax-M3"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        targetGroupDisplayMode="profiles"
+        onChange={vi.fn()}
+        executionTarget={{
+          engine: "claude",
+          providerProfileId: "provider-minimax",
+          model: "MiniMax-M3",
+          reasoning: null,
+        }}
+        targetGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            profiles: [
+              {
+                id: "provider-minimax",
+                label: "Minimax-m3",
+                source: "managed",
+                loading: false,
+                error: null,
+                models: [
+                  {
+                    id: "settings-main",
+                    model: "MiniMax-M3",
+                    label: "MiniMax-M3",
+                  },
+                ],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button"));
+
+    expect(
+      screen
+        .getByRole("menuitem", { name: /Minimax-m3/ })
+        .getAttribute("data-selected"),
+    ).toBe("true");
+    expect(
+      screen
+        .getByRole("menuitem", { name: /MiniMax-M3/ })
+        .getAttribute("data-selected"),
+    ).toBe("true");
   });
 
   it("keeps Shared CLI and provider accordion in one stable menu root", async () => {

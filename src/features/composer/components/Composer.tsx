@@ -653,7 +653,9 @@ function ComposerImpl({
   const sharedTargetResolved =
     !isSharedSession || isResolvedExecutionTarget(selectedSharedTarget);
   const effectiveSubmitDisabled = submitDisabled || !sharedTargetResolved;
-  const sharedTargetPersistenceRef = useRef<Promise<unknown>>(Promise.resolve());
+  const sharedTargetPersistenceByThreadRef = useRef(
+    new Map<string, Promise<void>>(),
+  );
   const handleSharedTargetChange = useCallback(
     (target: ExecutionTarget) => {
       if (
@@ -663,9 +665,18 @@ function ComposerImpl({
       ) {
         return;
       }
+      if (!isResolvedExecutionTarget(target)) {
+        // CLI / Provider 菜单导航属于 Picker 内部过渡态，不是一次持久化失败。
+        // 只有完整 Model row 形成 ResolvedExecutionTarget 后才允许跨过该边界。
+        return;
+      }
       const workspaceId = activeWorkspaceId;
       const threadId = activeThreadId;
-      sharedTargetPersistenceRef.current = sharedTargetPersistenceRef.current
+      const persistenceKey = `${workspaceId}::${threadId}`;
+      const previousPersistence =
+        sharedTargetPersistenceByThreadRef.current.get(persistenceKey) ??
+        Promise.resolve();
+      const currentPersistence = previousPersistence
         .catch(() => undefined)
         .then(async () => {
           const response = await persistSharedSessionSelectedTarget(
@@ -688,6 +699,18 @@ function ComposerImpl({
             }),
           });
         });
+      sharedTargetPersistenceByThreadRef.current.set(
+        persistenceKey,
+        currentPersistence,
+      );
+      void currentPersistence.finally(() => {
+        if (
+          sharedTargetPersistenceByThreadRef.current.get(persistenceKey) ===
+          currentPersistence
+        ) {
+          sharedTargetPersistenceByThreadRef.current.delete(persistenceKey);
+        }
+      });
     },
     [
       activeThreadId,
@@ -2507,7 +2530,8 @@ function ComposerImpl({
               onSelectEffort={
                 sharedTargetPickerLocked
                   ? undefined
-                  : isSharedSession && selectedSharedTarget
+                  : isSharedSession &&
+                      isResolvedExecutionTarget(selectedSharedTarget)
                     ? (effort) =>
                         handleSharedTargetChange({
                           ...selectedSharedTarget,

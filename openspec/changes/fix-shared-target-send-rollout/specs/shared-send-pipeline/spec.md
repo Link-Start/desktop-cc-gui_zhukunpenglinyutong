@@ -116,6 +116,22 @@ but MUST NOT let later visible events overtake earlier ones.
 - **THEN** the coordinator MUST retain one settlement and canonical commit
 - **AND** the UI MUST render one assistant final
 
+#### Scenario: equivalent Claude full observations are canonicalized once
+
+- **WHEN** Claude Shared emits an equivalent cumulative/full assistant or reasoning observation
+  more than once, including a duplicated terminal fallback
+- **THEN** the Shared coordinator MUST retain one canonical copy of that semantic content
+- **AND** it MUST preserve ordinary incremental fragments that add new content
+- **AND** Codex Shared accumulation and Native Claude rendering MUST remain unchanged
+
+#### Scenario: non-retry Codex error is terminal failure
+
+- **WHEN** Codex emits an `error` ingress with `willRetry=false` before a later
+  `turn/completed` transport notification
+- **THEN** the Attempt MUST commit exactly once with outcome `failed`
+- **AND** nested error message and code MUST be preserved as canonical failure metadata
+- **AND** the later transport completion MUST NOT rewrite the outcome to `completed`
+
 #### Scenario: interrupt error follows attempt cancel intent
 
 - **WHEN** an attempt-owned interrupt intent is registered before Runtime emits a synchronous
@@ -175,11 +191,16 @@ and before optimistic message, activity, or processing mutations. The returned m
 MUST be consumed exactly once by the V2 orchestrator. A read-only state check alone MUST NOT be
 treated as a concurrency lock.
 
-#### Scenario: degraded context requires explicit user confirmation
+#### Scenario: degraded context sends automatically with durable diagnostics
 
-- **WHEN** context preparation produces a lossy projection with omissions
-- **THEN** the composer MUST enter `degraded-context` listing omissions and mode
-- **AND** the turn MUST NOT be sent until the user explicitly confirms
+- **WHEN** context preparation produces a valid lossy projection with omissions
+- **THEN** Shared Send MUST continue automatically with portable context and the current user
+  request
+- **AND** omissions, dispositions, compression, and projection mode MUST remain durable
+  diagnostic facts
+- **AND** the composer MUST NOT block on a continue/cancel confirmation
+- **AND** compile failure, invalid ownership, ambiguous ACK, or Provider rejection MUST remain
+  fail-closed
 
 #### Scenario: ambiguous ack locks the whole shared session
 
@@ -221,6 +242,80 @@ treated as a concurrency lock.
 - **THEN** the terminal MUST settle that Run
 - **AND** durable commit ACK MUST transition the Shared Composer back to `idle`
 - **AND** a second Turn MUST then be submittable
+
+#### Scenario: exact attempt owns terminal despite projected runtime identity drift
+
+- **WHEN** a terminal carries the exact durable `attemptId` but its projected `runtimeTurnId` or
+  `nativeThreadId` differs from stale frontend owner projection
+- **THEN** exact Attempt ownership MUST settle the Turn
+- **AND** secondary Runtime identity MUST NOT veto that durable identity match
+
+#### Scenario: stop after canonical commit is idempotent
+
+- **WHEN** the user presses Stop after the Attempt has already canonical committed but before the
+  frontend clears its running projection
+- **THEN** interrupt MUST return a typed `terminal-committed` ACK without requiring an active
+  Runtime route
+- **AND** the frontend MUST clear the active Attempt and return the Composer to `idle`
+- **AND** it MUST NOT append a fabricated cancelled/stopped outcome
+
+#### Scenario: committed Shared response cannot revive the native turn
+
+- **WHEN** a Shared V2 send waits for Runtime terminal and canonical commit before its command
+  response returns
+- **THEN** the Shared caller MUST settle processing and return without executing the Native
+  Session turn-start response handler
+- **AND** it MUST NOT assign `activeTurnId` from the already completed Runtime response
+
+#### Scenario: Shared dispatch terminal convergence is engine-neutral
+
+- **WHEN** any Shared Runtime dispatch returns an accepted start ACK without a typed
+  `run.settled`
+- **THEN** the frontend MUST await the backend exact Attempt terminal contract
+- **AND** backend MUST treat durable `conversation.turnCommitted` as the final completion proof
+- **AND** a typed terminal already included in the response MAY be consumed as a fast path
+- **AND** absence of an inline terminal MUST NOT be classified as ambiguous delivery
+- **AND** Claude, Codex, and future Shared CLI adapters MUST use the same terminal convergence
+  contract without Engine-specific branching
+
+#### Scenario: missing frontend terminal event cannot strand a committed send
+
+- **WHEN** Runtime terminal has been canonical committed for the exact Attempt
+- **AND** the corresponding projected `app-server-event` is dropped, emitted before listener
+  installation, or otherwise not observed by the frontend send subscriber
+- **THEN** `shared_session_v2_await_turn_terminal` MUST return the durable committed outcome
+- **AND** Shared Composer MUST transition through `runSettled` and `canonicalCommitted` to `idle`
+- **AND** realtime events MAY still render content and play notifications but MUST NOT own control
+  completion
+- **AND** Native Session lifecycle MUST remain unchanged
+
+#### Scenario: Shared logical terminal is not delayed by CLI cleanup
+
+- **WHEN** a Shared-owned Claude Runtime emits a typed final `result`
+- **AND** its process, hook, MCP child, stdout/stderr pipe, or usage probe is still cleaning up
+- **THEN** the exact Shared Attempt MUST immediately normalize that result into terminal evidence
+- **AND** backend durable settlement MUST NOT wait for cleanup `TurnCompleted` or process exit
+- **AND** a later cleanup `TurnCompleted` MUST be absorbed exactly once without duplicate commit
+  or duplicate assistant content
+- **AND** success/error subtype, error code, stop reason, and final text MUST preserve their typed
+  result semantics
+- **AND** non-Shared Native Claude Session lifecycle MUST remain unchanged
+
+#### Scenario: projected Shared start cannot reactivate Native lifecycle
+
+- **WHEN** a projected `turn/started` event carries a valid Shared V2 owner
+- **THEN** it MUST NOT invoke the generic Native Session turn-start lifecycle
+- **AND** Shared assistant, reasoning, tool, error, and terminal projections MUST remain visible
+- **AND** a non-Shared Native Session event MUST keep the existing lifecycle unchanged
+
+#### Scenario: stop clears an idle Shared UI residue without native interruption
+
+- **WHEN** Shared Send state is already `idle`, its active Attempt has been released, and only a
+  stale frontend processing or active-turn projection remains
+- **THEN** Stop MUST clear that matching Shared UI residue idempotently
+- **AND** it MUST NOT call a Runtime interrupt or append a fabricated terminal outcome
+- **AND** the same condition on a Native Session MUST continue through the existing Native
+  interrupt contract unchanged
 
 #### Scenario: stale restore cannot relock a completed turn
 

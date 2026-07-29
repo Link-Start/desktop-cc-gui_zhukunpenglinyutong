@@ -29,4 +29,14 @@ describe("shared send locale parity", () => {
       });
     },
   );
+
+  it.each([
+    ["zh", zh],
+    ["zh-TW", zhTW],
+  ])("%s does not expose protocol terms in user-facing copy", (_language, locale) => {
+    const copy = Object.values(locale.sharedSend).join("\n");
+    expect(copy).not.toMatch(
+      /\b(?:Shared Session|omissions|Adapter|Probe|Binding|Attempt|Target|estimated tokens|portable-transcript|not-retrievable)\b/i,
+    );
+  });
 });

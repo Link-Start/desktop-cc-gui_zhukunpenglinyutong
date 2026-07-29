@@ -143,17 +143,32 @@ function isSelectedProviderProfile(
   providerId: ProviderId,
   providerProfileId: string,
 ): boolean {
-  const normalizedProviderProfileId = normalizeExecutionProviderProfileId(
-    providerId,
-    providerProfileId,
+  return Boolean(
+    executionTarget &&
+      isSameProviderExecutionProfile(
+        providerId,
+        providerProfileId,
+        executionTarget,
+      ),
   );
-  const expectedSource =
-    normalizedProviderProfileId === null ? "disk" : "managed";
-  return (
-    executionTarget?.engine === providerId &&
-    executionTarget.providerProfileSource === expectedSource &&
-    (executionTarget.providerProfileId ?? null) ===
-      normalizedProviderProfileId
+}
+
+function resolveRuntimeModel(model: ModelInfo): string | undefined {
+  return model.model?.trim() || model.id.trim() || undefined;
+}
+
+function isSelectedExecutionModel(
+  executionTarget: ExecutionTarget | null | undefined,
+  model: ModelInfo,
+): boolean {
+  const selectedCatalogEntryId = executionTarget?.modelCatalogEntryId?.trim();
+  if (selectedCatalogEntryId) {
+    return selectedCatalogEntryId === model.id;
+  }
+  const selectedRuntimeModel = executionTarget?.model?.trim();
+  return Boolean(
+    selectedRuntimeModel &&
+      selectedRuntimeModel === resolveRuntimeModel(model),
   );
 }
 
@@ -572,14 +587,14 @@ export const ModelSelect = memo(({
             )}
           {isExpanded &&
             profile.models.map((model) => {
-              const runtimeModel = model.model?.trim();
+              const runtimeModel = resolveRuntimeModel(model);
               const isSelected =
                 isSelectedProfile &&
-                (executionTarget?.modelCatalogEntryId ??
-                  executionTarget?.model) === model.id;
+                isSelectedExecutionModel(executionTarget, model);
               return (
                 <DropdownMenuItem
                   key={`${profileKey}:${model.id}`}
+                  data-selected={isSelected ? 'true' : undefined}
                   disabled={!runtimeModel}
                   className="gap-2 pl-7"
                   onSelect={() =>

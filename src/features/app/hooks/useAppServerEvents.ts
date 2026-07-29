@@ -64,6 +64,7 @@ type AgentDelta = {
 type TurnErrorPayload = {
   message: string;
   willRetry: boolean;
+  suppressMessage?: boolean;
   engine?: ConversationEngine | null;
   executionTargetSnapshot?: SharedSessionNativeBinding["executionTargetSnapshot"];
 };
@@ -1821,7 +1822,14 @@ export function dispatchAppServerEvent(
       delete threadAgentDeltaSeenRef.current[threadId];
       delete threadAgentCompletedSeenRef.current[threadId];
       delete threadAgentSnapshotSeenRef.current[threadId];
-      handlers.onTurnStarted?.(workspace_id, threadId, turnId);
+      // Shared V2 caller 已在 attempt admission 时建立 processing lifecycle。
+      // Rust 投影的 delayed turn/started 只提供 Runtime evidence；若再进入通用
+      // Native handler，会在 canonical commit 后复活 activeTurnId / Stop。
+      const isOwnedSharedV2Projection =
+        Boolean(sharedBridge) && params.sharedOwner !== undefined;
+      if (!isOwnedSharedV2Projection) {
+        handlers.onTurnStarted?.(workspace_id, threadId, turnId);
+      }
     }
     return;
   }
@@ -2130,10 +2138,16 @@ export function dispatchAppServerEvent(
         : typeof errorValue === "object" && errorValue
           ? String((errorValue as Record<string, unknown>).message ?? "")
           : "";
+    const suppressMessage =
+      Boolean(sharedBridge) &&
+      String(
+        params.sharedRecoveryReason ?? params.shared_recovery_reason ?? "",
+      ) === "native-session-not-found";
     if (threadId) {
       handlers.onTurnError?.(workspace_id, threadId, turnId, {
         message: messageText,
         willRetry,
+        ...(suppressMessage ? { suppressMessage: true } : {}),
         engine: resolveEventEngine(threadId, sharedBridge?.engine),
         ...(sharedBridge?.executionTargetSnapshot
           ? { executionTargetSnapshot: sharedBridge.executionTargetSnapshot }
@@ -2211,10 +2225,16 @@ export function dispatchAppServerEvent(
     const error = (params.error as Record<string, unknown> | undefined) ?? {};
     const messageText = String(error.message ?? "");
     const willRetry = Boolean(params.willRetry ?? params.will_retry);
+    const suppressMessage =
+      Boolean(sharedBridge) &&
+      String(
+        params.sharedRecoveryReason ?? params.shared_recovery_reason ?? "",
+      ) === "native-session-not-found";
     if (threadId) {
       handlers.onTurnError?.(workspace_id, threadId, turnId, {
         message: messageText,
         willRetry,
+        ...(suppressMessage ? { suppressMessage: true } : {}),
         engine: resolveEventEngine(threadId, sharedBridge?.engine),
         ...(sharedBridge?.executionTargetSnapshot
           ? { executionTargetSnapshot: sharedBridge.executionTargetSnapshot }

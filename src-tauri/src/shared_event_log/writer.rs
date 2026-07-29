@@ -107,6 +107,23 @@ pub struct BindingStateUpdate {
     pub updated_at: i64,
 }
 
+/// Shared Session 行的完整 selected Target 更新。
+#[derive(Debug, Clone)]
+pub struct SessionTargetUpdate {
+    pub session_id: String,
+    pub schema_version: u32,
+    pub selected_target_json: String,
+    pub updated_at: i64,
+}
+
+/// `shared_sessions_v2` 的 selected Target 只读快照。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredSessionTarget {
+    pub session_id: String,
+    pub selected_target_json: String,
+    pub updated_at: i64,
+}
+
 /// 已落盘的 binding 行（只读查询用）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredBindingState {
@@ -213,6 +230,22 @@ fn map_event_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoredEvent> {
         payload_checksum: row.get(8)?,
         fidelity: Fidelity::from_db_str(&fidelity_raw, 9)?,
         committed_at: row.get(10)?,
+    })
+}
+
+fn map_binding_state_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoredBindingState> {
+    Ok(StoredBindingState {
+        session_id: row.get(0)?,
+        binding_key: row.get(1)?,
+        engine: row.get(2)?,
+        provider_profile_id: row.get(3)?,
+        native_session_id: row.get(4)?,
+        accepted_through_sequence: row.get(5)?,
+        committed_through_sequence: row.get(6)?,
+        provisioning_json: row.get(7)?,
+        pending_delivery_json: row.get(8)?,
+        availability: row.get(9)?,
+        updated_at: row.get(10)?,
     })
 }
 
@@ -431,6 +464,55 @@ impl SharedEventStore {
         upsert_binding_state_tx(&self.conn, update)
     }
 
+    pub(crate) fn upsert_session_target(
+        &mut self,
+        update: &SessionTargetUpdate,
+    ) -> Result<(), StoreError> {
+        serde_json::from_str::<Value>(&update.selected_target_json)
+            .map_err(|source| StoreError::json("parse selected_target_json", source))?;
+        self.conn
+            .execute(
+                "INSERT INTO shared_sessions_v2 (
+                    session_id, schema_version, next_sequence, selected_target_json,
+                    created_at, updated_at
+                 ) VALUES (?1, ?2, 1, ?3, ?4, ?4)
+                 ON CONFLICT(session_id) DO UPDATE SET
+                    schema_version = excluded.schema_version,
+                    selected_target_json = excluded.selected_target_json,
+                    updated_at = excluded.updated_at",
+                rusqlite::params![
+                    update.session_id,
+                    update.schema_version,
+                    update.selected_target_json,
+                    update.updated_at,
+                ],
+            )
+            .map_err(|source| map_write_error("upsert session target", source))?;
+        Ok(())
+    }
+
+    pub(crate) fn session_target(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<StoredSessionTarget>, StoreError> {
+        self.conn
+            .query_row(
+                "SELECT session_id, selected_target_json, updated_at
+                 FROM shared_sessions_v2
+                 WHERE session_id = ?1",
+                [session_id],
+                |row| {
+                    Ok(StoredSessionTarget {
+                        session_id: row.get(0)?,
+                        selected_target_json: row.get(1)?,
+                        updated_at: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|source| StoreError::sqlite("read session target", source))
+    }
+
     /// 写入 Provider Usage Ledger 记录（revision/supersede 链校验见 [`ledger`]）。
     pub(crate) fn record_provider_usage(
         &mut self,
@@ -531,24 +613,33 @@ impl SharedEventStore {
                  FROM shared_binding_state
                  WHERE session_id = ?1 AND binding_key = ?2",
                 rusqlite::params![session_id, binding_key],
-                |row| {
-                    Ok(StoredBindingState {
-                        session_id: row.get(0)?,
-                        binding_key: row.get(1)?,
-                        engine: row.get(2)?,
-                        provider_profile_id: row.get(3)?,
-                        native_session_id: row.get(4)?,
-                        accepted_through_sequence: row.get(5)?,
-                        committed_through_sequence: row.get(6)?,
-                        provisioning_json: row.get(7)?,
-                        pending_delivery_json: row.get(8)?,
-                        availability: row.get(9)?,
-                        updated_at: row.get(10)?,
-                    })
-                },
+                map_binding_state_row,
             )
             .optional()
             .map_err(|source| StoreError::sqlite("read binding state", source))
+    }
+
+    /// 读取某 Shared Session 的全部 Hidden Native Binding。
+    pub(crate) fn binding_states_for_session(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<StoredBindingState>, StoreError> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT session_id, binding_key, engine, provider_profile_id, native_session_id,
+                        accepted_through_sequence, committed_through_sequence,
+                        provisioning_json, pending_delivery_json, availability, updated_at
+                 FROM shared_binding_state
+                 WHERE session_id = ?1
+                 ORDER BY binding_key ASC",
+            )
+            .map_err(|source| StoreError::sqlite("prepare binding states query", source))?;
+        let rows = statement
+            .query_map([session_id], map_binding_state_row)
+            .map_err(|source| StoreError::sqlite("query binding states", source))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|source| StoreError::sqlite("read binding states", source))
     }
 
     /// 读取某 `(provider, window, subject)` 下的 Ledger 行（按 revision 升序）。
@@ -972,6 +1063,14 @@ enum WriterCommand {
         update: BindingStateUpdate,
         respond: mpsc::Sender<Result<(), StoreError>>,
     },
+    UpsertSessionTarget {
+        update: SessionTargetUpdate,
+        respond: mpsc::Sender<Result<(), StoreError>>,
+    },
+    SessionTarget {
+        session_id: String,
+        respond: mpsc::Sender<Result<Option<StoredSessionTarget>, StoreError>>,
+    },
     RecordUsage {
         record: ProviderUsageRecord,
         respond: mpsc::Sender<Result<LedgerOutcome, StoreError>>,
@@ -997,6 +1096,10 @@ enum WriterCommand {
         session_id: String,
         binding_key: String,
         respond: mpsc::Sender<Result<Option<StoredBindingState>, StoreError>>,
+    },
+    BindingStatesForSession {
+        session_id: String,
+        respond: mpsc::Sender<Result<Vec<StoredBindingState>, StoreError>>,
     },
     LedgerRows {
         provider_profile_id: String,
@@ -1141,6 +1244,15 @@ impl SharedEventWriter {
                         WriterCommand::UpsertBinding { update, respond } => {
                             let _ = respond.send(store.upsert_binding_state(&update));
                         }
+                        WriterCommand::UpsertSessionTarget { update, respond } => {
+                            let _ = respond.send(store.upsert_session_target(&update));
+                        }
+                        WriterCommand::SessionTarget {
+                            session_id,
+                            respond,
+                        } => {
+                            let _ = respond.send(store.session_target(&session_id));
+                        }
                         WriterCommand::RecordUsage { record, respond } => {
                             let _ = respond.send(store.record_provider_usage(&record));
                         }
@@ -1177,6 +1289,12 @@ impl SharedEventWriter {
                             respond,
                         } => {
                             let _ = respond.send(store.binding_state(&session_id, &binding_key));
+                        }
+                        WriterCommand::BindingStatesForSession {
+                            session_id,
+                            respond,
+                        } => {
+                            let _ = respond.send(store.binding_states_for_session(&session_id));
                         }
                         WriterCommand::LedgerRows {
                             provider_profile_id,
@@ -1360,6 +1478,23 @@ impl SharedEventWriter {
         })
     }
 
+    pub fn upsert_session_target(&self, update: &SessionTargetUpdate) -> Result<(), StoreError> {
+        self.send_command(|respond| WriterCommand::UpsertSessionTarget {
+            update: update.clone(),
+            respond,
+        })
+    }
+
+    pub fn session_target(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<StoredSessionTarget>, StoreError> {
+        self.send_command(|respond| WriterCommand::SessionTarget {
+            session_id: session_id.to_string(),
+            respond,
+        })
+    }
+
     pub fn record_provider_usage(
         &self,
         record: &ProviderUsageRecord,
@@ -1414,6 +1549,17 @@ impl SharedEventWriter {
         self.send_command(|respond| WriterCommand::BindingState {
             session_id: session_id.to_string(),
             binding_key: binding_key.to_string(),
+            respond,
+        })
+    }
+
+    /// 只读查询：返回某 Shared Session 的全部 Hidden Native Binding。
+    pub fn binding_states_for_session(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<StoredBindingState>, StoreError> {
+        self.send_command(|respond| WriterCommand::BindingStatesForSession {
+            session_id: session_id.to_string(),
             respond,
         })
     }

@@ -41,9 +41,11 @@ import { sendSharedSessionTurnRouted } from "../../shared-session/runtime/sendSh
 import { isSharedV2SendEnabled } from "../../shared-session/runtime/sharedV2SendFlag";
 import { sharedSessionV2InterruptTurn as sharedSessionV2InterruptTurnService } from "../../shared-session/services/sharedSessions";
 import {
+  dispatchSharedSendEvent,
   getSharedSendActiveAttemptId,
   getSharedSendState,
   releaseSharedSendAdmission,
+  setSharedSendActiveAttempt,
   tryAcquireSharedSend,
 } from "../../shared-session/runtime/sharedSendStateStore";
 import {
@@ -1361,6 +1363,18 @@ export function useThreadMessaging({
             label: "shared-session/turn/start response",
             payload: response,
           });
+          const sharedV2Result =
+            response.v2 && typeof response.v2 === "object"
+              ? (response.v2 as Record<string, unknown>)
+              : null;
+          if (sharedV2SendEnabled && sharedV2Result?.committed === true) {
+            // Shared V2 command 直到 Runtime terminal 被 canonical commit 后才返回。
+            // 此处只收敛 Shared UI projection；不得落入 Native turn-start lifecycle。
+            markProcessing(threadId, false);
+            setActiveTurnId(threadId, null);
+            safeMessageActivity();
+            return;
+          }
         } else {
 
         const isClaudeSession = threadId.startsWith("claude:");
@@ -2242,6 +2256,32 @@ export function useThreadMessaging({
       return;
     }
     if (usesSharedV2Control && !sharedAttemptId) {
+      const sharedSendState = getSharedSendState(
+        activeWorkspace.id,
+        activeThreadId,
+      ).state;
+      if (
+        sharedSendState === "idle" &&
+        (activeTurnId || activeThreadIsProcessing)
+      ) {
+        // canonical commit 已把 Shared send state 收口并释放 Attempt；此时只剩
+        // frontend lifecycle residue。它不再需要、也不允许触发 Runtime interrupt。
+        markProcessing(activeThreadId, false);
+        setActiveTurnId(activeThreadId, null);
+        onDebug?.({
+          id: `${Date.now()}-client-shared-turn-residue-converged`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "shared-session/turn residue converged",
+          payload: {
+            workspaceId: activeWorkspace.id,
+            threadId: activeThreadId,
+            reason,
+            sharedSendState,
+          },
+        });
+        return;
+      }
       onDebug?.({
         id: `${Date.now()}-client-turn-interrupt-skipped`,
         timestamp: Date.now(),
@@ -2252,17 +2292,27 @@ export function useThreadMessaging({
           threadId: activeThreadId,
           reason,
           cause: "shared-attempt-owner-missing",
+          sharedSendState,
         },
       });
       return;
     }
     if (sharedAttemptId) {
       try {
-        await sharedSessionV2InterruptTurnService(
+        const interruptResult = await sharedSessionV2InterruptTurnService(
           activeWorkspace.id,
           activeThreadId,
           sharedAttemptId,
         );
+        if (interruptResult.status === "terminal-committed") {
+          dispatchSharedSendEvent(activeWorkspace.id, activeThreadId, {
+            type: "terminalCommitted",
+          });
+          setSharedSendActiveAttempt(activeWorkspace.id, activeThreadId, null);
+          markProcessing(activeThreadId, false);
+          setActiveTurnId(activeThreadId, null);
+          return;
+        }
       } catch (error) {
         onDebug?.({
           id: `${Date.now()}-client-turn-interrupt-error`,

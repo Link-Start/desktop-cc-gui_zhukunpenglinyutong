@@ -108,6 +108,11 @@ pub(crate) fn context_capabilities(target: &ExecutionTargetInput) -> RuntimeCont
     }
 }
 
+fn raw_claude_session_id(value: &str) -> Option<&str> {
+    let raw = value.strip_prefix("claude:").unwrap_or(value).trim();
+    (!raw.is_empty()).then_some(raw)
+}
+
 pub(crate) fn codex_import_items(package: &crate::shared_context::ContextPackage) -> Vec<Value> {
     codex_import_projection(package).0
 }
@@ -175,18 +180,29 @@ pub(crate) fn codex_import_projection(
             items
         })
         .collect();
-    let marker = format!(
-        "MOSSX_CONTEXT_PACKAGE:{}:{}",
-        package.package_id, package.manifest.source_checksum
-    );
-    items.insert(
-        0,
-        json!({
+    if !items.is_empty() {
+        let package_marker = format!(
+            "MOSSX_CONTEXT_PACKAGE:{}:{}",
+            package.package_id, package.manifest.source_checksum
+        );
+        let accepted_marker = format!(
+            "MOSSX_CONTEXT_ACCEPTED:{}:{}",
+            package.package_id, package.manifest.source_checksum
+        );
+        items.insert(
+            0,
+            json!({
+                "type": "message",
+                "role": "user",
+                "content": [{ "type": "input_text", "text": package_marker }],
+            }),
+        );
+        items.push(json!({
             "type": "message",
             "role": "user",
-            "content": [{ "type": "input_text", "text": marker }],
-        }),
-    );
+            "content": [{ "type": "input_text", "text": accepted_marker }],
+        }));
+    }
     (items, dropped_entries)
 }
 
@@ -239,6 +255,54 @@ impl ExecutionTargetInput {
     }
 }
 
+fn collaboration_mode_for_attempt(
+    collaboration_mode: Option<Value>,
+    target: &ExecutionTargetInput,
+) -> Option<Value> {
+    collaboration_mode.map(|payload| {
+        let mut root = payload.as_object().cloned().unwrap_or_default();
+        let mut settings = root
+            .get("settings")
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+
+        match target
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            Some(model) => {
+                settings.insert("model".to_string(), Value::String(model.to_string()));
+            }
+            None => {
+                settings.remove("model");
+            }
+        }
+        settings.remove("reasoningEffort");
+        match target
+            .reasoning_effort
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            Some(effort) => {
+                settings.insert(
+                    "reasoning_effort".to_string(),
+                    Value::String(effort.to_string()),
+                );
+            }
+            None => {
+                settings.remove("reasoning_effort");
+            }
+        }
+
+        root.insert("settings".to_string(), Value::Object(settings));
+        Value::Object(root)
+    })
+}
+
 #[cfg(test)]
 mod execution_target_contract_tests {
     use super::*;
@@ -275,6 +339,16 @@ mod execution_target_contract_tests {
         }))
         .expect_err("catalog source must not cross canonical IPC boundary");
         assert!(error.to_string().contains("unknown variant"));
+    }
+
+    #[test]
+    fn claude_session_identity_accepts_legacy_raw_and_canonical_prefix() {
+        assert_eq!(raw_claude_session_id("legacy-uuid"), Some("legacy-uuid"));
+        assert_eq!(
+            raw_claude_session_id("claude:canonical-uuid"),
+            Some("canonical-uuid")
+        );
+        assert_eq!(raw_claude_session_id("claude:"), None);
     }
 
     #[test]
@@ -355,6 +429,44 @@ mod execution_target_contract_tests {
         };
 
         assert!(context_capabilities(&target).strong_context_ack);
+    }
+
+    #[test]
+    fn collaboration_mode_uses_attempt_model_and_clears_stale_reasoning() {
+        let target = ExecutionTargetInput {
+            engine: EngineType::Codex,
+            provider_profile_id: Some("minimax".to_string()),
+            model_catalog_entry_id: Some("minimax-m3".to_string()),
+            model: Some("MiniMax-M3".to_string()),
+            reasoning_effort: None,
+            provider_profile_name_snapshot: Some("MiniMax".to_string()),
+            provider_profile_source: Some(CanonicalProviderProfileSource::Managed),
+            runtime_capability_fingerprint: None,
+        };
+        let rewritten = collaboration_mode_for_attempt(
+            Some(json!({
+                "mode": "default",
+                "settings": {
+                    "model": "gpt-5.6-sol",
+                    "reasoning_effort": "high",
+                    "developer_instructions": "keep-me"
+                }
+            })),
+            &target,
+        )
+        .expect("collaboration mode");
+
+        assert_eq!(
+            rewritten.pointer("/settings/model").and_then(Value::as_str),
+            Some("MiniMax-M3")
+        );
+        assert!(rewritten.pointer("/settings/reasoning_effort").is_none());
+        assert_eq!(
+            rewritten
+                .pointer("/settings/developer_instructions")
+                .and_then(Value::as_str),
+            Some("keep-me")
+        );
     }
 }
 
@@ -2168,11 +2280,75 @@ fn persist_not_accepted_dispatch(
     error: &str,
 ) -> String {
     let typed = typed_dispatch_error(code, error);
-    let persisted =
-        settle_known_dispatch_failure(writer, session_id, owner, native_session_id, &typed);
+    let existing_terminal = writer
+        .events_for_session(session_id)
+        .map_err(|error| error.to_string())
+        .and_then(|events| {
+            events
+                .into_iter()
+                .find(|event| {
+                    event.fact_type == "conversation.turnCommitted"
+                        && event.attempt_id.as_deref() == Some(owner.requested.attempt_id.as_str())
+                })
+                .map(|event| {
+                    serde_json::from_str::<CanonicalFact>(&event.payload_json)
+                        .map_err(|error| format!("parse existing turnCommitted payload: {error}"))
+                })
+                .transpose()
+        });
+    let persisted = match existing_terminal {
+        Ok(Some(CanonicalFact::TurnCommitted(fact)))
+            if matches!(
+                fact.outcome.status,
+                OutcomeStatus::Failed | OutcomeStatus::Cancelled | OutcomeStatus::Replaced
+            ) =>
+        {
+            // Runtime terminal 与 command response 可能并发到达。已有 authoritative
+            // negative terminal 时复用它，禁止追加不同 errorCode 的第二份事实。
+            Ok(())
+        }
+        Ok(_) => {
+            settle_known_dispatch_failure(writer, session_id, owner, native_session_id, &typed)
+        }
+        Err(error) => Err(error),
+    };
     match persisted {
         Ok(()) => typed,
         Err(persist_error) => format!("{typed}; canonical-failure-persistence: {persist_error}"),
+    }
+}
+
+fn persist_binding_recovery_and_cleanup(
+    state: &AppState,
+    writer: &SharedEventWriter,
+    session_id: &str,
+    owner: &DurableAttemptOwner,
+    native_session_id: Option<&str>,
+) -> String {
+    const RECOVERY_REASON: &str = "native-session-not-found";
+    let typed = persist_not_accepted_dispatch(
+        writer,
+        session_id,
+        owner,
+        native_session_id,
+        "binding-recovery-required",
+        RECOVERY_REASON,
+    );
+    let recovery_error = mark_recovery_core(
+        writer,
+        session_id,
+        &owner.binding_key,
+        owner.engine,
+        owner.provider_profile_id.clone(),
+        Some(RECOVERY_REASON),
+    )
+    .err();
+    state
+        .shared_runtime_coordinator
+        .remove_attempt(&owner.requested.attempt_id);
+    match recovery_error {
+        Some(error) => format!("{typed}; binding-recovery-persistence: {error}"),
+        None => typed,
     }
 }
 
@@ -2225,8 +2401,26 @@ pub(crate) fn commit_observed_runtime_settlement(
 ) -> Result<CommitTurnOutcome, String> {
     let writer = require_writer(state)?;
     let owner = settled.owner.clone();
+    let binding_recovery_required = owner.engine == EngineType::Claude
+        && settled.final_snapshot.outcome == OutcomeStatus::Failed
+        && settled
+            .final_snapshot
+            .error_message
+            .as_deref()
+            .is_some_and(crate::shared_runtime_coordinator::is_missing_native_session_error);
     match commit_settled_runtime_attempt(writer, settled) {
         Ok(committed) => {
+            if binding_recovery_required {
+                mark_recovery_core(
+                    writer,
+                    &owner.shared_session_id,
+                    &owner.binding_key,
+                    owner.engine,
+                    owner.execution_target_snapshot.provider_profile_id.clone(),
+                    Some("native-session-not-found"),
+                )
+                .map_err(|error| format!("binding-recovery-persistence: {error}"))?;
+            }
             state
                 .shared_runtime_coordinator
                 .remove_attempt(&owner.attempt_id);
@@ -2270,10 +2464,68 @@ fn runtime_terminal_delivery(
         OutcomeStatus::Failed => "failed",
         OutcomeStatus::Cancelled | OutcomeStatus::Replaced => "cancelled",
     };
+    let recovery_reason = (settled.owner.engine == EngineType::Claude
+        && settled.final_snapshot.outcome == OutcomeStatus::Failed
+        && settled
+            .final_snapshot
+            .error_message
+            .as_deref()
+            .is_some_and(crate::shared_runtime_coordinator::is_missing_native_session_error))
+    .then_some("native-session-not-found");
     json!({
         "type": "run.settled",
         "outcome": outcome,
+        "recoveryReason": recovery_reason,
     })
+}
+
+fn committed_terminal_response(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    attempt_id: &str,
+    binding_key: &str,
+) -> Result<Option<Value>, String> {
+    let committed = writer
+        .events_for_session(session_id)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .find(|event| {
+            event.fact_type == "conversation.turnCommitted"
+                && event.attempt_id.as_deref() == Some(attempt_id)
+        });
+    let Some(event) = committed else {
+        return Ok(None);
+    };
+    let fact = serde_json::from_str::<CanonicalFact>(&event.payload_json)
+        .map_err(|error| format!("parse committed terminal for attempt {attempt_id}: {error}"))?;
+    let CanonicalFact::TurnCommitted(committed) = fact else {
+        return Err(format!(
+            "invalid conversation.turnCommitted payload for attempt {attempt_id}"
+        ));
+    };
+    let outcome = match committed.outcome.status {
+        OutcomeStatus::Completed => "completed",
+        OutcomeStatus::Failed => "failed",
+        OutcomeStatus::Cancelled | OutcomeStatus::Replaced => "cancelled",
+    };
+    let recovery_reason = (committed.outcome.status == OutcomeStatus::Failed
+        && committed
+            .outcome
+            .error_message
+            .as_deref()
+            .is_some_and(crate::shared_runtime_coordinator::is_missing_native_session_error))
+    .then_some("native-session-not-found");
+    Ok(Some(json!({
+        "status": "committed",
+        "duplicate": true,
+        "sequence": event.sequence,
+        "bindingKey": binding_key,
+        "terminal": {
+            "type": "run.settled",
+            "outcome": outcome,
+            "recoveryReason": recovery_reason,
+        },
+    })))
 }
 
 fn persist_materialized_binding(
@@ -2428,16 +2680,13 @@ async fn materialize_attempt_binding(
                     ));
                 }
             }
+            // 兼容 foundation 回归期间写入的 raw UUID；canonical identity 始终
+            // 规范化为 `claude:<uuid>`，不能把 raw existing 误判成“无 Binding”。
             let raw_session_id = existing
                 .as_deref()
-                .and_then(|value| value.strip_prefix("claude:"))
-                .unwrap_or_default()
-                .trim();
-            let raw_session_id = if raw_session_id.is_empty() {
-                Uuid::new_v4().to_string()
-            } else {
-                raw_session_id.to_string()
-            };
+                .and_then(raw_claude_session_id)
+                .map(str::to_string)
+                .unwrap_or_else(|| Uuid::new_v4().to_string());
             format!("claude:{raw_session_id}")
         }
         _ => {
@@ -2652,6 +2901,7 @@ pub async fn shared_session_v2_prepare_context(
         .manifest
         .omitted
         .iter()
+        .filter(|omission| omission.requires_confirmation())
         .map(|omission| format!("{}: {}", omission.category, omission.reason))
         .collect::<Vec<_>>();
     Ok(json!({
@@ -2739,7 +2989,16 @@ pub async fn shared_session_v2_prepare_delivery(
         persist_context_prepare_failure(writer, &shared_session_id, &owner, &error)
     })?;
     Ok(json!({
-        "status": if package.manifest.omitted.is_empty() { "ready" } else { "degraded" },
+        "status": if package
+            .manifest
+            .omitted
+            .iter()
+            .any(|omission| omission.requires_confirmation())
+        {
+            "degraded"
+        } else {
+            "ready"
+        },
         "packageId": package.package_id,
         "artifactId": artifact.artifact_id,
         "artifactChecksum": artifact.checksum,
@@ -2886,13 +3145,15 @@ pub async fn shared_session_v2_dispatch_turn(
         // 后再一次性 bind + replay。
         native_session_id: None,
         runtime_turn_id: None,
-        context_marker: (capabilities.strong_context_ack && pending.operation == "prompt-prefix")
-            .then(
-                || crate::shared_runtime_coordinator::SharedRuntimeContextMarker {
-                    package_id: pending.package_id.clone(),
-                    source_checksum: pending.source_checksum.clone(),
-                },
-            ),
+        context_marker: (capabilities.strong_context_ack
+            && pending.operation == "prompt-prefix"
+            && !artifact.package.prompt_prefix.trim().is_empty())
+        .then(
+            || crate::shared_runtime_coordinator::SharedRuntimeContextMarker {
+                package_id: pending.package_id.clone(),
+                source_checksum: pending.source_checksum.clone(),
+            },
+        ),
     };
     if let Some(settled) = state
         .shared_runtime_coordinator
@@ -2927,7 +3188,16 @@ pub async fn shared_session_v2_dispatch_turn(
             },
         }));
     }
-    let native_session_id = materialize_attempt_binding(
+    let needs_codex_provisioning_hold = owner.engine == EngineType::Codex && !had_native_binding;
+    if needs_codex_provisioning_hold {
+        state
+            .shared_runtime_coordinator
+            .hold_native_provisioning(&attempt_id)
+            .map_err(|error| {
+                persist_ambiguous_dispatch(writer, &shared_session_id, &owner, &error)
+            })?;
+    }
+    let native_session_id = match materialize_attempt_binding(
         &workspace_id,
         &shared_session_id,
         &owner,
@@ -2936,7 +3206,51 @@ pub async fn shared_session_v2_dispatch_turn(
         &app,
     )
     .await
-    .map_err(|error| persist_ambiguous_dispatch(writer, &shared_session_id, &owner, &error))?;
+    {
+        Ok(native_session_id) => native_session_id,
+        Err(error) => {
+            if needs_codex_provisioning_hold {
+                // exact identity 未返回，隐藏这次 provisioning 窗口内的早到
+                // thread/started；durable Binding 已进入显式 recovery。
+                let _ = state
+                    .shared_runtime_coordinator
+                    .finish_native_provisioning(&attempt_id);
+            }
+            return Err(persist_ambiguous_dispatch(
+                writer,
+                &shared_session_id,
+                &owner,
+                &error,
+            ));
+        }
+    };
+    if let Err(error) = state
+        .shared_runtime_coordinator
+        .hold_native_session(&attempt_id, &native_session_id)
+    {
+        if needs_codex_provisioning_hold {
+            let _ = state
+                .shared_runtime_coordinator
+                .finish_native_provisioning(&attempt_id);
+        }
+        return Err(persist_ambiguous_dispatch(
+            writer,
+            &shared_session_id,
+            &owner,
+            &error,
+        ));
+    }
+    if needs_codex_provisioning_hold {
+        for event in state
+            .shared_runtime_coordinator
+            .finish_native_provisioning(&attempt_id)
+            .map_err(|error| {
+                persist_ambiguous_dispatch(writer, &shared_session_id, &owner, &error)
+            })?
+        {
+            let _ = app.emit("app-server-event", event);
+        }
+    }
     let delivery_request_id = format!("shared-delivery:{attempt_id}");
     mark_delivery_sent(
         writer,
@@ -2961,7 +3275,13 @@ pub async fn shared_session_v2_dispatch_turn(
             &error,
         )
     })?;
-    let mut context_evidence = "typed-prompt-acceptance";
+    let no_context_transfer_required =
+        artifact.package.delta.is_empty() && artifact.package.prompt_prefix.trim().is_empty();
+    let mut context_evidence = if no_context_transfer_required {
+        "no-context-transfer-required"
+    } else {
+        "typed-prompt-acceptance"
+    };
     if pending.operation == "context-import" {
         if owner.engine != EngineType::Codex {
             let error =
@@ -2976,24 +3296,28 @@ pub async fn shared_session_v2_dispatch_turn(
                 error,
             ));
         }
-        crate::shared::codex_core::inject_thread_items_core(
-            &state.sessions,
-            &workspace_id,
-            owner.provider_profile_id.as_deref(),
-            &native_session_id,
-            codex_import_items(&artifact.package),
-        )
-        .await
-        .map_err(|error| persist_ambiguous_dispatch(writer, &shared_session_id, &owner, &error))?;
+        if !no_context_transfer_required {
+            crate::shared::codex_core::inject_thread_items_core(
+                &state.sessions,
+                &workspace_id,
+                owner.provider_profile_id.as_deref(),
+                &native_session_id,
+                codex_import_items(&artifact.package),
+            )
+            .await
+            .map_err(|error| {
+                persist_ambiguous_dispatch(writer, &shared_session_id, &owner, &error)
+            })?;
+            context_evidence = "thread/inject_items-jsonrpc-success";
+        }
         accept_context_for_attempt_core(
             writer,
             &shared_session_id,
             &owner,
             &pending.package_id,
             &native_session_id,
-            Some(delivery_request_id.clone()),
+            (!no_context_transfer_required).then(|| delivery_request_id.clone()),
         )?;
-        context_evidence = "thread/inject_items-jsonrpc-success";
     }
 
     let user_text = owner
@@ -3023,11 +3347,6 @@ pub async fn shared_session_v2_dispatch_turn(
         user_text.to_string()
     };
 
-    state
-        .shared_runtime_coordinator
-        .hold_native_session(&attempt_id, &native_session_id)
-        .map_err(|error| persist_ambiguous_dispatch(writer, &shared_session_id, &owner, &error))?;
-
     let response = match owner.engine {
         EngineType::Codex => {
             let (mode_enforcement_enabled, extra_developer_instructions) = {
@@ -3049,7 +3368,7 @@ pub async fn shared_session_v2_dispatch_turn(
                 owner.target.reasoning_effort.clone(),
                 access_mode,
                 images,
-                collaboration_mode,
+                collaboration_mode_for_attempt(collaboration_mode, &owner.target),
                 preferred_language,
                 custom_spec_root,
                 mode_enforcement_enabled,
@@ -3100,6 +3419,17 @@ pub async fn shared_session_v2_dispatch_turn(
     .map_err(|error| persist_ambiguous_dispatch(writer, &shared_session_id, &owner, &error))?;
 
     if let Some(error) = runtime_response_error(&response) {
+        if owner.engine == EngineType::Claude
+            && crate::shared_runtime_coordinator::is_missing_native_session_error(&error)
+        {
+            return Err(persist_binding_recovery_and_cleanup(
+                &state,
+                writer,
+                &shared_session_id,
+                &owner,
+                Some(&native_session_id),
+            ));
+        }
         return Err(persist_not_accepted_dispatch_and_cleanup(
             &state,
             writer,
@@ -3145,7 +3475,7 @@ pub async fn shared_session_v2_dispatch_turn(
         .map_err(|error| persist_ambiguous_dispatch(writer, &shared_session_id, &owner, &error))?;
 
     if pending.operation == "prompt-prefix" {
-        if capabilities.strong_context_ack {
+        if capabilities.strong_context_ack && !artifact.package.prompt_prefix.trim().is_empty() {
             let wait_outcome = state
                 .shared_runtime_coordinator
                 .wait_for_context_ack_or_settlement(&attempt_id, Duration::from_secs(30))
@@ -3168,7 +3498,17 @@ pub async fn shared_session_v2_dispatch_turn(
                         .unwrap_or_else(|| {
                             "Runtime terminated before Shared context ACK".to_string()
                         });
+                    let binding_recovery_required = owner.engine == EngineType::Claude
+                        && outcome == OutcomeStatus::Failed
+                        && crate::shared_runtime_coordinator::is_missing_native_session_error(
+                            &detail,
+                        );
                     commit_observed_runtime_settlement(&state, settled)?;
+                    if binding_recovery_required {
+                        return Err(
+                            "binding-recovery-required: native-session-not-found".to_string(),
+                        );
+                    }
                     return Err(match outcome {
                         OutcomeStatus::Failed => {
                             format!("target-provider-rejected: {detail}")
@@ -3242,7 +3582,6 @@ pub async fn shared_session_v2_dispatch_turn(
             break;
         }
     }
-
     let acknowledged_provider_profile_id = dispatch_receipt
         .get("providerProfileId")
         .cloned()
@@ -3342,6 +3681,69 @@ pub async fn shared_context_scan_orphans(state: State<'_, AppState>) -> Result<V
         "status": "report-only",
         "paths": paths,
     }))
+}
+
+#[tauri::command]
+pub async fn shared_session_v2_await_turn_terminal(
+    workspace_id: String,
+    thread_id: String,
+    attempt_id: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    const TERMINAL_WAIT_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
+    let writer = require_writer(&state)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+    require_shared_session_workspace_owner(&workspace_id, &shared_session_id)?;
+    let owner = durable_attempt_owner(writer, &shared_session_id, &attempt_id)?;
+
+    if let Some(committed) =
+        committed_terminal_response(writer, &shared_session_id, &attempt_id, &owner.binding_key)?
+    {
+        return Ok(committed);
+    }
+
+    let settlement = match state
+        .shared_runtime_coordinator
+        .wait_for_settlement(&attempt_id, TERMINAL_WAIT_TIMEOUT)
+        .await
+    {
+        Ok(settlement) => settlement,
+        Err(wait_error) => {
+            // terminal commit 可能与 timeout 边界并发；durable fact 优先于 timer。
+            if let Some(committed) = committed_terminal_response(
+                writer,
+                &shared_session_id,
+                &attempt_id,
+                &owner.binding_key,
+            )? {
+                return Ok(committed);
+            }
+            return Err(wait_error);
+        }
+    };
+
+    if let Some(settled) = settlement {
+        if let Err(commit_error) = commit_observed_runtime_settlement(&state, settled) {
+            // 另一 critical sink 可能已经抢先完成幂等 commit/remove。
+            if let Some(committed) = committed_terminal_response(
+                writer,
+                &shared_session_id,
+                &attempt_id,
+                &owner.binding_key,
+            )? {
+                return Ok(committed);
+            }
+            return Err(commit_error);
+        }
+    }
+
+    committed_terminal_response(writer, &shared_session_id, &attempt_id, &owner.binding_key)?
+        .ok_or_else(|| {
+            format!(
+                "ambiguous-runtime: attempt {attempt_id} owner ended without durable conversation.turnCommitted"
+            )
+        })
 }
 
 #[tauri::command]
@@ -3519,6 +3921,22 @@ pub async fn shared_session_v2_cancel_attempt(
 /// Engine / Provider / Binding / native Thread / runtime Turn 全部从
 /// `turnRequested` + `SharedRuntimeCoordinator` 的同一 owner 解析。任何 owner 缺失或
 /// 不一致都 fail closed；禁止回退 active Engine、当前 Picker 或 workspace-wide interrupt。
+fn committed_attempt_sequence(
+    writer: &SharedEventWriter,
+    shared_session_id: &str,
+    attempt_id: &str,
+) -> Result<Option<i64>, String> {
+    Ok(writer
+        .events_for_session(shared_session_id)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .find(|event| {
+            event.fact_type == "conversation.turnCommitted"
+                && event.attempt_id.as_deref() == Some(attempt_id)
+        })
+        .map(|event| event.sequence))
+}
+
 #[tauri::command]
 pub async fn shared_session_v2_interrupt_turn(
     workspace_id: String,
@@ -3529,6 +3947,13 @@ pub async fn shared_session_v2_interrupt_turn(
     let writer = require_writer(&state)?;
     let shared_session_id = parse_shared_session_id(&thread_id)?;
     require_shared_session_workspace_owner(&workspace_id, &shared_session_id)?;
+    if let Some(sequence) = committed_attempt_sequence(writer, &shared_session_id, &attempt_id)? {
+        return Ok(json!({
+            "status": "terminal-committed",
+            "attemptId": attempt_id,
+            "sequence": sequence,
+        }));
+    }
     let route = resolve_shared_attempt_interrupt_route(
         writer,
         &state.shared_runtime_coordinator,
@@ -4077,7 +4502,11 @@ mod shared_interrupt_owner_tests {
         assert_eq!(route.engine, engine);
         assert_eq!(route.provider_profile_id.as_deref(), Some(provider));
         assert_eq!(route.binding_key, binding_key);
-        assert_eq!(route.native_thread_id, format!("native-{provider}"));
+        let expected_native_thread_id = match engine {
+            EngineType::Claude => format!("claude:native-{provider}"),
+            _ => format!("native-{provider}"),
+        };
+        assert_eq!(route.native_thread_id, expected_native_thread_id);
         assert_eq!(route.runtime_turn_id, format!("run-{provider}"));
 
         coordinator.remove_attempt(&attempt_id);
@@ -4090,6 +4519,89 @@ mod shared_interrupt_owner_tests {
         assert_route(EngineType::Claude, "provider-a");
         assert_route(EngineType::Claude, "provider-b");
         assert_route(EngineType::Codex, "provider-codex");
+    }
+
+    #[test]
+    fn committed_attempt_is_detected_without_a_live_runtime_owner() {
+        let session_id = "interrupt-already-committed";
+        let (root, writer) = open_test_writer("already-committed");
+        let selected_target = target(EngineType::Claude, "provider-committed");
+        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string())
+            .expect("begin");
+        let attempt_id = begin.attempt_id.expect("attempt");
+        let logical_turn_id = begin.logical_turn_id.expect("logical turn");
+        commit_turn_core(
+            &writer,
+            session_id,
+            &attempt_id,
+            &logical_turn_id,
+            &selected_target,
+            None,
+            &CommitOutcomeInput {
+                status: "failed".to_string(),
+                error_code: Some("test-terminal".to_string()),
+                error_message: Some("terminal already committed".to_string()),
+                stop_reason: None,
+            },
+            None,
+        )
+        .expect("commit terminal");
+
+        assert!(committed_attempt_sequence(&writer, session_id, &attempt_id)
+            .expect("query commit")
+            .is_some());
+
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn durable_terminal_response_projects_committed_outcome_without_runtime_owner() {
+        let session_id = "await-terminal-committed";
+        let (root, writer) = open_test_writer("await-terminal-committed");
+        let selected_target = target(EngineType::Claude, "provider-committed");
+        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string())
+            .expect("begin");
+        let attempt_id = begin.attempt_id.expect("attempt");
+        let logical_turn_id = begin.logical_turn_id.expect("logical turn");
+        let binding_key = begin.binding_key;
+        commit_turn_core(
+            &writer,
+            session_id,
+            &attempt_id,
+            &logical_turn_id,
+            &selected_target,
+            None,
+            &CommitOutcomeInput {
+                status: "failed".to_string(),
+                error_code: Some("test-terminal".to_string()),
+                error_message: Some("terminal already committed".to_string()),
+                stop_reason: None,
+            },
+            None,
+        )
+        .expect("commit terminal");
+
+        let response = committed_terminal_response(&writer, session_id, &attempt_id, &binding_key)
+            .expect("query durable terminal")
+            .expect("committed response");
+        assert_eq!(
+            response.get("status").and_then(Value::as_str),
+            Some("committed")
+        );
+        assert_eq!(
+            response
+                .pointer("/terminal/outcome")
+                .and_then(Value::as_str),
+            Some("failed")
+        );
+        assert_eq!(
+            response.get("bindingKey").and_then(Value::as_str),
+            Some(binding_key.as_str())
+        );
+
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
     }
 
     #[test]
@@ -4224,6 +4736,56 @@ mod native_continuation_import_tests {
             .as_str()
             .is_some_and(|text| text.starts_with("MOSSX_CONTEXT_PACKAGE:")));
         assert_eq!(items[1]["type"], "function_call");
+        let package_marker = items[0]["content"][0]["text"]
+            .as_str()
+            .expect("package marker");
+        let accepted_marker = items
+            .last()
+            .and_then(|item| item["content"][0]["text"].as_str())
+            .expect("accepted marker");
+        assert_eq!(
+            accepted_marker,
+            package_marker.replacen("MOSSX_CONTEXT_PACKAGE:", "MOSSX_CONTEXT_ACCEPTED:", 1)
+        );
         assert_eq!(dropped, 1);
+    }
+
+    #[test]
+    fn codex_zero_delta_projection_does_not_create_marker_only_import() {
+        let source = NativeHistorySource {
+            session_id: "codex:source".to_string(),
+            native_session_id: "source".to_string(),
+            engine: NativeHistoryEngine::Codex,
+            provider_profile_id: Some("provider-a".to_string()),
+        };
+        let package = compile_native_context(&CompileNativeContextRequest {
+            session_id: source.session_id.clone(),
+            binding_key: "continuation:op".to_string(),
+            destination: json!({"engine": "codex"}),
+            source,
+            history: NativeHistoryReadResult {
+                reader_id: "codex-rollout-jsonl/v1".to_string(),
+                source_fingerprint: "sha256:source".to_string(),
+                through_cursor: "jsonl-v1:0:sha256:source".to_string(),
+                entries: Vec::new(),
+                fidelity: NativeHistoryFidelity::Semantic,
+                omissions: Vec::new(),
+            },
+            capabilities: RuntimeContextCapabilities {
+                native_delta: false,
+                structured_history_import: true,
+                native_clone: false,
+                user_channel_transcript: true,
+                tool_history: true,
+                image_history: false,
+                strong_context_ack: true,
+            },
+            budget_estimated_tokens: None,
+        })
+        .expect("compile empty projection");
+
+        let (items, dropped) = codex_import_projection(&package);
+        assert!(items.is_empty());
+        assert_eq!(dropped, 0);
     }
 }

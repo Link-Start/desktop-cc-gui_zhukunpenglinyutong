@@ -56,7 +56,8 @@ for new sessions.
 #### Scenario: complete initial target is persisted atomically
 
 - **WHEN** a user creates a Shared Session with a resolved local or managed Target
-- **THEN** the first persisted metadata MUST contain that complete Target
+- **THEN** the first persisted legacy metadata and `shared_sessions_v2.selected_target_json` row
+  MUST contain that complete Target
 - **AND** the returned Session and Composer MUST expose the same Engine, Provider, catalog model,
   runtime model, and readable snapshot
 - **AND** no Runtime Binding or canonical Turn fact may be created by Session creation
@@ -88,12 +89,35 @@ store. Persistence failure MUST keep the previous Target visible and effective.
 - **THEN** the change MUST resolve and persist a complete Target through the four-level selector
 - **AND** no Engine-only action may replace the existing Target with a partial value
 
+#### Scenario: CLI navigation does not persist a transitional target
+
+- **WHEN** a user navigates from Codex CLI to Claude Code before selecting a concrete Provider
+  Model row
+- **THEN** the Picker MUST keep that navigation state local to the open menu
+- **AND** it MUST NOT invoke the persistence boundary with an Engine-only or otherwise partial
+  Target
+- **AND** selecting the concrete Model MUST emit exactly one complete `ResolvedExecutionTarget`
+
 #### Scenario: selection persistence fails
 
 - **WHEN** persisting a newly selected Target fails
 - **THEN** the Composer MUST keep the previous durable Target selected
 - **AND** it MUST surface a readable error
 - **AND** a later send MUST NOT use the unpersisted Target
+
+#### Scenario: parallel sessions persist targets independently
+
+- **WHEN** Target persistence for Shared Session A is pending while the user selects a Target in
+  Shared Session B
+- **THEN** Session B MUST persist through its own Workspace/Thread queue without waiting for A
+- **AND** a delayed failure from A MUST NOT be surfaced as Session B's selection failure
+
+#### Scenario: legacy partial target cannot persist reasoning alone
+
+- **WHEN** a legacy Shared Session exposes a partial Target that lacks the complete model pair or
+  readable Provider snapshot
+- **THEN** changing Reasoning MUST NOT enqueue Target persistence
+- **AND** the user MUST first resolve a complete Target through the four-level selector
 
 ## MODIFIED Requirements
 
@@ -137,6 +161,13 @@ next Turn.
 - **WHEN** the user changes `selectedNextTarget` after an earlier Turn was requested
 - **THEN** the earlier Turn's Runtime owner and visible label MUST remain bound to its immutable
   snapshot
+
+#### Scenario: stale collaboration mode cannot override durable model
+
+- **WHEN** `collaborationMode.settings` still contains Model or Reasoning from a prior Provider
+  while the durable Attempt snapshot selects a different Target
+- **THEN** the Runtime request MUST rewrite those settings from the Attempt snapshot
+- **AND** the stale Model or Reasoning MUST cause no Runtime side effect
 
 ### Requirement: Explicit local target MUST freeze canonical Provider semantics
 
