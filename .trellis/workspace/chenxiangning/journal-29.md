@@ -858,3 +858,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1222: Shared Session 接入 Kimi、Grok 与 OpenCode CLI
+
+**Date**: 2026-07-29
+**Task**: Shared Session 接入 Kimi、Grok 与 OpenCode CLI
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+完成 Shared/Home 五 CLI target catalog，以及 Kimi/Grok/OpenCode Shared V2 durable dispatch、provider-scoped receipt/event/interrupt/probe；Native Session 保持不变；按用户授权仅运行增量测试，未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7bde1c4a0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
