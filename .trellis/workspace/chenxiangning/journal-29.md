@@ -1123,3 +1123,103 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1230: 恢复 Shared Queue/Fusion 与 Compaction 连续性
+
+**Date**: 2026-07-30
+**Task**: 恢复 Shared Queue/Fusion 与 Compaction 连续性
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+修复 Shared nested terminal、Codex compaction barrier、exact owner manual compact，并恢复 frozen follow-up queue、typed ACK 与 compat-input cutover；focused gates 与 OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `67da2905e` | (see git log) |
+| `aec470983` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1231: 同步并归档 Shared 连续性 OpenSpec
+
+**Date**: 2026-07-30
+**Task**: 同步并归档 Shared 连续性 OpenSpec
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+将 Queue/Fusion 与 CLI-specific compaction delta 同步到五个主 specs，并归档已完成的 OpenSpec change；受影响 specs 均通过 strict validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8de5f121d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1232: 合并 v0.7.12 上游分支
+
+**Date**: 2026-07-30
+**Task**: 合并 v0.7.12 上游分支
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+将 upstream/chore/bump-version-0.7.12 语义合并到 bump-version-0.7.12；保留 Shared continuity 能力并引入 Shortcuts、Settings 与 Baidu Analytics。目标 Vitest 110 passed，TypeScript、runtime contracts、large-file sentry、diff gate 通过；ESLint 0 errors。未 push，未纳入并发创建的 OpenSpec change。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `21b5c4b99` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

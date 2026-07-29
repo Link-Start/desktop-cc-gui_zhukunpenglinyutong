@@ -273,6 +273,7 @@ fn emit_manual_compaction_event(
 async fn compact_claude_thread(
     workspace_id: String,
     thread_id: String,
+    provider_profile_id_override: Option<String>,
     state: &AppState,
     app: &AppHandle,
 ) -> Result<Value, String> {
@@ -291,13 +292,16 @@ async fn compact_claude_thread(
             .ok_or_else(|| "Workspace not found".to_string())?
     };
     let workspace_path = PathBuf::from(&workspace_entry.path);
-    let provider_profile_id = crate::session_management::resolve_engine_provider_profile_id(
-        state.storage_path.as_path(),
-        &workspace_id,
-        Some(&session_id),
-        "claude",
-        None,
-    )?;
+    let provider_profile_id = match provider_profile_id_override {
+        Some(provider_profile_id) => Some(provider_profile_id),
+        None => crate::session_management::resolve_engine_provider_profile_id(
+            state.storage_path.as_path(),
+            &workspace_id,
+            Some(&session_id),
+            "claude",
+            None,
+        )?,
+    };
     let provider_launch_profile = crate::engine::claude::resolve_claude_provider_launch_profile(
         provider_profile_id.as_deref(),
     )?;
@@ -1507,12 +1511,63 @@ pub(crate) async fn thread_compact(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Value, String> {
-    let normalized_thread_id = thread_id.trim().to_string();
+    let mut normalized_thread_id = thread_id.trim().to_string();
     if normalized_thread_id.is_empty() {
         return Err("thread_id is required".to_string());
     }
 
+    let shared_route = if normalized_thread_id.starts_with("shared:") {
+        let route = crate::shared_session_v2::resolve_shared_compaction_route(
+            &state,
+            &workspace_id,
+            &normalized_thread_id,
+        )?;
+        if route.has_unresolved_attempt {
+            return Err(
+                "shared-compaction-busy: Shared Attempt is still active or unresolved".to_string(),
+            );
+        }
+        Some(route)
+    } else {
+        None
+    };
+
     if remote_backend::is_remote_mode(&*state).await {
+        if let Some(route) = shared_route.as_ref() {
+            match route.engine {
+                EngineType::Codex => {
+                    let provider_profile_id = route
+                        .provider_profile_id
+                        .as_deref()
+                        .unwrap_or(CODEX_DISK_PROVIDER_PROFILE_ID);
+                    if provider_profile_id != CODEX_DISK_PROVIDER_PROFILE_ID {
+                        return Err(format!(
+                            "shared-compaction-provider-unavailable: remote daemon cannot compact Codex provider {provider_profile_id}"
+                        ));
+                    }
+                }
+                EngineType::Claude => {
+                    let provider_profile_id = route
+                        .provider_profile_id
+                        .as_deref()
+                        .unwrap_or(crate::engine::claude::CLAUDE_LOCAL_PROVIDER_PROFILE_ID);
+                    if provider_profile_id
+                        != crate::engine::claude::CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+                    {
+                        return Err(format!(
+                            "shared-compaction-provider-unavailable: remote daemon cannot compact Claude provider {provider_profile_id}"
+                        ));
+                    }
+                }
+                engine => {
+                    return Err(format!(
+                        "shared-compaction-unsupported: {} does not support context compaction",
+                        engine.icon()
+                    ));
+                }
+            }
+            normalized_thread_id = route.native_thread_id.clone();
+        }
         return remote_backend::call_remote(
             &*state,
             app,
@@ -1522,12 +1577,47 @@ pub(crate) async fn thread_compact(
         .await;
     }
 
-    if normalized_thread_id.starts_with("claude:") {
-        return compact_claude_thread(workspace_id, normalized_thread_id, &state, &app).await;
+    let mut shared_codex_provider_profile_id = None;
+    if let Some(route) = shared_route {
+        match route.engine {
+            EngineType::Codex => {
+                normalized_thread_id = route.native_thread_id;
+                shared_codex_provider_profile_id = Some(
+                    route
+                        .provider_profile_id
+                        .unwrap_or_else(|| CODEX_DISK_PROVIDER_PROFILE_ID.to_string()),
+                );
+            }
+            EngineType::Claude => {
+                let provider_profile_id = Some(route.provider_profile_id.unwrap_or_else(|| {
+                    crate::engine::claude::CLAUDE_LOCAL_PROVIDER_PROFILE_ID.to_string()
+                }));
+                return compact_claude_thread(
+                    workspace_id,
+                    route.native_thread_id,
+                    provider_profile_id,
+                    &state,
+                    &app,
+                )
+                .await;
+            }
+            engine => {
+                return Err(format!(
+                    "shared-compaction-unsupported: {} does not support context compaction",
+                    engine.icon()
+                ));
+            }
+        }
+    } else if normalized_thread_id.starts_with("claude:") {
+        return compact_claude_thread(workspace_id, normalized_thread_id, None, &state, &app).await;
     }
 
-    let provider_profile_id =
-        resolve_thread_provider_profile_id(&state, &workspace_id, &normalized_thread_id).await;
+    let provider_profile_id = match shared_codex_provider_profile_id {
+        Some(provider_profile_id) => provider_profile_id,
+        None => {
+            resolve_thread_provider_profile_id(&state, &workspace_id, &normalized_thread_id).await
+        }
+    };
     ensure_codex_session_for_provider(&workspace_id, &provider_profile_id, &state, &app).await?;
     let _ = app.emit(
         "app-server-event",

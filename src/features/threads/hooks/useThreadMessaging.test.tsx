@@ -421,11 +421,73 @@ describe("useThreadMessaging", () => {
     );
   });
 
+  it("returns the Shared typed commit and prefers a frozen queue target", async () => {
+    const threadId = "shared:thread-frozen-target";
+    selectNextTarget("ws-1", threadId, {
+      engine: "claude",
+      providerProfileId: "current-provider",
+      modelCatalogEntryId: "current-provider:claude",
+      providerProfileNameSnapshot: "Current Provider",
+      providerProfileSource: "managed",
+      model: "claude-current",
+      reasoning: { effort: "high" },
+    });
+    const frozenTarget = {
+      engine: "codex" as const,
+      providerProfileId: "queued-provider",
+      modelCatalogEntryId: "queued-provider:gpt-5.6-sol",
+      providerProfileNameSnapshot: "Queued Provider",
+      providerProfileSource: "managed" as const,
+      model: "gpt-5.6-sol",
+      reasoning: { effort: "max" },
+    };
+    const committedResponse = {
+      status: "accepted",
+      runtimeTurnId: "runtime-turn-queued",
+      v2: {
+        attemptId: "attempt-queued",
+        logicalTurnId: "logical-turn-queued",
+        committed: true,
+        duplicate: false,
+      },
+    };
+    vi.mocked(sendSharedSessionTurnRouted).mockResolvedValueOnce(
+      committedResponse,
+    );
+    const { result } = makeThreadMessagingHook("claude", {
+      activeThreadId: threadId,
+    });
+
+    let response: unknown;
+    await act(async () => {
+      response = await result.current.sendUserMessageToThread(
+        workspace,
+        threadId,
+        "use frozen target",
+        [],
+        { sharedExecutionTarget: frozenTarget },
+      );
+    });
+
+    expect(sendSharedSessionTurnRouted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "codex",
+        model: "gpt-5.6-sol",
+        effort: "max",
+        target: frozenTarget,
+      }),
+    );
+    expect(response).toEqual(committedResponse);
+  });
+
   it("fails closed for a stale unsupported Shared Target", async () => {
     selectNextTarget("ws-1", "shared:thread-1", {
-      engine: "kimi",
-      providerProfileId: "provider-kimi",
-      model: "kimi-for-coding",
+      engine: "gemini",
+      providerProfileId: "provider-gemini",
+      modelCatalogEntryId: "provider-gemini:gemini-pro",
+      providerProfileNameSnapshot: "Gemini Provider",
+      providerProfileSource: "managed",
+      model: "gemini-pro",
       reasoning: null,
     });
     const { result, pushThreadErrorMessage } = makeThreadMessagingHook("claude", {
@@ -1465,6 +1527,67 @@ describe("useThreadMessaging", () => {
     );
     expect(codexCompactionInFlightByThreadRef.current["thread-1"]).toBe(true);
     expect(safeMessageActivity).toHaveBeenCalled();
+  });
+
+  it("routes Shared Codex manual compaction through the logical Shared owner", async () => {
+    vi.mocked(compactThreadContext).mockResolvedValue({ status: "queued" });
+    const threadId = "shared:codex-session-1";
+    const {
+      result,
+      dispatch,
+      codexCompactionInFlightByThreadRef,
+    } = makeThreadMessagingHook("codex", {
+      activeThreadId: threadId,
+      ensuredThreadId: threadId,
+      threadEngineById: {
+        [threadId]: "codex",
+      },
+    });
+
+    await act(async () => {
+      await result.current.startCompact("/compact");
+    });
+
+    expect(compactThreadContext).toHaveBeenCalledWith("ws-1", threadId);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "markContextCompacting",
+      threadId,
+      isCompacting: true,
+      timestamp: expect.any(Number),
+      source: "manual",
+    });
+    expect(codexCompactionInFlightByThreadRef.current[threadId]).toBe(true);
+  });
+
+  it("routes Shared Claude manual compaction without requiring a claude-prefixed id", async () => {
+    vi.mocked(compactThreadContext).mockResolvedValue({
+      result: { turnId: "shared-compact-turn-1" },
+    });
+    const threadId = "shared:claude-session-1";
+    const { result, dispatch } = makeThreadMessagingHook("claude", {
+      activeThreadId: threadId,
+      ensuredThreadId: threadId,
+      threadEngineById: {
+        [threadId]: "claude",
+      },
+    });
+
+    await act(async () => {
+      await result.current.startCompact("/compact");
+    });
+
+    expect(compactThreadContext).toHaveBeenCalledWith("ws-1", threadId);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "markContextCompacting",
+      threadId,
+      isCompacting: true,
+      timestamp: expect.any(Number),
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendContextCompacted",
+      threadId,
+      turnId: "shared-compact-turn-1",
+    });
   });
 
   it("does not send duplicate Codex compact RPCs while one is already in flight", async () => {

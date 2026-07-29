@@ -14,6 +14,7 @@ import {
 } from "../../composer/hooks/composerDraftStore";
 import { useComposerImages } from "../../composer/hooks/useComposerImages";
 import { useQueuedSend } from "../../threads/hooks/useQueuedSend";
+import type { ThreadMessageDispatchResult } from "../../threads/hooks/useThreadMessaging";
 
 export function useComposerController({
   activeThreadId,
@@ -24,9 +25,11 @@ export function useComposerController({
   activeWorkspace,
   isProcessing,
   isReviewing,
+  isContextCompacting,
   hasPendingUserInput,
   steerEnabled,
   activeEngine,
+  isSharedSession,
   resolveCanonicalThreadId,
   connectWorkspace,
   startThreadForWorkspace,
@@ -60,14 +63,20 @@ export function useComposerController({
   activeWorkspace: WorkspaceInfo | null;
   isProcessing: boolean;
   isReviewing: boolean;
+  isContextCompacting?: boolean;
   hasPendingUserInput?: boolean;
   steerEnabled: boolean;
   activeEngine?: EngineType;
+  isSharedSession?: boolean;
   resolveCanonicalThreadId: (threadId: string) => string;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   startThreadForWorkspace: (
     workspaceId: string,
-    options?: { activate?: boolean; engine?: EngineType; folderId?: string | null },
+    options?: {
+      activate?: boolean;
+      engine?: EngineType;
+      folderId?: string | null;
+    },
   ) => Promise<string | null>;
   sendUserMessage: (
     text: string,
@@ -80,7 +89,7 @@ export function useComposerController({
     text: string,
     images?: string[],
     options?: MessageSendOptions,
-  ) => Promise<void>;
+  ) => Promise<ThreadMessageDispatchResult>;
   handleFusionStalled?: (
     threadId: string,
     options?: { message?: string | null },
@@ -138,10 +147,12 @@ export function useComposerController({
     activeTerminalPulse,
     isProcessing,
     isReviewing,
+    isContextCompacting,
     hasPendingUserInput,
     steerEnabled,
     activeWorkspace,
     activeEngine,
+    isSharedSession,
     resolveCanonicalThreadId,
     connectWorkspace,
     startThreadForWorkspace,

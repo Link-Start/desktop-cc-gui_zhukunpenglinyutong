@@ -462,6 +462,270 @@ let native_thread_ids = legacy_native_ids
     .dedup();
 ```
 
+## Scenario: Shared Queue / Fusion / Compaction Continuity
+
+### 1. Scope / Trigger
+
+- Trigger：修改 Shared follow-up queue、Fusion、V2 typed result、Codex
+  auto/manual compaction、Shared manual compact route 或 Composer compaction
+  projection。
+- 目标：User Run、Compaction、Retry 与 Follow-up 在 exact
+  `Attempt → TurnExecutionSnapshot → Binding → Native Session` owner 上严格串行；
+  queue item 只有在 successor canonical commit 后才可删除。
+- Behavior SSOT：
+  `openspec/changes/restore-shared-queue-fusion-compaction-continuity/**`。
+
+### 2. Signatures
+
+Frontend queue / dispatch：
+
+```ts
+type SharedQueuedExecutionTarget = {
+  engine: EngineType;
+  providerProfileId: string | null;
+  modelCatalogEntryId: string;
+  model: string;
+  reasoning: { effort: string } | null;
+  providerProfileNameSnapshot: string;
+  providerProfileSource: "disk" | "managed";
+};
+
+type QueuedMessage = {
+  id: string;
+  text: string;
+  createdAt: number;
+  images?: string[];
+  sendOptions?: MessageSendOptions;
+  sharedExecutionTarget?: SharedQueuedExecutionTarget;
+  sharedPredecessorAttemptId?: string | null;
+  sharedDispatchState?: "pending-ack";
+};
+
+type ThreadMessageDispatchResult =
+  | SendSharedSessionTurnV2Result
+  | { status: "ambiguous-error"; reason: string }
+  | undefined;
+
+readSharedQueuedFollowUps(workspaceId, threadId): QueuedMessage[]
+writeSharedQueuedFollowUps(workspaceId, threadId, queue): void
+```
+
+Backend control lane：
+
+```text
+WorkspaceSession.reserve_codex_user_dispatch(nativeThreadId)
+WorkspaceSession.release_codex_user_dispatch_reservation(nativeThreadId)
+WorkspaceSession.try_reserve_codex_manual_compaction(nativeThreadId)
+WorkspaceSession.release_codex_compaction_reservation(nativeThreadId)
+
+AutoCompactionThreadState {
+  isProcessing,
+  inFlight,
+  pendingUserDispatch,
+  pendingUserDispatchAtMs,
+  pendingHighWatermarkPercent,
+  lastTriggeredAtMs
+}
+
+resolve_shared_compaction_route(workspaceId, sharedThreadId)
+  -> { engine, providerProfileId, nativeThreadId, hasUnresolvedAttempt }
+```
+
+### 3. Contracts
+
+#### 3.1 Frozen Shared follow-up envelope
+
+- Shared `running` / `settling` MAY accept an explicit follow-up into the local
+  durable queue；`preparing-context`、`degraded-context`、
+  `awaiting-acceptance` MUST block submission，`cancel-pending` /
+  `recovery-required` MUST lock input、submit 与 Target picker。
+- Enqueue MUST freeze `text`、`images`、serializable `sendOptions`、complete
+  `SharedQueuedExecutionTarget` 与 exact predecessor Attempt。运行态缺
+  predecessor identity MUST fail closed。
+- Shared queue MUST use immediate client-store writes。Restore MUST validate the
+  full Target and discard an invalid envelope；it MUST NOT recover Target from
+  current Picker or an embedded `sendOptions.sharedExecutionTarget`。
+- Actual successor dispatch MUST pass the frozen Target into Shared V2 Tx1；
+  current Picker、active Engine 或 global model state MUST NOT override it。
+
+#### 3.2 Typed drain and exactly-once removal
+
+- Shared queue drain MUST wait for Shared send state `idle`，which represents
+  predecessor settlement plus canonical commit，and MUST additionally wait until
+  `isContextCompacting=false`。
+- Drain MUST mark the item `pending-ack` before handoff and guard duplicate React
+  effect execution。Only a matching result with `status="accepted"`、
+  `v2.committed=true`、non-empty Attempt/logical Turn identities and exact
+  Engine/Provider/Model/Reasoning MAY remove the item。
+- `blocked`、`target-unavailable`、`recovery-required` or an exact-target mismatch
+  MUST retain the original item and order。An untyped exception or missing ACK is
+  ambiguous：the item MUST remain `pending-ack` and MUST NOT be blindly replayed
+  after restart。
+- A blocked item MAY retry only after a newer Shared send-state revision；a stable
+  blocked state MUST NOT create a render/effect busy loop。
+
+#### 3.3 Fusion capability cutover
+
+- Only runtime-probed `input.mid-turn=supported` MAY use same-run steer。
+  `compat-input` MUST NOT resolve to `route=steer`。
+- `compat-input` Fusion MUST interrupt the exact predecessor Attempt，wait for
+  Shared canonical `idle`，dispatch the frozen item as a successor，then require
+  successor start/continuation or stronger canonical commit evidence。
+- `unsupported` MUST remain an ordinary follow-up。It MUST NOT call steer、
+  interrupt cutover or a different engine's compaction path。
+- Target、Provider、Model、Reasoning、predecessor Attempt or Binding generation
+  mismatch MUST disable Fusion；linear queue semantics remain available。
+
+#### 3.4 Codex compaction / send barrier
+
+- `turn/start` MUST reserve `pendingUserDispatch` before the first Runtime side
+  effect。If compaction already owns the native-thread gate，the untouched prompt
+  waits for `thread/compacted` / `thread/compactionFailed` and is then sent for the
+  first time。
+- Usage at or above the high-watermark while a Turn is processing MUST latch
+  `pendingHighWatermarkPercent`。A terminal event MUST evaluate that latch even
+  when the terminal itself carries no usage。
+- A stale predecessor terminal MUST NOT clear a newer `pendingUserDispatch`。
+  Missing compaction completion or prompt-start evidence MUST release its stale
+  reservation after the 120s bounded timeout and emit a diagnostic；同一时刻只允许
+  一个 pending prompt reservation。
+- `turn/completed` outcome normalization MUST inspect supported nested aliases,
+  including `params.turn.status` and `params.result.status`；`replaced` MUST remain
+  distinct from `completed` and MUST NOT trigger blind replay。
+
+#### 3.5 Shared manual compact and lifecycle projection
+
+- Shared manual compact MUST resolve unresolved Attempt owner first；otherwise it
+  reads `shared_sessions_v2.selected_target_json` as the durable selected Target。
+  It MUST validate exact Binding key、generation、availability、provisioning state
+  and native session identity。
+- Active/unresolved Shared Attempt MUST reject manual compact。Codex MUST use the
+  native-thread barrier；Claude MUST preserve the exact provider-scoped `/compact`
+  path；other engines MUST return actionable `unsupported` without Runtime calls。
+- Shared Composer MUST project existing low-frequency active-thread compaction
+  lifecycle scalars。It MUST NOT reintroduce per-delta AppShell root state updates。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| running / settling submit | 冻结完整 envelope 并入队一次 | 立即创建第二个 Runtime Turn |
+| pre-acceptance submit | 保留 draft，零 queue/Runtime side effect | 绕过 admission 入队 |
+| persisted Target invalid | 丢弃无效 item | 用当前 Picker 补 Target |
+| predecessor 未 commit | queue 保持原位 | 仅凭 child `turn/completed` drain |
+| compaction active | queue 等待 lifecycle release | 压缩中投递 successor |
+| matching canonical ACK | exactly-once 删除 item | React effect 重复 dispatch |
+| blocked / target unavailable | 保留 payload/order，等新 revision | 先删后报错 |
+| ACK 缺失或 Target mismatch | 保持 `pending-ack`，要求恢复/人工处理 | 自动盲重发 |
+| `input.mid-turn=supported` | MAY same-run steer，等待 continuation | 未见证据即宣告 Fusion 成功 |
+| `compat-input` | interrupt → settle → successor | 伪装 same-run steer |
+| `unsupported` | 普通 follow-up | 调 steer/interrupt/compact |
+| processing 期间达到阈值 | latch，settlement 后评估 | 丢失 high-watermark |
+| compaction-first | prompt 等待，release 后首次发送 | control Turn 替换 prompt |
+| prompt-first | compaction 保持 pending | 与 `turn/start` 并发 |
+| prompt reservation 无 start evidence | 120s bounded release | 永久占用 barrier |
+| nested `turn.status=replaced` | canonical outcome=`Replaced` | 按 method 猜 `Completed` |
+| Shared manual compact 有 active Attempt | actionable busy error | 启动第二条 control lane |
+| unsupported Shared Target compact | capability error，Runtime 零调用 | 按 logical id 猜 Codex |
+
+### 5. Good / Base / Bad Cases
+
+- Good：Shared `running` 时冻结 Target A 与 predecessor Attempt；即使之后 Picker
+  变为 B，successor 仍用 A，经 V2 canonical commit 后删除一次。
+- Good：Codex compaction 已占 gate；新 prompt 保持未发送，compaction lifecycle
+  release 后首次发出。
+- Base：`compat-input` 点击 Fusion 后先 interrupt；predecessor durable idle 后创建
+  successor，canonical commit 直接作为更强 continuation evidence。
+- Bad：queue drain 在调用 `sendUserMessageToThread` 前先 `shift()`。
+- Bad：把 `compat-input` 当 native steer，或按 `shared:*` prefix 选择 Codex compact。
+
+### 6. Tests Required
+
+只跑本场景的 focused validation：
+
+```bash
+npm exec vitest -- run \
+  src/features/threads/hooks/useThreadMessaging.test.tsx \
+  src/features/threads/hooks/useQueuedSend.test.tsx \
+  src/app-shell-parts/useAppShellSearchAndComposerSection.test.tsx \
+  src/features/app/hooks/useComposerController.test.tsx \
+  src/features/threads/utils/sharedQueuedFollowUpStore.test.ts \
+  src/features/shared-session/target/sendStateMachine.test.ts \
+  src/features/threads/contracts/engineMessageDelivery.test.ts \
+  src/features/layout/hooks/useLayoutNodes.client-ui-visibility.test.tsx \
+  src/features/shared-session/runtime/sendSharedSessionTurnV2.test.ts
+
+npm run typecheck
+npm run check:runtime-contracts
+
+cargo test --manifest-path src-tauri/Cargo.toml --lib compaction
+cargo test --manifest-path src-tauri/Cargo.toml --lib \
+  stale_user_dispatch_reservation_is_bounded_and_exclusive
+cargo test --manifest-path src-tauri/Cargo.toml --lib \
+  codex_nested_replaced_completion_preserves_replaced_outcome
+cargo fmt --manifest-path src-tauri/Cargo.toml --check
+cargo check --manifest-path src-tauri/Cargo.toml --lib
+cargo check --manifest-path src-tauri/Cargo.toml --bin cc_gui_daemon
+```
+
+关键断言：
+
+- queue restart restore 保留 full payload、frozen Target、predecessor identity；
+  invalid envelope fail closed。
+- blocked item 不删除、不 busy-loop；ambiguous ACK 保持 `pending-ack` 且不 replay；
+  matching canonical ACK exactly-once 删除。
+- Shared `running` / `settling` 可入队；pre-acceptance 与 ambiguous states 仍锁定。
+- `supported` same-run continuation、`compat-input` explicit cutover 与
+  `unsupported` follow-up degradation 分支互斥。
+- compaction-first、prompt-first、processing high-watermark latch、stale terminal 与
+  bounded timeout 均由 focused Rust tests 覆盖。
+- Shared manual compact 使用 unresolved owner 或 selected Target 的 exact Binding；
+  unsupported engine 与 active Attempt 均 fail closed。
+- Shared Composer 只消费 existing lifecycle scalar；runtime-contract gate 继续通过。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const item = queue.shift();
+await sendUserMessageToThread(workspace, threadId, item.text);
+```
+
+#### Correct
+
+```ts
+const result = await sendUserMessageToThread(
+  workspace,
+  threadId,
+  item.text,
+  item.images,
+  { ...item.sendOptions, sharedExecutionTarget: item.sharedExecutionTarget },
+);
+if (isMatchingCanonicalCommit(result, item.sharedExecutionTarget)) {
+  removeQueuedItemExactlyOnce(item.id);
+}
+```
+
+#### Wrong
+
+```rust
+if shared_thread_id.starts_with("shared:") {
+    compact_codex(shared_thread_id).await?;
+}
+```
+
+#### Correct
+
+```rust
+let route = resolve_shared_compaction_route(state, workspace_id, shared_thread_id)?;
+match route.engine {
+    EngineType::Codex => compact_codex(route.native_thread_id).await?,
+    EngineType::Claude => compact_claude(route.native_thread_id, route.provider_profile_id).await?,
+    engine => return Err(compaction_unsupported(engine)),
+}
+```
+
 ## Scenario: Shared Provider-aware Target Picker
 
 ### 1. Scope / Trigger

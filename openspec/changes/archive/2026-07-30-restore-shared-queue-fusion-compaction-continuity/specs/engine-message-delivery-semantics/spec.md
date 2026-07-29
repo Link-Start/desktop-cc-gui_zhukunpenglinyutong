@@ -1,16 +1,4 @@
-# engine-message-delivery-semantics Specification
-
-## Purpose
-TBD - created by archiving change define-engine-message-delivery-semantics. Update Purpose after archive.
-## Requirements
-### Requirement: Message Delivery MUST Use Explicit Intent
-
-Every engine message delivery request MUST declare `prompt`、`steer`、`followUp` or `nextTurn` and MUST return a typed accepted、rejected or degraded result.
-
-#### Scenario: caller omits intent
-
-- **WHEN** a new delivery caller provides message content without intent
-- **THEN** typecheck or command validation MUST reject the request
+## MODIFIED Requirements
 
 ### Requirement: Steering MUST Require Active Run And Mid-Turn Capability
 
@@ -48,13 +36,3 @@ Follow-up items MUST remain queued until the predecessor emits `run.settled`; re
 - **WHEN** predecessor terminal evidence is followed by an in-flight compaction control Turn
 - **THEN** Shared follow-up MUST remain queued until compaction completes or fails
 - **AND** it MUST then dispatch at most once
-
-### Requirement: Delivery Decisions MUST Be Diagnosable
-
-Every delivery decision MUST record intent、target session/run、capability evidence、result and fallback reason without storing secrets.
-
-#### Scenario: message is rejected
-
-- **WHEN** runtime/session state makes delivery impossible
-- **THEN** UI MUST receive an actionable reason
-- **AND** diagnostics MUST preserve the decision evidence

@@ -88,6 +88,7 @@ export type SharedV2SendBlocked = {
 };
 
 export type SharedV2SendCommitted = Record<string, unknown> & {
+  status: "accepted";
   v2: {
     attemptId: string;
     logicalTurnId: string;

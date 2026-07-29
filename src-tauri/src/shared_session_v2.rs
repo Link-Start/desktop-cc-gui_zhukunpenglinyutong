@@ -41,7 +41,7 @@ use crate::shared_event_log::{
 use crate::shared_sessions::{
     ensure_supported_shared_session_engine, now_millis, parse_shared_session_id,
     read_latest_shared_session_snapshot, read_shared_session_meta,
-    shared_session_projection_source, shared_target_binding_key,
+    shared_session_projection_source, shared_target_binding_key, SharedSelectedTarget,
 };
 use crate::state::AppState;
 
@@ -1100,6 +1100,146 @@ struct SharedAttemptInterruptRoute {
     binding_key: String,
     native_thread_id: String,
     runtime_turn_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SharedCompactionRoute {
+    pub(crate) engine: EngineType,
+    pub(crate) provider_profile_id: Option<String>,
+    pub(crate) native_thread_id: String,
+    pub(crate) has_unresolved_attempt: bool,
+}
+
+pub(crate) fn resolve_shared_compaction_route(
+    state: &AppState,
+    workspace_id: &str,
+    thread_id: &str,
+) -> Result<SharedCompactionRoute, String> {
+    let writer = require_writer(state)?;
+    let shared_session_id = parse_shared_session_id(thread_id)?;
+    require_shared_session_workspace_owner(workspace_id, &shared_session_id)?;
+    resolve_shared_compaction_route_core(writer, &shared_session_id, || {
+        resolve_durable_shared_compaction_target(writer, &shared_session_id)
+    })
+}
+
+fn resolve_durable_shared_compaction_target(
+    writer: &SharedEventWriter,
+    shared_session_id: &str,
+) -> Result<(EngineType, Option<String>), String> {
+    let stored_target = writer
+        .session_target(shared_session_id)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| {
+            format!(
+                "shared-compaction-target-unavailable: session {shared_session_id} has no durable V2 Target"
+            )
+        })?;
+    let target: SharedSelectedTarget =
+        serde_json::from_str(&stored_target.selected_target_json).map_err(|error| {
+            format!(
+                "shared-compaction-target-invalid: session {shared_session_id} durable Target is invalid: {error}"
+            )
+        })?;
+    let engine = ensure_supported_shared_session_engine(target.engine)
+        .map_err(|error| format!("shared-compaction-target-unavailable: {error}"))?;
+    let provider_profile_id = target
+        .provider_profile_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    Ok((engine, provider_profile_id))
+}
+
+fn resolve_shared_compaction_route_core<F>(
+    writer: &SharedEventWriter,
+    shared_session_id: &str,
+    resolve_selected_target: F,
+) -> Result<SharedCompactionRoute, String>
+where
+    F: FnOnce() -> Result<(EngineType, Option<String>), String>,
+{
+    let unresolved = unresolved_attempt_evidence(writer, &shared_session_id, None)?;
+    if unresolved.len() > 1 {
+        return Err(format!(
+            "shared-compaction-owner-ambiguous: session {shared_session_id} has {} unresolved attempts",
+            unresolved.len()
+        ));
+    }
+
+    let (engine, provider_profile_id, binding_key, binding_operation_id) =
+        if let Some(evidence) = unresolved.first() {
+            (
+                evidence.owner.engine,
+                evidence.owner.provider_profile_id.clone(),
+                evidence.owner.binding_key.clone(),
+                Some(evidence.owner.binding_operation_id.as_str()),
+            )
+        } else {
+            let (engine, provider_profile_id) = resolve_selected_target()?;
+            (
+                engine,
+                provider_profile_id.clone(),
+                shared_target_binding_key(engine, provider_profile_id.as_deref()),
+                None,
+            )
+        };
+
+    if !matches!(engine, EngineType::Codex | EngineType::Claude) {
+        return Err(format!(
+            "shared-compaction-unsupported: {} does not support context compaction",
+            engine.icon()
+        ));
+    }
+
+    let binding = writer
+        .binding_state(&shared_session_id, &binding_key)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| {
+            format!("shared-compaction-binding-unavailable: binding {binding_key} is missing")
+        })?;
+    if binding.engine != engine.icon()
+        || binding.provider_profile_id.as_deref() != provider_profile_id.as_deref()
+    {
+        return Err(format!(
+            "shared-compaction-owner-mismatch: binding {binding_key} does not match durable Target"
+        ));
+    }
+    if let Some(expected_operation_id) = binding_operation_id {
+        let actual_operation_id = binding_operation_id_of(&binding).unwrap_or_default();
+        if actual_operation_id != expected_operation_id {
+            return Err(format!(
+                "shared-compaction-owner-mismatch: binding generation changed for {binding_key}"
+            ));
+        }
+    }
+    if binding.availability != "ready" {
+        return Err(format!(
+            "shared-compaction-binding-unavailable: binding {binding_key} is {}",
+            binding.availability
+        ));
+    }
+    let provisioning_state = provisioning_state_of(&binding);
+    if provisioning_state != PROVISIONING_READY {
+        return Err(format!(
+            "shared-compaction-binding-unavailable: binding {binding_key} provisioning state is {provisioning_state}"
+        ));
+    }
+    let native_thread_id = binding
+        .native_session_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            format!(
+                "shared-compaction-binding-unavailable: binding {binding_key} has no native session"
+            )
+        })?;
+
+    Ok(SharedCompactionRoute {
+        engine,
+        provider_profile_id,
+        native_thread_id,
+        has_unresolved_attempt: !unresolved.is_empty(),
+    })
 }
 
 fn resolve_shared_attempt_interrupt_route(
@@ -4785,7 +4925,7 @@ mod legacy_import_tests {
 #[cfg(test)]
 mod shared_interrupt_owner_tests {
     use super::*;
-    use crate::shared_event_log::{open, OpenOutcome};
+    use crate::shared_event_log::{open, OpenOutcome, SessionTargetUpdate};
     use crate::shared_runtime_coordinator::{SharedRuntimeAttemptOwner, SharedRuntimeCoordinator};
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -4890,6 +5030,181 @@ mod shared_interrupt_owner_tests {
         assert_eq!(route.runtime_turn_id, format!("run-{provider}"));
 
         coordinator.remove_attempt(&attempt_id);
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn shared_compaction_selected_target_comes_from_v2_store() {
+        let session_id = "compaction-v2-target";
+        let (root, writer) = open_test_writer("compaction-v2-target");
+        writer
+            .upsert_session_target(&SessionTargetUpdate {
+                session_id: session_id.to_string(),
+                schema_version: 2,
+                selected_target_json: json!({
+                    "engine": "claude",
+                    "providerProfileId": "provider-v2"
+                })
+                .to_string(),
+                updated_at: 1,
+            })
+            .expect("persist V2 Target");
+
+        let (engine, provider_profile_id) =
+            resolve_durable_shared_compaction_target(&writer, session_id)
+                .expect("resolve durable target");
+        assert_eq!(engine, EngineType::Claude);
+        assert_eq!(provider_profile_id.as_deref(), Some("provider-v2"));
+
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn shared_compaction_route_prefers_unresolved_attempt_owner() {
+        let session_id = "compaction-active-attempt";
+        let (root, writer) = open_test_writer("compaction-active-attempt");
+        let active_target = target(EngineType::Codex, "provider-active");
+        let begin = begin_turn_core(&writer, session_id, &active_target, "hello".to_string())
+            .expect("begin");
+        let attempt_id = begin.attempt_id.expect("attempt");
+        let logical_turn_id = begin.logical_turn_id.expect("logical turn");
+        accept_turn_core(
+            &writer,
+            session_id,
+            &attempt_id,
+            &logical_turn_id,
+            &active_target,
+            "native-active",
+        )
+        .expect("accept");
+
+        let route = resolve_shared_compaction_route_core(&writer, session_id, || {
+            panic!("selected Target must not override an unresolved Attempt owner")
+        })
+        .expect("resolve compaction route");
+        assert_eq!(route.engine, EngineType::Codex);
+        assert_eq!(
+            route.provider_profile_id.as_deref(),
+            Some("provider-active")
+        );
+        assert_eq!(route.native_thread_id, "native-active");
+        assert!(route.has_unresolved_attempt);
+
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn shared_compaction_route_uses_selected_target_after_commit() {
+        let session_id = "compaction-selected-target";
+        let (root, writer) = open_test_writer("compaction-selected-target");
+        let selected_target = target(EngineType::Codex, "provider-selected");
+        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string())
+            .expect("begin");
+        let attempt_id = begin.attempt_id.expect("attempt");
+        let logical_turn_id = begin.logical_turn_id.expect("logical turn");
+        accept_turn_core(
+            &writer,
+            session_id,
+            &attempt_id,
+            &logical_turn_id,
+            &selected_target,
+            "native-selected",
+        )
+        .expect("accept");
+        commit_turn_core(
+            &writer,
+            session_id,
+            &attempt_id,
+            &logical_turn_id,
+            &selected_target,
+            None,
+            &CommitOutcomeInput {
+                status: "completed".to_string(),
+                error_code: None,
+                error_message: None,
+                stop_reason: None,
+            },
+            None,
+        )
+        .expect("commit");
+
+        let route = resolve_shared_compaction_route_core(&writer, session_id, || {
+            Ok((EngineType::Codex, Some("provider-selected".to_string())))
+        })
+        .expect("resolve selected route");
+        assert_eq!(route.engine, EngineType::Codex);
+        assert_eq!(route.native_thread_id, "native-selected");
+        assert!(!route.has_unresolved_attempt);
+
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn shared_compaction_route_preserves_selected_claude_provider() {
+        let session_id = "compaction-selected-claude";
+        let (root, writer) = open_test_writer("compaction-selected-claude");
+        let selected_target = target(EngineType::Claude, "provider-managed");
+        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string())
+            .expect("begin");
+        let attempt_id = begin.attempt_id.expect("attempt");
+        let logical_turn_id = begin.logical_turn_id.expect("logical turn");
+        accept_turn_core(
+            &writer,
+            session_id,
+            &attempt_id,
+            &logical_turn_id,
+            &selected_target,
+            "claude:native-managed",
+        )
+        .expect("accept");
+        commit_turn_core(
+            &writer,
+            session_id,
+            &attempt_id,
+            &logical_turn_id,
+            &selected_target,
+            None,
+            &CommitOutcomeInput {
+                status: "completed".to_string(),
+                error_code: None,
+                error_message: None,
+                stop_reason: None,
+            },
+            None,
+        )
+        .expect("commit");
+
+        let route = resolve_shared_compaction_route_core(&writer, session_id, || {
+            Ok((EngineType::Claude, Some("provider-managed".to_string())))
+        })
+        .expect("resolve selected Claude route");
+        assert_eq!(route.engine, EngineType::Claude);
+        assert_eq!(
+            route.provider_profile_id.as_deref(),
+            Some("provider-managed")
+        );
+        assert_eq!(route.native_thread_id, "claude:native-managed");
+        assert!(!route.has_unresolved_attempt);
+
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn shared_compaction_route_rejects_unsupported_engine_before_runtime_lookup() {
+        let session_id = "compaction-unsupported";
+        let (root, writer) = open_test_writer("compaction-unsupported");
+
+        let error = resolve_shared_compaction_route_core(&writer, session_id, || {
+            Ok((EngineType::Kimi, Some("provider-kimi".to_string())))
+        })
+        .expect_err("unsupported engine must fail closed");
+        assert!(error.contains("shared-compaction-unsupported"));
+
         writer.shutdown().expect("shutdown writer");
         std::fs::remove_dir_all(root).expect("remove test root");
     }

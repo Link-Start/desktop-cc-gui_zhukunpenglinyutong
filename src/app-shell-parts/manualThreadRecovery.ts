@@ -202,7 +202,7 @@ export async function recoverThreadBindingAndResendForManualRecovery<
     text: string,
     images: string[],
     options: ManualRecoveryResendOptions,
-  ) => Promise<void>;
+  ) => Promise<unknown>;
 }): Promise<ManualThreadRecoveryResult> {
   const normalizedWorkspaceId = params.workspaceId.trim();
   const normalizedThreadId = params.threadId.trim();
