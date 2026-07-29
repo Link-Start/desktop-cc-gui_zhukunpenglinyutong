@@ -1123,3 +1123,37 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1230: 恢复 Shared Queue/Fusion 与 Compaction 连续性
+
+**Date**: 2026-07-30
+**Task**: 恢复 Shared Queue/Fusion 与 Compaction 连续性
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+修复 Shared nested terminal、Codex compaction barrier、exact owner manual compact，并恢复 frozen follow-up queue、typed ACK 与 compat-input cutover；focused gates 与 OpenSpec strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `67da2905e` | (see git log) |
+| `aec470983` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
