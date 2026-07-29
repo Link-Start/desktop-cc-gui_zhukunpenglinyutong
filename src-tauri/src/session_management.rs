@@ -1821,6 +1821,33 @@ fn folder_assignment_keys_for_session(session_id: &str, engine: &str) -> Vec<Str
     keys
 }
 
+fn provider_continuation_stable_key_for_session_id(workspace_id: &str, session_id: &str) -> String {
+    let identity = parse_catalog_identity(session_id);
+    if identity.engine_name() == "codex" {
+        let raw_session_id = identity
+            .raw_session_id()
+            .strip_prefix("codex:")
+            .unwrap_or(identity.raw_session_id());
+        return format!("codex:{workspace_id}:{raw_session_id}");
+    }
+    metadata_stable_key_for_session_id(workspace_id, session_id)
+}
+
+fn append_legacy_codex_continuation_key(
+    keys: &mut Vec<String>,
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+) {
+    if !engine.eq_ignore_ascii_case("codex") {
+        return;
+    }
+    let raw_session_id = session_id.strip_prefix("codex:").unwrap_or(session_id);
+    if !raw_session_id.is_empty() {
+        keys.push(format!("codex:{workspace_id}:codex:{raw_session_id}"));
+    }
+}
+
 fn catalog_metadata_lookup_keys_for_entry(entry: &WorkspaceSessionCatalogEntry) -> Vec<String> {
     let mut keys = Vec::new();
     if let Some(stable_key) = entry
@@ -1837,6 +1864,12 @@ fn catalog_metadata_lookup_keys_for_entry(entry: &WorkspaceSessionCatalogEntry) 
         &entry.session_id,
         &entry.engine,
     ));
+    append_legacy_codex_continuation_key(
+        &mut keys,
+        &entry.workspace_id,
+        &entry.session_id,
+        &entry.engine,
+    );
     keys.sort();
     keys.dedup();
     keys
@@ -1849,6 +1882,7 @@ fn catalog_metadata_lookup_keys_for_session(
 ) -> Vec<String> {
     let mut keys = vec![metadata_stable_key_for_session_id(workspace_id, session_id)];
     keys.extend(folder_assignment_keys_for_session(session_id, engine));
+    append_legacy_codex_continuation_key(&mut keys, workspace_id, session_id, engine);
     keys.sort();
     keys.dedup();
     keys
@@ -1955,13 +1989,80 @@ fn apply_provider_continuation_metadata(
     let Some(metadata) = metadata_by_workspace_id.get(&entry.workspace_id) else {
         return;
     };
-    let continuation = catalog_metadata_lookup_keys_for_entry(entry)
-        .into_iter()
-        .find_map(|key| metadata.provider_continuation_by_session_key.get(&key))
-        .cloned();
+    let continuation = resolve_provider_continuation_metadata(
+        metadata,
+        &entry.workspace_id,
+        &entry.session_id,
+        &entry.engine,
+    );
     if let Some(continuation) = continuation {
         entry.continuation = continuation.into();
     }
+}
+
+fn stored_provider_continuation_metadata(
+    metadata: &WorkspaceSessionCatalogMetadata,
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+) -> Option<ProviderContinuationMetadata> {
+    catalog_metadata_lookup_keys_for_session(workspace_id, session_id, engine)
+        .into_iter()
+        .find_map(|key| metadata.provider_continuation_by_session_key.get(&key))
+        .cloned()
+}
+
+fn resolve_provider_continuation_metadata(
+    metadata: &WorkspaceSessionCatalogMetadata,
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+) -> Option<ProviderContinuationMetadata> {
+    fn resolve(
+        metadata: &WorkspaceSessionCatalogMetadata,
+        workspace_id: &str,
+        session_id: &str,
+        engine: &str,
+        visited: &mut HashSet<String>,
+    ) -> Option<ProviderContinuationMetadata> {
+        let mut continuation =
+            stored_provider_continuation_metadata(metadata, workspace_id, session_id, engine)?;
+        let visit_key = format!("{engine}:{session_id}");
+        if !visited.insert(visit_key) {
+            return Some(continuation);
+        }
+
+        let source_session_id = continuation.source_session_id.clone();
+        let source_engine = parse_catalog_identity(&source_session_id)
+            .engine_name()
+            .to_string();
+        if let Some(source_family) = resolve(
+            metadata,
+            workspace_id,
+            &source_session_id,
+            &source_engine,
+            visited,
+        ) {
+            continuation.family_id = source_family.family_id;
+            continuation.family_root_session_id = source_family.family_root_session_id;
+            continuation.lineage_depth = source_family.lineage_depth.saturating_add(1);
+        } else {
+            let source_key =
+                provider_continuation_stable_key_for_session_id(workspace_id, &source_session_id);
+            continuation.family_id = source_key.clone();
+            continuation.family_root_session_id = source_key;
+            continuation.lineage_depth = 1;
+        }
+        Some(continuation)
+    }
+
+    resolve(
+        metadata,
+        workspace_id,
+        session_id,
+        engine,
+        &mut HashSet::new(),
+    )
 }
 
 fn apply_codex_provider_home_binding_fallback(entry: &mut WorkspaceSessionCatalogEntry) {
@@ -2232,18 +2333,18 @@ pub(crate) async fn record_provider_continuation_metadata_core(
         .into_iter()
         .next()
         .ok_or_else(|| "source_session_id is required".to_string())?;
-    let target_key = metadata_stable_key_for_session_id(&workspace_id, &target_session_id);
-    let source_key = metadata_stable_key_for_session_id(&workspace_id, &source_session_id);
+    let target_key =
+        provider_continuation_stable_key_for_session_id(&workspace_id, &target_session_id);
+    let source_key =
+        provider_continuation_stable_key_for_session_id(&workspace_id, &source_session_id);
 
     with_catalog_metadata_mutation(storage_path, &workspace_id, |metadata| {
-        let source_family = catalog_metadata_lookup_keys_for_session(
+        let source_family = resolve_provider_continuation_metadata(
+            metadata,
             &workspace_id,
             &source_session_id,
             parse_catalog_identity(&source_session_id).engine_name(),
-        )
-        .into_iter()
-        .find_map(|key| metadata.provider_continuation_by_session_key.get(&key))
-        .cloned();
+        );
         let continuation = ProviderContinuationMetadata {
             origin_kind: "provider-continuation".to_string(),
             source_session_id: source_session_id.clone(),

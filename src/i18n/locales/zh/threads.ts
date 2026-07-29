@@ -65,7 +65,7 @@ const threads = {
       "Kimi CLI · {{provider}}（目标续接尚未验证）",
     providerContinuationKimiUnavailable:
       "Kimi CLI · 可作为来源，目标暂不可用",
-    providerContinuationEstimatedTokens: "预计上下文 Token",
+    providerContinuationEstimatedTokens: "可移植历史 Token → 续接包 Token",
     providerContinuationErrorCode: "错误代码：{{code}}",
     openClaudeTui: "在 Claude TUI 中打开",
     claudeResumeCommandHelp:

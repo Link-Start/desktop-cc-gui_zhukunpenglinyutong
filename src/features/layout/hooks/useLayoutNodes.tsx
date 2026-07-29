@@ -1072,6 +1072,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const messagesNode = useMemo(
     () =>
       buildConversationCanvasNode({
+        isProviderContinuation:
+          activeThreadSummary?.originKind === "provider-continuation",
         continuationContextNode:
           activeThreadSummary?.originKind === "provider-continuation" ? (
             <ProviderContinuationContextCard

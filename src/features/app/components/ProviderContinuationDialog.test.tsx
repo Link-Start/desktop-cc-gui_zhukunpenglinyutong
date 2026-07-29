@@ -75,6 +75,7 @@ describe("ProviderContinuationDialog", () => {
           node?.textContent?.replace(/\s/g, "") === "1,200→600",
       ),
     ).toBeTruthy();
+    expect(screen.getByText("可移植历史 Token → 续接包 Token")).toBeTruthy();
     expect(screen.queryByText(/Omissions|省略内容|unsupported/)).toBeNull();
     expect(screen.getByText("准备上下文")).toBeTruthy();
     expect(screen.getByText("传递上下文")).toBeTruthy();

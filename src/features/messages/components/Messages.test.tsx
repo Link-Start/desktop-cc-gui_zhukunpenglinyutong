@@ -73,16 +73,22 @@ describe("Messages", () => {
         text: marker,
       },
       {
-        id: "visible-user",
+        id: "imported-user",
         kind: "message",
         role: "user",
-        text: "继续修复登录问题",
+        text: "# AGENTS.md instructions",
       },
       {
         id: "protocol-accepted",
         kind: "message",
         role: "assistant",
         text: `MOSSX_CONTEXT_ACCEPTED:${packageId}:${checksum}`,
+      },
+      {
+        id: "visible-user",
+        kind: "message",
+        role: "user",
+        text: "继续修复登录问题",
       },
     ];
 
@@ -99,6 +105,7 @@ describe("Messages", () => {
     );
 
     expect(container.textContent).toContain("继续修复登录问题");
+    expect(container.textContent).not.toContain("AGENTS.md");
     expect(container.textContent).not.toContain("MOSSX_CONTEXT_");
   });
 
@@ -131,6 +138,90 @@ describe("Messages", () => {
       />,
     );
     expect(container.querySelector("[data-testid='continuation-metadata']")).toBeNull();
+  });
+
+  it("hides Codex host bootstrap only for a Provider Continuation target", () => {
+    const packageId = `sha256:${"c".repeat(64)}`;
+    const checksum = `sha256:${"d".repeat(64)}`;
+    const marker = `MOSSX_CONTEXT_PACKAGE:${packageId}:${checksum}`;
+    const items: ConversationItem[] = [
+      {
+        id: "codex-environment",
+        kind: "message",
+        role: "user",
+        text:
+          "<environment_context>\n" +
+          "  <cwd>/workspace</cwd>\n" +
+          "</environment_context>",
+      },
+      {
+        id: "continuation-control",
+        kind: "message",
+        role: "user",
+        text:
+          `${marker}\n` +
+          "MOSSX_SHARED_CONTEXT_V1\n" +
+          "session:shared-session-1\n" +
+          "binding:codex::managed-a\n\n" +
+          "Shared Context Transcript\n\nTurn 1\nUser: 旧问题\n" +
+          `${marker}\n\n` +
+          "Current user request:\n继续",
+      },
+      {
+        id: "bootstrap-assistant",
+        kind: "message",
+        role: "assistant",
+        text: "你好！我是 bootstrap assistant。",
+      },
+      {
+        id: "real-user",
+        kind: "message",
+        role: "user",
+        text: "这是续接后的真实问题",
+      },
+      {
+        id: "real-assistant",
+        kind: "message",
+        role: "assistant",
+        text: "开始处理真实问题。",
+      },
+    ];
+    const { container, rerender } = render(
+      <Messages
+        items={items}
+        threadId="codex-continuation"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="codex"
+        isProviderContinuation
+        openTargets={[]}
+        selectedOpenAppId=""
+        timelineLeadingNode={
+          <div data-testid="continuation-metadata">Provider 续接</div>
+        }
+      />,
+    );
+
+    expect(screen.getByTestId("continuation-metadata")).toBeTruthy();
+    expect(container.textContent).toContain("这是续接后的真实问题");
+    expect(container.textContent).toContain("开始处理真实问题");
+    expect(container.textContent).not.toContain("environment_context");
+    expect(container.textContent).not.toContain("bootstrap assistant");
+
+    rerender(
+      <Messages
+        items={items}
+        threadId="ordinary-codex"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.textContent).toContain("environment_context");
+    expect(container.textContent).toContain("bootstrap assistant");
   });
 
   it("keeps Claude reasoning title stable while streaming", () => {

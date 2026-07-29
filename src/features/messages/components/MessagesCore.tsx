@@ -218,6 +218,7 @@ export const MessagesCore = memo(function MessagesCore({
     presentationProfile = null,
     agentTaskScrollRequest = null,
     timelineLeadingNode = null,
+    isProviderContinuation = false,
   } = presentation;
   const { t } = useTranslation();
   const isWindowsDesktop = useMemo(() => isWindowsPlatform(), []);
@@ -228,6 +229,8 @@ export const MessagesCore = memo(function MessagesCore({
   const threadId = conversationState.meta.threadId || null;
   const activeTurnId = conversationState.meta.activeTurnId ?? null;
   const activeEngine = conversationState.meta.engine;
+  const hideLeadingContinuationBootstrap =
+    activeEngine === "codex" && isProviderContinuation;
   const renderScopeKey = `${workspaceId ?? ""}\u0000${threadId ?? ""}`;
   const conversationRenderModeKey =
     workspaceId && threadId ? `${workspaceId}\u0000${threadId}` : null;
@@ -335,13 +338,19 @@ export const MessagesCore = memo(function MessagesCore({
   const exitPlanDedupeCacheRef = useRef<{
     baseItems: ConversationItem[];
     result: ConversationItem[];
+    hideLeadingContinuationBootstrap: boolean;
   } | null>(null);
   const effectiveItems = useMemo(() => {
     const baseItems = isSelectionFrozen
       ? frozenItemsRef.current ?? items
       : items;
     const cache = exitPlanDedupeCacheRef.current;
-    if (cache && isTrailingMessageTextOnlyUpdate(cache.baseItems, baseItems)) {
+    if (
+      cache &&
+      cache.hideLeadingContinuationBootstrap ===
+        hideLeadingContinuationBootstrap &&
+      isTrailingMessageTextOnlyUpdate(cache.baseItems, baseItems)
+    ) {
       // dedupe 只会移除 exit-plan 工具条目,末尾的 "message" 条目必然原样透传,
       // 因此只需把结果数组的最后一项替换为最新引用,无需重新扫描整段历史。
       // 尾项引用未变时(如选区冻结触发的引用级重算)必须原样返回缓存:此时尾项
@@ -349,11 +358,14 @@ export const MessagesCore = memo(function MessagesCore({
       const nextLast = baseItems[baseItems.length - 1];
       if (
         isContextProtocolConversationItem(nextLast) ||
-        hasContextProtocolControlTail(baseItems)
+        hasContextProtocolControlTail(baseItems, {
+          hideLeadingContinuationBootstrap,
+        })
       ) {
         exitPlanDedupeCacheRef.current = {
           baseItems,
           result: cache.result,
+          hideLeadingContinuationBootstrap,
         };
         return cache.result;
       }
@@ -362,15 +374,25 @@ export const MessagesCore = memo(function MessagesCore({
         cache.result[cache.result.length - 1] === nextLast
           ? cache.result
           : [...cache.result.slice(0, -1), nextLast];
-      exitPlanDedupeCacheRef.current = { baseItems, result };
+      exitPlanDedupeCacheRef.current = {
+        baseItems,
+        result,
+        hideLeadingContinuationBootstrap,
+      };
       return result;
     }
     const result = dedupeExitPlanItemsKeepFirst(
-      filterContextProtocolConversationItems(baseItems),
+      filterContextProtocolConversationItems(baseItems, {
+        hideLeadingContinuationBootstrap,
+      }),
     );
-    exitPlanDedupeCacheRef.current = { baseItems, result };
+    exitPlanDedupeCacheRef.current = {
+      baseItems,
+      result,
+      hideLeadingContinuationBootstrap,
+    };
     return result;
-  }, [isSelectionFrozen, items]);
+  }, [hideLeadingContinuationBootstrap, isSelectionFrozen, items]);
   const messageActionTargetsCacheRef = useRef<{
     baseItems: ConversationItem[];
     result: MessageActionTargets;

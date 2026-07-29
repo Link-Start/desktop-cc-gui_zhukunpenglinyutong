@@ -220,7 +220,9 @@ type SidebarMenuHandlers = {
     workspacePath: string;
     sessionId: string;
   }) => void;
-  onReloadWorkspaceThreads: (workspaceId: string) => void;
+  onReloadWorkspaceThreads: (
+    workspaceId: string,
+  ) => Promise<void> | void;
   onSelectThread: (workspaceId: string, threadId: string) => void;
   isThreadAvailable?: (workspaceId: string, threadId: string) => boolean;
   getThreadSummary?: (
@@ -688,8 +690,8 @@ export function useSidebarMenus({
       });
       if (result.status === "ready" && result.operation.resultSessionId) {
         providerContinuationOperationIdsRef.current.delete(dialog.operationKey);
+        await onReloadWorkspaceThreads(dialog.workspaceId);
         replaceProviderContinuationDialog(null);
-        onReloadWorkspaceThreads(dialog.workspaceId);
         onSelectThread(dialog.workspaceId, result.operation.resultSessionId);
         return;
       }

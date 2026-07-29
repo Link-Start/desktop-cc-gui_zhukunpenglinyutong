@@ -201,8 +201,12 @@ type SidebarProps = {
   onDeleteWorktree: (workspaceId: string) => void;
   onRenameWorkspaceAlias: (workspace: WorkspaceInfo) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
-  onReloadWorkspaceThreads: (workspaceId: string) => void;
-  onQuickReloadWorkspaceThreads?: (workspaceId: string) => void;
+  onReloadWorkspaceThreads: (
+    workspaceId: string,
+  ) => Promise<void> | void;
+  onQuickReloadWorkspaceThreads?: (
+    workspaceId: string,
+  ) => Promise<void> | void;
   onRequestRootSessionFolderDraft?: (workspaceId: string) => void;
   workspaceDropTargetRef: RefObject<HTMLElement | null>;
   isWorkspaceDropActive: boolean;

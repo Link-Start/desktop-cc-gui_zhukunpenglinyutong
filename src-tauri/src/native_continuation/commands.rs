@@ -135,15 +135,16 @@ fn validate_provider_continuation_shape(
     if operation_id.trim().is_empty() {
         return Err("operation_id is required".to_string());
     }
-    if source.session_id.trim().is_empty() || source.native_session_id.trim().is_empty() {
+    let source_session_id = source.session_id.trim();
+    let native_session_id = source.native_session_id.trim();
+    if source_session_id.is_empty() || native_session_id.is_empty() {
         return Err("source session identity is required".to_string());
     }
-    let expected_source_session_id = format!(
-        "{}:{}",
-        engine_name(source.engine),
-        source.native_session_id.trim()
-    );
-    if source.session_id.trim() != expected_source_session_id {
+    let expected_source_session_id =
+        format!("{}:{}", engine_name(source.engine), native_session_id);
+    let source_identity_matches = source_session_id == expected_source_session_id
+        || (source.engine == NativeHistoryEngine::Codex && source_session_id == native_session_id);
+    if !source_identity_matches {
         return Err("source session identity does not match native session identity".to_string());
     }
     if destination.normalized_provider().is_none() {
@@ -552,6 +553,11 @@ async fn persist_target_metadata(
     Ok(())
 }
 
+fn raw_codex_thread_id(session_id: &str) -> Option<&str> {
+    let raw_session_id = session_id.trim_start_matches("codex:").trim();
+    (!raw_session_id.is_empty()).then_some(raw_session_id)
+}
+
 async fn execute_codex(
     state: &AppState,
     app: &AppHandle,
@@ -562,11 +568,31 @@ async fn execute_codex(
 ) -> Result<NativeProviderContinuationOperation, String> {
     let root = app_data_root(state)?;
     if operation.phase == "ready" {
+        if let Some(legacy_result_session_id) = operation
+            .result_session_id
+            .as_deref()
+            .filter(|session_id| session_id.starts_with("codex:"))
+        {
+            if let Some(target_session_id) = raw_codex_thread_id(legacy_result_session_id) {
+                return update_operation_phase(
+                    root,
+                    &operation.materialization.operation_id,
+                    "ready",
+                    Some(target_session_id),
+                    None,
+                    now_millis(),
+                )
+                .map_err(|error| error.to_string());
+            }
+        }
         return Ok(operation);
     }
     if operation.phase == "recovery-required" {
-        if let Some(canonical_target_session_id) = operation.result_session_id.as_deref() {
-            let target_session_id = canonical_target_session_id.trim_start_matches("codex:");
+        if let Some(result_session_id) = operation.result_session_id.as_deref() {
+            // 新 operation 保存 raw Codex thread id；这里保留旧 `codex:` result 的
+            // recovery compatibility，runtime command 始终只接收 raw id。
+            let target_session_id = raw_codex_thread_id(result_session_id)
+                .ok_or_else(|| "Codex target thread identity is invalid".to_string())?;
             let provider_profile_id = destination
                 .normalized_provider()
                 .ok_or_else(|| "destination provider identity is required".to_string())?;
@@ -606,14 +632,14 @@ async fn execute_codex(
                     workspace_id,
                     &operation,
                     destination,
-                    canonical_target_session_id,
+                    target_session_id,
                 )
                 .await?;
                 return update_operation_phase(
                     root,
                     &operation.materialization.operation_id,
                     "ready",
-                    Some(canonical_target_session_id),
+                    Some(target_session_id),
                     None,
                     now_millis(),
                 )
@@ -636,7 +662,9 @@ async fn execute_codex(
         );
         return Err("acceptance-ambiguous: target creation state is unknown".to_string());
     }
-    if let Some(canonical_target_session_id) = operation.result_session_id.as_deref() {
+    if let Some(result_session_id) = operation.result_session_id.as_deref() {
+        let target_session_id = raw_codex_thread_id(result_session_id)
+            .ok_or_else(|| "Codex target thread identity is invalid".to_string())?;
         if operation.error_code.as_deref() == Some("catalog-commit-failed") {
             emit_progress(
                 app,
@@ -649,14 +677,14 @@ async fn execute_codex(
                 workspace_id,
                 &operation,
                 destination,
-                canonical_target_session_id,
+                target_session_id,
             )
             .await?;
             return update_operation_phase(
                 root,
                 &operation.materialization.operation_id,
                 "ready",
-                Some(canonical_target_session_id),
+                Some(target_session_id),
                 None,
                 now_millis(),
             )
@@ -666,7 +694,7 @@ async fn execute_codex(
             root,
             &operation.materialization.operation_id,
             "recovery-required",
-            Some(canonical_target_session_id),
+            Some(target_session_id),
             Some("acceptance-ambiguous"),
             now_millis(),
         );
@@ -721,12 +749,11 @@ async fn execute_codex(
         );
         return Err("acceptance-ambiguous: Codex thread identity missing".to_string());
     };
-    let canonical_target_session_id = format!("codex:{target_session_id}");
     let operation = update_operation_phase(
         root,
         &operation.materialization.operation_id,
         "creating",
-        Some(&canonical_target_session_id),
+        Some(&target_session_id),
         None,
         now_millis(),
     )
@@ -792,7 +819,7 @@ async fn execute_codex(
             root,
             &operation.materialization.operation_id,
             "recovery-required",
-            Some(&canonical_target_session_id),
+            Some(&target_session_id),
             Some("acceptance-ambiguous"),
             now_millis(),
         );
@@ -815,7 +842,7 @@ async fn execute_codex(
         workspace_id,
         &operation,
         destination,
-        &canonical_target_session_id,
+        &target_session_id,
     )
     .await
     {
@@ -823,7 +850,7 @@ async fn execute_codex(
             root,
             &operation.materialization.operation_id,
             "creating",
-            Some(&canonical_target_session_id),
+            Some(&target_session_id),
             Some("catalog-commit-failed"),
             now_millis(),
         );
@@ -833,7 +860,7 @@ async fn execute_codex(
         root,
         &operation.materialization.operation_id,
         "ready",
-        Some(&canonical_target_session_id),
+        Some(&target_session_id),
         None,
         now_millis(),
     )
@@ -1525,10 +1552,116 @@ pub(crate) async fn create_native_provider_continuation(
 mod tests {
     use super::{
         claude_assistant_ack_in_jsonl, claude_bootstrap_evidence_in_jsonl, codex_context_transport,
-        native_provider_source, validate_claude_model_against_catalog,
-        CanonicalProviderProfileSource, ClaudeBootstrapEvidence, CodexContextTransport,
-        ProjectionMode, ProviderContinuationProgressPhase,
+        native_provider_source, raw_codex_thread_id, validate_claude_model_against_catalog,
+        validate_provider_continuation_shape, CanonicalProviderProfileSource,
+        ClaudeBootstrapEvidence, CodexContextTransport, ProjectionMode,
+        ProviderContinuationProgressPhase,
     };
+    use crate::engine::EngineType;
+    use crate::native_history::{NativeHistoryEngine, NativeHistorySource};
+    use crate::shared_session_v2::ExecutionTargetInput;
+
+    fn validate_source_identity(
+        engine: NativeHistoryEngine,
+        session_id: &str,
+        native_session_id: &str,
+    ) -> Result<(), String> {
+        let destination = ExecutionTargetInput {
+            engine: if engine == NativeHistoryEngine::Codex {
+                EngineType::Claude
+            } else {
+                EngineType::Codex
+            },
+            provider_profile_id: Some("target-provider".to_string()),
+            model_catalog_entry_id: None,
+            model: None,
+            reasoning_effort: None,
+            provider_profile_name_snapshot: None,
+            provider_profile_source: None,
+            runtime_capability_fingerprint: None,
+        };
+        validate_provider_continuation_shape(
+            "operation-1",
+            &NativeHistorySource {
+                session_id: session_id.to_string(),
+                native_session_id: native_session_id.to_string(),
+                engine,
+                provider_profile_id: Some("source-provider".to_string()),
+            },
+            &destination,
+        )
+    }
+
+    #[test]
+    fn provider_continuation_source_identity_validation_is_engine_aware() {
+        for (engine, session_id, native_session_id) in [
+            (
+                NativeHistoryEngine::Codex,
+                "codex-history-1",
+                "codex-history-1",
+            ),
+            (
+                NativeHistoryEngine::Codex,
+                "codex:codex-history-1",
+                "codex-history-1",
+            ),
+            (
+                NativeHistoryEngine::Claude,
+                "claude:claude-history-1",
+                "claude-history-1",
+            ),
+            (
+                NativeHistoryEngine::Kimi,
+                "kimi:kimi-history-1",
+                "kimi-history-1",
+            ),
+        ] {
+            assert!(
+                validate_source_identity(engine, session_id, native_session_id).is_ok(),
+                "{engine:?} identity should be accepted: {session_id}"
+            );
+        }
+
+        for (engine, session_id, native_session_id) in [
+            (
+                NativeHistoryEngine::Codex,
+                "codex-history-2",
+                "codex-history-1",
+            ),
+            (
+                NativeHistoryEngine::Codex,
+                "codex:codex-history-2",
+                "codex-history-1",
+            ),
+            (
+                NativeHistoryEngine::Claude,
+                "claude-history-1",
+                "claude-history-1",
+            ),
+            (
+                NativeHistoryEngine::Kimi,
+                "kimi-history-1",
+                "kimi-history-1",
+            ),
+        ] {
+            assert_eq!(
+                validate_source_identity(engine, session_id, native_session_id)
+                    .expect_err("identity should be rejected"),
+                "source session identity does not match native session identity"
+            );
+        }
+    }
+
+    #[test]
+    fn codex_result_identity_normalizes_legacy_prefixes_to_raw_thread_id() {
+        assert_eq!(raw_codex_thread_id("thread-1"), Some("thread-1"));
+        assert_eq!(raw_codex_thread_id("codex:thread-1"), Some("thread-1"));
+        assert_eq!(
+            raw_codex_thread_id("codex:codex:thread-1"),
+            Some("thread-1")
+        );
+        assert_eq!(raw_codex_thread_id("codex:"), None);
+    }
 
     #[test]
     fn canonical_provider_source_maps_back_to_native_catalog_source_explicitly() {

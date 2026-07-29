@@ -163,7 +163,7 @@ export function ProviderContinuationDialog({
               <div className="flex items-center justify-between gap-4 border-t border-border/60 bg-background/55 px-4 py-3 text-xs">
                 <span className="text-muted-foreground">
                   {t("threads.providerContinuationEstimatedTokens", {
-                    defaultValue: "预计上下文 Token",
+                    defaultValue: "可移植历史 Token → 续接包 Token",
                   })}
                 </span>
                 <span className="font-mono font-medium tabular-nums">

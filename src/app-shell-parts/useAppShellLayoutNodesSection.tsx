@@ -1347,7 +1347,7 @@ export function useAppShellLayoutNodesSection(
     void loadOlderThreadsForWorkspace(workspace);
   });
   const handleQuickReloadWorkspaceThreads = useEventCallback(
-    (workspaceId: string) => {
+    async (workspaceId: string) => {
       const workspace = workspacesById.get(workspaceId);
       if (!workspace) {
         return;
@@ -1362,7 +1362,7 @@ export function useAppShellLayoutNodesSection(
               ),
             ]
           : [workspace];
-      void Promise.allSettled(
+      await Promise.allSettled(
         targets.map((target) => listThreadsForWorkspaceTracked(target)),
       );
     },

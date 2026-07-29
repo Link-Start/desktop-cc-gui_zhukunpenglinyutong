@@ -177,6 +177,7 @@ vi.mock("../../messages", async (importOriginal) => {
     onForkFromMessage,
     onCaptureNote,
     timelineLeadingNode,
+    isProviderContinuation,
   }: {
     showMessageAnchors: boolean;
     activeEngine?: string;
@@ -184,6 +185,7 @@ vi.mock("../../messages", async (importOriginal) => {
     onForkFromMessage?: (messageId: string) => void;
     onCaptureNote?: typeof capturedMessagesNoteCapture;
     timelineLeadingNode?: ReactNode;
+    isProviderContinuation?: boolean;
     conversationState?: {
       meta?: {
         engine?: string;
@@ -202,6 +204,7 @@ vi.mock("../../messages", async (importOriginal) => {
       data-history-restored-at={String(
         conversationState?.meta?.historyRestoredAtMs ?? "",
       )}
+      data-provider-continuation={String(Boolean(isProviderContinuation))}
     >
       {timelineLeadingNode}
       {onForkFromMessage ? (
@@ -1102,6 +1105,9 @@ describe("useLayoutNodes client UI visibility", () => {
 
     expect(screen.getByText("来源最后一个问题")).toBeTruthy();
     expect(screen.getByText("来源最后一个回答")).toBeTruthy();
+    expect(screen.getByTestId("messages").dataset.providerContinuation).toBe(
+      "true",
+    );
   });
 
   it("selects the exact repository before staging from the file-tree Git menu", async () => {

@@ -286,6 +286,64 @@ fn timestamp_of(value: &Value) -> Option<i64> {
         })
 }
 
+struct EffectiveHistoryRecord {
+    value: Value,
+    source_line: usize,
+    replacement_index: Option<usize>,
+    fallback_id: String,
+}
+
+fn effective_history_records(
+    text: &str,
+    engine: NativeHistoryEngine,
+) -> Result<Vec<EffectiveHistoryRecord>, NativeHistoryError> {
+    let mut records = Vec::new();
+    for (index, line) in text.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let source_line = index + 1;
+        let value: Value = serde_json::from_str(line).map_err(|error| {
+            NativeHistoryError::new(
+                NativeHistoryErrorCode::SourceCorrupt,
+                format!("invalid JSONL record {source_line}: {error}"),
+            )
+        })?;
+        let replacement_history = (engine == NativeHistoryEngine::Codex
+            && value.get("type").and_then(Value::as_str) == Some("compacted"))
+        .then(|| value.pointer("/payload/replacement_history"))
+        .flatten()
+        .and_then(Value::as_array);
+        if let Some(replacement_history) = replacement_history {
+            records.clear();
+            records.extend(replacement_history.iter().enumerate().map(
+                |(replacement_index, item)| {
+                    EffectiveHistoryRecord {
+                        value: item.clone(),
+                        source_line,
+                        replacement_index: Some(replacement_index),
+                        fallback_id: sha256(
+                            format!(
+                                "codex-compaction:{source_line}:{replacement_index}:{}",
+                                item
+                            )
+                            .as_bytes(),
+                        ),
+                    }
+                },
+            ));
+            continue;
+        }
+        records.push(EffectiveHistoryRecord {
+            value,
+            source_line,
+            replacement_index: None,
+            fallback_id: sha256(line.as_bytes()),
+        });
+    }
+    Ok(records)
+}
+
 fn normalize_lines(
     bytes: &[u8],
     source: &NativeHistorySource,
@@ -302,17 +360,10 @@ fn normalize_lines(
             "native history ends with an incomplete JSONL record",
         ));
     }
-    let entries = text
-        .lines()
-        .enumerate()
-        .filter(|(_, line)| !line.trim().is_empty())
-        .map(|(index, line)| {
-            let value: Value = serde_json::from_str(line).map_err(|error| {
-                NativeHistoryError::new(
-                    NativeHistoryErrorCode::SourceCorrupt,
-                    format!("invalid JSONL record {}: {error}", index + 1),
-                )
-            })?;
+    let entries = effective_history_records(text, source.engine)?
+        .into_iter()
+        .map(|record| {
+            let value = record.value;
             let vendor_entry_type =
                 string_at(&value, &[&["type"], &["payload", "type"]]).unwrap_or("unknown");
             let source_entry_id = string_at(
@@ -326,7 +377,7 @@ fn normalize_lines(
                 ],
             )
             .map(str::to_string)
-            .unwrap_or_else(|| sha256(line.as_bytes()));
+            .unwrap_or(record.fallback_id);
             let (blocks, private_count, unknown_count) = blocks_of(&value, source.engine);
             Ok((
                 ContextSourceEntry {
@@ -339,7 +390,8 @@ fn normalize_lines(
                         "providerProfileId": source.provider_profile_id,
                         "nativeSessionId": source.native_session_id,
                         "vendorEntryType": vendor_entry_type,
-                        "sourceLine": index + 1,
+                        "sourceLine": record.source_line,
+                        "replacementIndex": record.replacement_index,
                     }),
                     fidelity: NativeHistoryFidelity::Semantic,
                 },
@@ -607,6 +659,44 @@ mod tests {
         let error = read_history_file(&path, &source(NativeHistoryEngine::Codex), &cursor)
             .expect_err("drift");
         assert_eq!(error.code, NativeHistoryErrorCode::SourceDrifted);
+        fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn reader_replays_last_codex_compaction_and_keeps_following_delta() {
+        let path = fixture(concat!(
+            "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"superseded\"}]}}\n",
+            "{\"type\":\"compacted\",\"payload\":{\"replacement_history\":[",
+            "{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"first replacement\"}]}",
+            "]}}\n",
+            "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"superseded delta\"}]}}\n",
+            "{\"type\":\"compacted\",\"payload\":{\"replacement_history\":[",
+            "{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"effective replacement\"}]},",
+            "{\"type\":\"compaction\",\"id\":\"compact-2\",\"encrypted_content\":\"private state\"}",
+            "]}}\n",
+            "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"following delta\"}]}}\n",
+        ));
+        let cursor = probe_history_file(&path, NativeHistoryEngine::Codex)
+            .expect("probe")
+            .current_through_cursor
+            .expect("cursor");
+
+        let result =
+            read_history_file(&path, &source(NativeHistoryEngine::Codex), &cursor).expect("read");
+        let repeated =
+            read_history_file(&path, &source(NativeHistoryEngine::Codex), &cursor).expect("repeat");
+        let serialized = serde_json::to_string(&result.entries).expect("serialize");
+
+        assert_eq!(result, repeated);
+        assert_eq!(result.entries.len(), 2);
+        assert!(serialized.contains("effective replacement"));
+        assert!(serialized.contains("following delta"));
+        assert!(!serialized.contains("superseded"));
+        assert!(!serialized.contains("private state"));
+        assert!(result
+            .omissions
+            .iter()
+            .any(|omission| omission.category == "provider-private-reasoning"));
         fs::remove_file(path).ok();
     }
 

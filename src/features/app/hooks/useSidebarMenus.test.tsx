@@ -145,6 +145,14 @@ const workspace: WorkspaceInfo = {
   },
 };
 
+function createDeferred<T>() {
+  let resolvePromise!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return { promise, resolve: resolvePromise };
+}
+
 function createHandlers() {
   const engineOptions: EngineDisplayInfo[] = [
     {
@@ -910,6 +918,7 @@ describe("useSidebarMenus", () => {
   });
 
   it("creates a top-level provider continuation from a native thread", async () => {
+    const catalogRefresh = createDeferred<void>();
     prepareNativeProviderContinuationMock.mockResolvedValueOnce({
       status: "prepared",
       fidelity: "degraded",
@@ -922,11 +931,12 @@ describe("useSidebarMenus", () => {
       fidelity: "degraded",
       operation: {
         phase: "ready",
-        resultSessionId: "codex:target-1",
+        resultSessionId: "target-1",
       },
     });
     const handlers = {
       ...createHandlers(),
+      onReloadWorkspaceThreads: vi.fn(() => catalogRefresh.promise),
       codexProviderProfiles: [
         {
           id: "provider-b",
@@ -983,11 +993,14 @@ describe("useSidebarMenus", () => {
       progressPercent: 32,
     });
     expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
-    await act(async () => {
-      await result.current.confirmProviderContinuation();
+    let confirmationPromise!: Promise<void>;
+    act(() => {
+      confirmationPromise = result.current.confirmProviderContinuation();
     });
 
-    expect(createNativeProviderContinuationMock).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(createNativeProviderContinuationMock).toHaveBeenCalledOnce();
+    });
     expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "ws-1",
@@ -1006,9 +1019,19 @@ describe("useSidebarMenus", () => {
       expect.objectContaining({ confirmDegraded: true }),
     );
     expect(handlers.onReloadWorkspaceThreads).toHaveBeenCalledWith("ws-1");
+    expect(handlers.onSelectThread).not.toHaveBeenCalled();
+    expect(result.current.providerContinuationDialogState?.stage).toBe(
+      "running",
+    );
+
+    await act(async () => {
+      catalogRefresh.resolve();
+      await confirmationPromise;
+    });
+
     expect(handlers.onSelectThread).toHaveBeenCalledWith(
       "ws-1",
-      "codex:target-1",
+      "target-1",
     );
   });
 
@@ -1308,7 +1331,7 @@ describe("useSidebarMenus", () => {
         fidelity: "degraded",
         operation: {
           phase: "ready",
-          resultSessionId: "codex:target-recovered",
+          resultSessionId: "target-recovered",
         },
       });
     const handlers = {
@@ -1376,7 +1399,7 @@ describe("useSidebarMenus", () => {
     );
     expect(handlers.onSelectThread).toHaveBeenCalledWith(
       "ws-1",
-      "codex:target-recovered",
+      "target-recovered",
     );
   });
 
@@ -1400,7 +1423,7 @@ describe("useSidebarMenus", () => {
         },
       ],
       getThreadSummary: () => ({
-        id: "codex:source-2",
+        id: "codex-history-1",
         name: "Source",
         updatedAt: 1,
         threadKind: "native" as const,
@@ -1419,7 +1442,7 @@ describe("useSidebarMenus", () => {
           stopPropagation: vi.fn(),
         } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
         "ws-1",
-        "codex:source-2",
+        "codex-history-1",
         true,
       );
     });
@@ -1436,6 +1459,15 @@ describe("useSidebarMenus", () => {
         "confirm",
       );
     });
+    expect(prepareNativeProviderContinuationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({
+          sessionId: "codex-history-1",
+          nativeSessionId: "codex-history-1",
+          providerProfileId: "provider-b",
+        }),
+      }),
+    );
     await act(async () => {
       await result.current.confirmProviderContinuation();
     });
@@ -1443,7 +1475,8 @@ describe("useSidebarMenus", () => {
     expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(
       expect.objectContaining({
         source: expect.objectContaining({
-          sessionId: "codex:source-2",
+          sessionId: "codex-history-1",
+          nativeSessionId: "codex-history-1",
           providerProfileId: "provider-b",
         }),
         destination: expect.objectContaining({

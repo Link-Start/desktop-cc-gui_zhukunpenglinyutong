@@ -69,7 +69,8 @@ const threads = {
       "Kimi CLI · {{provider}} (target continuation is not verified)",
     providerContinuationKimiUnavailable:
       "Kimi CLI · source only; target unavailable",
-    providerContinuationEstimatedTokens: "Estimated context tokens",
+    providerContinuationEstimatedTokens:
+      "Portable history tokens → continuation package tokens",
     providerContinuationErrorCode: "Error code: {{code}}",
     openClaudeTui: "Open in Claude TUI",
     claudeResumeCommandHelp:

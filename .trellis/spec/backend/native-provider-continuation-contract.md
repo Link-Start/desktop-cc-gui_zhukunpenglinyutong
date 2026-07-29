@@ -49,8 +49,12 @@ createNativeProviderContinuation({
 
 ### 3. Contracts
 
-- `source.sessionId` MUST 等于 `<engine>:<nativeSessionId>`；Codex source MUST 带
-  authoritative `providerProfileId`。
+- source identity validation MUST 按 Engine 处理：Claude/Kimi 的 `source.sessionId`
+  MUST 等于 `<engine>:<nativeSessionId>`；Codex MAY 使用 exact raw
+  `nativeSessionId` 或 `codex:<nativeSessionId>`。两种 Codex 表示都 MUST 映射到同一
+  native thread，且 MUST 保留 caller 提供的 exact logical `sessionId` 用于
+  materialization、lineage 与来源导航。Codex source MUST 带 authoritative
+  `providerProfileId`。
 - destination V1 支持 Claude/Codex。Kimi target 与 remote daemon MUST 返回 typed
   `unsupported-target-acceptance`，禁止 fallback。
 - phase 顺序：`prepared -> creating -> ready`；不确定 ACK 进入
@@ -59,6 +63,9 @@ createNativeProviderContinuation({
 - `prepare_native_provider_continuation` MUST 只冻结 source artifacts、编译 Context
   Package 并返回真实 source/package token estimate；MUST NOT 创建 target Session、发送
   Context 或写 target catalog identity。
+- preview 的 `sourceEstimatedTokens/packageEstimatedTokens` 是 deterministic portable-history
+  与 continuation-package estimate，不是 Provider-reported current context 或 billing Token；
+  UI MUST 明确展示“可移植历史 → 续接包”方向。
 - `discard_prepared_native_provider_continuation` MUST 重新计算 request checksum，且只删除
   checksum 匹配、phase=`prepared`、`result_session_id IS NULL` 的 operation。Content-addressed
   artifacts MAY 保留复用；`creating/ready/recovery-required` MUST 不受影响。
@@ -67,9 +74,27 @@ createNativeProviderContinuation({
   MUST 保留 durable identity 并 fail closed。
 - Native history 单文件读取 MUST 有明确 byte limit，并在 blocking worker 中执行；超限返回
   typed `source-too-large`，禁止在 async runtime worker 上无界读取。
+- Codex native history MUST 以 frozen cursor 内最后一个有效
+  `compacted.payload.replacement_history` 作为 effective window，并追加该 compaction 之后的
+  portable delta；superseded window MUST NOT 进入 normalized artifact。Replacement 内
+  private/unknown block 继续执行既有 omission，禁止因 compaction replay 放宽 allowlist。
 - Reader 只允许 portable text 与完整 Tool Call/Result pair；private reasoning、
   signature/encrypted/redacted block 与 unknown block MUST omission，禁止泄露到目标 Provider。
-- Codex runtime 调用使用裸 thread id；operation/catalog/UI 使用 `codex:<thread-id>`。
+- Context Package budget MUST 与 transport capability 解耦：Claude prompt 与 Codex
+  `thread/inject_items` 都必须先生成 budgeted delta；structured import MUST NOT 绕过 budget。
+  Oversized atomic Tool Exchange MUST 保持 Call/Result pairing 并使用 deterministic bounded
+  evidence。多个 Turn 先移除最旧完整 Turn；最后一个 oversized Turn MUST 至少保留 User intent
+  与 latest Assistant outcome（存在时）。Portable source 非空时 package MUST 满足
+  `0 < packageEstimatedTokens <= budget`；否则 fail closed，禁止 target side effect。
+- Codex runtime、operation `resultSessionId`、catalog row 与 frontend selection MUST
+  统一使用裸 `<thread-id>`。Continuation metadata stable key MUST 规范化为
+  `codex:<workspace-id>:<thread-id>`；读取时 MUST 兼容历史
+  `codex:<workspace-id>:codex:<thread-id>` duplicated key，但不得继续写入该格式。
+  Source operation/materialization MUST 保留已验证的 raw 或 prefixed logical identity，
+  禁止仅为通过校验而重写来源 `sessionId`。
+- catalog projection MUST 以 exact `sourceSessionId` 递归解析 continuation metadata，
+  重建 `familyId/rootSessionId/depth`；resolver MUST 有 cycle guard。该兼容层只修正
+  projection，不得迁移 native history 或复制 target Session。
 - Codex `thread/inject_items` capability MUST 由无目标副作用的 JSON-RPC method probe
   决定；`method not found` 才视为 unsupported。unsupported 时 MUST 使用已声明的
   portable prompt transport，禁止仍调用缺失 method。
@@ -132,11 +157,18 @@ createNativeProviderContinuation({
 
 - Rust：Reader append/drift/corrupt、operation conflict/phase/result identity、artifact checksum、
   byte limit、private/unknown omission、atomic Tool pair、Codex method probe/portable fallback、
-  Claude completed bootstrap、durable bootstrap history、assistant exact ACK compatibility、
-  unrelated marker rejection、catalog family/delete non-cascade。
+  raw Codex target identity、legacy duplicated metadata key、recursive family/cycle guard、
+  closed import envelope、Claude completed bootstrap、durable bootstrap history、
+  assistant exact ACK compatibility、unrelated marker rejection、catalog family/delete non-cascade。
+- Rust：额外覆盖 Codex last-compaction effective window、replacement private omission、
+  structured import budget、atomic Tool bounded fold、single oversized Turn non-empty spine 与
+  empty portable source fail-closed。
+- Rust：source identity truth table MUST 覆盖 raw Codex、prefixed Codex、Codex mismatch，
+  以及 Claude/Kimi raw rejection 与 prefixed acceptance。
 - Vitest：prepare/discard/create DTO mapping、Claude/Codex target menu、double-click guard、
   cancellation late-completion race、single confirmation、operation progress 过滤、Token 摘要、
-  omission negative assertion、canonical target selection、顶层“供应商续接”标签与来源导航。
+  omission negative assertion、canonical target selection、顶层“供应商续接”标签与来源导航、
+  Codex Provider Continuation leading host bootstrap 隐藏与普通 Codex Session 隔离。
 - Rust：额外覆盖 `ContextBootstrap` command args、普通 command wrapper、progress milestone
   单调性与 prepared guarded discard。
 - Contract：`cargo check --lib`、`npm run typecheck`、
@@ -195,13 +227,31 @@ ProviderContinuationContextCard({ thread, source, onOpenSource })
 - recovery 主文案 MUST 面向用户解释“是否可能已创建、重试是否会重复”；raw backend
   error 只能放在默认折叠的“技术详情”。
 - renderer production code MUST NOT 使用 `alert/window.alert` 或 native system confirm。
-- exact `MOSSX_CONTEXT_PACKAGE/ACCEPTED` 与完整 native context prompt 启动一个
-  control exchange；直到下一条普通 user message 之前的 reasoning/assistant/lifecycle
-  projection MUST 全部隐藏。普通包含 MOSSX 的用户文本 MUST 保留。
+- exact `MOSSX_CONTEXT_PACKAGE/ACCEPTED` MUST 按 package identity 形成可嵌套的
+  closed envelope：从 package
+  marker 起到 matching accepted marker 止，所有 user/developer/assistant/reasoning/
+  lifecycle projection MUST 全部隐藏；nested envelope MUST 用 identity-aware stack，
+  不得在内层 accepted marker 提前结束；外层 matching accepted MUST 一并清除其内部旧版
+  未闭合 package marker。完整 native context prompt 启动 legacy control exchange，
+  直到下一条普通 user message 前隐藏；shared runtime prompt 只隐藏其 exact echo。
+  普通包含 MOSSX 的用户文本 MUST 保留。
+- Codex app-server 在 continuation control prompt 之前注入的完整
+  `<environment_context>...</environment_context>`，以及 control prompt 后、第一条真实
+  user turn 前的 bootstrap reasoning/assistant output，MUST 仅在 catalog authoritative
+  `originKind=provider-continuation` 且 active engine 为 Codex 时由 Messages presentation
+  boundary 隐藏。该 gate MUST 纳入 presentation cache identity 与 control-tail 检测；
+  普通 Codex Session、Claude continuation、Shared V2 conversation 与第一条真实 user turn
+  之后的正文 MUST 保持既有语义。禁止在 vendor history loader 或 streaming reducer 中做
+  全局 substring 删除。
 - protocol title MUST 投影为“继续：来源标题”或可读 fallback。
 - continuation metadata MUST 通过既有 `.messages` timeline-leading slot 接入，默认折叠，
   不得成为 Canvas 根 sibling，也不得参与 message grouping、streaming、terminal 或
   scroll-anchor 计算。展开后显示 source → target snapshot；来源缺失时 disabled。
+- operation ready 后 frontend MUST await 既有 workspace catalog reload Promise，再关闭
+  Dialog 并选择 exact target id。Refresh settle 前 target MUST NOT 进入 Canvas；禁止用
+  fixed delay、polling、provisional Session row 或第二份 continuation registry 规避
+  metadata 时序。这样 target Canvas 首帧即可同时获得 engine 与 authoritative
+  `provider-continuation` origin，避免 host bootstrap 先显示再隐藏。
 
 ### 4. Validation & Error Matrix
 

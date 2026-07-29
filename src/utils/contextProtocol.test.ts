@@ -171,4 +171,209 @@ describe("filterContextProtocolConversationItems", () => {
     ]);
     expect(hasContextProtocolControlTail(items.slice(0, 2))).toBe(false);
   });
+
+  it("hides the leading Codex host bootstrap only for Provider Continuation", () => {
+    const marker = `MOSSX_CONTEXT_PACKAGE:${PACKAGE}:${CHECKSUM}`;
+    const items = [
+      {
+        id: "codex-environment",
+        kind: "message" as const,
+        role: "user" as const,
+        text:
+          "<environment_context>\n" +
+          "  <cwd>/workspace</cwd>\n" +
+          "  <shell>zsh</shell>\n" +
+          "</environment_context>",
+      },
+      {
+        id: "runtime-user-echo",
+        kind: "message" as const,
+        role: "user" as const,
+        text:
+          `${marker}\n` +
+          "MOSSX_SHARED_CONTEXT_V1\n" +
+          "session:shared-session-1\n" +
+          "binding:codex::managed-a\n\n" +
+          "Shared Context Transcript\n\nTurn 1\nUser: 你好\n" +
+          `${marker}\n\n` +
+          "Current user request:\n继续修复",
+      },
+      {
+        id: "bootstrap-assistant",
+        kind: "message" as const,
+        role: "assistant" as const,
+        text: "你好！我是 MiniMax。",
+      },
+      {
+        id: "real-user",
+        kind: "message" as const,
+        role: "user" as const,
+        text: "继续处理真实问题",
+      },
+      {
+        id: "real-assistant",
+        kind: "message" as const,
+        role: "assistant" as const,
+        text: "开始处理。",
+      },
+    ];
+    const continuationOptions = {
+      hideLeadingContinuationBootstrap: true,
+    };
+
+    expect(
+      filterContextProtocolConversationItems(items, continuationOptions).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["real-user", "real-assistant"]);
+    expect(
+      hasContextProtocolControlTail(items.slice(0, 3), continuationOptions),
+    ).toBe(true);
+    expect(hasContextProtocolControlTail(items, continuationOptions)).toBe(
+      false,
+    );
+
+    expect(filterContextProtocolConversationItems(items).map((item) => item.id)).toEqual([
+      "codex-environment",
+      "bootstrap-assistant",
+      "real-user",
+      "real-assistant",
+    ]);
+  });
+
+  it("hides an incremental Codex environment item before the control marker arrives", () => {
+    const items = [
+      {
+        id: "codex-environment",
+        kind: "message" as const,
+        role: "user" as const,
+        text:
+          "<environment_context><cwd>/workspace</cwd></environment_context>",
+      },
+    ];
+    const continuationOptions = {
+      hideLeadingContinuationBootstrap: true,
+    };
+
+    expect(
+      filterContextProtocolConversationItems(items, continuationOptions),
+    ).toEqual([]);
+    expect(hasContextProtocolControlTail(items, continuationOptions)).toBe(true);
+    expect(filterContextProtocolConversationItems(items)).toEqual(items);
+  });
+
+  it("hides a nested structured import envelope including imported user items", () => {
+    const outerPackage = `sha256:${"c".repeat(64)}`;
+    const outerChecksum = `sha256:${"d".repeat(64)}`;
+    const innerPackage = `sha256:${"e".repeat(64)}`;
+    const innerChecksum = `sha256:${"f".repeat(64)}`;
+    const items = [
+      {
+        id: "outer-package",
+        kind: "message" as const,
+        role: "user" as const,
+        text: `MOSSX_CONTEXT_PACKAGE:${outerPackage}:${outerChecksum}`,
+      },
+      {
+        id: "imported-environment",
+        kind: "message" as const,
+        role: "user" as const,
+        text: "<environment_context><cwd>/workspace</cwd></environment_context>",
+      },
+      {
+        id: "inner-package",
+        kind: "message" as const,
+        role: "user" as const,
+        text: `MOSSX_CONTEXT_PACKAGE:${innerPackage}:${innerChecksum}`,
+      },
+      {
+        id: "imported-instructions",
+        kind: "message" as const,
+        role: "user" as const,
+        text: "# AGENTS.md instructions",
+      },
+      {
+        id: "inner-accepted",
+        kind: "message" as const,
+        role: "user" as const,
+        text: `MOSSX_CONTEXT_ACCEPTED:${innerPackage}:${innerChecksum}`,
+      },
+      {
+        id: "imported-user-after-inner",
+        kind: "message" as const,
+        role: "user" as const,
+        text: "1+1",
+      },
+      {
+        id: "outer-accepted",
+        kind: "message" as const,
+        role: "user" as const,
+        text: `MOSSX_CONTEXT_ACCEPTED:${outerPackage}:${outerChecksum}`,
+      },
+      {
+        id: "real-user",
+        kind: "message" as const,
+        role: "user" as const,
+        text: "继续处理新问题",
+      },
+      {
+        id: "real-assistant",
+        kind: "message" as const,
+        role: "assistant" as const,
+        text: "开始处理。",
+      },
+    ];
+
+    expect(filterContextProtocolConversationItems(items).map((item) => item.id)).toEqual([
+      "real-user",
+      "real-assistant",
+    ]);
+    expect(hasContextProtocolControlTail(items.slice(0, 6))).toBe(true);
+    expect(hasContextProtocolControlTail(items)).toBe(false);
+  });
+
+  it("lets the outer acceptance close an imported legacy package without acceptance", () => {
+    const outerPackage = `sha256:${"1".repeat(64)}`;
+    const outerChecksum = `sha256:${"2".repeat(64)}`;
+    const legacyPackage = `sha256:${"3".repeat(64)}`;
+    const legacyChecksum = `sha256:${"4".repeat(64)}`;
+    const items = [
+      {
+        id: "outer-package",
+        kind: "message" as const,
+        role: "user" as const,
+        text: `MOSSX_CONTEXT_PACKAGE:${outerPackage}:${outerChecksum}`,
+      },
+      {
+        id: "legacy-package",
+        kind: "message" as const,
+        role: "user" as const,
+        text: `MOSSX_CONTEXT_PACKAGE:${legacyPackage}:${legacyChecksum}`,
+      },
+      {
+        id: "legacy-imported-user",
+        kind: "message" as const,
+        role: "user" as const,
+        text: "旧版导入内容",
+      },
+      {
+        id: "outer-accepted",
+        kind: "message" as const,
+        role: "user" as const,
+        text: `MOSSX_CONTEXT_ACCEPTED:${outerPackage}:${outerChecksum}`,
+      },
+      {
+        id: "real-user",
+        kind: "message" as const,
+        role: "user" as const,
+        text: "第三次切换后的真实问题",
+      },
+    ];
+
+    expect(filterContextProtocolConversationItems(items).map((item) => item.id)).toEqual([
+      "real-user",
+    ]);
+    expect(hasContextProtocolControlTail(items.slice(0, 3))).toBe(true);
+    expect(hasContextProtocolControlTail(items)).toBe(false);
+  });
 });

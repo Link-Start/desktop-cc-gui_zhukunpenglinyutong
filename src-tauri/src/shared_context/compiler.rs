@@ -14,6 +14,10 @@ use super::types::{
 
 const COMPILER_VERSION: &str = "mossx-shared-context/1";
 const DEFAULT_TRANSCRIPT_BUDGET: u64 = 12_000;
+const FOLD_BLOCK_THRESHOLD_CHARS: usize = 800;
+const FOLDED_TEXT_MAX_CHARS: usize = 2_400;
+const FOLDED_TOOL_ARGUMENTS_MAX_CHARS: usize = 800;
+const FOLDED_TOOL_OUTPUT_MAX_CHARS: usize = 1_600;
 
 #[derive(Debug, Clone)]
 pub struct CompileContextRequest {
@@ -384,6 +388,94 @@ fn fold_text(text: &str) -> (&'static str, String) {
     )
 }
 
+fn bounded_text(text: &str, max_chars: usize) -> String {
+    let char_count = text.chars().count();
+    if char_count <= max_chars {
+        return text.to_string();
+    }
+    let marker = "\n...[deterministically omitted]...\n";
+    let marker_chars = marker.chars().count();
+    let retained_chars = max_chars.saturating_sub(marker_chars);
+    let head_chars = retained_chars.div_ceil(2);
+    let tail_chars = retained_chars / 2;
+    let head = text.chars().take(head_chars).collect::<String>();
+    let tail = text
+        .chars()
+        .rev()
+        .take(tail_chars)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<String>();
+    format!("{head}{marker}{tail}")
+}
+
+fn fold_and_bound_text(text: &str, max_chars: usize) -> (&'static str, String) {
+    let (strategy, folded) = fold_text(text);
+    if folded.chars().count() <= max_chars {
+        return (strategy, folded);
+    }
+    let evidence = text
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            let lower = trimmed.to_ascii_lowercase();
+            lower.contains("error")
+                || lower.contains("warning")
+                || lower.contains("failed")
+                || trimmed.starts_with("diff --git")
+                || trimmed.starts_with("@@")
+                || trimmed.starts_with("fn ")
+                || trimmed.starts_with("function ")
+                || trimmed.starts_with("class ")
+                || trimmed.starts_with("struct ")
+        })
+        .take(20)
+        .collect::<Vec<_>>()
+        .join("\n");
+    if evidence.is_empty() {
+        return (strategy, bounded_text(&folded, max_chars));
+    }
+    let separator = "\n...[evidence]...\n";
+    let separator_chars = separator.chars().count();
+    let content_budget = max_chars.saturating_sub(separator_chars);
+    let evidence_budget = content_budget / 2;
+    let edge_budget = content_budget.saturating_sub(evidence_budget);
+    let head_budget = edge_budget.div_ceil(2);
+    let tail_budget = edge_budget / 2;
+    let head = text.chars().take(head_budget).collect::<String>();
+    let evidence = bounded_text(&evidence, evidence_budget);
+    let tail = text
+        .chars()
+        .rev()
+        .take(tail_budget)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<String>();
+    (strategy, format!("{head}{separator}{evidence}{tail}"))
+}
+
+fn fold_atomic_tool_exchange(block: &Value) -> Option<Value> {
+    if block.get("kind").and_then(Value::as_str) != Some("atomic-tool-exchange")
+        || block.to_string().chars().count() <= FOLD_BLOCK_THRESHOLD_CHARS
+    {
+        return None;
+    }
+    let arguments = block
+        .pointer("/exchange/call/argumentsSummary")
+        .and_then(Value::as_str)?;
+    let output = block
+        .pointer("/exchange/result/outputSummary")
+        .and_then(Value::as_str)?;
+    let (_, folded_arguments) = fold_and_bound_text(arguments, FOLDED_TOOL_ARGUMENTS_MAX_CHARS);
+    let (_, folded_output) = fold_and_bound_text(output, FOLDED_TOOL_OUTPUT_MAX_CHARS);
+    let mut folded = block.clone();
+    *folded.pointer_mut("/exchange/call/argumentsSummary")? = Value::String(folded_arguments);
+    *folded.pointer_mut("/exchange/result/outputSummary")? = Value::String(folded_output);
+    Some(folded)
+}
+
 fn fold_checkpoint_entries(
     entries: &mut [PortableContextEntry],
     omissions: &mut Vec<ProjectionOmission>,
@@ -391,14 +483,33 @@ fn fold_checkpoint_entries(
     let mut categories: HashMap<String, (u64, u64)> = HashMap::new();
     for entry in entries {
         for block in &mut entry.blocks {
+            if let Some(folded) = fold_atomic_tool_exchange(block) {
+                let source_tokens = estimated_tokens(&block.to_string());
+                let package_tokens = estimated_tokens(&folded.to_string());
+                *block = folded;
+                let strategy = "atomic-tool-exchange-bounded-evidence";
+                let totals = categories.entry(strategy.to_string()).or_default();
+                totals.0 += source_tokens;
+                totals.1 += package_tokens;
+                omissions.push(ProjectionOmission {
+                    entry_id: entry.entry_id.clone(),
+                    category: "deterministic-fold".to_string(),
+                    reason: format!(
+                        "{strategy}; Tool Call/Result evidence was folded for checkpoint budget"
+                    ),
+                    disposition: OmissionDisposition::NotRetrievable,
+                    retrievable_ref: None,
+                });
+                continue;
+            }
             let Some(text) = block.get("text").and_then(Value::as_str) else {
                 continue;
             };
-            if text.chars().count() <= 800 {
+            if text.chars().count() <= FOLD_BLOCK_THRESHOLD_CHARS {
                 continue;
             }
             let source_tokens = estimated_tokens(text);
-            let (strategy, folded) = fold_text(text);
+            let (strategy, folded) = fold_and_bound_text(text, FOLDED_TEXT_MAX_CHARS);
             let package_tokens = estimated_tokens(&folded);
             *block = text_block(folded);
             let totals = categories.entry(strategy.to_string()).or_default();
@@ -439,17 +550,16 @@ fn trim_checkpoint_entries_to_budget(
     // ponytail: checkpoint history is session-bounded. Recompute after each complete-Turn
     // removal for deterministic output; replace with a prefix token index if histories become
     // large enough for this low-frequency compiler path to matter.
-    while !entries.is_empty() && estimated_tokens(&transcript(entries, true)) > budget {
-        let remove_count = if entries.first().is_some_and(|entry| entry.role == "user") {
-            entries
-                .iter()
-                .skip(1)
-                .position(|entry| entry.role == "user")
-                .map(|offset| offset + 1)
-                .unwrap_or(entries.len())
-        } else {
-            1
+    while estimated_tokens(&transcript(entries, true)) > budget {
+        let Some(next_user_index) = entries
+            .iter()
+            .enumerate()
+            .skip(1)
+            .find_map(|(index, entry)| (entry.role == "user").then_some(index))
+        else {
+            break;
         };
+        let remove_count = next_user_index;
         for entry in entries.drain(..remove_count) {
             omissions.push(ProjectionOmission {
                 entry_id: entry.entry_id,
@@ -461,9 +571,41 @@ fn trim_checkpoint_entries_to_budget(
         }
     }
 
+    if estimated_tokens(&transcript(entries, true)) > budget && !entries.is_empty() {
+        let user_anchor = entries
+            .iter()
+            .rposition(|entry| entry.role == "user")
+            .map(|index| entries[index].entry_id.clone());
+        let outcome_anchor = entries
+            .iter()
+            .rposition(|entry| entry.role == "assistant")
+            .or_else(|| entries.len().checked_sub(1))
+            .map(|index| entries[index].entry_id.clone());
+        let anchors = [user_anchor, outcome_anchor]
+            .into_iter()
+            .flatten()
+            .collect::<HashSet<_>>();
+        while estimated_tokens(&transcript(entries, true)) > budget {
+            let Some(remove_index) = entries
+                .iter()
+                .position(|entry| !anchors.contains(&entry.entry_id))
+            else {
+                break;
+            };
+            let entry = entries.remove(remove_index);
+            omissions.push(ProjectionOmission {
+                entry_id: entry.entry_id,
+                category: "checkpoint-budget".to_string(),
+                reason: "intermediate entry omitted from oversized latest Turn".to_string(),
+                disposition: OmissionDisposition::RetrievableOnDemand,
+                retrievable_ref: None,
+            });
+        }
+    }
+
     Some(CompressionCategory {
         category: "checkpoint-history".to_string(),
-        strategy: "drop-oldest-complete-turns".to_string(),
+        strategy: "drop-oldest-turns-then-preserve-latest-spine".to_string(),
         source_estimated_tokens,
         package_estimated_tokens: estimated_tokens(&transcript(entries, true)),
     })
@@ -677,6 +819,9 @@ pub fn compile_native_context(
         })
         .collect::<Vec<_>>();
     let source_entry_count = entries.len();
+    if entries.is_empty() {
+        return Err("native history has no portable context entries".to_string());
+    }
     let source_estimated_tokens = estimated_tokens(&transcript(&entries, false));
     let budget = request
         .budget_estimated_tokens
@@ -687,12 +832,13 @@ pub fn compile_native_context(
         source_estimated_tokens,
         budget,
     );
-    let mut compression_categories = if mode == ProjectionMode::Checkpoint {
+    let requires_checkpoint = source_estimated_tokens > budget;
+    let mut compression_categories = if requires_checkpoint {
         fold_checkpoint_entries(&mut entries, &mut omissions)
     } else {
         Vec::new()
     };
-    if mode == ProjectionMode::Checkpoint {
+    if requires_checkpoint {
         if let Some(category) =
             trim_checkpoint_entries_to_budget(&mut entries, &mut omissions, budget)
         {
@@ -707,8 +853,16 @@ pub fn compile_native_context(
         "MOSSX_NATIVE_CONTEXT_V1\nsource:{}\nbinding:{}\n",
         request.source.session_id, request.binding_key
     );
-    let projected_text = transcript(&entries, mode == ProjectionMode::Checkpoint);
+    let projected_text = transcript(&entries, requires_checkpoint);
     let package_estimated_tokens = estimated_tokens(&projected_text);
+    if package_estimated_tokens == 0 {
+        return Err("native context projection is empty".to_string());
+    }
+    if requires_checkpoint && package_estimated_tokens > budget {
+        return Err(format!(
+            "native context projection exceeds budget: {package_estimated_tokens} > {budget}"
+        ));
+    }
     let manifest = ProjectionManifest {
         compiler_version: COMPILER_VERSION.to_string(),
         mode,
@@ -739,7 +893,7 @@ pub fn compile_native_context(
     };
     compression_categories.push(CompressionCategory {
         category: "portable-turns".to_string(),
-        strategy: if mode == ProjectionMode::Checkpoint {
+        strategy: if requires_checkpoint {
             "bounded-checkpoint".to_string()
         } else {
             "portable-transcript".to_string()
@@ -867,8 +1021,188 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["u1", "a1"]
         );
-        assert_eq!(category.strategy, "drop-oldest-complete-turns");
+        assert_eq!(
+            category.strategy,
+            "drop-oldest-turns-then-preserve-latest-spine"
+        );
         assert!(estimated_tokens(&transcript(&entries, true)) <= recent_budget);
+    }
+
+    #[test]
+    fn checkpoint_folds_atomic_tool_exchange_with_bounded_error_evidence() {
+        let arguments = format!(r#"{{"path":"{}"}}"#, "目录/".repeat(1_000));
+        let output = (0..300)
+            .map(|index| {
+                if index == 150 {
+                    "ERROR 目标供应商拒绝了工具输出".to_string()
+                } else {
+                    format!("第 {index} 行 {}", "数据".repeat(20))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let block = json!({
+            "kind": "atomic-tool-exchange",
+            "exchange": {
+                "toolCallId": "call-1",
+                "toolName": "Read",
+                "call": { "argumentsSummary": arguments },
+                "result": { "outputSummary": output }
+            }
+        });
+
+        let folded = fold_atomic_tool_exchange(&block).expect("fold tool exchange");
+        let repeated = fold_atomic_tool_exchange(&block).expect("repeat fold");
+
+        assert_eq!(folded, repeated);
+        assert_eq!(folded["exchange"]["toolCallId"], "call-1");
+        assert_eq!(folded["exchange"]["toolName"], "Read");
+        assert!(
+            folded["exchange"]["call"]["argumentsSummary"]
+                .as_str()
+                .expect("arguments")
+                .chars()
+                .count()
+                <= FOLDED_TOOL_ARGUMENTS_MAX_CHARS
+        );
+        let folded_output = folded["exchange"]["result"]["outputSummary"]
+            .as_str()
+            .expect("output");
+        assert!(folded_output.chars().count() <= FOLDED_TOOL_OUTPUT_MAX_CHARS);
+        assert!(folded_output.contains("ERROR 目标供应商拒绝了工具输出"));
+    }
+
+    #[test]
+    fn oversized_single_turn_preserves_non_empty_spine_for_prompt_and_import() {
+        use crate::native_history::{
+            ContextSourceEntry, NativeHistoryEngine, NativeHistoryFidelity,
+        };
+
+        let mut source_entries = vec![ContextSourceEntry {
+            source_entry_id: "user-intent".to_string(),
+            occurred_at: None,
+            role: "user".to_string(),
+            blocks: vec![text_block("继续完成这个目标。".repeat(600))],
+            provenance: json!({ "engine": "codex" }),
+            fidelity: NativeHistoryFidelity::Semantic,
+        }];
+        source_entries.extend((0..24).map(|index| ContextSourceEntry {
+            source_entry_id: format!("tool-{index}"),
+            occurred_at: None,
+            role: "control".to_string(),
+            blocks: vec![json!({
+                "kind": "atomic-tool-exchange",
+                "exchange": {
+                    "toolCallId": format!("call-{index}"),
+                    "toolName": "exec_command",
+                    "call": { "argumentsSummary": format!("参数-{index}-{}", "参".repeat(2_000)) },
+                    "result": { "outputSummary": format!("输出-{index}-{}", "果".repeat(4_000)) }
+                }
+            })],
+            provenance: json!({ "engine": "codex" }),
+            fidelity: NativeHistoryFidelity::Semantic,
+        }));
+        source_entries.push(ContextSourceEntry {
+            source_entry_id: "assistant-outcome".to_string(),
+            occurred_at: None,
+            role: "assistant".to_string(),
+            blocks: vec![text_block("最终结论已经形成。".repeat(600))],
+            provenance: json!({ "engine": "codex" }),
+            fidelity: NativeHistoryFidelity::Semantic,
+        });
+        let compile = |structured_history_import| {
+            compile_native_context(&CompileNativeContextRequest {
+                session_id: "continuation-a".to_string(),
+                binding_key: "continuation:operation-a".to_string(),
+                destination: json!({ "engine": "codex" }),
+                source: NativeHistorySource {
+                    session_id: "codex:source".to_string(),
+                    native_session_id: "source".to_string(),
+                    engine: NativeHistoryEngine::Codex,
+                    provider_profile_id: Some("provider-a".to_string()),
+                },
+                history: NativeHistoryReadResult {
+                    reader_id: NativeHistoryEngine::Codex.reader_id().to_string(),
+                    source_fingerprint: "sha256:source".to_string(),
+                    through_cursor: "cursor-a".to_string(),
+                    entries: source_entries.clone(),
+                    fidelity: NativeHistoryFidelity::Semantic,
+                    omissions: Vec::new(),
+                },
+                capabilities: RuntimeContextCapabilities {
+                    native_delta: false,
+                    structured_history_import,
+                    native_clone: false,
+                    user_channel_transcript: true,
+                    tool_history: structured_history_import,
+                    image_history: false,
+                    strong_context_ack: structured_history_import,
+                },
+                budget_estimated_tokens: Some(1_800),
+            })
+            .expect("compile oversized native turn")
+        };
+
+        let prompt = compile(false);
+        let native_import = compile(true);
+        for package in [&prompt, &native_import] {
+            assert!(package.compression.source_estimated_tokens > 1_800);
+            assert!(package.compression.package_estimated_tokens > 0);
+            assert!(package.compression.package_estimated_tokens <= 1_800);
+            assert!(package
+                .delta
+                .iter()
+                .any(|entry| entry.entry_id == "user-intent"));
+            assert!(package
+                .delta
+                .iter()
+                .any(|entry| entry.entry_id == "assistant-outcome"));
+            assert!(!package.manifest.omitted.is_empty());
+        }
+        assert_eq!(prompt.manifest.mode, ProjectionMode::Checkpoint);
+        assert_eq!(
+            native_import.manifest.mode,
+            ProjectionMode::NativeHistoryImport
+        );
+        assert!(native_import.prompt_prefix.is_empty());
+    }
+
+    #[test]
+    fn native_compilation_rejects_empty_portable_history() {
+        use crate::native_history::{NativeHistoryEngine, NativeHistoryFidelity};
+
+        let error = compile_native_context(&CompileNativeContextRequest {
+            session_id: "continuation-a".to_string(),
+            binding_key: "continuation:operation-a".to_string(),
+            destination: json!({ "engine": "codex" }),
+            source: NativeHistorySource {
+                session_id: "codex:source".to_string(),
+                native_session_id: "source".to_string(),
+                engine: NativeHistoryEngine::Codex,
+                provider_profile_id: Some("provider-a".to_string()),
+            },
+            history: NativeHistoryReadResult {
+                reader_id: NativeHistoryEngine::Codex.reader_id().to_string(),
+                source_fingerprint: "sha256:source".to_string(),
+                through_cursor: "cursor-a".to_string(),
+                entries: Vec::new(),
+                fidelity: NativeHistoryFidelity::Semantic,
+                omissions: Vec::new(),
+            },
+            capabilities: RuntimeContextCapabilities {
+                native_delta: false,
+                structured_history_import: true,
+                native_clone: false,
+                user_channel_transcript: true,
+                tool_history: true,
+                image_history: false,
+                strong_context_ack: true,
+            },
+            budget_estimated_tokens: None,
+        })
+        .expect_err("empty native history must fail closed");
+
+        assert_eq!(error, "native history has no portable context entries");
     }
 
     #[test]
@@ -1048,7 +1382,7 @@ mod tests {
         let budget_changed = compile(
             json!({"engine": "codex", "model": "a"}),
             transcript,
-            Some(1),
+            Some(16),
         );
 
         assert_eq!(first.package_id, same.package_id);

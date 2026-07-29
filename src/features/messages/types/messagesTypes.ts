@@ -107,4 +107,6 @@ export type MessagesProps = {
   taskRuns?: TaskRunRecord[];
   /** 稳定 metadata slot；不得承载普通 message/streaming lifecycle。 */
   timelineLeadingNode?: ReactNode;
+  /** Catalog authoritative origin；仅用于 Provider Continuation presentation gate。 */
+  isProviderContinuation?: boolean;
 };
