@@ -99,6 +99,25 @@
   position: relative;
 }
 
+.message-turn-target-badge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.message-turn-target-badge > span:not(:last-child)::after {
+  margin-left: 4px;
+  content: "·";
+}
+
+.message-turn-target-badge.is-unavailable {
+  color: var(--status-warning, #f59e0b);
+}
+
 .message-action-bar {
   display: inline-flex;
   align-items: center;

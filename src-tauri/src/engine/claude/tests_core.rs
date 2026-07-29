@@ -68,6 +68,27 @@ fn emit_error_broadcasts_turn_scoped_event() {
 }
 
 #[test]
+fn convert_event_preserves_replayed_user_message_as_raw_ack_evidence() {
+    let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
+    let event = json!({
+        "type": "user",
+        "isReplay": true,
+        "message": {
+            "role": "user",
+            "content": "MOSSX_CONTEXT_PACKAGE: package-1 checksum-1"
+        }
+    });
+
+    match session.convert_event("turn-a", &event) {
+        Some(EngineEvent::Raw { engine, data, .. }) => {
+            assert_eq!(engine, EngineType::Claude);
+            assert_eq!(data, event);
+        }
+        other => panic!("expected replay event as raw evidence, got {:?}", other),
+    }
+}
+
+#[test]
 fn convert_event_emits_live_context_window_usage_from_snake_case_payload() {
     let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
     let mut receiver = session.subscribe();

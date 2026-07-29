@@ -8,6 +8,10 @@ const models = {
     "addModel": "मॉडल जोड़ें",
     "refreshConfig": "कॉन्फ़िग रीफ़्रेश करें",
     "refreshingConfig": "रीफ़्रेश हो रहा है...",
+    "reloadConfig": "कॉन्फ़िग फिर से लोड करें",
+    "reloadingConfig": "कॉन्फ़िग फिर से लोड हो रहा है...",
+    "discoverModels": "CLI से मॉडल खोजें",
+    "discoveringModels": "मॉडल खोजे जा रहे हैं...",
     "refreshConfigFailed": "रीफ़्रेश विफल: {{message}}",
     "claude": {},
     "codex": {

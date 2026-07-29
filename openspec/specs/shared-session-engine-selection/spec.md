@@ -3,35 +3,81 @@
 ## Purpose
 
 Defines the shared-session-engine-selection behavior contract, covering Shared Session Uses Explicit Manual Engine Selection.
-
 ## Requirements
+
+### Requirement: Shared Target Picker MUST Refresh The Expanded Binding
+
+Shared Session Target Picker 的 catalog action MUST 作用于用户当前展开的
+`CLI + Provider Profile`，不得从 active thread 或 global engine selection 猜测目标。
+
+#### Scenario: Refresh a non-active Provider
+
+- **WHEN** Shared Session 当前绑定 Provider A
+- **AND** 用户展开 Provider B 并执行 config reload 或 CLI discovery
+- **THEN** 请求 MUST 携带 Provider B identity
+- **AND** Provider B 模型框 MUST 使用刷新结果
+- **AND** Provider A target snapshot MUST 保持不变
+
+#### Scenario: Select discovered model
+
+- **WHEN** Shared Picker 的 Provider B discovery 返回新模型
+- **AND** 用户选择该模型
+- **THEN** `selectedNextTarget` MUST 原子保存 Provider B identity、catalog entry id 与 runtime model
+- **AND** send boundary MUST 继续使用冻结后的 runtime model
+
+#### Scenario: One binding fails
+
+- **WHEN** Shared Picker 中某一 binding 刷新失败
+- **THEN** 其他 CLI/Profile catalog MUST 保持可用
+- **AND** 整个 Shared Picker MUST NOT 被清空或关闭
+
 ### Requirement: Shared Session Uses Explicit Manual Engine Selection
 
-Within a `shared session`, the system MUST let the user explicitly choose the current execution engine before sending a turn.
+Within a `shared session`, the system MUST let the user explicitly choose the execution target before sending a turn. The selector MUST be a four-level target picker (CLI → Provider → Model → Reasoning); the engine-only selector is superseded. Provider and model items MUST preserve Provider Profile scope instead of inferring the target from model id alone. The picker MUST be locked whenever the shared session composer is in any non-idle state.
 
-#### Scenario: shared composer exposes current engine selector
+#### Scenario: shared composer exposes four-level target picker
 
 - **WHEN** the user focuses the composer inside a `shared session`
-- **THEN** the system MUST show an explicit execution engine selector
-- **AND** that selector MUST allow the user to choose from the currently supported `Codex` and `Claude` engines only
+- **THEN** the system MUST show an explicit four-level execution target picker (CLI, provider profile, model, reasoning)
+- **AND** the CLI level MUST show supported and known unsupported engines with an explicit availability state
+- **AND** only engines supported by the current Shared Session runtime MAY be selected
 
-#### Scenario: selector update is metadata-only before send
+#### Scenario: provider profile scopes its model catalog
 
-- **WHEN** the user changes the shared-session engine selector but does not submit a message yet
-- **THEN** the system MUST update the selected engine state for that shared session
-- **AND** the system MUST NOT dispatch a turn or start an extra user-visible native conversation solely due to selector change
+- **WHEN** the user opens a Provider Profile inside the shared target picker
+- **THEN** the system MUST show models resolved for that exact Engine and Provider Profile
+- **AND** selecting a model MUST atomically preserve the Engine, Provider Profile, and Model identity
+- **AND** an equal model id in another Provider Profile MUST NOT change or satisfy the selection
 
-#### Scenario: submitted turn uses the user-selected engine
+#### Scenario: unavailable engine remains explainable
+
+- **WHEN** a registered CLI such as Kimi is not currently accepted as a Shared Session target
+- **THEN** the picker MUST keep the CLI visible but disabled
+- **AND** MUST expose a human-readable reason rather than silently filtering it out
+
+#### Scenario: picker update is metadata-only before send
+
+- **WHEN** the user changes the shared-session target picker but does not submit a message yet
+- **THEN** the system MUST update only the selected next target state for that shared session
+- **AND** the system MUST NOT dispatch a turn, create a binding, or start an extra user-visible native conversation solely due to picker change
+
+#### Scenario: submitted turn uses the user-selected target
 
 - **WHEN** the user submits a message from a `shared session`
-- **THEN** the system MUST dispatch that turn to the engine currently selected by the user
-- **AND** the dispatch result MUST remain attributable to that selected engine
+- **THEN** the system MUST dispatch that turn to the full target (engine and provider profile) currently selected by the user
+- **AND** the dispatch result MUST remain attributable to that selected target snapshot
+
+#### Scenario: picker locks outside idle state
+
+- **WHEN** the shared session composer is in any state other than `idle` (for example `running`, `awaiting-acceptance`, or `recovery-required`)
+- **THEN** the target picker MUST be locked against changes
+- **AND** the system MUST NOT apply a new target selection to the in-flight turn
 
 #### Scenario: unsupported engines stay unavailable in shared session
 
 - **WHEN** the user focuses the composer inside a `shared session`
-- **THEN** the system MUST keep `Gemini` and `OpenCode` unavailable for selection in that shared-session selector
-- **AND** the system MUST NOT route a shared-session turn through `Gemini` or `OpenCode`
+- **THEN** the system MUST keep unsupported engines unavailable for selection in that shared-session picker
+- **AND** the system MUST NOT route a shared-session turn through an unsupported engine
 
 ### Requirement: Shared Session Engine Selection Is Sticky Until User Changes It
 
@@ -86,4 +132,3 @@ In V1, `shared session` dispatch MUST remain user-controlled and MUST NOT silent
 - **WHEN** the selected engine is unavailable or the turn fails during execution
 - **THEN** the system MUST surface the error or recoverable failure state for that selected engine
 - **AND** the system MUST NOT silently reroute the same turn to another engine
-

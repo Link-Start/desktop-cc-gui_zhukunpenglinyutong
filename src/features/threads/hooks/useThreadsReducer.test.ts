@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ConversationItem, ThreadSummary } from "../../../types";
+import type {
+  ConversationItem,
+  RequestUserInputRequest,
+  ThreadSummary,
+} from "../../../types";
 import {
   __getPrepareThreadItemsCallCountForTests,
   __resetPrepareThreadItemsCallCountForTests,
@@ -9,6 +13,30 @@ import { initialState, threadReducer } from "./useThreadsReducer";
 import type { ThreadState } from "./useThreadsReducer";
 
 describe("threadReducer", () => {
+  it("keeps a Shared attempt target on an assistant error message", () => {
+    const executionTargetSnapshot = {
+      engine: "codex" as const,
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "catalog-a",
+      model: "runtime-a",
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed" as const,
+    };
+    const next = threadReducer(initialState, {
+      type: "addAssistantMessage",
+      threadId: "shared:thread-1",
+      text: "会话失败：provider rejected",
+      executionTargetSnapshot,
+    });
+
+    expect(next.itemsByThread["shared:thread-1"]?.[0]).toMatchObject({
+      kind: "message",
+      role: "assistant",
+      text: "会话失败：provider rejected",
+      executionTargetSnapshot,
+    });
+  });
+
   it("preserves Kimi provider binding when pending identity converges to canonical", () => {
     const withPending = threadReducer(initialState, {
       type: "ensureThread",
@@ -2643,6 +2671,53 @@ describe("threadReducer", () => {
       workspaceId: "ws-1",
     });
     expect(removed.userInputRequests).toEqual([requestB]);
+  });
+
+  it("scopes Shared user input request identity to its Runtime attempt", () => {
+    const makeSharedRequest = (
+      attemptId: string,
+      providerRuntimeKey: string,
+    ): RequestUserInputRequest => ({
+      workspace_id: "ws-1",
+      request_id: "request-1",
+      params: {
+        thread_id: "shared:thread-1",
+        turn_id: `turn-${attemptId}`,
+        item_id: `item-${attemptId}`,
+        questions: [],
+      },
+      shared_runtime_owner: {
+        attemptId,
+        providerRuntimeKey,
+        sharedThreadId: "shared:thread-1",
+        nativeThreadId: `native-${attemptId}`,
+        runtimeTurnId: `turn-${attemptId}`,
+        engine: providerRuntimeKey.startsWith("claude")
+          ? "claude"
+          : "codex",
+        providerProfileId: `profile-${attemptId}`,
+      },
+    });
+    const firstRequest = makeSharedRequest("attempt-1", "codex::profile-1");
+    const secondRequest = makeSharedRequest("attempt-2", "claude::profile-2");
+
+    const withFirst = threadReducer(initialState, {
+      type: "addUserInputRequest",
+      request: firstRequest,
+    });
+    const withBoth = threadReducer(withFirst, {
+      type: "addUserInputRequest",
+      request: secondRequest,
+    });
+    expect(withBoth.userInputRequests).toEqual([firstRequest, secondRequest]);
+
+    const withoutFirst = threadReducer(withBoth, {
+      type: "removeUserInputRequest",
+      requestId: firstRequest.request_id,
+      workspaceId: firstRequest.workspace_id,
+      request: firstRequest,
+    });
+    expect(withoutFirst.userInputRequests).toEqual([secondRequest]);
   });
 
   it("clears user input requests by thread while preserving other threads", () => {

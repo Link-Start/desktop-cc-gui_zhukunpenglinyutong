@@ -664,7 +664,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "updateCloneCopyName",
     "updateCustomInstructions",
     "updatePrompt",
-    "updateSharedSessionEngineSelection",
     "updateWorkspaceCodexBin",
     "updateWorkspaceSettings",
     "updateWorktreeBaseRef",

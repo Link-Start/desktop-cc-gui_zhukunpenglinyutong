@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 import type { Dispatch } from "react";
 import type { RequestUserInputRequest } from "../../../types";
+import { requestUserInputIdentityKey } from "../../../utils/requestUserInputIdentity";
 import type { ThreadAction } from "./useThreadsReducer";
 
 type UseThreadUserInputEventsOptions = {
@@ -20,7 +21,7 @@ export function useThreadUserInputEvents({
 
   return useCallback(
     (request: RequestUserInputRequest) => {
-      const requestKey = `${request.workspace_id}:${String(request.request_id)}`;
+      const requestKey = requestUserInputIdentityKey(request);
       if (request.params.completed === true) {
         completedRequestKeysRef.current.add(requestKey);
         if (completedRequestKeysRef.current.size > 2048) {
@@ -31,6 +32,7 @@ export function useThreadUserInputEvents({
           type: "removeUserInputRequest",
           requestId: request.request_id,
           workspaceId: request.workspace_id,
+          request,
         });
         return;
       }
@@ -38,11 +40,13 @@ export function useThreadUserInputEvents({
         return;
       }
       const canonicalThreadId =
+        request.shared_runtime_owner?.sharedThreadId ??
         resolveClaudeContinuationThreadId?.(
           request.workspace_id,
           request.params.thread_id,
           request.params.turn_id,
-        ) ?? request.params.thread_id;
+        ) ??
+        request.params.thread_id;
       const normalizedRequest =
         canonicalThreadId !== request.params.thread_id
           ? {

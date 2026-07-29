@@ -364,6 +364,27 @@ export function useThreadActionsResumeThreadForWorkspace(
             });
           }
           if (snapshotItems.length === 0) {
+            if (effectiveThreadId.startsWith("shared:")) {
+              setThreadHistoryRecoveryFailed(effectiveThreadId, false);
+              dispatch({
+                type: "setThreadHistoryRestoredAt",
+                threadId: effectiveThreadId,
+                timestamp: assembledSnapshot.meta.historyRestoredAtMs,
+              });
+              onDebug?.(
+                createThreadHistoryReadableSurfaceDebugEntry({
+                  workspaceId,
+                  threadId: effectiveThreadId,
+                  sourceThreadId: threadId,
+                  reopenOutcome: "recovered",
+                  localItemCount: effectiveLocalItems.length,
+                  snapshotItemCount: 0,
+                  fallbackWarningCount: snapshot.fallbackWarnings.length,
+                }),
+              );
+              setThreadLoaded(effectiveThreadId, true);
+              return true;
+            }
             markHistoryRecoveryFailure(
               effectiveThreadId,
               effectiveLocalItems,
@@ -478,6 +499,9 @@ export function useThreadActionsResumeThreadForWorkspace(
             return firstSnapshot;
           }
           if (hydrateHistory(firstSnapshot).items.length > 0) {
+            return firstSnapshot;
+          }
+          if (targetThreadId.startsWith("shared:")) {
             return firstSnapshot;
           }
           onDebug?.({
@@ -867,6 +891,28 @@ export function useThreadActionsResumeThreadForWorkspace(
           return threadId;
         } catch (error) {
           if (!isCurrentResumeRequest()) {
+            return threadId;
+          }
+          if (threadId.startsWith("shared:")) {
+            const diagnostic =
+              error instanceof Error
+                ? resolveThreadStabilityDiagnostic(error.message)
+                : resolveThreadStabilityDiagnostic(String(error));
+            onDebug?.({
+              id: `${Date.now()}-shared-history-loader-error`,
+              timestamp: Date.now(),
+              source: "error",
+              label: "thread/shared history loader error",
+              payload: {
+                workspaceId,
+                threadId,
+                error: error instanceof Error ? error.message : String(error),
+                diagnosticCategory:
+                  diagnostic?.category ?? "shared_projection_unavailable",
+              },
+            });
+            setThreadLoaded(threadId, false);
+            setThreadHistoryRecoveryFailed(threadId, false);
             return threadId;
           }
           if (isThreadResumeNotFoundError(error)) {

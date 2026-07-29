@@ -33,6 +33,7 @@ import { SidebarTopbarSlot } from "./SidebarTopbarSlot";
 import { SidebarVersionTag } from "./SidebarVersionTag";
 import { SidebarWorkspaceDropOverlay } from "./SidebarWorkspaceDropOverlay";
 import { SidebarWorkspaceMenuOverlay } from "./SidebarWorkspaceMenuOverlay";
+import { ProviderContinuationDialog } from "./ProviderContinuationDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RendererContextMenu } from "../../../components/ui/RendererContextMenu";
 import { useCollapsedGroups } from "../hooks/useCollapsedGroups";
@@ -202,8 +203,12 @@ type SidebarProps = {
   onDeleteWorktree: (workspaceId: string) => void;
   onRenameWorkspaceAlias: (workspace: WorkspaceInfo) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
-  onReloadWorkspaceThreads: (workspaceId: string) => void;
-  onQuickReloadWorkspaceThreads?: (workspaceId: string) => void;
+  onReloadWorkspaceThreads: (
+    workspaceId: string,
+  ) => Promise<void> | void;
+  onQuickReloadWorkspaceThreads?: (
+    workspaceId: string,
+  ) => Promise<void> | void;
   onRequestRootSessionFolderDraft?: (workspaceId: string) => void;
   workspaceDropTargetRef: RefObject<HTMLElement | null>;
   isWorkspaceDropActive: boolean;
@@ -946,8 +951,11 @@ function SidebarImpl({
     showWorktreeMenu,
     workspaceMenuState,
     sidebarContextMenuState,
+    providerContinuationDialogState,
     closeWorkspaceMenu,
     closeSidebarContextMenu,
+    closeProviderContinuationDialog,
+    confirmProviderContinuation,
     onWorkspaceMenuAction,
   } =
     useSidebarMenus({
@@ -992,6 +1000,15 @@ function SidebarImpl({
       },
       onOpenClaudeTui,
       onReloadWorkspaceThreads: onQuickReloadWorkspaceThreads ?? onReloadWorkspaceThreads,
+      onSelectThread,
+      isThreadAvailable: (workspaceId, threadId) =>
+        getProjectedThreads(workspaceId).some(
+          (thread) => thread.id === threadId,
+        ),
+      getThreadSummary: (workspaceId, threadId) =>
+        getProjectedThreads(workspaceId).find(
+          (thread) => thread.id === threadId,
+        ),
       onActivateWorkspace: onSelectWorkspace,
       onCreateSessionFolder: handleOpenRootSessionFolderDraft,
       onToggleExitedSessions: toggleExitedSessionsHidden,
@@ -2284,6 +2301,11 @@ function SidebarImpl({
           className="renderer-context-menu sidebar-renderer-context-menu"
         />
       ) : null}
+      <ProviderContinuationDialog
+        state={providerContinuationDialogState}
+        onCancel={closeProviderContinuationDialog}
+        onConfirm={confirmProviderContinuation}
+      />
     </aside>
   );
 }

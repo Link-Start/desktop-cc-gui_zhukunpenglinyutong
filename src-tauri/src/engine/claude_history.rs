@@ -1843,6 +1843,16 @@ fn find_claude_session_file(
     Err(format!("Session file not found: {}", session_id))
 }
 
+pub(crate) fn resolve_claude_session_file_with_config(
+    workspace_path: &Path,
+    session_id: &str,
+    config: Option<&EngineConfig>,
+) -> Result<PathBuf, String> {
+    let normalized_session_id = normalize_session_id(session_id)?;
+    let base_dir = claude_projects_dir(config).ok_or("Cannot determine Claude home directory")?;
+    find_claude_session_file(&base_dir, workspace_path, &normalized_session_id)
+}
+
 pub(crate) async fn load_claude_session_from_base_dir(
     base_dir: &Path,
     workspace_path: &Path,

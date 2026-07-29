@@ -5,6 +5,10 @@ const models = {
     addModel: "Add Model",
     refreshConfig: "Refresh Config",
     refreshingConfig: "Refreshing...",
+    reloadConfig: "Reload Config",
+    reloadingConfig: "Reloading Config...",
+    discoverModels: "Discover Models from CLI",
+    discoveringModels: "Discovering Models...",
     refreshConfigFailed: "Refresh failed: {{message}}",
     claude: {},
     codex: {

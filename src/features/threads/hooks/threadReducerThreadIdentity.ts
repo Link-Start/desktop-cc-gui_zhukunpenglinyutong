@@ -227,6 +227,7 @@ export function renameThreadStateIdentity({
 
   const newUserInputRequests = state.userInputRequests.map((request) => {
     if (
+      request.shared_runtime_owner ||
       request.workspace_id !== workspaceId ||
       request.params.thread_id !== oldThreadId
     ) {

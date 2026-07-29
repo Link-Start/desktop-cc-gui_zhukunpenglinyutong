@@ -24,7 +24,7 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, BufReader, Lines};
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
@@ -154,11 +154,19 @@ fn spawn_test_runtime_process() -> (tokio::process::Child, String) {
 }
 
 async fn make_workspace_session(id: &str) -> Arc<WorkspaceSession> {
+    make_workspace_session_with_runtime_key(id, id).await
+}
+
+async fn make_workspace_session_with_runtime_key(
+    id: &str,
+    provider_runtime_key: &str,
+) -> Arc<WorkspaceSession> {
     let (mut child, resolved_bin) = spawn_test_runtime_process();
     let process_id = child.id();
     let stdin = child.stdin.take().expect("test child stdin");
     Arc::new(WorkspaceSession {
         entry: workspace_entry(id),
+        provider_runtime_key: provider_runtime_key.to_string(),
         child: Mutex::new(child),
         stdin: Mutex::new(stdin),
         wrapper_kind: "direct".to_string(),
@@ -208,6 +216,62 @@ async fn settle_echoed_test_request(session: &WorkspaceSession, request: &Value,
         .remove(&request_id)
         .expect("pending request sender");
     sender.send(Ok(result)).expect("settle request");
+}
+
+#[cfg(not(windows))]
+async fn send_provider_turn_and_capture(
+    sessions: &Arc<Mutex<HashMap<String, Arc<WorkspaceSession>>>>,
+    session: &Arc<WorkspaceSession>,
+    lines: &mut Lines<BufReader<tokio::process::ChildStdout>>,
+    workspace_id: &str,
+    provider_profile_id: &str,
+    model: &str,
+    effort: &str,
+    runtime_turn_id: &str,
+) -> (Value, Value) {
+    let send_task = tokio::spawn({
+        let sessions = Arc::clone(sessions);
+        let workspace_id = workspace_id.to_string();
+        let provider_profile_id = provider_profile_id.to_string();
+        let model = model.to_string();
+        let effort = effort.to_string();
+        async move {
+            crate::shared::codex_core::send_user_message_core(
+                sessions.as_ref(),
+                workspace_id,
+                Some(provider_profile_id),
+                "shared-native-1".to_string(),
+                "hello".to_string(),
+                Some(model),
+                Some(effort),
+                None,
+                None,
+                None,
+                None,
+                None,
+                false,
+                None,
+            )
+            .await
+        }
+    });
+    let line = tokio::time::timeout(Duration::from_secs(2), lines.next_line())
+        .await
+        .expect("request reached expected provider runtime before timeout")
+        .expect("read provider request")
+        .expect("provider request line");
+    let request: Value = serde_json::from_str(&line).expect("valid provider request");
+    settle_echoed_test_request(
+        session,
+        &request,
+        json!({ "result": { "turn": { "id": runtime_turn_id } } }),
+    )
+    .await;
+    let response = send_task
+        .await
+        .expect("provider send task")
+        .expect("provider send succeeds");
+    (request, response)
 }
 
 #[cfg(not(windows))]
@@ -285,6 +349,148 @@ async fn explicit_model_list_owner_still_sends_model_list() {
         .expect("model list task")
         .expect("model list succeeds");
     dispose_workspace_session(&session).await;
+}
+
+#[cfg(not(windows))]
+#[tokio::test]
+async fn provider_scoped_model_list_uses_matching_runtime_session() {
+    let workspace_id = "provider-model-list";
+    let provider_profile_id = "managed-provider";
+    let session = make_workspace_session(workspace_id).await;
+    let stdout = session
+        .child
+        .lock()
+        .await
+        .stdout
+        .take()
+        .expect("test child stdout");
+    let session_key =
+        crate::codex::provider_profile::codex_runtime_key(workspace_id, provider_profile_id);
+    let sessions = Arc::new(Mutex::new(HashMap::from([(
+        session_key,
+        Arc::clone(&session),
+    )])));
+    let model_list_task = tokio::spawn({
+        let sessions = Arc::clone(&sessions);
+        async move {
+            crate::shared::codex_core::model_list_for_provider_core(
+                sessions.as_ref(),
+                workspace_id.to_string(),
+                Some(provider_profile_id.to_string()),
+            )
+            .await
+        }
+    });
+
+    let mut lines = BufReader::new(stdout).lines();
+    let line = lines
+        .next_line()
+        .await
+        .expect("read provider model request")
+        .expect("provider model request line");
+    let request: Value = serde_json::from_str(&line).expect("valid provider model request");
+    assert_eq!(request["method"], "model/list");
+    settle_echoed_test_request(&session, &request, json!({ "data": [] })).await;
+
+    model_list_task
+        .await
+        .expect("provider model list task")
+        .expect("provider model list succeeds");
+    dispose_workspace_session(&session).await;
+}
+
+#[cfg(not(windows))]
+#[tokio::test]
+async fn provider_scoped_turn_start_routes_a_b_a_to_real_runtime_sessions() {
+    let workspace_id = "provider-turn-routing";
+    let runtime_key_a =
+        crate::codex::provider_profile::codex_runtime_key(workspace_id, "provider-a");
+    let runtime_key_b =
+        crate::codex::provider_profile::codex_runtime_key(workspace_id, "provider-b");
+    let session_a = make_workspace_session_with_runtime_key(workspace_id, &runtime_key_a).await;
+    let session_b = make_workspace_session_with_runtime_key(workspace_id, &runtime_key_b).await;
+    let stdout_a = session_a
+        .child
+        .lock()
+        .await
+        .stdout
+        .take()
+        .expect("provider A stdout");
+    let stdout_b = session_b
+        .child
+        .lock()
+        .await
+        .stdout
+        .take()
+        .expect("provider B stdout");
+    let mut lines_a = BufReader::new(stdout_a).lines();
+    let mut lines_b = BufReader::new(stdout_b).lines();
+    let sessions = Arc::new(Mutex::new(HashMap::from([
+        (runtime_key_a.clone(), Arc::clone(&session_a)),
+        (runtime_key_b.clone(), Arc::clone(&session_b)),
+    ])));
+
+    let (request_a1, response_a1) = send_provider_turn_and_capture(
+        &sessions,
+        &session_a,
+        &mut lines_a,
+        workspace_id,
+        "provider-a",
+        "model-a1",
+        "high",
+        "turn-a1",
+    )
+    .await;
+    let (request_b, response_b) = send_provider_turn_and_capture(
+        &sessions,
+        &session_b,
+        &mut lines_b,
+        workspace_id,
+        "provider-b",
+        "model-b",
+        "low",
+        "turn-b",
+    )
+    .await;
+    let (request_a2, response_a2) = send_provider_turn_and_capture(
+        &sessions,
+        &session_a,
+        &mut lines_a,
+        workspace_id,
+        "provider-a",
+        "model-a2",
+        "medium",
+        "turn-a2",
+    )
+    .await;
+
+    for (request, model, effort) in [
+        (&request_a1, "model-a1", "high"),
+        (&request_b, "model-b", "low"),
+        (&request_a2, "model-a2", "medium"),
+    ] {
+        assert_eq!(request["method"], "turn/start");
+        assert_eq!(request["params"]["threadId"], "shared-native-1");
+        assert_eq!(request["params"]["model"], model);
+        assert_eq!(request["params"]["effort"], effort);
+    }
+    for (response, provider, runtime_key) in [
+        (&response_a1, "provider-a", runtime_key_a.as_str()),
+        (&response_b, "provider-b", runtime_key_b.as_str()),
+        (&response_a2, "provider-a", runtime_key_a.as_str()),
+    ] {
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerProfileId"],
+            provider
+        );
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerRuntimeKey"],
+            runtime_key
+        );
+    }
+
+    dispose_workspace_session(&session_a).await;
+    dispose_workspace_session(&session_b).await;
 }
 
 #[test]

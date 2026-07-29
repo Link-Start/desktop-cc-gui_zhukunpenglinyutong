@@ -8,6 +8,10 @@ const models = {
     "addModel": "Adicionar modelo",
     "refreshConfig": "Atualizar configuração",
     "refreshingConfig": "Atualizando...",
+    "reloadConfig": "Recarregar configuração",
+    "reloadingConfig": "Recarregando configuração...",
+    "discoverModels": "Descobrir modelos pela CLI",
+    "discoveringModels": "Descobrindo modelos...",
     "refreshConfigFailed": "Falha ao atualizar: {{message}}",
     "claude": {},
     "codex": {

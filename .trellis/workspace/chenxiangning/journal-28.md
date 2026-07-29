@@ -1448,3 +1448,537 @@ Claude/Codex 配置页新增从 CC Switch 导入供应商（只读扫描 ~/.cc-s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1182: 校准 Session Foundation 与 Shared Event Storage
+
+**Date**: 2026-07-27
+**Task**: 校准 Session Foundation 与 Shared Event Storage
+**Branch**: `feature/v-0710`
+
+### Summary
+
+将最后 4 个本地提交与 review remediation 压成单一安全提交：清退 raw evidence 并脱敏 golden fixtures；ACP sandbox 改为 fail-closed；Shared Event Store 收口到 actor-only 写入，补齐 idempotency conflict、shutdown、fidelity 与 crash recovery 边界；同步 OpenSpec 契约和回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b743c4f8a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1183: Wave 2 A2 canonical fact 装配闭环
+
+**Date**: 2026-07-27
+**Task**: Wave 2 A2 canonical fact 装配闭环
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 assemble-shared-canonical-facts 实现、集成测试与 Gate 2 验证
+
+### Main Changes
+
+## 完成内容
+
+- 实现 Wave 2 / Change A2 `assemble-shared-canonical-facts`：
+  - `src-tauri/src/shared_event_log/canonical/types.rs`：Canonical Fact 类型系统（serde tag="type"）
+  - `src-tauri/src/shared_event_log/canonical/validator.rs`：字段级校验，非法 payload 拒绝落盘
+  - `src-tauri/src/shared_event_log/canonical/assembler.rs`：Run/Turn Assembler + Tool Exchange 配对
+  - `src-tauri/src/shared_event_log/canonical/sink.rs`：Critical Commit Sink，deterministic committed_at 保证幂等
+  - `src-tauri/src/shared_event_log/canonical/shadow_v0.rs`：V0 evidence → presentation-only Shadow Log
+  - `src-tauri/src/shared_event_log/writer.rs` / `error.rs`：扩展 writer 支持 canonical/presentation-only fact 写入
+- 新增集成测试 `src-tauri/tests/assemble_canonical_facts.rs`（9 场景，全部通过）
+- 更新总任务清单 Wave 2 状态与 Gate 2 勾选
+- OpenSpec Change A2 4/4 artifacts 完成，`openspec validate --strict` 通过
+
+## 验证结果
+
+```
+cargo test --test assemble_canonical_facts: 9 passed; 0 failed
+openspec validate assemble-shared-canonical-facts --strict --no-interactive: valid
+```
+
+## 已知未解决问题
+
+- `runtime::tests` 中两个 process-group 终止测试在 macOS 上环境敏感失败，与本次变更无关（clean tree 同样失败）。
+
+## 关联提交
+
+- `68fcd078b`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68fcd078b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1184: Wave 3 A3：canonical 投影、checkpoint/rebuild、dual-read 与 Gate 3
+
+**Date**: 2026-07-27
+**Task**: Wave 3 A3：canonical 投影、checkpoint/rebuild、dual-read 与 Gate 3
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 project-shared-canonical-conversation：SharedProjector（turnRequested/turnCommitted/usageRecorded/control → ProjectionItem）、projection checkpoint + 幂等 rebuild、Legacy snapshot dual-read（presentation-only，不伪造 Tool ID/Signature/Target）、ShadowComparator mismatch 分类、前端 Shared DataSource（flag-gated seam，默认关闭）与 Canvas 四条硬门禁回归测试。Gate 3 通过：cargo 全套件 1651 通过 + 2 个已知环境性失败（沿用 Wave 2 结论）；前端 sharedProjection 8/8；openspec validate strict 通过。dark launch 纪律保持：Shared 真实流量仍走 V0，Canvas 消费端随 Wave 4 Tauri command 接入。另记录 1 个前端既有失败（CODEX_MODELS 列表测试未随 commit 34b758e33 同步）。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f403ce879` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1185: 校准 Wave 2-3 Canonical Session
+
+**Date**: 2026-07-27
+**Task**: 校准 Wave 2-3 Canonical Session
+**Branch**: `feature/v-0710`
+
+### Summary
+
+修正 canonical schema、真实时间戳、增量 projection/checkpoint、V0 JSONL dual-read 与 shadow comparator；补齐定向回归测试，并如实重开未接线的 Gate 2/3 项。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5c3073f71` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1186: 明确 Change A 收口路径与 Change B 准入条件
+
+**Date**: 2026-07-27
+**Task**: 明确 Change A 收口路径与 Change B 准入条件
+**Branch**: `feature/v-0710`
+
+### Summary
+
+同步多 CLI 多 Provider 总任务清单：记录 A1/A2/A3 实际进度、Change A 端到端闭环定义、A2/A3 收口顺序，并禁止 Gate 2/3 关闭前进入 Change B 产品代码。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e3562c9d5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1187: 收口 Change A 暗发布链路
+
+**Date**: 2026-07-27
+**Task**: 收口 Change A 暗发布链路
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 V0 final-evidence Shadow mirror、Usage precedence、Shared Projection Tauri commands、feature-flagged Canvas read path 与 render regression gates；A2/A3 均达到 100%，Change B 正式准入。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `60d68c6e1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1188: 归档 Change A OpenSpec
+
+**Date**: 2026-07-27
+**Task**: 归档 Change A OpenSpec
+**Branch**: `feature/v-0710`
+
+### Summary
+
+同步 shared-event-storage、assemble-shared-canonical-facts、shared-canonical-projection 主 specs，并归档 A1/A2/A3；修正 A2 mixed-capability delta 后完成语义同步。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `83833a540` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1189: 暴露 Shared Projection 动态测试入口
+
+**Date**: 2026-07-27
+**Task**: 暴露 Shared Projection 动态测试入口
+**Branch**: `feature/v-0710`
+
+### Summary
+
+在设置→其他设置新增默认关闭的 Shared Projection 测试开关，复用 mossx.sharedProjection localStorage override，状态变化后自动 reload，加载失败继续回退 V0；补齐 10 种语言文案与 15 个 focused tests。总任务清单 Wave 0–6 全部新增大白话说明、改变点、UI 变化三列，并整理远期认知说明。OpenSpec follow-up 已 verify、同步 shared-canonical-projection 主 spec 并归档。验证通过：focused Vitest 15/15、typecheck、scoped ESLint、git diff --check、Markdown table/link check、目标 spec strict；全量 OpenSpec 仍仅有既有 add-tokentracker-usage-dashboard 与 reduce-client-polling-overhead 两个 blocker。未跑全量测试，未做桌面人工 smoke。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `85f9c59a3` | (see git log) |
+| `c90c1c939` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1190: 调研 Headroom 并将压缩模式契约沉淀进会话基石设计
+
+**Date**: 2026-07-27
+**Task**: 调研 Headroom 并将压缩模式契约沉淀进会话基石设计
+**Branch**: `feature/v-0710`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 事项 | 说明 |
+|---------|-------------|
+| 调研 | Headroom（上下文压缩层）：CCR 可逆压缩、CacheAligner 前缀稳定、ContentRouter 分类型压缩；结论为只借模式不借工具 |
+| 设计文档 | §5.6 ContextPackage 新增 ContextCompressionReport；§9.2 新增前缀稳定性不变量；§9.4 检索显式发起约束；§9.5 V1 分类型确定性压缩策略表；§16 Change C 范围与 §17.3 矩阵同步；§21 参考材料 |
+| 任务清单 | Wave 5 新增 C.10（分类型压缩+前缀稳定性），更新 C.1/C.8 验收与 Gate 5 |
+| 边界 | 不引入 Headroom proxy/wrap 部署形态与 ML 压缩模型；Native CLI Session 内部压缩主权归 CLI |
+
+**Updated Files**:
+- `docs/research/mossx-multi-cli-provider-session-foundation-design.md`
+- `docs/plans/2026-07-27-multi-cli-provider-session-foundation-task-checklist.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3824f36ae` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1191: Wave 4 Change B：Execution Target + V2 Send 写路径全量落地
+
+**Date**: 2026-07-27
+**Task**: Wave 4 Change B：Execution Target + V2 Send 写路径全量落地
+**Branch**: `feature/v-0710`
+
+### Summary
+
+B.1–B.6 全部完成：Target Store/四级 Picker、bindingsByTarget 迁移、V2 Send（durable-first Tx1/Tx2 + recovery-required）、Durable Provisioning、Target-aware owner routing、§14.5 九状态 UI 状态机（StatusBar/锁定/重启恢复）。Gate 4 通过：matrix 测试、cargo 1658 passed、vitest shared 套件、typecheck、openspec validate。已知非阻断：engine retirement 迁移基线失败（tauri.test 5 + useThreadMessaging 10）、cargo 2 个 macOS 环境性失败、large-files baseline 漂移。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fe81e9212` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1192: 校准 Change B 发送与恢复语义
+
+**Date**: 2026-07-28
+**Task**: 校准 Change B 发送与恢复语义
+**Branch**: `feature/v-0710`
+
+### Summary
+
+Review Change B 后撤回 17 个虚假完成项和 Gate 4；修复 Composer managed Provider Target 透传、unknown send error fail-closed、Reasoning 锁定，以及基于 durable turnAccepted 的重启恢复。验证 41 个目标 Vitest、Rust 8 个集成测试、typecheck、scoped ESLint、cargo check、runtime contracts 与 OpenSpec strict。未跑全量测试；useThreadMessaging 全文件仍有 10 个既有 OpenCode/Gemini retirement 基线失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1b8aac983` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1193: 完成 Change B Execution Target 闭环
+
+**Date**: 2026-07-28
+**Task**: 完成 Change B Execution Target 闭环
+**Branch**: `feature/v-0710`
+
+### Summary
+
+补全 Shared Session 四级 Execution Target、schema v2 bindings、durable V2 send、typed ACK/真实 terminal、provider-scoped owner routing、degraded/recovery UI；完成增量测试、OpenSpec verify/sync/archive，并确认可进入 Change C。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `428ae19d2` | (see git log) |
+| `7974e3d41` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1194: 收口 Change B 总任务清单
+
+**Date**: 2026-07-28
+**Task**: 收口 Change B 总任务清单
+**Branch**: `feature/v-0710`
+
+### Summary
+
+补充 Change B OpenSpec 归档位置、实现提交、增量测试证据与 Gate 4 结论，明确后续能力统一进入 Change C。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c97bcfcf6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1195: 完成 Change C Shared Context Compiler
+
+**Date**: 2026-07-28
+**Task**: 完成 Change C Shared Context Compiler
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 ContextPackage、capability-driven compiler、兼容转换、确定性压缩、Artifact Store、two-phase cursor、Codex/Claude context ACK、Shared V2/UI 接线与增量验证；review 修复当前 turn 重复注入、V0 双投递、fake terminal、cursor 误推进、ACK recovery、跨 Target pending 绕过、orphan 漏报及 terminal/cursor 非原子提交。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bd5208f39` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1196: 归档 Change C 并开放 Change D
+
+**Date**: 2026-07-28
+**Task**: 归档 Change C 并开放 Change D
+**Branch**: `feature/v-0710`
+
+### Summary
+
+同步 5 份 OpenSpec 主 specs，归档 add-shared-context-compiler 与 Trellis task，更新总任务清单 Wave 5/Gate 5 收口证据；OpenSpec specs strict validation 453/453 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c5cd28958` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

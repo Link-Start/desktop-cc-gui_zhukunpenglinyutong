@@ -2057,6 +2057,48 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     });
   });
 
+  it('does not expose legacy engine/model callbacks inside shared sessions', async () => {
+    renderAdapter({
+      isSharedSession: true,
+      onSelectEngine: vi.fn(),
+      onSelectModel: vi.fn(),
+    });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      onProviderSelect?: (providerId: string) => void;
+      onModelSelect?: (modelId: string) => void;
+      providerTargetPickerMode?: string;
+    };
+    expect(latest.onProviderSelect).toBeUndefined();
+    expect(latest.onModelSelect).toBeUndefined();
+    expect(latest.providerTargetPickerMode).toBe('shared');
+  });
+
+  it('uses the atomic double-column picker without shared session semantics on Home', async () => {
+    renderAdapter({
+      isSharedSession: false,
+      providerTargetPickerMode: 'create-session',
+      onSelectEngine: vi.fn(),
+      onSelectModel: vi.fn(),
+      onExecutionTargetChange: vi.fn(),
+    });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      providerTargetPickerMode?: string;
+      onProviderSelect?: (providerId: string) => void;
+      onModelSelect?: (modelId: string) => void;
+      onExecutionTargetChange?: (target: unknown) => void;
+    };
+    expect(latest.providerTargetPickerMode).toBe('create-session');
+    expect(latest.onProviderSelect).toBeUndefined();
+    expect(latest.onModelSelect).toBeUndefined();
+    expect(latest.onExecutionTargetChange).toEqual(expect.any(Function));
+  });
+
   it('routes kimi provider selection to the kimi engine', async () => {
     const onSelectEngine = vi.fn();
     renderAdapter({ selectedEngine: 'claude', onSelectEngine });

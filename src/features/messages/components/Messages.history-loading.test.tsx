@@ -116,6 +116,28 @@ describe("Messages history loading", () => {
     expect(onRetryHistory).toHaveBeenCalledTimes(1);
   });
 
+  it("does not show the Native recovery card for Shared sessions", () => {
+    render(
+      <Messages
+        items={[]}
+        threadId="shared:session-history-recovery-failed"
+        workspaceId="ws-1"
+        isThinking={false}
+        historyRecoveryFailureReason="history-empty-after-retry"
+        onRetryHistory={vi.fn()}
+        activeEngine="claude"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(
+      screen.queryByRole("alert", { name: "messages.threadRecoveryTitle" }),
+    ).toBeNull();
+    expect(screen.queryByText("messages.threadRecoveryFailed")).toBeNull();
+    expect(screen.getByText("messages.emptyThread")).toBeTruthy();
+  });
+
   it("keeps last-good history visible beside the recovery failure surface", () => {
     render(
       <Messages

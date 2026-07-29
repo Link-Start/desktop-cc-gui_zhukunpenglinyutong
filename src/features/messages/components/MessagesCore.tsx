@@ -55,6 +55,11 @@ import { usePromptDistillation } from "../../prompt-distill/hooks/usePromptDisti
 import { PromptDistillDialog } from "../../prompt-distill/components/PromptDistillDialog";
 import { dedupeExitPlanItemsKeepFirst } from "../utils/messagesExitPlan";
 import {
+  filterContextProtocolConversationItems,
+  hasContextProtocolControlTail,
+  isContextProtocolConversationItem,
+} from "../../../utils/contextProtocol";
+import {
   findLastAssistantMessageIndex,
   findLastUserMessageIndex,
   isMessagesPerfDebugEnabled,
@@ -212,6 +217,8 @@ export const MessagesCore = memo(function MessagesCore({
     isPlanProcessing: _isPlanProcessing = false,
     presentationProfile = null,
     agentTaskScrollRequest = null,
+    timelineLeadingNode = null,
+    isProviderContinuation = false,
   } = presentation;
   const { t } = useTranslation();
   const isWindowsDesktop = useMemo(() => isWindowsPlatform(), []);
@@ -220,8 +227,11 @@ export const MessagesCore = memo(function MessagesCore({
   const userInputRequests = conversationState.userInputQueue;
   const workspaceId = conversationState.meta.workspaceId || null;
   const threadId = conversationState.meta.threadId || null;
+  const nativeRuntimeRecoveryEnabled = !threadId?.startsWith("shared:");
   const activeTurnId = conversationState.meta.activeTurnId ?? null;
   const activeEngine = conversationState.meta.engine;
+  const hideLeadingContinuationBootstrap =
+    activeEngine === "codex" && isProviderContinuation;
   const renderScopeKey = `${workspaceId ?? ""}\u0000${threadId ?? ""}`;
   const conversationRenderModeKey =
     workspaceId && threadId ? `${workspaceId}\u0000${threadId}` : null;
@@ -329,30 +339,61 @@ export const MessagesCore = memo(function MessagesCore({
   const exitPlanDedupeCacheRef = useRef<{
     baseItems: ConversationItem[];
     result: ConversationItem[];
+    hideLeadingContinuationBootstrap: boolean;
   } | null>(null);
   const effectiveItems = useMemo(() => {
     const baseItems = isSelectionFrozen
       ? frozenItemsRef.current ?? items
       : items;
     const cache = exitPlanDedupeCacheRef.current;
-    if (cache && isTrailingMessageTextOnlyUpdate(cache.baseItems, baseItems)) {
+    if (
+      cache &&
+      cache.hideLeadingContinuationBootstrap ===
+        hideLeadingContinuationBootstrap &&
+      isTrailingMessageTextOnlyUpdate(cache.baseItems, baseItems)
+    ) {
       // dedupe 只会移除 exit-plan 工具条目,末尾的 "message" 条目必然原样透传,
       // 因此只需把结果数组的最后一项替换为最新引用,无需重新扫描整段历史。
       // 尾项引用未变时(如选区冻结触发的引用级重算)必须原样返回缓存:此时尾项
       // 可能是被去重掉的 exit-plan 条目,写回结果末尾会丢真尾项、复活重复项。
       const nextLast = baseItems[baseItems.length - 1];
+      if (
+        isContextProtocolConversationItem(nextLast) ||
+        hasContextProtocolControlTail(baseItems, {
+          hideLeadingContinuationBootstrap,
+        })
+      ) {
+        exitPlanDedupeCacheRef.current = {
+          baseItems,
+          result: cache.result,
+          hideLeadingContinuationBootstrap,
+        };
+        return cache.result;
+      }
       const result =
         cache.baseItems[cache.baseItems.length - 1] === nextLast ||
         cache.result[cache.result.length - 1] === nextLast
           ? cache.result
           : [...cache.result.slice(0, -1), nextLast];
-      exitPlanDedupeCacheRef.current = { baseItems, result };
+      exitPlanDedupeCacheRef.current = {
+        baseItems,
+        result,
+        hideLeadingContinuationBootstrap,
+      };
       return result;
     }
-    const result = dedupeExitPlanItemsKeepFirst(baseItems);
-    exitPlanDedupeCacheRef.current = { baseItems, result };
+    const result = dedupeExitPlanItemsKeepFirst(
+      filterContextProtocolConversationItems(baseItems, {
+        hideLeadingContinuationBootstrap,
+      }),
+    );
+    exitPlanDedupeCacheRef.current = {
+      baseItems,
+      result,
+      hideLeadingContinuationBootstrap,
+    };
     return result;
-  }, [isSelectionFrozen, items]);
+  }, [hideLeadingContinuationBootstrap, isSelectionFrozen, items]);
   const messageActionTargetsCacheRef = useRef<{
     baseItems: ConversationItem[];
     result: MessageActionTargets;
@@ -441,6 +482,7 @@ export const MessagesCore = memo(function MessagesCore({
       codexWaitingForFirstText: t("messages.codexWaitingForFirstText"),
       contextCompacting: t("chat.contextDualViewCompacting"),
     },
+    nativeRuntimeRecoveryEnabled,
     renderScopeKey,
     reportVisibleTextRendered: noteThreadVisibleTextRendered,
     renderSourceItems,
@@ -1700,10 +1742,13 @@ export const MessagesCore = memo(function MessagesCore({
       activeUserInputRequestId,
       claudeHistoryTranscriptFallbackActive,
       hasVisibleUserInputRequest,
-      historyRecoveryFailureReason,
+      historyRecoveryFailureReason: nativeRuntimeRecoveryEnabled
+        ? historyRecoveryFailureReason
+        : null,
       isHistoryLoading,
       latestRetryMessage,
       latestRuntimeReconnectItemId,
+      nativeRuntimeRecoveryEnabled,
       proxyEnabled,
       proxyUrl,
       threadId,
@@ -1779,6 +1824,7 @@ export const MessagesCore = memo(function MessagesCore({
           threadId={threadId}
           workspaceId={workspaceId}
         />
+        {timelineLeadingNode}
         <MessagesTimeline {...timelineModels} />
       </div>
       <ScrollControl

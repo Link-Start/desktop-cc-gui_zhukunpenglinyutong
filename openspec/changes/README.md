@@ -3,8 +3,8 @@
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
 - Updated At: `2026-07-27`
-- Active proposals: `24`
-- Archived proposals: `740`
+- Active proposals: `26`
+- Archived proposals: `741`
 - Main capability specs: `438`
 
 ## Active Proposals
@@ -12,6 +12,8 @@
 | Change                                                                                                                               | Progress | Current gate                                                      | Artifacts                                                                                                                                                                                                                                                                                                                           |
 | ------------------------------------------------------------------------------------------------------------------------------------ | -------: | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`align-engine-runtime-capability-contract`](align-engine-runtime-capability-contract/proposal.md)                                   |      0/8 | Batch 0 P0；ready for implementation                              | [design](align-engine-runtime-capability-contract/design.md) · [tasks](align-engine-runtime-capability-contract/tasks.md) · [specs](align-engine-runtime-capability-contract/specs/)                                                                                                                                                |
+| [`establish-session-foundation-contracts`](establish-session-foundation-contracts/proposal.md)                                       |    17/17 | implemented + review remediated，待 verify/archive 决策            | [design](establish-session-foundation-contracts/design.md) · [tasks](establish-session-foundation-contracts/tasks.md) · [specs](establish-session-foundation-contracts/specs/)                                                                                                                                                     |
+| [`establish-shared-event-storage`](establish-shared-event-storage/proposal.md)                                                       |    12/12 | implemented + review remediated，待 verify/archive 决策            | [design](establish-shared-event-storage/design.md) · [tasks](establish-shared-event-storage/tasks.md) · [specs](establish-shared-event-storage/specs/)                                                                                                                                                                             |
 | [`establish-logical-session-runtime-identity`](establish-logical-session-runtime-identity/proposal.md)                               |      0/8 | Batch 0 P0；依赖 capability contract                              | [design](establish-logical-session-runtime-identity/design.md) · [tasks](establish-logical-session-runtime-identity/tasks.md) · [specs](establish-logical-session-runtime-identity/specs/)                                                                                                                                          |
 | [`establish-unified-engine-event-bus`](establish-unified-engine-event-bus/proposal.md)                                               |      0/9 | Batch 1 P0；依赖 runtime identity                                 | [design](establish-unified-engine-event-bus/design.md) · [tasks](establish-unified-engine-event-bus/tasks.md) · [specs](establish-unified-engine-event-bus/specs/)                                                                                                                                                                  |
 | [`define-engine-adapter-protocol-registry`](define-engine-adapter-protocol-registry/proposal.md)                                     |      0/9 | Batch 2 P1；依赖 capability contract                              | [design](define-engine-adapter-protocol-registry/design.md) · [tasks](define-engine-adapter-protocol-registry/tasks.md) · [specs](define-engine-adapter-protocol-registry/specs/)                                                                                                                                                   |
@@ -38,7 +40,8 @@
 
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 733 个 proposal，按月份 / 归档日期分组。
+- [完整归档提案索引](archive/README.md) — 734 个 proposal，按月份 / 归档日期分组。
+- [2026-07-27 `expose-shared-projection-test-toggle`](archive/2026-07-27-expose-shared-projection-test-toggle/proposal.md) — 已同步 `shared-canonical-projection`；设置页新增 Shared Projection 动态测试开关，总任务清单补齐大白话说明、改变点与 UI 变化。
 - [2026-07-27 `improve-codex-provider-protocol-error`](archive/2026-07-27-improve-codex-provider-protocol-error/proposal.md) — 已同步 Codex provider TOML/protocol error contract 与 renderer native Alert 禁令。
 - [2026-07-26 `fix-file-document-loading-error-stuck-state`](archive/2026-07-26-fix-file-document-loading-error-stuck-state/proposal.md) — 已同步 `file-document-loading-error-surface`；文件读取失败或读取期间产生本地脏改后，loading 状态必须收敛且错误可见。
 - [2026-07-24 `close-cleanup-review-findings`](archive/2026-07-24-close-cleanup-review-findings/proposal.md) — 已同步 composer completion、semantic review cache/fallback、settings/workspaces corruption backup uniqueness；并删除 JCEF/notice residual dead branches。

@@ -4,6 +4,7 @@ import type {
   RequestUserInputRequest,
   RequestUserInputResponse,
 } from "../../../types";
+import { requestUserInputIdentityKey } from "../../../utils/requestUserInputIdentity";
 import {
   getUserInputOptionKey,
   getUserInputOptionValue,
@@ -59,7 +60,7 @@ export function AskUserQuestionDialog({
 
   const activeRequest = activeRequests[0] ?? null;
   const requestId = activeRequest
-    ? `${activeRequest.workspace_id}:${String(activeRequest.request_id)}`
+    ? requestUserInputIdentityKey(activeRequest)
     : null;
 
   const [selections, setSelections] = useState<UserInputSelectionState>({});

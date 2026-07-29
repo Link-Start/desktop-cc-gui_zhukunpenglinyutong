@@ -43,6 +43,9 @@ export function useAppShellKanbanComposerSection(
     exitDiffView,
     connectWorkspace,
     startThreadForWorkspace,
+    persistComposerSelectionForThread,
+    setActiveEngine,
+    setHomeOpen,
     setCenterMode,
     selectWorkspace,
     setActiveThreadId,
@@ -142,6 +145,75 @@ export function useAppShellKanbanComposerSection(
     [composerLinkedKanbanPanels, setAppMode, setKanbanViewState],
   );
 
+  const resolveDefaultHomeComposerWorkspace =
+    useCallback(async (): Promise<WorkspaceInfo | null> => {
+      if (isWebServiceRuntime()) {
+        const existingWorkspace =
+          typedWorkspaces.find((entry) => isDefaultWorkspacePath(entry.path)) ??
+          typedWorkspaces.find((entry) => entry.kind === "main") ??
+          typedWorkspaces[0] ??
+          null;
+        if (existingWorkspace) {
+          return existingWorkspace;
+        }
+
+        try {
+          const resolvedHome = normalizePath(await homeDir());
+          if (!resolvedHome) {
+            throw new Error("Unable to resolve default workspace path.");
+          }
+          let createdWorkspacePath: string | null = null;
+          let lastError: unknown = null;
+          for (const candidatePath of getDefaultWorkspaceCandidatePaths(
+            resolvedHome,
+          )) {
+            try {
+              await ensureWorkspacePathDir(candidatePath);
+              createdWorkspacePath = candidatePath;
+              break;
+            } catch (error) {
+              lastError = error;
+            }
+          }
+          if (!createdWorkspacePath) {
+            throw (
+              lastError ?? new Error("Failed to create default workspace path.")
+            );
+          }
+          const normalizedDefaultPath = normalizePath(createdWorkspacePath);
+          return (
+            typedWorkspaces.find(
+              (entry) =>
+                normalizePath(entry.path) === normalizedDefaultPath,
+            ) ?? (await addWorkspaceFromPath(createdWorkspacePath))
+          );
+        } catch (error) {
+          alertError(error);
+          return null;
+        }
+      }
+
+      try {
+        const resolvedHome = normalizePath(await homeDir());
+        const defaultWorkspacePath = `${resolvedHome}/.ccgui/workspace`;
+        await ensureWorkspacePathDir(defaultWorkspacePath);
+        const normalizedDefaultPath = normalizePath(defaultWorkspacePath);
+        return (
+          typedWorkspaces.find(
+            (entry) => normalizePath(entry.path) === normalizedDefaultPath,
+          ) ?? (await addWorkspaceFromPath(defaultWorkspacePath))
+        );
+      } catch (error) {
+        alertError(error);
+        return null;
+      }
+    }, [
+      addWorkspaceFromPath,
+      alertError,
+      normalizePath,
+      typedWorkspaces,
+    ]);
+
   const resolveComposerKanbanPanel = useCallback(
     (text: string) => {
       const tagMatches = Array.from(text.matchAll(/&@([^\s]+)/g))
@@ -195,85 +267,79 @@ export function useAppShellKanbanComposerSection(
       const { panelId, cleanText } =
         resolveComposerKanbanPanel(trimmedOriginalText);
       const textForSending = cleanText;
+      const createSessionTarget = options?.createSessionTarget ?? null;
+
+      if (createSessionTarget && !isPullRequestComposer) {
+        const workspace =
+          (activeWorkspaceId
+            ? workspacesById.get(activeWorkspaceId) ?? null
+            : null) ?? (await resolveDefaultHomeComposerWorkspace());
+        if (!workspace) {
+          return;
+        }
+
+        const {
+          createSessionTarget: _consumedCreateSessionTarget,
+          ...turnOptions
+        } = options ?? {};
+        const providerProfile = createSessionTarget.providerProfileId
+          ? {
+              id: createSessionTarget.providerProfileId,
+              name:
+                createSessionTarget.providerProfileName ??
+                createSessionTarget.providerProfileId,
+              source: createSessionTarget.providerProfileSource,
+            }
+          : null;
+
+        exitDiffView();
+        resetPullRequestSelection();
+        setHomeOpen(false);
+        setWorkspaceHomeWorkspaceId(null);
+        setAppMode("chat");
+        setCenterMode("chat");
+        selectWorkspace(workspace.id);
+        if (!workspace.connected) {
+          await connectWorkspace(workspace);
+        }
+        await setActiveEngine(createSessionTarget.engine);
+        const threadId = await startThreadForWorkspace(workspace.id, {
+          engine: createSessionTarget.engine,
+          activate: true,
+          providerProfileId: createSessionTarget.providerProfileId,
+          providerProfile,
+        });
+        if (!threadId) {
+          return;
+        }
+        persistComposerSelectionForThread(workspace.id, threadId, {
+          modelId: createSessionTarget.modelCatalogEntryId,
+          effort: createSessionTarget.effort,
+        });
+        setActiveThreadId(threadId, workspace.id);
+
+        const fallbackText =
+          textForSending.length > 0 ? textForSending : trimmedOriginalText;
+        if (fallbackText.length > 0 || images.length > 0) {
+          await sendUserMessageToThread(
+            workspace,
+            threadId,
+            fallbackText,
+            images,
+            mergeSelectedAgentOption({
+              ...turnOptions,
+              model: createSessionTarget.model,
+              effort: createSessionTarget.effort,
+            }),
+          );
+        }
+        return;
+      }
 
       // HomeChat send: no active workspace yet. Select or create one, then
       // create a thread and jump to normal chat view before sending.
       if (!activeWorkspaceId && !isPullRequestComposer) {
-        let workspace: WorkspaceInfo | null = null;
-        if (isWebServiceRuntime()) {
-          workspace =
-            typedWorkspaces.find((entry) =>
-              isDefaultWorkspacePath(entry.path),
-            ) ??
-            typedWorkspaces.find((entry) => entry.kind === "main") ??
-            typedWorkspaces[0] ??
-            null;
-
-          if (!workspace) {
-            try {
-              const resolvedHome = normalizePath(await homeDir());
-              if (!resolvedHome) {
-                throw new Error("Unable to resolve default workspace path.");
-              }
-              const preferredPaths =
-                getDefaultWorkspaceCandidatePaths(resolvedHome);
-
-              let createdWorkspacePath: string | null = null;
-              let lastError: unknown = null;
-              for (const candidatePath of preferredPaths) {
-                try {
-                  await ensureWorkspacePathDir(candidatePath);
-                  createdWorkspacePath = candidatePath;
-                  break;
-                } catch (error) {
-                  lastError = error;
-                }
-              }
-              if (!createdWorkspacePath) {
-                throw (
-                  lastError ??
-                  new Error("Failed to create default workspace path.")
-                );
-              }
-              const normalizedDefaultPath = normalizePath(createdWorkspacePath);
-              workspace =
-                typedWorkspaces.find(
-                  (entry) =>
-                    normalizePath(entry.path) === normalizedDefaultPath,
-                ) ?? null;
-              if (!workspace) {
-                workspace = await addWorkspaceFromPath(createdWorkspacePath);
-              }
-            } catch (error) {
-              alertError(error);
-              return;
-            }
-          }
-        } else {
-          let defaultWorkspacePath: string;
-          try {
-            const resolvedHome = normalizePath(await homeDir());
-            defaultWorkspacePath = `${resolvedHome}/.ccgui/workspace`;
-            await ensureWorkspacePathDir(defaultWorkspacePath);
-          } catch (error) {
-            alertError(error);
-            return;
-          }
-          const normalizedDefaultPath = normalizePath(defaultWorkspacePath);
-          workspace =
-            typedWorkspaces.find(
-              (entry) => normalizePath(entry.path) === normalizedDefaultPath,
-            ) ?? null;
-          if (!workspace) {
-            try {
-              workspace = await addWorkspaceFromPath(defaultWorkspacePath);
-            } catch (error) {
-              alertError(error);
-              return;
-            }
-          }
-        }
-
+        const workspace = await resolveDefaultHomeComposerWorkspace();
         if (!workspace) {
           return;
         }
@@ -431,10 +497,7 @@ export function useAppShellKanbanComposerSection(
       handleComposerSend,
       mergeSelectedAgentOption,
       activeWorkspaceId,
-      normalizePath,
-      addWorkspaceFromPath,
-      alertError,
-      typedWorkspaces,
+      resolveDefaultHomeComposerWorkspace,
       workspacesById,
       exitDiffView,
       resetPullRequestSelection,
@@ -442,9 +505,12 @@ export function useAppShellKanbanComposerSection(
       setAppMode,
       setActiveThreadId,
       setCenterMode,
+      setHomeOpen,
       setWorkspaceHomeWorkspaceId,
       connectWorkspace,
+      setActiveEngine,
       startThreadForWorkspace,
+      persistComposerSelectionForThread,
       forkThreadForWorkspace,
       sendUserMessageToThread,
       isPullRequestComposer,

@@ -822,7 +822,10 @@ mod runtime_policy_tests {
         settings.opencode_enabled = false;
 
         assert!(engine_enabled_in_settings(&settings, EngineType::OpenCode));
-        assert_eq!(ensure_engine_enabled(&settings, EngineType::OpenCode), Ok(()));
+        assert_eq!(
+            ensure_engine_enabled(&settings, EngineType::OpenCode),
+            Ok(())
+        );
         assert_eq!(engine_disabled_diagnostic(EngineType::OpenCode), None);
     }
 }

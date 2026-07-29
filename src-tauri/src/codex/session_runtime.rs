@@ -424,6 +424,7 @@ async fn ensure_codex_session_with_mode(
             codex_args,
             app.clone(),
             codex_home,
+            session_key.clone(),
             ensure_mode.launch_options(),
         )
         .await;

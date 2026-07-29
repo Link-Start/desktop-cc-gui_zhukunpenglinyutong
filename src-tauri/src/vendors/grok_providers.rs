@@ -633,7 +633,9 @@ name = "Official"
             .expect("models table");
         assert!(models_table.get("default").is_none());
         assert_eq!(
-            models_table.get("web_search").and_then(toml::Value::as_bool),
+            models_table
+                .get("web_search")
+                .and_then(toml::Value::as_bool),
             Some(true)
         );
         std::fs::remove_file(&path).expect("remove config");
@@ -643,16 +645,20 @@ name = "Official"
     fn cleanup_reports_read_parse_write_and_rename_failures() {
         let read_error = config_test_path("cleanup-read");
         std::fs::create_dir(&read_error).expect("create read-error directory");
-        assert!(cleanup_provider_from_grok_config_at(&read_error, &sample_provider())
-            .expect_err("read failure")
-            .contains("Failed to read residual Grok config"));
+        assert!(
+            cleanup_provider_from_grok_config_at(&read_error, &sample_provider())
+                .expect_err("read failure")
+                .contains("Failed to read residual Grok config")
+        );
         std::fs::remove_dir(&read_error).expect("remove read-error directory");
 
         let malformed = config_test_path("cleanup-parse");
         std::fs::write(&malformed, "[model").expect("write malformed config");
-        assert!(cleanup_provider_from_grok_config_at(&malformed, &sample_provider())
-            .expect_err("parse failure")
-            .contains("Failed to parse residual Grok config"));
+        assert!(
+            cleanup_provider_from_grok_config_at(&malformed, &sample_provider())
+                .expect_err("parse failure")
+                .contains("Failed to parse residual Grok config")
+        );
         std::fs::remove_file(&malformed).expect("remove malformed config");
 
         let write_error = config_test_path("cleanup-write");

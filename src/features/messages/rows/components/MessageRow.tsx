@@ -67,6 +67,7 @@ import {
   useDeferredMessageImages,
 } from "../hooks/useDeferredMessageImages";
 import { buildMessageRowPresentation } from "../presentation/messageRowPresentation";
+import { resolveTurnBadge } from "../../../../utils/turnBadge";
 
 type MessageRowProps = MessageRowEqualityProps;
 
@@ -184,6 +185,7 @@ export const MessageRow = memo(function MessageRow({
   activeEngine = "claude",
   enableCollaborationBadge = false,
   presentationProfile = null,
+  nativeRuntimeRecoveryEnabled = true,
   showRuntimeReconnectCard = false,
   onRecoverThreadRuntime,
   onRecoverThreadRuntimeAndResend,
@@ -525,15 +527,36 @@ export const MessageRow = memo(function MessageRow({
     [agentTaskNotification, item],
   );
   const showActiveRuntimeReconnectCard =
+    nativeRuntimeRecoveryEnabled &&
     Boolean(runtimeReconnectHint) &&
     showRuntimeReconnectCard;
   const suppressRuntimeReconnectText = Boolean(runtimeReconnectHint);
   if (runtimeReconnectHint && !showActiveRuntimeReconnectCard) {
     return null;
   }
+  const turnBadge = item.executionTargetSnapshot
+    ? resolveTurnBadge(item.executionTargetSnapshot, {
+        providerExists: item.executionTargetSnapshot.providerAvailable !== false,
+        providerAvailable: item.executionTargetSnapshot.providerAvailable !== false,
+        runtimeAvailable: true,
+      })
+    : null;
 
   const bubbleNode = (
     <div className={`bubble message-bubble${agentTaskNotification ? " message-bubble-agent-task" : ""}`}>
+      {turnBadge && item.role === "assistant" ? (
+        <div
+          className={`message-turn-target-badge${turnBadge.unavailable ? " is-unavailable" : ""}`}
+          data-testid="message-turn-target-badge"
+          title={turnBadge.unavailable ? t("sidebar.unavailableTag") : undefined}
+        >
+          <span>{turnBadge.engineLabel}</span>
+          <span>{turnBadge.providerLabel}</span>
+          {turnBadge.modelLabel ? <span>{turnBadge.modelLabel}</span> : null}
+          {turnBadge.reasoningLabel ? <span>{turnBadge.reasoningLabel}</span> : null}
+          {turnBadge.unavailable ? <span>{t("sidebar.unavailableTag")}</span> : null}
+        </div>
+      ) : null}
       {agentTaskNotification && agentTaskDisplay ? (
         <Card className="message-agent-task-card gap-3 rounded-[8px] p-4 before:rounded-[7px]">
           <div className="flex items-center gap-3">
@@ -769,6 +792,7 @@ export const MessageRow = memo(function MessageRow({
     || imageItems.length > 0
     || deferredImageItems.length > 0
     || showActiveRuntimeReconnectCard
+    || Boolean(turnBadge)
     || (hasText && !suppressRuntimeReconnectText);
   const memoryPayloadDialogNode =
     memoryPayloadDialogOpen && memorySummaryRawPayload && typeof document !== "undefined"

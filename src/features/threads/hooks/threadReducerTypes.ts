@@ -5,6 +5,7 @@ import type {
   ConversationItem,
   RateLimitSnapshot,
   RequestUserInputRequest,
+  SharedRuntimeControlOwner,
   ThreadSummary,
   ThreadTokenUsage,
   TurnPlan,
@@ -148,7 +149,15 @@ export type ThreadAction =
     }
   | { type: "markReviewing"; threadId: string; isReviewing: boolean }
   | { type: "markUnread"; threadId: string; hasUnread: boolean }
-  | { type: "addAssistantMessage"; threadId: string; text: string }
+  | {
+      type: "addAssistantMessage";
+      threadId: string;
+      text: string;
+      executionTargetSnapshot?: Extract<
+        ConversationItem,
+        { kind: "message" }
+      >["executionTargetSnapshot"];
+    }
   | { type: "setThreadName"; workspaceId: string; threadId: string; name: string }
   | {
       type: "setThreadEngine";
@@ -260,6 +269,8 @@ export type ThreadAction =
       type: "removeUserInputRequest";
       requestId: number | string;
       workspaceId: string;
+      request?: RequestUserInputRequest;
+      sharedRuntimeOwner?: SharedRuntimeControlOwner;
     }
   | {
       type: "clearUserInputRequestsForThread";

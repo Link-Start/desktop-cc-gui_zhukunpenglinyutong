@@ -9,6 +9,7 @@ import {
   appendEvent,
   findConversationStateDiffs,
   hydrateHistory,
+  mergeHistoryProjectionItems,
 } from "./conversationAssembler";
 
 function createState(): ConversationState {
@@ -344,6 +345,169 @@ describe("conversationAssembler", () => {
       }),
     );
     expect(state.meta.activeTurnId).toBe("turn-1");
+  });
+
+  it("keeps the first immutable target snapshot across later message deltas", () => {
+    let state = appendEvent(
+      createState(),
+      createEvent({
+        eventId: "shared-message-delta-1",
+        operation: "appendAgentMessageDelta",
+        turnId: "attempt-a",
+        item: {
+          id: "shared-message",
+          kind: "message",
+          role: "assistant",
+          text: "",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileId: "provider-a",
+            providerProfileNameSnapshot: "Provider A",
+            model: "gpt-a",
+          },
+        },
+        delta: "first",
+      }),
+    );
+    state = appendEvent(
+      state,
+      createEvent({
+        eventId: "shared-message-delta-2",
+        operation: "appendAgentMessageDelta",
+        turnId: "attempt-a",
+        item: {
+          id: "shared-message",
+          kind: "message",
+          role: "assistant",
+          text: "",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileId: "provider-b",
+            providerProfileNameSnapshot: "Provider B",
+            model: "sonnet-b",
+          },
+        },
+        delta: " second",
+      }),
+    );
+
+    expect(state.items[0]).toMatchObject({
+      kind: "message",
+      role: "assistant",
+      text: "first second",
+      turnId: "attempt-a",
+      engineSource: "codex",
+      executionTargetSnapshot: {
+        engine: "codex",
+        providerProfileId: "provider-a",
+        providerProfileNameSnapshot: "Provider A",
+        model: "gpt-a",
+      },
+    });
+  });
+
+  it("hydrates a late attempt target onto an unchanged assistant snapshot", () => {
+    let state = appendEvent(
+      createState(),
+      createEvent({
+        eventId: "shared-message-snapshot-1",
+        operation: "itemUpdated",
+        turnId: "attempt-a",
+        item: {
+          id: "shared-message",
+          kind: "message",
+          role: "assistant",
+          text: "same answer",
+        },
+      }),
+    );
+    state = appendEvent(
+      state,
+      createEvent({
+        eventId: "shared-message-snapshot-2",
+        operation: "itemUpdated",
+        turnId: "attempt-a",
+        item: {
+          id: "shared-message",
+          kind: "message",
+          role: "assistant",
+          text: "same answer",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileId: "provider-a",
+            providerProfileNameSnapshot: "Provider A",
+            model: "gpt-a",
+          },
+        },
+      }),
+    );
+
+    expect(state.items[0]).toMatchObject({
+      kind: "message",
+      role: "assistant",
+      text: "same answer",
+      executionTargetSnapshot: {
+        engine: "codex",
+        providerProfileId: "provider-a",
+        providerProfileNameSnapshot: "Provider A",
+        model: "gpt-a",
+      },
+    });
+  });
+
+  it("keeps the first immutable target snapshot across later item snapshots", () => {
+    let state = appendEvent(
+      createState(),
+      createEvent({
+        eventId: "shared-message-snapshot-1",
+        operation: "itemUpdated",
+        turnId: "attempt-a",
+        item: {
+          id: "shared-message",
+          kind: "message",
+          role: "assistant",
+          text: "first",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileId: "provider-a",
+            providerProfileNameSnapshot: "Provider A",
+            model: "gpt-a",
+          },
+        },
+      }),
+    );
+    state = appendEvent(
+      state,
+      createEvent({
+        eventId: "shared-message-snapshot-2",
+        operation: "itemUpdated",
+        turnId: "attempt-a",
+        item: {
+          id: "shared-message",
+          kind: "message",
+          role: "assistant",
+          text: "first second",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileId: "provider-b",
+            providerProfileNameSnapshot: "Provider B",
+            model: "sonnet-b",
+          },
+        },
+      }),
+    );
+
+    expect(state.items[0]).toMatchObject({
+      kind: "message",
+      role: "assistant",
+      text: "first second",
+      executionTargetSnapshot: {
+        engine: "codex",
+        providerProfileId: "provider-a",
+        providerProfileNameSnapshot: "Provider A",
+        model: "gpt-a",
+      },
+    });
   });
 
   it("keeps claude reasoning snapshots append-only instead of replacing previous content", () => {
@@ -1326,5 +1490,269 @@ describe("conversationAssembler", () => {
     expect(findConversationStateDiffs(realtime, withPlanMismatch)).toEqual([
       "plan",
     ]);
+  });
+
+  it("merges projection identity into each matching history turn without duplication", () => {
+    const baseItems: ConversationItem[] = [
+      { id: "legacy-u1", kind: "message", role: "user", text: "first" },
+      { id: "legacy-r1", kind: "reasoning", summary: "think one", content: "think one" },
+      { id: "legacy-a1", kind: "message", role: "assistant", text: "answer one" },
+      { id: "legacy-u2", kind: "message", role: "user", text: "second" },
+      { id: "legacy-r2", kind: "reasoning", summary: "think two", content: "think two" },
+      { id: "legacy-a2", kind: "message", role: "assistant", text: "answer two" },
+    ];
+    const overlayItems: ConversationItem[] = [
+      { id: "canonical-u1", kind: "message", role: "user", text: "first" },
+      {
+        id: "canonical-a1",
+        kind: "message",
+        role: "assistant",
+        text: "answer one",
+        executionTargetSnapshot: {
+          engine: "claude",
+          providerProfileNameSnapshot: "Official",
+          model: "sonnet",
+        },
+      },
+      { id: "canonical-u2", kind: "message", role: "user", text: "second" },
+      {
+        id: "canonical-a2",
+        kind: "message",
+        role: "assistant",
+        text: "answer two",
+        executionTargetSnapshot: {
+          engine: "codex",
+          providerProfileNameSnapshot: "MiniMax",
+          model: "MiniMax-M3",
+        },
+      },
+    ];
+
+    const merged = mergeHistoryProjectionItems(baseItems, overlayItems, {
+      workspaceId: "ws-1",
+      threadId: "shared:thread-1",
+      engine: "codex",
+    });
+
+    expect(merged).toHaveLength(6);
+    expect(merged.filter((item) => item.kind === "reasoning")).toHaveLength(2);
+    expect(
+      merged
+        .filter(
+          (item): item is Extract<ConversationItem, { kind: "message" }> =>
+            item.kind === "message" && item.role === "assistant",
+        )
+        .map((item) => item.executionTargetSnapshot?.providerProfileNameSnapshot),
+    ).toEqual(["Official", "MiniMax"]);
+  });
+
+  it("matches repeated user prompts by Turn order instead of collapsing them", () => {
+    const merged = mergeHistoryProjectionItems(
+      [
+        { id: "legacy-u1", kind: "message", role: "user", text: "你好" },
+        { id: "legacy-a1", kind: "message", role: "assistant", text: "Claude answer" },
+        { id: "legacy-u2", kind: "message", role: "user", text: "你好" },
+        { id: "legacy-a2", kind: "message", role: "assistant", text: "Codex answer" },
+      ],
+      [
+        { id: "canonical-u1", kind: "message", role: "user", text: "你好" },
+        {
+          id: "canonical-a1",
+          kind: "message",
+          role: "assistant",
+          text: "Claude answer",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileNameSnapshot: "Claude Provider",
+          },
+        },
+        { id: "canonical-u2", kind: "message", role: "user", text: "你好" },
+        {
+          id: "canonical-a2",
+          kind: "message",
+          role: "assistant",
+          text: "Codex answer",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileNameSnapshot: "Codex Provider",
+          },
+        },
+      ],
+      {
+        workspaceId: "ws-1",
+        threadId: "shared:repeated-prompts",
+        engine: "codex",
+      },
+    );
+
+    expect(merged).toHaveLength(4);
+    expect(
+      merged
+        .filter(
+          (item): item is Extract<ConversationItem, { kind: "message" }> =>
+            item.kind === "message" && item.role === "assistant",
+        )
+        .map((item) => item.executionTargetSnapshot?.providerProfileNameSnapshot),
+    ).toEqual(["Claude Provider", "Codex Provider"]);
+  });
+
+  it("keeps a complete Legacy assistant body when canonical text is a short prefix", () => {
+    const merged = mergeHistoryProjectionItems(
+      [
+        { id: "legacy-user", kind: "message", role: "user", text: "model?" },
+        {
+          id: "legacy-assistant",
+          kind: "message",
+          role: "assistant",
+          text: "Claude，Anthropic 出品。这里是完整回答。",
+        },
+      ],
+      [
+        { id: "canonical-user", kind: "message", role: "user", text: "model?" },
+        {
+          id: "canonical-assistant",
+          kind: "message",
+          role: "assistant",
+          text: "Cl",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileNameSnapshot: "Official",
+            model: "settings-main",
+          },
+        },
+      ],
+      {
+        workspaceId: "ws-1",
+        threadId: "shared:thread-prefix",
+        engine: "claude",
+      },
+    );
+
+    expect(merged).toHaveLength(2);
+    expect(merged[1]).toMatchObject({
+      id: "canonical-assistant",
+      text: "Claude，Anthropic 出品。这里是完整回答。",
+      executionTargetSnapshot: {
+        engine: "claude",
+        providerProfileNameSnapshot: "Official",
+        model: "settings-main",
+      },
+    });
+  });
+
+  it("lets a resolved canonical Attempt Target replace a more verbose stale Legacy label", () => {
+    const merged = mergeHistoryProjectionItems(
+      [
+        { id: "legacy-user", kind: "message", role: "user", text: "model?" },
+        {
+          id: "legacy-assistant",
+          kind: "message",
+          role: "assistant",
+          text: "answer",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileId: "stale-provider",
+            providerProfileNameSnapshot: "Stale Provider",
+            providerProfileSource: "managed",
+            modelCatalogEntryId: "stale-catalog-model",
+            model: "stale-runtime-model",
+            reasoning: { effort: "high" },
+            runtimeCapabilityFingerprint: "stale-capability",
+          },
+        },
+      ],
+      [
+        { id: "canonical-user", kind: "message", role: "user", text: "model?" },
+        {
+          id: "canonical-assistant",
+          kind: "message",
+          role: "assistant",
+          text: "answer",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileId: "provider-kimi",
+            providerProfileNameSnapshot: "Kimi Coding",
+            providerProfileSource: "managed",
+            modelCatalogEntryId: "kimi-catalog-model",
+            model: "kimi-for-coding",
+          },
+        },
+      ],
+      {
+        workspaceId: "ws-1",
+        threadId: "shared:canonical-target-authority",
+        engine: "codex",
+      },
+    );
+
+    expect(merged[1]).toMatchObject({
+      id: "canonical-assistant",
+      executionTargetSnapshot: {
+        engine: "codex",
+        providerProfileId: "provider-kimi",
+        providerProfileNameSnapshot: "Kimi Coding",
+        providerProfileSource: "managed",
+        modelCatalogEntryId: "kimi-catalog-model",
+        model: "kimi-for-coding",
+      },
+    });
+  });
+
+  it("upgrades a Legacy prefix from canonical final without collapsing unrelated text", () => {
+    const upgraded = mergeHistoryProjectionItems(
+      [
+        { id: "legacy-user", kind: "message", role: "user", text: "model?" },
+        { id: "legacy-assistant", kind: "message", role: "assistant", text: "Cl" },
+      ],
+      [
+        { id: "canonical-user", kind: "message", role: "user", text: "model?" },
+        {
+          id: "canonical-assistant",
+          kind: "message",
+          role: "assistant",
+          text: "Claude，Anthropic 出品。这里是完整回答。",
+        },
+      ],
+      {
+        workspaceId: "ws-1",
+        threadId: "shared:thread-upgrade",
+        engine: "claude",
+      },
+    );
+    const unrelated = mergeHistoryProjectionItems(
+      [
+        { id: "legacy-user", kind: "message", role: "user", text: "model?" },
+        { id: "legacy-assistant", kind: "message", role: "assistant", text: "旧回答" },
+      ],
+      [
+        { id: "canonical-user", kind: "message", role: "user", text: "model?" },
+        {
+          id: "canonical-assistant",
+          kind: "message",
+          role: "assistant",
+          text: "完全不同的新回答",
+        },
+      ],
+      {
+        workspaceId: "ws-1",
+        threadId: "shared:thread-unrelated",
+        engine: "claude",
+      },
+    );
+
+    expect(upgraded).toHaveLength(2);
+    expect(upgraded[1]).toMatchObject({
+      id: "canonical-assistant",
+      text: "Claude，Anthropic 出品。这里是完整回答。",
+    });
+    expect(unrelated).toHaveLength(3);
+    expect(
+      unrelated
+        .filter(
+          (item): item is Extract<ConversationItem, { kind: "message" }> =>
+            item.kind === "message" && item.role === "assistant",
+        )
+        .map((item) => item.text),
+    ).toEqual(["旧回答", "完全不同的新回答"]);
   });
 });

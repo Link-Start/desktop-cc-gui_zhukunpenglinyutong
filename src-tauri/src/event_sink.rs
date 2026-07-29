@@ -4,11 +4,97 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::time::interval;
 
-use crate::backend::events::{AppServerEvent, EventSink, TerminalOutput};
+use crate::backend::events::{
+    AppServerEvent, AppServerEventDisposition, EventSink, TerminalOutput,
+};
+use crate::engine::agent_event_bus::RunSettlementStatus;
+use crate::shared_event_log::canonical::types::OutcomeStatus;
 use crate::snapshot_throttle::global_snapshot_throttle_count;
+
+fn observe_shared_codex_runtime_event(
+    app: &AppHandle,
+    provider_runtime_key: &str,
+    event: &mut AppServerEvent,
+) -> AppServerEventDisposition {
+    let Some(state) = app.try_state::<crate::state::AppState>() else {
+        return AppServerEventDisposition::EmitNow;
+    };
+    let observation = state.shared_runtime_coordinator.ingest_codex_event_scoped(
+        provider_runtime_key,
+        &event.workspace_id,
+        &event.message,
+    );
+    if observation.ui_fanout_deferred {
+        return AppServerEventDisposition::DeferredBySharedOwner;
+    }
+    let Some(owner) = observation.owner.as_ref() else {
+        return AppServerEventDisposition::EmitNow;
+    };
+    crate::shared_runtime_coordinator::project_app_server_event_to_shared_owner(event, owner);
+    publish_shared_runtime_observation(&state, &observation);
+    AppServerEventDisposition::EmitNow
+}
+
+pub(crate) fn publish_shared_runtime_observation(
+    state: &crate::state::AppState,
+    observation: &crate::shared_runtime_coordinator::SharedRuntimeObservation,
+) {
+    let Some(owner) = observation.owner.as_ref() else {
+        return;
+    };
+    let run_id = owner
+        .runtime_turn_id
+        .as_deref()
+        .unwrap_or(owner.attempt_id.as_str());
+    let turn_id = owner.runtime_turn_id.as_deref();
+    let bus = state.engine_manager.agent_event_bus();
+    if let Some(settled) = observation.settled.as_ref() {
+        if let Err(error) =
+            crate::shared_session_v2::commit_observed_runtime_settlement(state, settled.clone())
+        {
+            // commit helper 保留 settled cache 并把 Binding 标为 recovery-required。
+            // 仍发布 terminal evidence，让 UI 进入显式 recovery，而不是伪装成功或丢 final。
+            log::error!(
+                "[shared-runtime] canonical terminal commit failed attempt_id={} shared_session_id={} error={}",
+                owner.attempt_id,
+                owner.shared_session_id,
+                error
+            );
+        }
+        let status = match settled.final_snapshot.outcome {
+            OutcomeStatus::Completed => RunSettlementStatus::Completed,
+            OutcomeStatus::Failed => RunSettlementStatus::Failed,
+            OutcomeStatus::Cancelled => RunSettlementStatus::Cancelled,
+            OutcomeStatus::Replaced => RunSettlementStatus::Replaced,
+        };
+        let evidence = observation
+            .agent_event
+            .as_ref()
+            .and_then(|event| serde_json::to_value(event).ok())
+            .unwrap_or(serde_json::Value::Null);
+        let _ = bus.publish_settlement(
+            owner.engine,
+            &owner.shared_thread_id,
+            owner.native_session_id.as_deref(),
+            run_id,
+            turn_id,
+            status,
+            evidence,
+        );
+    } else if let Some(agent_event) = observation.agent_event.as_ref() {
+        let _ = bus.publish_engine_event(
+            owner.engine,
+            &owner.shared_thread_id,
+            owner.native_session_id.as_deref(),
+            run_id,
+            turn_id,
+            agent_event,
+        );
+    }
+}
 
 pub(crate) const APP_SERVER_EVENT_BATCH: &str = "app-server-event-batch";
 pub(crate) const APP_SERVER_EVENT_BATCH_STATS: &str = "app-server-event-batch-stats";
@@ -38,6 +124,14 @@ impl TauriEventSink {
 }
 
 impl EventSink for TauriEventSink {
+    fn observe_app_server_event(
+        &self,
+        provider_runtime_key: &str,
+        event: &mut AppServerEvent,
+    ) -> AppServerEventDisposition {
+        observe_shared_codex_runtime_event(&self.app, provider_runtime_key, event)
+    }
+
     fn emit_app_server_event(&self, event: AppServerEvent) {
         let _ = self.app.emit("app-server-event", event);
     }
@@ -258,6 +352,14 @@ fn estimate_event_bytes(event: &AppServerEvent) -> usize {
 }
 
 impl EventSink for BatchedTauriEventSink {
+    fn observe_app_server_event(
+        &self,
+        provider_runtime_key: &str,
+        event: &mut AppServerEvent,
+    ) -> AppServerEventDisposition {
+        observe_shared_codex_runtime_event(&self.app, provider_runtime_key, event)
+    }
+
     fn emit_app_server_event(&self, event: AppServerEvent) {
         // We are inside a sync trait method. The critical section is just a
         // HashMap insert + VecDeque push (microseconds), so a sync mutex is
@@ -316,6 +418,21 @@ pub(crate) enum AppServerEventSink {
 }
 
 impl EventSink for AppServerEventSink {
+    fn observe_app_server_event(
+        &self,
+        provider_runtime_key: &str,
+        event: &mut AppServerEvent,
+    ) -> AppServerEventDisposition {
+        match self {
+            AppServerEventSink::Batched(sink) => {
+                sink.observe_app_server_event(provider_runtime_key, event)
+            }
+            AppServerEventSink::Single(sink) => {
+                sink.observe_app_server_event(provider_runtime_key, event)
+            }
+        }
+    }
+
     fn emit_app_server_event(&self, event: AppServerEvent) {
         match self {
             AppServerEventSink::Batched(sink) => sink.emit_app_server_event(event),

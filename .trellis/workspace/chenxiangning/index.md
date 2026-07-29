@@ -7,9 +7,9 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-28.md`
-- **Total Sessions**: 1181
-- **Last Active**: 2026-07-27
+- **Active File**: `journal-29.md`
+- **Total Sessions**: 1218
+- **Last Active**: 2026-07-29
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~1450 | Active |
+| `journal-29.md` | ~744 | Active |
+| `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +57,43 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1218 | 2026-07-29 | 完善多 CLI 会话目标选择 | `e582d1819` | `feature/v-0710` |
+| 1217 | 2026-07-29 | 修复 Shared Session canonical 历史恢复 | `5ec8dc0de` | `feature/v-0710` |
+| 1216 | 2026-07-29 | 修复 Shared Session 跨 CLI 切换与终态收口 | `994007b31` | `feature/v-0710` |
+| 1215 | 2026-07-29 | 续接会话围挡默认折叠 | `53759006f` | `feature/v-0710` |
+| 1214 | 2026-07-29 | 闭环 Codex CLI 供应商续接 | `d528fc91c` | `feature/v-0710` |
+| 1213 | 2026-07-29 | 优化普通 CLI 供应商续接 | `93ce0a709` | `feature/v-0710` |
+| 1212 | 2026-07-29 | 闭环共享会话多 CLI Provider 基石 | `29bcf6c65`, `6e08a700e`, `94c1795ac` | `feature/v-0710` |
+| 1211 | 2026-07-29 | 聚合 Provider 续接会话家族 | `ea73d6007` | `feature/v-0710` |
+| 1210 | 2026-07-28 | 稳定供应商与模型选择 | `f0c5c5e3a` | `feature/v-0710` |
+| 1209 | 2026-07-28 | 展示 Provider Continuation 来源最后一轮 | `f610a74d7`, `dedcc7894` | `feature/v-0710` |
+| 1208 | 2026-07-28 | 修复 Provider Continuation 幕布头部交互 | `0cb29cdc8`, `7583cadcb` | `feature/v-0710` |
+| 1207 | 2026-07-28 | 校准 Provider 续接稳定性与 Shared 身份展示 | `fa6113bf1` | `feature/v-0710` |
+| 1206 | 2026-07-28 | 补齐多 Provider 切换 UX | `687b951c0` | `feature/v-0710` |
+| 1205 | 2026-07-28 | 校准多 CLI 会话基石 A-D | `b5a2aba34` | `feature/v-0710` |
+| 1204 | 2026-07-28 | 完成并归档 Change D | `c5a1eb838` | `feature/v-0710` |
+| 1203 | 2026-07-28 | 收口续接回归测试格式 | `6b5aa9d63` | `feature/v-0710` |
+| 1202 | 2026-07-28 | 补齐续接来源缺失回归测试 | `1e86de202` | `feature/v-0710` |
+| 1201 | 2026-07-28 | 清退跨供应商原生分叉残留 | `548e61c5f` | `feature/v-0710` |
+| 1200 | 2026-07-28 | 补齐续接降级确认信息 | `5e2dea219` | `feature/v-0710` |
+| 1199 | 2026-07-28 | 完成 Change D 原生供应商续接实现 | `fef31ae23` | `feature/v-0710` |
+| 1198 | 2026-07-28 | Change D 原生历史物化基础 | `17a1d9594` | `feature/v-0710` |
+| 1197 | 2026-07-28 | 建立 Change D 续接契约 | `7ecfcba52` | `feature/v-0710` |
+| 1196 | 2026-07-28 | 归档 Change C 并开放 Change D | `c5cd28958` | `feature/v-0710` |
+| 1195 | 2026-07-28 | 完成 Change C Shared Context Compiler | `bd5208f39` | `feature/v-0710` |
+| 1194 | 2026-07-28 | 收口 Change B 总任务清单 | `c97bcfcf6` | `feature/v-0710` |
+| 1193 | 2026-07-28 | 完成 Change B Execution Target 闭环 | `428ae19d2`, `7974e3d41` | `feature/v-0710` |
+| 1192 | 2026-07-28 | 校准 Change B 发送与恢复语义 | `1b8aac983` | `feature/v-0710` |
+| 1191 | 2026-07-27 | Wave 4 Change B：Execution Target + V2 Send 写路径全量落地 | `fe81e9212` | `feature/v-0710` |
+| 1190 | 2026-07-27 | 调研 Headroom 并将压缩模式契约沉淀进会话基石设计 | `3824f36ae` | `feature/v-0710` |
+| 1189 | 2026-07-27 | 暴露 Shared Projection 动态测试入口 | `85f9c59a3`, `c90c1c939` | `feature/v-0710` |
+| 1188 | 2026-07-27 | 归档 Change A OpenSpec | `83833a540` | `feature/v-0710` |
+| 1187 | 2026-07-27 | 收口 Change A 暗发布链路 | `60d68c6e1` | `feature/v-0710` |
+| 1186 | 2026-07-27 | 明确 Change A 收口路径与 Change B 准入条件 | `e3562c9d5` | `feature/v-0710` |
+| 1185 | 2026-07-27 | 校准 Wave 2-3 Canonical Session | `5c3073f71` | `feature/v-0710` |
+| 1184 | 2026-07-27 | Wave 3 A3：canonical 投影、checkpoint/rebuild、dual-read 与 Gate 3 | `f403ce879` | `feature/v-0710` |
+| 1183 | 2026-07-27 | Wave 2 A2 canonical fact 装配闭环 | `68fcd078b` | `feature/v-0710` |
+| 1182 | 2026-07-27 | 校准 Session Foundation 与 Shared Event Storage | `b743c4f8a` | `feature/v-0710` |
 | 1181 | 2026-07-27 | 多 CLI 会话基石文档链落地 | `189a1281c` | `feature/v-0710` |
 | 1180 | 2026-07-27 | 修复运行时卡顿与模型目录竞态 | `35a72b395` | `feature/v-0710` |
 | 1179 | 2026-07-27 | 完善多 CLI 与多供应商会话架构设计 | `9feb2520e` | `feature/v-0710` |

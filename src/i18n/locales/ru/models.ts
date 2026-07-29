@@ -8,6 +8,10 @@ const models = {
     "addModel": "Добавить модель",
     "refreshConfig": "Обновить конфигурацию",
     "refreshingConfig": "Обновление...",
+    "reloadConfig": "Перезагрузить конфигурацию",
+    "reloadingConfig": "Перезагрузка конфигурации...",
+    "discoverModels": "Найти модели через CLI",
+    "discoveringModels": "Поиск моделей...",
     "refreshConfigFailed": "Не удалось обновить: {{message}}",
     "claude": {},
     "codex": {

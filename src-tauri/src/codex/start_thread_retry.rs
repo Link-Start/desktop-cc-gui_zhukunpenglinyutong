@@ -174,15 +174,6 @@ where
     })
 }
 
-pub(crate) async fn start_thread_with_runtime_retry(
-    workspace_id: &str,
-    model: Option<String>,
-    state: &AppState,
-    app: &AppHandle,
-) -> Result<Value, String> {
-    start_thread_with_runtime_retry_for_provider(workspace_id, model, None, state, app).await
-}
-
 pub(crate) async fn start_thread_with_runtime_retry_for_provider(
     workspace_id: &str,
     model: Option<String>,

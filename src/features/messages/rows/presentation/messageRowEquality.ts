@@ -26,6 +26,7 @@ export type MessageRowEqualityProps = {
   activeCollaborationModeId?: string | null;
   enableCollaborationBadge?: boolean;
   presentationProfile?: PresentationProfile | null;
+  nativeRuntimeRecoveryEnabled?: boolean;
   showRuntimeReconnectCard?: boolean;
   onRecoverThreadRuntime?: (
     workspaceId: string,
@@ -120,6 +121,7 @@ export function areMessageItemsEqual(previous: MessageItem, next: MessageItem) {
       previous.role === next.role &&
       previous.text === next.text &&
       previous.engineSource === next.engineSource &&
+      previous.executionTargetSnapshot === next.executionTargetSnapshot &&
       previous.isFinal === next.isFinal &&
       previous.finalCompletedAt === next.finalCompletedAt &&
       previous.finalDurationMs === next.finalDurationMs &&
@@ -153,6 +155,7 @@ export function areMessageRowPropsEqual(
     previous.activeCollaborationModeId === next.activeCollaborationModeId &&
     previous.enableCollaborationBadge === next.enableCollaborationBadge &&
     previous.presentationProfile === next.presentationProfile &&
+    previous.nativeRuntimeRecoveryEnabled === next.nativeRuntimeRecoveryEnabled &&
     previous.showRuntimeReconnectCard === next.showRuntimeReconnectCard &&
     previous.userActionNode === next.userActionNode &&
     (

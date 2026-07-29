@@ -33,6 +33,7 @@ import {
 import { buildCodexLivenessDiagnostic } from "../utils/codexConversationLiveness";
 import { domainEventFactories } from "../domain-events";
 import type { ThreadEventHandlersOptions } from "./threadEventHandlerTypes";
+import type { TurnExecutionSnapshot } from "../../shared-session/target/types";
 import { handleThreadAppServerEventDiagnostics } from "./threadAppServerEventDiagnostics";
 import {
   TURN_FIRST_DELTA_WARNING_MS,
@@ -1140,11 +1141,13 @@ export function useThreadEventHandlers({
     (request: RequestUserInputRequest) => {
       enqueueUserInputRequest(request);
       const threadId =
+        request.shared_runtime_owner?.sharedThreadId ??
         resolveClaudeContinuationThreadId?.(
           request.workspace_id,
           request.params.thread_id,
           request.params.turn_id,
-        ) ?? request.params.thread_id;
+        ) ??
+        request.params.thread_id;
       if (!threadId) {
         return;
       }
@@ -1160,7 +1163,9 @@ export function useThreadEventHandlers({
     (event: CollaborationModeBlockedRequest) => {
       const rawThreadId = event.params.thread_id;
       const threadId =
-        resolveClaudeContinuationThreadId?.(event.workspace_id, rawThreadId) ?? rawThreadId;
+        event.shared_runtime_owner?.sharedThreadId ??
+        resolveClaudeContinuationThreadId?.(event.workspace_id, rawThreadId) ??
+        rawThreadId;
       if (!threadId) {
         return;
       }
@@ -1171,6 +1176,9 @@ export function useThreadEventHandlers({
           type: "removeUserInputRequest",
           requestId,
           workspaceId: event.workspace_id,
+          ...(event.shared_runtime_owner
+            ? { sharedRuntimeOwner: event.shared_runtime_owner }
+            : {}),
         });
       }
       if (requestUserInputBlocked) {
@@ -2373,7 +2381,9 @@ export function useThreadEventHandlers({
       payload: {
         message: string;
         willRetry: boolean;
+        suppressMessage?: boolean;
         engine?: ConversationEngine | null;
+        executionTargetSnapshot?: TurnExecutionSnapshot;
       },
     ) => {
       const normalizedTurnId = resolveTerminalSettlementTurnId(threadId, turnId);

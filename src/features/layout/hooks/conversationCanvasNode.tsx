@@ -14,6 +14,8 @@ import {
 export type ConversationCanvasNodeInput = {
   messagesProps: ComponentProps<typeof Messages>;
   forkConfirmDialogProps: ComponentProps<typeof MessageForkConfirmDialog>;
+  continuationContextNode?: ReactNode;
+  isProviderContinuation?: boolean;
 };
 
 // 刻意不选 heartbeatPulse:opencode 心跳(约 5s 一次)会 bump 该计数,若选入这里,
@@ -75,10 +77,18 @@ function ActiveCanvasMessages({
 export function buildConversationCanvasNode({
   messagesProps,
   forkConfirmDialogProps,
+  continuationContextNode,
+  isProviderContinuation = false,
 }: ConversationCanvasNodeInput): ReactNode {
   return (
     <>
-      <ActiveCanvasMessages messagesProps={messagesProps} />
+      <ActiveCanvasMessages
+        messagesProps={{
+          ...messagesProps,
+          timelineLeadingNode: continuationContextNode ?? null,
+          isProviderContinuation,
+        }}
+      />
       <MessageForkConfirmDialog {...forkConfirmDialogProps} />
     </>
   );

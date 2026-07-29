@@ -657,7 +657,10 @@ impl DaemonState {
         crate::codex::run_grok_doctor_with_settings(grok_bin, &settings).await
     }
 
-    pub(super) async fn opencode_doctor(&self, opencode_bin: Option<String>) -> Result<Value, String> {
+    pub(super) async fn opencode_doctor(
+        &self,
+        opencode_bin: Option<String>,
+    ) -> Result<Value, String> {
         let settings = self.app_settings.lock().await.clone();
         crate::codex::run_opencode_doctor_with_settings(opencode_bin, &settings).await
     }
@@ -2716,18 +2719,34 @@ impl DaemonState {
         workspace_id: String,
         turn_id: String,
         engine: Option<engine::EngineType>,
+        provider_profile_id: Option<String>,
     ) -> Result<(), String> {
         self.sync_engine_configs().await;
         let active_engine = self.get_active_engine().await;
         let target_engine = engine.unwrap_or(active_engine);
         match target_engine {
             engine::EngineType::Claude => {
-                if let Some(session) = self
-                    .engine_manager
-                    .claude_manager
-                    .session_for_turn(&workspace_id, &turn_id)
-                    .await
-                {
+                let provider_profile_id = provider_profile_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty());
+                let session = if provider_profile_id.is_some() {
+                    let provider_session = self
+                        .engine_manager
+                        .claude_manager
+                        .get_session_for_provider(&workspace_id, provider_profile_id)
+                        .await;
+                    match provider_session {
+                        Some(session) if session.has_active_turn(&turn_id).await => Some(session),
+                        _ => None,
+                    }
+                } else {
+                    self.engine_manager
+                        .claude_manager
+                        .session_for_turn(&workspace_id, &turn_id)
+                        .await
+                };
+                if let Some(session) = session {
                     session.interrupt_turn(&turn_id).await?;
                 }
                 Ok(())
@@ -3539,9 +3558,16 @@ impl DaemonState {
         workspace_id: String,
         thread_id: String,
         turn_id: String,
+        provider_profile_id: Option<String>,
     ) -> Result<Value, String> {
-        codex_core::turn_interrupt_core(&self.sessions, workspace_id, None, thread_id, turn_id)
-            .await
+        codex_core::turn_interrupt_core(
+            &self.sessions,
+            workspace_id,
+            provider_profile_id,
+            thread_id,
+            turn_id,
+        )
+        .await
     }
 
     pub(super) async fn thread_compact(
@@ -3591,6 +3617,18 @@ impl DaemonState {
             }
             Err(error) => Err(error),
         }
+    }
+
+    pub(super) async fn discover_codex_models(
+        &self,
+        workspace_id: String,
+        provider_profile_id: Option<String>,
+    ) -> Result<Value, String> {
+        let provider_profile_id = normalize_daemon_disk_provider_profile(provider_profile_id)?;
+        self.ensure_codex_session_for_workspace(&workspace_id)
+            .await?;
+        codex_core::model_list_for_provider_core(&self.sessions, workspace_id, provider_profile_id)
+            .await
     }
 
     pub(super) async fn collaboration_mode_list(
@@ -3883,6 +3921,7 @@ impl DaemonState {
         workspace_id: String,
         request_id: Value,
         result: Value,
+        provider_profile_id: Option<String>,
     ) -> Result<Value, String> {
         if request_id.is_string() {
             for session in self
@@ -3906,6 +3945,7 @@ impl DaemonState {
         codex_core::respond_to_server_request_core(
             &self.sessions,
             workspace_id,
+            provider_profile_id,
             request_id,
             result,
         )

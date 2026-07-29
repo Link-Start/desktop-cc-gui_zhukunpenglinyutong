@@ -764,7 +764,7 @@ describe("useThreadActions codex rewind", () => {
     expect(loadedThreadsRef.current["thread-codex-provider-child"]).toBe(true);
   });
 
-  it("creates a native child re-bound to the selected provider for cross-provider Codex message fork", async () => {
+  it("rejects cross-provider Codex message fork in favor of Provider Continuation", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: {
         data: [],
@@ -772,34 +772,6 @@ describe("useThreadActions codex rewind", () => {
       },
     } as any);
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
-    vi.mocked(forkThread).mockResolvedValue({
-      thread: {
-        id: "thread-codex-managed-child",
-        parentThreadId: "thread-codex-1",
-        forkMode: "native-provider-rebind",
-        forkedFromMessageId: "runtime-user-first",
-        providerProfileId: "provider-openai",
-        providerProfileSource: "managed",
-        providerProfileName: "OpenAI Relay",
-      },
-    } as any);
-    vi.mocked(resumeThread).mockResolvedValue({
-      result: {
-        thread: {
-          preview: "managed child",
-          turns: [],
-        },
-      },
-    } as any);
-    vi.mocked(buildItemsFromThread).mockReturnValue([
-      {
-        id: "managed-child-user",
-        kind: "message",
-        role: "user",
-        text: "从这里分叉",
-      },
-    ]);
-
     const { result, dispatch, loadedThreadsRef } = renderActions({
       threadsByWorkspace: {
         "ws-1": [
@@ -842,9 +814,8 @@ describe("useThreadActions codex rewind", () => {
 
     dispatch.mockClear();
 
-    let output: string | null = null;
-    await act(async () => {
-      output = await result.current.forkSessionFromMessageForWorkspace(
+    await expect(
+      result.current.forkSessionFromMessageForWorkspace(
         "ws-1",
         "thread-codex-1",
         "user-local-first",
@@ -856,53 +827,15 @@ describe("useThreadActions codex rewind", () => {
             source: "managed",
           },
         },
-      );
-    });
+      ),
+    ).rejects.toThrow("使用其他 Provider 继续");
 
-    expect(output).toBe("thread-codex-managed-child");
-    expect(forkThread).toHaveBeenCalledWith(
-      "ws-1",
-      "thread-codex-1",
-      "user-local-first",
-      {
-        providerProfileId: "provider-openai",
-        targetUserTurnIndex: 0,
-        targetUserMessageText: "从这里分叉",
-        targetUserMessageOccurrence: 1,
-        localUserMessageCount: 1,
-      },
-    );
+    expect(forkThread).not.toHaveBeenCalled();
     expect(rewindCodexThread).not.toHaveBeenCalled();
-    expect(dispatch).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "renameThreadId",
-        oldThreadId: "thread-codex-1",
-      }),
-    );
-    expect(dispatch).not.toHaveBeenCalledWith({
-      type: "hideThread",
-      workspaceId: "ws-1",
-      threadId: "thread-codex-1",
-    });
-    expect(dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "ensureThread",
-        workspaceId: "ws-1",
-        threadId: "thread-codex-managed-child",
-        engine: "codex",
-        providerProfileId: "provider-openai",
-        providerProfileSource: "managed",
-        providerProfileName: "OpenAI Relay",
-      }),
-    );
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "setActiveThreadId",
-      workspaceId: "ws-1",
-      threadId: "thread-codex-managed-child",
-    });
-    expect(resumeThread).toHaveBeenCalledWith("ws-1", "thread-codex-managed-child");
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(resumeThread).not.toHaveBeenCalled();
     expect(loadedThreadsRef.current["thread-codex-1"]).toBe(true);
-    expect(loadedThreadsRef.current["thread-codex-managed-child"]).toBe(true);
+    expect(loadedThreadsRef.current["thread-codex-managed-child"]).toBeUndefined();
   });
 
   it("rolls workspace files back when Codex rewind fork fails", async () => {

@@ -152,7 +152,8 @@ impl EngineManager {
 
     /// Detect a single engine's status
     async fn detect_single_engine(&self, engine_type: EngineType) -> EngineStatus {
-        self.detect_single_engine_with_gates(engine_type, true).await
+        self.detect_single_engine_with_gates(engine_type, true)
+            .await
     }
 
     async fn detect_single_engine_with_gates(
@@ -780,8 +781,13 @@ impl EngineManager {
         workspace_id: &str,
         workspace_path: &Path,
     ) -> Arc<GrokSession> {
-        self.get_or_create_grok_session_for_runtime(workspace_id, workspace_path, workspace_id, None)
-            .await
+        self.get_or_create_grok_session_for_runtime(
+            workspace_id,
+            workspace_path,
+            workspace_id,
+            None,
+        )
+        .await
     }
 
     /// Get or create a Grok session isolated by provider runtime key.

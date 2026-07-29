@@ -4,8 +4,8 @@ use super::claude_forwarder::{
     ClaudeForwarderState, CLAUDE_RUNTIME_SYNC_HEARTBEAT_SECS,
 };
 use super::{
-    build_engine_active_process_diagnostics, build_provider_prefill_query,
-    collect_stale_child_candidates, delete_opencode_session_files,
+    build_claude_dispatch_receipt, build_engine_active_process_diagnostics,
+    build_provider_prefill_query, collect_stale_child_candidates, delete_opencode_session_files,
     delete_opencode_session_from_datastore, ensure_engine_enabled, extract_turn_result_text,
     is_likely_foreign_model_for_gemini, is_likely_legacy_claude_model_id,
     is_valid_claude_model_for_passthrough, merge_opencode_agents, next_gemini_routed_item_id,
@@ -36,6 +36,47 @@ use uuid::Uuid;
 
 use crate::engine::kimi::resolve_kimi_session_id_for_engine_send;
 use crate::engine::SendMessageParams;
+
+#[test]
+fn claude_dispatch_receipt_normalizes_explicit_local_provider_sentinel() {
+    let receipt = build_claude_dispatch_receipt(
+        "workspace-local",
+        Some(crate::engine::claude::CLAUDE_LOCAL_PROVIDER_PROFILE_ID),
+        Some("claude-sonnet-4-5"),
+        Some("high"),
+    );
+
+    assert_eq!(receipt["engine"], "claude");
+    assert!(receipt["providerProfileId"].is_null());
+    assert_eq!(receipt["providerProfileSource"], "local");
+    assert_eq!(
+        receipt["providerRuntimeKey"],
+        format!(
+            "claude::workspace-local::{}",
+            crate::engine::claude::CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+        )
+    );
+    assert_eq!(receipt["model"], "claude-sonnet-4-5");
+    assert_eq!(receipt["reasoningEffort"], "high");
+}
+
+#[test]
+fn claude_dispatch_receipt_preserves_managed_provider_identity() {
+    let receipt = build_claude_dispatch_receipt(
+        "workspace-managed",
+        Some("provider-anthropic"),
+        Some("claude-opus-4-1"),
+        None,
+    );
+
+    assert_eq!(receipt["providerProfileId"], "provider-anthropic");
+    assert_eq!(receipt["providerProfileSource"], "managed");
+    assert_eq!(
+        receipt["providerRuntimeKey"],
+        "claude::workspace-managed::provider-anthropic"
+    );
+    assert!(receipt["reasoningEffort"].is_null());
+}
 
 #[test]
 fn kimi_new_turn_waits_for_cli_canonical_session_id() {

@@ -11,6 +11,7 @@ import {
   rememberApprovalRule,
   respondToServerRequest,
 } from "../../../services/tauri";
+import { approvalConversationItemId } from "./threadReducerApprovalRequests";
 import type { ThreadAction } from "./useThreadsReducer";
 
 type UseThreadApprovalsOptions = {
@@ -62,7 +63,35 @@ function isFileChangeApprovalRequest(request: ApprovalRequest): boolean {
 }
 
 function buildApprovalRequestKey(request: ApprovalRequest): string {
-  return `${request.workspace_id}:${String(request.request_id)}`;
+  return JSON.stringify([
+    request.workspace_id,
+    request.shared_runtime_owner?.providerRuntimeKey ?? "native",
+    request.shared_runtime_owner?.attemptId ?? "native",
+    request.request_id,
+  ]);
+}
+
+/** Shared control response 只接受事件携带的 Runtime owner，不从 threadId 推断。 */
+export function resolveApprovalSharedRuntimeOwner(request: ApprovalRequest) {
+  const owner = request.shared_runtime_owner ?? null;
+  const threadId = getApprovalThreadId(request);
+  const hasSharedThreadClaim = Boolean(threadId?.startsWith("shared:"));
+  if (hasSharedThreadClaim && !owner) {
+    throw new Error(
+      "Shared approval response is missing its Runtime owner.",
+    );
+  }
+  if (owner && threadId && threadId !== owner.sharedThreadId) {
+    throw new Error(
+      "Shared approval response Runtime owner does not match the request thread.",
+    );
+  }
+  if (owner && getApprovalTurnId(request) !== owner.runtimeTurnId) {
+    throw new Error(
+      "Shared approval response Runtime owner does not match the request turn.",
+    );
+  }
+  return owner;
 }
 
 export function useThreadApprovals({
@@ -77,6 +106,7 @@ export function useThreadApprovals({
       const rawThreadId = getApprovalThreadId(request);
       const turnId = getApprovalTurnId(request);
       const threadId =
+        request.shared_runtime_owner?.sharedThreadId ??
         (rawThreadId
           ? resolveClaudeContinuationThreadId?.(
               request.workspace_id,
@@ -106,7 +136,7 @@ export function useThreadApprovals({
         workspaceId: request.workspace_id,
         threadId,
         item: {
-          id: String(request.request_id),
+          id: approvalConversationItemId(request),
           kind: "tool",
           toolType: "fileChange",
           title: i18n.t("approval.applyingApprovedFileChange"),
@@ -161,6 +191,7 @@ export function useThreadApprovals({
         });
         return;
       }
+      const sharedOwner = resolveApprovalSharedRuntimeOwner(request);
       if (decision === "accept") {
         markApprovalAsApplying(request);
       }
@@ -168,6 +199,7 @@ export function useThreadApprovals({
         request.workspace_id,
         request.request_id,
         decision,
+        sharedOwner,
       );
       dispatch({
         type: "removeApproval",
@@ -195,11 +227,13 @@ export function useThreadApprovals({
       });
 
       for (const approval of uniqueFileBatch) {
+        const sharedOwner = resolveApprovalSharedRuntimeOwner(approval);
         markApprovalAsApplying(approval);
         await respondToServerRequest(
           approval.workspace_id,
           approval.request_id,
           "accept",
+          sharedOwner,
         );
         dispatch({
           type: "removeApproval",
@@ -214,6 +248,7 @@ export function useThreadApprovals({
 
   const handleApprovalRemember = useCallback(
     async (request: ApprovalRequest, command: string[]) => {
+      const sharedOwner = resolveApprovalSharedRuntimeOwner(request);
       try {
         await rememberApprovalRule(request.workspace_id, command);
       } catch (error) {
@@ -234,6 +269,7 @@ export function useThreadApprovals({
         request.workspace_id,
         request.request_id,
         "accept",
+        sharedOwner,
       );
       dispatch({
         type: "removeApproval",

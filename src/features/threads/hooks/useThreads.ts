@@ -37,6 +37,7 @@ import { useThreadEventHandlers } from "./useThreadEventHandlers";
 import { useThreadActions } from "./useThreadActions";
 import { useThreadMessaging } from "./useThreadMessaging";
 import { useThreadApprovals } from "./useThreadApprovals";
+import type { TurnExecutionSnapshot } from "../../shared-session/target/types";
 import {
   cleanupThreadScopedRefs,
   createWorkspaceScopedMap,
@@ -106,9 +107,9 @@ import { buildItemsFromThread } from "../../../utils/threadItems";
 import i18n from "../../../i18n";
 import { clearSharedSessionBindingsForSharedThread } from "../../shared-session/runtime/sharedSessionBridge";
 import {
-  setSharedSessionSelectedEngine as setSharedSessionSelectedEngineService,
   syncSharedSessionSnapshot as syncSharedSessionSnapshotService,
 } from "../../shared-session/services/sharedSessions";
+import { isSharedV2SendEnabled } from "../../shared-session/runtime/sharedV2SendFlag";
 import { normalizeSharedSessionEngine } from "../../shared-session/utils/sharedSessionEngines";
 import { type ConversationCompletionEmailMetadata } from "../utils/conversationCompletionEmail";
 import {
@@ -463,7 +464,12 @@ export function useThreads({
   );
 
   const pushThreadErrorMessage = useCallback(
-    (workspaceId: string, threadId: string, message: string) => {
+    (
+      workspaceId: string,
+      threadId: string,
+      message: string,
+      executionTargetSnapshot?: TurnExecutionSnapshot,
+    ) => {
       const normalized = message.trim();
       if (normalized) {
         const now = Date.now();
@@ -490,6 +496,7 @@ export function useThreads({
         type: "addAssistantMessage",
         threadId,
         text: message,
+        ...(executionTargetSnapshot ? { executionTargetSnapshot } : {}),
       });
       if (threadId !== activeThreadId) {
         dispatch({ type: "markUnread", threadId, hasUnread: true });
@@ -685,39 +692,6 @@ export function useThreads({
       return thread?.providerProfileId?.trim() || null;
     },
     [],
-  );
-
-  const updateSharedSessionEngineSelection = useCallback(
-    (
-      workspaceId: string,
-      threadId: string,
-      engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode",
-    ) => {
-      const sharedEngine = normalizeSharedSessionEngine(engine);
-      dispatch({
-        type: "setThreadEngine",
-        workspaceId,
-        threadId,
-        engine: sharedEngine,
-      });
-      if (!threadId.startsWith("shared:")) {
-        return;
-      }
-      void setSharedSessionSelectedEngineService(
-        workspaceId,
-        threadId,
-        sharedEngine,
-      ).catch((error) => {
-        onDebug?.({
-          id: `${Date.now()}-shared-session-select-engine-error`,
-          timestamp: Date.now(),
-          source: "error",
-          label: "shared-session/select-engine error",
-          payload: error instanceof Error ? error.message : String(error),
-        });
-      });
-    },
-    [dispatch, onDebug],
   );
 
   const resolvePendingThreadForSession = useCallback(
@@ -2461,6 +2435,7 @@ export function useThreads({
                 thread.id,
                 items,
                 selectedEngine,
+                !isSharedV2SendEnabled(),
               ).catch((error) => {
                 onDebug?.({
                   id: `${Date.now()}-shared-session-sync-error`,
@@ -2910,7 +2885,9 @@ export function useThreads({
         payload: {
           message: string;
           willRetry: boolean;
+          suppressMessage?: boolean;
           engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | null;
+          executionTargetSnapshot?: TurnExecutionSnapshot;
         },
       ) => {
         handlers.onTurnError?.(workspaceId, threadId, turnId, payload);
@@ -3011,7 +2988,6 @@ export function useThreads({
     startLsp,
     startShare,
     getThreadKind,
-    updateSharedSessionEngineSelection,
     updateThreadParent,
     resolveCanonicalThreadId,
     reviewPrompt,

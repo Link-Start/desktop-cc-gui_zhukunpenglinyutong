@@ -56,4 +56,39 @@ describe("activeCanvasStore", () => {
     expect(listener).toHaveBeenCalledTimes(1);
     expect(store.getSnapshot().threadId).toBe("thread-2");
   });
+
+  it("does not notify Canvas for background binding-only updates", () => {
+    const items: ActiveCanvasSnapshot["items"] = [
+      { id: "m1", kind: "message", role: "assistant", text: "done" },
+    ];
+    const store = createActiveCanvasStore(
+      snapshotOf({
+        threadId: "shared:session-1",
+        items,
+      }),
+    );
+    const listener = vi.fn();
+
+    store.subscribeSelector(
+      (snapshot) => ({ threadId: snapshot.threadId, items: snapshot.items }),
+      listener,
+      shallowEqual,
+    );
+    store.setSnapshot(
+      snapshotOf({
+        threadId: "shared:session-1",
+        items,
+        threadStatusById: {
+          "shared:background": {
+            isProcessing: true,
+            hasUnread: false,
+            isReviewing: false,
+            processingStartedAt: 1,
+          },
+        },
+      }),
+    );
+
+    expect(listener).not.toHaveBeenCalled();
+  });
 });

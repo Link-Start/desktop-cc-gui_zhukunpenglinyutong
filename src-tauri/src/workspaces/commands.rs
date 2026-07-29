@@ -625,7 +625,11 @@ async fn cleanup_engine_sessions_for_workspace(
         .await;
     let kimi_cleanup_result = state.engine_manager.remove_kimi_session(workspace_id).await;
     let grok_cleanup_result = state.engine_manager.remove_grok_session(workspace_id).await;
-    match (gemini_cleanup_result, kimi_cleanup_result, grok_cleanup_result) {
+    match (
+        gemini_cleanup_result,
+        kimi_cleanup_result,
+        grok_cleanup_result,
+    ) {
         (Ok(()), Ok(()), Ok(())) => Ok(()),
         (gemini, kimi, grok) => {
             let mut errors = Vec::new();
@@ -1328,7 +1332,7 @@ pub(crate) async fn add_workspace(
 }
 
 /// Add workspace for a CLI-based engine (no persistent session needed).
-/// Supports Claude, Gemini and OpenCode engines.
+/// Supports Claude, Gemini, OpenCode, Kimi and Grok engines.
 async fn add_workspace_for_cli_engine(
     engine_type: EngineType,
     path: String,
@@ -1377,7 +1381,9 @@ async fn add_workspace_for_cli_engine(
                 let settings = state.app_settings.lock().await;
                 settings.opencode_bin.clone()
             };
-            detect_opencode_status(opencode_bin.as_deref()).await.installed
+            detect_opencode_status(opencode_bin.as_deref())
+                .await
+                .installed
         }
         EngineType::Kimi => {
             let kimi_bin = {

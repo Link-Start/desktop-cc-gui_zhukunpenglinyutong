@@ -922,9 +922,9 @@ pub(crate) async fn resolve_cli_version_status(
     let latest_version = if engine == CliInstallEngine::Grok {
         // Grok CLI is not on npm; there is no registry version probe.
         details = Some(match details {
-            Some(existing) => format!(
-                "{existing}; Grok CLI has no npm registry probe; latest version unknown."
-            ),
+            Some(existing) => {
+                format!("{existing}; Grok CLI has no npm registry probe; latest version unknown.")
+            }
             None => "Grok CLI has no npm registry probe; latest version unknown.".to_string(),
         });
         None
@@ -1032,8 +1032,7 @@ pub(crate) async fn build_cli_install_plan_with_backend(
             } else if cfg!(target_os = "windows") {
                 // PowerShell is expected on Windows; install script itself is official.
             } else if !Path::new("/bin/bash").exists() {
-                blockers
-                    .push("/bin/bash is required for the native installer.".to_string());
+                blockers.push("/bin/bash is required for the native installer.".to_string());
             } else if matches!(
                 action,
                 CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest
@@ -1502,9 +1501,11 @@ mod tests {
             command_preview_for(CliInstallEngine::Grok, CliInstallAction::UpdateLatest),
             grok_native_install_preview()
         );
-        assert!(command_preview_for(CliInstallEngine::Grok, CliInstallAction::Uninstall)
-            .join(" ")
-            .contains("uninstall is intentionally not supported"));
+        assert!(
+            command_preview_for(CliInstallEngine::Grok, CliInstallAction::Uninstall)
+                .join(" ")
+                .contains("uninstall is intentionally not supported")
+        );
         assert_eq!(
             command_preview_for(CliInstallEngine::OpenCode, CliInstallAction::InstallLatest),
             vec![
@@ -1523,9 +1524,11 @@ mod tests {
                 "opencode-ai@latest".to_string()
             ]
         );
-        assert!(command_preview_for(CliInstallEngine::OpenCode, CliInstallAction::Uninstall)
-            .join(" ")
-            .contains("uninstall is intentionally not supported"));
+        assert!(
+            command_preview_for(CliInstallEngine::OpenCode, CliInstallAction::Uninstall)
+                .join(" ")
+                .contains("uninstall is intentionally not supported")
+        );
     }
 
     #[test]
