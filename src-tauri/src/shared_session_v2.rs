@@ -393,6 +393,33 @@ mod execution_target_contract_tests {
     }
 
     #[test]
+    fn execution_target_validation_accepts_new_shared_cli_local_catalogs() {
+        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode] {
+            let catalog = crate::engine::status::get_local_engine_models_for_validation(engine)
+                .unwrap_or_else(|| panic!("missing local catalog for {engine:?}"));
+            let selected = catalog
+                .first()
+                .unwrap_or_else(|| panic!("empty local catalog for {engine:?}"));
+            let target = ExecutionTargetInput {
+                engine,
+                provider_profile_id: None,
+                model_catalog_entry_id: Some(selected.id.clone()),
+                model: Some(selected.model.clone()),
+                reasoning_effort: None,
+                provider_profile_name_snapshot: Some("本地配置".to_string()),
+                provider_profile_source: Some(CanonicalProviderProfileSource::Local),
+                runtime_capability_fingerprint: None,
+            };
+
+            assert_eq!(
+                validate_resolved_execution_target(&target)
+                    .unwrap_or_else(|error| panic!("{engine:?} local target rejected: {error}")),
+                engine
+            );
+        }
+    }
+
+    #[test]
     fn resolved_execution_target_rejects_legacy_partial_identity() {
         let partial = ExecutionTargetInput {
             engine: EngineType::Codex,

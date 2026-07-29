@@ -187,7 +187,10 @@ pub(crate) fn get_local_engine_models_for_validation(
             Some(dedupe_models_preserve_order(models))
         }
         EngineType::Codex => Some(get_codex_models()),
-        _ => None,
+        EngineType::Kimi => Some(get_kimi_models(get_kimi_home_dir().as_deref()).0),
+        EngineType::Grok => Some(get_grok_models(get_grok_home_dir().as_deref()).0),
+        EngineType::OpenCode => Some(public_models_for_engine(EngineType::OpenCode)),
+        EngineType::Gemini => None,
     }
 }
 
@@ -1798,6 +1801,35 @@ mod tests {
         )
         .expect_err("Shared target requires a catalog runtime match")
         .contains("runtime model 'custom/provider-model' is unavailable"));
+    }
+
+    #[test]
+    fn shared_local_validation_catalog_covers_all_supported_cli_engines() {
+        for engine in [
+            EngineType::Claude,
+            EngineType::Codex,
+            EngineType::Kimi,
+            EngineType::Grok,
+            EngineType::OpenCode,
+        ] {
+            let catalog = get_local_engine_models_for_validation(engine)
+                .unwrap_or_else(|| panic!("missing local validation catalog for {engine:?}"));
+            let selected = catalog
+                .first()
+                .unwrap_or_else(|| panic!("empty local validation catalog for {engine:?}"));
+
+            assert!(
+                validate_model_catalog_pair(
+                    Some(&selected.id),
+                    Some(&selected.model),
+                    &catalog,
+                    UnlistedRuntimeModelPolicy::Reject,
+                )
+                .is_ok(),
+                "{engine:?}"
+            );
+        }
+        assert!(get_local_engine_models_for_validation(EngineType::Gemini).is_none());
     }
 
     #[test]

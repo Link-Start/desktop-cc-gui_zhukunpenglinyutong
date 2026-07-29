@@ -1958,6 +1958,29 @@ mod tests {
     }
 
     #[test]
+    fn resolved_local_targets_validate_for_new_shared_cli_engines() {
+        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode] {
+            let catalog = crate::engine::status::get_local_engine_models_for_validation(engine)
+                .unwrap_or_else(|| panic!("missing local catalog for {engine:?}"));
+            let selected = catalog
+                .first()
+                .unwrap_or_else(|| panic!("empty local catalog for {engine:?}"));
+            let target = SharedSelectedTarget {
+                engine,
+                provider_profile_id: None,
+                model_catalog_entry_id: Some(selected.id.clone()),
+                model: Some(selected.model.clone()),
+                reasoning: None,
+                provider_profile_name_snapshot: Some("本地配置".to_string()),
+                provider_profile_source: Some("disk".to_string()),
+            };
+
+            validate_resolved_shared_selected_target(&target)
+                .unwrap_or_else(|error| panic!("{engine:?} local target rejected: {error}"));
+        }
+    }
+
+    #[test]
     fn normalizes_legacy_shared_meta_to_supported_engines_only() {
         let mut meta = SharedSessionMeta {
             schema_version: 1,

@@ -22,3 +22,20 @@ Profiles and Models using the same `engine + providerProfileId` scope used by Ru
 - **WHEN** one newly supported CLI Profile or Model request fails
 - **THEN** its binding MUST expose a scoped error
 - **AND** other CLI/Profile groups MUST remain usable
+
+### Requirement: Shared Validation MUST Have Catalog Authority For Every Supported CLI
+
+Shared create、selection persistence、V2 turn revalidation and projection availability MUST use
+the same supported CLI matrix and MUST fail closed when the selected catalog authority is absent.
+
+#### Scenario: canonical local target reaches Shared creation
+
+- **WHEN** a resolved Kimi、Grok or OpenCode local Target reaches the Rust Shared boundary
+- **THEN** backend MUST load that CLI's local validation catalog
+- **AND** MUST validate `modelCatalogEntryId + runtime model` before creating or persisting the Session
+
+#### Scenario: managed provider is missing
+
+- **WHEN** a projection snapshot references a missing managed Provider under any supported CLI
+- **THEN** `providerAvailable` MUST be `false`
+- **AND** an absent catalog MUST NOT be interpreted as an available Provider

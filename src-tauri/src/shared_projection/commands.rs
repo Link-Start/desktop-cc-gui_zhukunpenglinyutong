@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use tauri::State;
 
 use crate::engine::EngineType;
-use crate::shared_sessions::shared_session_projection_source;
+use crate::shared_sessions::{
+    ensure_supported_shared_session_engine, shared_session_projection_source,
+};
 use crate::state::AppState;
 
 use super::{
@@ -35,6 +37,50 @@ async fn projection_context(
     Ok((writer, session_id, legacy_log_path))
 }
 
+fn projection_engine(snapshot: &serde_json::Map<String, serde_json::Value>) -> Option<EngineType> {
+    let engine = serde_json::from_value::<EngineType>(
+        snapshot.get("engine")?.as_str()?.trim().to_string().into(),
+    )
+    .ok()?;
+    ensure_supported_shared_session_engine(engine).ok()
+}
+
+fn is_legacy_local_provider(engine: EngineType, provider_profile_id: &str) -> bool {
+    match engine {
+        EngineType::Claude => {
+            provider_profile_id
+                == crate::engine::claude::provider_profile::CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+        }
+        EngineType::Codex => {
+            provider_profile_id == crate::codex::provider_profile::CODEX_DISK_PROVIDER_PROFILE_ID
+        }
+        EngineType::Kimi => {
+            provider_profile_id
+                == crate::engine::kimi_provider_profile::KIMI_LOCAL_PROVIDER_PROFILE_ID
+        }
+        EngineType::Grok => {
+            provider_profile_id
+                == crate::engine::grok_provider_profile::GROK_LOCAL_PROVIDER_PROFILE_ID
+        }
+        EngineType::OpenCode => {
+            provider_profile_id
+                == crate::engine::opencode_provider_profile::OPENCODE_LOCAL_PROVIDER_PROFILE_ID
+        }
+        EngineType::Gemini => false,
+    }
+}
+
+fn provider_catalog_is_available(engine: EngineType, provider_profile_id: &str) -> bool {
+    is_legacy_local_provider(engine, provider_profile_id)
+        || matches!(
+            crate::engine::status::get_provider_scoped_engine_models(
+                engine,
+                Some(provider_profile_id),
+            ),
+            Ok(Some(_))
+        )
+}
+
 fn enrich_provider_availability(items: &mut [ProjectionItem]) {
     let mut availability_by_target = HashMap::<(EngineType, String), bool>::new();
     for item in items {
@@ -54,21 +100,13 @@ fn enrich_provider_availability(items: &mut [ProjectionItem]) {
             snapshot.insert("providerAvailable".to_string(), true.into());
             continue;
         };
-        let engine = match snapshot.get("engine").and_then(serde_json::Value::as_str) {
-            Some("claude") => EngineType::Claude,
-            Some("codex") => EngineType::Codex,
-            _ => continue,
+        let Some(engine) = projection_engine(snapshot) else {
+            continue;
         };
-        let local_provider = matches!(provider_profile_id, "__disk__" | "__local_settings_json__");
         let target_key = (engine, provider_profile_id.to_string());
-        let available = *availability_by_target.entry(target_key).or_insert_with(|| {
-            local_provider
-                || crate::engine::status::get_provider_scoped_engine_models(
-                    engine,
-                    Some(provider_profile_id),
-                )
-                .is_ok()
-        });
+        let available = *availability_by_target
+            .entry(target_key)
+            .or_insert_with(|| provider_catalog_is_available(engine, provider_profile_id));
         snapshot.insert("providerAvailable".to_string(), available.into());
     }
 }
@@ -140,4 +178,42 @@ pub(crate) async fn compare_shared_projection(
     .await
     .map_err(|error| format!("Shared projection compare task failed: {error}"))?
     .map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn projection_engine_covers_shared_cli_matrix_and_rejects_gemini() {
+        for engine in ["claude", "codex", "kimi", "grok", "opencode"] {
+            let snapshot = serde_json::json!({ "engine": engine })
+                .as_object()
+                .expect("snapshot object")
+                .clone();
+            assert!(projection_engine(&snapshot).is_some(), "{engine}");
+        }
+
+        let snapshot = serde_json::json!({ "engine": "gemini" })
+            .as_object()
+            .expect("snapshot object")
+            .clone();
+        assert!(projection_engine(&snapshot).is_none());
+    }
+
+    #[test]
+    fn missing_managed_provider_catalog_is_unavailable_for_shared_cli_matrix() {
+        for engine in [
+            EngineType::Claude,
+            EngineType::Codex,
+            EngineType::Kimi,
+            EngineType::Grok,
+            EngineType::OpenCode,
+        ] {
+            assert!(
+                !provider_catalog_is_available(engine, "__missing-shared-provider__"),
+                "{engine:?}"
+            );
+        }
+    }
 }

@@ -23,3 +23,9 @@ provenance contract.
 - **WHEN** a Kimi、Grok or OpenCode local Profile is selected
 - **THEN** mutable selection MUST use `providerProfileId=null + providerProfileSource=disk`
 - **AND** the frozen canonical snapshot MUST use `providerProfileSource=local`
+
+#### Scenario: local target is revalidated across Shared boundaries
+
+- **WHEN** Kimi、Grok or OpenCode local Target is used to create a Shared Session or begin a V2 turn
+- **THEN** both boundaries MUST resolve a non-empty local Model catalog for the selected CLI
+- **AND** the same strict catalog pair validation MUST run before durable state changes

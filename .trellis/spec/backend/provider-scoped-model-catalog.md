@@ -4,7 +4,7 @@
 
 ### 1. Scope / Trigger
 
-- Trigger：修改 Claude Code、Codex 或 Kimi CLI 的新会话 provider binding、模型菜单、`get_engine_models`、provider config resolver 或 Desktop/daemon bridge。
+- Trigger：修改 Claude Code、Codex、Kimi、Grok 或 OpenCode CLI 的新会话 provider binding、模型菜单、`get_engine_models`、provider config resolver、Shared Session target validation 或 Desktop/daemon bridge。
 - 目标：已绑定 provider 的 thread 只能读取该 provider 配置模型，并追加 public models；禁止回退到其他 provider 或 global managed config。
 
 ### 2. Signatures
@@ -34,6 +34,12 @@ pub(crate) fn get_provider_scoped_engine_models(
     engine_type: EngineType,
     provider_profile_id: Option<&str>,
 ) -> Result<Option<Vec<ModelInfo>>, String>
+```
+
+```rust
+pub(crate) fn get_local_engine_models_for_validation(
+    engine_type: EngineType,
+) -> Option<Vec<ModelInfo>>
 ```
 
 Response origin field：
@@ -85,6 +91,19 @@ type EngineModelInfo = {
 - 切换 Target 后当前 Model label 必须从目标 Provider catalog 解析，禁止继续消费旧
   Engine 的 `models` prop。
 - missing/invalid managed provider 必须返回可诊断 error；禁止静默回退 global catalog。
+- Shared supported Engine allowlist、local validation catalog、managed provider catalog、
+  create/persistence validation、V2 turn revalidation 与 Projection availability 是一个
+  capability propagation matrix。新增 Shared CLI 时 MUST 同批核对所有入口；只让
+  Picker 可见不等于 Runtime 已接入。
+- Kimi/Grok/OpenCode canonical local Target 必须通过
+  `get_local_engine_models_for_validation` 读取对应 CLI authority：Kimi/Grok 使用当前
+  local config + generated fallback，OpenCode 使用 generated public catalog 基线。
+  Shared create 与 V2 turn MUST 继续执行 strict
+  `modelCatalogEntryId + runtime model` pair validation，禁止用 shape-only passthrough
+  掩盖缺失 catalog。
+- Shared Projection 对五种 supported CLI 必须使用同一 Engine allowlist。managed
+  provider lookup 的 `Ok(None)` 表示 catalog authority 不存在，`providerAvailable`
+  MUST 为 `false`；禁止把“查询过程没有报错”误判为“Provider 可用”。
 - Codex managed provider 的 create-session/model-omitted send fallback 必须读取同一 profile 的 top-level `configToml.model`；仅 disk profile 可读取 workspace/default model。
 - Codex provider name 只是 display metadata；名称为 `Kimi` 不得改变 `engine=codex` routing。
 - Provider catalog 的显式动作必须分离：`Reload Config` 重新读取持久化配置，
@@ -126,7 +145,7 @@ type EngineModelInfo = {
 
 | 输入/状态 | 结果 | 禁止行为 |
 |---|---|---|
-| `providerProfileId` omitted | legacy global/local catalog | 擅自清空已有模型 |
+| `providerProfileId` omitted | 对应 CLI local validation catalog | supported CLI 返回 `None` 或绕过 strict pair validation |
 | local/disk sentinel | CLI 本地配置模型 | 当作 managed provider 查询 |
 | valid managed provider | provider models + public models，整体去重 | 混入其他 provider models |
 | provider model 与 public model 同 runtime id | provider row 保留一次 | public row 覆盖 provider label/origin |
@@ -147,6 +166,8 @@ type EngineModelInfo = {
 | Codex Discover Models | 当前 Provider session 执行 `model/list` 并更新模型框 | 使用 global/default session |
 | runtime 无 CLI discovery protocol | 不显示 Discover Models | 解析 `--help` 或请求 HTTP |
 | refresh/discovery rejected | 保留 last-good catalog 与 selection，显示 scoped error | 清空模型框或静默成功 |
+| Shared local Kimi/Grok/OpenCode target | create、persistence、V2 turn 使用对应 local catalog 严格校验 | Picker 可选但 Rust 返回 catalog unavailable |
+| Shared projection managed provider lookup 返回 `Ok(None)` | `providerAvailable=false` | 仅用 `.is_ok()` 判定为可用 |
 
 ### 5. Good/Base/Bad Cases
 
@@ -154,15 +175,23 @@ type EngineModelInfo = {
 - Base：legacy thread 无 provider binding，继续使用既有 engine-global catalog。
 - Bad：只在创建会话时保存 provider binding，但模型刷新仍调用 `getEngineModels(engineType)`。
 - Bad：provider lookup 失败后使用 `engineStatuses.models`，导致菜单泄漏默认配置模型。
+- Bad：只扩展 Shared Engine allowlist 与前端 Picker，遗漏 local validation catalog 或
+  Projection Engine mapping。
 
 ### 6. Tests Required
 
 - `src/services/tauri.test.ts`：断言 camelCase payload 映射、trim 与 blank omission。
 - `src/features/engine/hooks/useEngineController.test.tsx`：断言 scope key、origin metadata、provider A/B stale response guard。
-- `src/app-shell-parts/useProviderModelCatalogSync.test.tsx`：断言 Claude/Codex/Kimi thread binding 触发 scoped refresh。
+- `src/app-shell-parts/useProviderModelCatalogSync.test.tsx`：断言 Claude/Codex/Kimi/Grok/OpenCode thread binding 触发 scoped refresh。
 - `src/app-shell-parts/useAppShellComposerModelSection.test.tsx`：断言绑定 Codex provider 后不消费 global model list。
 - `src/features/composer/components/ChatInputBox/modelOptions.test.ts`：断言 provider models + public models、过滤其他 provider、runtime id 去重。
-- Rust `engine::status::tests`：分别覆盖 Claude/Codex/Kimi provider 优先、public 追加与去重。
+- Rust `engine::status::tests`：分别覆盖五 CLI local validation catalog，以及
+  Claude/Codex/Kimi/Grok/OpenCode provider 优先、public 追加与去重。
+- Rust `shared_sessions::tests` + `shared_session_v2::execution_target_contract_tests`：
+  覆盖 Kimi/Grok/OpenCode canonical local target 在 create/persistence 与 V2 turn
+  boundary 均通过同一 strict catalog pair validation。
+- Rust `shared_projection::commands::tests`：覆盖五 CLI Engine mapping，并断言 missing
+  managed provider 的 `Ok(None)` 不得投影为 available。
 - `ModelSelect.test.tsx` + Native continuation Rust tests：覆盖 `id != model`、backend
   UI-only id fail closed 与 custom runtime passthrough。
 - `useProviderTargetCatalogOwners.test.tsx`：覆盖 Native/Atomic owner input isolation、

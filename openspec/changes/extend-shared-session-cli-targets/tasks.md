@@ -27,3 +27,9 @@
 
 - [x] 5.1 [P0，依赖：1.3] 输入：Grok/OpenCode local Provider Model 点击；输出：local sentinel 在 Atomic 双栏 Target 中归一为 `providerProfileId=null + source=disk`，完整 Target 可跨过 resolved gate；验证：`ModelSelect.test.tsx` focused Vitest。
 - [x] 5.2 [P0，依赖：5.1] 运行 targeted ESLint、`tsc --noEmit`、`check:runtime-contracts`、OpenSpec strict validation 与 `git diff --check`；不运行全量 test。
+
+## 6. Shared 创建链路 Catalog 补全
+
+- [x] 6.1 [P0，依赖：2.1] 输入：Kimi/Grok/OpenCode canonical local Target；输出：Shared create、selected target persistence 与 V2 turn revalidation 使用对应 CLI 的本地权威 Model catalog，不再只覆盖 Claude/Codex；验证：`engine::status`、`shared_sessions`、`shared_session_v2` focused Rust tests。
+- [x] 6.2 [P0，依赖：6.1] 输入：五 CLI execution target snapshot；输出：Shared projection 对 Claude/Codex/Kimi/Grok/OpenCode 统一计算 managed Provider availability，missing catalog fail closed；验证：`shared_projection::commands` focused Rust tests。
+- [x] 6.3 [P0，依赖：6.1,6.2] 将 capability propagation checklist 写入 Provider-scoped Model Catalog contract，同步 OpenSpec spec，运行 focused Rust tests、OpenSpec strict validation 与 `git diff --check`；不运行全量 test。
