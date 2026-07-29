@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1231
+- **Total Sessions**: 1232
 - **Last Active**: 2026-07-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~1192 | Active |
+| `journal-29.md` | ~1225 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1232 | 2026-07-30 | 合并 v0.7.12 上游分支 | `21b5c4b99` | `bump-version-0.7.12` |
 | 1231 | 2026-07-30 | 同步并归档 Shared 连续性 OpenSpec | `8de5f121d` | `bump-version-0.7.12` |
 | 1230 | 2026-07-30 | 恢复 Shared Queue/Fusion 与 Compaction 连续性 | `67da2905e`, `aec470983` | `bump-version-0.7.12` |
 | 1229 | 2026-07-30 | 修复 Shared Session 终态偶发复燃 | `80b764a74` | `bump-version-0.7.12` |

@@ -1190,3 +1190,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1232: 合并 v0.7.12 上游分支
+
+**Date**: 2026-07-30
+**Task**: 合并 v0.7.12 上游分支
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+将 upstream/chore/bump-version-0.7.12 语义合并到 bump-version-0.7.12；保留 Shared continuity 能力并引入 Shortcuts、Settings 与 Baidu Analytics。目标 Vitest 110 passed，TypeScript、runtime contracts、large-file sentry、diff gate 通过；ESLint 0 errors。未 push，未纳入并发创建的 OpenSpec change。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `21b5c4b99` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
