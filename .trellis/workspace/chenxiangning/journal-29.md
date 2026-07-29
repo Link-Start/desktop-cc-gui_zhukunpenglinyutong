@@ -957,3 +957,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1225: 补全 Shared CLI 创建与运行时修复设计
+
+**Date**: 2026-07-30
+**Task**: 补全 Shared CLI 创建与运行时修复设计
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+新增 repair-shared-cli-creation-runtime-contracts OpenSpec 与设计文档，确定 Shared CLI 二级选择、OpenCode runtime catalog authority、Kimi/Grok canonical Runtime key 修复方案；OpenSpec strict validation 通过，尚未实施产品代码，按用户要求后续仅跑增量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `62e7f668b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
