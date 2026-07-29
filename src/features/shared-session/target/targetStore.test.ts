@@ -141,20 +141,26 @@ describe("freezeTurnSnapshot", () => {
 });
 
 describe("resolved Execution Target contract", () => {
-  it("accepts explicit managed and local identities", () => {
+  it.each(["codex", "kimi", "grok", "opencode"] as const)(
+    "accepts explicit managed %s identity",
+    (engine) => {
+      expect(
+        isResolvedExecutionTarget({
+          engine,
+          providerProfileId: "provider-a",
+          modelCatalogEntryId: "catalog-a",
+          model: "runtime-a",
+          providerProfileNameSnapshot: "Provider A",
+          providerProfileSource: "managed",
+        }),
+      ).toBe(true);
+    },
+  );
+
+  it("accepts explicit local identity", () => {
     expect(
       isResolvedExecutionTarget({
-        engine: "codex",
-        providerProfileId: "provider-a",
-        modelCatalogEntryId: "catalog-a",
-        model: "runtime-a",
-        providerProfileNameSnapshot: "Provider A",
-        providerProfileSource: "managed",
-      }),
-    ).toBe(true);
-    expect(
-      isResolvedExecutionTarget({
-        engine: "claude",
+        engine: "opencode",
         providerProfileId: null,
         modelCatalogEntryId: "catalog-local",
         model: "runtime-local",
@@ -162,6 +168,19 @@ describe("resolved Execution Target contract", () => {
         providerProfileSource: "disk",
       }),
     ).toBe(true);
+  });
+
+  it("rejects unsupported Gemini targets", () => {
+    expect(
+      isResolvedExecutionTarget({
+        engine: "gemini",
+        providerProfileId: null,
+        modelCatalogEntryId: "catalog-local",
+        model: "runtime-local",
+        providerProfileNameSnapshot: "本地配置",
+        providerProfileSource: "disk",
+      }),
+    ).toBe(false);
   });
 
   it("keeps legacy partial metadata non-executable instead of guessing local", () => {

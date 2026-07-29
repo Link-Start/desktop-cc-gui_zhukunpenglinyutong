@@ -2007,7 +2007,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     expect(latest.selectedModel).toBe('');
   });
 
-  it('disables gemini and opencode provider options inside shared sessions', async () => {
+  it('enables the five supported provider options inside shared sessions', async () => {
     renderAdapter({
       isSharedSession: true,
       engines: [
@@ -2015,6 +2015,8 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
         { type: 'codex', installed: true, version: '1.0.0' },
         { type: 'gemini', installed: true, version: '1.0.0' },
         { type: 'opencode', installed: true, version: '1.0.0' },
+        { type: 'kimi', installed: true, version: '1.0.0' },
+        { type: 'grok', installed: true, version: '1.0.0' },
       ],
     });
 
@@ -2028,7 +2030,9 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
       claude: true,
       codex: true,
       gemini: false,
-      opencode: false,
+      opencode: true,
+      kimi: true,
+      grok: true,
     });
   });
 

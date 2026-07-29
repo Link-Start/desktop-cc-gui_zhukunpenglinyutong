@@ -4,7 +4,7 @@ export type SharedRuntimeControlOwner = {
   sharedThreadId: string;
   nativeThreadId: string;
   runtimeTurnId: string;
-  engine: "claude" | "codex";
+  engine: "claude" | "codex" | "kimi" | "grok" | "opencode";
   providerProfileId: string | null;
 };
 

@@ -1,6 +1,10 @@
-import type { SharedSessionSupportedEngine } from "../utils/sharedSessionEngines";
+import {
+  isSharedSessionSupportedEngine,
+  type SharedSessionSupportedEngine,
+} from "../utils/sharedSessionEngines";
 import type { TurnExecutionSnapshot } from "../target/types";
 import type { SharedRuntimeControlOwner } from "../../../types/interaction";
+import type { EngineType } from "../../../types";
 
 export type SharedSessionNativeBinding = {
   workspaceId: string;
@@ -85,7 +89,7 @@ function isPendingSharedNativeThreadId(
   if (engine === "claude") {
     return nativeThreadId.startsWith("claude-pending-shared-");
   }
-  return nativeThreadId.startsWith("codex-pending-shared-");
+  return nativeThreadId.startsWith(`${engine}-pending-shared-`);
 }
 
 export function resolveSharedSessionBindingByNativeThread(
@@ -118,11 +122,11 @@ export function resolveSharedSessionBindingFromRuntimeOwner(
       params.native_thread_id ??
       "",
   ).trim();
-  const engine = String(rawOwner.engine ?? "").trim().toLowerCase();
+  const engine = String(rawOwner.engine ?? "").trim().toLowerCase() as EngineType;
   if (
     !sharedThreadId.startsWith("shared:") ||
     !nativeThreadId ||
-    (engine !== "claude" && engine !== "codex")
+    !isSharedSessionSupportedEngine(engine)
   ) {
     return null;
   }

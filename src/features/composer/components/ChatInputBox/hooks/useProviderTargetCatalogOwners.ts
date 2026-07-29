@@ -5,7 +5,9 @@ import {
   getClaudeProviders,
   getCodexProviders,
   getEngineModels,
+  getGrokProviders,
   getKimiProviders,
+  getOpenCodeProviders,
 } from "../../../../../services/tauri";
 import type { EngineType } from "../../../../../types";
 import {
@@ -13,8 +15,12 @@ import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
   CODEX_DISK_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_NAME,
+  GROK_LOCAL_PROVIDER_PROFILE_ID,
+  GROK_LOCAL_PROVIDER_PROFILE_NAME,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_NAME,
+  OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  OPENCODE_LOCAL_PROVIDER_PROFILE_NAME,
   type EngineProviderProfileOption,
 } from "../../../../threads/constants/codexProviderProfiles";
 import type { ModelInfo, ProviderId } from "../types";
@@ -43,7 +49,10 @@ export type ProviderTargetGroup = {
 };
 
 type ProfileCatalog = Partial<
-  Record<"claude" | "codex" | "kimi", EngineProviderProfileOption[]>
+  Record<
+    "claude" | "codex" | "kimi" | "grok" | "opencode",
+    EngineProviderProfileOption[]
+  >
 >;
 
 const DEFAULT_PROFILES: ProfileCatalog = {
@@ -65,6 +74,20 @@ const DEFAULT_PROFILES: ProfileCatalog = {
     {
       id: KIMI_LOCAL_PROVIDER_PROFILE_ID,
       name: KIMI_LOCAL_PROVIDER_PROFILE_NAME,
+      source: "disk",
+    },
+  ],
+  grok: [
+    {
+      id: GROK_LOCAL_PROVIDER_PROFILE_ID,
+      name: GROK_LOCAL_PROVIDER_PROFILE_NAME,
+      source: "disk",
+    },
+  ],
+  opencode: [
+    {
+      id: OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+      name: OPENCODE_LOCAL_PROVIDER_PROFILE_NAME,
       source: "disk",
     },
   ],
@@ -100,7 +123,7 @@ type NativeProviderTargetCatalogOptions =
   };
 
 function isCurrentProviderProfile(
-  engine: "claude" | "codex" | "kimi",
+  engine: "claude" | "codex" | "kimi" | "grok" | "opencode",
   profileId: string,
   currentProviderProfileId: string | null | undefined,
 ): boolean {
@@ -114,7 +137,7 @@ function isCurrentProviderProfile(
 }
 
 function normalizeProfiles(
-  engine: "claude" | "codex" | "kimi",
+  engine: "claude" | "codex" | "kimi" | "grok" | "opencode",
   providers: Array<{
     id: string;
     name: string;
@@ -153,12 +176,16 @@ async function loadProfileCatalog(): Promise<ProfileCatalog> {
       getClaudeProviders(),
       getCodexProviders(),
       getKimiProviders(),
+      getGrokProviders(),
+      getOpenCodeProviders(),
     ])
-      .then(([claude, codex, kimi]) => {
+      .then(([claude, codex, kimi, grok, opencode]) => {
         if (
           claude.status === "rejected" &&
           codex.status === "rejected" &&
-          kimi.status === "rejected"
+          kimi.status === "rejected" &&
+          grok.status === "rejected" &&
+          opencode.status === "rejected"
         ) {
           throw claude.reason;
         }
@@ -175,6 +202,14 @@ async function loadProfileCatalog(): Promise<ProfileCatalog> {
             kimi.status === "fulfilled"
               ? normalizeProfiles("kimi", kimi.value)
               : DEFAULT_PROFILES.kimi,
+          grok:
+            grok.status === "fulfilled"
+              ? normalizeProfiles("grok", grok.value)
+              : DEFAULT_PROFILES.grok,
+          opencode:
+            opencode.status === "fulfilled"
+              ? normalizeProfiles("opencode", opencode.value)
+              : DEFAULT_PROFILES.opencode,
         };
         return profileCatalogCache;
       })
@@ -200,6 +235,10 @@ function isLocalProviderProfile(
       return providerProfileId === CODEX_DISK_PROVIDER_PROFILE_ID;
     case "kimi":
       return providerProfileId === KIMI_LOCAL_PROVIDER_PROFILE_ID;
+    case "grok":
+      return providerProfileId === GROK_LOCAL_PROVIDER_PROFILE_ID;
+    case "opencode":
+      return providerProfileId === OPENCODE_LOCAL_PROVIDER_PROFILE_ID;
     default:
       return false;
   }
@@ -375,7 +414,10 @@ function useProviderTargetCatalogOwner({
 
   const ensureModels = useCallback(
     async (engine: EngineType, providerProfileId: string) => {
-      if (!enabled || (engine !== "claude" && engine !== "codex")) {
+      if (
+        !enabled ||
+        !["claude", "codex", "kimi", "grok", "opencode"].includes(engine)
+      ) {
         return;
       }
       const key = modelCatalogKey(engine, providerProfileId);
@@ -525,23 +567,27 @@ function useProviderTargetCatalogOwner({
     if (!enabled) {
       return [];
     }
-    const supportedEngines: Array<"claude" | "codex" | "kimi"> = [
-      "claude", "codex", "kimi",
+    const atomicSupportedEngines: Array<
+      "claude" | "codex" | "grok" | "kimi" | "opencode"
+    > = ["claude", "codex", "grok", "kimi", "opencode"];
+    const nativeSupportedEngines: Array<"claude" | "codex" | "kimi"> = [
+      "claude",
+      "codex",
+      "kimi",
     ];
     const engines =
-      mode === "native" && supportedEngines.includes(
-        currentProvider as "claude" | "codex" | "kimi",
-      )
-        ? [currentProvider as "claude" | "codex" | "kimi"]
-        : supportedEngines;
+      mode === "native"
+        ? nativeSupportedEngines.includes(
+            currentProvider as "claude" | "codex" | "kimi",
+          )
+          ? [currentProvider as "claude" | "codex" | "kimi"]
+          : nativeSupportedEngines
+        : atomicSupportedEngines;
     return engines.map((engine) => ({
       providerId: engine,
       providerLabel: resolveProviderLabel(engine),
-      enabled: mode === "native" || engine !== "kimi",
-      disabledReason:
-        mode === "shared" && engine === "kimi"
-          ? kimiDisabledReason
-          : undefined,
+      enabled: true,
+      disabledReason: undefined,
       profiles: (profiles[engine] ?? []).map((profile) => {
         const key = modelCatalogKey(engine, profile.id);
         const isCurrentBinding =
@@ -572,9 +618,10 @@ function useProviderTargetCatalogOwner({
           id: profile.id,
           label: profile.name,
           source: profile.source,
-          enabled: engine !== "kimi" || isCurrentBinding,
+          enabled:
+            mode !== "native" || engine !== "kimi" || isCurrentBinding,
           disabledReason:
-            engine === "kimi" && !isCurrentBinding
+            mode === "native" && engine === "kimi" && !isCurrentBinding
               ? kimiDisabledReason
               : undefined,
           models:

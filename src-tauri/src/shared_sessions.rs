@@ -30,7 +30,14 @@ fn codex_turn_developer_instructions(settings: &crate::types::AppSettings) -> Op
 }
 
 fn is_supported_shared_session_engine(engine: EngineType) -> bool {
-    matches!(engine, EngineType::Claude | EngineType::Codex)
+    matches!(
+        engine,
+        EngineType::Claude
+            | EngineType::Codex
+            | EngineType::Kimi
+            | EngineType::Grok
+            | EngineType::OpenCode
+    )
 }
 
 fn normalize_shared_session_engine(engine: EngineType) -> EngineType {
@@ -466,11 +473,11 @@ fn is_pending_shared_binding_thread_id(engine: EngineType, thread_id: &str) -> b
     }
     match engine {
         EngineType::Claude => normalized.starts_with("claude-pending-shared-"),
-        // Codex native thread IDs are often UUID-shaped strings. Treat only explicit
-        // shared placeholders as pending; otherwise every send would create a new
-        // native Codex thread and lose shared-context continuity.
         EngineType::Codex => normalized.starts_with("codex-pending-shared-"),
-        EngineType::Gemini | EngineType::OpenCode | EngineType::Grok | EngineType::Kimi => false,
+        EngineType::Kimi => normalized.starts_with("kimi-pending-shared-"),
+        EngineType::Grok => normalized.starts_with("grok-pending-shared-"),
+        EngineType::OpenCode => normalized.starts_with("opencode-pending-shared-"),
+        EngineType::Gemini => false,
     }
 }
 
@@ -480,9 +487,9 @@ fn binding_uses_established_native_thread(engine: EngineType, thread_id: &str) -
         return false;
     }
     match engine {
-        EngineType::Codex => true,
         EngineType::Claude => normalized.contains(':'),
-        EngineType::Gemini | EngineType::OpenCode | EngineType::Grok | EngineType::Kimi => false,
+        EngineType::Codex | EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => true,
+        EngineType::Gemini => false,
     }
 }
 
@@ -490,9 +497,10 @@ pub(crate) fn engine_binding_thread_id(engine: EngineType, seed: &str) -> String
     match engine {
         EngineType::Claude => format!("claude-pending-shared-{seed}"),
         EngineType::Codex => format!("codex-pending-shared-{seed}"),
-        EngineType::Gemini | EngineType::OpenCode | EngineType::Grok | EngineType::Kimi => {
-            format!("claude-pending-shared-{seed}")
-        }
+        EngineType::Kimi => format!("kimi-pending-shared-{seed}"),
+        EngineType::Grok => format!("grok-pending-shared-{seed}"),
+        EngineType::OpenCode => format!("opencode-pending-shared-{seed}"),
+        EngineType::Gemini => format!("gemini-pending-shared-{seed}"),
     }
 }
 
@@ -1893,14 +1901,18 @@ mod tests {
 
     #[test]
     fn detects_pending_shared_binding_ids() {
-        assert!(is_pending_shared_binding_thread_id(
+        for engine in [
             EngineType::Claude,
-            "claude-pending-shared-1"
-        ));
-        assert!(is_pending_shared_binding_thread_id(
             EngineType::Codex,
-            "codex-pending-shared-1"
-        ));
+            EngineType::Kimi,
+            EngineType::Grok,
+            EngineType::OpenCode,
+        ] {
+            assert!(is_pending_shared_binding_thread_id(
+                engine,
+                &format!("{}-pending-shared-1", engine.icon()),
+            ));
+        }
         assert!(!is_pending_shared_binding_thread_id(
             EngineType::Codex,
             "550e8400-e29b-41d4-a716-446655440000"
@@ -1933,6 +1945,16 @@ mod tests {
             EngineType::Codex,
             "codex-native-thread-1"
         ));
+        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode] {
+            assert!(!binding_uses_established_native_thread(
+                engine,
+                &format!("{}-pending-shared-1", engine.icon()),
+            ));
+            assert!(binding_uses_established_native_thread(
+                engine,
+                &format!("native-{}-session", engine.icon()),
+            ));
+        }
     }
 
     #[test]

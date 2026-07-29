@@ -405,6 +405,17 @@ impl EngineManager {
             .map(|entry| entry.session.clone())
     }
 
+    pub async fn get_opencode_session_for_runtime(
+        &self,
+        runtime_key: &str,
+    ) -> Option<Arc<OpenCodeSession>> {
+        self.opencode_sessions
+            .lock()
+            .await
+            .get(runtime_key)
+            .map(|entry| entry.session.clone())
+    }
+
     /// Snapshot all OpenCode sessions owned by a workspace.
     pub async fn get_opencode_sessions(&self, workspace_id: &str) -> Vec<Arc<OpenCodeSession>> {
         let sessions = self.opencode_sessions.lock().await;
@@ -671,6 +682,17 @@ impl EngineManager {
             .map(|entry| entry.session.clone())
     }
 
+    pub async fn get_kimi_session_for_runtime(
+        &self,
+        runtime_key: &str,
+    ) -> Option<Arc<KimiSession>> {
+        self.kimi_sessions
+            .lock()
+            .await
+            .get(runtime_key)
+            .map(|entry| entry.session.clone())
+    }
+
     /// Snapshot all Kimi sessions owned by a workspace.
     pub async fn get_kimi_sessions(&self, workspace_id: &str) -> Vec<Arc<KimiSession>> {
         let sessions = self.kimi_sessions.lock().await;
@@ -832,6 +854,17 @@ impl EngineManager {
         sessions
             .values()
             .find(|entry| entry.workspace_id == workspace_id)
+            .map(|entry| entry.session.clone())
+    }
+
+    pub async fn get_grok_session_for_runtime(
+        &self,
+        runtime_key: &str,
+    ) -> Option<Arc<GrokSession>> {
+        self.grok_sessions
+            .lock()
+            .await
+            .get(runtime_key)
             .map(|entry| entry.session.clone())
     }
 

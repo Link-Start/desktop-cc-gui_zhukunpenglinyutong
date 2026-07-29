@@ -5,7 +5,8 @@ use super::claude_forwarder::{
 };
 use super::{
     build_claude_dispatch_receipt, build_engine_active_process_diagnostics,
-    build_provider_prefill_query, collect_stale_child_candidates, delete_opencode_session_files,
+    build_provider_engine_dispatch_receipt, build_provider_prefill_query,
+    collect_stale_child_candidates, delete_opencode_session_files,
     delete_opencode_session_from_datastore, ensure_engine_enabled, extract_turn_result_text,
     is_likely_foreign_model_for_gemini, is_likely_legacy_claude_model_id,
     is_valid_claude_model_for_passthrough, merge_opencode_agents, next_gemini_routed_item_id,
@@ -76,6 +77,40 @@ fn claude_dispatch_receipt_preserves_managed_provider_identity() {
         "claude::workspace-managed::provider-anthropic"
     );
     assert!(receipt["reasoningEffort"].is_null());
+}
+
+#[test]
+fn provider_engine_dispatch_receipt_normalizes_local_sentinels() {
+    for (engine, local_profile_id) in [
+        (
+            crate::engine::EngineType::Kimi,
+            crate::engine::kimi_provider_profile::KIMI_LOCAL_PROVIDER_PROFILE_ID,
+        ),
+        (
+            crate::engine::EngineType::Grok,
+            crate::engine::grok_provider_profile::GROK_LOCAL_PROVIDER_PROFILE_ID,
+        ),
+        (
+            crate::engine::EngineType::OpenCode,
+            crate::engine::opencode_provider_profile::OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+        ),
+    ] {
+        let runtime_key = format!("{}::workspace-local::{local_profile_id}", engine.icon());
+        let receipt = build_provider_engine_dispatch_receipt(
+            engine,
+            Some(local_profile_id),
+            &runtime_key,
+            Some("runtime-model"),
+            Some("high"),
+        );
+
+        assert_eq!(receipt["engine"], engine.icon());
+        assert!(receipt["providerProfileId"].is_null());
+        assert_eq!(receipt["providerProfileSource"], "local");
+        assert_eq!(receipt["providerRuntimeKey"], runtime_key);
+        assert_eq!(receipt["model"], "runtime-model");
+        assert_eq!(receipt["reasoningEffort"], "high");
+    }
 }
 
 #[test]

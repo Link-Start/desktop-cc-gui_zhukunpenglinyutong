@@ -7,7 +7,10 @@
  */
 
 import type { EngineType } from "../../../types/engine";
-import type { SharedSessionSupportedEngine } from "../utils/sharedSessionEngines";
+import {
+  isSharedSessionSupportedEngine,
+  type SharedSessionSupportedEngine,
+} from "../utils/sharedSessionEngines";
 import {
   LOCAL_PROVIDER_LABEL,
   LOCAL_PROVIDER_SOURCE,
@@ -79,8 +82,10 @@ export function normalizePersistedExecutionTarget(
     return null;
   }
   const target = value as Record<string, unknown>;
-  const engine = optionalTrimmedString(target.engine)?.toLowerCase();
-  if (engine !== "claude" && engine !== "codex") {
+  const engine = optionalTrimmedString(target.engine)?.toLowerCase() as
+    | EngineType
+    | undefined;
+  if (!isSharedSessionSupportedEngine(engine)) {
     return null;
   }
   const reasoning =
@@ -113,7 +118,7 @@ export function normalizePersistedExecutionTarget(
 export function isResolvedExecutionTarget(
   target: ExecutionTarget | null | undefined,
 ): target is ResolvedExecutionTarget {
-  if (!target || (target.engine !== "claude" && target.engine !== "codex")) {
+  if (!target || !isSharedSessionSupportedEngine(target.engine)) {
     return false;
   }
   const providerProfileId = target.providerProfileId?.trim() || null;

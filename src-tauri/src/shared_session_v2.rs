@@ -66,7 +66,7 @@ pub struct ExecutionTargetInput {
 
 pub(crate) fn context_capabilities(target: &ExecutionTargetInput) -> RuntimeContextCapabilities {
     // Adapter capability 在这里显式声明；compiler 只消费 capability，不按 engine 分支。
-    // 当前 runtime bridge 对 Claude/Codex 都有 user-channel prompt ACK，
+    // 当前 runtime bridge 对五种 Shared CLI 都有 user-channel prompt ACK，
     // structured import 等待对应 CLI method probe 后再打开，禁止猜测支持。
     match target.engine {
         EngineType::Codex => {
@@ -96,6 +96,15 @@ pub(crate) fn context_capabilities(target: &ExecutionTargetInput) -> RuntimeCont
             // response 当作 context acceptance。fingerprint 只用于审计，不参与降级。
             strong_context_ack: true,
         },
+        EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => RuntimeContextCapabilities {
+            native_delta: false,
+            structured_history_import: false,
+            native_clone: false,
+            user_channel_transcript: true,
+            tool_history: false,
+            image_history: false,
+            strong_context_ack: false,
+        },
         _ => RuntimeContextCapabilities {
             native_delta: false,
             structured_history_import: false,
@@ -110,6 +119,12 @@ pub(crate) fn context_capabilities(target: &ExecutionTargetInput) -> RuntimeCont
 
 fn raw_claude_session_id(value: &str) -> Option<&str> {
     let raw = value.strip_prefix("claude:").unwrap_or(value).trim();
+    (!raw.is_empty()).then_some(raw)
+}
+
+fn raw_engine_session_id(engine: EngineType, value: &str) -> Option<&str> {
+    let prefix = format!("{}:", engine.icon());
+    let raw = value.strip_prefix(prefix.as_str()).unwrap_or(value).trim();
     (!raw.is_empty()).then_some(raw)
 }
 
@@ -429,6 +444,58 @@ mod execution_target_contract_tests {
         };
 
         assert!(context_capabilities(&target).strong_context_ack);
+    }
+
+    #[test]
+    fn newly_supported_shared_engines_use_weak_user_channel_context() {
+        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode] {
+            let target = ExecutionTargetInput {
+                engine,
+                provider_profile_id: None,
+                model_catalog_entry_id: Some("runtime-model".to_string()),
+                model: Some("runtime-model".to_string()),
+                reasoning_effort: None,
+                provider_profile_name_snapshot: Some("本地配置".to_string()),
+                provider_profile_source: Some(CanonicalProviderProfileSource::Local),
+                runtime_capability_fingerprint: None,
+            };
+            let capabilities = context_capabilities(&target);
+            assert!(capabilities.user_channel_transcript, "{engine:?}");
+            assert!(!capabilities.structured_history_import, "{engine:?}");
+            assert!(!capabilities.strong_context_ack, "{engine:?}");
+        }
+    }
+
+    #[test]
+    fn newly_supported_shared_engines_use_provider_scoped_runtime_keys() {
+        for (engine, local_suffix, managed_suffix) in [
+            (
+                EngineType::Kimi,
+                crate::engine::kimi_provider_profile::KIMI_LOCAL_PROVIDER_PROFILE_ID,
+                "provider-kimi",
+            ),
+            (
+                EngineType::Grok,
+                crate::engine::grok_provider_profile::GROK_LOCAL_PROVIDER_PROFILE_ID,
+                "provider-grok",
+            ),
+            (
+                EngineType::OpenCode,
+                crate::engine::opencode_provider_profile::OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+                "provider-opencode",
+            ),
+        ] {
+            assert_eq!(
+                provider_runtime_key_for_target("workspace-1", engine, None)
+                    .expect("local runtime key"),
+                format!("{}::workspace-1::{local_suffix}", engine.icon()),
+            );
+            assert_eq!(
+                provider_runtime_key_for_target("workspace-1", engine, Some(managed_suffix))
+                    .expect("managed runtime key"),
+                format!("{}::workspace-1::{managed_suffix}", engine.icon()),
+            );
+        }
     }
 
     #[test]
@@ -1886,7 +1953,7 @@ fn receipt_nullable_string<'a>(receipt: &'a Value, key: &str) -> Result<Option<&
         .ok_or_else(|| format!("dispatch receipt has invalid {key}"))
 }
 
-fn provider_runtime_key_for_target(
+pub(crate) fn provider_runtime_key_for_target(
     workspace_id: &str,
     engine: EngineType,
     provider_profile_id: Option<&str>,
@@ -1900,6 +1967,22 @@ fn provider_runtime_key_for_target(
             workspace_id,
             provider_profile_id,
         )),
+        EngineType::Kimi => Ok(crate::engine::kimi_provider_profile::kimi_runtime_key(
+            workspace_id,
+            provider_profile_id
+                .unwrap_or(crate::engine::kimi_provider_profile::KIMI_LOCAL_PROVIDER_PROFILE_ID),
+        )),
+        EngineType::Grok => Ok(crate::engine::grok_provider_profile::grok_runtime_key(
+            workspace_id,
+            provider_profile_id
+                .unwrap_or(crate::engine::grok_provider_profile::GROK_LOCAL_PROVIDER_PROFILE_ID),
+        )),
+        EngineType::OpenCode => Ok(
+            crate::engine::opencode_provider_profile::opencode_runtime_key(
+                workspace_id,
+                provider_profile_id,
+            ),
+        ),
         _ => Err("dispatch receipt has unsupported Shared engine".to_string()),
     }
 }
@@ -2108,6 +2191,63 @@ mod runtime_dispatch_receipt_tests {
             "workspace-managed",
         )
         .is_ok());
+    }
+
+    #[test]
+    fn newly_supported_engine_receipts_accept_local_and_managed_identity() {
+        for (engine, model, managed_provider) in [
+            (EngineType::Kimi, "kimi-k2", "provider-kimi"),
+            (EngineType::Grok, "grok-code-fast-1", "provider-grok"),
+            (
+                EngineType::OpenCode,
+                "ccgui/opencode-model",
+                "provider-opencode",
+            ),
+        ] {
+            let local_owner = durable_owner_for_receipt_test(engine, None, model, None);
+            let local_runtime_key =
+                provider_runtime_key_for_target("workspace-local", engine, None)
+                    .expect("local runtime key");
+            assert!(validate_runtime_dispatch_receipt(
+                &json!({
+                    "mossxDispatchReceipt": {
+                        "engine": engine.icon(),
+                        "providerProfileId": null,
+                        "providerProfileSource": "local",
+                        "providerRuntimeKey": local_runtime_key,
+                        "model": model,
+                        "reasoningEffort": null,
+                    }
+                }),
+                &local_owner,
+                "workspace-local",
+            )
+            .is_ok());
+
+            let managed_owner =
+                durable_owner_for_receipt_test(engine, Some(managed_provider), model, Some("high"));
+            let managed_runtime_key = provider_runtime_key_for_target(
+                "workspace-managed",
+                engine,
+                Some(managed_provider),
+            )
+            .expect("managed runtime key");
+            assert!(validate_runtime_dispatch_receipt(
+                &json!({
+                    "mossxDispatchReceipt": {
+                        "engine": engine.icon(),
+                        "providerProfileId": managed_provider,
+                        "providerProfileSource": "managed",
+                        "providerRuntimeKey": managed_runtime_key,
+                        "model": model,
+                        "reasoningEffort": "high",
+                    }
+                }),
+                &managed_owner,
+                "workspace-managed",
+            )
+            .is_ok());
+        }
     }
 
     #[test]
@@ -2688,6 +2828,14 @@ async fn materialize_attempt_binding(
                 .map(str::to_string)
                 .unwrap_or_else(|| Uuid::new_v4().to_string());
             format!("claude:{raw_session_id}")
+        }
+        EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => {
+            existing.unwrap_or_else(|| {
+                crate::shared_sessions::engine_binding_thread_id(
+                    owner.engine,
+                    Uuid::new_v4().to_string().as_str(),
+                )
+            })
         }
         _ => {
             return Err(format!(
@@ -3411,6 +3559,52 @@ pub async fn shared_session_v2_dispatch_turn(
             )
             .await
         }
+        EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => {
+            let runtime_provider_profile_id = owner.provider_profile_id.clone().or_else(|| {
+                Some(
+                    match owner.engine {
+                        EngineType::Kimi => {
+                            crate::engine::kimi_provider_profile::KIMI_LOCAL_PROVIDER_PROFILE_ID
+                        }
+                        EngineType::Grok => {
+                            crate::engine::grok_provider_profile::GROK_LOCAL_PROVIDER_PROFILE_ID
+                        }
+                        EngineType::OpenCode => {
+                            crate::engine::opencode_provider_profile::OPENCODE_LOCAL_PROVIDER_PROFILE_ID
+                        }
+                        _ => unreachable!("new Shared engine branch is exhaustively matched"),
+                    }
+                    .to_string(),
+                )
+            });
+            let runtime_session_id = had_native_binding
+                .then(|| raw_engine_session_id(owner.engine, &native_session_id))
+                .flatten()
+                .map(str::to_string);
+            crate::engine::engine_send_message(
+                workspace_id.clone(),
+                outbound_text,
+                Some(owner.engine),
+                owner.target.model.clone(),
+                owner.target.reasoning_effort.clone(),
+                disable_thinking,
+                access_mode,
+                images,
+                had_native_binding,
+                Some(native_session_id.clone()),
+                runtime_session_id,
+                None,
+                None,
+                None,
+                runtime_provider_profile_id,
+                custom_spec_root,
+                None,
+                None,
+                app.clone(),
+                state.clone(),
+            )
+            .await
+        }
         _ => Err(format!(
             "target-unavailable: unsupported Shared engine {}",
             owner.engine.icon()
@@ -4001,6 +4195,60 @@ pub async fn shared_session_v2_interrupt_turn(
                 }
                 session.interrupt_turn(&route.runtime_turn_id).await
             }
+            EngineType::OpenCode => {
+                let runtime_key = provider_runtime_key_for_target(
+                    &workspace_id,
+                    route.engine,
+                    route.provider_profile_id.as_deref(),
+                )?;
+                let session = state
+                    .engine_manager
+                    .get_opencode_session_for_runtime(&runtime_key)
+                    .await
+                    .ok_or_else(|| {
+                        format!(
+                            "shared-control-owner-unavailable: OpenCode runtime missing for attempt {}",
+                            route.attempt_id
+                        )
+                    })?;
+                session.interrupt_turn(&route.runtime_turn_id).await
+            }
+            EngineType::Kimi => {
+                let runtime_key = provider_runtime_key_for_target(
+                    &workspace_id,
+                    route.engine,
+                    route.provider_profile_id.as_deref(),
+                )?;
+                let session = state
+                    .engine_manager
+                    .get_kimi_session_for_runtime(&runtime_key)
+                    .await
+                    .ok_or_else(|| {
+                        format!(
+                            "shared-control-owner-unavailable: Kimi runtime missing for attempt {}",
+                            route.attempt_id
+                        )
+                    })?;
+                session.interrupt_turn(&route.runtime_turn_id).await
+            }
+            EngineType::Grok => {
+                let runtime_key = provider_runtime_key_for_target(
+                    &workspace_id,
+                    route.engine,
+                    route.provider_profile_id.as_deref(),
+                )?;
+                let session = state
+                    .engine_manager
+                    .get_grok_session_for_runtime(&runtime_key)
+                    .await
+                    .ok_or_else(|| {
+                        format!(
+                            "shared-control-owner-unavailable: Grok runtime missing for attempt {}",
+                            route.attempt_id
+                        )
+                    })?;
+                session.interrupt_turn(&route.runtime_turn_id).await
+            }
             unsupported => Err(format!(
                 "target-unavailable: unsupported Shared interrupt engine {}",
                 unsupported.icon()
@@ -4225,6 +4473,108 @@ pub async fn shared_session_v2_probe_binding(
                 None => json!({ "status": "runtime-missing", "runtimeKey": runtime_key }),
             }
         }
+        Some(row) if row.engine == EngineType::OpenCode.icon() => {
+            let runtime_key = provider_runtime_key_for_target(
+                &workspace_id,
+                EngineType::OpenCode,
+                row.provider_profile_id.as_deref(),
+            )?;
+            match state
+                .engine_manager
+                .get_opencode_session_for_runtime(&runtime_key)
+                .await
+            {
+                Some(session) => {
+                    let runtime_session_id = session.get_session_id().await;
+                    let expected_session_id = row
+                        .native_session_id
+                        .as_deref()
+                        .and_then(|value| raw_engine_session_id(EngineType::OpenCode, value));
+                    json!({
+                        "status": if runtime_session_id.as_deref() == expected_session_id {
+                            "matched"
+                        } else if expected_session_id
+                            .is_some_and(|value| value.starts_with("opencode-pending-shared-"))
+                        {
+                            "runtime-created-awaiting-session"
+                        } else {
+                            "mismatch"
+                        },
+                        "runtimeKey": runtime_key,
+                        "runtimeSessionId": runtime_session_id,
+                    })
+                }
+                None => json!({ "status": "runtime-missing", "runtimeKey": runtime_key }),
+            }
+        }
+        Some(row) if row.engine == EngineType::Kimi.icon() => {
+            let runtime_key = provider_runtime_key_for_target(
+                &workspace_id,
+                EngineType::Kimi,
+                row.provider_profile_id.as_deref(),
+            )?;
+            match state
+                .engine_manager
+                .get_kimi_session_for_runtime(&runtime_key)
+                .await
+            {
+                Some(session) => {
+                    let runtime_session_id = session.get_session_id().await;
+                    let expected_session_id = row
+                        .native_session_id
+                        .as_deref()
+                        .and_then(|value| raw_engine_session_id(EngineType::Kimi, value));
+                    json!({
+                        "status": if runtime_session_id.as_deref() == expected_session_id {
+                            "matched"
+                        } else if expected_session_id
+                            .is_some_and(|value| value.starts_with("kimi-pending-shared-"))
+                        {
+                            "runtime-created-awaiting-session"
+                        } else {
+                            "mismatch"
+                        },
+                        "runtimeKey": runtime_key,
+                        "runtimeSessionId": runtime_session_id,
+                    })
+                }
+                None => json!({ "status": "runtime-missing", "runtimeKey": runtime_key }),
+            }
+        }
+        Some(row) if row.engine == EngineType::Grok.icon() => {
+            let runtime_key = provider_runtime_key_for_target(
+                &workspace_id,
+                EngineType::Grok,
+                row.provider_profile_id.as_deref(),
+            )?;
+            match state
+                .engine_manager
+                .get_grok_session_for_runtime(&runtime_key)
+                .await
+            {
+                Some(session) => {
+                    let runtime_session_id = session.get_session_id().await;
+                    let expected_session_id = row
+                        .native_session_id
+                        .as_deref()
+                        .and_then(|value| raw_engine_session_id(EngineType::Grok, value));
+                    json!({
+                        "status": if runtime_session_id.as_deref() == expected_session_id {
+                            "matched"
+                        } else if expected_session_id
+                            .is_some_and(|value| value.starts_with("grok-pending-shared-"))
+                        {
+                            "runtime-created-awaiting-session"
+                        } else {
+                            "mismatch"
+                        },
+                        "runtimeKey": runtime_key,
+                        "runtimeSessionId": runtime_session_id,
+                    })
+                }
+                None => json!({ "status": "runtime-missing", "runtimeKey": runtime_key }),
+            }
+        }
         Some(_) => json!({ "status": "unsupported-engine" }),
         None => json!({ "status": "binding-missing" }),
     };
@@ -4440,7 +4790,10 @@ mod shared_interrupt_owner_tests {
             model: Some(match engine {
                 EngineType::Claude => "claude-sonnet-4-5".to_string(),
                 EngineType::Codex => "gpt-5-codex".to_string(),
-                _ => "unsupported".to_string(),
+                EngineType::Kimi => "kimi-k2".to_string(),
+                EngineType::Grok => "ccgui/grok-4.5".to_string(),
+                EngineType::OpenCode => "ccgui/opencode-model".to_string(),
+                EngineType::Gemini => "unsupported".to_string(),
             }),
             reasoning_effort: Some("medium".to_string()),
             provider_profile_name_snapshot: Some(provider.to_string()),
@@ -4519,6 +4872,9 @@ mod shared_interrupt_owner_tests {
         assert_route(EngineType::Claude, "provider-a");
         assert_route(EngineType::Claude, "provider-b");
         assert_route(EngineType::Codex, "provider-codex");
+        assert_route(EngineType::Kimi, "provider-kimi");
+        assert_route(EngineType::Grok, "provider-grok");
+        assert_route(EngineType::OpenCode, "provider-opencode");
     }
 
     #[test]

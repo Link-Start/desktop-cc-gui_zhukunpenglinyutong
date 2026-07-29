@@ -14,7 +14,9 @@ import {
   getClaudeProviders,
   getCodexProviders,
   getEngineModels,
+  getGrokProviders,
   getKimiProviders,
+  getOpenCodeProviders,
 } from "../../../../../services/tauri";
 
 vi.mock("../../../../../services/tauri", () => ({
@@ -22,12 +24,16 @@ vi.mock("../../../../../services/tauri", () => ({
   getClaudeProviders: vi.fn(),
   getCodexProviders: vi.fn(),
   getKimiProviders: vi.fn(),
+  getGrokProviders: vi.fn(),
+  getOpenCodeProviders: vi.fn(),
   getEngineModels: vi.fn(),
 }));
 
 const getClaudeProvidersMock = vi.mocked(getClaudeProviders);
 const getCodexProvidersMock = vi.mocked(getCodexProviders);
 const getKimiProvidersMock = vi.mocked(getKimiProviders);
+const getGrokProvidersMock = vi.mocked(getGrokProviders);
+const getOpenCodeProvidersMock = vi.mocked(getOpenCodeProviders);
 const getEngineModelsMock = vi.mocked(getEngineModels);
 const discoverCodexModelsMock = vi.mocked(discoverCodexModels);
 
@@ -48,6 +54,24 @@ describe("Provider target catalog owners", () => {
         baseUrl: "",
         apiKey: "",
         model: "",
+      },
+    ]);
+    getGrokProvidersMock.mockResolvedValue([
+      {
+        id: "grok-d",
+        name: "Grok D",
+        baseUrl: "",
+        apiKey: "",
+        model: "",
+      },
+    ]);
+    getOpenCodeProvidersMock.mockResolvedValue([
+      {
+        id: "opencode-e",
+        name: "OpenCode E",
+        baseUrl: "",
+        apiKey: "",
+        models: [],
       },
     ]);
     getEngineModelsMock.mockResolvedValue([
@@ -80,8 +104,21 @@ describe("Provider target catalog owners", () => {
       await result.current.ensureProfiles();
     });
     expect(getClaudeProvidersMock).toHaveBeenCalledOnce();
-    expect(result.current.groups.find((group) => group.providerId === "kimi"))
-      .toMatchObject({ enabled: false, disabledReason: "source only" });
+    expect(result.current.groups.map((group) => group.providerId)).toEqual([
+      "claude",
+      "codex",
+      "grok",
+      "kimi",
+      "opencode",
+    ]);
+    expect(
+      result.current.groups.filter((group) => group.enabled),
+    ).toHaveLength(5);
+    expect(
+      result.current.groups.flatMap((group) => group.profiles).every(
+        (profile) => profile.enabled !== false,
+      ),
+    ).toBe(true);
 
     await act(async () => {
       await result.current.ensureModels("codex", "codex-b");
@@ -99,6 +136,82 @@ describe("Provider target catalog owners", () => {
     ).toEqual([
       expect.objectContaining({ id: "same-model", label: "Scoped model" }),
     ]);
+  });
+
+  it.each([
+    ["kimi", "kimi-c"],
+    ["grok", "grok-d"],
+    ["opencode", "opencode-e"],
+  ] as const)(
+    "loads %s models from the selected Provider binding",
+    async (engine, providerProfileId) => {
+      getEngineModelsMock.mockResolvedValueOnce([
+        {
+          id: `${engine}-model`,
+          model: `${engine}-runtime`,
+          displayName: `${engine} model`,
+          description: "",
+          isDefault: true,
+          providerProfileId,
+        },
+      ]);
+      const { result } = renderHook(() =>
+        useAtomicProviderTargetCatalog({
+          enabled: true,
+          mode: "shared",
+          currentProvider: engine,
+          currentProviderProfileId: providerProfileId,
+          resolveProviderLabel: (provider) => provider,
+          kimiDisabledReason: "source only",
+        }),
+      );
+
+      await act(async () => {
+        await result.current.ensureProfiles();
+        await result.current.ensureModels(engine, providerProfileId);
+      });
+
+      expect(getEngineModelsMock).toHaveBeenCalledWith(engine, {
+        providerProfileId,
+      });
+      expect(
+        result.current.groups
+          .find((group) => group.providerId === engine)
+          ?.profiles.find((profile) => profile.id === providerProfileId)
+          ?.models,
+      ).toEqual([
+        expect.objectContaining({
+          id: `${engine}-model`,
+          model: `${engine}-runtime`,
+        }),
+      ]);
+    },
+  );
+
+  it("exposes the same five CLI groups on Home create-session", async () => {
+    const { result } = renderHook(() =>
+      useAtomicProviderTargetCatalog({
+        enabled: true,
+        mode: "create-session",
+        currentProvider: "opencode",
+        currentProviderProfileId: "opencode-e",
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "native only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+    });
+
+    expect(result.current.groups.map((group) => group.providerId)).toEqual([
+      "claude",
+      "codex",
+      "grok",
+      "kimi",
+      "opencode",
+    ]);
+    expect(result.current.groups.every((group) => group.enabled)).toBe(true);
   });
 
   it("preserves a backend-returned Claude Local profile and produces a resolved model target", async () => {

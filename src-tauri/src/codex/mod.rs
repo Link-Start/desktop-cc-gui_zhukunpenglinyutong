@@ -1908,26 +1908,16 @@ pub(crate) fn resolve_shared_control_response_route(
     if owner_provider_profile_id != provider_profile_id {
         return Err("shared control response Provider Profile owner mismatch".to_string());
     }
-    let expected_engine = match owner.engine {
-        EngineType::Claude => "claude",
-        EngineType::Codex => "codex",
-        _ => {
-            return Err("shared control response owner uses an unsupported engine".to_string());
-        }
-    };
+    let expected_engine =
+        crate::shared_sessions::ensure_supported_shared_session_engine(owner.engine)?.icon();
     if owner.execution_target_snapshot.engine.trim() != expected_engine {
         return Err("shared control response target engine owner mismatch".to_string());
     }
-    let expected_runtime_key = match owner.engine {
-        EngineType::Claude => crate::engine::claude::provider_profile::claude_runtime_key(
-            workspace_id,
-            owner_provider_profile_id.as_deref(),
-        ),
-        EngineType::Codex => {
-            codex_core::session_key_for_provider(workspace_id, owner_provider_profile_id.as_deref())
-        }
-        _ => unreachable!("unsupported Shared engine rejected above"),
-    };
+    let expected_runtime_key = crate::shared_session_v2::provider_runtime_key_for_target(
+        workspace_id,
+        owner.engine,
+        owner_provider_profile_id.as_deref(),
+    )?;
     if expected_runtime_key != provider_runtime_key {
         return Err("shared control response Provider Runtime key is not canonical".to_string());
     }

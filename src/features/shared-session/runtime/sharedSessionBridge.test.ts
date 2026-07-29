@@ -72,6 +72,39 @@ describe("sharedSessionBridge", () => {
     expect(binding).toBeNull();
   });
 
+  it.each(["kimi", "grok", "opencode"] as const)(
+    "routes %s runtime owner metadata into Shared Session",
+    (engine) => {
+      expect(
+        resolveSharedSessionBindingFromRuntimeOwner("ws-owner", {
+          threadId: "shared:thread-owner",
+          nativeThreadId: `${engine}:native-owner`,
+          sharedOwner: {
+            sharedThreadId: "shared:thread-owner",
+            nativeThreadId: `${engine}:native-owner`,
+            engine,
+            attemptId: "attempt-owner",
+            executionTargetSnapshot: {
+              engine,
+              providerProfileId: `provider-${engine}`,
+              modelCatalogEntryId: `catalog-${engine}`,
+              model: `runtime-${engine}`,
+              providerProfileNameSnapshot: `${engine} Provider`,
+              providerProfileSource: "managed",
+            },
+          },
+        }),
+      ).toMatchObject({
+        workspaceId: "ws-owner",
+        sharedThreadId: "shared:thread-owner",
+        nativeThreadId: `${engine}:native-owner`,
+        engine,
+        attemptId: "attempt-owner",
+        providerProfileId: `provider-${engine}`,
+      });
+    },
+  );
+
   it("requires the complete Runtime owner for Shared control responses", () => {
     const params = {
       threadId: "shared:thread-owner",

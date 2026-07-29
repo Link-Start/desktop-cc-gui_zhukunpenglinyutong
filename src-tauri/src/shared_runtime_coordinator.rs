@@ -2380,6 +2380,72 @@ mod tests {
     }
 
     #[test]
+    fn provider_engine_events_settle_exact_shared_attempts() {
+        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode] {
+            let coordinator = SharedRuntimeCoordinator::default();
+            let runtime_turn_id = format!("{}-turn-1", engine_token(engine));
+            let native_session_id = format!("{}-session-1", engine_token(engine));
+            let mut engine_owner = owner(
+                &format!("attempt-{}", engine_token(engine)),
+                Some(&runtime_turn_id),
+                None,
+            );
+            engine_owner.engine = engine;
+            engine_owner.binding_key = format!("{}::managed-a", engine_token(engine));
+            engine_owner.execution_target_snapshot.engine = engine_token(engine).to_string();
+            coordinator
+                .register_attempt(engine_owner)
+                .expect("register provider engine owner");
+
+            coordinator.ingest_engine_event_with_replay_scoped(
+                TEST_PROVIDER_RUNTIME_KEY,
+                engine,
+                Some(&runtime_turn_id),
+                None,
+                &EngineEvent::SessionStarted {
+                    workspace_id: "ws-1".to_string(),
+                    session_id: native_session_id.clone(),
+                    engine,
+                    turn_id: Some(runtime_turn_id.clone()),
+                },
+                Vec::new(),
+            );
+            coordinator.ingest_engine_event_with_replay_scoped(
+                TEST_PROVIDER_RUNTIME_KEY,
+                engine,
+                Some(&runtime_turn_id),
+                Some(&native_session_id),
+                &EngineEvent::TextDelta {
+                    workspace_id: "ws-1".to_string(),
+                    text: format!("{} response", engine_token(engine)),
+                },
+                Vec::new(),
+            );
+            let settled = coordinator
+                .ingest_engine_event_with_replay_scoped(
+                    TEST_PROVIDER_RUNTIME_KEY,
+                    engine,
+                    Some(&runtime_turn_id),
+                    Some(&native_session_id),
+                    &EngineEvent::TurnCompleted {
+                        workspace_id: "ws-1".to_string(),
+                        result: Some(json!({ "status": "completed" })),
+                    },
+                    Vec::new(),
+                )
+                .settled
+                .expect("provider engine terminal settles owner");
+
+            assert_eq!(settled.owner.engine, engine);
+            assert_eq!(
+                settled.owner.native_session_id.as_deref(),
+                Some(native_session_id.as_str()),
+            );
+            assert_eq!(settled.final_snapshot.outcome, OutcomeStatus::Completed);
+        }
+    }
+
+    #[test]
     fn claude_raw_result_settles_shared_attempt_before_process_cleanup() {
         let coordinator = SharedRuntimeCoordinator::default();
         coordinator

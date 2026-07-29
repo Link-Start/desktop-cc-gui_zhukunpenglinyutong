@@ -5,14 +5,16 @@ import {
 } from "./sharedSessionEngines";
 
 describe("sharedSessionEngines", () => {
-  it("uses capability matrix semantics for codex collaboration support", () => {
-    expect(isSharedSessionSupportedEngine("codex")).toBe(true);
-    expect(normalizeSharedSessionEngine("codex")).toBe("codex");
-  });
+  it.each(["claude", "codex", "kimi", "grok", "opencode"] as const)(
+    "accepts %s as a Shared Session target",
+    (engine) => {
+      expect(isSharedSessionSupportedEngine(engine)).toBe(true);
+      expect(normalizeSharedSessionEngine(engine)).toBe(engine);
+    },
+  );
 
-  it("keeps non-collaboration shared-session engines on claude fallback", () => {
+  it("keeps unsupported engines on claude fallback", () => {
     expect(isSharedSessionSupportedEngine("gemini")).toBe(false);
-    expect(isSharedSessionSupportedEngine("opencode")).toBe(false);
     expect(normalizeSharedSessionEngine("gemini")).toBe("claude");
   });
 });
