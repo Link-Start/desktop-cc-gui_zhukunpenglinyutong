@@ -666,3 +666,69 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 65: 重构快捷键设置页为双栏录制布局
+
+**Date**: 2026-07-30
+**Task**: 重构快捷键设置页为双栏录制布局
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+快捷键设置页从输入框列表重构为双栏布局：左侧搜索+分组快捷键行(kbd 键帽)，右侧详情面板(大号点击录制框 focusable div + 重置为默认按钮)；handleShortcutKeyDown 事件类型放宽为 HTMLElement；Escape 取消录制不冒泡；中英 i18n 各补 4 key；ShortcutsSection 测试 +4 交互用例、shortcuts.test.ts +3 splitShortcutForPlatform 用例；清理预览残留并 gitignore .playwright-mcp/。验证：tsc/eslint/settings 233+9 测试全绿。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eb4ed9027` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 66: 快捷键设置页对齐参考样式并补全部重置
+
+**Date**: 2026-07-30
+**Task**: 快捷键设置页对齐参考样式并补全部重置
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+在上一会话双栏布局基础上对齐参考样式：删除与顶部 header 重复的区内标题；列表列 520px 最大高度+分组区内部滚动(搜索框固定)；右侧详情面板改 stretch 与列表严格等高、16px 圆角+浅描边；新增「全部重置为默认」按钮(仅重置被改过项,执行期禁用)+中英 i18n key；reset-all 测试用例+1。验证：tsc + settings 全域 18 文件 234 测试全绿。注意：上一会话(Session 65)记录的双栏布局工作当时未提交,本次一并包含在 15a30e24f 中。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `15a30e24f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
