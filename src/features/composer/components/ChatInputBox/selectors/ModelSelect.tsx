@@ -1,11 +1,17 @@
-import { Fragment, memo, useCallback, useMemo, useState } from 'react';
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useMemo,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import CheckIcon from 'lucide-react/dist/esm/icons/check';
 import type { ModelInfo, ProviderId } from '../types';
 import type { ProviderModelGroup } from '../modelOptions';
 import type {
   ProviderTargetGroup,
-} from '../hooks/useSharedProviderTargetCatalog';
+} from '../hooks/useProviderTargetCatalogOwners';
 import type { ExecutionTarget } from '../../../../shared-session/target/types';
 import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
@@ -221,9 +227,19 @@ export const ModelSelect = memo(({
   const [isOpen, setIsOpen] = useState(false);
   const [activeTargetGroupId, setActiveTargetGroupId] =
     useState<ProviderId | null>(null);
-  const [expandedProviderProfileKey, setExpandedProviderProfileKey] =
+  const [atomicExpandedProviderProfileKey, setAtomicExpandedProviderProfileKey] =
+    useState<string | null>(null);
+  const [nativeExpandedProviderProfileKey, setNativeExpandedProviderProfileKey] =
     useState<string | null>(null);
   const [refreshConfigError, setRefreshConfigError] = useState<string | null>(null);
+  const expandedProviderProfileKey =
+    targetGroupDisplayMode === 'cli'
+      ? atomicExpandedProviderProfileKey
+      : nativeExpandedProviderProfileKey;
+  const setExpandedProviderProfileKey =
+    targetGroupDisplayMode === 'cli'
+      ? setAtomicExpandedProviderProfileKey
+      : setNativeExpandedProviderProfileKey;
 
   const effectiveModels = useMemo(() => {
     if (models.length > 0) {
@@ -346,7 +362,7 @@ export const ModelSelect = memo(({
       );
       void onOpenProviderProfile?.(providerId, providerProfileId);
     },
-    [onOpenProviderProfile],
+    [onOpenProviderProfile, setExpandedProviderProfileKey],
   );
   const openDefaultProviderProfile = useCallback(
     (group: ProviderTargetGroup) => {
@@ -366,7 +382,11 @@ export const ModelSelect = memo(({
       setExpandedProviderProfileKey(`${group.providerId}:${profile.id}`);
       void onOpenProviderProfile?.(group.providerId, profile.id);
     },
-    [executionTarget, onOpenProviderProfile],
+    [
+      executionTarget,
+      onOpenProviderProfile,
+      setExpandedProviderProfileKey,
+    ],
   );
   const activateTargetGroup = useCallback(
     (group: ProviderTargetGroup) => {
@@ -449,16 +469,19 @@ export const ModelSelect = memo(({
       label,
       icon,
       loading,
+      disabled = false,
       onClick,
     }: {
       label: string;
       icon: string;
       loading: boolean;
+      disabled?: boolean;
       onClick: () => Promise<void> | void;
     }) => (
       <button
         type="button"
-        disabled={loading}
+        disabled={loading || disabled}
+        aria-disabled={loading || disabled}
         onPointerDown={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -497,7 +520,6 @@ export const ModelSelect = memo(({
               onReloadProviderConfig(group.providerId, profile.id),
           })}
         {onDiscoverProviderModels &&
-          profile.discoverySupported &&
           renderActionButton({
             label: t(
               profile.discoveringModels
@@ -506,8 +528,11 @@ export const ModelSelect = memo(({
             ),
             icon: 'cloud-download',
             loading: Boolean(profile.discoveringModels),
+            disabled: !profile.discoverySupported,
             onClick: () =>
-              onDiscoverProviderModels(group.providerId, profile.id),
+              profile.discoverySupported
+                ? onDiscoverProviderModels(group.providerId, profile.id)
+                : undefined,
           })}
       </span>
     );
@@ -532,12 +557,31 @@ export const ModelSelect = memo(({
             aria-expanded={isExpanded}
             title={profile.disabledReason}
             className="items-start gap-2"
-            onSelect={(event) => {
-              event.preventDefault();
-              if (profile.enabled !== false) {
-                toggleProviderProfile(group.providerId, profile.id);
-              }
-            }}
+            onClick={
+              targetGroupDisplayMode === 'cli'
+                ? (event) => {
+                    event.preventDefault();
+                    if (
+                      event.button !== 0 ||
+                      event.ctrlKey ||
+                      profile.enabled === false
+                    ) {
+                      return;
+                    }
+                    toggleProviderProfile(group.providerId, profile.id);
+                  }
+                : undefined
+            }
+            onSelect={
+              targetGroupDisplayMode === 'profiles'
+                ? (event) => {
+                    event.preventDefault();
+                    if (profile.enabled !== false) {
+                      toggleProviderProfile(group.providerId, profile.id);
+                    }
+                  }
+                : undefined
+            }
           >
             <span
               className="codicon codicon-server-environment mt-0.5 shrink-0"
@@ -591,21 +635,38 @@ export const ModelSelect = memo(({
               const isSelected =
                 isSelectedProfile &&
                 isSelectedExecutionModel(executionTarget, model);
+              const selectModel = () => {
+                handleTargetSelect(
+                  group.providerId,
+                  profile.id,
+                  model.id,
+                  profile.label,
+                  profile.source,
+                  runtimeModel,
+                );
+              };
               return (
                 <DropdownMenuItem
                   key={`${profileKey}:${model.id}`}
+                  data-model-id={model.id}
                   data-selected={isSelected ? 'true' : undefined}
                   disabled={!runtimeModel}
-                  className="gap-2 pl-7"
-                  onSelect={() =>
-                    handleTargetSelect(
-                      group.providerId,
-                      profile.id,
-                      model.id,
-                      profile.label,
-                      profile.source,
-                      runtimeModel,
-                    )
+                  className="cursor-pointer gap-2 pl-7"
+                  onClick={
+                    targetGroupDisplayMode === 'cli'
+                      ? (event) => {
+                          event.preventDefault();
+                          if (event.button !== 0 || event.ctrlKey) {
+                            return;
+                          }
+                          selectModel();
+                        }
+                      : undefined
+                  }
+                  onSelect={
+                    targetGroupDisplayMode === 'profiles'
+                      ? selectModel
+                      : undefined
                   }
                 >
                   <ModelIcon provider={group.providerId} size={16} />
@@ -749,10 +810,15 @@ export const ModelSelect = memo(({
                             }
                             title={group.disabledReason}
                             className="items-start gap-2"
-                            onPointerEnter={() => activateTargetGroup(group)}
-                            onFocus={() => activateTargetGroup(group)}
-                            onSelect={(event) => {
+                            onClick={(event) => {
                               event.preventDefault();
+                              if (
+                                event.button !== 0 ||
+                                event.ctrlKey ||
+                                !group.enabled
+                              ) {
+                                return;
+                              }
                               activateTargetGroup(group);
                             }}
                           >

@@ -234,6 +234,9 @@ vi.mock("../../composer/components/Composer", async () => {
     onOpenDiffPath,
     showStatusPanelToggleOverride,
     onResolvedAlwaysThinkingChange,
+    createSessionTargetPicker = false,
+    onCreationTargetEngineChange,
+    isSharedSession = false,
   }: {
     activeThreadId?: string | null;
     onDraftChange: (next: string) => void;
@@ -242,6 +245,11 @@ vi.mock("../../composer/components/Composer", async () => {
     onOpenDiffPath?: (path: string) => void;
     showStatusPanelToggleOverride?: boolean;
     onResolvedAlwaysThinkingChange?: (enabled: boolean) => void;
+    createSessionTargetPicker?: boolean;
+    onCreationTargetEngineChange?: (
+      engine: "claude" | "codex" | "gemini" | "kimi" | "opencode" | null,
+    ) => void;
+    isSharedSession?: boolean;
   }) => {
     const draftText = useComposerDraft(activeThreadId ?? null);
     composerMockState.thinkingCallbacks.push(onResolvedAlwaysThinkingChange);
@@ -251,6 +259,8 @@ vi.mock("../../composer/components/Composer", async () => {
         data-show-status-panel-toggle-override={String(
           showStatusPanelToggleOverride,
         )}
+        data-create-session-target-picker={String(createSessionTargetPicker)}
+        data-is-shared-session={String(isSharedSession)}
       >
         <textarea
           aria-label="composer input"
@@ -271,6 +281,14 @@ vi.mock("../../composer/components/Composer", async () => {
         >
           report thinking disabled
         </button>
+        {createSessionTargetPicker ? (
+          <button
+            type="button"
+            onClick={() => onCreationTargetEngineChange?.("codex")}
+          >
+            select Codex creation target
+          </button>
+        ) : null}
       </form>
     );
   },
@@ -297,8 +315,16 @@ vi.mock("../../app/components/TopbarSessionTabs", () => ({
 }));
 
 vi.mock("../../home/components/HomeChat", () => ({
-  HomeChat: ({ composerNode }: { composerNode?: ReactNode }) => (
-    <section data-testid="home-chat">{composerNode}</section>
+  HomeChat: ({
+    composerNode,
+    selectedEngine,
+  }: {
+    composerNode?: ReactNode;
+    selectedEngine?: string;
+  }) => (
+    <section data-testid="home-chat" data-selected-engine={selectedEngine}>
+      {composerNode}
+    </section>
   ),
 }));
 
@@ -1039,6 +1065,14 @@ function LayoutNodesHarness({
   );
 }
 
+function HomeLayoutNodesHarness({
+  options,
+}: {
+  options: Parameters<typeof useLayoutNodes>[0];
+}) {
+  return useLayoutNodes(options).homeNode;
+}
+
 async function renderUseLayoutNodes(
   options: Parameters<typeof useLayoutNodes>[0],
 ) {
@@ -1059,6 +1093,64 @@ describe("useLayoutNodes client UI visibility", () => {
     capturedMessagesNoteCapture = undefined;
     capturedWorkspaceNotePanelProps = null;
     vi.clearAllMocks();
+  });
+
+  it("enables the create-session target picker only for Home composer", async () => {
+    const options = createLayoutOptions({
+      activeThreadId: "shared-thread",
+      threadsByWorkspace: {
+        [workspace.id]: [
+          {
+            id: "shared-thread",
+            name: "Shared",
+            updatedAt: 1,
+            engineSource: "claude",
+            threadKind: "shared",
+          },
+        ],
+      },
+    });
+    const { result } = await renderUseLayoutNodes(options);
+
+    const normalComposer = render(<>{result.current.composerNode}</>);
+    expect(
+      normalComposer.getByTestId("composer").dataset
+        .createSessionTargetPicker,
+    ).toBe("false");
+    expect(
+      normalComposer.getByTestId("composer").dataset.isSharedSession,
+    ).toBe("true");
+    normalComposer.unmount();
+
+    const homeComposer = render(<>{result.current.homeNode}</>);
+    expect(
+      homeComposer.getByTestId("composer").dataset.createSessionTargetPicker,
+    ).toBe("true");
+    expect(
+      homeComposer.getByTestId("composer").dataset.isSharedSession,
+    ).toBe("false");
+  });
+
+  it("projects the Home creation target Engine into the hero icon owner", async () => {
+    render(
+      <HomeLayoutNodesHarness
+        options={createLayoutOptions({ selectedEngine: "claude" })}
+      />,
+    );
+
+    expect(screen.getByTestId("home-chat").dataset.selectedEngine).toBe(
+      "claude",
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "select Codex creation target",
+      }),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("home-chat").dataset.selectedEngine).toBe(
+        "codex",
+      );
+    });
   });
 
   it("projects the loaded source turn into Provider Continuation metadata", async () => {

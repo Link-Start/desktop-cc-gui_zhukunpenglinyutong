@@ -44,6 +44,12 @@ import {
 import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
 import { dispatchSharedSendEvent } from "../../shared-session/runtime/sharedSendStateStore";
 import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
+import {
+  CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
+  CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
+  CODEX_DISK_PROVIDER_PROFILE_ID,
+  CODEX_DISK_PROVIDER_PROFILE_NAME,
+} from "../../threads/constants/codexProviderProfiles";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
@@ -200,6 +206,10 @@ type ComposerProps = {
   selectedCollaborationModeId: string | null;
   onSelectCollaborationMode: (id: string | null) => void;
   isSharedSession?: boolean;
+  /** New Home 仅复用双栏 picker，不启用 Shared Session durable semantics。 */
+  createSessionTargetPicker?: boolean;
+  /** New Home 标题只接收 creation target 的 Engine projection；完整 Target 仍由 Composer 持有。 */
+  onCreationTargetEngineChange?: (engine: EngineType | null) => void;
   /** Wave 4 / B.6：Shared Send 状态机非 idle 时锁定四级 Picker（§14.5.3）。 */
   sharedTargetPickerLocked?: boolean;
   // Engine props
@@ -480,6 +490,8 @@ function ComposerImpl({
   selectedCollaborationModeId: _selectedCollaborationModeId,
   onSelectCollaborationMode: _onSelectCollaborationMode,
   isSharedSession = false,
+  createSessionTargetPicker = false,
+  onCreationTargetEngineChange,
   sharedTargetPickerLocked = false,
   engines,
   selectedEngine,
@@ -650,6 +662,80 @@ function ComposerImpl({
     activeThreadId ?? "",
   );
   const selectedSharedTarget = sharedTargetState.selectedNextTarget;
+  const [selectedCreationTarget, setSelectedCreationTarget] =
+    useState<ExecutionTarget | null>(null);
+  const defaultCreationTarget = useMemo<ExecutionTarget | null>(() => {
+    if (
+      !createSessionTargetPicker ||
+      (selectedEngine !== "claude" && selectedEngine !== "codex") ||
+      !selectedModelId?.trim()
+    ) {
+      return null;
+    }
+    const selectedModel =
+      models.find((candidate) => candidate.id === selectedModelId) ?? null;
+    const runtimeModel = selectedModel?.model?.trim() || null;
+    if (!selectedModel || !runtimeModel) {
+      return null;
+    }
+    const rawProviderProfileId = providerProfileId?.trim() || null;
+    const localProviderProfileId =
+      selectedEngine === "claude"
+        ? CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+        : CODEX_DISK_PROVIDER_PROFILE_ID;
+    const normalizedProviderProfileId =
+      rawProviderProfileId === localProviderProfileId
+        ? null
+        : rawProviderProfileId;
+    return {
+      engine: selectedEngine,
+      providerProfileId: normalizedProviderProfileId,
+      modelCatalogEntryId: selectedModel.id,
+      model: runtimeModel,
+      reasoning: selectedEffort ? { effort: selectedEffort } : null,
+      providerProfileNameSnapshot:
+        normalizedProviderProfileId ??
+        (selectedEngine === "claude"
+          ? CLAUDE_LOCAL_PROVIDER_PROFILE_NAME
+          : CODEX_DISK_PROVIDER_PROFILE_NAME),
+      providerProfileSource: normalizedProviderProfileId ? "managed" : "disk",
+    };
+  }, [
+    createSessionTargetPicker,
+    models,
+    providerProfileId,
+    selectedEffort,
+    selectedEngine,
+    selectedModelId,
+  ]);
+  const effectiveCreationTarget =
+    selectedCreationTarget ?? defaultCreationTarget;
+  useEffect(() => {
+    if (!createSessionTargetPicker) {
+      return;
+    }
+    onCreationTargetEngineChange?.(
+      effectiveCreationTarget?.engine ?? selectedEngine ?? null,
+    );
+  }, [
+    createSessionTargetPicker,
+    effectiveCreationTarget?.engine,
+    onCreationTargetEngineChange,
+    selectedEngine,
+  ]);
+  useEffect(() => {
+    if (!createSessionTargetPicker) {
+      return;
+    }
+    return () => {
+      onCreationTargetEngineChange?.(null);
+    };
+  }, [createSessionTargetPicker, onCreationTargetEngineChange]);
+  const selectedAtomicTarget = isSharedSession
+    ? selectedSharedTarget
+    : createSessionTargetPicker
+      ? effectiveCreationTarget
+      : null;
   const sharedTargetResolved =
     !isSharedSession || isResolvedExecutionTarget(selectedSharedTarget);
   const effectiveSubmitDisabled = submitDisabled || !sharedTargetResolved;
@@ -749,6 +835,15 @@ function ComposerImpl({
       });
     },
     [activeThreadId, activeWorkspaceId, isSharedSession],
+  );
+  const handleCreationTargetChange = useCallback(
+    (target: ExecutionTarget) => {
+      if (!createSessionTargetPicker || !isResolvedExecutionTarget(target)) {
+        return;
+      }
+      setSelectedCreationTarget(target);
+    },
+    [createSessionTargetPicker],
   );
   // 草稿值直接订阅模块级 store(而非经 app-shell 根 prop 灌入):按键写 store 时
   // 只有 Composer 自身重渲染,不再把整个 app-shell 拖下水。
@@ -1570,12 +1665,30 @@ function ComposerImpl({
       const shouldReferenceMemory = memoryReferenceMode !== "off";
       const browserContextAttachment = browserContext.attachment;
       const hasBrowserContextAttachment = Boolean(browserContextAttachment);
-      const sendOptions =
+      const createSessionTarget =
+        createSessionTargetPicker &&
+        isResolvedExecutionTarget(effectiveCreationTarget)
+          ? {
+              engine: effectiveCreationTarget.engine,
+              providerProfileId:
+                effectiveCreationTarget.providerProfileId?.trim() || null,
+              providerProfileName:
+                effectiveCreationTarget.providerProfileNameSnapshot,
+              providerProfileSource:
+                effectiveCreationTarget.providerProfileSource,
+              modelCatalogEntryId:
+                effectiveCreationTarget.modelCatalogEntryId,
+              model: effectiveCreationTarget.model,
+              effort: effectiveCreationTarget.reasoning?.effort ?? null,
+            }
+          : null;
+      const sendOptions: MessageSendOptions | undefined =
         skillInvocations.length > 0 ||
         selectedMemoryIds.length > 0 ||
         selectedNoteCardIds.length > 0 ||
         shouldReferenceMemory ||
-        hasBrowserContextAttachment
+        hasBrowserContextAttachment ||
+        createSessionTarget !== null
           ? {
               ...(skillInvocations.length > 0 ? { skillInvocations } : {}),
               ...(shouldReferenceMemory ? { memoryReferenceEnabled: true } : {}),
@@ -1584,6 +1697,7 @@ function ComposerImpl({
                 : {}),
               ...(selectedNoteCardIds.length > 0 ? { selectedNoteCardIds } : {}),
               ...(browserContextAttachment ? { browserContextAttachment } : {}),
+              ...(createSessionTarget ? { createSessionTarget } : {}),
             }
           : undefined;
       const sendResult = onSend(
@@ -1643,6 +1757,8 @@ function ComposerImpl({
       attachedImages,
       activeWorkspaceId,
       browserContext,
+      createSessionTargetPicker,
+      effectiveCreationTarget,
       disabled,
       effectiveSubmitDisabled,
       intentCanvasAttachments.length,
@@ -2483,48 +2599,63 @@ function ComposerImpl({
               onStop={onStop}
               onTextChange={handleTextChangeWithHistory}
               selectedModelId={
-                isSharedSession
-                  ? selectedSharedTarget?.modelCatalogEntryId ??
-                    selectedSharedTarget?.model ??
+                selectedAtomicTarget
+                  ? selectedAtomicTarget.modelCatalogEntryId ??
+                    selectedAtomicTarget.model ??
                     ""
                   : selectedModelId
               }
               selectedEngine={
-                selectedSharedTarget?.engine ?? selectedEngine
+                selectedAtomicTarget?.engine ?? selectedEngine
               }
               isSharedSession={isSharedSession}
+              providerTargetPickerMode={
+                isSharedSession
+                  ? "shared"
+                  : createSessionTargetPicker
+                    ? "create-session"
+                    : "native"
+              }
               threadId={activeThreadId}
               engines={engines}
               onSelectEngine={
-                isSharedSession || sharedTargetPickerLocked
+                isSharedSession ||
+                createSessionTargetPicker ||
+                sharedTargetPickerLocked
                   ? undefined
                   : onSelectEngine
               }
               models={models}
               providerModelCatalogs={providerModelCatalogs}
               providerProfileId={
-                isSharedSession
-                  ? selectedSharedTarget?.providerProfileId ?? null
+                selectedAtomicTarget
+                  ? selectedAtomicTarget.providerProfileId ?? null
                   : providerProfileId
               }
-              executionTarget={selectedSharedTarget}
+              executionTarget={selectedAtomicTarget}
               onExecutionTargetChange={
                 isSharedSession && !sharedTargetPickerLocked
                   ? handleSharedTargetChange
+                  : createSessionTargetPicker
+                    ? handleCreationTargetChange
                   : undefined
               }
               onNativeProviderTargetChange={
-                !isSharedSession ? handleNativeProviderTargetChange : undefined
+                !isSharedSession && !createSessionTargetPicker
+                  ? handleNativeProviderTargetChange
+                  : undefined
               }
               onSelectModel={
-                isSharedSession || sharedTargetPickerLocked
+                isSharedSession ||
+                createSessionTargetPicker ||
+                sharedTargetPickerLocked
                   ? undefined
                   : onSelectModel
               }
               reasoningOptions={reasoningOptions}
               selectedEffort={
-                isSharedSession
-                  ? selectedSharedTarget?.reasoning?.effort ?? null
+                selectedAtomicTarget
+                  ? selectedAtomicTarget.reasoning?.effort ?? null
                   : selectedEffort
               }
               onSelectEffort={
@@ -2537,6 +2668,13 @@ function ComposerImpl({
                           ...selectedSharedTarget,
                           reasoning: effort ? { effort } : null,
                         })
+                    : createSessionTargetPicker &&
+                        isResolvedExecutionTarget(effectiveCreationTarget)
+                      ? (effort) =>
+                          setSelectedCreationTarget({
+                            ...effectiveCreationTarget,
+                            reasoning: effort ? { effort } : null,
+                          })
                     : onSelectEffort
               }
               reasoningSupported={reasoningSupported}

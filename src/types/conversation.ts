@@ -447,6 +447,22 @@ export type SkillInvocation = {
   args?: Record<string, string>;
 };
 
+/**
+ * New Home 创建会话时冻结的一次性目标。
+ *
+ * 创建完成后必须消费；后续 Turn 继续以 thread binding 与 thread-scoped
+ * Composer selection 为准。
+ */
+export type ComposerCreateSessionTarget = {
+  engine: EngineType;
+  providerProfileId: string | null;
+  providerProfileName: string | null;
+  providerProfileSource: "disk" | "managed";
+  modelCatalogEntryId: string;
+  model: string;
+  effort: string | null;
+};
+
 export type MessageSendOptions = {
   skillInvocations?: SkillInvocation[];
   selectedMemoryIds?: string[];
@@ -465,6 +481,7 @@ export type MessageSendOptions = {
   autoSession?: AutoSessionMetadata | null;
   browserContextAttachment?: BrowserContextSendAttachment | null;
   intentCanvasContextAttachments?: IntentCanvasContextSendAttachment[];
+  createSessionTarget?: ComposerCreateSessionTarget;
 };
 
 export type SelectedAgentOption = {

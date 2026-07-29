@@ -3,7 +3,10 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ComposerEditorSettings } from "../../../types";
+import type {
+  ComposerEditorSettings,
+  MessageSendOptions,
+} from "../../../types";
 import type {
   CodeAnnotationDraftInput,
   CodeAnnotationSelection,
@@ -63,6 +66,7 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
     selectedEffort,
     onNativeProviderTargetChange,
     onExecutionTargetChange,
+    providerTargetPickerMode,
     onSelectEngine,
     onSelectModel,
     onSelectEffort,
@@ -89,6 +93,7 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
       providerProfileNameSnapshot?: string | null;
       providerProfileSource?: "disk" | "managed" | null;
     }) => void;
+    providerTargetPickerMode?: "native" | "shared" | "create-session";
     onSelectEngine?: (engine: "codex") => void;
     onSelectModel?: (modelId: string) => void;
     onSelectEffort?: (effort: string | null) => void;
@@ -97,6 +102,7 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
       <div
         data-testid="composer-target-authority"
         data-atomic-target={String(Boolean(onExecutionTargetChange))}
+        data-picker-mode={providerTargetPickerMode ?? "native"}
         data-engine-bypass={String(Boolean(onSelectEngine))}
         data-model-bypass={String(Boolean(onSelectModel))}
       />
@@ -161,6 +167,21 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
         data-testid="select-shared-effort"
         onClick={() => onSelectEffort?.("high")}
       />
+      <button
+        type="button"
+        data-testid="select-claude-local-target"
+        onClick={() =>
+          onExecutionTargetChange?.({
+            engine: "claude",
+            providerProfileId: null,
+            modelCatalogEntryId: "settings-main",
+            model: "kimi-for-coding",
+            reasoning: null,
+            providerProfileNameSnapshot: "Local settings.json",
+            providerProfileSource: "disk",
+          })
+        }
+      />
     </>
   ),
 }));
@@ -170,9 +191,11 @@ function ComposerHarness({
   pendingCodeAnnotation = null,
   onCodeAnnotationConsumed,
   sharedTarget,
+  createSessionTargetPicker = false,
+  onCreationTargetEngineChange,
   activeThreadId = "thread-1",
 }: {
-  onSend: (text: string) => void;
+  onSend: (text: string, options?: MessageSendOptions) => void;
   pendingCodeAnnotation?: CodeAnnotationDraftInput | null;
   onCodeAnnotationConsumed?: (dedupeKey: string) => void;
   sharedTarget?: {
@@ -181,6 +204,10 @@ function ComposerHarness({
     runtimeModel?: string;
     effort: string;
   };
+  createSessionTargetPicker?: boolean;
+  onCreationTargetEngineChange?: (
+    engine: "claude" | "codex" | "gemini" | "kimi" | "opencode" | null,
+  ) => void;
   activeThreadId?: string;
 }) {
   const [selectedCodeAnnotations, setSelectedCodeAnnotations] = useState<CodeAnnotationSelection[]>([]);
@@ -218,7 +245,9 @@ function ComposerHarness({
 
   return (
     <Composer
-      onSend={(text) => onSend(text)}
+      onSend={(text, _images, options) =>
+        options === undefined ? onSend(text) : onSend(text, options)
+      }
       onQueue={() => {}}
       onStop={() => {}}
       canStop={false}
@@ -230,6 +259,8 @@ function ComposerHarness({
       onSelectCollaborationMode={() => {}}
       selectedEngine="claude"
       isSharedSession={Boolean(sharedTarget)}
+      createSessionTargetPicker={createSessionTargetPicker}
+      onCreationTargetEngineChange={onCreationTargetEngineChange}
       providerProfileId={sharedTarget?.providerProfileId ?? null}
       models={
         sharedTarget
@@ -277,6 +308,89 @@ function getTextarea(container: HTMLElement) {
 }
 
 describe("Composer file reference token", () => {
+  it("keeps Home create-session target local and sends one complete target", async () => {
+    const onSend = vi.fn();
+    const onCreationTargetEngineChange = vi.fn();
+    const view = render(
+      <ComposerHarness
+        onSend={onSend}
+        createSessionTargetPicker
+        onCreationTargetEngineChange={onCreationTargetEngineChange}
+      />,
+    );
+
+    const authority = view.getByTestId("composer-target-authority");
+    expect(authority.dataset.atomicTarget).toBe("true");
+    expect(authority.dataset.pickerMode).toBe("create-session");
+    expect(authority.dataset.engineBypass).toBe("false");
+    expect(authority.dataset.modelBypass).toBe("false");
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId("select-shared-target"));
+      await Promise.resolve();
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(onCreationTargetEngineChange).toHaveBeenLastCalledWith("codex");
+
+    const textarea = getTextarea(view.container);
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "home target" } });
+      fireEvent.keyDown(textarea, { key: "Enter" });
+      await Promise.resolve();
+    });
+
+    expect(onSend).toHaveBeenCalledWith(
+      "home target",
+      expect.objectContaining({
+        createSessionTarget: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileName: "Provider B",
+          providerProfileSource: "managed",
+          modelCatalogEntryId: "settings-reasoning",
+          model: "deepseek-v4-pro",
+          effort: "high",
+        },
+      }),
+    );
+  });
+
+  it("accepts a Claude local model as the Home creation target", async () => {
+    const onSend = vi.fn();
+    const view = render(
+      <ComposerHarness onSend={onSend} createSessionTargetPicker />,
+    );
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId("select-claude-local-target"));
+      await Promise.resolve();
+    });
+
+    const textarea = getTextarea(view.container);
+    expect(textarea.dataset.providerProfileId).toBe("null");
+
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "local target" } });
+      fireEvent.keyDown(textarea, { key: "Enter" });
+      await Promise.resolve();
+    });
+
+    expect(onSend).toHaveBeenCalledWith(
+      "local target",
+      expect.objectContaining({
+        createSessionTarget: {
+          engine: "claude",
+          providerProfileId: null,
+          providerProfileName: "Local settings.json",
+          providerProfileSource: "disk",
+          modelCatalogEntryId: "settings-main",
+          model: "kimi-for-coding",
+          effort: null,
+        },
+      }),
+    );
+  });
+
   it("does not fabricate a Shared target from global Composer props", () => {
     const view = render(
       <ComposerHarness

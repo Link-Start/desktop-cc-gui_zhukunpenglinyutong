@@ -26,6 +26,7 @@ import type {
   ModelInfo,
   PermissionMode,
   ProviderModelCatalogs,
+  ProviderTargetPickerMode,
   ReasoningEffort,
   SelectedAgent,
   StreamActivityPhase,
@@ -465,6 +466,7 @@ export interface ChatInputBoxAdapterProps {
   selectedModelId: string | null;
   selectedEngine?: EngineType;
   isSharedSession?: boolean;
+  providerTargetPickerMode?: ProviderTargetPickerMode;
   /** Shared Thread id（Wave 4 / B.6：send 状态条/状态机的 store key 组成）。 */
   threadId?: string | null;
   engines?: AdapterEngineInfo[];
@@ -1041,6 +1043,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       selectedModelId,
       selectedEngine,
       isSharedSession = false,
+      providerTargetPickerMode,
       engines,
       onSelectEngine,
       models,
@@ -1121,6 +1124,10 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       completionEmailDisabled,
       onToggleCompletionEmail,
     } = props;
+    const effectiveProviderTargetPickerMode =
+      providerTargetPickerMode ?? (isSharedSession ? 'shared' : 'native');
+    const usesAtomicProviderTargetPicker =
+      effectiveProviderTargetPickerMode !== 'native';
     const { t } = useTranslation();
     const chatInputRef = useRef<ChatInputBoxHandle>(null);
     const renderCountRef = useRef(0);
@@ -2123,7 +2130,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         executionTarget={executionTarget}
         onExecutionTargetChange={onExecutionTargetChange}
         onNativeProviderTargetChange={onNativeProviderTargetChange}
-        sharedTargetPicker={isSharedSession}
+        providerTargetPickerMode={effectiveProviderTargetPickerMode}
         providerAvailability={providerAvailability}
         providerVersions={providerVersions}
         providerStatusLabels={providerStatusLabels}
@@ -2143,10 +2150,14 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         onRemoveAttachment={handleRemoveAttachment}
         onModeSelect={onModeSelect}
         onModelSelect={
-          !isSharedSession && onSelectModel ? handleModelSelect : undefined
+          !usesAtomicProviderTargetPicker && onSelectModel
+            ? handleModelSelect
+            : undefined
         }
         onProviderSelect={
-          !isSharedSession && onSelectEngine ? handleProviderSelect : undefined
+          !usesAtomicProviderTargetPicker && onSelectEngine
+            ? handleProviderSelect
+            : undefined
         }
         reasoningEffort={effortToOptionalReasoning(selectedEffort)}
         reasoningOptions={normalizeReasoningOptions(reasoningOptions)}

@@ -350,6 +350,7 @@ export interface ProviderInfo {
 
 export type ProviderId = 'claude' | 'codex' | 'gemini' | 'kimi' | 'opencode';
 export type ProviderModelCatalogs = Partial<Record<ProviderId, ModelInfo[]>>;
+export type ProviderTargetPickerMode = 'native' | 'shared' | 'create-session';
 export type CodexSpeedMode = 'standard' | 'fast' | 'unknown';
 export type StreamActivityPhase = 'idle' | 'waiting' | 'ingress';
 
@@ -545,8 +546,8 @@ export interface ChatInputBoxProps {
   onExecutionTargetChange?: (target: ExecutionTarget) => void;
   /** Native Session 选择其他 Provider Profile 时请求创建续接会话。 */
   onNativeProviderTargetChange?: (target: ExecutionTarget) => void;
-  /** 是否使用 Shared Session Provider-aware target picker。 */
-  sharedTargetPicker?: boolean;
+  /** Picker layout/interaction mode；不得用它推断 Session Kind。 */
+  providerTargetPickerMode?: ProviderTargetPickerMode;
   /** Provider availability override (installed state from host app) */
   providerAvailability?: Partial<Record<ProviderId, boolean>>;
   /** Provider CLI versions (from host app detection) */

@@ -283,6 +283,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   >([]);
   const [noteCardSelectionRequest, setNoteCardSelectionRequest] =
     useState<ComposerNoteCardSelectionRequest | null>(null);
+  const [homeCreationTargetEngine, setHomeCreationTargetEngine] =
+    useState<EngineType | null>(null);
   const [gitModalPreviewRequest, setGitModalPreviewRequest] =
     useState<GitModalPreviewRequest | null>(null);
   const [gitModeControlsTarget, setGitModeControlsTarget] =
@@ -1447,13 +1449,14 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     showStatusPanelToggleOverride?: boolean,
     branchControlEnabled: boolean = true,
     externalNoteCardRequest: ComposerNoteCardSelectionRequest | null = null,
+    createSessionTargetPicker: boolean = false,
   ) =>
     options.showComposer ? (
       <Profiler id="composer" onRender={handleRuntimeProfileRender}>
         <SharedSendStatusBar
           workspaceId={options.activeWorkspaceId ?? null}
           threadId={options.activeThreadId ?? null}
-          isSharedSession={isSharedSession}
+          isSharedSession={isSharedSession && !createSessionTargetPicker}
         />
         <ActiveCanvasComposer
           items={EMPTY_ACTIVE_CANVAS_ITEMS}
@@ -1472,8 +1475,15 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           rewindDialogRequest={rewindDialogRequest}
           onRewindDialogRequestConsumed={handleRewindDialogRequestConsumed}
           canStop={options.canStop}
-          disabled={options.isReviewing || isComposerInputLocked(sharedSendState)}
-          submitDisabled={isComposerSubmitLocked(sharedSendState)}
+          disabled={
+            options.isReviewing ||
+            (!createSessionTargetPicker &&
+              isComposerInputLocked(sharedSendState))
+          }
+          submitDisabled={
+            !createSessionTargetPicker &&
+            isComposerSubmitLocked(sharedSendState)
+          }
           contextUsage={null}
           contextDualViewEnabled={options.contextDualViewEnabled}
           codexAutoCompactionEnabled={options.codexAutoCompactionEnabled}
@@ -1523,8 +1533,16 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           collaborationModesEnabled={options.collaborationModesEnabled}
           selectedCollaborationModeId={options.selectedCollaborationModeId}
           onSelectCollaborationMode={options.onSelectCollaborationMode}
-          isSharedSession={isSharedSession}
-          sharedTargetPickerLocked={isPickerLocked(sharedSendState)}
+          isSharedSession={isSharedSession && !createSessionTargetPicker}
+          createSessionTargetPicker={createSessionTargetPicker}
+          onCreationTargetEngineChange={
+            createSessionTargetPicker
+              ? setHomeCreationTargetEngine
+              : undefined
+          }
+          sharedTargetPickerLocked={
+            !createSessionTargetPicker && isPickerLocked(sharedSendState)
+          }
           engines={options.engines}
           selectedEngine={options.selectedEngine}
           onSelectEngine={options.onSelectEngine}
@@ -1639,7 +1657,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     ) : null;
   const composerNode = renderComposerNode(false, true, noteCardSelectionRequest);
   // 首页：分支徽标与工作区选择并排渲染在 HomeChat 里，故 Composer 内不再重复
-  const homeComposerNode = renderComposerNode(false, false);
+  const homeComposerNode = renderComposerNode(false, false, null, true);
   const approvalToastsNode = null;
 
   const updateToastNode = (
@@ -1686,7 +1704,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       onSelectWorkspace={options.onSelectHomeWorkspace}
       onAddWorkspace={options.onAddWorkspace}
       composerNode={homeComposerNode}
-      selectedEngine={options.selectedEngine}
+      selectedEngine={homeCreationTargetEngine ?? options.selectedEngine}
       branchControl={composerBranchControl}
     />
   );

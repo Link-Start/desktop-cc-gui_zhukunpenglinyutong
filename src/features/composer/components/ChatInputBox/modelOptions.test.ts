@@ -203,7 +203,7 @@ describe('ChatInputBox model options', () => {
     expect(modelList).toContain('gpt-5.5:gpt-5.5:settings-override:gpt-5.5 (config)');
     expect(modelList).toContain('demo:demo:custom:Demo Override');
     expect(modelList).toContain('gpt-5.6-luna:gpt-5.6-luna:catalog:gpt-5.6-luna');
-    expect(modelList).toContain('user-custom-codex:::User Custom Codex');
+    expect(modelList).toContain('user-custom-codex::custom:User Custom Codex');
     expect(modelEntries.filter((entry) => entry.startsWith('gpt-5.5:'))).toHaveLength(1);
     expect(modelEntries.filter((entry) => entry.startsWith('demo:'))).toHaveLength(1);
     expect(modelEntries.filter((entry) => entry.startsWith('user-custom-codex:'))).toHaveLength(1);
@@ -248,7 +248,7 @@ describe('ChatInputBox model options', () => {
       modelStorageSnapshot: readModelStorageSnapshot(),
     }));
 
-    expect(modelList).toContain('gpt-5.4:::My GPT 5.4');
+    expect(modelList).toContain('gpt-5.4::custom:My GPT 5.4');
     expect(modelList.match(/gpt-5\.4:/g)).toHaveLength(1);
     expect(modelList).toContain('gpt-5.5::fallback:gpt-5.5');
   });

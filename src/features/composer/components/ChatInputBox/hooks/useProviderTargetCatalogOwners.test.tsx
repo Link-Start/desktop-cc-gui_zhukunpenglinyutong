@@ -3,9 +3,12 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  resetSharedProviderTargetCatalogForTests,
-  useSharedProviderTargetCatalog,
-} from "./useSharedProviderTargetCatalog";
+  resetProviderTargetCatalogForTests,
+  useAtomicProviderTargetCatalog,
+  useNativeProviderTargetCatalog,
+} from "./useProviderTargetCatalogOwners";
+import { buildProviderExecutionTarget } from "../selectors/ModelSelect";
+import { isResolvedExecutionTarget } from "../../../../shared-session/target/types";
 import {
   discoverCodexModels,
   getClaudeProviders,
@@ -28,9 +31,9 @@ const getKimiProvidersMock = vi.mocked(getKimiProviders);
 const getEngineModelsMock = vi.mocked(getEngineModels);
 const discoverCodexModelsMock = vi.mocked(discoverCodexModels);
 
-describe("useSharedProviderTargetCatalog", () => {
+describe("Provider target catalog owners", () => {
   beforeEach(() => {
-    resetSharedProviderTargetCatalogForTests();
+    resetProviderTargetCatalogForTests();
     vi.clearAllMocks();
     getClaudeProvidersMock.mockResolvedValue([
       { id: "claude-a", name: "Claude A" },
@@ -53,6 +56,7 @@ describe("useSharedProviderTargetCatalog", () => {
         displayName: "Scoped model",
         description: "",
         isDefault: true,
+        providerProfileId: "codex-b",
       },
     ]);
     discoverCodexModelsMock.mockResolvedValue({ data: [] });
@@ -60,11 +64,11 @@ describe("useSharedProviderTargetCatalog", () => {
 
   it("loads profiles once and models only for the opened binding", async () => {
     const { result } = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
+        mode: "shared",
         currentProvider: "claude",
         currentProviderProfileId: "claude-a",
-        currentModels: [],
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -97,6 +101,240 @@ describe("useSharedProviderTargetCatalog", () => {
     ]);
   });
 
+  it("preserves a backend-returned Claude Local profile and produces a resolved model target", async () => {
+    getClaudeProvidersMock.mockResolvedValueOnce([
+      {
+        id: "__local_settings_json__",
+        name: "Local settings.json",
+        isLocalProvider: true,
+      },
+      { id: "minimax-m3", name: "Minimax-m3" },
+    ]);
+    const { result } = renderHook(() =>
+      useAtomicProviderTargetCatalog({
+        enabled: true,
+        mode: "create-session",
+        currentProvider: "claude",
+        currentProviderProfileId: "minimax-m3",
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+    });
+
+    const claudeProfiles = result.current.groups.find(
+      (group) => group.providerId === "claude",
+    )?.profiles;
+    const localProfile = claudeProfiles?.find(
+      (profile) => profile.id === "__local_settings_json__",
+    );
+    expect(
+      localProfile,
+    ).toMatchObject({
+      label: "Local settings.json",
+      source: "disk",
+    });
+    expect(
+      claudeProfiles?.find((profile) => profile.id === "minimax-m3"),
+    ).toMatchObject({
+      label: "Minimax-m3",
+      source: "managed",
+    });
+
+    const selectedLocalTarget = buildProviderExecutionTarget(
+      {
+        engine: "claude",
+        providerProfileId: "minimax-m3",
+        modelCatalogEntryId: "managed-main",
+        model: "managed-main",
+        providerProfileNameSnapshot: "Minimax-m3",
+        providerProfileSource: "managed",
+      },
+      "claude",
+      localProfile!.id,
+      "settings-main",
+      localProfile!.label,
+      localProfile!.source,
+      true,
+      "kimi-for-coding",
+    );
+    expect(selectedLocalTarget).toMatchObject({
+      engine: "claude",
+      providerProfileId: null,
+      modelCatalogEntryId: "settings-main",
+      model: "kimi-for-coding",
+      providerProfileSource: "disk",
+    });
+    expect(isResolvedExecutionTarget(selectedLocalTarget)).toBe(true);
+  });
+
+  it("keeps Native Local rows out of Home managed Profiles while preserving public fallback", async () => {
+    getClaudeProvidersMock.mockResolvedValueOnce([
+      { id: "minimax-m3", name: "Minimax-m3" },
+    ]);
+    getEngineModelsMock
+      .mockResolvedValueOnce([
+        {
+          id: "local-scoped",
+          model: "local-scoped-runtime",
+          displayName: "Local scoped",
+          description: "",
+          isDefault: true,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "minimax-scoped",
+          model: "minimax-runtime",
+          displayName: "Minimax scoped",
+          description: "",
+          isDefault: true,
+          providerProfileId: "minimax-m3",
+        },
+        {
+          id: "leaked-local",
+          model: "kimi-for-coding",
+          displayName: "Leaked local",
+          description: "",
+          isDefault: false,
+          providerProfileId: null,
+          source: "settings-override",
+        },
+        {
+          id: "public-builtin",
+          model: "claude-sonnet-5",
+          displayName: "Sonnet 5",
+          description: "",
+          isDefault: false,
+          providerProfileId: null,
+          source: "builtin",
+        },
+      ]);
+    const { result } = renderHook(() =>
+      useAtomicProviderTargetCatalog({
+        enabled: true,
+        mode: "create-session",
+        currentProvider: "claude",
+        currentProviderProfileId: "minimax-m3",
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+    });
+
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "claude")
+        ?.profiles.find(
+          (profile) => profile.id === "__local_settings_json__",
+        )?.models,
+    ).toEqual([]);
+
+    await act(async () => {
+      await result.current.ensureModels(
+        "claude",
+        "__local_settings_json__",
+      );
+      await result.current.ensureModels("claude", "minimax-m3");
+    });
+
+    expect(getEngineModelsMock).toHaveBeenCalledWith("claude", {
+      providerProfileId: "__local_settings_json__",
+    });
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "claude")
+        ?.profiles.find(
+          (profile) => profile.id === "__local_settings_json__",
+        ),
+    ).toMatchObject({
+      loading: false,
+      models: [
+        expect.objectContaining({
+          id: "local-scoped",
+          model: "local-scoped-runtime",
+        }),
+      ],
+    });
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "claude")
+        ?.profiles.find((profile) => profile.id === "minimax-m3")
+        ?.models,
+    ).toEqual([
+      expect.objectContaining({
+        id: "minimax-scoped",
+        model: "minimax-runtime",
+      }),
+      expect.objectContaining({
+        id: "public-builtin",
+        model: "claude-sonnet-5",
+        source: "builtin",
+      }),
+    ]);
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "claude")
+        ?.profiles.find((profile) => profile.id === "minimax-m3")
+        ?.models,
+    ).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ model: "kimi-for-coding" }),
+      ]),
+    );
+  });
+
+  it("keeps public fallback rows available in the Native owner", async () => {
+    getEngineModelsMock.mockResolvedValueOnce([
+      {
+        id: "provider-scoped",
+        model: "provider-runtime",
+        displayName: "Provider scoped",
+        description: "",
+        isDefault: true,
+        providerProfileId: "codex-b",
+      },
+      {
+        id: "public-fallback",
+        model: "public-runtime",
+        displayName: "Public fallback",
+        description: "",
+        isDefault: false,
+        providerProfileId: null,
+      },
+    ]);
+    const { result } = renderHook(() =>
+      useNativeProviderTargetCatalog({
+        enabled: true,
+        currentProvider: "codex",
+        currentProviderProfileId: "codex-b",
+        currentModels: [],
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+      await result.current.ensureModels("codex", "codex-b");
+    });
+
+    expect(
+      result.current.groups[0]?.profiles.find(
+        (profile) => profile.id === "codex-b",
+      )?.models,
+    ).toEqual([
+      expect.objectContaining({ id: "provider-scoped" }),
+      expect.objectContaining({ id: "public-fallback" }),
+    ]);
+  });
+
   it("bypasses a completed cache entry when Shared reopens a local Provider", async () => {
     getEngineModelsMock.mockResolvedValueOnce([
       {
@@ -108,12 +346,11 @@ describe("useSharedProviderTargetCatalog", () => {
       },
     ]);
     const firstHook = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
         mode: "shared",
         currentProvider: "codex",
         currentProviderProfileId: "codex-b",
-        currentModels: [],
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -137,12 +374,11 @@ describe("useSharedProviderTargetCatalog", () => {
       },
     ]);
     const secondHook = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
         mode: "shared",
         currentProvider: "codex",
         currentProviderProfileId: "codex-b",
-        currentModels: [],
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -193,12 +429,11 @@ describe("useSharedProviderTargetCatalog", () => {
         }),
     );
     const { result } = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
         mode: "shared",
         currentProvider: "codex",
         currentProviderProfileId: "codex-b",
-        currentModels: [],
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -260,9 +495,8 @@ describe("useSharedProviderTargetCatalog", () => {
           }),
       );
     const nativeHook = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useNativeProviderTargetCatalog({
         enabled: true,
-        mode: "native",
         currentProvider: "claude",
         currentProviderProfileId: null,
         currentModels: [],
@@ -271,12 +505,11 @@ describe("useSharedProviderTargetCatalog", () => {
       }),
     );
     const sharedHook = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
         mode: "shared",
         currentProvider: "codex",
         currentProviderProfileId: "codex-b",
-        currentModels: [],
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -309,12 +542,11 @@ describe("useSharedProviderTargetCatalog", () => {
   it("keeps other CLIs usable when one Provider catalog fails", async () => {
     getKimiProvidersMock.mockRejectedValueOnce(new Error("kimi unavailable"));
     const { result } = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
         mode: "shared",
         currentProvider: "claude",
         currentProviderProfileId: null,
-        currentModels: [{ id: "local-model", label: "Local model" }],
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -342,18 +574,11 @@ describe("useSharedProviderTargetCatalog", () => {
 
   it("does not project global engine models into a Shared Provider binding", async () => {
     const { result } = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
         mode: "shared",
         currentProvider: "codex",
         currentProviderProfileId: "codex-b",
-        currentModels: [
-          {
-            id: "kimi-catalog-entry",
-            model: "kimi-for-coding",
-            label: "Stale global Kimi model",
-          },
-        ],
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -388,11 +613,11 @@ describe("useSharedProviderTargetCatalog", () => {
   it("surfaces a binding-scoped model failure without replacing the catalog", async () => {
     getEngineModelsMock.mockRejectedValueOnce(new Error("provider offline"));
     const { result } = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
+        mode: "shared",
         currentProvider: "claude",
         currentProviderProfileId: "claude-a",
-        currentModels: [],
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -415,9 +640,8 @@ describe("useSharedProviderTargetCatalog", () => {
 
   it("projects only the current CLI in native mode", async () => {
     const { result } = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useNativeProviderTargetCatalog({
         enabled: true,
-        mode: "native",
         currentProvider: "codex",
         currentProviderProfileId: "codex-b",
         currentModels: [{ id: "current-model", label: "Current model" }],
@@ -445,9 +669,8 @@ describe("useSharedProviderTargetCatalog", () => {
 
   it("keeps only the current Kimi profile selectable in native mode", async () => {
     const { result } = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useNativeProviderTargetCatalog({
         enabled: true,
-        mode: "native",
         currentProvider: "kimi",
         currentProviderProfileId: "kimi-c",
         currentModels: [{ id: "kimi-model", label: "Kimi model" }],
@@ -474,9 +697,8 @@ describe("useSharedProviderTargetCatalog", () => {
 
   it("reloads only the configured slice and preserves current custom models", async () => {
     const { result } = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useNativeProviderTargetCatalog({
         enabled: true,
-        mode: "native",
         workspaceId: "ws-1",
         currentProvider: "codex",
         currentProviderProfileId: "codex-b",
@@ -522,16 +744,16 @@ describe("useSharedProviderTargetCatalog", () => {
         displayName: "Last Good",
         description: "",
         isDefault: true,
+        providerProfileId: "codex-b",
       },
     ]);
     const { result } = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
         mode: "shared",
         workspaceId: "ws-1",
         currentProvider: "codex",
         currentProviderProfileId: "codex-b",
-        currentModels: [],
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -566,9 +788,8 @@ describe("useSharedProviderTargetCatalog", () => {
       ],
     });
     const { result } = renderHook(() =>
-      useSharedProviderTargetCatalog({
+      useNativeProviderTargetCatalog({
         enabled: true,
-        mode: "native",
         workspaceId: "ws-1",
         currentProvider: "codex",
         currentProviderProfileId: "codex-b",

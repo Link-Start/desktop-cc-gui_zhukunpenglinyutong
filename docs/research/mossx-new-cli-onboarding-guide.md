@@ -1,23 +1,25 @@
 # 新 CLI 接入指南（Engine Onboarding Guide）
 
-> 日期：2026-07-27
+> 初始日期：2026-07-27
+> 最近校准：2026-07-29
 > 上游契约：[`mossx-multi-cli-provider-session-foundation-design.md`](./mossx-multi-cli-provider-session-foundation-design.md)（下称**基石设计**）
 > 适用读者：要为 mossx 接入新 Agent CLI（如 Grok CLI、Auggie、未来任意 CLI）的工程师
-> 核心结论：接入一个新 CLI = **一次 Capability Spike + 一个新 RuntimeDeliveryAdapter + 注册点**，不是改动内核。对存量 CLI 与存量 Shared 会话零影响。
+> 核心结论：接入一个新 CLI = **一次 Capability Spike + 一个 RuntimeDeliveryAdapter + terminal/event normalizer + 注册点**，不是复制一套 Shared lifecycle。接入目标是保持存量 CLI、Native Session 与 Shared Session 的既有语义不变。
 
 ---
 
 ## 一、这份文档解决什么问题
 
-基石设计把 mossx 的会话系统建成 capability-driven 架构：内核（Canonical Event Log、ContextCompiler、Cursor、Provisioning）不感知具体 CLI，所有 CLI 差异收敛到三个扩展点：
+基石设计把 mossx 的会话系统建成 capability-driven 架构：内核（Canonical Event Log、ContextCompiler、Cursor、Provisioning）不感知具体 CLI，CLI 差异收敛到四个扩展点：
 
 ```text
 扩展点 1: RuntimeDeliveryAdapter   —— 投递与 ACK 语义（基石设计 §14.3.1）
 扩展点 2: RuntimeCapabilities      —— 运行期 Probe 得到的能力画像（§14.3.1/§14.3.2）
-扩展点 3: NativeHistoryReader      —— 只读 History 源端（§9.1.1，可后置）
+扩展点 3: NativeEventNormalizer    —— typed terminal、streaming、tool 与 usage 事件归一（§14.2.2.1）
+扩展点 4: NativeHistoryReader      —— 只读 History 源端（§9.1.1，可后置）
 ```
 
-新 CLI 接入就是按固定流程填充这三个扩展点。**先读基石设计的 §3.2、§9.2、§14.3 三节**，再回来按本指南执行。
+新 CLI 接入按固定流程填充前三个必选扩展点，再按需实现 `NativeHistoryReader`。**先读基石设计的 §3.2、§9.2、§14.2.2.1、§14.3 与 §14.4.4.1**，再回来按本指南执行。
 
 ### 1.1 接入前必须建立的心智模型
 
@@ -26,8 +28,11 @@
 | Engine ≠ Provider ≠ Model | CLI 是执行者，Provider 是通信配置，Model 是本 Turn 的选择，三者正交 | §2.1 |
 | Capability 不靠猜 | 一切能力由运行期 Probe 得到，禁止按 Engine 名字硬编码假设 | 红线 20/26 |
 | ACK 分级 | Process Spawn、stdin write、first token 都不是 ACK；每个 Adapter 用自己的协议证据 | §14.3.1 |
+| Terminal 与 cleanup 分域 | Provider typed final/result 决定 Shared logical settlement；process/stdio/hook cleanup 不能拖住 Composer | §14.2.2.1 |
 | Intent Before Side Effect | 调用外部 CLI 之前，对应 Intent 必须先 Durable | §14.2.2、红线 25 |
 | 降级是合法的 | 能力弱的 CLI 走 `portable-transcript`/`checkpoint` + `ackFidelity = weak`，不假装 exactly-once | §9.2、§14.3.5 |
+| Canonical writer 单一权威 | Adapter 只产生 typed evidence；Canonical Fact 由 Shared core 统一序列化和持久化 | §14.4.4.1 |
+| Recovery owner 隔离 | Shared Attempt/Binding recovery 不得回退 Native resume/rebind/fork | §14.4.7.1 |
 
 ### 1.2 接入形态分级：先想清楚做到哪一档
 
@@ -77,6 +82,8 @@
 - [ ] **Input ACK**：投递后有 request-response 确认吗？有 echo 吗（如 Claude `--replay-user-messages`）？还是只能等第一个合法 event（弱 ACK）？
 - [ ] **Run Started**：有显式 started 事件，还是只能从第一个 assistant/tool event 推断？
 - [ ] **Terminal**：有显式 completed/result 事件吗？Process Exit 与 Terminal 冲突时哪个为准？
+- [ ] **Cleanup**：typed final 后还有哪些 process/stdio/hook/MCP child/usage 清理事件？它们会延迟多久，是否可能不退出？
+- [ ] **Duplicate Final**：typed final、cumulative full snapshot、process-exit fallback 是否可能重复表达同一结果？
 - [ ] **Pending Probe**：投递后 ACK 丢失时，能按 client-supplied id 或 native history 查询"刚才的输入到底进没进去"吗？
 - [ ] **Cancel**：能取消一个已投递但未确认的 delivery 吗？取消有 ACK 吗？（→ `pendingCancel` 枚举）
 
@@ -170,6 +177,8 @@ interface RuntimeDeliveryAdapter {
 - 不得把 process spawned、stdin write success、first token 当作 ACK 返回；
 - 不得为了让 matrix 好看而上报未实测的能力；
 - 不得在 Adapter 内做自动重试/自动 failover（重试决策属于内核 + 用户，§8.4、§14.5.5）。
+- 不得把 accepted start ACK 当作 completed；Shared completion 由 exact Attempt waiter 等待 logical terminal。
+- 不得让 frontend 根据 Engine 名称、inline event 是否到达或 timeout 猜测 terminal。
 
 ### Step 4：事件归一（MossxAgentEvent Ingress）
 
@@ -177,8 +186,27 @@ interface RuntimeDeliveryAdapter {
 
 - 映射到 `run:start / turn:start / message:delta / tool:start|update|end / turn:end / run:settled` 最小事件面；
 - **不改** `MossxAgentEvent` 的既有 event meaning（红线 32）——新事件类型用 additive envelope 扩展；
-- 关键义务：保证 **Terminal 边界可判定**。Assembler（A2.3）依赖 authoritative final snapshot 组装 `turnCommitted`；如果新 CLI 的 Terminal 只能靠 process-exit 推断，要在 capability 里如实标 `terminal: "process-exit"`，并确保 exit 前的 final state 可完整读取；
+- 关键义务：保证 **Terminal 边界可判定**。Provider typed final/result 必须归一为 Attempt-owned `run.settled`；如果 Spike 证明 process exit 本身就是该 CLI 唯一的 logical terminal evidence，才允许声明 `terminal: "process-exit"`，并确保退出前可以取得完整 final snapshot；
+- Shared logical settlement 与 runtime cleanup 分开：typed final 后仍在进行的 stdout/stderr drain、process reap、hook/MCP child 退出与 usage probe 只能补充 cleanup/usage，不能延迟或重新打开已 settled Attempt；
+- 同一 `attemptId + runtimeTurnId` 的 duplicate final、cumulative full observation 与迟到 `TurnCompleted` 必须幂等吸收，不能生成第二条 Assistant Final 或第二个 `conversation.turnCommitted`；
+- Runtime send 返回 exact identity 前到达的事件必须进入 bounded hold/replay barrier；绑定 exact Shared owner 后按原顺序释放，不能先投影成 Native Session；
 - streaming delta 走既有 `liveAssistantTextChannel` 外部化通道（红线 35），不为新 CLI 开第二条 delta 路径。
+
+新 CLI 不拥有 Canonical persistence：
+
+- Adapter 输出 typed ACK、terminal、usage 与 control evidence
+- Shared coordinator 解析 exact owner 并归一 evidence
+- assembler 生成 typed `SharedCanonicalFact`
+- `SharedEventWriter::append_canonical_fact*` 统一生成 tagged envelope 并落盘
+
+禁止 Adapter、delivery 模块或 frontend 手工构造 `NewCanonicalEvent`。需要同时更新 Binding state 时，必须调用 Writer 的原子组合入口。Projection 兼容旧 type-less row 属于 core decode boundary，不属于新 CLI Adapter。
+
+Shared 与 Native 可以复用底层 CLI protocol parser，但不能复用 recovery owner：
+
+- Shared failure 保持在 Attempt/Binding 状态机，不能调用 Native resume/rebind/fork
+- Native reconnect card 只服务 Native thread
+- Shared loader 只读取 Canonical Projection 与可展示的 Legacy Shared snapshot
+- 新 CLI 的 Native history 只有在 Step 7 的只读 `NativeHistoryReader` 中可用，不能反向修补 Shared Canvas
 
 ### Step 5：ContextCompiler 对接（通常零代码）
 
@@ -228,11 +256,18 @@ interface RuntimeDeliveryAdapter {
 | 1 | request accepted / rejected | 基本投递语义 |
 | 2 | accepted 后 connection drop | ACK 与现实的裂缝 → ambiguous 路径 |
 | 3 | first event 前 crash | 弱 ACK CLI 的恢复定性 |
-| 4 | duplicate Terminal | `turnCommitted` 幂等 |
+| 4 | duplicate typed final / late cleanup terminal | `run.settled`、Assistant Final 与 `turnCommitted` 都 exactly-once |
 | 5 | Resume 后 Probe | pendingDelivery 恢复 |
 | 6 | Provider A/B 相同 Engine 并行 | Runtime 隔离不串线 |
 | 7 | unsupported capability 降级 | transcript/checkpoint 自动兜底 |
 | 8 | schema/version 变化 | 重新 Probe，不用旧能力解释新 binary |
+| 9 | typed final 后 process 继续存活 | Shared Composer 立即 idle；cleanup 独立完成 |
+| 10 | Shared Stop / cancel race | 命中 exact Attempt owner；cancel ACK/typed cancellation 结算为 `cancelled`，已抢先完成的合法 terminal 可以保持 `completed`；最终 exactly-once |
+| 11 | send 返回 accepted，但 frontend 未收到 inline terminal | backend waiter 仍从 durable settlement 收口 |
+| 12 | early event before exact native identity | hold/replay 后只投影 Shared，不泄漏 Native row |
+| 13 | Canonical envelope | 新 Fact 的 payload `type` 与 row `fact_type` 一致 |
+| 14 | Shared projection failure | 保持可重试，不调用 Native recovery，不显示 Native recovery card |
+| 15 | Native Session 对照 | Native history、live terminal、stop 与 recovery 行为不变 |
 
 另外两项接入级验收：
 
@@ -241,16 +276,18 @@ interface RuntimeDeliveryAdapter {
 
 ---
 
-## 五、对存量系统的影响清单（预期：全零）
+## 五、存量行为防回归清单（必须为零）
 
-接入完成后，用这张表自证"零影响"：
+接入完成后，用这张表证明存量行为没有回归：
 
 - [ ] 存量 Engine 的事件含义、顺序、Terminal settlement 未变（红线 32）
 - [ ] 存量 Shared 会话的 Canonical Entry、Cursor、Binding 状态未被触碰（新 CLI 只产生新 `bindingKey`）
 - [ ] 存量 Native Session 不经过任何新代码路径（additive routing）
+- [ ] Shared typed final 可以在 process cleanup 前收口；Native CLI 原有 cleanup lifecycle 未被全局改写
 - [ ] `ConversationItem` / `threadItems.ts` / `liveAssistantTextChannel` 无改动（红线 31/34/35）
 - [ ] 老 Shared 会话切到新 CLI Target 时：新 Binding lazy create，老 Binding 保留；切回时 `native-delta` 复用（§8.3）
 - [ ] 新 CLI 的 weak ACK 没有污染全局 exactly-once 语义（降级显式可见）
+- [ ] Shared history error 不进入 Native recovery；Shared title 变化后仍按同一 `shared:<UUID>` 恢复
 
 ---
 
@@ -264,7 +301,7 @@ Phase S Spike 实测（假想结论）:
   - Session: 首个 prompt 隐式创建，session id 在 system init event 返回
   - Resume: --resume <id> 支持；无 fork/clone
   - Input ACK: 无 response、无 echo；第一个 assistant event 是唯一信号
-  - Terminal: result event 存在；process exit 可兜底
+  - Terminal: result event 存在；process exit 只表示 cleanup 完成
   - Pending Probe: 无 client id 机制；可读 ~/.grok/sessions/*.jsonl（append-only）
   - History Import: 无
   - Usage: result event 含 per-turn tokens，有 turn id
@@ -288,7 +325,7 @@ Phase S Spike 实测（假想结论）:
   Step 7  后置：grok 的 jsonl 有 line-number cursor → NativeHistoryReader 可做 L3
 
 验收:
-  - 8 项 Contract Tests 全过（其中 #2/#3 是 grok 这种弱 ACK 的重点）
+  - 15 项 Contract Tests 全过（其中 #2/#3/#9 是 grok 这种弱 ACK + 独立 cleanup 的重点）
   - Shared 会话 Claude → Grok → Claude：grok 走 checkpoint 降级（用户可见确认），
     切回 Claude 时 native-delta 只补增量
   - 存量 fixtures 全绿
@@ -304,12 +341,17 @@ Phase S Spike 实测（假想结论）:
 4. **"手改它的 session 文件注入历史"** → 红线 21 禁止；只接受官方 import/fork/clone 协议。
 5. **"为新 CLI 在内核加 if engine == 'grok'"** → 所有 Engine 特判必须收敛到 Adapter 或 capability predicate；内核出现 engine 分支即设计腐化信号。
 6. **"顺便优化一下存量 Adapter"** → 接入 PR 只做 additive；存量行为变更独立成 Change。
+7. **"前端看到回复正文就结束 Shared Turn"** → 正文是 presentation evidence，不是 terminal authority；等待 backend exact-Attempt settlement。
+8. **"等 CLI 进程完全退出再结束"** → 混淆 logical settlement 与 cleanup；typed final 到达后立即收口 Shared，cleanup 独立执行。
+9. **"这个 CLI 特殊，自己写一条 event row"** → 破坏 canonical envelope 单一权威；只向 coordinator 提交 typed evidence。
+10. **"Shared history 失败就调用普通 Session 恢复"** → recovery owner 串线；Shared 只走 canonical/Legacy Shared read path。
+11. **"用会话标题找回 Shared history"** → 标题可变且可重复；只使用 `shared:<UUID>`。
 
 ---
 
 ## 八、索引
 
 - 基石设计（契约与红线）：[`mossx-multi-cli-provider-session-foundation-design.md`](./mossx-multi-cli-provider-session-foundation-design.md)
-  - §3.2 Provider/Protocol 正交 · §9.1.1 NativeHistoryReader · §9.2 五种 Projection Mode · §14.2 Canonical Turn Contract · §14.3 Capability/ACK Matrix · §19 设计红线
+  - §3.2 Provider/Protocol 正交 · §9.1.1 NativeHistoryReader · §9.2 五种 Projection Mode · §14.2 Canonical Turn Contract · §14.3 Capability/ACK Matrix · §14.4.4.1 Canonical envelope · §14.4.7.1 Recovery ownership · §19 设计红线
 - 实施任务清单（Wave 0 Spike 模板来源）：[`../plans/2026-07-27-multi-cli-provider-session-foundation-task-checklist.md`](../plans/2026-07-27-multi-cli-provider-session-foundation-task-checklist.md)
 - 现有 Adapter 参照实现：`src-tauri/src/engine/claude.rs`、`src-tauri/src/engine/kimi.rs`、`src-tauri/src/shared/codex_core.rs`

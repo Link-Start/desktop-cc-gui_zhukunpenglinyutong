@@ -96,8 +96,31 @@ type EngineModelInfo = {
 - 两个动作都必须更新当前 Provider Binding 的模型框，并按 runtime `model` identity
   合并 custom/configured/discovered rows；custom row 优先，任一动作失败时保留
   last-good catalog 与当前 selection。
-- Native Composer 与 Shared Session 必须复用同一个 Provider-scoped catalog owner。
-  Shared Profile B 的动作不得刷新 Profile A，也不得改写其他 binding 的 selection。
+- Native 单栏与 Atomic 双栏（Shared / Home create-session）可以共享
+  `engine + providerProfileId` keyed cache/request primitives，但必须使用独立 hook state
+  owner 与互斥 input contract。Native owner MAY 接收当前 Session 的 `currentModels`，
+  并且只能投影到当前 CLI/Profile；Atomic owner MUST NOT接收或投影
+  `currentModels`，所有 Profile rows 只能来自对应 binding-scoped catalog。
+- Native 单栏与 Atomic 双栏必须分别持有 expanded Profile / active CLI UI state。
+  Shared 或 Home Profile B 的展开、加载与 action 不得刷新 Profile A，不得改写 Native
+  selection，也不得把其他 managed Provider 或 Local settings override 放入当前
+  managed Provider。
+- Backend managed catalog 返回 `providerProfileId = null` 且 `source = fallback | builtin`
+  的 public fallback 时，Native 单栏与 Atomic 双栏都 MUST 保留这些 rows。Atomic
+  managed Profile 只允许当前 `profile.id` 的 scoped rows 加 public fallback；其他
+  无 binding identity 的 Local/config rows 只允许出现在 local/disk Profile。
+- Profile catalog loader MUST 按 canonical local sentinel（以及 backend
+  `isLocalProvider` metadata）保持 local Profile 的 `source = disk`。Backend
+  返回 local sentinel 不得因经过统一 Provider normalization 被重分类为
+  `managed`；否则 Picker 会形成非法的 `providerProfileId = null + source =
+  managed` target，并被 resolved target gate 拒绝。
+- Atomic 双栏的 CLI row、Provider Profile header 与 Model row MUST 仅由 primary
+  click 改变 active/expanded/selected state；pointer hover/focus 不得切换 CLI，
+  `pointerdown` 不得提前提交 Model。Native 单栏继续遵循既有 submenu contract。
+- Home create-session 的完整 `ExecutionTarget` MUST 保持 Composer-local。位于
+  Composer 外部的 hero Engine icon MUST 消费当前 creation target 的低频 Engine
+  projection，不得继续读取可能滞后的 global `selectedEngine`；禁止为标题回显上提
+  Provider/Model/Reasoning 或整份 draft target。
 
 ### 4. Validation & Error Matrix
 
@@ -112,6 +135,11 @@ type EngineModelInfo = {
 | daemon mode | 与 Desktop 相同 payload/result contract | 丢失 `providerProfileId` |
 | Shared root menu open | 只读取 Profile catalog | 预取所有 Provider models |
 | Shared local profile expand | forced binding-scoped config refresh；并发请求合并 | 展示或提交 completed stale cache |
+| Home Atomic managed Profile active | 当前 binding scoped rows + public fallback | 注入 Native `currentModels` / Local settings override |
+| backend 返回 Claude Local sentinel | Profile 保持 `source = disk`；选择后形成 `null + disk` Target | 重分类为 `managed`，导致模型点击被 resolved gate 丢弃 |
+| Atomic 双栏 hover/focus | 不改变 active CLI/Profile | 鼠标经过即切换右栏 |
+| Atomic 双栏 primary click | CLI 切换、Profile 折叠、Model 选择各提交一次 | `pointerdown` 抢先关闭菜单或重复提交 |
+| Home creation target 跨 CLI 切换 | footer 与 hero Engine icon 同步；只投影 Engine | footer 已切换但 hero 仍读取 global Engine，或把完整 target 上提到 AppShell |
 | local profile selected | catalog 用 sentinel；Target 用 `null` | 形成第二个 local Binding |
 | target catalog partial failure | 仅失败 binding 显示 error | 整个模型菜单不可用 |
 | catalog `id=settings-reasoning`, `model=deepseek-v4-pro` | Picker 保留 id，runtime 只收到 `deepseek-v4-pro` | 把 `settings-reasoning` 传给 CLI |
@@ -137,9 +165,14 @@ type EngineModelInfo = {
 - Rust `engine::status::tests`：分别覆盖 Claude/Codex/Kimi provider 优先、public 追加与去重。
 - `ModelSelect.test.tsx` + Native continuation Rust tests：覆盖 `id != model`、backend
   UI-only id fail closed 与 custom runtime passthrough。
-- `useSharedProviderTargetCatalog.test.tsx`：覆盖 config reload、Codex CLI discovery、
-  custom/configured/discovered runtime identity merge、Shared local stale cache bypass、
-  concurrent refresh coalescing 与失败保留 last-good。
+- `useProviderTargetCatalogOwners.test.tsx`：覆盖 Native/Atomic owner input isolation、
+  config reload、Codex CLI discovery、custom/configured/discovered runtime identity merge、
+  Shared local stale cache bypass、concurrent refresh coalescing、失败保留 last-good、
+  Home managed Profile 保留 public fallback 但不吸收 Local settings rows，以及 Local
+  sentinel scoped load与 backend-returned Local sentinel 的 `disk` identity 保真。
+- `Composer.file-reference-token.test.tsx` +
+  `useLayoutNodes.client-ui-visibility.test.tsx`：覆盖 Home creation target Engine 从
+  Composer 投影到 Home hero owner，且不改变 Native/Shared target owner。
 - `src-tauri/src/backend/app_server_tests.rs`：覆盖 managed Provider session 的
   `model/list` 路由，不回退 disk/global session。
 - 必跑：`npm run typecheck`、`npm run lint`、`npm run check:runtime-contracts`、`cargo test --manifest-path src-tauri/Cargo.toml engine::status::tests --lib`、`cargo check --manifest-path src-tauri/Cargo.toml --bins`。

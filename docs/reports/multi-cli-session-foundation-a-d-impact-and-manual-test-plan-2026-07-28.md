@@ -1,12 +1,14 @@
-# 多 CLI × 多 Provider 会话基石 A–D：代码梳理、客户端变化预测与人工测试计划
+# 多 CLI × 多 Provider 会话基石 A–D：代码梳理、客户端影响与人工测试计划
 
-> - 分析日期：2026-07-28
-> - 分析窗口：2026-07-27～2026-07-28
+> - 初始分析日期：2026-07-28
+> - 最近校准：2026-07-29
+> - 分析窗口：2026-07-27～2026-07-29
 > - 基线分支：`feature/v-0710`
-> - 文档性质：代码与 OpenSpec 现状审计、A–D 完工影响预测、人工验收计划、D 后路线图
+> - 文档性质：代码与 OpenSpec 现状审计、A–D 实际影响、人工验收计划、D 后路线图
 > - 上游设计：[`mossx-multi-cli-provider-session-foundation-design.md`](../research/mossx-multi-cli-provider-session-foundation-design.md)
 > - 总任务清单：[`2026-07-27-multi-cli-provider-session-foundation-task-checklist.md`](../plans/2026-07-27-multi-cli-provider-session-foundation-task-checklist.md)
 > - Change D：[`add-native-provider-continuation`](../../openspec/changes/archive/2026-07-28-add-native-provider-continuation/)
+> - Shared history recovery 校准：[`fix-shared-canonical-history-recovery`](../../openspec/changes/fix-shared-canonical-history-recovery/)
 
 ## 0. 怎么读这篇文档
 
@@ -43,8 +45,12 @@
 | Provenance | 这条消息实际由哪个 CLI、Provider、Model 生成 |
 | Lineage | 会话之间的来源关系，例如新续接会话是从哪条旧会话来的 |
 | Runtime | 真正运行中的 CLI 进程 |
+| Logical settlement | Agent 业务回合已经有最终结果，Shared Composer 可以结束本轮 |
+| Runtime cleanup | logical settlement 之后的进程回收、stdio drain、hook/MCP child 退出与补充 usage |
+| Canonical envelope | Canonical Fact 在 SQLite row 与 tagged JSON payload 中使用的统一封装 |
 | Side effect | 已经在外部产生的真实变化，例如创建了一个 Codex thread |
 | Recovery | App 崩溃或网络中断后，从已保存进度继续，不重复创建或重复发送 |
+| Recovery owner | 负责解释和修复某类故障的状态机；Shared Attempt/Binding 与 Native runtime 各自独立 |
 | Owner routing | 把停止、审批、重试等操作发给真正执行当前任务的 CLI 和 Provider |
 | Dark launch | 新链路在后台运行和对比，但默认不接管用户真实操作 |
 
@@ -118,6 +124,33 @@ contract 缺口：Context Package identity 冲突、artifact payload 未验真�
   已完成就收口，异常重试只校验同一个 target，不重复创建。
 - Shared send 以当前 Target Store 为准，逐 Turn 冻结真实 CLI/Provider/Model；
   unsupported 历史 Target 明确阻止，不偷偷改发 Claude。
+
+2026-07-29 Shared Session 生产回归校准：真实 Claude Code/Codex CLI 交叉切换继续暴露出
+terminal、history projection 与 recovery ownership 三类断裂。本轮没有扩大到普通 Native
+Session，而是在 Shared boundary 完成以下收口：
+
+- Shared completion 统一等待 backend exact-Attempt settlement。Provider typed final/result
+  立即形成 `run.settled`；process、stdio、hook、MCP child 与 usage cleanup 不再阻塞 Composer。
+- accepted start ACK、inline frontend event 与 Engine 名称都不再承担 terminal authority。
+  duplicate final、cumulative/full observation 与迟到 cleanup terminal 按 Attempt 幂等吸收。
+- delivery fact 统一通过 canonical writer 写入完整 tagged envelope，并与 Binding state
+  保持同一 SQLite transaction。
+- 旧 type-less object payload 在 Projection decode boundary 使用 row `fact_type` 补齐；
+  embedded type conflict 或非 object payload 继续 fail closed，不改写旧 row/checksum。
+- Shared projection failure 只在 Legacy snapshot 有实际内容时降级显示。Legacy 为空时保留
+  retryable error，不调用 Native resume，不写 Native recovery scope，也不显示 Native recovery card。
+- Shared history lookup 固定使用 `shared:<UUID>`。首条消息推导标题或后续改名只更新
+  presentation metadata，不改变 Projection checkpoint、cache 或 recovery identity。
+
+本轮增量证据：
+
+- 产品 owner 已验证 Shared Claude CLI 与 Codex CLI 交叉切换、切回与正常结束。
+- Frontend focused tests：26/26 通过。
+- Rust focused tests：`shared_projection` 20/20、`shared_context` 3/3、
+  `shared_session_v2` 14/14 通过。
+- `npm run typecheck`、scoped ESLint、`npm run check:runtime-contracts`、`cargo check`、
+  changed-file `rustfmt --check` 与当前 OpenSpec strict validation 通过。
+- 该证据只覆盖 Shared Session，不替代 Change D 的 Native Provider Continuation Desktop smoke。
 
 ### 2.2 Change D 的真实进度
 
@@ -533,6 +566,37 @@ Claude Provider A 的旧 Session
 - 历史仍可读。
 - 错误包含目标 Provider 身份与恢复方向。
 
+#### MT-B04：Shared 跨 CLI 终态、Stop 与重复回复
+
+步骤：
+
+1. 在 Shared Session 使用 Claude Code 发送一条短消息。
+2. Claude typed final/result 到达后，观察 Composer 是否立即恢复 idle；不要等待 CLI process 或 hook 完全退出。
+3. 切换到 Codex CLI 发送一条消息，再切回 Claude Code 发送一条消息。
+4. 启动一个长 Turn，在运行中点击 Stop，然后继续发送下一轮。
+5. 分别检查消息列表、Shared 状态条和 Sidebar 运行状态。
+
+预期：
+
+- Claude/Codex 都由 backend exact-Attempt waiter 以 durable settlement 收口。
+- Provider typed final 到达后 Composer 正常结束；cleanup 仍可在后台完成。
+- 每个 Attempt 只显示一条 Assistant Final，不因 cumulative/full observation 或迟到 terminal 重复回复。
+- Stop 命中当前 Engine + Provider + Binding + Runtime Turn。收到 cancel ACK/typed cancellation 时结算为 `cancelled`；若 Provider completion 在取消生效前获胜，可以保持 `completed`，但最终只能有一个 outcome。
+- 切换 CLI 不改变既有 Turn Badge，也不让前一个 Runtime 的迟到事件结束当前 Turn。
+- 普通 Claude/Codex Native Session 的终态、Stop 与 recovery 行为保持不变。
+
+失败判据：
+
+- 已听到结束提示、已看到最终回复，但 Composer 仍长期显示 Stop。
+- 出现 `blocking Claude Shared dispatch returned without typed run.settled` 一类前端猜测错误。
+- 一轮出现两条相同 Assistant Final。
+- Stop 无响应、停错 Provider，或 Stop 后下一轮仍被旧状态锁住。
+
+当前证据：
+
+- 2026-07-29 产品 owner 已验证 Shared Claude CLI/Codex CLI 交叉切换、切回与正常结束。
+- Stop、duplicate terminal、late cleanup 与 Native 对照由 focused automated tests 覆盖。
+
 ### 7.2 换 Provider 时搬运历史
 
 #### MT-C01：历史可以高完整度搬过去
@@ -818,6 +882,53 @@ Claude Provider A 的旧 Session
 - streaming 正文继续走 `liveAssistantTextChannel`。
 - 不出现逐 delta root dispatch。
 
+#### MT-X04：Shared 历史恢复、改名与 recovery owner 隔离
+
+自动故障注入准备：
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml --test shared_projection
+npx vitest run \
+  src/features/threads/loaders/sharedHistoryLoader.test.ts \
+  src/features/threads/hooks/useThreadActions.shared-history.test.tsx \
+  src/features/messages/components/Messages.history-loading.test.tsx
+```
+
+这些测试在临时数据或 mock boundary 中覆盖 type-less row、type conflict、合法空 Projection、
+Legacy 有/无内容和 Shared/Native recovery 对照。禁止为了人工验收直接修改正在使用的
+Shared SQLite 数据库或 checksum。
+
+Desktop 非破坏性步骤：
+
+1. 打开一条已有多轮历史的 Shared Session，记录其 `shared:<UUID>`、标题、消息数量和最后一轮 Badge。
+2. 修改标题，或发送首条消息触发标题推导。
+3. 切换到其他会话再切回，然后重启 App 并再次打开该 Shared Session。
+4. 对照 `shared:<UUID>`、消息数量、顺序、最后一轮 Badge 和恢复 UI。
+
+预期：
+
+- 改名前后始终按同一个 `shared:<UUID>` 加载，历史顺序、内容和 Turn provenance 不变。
+- Rust harness 证明新写入 delivery row 同时包含 row `fact_type` 与 payload tagged `type`。
+- Rust harness 证明旧 type-less object row 可以在不改写 payload/checksum 的前提下重建。
+- Rust harness 证明 embedded type conflict 或非 object payload 返回 typed projection error，不猜测修复。
+- Frontend tests 证明 Legacy 有实际内容时允许 presentation fallback；Legacy 为空时保持 retryable error。
+- Frontend tests 证明合法空 Shared Session 可以正常 loaded，不与 projection error 混淆。
+- Shared failure 不调用 Claude/Codex Native resume，不显示“当前会话需要恢复”Native 卡片。
+- Native Session 继续保留自己的 recovery card 和 retry action。
+
+失败判据：
+
+- 标题变化后加载另一份历史、空幕布或错误 cache scope。
+- 自动测试失败，或 Projection error 被当成成功空数组后不再重试。
+- Shared Canvas 出现 Native recovery card，或点击恢复后操作 Hidden Native Session。
+- Desktop 改名/重启后 `shared:<UUID>`、消息数量、顺序或最后一轮 Badge 变化。
+
+证据留存：
+
+- 保存两条自动化命令的通过摘要。
+- 保存改名前、改名后切回、重启后各一张包含 Sidebar 标题与最后一轮消息的截图。
+- 记录同一个 `shared:<UUID>`；不要记录或提交真实 Provider credential、完整本地数据库。
+
 ## 8. 发布前硬门槛
 
 大白话：下面这些问题不是“小瑕疵”。只要出现一个，就不应该发布 A–D。
@@ -825,6 +936,8 @@ Claude Provider A 的旧 Session
 以下任一失败都应阻断 A–D rollout：
 
 - 同一轮出现两条重复的 Assistant 最终回复
+- Provider 已返回 typed final，但 Shared Composer 仍等待 process/hook cleanup
+- Shared Stop 没有命中 exact Attempt，或取消后仍保持运行锁
 - Tool Call 和 Tool Result 只剩一半
 - 某个 Provider 的私有 reasoning 或 signature 泄漏给不兼容的 Provider
 - 历史已经被删减，但没有经过用户确认就发送
@@ -836,6 +949,9 @@ Claude Provider A 的旧 Session
 - Shared 模型菜单无法选择其他 Provider 的真实模型，或切换后仍显示旧 Target
 - 续接确认使用 native Alert，或取消后仍创建目标
 - Sidebar/幕布直接展示 `MOSSX_CONTEXT_*` hash，或无法从续接会话返回来源
+- Shared projection error 被伪装成正常空历史，或 Shared 进入 Native recovery/card
+- Shared 标题变化后使用不同 history/cache/recovery key
+- 新 Canonical Fact 缺少 tagged `type`，或 row `fact_type` 与 payload type 冲突仍被接受
 - 流式文字每来一小段就触发整个 AppShell 更新
 - 后台隐藏会话让 AppShell 持续重复渲染
 
@@ -846,7 +962,7 @@ Claude Provider A 的旧 Session
 - TypeScript typecheck 与 scoped ESLint。
 - Desktop / daemon command parity。
 - OpenSpec strict validation。
-- 本文 MT-B01、MT-C02、MT-D01、MT-D02、MT-D06、MT-D09、MT-X03 的人工记录。
+- 本文 MT-B01、MT-B04、MT-C02、MT-D01、MT-D02、MT-D06、MT-D09、MT-X03、MT-X04 的人工记录。
 
 ## 9. 当前不足点
 
@@ -898,6 +1014,10 @@ Claude Provider A 的旧 Session
 ### 9.2 工程闭环不足
 
 - Change D tasks 已完成 19/19；真实 Desktop smoke 仍是发布 gate。
+- Shared Claude/Codex 交叉切换与终态已由产品 owner 验证，但 MT-B04 的 Stop 和 MT-X04
+  故障注入仍应保留独立人工记录，不能只依赖正常路径。
+- 2026-07-29 校准使用 focused suites；它证明本次 Shared contract，但不代表整个前端
+  repository test suite 在任意 dirty worktree 下全部通过。
 - A–D 生产校准的 focused automated tests 已纳入发布证据；Windows/Linux 由 native
   release CI 继续执行平台编译。macOS 上的 Windows cross-check 因缺少 Windows SDK
   C headers 停在第三方 `ring` build script，不记作代码通过或失败。
@@ -919,7 +1039,7 @@ Claude Provider A 的旧 Session
 | 调研项 | 要回答的问题 | 产出 |
 | --- | --- | --- |
 | Codex 导入版本矩阵 | 哪些 Codex 版本支持 `thread/inject_items`？能导入哪些消息？重复导入和重新读取会怎样？ | 按版本记录的能力表和发布门槛 |
-| Claude 目标端确认 | 真实 Claude Provider 是否严格回显校验码，失败后能否从同一 session 恢复？ | Desktop smoke 记录 |
+| Claude 目标端终态与恢复 | 真实 Claude typed final 是否在 process cleanup 前稳定收口？replay echo 只作为 delivery/recovery evidence 时，失败后能否恢复同一 session？ | Shared MT-B04 与 Native Continuation Desktop smoke 记录 |
 | Kimi 稳定历史和接收确认 | Kimi 的公开历史读取边界是否稳定？ACP 加载、发送、恢复、取消分别能提供多强的确认？ | 明确“支持 / 不支持”和错误类型 |
 | 目标会话恢复 | 真实 Provider 断线后，重试是否准确找回同一个目标？ | recovery smoke 记录 |
 | 来源身份 | 固定、分组、归档和老会话里的 catalog id、native id、provider id 是否都可靠？ | 真实 catalog smoke |
@@ -1138,8 +1258,10 @@ A–D 完成后，mossx 的客户端定位会发生一次实质跃迁：
 - Native history 所有权不被破坏。
 - 新 CLI 按 Adapter contract 接入，而不是继续堆条件分支。
 
-当前最重要的下一步不是继续扩功能，而是完成 Claude A → Codex B → Claude A 的真实
-Desktop smoke，验证失败恢复和真实 CLI 版本；Kimi target 继续保持 capability gate。
+Shared Session 的 Claude → Codex → Claude 正常交叉切换已于 2026-07-29 通过产品 owner
+验证。当前最重要的下一步不是继续扩功能，而是补齐 MT-B04 Stop、MT-X04 故障恢复记录，
+并独立完成 Native Provider Continuation 的 Claude A → Codex B → 原 Claude A Desktop
+smoke。Kimi target 继续保持 capability gate。
 
 ## 13. 核对范围
 
@@ -1152,6 +1274,8 @@ Desktop smoke，验证失败恢复和真实 CLI 版本；Kimi target 继续保�
 - `openspec/changes/archive/2026-07-28-calibrate-multi-cli-session-foundation-a-d/**`
 - `openspec/changes/archive/2026-07-27-{establish-shared-event-storage,assemble-shared-canonical-facts,project-shared-canonical-conversation}/**`
 - `openspec/changes/archive/2026-07-28-{compose-shared-session-execution-target,add-shared-context-compiler}/**`
+- `openspec/changes/fix-shared-terminal-recovery-i18n/**`
+- `openspec/changes/fix-shared-canonical-history-recovery/**`
 - `src-tauri/src/shared_event_log/**`
 - `src-tauri/src/shared_projection/**`
 - `src-tauri/src/shared_context/**`
@@ -1164,5 +1288,6 @@ Desktop smoke，验证失败恢复和真实 CLI 版本；Kimi target 继续保�
 
 **Impact：**
 
-- 本文同步记录 A–D 实现现状与发布前人工测试计划。
-- Change D 自动化闭环已验证；真实 Desktop Provider smoke 明确保留为发布 gate。
+- 本文同步记录 A–D 实现现状、2026-07-29 Shared 生产回归校准与发布前人工测试计划。
+- Shared Claude/Codex 正常交叉切换已验证；Stop/故障恢复仍保留独立记录要求。
+- Change D 自动化闭环已验证；Native Provider Continuation Desktop smoke 明确保留为独立发布 gate。

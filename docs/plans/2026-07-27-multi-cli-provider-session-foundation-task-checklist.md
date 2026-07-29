@@ -1,8 +1,10 @@
 # 多 CLI × 多 Provider 会话基石：实施任务清单
 
-> 日期：2026-07-27
+> 初始日期：2026-07-27
+> 最近校准：2026-07-29
 > 上游设计：[`docs/research/mossx-multi-cli-provider-session-foundation-design.md`](../research/mossx-multi-cli-provider-session-foundation-design.md)（Implementation-ready）
 > 用途：照着执行的 Checklist。完成一项勾一项；每个 Wave 收尾必须过对应的 Gate，不过 Gate 不进下一 Wave。
+> 状态说明：Wave 0–6 保留原始实施时间线；`R.*` 记录上线前后校准，不回写历史 Gate。
 
 ## Change A 当前结论（2026-07-27 校准）
 
@@ -228,6 +230,27 @@ OpenSpec 已归档至 `openspec/changes/archive/2026-07-27-{establish-shared-eve
 | R.6 | Continuation 可读投影校准 | 不再把校验 hash、协议 marker 和“default”直接扔给用户看。 | 完整 bootstrap control exchange 从幕布隐藏；协议标题投影为“继续：来源会话”；续接 metadata 接入既有消息滚动区并默认折叠，可打开来源；本地 Provider 与历史未知配置明确区分。 | **有**：Sidebar 标题可读；幕布只有一条默认折叠的“Provider 续接”摘要，展开后可回来源；不改变普通消息排列。 | → | D.3、D.4 | control exchange classifier、title projection、collapsed metadata slot、source navigation tests | M | ✅ 已完成 |
 | R.7 | UX 回归与跨平台增量门禁 | 把本次人工截图暴露的问题变成以后自动拦截的测试。 | 新增 Picker、catalog partial failure/cache、Dialog confirm/cancel/degraded、marker render、title、来源卡片和 local binding normalization 测试；UI 路径不新增 path/shell/platform 分支。 | 无；防止 macOS、Windows、Linux 后续回退。 | ⫽ | R.4–R.6 | typecheck、scoped ESLint、相关 Vitest、runtime contracts、OpenSpec strict validation | M | ✅ 已完成 |
 | R.8 | 续接稳定性与逐 Turn 身份校准 | 修掉“第一次像卡死、第二次才成功”和 Shared 会话标签认错人的问题。 | Claude 首次完成 bootstrap 即按 durable target identity 收口，不再依赖模型逐字回 marker；retry 只校验同一 target；Shared send 以 Target Store 为准并冻结 Provider 可读身份；unsupported 历史 Target fail closed。 | **有**：续接 Dialog 显示创建/校验、可读恢复和“重试校验”；逐 Turn Badge 显示真实 CLI/Provider；技术错误默认折叠。 | → | R.4–R.7 | 首次无 marker 回显、bounded recovery、stale selection、legacy unknown、Dialog retry tests | L | ✅ 已完成 |
+
+**Shared Session 生产回归校准（2026-07-29）**
+
+这组任务来自真实 Shared Session 的 Claude Code/Codex CLI 交叉切换测试。它只修复 Shared lifecycle，不改变普通 Native Session，也不替代 Gate 6 的 Native Provider Continuation smoke。
+
+| # | 任务 | 大白话说明 | 改变点 | UI 变化 | 顺序 | 前置 | 验收 | 体量 | 状态 |
+|---|---|---|---|---|---|---|---|---|---|
+| R.9 | CLI-neutral logical terminal 收口 | Claude 已经返回最终结果并播放结束音效时，Shared Turn 必须结束，不能继续等待进程或 hook 清理。 | Provider typed final/result 在 exact Shared owner 下立即归一为 `run.settled`；process/stdio/hook/MCP child/usage cleanup 独立收尾；accepted start ACK 不再被误当 completed。 | **有**：Composer 正常恢复 idle，Stop 不再长期占据发送区。 | → | B.3、A2.4 | Claude/Codex typed final、late cleanup、backend waiter、duplicate terminal 与 Native 对照测试 | L | ✅ 已完成，commit `994007b31` |
+| R.10 | Shared owner、Stop 与重复回复校准 | Stop 必须命中当前 Attempt，迟到终态和 cumulative/full observation 不能重复显示最终回复。 | exact Attempt waiter 统一等待 durable settlement；cancel intent 绑定 owner；Shared accumulator exactly-once merge；frontend 删除 Engine-specific terminal completion authority。 | **有**：跨 CLI 切换后可结束、可停止，Assistant Final 只出现一次。 | → | R.9 | Shared stop/cancel、duplicate final、cross-CLI terminal 与 Native lifecycle 隔离测试 | L | ✅ 已完成，commit `994007b31` |
+| R.11 | Canonical delivery envelope 单一写入权威 | 修复 delivery row 有 `fact_type`、payload 却缺少 tagged `type`，导致整个 Projection 无法读取。 | `prepare_delivery`/`accept_delivery` 改用 canonical writer 原子写 event + Binding；不再手工构造第二套 payload serialization。 | 无直接变化；恢复既有 Shared 历史可读性。 | → | A1.2、A2.1 | payload `type` 与 row `fact_type` 一致；duplicate append 仍幂等 | M | ✅ 已完成，commit `5ec8dc0de` |
+| R.12 | 旧 type-less row 的兼容 Projection | 旧数据不改库也能恢复，但显式类型冲突继续拒绝读取。 | Projector 仅在内存 decode 副本中使用 durable `fact_type` 补 tag；非 object 或 embedded type conflict fail closed；payload/checksum 保持 immutable。 | 无直接变化；旧幕布可以重建。 | → | R.11 | type-less delivery + 后续 committed facts 完整重建；冲突与非法 payload tests | M | ✅ 已完成，commit `5ec8dc0de` |
+| R.13 | Shared history recovery ownership 与稳定身份 | Projection 错误不能伪装成空历史，也不能掉进 Native recovery；改名不能改变历史 key。 | 有 Legacy 内容才允许 presentation fallback；合法空 Shared 正常 loaded；错误保持 retryable，不写 Native recovery scope；卡片按 `shared:` owner 隔离；lookup 固定 `shared:<UUID>`。 | **有**：Shared 不再显示“当前会话需要恢复”Native 卡片；改名后仍恢复原幕布历史。 | → | R.12 | Shared/Native recovery 对照、空历史/error、title mutation 与稳定 identity tests | M | ✅ 已完成，commit `5ec8dc0de` |
+
+**2026-07-29 增量 Gate**
+
+- [x] Shared Claude/Codex 交叉切换由产品 owner 实测通过：对话正常结束，切回复用正常
+- [x] Frontend focused tests：26/26 通过
+- [x] Rust focused tests：`shared_projection` 20/20、`shared_context` 3/3、`shared_session_v2` 14/14 通过
+- [x] `npm run typecheck`、scoped ESLint、`npm run check:runtime-contracts`、`cargo check`、changed-file `rustfmt --check` 通过
+- [x] `fix-shared-canonical-history-recovery` OpenSpec strict validation 通过
+- [ ] Gate 6 Native Provider Continuation Desktop smoke 仍独立保留，不能用本次 Shared 测试替代
 
 ---
 

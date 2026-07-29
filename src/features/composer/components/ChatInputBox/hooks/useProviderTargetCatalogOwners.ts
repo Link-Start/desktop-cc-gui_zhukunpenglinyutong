@@ -19,6 +19,7 @@ import {
 } from "../../../../threads/constants/codexProviderProfiles";
 import type { ModelInfo, ProviderId } from "../types";
 
+// Native 单栏与 Atomic 双栏共享不可变 cache primitives，但拥有独立 hook state/input contract。
 export type ProviderProfileModelGroup = {
   id: string;
   label: string;
@@ -74,8 +75,29 @@ let profileCatalogRequest: Promise<ProfileCatalog> | null = null;
 const modelCatalogCache = new Map<string, ModelInfo[]>();
 const modelCatalogRequests = new Map<string, Promise<ModelInfo[]>>();
 const discoveredModelCatalogCache = new Map<string, ModelInfo[]>();
+const EMPTY_MODELS: ModelInfo[] = [];
 
 type CatalogAction = "reload-config" | "discover-models";
+type AtomicProviderTargetCatalogMode = "shared" | "create-session";
+
+type ProviderTargetCatalogCommonOptions = {
+  enabled: boolean;
+  workspaceId?: string | null;
+  currentProvider: ProviderId;
+  currentProviderProfileId?: string | null;
+  resolveProviderLabel: (providerId: ProviderId) => string;
+  kimiDisabledReason: string;
+};
+
+type AtomicProviderTargetCatalogOptions =
+  ProviderTargetCatalogCommonOptions & {
+    mode: AtomicProviderTargetCatalogMode;
+  };
+
+type NativeProviderTargetCatalogOptions =
+  ProviderTargetCatalogCommonOptions & {
+    currentModels: ModelInfo[];
+  };
 
 function isCurrentProviderProfile(
   engine: "claude" | "codex" | "kimi",
@@ -93,14 +115,24 @@ function isCurrentProviderProfile(
 
 function normalizeProfiles(
   engine: "claude" | "codex" | "kimi",
-  providers: Array<{ id: string; name: string }>,
+  providers: Array<{
+    id: string;
+    name: string;
+    isLocalProvider?: boolean;
+  }>,
 ): EngineProviderProfileOption[] {
   const normalized = providers
-    .map((provider) => ({
-      id: provider.id.trim(),
-      name: provider.name.trim() || provider.id.trim(),
-      source: "managed" as const,
-    }))
+    .map((provider) => {
+      const id = provider.id.trim();
+      return {
+        id,
+        name: provider.name.trim() || id,
+        source:
+          provider.isLocalProvider || isLocalProviderProfile(engine, id)
+            ? ("disk" as const)
+            : ("managed" as const),
+      };
+    })
     .filter((provider) => provider.id.length > 0);
   const defaults = DEFAULT_PROFILES[engine] ?? [];
   return [
@@ -174,9 +206,9 @@ function isLocalProviderProfile(
 }
 
 function initialLoadedModels(
-  mode: "shared" | "native",
+  mode: "shared" | "native" | "create-session",
 ): Record<string, ModelInfo[]> {
-  if (mode === "native") {
+  if (mode !== "shared") {
     return Object.fromEntries(modelCatalogCache);
   }
   return Object.fromEntries(
@@ -210,6 +242,13 @@ function modelRuntimeIdentity(model: ModelInfo): string {
   return (model.model?.trim() || model.id.trim()).toLowerCase();
 }
 
+function isPublicFallbackModel(model: ModelInfo): boolean {
+  if (model.providerProfileId?.trim()) {
+    return false;
+  }
+  return model.source === "fallback" || model.source === "builtin";
+}
+
 export function mergeProviderCatalogModels(
   customModels: ModelInfo[],
   configuredModels: ModelInfo[],
@@ -230,6 +269,22 @@ export function mergeProviderCatalogModels(
     merged.push(model);
   }
   return merged;
+}
+
+export function filterAtomicProviderProfileModels(
+  engine: EngineType,
+  providerProfileId: string,
+  models: ModelInfo[],
+): ModelInfo[] {
+  const localProfile = isLocalProviderProfile(engine, providerProfileId);
+  return models.filter((model) => {
+    const modelProviderProfileId = model.providerProfileId?.trim() || null;
+    return localProfile
+      ? modelProviderProfileId === null ||
+          modelProviderProfileId === providerProfileId
+      : modelProviderProfileId === providerProfileId ||
+          isPublicFallbackModel(model);
+  });
 }
 
 function extractCodexDiscoveredModels(response: Record<string, unknown>): ModelInfo[] {
@@ -270,7 +325,7 @@ function extractCodexDiscoveredModels(response: Record<string, unknown>): ModelI
   });
 }
 
-export function useSharedProviderTargetCatalog({
+function useProviderTargetCatalogOwner({
   enabled,
   workspaceId,
   mode = "shared",
@@ -282,7 +337,7 @@ export function useSharedProviderTargetCatalog({
 }: {
   enabled: boolean;
   workspaceId?: string | null;
-  mode?: "shared" | "native";
+  mode?: "shared" | "native" | "create-session";
   currentProvider: ProviderId;
   currentProviderProfileId?: string | null;
   currentModels: ModelInfo[];
@@ -438,7 +493,7 @@ export function useSharedProviderTargetCatalog({
 
         const models = extractCodexDiscoveredModels(
           await discoverCodexModels(workspaceId!.trim(), providerProfileId),
-        );
+        ).map((model) => ({ ...model, providerProfileId }));
         discoveredModelCatalogCache.set(key, models);
         setLoadedModels((current) => ({ ...current }));
       } catch (error) {
@@ -508,6 +563,11 @@ export function useSharedProviderTargetCatalog({
             ? undefined
             : modelCatalogCache.get(key)) ??
           (canUseCurrentModels ? currentModels : []);
+        const mergedModels = mergeProviderCatalogModels(
+          customModels,
+          configuredModels,
+          discoveredModelCatalogCache.get(key) ?? [],
+        );
         return {
           id: profile.id,
           label: profile.name,
@@ -517,11 +577,14 @@ export function useSharedProviderTargetCatalog({
             engine === "kimi" && !isCurrentBinding
               ? kimiDisabledReason
               : undefined,
-          models: mergeProviderCatalogModels(
-            customModels,
-            configuredModels,
-            discoveredModelCatalogCache.get(key) ?? [],
-          ),
+          models:
+            mode === "native"
+              ? mergedModels
+              : filterAtomicProviderProfileModels(
+                  engine,
+                  profile.id,
+                  mergedModels,
+                ),
           loading: loadingBindings.has(key),
           reloadingConfig: catalogActions.has(`reload-config:${key}`),
           discoveringModels: catalogActions.has(`discover-models:${key}`),
@@ -556,7 +619,40 @@ export function useSharedProviderTargetCatalog({
   };
 }
 
-export function resetSharedProviderTargetCatalogForTests(): void {
+/**
+ * Atomic 双栏 catalog owner。
+ *
+ * 参数层刻意不接收 Native `currentModels`，确保任何 Profile 的 Models 都只能
+ * 由 `engine + providerProfileId` scoped catalog 产生。
+ */
+export function useAtomicProviderTargetCatalog({
+  mode,
+  ...options
+}: AtomicProviderTargetCatalogOptions) {
+  return useProviderTargetCatalogOwner({
+    ...options,
+    mode,
+    currentModels: EMPTY_MODELS,
+  });
+}
+
+/**
+ * Native 单栏 catalog owner。
+ *
+ * 仅该 owner 可以投影当前 Session 的 Models，并且只投影到当前 CLI/Profile。
+ */
+export function useNativeProviderTargetCatalog({
+  currentModels,
+  ...options
+}: NativeProviderTargetCatalogOptions) {
+  return useProviderTargetCatalogOwner({
+    ...options,
+    mode: "native",
+    currentModels,
+  });
+}
+
+export function resetProviderTargetCatalogForTests(): void {
   profileCatalogCache = null;
   profileCatalogRequest = null;
   modelCatalogCache.clear();

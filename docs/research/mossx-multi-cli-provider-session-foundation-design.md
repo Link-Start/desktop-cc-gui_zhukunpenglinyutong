@@ -1,8 +1,9 @@
 # mossx 多 CLI × 多 Provider 会话基石设计
 
-> 状态：Architecture Decision Draft  
-> 日期：2026-07-27  
-> 适用范围：Native Session、Shared Session、Provider Runtime、Session Catalog、Sidebar Projection、未来 Plugin / Orchestration  
+> 状态：Architecture Decision Record（持续校准）
+> 初始日期：2026-07-27
+> 最近校准：2026-07-29
+> 适用范围：Native Session、Shared Session、Provider Runtime、Session Catalog、Sidebar Projection、未来 Plugin / Orchestration
 > 核心决策：Native Session 保持原生身份；Shared Session 承担跨 CLI、跨 Provider 的逐 Turn 切换
 
 ---
@@ -35,6 +36,11 @@ Shared Session
 5. Subagent、User Fork、Provider Continuation、Shared Binding 是四种不同关系，不共用一种 Parent/Child 语义。
 6. `parentThreadId` 只表达 Engine/runtime 权威的 Subagent ownership；用户血缘关系使用独立的 Conversation Family contract。
 7. V1 持久化 Conversation Family 血缘，但 Sidebar 仍可先按带标签的顶层 Session 展示；数据模型与 UI Projection 解耦。
+8. Shared Session 使用 Adapter 声明并经 Spike 证明的 authoritative logical terminal evidence；Provider typed final/result 到达时必须立即归一，process exit 仅在它被证明是该 CLI 唯一逻辑终态时可用，stdio、hook、MCP child 与 usage cleanup 不得阻塞 `run.settled`。
+9. Canonical Fact 只能通过统一 Writer 生成 tagged envelope；业务模块不得手工构造另一套 payload serialization。
+10. Shared history recovery 与 Native runtime recovery 分属不同 owner；Shared 不得回退到 Native resume，也不得显示 Native recovery card。
+11. Shared durable identity 固定为 `session UUID`，前端 thread key 固定为 `shared:<UUID>`；标题只属于 presentation metadata。
+12. 旧 canonical row 可以在 Projection decode boundary 做无损兼容，但不得改写 immutable payload 或 checksum。
 
 一句话概括：
 
@@ -1629,9 +1635,11 @@ Shared Session V2
 
 ---
 
-## 十三、当前能力与缺口
+## 十三、实施基线与当前状态
 
-### 13.1 已有资产
+本章的 P0/P1 清单记录 2026-07-27 开工前基线，用于解释 A–D 为什么拆分，不代表 2026-07-29 仍未实现。当前状态以 §13.6 为准。
+
+### 13.1 2026-07-27 已有资产
 
 mossx 已具备：
 
@@ -1651,7 +1659,7 @@ mossx 已具备：
 - Provider Profile unavailable/fail-closed 语义；
 - App-server compatible frontend event contract。
 
-### 13.2 P0 缺口
+### 13.2 2026-07-27 P0 缺口（已由 A–D 与校准任务收口）
 
 - 当前 Shared snapshot 是前端 Presentation Model，不是 authoritative Canonical Log。
 - 缺少可靠的 `conversation.turnCommitted` 与 Run/Turn Assembler。
@@ -1667,7 +1675,7 @@ mossx 已具备：
 - Provider Continuation 缺少独立 Origin 类型与标签。
 - Conversation Family 尚无 authoritative persistence contract。
 
-### 13.3 P1 缺口
+### 13.3 2026-07-27 P1 缺口（已实现或按 capability 明确降级）
 
 - 当前 Context Sync 只有 bounded text delta。
 - 缺少 versioned Context Package 与 Projection Manifest。
@@ -1680,7 +1688,7 @@ mossx 已具备：
 - Runtime Capability 不一致：Codex 已提供 `thread/inject_items`，Claude/Kimi 当前 Adapter 仍只能采用 native resume、transcript/checkpoint。
 - 缺少 Legacy snapshot dual-read 与 fidelity 标记。
 
-### 13.4 P2 缺口
+### 13.4 当前 P2 缺口
 
 - 外部 RPC/SDK。
 - Plugin Agent Hook。
@@ -1701,6 +1709,22 @@ Shared Session V2 采用“保留壳，重建核”：
 | Provider Runtime / Model Catalog 基础 | engine-only owner routing |
 
 不建议在 V0 上继续追加 Provider 字段后直接发布。那会让“多 Provider”建立在不可靠 Canonical History 和错误 Cursor 语义之上，后续迁移成本更高。
+
+### 13.6 2026-07-29 实现校准
+
+A1–A3、B、C、D 的代码与自动化已完成；2026-07-29 又依据真实 Shared Session 回归完成两组修复：
+
+1. 跨 CLI logical terminal 统一由 backend exact-Attempt settlement 收口，并与 Runtime cleanup 分域
+2. Canonical delivery 使用统一 tagged envelope，旧 type-less row 可兼容 Projection
+3. Shared/Native recovery owner 隔离，Shared failure 不再进入 Native recovery card
+4. Shared history identity 固定为 `shared:<UUID>`，标题变化不影响恢复
+
+当前仍保留以下边界：
+
+- Kimi target acceptance 不能证明时 typed unsupported，不伪装成可用
+- Native Provider Continuation 仍需真实 Desktop Provider smoke
+- Event Log Inspector、Conversation Family Sidebar Projection、自动 Context policy 与 Plugin/Orchestration 属于后续阶段
+- legacy type-less compatibility 是只读 decode 策略，不代表允许新 writer 继续生成无 tag payload
 
 ---
 
@@ -2351,6 +2375,44 @@ Artifact：
 - Artifact 写入必须先落临时文件并原子 rename，再允许 Canonical Fact 引用。
 - 缺失 Artifact 不删除 Fact；标记 unavailable/corrupt。
 
+#### 14.4.4.1 Canonical envelope 只有一个序列化权威
+
+`shared_event_log.fact_type` 与 `payload_json.type` 表达同一个 Canonical Fact discriminator，但承担不同职责：
+
+| 字段 | 职责 | 约束 |
+|---|---|---|
+| `fact_type` | SQLite index、幂等键、兼容 decode discriminator | 必须由 typed fact 派生，业务调用方不得单独指定另一种类型 |
+| `payload_json.type` | tagged enum decode 与跨层 payload contract | 新写入必须存在，并与 `fact_type` 完全一致 |
+| `payload_checksum` | immutable payload 完整性 | checksum 对应已落盘 payload；兼容读取不得改写 |
+
+所有新 Fact 必须通过 `SharedEventWriter::append_canonical_fact*` 系列入口写入。需要同时更新 Binding state 时，也必须调用 Writer 提供的原子组合入口。业务模块不得手工构造 `NewCanonicalEvent`、删除 tagged `type`，或复制一套 event id、schema version、attempt identity 与 serialization 规则。
+
+这条边界的原因不是减少重复代码，而是保证四个属性同时成立：
+
+1. typed fact 与 durable row 使用同一个 discriminator
+2. Event 与 Binding state 保持同一 SQLite transaction
+3. event id、attempt id 与 logical turn id 使用统一推导规则
+4. 新 CLI、新 Fact 或 schema version 不会绕开 canonical validator
+
+旧版本可能已经写入缺少 `payload_json.type` 的 row。Projection 允许在 decode boundary 做以下兼容：
+
+```text
+payload 是 JSON object
+  ├─ 已有 type：必须与 row.fact_type 相等
+  └─ 缺少 type：仅在内存副本中注入 row.fact_type，再做 typed decode
+
+payload 非 object，或 embedded type 与 row.fact_type 冲突
+  └─ typed projection error，fail closed
+```
+
+兼容读取不得更新旧 row、重算 checksum 或伪造 migration completion。`fact_type` 与 payload/checksum 同属 immutable row，适合作为缺失 tag 的 decode discriminator；它不能覆盖显式冲突。
+
+Projection error 与合法空会话是两个状态：
+
+- 成功返回空 Projection：表示新建但尚无消息的 Shared Session，可以标记 history loaded
+- Projection error 且 Legacy snapshot 非空：允许降级显示 Legacy presentation，并保留诊断
+- Projection error 且 Legacy snapshot 为空：必须传播错误并保持可重试，不能伪装成“历史为空”
+
 #### 14.4.5 Security 与 Privacy
 
 - DB 文件权限使用 `0600`，父目录使用 `0700`；Windows 使用等价 ACL。
@@ -2406,6 +2468,36 @@ Legacy：
 - Import 完成写 `shared_legacy_import.status = completed`。
 - Legacy 文件继续只读保留，直到用户显式清理。
 
+#### 14.4.7.1 Shared history recovery ownership 与稳定身份
+
+Shared history loader 只能使用两类来源：
+
+```text
+Canonical Shared Projection
+  → Legacy Shared presentation snapshot（仅在存在可展示内容时降级）
+```
+
+它不得继续调用 Claude/Codex/Kimi Native history resume RPC，也不得读取 Hidden Binding 的 vendor history 来“补” Shared Canvas。Native Session 的 runtime reconnect、rebind/fork recovery 与对应恢复卡片只服务 Native thread。
+
+Shared loader 失败时：
+
+- 保持 `loaded = false`，让后续选择或显式刷新可以重试
+- 记录 Shared projection diagnostic
+- 不写入 Native automatic-recovery failure scope
+- 不生成 Native recovery card，也不提供会操作 Native Session 的恢复按钮
+
+隐藏卡片只能修正 presentation，不能修复 recovery ownership。实现必须同时阻止 Shared thread 进入 Native recovery state。
+
+Shared identity 使用以下稳定映射：
+
+```text
+durable session id = UUID
+frontend thread id = shared:<UUID>
+title = presentation metadata
+```
+
+创建、改名、首条消息推导标题、Sidebar 排序或标题重复都不得改变 durable lookup key、Projection checkpoint key、loader cache scope 或 recovery scope。禁止按标题、更新时间或当前 Picker 反推 Shared Session identity。
+
 #### 14.4.8 Acceptance Tests
 
 - SQLite transaction 任意语句失败时，Event、Sequence、Cursor 全部回滚。
@@ -2416,6 +2508,11 @@ Legacy：
 - WAL 增长可观测；长时间 reader 不导致无界增长而无诊断。
 - Legacy Import 重复运行结果一致。
 - Artifact rename 前 crash 不产生悬空可用引用；rename 后 Event Commit 失败可被 GC 识别。
+- 新写入 Canonical Fact 的 `payload_json.type` 与 row `fact_type` 一致。
+- 旧 type-less object payload 可重建；显式 type 冲突和非 object payload 必须 fail closed。
+- Projection error + 空 Legacy 不得返回成功空历史；合法空 Projection 必须正常完成加载。
+- Shared history failure 不得调用 Native resume，不得写 Native recovery scope，也不得显示 Native recovery card。
+- Shared title 更新前后，loader 与 Projection 始终使用同一个 `shared:<UUID>`。
 
 ### 14.5 Shared Session UI 状态机
 
@@ -2480,7 +2577,7 @@ Cancel intent 不单独持久化；App 在 `CancelPending` 崩溃后由 `pending
 | `cancel-pending` | “正在确认取消结果” + pending phase | 锁定 | 锁定 | Probe；不展示普通 Retry |
 | `running` | Assistant Placeholder 固定显示 Active Target | V1 锁定 | Stop/Steer 按 capability | Stop |
 | `settling` | “正在保存结果” | 锁定 | 锁定 | 无；短时状态 |
-| `recovery-required` | 恢复卡片：Pending phase、Target、last probe | 锁定 | 锁定 | Probe、查看 Native Session、显式重建 |
+| `recovery-required` | Shared 状态条：Pending phase、Target、last probe | 锁定 | 锁定 | Probe、查看技术详情、显式重建当前 Binding |
 | `target-unavailable` | Provider/Runtime unavailable 原因 | 可更换 | Send disabled | 修复配置、选择其他 Target |
 
 第一阶段 Picker 在非 Idle 状态锁定。后续若需要“运行中预选 Next Target”，必须增加独立 Queue contract，不能让一个 Picker 同时表示 Active 与 Next。
@@ -3106,6 +3203,10 @@ OpenSpec 验收不得只检查字段存在。必须同时验证：
 | Legacy snapshot 打开 | 以 presentation-only fidelity 读取，不伪造缺失协议事实 |
 | SQLite Projection 被删除 | 从 Event Log 重建，不读取 frontend snapshot 反向修复 |
 | SQLite Integrity 失败 | 进入 read-only recovery，不创建空库覆盖 |
+| Canonical row 缺少 payload type | 仅在 decode 内存副本中使用 row `fact_type` 补齐；不改写 row/checksum |
+| Canonical row type 冲突 | Projection fail closed，不用 Legacy empty 伪装成功 |
+| Shared Projection 加载失败 | 保持可重试，不调用 Native resume，不显示 Native recovery card |
+| Shared 首条消息更新标题 | thread key、checkpoint 与 recovery scope 仍为同一 `shared:<UUID>` |
 
 ### 17.5 Source × Target 实施前验收矩阵
 
@@ -3157,6 +3258,9 @@ Codex / Provider A
 | Shared Live | delta → terminal commit | Live Text 平滑收束，只有一个 Assistant Final |
 | Shared Target Switch | Claude → Codex → Claude | 幕布不 remount；既有 item 不重建或闪烁 |
 | Shared Projection | 删除 cache 后 rebuild | item count/order/type/checksum 一致 |
+| Shared Projection | 旧 type-less delivery row 后继续包含 requested/committed facts | 完整 user/assistant items 可重建；冲突类型拒绝读取 |
+| Shared History | 成功空 Projection / Projection error + 空 Legacy | 前者正常 loaded；后者保持 retryable error，不进入 Native recovery |
+| Shared Identity | 首条消息改名、手动改名、重复标题 | 始终按 `shared:<UUID>` 恢复同一幕布历史 |
 | Shared Background | Binding 运行、幕布关闭 | 无持续 Canvas/AppShell render storm |
 | Sidebar | Shared 创建/恢复 Hidden Binding | 始终一个 Shared Row，不出现 Native Child |
 | Legacy Shared | dual-read 后继续 | 不重写旧 snapshot；新 Turn 按 V2 边界追加 |
@@ -3236,6 +3340,16 @@ Codex / Provider A
     evidence；不得被 prompt/marker persistence 或 warning 覆盖为 ACK success。
 43. Provider typed final/result 与 CLI process cleanup 必须分域；Shared Attempt 必须由
     前者立即 settle，后者只能补充 cleanup/usage，不能延迟或复活 Composer。
+44. Canonical Fact 新写入必须通过统一 Writer 生成完整 tagged envelope；业务模块不得手工删除
+    `payload_json.type` 或维护第二套 serialization authority。
+45. 旧 type-less Canonical row 只允许在 Projection decode boundary 使用 row
+    `fact_type` 补齐；显式冲突必须 fail closed，兼容读取不得改写 payload/checksum。
+46. Shared history recovery 不得调用 Native resume/rebind/fork，也不得写入 Native recovery
+    scope 或显示 Native recovery card。
+47. 成功空 Shared Projection 与 Projection error 必须分开表达；Legacy 为空不能把错误伪装成
+    正常空历史。
+48. Shared durable identity 只能来自 session UUID；标题、排序时间、当前 Target 与 Provider
+    label 都不得参与 storage lookup、Projection checkpoint、cache 或 recovery key。
 
 ---
 

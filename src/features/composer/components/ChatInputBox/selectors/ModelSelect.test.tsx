@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -9,6 +10,7 @@ import {
   ModelSelect,
 } from "./ModelSelect";
 import { STORAGE_KEYS } from "../../../types/provider";
+import type { ExecutionTarget } from "../../../../shared-session/target/types";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -189,9 +191,22 @@ describe("ModelSelect", () => {
         "data-disabled",
       ),
     ).not.toBeNull();
+    expect(screen.getByRole("menuitem", { name: /A Model/ })).toBeTruthy();
     await user.hover(codexItem);
+    expect(screen.queryByRole("menuitem", { name: /B Model/ })).toBeNull();
+    act(() => {
+      codexItem.focus();
+    });
+    expect(screen.queryByRole("menuitem", { name: /B Model/ })).toBeNull();
+    fireEvent.click(codexItem, { button: 0, ctrlKey: true });
+    expect(screen.queryByRole("menuitem", { name: /B Model/ })).toBeNull();
+    expect(screen.getByRole("menu")).toBeTruthy();
     expect(onExecutionTargetChange).not.toHaveBeenCalled();
-    fireEvent.click(await screen.findByRole("menuitem", { name: /B Model/ }));
+
+    await user.click(codexItem);
+    await user.click(
+      await screen.findByRole("menuitem", { name: /B Model/ }),
+    );
 
     expect(onOpenProviderProfile).toHaveBeenCalledWith("codex", "provider-b");
     expect(onExecutionTargetChange).toHaveBeenCalledTimes(1);
@@ -276,9 +291,14 @@ describe("ModelSelect", () => {
     );
 
     await user.click(screen.getByRole("button"));
-    await user.hover(
-      await screen.findByRole("menuitem", { name: /Claude Code/ }),
-    );
+    const claudeItem = await screen.findByRole("menuitem", {
+      name: /Claude Code/,
+    });
+    await user.hover(claudeItem);
+    expect(
+      screen.queryByRole("menuitem", { name: /kimi-for-coding/ }),
+    ).toBeNull();
+    await user.click(claudeItem);
     await user.click(
       await screen.findByRole("menuitem", { name: /kimi-for-coding/ }),
     );
@@ -298,6 +318,216 @@ describe("ModelSelect", () => {
       reasoning: null,
     });
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("switches between models in an already loaded Claude local profile", async () => {
+    const user = userEvent.setup();
+
+    function ControlledLocalTargetPicker() {
+      const [target, setTarget] = useState<ExecutionTarget>({
+        engine: "claude",
+        providerProfileId: null,
+        modelCatalogEntryId: "settings-main",
+        model: "kimi-for-coding",
+        providerProfileNameSnapshot: "Local settings.json",
+        providerProfileSource: "disk",
+      });
+      return (
+        <>
+          <ModelSelect
+            value={target.modelCatalogEntryId ?? ""}
+            currentProvider={target.engine}
+            triggerVariant="readiness"
+            onChange={vi.fn()}
+            executionTarget={target}
+            onExecutionTargetChange={setTarget}
+            targetGroups={[
+              {
+                providerId: "claude",
+                providerLabel: "Claude Code",
+                enabled: true,
+                profiles: [
+                  {
+                    id: "__local_settings_json__",
+                    label: "Local settings.json",
+                    source: "disk",
+                    loading: false,
+                    error: null,
+                    models: [
+                      {
+                        id: "settings-main",
+                        model: "kimi-for-coding",
+                        label: "kimi-for-coding",
+                      },
+                      {
+                        id: "settings-sonnet",
+                        model: "k3",
+                        label: "k3",
+                      },
+                    ],
+                  },
+                ],
+              },
+            ]}
+          />
+          <output data-testid="selected-local-target">
+            {JSON.stringify(target)}
+          </output>
+        </>
+      );
+    }
+
+    render(<ControlledLocalTargetPicker />);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "chat.currentModel:kimi-for-coding",
+      }),
+    );
+    await user.click(
+      await screen.findByRole("menuitem", { name: /^k3$/ }),
+    );
+
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(
+      screen.getByRole("button", {
+        name: "chat.currentModel:k3",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByTestId("selected-local-target").textContent).toBe(
+      JSON.stringify({
+        engine: "claude",
+        providerProfileId: null,
+        modelCatalogEntryId: "settings-sonnet",
+        model: "k3",
+        providerProfileNameSnapshot: "Local settings.json",
+        providerProfileSource: "disk",
+        reasoning: null,
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "chat.currentModel:k3",
+      }),
+    );
+    const kimiModelItem = await screen.findByRole("menuitem", {
+      name: /^kimi-for-coding$/,
+    });
+    act(() => {
+      kimiModelItem.focus();
+    });
+    await user.keyboard("{Enter}");
+
+    expect(
+      screen.getByRole("button", {
+        name: "chat.currentModel:kimi-for-coding",
+      }),
+    ).toBeTruthy();
+  });
+
+  it("opens Claude Local from a selected managed profile in the Atomic surface", async () => {
+    const user = userEvent.setup();
+    const onExecutionTargetChange = vi.fn();
+    const onOpenProviderProfile = vi.fn();
+
+    render(
+      <ModelSelect
+        value="minimax-entry"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        executionTarget={{
+          engine: "claude",
+          providerProfileId: "minimax-m3",
+          modelCatalogEntryId: "minimax-entry",
+          model: "minimax-runtime",
+          providerProfileNameSnapshot: "Minimax-m3",
+          providerProfileSource: "managed",
+        }}
+        onExecutionTargetChange={onExecutionTargetChange}
+        onOpenProviderProfile={onOpenProviderProfile}
+        targetGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            profiles: [
+              {
+                id: "__local_settings_json__",
+                label: "Local settings.json",
+                source: "disk",
+                loading: false,
+                error: null,
+                models: [
+                  {
+                    id: "settings-k3",
+                    model: "k3",
+                    label: "k3",
+                  },
+                ],
+              },
+              {
+                id: "minimax-m3",
+                label: "Minimax-m3",
+                source: "managed",
+                loading: false,
+                error: null,
+                models: [
+                  {
+                    id: "minimax-entry",
+                    model: "minimax-runtime",
+                    label: "MiniMax-M3",
+                  },
+                ],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "chat.currentModel:MiniMax-M3",
+      }),
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: /MiniMax-M3/ }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /^k3$/ })).toBeNull();
+
+    await user.click(
+      screen.getByRole("menuitem", { name: /Local settings\.json/ }),
+    );
+
+    expect(onOpenProviderProfile).toHaveBeenLastCalledWith(
+      "claude",
+      "__local_settings_json__",
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: /^k3$/ }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /MiniMax-M3/ })).toBeNull();
+
+    await user.click(
+      screen.getByRole("menuitem", { name: /Local settings\.json/ }),
+    );
+    expect(screen.queryByRole("menuitem", { name: /^k3$/ })).toBeNull();
+
+    await user.click(
+      screen.getByRole("menuitem", { name: /Local settings\.json/ }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: /^k3$/ }));
+    expect(onExecutionTargetChange).toHaveBeenCalledWith({
+      engine: "claude",
+      providerProfileId: null,
+      modelCatalogEntryId: "settings-k3",
+      model: "k3",
+      providerProfileNameSnapshot: "Local settings.json",
+      providerProfileSource: "disk",
+      reasoning: null,
+    });
   });
 
   it("uses the catalog id as the runtime fallback for a legacy model row", async () => {
@@ -784,6 +1014,56 @@ describe("ModelSelect", () => {
       "codex",
       "provider-a",
     );
+  });
+
+  it("keeps an inert discovery slot for Claude Provider header parity", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onDiscoverProviderModels = vi.fn();
+
+    render(
+      <ModelSelect
+        value="model-a"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onDiscoverProviderModels={onDiscoverProviderModels}
+        executionTarget={{
+          engine: "claude",
+          providerProfileId: null,
+          modelCatalogEntryId: "model-a",
+          model: "model-a",
+          providerProfileNameSnapshot: "Local settings.json",
+          providerProfileSource: "disk",
+        }}
+        targetGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            profiles: [
+              {
+                id: "__local_settings_json__",
+                label: "Local settings.json",
+                source: "disk",
+                loading: false,
+                discoverySupported: false,
+                error: null,
+                models: [{ id: "model-a", model: "model-a", label: "Model A" }],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button"));
+
+    const discoveryButton = await screen.findByRole("button", {
+      name: "models.discoverModels",
+    }) as HTMLButtonElement;
+    expect(discoveryButton.disabled).toBe(true);
+    fireEvent.click(discoveryButton);
+    expect(onDiscoverProviderModels).not.toHaveBeenCalled();
   });
 
   it("builds an atomic Shared target without inferring from model id", () => {
