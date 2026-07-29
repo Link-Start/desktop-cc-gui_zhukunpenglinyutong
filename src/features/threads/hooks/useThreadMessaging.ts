@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { WorkspaceScopedMap } from "./workspaceScopedMap";
 import {
   workspaceScopedDelete,
@@ -40,7 +40,11 @@ import {
   listKimiSessions as listKimiSessionsService,
 } from "../../../services/tauri";
 import { sendSharedSessionTurnRouted } from "../../shared-session/runtime/sendSharedSessionTurn";
-import type { SendSharedSessionTurnV2Result } from "../../shared-session/runtime/sendSharedSessionTurnV2";
+import {
+  SharedActiveAttemptObserverError,
+  type SendSharedSessionTurnV2Result,
+} from "../../shared-session/runtime/sendSharedSessionTurnV2";
+import { subscribeSharedSessionAttemptSettlements } from "../../shared-session/runtime/reattachSharedSessionAttempt";
 import { isSharedV2SendEnabled } from "../../shared-session/runtime/sharedV2SendFlag";
 import { sharedSessionV2InterruptTurn as sharedSessionV2InterruptTurnService } from "../../shared-session/services/sharedSessions";
 import {
@@ -396,6 +400,31 @@ export function useThreadMessaging({
     runWithCreateSessionLoading,
     startThreadForWorkspace,
   });
+
+  useEffect(
+    () =>
+      subscribeSharedSessionAttemptSettlements(
+        ({ workspaceId, threadId, attemptId, runtimeTurnId }) => {
+          // Reattachment 绕过原 send Promise；必须复用正常 V2 terminal 的
+          // barrier → processing cleanup 顺序，避免迟到 realtime event 复燃 Stop。
+          onSharedDurableTurnCommitted?.(threadId, runtimeTurnId);
+          if (
+            getSharedSendActiveAttemptId(workspaceId, threadId) !== attemptId
+          ) {
+            return;
+          }
+          markProcessing(threadId, false);
+          setActiveTurnId(threadId, null);
+          safeMessageActivity();
+        },
+      ),
+    [
+      markProcessing,
+      onSharedDurableTurnCommitted,
+      safeMessageActivity,
+      setActiveTurnId,
+    ],
+  );
 
   const sendMessageToThread = useCallback(
     async (
@@ -2030,6 +2059,31 @@ export function useThreadMessaging({
         const rawMessage = error instanceof Error ? error.message : String(error);
         if (await retryCodexSendAfterThreadRefresh(rawMessage)) {
           return;
+        }
+        const preserveSharedActiveLifecycle =
+          threadKind === "shared" &&
+          error instanceof SharedActiveAttemptObserverError &&
+          getSharedSendActiveAttemptId(workspace.id, threadId) ===
+            error.attemptId;
+        if (preserveSharedActiveLifecycle) {
+          // Runtime 已 accepted；这里只是 frontend observer 脱离。禁止把它投影成
+          // Turn failure 或清 processing，recovery card 负责 exact-Attempt reattach。
+          onDebug?.({
+            id: `${Date.now()}-shared-terminal-observer-detached`,
+            timestamp: Date.now(),
+            source: "error",
+            label: "shared terminal observer detached",
+            payload: {
+              threadId,
+              attemptId: error.attemptId,
+              rawMessage,
+            },
+          });
+          safeMessageActivity();
+          return {
+            status: "ambiguous-error",
+            reason: rawMessage,
+          };
         }
         const stabilityDiagnostic = resolveThreadStabilityDiagnostic(rawMessage);
         const staleRecoveryClassification = classifyStaleThreadRecovery(rawMessage);

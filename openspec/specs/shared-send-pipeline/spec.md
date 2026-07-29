@@ -71,7 +71,7 @@ The V2 send path MUST commit `conversation.turnAccepted` after the runtime's exp
 
 ### Requirement: Turn Commit MUST Follow Settled Ack With Idempotent Sink
 
-A turn MUST only be committed as `conversation.turnCommitted` after the runtime's settled evidence, via the existing idempotent commit sink. Duplicate terminal evidence MUST NOT produce a second commit.
+A turn MUST only be committed as `conversation.turnCommitted` after the runtime's settled evidence, via the existing idempotent commit sink. Duplicate terminal evidence MUST NOT produce a second commit. Once prompt acceptance is durable, terminal observation MUST remain attached to the exact Runtime Attempt without an arbitrary full-Turn wall-clock deadline; an observer transport failure MUST NOT be treated as Runtime settlement.
 
 #### Scenario: duplicate settled evidence commits once
 
@@ -84,6 +84,25 @@ A turn MUST only be committed as `conversation.turnCommitted` after the runtime'
 - **WHEN** a turn fails on the selected target
 - **THEN** the failure outcome MUST be committed against the original snapshot
 - **AND** the system MUST NOT automatically retry on a different provider
+
+#### Scenario: accepted turn outlives the former observer deadline
+
+- **WHEN** an accepted Shared Turn remains active longer than any UI or IPC observation window
+- **THEN** the exact Attempt MUST remain `running` until authoritative terminal evidence, explicit interrupt, or Runtime-ended evidence arrives
+- **AND** desktop and daemon Provider event forwarders MUST continue forwarding that exact Turn until terminal or Runtime teardown
+- **AND** elapsed wall-clock time alone MUST NOT mark its Binding `recovery-required`
+
+#### Scenario: multiple observers wait on one active attempt
+
+- **WHEN** the original terminal observer and a recovery reattachment both wait on the same exact Attempt
+- **THEN** settlement or owner removal MUST wake every observer
+- **AND** no observer MAY remain pending because another observer consumed the notification
+
+#### Scenario: terminal observer transport detaches from an active attempt
+
+- **WHEN** the terminal observer fails while durable evidence and the coordinator still identify an accepted active Attempt
+- **THEN** the system MUST preserve the Runtime owner and frozen Target
+- **AND** the observer failure MUST NOT create a failed, cancelled, or recovery terminal fact
 
 ### Requirement: Shared Composer MUST Follow the Nine-State UI Machine
 
@@ -107,6 +126,8 @@ The Shared Composer MUST distinguish text editing, queued follow-up creation, an
 
 - **WHEN** the app restarts while a turn was `running`, `settling`, or `recovery-required`
 - **THEN** the restored UI MUST resume the corresponding non-idle state from durable evidence
+- **AND** a uniquely identified accepted live owner MUST regain an exact terminal observer before remaining `running`
+- **AND** an absent or ambiguous owner MUST remain `recovery-required`
 - **AND** the session MUST NOT silently reset to `idle`
 
 #### Scenario: cancel pending reflects capability
@@ -146,6 +167,26 @@ The Shared Composer MUST distinguish text editing, queued follow-up creation, an
 - **WHEN** the Shared Send state is `cancel-pending` or `recovery-required`
 - **THEN** text editing and Turn submission MUST both remain locked
 - **AND** another Target MUST NOT bypass the unresolved linear ordering
+
+#### Scenario: Probe confirms the exact attempt is still active
+
+- **WHEN** recovery Probe confirms that the coordinator still owns the accepted Attempt
+- **THEN** the UI MUST restore that Attempt identity and its frozen `TurnExecutionSnapshot`
+- **AND** it MUST reattach a deduplicated terminal observer before representing the Turn as normally running
+- **AND** a later durable terminal commit MUST clear the active owner and return the Composer to `idle`
+
+#### Scenario: Probe cannot find a live owner
+
+- **WHEN** durable acceptance exists but the exact Runtime owner is absent after restart or Runtime loss
+- **THEN** Probe MUST keep the Attempt in `unknown` recovery
+- **AND** the UI MUST NOT fabricate `running`, resend the prompt, or infer a Target from the current Picker
+
+#### Scenario: stale reattachment resolves after a successor owns the thread
+
+- **WHEN** an old Attempt's terminal observer resolves after a different Attempt has become the current UI owner
+- **THEN** the old `runtimeTurnId` terminal barrier MUST still be installed
+- **AND** cleanup MUST compare the exact `attemptId`
+- **AND** the successor's processing state, active owner, and frozen Target MUST remain intact
 
 ### Requirement: V2 Send MUST Be Feature-Flagged With V0 Rollback
 

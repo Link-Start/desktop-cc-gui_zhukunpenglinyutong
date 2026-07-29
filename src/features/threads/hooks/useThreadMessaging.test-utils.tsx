@@ -20,7 +20,10 @@ import {
   sendSharedSessionTurn,
   sendSharedSessionTurnRouted,
 } from "../../shared-session/runtime/sendSharedSessionTurn";
-import { sharedSessionV2InterruptTurn } from "../../shared-session/services/sharedSessions";
+import {
+  sharedSessionV2AwaitTurnTerminal,
+  sharedSessionV2InterruptTurn,
+} from "../../shared-session/services/sharedSessions";
 import type { CodexAcceptedTurnRecord } from "../utils/codexConversationLiveness";
 import { useThreadMessaging } from "./useThreadMessaging";
 import type { ThreadState } from "./useThreadsReducer";
@@ -74,6 +77,7 @@ vi.mock("../../shared-session/runtime/sendSharedSessionTurn", () => {
 });
 
 vi.mock("../../shared-session/services/sharedSessions", () => ({
+  sharedSessionV2AwaitTurnTerminal: vi.fn(),
   sharedSessionV2InterruptTurn: vi.fn(),
 }));
 
@@ -125,6 +129,17 @@ export function resetThreadMessagingTestMocks() {
     bindingKey: "claude:provider-a",
     nativeThreadId: "native-1",
     runtimeTurnId: "turn-1",
+  });
+  vi.mocked(sharedSessionV2AwaitTurnTerminal).mockResolvedValue({
+    status: "committed",
+    duplicate: false,
+    sequence: 1,
+    bindingKey: "codex:provider-a",
+    terminal: {
+      type: "run.settled",
+      outcome: "completed",
+      recoveryReason: null,
+    },
   });
   vi.mocked(sendSharedSessionTurn).mockResolvedValue({
     result: { turn: { id: "shared-turn-1" } },

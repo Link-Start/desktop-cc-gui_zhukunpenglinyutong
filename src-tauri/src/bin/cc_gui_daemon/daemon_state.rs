@@ -1211,15 +1211,14 @@ impl DaemonState {
                 let provider_binding_storage_path = self.storage_path.clone();
                 let provider_binding_workspace_id = workspace_id.clone();
                 tokio::spawn(async move {
-                    let deadline = tokio::time::Instant::now()
-                        + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                     let mut post_completion_grace_deadline: Option<tokio::time::Instant> = None;
                     loop {
-                        let active_deadline = post_completion_grace_deadline
-                            .map(|grace| if grace < deadline { grace } else { deadline })
-                            .unwrap_or(deadline);
                         let recv_result =
-                            tokio::time::timeout_at(active_deadline, receiver.recv()).await;
+                            if let Some(grace_deadline) = post_completion_grace_deadline {
+                                tokio::time::timeout_at(grace_deadline, receiver.recv()).await
+                            } else {
+                                Ok(receiver.recv().await)
+                            };
                         let turn_event = match recv_result {
                             Ok(Ok(event)) => event,
                             Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
@@ -1529,17 +1528,13 @@ impl DaemonState {
                 let item_id_clone = item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
                 tokio::spawn(async move {
-                    let deadline = tokio::time::Instant::now()
-                        + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                     loop {
-                        let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
-                        let turn_event = match recv_result {
-                            Ok(Ok(event)) => event,
-                            Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
-                            Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {
+                        let turn_event = match receiver.recv().await {
+                            Ok(event) => event,
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                                 continue;
                             }
-                            Err(_) => break,
                         };
                         if turn_event.turn_id != turn_id_for_forwarder {
                             continue;
@@ -1680,16 +1675,15 @@ impl DaemonState {
                 let turn_id_for_forwarder = turn_id.clone();
                 let mut accumulated_agent_text = String::new();
                 tokio::spawn(async move {
-                    let deadline = tokio::time::Instant::now()
-                        + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                     let mut render_state = GeminiRenderRoutingState::default();
                     let mut post_completion_grace_deadline: Option<tokio::time::Instant> = None;
                     loop {
-                        let active_deadline = post_completion_grace_deadline
-                            .map(|grace| if grace < deadline { grace } else { deadline })
-                            .unwrap_or(deadline);
                         let recv_result =
-                            tokio::time::timeout_at(active_deadline, receiver.recv()).await;
+                            if let Some(grace_deadline) = post_completion_grace_deadline {
+                                tokio::time::timeout_at(grace_deadline, receiver.recv()).await
+                            } else {
+                                Ok(receiver.recv().await)
+                            };
                         let turn_event = match recv_result {
                             Ok(Ok(event)) => event,
                             Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
@@ -1919,18 +1913,14 @@ impl DaemonState {
                 let provider_binding_storage_path = self.storage_path.clone();
                 let provider_binding_workspace_id = workspace_id.clone();
                 tokio::spawn(async move {
-                    let deadline = tokio::time::Instant::now()
-                        + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                     let mut render_state = GeminiRenderRoutingState::default();
                     loop {
-                        let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
-                        let turn_event = match recv_result {
-                            Ok(Ok(event)) => event,
-                            Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
-                            Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {
+                        let turn_event = match receiver.recv().await {
+                            Ok(event) => event,
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                                 continue;
                             }
-                            Err(_) => break,
                         };
                         if turn_event.turn_id != turn_id_for_forwarder {
                             continue;
@@ -2163,18 +2153,14 @@ impl DaemonState {
                 let provider_binding_storage_path = self.storage_path.clone();
                 let provider_binding_workspace_id = workspace_id.clone();
                 tokio::spawn(async move {
-                    let deadline = tokio::time::Instant::now()
-                        + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                     let mut render_state = GeminiRenderRoutingState::default();
                     loop {
-                        let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
-                        let turn_event = match recv_result {
-                            Ok(Ok(event)) => event,
-                            Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
-                            Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {
+                        let turn_event = match receiver.recv().await {
+                            Ok(event) => event,
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                                 continue;
                             }
-                            Err(_) => break,
                         };
                         if turn_event.turn_id != turn_id_for_forwarder {
                             continue;

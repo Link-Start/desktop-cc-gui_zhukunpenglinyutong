@@ -26,7 +26,15 @@ import { getClientStoreSync } from "../../../services/clientStorage";
 import { pushErrorToast } from "../../../services/toasts";
 import { getGlobalRuntimeNoticesSnapshot } from "../../../services/globalRuntimeNotices";
 import { sendSharedSessionTurnRouted } from "../../shared-session/runtime/sendSharedSessionTurn";
-import { sharedSessionV2InterruptTurn } from "../../shared-session/services/sharedSessions";
+import { SharedActiveAttemptObserverError } from "../../shared-session/runtime/sendSharedSessionTurnV2";
+import {
+  sharedSessionV2AwaitTurnTerminal,
+  sharedSessionV2InterruptTurn,
+} from "../../shared-session/services/sharedSessions";
+import {
+  reattachSharedSessionAttempt,
+  resetSharedSessionAttemptReattachmentsForTests,
+} from "../../shared-session/runtime/reattachSharedSessionAttempt";
 import {
   consumeSharedSendAdmission,
   dispatchSharedSendEvent,
@@ -74,6 +82,7 @@ describe("useThreadMessaging", () => {
     resetThreadMessagingTestMocks();
     resetSharedTargetStoreForTests();
     resetSharedSendStateStoreForTests();
+    resetSharedSessionAttemptReattachmentsForTests();
     window.localStorage.removeItem("mossx.sharedV2Send");
   });
 
@@ -659,6 +668,207 @@ describe("useThreadMessaging", () => {
     );
     expect(engineSendMessage).not.toHaveBeenCalled();
     expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps Shared processing attached when only the terminal observer detached", async () => {
+    const sharedThreadId = "shared:thread-observer-detached";
+    const attemptId = "attempt-observer-detached";
+    selectNextTarget("ws-1", sharedThreadId, {
+      engine: "codex",
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "settings-gpt-5",
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed",
+      model: "gpt-5",
+      reasoning: { effort: "high" },
+    });
+    setSharedSendActiveAttempt("ws-1", sharedThreadId, attemptId);
+    vi.mocked(sendSharedSessionTurnRouted).mockImplementationOnce((input) => {
+      expect(
+        consumeSharedSendAdmission(
+          input.workspaceId,
+          input.threadId,
+          input.sharedSendAdmissionRevision ?? -1,
+        ),
+      ).toBe(true);
+      return Promise.reject(
+        new SharedActiveAttemptObserverError(
+          attemptId,
+          new Error("frontend observer detached"),
+        ),
+      );
+    });
+    const {
+      result,
+      markProcessing,
+      setActiveTurnId,
+      pushThreadErrorMessage,
+      onDebug,
+    } =
+      makeThreadMessagingHook("codex", {
+        activeThreadId: sharedThreadId,
+        threadEngineById: { [sharedThreadId]: "codex" },
+      });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        sharedThreadId,
+        "keep running",
+      );
+    });
+
+    expect(markProcessing).toHaveBeenCalledWith(sharedThreadId, true);
+    expect(markProcessing).not.toHaveBeenCalledWith(sharedThreadId, false);
+    expect(setActiveTurnId).not.toHaveBeenCalledWith(sharedThreadId, null);
+    expect(getSharedSendActiveAttemptId("ws-1", sharedThreadId)).toBe(
+      attemptId,
+    );
+    expect(pushThreadErrorMessage).not.toHaveBeenCalled();
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "shared terminal observer detached",
+        payload: expect.objectContaining({ attemptId }),
+      }),
+    );
+  });
+
+  it("converges thread processing when a reattached Attempt reaches durable terminal", async () => {
+    const sharedThreadId = "shared:thread-reattached-terminal";
+    const onSharedDurableTurnCommitted = vi.fn();
+    const { markProcessing, setActiveTurnId } = makeThreadMessagingHook(
+      "codex",
+      {
+        activeThreadId: sharedThreadId,
+        threadEngineById: { [sharedThreadId]: "codex" },
+        onSharedDurableTurnCommitted,
+      },
+    );
+    dispatchSharedSendEvent("ws-1", sharedThreadId, { type: "send" });
+    dispatchSharedSendEvent("ws-1", sharedThreadId, {
+      type: "packagePrepared",
+    });
+    dispatchSharedSendEvent("ws-1", sharedThreadId, {
+      type: "ackAmbiguous",
+    });
+    vi.mocked(sharedSessionV2AwaitTurnTerminal).mockResolvedValueOnce({
+      status: "committed",
+      duplicate: false,
+      sequence: 17,
+      bindingKey: "codex:provider-a",
+      terminal: {
+        type: "run.settled",
+        outcome: "completed",
+        recoveryReason: null,
+      },
+    });
+
+    await act(async () => {
+      await reattachSharedSessionAttempt("ws-1", sharedThreadId, {
+        status: "active",
+        attemptId: "attempt-reattached-terminal",
+        bindingKey: "codex:provider-a",
+        nativeThreadId: "native-reattached-terminal",
+        runtimeTurnId: "runtime-reattached-terminal",
+        executionTargetSnapshot: {
+          engine: "codex",
+          providerProfileId: "provider-a",
+          modelCatalogEntryId: "settings-gpt-5",
+          model: "gpt-5",
+          reasoning: { effort: "high" },
+          providerProfileNameSnapshot: "Provider A",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+
+    expect(onSharedDurableTurnCommitted).toHaveBeenCalledWith(
+      sharedThreadId,
+      "runtime-reattached-terminal",
+    );
+    expect(markProcessing).toHaveBeenCalledWith(sharedThreadId, false);
+    expect(setActiveTurnId).toHaveBeenCalledWith(sharedThreadId, null);
+    expect(getSharedSendState("ws-1", sharedThreadId).state).toBe("idle");
+  });
+
+  it("installs a stale observer terminal barrier without clearing a newer Attempt", async () => {
+    const sharedThreadId = "shared:thread-stale-reattachment";
+    const onSharedDurableTurnCommitted = vi.fn();
+    const { markProcessing, setActiveTurnId } = makeThreadMessagingHook(
+      "codex",
+      {
+        activeThreadId: sharedThreadId,
+        threadEngineById: { [sharedThreadId]: "codex" },
+        onSharedDurableTurnCommitted,
+      },
+    );
+    dispatchSharedSendEvent("ws-1", sharedThreadId, { type: "send" });
+    dispatchSharedSendEvent("ws-1", sharedThreadId, {
+      type: "packagePrepared",
+    });
+    dispatchSharedSendEvent("ws-1", sharedThreadId, {
+      type: "ackAmbiguous",
+    });
+    let resolveTerminal!: (
+      value: Awaited<ReturnType<typeof sharedSessionV2AwaitTurnTerminal>>,
+    ) => void;
+    vi.mocked(sharedSessionV2AwaitTurnTerminal).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveTerminal = resolve;
+      }),
+    );
+    const staleObserver = reattachSharedSessionAttempt(
+      "ws-1",
+      sharedThreadId,
+      {
+        status: "active",
+        attemptId: "attempt-stale",
+        bindingKey: "codex:provider-a",
+        nativeThreadId: "native-stale",
+        runtimeTurnId: "runtime-stale",
+        executionTargetSnapshot: {
+          engine: "codex",
+          providerProfileId: "provider-a",
+          modelCatalogEntryId: "settings-gpt-5",
+          model: "gpt-5",
+          reasoning: { effort: "high" },
+          providerProfileNameSnapshot: "Provider A",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      },
+    );
+    setSharedSendActiveAttempt(
+      "ws-1",
+      sharedThreadId,
+      "attempt-current",
+    );
+
+    await act(async () => {
+      resolveTerminal({
+        status: "committed",
+        duplicate: false,
+        sequence: 18,
+        bindingKey: "codex:provider-a",
+        terminal: {
+          type: "run.settled",
+          outcome: "completed",
+          recoveryReason: null,
+        },
+      });
+      await staleObserver;
+    });
+
+    expect(onSharedDurableTurnCommitted).toHaveBeenCalledWith(
+      sharedThreadId,
+      "runtime-stale",
+    );
+    expect(markProcessing).not.toHaveBeenCalledWith(sharedThreadId, false);
+    expect(setActiveTurnId).not.toHaveBeenCalledWith(sharedThreadId, null);
+    expect(getSharedSendActiveAttemptId("ws-1", sharedThreadId)).toBe(
+      "attempt-current",
+    );
   });
 
   it("records missing Runtime identity instead of fabricating a durable terminal barrier", async () => {

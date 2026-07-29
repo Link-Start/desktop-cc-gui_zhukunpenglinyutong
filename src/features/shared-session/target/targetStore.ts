@@ -99,16 +99,33 @@ export function getActiveTurnTargetForAttempt(
   return readState(key).activeTurnTarget;
 }
 
-/** Turn 到达终态后清除 active 快照（历史 Badge 由 turn fact 承担，不读 store）。 */
-export function endTurn(workspaceId: string, threadId: string): void {
+/**
+ * Turn 到达终态后清除 active 快照（历史 Badge 由 turn fact 承担，不读 store）。
+ *
+ * observer/recovery caller 应传 exact attemptId；迟到的旧 observer 不得清掉新 Turn。
+ * 省略 attemptId 只保留给无并发 owner 的 legacy caller。
+ */
+export function endTurn(
+  workspaceId: string,
+  threadId: string,
+  attemptId?: string | null,
+): boolean {
   const key = storeKeyOf(workspaceId, threadId);
+  const normalizedAttemptId = attemptId?.trim();
+  if (
+    normalizedAttemptId &&
+    activeAttemptIds.get(key) !== normalizedAttemptId
+  ) {
+    return false;
+  }
   const state = readState(key);
   if (state.activeTurnTarget === null) {
     activeAttemptIds.delete(key);
-    return;
+    return true;
   }
   activeAttemptIds.delete(key);
   writeState(key, { ...state, activeTurnTarget: null });
+  return true;
 }
 
 export function getSharedTargetState(

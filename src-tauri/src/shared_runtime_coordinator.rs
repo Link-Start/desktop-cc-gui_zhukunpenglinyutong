@@ -377,9 +377,9 @@ impl AttemptAccumulator {
                         stop_reason: evidence.stop_reason,
                     },
                 };
-                // backend durable waiter 与 UI event fan-out 解耦。`notify_one`
-                // 会保留 permit，覆盖 terminal 恰好发生在 waiter 注册窗口的 race。
-                self.settlement_notify.notify_one();
+                // 同一 Attempt 可能同时存在旧 observer 与 recovery reattachment。
+                // waiter 会先注册再复查 state，因此这里安全唤醒全部 observer。
+                self.settlement_notify.notify_waiters();
                 return Some(settled);
             }
         }
@@ -728,27 +728,33 @@ impl SharedRuntimeCoordinator {
     pub(crate) async fn wait_for_settlement(
         &self,
         attempt_id: &str,
-        timeout: std::time::Duration,
-    ) -> Result<Option<SettledSharedRuntimeAttempt>, String> {
-        let deadline = tokio::time::Instant::now() + timeout;
+    ) -> Option<SettledSharedRuntimeAttempt> {
         loop {
             let notify = {
                 let state = self.lock();
                 if let Some(settled) = state.settled_by_attempt.get(attempt_id) {
-                    return Ok(Some(settled.clone()));
+                    return Some(settled.clone());
                 }
                 let Some(attempt) = state.attempts.get(attempt_id) else {
-                    return Ok(None);
+                    return None;
                 };
                 Arc::clone(&attempt.settlement_notify)
             };
-            tokio::time::timeout_at(deadline, notify.notified())
-                .await
-                .map_err(|_| {
-                    format!(
-                        "ambiguous-runtime: timed out waiting for terminal settlement for attempt {attempt_id}"
-                    )
-                })?;
+            let notified = notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            {
+                // 注册 waiter 后复查，封闭「首次检查 → notified().await」之间的
+                // terminal/remove race；同时允许 notify_waiters 唤醒所有重挂 observer。
+                let state = self.lock();
+                if let Some(settled) = state.settled_by_attempt.get(attempt_id) {
+                    return Some(settled.clone());
+                }
+                if !state.attempts.contains_key(attempt_id) {
+                    return None;
+                }
+            }
+            notified.await;
         }
     }
 
@@ -834,7 +840,7 @@ impl SharedRuntimeCoordinator {
         if let Some(attempt) = state.attempts.get(attempt_id) {
             // critical sink 可能先 commit SQL 再清理 coordinator。唤醒 backend
             // waiter，让它从 durable fact 完成收敛。
-            attempt.settlement_notify.notify_one();
+            attempt.settlement_notify.notify_waiters();
         }
         let removed_scope = state
             .attempts
@@ -3492,11 +3498,13 @@ mod tests {
                 }
             }),
         );
-        let unrelated = coordinator
-            .wait_for_settlement("attempt-a", std::time::Duration::from_millis(5))
-            .await
-            .expect_err("attempt b terminal must not settle attempt a");
-        assert!(unrelated.contains("timed out waiting for terminal settlement"));
+        tokio::time::timeout(
+            std::time::Duration::from_millis(5),
+            coordinator.wait_for_settlement("attempt-a"),
+        )
+        .await
+        .expect_err("attempt b terminal must leave attempt a pending");
+        assert!(coordinator.owns_attempt("attempt-a"));
 
         coordinator.ingest_codex_event(
             "ws-1",
@@ -3509,9 +3517,8 @@ mod tests {
             }),
         );
         let settled = coordinator
-            .wait_for_settlement("attempt-a", std::time::Duration::from_millis(5))
+            .wait_for_settlement("attempt-a")
             .await
-            .expect("early terminal must leave a waiter permit")
             .expect("settlement retained");
         assert_eq!(settled.owner.attempt_id, "attempt-a");
     }
@@ -3529,10 +3536,54 @@ mod tests {
         coordinator.remove_attempt("attempt-removed");
 
         assert!(coordinator
-            .wait_for_settlement("attempt-removed", std::time::Duration::from_millis(5),)
+            .wait_for_settlement("attempt-removed")
             .await
-            .expect("owner removal is a durable recheck signal")
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn settlement_wait_wakes_all_observers_for_the_same_attempt() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner(
+                "attempt-multi-waiter",
+                Some("run-multi-waiter"),
+                Some("native-multi-waiter"),
+            ))
+            .expect("register");
+        let first_coordinator = coordinator.clone();
+        let first_waiter = tokio::spawn(async move {
+            first_coordinator
+                .wait_for_settlement("attempt-multi-waiter")
+                .await
+        });
+        let second_coordinator = coordinator.clone();
+        let second_waiter = tokio::spawn(async move {
+            second_coordinator
+                .wait_for_settlement("attempt-multi-waiter")
+                .await
+        });
+        tokio::task::yield_now().await;
+
+        coordinator.ingest_codex_event(
+            "ws-1",
+            &json!({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "native-multi-waiter",
+                    "turnId": "run-multi-waiter"
+                }
+            }),
+        );
+
+        for waiter in [first_waiter, second_waiter] {
+            let settled = tokio::time::timeout(std::time::Duration::from_secs(1), waiter)
+                .await
+                .expect("all observers must wake")
+                .expect("waiter task")
+                .expect("settlement");
+            assert_eq!(settled.owner.attempt_id, "attempt-multi-waiter");
+        }
     }
 
     #[tokio::test]
