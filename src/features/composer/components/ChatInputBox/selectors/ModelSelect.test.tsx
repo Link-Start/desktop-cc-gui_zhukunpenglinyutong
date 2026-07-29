@@ -320,6 +320,121 @@ describe("ModelSelect", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
+  it.each([
+    {
+      providerId: "grok" as const,
+      providerLabel: "Grok CLI",
+      localProfileId: "__local_config_toml__",
+      localProfileLabel: "Local config.toml",
+      catalogEntryId: "grok-local-entry",
+      runtimeModel: "grok-4.5",
+    },
+    {
+      providerId: "opencode" as const,
+      providerLabel: "OpenCode",
+      localProfileId: "__local_opencode_json__",
+      localProfileLabel: "Local opencode.json",
+      catalogEntryId: "opencode-local-entry",
+      runtimeModel: "opencode/big-pickle",
+    },
+  ])(
+    "normalizes the $providerId local model into one resolved Atomic target",
+    async ({
+      providerId,
+      providerLabel,
+      localProfileId,
+      localProfileLabel,
+      catalogEntryId,
+      runtimeModel,
+    }) => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      const onExecutionTargetChange = vi.fn();
+
+      render(
+        <ModelSelect
+          value="claude-current"
+          currentProvider="claude"
+          triggerVariant="readiness"
+          onChange={vi.fn()}
+          executionTarget={{
+            engine: "claude",
+            providerProfileId: "provider-claude",
+            modelCatalogEntryId: "claude-current",
+            model: "claude-current",
+            providerProfileNameSnapshot: "Claude Provider",
+            providerProfileSource: "managed",
+            reasoning: null,
+          }}
+          onExecutionTargetChange={onExecutionTargetChange}
+          targetGroups={[
+            {
+              providerId: "claude",
+              providerLabel: "Claude Code",
+              enabled: true,
+              profiles: [
+                {
+                  id: "provider-claude",
+                  label: "Claude Provider",
+                  source: "managed",
+                  loading: false,
+                  error: null,
+                  models: [
+                    {
+                      id: "claude-current",
+                      model: "claude-current",
+                      label: "Claude Current",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              providerId,
+              providerLabel,
+              enabled: true,
+              profiles: [
+                {
+                  id: localProfileId,
+                  label: localProfileLabel,
+                  source: "disk",
+                  loading: false,
+                  error: null,
+                  models: [
+                    {
+                      id: catalogEntryId,
+                      model: runtimeModel,
+                      label: runtimeModel,
+                    },
+                  ],
+                },
+              ],
+            },
+          ]}
+        />,
+      );
+
+      await user.click(screen.getByRole("button"));
+      await user.click(
+        await screen.findByRole("menuitem", { name: providerLabel }),
+      );
+      await user.click(
+        await screen.findByRole("menuitem", { name: runtimeModel }),
+      );
+
+      expect(onExecutionTargetChange).toHaveBeenCalledOnce();
+      expect(onExecutionTargetChange).toHaveBeenCalledWith({
+        engine: providerId,
+        providerProfileId: null,
+        modelCatalogEntryId: catalogEntryId,
+        model: runtimeModel,
+        providerProfileNameSnapshot: localProfileLabel,
+        providerProfileSource: "disk",
+        reasoning: null,
+      });
+      expect(screen.queryByRole("menu")).toBeNull();
+    },
+  );
+
   it("switches between models in an already loaded Claude local profile", async () => {
     const user = userEvent.setup();
 

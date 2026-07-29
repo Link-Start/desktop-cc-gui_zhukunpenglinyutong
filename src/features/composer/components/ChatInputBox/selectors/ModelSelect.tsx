@@ -16,7 +16,9 @@ import type { ExecutionTarget } from '../../../../shared-session/target/types';
 import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_ID,
+  GROK_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
+  OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
 } from '../../../../threads/constants/codexProviderProfiles';
 import { EngineIcon } from '../../../../engine/components/EngineIcon';
 import {
@@ -83,6 +85,8 @@ const LOCAL_PROVIDER_PROFILE_IDS: Partial<Record<ProviderId, string>> = {
   claude: CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
   codex: CODEX_DISK_PROVIDER_PROFILE_ID,
   kimi: KIMI_LOCAL_PROVIDER_PROFILE_ID,
+  grok: GROK_LOCAL_PROVIDER_PROFILE_ID,
+  opencode: OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
 };
 
 export function normalizeExecutionProviderProfileId(

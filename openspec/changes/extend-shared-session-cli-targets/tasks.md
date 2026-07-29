@@ -22,3 +22,8 @@
 - [x] 4.2 [P0，依赖：2.*,3.*] 运行 Shared Session Rust focused tests、`cargo check --lib --bins` 与 `git diff --check`，通过后提交 backend/runtime 批次。
 - [x] 4.3 [P0，依赖：4.1,4.2] 运行 `openspec validate extend-shared-session-cli-targets --strict --no-interactive`、能力符号哨兵与最终增量回归；不运行全量 test。
 - [x] 4.4 [P0，依赖：4.3] 每次 `git commit` 后执行 Trellis session record，并记录未执行全量测试的用户授权与剩余手测项。
+
+## 5. 验收回归修复
+
+- [x] 5.1 [P0，依赖：1.3] 输入：Grok/OpenCode local Provider Model 点击；输出：local sentinel 在 Atomic 双栏 Target 中归一为 `providerProfileId=null + source=disk`，完整 Target 可跨过 resolved gate；验证：`ModelSelect.test.tsx` focused Vitest。
+- [x] 5.2 [P0，依赖：5.1] 运行 targeted ESLint、`tsc --noEmit`、`check:runtime-contracts`、OpenSpec strict validation 与 `git diff --check`；不运行全量 test。
