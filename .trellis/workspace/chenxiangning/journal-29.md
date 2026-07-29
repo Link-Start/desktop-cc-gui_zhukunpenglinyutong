@@ -577,3 +577,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1214: 闭环 Codex CLI 供应商续接
+
+**Date**: 2026-07-29
+**Task**: 闭环 Codex CLI 供应商续接
+**Branch**: `feature/v-0710`
+
+### Summary
+
+统一 Codex source/target identity 与 continuation family projection，隐藏 structured import 和 host bootstrap 幕布并等待 catalog hydration，按最后 compaction 计算有效历史并对 Claude/Codex 续接包执行统一非空预算裁剪；同步 UI Token 语义、OpenSpec 与 executable contract。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d528fc91c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
