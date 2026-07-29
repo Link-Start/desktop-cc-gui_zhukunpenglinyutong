@@ -809,3 +809,52 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1221: 精准优化 Shared CLI 菜单显示
+
+**Date**: 2026-07-29
+**Task**: 精准优化 Shared CLI 菜单显示
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+将新建共享会话入口统一显示为 Shared CLI，修复 Kimi/Grok 图标在深色主题下不能继承颜色的问题，并隐藏 workspace menu 竖向滚动条但保留滚动能力。验证通过 focused vitest 58 tests、lint、typecheck、check:large-files、git diff --check。
+
+### Main Changes
+
+## 工作内容
+- 将 sidebar 新建共享会话入口文案从 `Claude Code + Codex` 调整为 `Shared CLI`，覆盖 10 个 locale 的 `sidebar.newSharedSession`。
+- 将 `EngineIcon` 中 Kimi/Grok 的图标从外链 img 改为 inline monochrome SVG，使其通过 `currentColor` 跟随主题色。
+- 对 `.sidebar-workspace-menu` 隐藏竖向 scrollbar，同时保留 `overflow-y: auto` 的滚动行为。
+- 增加 `EngineIcon` 和 `Sidebar.styles` 的 focused regression tests。
+
+## 验证
+- `npm exec vitest run src/features/engine/components/EngineIcon.test.tsx src/features/app/components/Sidebar.styles.test.ts src/features/app/components/SidebarWorkspaceMenuOverlay.test.tsx src/i18n/index.test.ts src/features/app/hooks/useSidebarMenus.test.tsx` 通过，5 files / 58 tests。
+- `npm run lint` 通过，0 errors，保留既有 8 warnings。
+- `npm run typecheck` 通过。
+- `npm run check:large-files` 通过，命令仍报告既有 43 个 inventory 项。
+- `git diff --check` 通过。
+
+## 边界
+- 未提交 Shared Session engine 扩展相关未完成改动。
+- 未提交 `extend-shared-session-cli-targets` OpenSpec 未跟踪文件。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e6556d9d9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
